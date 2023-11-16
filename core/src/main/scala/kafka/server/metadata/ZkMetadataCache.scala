@@ -31,7 +31,7 @@ import kafka.utils.Logging
 import kafka.utils.Implicits._
 import org.apache.kafka.admin.BrokerMetadata
 import org.apache.kafka.common.internals.Topic
-import org.apache.kafka.common.message.UpdateMetadataRequestData.UpdateMetadataPartitionState
+import org.apache.kafka.common.message.UpdateMetadataRequestData.{UpdateMetadataPartitionState, UpdateMetadataTopicState}
 import org.apache.kafka.common.{Cluster, Node, PartitionInfo, TopicPartition, Uuid}
 import org.apache.kafka.common.message.MetadataResponseData.MetadataResponseTopic
 import org.apache.kafka.common.message.MetadataResponseData.MetadataResponsePartition
@@ -71,10 +71,11 @@ object ZkMetadataCache {
    */
   def maybeInjectDeletedPartitionsFromFullMetadataRequest(
     currentMetadata: MetadataSnapshot,
-    updateMetadataRequest: UpdateMetadataRequest
+    requestControllerEpoch: Int,
+    requestTopicStates: util.List[UpdateMetadataTopicState],
   ): Seq[Uuid] = {
     val prevTopicIds = currentMetadata.topicIds.values.toSet
-    val requestTopics = updateMetadataRequest.topicStates().asScala.map { topicState =>
+    val requestTopics = requestTopicStates.asScala.map { topicState =>
       topicState.topicName() -> topicState.topicId()
     }.toMap
 
@@ -97,13 +98,13 @@ object ZkMetadataCache {
           .setTopicName(topicName)
           .setLeader(lisr.leader)
           .setLeaderEpoch(lisr.leaderEpoch)
-          .setControllerEpoch(updateMetadataRequest.controllerEpoch())
+          .setControllerEpoch(requestControllerEpoch)
           .setReplicas(partitionState.replicas())
           .setZkVersion(lisr.partitionEpoch)
           .setIsr(lisr.isr.map(Integer.valueOf).asJava)
         topicState.partitionStates().add(newPartitionState)
       }
-      updateMetadataRequest.data().topicStates().add(topicState)
+      requestTopicStates.add(topicState)
     }
     deleteTopics.toSeq
   }
@@ -440,7 +441,7 @@ class ZkMetadataCache(
             s"are not enabled on this broker. Not treating this as a full metadata update")
         } else {
           val deletedTopicIds = ZkMetadataCache.maybeInjectDeletedPartitionsFromFullMetadataRequest(
-            metadataSnapshot, updateMetadataRequest)
+            metadataSnapshot, updateMetadataRequest.controllerEpoch(), updateMetadataRequest.topicStates())
           if (deletedTopicIds.isEmpty) {
             stateChangeLogger.trace(s"Received UpdateMetadataRequest with Type=FULL (2), " +
               s"but no deleted topics were detected.")
