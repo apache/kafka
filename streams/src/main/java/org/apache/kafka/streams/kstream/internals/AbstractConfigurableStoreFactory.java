@@ -18,7 +18,6 @@ package org.apache.kafka.streams.kstream.internals;
 
 import java.util.HashSet;
 import java.util.Set;
-import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.processor.internals.StoreFactory;
@@ -35,16 +34,9 @@ public abstract class AbstractConfigurableStoreFactory implements StoreFactory {
     @Override
     public void configure(final StreamsConfig config) {
         if (dslStoreSuppliers == null) {
-            try {
-                dslStoreSuppliers = Utils.newInstance(
-                        config.getString(StreamsConfig.DSL_STORE_SUPPLIERS_CLASS_CONFIG),
-                        DslStoreSuppliers.class);
-            } catch (final ClassNotFoundException e) {
-                throw new ConfigException(
-                        "Invalid configuration for "
-                                + StreamsConfig.DSL_STORE_SUPPLIERS_CLASS_CONFIG,
-                        e);
-            }
+            dslStoreSuppliers = Utils.newInstance(
+                    config.getClass(StreamsConfig.DSL_STORE_SUPPLIERS_CLASS_CONFIG),
+                    DslStoreSuppliers.class);
         }
     }
 

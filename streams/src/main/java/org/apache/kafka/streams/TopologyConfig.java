@@ -21,7 +21,6 @@ import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigDef.Importance;
 import org.apache.kafka.common.config.ConfigDef.Type;
-import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.errors.DeserializationExceptionHandler;
 import org.apache.kafka.streams.internals.StreamsConfigUtils;
@@ -113,7 +112,7 @@ public class TopologyConfig extends AbstractConfig {
                 Importance.LOW,
                 DEFAULT_DSL_STORE_DOC)
             .define(DSL_STORE_SUPPLIERS_CLASS_CONFIG,
-                Type.STRING,
+                Type.CLASS,
                 DSL_STORE_SUPPLIERS_CLASS_DEFAULT,
                 Importance.LOW,
                 DSL_STORE_SUPPLIERS_CLASS_DOC);
@@ -133,7 +132,7 @@ public class TopologyConfig extends AbstractConfig {
     public final long maxTaskIdleMs;
     public final long taskTimeoutMs;
     public final String storeType;
-    public final String dslStoreSuppliers;
+    public final Class<?> dslStoreSuppliers;
     public final Supplier<TimestampExtractor> timestampExtractorSupplier;
     public final Supplier<DeserializationExceptionHandler> deserializationExceptionHandlerSupplier;
 
@@ -234,10 +233,10 @@ public class TopologyConfig extends AbstractConfig {
         }
 
         if (isTopologyOverride(DSL_STORE_SUPPLIERS_CLASS_CONFIG, topologyOverrides)) {
-            dslStoreSuppliers = getString(DSL_STORE_SUPPLIERS_CLASS_CONFIG);
+            dslStoreSuppliers = getClass(DSL_STORE_SUPPLIERS_CLASS_CONFIG);
             log.info("Topology {} is overriding {} to {}", topologyName, DSL_STORE_SUPPLIERS_CLASS_CONFIG, dslStoreSuppliers);
         } else {
-            dslStoreSuppliers = globalAppConfigs.getString(DSL_STORE_SUPPLIERS_CLASS_CONFIG);
+            dslStoreSuppliers = globalAppConfigs.getClass(DSL_STORE_SUPPLIERS_CLASS_CONFIG);
         }
     }
 
@@ -252,11 +251,7 @@ public class TopologyConfig extends AbstractConfig {
      */
     public Optional<DslStoreSuppliers> resolveDslStoreSuppliers() {
         if (isTopologyOverride(DSL_STORE_SUPPLIERS_CLASS_CONFIG, topologyOverrides) || globalAppConfigs.originals().containsKey(DSL_STORE_SUPPLIERS_CLASS_CONFIG)) {
-            try {
-                return Optional.of(Utils.newInstance(dslStoreSuppliers, DslStoreSuppliers.class));
-            } catch (final ClassNotFoundException e) {
-                throw new ConfigException("Invalid " + DSL_STORE_SUPPLIERS_CLASS_CONFIG + ": " + dslStoreSuppliers, e);
-            }
+            return Optional.of(Utils.newInstance(dslStoreSuppliers, DslStoreSuppliers.class));
         } else if (isTopologyOverride(DEFAULT_DSL_STORE_CONFIG, topologyOverrides) || globalAppConfigs.originals().containsKey(DEFAULT_DSL_STORE_CONFIG)) {
             return Optional.of(MaterializedInternal.parse(storeType));
         } else {

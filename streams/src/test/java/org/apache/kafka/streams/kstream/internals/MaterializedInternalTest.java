@@ -17,7 +17,6 @@
 
 package org.apache.kafka.streams.kstream.internals;
 
-import java.util.Map;
 import java.util.Optional;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.StreamsConfig;
@@ -106,7 +105,7 @@ public class MaterializedInternalTest {
     public void shouldPreferStoreSupplierWhenProvidedWithStoreTypeViaTopologyConfig() {
         final Properties topologyOverrides = new Properties();
         topologyOverrides.put(StreamsConfig.DEFAULT_DSL_STORE_CONFIG, StreamsConfig.ROCKS_DB);
-        topologyOverrides.put(StreamsConfig.DSL_STORE_SUPPLIERS_CLASS_CONFIG, TestStoreSupplier.class.getName());
+        topologyOverrides.put(StreamsConfig.DSL_STORE_SUPPLIERS_CLASS_CONFIG, TestStoreSupplier.class);
         final StreamsConfig config = new StreamsConfig(StreamsTestUtils.getStreamsConfig());
 
         final InternalTopologyBuilder topologyBuilder = new InternalTopologyBuilder(
@@ -136,10 +135,6 @@ public class MaterializedInternalTest {
     }
 
     public static class TestStoreSupplier implements DslStoreSuppliers {
-
-        @Override
-        public void configure(final Map<String, ?> configs) {
-        }
 
         @Override
         public KeyValueBytesStoreSupplier keyValueStore(final DslKeyValueParams params) {

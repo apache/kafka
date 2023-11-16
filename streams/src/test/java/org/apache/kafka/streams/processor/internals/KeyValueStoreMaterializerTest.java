@@ -49,6 +49,7 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.core.IsInstanceOf.instanceOf;
 import static org.hamcrest.core.IsNot.not;
+import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.when;
 
 @RunWith(MockitoJUnitRunner.StrictStubs.class)
@@ -81,8 +82,8 @@ public class KeyValueStoreMaterializerTest {
         when(versionedStoreSupplier.name()).thenReturn(STORE_NAME);
         when(versionedStoreSupplier.metricsScope()).thenReturn(METRICS_SCOPE);
 
-        when(streamsConfig.getString(StreamsConfig.DSL_STORE_SUPPLIERS_CLASS_CONFIG))
-                .thenReturn(BuiltInDslStoreSuppliers.ROCKS_DB.getClass().getName());
+        doReturn(BuiltInDslStoreSuppliers.RocksDBDslStoreSuppliers.class)
+                .when(streamsConfig).getClass(StreamsConfig.DSL_STORE_SUPPLIERS_CLASS_CONFIG);
     }
 
     @Test

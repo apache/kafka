@@ -540,12 +540,13 @@ public class StreamsConfig extends AbstractConfig {
     public static final String ROCKS_DB = "rocksDB";
     @Deprecated
     public static final String IN_MEMORY = "in_memory";
+    @Deprecated
     public static final String DEFAULT_DSL_STORE = ROCKS_DB;
 
     /** {@code dsl.store.suppliers.class } */
     public static final String DSL_STORE_SUPPLIERS_CLASS_CONFIG = "dsl.store.suppliers.class";
     static final String DSL_STORE_SUPPLIERS_CLASS_DOC = "Defines which store implementations to plug in to DSL operators. Must implement the <code>org.apache.kafka.streams.state.DslStoreSuppliers</code> interface.";
-    public static final String DSL_STORE_SUPPLIERS_CLASS_DEFAULT = BuiltInDslStoreSuppliers.RocksDBDslStoreSuppliers.class.getName();
+    static final Class<?> DSL_STORE_SUPPLIERS_CLASS_DEFAULT = BuiltInDslStoreSuppliers.RocksDBDslStoreSuppliers.class;
 
     /** {@code default.windowed.key.serde.inner} */
     @SuppressWarnings("WeakerAccess")
@@ -1016,7 +1017,7 @@ public class StreamsConfig extends AbstractConfig {
                     Importance.LOW,
                     DEFAULT_DSL_STORE_DOC)
             .define(DSL_STORE_SUPPLIERS_CLASS_CONFIG,
-                    Type.STRING,
+                    Type.CLASS,
                     DSL_STORE_SUPPLIERS_CLASS_DEFAULT,
                     Importance.LOW,
                     DSL_STORE_SUPPLIERS_CLASS_DOC)
