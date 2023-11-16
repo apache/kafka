@@ -351,19 +351,17 @@ final class RocksDBVersionedStoreSegmentValueFormatter {
             while (currTimestamp != minTimestamp) {
                 final int timestampSegmentIndex = 2 * TIMESTAMP_SIZE + currIndex * (TIMESTAMP_SIZE + VALUE_SIZE);
                 currTimestamp = ByteBuffer.wrap(segmentValue).getLong(timestampSegmentIndex);
-                if (currTimestamp > toTime || currNextTimestamp < fromTime) {
-                    break;
-                }
                 currValueSize = ByteBuffer.wrap(segmentValue).getInt(timestampSegmentIndex + TIMESTAMP_SIZE);
                 cumValueSize += Math.max(currValueSize, 0);
                 if (currValueSize >= 0) {
                     final byte[] value = new byte[currValueSize];
                     final int valueSegmentIndex = segmentValue.length - cumValueSize;
                     System.arraycopy(segmentValue, valueSegmentIndex, value, 0, currValueSize);
-                    segmentSearchResults.add(new SegmentSearchResult(currIndex, currTimestamp, currNextTimestamp, value));
-                } else {
-                    segmentSearchResults.add(new SegmentSearchResult(currIndex, currTimestamp, currNextTimestamp, null));
+                    if (currTimestamp <= toTime && currNextTimestamp >= fromTime) {
+                        segmentSearchResults.add(new SegmentSearchResult(currIndex, currTimestamp, currNextTimestamp, value));
+                    }
                 }
+
                 // prep for next iteration
                 currNextTimestamp = currTimestamp;
                 currIndex++;

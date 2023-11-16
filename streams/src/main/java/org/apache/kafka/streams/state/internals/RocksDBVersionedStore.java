@@ -53,6 +53,7 @@ import org.apache.kafka.streams.state.internals.RocksDBVersionedStoreSegmentValu
 import org.apache.kafka.streams.state.internals.RocksDBVersionedStoreSegmentValueFormatter.SegmentValue.SegmentSearchResult;
 import org.apache.kafka.streams.state.internals.metrics.RocksDBMetricsRecorder;
 import org.rocksdb.RocksDBException;
+import org.rocksdb.Snapshot;
 import org.rocksdb.WriteBatch;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -275,6 +276,78 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
                 final long recordTimestamp = LatestValueFormatter.getTimestamp(rawLatestValueAndTimestamp);
                 if (recordTimestamp <= toTimestamp) {
                     // latest value satisfies timestamp bound
+                    queryResults.add(new VersionedRecord<>(LatestValueFormatter.getValue(rawLatestValueAndTimestamp), recordTimestamp));
+                }
+            }
+
+            // history retention has elapsed and the latest record version (if present) does
+            // not satisfy the timestamp bound. return null for predictability, even if data
+            // is still present in segments.
+            if (queryResults.size() == 0) {
+                LOG.warn("Returning null for expired get.");
+            }
+            return new VersionedRecordIterator<>(queryResults.listIterator());
+        } else {
+            // take a RocksDB snapshot to return the segments content at the query time (in order to guarantee consistency)
+            final Snapshot snapshot = latestValueStore.getSnapshot();
+            // first check the latest value store
+            final byte[] rawLatestValueAndTimestamp = latestValueStore.get(key, snapshot);
+            if (rawLatestValueAndTimestamp != null) {
+                final long recordTimestamp = LatestValueFormatter.getTimestamp(rawLatestValueAndTimestamp);
+                if (recordTimestamp <= toTimestamp) {
+                    queryResults.add(new VersionedRecord<>(LatestValueFormatter.getValue(rawLatestValueAndTimestamp), recordTimestamp));
+                }
+            }
+
+            // check segment stores
+            // consider the search lower bound as -INF (LONG.MIN_VALUE) to find the record that has been inserted before the {@code fromTimestamp}
+            // but is still valid in query specified time interval.
+            final List<LogicalKeyValueSegment> segments = segmentStores.segments(Long.MIN_VALUE, toTimestamp, false);
+            for (final LogicalKeyValueSegment segment : segments) {
+                final byte[] rawSegmentValue = segment.get(key, snapshot);
+                if (rawSegmentValue != null) {
+
+                    if (RocksDBVersionedStoreSegmentValueFormatter.getNextTimestamp(rawSegmentValue) < fromTimestamp) {
+                        // this segment contains no data for the queried time range, so earlier segments
+                        // cannot either
+                        break;
+                    }
+
+                    // this segments contains (some of) the queried records
+                    final List<SegmentSearchResult> searchResults = RocksDBVersionedStoreSegmentValueFormatter
+                                                                    .deserialize(rawSegmentValue)
+                                                                    .findAll(fromTimestamp, toTimestamp);
+                    for (final SegmentSearchResult searchResult : searchResults) {
+                        queryResults.add(new VersionedRecord<>(searchResult.value(), searchResult.validFrom(), searchResult.validTo()));
+                    }
+                }
+            }
+            if (!isAscending) {
+                queryResults.sort((r1, r2) -> (int) (r1.timestamp() - r2.timestamp()));
+            }
+
+            latestValueStore.releaseSnapshot(snapshot);
+
+            return new VersionedRecordIterator<>(queryResults.listIterator());
+        }
+    }
+
+    public ValueIterator<VersionedRecord<byte[]>> get2(final Bytes key, final long fromTimestamp, final long toTimestamp, final boolean isAscending) {
+
+        Objects.requireNonNull(key, "key cannot be null");
+        validateStoreOpen();
+
+        final List<VersionedRecord<byte[]>> queryResults = new ArrayList<>();
+
+        if (toTimestamp < observedStreamTime - historyRetention) {
+            // history retention exceeded. we still check the latest value store in case the
+            // latest record version satisfies the timestamp bound, in which case it should
+            // still be returned (i.e., the latest record version per key never expires).
+            final byte[] rawLatestValueAndTimestamp = latestValueStore.get(key);
+            if (rawLatestValueAndTimestamp != null) {
+                final long recordTimestamp = LatestValueFormatter.getTimestamp(rawLatestValueAndTimestamp);
+                if (recordTimestamp <= toTimestamp) {
+                    // latest value satisfies timestamp bound
                     queryResults.add(new VersionedRecord<>(
                         LatestValueFormatter.getValue(rawLatestValueAndTimestamp),
                         recordTimestamp
@@ -295,41 +368,13 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
             if (rawLatestValueAndTimestamp != null) {
                 final long recordTimestamp = LatestValueFormatter.getTimestamp(rawLatestValueAndTimestamp);
                 if (recordTimestamp <= toTimestamp) {
-                    queryResults.add(new VersionedRecord<>(
-                        LatestValueFormatter.getValue(rawLatestValueAndTimestamp),
-                        recordTimestamp));
+                    queryResults.add(new VersionedRecord<>(LatestValueFormatter.getValue(rawLatestValueAndTimestamp), recordTimestamp));
                 }
             }
 
-            // check segment stores
-            // consider the search lower bound as -INF (LONG.MIN_VALUE) to find the record that has been inserted before the {@code fromTimestamp}
-            // but is still valid in query specified time interval.
-            final List<LogicalKeyValueSegment> segments = segmentStores.segments(Long.MIN_VALUE,
-                toTimestamp, false);
-            for (final LogicalKeyValueSegment segment : segments) {
-                final byte[] rawSegmentValue = segment.get(key);
-                if (rawSegmentValue != null) {
 
-                    if (RocksDBVersionedStoreSegmentValueFormatter.getNextTimestamp(rawSegmentValue) < fromTimestamp) {
-                        // this segment contains no data for the queried time range, so earlier segments
-                        // cannot either
-                        break;
-                    }
 
-                    // this segments contains the (some of) queried records
-                    final List<SegmentSearchResult> searchResults = RocksDBVersionedStoreSegmentValueFormatter
-                                                                    .deserialize(rawSegmentValue)
-                                                                    .findAll(fromTimestamp, toTimestamp);
-                    for (final SegmentSearchResult searchResult : searchResults) {
-                        if (searchResult.value() != null && searchResult.validFrom() <= toTimestamp && searchResult.validTo() >= fromTimestamp) {
-                            queryResults.add(new VersionedRecord<>(searchResult.value(), searchResult.validFrom(), searchResult.validTo()));
-                        }
-                    }
-                }
-            }
-            if (!isAscending) {
-                queryResults.sort((r1, r2) -> (int) (r1.timestamp() - r2.timestamp()));
-            }
+
             return new VersionedRecordIterator<>(queryResults.listIterator());
         }
     }
