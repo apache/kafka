@@ -1606,7 +1606,8 @@ class ReplicaManager(val config: KafkaConfig,
         return Some(createLogReadResult(e))
     }
 
-    val remoteFetch = new DelayedRemoteFetch(remoteFetchTask, remoteFetchResult, remoteFetchInfo,
+    val timeout = config.remoteLogManagerConfig.remoteLogReaderFetchTimeoutMs();
+    val remoteFetch = new DelayedRemoteFetch(remoteFetchTask, remoteFetchResult, remoteFetchInfo, timeout,
       fetchPartitionStatus, params, logReadResults, this, responseCallback)
 
     delayedRemoteFetchPurgatory.tryCompleteElseWatch(remoteFetch, Seq(key))

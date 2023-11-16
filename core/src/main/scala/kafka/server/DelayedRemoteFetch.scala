@@ -34,12 +34,13 @@ import scala.collection._
 class DelayedRemoteFetch(remoteFetchTask: Future[Void],
                          remoteFetchResult: CompletableFuture[RemoteLogReadResult],
                          remoteFetchInfo: RemoteStorageFetchInfo,
+                         delayMs: Long,
                          fetchPartitionStatus: Seq[(TopicIdPartition, FetchPartitionStatus)],
                          fetchParams: FetchParams,
                          localReadResults: Seq[(TopicIdPartition, LogReadResult)],
                          replicaManager: ReplicaManager,
                          responseCallback: Seq[(TopicIdPartition, FetchPartitionData)] => Unit)
-  extends DelayedOperation(fetchParams.maxWaitMs) {
+  extends DelayedOperation(delayMs) {
 
   if (fetchParams.isFromFollower) {
     throw new IllegalStateException(s"The follower should not invoke remote fetch. Fetch params are: $fetchParams")
