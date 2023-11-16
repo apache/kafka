@@ -276,18 +276,16 @@ public final class MetaPropertiesEnsemble {
          */
         public Uuid generateValidDirectoryId() {
             while (true) {
-                Uuid uuid = new Uuid(random.nextLong(), random.nextLong());
-                if (!(uuid.toString().startsWith("-") || DirectoryId.reserved(uuid))) {
-                    boolean duplicate = false;
-                    for (MetaProperties metaProps : logDirProps.values()) {
-                        if (metaProps.directoryId().equals(Optional.of(uuid))) {
-                            duplicate = true;
-                            break;
-                        }
+                Uuid uuid = DirectoryId.random();
+                boolean duplicate = false;
+                for (MetaProperties metaProps : logDirProps.values()) {
+                    if (metaProps.directoryId().equals(Optional.of(uuid))) {
+                        duplicate = true;
+                        break;
                     }
-                    if (!duplicate) {
-                        return uuid;
-                    }
+                }
+                if (!duplicate) {
+                    return uuid;
                 }
             }
         }
