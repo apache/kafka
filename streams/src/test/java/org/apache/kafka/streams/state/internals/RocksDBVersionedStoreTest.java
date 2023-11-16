@@ -101,9 +101,9 @@ public class RocksDBVersionedStoreTest {
         putToStore("k", "v2", BASE_TIMESTAMP + 1, PUT_RETURN_CODE_VALID_TO_UNDEFINED);
 
         verifyGetValueFromStore("k", "v2", BASE_TIMESTAMP + 1);
-        verifyTimestampedGetValueFromStore("k", BASE_TIMESTAMP, "v", BASE_TIMESTAMP);
-        verifyTimestampedGetValueFromStore("k", BASE_TIMESTAMP + 1, "v2", BASE_TIMESTAMP + 1);
-        verifyTimestampedGetValueFromStore("k", BASE_TIMESTAMP + 2, "v2", BASE_TIMESTAMP + 1);
+        verifyTimestampedGetValueFromStore("k", BASE_TIMESTAMP, "v", BASE_TIMESTAMP, BASE_TIMESTAMP + 1);
+        verifyTimestampedGetValueFromStore("k", BASE_TIMESTAMP + 1, "v2", BASE_TIMESTAMP + 1, Long.MAX_VALUE);
+        verifyTimestampedGetValueFromStore("k", BASE_TIMESTAMP + 2, "v2", BASE_TIMESTAMP + 1, Long.MAX_VALUE);
     }
 
     @Test
@@ -125,10 +125,10 @@ public class RocksDBVersionedStoreTest {
         putToStore("k", "v4", BASE_TIMESTAMP - 4, BASE_TIMESTAMP - 2);
 
         verifyGetValueFromStore("k", "v", BASE_TIMESTAMP);
-        verifyTimestampedGetValueFromStore("k", BASE_TIMESTAMP, "v", BASE_TIMESTAMP);
-        verifyTimestampedGetValueFromStore("k", BASE_TIMESTAMP - 1, "v1", BASE_TIMESTAMP - 1);
-        verifyTimestampedGetValueFromStore("k", BASE_TIMESTAMP - 2, "v2", BASE_TIMESTAMP - 2);
-        verifyTimestampedGetValueFromStore("k", BASE_TIMESTAMP - 3, "v4", BASE_TIMESTAMP - 4);
+        verifyTimestampedGetValueFromStore("k", BASE_TIMESTAMP, "v", BASE_TIMESTAMP, Long.MAX_VALUE);
+        verifyTimestampedGetValueFromStore("k", BASE_TIMESTAMP - 1, "v1", BASE_TIMESTAMP - 1, BASE_TIMESTAMP);
+        verifyTimestampedGetValueFromStore("k", BASE_TIMESTAMP - 2, "v2", BASE_TIMESTAMP - 2, BASE_TIMESTAMP - 1);
+        verifyTimestampedGetValueFromStore("k", BASE_TIMESTAMP - 3, "v4", BASE_TIMESTAMP - 4, BASE_TIMESTAMP - 2);
     }
 
     @Test
@@ -140,9 +140,9 @@ public class RocksDBVersionedStoreTest {
 
         verifyGetNullFromStore("k");
         verifyTimestampedGetNullFromStore("k", BASE_TIMESTAMP);
-        verifyTimestampedGetValueFromStore("k", BASE_TIMESTAMP - 1, "v1", BASE_TIMESTAMP - 1);
-        verifyTimestampedGetValueFromStore("k", BASE_TIMESTAMP - 2, "v2", BASE_TIMESTAMP - 2);
-        verifyTimestampedGetValueFromStore("k", BASE_TIMESTAMP - 3, "v4", BASE_TIMESTAMP - 4);
+        verifyTimestampedGetValueFromStore("k", BASE_TIMESTAMP - 1, "v1", BASE_TIMESTAMP - 1, BASE_TIMESTAMP);
+        verifyTimestampedGetValueFromStore("k", BASE_TIMESTAMP - 2, "v2", BASE_TIMESTAMP - 2, BASE_TIMESTAMP - 1);
+        verifyTimestampedGetValueFromStore("k", BASE_TIMESTAMP - 3, "v4", BASE_TIMESTAMP - 4, BASE_TIMESTAMP - 2);
     }
 
     @Test
@@ -156,12 +156,12 @@ public class RocksDBVersionedStoreTest {
         putToStore("k", null, BASE_TIMESTAMP - 6, BASE_TIMESTAMP - 5);
 
         verifyGetValueFromStore("k", "v", BASE_TIMESTAMP);
-        verifyTimestampedGetValueFromStore("k", BASE_TIMESTAMP, "v", BASE_TIMESTAMP);
+        verifyTimestampedGetValueFromStore("k", BASE_TIMESTAMP, "v", BASE_TIMESTAMP, Long.MAX_VALUE);
         verifyTimestampedGetNullFromStore("k", BASE_TIMESTAMP - 1);
         verifyTimestampedGetNullFromStore("k", BASE_TIMESTAMP - 2);
-        verifyTimestampedGetValueFromStore("k", BASE_TIMESTAMP - 3, "v3", BASE_TIMESTAMP - 3);
+        verifyTimestampedGetValueFromStore("k", BASE_TIMESTAMP - 3, "v3", BASE_TIMESTAMP - 3, BASE_TIMESTAMP - 2);
         verifyTimestampedGetNullFromStore("k", BASE_TIMESTAMP - 4);
-        verifyTimestampedGetValueFromStore("k", BASE_TIMESTAMP - 5, "v5", BASE_TIMESTAMP - 5);
+        verifyTimestampedGetValueFromStore("k", BASE_TIMESTAMP - 5, "v5", BASE_TIMESTAMP - 5, BASE_TIMESTAMP - 4);
         verifyTimestampedGetNullFromStore("k", BASE_TIMESTAMP - 6);
     }
 
@@ -179,9 +179,9 @@ public class RocksDBVersionedStoreTest {
         verifyTimestampedGetNullFromStore("k", BASE_TIMESTAMP);
         verifyTimestampedGetNullFromStore("k", BASE_TIMESTAMP - 1);
         verifyTimestampedGetNullFromStore("k", BASE_TIMESTAMP - 2);
-        verifyTimestampedGetValueFromStore("k", BASE_TIMESTAMP - 3, "v3", BASE_TIMESTAMP - 3);
+        verifyTimestampedGetValueFromStore("k", BASE_TIMESTAMP - 3, "v3", BASE_TIMESTAMP - 3, BASE_TIMESTAMP - 2);
         verifyTimestampedGetNullFromStore("k", BASE_TIMESTAMP - 4);
-        verifyTimestampedGetValueFromStore("k", BASE_TIMESTAMP - 5, "v5", BASE_TIMESTAMP - 5);
+        verifyTimestampedGetValueFromStore("k", BASE_TIMESTAMP - 5, "v5", BASE_TIMESTAMP - 5, BASE_TIMESTAMP - 4);
         verifyTimestampedGetNullFromStore("k", BASE_TIMESTAMP - 6);
     }
 
@@ -191,7 +191,7 @@ public class RocksDBVersionedStoreTest {
         putToStore("k", "b", BASE_TIMESTAMP, PUT_RETURN_CODE_VALID_TO_UNDEFINED);
 
         verifyGetValueFromStore("k", "b", BASE_TIMESTAMP);
-        verifyTimestampedGetValueFromStore("k", BASE_TIMESTAMP, "b", BASE_TIMESTAMP);
+        verifyTimestampedGetValueFromStore("k", BASE_TIMESTAMP, "b", BASE_TIMESTAMP, Long.MAX_VALUE);
         verifyTimestampedGetNullFromStore("k", BASE_TIMESTAMP - 1);
 
         putToStore("k", null, BASE_TIMESTAMP, PUT_RETURN_CODE_VALID_TO_UNDEFINED);
@@ -209,7 +209,7 @@ public class RocksDBVersionedStoreTest {
         putToStore("k", "b", BASE_TIMESTAMP, PUT_RETURN_CODE_VALID_TO_UNDEFINED);
 
         verifyGetValueFromStore("k", "b", BASE_TIMESTAMP);
-        verifyTimestampedGetValueFromStore("k", BASE_TIMESTAMP, "b", BASE_TIMESTAMP);
+        verifyTimestampedGetValueFromStore("k", BASE_TIMESTAMP, "b", BASE_TIMESTAMP, Long.MAX_VALUE);
         verifyTimestampedGetNullFromStore("k", BASE_TIMESTAMP - 1);
     }
 
@@ -235,12 +235,12 @@ public class RocksDBVersionedStoreTest {
         verifyGetNullFromStore("k");
         verifyTimestampedGetNullFromStore("k", SEGMENT_INTERVAL + 30);
         verifyTimestampedGetNullFromStore("k", SEGMENT_INTERVAL + 15);
-        verifyTimestampedGetValueFromStore("k", SEGMENT_INTERVAL + 6, "vp5", SEGMENT_INTERVAL + 5);
+        verifyTimestampedGetValueFromStore("k", SEGMENT_INTERVAL + 6, "vp5", SEGMENT_INTERVAL + 5, SEGMENT_INTERVAL + 10);
         verifyTimestampedGetNullFromStore("k", SEGMENT_INTERVAL + 2);
         verifyTimestampedGetNullFromStore("k", SEGMENT_INTERVAL);
         verifyTimestampedGetNullFromStore("k", SEGMENT_INTERVAL - 1);
-        verifyTimestampedGetValueFromStore("k", SEGMENT_INTERVAL - 5, "vn5", SEGMENT_INTERVAL - 5);
-        verifyTimestampedGetValueFromStore("k", SEGMENT_INTERVAL - 6, "vn6", SEGMENT_INTERVAL - 6);
+        verifyTimestampedGetValueFromStore("k", SEGMENT_INTERVAL - 5, "vn5", SEGMENT_INTERVAL - 5, SEGMENT_INTERVAL - 1);
+        verifyTimestampedGetValueFromStore("k", SEGMENT_INTERVAL - 6, "vn6", SEGMENT_INTERVAL - 6, SEGMENT_INTERVAL - 5);
         verifyTimestampedGetNullFromStore("k", SEGMENT_INTERVAL - 8);
     }
 
@@ -255,12 +255,12 @@ public class RocksDBVersionedStoreTest {
 
         verifyGetNullFromStore("k");
         verifyTimestampedGetNullFromStore("k", SEGMENT_INTERVAL + 30);
-        verifyTimestampedGetValueFromStore("k", SEGMENT_INTERVAL + 15, "vp10", SEGMENT_INTERVAL + 10);
+        verifyTimestampedGetValueFromStore("k", SEGMENT_INTERVAL + 15, "vp10", SEGMENT_INTERVAL + 10, SEGMENT_INTERVAL + 20);
         verifyTimestampedGetNullFromStore("k", SEGMENT_INTERVAL + 5);
         verifyTimestampedGetNullFromStore("k", SEGMENT_INTERVAL + 2);
         verifyTimestampedGetNullFromStore("k", SEGMENT_INTERVAL);
         verifyTimestampedGetNullFromStore("k", SEGMENT_INTERVAL - 1);
-        verifyTimestampedGetValueFromStore("k", SEGMENT_INTERVAL - 5, "vn10", SEGMENT_INTERVAL - 10);
+        verifyTimestampedGetValueFromStore("k", SEGMENT_INTERVAL - 5, "vn10", SEGMENT_INTERVAL - 10, SEGMENT_INTERVAL - 1);
         verifyTimestampedGetNullFromStore("k", SEGMENT_INTERVAL - 15);
     }
 
@@ -274,13 +274,13 @@ public class RocksDBVersionedStoreTest {
         putToStore("k", "vp1", SEGMENT_INTERVAL + 1, SEGMENT_INTERVAL + 10);
 
         verifyGetValueFromStore("k", "vp20", SEGMENT_INTERVAL + 20);
-        verifyTimestampedGetValueFromStore("k", SEGMENT_INTERVAL + 30, "vp20", SEGMENT_INTERVAL + 20);
-        verifyTimestampedGetValueFromStore("k", SEGMENT_INTERVAL + 15, "vp10", SEGMENT_INTERVAL + 10);
-        verifyTimestampedGetValueFromStore("k", SEGMENT_INTERVAL + 5, "vp1", SEGMENT_INTERVAL + 1);
-        verifyTimestampedGetValueFromStore("k", SEGMENT_INTERVAL, "vn1", SEGMENT_INTERVAL - 1);
-        verifyTimestampedGetValueFromStore("k", SEGMENT_INTERVAL - 1, "vn1", SEGMENT_INTERVAL - 1);
-        verifyTimestampedGetValueFromStore("k", SEGMENT_INTERVAL - 2, "vn2", SEGMENT_INTERVAL - 2);
-        verifyTimestampedGetValueFromStore("k", SEGMENT_INTERVAL - 5, "vn10", SEGMENT_INTERVAL - 10);
+        verifyTimestampedGetValueFromStore("k", SEGMENT_INTERVAL + 30, "vp20", SEGMENT_INTERVAL + 20, Long.MAX_VALUE);
+        verifyTimestampedGetValueFromStore("k", SEGMENT_INTERVAL + 15, "vp10", SEGMENT_INTERVAL + 10, SEGMENT_INTERVAL + 20);
+        verifyTimestampedGetValueFromStore("k", SEGMENT_INTERVAL + 5, "vp1", SEGMENT_INTERVAL + 1, SEGMENT_INTERVAL + 10);
+        verifyTimestampedGetValueFromStore("k", SEGMENT_INTERVAL, "vn1", SEGMENT_INTERVAL - 1, SEGMENT_INTERVAL + 1);
+        verifyTimestampedGetValueFromStore("k", SEGMENT_INTERVAL - 1, "vn1", SEGMENT_INTERVAL - 1, SEGMENT_INTERVAL + 1);
+        verifyTimestampedGetValueFromStore("k", SEGMENT_INTERVAL - 2, "vn2", SEGMENT_INTERVAL - 2, SEGMENT_INTERVAL - 1);
+        verifyTimestampedGetValueFromStore("k", SEGMENT_INTERVAL - 5, "vn10", SEGMENT_INTERVAL - 10, SEGMENT_INTERVAL - 2);
     }
 
     @Test
@@ -297,12 +297,12 @@ public class RocksDBVersionedStoreTest {
         verifyGetNullFromStore("k");
         verifyTimestampedGetNullFromStore("k", SEGMENT_INTERVAL + 30);
         verifyTimestampedGetNullFromStore("k", SEGMENT_INTERVAL + 15);
-        verifyTimestampedGetValueFromStore("k", SEGMENT_INTERVAL + 6, "vp5", SEGMENT_INTERVAL + 5);
+        verifyTimestampedGetValueFromStore("k", SEGMENT_INTERVAL + 6, "vp5", SEGMENT_INTERVAL + 5, SEGMENT_INTERVAL + 10);
         verifyTimestampedGetNullFromStore("k", SEGMENT_INTERVAL + 2);
         verifyTimestampedGetNullFromStore("k", SEGMENT_INTERVAL);
         verifyTimestampedGetNullFromStore("k", SEGMENT_INTERVAL - 1);
-        verifyTimestampedGetValueFromStore("k", SEGMENT_INTERVAL - 5, "vn5", SEGMENT_INTERVAL - 5);
-        verifyTimestampedGetValueFromStore("k", SEGMENT_INTERVAL - 6, "vn6", SEGMENT_INTERVAL - 6);
+        verifyTimestampedGetValueFromStore("k", SEGMENT_INTERVAL - 5, "vn5", SEGMENT_INTERVAL - 5, SEGMENT_INTERVAL - 1);
+        verifyTimestampedGetValueFromStore("k", SEGMENT_INTERVAL - 6, "vn6", SEGMENT_INTERVAL - 6, SEGMENT_INTERVAL - 5);
         verifyTimestampedGetNullFromStore("k", SEGMENT_INTERVAL - 8);
     }
 
@@ -316,13 +316,13 @@ public class RocksDBVersionedStoreTest {
         putToStore("k", "vn2", SEGMENT_INTERVAL - 2, SEGMENT_INTERVAL - 1);
 
         verifyGetValueFromStore("k", "vp20", SEGMENT_INTERVAL + 20);
-        verifyTimestampedGetValueFromStore("k", SEGMENT_INTERVAL + 30, "vp20", SEGMENT_INTERVAL + 20);
+        verifyTimestampedGetValueFromStore("k", SEGMENT_INTERVAL + 30, "vp20", SEGMENT_INTERVAL + 20, Long.MAX_VALUE);
         verifyTimestampedGetNullFromStore("k", SEGMENT_INTERVAL + 12);
         verifyTimestampedGetNullFromStore("k", SEGMENT_INTERVAL);
         verifyTimestampedGetNullFromStore("k", SEGMENT_INTERVAL - 1);
-        verifyTimestampedGetValueFromStore("k", SEGMENT_INTERVAL - 2, "vn2", SEGMENT_INTERVAL - 2);
+        verifyTimestampedGetValueFromStore("k", SEGMENT_INTERVAL - 2, "vn2", SEGMENT_INTERVAL - 2, SEGMENT_INTERVAL - 1);
         verifyTimestampedGetNullFromStore("k", SEGMENT_INTERVAL - 5);
-        verifyTimestampedGetValueFromStore("k", SEGMENT_INTERVAL - 6, "vn6", SEGMENT_INTERVAL - 6);
+        verifyTimestampedGetValueFromStore("k", SEGMENT_INTERVAL - 6, "vn6", SEGMENT_INTERVAL - 6, SEGMENT_INTERVAL - 5);
     }
 
     @Test
@@ -334,10 +334,10 @@ public class RocksDBVersionedStoreTest {
         putToStore("k", null, SEGMENT_INTERVAL - 2, SEGMENT_INTERVAL - 1);
 
         verifyGetValueFromStore("k", "vp30", SEGMENT_INTERVAL + 30);
-        verifyTimestampedGetValueFromStore("k", SEGMENT_INTERVAL + 10, "vn1", SEGMENT_INTERVAL - 1);
-        verifyTimestampedGetValueFromStore("k", SEGMENT_INTERVAL - 1, "vn1", SEGMENT_INTERVAL - 1);
+        verifyTimestampedGetValueFromStore("k", SEGMENT_INTERVAL + 10, "vn1", SEGMENT_INTERVAL - 1, SEGMENT_INTERVAL + 30);
+        verifyTimestampedGetValueFromStore("k", SEGMENT_INTERVAL - 1, "vn1", SEGMENT_INTERVAL - 1, SEGMENT_INTERVAL + 30);
         verifyTimestampedGetNullFromStore("k", SEGMENT_INTERVAL - 2);
-        verifyTimestampedGetValueFromStore("k", SEGMENT_INTERVAL - 5, "vn5", SEGMENT_INTERVAL - 5);
+        verifyTimestampedGetValueFromStore("k", SEGMENT_INTERVAL - 5, "vn5", SEGMENT_INTERVAL - 5, SEGMENT_INTERVAL - 2);
         verifyTimestampedGetNullFromStore("k", SEGMENT_INTERVAL - 10);
     }
 
@@ -414,7 +414,7 @@ public class RocksDBVersionedStoreTest {
         putToStore("k", null, SEGMENT_INTERVAL - 10, PUT_RETURN_CODE_VALID_TO_UNDEFINED);
 
         verifyTimestampedGetNullFromStore("k", SEGMENT_INTERVAL - 30);
-        verifyTimestampedGetValueFromStore("k", SEGMENT_INTERVAL - 15, "v", SEGMENT_INTERVAL - 20);
+        verifyTimestampedGetValueFromStore("k", SEGMENT_INTERVAL - 15, "v", SEGMENT_INTERVAL - 20, SEGMENT_INTERVAL - 10);
         verifyTimestampedGetNullFromStore("k", SEGMENT_INTERVAL - 5);
 
         // insert data to create non-empty (third) segment
@@ -423,7 +423,7 @@ public class RocksDBVersionedStoreTest {
 
         // presence of non-empty later segment does not affect results of getting from earlier segment
         verifyTimestampedGetNullFromStore("k", SEGMENT_INTERVAL - 30);
-        verifyTimestampedGetValueFromStore("k", SEGMENT_INTERVAL - 15, "v", SEGMENT_INTERVAL - 20);
+        verifyTimestampedGetValueFromStore("k", SEGMENT_INTERVAL - 15, "v", SEGMENT_INTERVAL - 20, SEGMENT_INTERVAL - 10);
         verifyTimestampedGetNullFromStore("k", SEGMENT_INTERVAL - 5);
     }
 
@@ -433,12 +433,12 @@ public class RocksDBVersionedStoreTest {
         putToStore("k", "v", SEGMENT_INTERVAL - 10, PUT_RETURN_CODE_VALID_TO_UNDEFINED);
 
         // old record has not yet expired
-        verifyTimestampedGetValueFromStore("k", SEGMENT_INTERVAL - 11, "v_old", 0);
+        verifyTimestampedGetValueFromStore("k", SEGMENT_INTERVAL - 11, "v_old", 0, SEGMENT_INTERVAL - 10);
 
         putToStore("ko", "vo", HISTORY_RETENTION + SEGMENT_INTERVAL - 11, PUT_RETURN_CODE_VALID_TO_UNDEFINED);
 
         // old record still has not yet expired
-        verifyTimestampedGetValueFromStore("k", SEGMENT_INTERVAL - 11, "v_old", 0);
+        verifyTimestampedGetValueFromStore("k", SEGMENT_INTERVAL - 11, "v_old", 0, SEGMENT_INTERVAL - 10);
 
         putToStore("ko", "vo2", HISTORY_RETENTION + SEGMENT_INTERVAL - 10, PUT_RETURN_CODE_VALID_TO_UNDEFINED);
 
@@ -453,7 +453,7 @@ public class RocksDBVersionedStoreTest {
         putToStore("ko", "vo_new", HISTORY_RETENTION + 12, PUT_RETURN_CODE_VALID_TO_UNDEFINED);
 
         // expired get on key where latest satisfies timestamp bound still returns data
-        verifyTimestampedGetValueFromStore("k", 10, "v", 1);
+        verifyTimestampedGetValueFromStore("k", 10, "v", 1, Long.MAX_VALUE);
 
         // same expired get on key where latest value does not satisfy timestamp bound does not return data
         verifyTimestampedGetNullFromStore("ko", 10);
@@ -474,12 +474,12 @@ public class RocksDBVersionedStoreTest {
         verifyGetNullFromStore("k");
         verifyTimestampedGetNullFromStore("k", SEGMENT_INTERVAL + 30);
         verifyTimestampedGetNullFromStore("k", SEGMENT_INTERVAL + 15);
-        verifyTimestampedGetValueFromStore("k", SEGMENT_INTERVAL + 6, "", SEGMENT_INTERVAL + 5);
+        verifyTimestampedGetValueFromStore("k", SEGMENT_INTERVAL + 6, "", SEGMENT_INTERVAL + 5, SEGMENT_INTERVAL + 10);
         verifyTimestampedGetNullFromStore("k", SEGMENT_INTERVAL + 2);
         verifyTimestampedGetNullFromStore("k", SEGMENT_INTERVAL);
         verifyTimestampedGetNullFromStore("k", SEGMENT_INTERVAL - 1);
-        verifyTimestampedGetValueFromStore("k", SEGMENT_INTERVAL - 5, "", SEGMENT_INTERVAL - 5);
-        verifyTimestampedGetValueFromStore("k", SEGMENT_INTERVAL - 6, "", SEGMENT_INTERVAL - 6);
+        verifyTimestampedGetValueFromStore("k", SEGMENT_INTERVAL - 5, "", SEGMENT_INTERVAL - 5, SEGMENT_INTERVAL - 1);
+        verifyTimestampedGetValueFromStore("k", SEGMENT_INTERVAL - 6, "", SEGMENT_INTERVAL - 6, SEGMENT_INTERVAL - 5);
         verifyTimestampedGetNullFromStore("k", SEGMENT_INTERVAL - 8);
     }
 
@@ -641,13 +641,13 @@ public class RocksDBVersionedStoreTest {
         store.restoreBatch(getChangelogRecords(records));
 
         verifyGetValueFromStore("k", "vp20", SEGMENT_INTERVAL + 20);
-        verifyTimestampedGetValueFromStore("k", SEGMENT_INTERVAL + 30, "vp20", SEGMENT_INTERVAL + 20);
-        verifyTimestampedGetValueFromStore("k", SEGMENT_INTERVAL + 15, "vp10", SEGMENT_INTERVAL + 10);
-        verifyTimestampedGetValueFromStore("k", SEGMENT_INTERVAL + 5, "vp1", SEGMENT_INTERVAL + 1);
-        verifyTimestampedGetValueFromStore("k", SEGMENT_INTERVAL, "vn1", SEGMENT_INTERVAL - 1);
-        verifyTimestampedGetValueFromStore("k", SEGMENT_INTERVAL - 1, "vn1", SEGMENT_INTERVAL - 1);
-        verifyTimestampedGetValueFromStore("k", SEGMENT_INTERVAL - 2, "vn2", SEGMENT_INTERVAL - 2);
-        verifyTimestampedGetValueFromStore("k", SEGMENT_INTERVAL - 5, "vn10", SEGMENT_INTERVAL - 10);
+        verifyTimestampedGetValueFromStore("k", SEGMENT_INTERVAL + 30, "vp20", SEGMENT_INTERVAL + 20, Long.MAX_VALUE);
+        verifyTimestampedGetValueFromStore("k", SEGMENT_INTERVAL + 15, "vp10", SEGMENT_INTERVAL + 10, SEGMENT_INTERVAL + 20);
+        verifyTimestampedGetValueFromStore("k", SEGMENT_INTERVAL + 5, "vp1", SEGMENT_INTERVAL + 1, SEGMENT_INTERVAL + 10);
+        verifyTimestampedGetValueFromStore("k", SEGMENT_INTERVAL, "vn1", SEGMENT_INTERVAL - 1, SEGMENT_INTERVAL + 1);
+        verifyTimestampedGetValueFromStore("k", SEGMENT_INTERVAL - 1, "vn1", SEGMENT_INTERVAL - 1, SEGMENT_INTERVAL + 1);
+        verifyTimestampedGetValueFromStore("k", SEGMENT_INTERVAL - 2, "vn2", SEGMENT_INTERVAL - 2, SEGMENT_INTERVAL - 1);
+        verifyTimestampedGetValueFromStore("k", SEGMENT_INTERVAL - 5, "vn10", SEGMENT_INTERVAL - 10, SEGMENT_INTERVAL - 2);
     }
 
     @Test
@@ -667,12 +667,12 @@ public class RocksDBVersionedStoreTest {
         verifyGetNullFromStore("k");
         verifyTimestampedGetNullFromStore("k", SEGMENT_INTERVAL + 30);
         verifyTimestampedGetNullFromStore("k", SEGMENT_INTERVAL + 15);
-        verifyTimestampedGetValueFromStore("k", SEGMENT_INTERVAL + 6, "vp5", SEGMENT_INTERVAL + 5);
+        verifyTimestampedGetValueFromStore("k", SEGMENT_INTERVAL + 6, "vp5", SEGMENT_INTERVAL + 5, SEGMENT_INTERVAL + 10);
         verifyTimestampedGetNullFromStore("k", SEGMENT_INTERVAL + 2);
         verifyTimestampedGetNullFromStore("k", SEGMENT_INTERVAL);
         verifyTimestampedGetNullFromStore("k", SEGMENT_INTERVAL - 1);
-        verifyTimestampedGetValueFromStore("k", SEGMENT_INTERVAL - 5, "vn5", SEGMENT_INTERVAL - 5);
-        verifyTimestampedGetValueFromStore("k", SEGMENT_INTERVAL - 6, "vn6", SEGMENT_INTERVAL - 6);
+        verifyTimestampedGetValueFromStore("k", SEGMENT_INTERVAL - 5, "vn5", SEGMENT_INTERVAL - 5, SEGMENT_INTERVAL - 1);
+        verifyTimestampedGetValueFromStore("k", SEGMENT_INTERVAL - 6, "vn6", SEGMENT_INTERVAL - 6, SEGMENT_INTERVAL - 5);
         verifyTimestampedGetNullFromStore("k", SEGMENT_INTERVAL - 8);
     }
 
@@ -701,12 +701,12 @@ public class RocksDBVersionedStoreTest {
         verifyGetNullFromStore("k");
         verifyTimestampedGetNullFromStore("k", SEGMENT_INTERVAL + 30);
         verifyTimestampedGetNullFromStore("k", SEGMENT_INTERVAL + 15);
-        verifyTimestampedGetValueFromStore("k", SEGMENT_INTERVAL + 6, "vp5", SEGMENT_INTERVAL + 5);
+        verifyTimestampedGetValueFromStore("k", SEGMENT_INTERVAL + 6, "vp5", SEGMENT_INTERVAL + 5, SEGMENT_INTERVAL + 10);
         verifyTimestampedGetNullFromStore("k", SEGMENT_INTERVAL + 2);
         verifyTimestampedGetNullFromStore("k", SEGMENT_INTERVAL);
         verifyTimestampedGetNullFromStore("k", SEGMENT_INTERVAL - 1);
-        verifyTimestampedGetValueFromStore("k", SEGMENT_INTERVAL - 5, "vn5", SEGMENT_INTERVAL - 5);
-        verifyTimestampedGetValueFromStore("k", SEGMENT_INTERVAL - 6, "vn6", SEGMENT_INTERVAL - 6);
+        verifyTimestampedGetValueFromStore("k", SEGMENT_INTERVAL - 5, "vn5", SEGMENT_INTERVAL - 5, SEGMENT_INTERVAL - 1);
+        verifyTimestampedGetValueFromStore("k", SEGMENT_INTERVAL - 6, "vn6", SEGMENT_INTERVAL - 6, SEGMENT_INTERVAL - 5);
         verifyTimestampedGetNullFromStore("k", SEGMENT_INTERVAL - 8);
     }
 
@@ -727,12 +727,12 @@ public class RocksDBVersionedStoreTest {
 
         verifyGetNullFromStore("k");
         verifyTimestampedGetNullFromStore("k", SEGMENT_INTERVAL + 30);
-        verifyTimestampedGetValueFromStore("k", SEGMENT_INTERVAL + 15, "vp10", SEGMENT_INTERVAL + 10);
+        verifyTimestampedGetValueFromStore("k", SEGMENT_INTERVAL + 15, "vp10", SEGMENT_INTERVAL + 10, SEGMENT_INTERVAL + 20);
         verifyTimestampedGetNullFromStore("k", SEGMENT_INTERVAL + 5);
         verifyTimestampedGetNullFromStore("k", SEGMENT_INTERVAL + 2);
         verifyTimestampedGetNullFromStore("k", SEGMENT_INTERVAL);
         verifyTimestampedGetNullFromStore("k", SEGMENT_INTERVAL - 1);
-        verifyTimestampedGetValueFromStore("k", SEGMENT_INTERVAL - 5, "vn10", SEGMENT_INTERVAL - 10);
+        verifyTimestampedGetValueFromStore("k", SEGMENT_INTERVAL - 5, "vn10", SEGMENT_INTERVAL - 10, SEGMENT_INTERVAL - 1);
         verifyTimestampedGetNullFromStore("k", SEGMENT_INTERVAL - 15);
     }
 
@@ -774,18 +774,18 @@ public class RocksDBVersionedStoreTest {
         // put and get
         putToStore("k", "v", BASE_TIMESTAMP, PUT_RETURN_CODE_VALID_TO_UNDEFINED);
         verifyGetValueFromStore("k", "v", BASE_TIMESTAMP);
-        verifyTimestampedGetValueFromStore("k", BASE_TIMESTAMP, "v", BASE_TIMESTAMP);
-        verifyTimestampedGetValueFromStore("k", BASE_TIMESTAMP + 1, "v", BASE_TIMESTAMP); // query in "future" is allowed
+        verifyTimestampedGetValueFromStore("k", BASE_TIMESTAMP, "v", BASE_TIMESTAMP, Long.MAX_VALUE);
+        verifyTimestampedGetValueFromStore("k", BASE_TIMESTAMP + 1, "v", BASE_TIMESTAMP, Long.MAX_VALUE); // query in "future" is allowed
 
         // update existing record at same timestamp
         putToStore("k", "updated", BASE_TIMESTAMP, PUT_RETURN_CODE_VALID_TO_UNDEFINED);
         verifyGetValueFromStore("k", "updated", BASE_TIMESTAMP);
-        verifyTimestampedGetValueFromStore("k", BASE_TIMESTAMP, "updated", BASE_TIMESTAMP);
+        verifyTimestampedGetValueFromStore("k", BASE_TIMESTAMP, "updated", BASE_TIMESTAMP, Long.MAX_VALUE);
 
         // put new record version
         putToStore("k", "v2", BASE_TIMESTAMP + 2, PUT_RETURN_CODE_VALID_TO_UNDEFINED);
         verifyGetValueFromStore("k", "v2", BASE_TIMESTAMP + 2);
-        verifyTimestampedGetValueFromStore("k", BASE_TIMESTAMP + 2, "v2", BASE_TIMESTAMP + 2);
+        verifyTimestampedGetValueFromStore("k", BASE_TIMESTAMP + 2, "v2", BASE_TIMESTAMP + 2, Long.MAX_VALUE);
 
         // query in past (history retention expired) returns null
         verifyTimestampedGetNullFromStore("k", BASE_TIMESTAMP + 1);
@@ -840,6 +840,7 @@ public class RocksDBVersionedStoreTest {
         final VersionedRecord<String> latest = getFromStore(key);
         assertThat(latest.value(), equalTo(expectedValue));
         assertThat(latest.timestamp(), equalTo(expectedTimestamp));
+        assertThat(latest.validTo(), equalTo(Long.MAX_VALUE));
     }
 
     private void verifyGetNullFromStore(final String key) {
@@ -847,10 +848,11 @@ public class RocksDBVersionedStoreTest {
         assertThat(record, nullValue());
     }
 
-    private void verifyTimestampedGetValueFromStore(final String key, final long timestamp, final String expectedValue, final long expectedTimestamp) {
+    private void verifyTimestampedGetValueFromStore(final String key, final long timestamp, final String expectedValue, final long expectedTimestamp, final long expectedValidTo) {
         final VersionedRecord<String> latest = getFromStore(key, timestamp);
         assertThat(latest.value(), equalTo(expectedValue));
         assertThat(latest.timestamp(), equalTo(expectedTimestamp));
+        assertThat(latest.validTo(), equalTo(expectedValidTo));
     }
 
     private void verifyTimestampedGetValueFromStore(final String key,

@@ -430,9 +430,8 @@ public final class StoreQueryUtils {
     public static <V> VersionedRecord<V> deserializeVersionedRecord(final StateSerdes<?, V> serdes,
         final VersionedRecord<byte[]> rawVersionedRecord) {
         final Deserializer<V> valueDeserializer = serdes.valueDeserializer();
-        final long timestamp = rawVersionedRecord.timestamp();
         final V value = valueDeserializer.deserialize(serdes.topic(), rawVersionedRecord.value());
-        return new VersionedRecord<>(value, timestamp);
+        return new VersionedRecord<>(value, rawVersionedRecord.timestamp(), rawVersionedRecord.validTo());
     }
 
     public static void checkpointPosition(final OffsetCheckpoint checkpointFile,

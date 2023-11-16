@@ -135,13 +135,12 @@ public class IQv2VersionedStoreIntegrationTest {
     @Test
     public void verifyStore() {
         /* Test Versioned Key Queries */
-
         // retrieve the latest value
-        shouldHandleVersionedKeyQuery(RECORD_KEY, Optional.empty(), RECORD_VALUES[3], RECORD_TIMESTAMPS[3]);
-        shouldHandleVersionedKeyQuery(RECORD_KEY, Optional.of(Instant.now()), RECORD_VALUES[3], RECORD_TIMESTAMPS[3]);
-        shouldHandleVersionedKeyQuery(RECORD_KEY, Optional.of(Instant.ofEpochMilli(RECORD_TIMESTAMPS[3])), RECORD_VALUES[3], RECORD_TIMESTAMPS[3]);
+        shouldHandleVersionedKeyQuery(RECORD_KEY, Optional.empty(), RECORD_VALUES[3], RECORD_TIMESTAMPS[3], Long.MAX_VALUE);
+        shouldHandleVersionedKeyQuery(RECORD_KEY, Optional.of(Instant.now()), RECORD_VALUES[3], RECORD_TIMESTAMPS[3], Long.MAX_VALUE);
+        shouldHandleVersionedKeyQuery(RECORD_KEY, Optional.of(Instant.ofEpochMilli(RECORD_TIMESTAMPS[3])), RECORD_VALUES[3], RECORD_TIMESTAMPS[3], Long.MAX_VALUE);
         // retrieve the old value
-        shouldHandleVersionedKeyQuery(RECORD_KEY, Optional.of(Instant.ofEpochMilli(RECORD_TIMESTAMPS[0])), RECORD_VALUES[0], RECORD_TIMESTAMPS[0]);
+        shouldHandleVersionedKeyQuery(RECORD_KEY, Optional.of(Instant.ofEpochMilli(RECORD_TIMESTAMPS[0])), RECORD_VALUES[0], RECORD_TIMESTAMPS[0], RECORD_TIMESTAMPS[1]);
         // there is no record for the provided timestamp
         shouldVerifyGetNullforVersionedKeyQuery(RECORD_KEY, Instant.ofEpochMilli(RECORD_TIMESTAMPS[0] - 50));
         // there is no record with this key
@@ -156,7 +155,8 @@ public class IQv2VersionedStoreIntegrationTest {
     private void shouldHandleVersionedKeyQuery(final Integer key,
                                                final Optional<Instant> queryTimestamp,
                                                final Integer expectedValue,
-                                               final Long expectedTimestamp) {
+                                               final Long expectedTimestamp,
+                                               final Long expectedValidToTime) {
 
         VersionedKeyQuery<Integer, Integer> query = VersionedKeyQuery.withKey(key);
         if (queryTimestamp.isPresent()) {
@@ -180,6 +180,7 @@ public class IQv2VersionedStoreIntegrationTest {
         final VersionedRecord<Integer> result1 = queryResult.getResult();
         assertThat(result1.value(), is(expectedValue));
         assertThat(result1.timestamp(), is(expectedTimestamp));
+        assertThat(result1.validTo(), is(expectedValidToTime));
         assertThat(queryResult.getExecutionInfo(), is(empty()));
     }
 
@@ -192,65 +193,62 @@ public class IQv2VersionedStoreIntegrationTest {
     }
 
     public void shouldHandleMultiVersionedKeyQuery(final Integer key) {
-      final MultiVersionedKeyQuery<Integer, Integer> query = MultiVersionedKeyQuery.withKey(key);
-      handleMultiVersionedKeyQuery(query, 0, RECORD_NUMBER - 1, true);
+        final MultiVersionedKeyQuery<Integer, Integer> query = MultiVersionedKeyQuery.withKey(key);
+        handleMultiVersionedKeyQuery(query, 0, RECORD_NUMBER - 1, true);
     }
 
     public void shouldHandleMultiVersionedKeyQueryOrderedDescendingly(final Integer key) {
-      MultiVersionedKeyQuery<Integer, Integer> query = MultiVersionedKeyQuery.withKey(key);
-      query = query.withDescendingTimestamps();
-      handleMultiVersionedKeyQuery(query, 0, RECORD_NUMBER - 1, false);
+        MultiVersionedKeyQuery<Integer, Integer> query = MultiVersionedKeyQuery.withKey(key);
+        query = query.withDescendingTimestamps();
+        handleMultiVersionedKeyQuery(query, 0, RECORD_NUMBER - 1, false);
     }
 
     public void shouldHandleMultiVersionedKeyQueryWithTS(final Integer key, final Instant fromTime, final Instant toTime) {
-      MultiVersionedKeyQuery<Integer, Integer> query = MultiVersionedKeyQuery.withKey(key);
-      query = query.fromTime(fromTime).toTime(toTime);
-      handleMultiVersionedKeyQuery(query, 1, RECORD_NUMBER - 1, true);
+        MultiVersionedKeyQuery<Integer, Integer> query = MultiVersionedKeyQuery.withKey(key);
+        query = query.fromTime(fromTime).toTime(toTime);
+        handleMultiVersionedKeyQuery(query, 1, RECORD_NUMBER - 1, true);
     }
 
     private void handleMultiVersionedKeyQuery(final MultiVersionedKeyQuery<Integer, Integer> query,
-        final int arrayLowerBound,
-        final int arrayUpperBound,
-        final boolean ascending) {
+                                              final int arrayLowerBound,
+                                              final int arrayUpperBound,
+                                              final boolean ascending) {
 
-      final StateQueryRequest<VersionedRecordIterator<Integer>> request = StateQueryRequest.inStore(STORE_NAME).withQuery(query);
-      final StateQueryResult<VersionedRecordIterator<Integer>> result = kafkaStreams.query(request);
-      final QueryResult<VersionedRecordIterator<Integer>> queryResult = result.getOnlyPartitionResult();
-      final boolean failure = queryResult.isFailure();
-      if (failure) {
-        throw new AssertionError(queryResult.toString());
-      }
-      assertThat(queryResult.isSuccess(), is(true));
-
-      assertThrows(IllegalArgumentException.class, queryResult::getFailureReason);
-      assertThrows(
-          IllegalArgumentException.class,
-          queryResult::getFailureMessage
-      );
-
-
-      final Map<Integer, QueryResult<VersionedRecordIterator<Integer>>> partitionResults = result.getPartitionResults();
-      for (final Entry<Integer, QueryResult<VersionedRecordIterator<Integer>>> entry : partitionResults.entrySet()) {
-        try (final VersionedRecordIterator<Integer> iterator = entry.getValue().getResult()) {
-          int i = ascending ? arrayUpperBound : 0;
-          int iteratorSize = 0;
-          while (iterator.hasNext()) {
-            final VersionedRecord<Integer> record = iterator.next();
-            final Long timestamp = record.timestamp();
-            final Long validTo = record.validTo();
-            final Integer value = record.value();
-
-            final Long expectedValidTo = i < arrayUpperBound ? RECORD_TIMESTAMPS[i + 1] : Long.MAX_VALUE;
-            assertThat(value, is(RECORD_VALUES[i]));
-            assertThat(timestamp, is(RECORD_TIMESTAMPS[i]));
-            assertThat(validTo, is(expectedValidTo));
-            assertThat(queryResult.getExecutionInfo(), is(empty()));
-            i = ascending ? i - 1 : i + 1;
-            iteratorSize++;
+          final StateQueryRequest<VersionedRecordIterator<Integer>> request = StateQueryRequest.inStore(STORE_NAME).withQuery(query);
+          final StateQueryResult<VersionedRecordIterator<Integer>> result = kafkaStreams.query(request);
+          final QueryResult<VersionedRecordIterator<Integer>> queryResult = result.getOnlyPartitionResult();
+          final boolean failure = queryResult.isFailure();
+          if (failure) {
+              throw new AssertionError(queryResult.toString());
           }
-          // The number of returned records by query is equal to expected number of records
-          assertThat(iteratorSize, equalTo(arrayUpperBound - arrayLowerBound + 1));
-        }
+          assertThat(queryResult.isSuccess(), is(true));
+
+          assertThrows(IllegalArgumentException.class, queryResult::getFailureReason);
+          assertThrows(IllegalArgumentException.class, queryResult::getFailureMessage);
+
+
+          final Map<Integer, QueryResult<VersionedRecordIterator<Integer>>> partitionResults = result.getPartitionResults();
+          for (final Entry<Integer, QueryResult<VersionedRecordIterator<Integer>>> entry : partitionResults.entrySet()) {
+              try (final VersionedRecordIterator<Integer> iterator = entry.getValue().getResult()) {
+                  int i = ascending ? arrayUpperBound : 0;
+                  int iteratorSize = 0;
+                  while (iterator.hasNext()) {
+                      final VersionedRecord<Integer> record = iterator.next();
+                      final Long timestamp = record.timestamp();
+                      final Long validTo = record.validTo();
+                      final Integer value = record.value();
+
+                      final Long expectedValidTo = i < arrayUpperBound ? RECORD_TIMESTAMPS[i + 1] : Long.MAX_VALUE;
+                      assertThat(value, is(RECORD_VALUES[i]));
+                      assertThat(timestamp, is(RECORD_TIMESTAMPS[i]));
+                      assertThat(validTo, is(expectedValidTo));
+                      assertThat(queryResult.getExecutionInfo(), is(empty()));
+                      i = ascending ? i - 1 : i + 1;
+                      iteratorSize++;
+                  }
+                  // The number of returned records by query is equal to expected number of records
+                  assertThat(iteratorSize, equalTo(arrayUpperBound - arrayLowerBound + 1));
+              }
+          }
       }
-    }
 }

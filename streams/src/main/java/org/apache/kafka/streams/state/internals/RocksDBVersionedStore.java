@@ -255,7 +255,7 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
                         .deserialize(rawSegmentValue)
                         .find(asOfTimestamp, true);
                 if (searchResult.value() != null) {
-                    return new VersionedRecord<>(searchResult.value(), searchResult.validFrom());
+                    return new VersionedRecord<>(searchResult.value(), searchResult.validFrom(), searchResult.validTo());
                 } else {
                     return null;
                 }
@@ -1049,22 +1049,6 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
 
             return ByteBuffer.allocate(TIMESTAMP_SIZE + rawValue.length)
                 .putLong(timestamp)
-                .put(rawValue)
-                .array();
-        }
-
-        /**
-         * @return the formatted bytes containing the provided {@code rawValue},
-         * {@code validFrom}, and {@code validTo}
-         */
-        static byte[] from(final byte[] rawValue, final long validFrom, final long validTo) {
-            if (rawValue == null) {
-                throw new IllegalStateException("Cannot store tombstone in latest value");
-            }
-
-            return ByteBuffer.allocate(2 * TIMESTAMP_SIZE + rawValue.length)
-                .putLong(validFrom)
-                .putLong(validTo)
                 .put(rawValue)
                 .array();
         }
