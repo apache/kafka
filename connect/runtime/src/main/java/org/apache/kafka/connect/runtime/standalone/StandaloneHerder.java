@@ -183,6 +183,12 @@ public class StandaloneHerder extends AbstractHerder {
                                                 final Map<String, String> config,
                                                 boolean allowReplace,
                                                 final Callback<Created<ConnectorInfo>> callback) {
+        putConnectorConfig(connName, config, null, allowReplace, callback);
+    }
+
+    @Override
+    public void putConnectorConfig(final String connName, final Map<String, String> config, final TargetState targetState,
+                                   final boolean allowReplace, final Callback<Created<ConnectorInfo>> callback) {
         try {
             validateConnectorConfig(config, (error, configInfos) -> {
                 if (error != null) {
@@ -191,7 +197,7 @@ public class StandaloneHerder extends AbstractHerder {
                 }
 
                 requestExecutorService.submit(
-                    () -> putConnectorConfig(connName, config, allowReplace, callback, configInfos)
+                    () -> putConnectorConfig(connName, config, targetState, allowReplace, callback, configInfos)
                 );
             });
         } catch (Throwable t) {
@@ -201,6 +207,7 @@ public class StandaloneHerder extends AbstractHerder {
 
     private synchronized void putConnectorConfig(String connName,
                                                  final Map<String, String> config,
+                                                 TargetState targetState,
                                                  boolean allowReplace,
                                                  final Callback<Created<ConnectorInfo>> callback,
                                                  ConfigInfos configInfos) {
@@ -221,7 +228,7 @@ public class StandaloneHerder extends AbstractHerder {
                 created = true;
             }
 
-            configBackingStore.putConnectorConfig(connName, config);
+            configBackingStore.putConnectorConfig(connName, config, targetState);
 
             startConnector(connName, (error, result) -> {
                 if (error != null) {

@@ -14,27 +14,25 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
-package org.apache.kafka.metadata;
+package org.apache.kafka.streams.query;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.Timeout;
+import org.apache.kafka.streams.state.VersionedRecord;
+import org.junit.Test;
 
-@Timeout(value = 40)
-public class BrokerStateTest {
-
+public class VersionedKeyQueryTest {
     @Test
-    public void testFromValue() {
-        for (BrokerState state : BrokerState.values()) {
-            BrokerState state2 = BrokerState.fromValue(state.value());
-            assertEquals(state, state2);
-        }
+    public void shouldThrowNPEWithNullKey() {
+        final Exception exception = assertThrows(NullPointerException.class, () -> VersionedKeyQuery.withKey(null));
+        assertEquals("key cannot be null.", exception.getMessage());
     }
 
     @Test
-    public void testUnknownValues() {
-        assertEquals(BrokerState.UNKNOWN, BrokerState.fromValue((byte) 126));
+    public void shouldThrowNPEWithNullAsOftimestamp() {
+        final VersionedKeyQuery<Integer, VersionedRecord<Integer>> query = VersionedKeyQuery.withKey(1);
+        final Exception exception = assertThrows(NullPointerException.class, () -> query.asOf(null));
+        assertEquals("asOf timestamp cannot be null.", exception.getMessage());
     }
 }
