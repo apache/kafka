@@ -307,7 +307,7 @@ public class MembershipManagerImplTest {
      * This is the case where a member is stuck reconciling an assignment A (waiting on
      * metadata, commit or callbacks), and the target assignment changes (due to new topics added
      * to metadata, or new assignment received from broker). If the reconciliation of A completes
-     * t should be applied (should update the assignment on the member and send ack), and then
+     * it should be applied (should update the assignment on the member and send ack), and then
      * the reconciliation of assignment B will be processed and applied in the next
      * reconciliation loop.
      */
@@ -499,8 +499,8 @@ public class MembershipManagerImplTest {
 
     /**
      * This test should be the case when an assignment is sent to the member, and it cannot find
-     * it in metadata (temporarily). The broker will continue to send the assignment to the
-     * member. The member should keep it was waiting for metadata and continue to request updates.
+     * it in metadata (temporarily). If the broker continues to send the assignment to the
+     * member, this one should keep it waiting for metadata and continue to request updates.
      */
     @Test
     public void testMemberKeepsUnresolvedAssignmentWaitingForMetadataUntilResolved() {
@@ -1015,13 +1015,14 @@ public class MembershipManagerImplTest {
     }
 
     private void testStateUpdateOnFatalFailure(MembershipManager membershipManager) {
-        String initialMemberId = membershipManager.memberId();
+        String memberId = membershipManager.memberId();
+        int lastEpoch = membershipManager.memberEpoch();
         when(subscriptionState.hasAutoAssignedPartitions()).thenReturn(true);
         membershipManager.transitionToFatal();
         assertEquals(MemberState.FATAL, membershipManager.state());
-        // Should keep member id and reset epoch to -1 to indicate member not in the group
-        assertEquals(initialMemberId, membershipManager.memberId());
-        assertEquals(-1, membershipManager.memberEpoch());
+        // Should keep its last member id and epoch
+        assertEquals(memberId, membershipManager.memberId());
+        assertEquals(lastEpoch, membershipManager.memberEpoch());
     }
 
     private ConsumerGroupHeartbeatResponse createConsumerGroupHeartbeatResponse(

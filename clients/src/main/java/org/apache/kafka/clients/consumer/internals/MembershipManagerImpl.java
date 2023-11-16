@@ -32,13 +32,13 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.SortedSet;
@@ -89,8 +89,7 @@ import java.util.concurrent.CompletableFuture;
  *     <li>When the above steps complete, the member acknowledges the reconciled assignment,
  *     which is the subset of the target that was resolved from metadata and actually reconciled.
  *     The ack is performed by sending a heartbeat request back to the broker, including the
- *     reconciled assignment.
- *     .</li>
+ *     reconciled assignment.</li>
  * </ol>
  *
  * Note that user-defined callbacks are triggered from this manager that runs in the
@@ -324,8 +323,6 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
             transitionTo(MemberState.RECONCILING);
             replaceUnresolvedAssignmentWithNewAssignment(assignment);
             resolveMetadataForUnresolvedAssignment();
-            // TODO: improve reconciliation triggering. Initial approach of triggering on every
-            //  HB response and metadata update.
             reconcile();
         } else if (allPendingAssignmentsReconciled()) {
             transitionTo(MemberState.STABLE);
@@ -357,21 +354,21 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
      */
     @Override
     public void transitionToFenced() {
-        resetEpoch();
         transitionTo(MemberState.FENCED);
+        resetEpoch();
+        log.debug("Member {} with epoch {} transitioned to {} state. It will release its " +
+                "assignment and rejoin the group.", memberId, memberEpoch, MemberState.FENCED);
 
         // Release assignment
         CompletableFuture<Void> callbackResult = invokeOnPartitionsLostCallback(subscriptions.assignedPartitions());
         callbackResult.whenComplete((result, error) -> {
             if (error != null) {
                 log.error("onPartitionsLost callback invocation failed while releasing assignment" +
-                        "after member got fenced. Member will rejoin the group anyways.", error);
+                        " after member got fenced. Member will rejoin the group anyways.", error);
             }
-            subscriptions.assignFromSubscribed(Collections.emptySet());
+            updateSubscription(Collections.emptySet());
             transitionToJoining();
         });
-
-        clearPendingAssignmentsAndLocalNamesCache();
     }
 
     /**
@@ -379,21 +376,18 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
      */
     @Override
     public void transitionToFatal() {
-        log.error("Member {} transitioned to {} state", memberId, MemberState.FATAL);
+        transitionTo(MemberState.FATAL);
+        log.error("Member {} with epoch {} transitioned to {} state", memberId, memberEpoch, MemberState.FATAL);
 
-        // Update epoch to indicate that the member is not in the group anymore, so that the
-        // onPartitionsLost is called to release assignment.
-        memberEpoch = ConsumerGroupHeartbeatRequest.LEAVE_GROUP_MEMBER_EPOCH;
+        // Release assignment
         CompletableFuture<Void> callbackResult = invokeOnPartitionsLostCallback(subscriptions.assignedPartitions());
         callbackResult.whenComplete((result, error) -> {
             if (error != null) {
                 log.error("onPartitionsLost callback invocation failed while releasing assignment" +
                         "after member failed with fatal error.", error);
             }
+            updateSubscription(Collections.emptySet());
         });
-        subscriptions.assignFromSubscribed(Collections.emptySet());
-        clearPendingAssignmentsAndLocalNamesCache();
-        transitionTo(MemberState.FATAL);
     }
 
     /**
@@ -403,8 +397,16 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
         if (state == MemberState.UNSUBSCRIBED) {
             transitionToJoining();
         }
-        // TODO: If the member is already part of the group, this should only ensure that the
-        //  updated subscription is included in the next heartbeat request.
+    }
+
+    /**
+     * Update a new assignment by setting the assigned partitions in the member subscription.
+     */
+    private void updateSubscription(Collection<TopicPartition> assignedPartitions) {
+        subscriptions.assignFromSubscribed(assignedPartitions);
+        if (assignedPartitions.isEmpty()) {
+            clearPendingAssignmentsAndLocalNamesCache();
+        }
     }
 
     /**
@@ -459,15 +461,13 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
         CompletableFuture<Void> callbackResult = invokeOnPartitionsRevokedOrLostToReleaseAssignment();
         callbackResult.whenComplete((result, error) -> {
             // Clear the subscription, no matter if the callback execution failed or succeeded.
-            subscriptions.assignFromSubscribed(Collections.emptySet());
+            updateSubscription(Collections.emptySet());
 
             // Transition to ensure that a heartbeat request is sent out to effectively leave the
             // group (even in the case where the member had no assignment to release or when the
             // callback execution failed.)
             transitionToSendingLeaveGroup();
         });
-
-        clearPendingAssignmentsAndLocalNamesCache();
 
         // Return future to indicate that the leave group is done when the callbacks
         // complete, and the heartbeat to be sent out. (Best effort to send it, without waiting
@@ -506,8 +506,6 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
                 // Member is not part of the group anymore. Invoke onPartitionsLost.
                 callbackResult = invokeOnPartitionsLostCallback(droppedPartitions);
             }
-            // Remove all topic IDs and names from local cache
-            callbackResult.whenComplete((result, error) -> clearPendingAssignmentsAndLocalNamesCache());
         }
         return callbackResult;
     }
@@ -631,8 +629,7 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
         // and assignment, executed sequentially)
         CompletableFuture<Void> reconciliationResult =
                 revocationResult.thenCompose(__ -> {
-                    boolean memberHasRejoined = !Objects.equals(memberEpochOnReconciliationStart,
-                            memberEpoch);
+                    boolean memberHasRejoined = memberEpochOnReconciliationStart != memberEpoch;
                     if (state == MemberState.RECONCILING && !memberHasRejoined) {
                         // Apply assignment
                         CompletableFuture<Void> assignResult = assignPartitions(assignedPartitions, addedPartitions);
@@ -645,17 +642,11 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
                         }
                         return assignResult;
                     } else {
-                        String reason;
-                        if (state != MemberState.RECONCILING) {
-                            reason = "The member already transitioned out of the reconciling " +
-                                    "state into " + state;
-                        } else {
-                            reason = "The member has re-joined the group.";
-                        }
-                        // Revocation callback completed but the reconciled assignment should not
-                        // be applied (not relevant anymore). This could be because the member
-                        // is not in the RECONCILING state anymore (fenced, failed, unsubscribed),
-                        // or because it has already re-joined the group.
+                        log.debug("Revocation callback completed but the member already " +
+                                "transitioned out of the reconciling state for epoch {} into " +
+                                "{} state with epoch {}. Interrupting reconciliation as it's " +
+                                "not relevant anymore,", memberEpochOnReconciliationStart, state, memberEpoch);
+                        String reason = interruptedReconciliationErrorMessage();
                         CompletableFuture<Void> res = new CompletableFuture<>();
                         res.completeExceptionally(new KafkaException("Interrupting reconciliation" +
                                 " after revocation. " + reason));
@@ -672,7 +663,8 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
                 // RECONCILING -> FENCED transition.
                 log.error("Reconciliation failed.", error);
             } else {
-                if (state == MemberState.RECONCILING) {
+                boolean memberHasRejoined = memberEpochOnReconciliationStart != memberEpoch;
+                if (state == MemberState.RECONCILING && !memberHasRejoined) {
                     // Make assignment effective on the broker by transitioning to send acknowledge.
                     transitionTo(MemberState.ACKNOWLEDGING);
 
@@ -684,14 +676,27 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
                     // metadata)
                     assignmentReadyToReconcile.removeAll(assignedPartitions);
                 } else {
-                    log.debug("New assignment processing completed but the member already " +
-                            "transitioned out of the reconciliation state into {}. Interrupting " +
-                            "reconciliation as it's not relevant anymore,", state);
+                    String reason = interruptedReconciliationErrorMessage();
+                    log.error("Interrupting reconciliation after partitions assigned callback " +
+                            "completed. " + reason);
                 }
             }
         });
 
         return true;
+    }
+
+    /**
+     * @return Reason for interrupting a reconciliation progress when callbacks complete.
+     */
+    private String interruptedReconciliationErrorMessage() {
+        String reason;
+        if (state != MemberState.RECONCILING) {
+            reason = "The member already transitioned out of the reconciling state into " + state;
+        } else {
+            reason = "The member has re-joined the group.";
+        }
+        return reason;
     }
 
     /**
@@ -862,7 +867,7 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
             SortedSet<TopicPartition> addedPartitions) {
 
         // Make assignment effective on the client by updating the subscription state.
-        subscriptions.assignFromSubscribed(assignedPartitions);
+        updateSubscription(assignedPartitions);
 
         // Invoke user call back
         return invokeOnPartitionsAssignedCallback(addedPartitions);
@@ -889,8 +894,8 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
     }
 
     private CompletableFuture<Void> invokeOnPartitionsRevokedCallback(Set<TopicPartition> partitionsRevoked) {
-        // TODO: when implementing callbacks, keep the current logic for not triggering the
-        //  callback if partitionsRevoked is empty, to keep the current contract for user callbacks
+        // This should not trigger the callback if partitionsRevoked is empty, to keep the
+        // current behaviour.
         Optional<ConsumerRebalanceListener> listener = subscriptions.rebalanceListener();
         if (!partitionsRevoked.isEmpty() && listener.isPresent()) {
             throw new UnsupportedOperationException("User-defined callbacks not supported yet");
@@ -901,7 +906,7 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
 
     private CompletableFuture<Void> invokeOnPartitionsAssignedCallback(Set<TopicPartition> partitionsAssigned) {
         // This should always trigger the callback, even if partitionsAssigned is empty, to keep
-        // the current contract for user callbacks
+        // the current behaviour.
         Optional<ConsumerRebalanceListener> listener = subscriptions.rebalanceListener();
         if (listener.isPresent()) {
             throw new UnsupportedOperationException("User-defined callbacks not supported yet");
@@ -911,8 +916,8 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
     }
 
     private CompletableFuture<Void> invokeOnPartitionsLostCallback(Set<TopicPartition> partitionsLost) {
-        // TODO: when implementing callbacks, keep the current logic for not triggering the
-        //  callback if partitionsLost is empty, to keep the current contract for user callbacks
+        // This should not trigger the callback if partitionsLost is empty, to keep the current
+        // behaviour.
         Optional<ConsumerRebalanceListener> listener = subscriptions.rebalanceListener();
         if (!partitionsLost.isEmpty() && listener.isPresent()) {
             throw new UnsupportedOperationException("User-defined callbacks not supported yet");
@@ -1010,8 +1015,6 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
     public void onUpdate(ClusterResource clusterResource) {
         resolveMetadataForUnresolvedAssignment();
         if (!assignmentReadyToReconcile.isEmpty()) {
-            // TODO: improve reconciliation triggering. Initial approach of triggering on every
-            //  HB response and metadata update.
             reconcile();
         }
     }
