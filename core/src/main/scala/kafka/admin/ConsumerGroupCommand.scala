@@ -27,7 +27,7 @@ import org.apache.kafka.clients.admin._
 import org.apache.kafka.clients.consumer.OffsetAndMetadata
 import org.apache.kafka.clients.CommonClientConfigs
 import org.apache.kafka.common.utils.Utils
-import org.apache.kafka.common.{KafkaException, Node, TopicPartition}
+import org.apache.kafka.common.{ConsumerGroupState, ConsumerGroupType, KafkaException, Node, TopicPartition}
 import org.apache.kafka.server.util.{CommandDefaultOptions, CommandLineUtils}
 
 import scala.jdk.CollectionConverters._
@@ -39,9 +39,7 @@ import org.apache.kafka.common.protocol.Errors
 
 import scala.collection.immutable.TreeMap
 import scala.reflect.ClassTag
-import org.apache.kafka.common.ConsumerGroupState
 import org.apache.kafka.common.requests.ListOffsetsResponse
-import org.apache.kafka.coordinator.group.Group.GroupType
 
 object ConsumerGroupCommand extends Logging {
 
@@ -103,11 +101,11 @@ object ConsumerGroupCommand extends Logging {
     parsedStates
   }
 
-  def consumerGroupTypesFromString(input: String): Set[GroupType] = {
-    val parsedStates = input.split(',').map(s => GroupType.parse(s.trim)).toSet
-    if (parsedStates.contains(ConsumerGroupState.UNKNOWN)) {
-      val validStates = ConsumerGroupState.values().filter(_ != ConsumerGroupState.UNKNOWN)
-      throw new IllegalArgumentException(s"Invalid state list '$input'. Valid states are: ${validStates.mkString(", ")}")
+  def consumerGroupTypesFromString(input: String): Set[ConsumerGroupType] = {
+    val parsedStates = input.split(',').map(s => ConsumerGroupType.parse(s.trim)).toSet
+    if (parsedStates.contains(ConsumerGroupType.UNKNOWN)) {
+      val validTypes = ConsumerGroupType.values().filter(_ != ConsumerGroupType.UNKNOWN)
+      throw new IllegalArgumentException(s"Invalid types list '$input'. Valid types are: ${validTypes.mkString(", ")}")
     }
     parsedStates
   }
@@ -204,16 +202,16 @@ object ConsumerGroupCommand extends Logging {
         else
           consumerGroupStatesFromString(stateValue)
         val listings = listConsumerGroupsWithState(states)
-        printGroupStates(listings.map(e => (e.groupId, e.state.get.toString)))
+        printGroupStates(listings.map(e => (e.groupId, e.state().toString)))
       }
       if (opts.options.has(opts.typeOpt)) {
         val typeValue = opts.options.valueOf(opts.typeOpt)
         val types = if (typeValue == null || typeValue.isEmpty)
-          Set[GroupType]()
+          Set[ConsumerGroupType]()
         else
-          consumerGroupTypesFromString(types)
+          consumerGroupTypesFromString(typeValue)
         val listings = listConsumerGroupsWithType(types)
-        printGroupStates(listings.map(e => (e.groupId, e.state.get.toString)))
+        printGroupTypes(listings.map(e => (e.groupId, e.groupType().toString)))
       } else
         listConsumerGroups().foreach(println(_))
     }
@@ -231,7 +229,7 @@ object ConsumerGroupCommand extends Logging {
       result.all.get.asScala.toList
     }
 
-    def listConsumerGroupsWithType(types: Set[GroupType]): List[ConsumerGroupListing] = {
+    def listConsumerGroupsWithType(types: Set[ConsumerGroupType]): List[ConsumerGroupListing] = {
       val listConsumerGroupsOptions = withTimeoutMs(new ListConsumerGroupsOptions())
       listConsumerGroupsOptions.inTypes(types.asJava)
       val result = adminClient.listConsumerGroups(listConsumerGroupsOptions)
@@ -248,6 +246,19 @@ object ConsumerGroupCommand extends Logging {
       println(format.format("GROUP", "STATE"))
       for ((groupId, state) <- groupsAndStates) {
         println(format.format(groupId, state))
+      }
+    }
+
+    private def printGroupTypes(groupsAndTypes: List[(String, String)]): Unit = {
+      // find proper columns width
+      var maxGroupLen = 15
+      for ((groupId, _) <- groupsAndTypes) {
+        maxGroupLen = Math.max(maxGroupLen, groupId.length)
+      }
+      val format = s"%${-maxGroupLen}s %s"
+      println(format.format("GROUP", "TYPE"))
+      for ((groupId, groupType) <- groupsAndTypes) {
+        println(format.format(groupId, groupType))
       }
     }
 

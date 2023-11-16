@@ -22,6 +22,7 @@ import java.util.HashSet;
 import java.util.Set;
 
 import org.apache.kafka.common.ConsumerGroupState;
+import org.apache.kafka.common.ConsumerGroupType;
 import org.apache.kafka.common.annotation.InterfaceStability;
 
 /**
@@ -34,10 +35,10 @@ public class ListConsumerGroupsOptions extends AbstractOptions<ListConsumerGroup
 
     private Set<ConsumerGroupState> states = Collections.emptySet();
 
-    private Set<String> types = Collections.emptySet();
+    private Set<ConsumerGroupType> groupTypes = Collections.emptySet();
 
     /**
-     * If states is set, only groups in these states will be returned by listConsumerGroups()
+     * If states is set, only groups in these states will be returned by listConsumerGroups().
      * Otherwise, all groups are returned.
      * This operation is supported by brokers with version 2.6.0 or later.
      */
@@ -47,12 +48,12 @@ public class ListConsumerGroupsOptions extends AbstractOptions<ListConsumerGroup
     }
 
     /**
-     * If types is set, only groups of these types will be returned by listConsumerGroups()
+     * If groupTypes is set, only groups of these groupTypes will be returned by listConsumerGroups().
      * Otherwise, all groups are returned.
      *
      */
-    public ListConsumerGroupsOptions inTypes(Set<GroupType> types) {
-        this.types = (types == null) ? Collections.emptySet() : new HashSet<>(types);
+    public ListConsumerGroupsOptions inTypes(Set<ConsumerGroupType> groupTypes) {
+        this.groupTypes = (groupTypes == null) ? Collections.emptySet() : new HashSet<>(groupTypes);
         return this;
     }
 
@@ -64,9 +65,9 @@ public class ListConsumerGroupsOptions extends AbstractOptions<ListConsumerGroup
     }
 
     /**
-     * Returns the list of Types that are requested or empty if no types have been specified
+     * Returns the list of types that are requested or empty if no groupTypes have been specified
      */
-    public Set<String> types() {
-        return types;
+    public Set<ConsumerGroupType> groupTypes() {
+        return groupTypes;
     }
 }

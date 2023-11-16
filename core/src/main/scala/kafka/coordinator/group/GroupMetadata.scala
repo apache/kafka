@@ -28,7 +28,6 @@ import org.apache.kafka.common.message.JoinGroupResponseData.JoinGroupResponseMe
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.protocol.types.SchemaException
 import org.apache.kafka.common.utils.Time
-import org.apache.kafka.coordinator.group.Group.GroupType
 
 import scala.collection.{Seq, immutable, mutable}
 import scala.jdk.CollectionConverters._

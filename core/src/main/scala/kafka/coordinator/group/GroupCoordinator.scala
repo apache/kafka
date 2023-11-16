@@ -32,7 +32,6 @@ import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.record.RecordBatch
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.utils.Time
-import org.apache.kafka.coordinator.group.Group.GroupType
 import org.apache.kafka.server.record.BrokerCompressionType
 import org.apache.kafka.storage.internals.log.VerificationGuard
 
@@ -1114,7 +1113,7 @@ private[group] class GroupCoordinator(
       // Filter groups based on states and groupTypes. If either is empty, it won't filter on that criterion.
       val groups = groupManager.currentGroups.filter { g =>
         (states.isEmpty || states.contains(g.summary.state)) &&
-          (groupTypes.isEmpty || groupTypes.contains(g.overview.groupType))
+        (groupTypes.isEmpty || groupTypes.contains(g.overview.groupType))
       }
       (errorCode, groups.map(_.overview).toList)
     }
