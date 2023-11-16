@@ -114,11 +114,24 @@ public class MembershipManagerImplTest {
     }
 
     @Test
-    public void testMembershipManagerRegistersForClusterMetadataUpdates() {
+    public void testMembershipManagerRegistersForClusterMetadataUpdatesOnFirstJoin() {
+        // First join should register to get metadata updates
         MembershipManagerImpl manager = new MembershipManagerImpl(
                 GROUP_ID, subscriptionState, commitRequestManager,
                 metadata, testBuilder.logContext);
+        manager.transitionToJoining();
         verify(metadata).addClusterUpdateListener(manager);
+        clearInvocations(metadata);
+
+        // Following joins should not register again.
+        receiveEmptyAssignment(manager);
+        mockLeaveGroup();
+        manager.leaveGroup();
+        assertEquals(MemberState.LEAVING, manager.state());
+        manager.onHeartbeatRequestSent();
+        assertEquals(MemberState.UNSUBSCRIBED, manager.state());
+        manager.transitionToJoining();
+        verify(metadata, never()).addClusterUpdateListener(manager);
     }
 
     @Test
@@ -164,7 +177,7 @@ public class MembershipManagerImplTest {
     }
 
     @Test
-    public void testTransitionToFailure() {
+    public void testTransitionToFatal() {
         MembershipManagerImpl membershipManager = createMembershipManagerJoiningGroup();
         ConsumerGroupHeartbeatResponse heartbeatResponse =
                 createConsumerGroupHeartbeatResponse(null);
@@ -173,8 +186,10 @@ public class MembershipManagerImplTest {
         assertEquals(MEMBER_ID, membershipManager.memberId());
         assertEquals(MEMBER_EPOCH, membershipManager.memberEpoch());
 
+        when(subscriptionState.hasAutoAssignedPartitions()).thenReturn(true);
         membershipManager.transitionToFatal();
         assertEquals(MemberState.FATAL, membershipManager.state());
+        verify(subscriptionState).assignFromSubscribed(Collections.emptySet());
     }
 
     @Test
@@ -185,6 +200,7 @@ public class MembershipManagerImplTest {
         assertEquals(MemberState.UNSUBSCRIBED, membershipManager.state());
         membershipManager.transitionToJoining();
 
+        when(subscriptionState.hasAutoAssignedPartitions()).thenReturn(true);
         membershipManager.transitionToFatal();
         assertEquals(MemberState.FATAL, membershipManager.state());
     }
@@ -222,7 +238,10 @@ public class MembershipManagerImplTest {
         CompletableFuture<Void> commitResult = mockEmptyAssignmentAndRevocationStuckOnCommit(membershipManager);
 
         // Member received fatal error while reconciling
+        when(subscriptionState.hasAutoAssignedPartitions()).thenReturn(true);
         membershipManager.transitionToFatal();
+        verify(subscriptionState).assignFromSubscribed(Collections.emptySet());
+        clearInvocations(subscriptionState);
 
         // Complete commit request
         commitResult.complete(null);
@@ -989,6 +1008,7 @@ public class MembershipManagerImplTest {
 
     private void testStateUpdateOnFatalFailure(MembershipManager membershipManager) {
         String initialMemberId = membershipManager.memberId();
+        when(subscriptionState.hasAutoAssignedPartitions()).thenReturn(true);
         membershipManager.transitionToFatal();
         assertEquals(MemberState.FATAL, membershipManager.state());
         // Should keep member id and reset epoch to -1 to indicate member not in the group
@@ -996,7 +1016,8 @@ public class MembershipManagerImplTest {
         assertEquals(-1, membershipManager.memberEpoch());
     }
 
-    private ConsumerGroupHeartbeatResponse createConsumerGroupHeartbeatResponse(ConsumerGroupHeartbeatResponseData.Assignment assignment) {
+    private ConsumerGroupHeartbeatResponse createConsumerGroupHeartbeatResponse(
+            ConsumerGroupHeartbeatResponseData.Assignment assignment) {
         return new ConsumerGroupHeartbeatResponse(new ConsumerGroupHeartbeatResponseData()
                 .setErrorCode(Errors.NONE.code())
                 .setMemberId(MEMBER_ID)

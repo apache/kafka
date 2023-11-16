@@ -186,6 +186,7 @@ public class HeartbeatRequestManagerTest {
         assertEquals(DEFAULT_HEARTBEAT_INTERVAL_MS - 100, result.timeUntilNextPollMs);
 
         // Member in state where it should not send Heartbeat anymore
+        when(subscriptions.hasAutoAssignedPartitions()).thenReturn(true);
         membershipManager.transitionToFatal();
         result = heartbeatRequestManager.poll(time.milliseconds());
         assertEquals(Long.MAX_VALUE, result.timeUntilNextPollMs);
@@ -296,6 +297,7 @@ public class HeartbeatRequestManagerTest {
         assertEquals(1, result.unsentRequests.size());
 
         // Manually completing the response to test error handling
+        when(subscriptions.hasAutoAssignedPartitions()).thenReturn(true);
         ClientResponse response = createHeartbeatResponse(
             result.unsentRequests.get(0),
             error);
