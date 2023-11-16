@@ -88,7 +88,6 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
@@ -1170,7 +1169,7 @@ public class EosIntegrationTest {
                     valueDeserializer,
                     Utils.mkProperties(Collections.singletonMap(
                         ConsumerConfig.ISOLATION_LEVEL_CONFIG,
-                        IsolationLevel.READ_COMMITTED.name().toLowerCase(Locale.ROOT)))),
+                        IsolationLevel.READ_COMMITTED.toString()))),
                 topic,
                 numberOfRecords
             );
@@ -1202,7 +1201,7 @@ public class EosIntegrationTest {
                     valueDeserializer,
                     Utils.mkProperties(Collections.singletonMap(
                         ConsumerConfig.ISOLATION_LEVEL_CONFIG,
-                        IsolationLevel.READ_COMMITTED.name().toLowerCase(Locale.ROOT))
+                        IsolationLevel.READ_COMMITTED.toString())
                     )
                 ),
                 topic,
