@@ -103,7 +103,7 @@ public class ImageDowngradeTest {
      * Test downgrading to a MetadataVersion that doesn't support inControlledShutdown.
      */
     @Test
-    public void testPreControlledShutdownStateVersion() throws Throwable {
+    public void testPreControlledShutdownStateVersion() {
         writeWithExpectedLosses(MetadataVersion.IBP_3_3_IV2,
                 Arrays.asList(
                         "the inControlledShutdown state of one or more brokers"),
