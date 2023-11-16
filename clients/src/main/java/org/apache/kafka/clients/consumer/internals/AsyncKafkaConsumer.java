@@ -908,12 +908,6 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         subscriptions.unsubscribe();
     }
 
-    @Override
-    @Deprecated
-    public ConsumerRecords<K, V> poll(final long timeoutMs) {
-        return poll(Duration.ofMillis(timeoutMs));
-    }
-
     // Visible for testing
     WakeupTrigger wakeupTrigger() {
         return wakeupTrigger;

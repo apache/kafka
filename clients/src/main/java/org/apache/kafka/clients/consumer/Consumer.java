@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.clients.consumer;
 
+import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.PartitionInfo;
@@ -78,10 +79,14 @@ public interface Consumer<K, V> extends Closeable {
     void unsubscribe();
 
     /**
-     * @see KafkaConsumer#poll(long)
+     * @deprecated Since 2.0. Use {@link #poll(Duration)}, which does not block beyond the timeout awaiting partition
+     *             assignment. See <a href="https://cwiki.apache.org/confluence/x/5kiHB">KIP-266</a> for more information.
+     * @see KafkaConsumer#poll(Duration)
      */
     @Deprecated
-    ConsumerRecords<K, V> poll(long timeout);
+    default ConsumerRecords<K, V> poll(long timeout) {
+        throw new KafkaException("This version of poll() is no longer supported. See KIP-266 (https://cwiki.apache.org/confluence/x/5kiHB) for more information.");
+    }
 
     /**
      * @see KafkaConsumer#poll(Duration)

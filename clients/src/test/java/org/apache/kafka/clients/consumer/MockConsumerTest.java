@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.clients.consumer;
 
+import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.record.TimestampType;
@@ -33,6 +34,8 @@ import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class MockConsumerTest {
@@ -71,31 +74,10 @@ public class MockConsumerTest {
     @Test
     public void testSimpleMockDeprecated() {
         consumer.subscribe(Collections.singleton("test"));
-        assertEquals(0, consumer.poll(1000).count());
-        consumer.rebalance(Arrays.asList(new TopicPartition("test", 0), new TopicPartition("test", 1)));
-        // Mock consumers need to seek manually since they cannot automatically reset offsets
-        HashMap<TopicPartition, Long> beginningOffsets = new HashMap<>();
-        beginningOffsets.put(new TopicPartition("test", 0), 0L);
-        beginningOffsets.put(new TopicPartition("test", 1), 0L);
-        consumer.updateBeginningOffsets(beginningOffsets);
-        consumer.seek(new TopicPartition("test", 0), 0);
-        ConsumerRecord<String, String> rec1 = new ConsumerRecord<>("test", 0, 0, 0L, TimestampType.CREATE_TIME,
-            0, 0, "key1", "value1", new RecordHeaders(), Optional.empty());
-        ConsumerRecord<String, String> rec2 = new ConsumerRecord<>("test", 0, 1, 0L, TimestampType.CREATE_TIME,
-            0, 0, "key2", "value2", new RecordHeaders(), Optional.empty());
-        consumer.addRecord(rec1);
-        consumer.addRecord(rec2);
-        ConsumerRecords<String, String> recs = consumer.poll(1);
-        Iterator<ConsumerRecord<String, String>> iter = recs.iterator();
-        assertEquals(rec1, iter.next());
-        assertEquals(rec2, iter.next());
-        assertFalse(iter.hasNext());
-        final TopicPartition tp = new TopicPartition("test", 0);
-        assertEquals(2L, consumer.position(tp));
-        consumer.commitSync();
-        assertEquals(2L, consumer.committed(Collections.singleton(tp)).get(tp).offset());
-        assertEquals(new ConsumerGroupMetadata("dummy.group.id", 1, "1", Optional.empty()),
-            consumer.groupMetadata());
+        KafkaException error = assertThrows(KafkaException.class, () -> consumer.poll(1000));
+        assertNotNull(error);
+        assertNotNull(error.getMessage());
+        assertTrue(error.getMessage().contains("no longer supported"));
     }
 
     @Test
