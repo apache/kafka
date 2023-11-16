@@ -85,6 +85,7 @@ import java.util.OptionalLong;
 import java.util.Set;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
@@ -907,11 +908,18 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
     @Override
     public void unsubscribe() {
         fetchBuffer.retainAll(Collections.emptySet());
-        UnsubscribeApplicationEvent unsubscribeApplicationEvent = new UnsubscribeApplicationEvent();
-        applicationEventHandler.add(unsubscribeApplicationEvent);
-        unsubscribeApplicationEvent.future().whenComplete((result, error) -> {
-            subscriptions.unsubscribe();
-        });
+
+        if (groupId.isPresent()) {
+            UnsubscribeApplicationEvent unsubscribeApplicationEvent = new UnsubscribeApplicationEvent();
+            applicationEventHandler.add(unsubscribeApplicationEvent);
+            try {
+                unsubscribeApplicationEvent.future().get();
+                log.info("Unsubscribed all topics or patterns and assigned partitions");
+            } catch (InterruptedException | ExecutionException e) {
+                log.error("Failed while waiting for the unsubscribe event to complete", e);
+            }
+        }
+        subscriptions.unsubscribe();
     }
 
     @Override

@@ -460,7 +460,8 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
         }
 
         transitionTo(MemberState.PREPARE_LEAVING);
-        leaveGroupInProgress = Optional.of(new CompletableFuture<>());
+        CompletableFuture<Void> leaveResult = new CompletableFuture<>();
+        leaveGroupInProgress = Optional.of(leaveResult);
 
         CompletableFuture<Void> callbackResult = invokeOnPartitionsRevokedOrLostToReleaseAssignment();
         callbackResult.whenComplete((result, error) -> {
@@ -474,9 +475,8 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
         });
 
         // Return future to indicate that the leave group is done when the callbacks
-        // complete, and the heartbeat to be sent out. (Best effort to send it, without waiting
-        // for a response or handling timeouts)
-        return leaveGroupInProgress.get();
+        // complete, and the transition to send the heartbeat has been made.
+        return leaveResult;
     }
 
     /**
@@ -544,13 +544,32 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
             if (allPendingAssignmentsReconciled()) {
                 transitionTo(MemberState.STABLE);
             } else {
+                log.debug("Member {} with epoch {} transitioned to {} after a heartbeat was sent " +
+                        "to ack a previous reconciliation. New assignments are ready to " +
+                        "be reconciled.", memberId, memberEpoch, MemberState.RECONCILING);
                 transitionTo(MemberState.RECONCILING);
             }
         } else if (state == MemberState.LEAVING) {
-            transitionTo(MemberState.UNSUBSCRIBED);
-            leaveGroupInProgress.get().complete(null);
-            leaveGroupInProgress = Optional.empty();
+            transitionToUnsubscribed();
         }
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public void onHeartbeatRequestSkipped() {
+        if (state == MemberState.LEAVING) {
+            log.debug("Heartbeat for leaving group could not be sent. Member {} with epoch {} will transition to {}.",
+                    memberId, memberEpoch, MemberState.UNSUBSCRIBED);
+            transitionToUnsubscribed();
+        }
+    }
+
+    private void transitionToUnsubscribed() {
+        transitionTo(MemberState.UNSUBSCRIBED);
+        leaveGroupInProgress.get().complete(null);
+        leaveGroupInProgress = Optional.empty();
     }
 
     /**

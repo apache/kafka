@@ -75,6 +75,13 @@ public interface MembershipManager {
     void onHeartbeatRequestSent();
 
     /**
+     * Transition out of the {@link MemberState#LEAVING} state even if the heartbeat was not sent
+     * . This will ensure that the member is not blocked on {@link MemberState#LEAVING} (best
+     * effort to send the request, without any response handling or retry logic)
+     */
+    void onHeartbeatRequestSkipped();
+
+    /**
      * @return Server-side assignor implementation configured for the member, that will be sent
      * out to the server to be used. If empty, then the server will select the assignor.
      */
