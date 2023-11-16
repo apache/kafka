@@ -18,6 +18,7 @@
 package org.apache.kafka.streams.kstream.internals;
 
 import java.util.Map;
+import java.util.Optional;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.kstream.Materialized;
@@ -97,7 +98,7 @@ public class MaterializedInternalTest {
 
         final MaterializedInternal<Object, Object, KeyValueStore<Bytes, byte[]>> materialized =
             new MaterializedInternal<>(Materialized.as(supplier), internalStreamsBuilder, prefix);
-        assertThat(materialized.dslStoreSuppliers(), equalTo(Materialized.StoreType.IN_MEMORY));
+        assertThat(materialized.dslStoreSuppliers(), equalTo(Optional.of(Materialized.StoreType.IN_MEMORY)));
     }
 
     @SuppressWarnings("deprecation")

@@ -17,7 +17,9 @@
 package org.apache.kafka.streams.kstream.internals;
 
 import java.time.Duration;
+import java.util.HashMap;
 import java.util.Map;
+import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.kstream.EmitStrategy;
 import org.apache.kafka.streams.kstream.JoinWindows;
@@ -35,9 +37,10 @@ public class StreamJoinedStoreFactory<K, V1, V2> extends AbstractConfigurableSto
     private final JoinWindows windows;
     private final Serde<?> valueSerde;
     private final WindowBytesStoreSupplier storeSupplier;
-    private StreamJoinedInternal<K, V1, V2> joinedInternal;
+    private final StreamJoinedInternal<K, V1, V2> joinedInternal;
 
     private boolean loggingEnabled;
+    private final Map<String, String> logConfig;
 
     public enum Type {
         THIS,
@@ -55,6 +58,12 @@ public class StreamJoinedStoreFactory<K, V1, V2> extends AbstractConfigurableSto
         this.joinedInternal = joinedInternal;
         this.windows = windows;
         this.loggingEnabled = joinedInternal.loggingEnabled();
+        this.logConfig = new HashMap<>(joinedInternal.logConfig());
+
+        // since this store is configured to retain duplicates, we should
+        // not compact, so we override the configuration to make sure that
+        // it's just delete (window stores are configured to compact,delete)
+        this.logConfig.put(TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_DELETE);
 
         switch (type) {
             case THIS:
@@ -90,7 +99,7 @@ public class StreamJoinedStoreFactory<K, V1, V2> extends AbstractConfigurableSto
         );
 
         if (joinedInternal.loggingEnabled()) {
-            builder.withLoggingEnabled(joinedInternal.logConfig());
+            builder.withLoggingEnabled(logConfig);
         } else {
             builder.withLoggingDisabled();
         }
@@ -131,7 +140,7 @@ public class StreamJoinedStoreFactory<K, V1, V2> extends AbstractConfigurableSto
 
     @Override
     public Map<String, String> logConfig() {
-        return joinedInternal.logConfig();
+        return logConfig;
     }
 
     @Override

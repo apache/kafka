@@ -42,7 +42,6 @@ public class OuterStreamJoinStoreFactory<K, V1, V2> extends AbstractConfigurable
     private final String name;
     private final StreamJoinedInternal<K, V1, V2> streamJoined;
     private final JoinWindows windows;
-    private Type type;
     private boolean loggingEnabled;
 
     public enum Type {
@@ -57,10 +56,9 @@ public class OuterStreamJoinStoreFactory<K, V1, V2> extends AbstractConfigurable
             final Type type
     ) {
         super(streamJoined.dslStoreSuppliers());
-        this.name = buildOuterJoinWindowStoreName(streamJoined, name) + "-store";
+        this.name = buildOuterJoinWindowStoreName(streamJoined, name, type) + "-store";
         this.streamJoined = streamJoined;
         this.windows = windows;
-        this.type = type;
         this.loggingEnabled = streamJoined.loggingEnabled();
     }
 
@@ -164,10 +162,15 @@ public class OuterStreamJoinStoreFactory<K, V1, V2> extends AbstractConfigurable
 
     @Override
     public boolean isCompatibleWith(final StoreFactory storeFactory) {
-        return false;
+        return (storeFactory instanceof OuterStreamJoinStoreFactory)
+                && ((OuterStreamJoinStoreFactory<?, ?, ?>) storeFactory).streamJoined.equals(streamJoined);
     }
 
-    private String buildOuterJoinWindowStoreName(final StreamJoinedInternal<K, V1, V2> streamJoinedInternal, final String joinThisGeneratedName) {
+    private static <K, V1, V2> String buildOuterJoinWindowStoreName(
+            final StreamJoinedInternal<K, V1, V2> streamJoinedInternal,
+            final String joinThisGeneratedName,
+            final Type type
+    ) {
         final String outerJoinSuffix = (type == Type.RIGHT) ? "-outer-shared-join" : "-left-shared-join";
 
         if (streamJoinedInternal.thisStoreSupplier() != null && !streamJoinedInternal.thisStoreSupplier().name().isEmpty()) {

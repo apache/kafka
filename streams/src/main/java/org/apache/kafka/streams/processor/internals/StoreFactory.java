@@ -66,6 +66,10 @@ public interface StoreFactory {
 
     boolean isVersionedStore();
 
+    // TODO: consider moving all the log configuration code (InternalTopicConfig)
+    // into the StoreFactory interface and exposing it as StoreFactory#changelogTopicConfig
+    // that will mean we don't need to expose many methods like logConfig, isWindowStore()
+    // and retentionPeriod()
     Map<String, String> logConfig();
 
     StoreFactory withCachingDisabled();
