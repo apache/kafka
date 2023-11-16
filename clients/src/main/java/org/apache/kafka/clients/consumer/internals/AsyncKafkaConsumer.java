@@ -1168,12 +1168,17 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
 
     @Override
     public boolean updateAssignmentMetadataIfNeeded(Timer timer) {
-        backgroundEventProcessor.process();
+        acquireAndEnsureOpen();
+        try {
+            backgroundEventProcessor.process();
 
-        // Keeping this updateAssignmentMetadataIfNeeded wrapping up the updateFetchPositions as
-        // in the previous implementation, because it will eventually involve group coordination
-        // logic
-        return updateFetchPositions(timer);
+            // Keeping this updateAssignmentMetadataIfNeeded wrapping up the updateFetchPositions as
+            // in the previous implementation, because it will eventually involve group coordination
+            // logic
+            return updateFetchPositions(timer);
+        } finally {
+            release();
+        }
     }
 
     @Override
