@@ -2445,6 +2445,12 @@ class KafkaApisTest {
         .build(version.toShort)
       val request = buildRequest(produceRequest)
 
+      val postVerificationCallback: ArgumentCaptor[RequestLocal => (Map[TopicPartition, MemoryRecords], Map[TopicPartition, LogAppendResult]) => Unit] = ArgumentCaptor.forClass(
+        classOf[RequestLocal => (Map[TopicPartition, MemoryRecords], Map[TopicPartition, LogAppendResult]) => Unit])
+      when(replicaManager.appendRecordsWithVerification(any(), any(), any(), any(), postVerificationCallback.capture())).thenAnswer(
+        _ => postVerificationCallback.getValue()(RequestLocal.NoCaching)(Map.empty, Map.empty)
+      )
+
       when(replicaManager.appendRecords(anyLong,
         anyShort,
         ArgumentMatchers.eq(false),
@@ -2455,7 +2461,8 @@ class KafkaApisTest {
         any(),
         any(),
         any(),
-        any()
+        any(),
+        any(),
       )).thenAnswer(_ => responseCallback.getValue.apply(Map(tp -> new PartitionResponse(Errors.INVALID_PRODUCER_EPOCH))))
 
       when(clientRequestQuotaManager.maybeRecordAndGetThrottleTimeMs(any[RequestChannel.Request](),
@@ -2487,6 +2494,8 @@ class KafkaApisTest {
       reset(replicaManager, clientQuotaManager, clientRequestQuotaManager, requestChannel, txnCoordinator)
 
       val responseCallback: ArgumentCaptor[Map[TopicPartition, PartitionResponse] => Unit] = ArgumentCaptor.forClass(classOf[Map[TopicPartition, PartitionResponse] => Unit])
+      val postVerificationCallback: ArgumentCaptor[RequestLocal => (Map[TopicPartition, MemoryRecords], Map[TopicPartition, LogAppendResult]) => Unit] = ArgumentCaptor.forClass(
+        classOf[RequestLocal => (Map[TopicPartition, MemoryRecords], Map[TopicPartition, LogAppendResult]) => Unit])
 
       val tp = new TopicPartition("topic", 0)
 
@@ -2505,8 +2514,31 @@ class KafkaApisTest {
       val request = buildRequest(produceRequest)
 
       val kafkaApis = createKafkaApis()
+      val requestLocal = RequestLocal.withThreadConfinedCaching
+      val newRequestLocal = RequestLocal.NoCaching
+
+      when(replicaManager.appendRecordsWithVerification(any(), any(), any(), any(), postVerificationCallback.capture())).thenAnswer(
+        arg => replicaManager.appendRecordsAfterVerification(arg.getArgument(0), arg.getArgument(1), postVerificationCallback.getValue)(newRequestLocal, Map.empty)
+      )
+
+      when(replicaManager.appendRecordsAfterVerification(any(), any(), postVerificationCallback.capture())(any(), any())).thenAnswer(
+        _ => postVerificationCallback.getValue()(newRequestLocal)(Map.empty, Map.empty)
+      )
       
-      kafkaApis.handleProduceRequest(request, RequestLocal.withThreadConfinedCaching)
+      kafkaApis.handleProduceRequest(request, requestLocal)
+
+      verify(replicaManager).appendRecordsWithVerification(
+        any(),
+        any(),
+        ArgumentMatchers.eq(transactionalId),
+        ArgumentMatchers.eq(requestLocal),
+        ArgumentMatchers.eq(postVerificationCallback.getValue)
+      )
+
+      verify(replicaManager).appendRecordsAfterVerification(
+        any(),
+        any(),
+        ArgumentMatchers.eq(postVerificationCallback.getValue))(ArgumentMatchers.eq(newRequestLocal), any())
       
       verify(replicaManager).appendRecords(anyLong,
         anyShort,
@@ -2516,8 +2548,9 @@ class KafkaApisTest {
         responseCallback.capture(),
         any(),
         any(),
+        ArgumentMatchers.eq(newRequestLocal),
         any(),
-        ArgumentMatchers.eq(transactionalId),
+        any(),
         any())
     }
   }
@@ -2644,6 +2677,7 @@ class KafkaApisTest {
       any(),
       any(),
       ArgumentMatchers.eq(requestLocal),
+      any(),
       any(),
       any()
     )).thenAnswer(_ => responseCallback.getValue.apply(Map(tp2 -> new PartitionResponse(Errors.NONE))))
@@ -2777,6 +2811,7 @@ class KafkaApisTest {
       any(),
       ArgumentMatchers.eq(requestLocal),
       any(),
+      any(),
       any()
     )).thenAnswer(_ => responseCallback.getValue.apply(Map(tp2 -> new PartitionResponse(Errors.NONE))))
 
@@ -2810,6 +2845,7 @@ class KafkaApisTest {
       any(),
       any(),
       ArgumentMatchers.eq(requestLocal),
+      any(),
       any(),
       any())
   }

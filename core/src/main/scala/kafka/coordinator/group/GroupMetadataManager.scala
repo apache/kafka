@@ -26,7 +26,7 @@ import java.util.concurrent.locks.ReentrantLock
 import java.util.concurrent.ConcurrentHashMap
 import com.yammer.metrics.core.Gauge
 import kafka.common.OffsetAndMetadata
-import kafka.server.{ReplicaManager, RequestLocal}
+import kafka.server.{LogAppendResult, ReplicaManager, RequestLocal}
 import kafka.utils.CoreUtils.inLock
 import kafka.utils.Implicits._
 import kafka.utils._
@@ -328,7 +328,7 @@ class GroupMetadataManager(brokerId: Int,
                              records: Map[TopicPartition, MemoryRecords],
                              requestLocal: RequestLocal,
                              callback: Map[TopicPartition, PartitionResponse] => Unit,
-                             transactionalId: String = null): Unit = {
+                             preAppendErrors: Map[TopicPartition, LogAppendResult] = Map.empty): Unit = {
     // call replica manager to append the group message
     replicaManager.appendRecords(
       timeout = config.offsetCommitTimeoutMs.toLong,
@@ -339,7 +339,7 @@ class GroupMetadataManager(brokerId: Int,
       delayedProduceLock = Some(group.lock),
       responseCallback = callback,
       requestLocal = requestLocal,
-      transactionalId = transactionalId)
+      preAppendErrors = preAppendErrors)
   }
 
   /**
@@ -469,18 +469,34 @@ class GroupMetadataManager(brokerId: Int,
             responseCallback(commitStatus)
           }
 
-          if (isTxnOffsetCommit) {
-            group.inLock {
-              addProducerGroup(producerId, group.groupId)
-              group.prepareTxnOffsetCommit(producerId, offsetMetadata)
-            }
-          } else {
-            group.inLock {
-              group.prepareOffsetCommit(offsetMetadata)
-            }
-          }
+          val transactionVerificationEntries = new ReplicaManager.TransactionVerificationEntries
+          def postVerificationCallback(newRequestLocal: RequestLocal)
+                                      (newlyVerifiedEntries: Map[TopicPartition, MemoryRecords], errorResults: Map[TopicPartition, LogAppendResult]): Unit = {
 
-          appendForGroup(group, entries, requestLocal, putCacheCallback, transactionalId)
+            if (isTxnOffsetCommit) {
+              group.inLock {
+                addProducerGroup(producerId, group.groupId)
+                group.prepareTxnOffsetCommit(producerId, offsetMetadata)
+              }
+            } else {
+              group.inLock {
+                group.prepareOffsetCommit(offsetMetadata)
+              }
+            }
+
+            appendForGroup(group, newlyVerifiedEntries ++ transactionVerificationEntries.verified, newRequestLocal, putCacheCallback, errorResults)
+          }
+          if (transactionalId != null ) {
+            replicaManager.appendRecordsWithVerification(
+              entriesPerPartition = entries,
+              transactionVerificationEntries = transactionVerificationEntries,
+              transactionalId = transactionalId,
+              requestLocal = requestLocal,
+              postVerificationCallback = postVerificationCallback
+            )
+          } else {
+            postVerificationCallback(requestLocal)(entries, Map.empty)
+          }
 
         case None =>
           val commitStatus = offsetMetadata.map { case (topicIdPartition, _) =>

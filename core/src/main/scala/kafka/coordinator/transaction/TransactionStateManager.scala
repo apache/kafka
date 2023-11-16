@@ -281,12 +281,12 @@ class TransactionStateManager(brokerId: Int,
 
     inReadLock(stateLock) {
       replicaManager.appendRecords(
-        config.requestTimeoutMs,
-        TransactionLog.EnforcedRequiredAcks,
+        timeout = config.requestTimeoutMs,
+        requiredAcks = TransactionLog.EnforcedRequiredAcks,
         internalTopicsAllowed = true,
         origin = AppendOrigin.COORDINATOR,
         entriesPerPartition = Map(transactionPartition -> tombstoneRecords),
-        removeFromCacheCallback,
+        responseCallback = removeFromCacheCallback,
         requestLocal = RequestLocal.NoCaching)
     }
   }
@@ -767,15 +767,15 @@ class TransactionStateManager(brokerId: Int,
           }
           if (append) {
             replicaManager.appendRecords(
-                newMetadata.txnTimeoutMs.toLong,
-                TransactionLog.EnforcedRequiredAcks,
-                internalTopicsAllowed = true,
-                origin = AppendOrigin.COORDINATOR,
-                recordsPerPartition,
-                updateCacheCallback,
-                requestLocal = requestLocal)
+              timeout = newMetadata.txnTimeoutMs.toLong,
+              requiredAcks = TransactionLog.EnforcedRequiredAcks,
+              internalTopicsAllowed = true,
+              origin = AppendOrigin.COORDINATOR,
+              entriesPerPartition = recordsPerPartition,
+              responseCallback = updateCacheCallback,
+              requestLocal = requestLocal)
 
-              trace(s"Appending new metadata $newMetadata for transaction id $transactionalId with coordinator epoch $coordinatorEpoch to the local transaction log")
+            trace(s"Appending new metadata $newMetadata for transaction id $transactionalId with coordinator epoch $coordinatorEpoch to the local transaction log")
           }
       }
     }

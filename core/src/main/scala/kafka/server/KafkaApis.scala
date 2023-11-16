@@ -675,22 +675,34 @@ class KafkaApis(val requestChannel: RequestChannel,
       }
     }
 
-    if (authorizedRequestInfo.isEmpty)
-      sendResponseCallback(Map.empty)
-    else {
-      val internalTopicsAllowed = request.header.clientId == AdminUtils.ADMIN_CLIENT_ID
+    val internalTopicsAllowed = request.header.clientId == AdminUtils.ADMIN_CLIENT_ID
+    val transactionVerificationEntries = new ReplicaManager.TransactionVerificationEntries
 
-      // call the replica manager to append messages to the replicas
+    def postVerificationCallback(newRequestLocal: RequestLocal)
+                                (newlyVerifiedEntries: Map[TopicPartition, MemoryRecords], errorResults: Map[TopicPartition, LogAppendResult]): Unit = {
       replicaManager.appendRecords(
         timeout = produceRequest.timeout.toLong,
         requiredAcks = produceRequest.acks,
         internalTopicsAllowed = internalTopicsAllowed,
         origin = AppendOrigin.CLIENT,
-        entriesPerPartition = authorizedRequestInfo,
-        requestLocal = requestLocal,
+        entriesPerPartition = newlyVerifiedEntries ++ transactionVerificationEntries.verified,
         responseCallback = sendResponseCallback,
         recordConversionStatsCallback = processingStatsCallback,
-        transactionalId = produceRequest.transactionalId()
+        requestLocal = newRequestLocal,
+        preAppendErrors = errorResults
+      )
+    }
+
+    if (authorizedRequestInfo.isEmpty)
+      sendResponseCallback(Map.empty)
+    else {
+      // call the replica manager to append messages to the replicas
+      replicaManager.appendRecordsWithVerification(
+        entriesPerPartition = authorizedRequestInfo,
+        transactionVerificationEntries = transactionVerificationEntries,
+        transactionalId = produceRequest.transactionalId,
+        requestLocal = requestLocal,
+        postVerificationCallback = postVerificationCallback
       )
 
       // if the request is put into the purgatory, it will have a held reference and hence cannot be garbage collected;

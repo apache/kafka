@@ -23,6 +23,7 @@ import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.locks.Lock
 import kafka.coordinator.AbstractCoordinatorConcurrencyTest._
 import kafka.log.UnifiedLog
+import kafka.server.ReplicaManager.TransactionVerificationEntries
 import kafka.server._
 import kafka.utils._
 import kafka.zk.KafkaZkClient
@@ -32,7 +33,7 @@ import org.apache.kafka.common.record.{MemoryRecords, RecordBatch, RecordConvers
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.server.util.timer.MockTimer
 import org.apache.kafka.server.util.{MockScheduler, MockTime}
-import org.apache.kafka.storage.internals.log.{AppendOrigin, LogConfig}
+import org.apache.kafka.storage.internals.log.{AppendOrigin, LogConfig, VerificationGuard}
 import org.junit.jupiter.api.{AfterEach, BeforeEach}
 import org.mockito.Mockito.{CALLS_REAL_METHODS, mock, withSettings}
 
@@ -179,8 +180,9 @@ object AbstractCoordinatorConcurrencyTest {
                                delayedProduceLock: Option[Lock] = None,
                                processingStatsCallback: Map[TopicPartition, RecordConversionStats] => Unit = _ => (),
                                requestLocal: RequestLocal = RequestLocal.NoCaching,
-                               transactionalId: String = null,
-                               actionQueue: ActionQueue = null): Unit = {
+                               actionQueue: ActionQueue = null,
+                               verificationGuards: Map[TopicPartition, VerificationGuard] = Map.empty,
+                               preAppendErrors: Map[TopicPartition, LogAppendResult] = Map.empty): Unit = {
 
       if (entriesPerPartition.isEmpty)
         return
@@ -208,6 +210,16 @@ object AbstractCoordinatorConcurrencyTest {
       watchKeys ++= producerRequestKeys
       producePurgatory.tryCompleteElseWatch(delayedProduce, producerRequestKeys)
     }
+
+    override def appendRecordsWithVerification(entriesPerPartition: Map[TopicPartition, MemoryRecords],
+      transactionVerificationEntries: TransactionVerificationEntries,
+      transactionalId: String,
+      requestLocal: RequestLocal,
+      postVerificationCallback: RequestLocal => (Map[TopicPartition, MemoryRecords], Map[TopicPartition, LogAppendResult]) => Unit): Unit = {
+
+      postVerificationCallback(requestLocal)(entriesPerPartition, Map.empty)
+    }
+
 
     override def getMagic(topicPartition: TopicPartition): Option[Byte] = {
       Some(RecordBatch.MAGIC_VALUE_V2)

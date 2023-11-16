@@ -27,7 +27,7 @@ import javax.management.ObjectName
 import kafka.cluster.Partition
 import kafka.common.OffsetAndMetadata
 import kafka.log.UnifiedLog
-import kafka.server.{HostedPartition, KafkaConfig, ReplicaManager, RequestLocal}
+import kafka.server.{HostedPartition, KafkaConfig, LogAppendResult, ReplicaManager, RequestLocal}
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.Subscription
@@ -1187,6 +1187,7 @@ class GroupMetadataManagerTest {
       any(),
       any(),
       any(),
+      any(),
       any())
     verify(replicaManager).getMagic(any())
   }
@@ -1222,6 +1223,7 @@ class GroupMetadataManagerTest {
       any(),
       any(),
       any[Option[ReentrantLock]],
+      any(),
       any(),
       any(),
       any(),
@@ -1301,6 +1303,7 @@ class GroupMetadataManagerTest {
       any(),
       any(),
       any(),
+      any(),
       any())
     // Will update sensor after commit
     assertEquals(1, TestUtils.totalMetricValue(metrics, "offset-commit-count"))
@@ -1330,6 +1333,7 @@ class GroupMetadataManagerTest {
       commitErrors = Some(errors)
     }
 
+    setUpTransactionVerification(replicaManager, transactionalId)
     groupMetadataManager.storeOffsets(group, memberId, offsets, callback, transactionalId, producerId, producerEpoch)
     assertTrue(group.hasOffsets)
     assertTrue(group.allOffsets.isEmpty)
@@ -1343,7 +1347,8 @@ class GroupMetadataManagerTest {
       any[Option[ReentrantLock]],
       any(),
       any(),
-      ArgumentMatchers.eq(transactionalId),
+      any(),
+      any(),
       any())
     verify(replicaManager).getMagic(any())
     capturedResponseCallback.getValue.apply(Map(groupTopicPartition ->
@@ -1381,6 +1386,7 @@ class GroupMetadataManagerTest {
       commitErrors = Some(errors)
     }
 
+    setUpTransactionVerification(replicaManager, transactionalId)
     groupMetadataManager.storeOffsets(group, memberId, offsets, callback, transactionalId, producerId, producerEpoch)
     assertTrue(group.hasOffsets)
     assertTrue(group.allOffsets.isEmpty)
@@ -1404,7 +1410,8 @@ class GroupMetadataManagerTest {
       any[Option[ReentrantLock]],
       any(),
       any(),
-      ArgumentMatchers.eq(transactionalId),
+      any(),
+      any(),
       any())
     verify(replicaManager).getMagic(any())
   }
@@ -1432,6 +1439,7 @@ class GroupMetadataManagerTest {
       commitErrors = Some(errors)
     }
 
+    setUpTransactionVerification(replicaManager, transactionalId)
     groupMetadataManager.storeOffsets(group, memberId, offsets, callback, transactionalId, producerId, producerEpoch)
     assertTrue(group.hasOffsets)
     assertTrue(group.allOffsets.isEmpty)
@@ -1455,7 +1463,8 @@ class GroupMetadataManagerTest {
       any[Option[ReentrantLock]],
       any(),
       any(),
-      ArgumentMatchers.eq(transactionalId),
+      any(),
+      any(),
       any())
     verify(replicaManager).getMagic(any())
   }
@@ -1484,6 +1493,7 @@ class GroupMetadataManagerTest {
       commitErrors = Some(errors)
     }
 
+    setUpTransactionVerification(replicaManager, transactionalId)
     groupMetadataManager.storeOffsets(group, memberId, offsets, callback, transactionalId, producerId, producerEpoch)
     assertTrue(group.hasOffsets)
     assertTrue(group.allOffsets.isEmpty)
@@ -1509,7 +1519,8 @@ class GroupMetadataManagerTest {
       any[Option[ReentrantLock]],
       any(),
       any(),
-      ArgumentMatchers.eq(transactionalId),
+      any(),
+      any(),
       any())
     verify(replicaManager).getMagic(any())
   }
@@ -1662,6 +1673,7 @@ class GroupMetadataManagerTest {
       any(),
       any(),
       any(),
+      any(),
       any())
     verify(replicaManager).getMagic(any())
     assertEquals(1, TestUtils.totalMetricValue(metrics, "offset-commit-count"))
@@ -1766,6 +1778,7 @@ class GroupMetadataManagerTest {
       any(),
       any(),
       any[Option[ReentrantLock]],
+      any(),
       any(),
       any(),
       any(),
@@ -2876,6 +2889,7 @@ class GroupMetadataManagerTest {
       any(),
       any(),
       any(),
+      any(),
       any())
     capturedArgument
   }
@@ -2890,6 +2904,7 @@ class GroupMetadataManagerTest {
       capturedRecords.capture(),
       capturedCallback.capture(),
       any[Option[ReentrantLock]],
+      any(),
       any(),
       any(),
       any(),
@@ -3111,5 +3126,13 @@ class GroupMetadataManagerTest {
       assertEquals(Some(offset), group.offset(topicPartition).map(_.offset))
       assertTrue(group.offset(topicPartition).map(_.expireTimestamp).contains(None))
     }
+  }
+
+  def setUpTransactionVerification(replicaManager: ReplicaManager, transactionalId: String): Unit = {
+    val postVerificationCallback: ArgumentCaptor[RequestLocal => (Map[TopicPartition, MemoryRecords], Map[TopicPartition, LogAppendResult]) => Unit] = ArgumentCaptor.forClass(
+      classOf[RequestLocal => (Map[TopicPartition, MemoryRecords], Map[TopicPartition, LogAppendResult]) => Unit])
+    when(replicaManager.appendRecordsWithVerification(any(), any(), ArgumentMatchers.eq(transactionalId), any(), postVerificationCallback.capture())).thenAnswer(
+      _ => postVerificationCallback.getValue()(RequestLocal.NoCaching)(Map.empty, Map.empty)
+    )
   }
 }

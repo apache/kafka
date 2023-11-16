@@ -19,7 +19,7 @@ package kafka.coordinator.group
 
 import java.util.{Optional, OptionalInt}
 import kafka.common.OffsetAndMetadata
-import kafka.server.{DelayedOperationPurgatory, HostedPartition, KafkaConfig, ReplicaManager, RequestLocal}
+import kafka.server.{DelayedOperationPurgatory, HostedPartition, KafkaConfig, LogAppendResult, ReplicaManager, RequestLocal}
 import kafka.utils._
 import org.apache.kafka.common.{TopicIdPartition, TopicPartition, Uuid}
 import org.apache.kafka.common.protocol.Errors
@@ -48,7 +48,7 @@ import org.mockito.ArgumentMatchers.{any, anyLong, anyShort}
 import org.mockito.Mockito.{mock, when}
 
 import scala.jdk.CollectionConverters._
-import scala.collection.{Seq, mutable}
+import scala.collection.{Seq, mutable, Map => SMap}
 import scala.collection.mutable.ArrayBuffer
 import scala.concurrent.duration.Duration
 import scala.concurrent.{Await, Future, Promise, TimeoutException}
@@ -3865,6 +3865,7 @@ class GroupCoordinatorTest {
       any(),
       any(),
       any(),
+      any(),
       any()
     )).thenAnswer(_ => {
       capturedArgument.getValue.apply(
@@ -3900,6 +3901,7 @@ class GroupCoordinatorTest {
       any[Option[ReentrantLock]],
       any(),
       any(), 
+      any(),
       any(),
       any())).thenAnswer(_ => {
         capturedArgument.getValue.apply(
@@ -4047,6 +4049,7 @@ class GroupCoordinatorTest {
       any(),
       any(),
       any(),
+      any(),
       any()
     )).thenAnswer(_ => {
       capturedArgument.getValue.apply(
@@ -4074,6 +4077,12 @@ class GroupCoordinatorTest {
 
     // Since transactional ID is only used in appendRecords, we can use a dummy value. Ensure it passes through.
     val transactionalId = "dummy-txn-id"
+
+    val postVerificationCallback: ArgumentCaptor[RequestLocal => (SMap[TopicPartition, MemoryRecords], SMap[TopicPartition, LogAppendResult]) => Unit] = ArgumentCaptor.forClass(
+      classOf[RequestLocal => (SMap[TopicPartition, MemoryRecords], SMap[TopicPartition, LogAppendResult]) => Unit])
+    when(replicaManager.appendRecordsWithVerification(any(), any(), ArgumentMatchers.eq(transactionalId), any(), postVerificationCallback.capture())).thenAnswer(
+      _ => postVerificationCallback.getValue()(RequestLocal.NoCaching)(Map.empty, Map.empty)
+    )
     when(replicaManager.appendRecords(anyLong,
       anyShort(),
       internalTopicsAllowed = ArgumentMatchers.eq(true),
@@ -4083,7 +4092,8 @@ class GroupCoordinatorTest {
       any[Option[ReentrantLock]],
       any(),
       any(),
-      ArgumentMatchers.eq(transactionalId),
+      any(),
+      any(),
       any()
     )).thenAnswer(_ => {
       capturedArgument.getValue.apply(
