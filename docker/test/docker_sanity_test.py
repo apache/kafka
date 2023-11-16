@@ -71,6 +71,55 @@ class DockerSanityTest(unittest.TestCase):
         command.extend(consumer_config)
         message = subprocess.check_output(["bash", "-c", " ".join(command)], timeout=constants.CLIENT_TIMEOUT)
         return message.decode("utf-8").strip()
+    
+    def get_metrics(self, jmx_tool_config):
+        command = [constants.KAFKA_RUN_CLASS, constants.JMX_TOOL]
+        command.extend(jmx_tool_config)
+        message = subprocess.check_output(["bash", "-c", " ".join(command)], timeout=constants.CLIENT_TIMEOUT)
+        return message.decode("utf-8").strip().split()
+    
+    def broker_metrics_flow(self):
+        print(f"Running {constants.BROKER_METRICS_TESTS}")
+        errors = []
+        try:
+            self.assertTrue(self.create_topic(constants.BROKER_METRICS_TEST_TOPIC, ["--bootstrap-server", "localhost:9092"]))
+        except AssertionError as e:
+            errors.append(constants.BROKER_METRICS_ERROR_PREFIX + str(e))
+            return errors
+        jmx_tool_config = ["--one-time", "--object-name", "kafka.server:type=BrokerTopicMetrics,name=MessagesInPerSec", "--jmx-url", "service:jmx:rmi:///jndi/rmi://:9101/jmxrmi"]
+        metrics_before_message = self.get_metrics(jmx_tool_config)
+        try:
+            self.assertEqual(len(metrics_before_message), 2)
+            self.assertEqual(metrics_before_message[0], constants.BROKER_METRICS_HEADING)
+        except AssertionError as e:
+            errors.append(constants.BROKER_METRICS_ERROR_PREFIX + str(e))
+            return errors
+
+        producer_config = ["--bootstrap-server", "localhost:9092", "--property", "client.id=host"]
+        self.produce_message(constants.BROKER_METRICS_TEST_TOPIC, producer_config, "key", "message")
+        consumer_config = ["--bootstrap-server", "localhost:9092", "--property", "auto.offset.reset=earliest"]
+        message = self.consume_message(constants.BROKER_METRICS_TEST_TOPIC, consumer_config)
+        try:
+            self.assertEqual(message, "key:message")
+        except AssertionError as e:
+            errors.append(constants.BROKER_METRICS_ERROR_PREFIX + str(e))
+            return errors
+        
+        metrics_after_message = self.get_metrics(jmx_tool_config)
+        try:
+            self.assertEqual(len(metrics_before_message), 2)
+            self.assertEqual(metrics_after_message[0], constants.BROKER_METRICS_HEADING)
+            before_metrics_data, after_metrics_data = metrics_before_message[1].split(","), metrics_after_message[1].split(",")
+            self.assertEqual(len(before_metrics_data), len(after_metrics_data))
+            for i in range(len(before_metrics_data)):
+                if after_metrics_data[i].replace(".", "").isnumeric():
+                    self.assertGreater(float(after_metrics_data[i]), float(before_metrics_data[i]))
+                else:
+                    self.assertEqual(after_metrics_data[i], before_metrics_data[i])
+        except AssertionError as e:
+            errors.append(constants.BROKER_METRICS_ERROR_PREFIX + str(e))
+
+        return errors
 
     def ssl_flow(self, ssl_broker_port, test_name, test_error_prefix, topic):
         print(f"Running {test_name}")
@@ -92,17 +141,10 @@ class DockerSanityTest(unittest.TestCase):
         ]
         message = self.consume_message(topic, consumer_config)
         try:
-            self.assertIsNotNone(message)
-        except AssertionError as e:
-            errors.append(test_error_prefix + str(e))
-        try:
             self.assertEqual(message, "key:message")
         except AssertionError as e:
             errors.append(test_error_prefix + str(e))
-        if errors:
-            print(f"Errors in {test_name}:- {errors}")
-        else:
-            print(f"No errors in {test_name}")
+        
         return errors
     
     def broker_restart_flow(self):
@@ -126,22 +168,19 @@ class DockerSanityTest(unittest.TestCase):
         consumer_config = ["--bootstrap-server", "localhost:9092", "--property", "auto.offset.reset=earliest"]
         message = self.consume_message(constants.BROKER_RESTART_TEST_TOPIC, consumer_config)
         try:
-            self.assertIsNotNone(message)
-        except AssertionError as e:
-            errors.append(constants.BROKER_RESTART_ERROR_PREFIX + str(e))
-            return errors
-        try:
             self.assertEqual(message, "key:message")
         except AssertionError as e:
             errors.append(constants.BROKER_RESTART_ERROR_PREFIX + str(e))
-        if errors:
-            print(f"Errors in {constants.BROKER_RESTART_TESTS}:- {errors}")
-        else:
-            print(f"No errors in {constants.BROKER_RESTART_TESTS}")
+        
         return errors
 
     def execute(self):
         total_errors = []
+        try:
+            total_errors.extend(self.broker_metrics_flow())
+        except Exception as e:
+            print(constants.BROKER_METRICS_ERROR_PREFIX, str(e))
+            total_errors.append(str(e))
         try:
             total_errors.extend(self.ssl_flow('localhost:9093', constants.SSL_FLOW_TESTS, constants.SSL_ERROR_PREFIX, constants.SSL_TOPIC))
         except Exception as e:

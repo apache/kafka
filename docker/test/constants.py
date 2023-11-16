@@ -16,6 +16,7 @@
 KAFKA_TOPICS="./test/fixtures/kafka/bin/kafka-topics.sh"
 KAFKA_CONSOLE_PRODUCER="./test/fixtures/kafka/bin/kafka-console-producer.sh"
 KAFKA_CONSOLE_CONSUMER="./test/fixtures/kafka/bin/kafka-console-consumer.sh"
+KAFKA_RUN_CLASS="./test/fixtures/kafka/bin/kafka-run-class.sh"
 
 JVM_COMPOSE="./test/fixtures/jvm/docker-compose.yml"
 
@@ -32,6 +33,12 @@ BROKER_RESTART_TESTS="Broker Restart Tests"
 BROKER_CONTAINER="broker"
 BROKER_RESTART_TEST_TOPIC="test-topic-broker-restart"
 
+BROKER_METRICS_TESTS="Broker Metrics Tests"
+BROKER_METRICS_TEST_TOPIC="test-topic-broker-metrics"
+JMX_TOOL="org.apache.kafka.tools.JmxTool"
+BROKER_METRICS_HEADING='"time","kafka.server:type=BrokerTopicMetrics,name=MessagesInPerSec:Count","kafka.server:type=BrokerTopicMetrics,name=MessagesInPerSec:EventType","kafka.server:type=BrokerTopicMetrics,name=MessagesInPerSec:FifteenMinuteRate","kafka.server:type=BrokerTopicMetrics,name=MessagesInPerSec:FiveMinuteRate","kafka.server:type=BrokerTopicMetrics,name=MessagesInPerSec:MeanRate","kafka.server:type=BrokerTopicMetrics,name=MessagesInPerSec:OneMinuteRate","kafka.server:type=BrokerTopicMetrics,name=MessagesInPerSec:RateUnit"'
+
 SSL_ERROR_PREFIX="SSL_ERR"
 BROKER_RESTART_ERROR_PREFIX="BROKER_RESTART_ERR"
 FILE_INPUT_ERROR_PREFIX="FILE_INPUT_ERR"
+BROKER_METRICS_ERROR_PREFIX="BROKER_METRICS_ERR"
