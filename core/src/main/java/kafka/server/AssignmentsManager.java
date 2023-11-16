@@ -57,7 +57,7 @@ public class AssignmentsManager {
      * is no request in flight already.
      * The interval is reset when a new assignment is submitted.
      */
-    private static final long DISPATCH_INTERVAL_NS = TimeUnit.SECONDS.toNanos(1);
+    private static final long DISPATCH_INTERVAL_NS = TimeUnit.MILLISECONDS.toNanos(500);
 
     private static final long MAX_BACKOFF_INTERVAL_MS = TimeUnit.SECONDS.toNanos(10);
 
