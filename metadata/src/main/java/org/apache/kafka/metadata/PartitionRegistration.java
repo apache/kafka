@@ -350,14 +350,16 @@ public class PartitionRegistration {
             setLeaderEpoch(leaderEpoch).
             setPartitionEpoch(partitionEpoch);
         if (options.metadataVersion().isElrSupported()) {
-            record.setEligibleLeaderReplicas(Replicas.toList(elr)).
-                setLastKnownELR(Replicas.toList(lastKnownElr));
+            // The following are tagged fields, we should only set them when there are some contents, in order to save
+            // spaces.
+            if (elr.length > 0) record.setEligibleLeaderReplicas(Replicas.toList(elr));
+            if (lastKnownElr.length > 0) record.setLastKnownELR(Replicas.toList(lastKnownElr));
         }
         if (options.metadataVersion().isDirectoryAssignmentSupported()) {
             record.setDirectories(Uuid.toList(directories));
         } else {
-            for (int i = 0; i < directories.length; i++) {
-                if (!DirectoryId.UNASSIGNED.equals(directories[i])) {
+            for (Uuid directory : directories) {
+                if (!DirectoryId.UNASSIGNED.equals(directory)) {
                     options.handleLoss("the directory assignment state of one or more replicas");
                     break;
                 }
