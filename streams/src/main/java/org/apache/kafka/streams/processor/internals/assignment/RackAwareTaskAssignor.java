@@ -82,6 +82,7 @@ public class RackAwareTaskAssignor {
     private final Cluster fullMetadata;
     private final Map<TaskId, Set<TopicPartition>> partitionsForTask;
     private final Map<TaskId, Set<TopicPartition>> changelogPartitionsForTask;
+    private final Map<Subtopology, Set<TaskId>> tasksForTopicGroup;
     private final AssignmentConfigs assignmentConfigs;
     private final Map<TopicPartition, Set<String>> racksForPartition;
     private final Map<UUID, String> racksForProcess;
@@ -101,6 +102,7 @@ public class RackAwareTaskAssignor {
         this.fullMetadata = fullMetadata;
         this.partitionsForTask = partitionsForTask;
         this.changelogPartitionsForTask = changelogPartitionsForTask;
+        this.tasksForTopicGroup = tasksForTopicGroup;
         this.internalTopicManager = internalTopicManager;
         this.assignmentConfigs = assignmentConfigs;
         this.racksForPartition = new HashMap<>();
@@ -323,7 +325,7 @@ public class RackAwareTaskAssignor {
         }
         final List<UUID> clientList = new ArrayList<>(clientStates.keySet());
         final List<TaskId> taskIdList = new ArrayList<>(tasks);
-        final Graph<Integer> graph = RackAwareGraphConstructorFactory.create(assignmentConfigs).constructTaskGraph(clientList, taskIdList,
+        final Graph<Integer> graph = RackAwareGraphConstructorFactory.create(assignmentConfigs, tasksForTopicGroup).constructTaskGraph(clientList, taskIdList,
             clientStates, new HashMap<>(), new HashMap<>(), hasAssignedTask, this::getCost, trafficCost, nonOverlapCost, hasReplica, isStandby);
         return graph.totalCost();
     }
@@ -359,7 +361,7 @@ public class RackAwareTaskAssignor {
         final List<TaskId> taskIdList = new ArrayList<>(activeTasks);
         final Map<TaskId, UUID> taskClientMap = new HashMap<>();
         final Map<UUID, Integer> originalAssignedTaskNumber = new HashMap<>();
-        final RackAwareGraphConstructor graphConstructor = RackAwareGraphConstructorFactory.create(assignmentConfigs);
+        final RackAwareGraphConstructor graphConstructor = RackAwareGraphConstructorFactory.create(assignmentConfigs, tasksForTopicGroup);
         final Graph<Integer> graph = graphConstructor.constructTaskGraph(clientList, taskIdList,
             clientStates, taskClientMap, originalAssignedTaskNumber, ClientState::hasActiveTask, this::getCost, trafficCost, nonOverlapCost, false, false);
 

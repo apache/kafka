@@ -5,17 +5,36 @@ import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Objects;
+import java.util.Set;
+import java.util.SortedMap;
 import java.util.UUID;
 import java.util.function.BiConsumer;
 import java.util.function.BiPredicate;
 import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.internals.TopologyMetadata.Subtopology;
 import org.apache.kafka.streams.processor.internals.assignment.RackAwareTaskAssignor.GetCostFunction;
 
 public class MinTrafficGraphConstructor implements RackAwareGraphConstructor {
 
     @Override
+    public int getSinkNodeID(final List<TaskId> taskIdList, final List<UUID> clientList,
+        final Map<Subtopology, Set<TaskId>> tasksForTopicGroup) {
+        return clientList.size() + taskIdList.size();
+    }
+
+    @Override
+    public int getClientNodeId(final int clientIndex, final List<TaskId> taskIdList, final List<UUID> clientList, final int topicGroupIndex) {
+        return clientIndex + taskIdList.size();
+    }
+
+    @Override
+    public int getClientIndex(final int clientNodeId, final List<TaskId> taskIdList, final List<UUID> clientList, final int topicGroupIndex) {
+        return clientNodeId - taskIdList.size();
+    }
+
+    @Override
     public Graph<Integer> constructTaskGraph(final List<UUID> clientList,
-        final List<TaskId> taskIdList, final Map<UUID, ClientState> clientStates,
+        final List<TaskId> taskIdList, final SortedMap<UUID, ClientState> clientStates,
         final Map<TaskId, UUID> taskClientMap, final Map<UUID, Integer> originalAssignedTaskNumber,
         final BiPredicate<ClientState, TaskId> hasAssignedTask, final GetCostFunction getCostFunction, final int trafficCost,
         final int nonOverlapCost, final boolean hasReplica, final boolean isStandby) {
@@ -34,7 +53,7 @@ public class MinTrafficGraphConstructor implements RackAwareGraphConstructor {
         for (int taskNodeId = 0; taskNodeId < taskIdList.size(); taskNodeId++) {
             final TaskId taskId = taskIdList.get(taskNodeId);
             for (int j = 0; j < clientList.size(); j++) {
-                final int clientNodeId = RackAwareGraphConstructor.getClientNodeId(taskIdList, j);
+                final int clientNodeId = getClientNodeId(j, taskIdList, clientList, 0);
                 final UUID processId = clientList.get(j);
 
                 final int flow = hasAssignedTask.test(clientStates.get(processId), taskId) ? 1 : 0;
@@ -58,11 +77,11 @@ public class MinTrafficGraphConstructor implements RackAwareGraphConstructor {
             graph.addEdge(SOURCE_ID, taskNodeId, 1, 0, 1);
         }
 
-        final int sinkId = RackAwareGraphConstructor.getSinkNodeID(clientList, taskIdList);
+        final int sinkId = getSinkNodeID(taskIdList, clientList, null);
         // It's possible that some clients have 0 task assign. These clients will have 0 tasks assigned
         // even though it may have higher traffic cost. This is to maintain the original assigned task count
         for (int i = 0; i < clientList.size(); i++) {
-            final int clientNodeId = RackAwareGraphConstructor.getClientNodeId(taskIdList, i);
+            final int clientNodeId = getClientNodeId(i, taskIdList, clientList, 0);
             final int capacity = originalAssignedTaskNumber.getOrDefault(clientList.get(i), 0);
             // Flow equals to capacity for edges to sink
             graph.addEdge(clientNodeId, sinkId, capacity, 0, capacity);
@@ -91,7 +110,7 @@ public class MinTrafficGraphConstructor implements RackAwareGraphConstructor {
             for (final Graph<Integer>.Edge edge : edges.values()) {
                 if (edge.flow > 0) {
                     tasksAssigned++;
-                    final int clientIndex = RackAwareGraphConstructor.getClientIndex(taskIdList, edge.destination);
+                    final int clientIndex = getClientIndex(edge.destination, taskIdList, clientList, 0);
                     final UUID processId = clientList.get(clientIndex);
                     final UUID originalProcessId = taskClientMap.get(taskId);
 
