@@ -248,8 +248,8 @@ public class MeteredKeyValueStore<K, V>
 
     @SuppressWarnings("unchecked")
     private <R> QueryResult<R> runRangeQuery(final Query<R> query,
-                                               final PositionBound positionBound,
-                                               final QueryConfig config) {
+                                             final PositionBound positionBound,
+                                             final QueryConfig config) {
 
         final QueryResult<R> result;
         final RangeQuery<K, V> typedQuery = (RangeQuery<K, V>) query;
@@ -286,8 +286,8 @@ public class MeteredKeyValueStore<K, V>
 
     @SuppressWarnings("unchecked")
     private  <R> QueryResult<R> runKeyQuery(final Query<R> query,
-                                             final PositionBound positionBound,
-                                             final QueryConfig config) {
+                                            final PositionBound positionBound,
+                                            final QueryConfig config) {
         final QueryResult<R> result;
         final KeyQuery<K, V> typedKeyQuery = (KeyQuery<K, V>) query;
         final KeyQuery<Bytes, byte[]> rawKeyQuery =

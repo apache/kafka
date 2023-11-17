@@ -176,8 +176,8 @@ public class MeteredTimestampedKeyValueStore<K, V>
 
     @SuppressWarnings("unchecked")
     private <R> QueryResult<R> runTimestampedKeyQuery(final Query<R> query,
-                                                        final PositionBound positionBound,
-                                                        final QueryConfig config) {
+                                                      final PositionBound positionBound,
+                                                      final QueryConfig config) {
         final QueryResult<R> result;
         final TimestampedKeyQuery<K, V> typedKeyQuery = (TimestampedKeyQuery<K, V>) query;
         final KeyQuery<Bytes, byte[]> rawKeyQuery =
@@ -305,19 +305,19 @@ public class MeteredTimestampedKeyValueStore<K, V>
         private final KeyValueIterator<Bytes, byte[]> iter;
         private final Sensor sensor;
         private final long startNs;
-        private final Function<byte[], ValueAndTimestamp<V>> valueDeserializer;
+        private final Function<byte[], ValueAndTimestamp<V>> valueAndTimestampDeserializer;
 
-        private final boolean isKeyOrRangeQuery;
+        private final boolean returnPlainValue;
 
         private MeteredTimestampedKeyValueStoreIterator(final KeyValueIterator<Bytes, byte[]> iter,
-                                                   final Sensor sensor,
-                                                   final Function<byte[], ValueAndTimestamp<V>> valueDeserializer,
-                                                   final boolean isKeyOrRangeQuery) {
+                                                        final Sensor sensor,
+                                                        final Function<byte[], ValueAndTimestamp<V>> valueAndTimestampDeserializer,
+                                                        final boolean returnPlainValue) {
             this.iter = iter;
             this.sensor = sensor;
-            this.valueDeserializer = valueDeserializer;
+            this.valueAndTimestampDeserializer = valueAndTimestampDeserializer;
             this.startNs = time.nanoseconds();
-            this.isKeyOrRangeQuery = isKeyOrRangeQuery;
+            this.returnPlainValue = returnPlainValue;
         }
 
         @Override
@@ -328,14 +328,14 @@ public class MeteredTimestampedKeyValueStore<K, V>
         @Override
         public KeyValue<K, V> next() {
             final KeyValue<Bytes, byte[]> keyValue = iter.next();
-            if (isKeyOrRangeQuery) {
-                final V value = valueDeserializer.apply(keyValue.value).value();
+            if (returnPlainValue) {
+                final V plainValue = valueAndTimestampDeserializer.apply(keyValue.value).value();
                 return KeyValue.pair(
-                        serdes.keyFrom(keyValue.key.get()), value);
+                        serdes.keyFrom(keyValue.key.get()), plainValue);
             }
             return (KeyValue<K, V>) KeyValue.pair(
                     serdes.keyFrom(keyValue.key.get()),
-                    valueDeserializer.apply(keyValue.value));
+                    valueAndTimestampDeserializer.apply(keyValue.value));
         }
         @Override
         public void close() {

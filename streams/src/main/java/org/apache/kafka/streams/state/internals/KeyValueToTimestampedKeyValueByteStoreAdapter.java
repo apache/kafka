@@ -19,7 +19,6 @@ package org.apache.kafka.streams.state.internals;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
-import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
@@ -140,6 +139,8 @@ public class KeyValueToTimestampedKeyValueByteStoreAdapter implements KeyValueSt
         final long start = config.isCollectExecutionInfo() ? System.nanoTime() : -1L;
         QueryResult<R> result = store.query(query, positionBound, config);
 
+        // this adapter always needs to return a `value-with-timestamp` result to hold up its contract
+        // thus, we need to add the dummy `-1` timestamp even for `KeyQuery` and `RangeQuery`
         if (result.isSuccess()) {
             if (query instanceof KeyQuery || query instanceof TimestampedKeyQuery) {
                 final byte[] plainValue = (byte[]) result.getResult();
@@ -149,7 +150,7 @@ public class KeyValueToTimestampedKeyValueByteStoreAdapter implements KeyValueSt
                 final KeyValueToTimestampedKeyValueAdapterIterator wrappedRocksDBRangeIterator = new KeyValueToTimestampedKeyValueAdapterIterator((RocksDbIterator) result.getResult());
                 result = (QueryResult<R>) InternalQueryResultUtil.copyAndSubstituteDeserializedResult(result, wrappedRocksDBRangeIterator);
             } else {
-                throw new StreamsException("unsupported query type");
+                throw new IllegalArgumentException("Unsupported query type: " + query.getClass());
             }
         }
 
