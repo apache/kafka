@@ -2448,7 +2448,10 @@ class KafkaApisTest {
       val postVerificationCallback: ArgumentCaptor[RequestLocal => (Map[TopicPartition, MemoryRecords], Map[TopicPartition, LogAppendResult]) => Unit] = ArgumentCaptor.forClass(
         classOf[RequestLocal => (Map[TopicPartition, MemoryRecords], Map[TopicPartition, LogAppendResult]) => Unit])
       when(replicaManager.appendRecordsWithVerification(any(), any(), any(), any(), postVerificationCallback.capture())).thenAnswer(
-        _ => postVerificationCallback.getValue()(RequestLocal.NoCaching)(Map.empty, Map.empty)
+        _ => {
+          val callback = postVerificationCallback.getValue
+          callback(RequestLocal.NoCaching)(Map.empty, Map.empty)
+        }
       )
 
       when(replicaManager.appendRecords(anyLong,
@@ -2518,11 +2521,14 @@ class KafkaApisTest {
       val newRequestLocal = RequestLocal.NoCaching
 
       when(replicaManager.appendRecordsWithVerification(any(), any(), any(), any(), postVerificationCallback.capture())).thenAnswer(
-        arg => replicaManager.appendRecordsAfterVerification(arg.getArgument(0), arg.getArgument(1), postVerificationCallback.getValue)(newRequestLocal, Map.empty)
+        arg => replicaManager.appendRecordsAfterVerification(arg.getArgument(0), arg.getArgument(1), postVerificationCallback.getValue())(newRequestLocal, Map.empty)
       )
 
       when(replicaManager.appendRecordsAfterVerification(any(), any(), postVerificationCallback.capture())(any(), any())).thenAnswer(
-        _ => postVerificationCallback.getValue()(newRequestLocal)(Map.empty, Map.empty)
+        _ => {
+          val callback = postVerificationCallback.getValue
+          callback(RequestLocal.NoCaching)(Map.empty, Map.empty)
+        }
       )
       
       kafkaApis.handleProduceRequest(request, requestLocal)

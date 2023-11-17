@@ -689,6 +689,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         responseCallback = sendResponseCallback,
         recordConversionStatsCallback = processingStatsCallback,
         requestLocal = newRequestLocal,
+        verificationGuards = transactionVerificationEntries.verificationGuards.toMap,
         preAppendErrors = errorResults
       )
     }

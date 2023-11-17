@@ -47,7 +47,7 @@ import org.apache.kafka.server.common.MetadataVersion
 import org.apache.kafka.server.common.MetadataVersion.{IBP_0_10_1_IV0, IBP_2_1_IV0, IBP_2_1_IV1, IBP_2_3_IV0}
 import org.apache.kafka.server.metrics.KafkaMetricsGroup
 import org.apache.kafka.server.util.KafkaScheduler
-import org.apache.kafka.storage.internals.log.{AppendOrigin, FetchIsolation}
+import org.apache.kafka.storage.internals.log.{AppendOrigin, FetchIsolation, VerificationGuard}
 
 import scala.collection._
 import scala.collection.mutable.ArrayBuffer
@@ -328,6 +328,7 @@ class GroupMetadataManager(brokerId: Int,
                              records: Map[TopicPartition, MemoryRecords],
                              requestLocal: RequestLocal,
                              callback: Map[TopicPartition, PartitionResponse] => Unit,
+                             verificationGuards: Map[TopicPartition, VerificationGuard] = Map.empty,
                              preAppendErrors: Map[TopicPartition, LogAppendResult] = Map.empty): Unit = {
     // call replica manager to append the group message
     replicaManager.appendRecords(
@@ -339,6 +340,7 @@ class GroupMetadataManager(brokerId: Int,
       delayedProduceLock = Some(group.lock),
       responseCallback = callback,
       requestLocal = requestLocal,
+      verificationGuards = verificationGuards,
       preAppendErrors = preAppendErrors)
   }
 
@@ -473,18 +475,17 @@ class GroupMetadataManager(brokerId: Int,
           def postVerificationCallback(newRequestLocal: RequestLocal)
                                       (newlyVerifiedEntries: Map[TopicPartition, MemoryRecords], errorResults: Map[TopicPartition, LogAppendResult]): Unit = {
 
-            if (isTxnOffsetCommit) {
-              group.inLock {
-                addProducerGroup(producerId, group.groupId)
-                group.prepareTxnOffsetCommit(producerId, offsetMetadata)
+            group.inLock {
+              if (isTxnOffsetCommit) {
+                  addProducerGroup(producerId, group.groupId)
+                  group.prepareTxnOffsetCommit(producerId, offsetMetadata)
+              } else {
+                  group.prepareOffsetCommit(offsetMetadata)
               }
-            } else {
-              group.inLock {
-                group.prepareOffsetCommit(offsetMetadata)
-              }
-            }
 
-            appendForGroup(group, newlyVerifiedEntries ++ transactionVerificationEntries.verified, newRequestLocal, putCacheCallback, errorResults)
+              appendForGroup(group, newlyVerifiedEntries ++ transactionVerificationEntries.verified, newRequestLocal,
+                putCacheCallback, transactionVerificationEntries.verificationGuards.toMap, errorResults)
+            }
           }
           if (transactionalId != null ) {
             replicaManager.appendRecordsWithVerification(
