@@ -26,7 +26,7 @@ public final class Utils {
 
     final static class PartitionComparator implements Comparator<TopicPartition>, Serializable {
         private static final long serialVersionUID = 1L;
-        private Map<String, List<String>> map;
+        private final Map<String, List<String>> map;
 
         PartitionComparator(Map<String, List<String>> map) {
             this.map = map;

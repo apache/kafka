@@ -453,17 +453,22 @@ public class SubscriptionState {
     public synchronized boolean maybeValidatePositionForCurrentLeader(ApiVersions apiVersions,
                                                                       TopicPartition tp,
                                                                       Metadata.LeaderAndEpoch leaderAndEpoch) {
+        TopicPartitionState state = assignedStateOrNull(tp);
+        if (state == null) {
+            log.debug("Skipping validating position for partition {} which is not currently assigned.", tp);
+            return false;
+        }
         if (leaderAndEpoch.leader.isPresent()) {
             NodeApiVersions nodeApiVersions = apiVersions.get(leaderAndEpoch.leader.get().idString());
             if (nodeApiVersions == null || hasUsableOffsetForLeaderEpochVersion(nodeApiVersions)) {
-                return assignedState(tp).maybeValidatePosition(leaderAndEpoch);
+                return state.maybeValidatePosition(leaderAndEpoch);
             } else {
                 // If the broker does not support a newer version of OffsetsForLeaderEpoch, we skip validation
-                assignedState(tp).updatePositionLeaderNoValidation(leaderAndEpoch);
+                state.updatePositionLeaderNoValidation(leaderAndEpoch);
                 return false;
             }
         } else {
-            return assignedState(tp).maybeValidatePosition(leaderAndEpoch);
+            return state.maybeValidatePosition(leaderAndEpoch);
         }
     }
 

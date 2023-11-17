@@ -33,7 +33,6 @@ import org.apache.kafka.common.serialization._
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.test.{MockConsumerInterceptor, MockProducerInterceptor}
 import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{CsvSource, ValueSource}
 
@@ -565,13 +564,17 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     assertEquals(2, parts.size)
   }
 
-  @Test // TODO: doesn't pass for kraft and kraft+kip848
-  def testPartitionsForAutoCreate(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft", "kraft+kip848"))
+  def testPartitionsForAutoCreate(quorum: String): Unit = {
     val consumer = createConsumer()
     // First call would create the topic
     consumer.partitionsFor("non-exist-topic")
-    val partitions = consumer.partitionsFor("non-exist-topic")
-    assertFalse(partitions.isEmpty)
+    var partitions = consumer.partitionsFor("non-exist-topic")
+    TestUtils.waitUntilTrue(() => {
+      partitions = consumer.partitionsFor("non-exist-topic")
+      !partitions.isEmpty
+    }, s"Timed out while awaiting non empty partitions.")
   }
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
