@@ -166,7 +166,7 @@ class WorkerSinkTask extends WorkerTask {
     @Override
     public void cancel() {
         super.cancel();
-        Utils.closeQuietly(consumer, "consumer");
+        Utils.closeQuietly(consumer, "consumer for task id " + id);
     }
 
     @Override

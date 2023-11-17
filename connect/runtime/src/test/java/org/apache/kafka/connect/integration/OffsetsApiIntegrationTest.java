@@ -412,9 +412,7 @@ public class OffsetsApiIntegrationTest {
             connect.kafka().produce(TOPIC, 0, "key", "value");
         }
 
-        Map<String, String> connectorConfigs = baseSinkConnectorConfigs();
-
-        connect.configureConnector(CONNECTOR_NAME, connectorConfigs);
+        connect.configureConnector(CONNECTOR_NAME, baseSinkConnectorConfigs());
         connect.assertions().assertConnectorAndAtLeastNumTasksAreRunning(CONNECTOR_NAME, 1,
                 "Connector tasks did not start in time.");
 
@@ -775,9 +773,7 @@ public class OffsetsApiIntegrationTest {
             connect.kafka().produce(TOPIC, 0, "key", "value");
         }
 
-        Map<String, String> connectorConfigs = baseSinkConnectorConfigs();
-
-        connect.configureConnector(CONNECTOR_NAME, connectorConfigs);
+        connect.configureConnector(CONNECTOR_NAME, baseSinkConnectorConfigs());
         connect.assertions().assertConnectorAndAtLeastNumTasksAreRunning(CONNECTOR_NAME, 1,
                 "Connector tasks did not start in time.");
 
