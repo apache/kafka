@@ -21,14 +21,14 @@ package org.apache.kafka.streams.query;
 
 import org.apache.kafka.common.annotation.InterfaceStability.Evolving;
 import org.apache.kafka.streams.state.KeyValueIterator;
+import org.apache.kafka.streams.state.TimestampedKeyValueStore;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 
 
 import java.util.Optional;
 
 /**
- * Interactive query for issuing range queries and scans over Timestamped
- * KeyValue stores.
+ * Interactive query for issuing range queries and scans over {@link TimestampedKeyValueStore}
  * <p>
  *  A range query retrieves a set of records, specified using an upper and/or lower bound on the keys.
  * <p>

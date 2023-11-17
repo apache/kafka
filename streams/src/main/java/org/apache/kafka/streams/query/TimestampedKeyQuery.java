@@ -17,12 +17,13 @@
 package org.apache.kafka.streams.query;
 
 import org.apache.kafka.common.annotation.InterfaceStability.Evolving;
+import org.apache.kafka.streams.state.TimestampedKeyValueStore;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 
 import java.util.Objects;
 
 /**
- * Interactive query for retrieving a single record based on its key.
+ * Interactive query for retrieving a single record based on its key from {@link TimestampedKeyValueStore}
  * @param <K> Type of keys
  * @param <V> Type of values
  */
