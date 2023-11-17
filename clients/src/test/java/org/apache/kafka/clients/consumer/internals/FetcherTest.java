@@ -189,6 +189,7 @@ public class FetcherTest {
 
     private MemoryRecords records;
     private MemoryRecords nextRecords;
+    private MemoryRecords moreRecords;
     private MemoryRecords emptyRecords;
     private MemoryRecords partialRecords;
     private ExecutorService executorService;
@@ -197,6 +198,7 @@ public class FetcherTest {
     public void setup() {
         records = buildRecords(1L, 3, 1);
         nextRecords = buildRecords(4L, 2, 4);
+        moreRecords = buildRecords(6L, 3, 6);
         emptyRecords = buildRecords(0L, 0, 0);
         partialRecords = buildRecords(4L, 1, 0);
         partialRecords.buffer().putInt(Records.SIZE_OFFSET, 10000);
@@ -1122,6 +1124,62 @@ public class FetcherTest {
         assertEquals(6L, subscriptions.position(tp0).offset);
         assertEquals(4, recordsToTest.get(0).offset());
         assertEquals(5, recordsToTest.get(1).offset());
+    }
+
+    /**
+     * KAFKA-15836:
+     * Test that max.poll.records is honoured when consuming from multiple topic-partitions and the
+     * fetched records are not aligned on max.poll.records boundaries.
+     *
+     * tp0 has records 1,2,3; tp1 has records 6,7,8
+     * max.poll.records is 2
+     * 
+     * poll 1 should return 1,2
+     * poll 2 should return 3,6
+     * poll 3 should return 7,8
+     * 
+     * Or similar :)
+     */
+    @Test
+    public void testFetchMaxPollRecordsUnaligned() {
+        buildFetcher(2);
+
+        Set<TopicPartition> tps = new HashSet<>();
+        tps.add(tp0);
+        tps.add(tp1);
+        assignFromUser(tps);
+        subscriptions.seek(tp0, 1);
+        subscriptions.seek(tp1, 6);
+
+        client.prepareResponse(fetchResponse2(tidp0, records, 100L, tidp1, moreRecords, 100L));
+        client.prepareResponse(fullFetchResponse(tidp0, emptyRecords, Errors.NONE, 100L, 0));
+
+        assertEquals(1, sendFetches());
+        consumerClient.poll(time.timer(0));
+        Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> recordsByPartition = fetchRecords();
+        int fetchedRecords = 0;
+        for (List<ConsumerRecord<byte[], byte[]>> recordsToTest : recordsByPartition.values()) {
+            fetchedRecords += recordsToTest.size();
+        }
+        assertEquals(2, fetchedRecords);
+
+        assertEquals(0, sendFetches());
+        consumerClient.poll(time.timer(0));
+        recordsByPartition = fetchRecords();
+        fetchedRecords = 0;
+        for (List<ConsumerRecord<byte[], byte[]>> recordsToTest : recordsByPartition.values()) {
+            fetchedRecords += recordsToTest.size();
+        }
+        assertEquals(2, fetchedRecords);
+
+        assertTrue(sendFetches() > 0);
+        consumerClient.poll(time.timer(0));
+        recordsByPartition = fetchRecords();
+        fetchedRecords = 0;
+        for (List<ConsumerRecord<byte[], byte[]>> recordsToTest : recordsByPartition.values()) {
+            fetchedRecords += recordsToTest.size();
+        }
+        assertEquals(2, fetchedRecords);
     }
 
     /**
@@ -3693,6 +3751,28 @@ public class FetcherTest {
                         .setLogStartOffset(logStartOffset)
                         .setRecords(records));
         return FetchResponse.of(Errors.NONE, throttleTime, INVALID_SESSION_ID, new LinkedHashMap<>(partitions));
+    }
+
+    private FetchResponse fetchResponse2(TopicIdPartition tp1, MemoryRecords records1, long hw1,
+                                         TopicIdPartition tp2, MemoryRecords records2, long hw2) {
+        Map<TopicIdPartition, FetchResponseData.PartitionData> partitions = new HashMap<>();
+        partitions.put(tp1,
+                new FetchResponseData.PartitionData()
+                        .setPartitionIndex(tp1.topicPartition().partition())
+                        .setErrorCode(Errors.NONE.code())
+                        .setHighWatermark(hw1)
+                        .setLastStableOffset(FetchResponse.INVALID_LAST_STABLE_OFFSET)
+                        .setLogStartOffset(0)
+                        .setRecords(records1));
+        partitions.put(tp2,
+                new FetchResponseData.PartitionData()
+                        .setPartitionIndex(tp2.topicPartition().partition())
+                        .setErrorCode(Errors.NONE.code())
+                        .setHighWatermark(hw2)
+                        .setLastStableOffset(FetchResponse.INVALID_LAST_STABLE_OFFSET)
+                        .setLogStartOffset(0)
+                        .setRecords(records2));
+        return FetchResponse.of(Errors.NONE, 0, INVALID_SESSION_ID, new LinkedHashMap<>(partitions));
     }
 
     /**
