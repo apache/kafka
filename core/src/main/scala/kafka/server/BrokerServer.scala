@@ -34,7 +34,7 @@ import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.security.scram.internals.ScramMechanism
 import org.apache.kafka.common.security.token.delegation.internals.DelegationTokenCache
 import org.apache.kafka.common.utils.{LogContext, Time}
-import org.apache.kafka.common.{ClusterResource, KafkaException, TopicPartition}
+import org.apache.kafka.common.{ClusterResource, KafkaException, TopicPartition, Uuid}
 import org.apache.kafka.coordinator.group
 import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorRuntimeMetrics
 import org.apache.kafka.coordinator.group.util.SystemTimerReaper
@@ -43,7 +43,7 @@ import org.apache.kafka.image.publisher.MetadataPublisher
 import org.apache.kafka.metadata.{BrokerState, ListenerInfo, VersionRange}
 import org.apache.kafka.raft.RaftConfig
 import org.apache.kafka.server.authorizer.Authorizer
-import org.apache.kafka.server.common.ApiMessageAndVersion
+import org.apache.kafka.server.common.{ApiMessageAndVersion, DirectoryEventHandler, TopicIdPartition}
 import org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.apache.kafka.server.network.{EndpointReadyFutures, KafkaAuthorizerServerInfo}
@@ -84,6 +84,8 @@ class BrokerServer(
   this.logIdent = logContext.logPrefix
 
   @volatile var lifecycleManager: BrokerLifecycleManager = _
+
+  var assignmentsManager: AssignmentsManager = _
 
   private val isShuttingDown = new AtomicBoolean(false)
 
@@ -277,6 +279,28 @@ class BrokerServer(
         time
       )
 
+      val assignmentsChannelManager = NodeToControllerChannelManager(
+        controllerNodeProvider,
+        time,
+        metrics,
+        config,
+        "directory-assignments",
+        s"broker-${config.nodeId}-",
+        retryTimeoutMs = 60000
+      )
+      assignmentsManager = new AssignmentsManager(
+        time,
+        assignmentsChannelManager,
+        config.brokerId,
+        () => lifecycleManager.brokerEpoch
+      )
+      val directoryEventHandler = new DirectoryEventHandler {
+        override def handleAssignment(partition: TopicIdPartition, directoryId: Uuid): Unit =
+          assignmentsManager.onAssignment(partition, directoryId)
+        override def handleFailure(directoryId: Uuid): Unit =
+          lifecycleManager.propagateDirectoryFailure(directoryId)
+      }
+
       this._replicaManager = new ReplicaManager(
         config = config,
         metrics = metrics,
@@ -294,7 +318,8 @@ class BrokerServer(
         threadNamePrefix = None, // The ReplicaManager only runs on the broker, and already includes the ID in thread names.
         delayedRemoteFetchPurgatoryParam = None,
         brokerEpochSupplier = () => lifecycleManager.brokerEpoch,
-        addPartitionsToTxnManager = Some(addPartitionsToTxnManager)
+        addPartitionsToTxnManager = Some(addPartitionsToTxnManager),
+        directoryEventHandler = directoryEventHandler
       )
 
       /* start token manager */
@@ -647,6 +672,9 @@ class BrokerServer(
 
       if (tokenManager != null)
         CoreUtils.swallow(tokenManager.shutdown(), this)
+
+      if (assignmentsManager != null)
+        CoreUtils.swallow(assignmentsManager.close(), this)
 
       if (replicaManager != null)
         CoreUtils.swallow(replicaManager.shutdown(), this)

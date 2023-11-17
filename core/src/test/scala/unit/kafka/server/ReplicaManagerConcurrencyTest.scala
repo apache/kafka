@@ -38,6 +38,8 @@ import org.apache.kafka.common.{IsolationLevel, TopicIdPartition, TopicPartition
 import org.apache.kafka.image.{MetadataDelta, MetadataImage}
 import org.apache.kafka.metadata.LeaderRecoveryState
 import org.apache.kafka.metadata.PartitionRegistration
+import org.apache.kafka.metadata.properties.{MetaProperties, MetaPropertiesVersion}
+import org.apache.kafka.server.common.MetadataVersion
 import org.apache.kafka.server.util.{MockTime, ShutdownableThread}
 import org.apache.kafka.storage.internals.log.{AppendOrigin, FetchIsolation, FetchParams, FetchPartitionData, LogConfig, LogDirFailureChannel}
 import org.junit.jupiter.api.Assertions._
@@ -147,6 +149,12 @@ class ReplicaManagerConcurrencyTest {
     metadataCache: MetadataCache,
   ): ReplicaManager = {
     val logDir = TestUtils.tempDir()
+    val metaProperties = new MetaProperties.Builder().
+      setVersion(MetaPropertiesVersion.V1).
+      setClusterId(Uuid.randomUuid().toString).
+      setNodeId(1).
+      build()
+    TestUtils.formatDirectories(Seq(logDir.getAbsolutePath), metaProperties, MetadataVersion.latest(), None)
 
     val props = new Properties
     props.put(KafkaConfig.QuorumVotersProp, "100@localhost:12345")
