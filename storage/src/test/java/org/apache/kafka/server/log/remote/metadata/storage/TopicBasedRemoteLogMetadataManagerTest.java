@@ -30,6 +30,8 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import scala.collection.JavaConverters;
@@ -66,15 +68,17 @@ public class TopicBasedRemoteLogMetadataManagerTest {
         return remoteLogMetadataManagerHarness.remoteLogMetadataManager();
     }
 
-    @Test
-    public void testWithNoAssignedPartitions() throws Exception {
+    @ParameterizedTest(name = "{displayName}.quorum={0}")
+    @ValueSource(strings = {"zk", "kraft"})
+    public void testWithNoAssignedPartitions(String quorum) throws Exception {
         // This test checks simple lifecycle of TopicBasedRemoteLogMetadataManager with out assigning any leader/follower partitions.
         // This should close successfully releasing the resources.
         log.info("Not assigning any partitions on TopicBasedRemoteLogMetadataManager");
     }
 
-    @Test
-    public void testNewPartitionUpdates() throws Exception {
+    @ParameterizedTest(name = "{displayName}.quorum={0}")
+    @ValueSource(strings = {"zk", "kraft"})
+    public void testNewPartitionUpdates(String quorum) throws Exception {
         // Create topics.
         String leaderTopic = "new-leader";
         HashMap<Object, Seq<Object>> assignedLeaderTopicReplicas = new HashMap<>();
