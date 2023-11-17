@@ -2446,15 +2446,6 @@ class KafkaApisTest {
         .build(version.toShort)
       val request = buildRequest(produceRequest)
 
-      val postVerificationCallback: ArgumentCaptor[RequestLocal => (Map[TopicPartition, MemoryRecords], Map[TopicPartition, LogAppendResult]) => Unit] = ArgumentCaptor.forClass(
-        classOf[RequestLocal => (Map[TopicPartition, MemoryRecords], Map[TopicPartition, LogAppendResult]) => Unit])
-      when(replicaManager.appendRecordsWithVerification(any(), any(), any(), any(), postVerificationCallback.capture())).thenAnswer(
-        _ => {
-          val callback = postVerificationCallback.getValue()
-          callback(RequestLocal.NoCaching)(Map.empty, Map.empty)
-        }
-      )
-
       when(replicaManager.appendRecords(anyLong,
         anyShort,
         ArgumentMatchers.eq(false),
@@ -2525,6 +2516,7 @@ class KafkaApisTest {
         any(),
         any(),
         any(),
+        any(),
         any())
       ).thenAnswer(_ => responseCallback.getValue.apply(Map(tp -> new PartitionResponse(Errors.NOT_LEADER_OR_FOLLOWER))))
 
@@ -2591,6 +2583,7 @@ class KafkaApisTest {
         any(),
         any(),
         any(),
+        any(),
         any())
       ).thenAnswer(_ => responseCallback.getValue.apply(Map(tp -> new PartitionResponse(Errors.NOT_LEADER_OR_FOLLOWER))))
 
@@ -2652,6 +2645,7 @@ class KafkaApisTest {
         ArgumentMatchers.eq(AppendOrigin.CLIENT),
         any(),
         responseCallback.capture(),
+        any(),
         any(),
         any(),
         any(),

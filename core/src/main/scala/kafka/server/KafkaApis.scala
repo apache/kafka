@@ -730,13 +730,17 @@ class KafkaApis(val requestChannel: RequestChannel,
       sendResponseCallback(Map.empty)
     else {
       // call the replica manager to append messages to the replicas
-      replicaManager.appendRecordsWithVerification(
-        entriesPerPartition = authorizedRequestInfo,
-        transactionVerificationEntries = transactionVerificationEntries,
-        transactionalId = produceRequest.transactionalId,
-        requestLocal = requestLocal,
-        postVerificationCallback = postVerificationCallback
-      )
+      if (produceRequest.transactionalId == null){
+        postVerificationCallback(requestLocal)(Map.empty, Map.empty)
+      } else {
+        replicaManager.appendRecordsWithVerification(
+          entriesPerPartition = authorizedRequestInfo,
+          transactionVerificationEntries = transactionVerificationEntries,
+          transactionalId = produceRequest.transactionalId,
+          requestLocal = requestLocal,
+          postVerificationCallback = postVerificationCallback
+        )
+      }
 
       // if the request is put into the purgatory, it will have a held reference and hence cannot be garbage collected;
       // hence we clear its data here in order to let GC reclaim its memory since it is already appended to log
