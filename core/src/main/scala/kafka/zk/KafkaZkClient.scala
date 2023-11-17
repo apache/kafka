@@ -623,7 +623,7 @@ class KafkaZkClient private[zk] (zooKeeperClient: ZooKeeperClient,
    * @return sequence of topics in the cluster.
    *
    */
-  def getAllFederatedTopicsInNamespace(namespace: String, registerWatch: Boolean = false): Set[String] = {
+  def getAllFederatedTopicsInNamespace(namespace: String, registerWatch: Boolean = true): Set[String] = {
     val getChildrenResponse = retryRequestUntilConnected(
       if (paginateTopics) {
         debug(s"upgrading GetChildrenRequest to GetChildrenPaginatedRequest for " +
