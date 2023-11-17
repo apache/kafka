@@ -314,7 +314,7 @@ class BrokerServer(
         config, Some(clientToControllerChannelManager), None, None,
         groupCoordinator, transactionCoordinator)
 
-      clientMetricsManager = ClientMetricsManager.instance()
+      clientMetricsManager = new ClientMetricsManager(config, time)
 
       dynamicConfigHandlers = Map[String, ConfigHandler](
         ConfigType.Topic -> new TopicConfigHandler(replicaManager, config, quotaManagers, None),

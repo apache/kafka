@@ -68,32 +68,25 @@ import java.util.regex.Pattern;
 public class ClientMetricsManager implements Closeable {
 
     private static final Logger log = LoggerFactory.getLogger(ClientMetricsManager.class);
-    private static final ClientMetricsManager INSTANCE = new ClientMetricsManager();
     private static final List<Byte> SUPPORTED_COMPRESSION_TYPES = Collections.unmodifiableList(
         Arrays.asList(CompressionType.ZSTD.id, CompressionType.LZ4.id, CompressionType.GZIP.id, CompressionType.SNAPPY.id));
-
-    public static ClientMetricsManager instance() {
-        return INSTANCE;
-    }
     // Max cache size (16k active client connections per broker)
     private static final int CM_CACHE_MAX_SIZE = 16384;
+
     private final Cache<Uuid, ClientMetricsInstance> clientInstanceCache;
     private final Map<String, SubscriptionInfo> subscriptionMap;
+    private final KafkaConfig config;
     private final Time time;
 
     // The latest subscription version is used to determine if subscription has changed and needs
     // to re-evaluate the client instance subscription id as per changed subscriptions.
     private final AtomicInteger subscriptionUpdateVersion;
 
-    private ClientMetricsManager() {
-        this(Time.SYSTEM);
-    }
-
-    // Visible for testing
-    ClientMetricsManager(Time time) {
+    public ClientMetricsManager(KafkaConfig config, Time time) {
         this.subscriptionMap = new ConcurrentHashMap<>();
         this.subscriptionUpdateVersion = new AtomicInteger(0);
         this.clientInstanceCache = new SynchronizedCache<>(new LRUCache<>(CM_CACHE_MAX_SIZE));
+        this.config = config;
         this.time = time;
     }
 
@@ -116,7 +109,7 @@ public class ClientMetricsManager implements Closeable {
     }
 
     public GetTelemetrySubscriptionsResponse processGetTelemetrySubscriptionRequest(
-        GetTelemetrySubscriptionsRequest request, int telemetryMaxBytes, RequestContext requestContext, int throttleMs) {
+        GetTelemetrySubscriptionsRequest request, RequestContext requestContext, int throttleMs) {
 
         long now = time.milliseconds();
         Uuid clientInstanceId = Optional.ofNullable(request.data().clientInstanceId())
@@ -137,21 +130,21 @@ public class ClientMetricsManager implements Closeable {
             // Validate the get request parameters for the client instance.
             validateGetRequest(request, clientInstance, now);
         } catch (ApiException exception) {
-            return request.getErrorResponse(throttleMs, exception);
+            return request.getErrorResponse(0, exception);
         }
 
         clientInstance.lastKnownError(Errors.NONE);
-        return createGetSubscriptionResponse(clientInstanceId, clientInstance, telemetryMaxBytes, throttleMs);
+        return createGetSubscriptionResponse(clientInstanceId, clientInstance, throttleMs);
     }
 
     public PushTelemetryResponse processPushTelemetryRequest(PushTelemetryRequest request,
-        int telemetryMaxBytes, RequestContext requestContext, int throttleMs) {
+        RequestContext requestContext, int throttleMs) {
 
         Uuid clientInstanceId = request.data().clientInstanceId();
         if (clientInstanceId == null || Uuid.RESERVED.contains(clientInstanceId)) {
             String msg = String.format("Invalid request from the client [%s], invalid client instance id",
                 clientInstanceId);
-            return request.getErrorResponse(throttleMs, new InvalidRequestException(msg));
+            return request.getErrorResponse(0, new InvalidRequestException(msg));
         }
 
         long now = time.milliseconds();
@@ -159,11 +152,11 @@ public class ClientMetricsManager implements Closeable {
 
         try {
             // Validate the push request parameters for the client instance.
-            validatePushRequest(request, telemetryMaxBytes, clientInstance, now);
+            validatePushRequest(request, clientInstance, now);
         } catch (ApiException exception) {
             log.debug("Error validating push telemetry request from client [{}]", clientInstanceId, exception);
             clientInstance.lastKnownError(Errors.forException(exception));
-            return request.getErrorResponse(throttleMs, exception);
+            return request.getErrorResponse(0, exception);
         } finally {
             // Update the client instance with the latest push request parameters.
             clientInstance.terminating(request.data().terminating());
@@ -313,7 +306,7 @@ public class ClientMetricsManager implements Closeable {
     }
 
     private GetTelemetrySubscriptionsResponse createGetSubscriptionResponse(Uuid clientInstanceId,
-        ClientMetricsInstance clientInstance, int telemetryMaxBytes, int throttleMs) {
+        ClientMetricsInstance clientInstance, int throttleMs) {
 
         GetTelemetrySubscriptionsResponseData data = new GetTelemetrySubscriptionsResponseData()
             .setClientInstanceId(clientInstanceId)
@@ -321,7 +314,7 @@ public class ClientMetricsManager implements Closeable {
             .setRequestedMetrics(new ArrayList<>(clientInstance.metrics()))
             .setAcceptedCompressionTypes(SUPPORTED_COMPRESSION_TYPES)
             .setPushIntervalMs(clientInstance.pushIntervalMs())
-            .setTelemetryMaxBytes(telemetryMaxBytes)
+            .setTelemetryMaxBytes(config.clientTelemetryMaxBytes())
             .setDeltaTemporality(true)
             .setErrorCode(Errors.NONE.code())
             .setThrottleTimeMs(throttleMs);
@@ -340,8 +333,7 @@ public class ClientMetricsManager implements Closeable {
         }
     }
 
-    private void validatePushRequest(PushTelemetryRequest request, int telemetryMaxBytes,
-        ClientMetricsInstance clientInstance, long timestamp) {
+    private void validatePushRequest(PushTelemetryRequest request, ClientMetricsInstance clientInstance, long timestamp) {
 
         if (clientInstance.terminating()) {
             String msg = String.format(
@@ -368,9 +360,9 @@ public class ClientMetricsManager implements Closeable {
             throw new UnsupportedCompressionTypeException(msg);
         }
 
-        if (request.data().metrics() != null && request.data().metrics().length > telemetryMaxBytes) {
+        if (request.data().metrics() != null && request.data().metrics().length > config.clientTelemetryMaxBytes()) {
             String msg = String.format("Telemetry request from [%s] is larger than the maximum allowed size [%s]",
-                request.data().clientInstanceId(), telemetryMaxBytes);
+                request.data().clientInstanceId(), config.clientTelemetryMaxBytes());
             throw new TelemetryTooLargeException(msg);
         }
     }

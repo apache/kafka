@@ -27,17 +27,14 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class ClientMetricsInstanceTest {
 
-    private Uuid uuid;
-    private ClientMetricsInstanceMetadata instanceMetadata;
     private ClientMetricsInstance clientInstance;
 
     @BeforeEach
     public void setUp() throws UnknownHostException {
-        uuid = Uuid.randomUuid();
-        instanceMetadata = new ClientMetricsInstanceMetadata(uuid,
+        Uuid uuid = Uuid.randomUuid();
+        ClientMetricsInstanceMetadata instanceMetadata = new ClientMetricsInstanceMetadata(uuid,
             ClientMetricsTestUtils.requestContext());
-        clientInstance = new ClientMetricsInstance(Uuid.randomUuid(), instanceMetadata, 0, 0,
-            null, ClientMetricsConfigs.DEFAULT_INTERVAL_MS);
+        clientInstance = new ClientMetricsInstance(uuid, instanceMetadata, 0, 0, null, ClientMetricsConfigs.DEFAULT_INTERVAL_MS);
     }
 
     @Test

@@ -44,10 +44,7 @@ public class ClientMetricsReceiverPluginTest {
 
         byte[] metrics = "test-metrics".getBytes(StandardCharsets.UTF_8);
         ClientMetricsReceiverPlugin.instance().exportMetrics(ClientMetricsTestUtils.requestContext(),
-            new PushTelemetryRequest.Builder(
-                new PushTelemetryRequestData()
-                    .setMetrics(metrics))
-                .build());
+            new PushTelemetryRequest.Builder(new PushTelemetryRequestData().setMetrics(metrics), true).build());
 
         assertEquals(1, telemetryReceiver.exportMetricsInvokedCount);
         assertEquals(1, telemetryReceiver.metricsData.size());

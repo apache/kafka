@@ -124,7 +124,6 @@ class ControllerServer(
   @volatile var incarnationId: Uuid = _
   @volatile var registrationManager: ControllerRegistrationManager = _
   @volatile var registrationChannelManager: NodeToControllerChannelManager = _
-  var clientMetricsManager: ClientMetricsManager = _
 
   private def maybeChangeStatus(from: ProcessStatus, to: ProcessStatus): Boolean = {
     lock.lock()
@@ -333,8 +332,6 @@ class ControllerServer(
         DataPlaneAcceptor.ThreadPrefix,
         "controller")
 
-      clientMetricsManager = ClientMetricsManager.instance()
-
       // Set up the metadata cache publisher.
       metadataPublishers.add(metadataCachePublisher)
 
@@ -365,8 +362,7 @@ class ControllerServer(
         sharedServer.metadataPublishingFaultHandler,
         immutable.Map[String, ConfigHandler](
           // controllers don't host topics, so no need to do anything with dynamic topic config changes here
-          ConfigType.Broker -> new BrokerConfigHandler(config, quotaManagers),
-          ConfigType.ClientMetrics -> new ClientMetricsConfigHandler(clientMetricsManager)
+          ConfigType.Broker -> new BrokerConfigHandler(config, quotaManagers)
         ),
         "controller"))
 
