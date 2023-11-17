@@ -2449,7 +2449,7 @@ class KafkaApisTest {
         classOf[RequestLocal => (Map[TopicPartition, MemoryRecords], Map[TopicPartition, LogAppendResult]) => Unit])
       when(replicaManager.appendRecordsWithVerification(any(), any(), any(), any(), postVerificationCallback.capture())).thenAnswer(
         _ => {
-          val callback = postVerificationCallback.getValue
+          val callback = postVerificationCallback.getValue()
           callback(RequestLocal.NoCaching)(Map.empty, Map.empty)
         }
       )
@@ -2526,7 +2526,7 @@ class KafkaApisTest {
 
       when(replicaManager.appendRecordsAfterVerification(any(), any(), postVerificationCallback.capture())(any(), any())).thenAnswer(
         _ => {
-          val callback = postVerificationCallback.getValue
+          val callback = postVerificationCallback.getValue()
           callback(RequestLocal.NoCaching)(Map.empty, Map.empty)
         }
       )
@@ -2538,13 +2538,13 @@ class KafkaApisTest {
         any(),
         ArgumentMatchers.eq(transactionalId),
         ArgumentMatchers.eq(requestLocal),
-        ArgumentMatchers.eq(postVerificationCallback.getValue)
+        ArgumentMatchers.eq(postVerificationCallback.getValue())
       )
 
       verify(replicaManager).appendRecordsAfterVerification(
         any(),
         any(),
-        ArgumentMatchers.eq(postVerificationCallback.getValue))(ArgumentMatchers.eq(newRequestLocal), any())
+        ArgumentMatchers.eq(postVerificationCallback.getValue()))(ArgumentMatchers.eq(newRequestLocal), any())
       
       verify(replicaManager).appendRecords(anyLong,
         anyShort,
