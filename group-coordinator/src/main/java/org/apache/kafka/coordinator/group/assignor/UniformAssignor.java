@@ -96,7 +96,7 @@ public class UniformAssignor implements PartitionAssignor {
     private boolean allSubscriptionsEqual(Map<String, AssignmentMemberSpec> members) {
         Set<Uuid> firstSubscriptionSet = new HashSet<>(members.values().iterator().next().subscribedTopicIds());
         for (AssignmentMemberSpec memberSpec : members.values()) {
-            if (!firstSubscriptionSet.containsAll(memberSpec.subscribedTopicIds())) {
+            if (!firstSubscriptionSet.equals(new HashSet<>(memberSpec.subscribedTopicIds()))) {
                 return false;
             }
         }
