@@ -225,7 +225,7 @@ abstract class BaseAdminIntegrationTest extends IntegrationTestHarness with Logg
 
   def waitForFederatedTopicZnodes(client: KafkaZkClient, expectedPresent: Seq[String], expectedMissing: Seq[String]): Unit = {
     waitUntilTrue(() => {
-      val topics = client.getAllFederatedTopics
+      val topics = client.getAllFederatedTopics()
       expectedPresent.forall(topicName => topics.contains(topicName)) &&
         expectedMissing.forall(topicName => !topics.contains(topicName))
     }, "timed out waiting for federated topics")

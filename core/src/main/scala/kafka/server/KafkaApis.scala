@@ -3841,7 +3841,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     try {
       if (requestedTopics.isEmpty) {
         // if empty list passed, list all existing federated topics
-        val allFederatedTopicZnodes = zkSupport.zkClient.getAllFederatedTopics.toList.asJava
+        val allFederatedTopicZnodes = zkSupport.zkClient.getAllFederatedTopics().toList.asJava
 
         requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
           new LiListFederatedTopicZnodesResponse(

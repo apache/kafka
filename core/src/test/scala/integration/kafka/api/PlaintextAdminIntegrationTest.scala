@@ -144,7 +144,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     waitForFederatedTopicZnodes(zkClient, expectedFedTopic, List())
 
     // check federated topic is created
-    val federatedTopics = zkClient.getAllFederatedTopics
+    val federatedTopics = zkClient.getAllFederatedTopics()
     assertEquals(1, federatedTopics.size)
 
     // test list federated topic znodes api
@@ -167,7 +167,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     waitForFederatedTopicZnodes(zkClient, List(), expectedFedTopic)
 
     // after deletion, federated topic znodes should be empty
-    val result1 = zkClient.getAllFederatedTopics
+    val result1 = zkClient.getAllFederatedTopics()
     assertEquals(0, result1.size)
   }
 
