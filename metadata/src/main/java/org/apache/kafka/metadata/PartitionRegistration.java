@@ -30,7 +30,6 @@ import org.slf4j.Logger;
 
 import java.util.Arrays;
 import java.util.List;
-import java.util.Map;
 import java.util.Objects;
 
 import static org.apache.kafka.metadata.LeaderConstants.NO_LEADER;
@@ -339,12 +338,12 @@ public class PartitionRegistration {
     }
 
     public Uuid directory(int replica) {
-        Map<Integer, Uuid> assignment = DirectoryId.createAssignmentMap(replicas, directories);
-        Uuid uuid = assignment.get(replica);
-        if (uuid == null) {
-            throw new IllegalArgumentException("Replica " + replica + " is not assigned to this partition.");
+        for (int i = 0; i < replicas.length; i++) {
+            if (replicas[i] == replica) {
+                return directories[i];
+            }
         }
-        return uuid;
+        throw new IllegalArgumentException("Replica " + replica + " is not assigned to this partition.");
     }
 
     public ApiMessageAndVersion toRecord(Uuid topicId, int partitionId, ImageWriterOptions options) {

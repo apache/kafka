@@ -37,7 +37,9 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.when;
 
@@ -168,5 +170,30 @@ public class BrokerRegistrationTest {
             REGISTRATIONS.get(2).node("INTERNAL"));
         assertEquals(Optional.of(new Node(3, "localhost", 9093, null)),
             REGISTRATIONS.get(3).node("INTERNAL"));
+    }
+
+    @Test
+    void testDirectoryListOrderDoesNotMatter() {
+        BrokerRegistration.Builder builder = new BrokerRegistration.Builder().
+                setId(0).
+                setEpoch(0).
+                setIncarnationId(Uuid.fromString("ik32HZbLTW6ulw1yyrC8jQ")).
+                setListeners(Arrays.asList(new Endpoint("INTERNAL", SecurityProtocol.PLAINTEXT, "localhost", 9090))).
+                setSupportedFeatures(Collections.singletonMap("foo", VersionRange.of((short) 1, (short) 2))).
+                setRack(Optional.empty()).
+                setFenced(false).
+                setInControlledShutdown(false);
+        Uuid dir1 = Uuid.fromString("apL5H78tQQqio31Od2xYRQ");
+        Uuid dir2 = Uuid.fromString("3b4Y3zHCScGAEnz4op4blg");
+        BrokerRegistration registration1 = builder.setDirectories(Arrays.asList(dir1, dir2)).build();
+        BrokerRegistration registration2 = builder.setDirectories(Arrays.asList(dir2, dir1)).build();
+        assertEquals(registration1, registration2);
+        assertEquals(registration1.hashCode(), registration2.hashCode());
+        assertTrue(registration1.hasOnlineDir(dir1));
+        assertTrue(registration1.hasOnlineDir(dir2));
+        assertTrue(registration2.hasOnlineDir(dir1));
+        assertTrue(registration2.hasOnlineDir(dir2));
+        assertFalse(registration1.hasOnlineDir(Uuid.fromString("sOwN7HH7S1maxpU1WzlzXg")));
+        assertFalse(registration2.hasOnlineDir(Uuid.fromString("sOwN7HH7S1maxpU1WzlzXg")));
     }
 }

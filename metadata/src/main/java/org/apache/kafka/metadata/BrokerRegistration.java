@@ -28,16 +28,13 @@ import org.apache.kafka.image.writer.ImageWriterOptions;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Objects;
 import java.util.Optional;
-import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
@@ -54,7 +51,7 @@ public class BrokerRegistration {
         private boolean fenced = false;
         private boolean inControlledShutdown = false;
         private boolean isMigratingZkBroker = false;
-        private Set<Uuid> directories;
+        private List<Uuid> directories;
 
         public Builder() {
             this.id = 0;
@@ -66,7 +63,7 @@ public class BrokerRegistration {
             this.fenced = false;
             this.inControlledShutdown = false;
             this.isMigratingZkBroker = false;
-            this.directories = Collections.emptySet();
+            this.directories = Collections.emptyList();
         }
 
         public Builder setId(int id) {
@@ -124,10 +121,8 @@ public class BrokerRegistration {
             return this;
         }
 
-        public Builder setDirectories(Collection<Uuid> directories) {
-            this.directories = directories instanceof Set
-                    ? (Set<Uuid>) directories
-                    : new HashSet<>(directories);
+        public Builder setDirectories(List<Uuid> directories) {
+            this.directories = new ArrayList<>(directories);
             return this;
         }
 
@@ -163,7 +158,7 @@ public class BrokerRegistration {
     private final boolean fenced;
     private final boolean inControlledShutdown;
     private final boolean isMigratingZkBroker;
-    private final Set<Uuid> directories;
+    private final List<Uuid> directories;
 
     private BrokerRegistration(
         int id,
@@ -175,7 +170,7 @@ public class BrokerRegistration {
         boolean fenced,
         boolean inControlledShutdown,
         boolean isMigratingZkBroker,
-        Set<Uuid> directories
+        List<Uuid> directories
     ) {
         this.id = id;
         this.epoch = epoch;
@@ -194,7 +189,9 @@ public class BrokerRegistration {
         this.fenced = fenced;
         this.inControlledShutdown = inControlledShutdown;
         this.isMigratingZkBroker = isMigratingZkBroker;
-        this.directories = Collections.unmodifiableSet(directories);
+        directories = new ArrayList<>(directories);
+        directories.sort(Uuid::compareTo);
+        this.directories = Collections.unmodifiableList(directories);
     }
 
     public static BrokerRegistration fromRecord(RegisterBrokerRecord record) {
@@ -219,7 +216,7 @@ public class BrokerRegistration {
             record.fenced(),
             record.inControlledShutdown(),
             record.isMigratingZkBroker(),
-            new HashSet<>(record.logDirs()));
+            record.logDirs());
     }
 
     public int id() {
@@ -266,8 +263,8 @@ public class BrokerRegistration {
         return isMigratingZkBroker;
     }
 
-    public Set<Uuid> directories() {
-        return directories;
+    public boolean hasOnlineDir(Uuid dir) {
+        return Collections.binarySearch(directories, dir) >= 0;
     }
 
     public ApiMessageAndVersion toRecord(ImageWriterOptions options) {
@@ -295,7 +292,7 @@ public class BrokerRegistration {
         }
 
         if (directories.isEmpty() || options.metadataVersion().isDirectoryAssignmentSupported()) {
-            registrationRecord.setLogDirs(new ArrayList<>(directories));
+            registrationRecord.setLogDirs(directories);
         } else {
             options.handleLoss("the online log directories of one or more brokers");
         }

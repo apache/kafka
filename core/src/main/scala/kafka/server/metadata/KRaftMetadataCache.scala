@@ -163,7 +163,7 @@ class KRaftMetadataCache(val brokerId: Int) extends MetadataCache with Logging w
     partition.directory(broker.id()) match {
       case DirectoryId.LOST => true
       case DirectoryId.MIGRATING => false
-      case dir => !broker.directories().contains(dir)
+      case dir => !broker.hasOnlineDir(dir)
     }
   }
 
