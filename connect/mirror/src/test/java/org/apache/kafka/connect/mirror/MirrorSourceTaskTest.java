@@ -34,18 +34,25 @@ import org.apache.kafka.connect.source.SourceRecord;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Random;
 import java.util.concurrent.Semaphore;
+import java.util.stream.IntStream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.clearInvocations;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
@@ -54,6 +61,25 @@ import static org.mockito.Mockito.when;
 import static org.mockito.Mockito.verifyNoInteractions;
 
 public class MirrorSourceTaskTest {
+
+    private static ConsumerRecord<byte[], byte[]> getRecordOfBytes(TopicPartition partition, int byteSize) {
+        return new ConsumerRecord<>(
+                partition.topic(),
+                partition.partition(),
+                0,
+                null,
+                getRandomString(byteSize).getBytes(StandardCharsets.UTF_8));
+    }
+
+    private static String getRandomString(int length) {
+        String candidateChars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ1234567890";
+        StringBuilder sb = new StringBuilder();
+        Random random = new Random();
+        for (int i = 0; i < length; i++) {
+            sb.append(candidateChars.charAt(random.nextInt(candidateChars.length())));
+        }
+        return sb.toString();
+    }
 
     @Test
     public void testSerde() {
@@ -214,6 +240,239 @@ public class MirrorSourceTaskTest {
         }
     }
 
+
+    @Test
+    public void testRecordAge() {
+        @SuppressWarnings("unchecked")
+        KafkaConsumer<byte[], byte[]> consumer = mock(KafkaConsumer.class);
+
+        MirrorSourceMetrics metrics = mock(MirrorSourceMetrics.class);
+        String sourceClusterName = "cluster1";
+        ReplicationPolicy replicationPolicy = new DefaultReplicationPolicy();
+        MirrorSourceTask task =
+                new MirrorSourceTask(
+                        consumer,
+                        metrics,
+                        sourceClusterName,
+                        replicationPolicy,
+                        50,
+                        null,
+                        new Semaphore(1),
+                        new HashMap<>(),
+                        "offsetSyncsTopic");
+
+        TopicPartition partition = new TopicPartition("topicName", 0);
+
+        int recordCount = 10;
+        when(consumer.poll(any())).thenReturn(createMockConsumerRecords(partition, recordCount));
+
+        task.poll();
+
+        ArgumentCaptor<Long> recordAgeCaptor = ArgumentCaptor.forClass(Long.class);
+        TopicPartition convertedPartition =
+                new TopicPartition(
+                        replicationPolicy.formatRemoteTopic(sourceClusterName, partition.topic()),
+                        partition.partition());
+
+        verify(metrics, times(recordCount)).recordAge(eq(convertedPartition), recordAgeCaptor.capture());
+
+        List<Long> listOfRecordAges = recordAgeCaptor.getAllValues();
+        assertEquals(recordCount, listOfRecordAges.size());
+        listOfRecordAges.forEach(recordAge -> assertTrue(recordAge >= 0));
+    }
+
+    @Test
+    public void testRecordBytes() {
+        @SuppressWarnings("unchecked")
+        KafkaConsumer<byte[], byte[]> consumer = mock(KafkaConsumer.class);
+
+        MirrorSourceMetrics metrics = mock(MirrorSourceMetrics.class);
+        String sourceClusterName = "cluster1";
+        ReplicationPolicy replicationPolicy = new DefaultReplicationPolicy();
+        MirrorSourceTask task =
+                new MirrorSourceTask(
+                        consumer,
+                        metrics,
+                        sourceClusterName,
+                        replicationPolicy,
+                        50,
+                        null,
+                        new Semaphore(1),
+                        new HashMap<>(),
+                        "offsetSyncsTopic");
+
+        TopicPartition partition = new TopicPartition("topicName", 0);
+
+        List<ConsumerRecord<byte[], byte[]>> records = Arrays.asList(
+                getRecordOfBytes(partition, 4),
+                getRecordOfBytes(partition, 1),
+                getRecordOfBytes(partition, 0)
+        );
+        when(consumer.poll(any())).thenReturn(new ConsumerRecords<>(Collections.singletonMap(partition, records)));
+
+        task.poll();
+
+        ArgumentCaptor<Long> recordBytesCaptor = ArgumentCaptor.forClass(Long.class);
+        TopicPartition convertedPartition =
+                new TopicPartition(
+                        replicationPolicy.formatRemoteTopic(sourceClusterName, partition.topic()),
+                        partition.partition());
+
+        int recordCount = records.size();
+        verify(metrics, times(recordCount)).recordBytes(eq(convertedPartition), recordBytesCaptor.capture());
+
+        List<Long> listOfRecordBytes = recordBytesCaptor.getAllValues();
+        assertEquals(recordCount, listOfRecordBytes.size());
+        assertTrue(listOfRecordBytes.contains(4L));
+        assertTrue(listOfRecordBytes.contains(1L));
+        assertTrue(listOfRecordBytes.contains(0L));
+    }
+
+    @Test
+    public void testRecordLatency() {
+        @SuppressWarnings("unchecked")
+        KafkaConsumer<byte[], byte[]> consumer = mock(KafkaConsumer.class);
+        MirrorSourceMetrics metrics = mock(MirrorSourceMetrics.class);
+        String sourceClusterName = "cluster1";
+        ReplicationPolicy replicationPolicy = new DefaultReplicationPolicy();
+        @SuppressWarnings("unchecked")
+        KafkaProducer<byte[], byte[]> offsetProducer = mock(KafkaProducer.class);
+        MirrorSourceTask task =
+                new MirrorSourceTask(
+                        consumer,
+                        metrics,
+                        sourceClusterName,
+                        replicationPolicy,
+                        50,
+                        offsetProducer,
+                        new Semaphore(1),
+                        new HashMap<>(),
+                        "offsetSyncsTopic");
+
+        TopicPartition partition = new TopicPartition("topicName", 0);
+
+        int recordCount = 10;
+        ConsumerRecords<byte[], byte[]> consumerRecords = createMockConsumerRecords(partition, recordCount);
+        when(consumer.poll(any())).thenReturn(consumerRecords);
+
+        TopicPartition convertedPartition =
+                new TopicPartition(
+                        replicationPolicy.formatRemoteTopic(sourceClusterName, partition.topic()),
+                        partition.partition());
+
+        ArgumentCaptor<Long> recordLatencyCaptor = ArgumentCaptor.forClass(Long.class);
+        consumerRecords.forEach(record -> {
+            SourceRecord convertedRecord = task.convertRecord(record);
+            long currentTimestamp = System.currentTimeMillis();
+            task.commitRecord(convertedRecord, dummyRecordMetadata());
+            verify(metrics, times(1)).replicationLatency(eq(convertedPartition), recordLatencyCaptor.capture());
+            clearInvocations(metrics);
+            long recordLatency = recordLatencyCaptor.getValue();
+            // mock records are created with no timestamp, which defaults the timestamp to -1
+            // we verify that the calculated record latency is at least as large as the timestamp at the time of commit, minus -1
+            assertTrue(recordLatency >= currentTimestamp + 1L);
+        });
+
+        List<Long> listOfRecordLatencies = recordLatencyCaptor.getAllValues();
+        assertEquals(recordCount, listOfRecordLatencies.size());
+    }
+
+    @Test
+    public void testPositiveReplicationOffsetLag() {
+        @SuppressWarnings("unchecked") KafkaConsumer<byte[], byte[]> consumer = mock(KafkaConsumer.class);
+        @SuppressWarnings("unchecked") KafkaProducer<byte[], byte[]> producer = mock(KafkaProducer.class);
+
+        MirrorSourceMetrics metrics = mock(MirrorSourceMetrics.class);
+        MirrorSourceTask task = new MirrorSourceTask(
+                consumer, metrics, "primary", new DefaultReplicationPolicy(), 50,
+                producer, new Semaphore(1), new HashMap<>(), "offsetSyncsTopic");
+
+        TopicPartition partition = new TopicPartition("topicOne", 0);
+
+        int recordCount = 10;
+        when(consumer.poll(any())).thenReturn(createMockConsumerRecords(partition, recordCount));
+        when(producer.send(any())).thenReturn(null);
+
+        List<SourceRecord> sourceRecords = task.poll();
+        long lag = 5;
+        sourceRecords.forEach(r -> {
+            r = addLagToRecord(r, lag);
+            task.commitRecord(r, dummyRecordMetadata());
+        });
+        task.poll();
+
+        // at first poll, no records are committed - we expect full lag, equal to the number of records
+        verify(metrics, times(1)).replicationOffsetLag(partition, recordCount);
+
+        //at second poll, we expect full lag, equal to the number we added to each source offset
+        verify(metrics, times(1)).replicationOffsetLag(partition, lag + 1); // +1
+
+    }
+
+    @Test
+    public void testNegativeReplicationOffsetLag() {
+        @SuppressWarnings("unchecked") KafkaConsumer<byte[], byte[]> consumer = mock(KafkaConsumer.class);
+        @SuppressWarnings("unchecked") KafkaProducer<byte[], byte[]> offsetSyncProducer = mock(KafkaProducer.class);
+
+        MirrorSourceMetrics metrics = mock(MirrorSourceMetrics.class);
+        MirrorSourceTask task = new MirrorSourceTask(
+                consumer, metrics, "primary", new DefaultReplicationPolicy(), 50,
+                offsetSyncProducer, new Semaphore(1), new HashMap<>(), "offsetSyncsTopic");
+
+
+        TopicPartition partition = new TopicPartition("topicOne", 0);
+
+        int recordCount = 10;
+        when(consumer.poll(any())).thenReturn(createMockConsumerRecords(partition, recordCount));
+        when(offsetSyncProducer.send(any())).thenReturn(null);
+
+        List<SourceRecord> sourceRecords = task.poll();
+        long lag = recordCount + 1;
+        sourceRecords.forEach(r -> {
+            r = addLagToRecord(r, lag);
+            task.commitRecord(r, dummyRecordMetadata());
+        });
+        task.poll();
+
+        // at first poll, no records are committed - we expect full lag, equal to the number of records
+        verify(metrics, times(1)).replicationOffsetLag(partition, recordCount);
+
+        //at second poll, we expect the metric reporting to be skipped since the reported lag is negative
+        verify(metrics, times(1)).replicationOffsetLag(any(), anyLong());
+    }
+
+    private RecordMetadata dummyRecordMetadata() {
+        return new RecordMetadata(
+                new TopicPartition("topic", 0),
+                0,
+                0, 0, 0, 0);
+    }
+
+    private SourceRecord addLagToRecord(SourceRecord record, long lag) {
+        long offset = MirrorUtils.unwrapOffset(record.sourceOffset());
+        Map<String, Object> offsetPlusLag = MirrorUtils.wrapOffset(offset - lag);
+
+        return new SourceRecord(
+                record.sourcePartition(),
+                offsetPlusLag,
+                record.topic(),
+                record.kafkaPartition(),
+                record.keySchema(),
+                record.key(),
+                record.valueSchema(),
+                record.value(),
+                record.timestamp());
+    }
+
+    private <K, V> ConsumerRecords<K, V> createMockConsumerRecords(TopicPartition topicPartition, int count) {
+        List<ConsumerRecord<K, V>> consumerRecords = new ArrayList<>();
+        IntStream.range(0, count).forEach(i -> {
+            ConsumerRecord<K, V> record = new ConsumerRecord<>(topicPartition.topic(), topicPartition.partition(), i, null, null);
+            consumerRecords.add(record);
+        });
+        return new ConsumerRecords<>(Collections.singletonMap(topicPartition, consumerRecords));
+    }
+
     @Test
     public void testCommitRecordWithNullMetadata() {
         // Create a consumer mock
@@ -361,4 +620,5 @@ public class MirrorSourceTaskTest {
                     "taskHeader's value expected to equal " + taskHeader.value().toString());
         }
     }
+
 }
