@@ -43,11 +43,15 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import java.time.Duration;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -59,6 +63,7 @@ public class ClientTelemetryReporterTest {
     private ClientTelemetryReporter clientTelemetryReporter;
     private Map<String, Object> configs;
     private MetricsContext metricsContext;
+    private Uuid uuid;
     private ClientTelemetrySubscription subscription;
 
     @BeforeEach
@@ -66,7 +71,8 @@ public class ClientTelemetryReporterTest {
         clientTelemetryReporter = new ClientTelemetryReporter();
         configs = new HashMap<>();
         metricsContext = new KafkaMetricsContext("test");
-        subscription = new ClientTelemetrySubscription(Uuid.randomUuid(), 1234, 20000,
+        uuid = Uuid.randomUuid();
+        subscription = new ClientTelemetrySubscription(uuid, 1234, 20000,
             Collections.emptyList(), true, null);
     }
 
@@ -162,29 +168,29 @@ public class ClientTelemetryReporterTest {
     @Test
     public void testTelemetrySenderTimeToNextUpdate() {
         DefaultClientTelemetrySender telemetrySender = (DefaultClientTelemetrySender) clientTelemetryReporter.telemetrySender();
-        // subscription needed state
+
         assertEquals(ClientTelemetryState.SUBSCRIPTION_NEEDED, telemetrySender.state());
         assertEquals(0, telemetrySender.timeToNextUpdate(100));
-        // subscription needed state with local request time
+
         telemetrySender.updateSubscriptionResult(subscription, System.currentTimeMillis());
         assertEquals(20000, telemetrySender.timeToNextUpdate(100), 200);
-        // subscription in progress state
+
         assertTrue(telemetrySender.maybeSetState(ClientTelemetryState.SUBSCRIPTION_IN_PROGRESS));
         assertEquals(100, telemetrySender.timeToNextUpdate(100));
-        // push needed state
+
         assertTrue(telemetrySender.maybeSetState(ClientTelemetryState.PUSH_NEEDED));
         long time = telemetrySender.timeToNextUpdate(100);
         assertTrue(time > 0 && time >= 0.5 * time && time <= 1.5 * time);
-        // push in progress state
+
         assertTrue(telemetrySender.maybeSetState(ClientTelemetryState.PUSH_IN_PROGRESS));
         assertEquals(100, telemetrySender.timeToNextUpdate(100));
-        // terminating push needed state
+
         assertTrue(telemetrySender.maybeSetState(ClientTelemetryState.TERMINATING_PUSH_NEEDED));
         assertEquals(0, telemetrySender.timeToNextUpdate(100));
-        // terminating push in progress state
+
         assertTrue(telemetrySender.maybeSetState(ClientTelemetryState.TERMINATING_PUSH_IN_PROGRESS));
         assertEquals(100, telemetrySender.timeToNextUpdate(100));
-        // terminated state
+
         assertTrue(telemetrySender.maybeSetState(ClientTelemetryState.TERMINATED));
         assertEquals(Long.MAX_VALUE, telemetrySender.timeToNextUpdate(100));
     }
@@ -229,7 +235,7 @@ public class ClientTelemetryReporterTest {
     @Test
     public void testCreateRequestPushNeeded() {
         DefaultClientTelemetrySender telemetrySender = (DefaultClientTelemetrySender) clientTelemetryReporter.telemetrySender();
-        // create request to move state to subscription in progress
+        // create request to move state to SUBSCRIPTION_IN_PROGRESS
         telemetrySender.updateSubscriptionResult(subscription, System.currentTimeMillis());
         telemetrySender.createRequest();
         assertTrue(telemetrySender.maybeSetState(ClientTelemetryState.PUSH_NEEDED));
@@ -251,7 +257,7 @@ public class ClientTelemetryReporterTest {
     @Test
     public void testCreateRequestPushNeededWithoutSubscription() {
         DefaultClientTelemetrySender telemetrySender = (DefaultClientTelemetrySender) clientTelemetryReporter.telemetrySender();
-        // create request to move state to subscription in progress
+        // create request to move state to SUBSCRIPTION_IN_PROGRESS
         telemetrySender.createRequest();
         assertTrue(telemetrySender.maybeSetState(ClientTelemetryState.PUSH_NEEDED));
 
@@ -294,7 +300,7 @@ public class ClientTelemetryReporterTest {
                 .setSubscriptionId(5678)
                 .setAcceptedCompressionTypes(Collections.singletonList(CompressionType.GZIP.id))
                 .setPushIntervalMs(20000)
-                .setRequestedMetrics(Collections.singletonList("")));
+                .setRequestedMetrics(Collections.singletonList("*")));
 
         telemetrySender.handleResponse(response);
         assertEquals(ClientTelemetryState.PUSH_NEEDED, telemetrySender.state());
@@ -456,6 +462,36 @@ public class ClientTelemetryReporterTest {
         assertEquals(ClientTelemetryState.SUBSCRIPTION_NEEDED, telemetrySender.state());
         assertEquals(Integer.MAX_VALUE, telemetrySender.intervalMs());
         assertFalse(telemetrySender.enabled());
+    }
+
+    @Test
+    public void testClientInstanceId() throws InterruptedException {
+        DefaultClientTelemetrySender telemetrySender = (DefaultClientTelemetrySender) clientTelemetryReporter.telemetrySender();
+        assertTrue(telemetrySender.maybeSetState(ClientTelemetryState.SUBSCRIPTION_IN_PROGRESS));
+
+        CountDownLatch lock = new CountDownLatch(2);
+
+        AtomicReference<Optional<Uuid>> clientInstanceId = new AtomicReference<>();
+        new Thread(() -> {
+            try {
+                clientInstanceId.set(telemetrySender.clientInstanceId(Duration.ofMillis(10000)));
+            } finally {
+                lock.countDown();
+            }
+        }).start();
+
+        new Thread(() -> {
+            try {
+                telemetrySender.updateSubscriptionResult(subscription, System.currentTimeMillis());
+            } finally {
+                lock.countDown();
+            }
+        }).start();
+
+        assertTrue(lock.await(2000, TimeUnit.MILLISECONDS));
+        assertNotNull(clientInstanceId.get());
+        assertTrue(clientInstanceId.get().isPresent());
+        assertEquals(uuid, clientInstanceId.get().get());
     }
 
     @AfterEach

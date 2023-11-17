@@ -290,8 +290,8 @@ public class ClientTelemetryReporter implements MetricsReporter {
             final long localLastRequestMs;
             int localIntervalMs;
 
+            lock.readLock().lock();
             try {
-                lock.readLock().lock();
                 if (!enabled) {
                     return Integer.MAX_VALUE;
                 }
@@ -331,7 +331,7 @@ public class ClientTelemetryReporter implements MetricsReporter {
                 case PUSH_NEEDED: {
                     String apiName = (localState == ClientTelemetryState.SUBSCRIPTION_NEEDED) ? ApiKeys.GET_TELEMETRY_SUBSCRIPTIONS.name : ApiKeys.PUSH_TELEMETRY.name;
                     long timeRemainingBeforeRequest = localLastRequestMs + localIntervalMs - now;
-                    if (timeRemainingBeforeRequest < 0) {
+                    if (timeRemainingBeforeRequest <= 0) {
                         timeMs = 0;
                         msg = String.format("the wait time before submitting the next %s network API request has elapsed", apiName);
                     } else {
@@ -355,8 +355,8 @@ public class ClientTelemetryReporter implements MetricsReporter {
             final ClientTelemetryState localState;
             final ClientTelemetrySubscription localSubscription;
 
+            lock.readLock().lock();
             try {
-                lock.readLock().lock();
                 localState = state;
                 localSubscription = subscription;
             } finally {
@@ -382,7 +382,7 @@ public class ClientTelemetryReporter implements MetricsReporter {
             // If the error code indicates that the interval ms needs to be updated as per the error
             // code then update the interval ms and state so that the subscription can be retried.
             if (errorIntervalMsOpt.isPresent()) {
-                // Update the state from subscription in progress to subscription needed as the error
+                // Update the state from SUBSCRIPTION_INR_PROGRESS to SUBSCRIPTION_NEEDED as the error
                 // response indicates that the subscription is not valid.
                 if (!maybeSetState(ClientTelemetryState.SUBSCRIPTION_NEEDED)) {
                     log.error("Unable to transition state after failed get telemetry subscriptions from state {}", state);
@@ -406,8 +406,8 @@ public class ClientTelemetryReporter implements MetricsReporter {
                 data.deltaTemporality(),
                 selector);
 
+            lock.writeLock().lock();
             try {
-                lock.writeLock().lock();
                 // This is the case if we began termination sometime after the subscription request
                 // was issued. We're just now getting our callback, but we need to ignore it.
                 if (isTerminatingState()) {
@@ -445,8 +445,8 @@ public class ClientTelemetryReporter implements MetricsReporter {
             // code then update the interval ms and state so that the subscription can be re-fetched,
             // and the push retried.
             if (errorIntervalMsOpt.isPresent()) {
+                lock.writeLock().lock();
                 try {
-                    lock.writeLock().lock();
                     // This is the case when client began termination sometime after the last push request
                     // was issued. Just getting the callback, hence need to ignore it.
                     if (isTerminatingState()) {
@@ -463,8 +463,8 @@ public class ClientTelemetryReporter implements MetricsReporter {
                 }
             }
 
+            lock.writeLock().lock();
             try {
-                lock.writeLock().lock();
                 lastRequestMs = now;
                 intervalMs = subscription.pushIntervalMs();
                 if (!maybeSetState(ClientTelemetryState.PUSH_NEEDED)) {
@@ -494,8 +494,8 @@ public class ClientTelemetryReporter implements MetricsReporter {
                 throw new IllegalArgumentException("The timeout cannot be negative for fetching client instance id.");
             }
 
+            lock.writeLock().lock();
             try {
-                lock.writeLock().lock();
                 if (subscription == null) {
                     // If we have a non-negative timeout and no-subscription, let's wait for one to be retrieved.
                     log.debug("Waiting for telemetry subscription containing the client instance ID with timeoutMillis = {} ms.", timeoutMs);
@@ -532,8 +532,8 @@ public class ClientTelemetryReporter implements MetricsReporter {
             maybeInitiateClose(Duration.ofMillis(MAX_TERMINAL_PUSH_WAIT_MS));
 
             boolean shouldClose = false;
+            lock.writeLock().lock();
             try {
-                lock.writeLock().lock();
                 if (this.state != ClientTelemetryState.TERMINATED) {
                     if (maybeSetState(ClientTelemetryState.TERMINATED)) {
                         shouldClose = true;
@@ -556,8 +556,8 @@ public class ClientTelemetryReporter implements MetricsReporter {
             // signal to the broker that we need to have a client instance ID assigned.
             Uuid clientInstanceId = (localSubscription != null) ? localSubscription.clientInstanceId() : Uuid.ZERO_UUID;
 
+            lock.writeLock().lock();
             try {
-                lock.writeLock().lock();
                 if (isTerminatingState()) {
                     return Optional.empty();
                 }
@@ -584,8 +584,8 @@ public class ClientTelemetryReporter implements MetricsReporter {
             }
 
             boolean terminating;
+            lock.writeLock().lock();
             try {
-                lock.writeLock().lock();
                 // We've already been terminated, or we've already issued our last push, so we
                 // should just exit now.
                 if (this.state == ClientTelemetryState.TERMINATED || this.state == ClientTelemetryState.TERMINATING_PUSH_IN_PROGRESS) {
@@ -637,8 +637,8 @@ public class ClientTelemetryReporter implements MetricsReporter {
          */
         // Visible for testing
         void updateSubscriptionResult(ClientTelemetrySubscription subscription, long timeMs) {
+            lock.writeLock().lock();
             try {
-                lock.writeLock().lock();
                 this.subscription = Objects.requireNonNull(subscription);
                 /*
                  If the subscription is updated for the client, we want to attempt to spread out the push
@@ -667,8 +667,8 @@ public class ClientTelemetryReporter implements MetricsReporter {
          * The contents of the method are guarded by the {@link #lock}.
          */
         private void updateErrorResult(int intervalMs, long timeMs) {
+            lock.writeLock().lock();
             try {
-                lock.writeLock().lock();
                 this.intervalMs = intervalMs;
                 this.lastRequestMs = timeMs;
                 /*
@@ -702,8 +702,8 @@ public class ClientTelemetryReporter implements MetricsReporter {
 
         // Visible for testing
         boolean maybeSetState(ClientTelemetryState newState) {
+            lock.writeLock().lock();
             try {
-                lock.writeLock().lock();
                 ClientTelemetryState oldState = state;
                 state = oldState.validateTransition(newState);
                 log.debug("Setting telemetry state from {} to {}", oldState, newState);
@@ -722,8 +722,8 @@ public class ClientTelemetryReporter implements MetricsReporter {
 
         private void handleFailedRequest(boolean shouldWait) {
             final long now = System.currentTimeMillis();
+            lock.writeLock().lock();
             try {
-                lock.writeLock().lock();
                 if (isTerminatingState()) {
                     return;
                 }
@@ -769,8 +769,8 @@ public class ClientTelemetryReporter implements MetricsReporter {
             log.debug("initiate close for client telemetry, check if terminal push required");
 
             long timeoutMs = timeout.toMillis();
+            lock.writeLock().lock();
             try {
-                lock.writeLock().lock();
                 // If we never fetched a subscription, we can't really push anything.
                 if (lastRequestMs == 0) {
                     log.info("Telemetry subscription not loaded, not attempting terminating push");
@@ -802,8 +802,8 @@ public class ClientTelemetryReporter implements MetricsReporter {
 
         // Visible for testing
         ClientTelemetrySubscription subscription() {
+            lock.readLock().lock();
             try {
-                lock.readLock().lock();
                 return subscription;
             } finally {
                 lock.readLock().unlock();
@@ -812,8 +812,8 @@ public class ClientTelemetryReporter implements MetricsReporter {
 
         // Visible for testing
         ClientTelemetryState state() {
+            lock.readLock().lock();
             try {
-                lock.readLock().lock();
                 return state;
             } finally {
                 lock.readLock().unlock();
@@ -822,8 +822,8 @@ public class ClientTelemetryReporter implements MetricsReporter {
 
         // Visible for testing
         long intervalMs() {
+            lock.readLock().lock();
             try {
-                lock.readLock().lock();
                 return intervalMs;
             } finally {
                 lock.readLock().unlock();
@@ -832,8 +832,8 @@ public class ClientTelemetryReporter implements MetricsReporter {
 
         // Visible for testing
         void enabled(boolean enabled) {
+            lock.writeLock().lock();
             try {
-                lock.writeLock().lock();
                 this.enabled = enabled;
             } finally {
                 lock.writeLock().unlock();
@@ -842,8 +842,8 @@ public class ClientTelemetryReporter implements MetricsReporter {
 
         // Visible for testing
         boolean enabled() {
+            lock.readLock().lock();
             try {
-                lock.readLock().lock();
                 return enabled;
             } finally {
                 lock.readLock().unlock();
