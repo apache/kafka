@@ -1038,7 +1038,7 @@ class MetadataCacheTest {
     )
     val partitions = Seq(
       Partition(0, asList(0, 1), asList(Uuid.fromString("broker1logdirjEo71BG0w"), DirectoryId.LOST)),
-      Partition(1, asList(0, 1), asList(Uuid.fromString("unknownlogdirjEo71BG0w"), Uuid.fromString("broker2logdirRmQQgLxgw"))),
+      Partition(1, asList(0, 1), asList(Uuid.fromString("unknownlogdirjEo71BG0w"), DirectoryId.UNASSIGNED)),
       Partition(2, asList(0, 1), asList(DirectoryId.MIGRATING, Uuid.fromString("broker2logdirRmQQgLxgw")))
     )
     assertEquals(Map(
