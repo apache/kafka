@@ -115,7 +115,8 @@ public class AsyncKafkaConsumerTest {
     @Test
     public void testFailOnClosedConsumer() {
         consumer.close();
-        assertThrows(IllegalStateException.class, consumer::assignment);
+        final IllegalStateException res = assertThrows(IllegalStateException.class, consumer::assignment);
+        assertEquals("This consumer has already been closed.", res.getMessage());
     }
 
     @Test
