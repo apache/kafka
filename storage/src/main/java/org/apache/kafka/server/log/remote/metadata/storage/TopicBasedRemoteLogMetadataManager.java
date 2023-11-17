@@ -449,7 +449,7 @@ public class TopicBasedRemoteLogMetadataManager implements RemoteLogMetadataMana
         }
     }
 
-    boolean isTopicExists(Admin adminClient, String topic) {
+    boolean doesTopicExist(Admin adminClient, String topic) {
         try {
             TopicDescription description = adminClient.describeTopics(Collections.singleton(topic))
                     .topicNameValues()
@@ -495,11 +495,11 @@ public class TopicBasedRemoteLogMetadataManager implements RemoteLogMetadataMana
      * @return Returns true if the topic already exists, or it is created successfully.
      */
     private boolean createTopic(Admin adminClient, NewTopic newTopic) {
-        boolean topicExists = false;
+        boolean doesTopicExist = false;
         String topic = newTopic.name();
         try {
-            topicExists = isTopicExists(adminClient, topic);
-            if (!topicExists) {
+            doesTopicExist = doesTopicExist(adminClient, topic);
+            if (!doesTopicExist) {
                 CreateTopicsResult result = adminClient.createTopics(Collections.singleton(newTopic));
                 result.all().get();
                 List<String> overriddenConfigs = result.config(topic).get()
@@ -511,19 +511,19 @@ public class TopicBasedRemoteLogMetadataManager implements RemoteLogMetadataMana
                 log.info("Topic {} created. TopicId: {}, numPartitions: {}, replicationFactor: {}, config: {}",
                         topic, result.topicId(topic).get(), result.numPartitions(topic).get(),
                         result.replicationFactor(topic).get(), overriddenConfigs);
-                topicExists = true;
+                doesTopicExist = true;
             }
         } catch (Exception e) {
             // This exception can still occur as multiple brokers may call create topics and one of them may become
             // successful and other would throw TopicExistsException
             if (e.getCause() instanceof TopicExistsException) {
                 log.info("Topic [{}] already exists", topic);
-                topicExists = true;
+                doesTopicExist = true;
             } else {
                 log.error("Encountered error while creating {} topic.", topic, e);
             }
         }
-        return topicExists;
+        return doesTopicExist;
     }
 
     public boolean isInitialized() {

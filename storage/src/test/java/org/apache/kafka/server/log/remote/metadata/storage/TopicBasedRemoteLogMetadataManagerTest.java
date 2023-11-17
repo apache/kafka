@@ -75,8 +75,8 @@ public class TopicBasedRemoteLogMetadataManagerTest {
         ListenerName listenerName = remoteLogMetadataManagerHarness.listenerName();
         try (Admin admin = remoteLogMetadataManagerHarness.createAdminClient(listenerName, adminConfig)) {
             String topic = topicBasedRlmm().config().remoteLogMetadataTopicName();
-            boolean isTopicExists = topicBasedRlmm().isTopicExists(admin, topic);
-            Assertions.assertTrue(isTopicExists);
+            boolean doesTopicExist = topicBasedRlmm().doesTopicExist(admin, topic);
+            Assertions.assertTrue(doesTopicExist);
         }
     }
 
@@ -86,8 +86,8 @@ public class TopicBasedRemoteLogMetadataManagerTest {
         ListenerName listenerName = remoteLogMetadataManagerHarness.listenerName();
         try (Admin admin = remoteLogMetadataManagerHarness.createAdminClient(listenerName, adminConfig)) {
             String topic = "dummy-test-topic";
-            boolean isTopicExists = topicBasedRlmm().isTopicExists(admin, topic);
-            Assertions.assertFalse(isTopicExists);
+            boolean doesTopicExist = topicBasedRlmm().doesTopicExist(admin, topic);
+            Assertions.assertFalse(doesTopicExist);
         }
     }
 
