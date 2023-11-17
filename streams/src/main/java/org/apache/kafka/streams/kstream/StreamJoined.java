@@ -70,7 +70,7 @@ public class StreamJoined<K, V1, V2> implements NamedOperation<StreamJoined<K, V
         this.keySerde = keySerde;
         this.valueSerde = valueSerde;
         this.otherValueSerde = otherValueSerde;
-        this.dslStoreSuppliers = dslStoreSuppliers == null ? Materialized.StoreType.ROCKS_DB : dslStoreSuppliers;
+        this.dslStoreSuppliers = dslStoreSuppliers;
         this.thisStoreSupplier = thisStoreSupplier;
         this.otherStoreSupplier = otherStoreSupplier;
         this.name = name;
