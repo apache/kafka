@@ -16,8 +16,6 @@
  */
 package org.apache.kafka.common.telemetry.internals;
 
-import io.opentelemetry.proto.common.v1.AnyValue;
-import io.opentelemetry.proto.common.v1.KeyValue;
 import io.opentelemetry.proto.metrics.v1.AggregationTemporality;
 import io.opentelemetry.proto.metrics.v1.Metric;
 import io.opentelemetry.proto.metrics.v1.NumberDataPoint;
@@ -26,11 +24,11 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.time.Instant;
-import java.util.Map;
-import java.util.concurrent.TimeUnit;
 import java.util.Collections;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class SinglePointMetricTest {
 
@@ -61,102 +59,112 @@ public class SinglePointMetricTest {
     @Test
     public void testGaugeWithNumberValue() {
         SinglePointMetric gaugeNumber = SinglePointMetric.gauge(metricKey, Long.valueOf(1), now);
-        assertEquals(getIntGaugeMetric("name", 1, now),
-            gaugeNumber.builder().build());
+        MetricKey metricKey = gaugeNumber.key();
+        assertEquals("name", metricKey.name());
+
+        Metric metric = gaugeNumber.builder().build();
+        assertEquals(1, metric.getGauge().getDataPointsCount());
+
+        NumberDataPoint point = metric.getGauge().getDataPoints(0);
+        assertEquals(now.getEpochSecond() * Math.pow(10, 9) + now.getNano(), point.getTimeUnixNano());
+        assertEquals(0, point.getStartTimeUnixNano());
+        assertEquals(1, point.getAsInt());
+        assertEquals(0, point.getAttributesCount());
     }
 
     @Test
     public void testGaugeWithDoubleValue() {
         SinglePointMetric gaugeNumber = SinglePointMetric.gauge(metricKey, 1.0, now);
-        assertEquals(getDoubleGaugeMetric("name", 1.0, now),
-            gaugeNumber.builder().build());
+        MetricKey metricKey = gaugeNumber.key();
+        assertEquals("name", metricKey.name());
+
+        Metric metric = gaugeNumber.builder().build();
+        assertEquals(1, metric.getGauge().getDataPointsCount());
+
+        NumberDataPoint point = metric.getGauge().getDataPoints(0);
+        assertEquals(now.getEpochSecond() * Math.pow(10, 9) + now.getNano(), point.getTimeUnixNano());
+        assertEquals(0, point.getStartTimeUnixNano());
+        assertEquals(1.0, point.getAsDouble());
+        assertEquals(0, point.getAttributesCount());
     }
 
     @Test
     public void testGaugeWithMetricTags() {
         MetricKey metricKey = new MetricKey("name", Collections.singletonMap("tag", "value"));
         SinglePointMetric gaugeNumber = SinglePointMetric.gauge(metricKey, 1.0, now);
-        assertEquals(getDoubleGaugeMetric("name", 1.0, now,
-                Collections.singletonMap("tag", "value")), gaugeNumber.builder().build());
+
+        MetricKey key = gaugeNumber.key();
+        assertEquals("name", key.name());
+
+        Metric metric = gaugeNumber.builder().build();
+        assertEquals(1, metric.getGauge().getDataPointsCount());
+
+        NumberDataPoint point = metric.getGauge().getDataPoints(0);
+        assertEquals(now.getEpochSecond() * Math.pow(10, 9) + now.getNano(), point.getTimeUnixNano());
+        assertEquals(0, point.getStartTimeUnixNano());
+        assertEquals(1.0, point.getAsDouble());
+        assertEquals(1, point.getAttributesCount());
+        assertEquals("tag", point.getAttributes(0).getKey());
+        assertEquals("value", point.getAttributes(0).getValue().getStringValue());
     }
 
     @Test
     public void testSum() {
         SinglePointMetric sum = SinglePointMetric.sum(metricKey, 1.0, false, now);
-        assertEquals(getSumMetric("name", 1.0, false, now), sum.builder().build());
+
+        MetricKey key = sum.key();
+        assertEquals("name", key.name());
+
+        Metric metric = sum.builder().build();
+        assertFalse(metric.getSum().getIsMonotonic());
+        assertEquals(AggregationTemporality.AGGREGATION_TEMPORALITY_CUMULATIVE, metric.getSum().getAggregationTemporality());
+        assertEquals(1, metric.getSum().getDataPointsCount());
+
+        NumberDataPoint point = metric.getSum().getDataPoints(0);
+        assertEquals(now.getEpochSecond() * Math.pow(10, 9) + now.getNano(), point.getTimeUnixNano());
+        assertEquals(0, point.getStartTimeUnixNano());
+        assertEquals(1.0, point.getAsDouble());
+        assertEquals(0, point.getAttributesCount());
     }
 
     @Test
     public void testSumWithStartTimeAndTags() {
         MetricKey metricKey = new MetricKey("name", Collections.singletonMap("tag", "value"));
         SinglePointMetric sum = SinglePointMetric.sum(metricKey, 1.0, true, now, now);
-        assertEquals(getSumMetric("name", 1.0, true, now, now,
-            Collections.singletonMap("tag", "value"), false), sum.builder().build());
+
+        MetricKey key = sum.key();
+        assertEquals("name", key.name());
+
+        Metric metric = sum.builder().build();
+        assertTrue(metric.getSum().getIsMonotonic());
+        assertEquals(AggregationTemporality.AGGREGATION_TEMPORALITY_CUMULATIVE, metric.getSum().getAggregationTemporality());
+        assertEquals(1, metric.getSum().getDataPointsCount());
+
+        NumberDataPoint point = metric.getSum().getDataPoints(0);
+        assertEquals(now.getEpochSecond() * Math.pow(10, 9) + now.getNano(), point.getTimeUnixNano());
+        assertEquals(now.getEpochSecond() * Math.pow(10, 9) + now.getNano(), point.getStartTimeUnixNano());
+        assertEquals(1.0, point.getAsDouble());
+        assertEquals(1, point.getAttributesCount());
+        assertEquals("tag", point.getAttributes(0).getKey());
+        assertEquals("value", point.getAttributes(0).getValue().getStringValue());
     }
 
     @Test
     public void testDeltaSum() {
         SinglePointMetric sum = SinglePointMetric.deltaSum(metricKey, 1.0, true, now, now);
-        assertEquals(getSumMetric("name", 1.0, true, now, now, Collections.emptyMap(),
-            true), sum.builder().build());
-    }
 
-    private Metric getDoubleGaugeMetric(String name, Double value, Instant time) {
-        return getDoubleGaugeMetric(name, value, time, Collections.emptyMap());
-    }
+        MetricKey key = sum.key();
+        assertEquals("name", key.name());
 
-    private Metric getDoubleGaugeMetric(String name, Double value, Instant time, Map<String, String> tags) {
-        NumberDataPoint.Builder point = NumberDataPoint.newBuilder()
-            .setTimeUnixNano(TimeUnit.SECONDS.toNanos(time.getEpochSecond()) + time.getNano())
-            .setAsDouble(value);
+        Metric metric = sum.builder().build();
+        assertTrue(metric.getSum().getIsMonotonic());
+        assertEquals(AggregationTemporality.AGGREGATION_TEMPORALITY_DELTA, metric.getSum().getAggregationTemporality());
+        assertEquals(1, metric.getSum().getDataPointsCount());
 
-        point.addAllAttributes(tags.entrySet().stream().map(
-            entry -> KeyValue.newBuilder()
-                .setKey(entry.getKey())
-                .setValue(AnyValue.newBuilder().setStringValue(entry.getValue())).build()
-        )::iterator);
-
-        Metric.Builder metric = Metric.newBuilder().setName(name);
-        metric.getGaugeBuilder().addDataPoints(point);
-        return metric.build();
-    }
-
-    private Metric getIntGaugeMetric(String name, int value, Instant time) {
-        NumberDataPoint.Builder point = NumberDataPoint.newBuilder()
-            .setTimeUnixNano(TimeUnit.SECONDS.toNanos(time.getEpochSecond()) + time.getNano())
-            .setAsInt(value);
-
-        Metric.Builder metric = Metric.newBuilder().setName(name);
-        metric.getGaugeBuilder().addDataPoints(point);
-        return metric.build();
-    }
-
-    private Metric getSumMetric(String name, Double value, boolean monotonic, Instant time) {
-        return getSumMetric(name, value, monotonic, time, null, Collections.emptyMap(), false);
-    }
-
-    private Metric getSumMetric(String name, Double value, boolean monotonic, Instant time,
-        Instant startTime, Map<String, String> tags, boolean isDelta) {
-        NumberDataPoint.Builder point = NumberDataPoint.newBuilder()
-            .setTimeUnixNano(TimeUnit.SECONDS.toNanos(time.getEpochSecond()) + time.getNano())
-            .setAsDouble(value);
-
-        if (startTime != null) {
-            point.setStartTimeUnixNano(TimeUnit.SECONDS.toNanos(startTime.getEpochSecond()) + startTime.getNano());
-        }
-
-        point.addAllAttributes(tags.entrySet().stream().map(
-            entry -> KeyValue.newBuilder()
-                .setKey(entry.getKey())
-                .setValue(AnyValue.newBuilder().setStringValue(entry.getValue())).build()
-        )::iterator);
-
-        Metric.Builder metric = Metric.newBuilder().setName(name);
-        metric.getSumBuilder()
-            .setIsMonotonic(monotonic)
-            .setAggregationTemporality(isDelta ? AggregationTemporality.AGGREGATION_TEMPORALITY_DELTA :
-                AggregationTemporality.AGGREGATION_TEMPORALITY_CUMULATIVE)
-            .addDataPoints(point);
-        return metric.build();
+        NumberDataPoint point = metric.getSum().getDataPoints(0);
+        assertEquals(now.getEpochSecond() * Math.pow(10, 9) + now.getNano(), point.getTimeUnixNano());
+        assertEquals(now.getEpochSecond() * Math.pow(10, 9) + now.getNano(), point.getStartTimeUnixNano());
+        assertEquals(1.0, point.getAsDouble());
+        assertEquals(0, point.getAttributesCount());
     }
 }
