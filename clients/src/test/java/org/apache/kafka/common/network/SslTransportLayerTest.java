@@ -1326,7 +1326,7 @@ public class SslTransportLayerTest {
     }
 
     private Supplier<ApiVersionsResponse> defaultApiVersionsSupplier() {
-        return () -> ApiVersionsResponse.defaultApiVersionsResponse(ApiMessageType.ListenerType.ZK_BROKER);
+        return () -> TestUtils.defaultApiVersionsResponse(ApiMessageType.ListenerType.ZK_BROKER);
     }
 
     static class TestSslChannelBuilder extends SslChannelBuilder {

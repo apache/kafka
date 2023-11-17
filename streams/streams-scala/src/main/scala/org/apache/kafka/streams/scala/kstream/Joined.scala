@@ -22,7 +22,7 @@ import org.apache.kafka.streams.kstream.{Joined => JoinedJ}
 object Joined {
 
   /**
-   * Create an instance of [[org.apache.kafka.streams.kstream.Joined]] with key, value, and otherValue [[Serde]]
+   * Create an instance of `org.apache.kafka.streams.kstream.Joined` with key, value, and otherValue Serde
    * instances.
    * `null` values are accepted and will be replaced by the default serdes as defined in config.
    *
@@ -32,7 +32,7 @@ object Joined {
    * @param keySerde        the key serde to use.
    * @param valueSerde      the value serde to use.
    * @param otherValueSerde the otherValue serde to use. If `null` the default value serde from config will be used
-   * @return new [[org.apache.kafka.streams.kstream.Joined]] instance with the provided serdes
+   * @return new `org.apache.kafka.streams.kstream.Joined` instance with the provided serdes
    */
   def `with`[K, V, VO](implicit
     keySerde: Serde[K],
@@ -42,7 +42,7 @@ object Joined {
     JoinedJ.`with`(keySerde, valueSerde, otherValueSerde)
 
   /**
-   * Create an instance of [[org.apache.kafka.streams.kstream.Joined]] with key, value, and otherValue [[Serde]]
+   * Create an instance of `org.apache.kafka.streams.kstream.Joined` with key, value, and otherValue Serde
    * instances.
    * `null` values are accepted and will be replaced by the default serdes as defined in config.
    *
@@ -53,7 +53,7 @@ object Joined {
    * @param keySerde        the key serde to use.
    * @param valueSerde      the value serde to use.
    * @param otherValueSerde the otherValue serde to use. If `null` the default value serde from config will be used
-   * @return new [[org.apache.kafka.streams.kstream.Joined]] instance with the provided serdes
+   * @return new `org.apache.kafka.streams.kstream.Joined` instance with the provided serdes
    */
   // disable spotless scala, which wants to make a mess of the argument lists
   // format: off

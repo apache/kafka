@@ -67,7 +67,7 @@ public interface TransportLayer extends ScatteringByteChannel, TransferableChann
     /**
      * This a no-op for the non-secure PLAINTEXT implementation. For SSL, this performs
      * SSL handshake. The SSL handshake includes client authentication if configured using
-     * {@link org.apache.kafka.common.config.SslConfigs#SSL_CLIENT_AUTH_CONFIG}.
+     * {@link org.apache.kafka.common.config.internals.BrokerSecurityConfigs#SSL_CLIENT_AUTH_CONFIG}.
      * @throws AuthenticationException if handshake fails due to an {@link javax.net.ssl.SSLException}.
      * @throws IOException if read or write fails with an I/O error.
     */

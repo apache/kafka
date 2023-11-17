@@ -21,6 +21,7 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
+import org.apache.kafka.image.loader.LoaderManifest;
 import org.apache.kafka.image.loader.LogDeltaManifest;
 import org.apache.kafka.image.loader.SnapshotManifest;
 import org.apache.kafka.queue.EventQueue;
@@ -44,6 +45,7 @@ public class SnapshotGenerator implements MetadataPublisher {
         private long maxBytesSinceLastSnapshot = 100 * 1024L * 1024L;
         private long maxTimeSinceLastSnapshotNs = TimeUnit.DAYS.toNanos(1);
         private AtomicReference<String> disabledReason = null;
+        private String threadNamePrefix = "";
 
         public Builder(Emitter emitter) {
             this.emitter = emitter;
@@ -79,6 +81,11 @@ public class SnapshotGenerator implements MetadataPublisher {
             return this;
         }
 
+        public Builder setThreadNamePrefix(String threadNamePrefix) {
+            this.threadNamePrefix = threadNamePrefix;
+            return this;
+        }
+
         public SnapshotGenerator build() {
             if (disabledReason == null) {
                 disabledReason = new AtomicReference<>();
@@ -90,7 +97,8 @@ public class SnapshotGenerator implements MetadataPublisher {
                 faultHandler,
                 maxBytesSinceLastSnapshot,
                 maxTimeSinceLastSnapshotNs,
-                disabledReason
+                disabledReason,
+                threadNamePrefix
             );
         }
     }
@@ -173,7 +181,8 @@ public class SnapshotGenerator implements MetadataPublisher {
         FaultHandler faultHandler,
         long maxBytesSinceLastSnapshot,
         long maxTimeSinceLastSnapshotNs,
-        AtomicReference<String> disabledReason
+        AtomicReference<String> disabledReason,
+        String threadNamePrefix
     ) {
         this.nodeId = nodeId;
         this.time = time;
@@ -181,10 +190,10 @@ public class SnapshotGenerator implements MetadataPublisher {
         this.faultHandler = faultHandler;
         this.maxBytesSinceLastSnapshot = maxBytesSinceLastSnapshot;
         this.maxTimeSinceLastSnapshotNs = maxTimeSinceLastSnapshotNs;
-        LogContext logContext = new LogContext("[SnapshotGenerator " + nodeId + "] ");
+        LogContext logContext = new LogContext("[SnapshotGenerator id=" + nodeId + "] ");
         this.log = logContext.logger(SnapshotGenerator.class);
         this.disabledReason = disabledReason;
-        this.eventQueue = new KafkaEventQueue(time, logContext, "SnapshotGenerator" + nodeId);
+        this.eventQueue = new KafkaEventQueue(time, logContext, threadNamePrefix + "snapshot-generator-");
         resetSnapshotCounters();
         log.debug("Starting SnapshotGenerator.");
     }
@@ -200,18 +209,31 @@ public class SnapshotGenerator implements MetadataPublisher {
     }
 
     @Override
-    public void publishSnapshot(
+    public void onMetadataUpdate(
+        MetadataDelta delta,
+        MetadataImage newImage,
+        LoaderManifest manifest
+    ) {
+        switch (manifest.type()) {
+            case LOG_DELTA:
+                publishLogDelta(delta, newImage, (LogDeltaManifest) manifest);
+                break;
+            case SNAPSHOT:
+                publishSnapshot(delta, newImage, (SnapshotManifest) manifest);
+                break;
+        }
+    }
+
+    void publishSnapshot(
         MetadataDelta delta,
         MetadataImage newImage,
         SnapshotManifest manifest
     ) {
-        log.debug("Resetting the snapshot counters because we just read a snapshot at offset {}.",
-                newImage.provenance().offset());
+        log.debug("Resetting the snapshot counters because we just read {}.", newImage.provenance().snapshotName());
         resetSnapshotCounters();
     }
 
-    @Override
-    public void publishLogDelta(
+    void publishLogDelta(
         MetadataDelta delta,
         MetadataImage newImage,
         LogDeltaManifest manifest

@@ -454,7 +454,7 @@ public final class FieldSpec {
                     name + ".  The only valid default for a struct field " +
                     "is the empty struct or null.");
             }
-            return "new " + type.toString() + "()";
+            return "new " + type + "()";
         } else if (type.isArray()) {
             if (fieldDefault.equals("null")) {
                 validateNullDefault();

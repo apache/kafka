@@ -24,8 +24,8 @@ import org.apache.kafka.clients.admin.{Admin, AdminClientConfig, AlterConfigOp, 
 import org.apache.kafka.common.config.{ConfigResource, TopicConfig}
 import org.apache.kafka.common.errors.{InvalidConfigurationException, InvalidRequestException, PolicyViolationException}
 import org.apache.kafka.common.utils.Utils
-import org.apache.kafka.server.log.internals.LogConfig
 import org.apache.kafka.server.policy.AlterConfigPolicy
+import org.apache.kafka.storage.internals.log.LogConfig
 import org.junit.jupiter.api.Assertions.{assertEquals, assertNull, assertTrue}
 import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo, Timeout}
 import org.junit.jupiter.params.ParameterizedTest

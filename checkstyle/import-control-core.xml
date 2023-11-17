@@ -36,6 +36,7 @@
   <allow pkg="kafka.utils" />
   <allow pkg="kafka.serializer" />
   <allow pkg="org.apache.kafka.common" />
+  <allow pkg="org.mockito" class="AssignmentsManagerTest"/>
 
   <!-- see KIP-544 for why KafkaYammerMetrics should be used instead of the global default yammer metrics registry
        https://cwiki.apache.org/confluence/display/KAFKA/KIP-544%3A+Make+metrics+exposed+via+JMX+configurable -->
@@ -60,8 +61,9 @@
   <subpackage name="tools">
     <allow pkg="org.apache.kafka.clients.admin" />
     <allow pkg="kafka.admin" />
-    <allow pkg="joptsimple" />
     <allow pkg="org.apache.kafka.clients.consumer" />
+    <allow pkg="org.apache.kafka.server.util" />
+    <allow pkg="joptsimple" />
   </subpackage>
 
   <subpackage name="coordinator">
@@ -72,11 +74,21 @@
     <allow pkg="org.apache.kafka.clients" />
   </subpackage>
 
+  <subpackage name="log.remote">
+    <allow pkg="org.apache.kafka.server.common" />
+    <allow pkg="org.apache.kafka.server.log.remote" />
+    <allow pkg="org.apache.kafka.server.metrics" />
+    <allow pkg="org.apache.kafka.storage.internals" />
+    <allow pkg="kafka.log" />
+    <allow pkg="kafka.cluster" />
+    <allow pkg="kafka.server" />
+    <allow pkg="org.mockito" />
+    <allow pkg="org.apache.kafka.test" />
+  </subpackage>
+
   <subpackage name="server">
-    <subpackage name="builders">
-      <allow pkg="kafka" />
-      <allow pkg="org.apache.kafka" />
-    </subpackage>
+    <allow pkg="kafka" />
+    <allow pkg="org.apache.kafka" />
   </subpackage>
 
   <subpackage name="test">
@@ -84,11 +96,14 @@
     <allow pkg="org.apache.kafka.metadata"/>
     <allow pkg="org.apache.kafka.server.authorizer"/>
     <allow pkg="org.apache.kafka.server.common" />
+    <allow pkg="org.apache.kafka.test" />
+    <allow pkg="kafka.testkit"/>
     <allow pkg="kafka.test.annotation"/>
     <allow pkg="kafka.test.junit"/>
     <allow pkg="kafka.network"/>
     <allow pkg="kafka.api"/>
     <allow pkg="kafka.server"/>
+    <allow pkg="kafka.zk" />
     <allow pkg="org.apache.kafka.clients.admin"/>
     <allow pkg="integration.kafka.server" class="IntegrationTestHelper"/>
     <subpackage name="annotation">
@@ -96,7 +111,6 @@
     </subpackage>
     <subpackage name="junit">
       <allow pkg="kafka.test"/>
-      <allow pkg="kafka.testkit"/>
       <allow pkg="org.apache.kafka.clients"/>
       <allow pkg="org.apache.kafka.metadata" />
     </subpackage>

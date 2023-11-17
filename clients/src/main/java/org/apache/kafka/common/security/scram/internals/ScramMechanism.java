@@ -21,15 +21,23 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
+/*
+ * This code is duplicated in org.apache.kafka.clients.admin.ScramMechanism.
+ * The type field in both files must match and must not change. The type field
+ * is used both for passing ScramCredentialUpsertion and for the internal 
+ * UserScramCredentialRecord. Do not change the type field.
+ */
 public enum ScramMechanism {
 
-    SCRAM_SHA_256("SHA-256", "HmacSHA256", 4096),
-    SCRAM_SHA_512("SHA-512", "HmacSHA512", 4096);
+    SCRAM_SHA_256((byte) 1, "SHA-256", "HmacSHA256", 4096, 16384),
+    SCRAM_SHA_512((byte) 2, "SHA-512", "HmacSHA512", 4096, 16384);
 
+    private final byte type;
     private final String mechanismName;
     private final String hashAlgorithm;
     private final String macAlgorithm;
     private final int minIterations;
+    private final int maxIterations;
 
     private static final Map<String, ScramMechanism> MECHANISMS_MAP;
 
@@ -40,11 +48,19 @@ public enum ScramMechanism {
         MECHANISMS_MAP = Collections.unmodifiableMap(map);
     }
 
-    ScramMechanism(String hashAlgorithm, String macAlgorithm, int minIterations) {
+    ScramMechanism(
+        byte type,
+        String hashAlgorithm,
+        String macAlgorithm,
+        int minIterations,
+        int maxIterations
+    ) {
+        this.type = type;
         this.mechanismName = "SCRAM-" + hashAlgorithm;
         this.hashAlgorithm = hashAlgorithm;
         this.macAlgorithm = macAlgorithm;
         this.minIterations = minIterations;
+        this.maxIterations = maxIterations;
     }
 
     public final String mechanismName() {
@@ -63,6 +79,10 @@ public enum ScramMechanism {
         return minIterations;
     }
 
+    public int maxIterations() {
+        return maxIterations;
+    }
+
     public static ScramMechanism forMechanismName(String mechanismName) {
         return MECHANISMS_MAP.get(mechanismName);
     }
@@ -73,5 +93,13 @@ public enum ScramMechanism {
 
     public static boolean isScram(String mechanismName) {
         return MECHANISMS_MAP.containsKey(mechanismName);
+    }
+
+    /**
+     *
+     * @return the type indicator for this SASL SCRAM mechanism
+     */
+    public byte type() {
+        return this.type;
     }
 }

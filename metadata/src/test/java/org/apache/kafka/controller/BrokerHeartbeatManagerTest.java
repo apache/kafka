@@ -41,6 +41,7 @@ import static org.apache.kafka.controller.BrokerControlState.SHUTDOWN_NOW;
 import static org.apache.kafka.controller.BrokerControlState.UNFENCED;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -239,7 +240,7 @@ public class BrokerHeartbeatManagerTest {
     @Test
     public void testBrokerHeartbeatStateList() {
         BrokerHeartbeatStateList list = new BrokerHeartbeatStateList();
-        assertEquals(null, list.first());
+        assertNull(list.first());
         BrokerHeartbeatStateIterator iterator = list.iterator();
         assertFalse(iterator.hasNext());
         BrokerHeartbeatState broker0 = new BrokerHeartbeatState(0);

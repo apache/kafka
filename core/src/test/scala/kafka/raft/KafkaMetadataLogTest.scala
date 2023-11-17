@@ -16,20 +16,21 @@
  */
 package kafka.raft
 
-import kafka.log.{SegmentDeletion, UnifiedLog}
+import kafka.log.UnifiedLog
 import kafka.server.KafkaConfig.{MetadataLogSegmentBytesProp, MetadataLogSegmentMillisProp, MetadataLogSegmentMinBytesProp, NodeIdProp, ProcessRolesProp, QuorumVotersProp}
 import kafka.server.{KafkaConfig, KafkaRaftServer}
-import kafka.utils.{MockTime, TestUtils}
+import kafka.utils.TestUtils
 import org.apache.kafka.common.errors.{InvalidConfigurationException, RecordTooLargeException}
 import org.apache.kafka.common.protocol
 import org.apache.kafka.common.protocol.{ObjectSerializationCache, Writable}
 import org.apache.kafka.common.record.{CompressionType, MemoryRecords, SimpleRecord}
 import org.apache.kafka.common.utils.Utils
-import org.apache.kafka.raft.internals.BatchBuilder
 import org.apache.kafka.raft._
+import org.apache.kafka.raft.internals.BatchBuilder
 import org.apache.kafka.server.common.serialization.RecordSerde
-import org.apache.kafka.server.log.internals.LogConfig
+import org.apache.kafka.server.util.MockTime
 import org.apache.kafka.snapshot.{FileRawSnapshotWriter, RawSnapshotReader, RawSnapshotWriter, SnapshotPath, Snapshots}
+import org.apache.kafka.storage.internals.log.{LogConfig, LogStartOffsetIncrementReason}
 import org.apache.kafka.test.TestUtils.assertOptional
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
@@ -39,6 +40,7 @@ import java.nio.ByteBuffer
 import java.nio.file.{Files, Path}
 import java.util
 import java.util.{Collections, Optional, Properties}
+import scala.jdk.CollectionConverters._
 
 final class KafkaMetadataLogTest {
   import KafkaMetadataLogTest._
@@ -194,7 +196,7 @@ final class KafkaMetadataLogTest {
     }
 
     // Simulate log cleanup that advances the LSO
-    log.log.maybeIncrementLogStartOffset(snapshotId.offset - 1, SegmentDeletion)
+    log.log.maybeIncrementLogStartOffset(snapshotId.offset - 1, LogStartOffsetIncrementReason.SegmentDeletion)
 
     assertEquals(Optional.empty(), log.createNewSnapshot(new OffsetAndEpoch(snapshotId.offset - 2, snapshotId.epoch)))
   }
@@ -715,7 +717,7 @@ final class KafkaMetadataLogTest {
       snapshot.freeze()
     }
     // Simulate log cleaning advancing the LSO
-    log.log.maybeIncrementLogStartOffset(offset, SegmentDeletion);
+    log.log.maybeIncrementLogStartOffset(offset, LogStartOffsetIncrementReason.SegmentDeletion);
 
     val resultOffsetAndEpoch = log.validateOffsetAndEpoch(offset - 1, epoch)
     assertEquals(ValidOffsetAndEpoch.Kind.SNAPSHOT, resultOffsetAndEpoch.kind)
@@ -973,7 +975,7 @@ final class KafkaMetadataLogTest {
     // The clean up code requires that there are at least two snapshots
     // Generate first snapshots that includes the first segment by using the base offset of the second segment
     val snapshotId1 = new OffsetAndEpoch(
-      log.log.logSegments.drop(1).head.baseOffset,
+      log.log.logSegments.asScala.drop(1).head.baseOffset,
       1
     )
     TestUtils.resource(log.storeSnapshot(snapshotId1).get()) { snapshot =>
@@ -981,7 +983,7 @@ final class KafkaMetadataLogTest {
     }
     // Generate second snapshots that includes the second segment by using the base offset of the third segment
     val snapshotId2 = new OffsetAndEpoch(
-      log.log.logSegments.drop(2).head.baseOffset,
+      log.log.logSegments.asScala.drop(2).head.baseOffset,
       1
     )
     TestUtils.resource(log.storeSnapshot(snapshotId2).get()) { snapshot =>

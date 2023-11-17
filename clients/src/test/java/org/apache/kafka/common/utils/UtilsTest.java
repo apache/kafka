@@ -34,7 +34,6 @@ import java.nio.channels.FileChannel;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.StandardOpenOption;
-import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.ZoneOffset;
@@ -44,12 +43,14 @@ import java.time.temporal.ChronoField;
 import java.time.temporal.ChronoUnit;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Random;
 import java.util.Set;
 import java.util.TreeSet;
+import java.util.concurrent.Callable;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
@@ -64,6 +65,7 @@ import static org.apache.kafka.common.utils.Utils.formatBytes;
 import static org.apache.kafka.common.utils.Utils.getHost;
 import static org.apache.kafka.common.utils.Utils.getPort;
 import static org.apache.kafka.common.utils.Utils.intersection;
+import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.apache.kafka.common.utils.Utils.murmur2;
 import static org.apache.kafka.common.utils.Utils.union;
@@ -71,6 +73,7 @@ import static org.apache.kafka.common.utils.Utils.validHostPattern;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -895,7 +898,7 @@ public class UtilsTest {
         if (a == null) {
             assertNotNull(b);
         } else {
-            assertFalse(a.equals(b));
+            assertNotEquals(a, b);
         }
         assertFalse(Utils.isEqualConstantTime(first, second));
         assertFalse(Utils.isEqualConstantTime(second, first));
@@ -907,7 +910,7 @@ public class UtilsTest {
         if (a == null) {
             assertNull(b);
         } else {
-            assertTrue(a.equals(b));
+            assertEquals(a, b);
         }
         assertTrue(Utils.isEqualConstantTime(first, second));
         assertTrue(Utils.isEqualConstantTime(second, first));
@@ -915,14 +918,13 @@ public class UtilsTest {
 
     @Test
     public void testToLogDateTimeFormat() {
-        DateTimeFormatter offsetFormatter = DateTimeFormatter.ofPattern("XXX");
-        ZoneOffset offset = ZoneId.systemDefault().getRules().getOffset(Instant.now());
-        
-        String requiredOffsetFormat = offsetFormatter.format(offset);
-
         final LocalDateTime timestampWithMilliSeconds = LocalDateTime.of(2020, 11, 9, 12, 34, 5, 123000000);
         final LocalDateTime timestampWithSeconds = LocalDateTime.of(2020, 11, 9, 12, 34, 5);
-        
+
+        DateTimeFormatter offsetFormatter = DateTimeFormatter.ofPattern("XXX");
+        ZoneOffset offset = ZoneId.systemDefault().getRules().getOffset(timestampWithSeconds);
+        String requiredOffsetFormat = offsetFormatter.format(offset);
+
         assertEquals(String.format("2020-11-09 12:34:05,123 %s", requiredOffsetFormat), Utils.toLogDateTimeFormat(timestampWithMilliSeconds.atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()));
         assertEquals(String.format("2020-11-09 12:34:05,000 %s", requiredOffsetFormat), Utils.toLogDateTimeFormat(timestampWithSeconds.atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()));
     }
@@ -935,4 +937,96 @@ public class UtilsTest {
         assertEquals("foo.txt", Utils.replaceSuffix("foo", "", ".txt"));
     }
 
+    @Test
+    public void testEntriesWithPrefix() {
+        Map<String, Object> props = new HashMap<>();
+        props.put("foo.bar", "abc");
+        props.put("setting", "def");
+
+        // With stripping
+        Map<String, Object> expected = Collections.singletonMap("bar", "abc");
+        Map<String, Object> actual = Utils.entriesWithPrefix(props, "foo.");
+        assertEquals(expected, actual);
+
+        // Without stripping
+        expected = Collections.singletonMap("foo.bar", "abc");
+        actual = Utils.entriesWithPrefix(props, "foo.", false);
+        assertEquals(expected, actual);
+    }
+
+    @Test
+    public void testTryAll() throws Throwable {
+        Map<String, Object> recorded = new HashMap<>();
+
+        Utils.tryAll(asList(
+            recordingCallable(recorded, "valid-0", null),
+            recordingCallable(recorded, null, new TestException("exception-1")),
+            recordingCallable(recorded, "valid-2", null),
+            recordingCallable(recorded, null, new TestException("exception-3"))
+        ));
+        Map<String, Object> expected = Utils.mkMap(
+            mkEntry("valid-0", "valid-0"),
+            mkEntry("exception-1", new TestException("exception-1")),
+            mkEntry("valid-2", "valid-2"),
+            mkEntry("exception-3", new TestException("exception-3"))
+        );
+        assertEquals(expected, recorded);
+
+        recorded.clear();
+        Utils.tryAll(asList(
+            recordingCallable(recorded, "valid-0", null),
+            recordingCallable(recorded, "valid-1", null)
+        ));
+        expected = Utils.mkMap(
+            mkEntry("valid-0", "valid-0"),
+            mkEntry("valid-1", "valid-1")
+        );
+        assertEquals(expected, recorded);
+
+        recorded.clear();
+        Utils.tryAll(asList(
+            recordingCallable(recorded, null, new TestException("exception-0")),
+            recordingCallable(recorded, null, new TestException("exception-1")))
+        );
+        expected = Utils.mkMap(
+            mkEntry("exception-0", new TestException("exception-0")),
+            mkEntry("exception-1", new TestException("exception-1"))
+        );
+        assertEquals(expected, recorded);
+    }
+
+    private Callable<Void> recordingCallable(Map<String, Object> recordingMap, String success, TestException failure) {
+        return () -> {
+            if (success == null)
+                recordingMap.put(failure.key, failure);
+            else if (failure == null)
+                recordingMap.put(success, success);
+            else
+                throw new IllegalArgumentException("Either `success` or `failure` must be null, but both are non-null.");
+
+            return null;
+        };
+    }
+
+    private class TestException extends Exception {
+        final String key;
+        TestException(String key) {
+            this.key = key;
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o)
+                return true;
+            if (o == null || getClass() != o.getClass())
+                return false;
+            TestException that = (TestException) o;
+            return key.equals(that.key);
+        }
+
+        @Override
+        public int hashCode() {
+            return key.hashCode();
+        }
+    }
 }

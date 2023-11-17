@@ -19,6 +19,7 @@ package org.apache.kafka.clients;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNotSame;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
@@ -31,6 +32,8 @@ import java.net.UnknownHostException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
+import java.util.stream.Stream;
+
 import org.apache.kafka.common.errors.AuthenticationException;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
@@ -183,7 +186,7 @@ public class ClusterConnectionStatesTest {
         connectionStates.authenticationFailed(nodeId1, time.milliseconds(), new AuthenticationException("No path to CA for certificate!"));
         time.sleep(1000);
         assertEquals(connectionStates.connectionState(nodeId1), ConnectionState.AUTHENTICATION_FAILED);
-        assertTrue(connectionStates.authenticationException(nodeId1) instanceof AuthenticationException);
+        assertNotNull(connectionStates.authenticationException(nodeId1));
         assertFalse(connectionStates.hasReadyNodes(time.milliseconds()));
         assertFalse(connectionStates.canConnect(nodeId1, time.milliseconds()));
 
@@ -263,7 +266,14 @@ public class ClusterConnectionStatesTest {
 
     @Test
     public void testSingleIP() throws UnknownHostException {
-        assertEquals(1, ClientUtils.resolve("localhost", singleIPHostResolver).size());
+        InetAddress[] localhostIps = Stream.of(InetAddress.getByName("127.0.0.1")).toArray(InetAddress[]::new);
+        HostResolver hostResolver = host -> {
+            assertEquals("localhost", host);
+            return localhostIps;
+        };
+
+        connectionStates = new ClusterConnectionStates(reconnectBackoffMs, reconnectBackoffMax,
+            connectionSetupTimeoutMs, connectionSetupTimeoutMaxMs, new LogContext(), hostResolver);
 
         connectionStates.connecting(nodeId1, time.milliseconds(), "localhost");
         InetAddress currAddress = connectionStates.currentAddress(nodeId1);

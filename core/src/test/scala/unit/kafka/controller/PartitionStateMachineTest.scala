@@ -24,7 +24,7 @@ import kafka.zk.{KafkaZkClient, TopicPartitionStateZNode}
 import kafka.zookeeper._
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.server.common.MetadataVersion.{IBP_3_1_IV0, IBP_3_2_IV0}
-import org.apache.kafka.server.log.internals.LogConfig
+import org.apache.kafka.storage.internals.log.LogConfig
 import org.apache.zookeeper.KeeperException.Code
 import org.apache.zookeeper.data.Stat
 import org.junit.jupiter.api.Assertions._

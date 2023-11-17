@@ -25,6 +25,7 @@ import org.apache.kafka.connect.runtime.Herder;
 import org.apache.kafka.connect.runtime.WorkerConfig;
 import org.apache.kafka.connect.runtime.WorkerInfo;
 import org.apache.kafka.connect.runtime.isolation.Plugins;
+import org.apache.kafka.connect.runtime.rest.ConnectRestServer;
 import org.apache.kafka.connect.runtime.rest.RestClient;
 import org.apache.kafka.connect.runtime.rest.RestServer;
 import org.slf4j.Logger;
@@ -124,7 +125,7 @@ public abstract class AbstractConnectCli<T extends WorkerConfig> {
 
         RestClient restClient = new RestClient(config);
 
-        RestServer restServer = new RestServer(config, restClient);
+        ConnectRestServer restServer = new ConnectRestServer(config.rebalanceTimeout(), restClient, workerProps);
         restServer.initializeServer();
 
         URI advertisedUrl = restServer.advertisedUrl();

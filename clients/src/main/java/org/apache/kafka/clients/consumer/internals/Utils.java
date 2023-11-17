@@ -22,11 +22,11 @@ import java.util.List;
 import java.util.Map;
 import org.apache.kafka.common.TopicPartition;
 
-final class Utils {
+public final class Utils {
 
     final static class PartitionComparator implements Comparator<TopicPartition>, Serializable {
         private static final long serialVersionUID = 1L;
-        private Map<String, List<String>> map;
+        private final Map<String, List<String>> map;
 
         PartitionComparator(Map<String, List<String>> map) {
             this.map = map;
@@ -44,7 +44,7 @@ final class Utils {
         }
     }
 
-    final static class TopicPartitionComparator implements Comparator<TopicPartition>, Serializable {
+    public final static class TopicPartitionComparator implements Comparator<TopicPartition>, Serializable {
         private static final long serialVersionUID = 1L;
 
         @Override

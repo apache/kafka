@@ -24,9 +24,7 @@ import java.nio.channels.{Selector => NSelector, _}
 import java.util
 import java.util.concurrent._
 import java.util.concurrent.atomic._
-
 import kafka.cluster.{BrokerEndPoint, EndPoint}
-import kafka.metrics.KafkaMetricsGroup
 import kafka.network.ConnectionQuotas._
 import kafka.network.Processor._
 import kafka.network.RequestChannel.{CloseConnectionResponse, EndThrottlingResponse, NoOpResponse, SendResponse, StartThrottlingResponse}
@@ -48,6 +46,8 @@ import org.apache.kafka.common.requests.{ApiVersionsRequest, RequestContext, Req
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.utils.{KafkaThread, LogContext, Time, Utils}
 import org.apache.kafka.common.{Endpoint, KafkaException, MetricName, Reconfigurable}
+import org.apache.kafka.server.metrics.KafkaMetricsGroup
+import org.apache.kafka.server.util.FutureUtils
 import org.slf4j.event.Level
 
 import scala.collection._
@@ -78,7 +78,9 @@ class SocketServer(val config: KafkaConfig,
                    val time: Time,
                    val credentialProvider: CredentialProvider,
                    val apiVersionManager: ApiVersionManager)
-  extends Logging with KafkaMetricsGroup with BrokerReconfigurable {
+  extends Logging with BrokerReconfigurable {
+
+  private val metricsGroup = new KafkaMetricsGroup(this.getClass)
 
   private val maxQueuedRequests = config.queuedMaxRequests
 
@@ -115,7 +117,7 @@ class SocketServer(val config: KafkaConfig,
   private var stopped = false
 
   // Socket server metrics
-  newGauge(s"${DataPlaneAcceptor.MetricPrefix}NetworkProcessorAvgIdlePercent", () => SocketServer.this.synchronized {
+  metricsGroup.newGauge(s"${DataPlaneAcceptor.MetricPrefix}NetworkProcessorAvgIdlePercent", () => SocketServer.this.synchronized {
     val dataPlaneProcessors = dataPlaneAcceptors.asScala.values.flatMap(a => a.processors)
     val ioWaitRatioMetricNames = dataPlaneProcessors.map { p =>
       metrics.metricName("io-wait-ratio", MetricsGroup, p.metricTags)
@@ -129,7 +131,7 @@ class SocketServer(val config: KafkaConfig,
     }
   })
   if (config.requiresZookeeper) {
-    newGauge(s"${ControlPlaneAcceptor.MetricPrefix}NetworkProcessorAvgIdlePercent", () => SocketServer.this.synchronized {
+    metricsGroup.newGauge(s"${ControlPlaneAcceptor.MetricPrefix}NetworkProcessorAvgIdlePercent", () => SocketServer.this.synchronized {
       val controlPlaneProcessorOpt = controlPlaneAcceptorOpt.map(a => a.processors(0))
       val ioWaitRatioMetricName = controlPlaneProcessorOpt.map { p =>
         metrics.metricName("io-wait-ratio", MetricsGroup, p.metricTags)
@@ -139,9 +141,9 @@ class SocketServer(val config: KafkaConfig,
       }.getOrElse(Double.NaN)
     })
   }
-  newGauge("MemoryPoolAvailable", () => memoryPool.availableMemory)
-  newGauge("MemoryPoolUsed", () => memoryPool.size() - memoryPool.availableMemory)
-  newGauge(s"${DataPlaneAcceptor.MetricPrefix}ExpiredConnectionsKilledCount", () => SocketServer.this.synchronized {
+  metricsGroup.newGauge("MemoryPoolAvailable", () => memoryPool.availableMemory)
+  metricsGroup.newGauge("MemoryPoolUsed", () => memoryPool.size() - memoryPool.availableMemory)
+  metricsGroup.newGauge(s"${DataPlaneAcceptor.MetricPrefix}ExpiredConnectionsKilledCount", () => SocketServer.this.synchronized {
     val dataPlaneProcessors = dataPlaneAcceptors.asScala.values.flatMap(a => a.processors)
     val expiredConnectionsKilledCountMetricNames = dataPlaneProcessors.map { p =>
       metrics.metricName("expired-connections-killed-count", MetricsGroup, p.metricTags)
@@ -151,7 +153,7 @@ class SocketServer(val config: KafkaConfig,
     }.sum
   })
   if (config.requiresZookeeper) {
-    newGauge(s"${ControlPlaneAcceptor.MetricPrefix}ExpiredConnectionsKilledCount", () => SocketServer.this.synchronized {
+    metricsGroup.newGauge(s"${ControlPlaneAcceptor.MetricPrefix}ExpiredConnectionsKilledCount", () => SocketServer.this.synchronized {
       val controlPlaneProcessorOpt = controlPlaneAcceptorOpt.map(a => a.processors(0))
       val expiredConnectionsKilledCountMetricNames = controlPlaneProcessorOpt.map { p =>
         metrics.metricName("expired-connections-killed-count", MetricsGroup, p.metricTags)
@@ -189,10 +191,14 @@ class SocketServer(val config: KafkaConfig,
    *                              processor corresponding to the [[EndPoint]]. Any endpoint
    *                              that does not appear in this map will be started once all
    *                              authorizerFutures are complete.
+   *
+   * @return                      A future which is completed when all of the acceptor threads have
+   *                              successfully started. If any of them do not start, the future will
+   *                              be completed with an exception.
    */
   def enableRequestProcessing(
     authorizerFutures: Map[Endpoint, CompletableFuture[Void]]
-  ): Unit = this.synchronized {
+  ): CompletableFuture[Void] = this.synchronized {
     if (stopped) {
       throw new RuntimeException("Can't enable request processing: SocketServer is stopped.")
     }
@@ -200,19 +206,36 @@ class SocketServer(val config: KafkaConfig,
     def chainAcceptorFuture(acceptor: Acceptor): Unit = {
       // Because of ephemeral ports, we need to match acceptors to futures by looking at
       // the listener name, rather than the endpoint object.
-      authorizerFutures.find {
+      val authorizerFuture = authorizerFutures.find {
         case (endpoint, _) => acceptor.endPoint.listenerName.value().equals(endpoint.listenerName().get())
       } match {
-        case None => chainFuture(allAuthorizerFuturesComplete, acceptor.startFuture)
-        case Some((_, future)) => chainFuture(future, acceptor.startFuture)
+        case None => allAuthorizerFuturesComplete
+        case Some((_, future)) => future
       }
+      authorizerFuture.whenComplete((_, e) => {
+        if (e != null) {
+          // If the authorizer failed to start, fail the acceptor's startedFuture.
+          acceptor.startedFuture.completeExceptionally(e)
+        } else {
+          // Once the authorizer has started, attempt to start the associated acceptor. The Acceptor.start()
+          // function will complete the acceptor started future (either successfully or not)
+          acceptor.start()
+        }
+      })
     }
 
     info("Enabling request processing.")
     controlPlaneAcceptorOpt.foreach(chainAcceptorFuture)
     dataPlaneAcceptors.values().forEach(chainAcceptorFuture)
-    chainFuture(CompletableFuture.allOf(authorizerFutures.values.toArray: _*),
+    FutureUtils.chainFuture(CompletableFuture.allOf(authorizerFutures.values.toArray: _*),
         allAuthorizerFuturesComplete)
+
+    // Construct a future that will be completed when all Acceptors have been successfully started.
+    // Alternately, if any of them fail to start, this future will be completed exceptionally.
+    val allAcceptors = dataPlaneAcceptors.values().asScala.toSeq ++ controlPlaneAcceptorOpt
+    val enableFuture = new CompletableFuture[Void]
+    FutureUtils.chainFuture(CompletableFuture.allOf(allAcceptors.map(_.startedFuture).toArray: _*), enableFuture)
+    enableFuture
   }
 
   def createDataPlaneAcceptorAndProcessors(endpoint: EndPoint): Unit = synchronized {
@@ -289,13 +312,13 @@ class SocketServer(val config: KafkaConfig,
     try {
       val acceptor = dataPlaneAcceptors.get(endpoints(listenerName))
       if (acceptor != null) {
-        acceptor.serverChannel.socket.getLocalPort
+        acceptor.localPort
       } else {
-        controlPlaneAcceptorOpt.map(_.serverChannel.socket().getLocalPort).getOrElse(throw new KafkaException("Could not find listenerName : " + listenerName + " in data-plane or control-plane"))
+        controlPlaneAcceptorOpt.map(_.localPort).getOrElse(throw new KafkaException("Could not find listenerName : " + listenerName + " in data-plane or control-plane"))
       }
     } catch {
       case e: Exception =>
-        throw new KafkaException("Tried to check server's port before server was started or checked for port of non-existing protocol", e)
+        throw new KafkaException("Tried to check for port of non-existing protocol", e)
     }
   }
 
@@ -312,7 +335,13 @@ class SocketServer(val config: KafkaConfig,
       val acceptor = dataPlaneAcceptors.get(endpoint)
       // There is no authorizer future for this new listener endpoint. So start the
       // listener once all authorizer futures are complete.
-      chainFuture(allAuthorizerFuturesComplete, acceptor.startFuture)
+      allAuthorizerFuturesComplete.whenComplete((_, e) => {
+        if (e != null) {
+          acceptor.startedFuture.completeExceptionally(e)
+        } else {
+          acceptor.start()
+        }
+      })
     }
   }
 
@@ -323,6 +352,7 @@ class SocketServer(val config: KafkaConfig,
       dataPlaneAcceptors.asScala.remove(endpoint).foreach { acceptor =>
         acceptor.beginShutdown()
         acceptor.close()
+        config.removeReconfigurable(acceptor)
       }
     }
   }
@@ -387,15 +417,6 @@ object SocketServer {
   ): Unit = {
     CoreUtils.swallow(channel.socket().close(), logging, Level.ERROR)
     CoreUtils.swallow(channel.close(), logging, Level.ERROR)
-  }
-
-  def chainFuture(sourceFuture: CompletableFuture[Void],
-                  destinationFuture: CompletableFuture[Void]): Unit = {
-    sourceFuture.whenComplete((_, t) => if (t != null) {
-      destinationFuture.completeExceptionally(t)
-    } else {
-      destinationFuture.complete(null)
-    })
   }
 }
 
@@ -561,7 +582,9 @@ private[kafka] abstract class Acceptor(val socketServer: SocketServer,
                                        logContext: LogContext,
                                        memoryPool: MemoryPool,
                                        apiVersionManager: ApiVersionManager)
-  extends Runnable with Logging with KafkaMetricsGroup {
+  extends Runnable with Logging {
+
+  private val metricsGroup = new KafkaMetricsGroup(this.getClass)
 
   val shouldRun = new AtomicBoolean(true)
 
@@ -573,35 +596,62 @@ private[kafka] abstract class Acceptor(val socketServer: SocketServer,
   private val listenBacklogSize = config.socketListenBacklogSize
 
   private val nioSelector = NSelector.open()
-  private[network] val serverChannel = openServerSocket(endPoint.host, endPoint.port, listenBacklogSize)
+
+  // If the port is configured as 0, we are using a wildcard port, so we need to open the socket
+  // before we can find out what port we have. If it is set to a nonzero value, defer opening
+  // the socket until we start the Acceptor. The reason for deferring the socket opening is so
+  // that systems which assume that the socket being open indicates readiness are not confused.
+  private[network] var serverChannel: ServerSocketChannel  = _
+  private[network] val localPort: Int  = if (endPoint.port != 0) {
+    endPoint.port
+  } else {
+    serverChannel = openServerSocket(endPoint.host, endPoint.port, listenBacklogSize)
+    val newPort = serverChannel.socket().getLocalPort()
+    info(s"Opened wildcard endpoint ${endPoint.host}:${newPort}")
+    newPort
+  }
+
   private[network] val processors = new ArrayBuffer[Processor]()
   // Build the metric name explicitly in order to keep the existing name for compatibility
-  private val blockedPercentMeterMetricName = explicitMetricName(
+  private val blockedPercentMeterMetricName = KafkaMetricsGroup.explicitMetricName(
     "kafka.network",
     "Acceptor",
     s"${metricPrefix()}AcceptorBlockedPercent",
-    Map(ListenerMetricTag -> endPoint.listenerName.value))
-  private val blockedPercentMeter = newMeter(blockedPercentMeterMetricName,"blocked time", TimeUnit.NANOSECONDS)
+    Map(ListenerMetricTag -> endPoint.listenerName.value).asJava)
+  private val blockedPercentMeter = metricsGroup.newMeter(blockedPercentMeterMetricName,"blocked time", TimeUnit.NANOSECONDS)
   private var currentProcessorIndex = 0
   private[network] val throttledSockets = new mutable.PriorityQueue[DelayedCloseSocket]()
   private var started = false
-  private[network] val startFuture = new CompletableFuture[Void]()
+  private[network] val startedFuture = new CompletableFuture[Void]()
 
   val thread = KafkaThread.nonDaemon(
     s"${threadPrefix()}-kafka-socket-acceptor-${endPoint.listenerName}-${endPoint.securityProtocol}-${endPoint.port}",
     this)
 
-  startFuture.thenRun(() => synchronized {
-    if (!shouldRun.get()) {
-      debug(s"Ignoring start future for ${endPoint.listenerName} since the acceptor has already been shut down.")
-    } else {
+  def start(): Unit = synchronized {
+    try {
+      if (!shouldRun.get()) {
+        throw new ClosedChannelException()
+      }
+      if (serverChannel == null) {
+        serverChannel = openServerSocket(endPoint.host, endPoint.port, listenBacklogSize)
+        debug(s"Opened endpoint ${endPoint.host}:${endPoint.port}")
+      }
       debug(s"Starting processors for listener ${endPoint.listenerName}")
-      started = true
       processors.foreach(_.start())
       debug(s"Starting acceptor thread for listener ${endPoint.listenerName}")
       thread.start()
+      startedFuture.complete(null)
+      started = true
+    } catch {
+      case e: ClosedChannelException =>
+        debug(s"Refusing to start acceptor for ${endPoint.listenerName} since the acceptor has already been shut down.")
+        startedFuture.completeExceptionally(e)
+      case t: Throwable =>
+        error(s"Unable to start acceptor for ${endPoint.listenerName}", t)
+        startedFuture.completeExceptionally(new RuntimeException(s"Unable to start acceptor for ${endPoint.listenerName}", t))
     }
-  })
+  }
 
   private[network] case class DelayedCloseSocket(socket: SocketChannel, endThrottleTimeMs: Long) extends Ordered[DelayedCloseSocket] {
     override def compare(that: DelayedCloseSocket): Int = endThrottleTimeMs compare that.endThrottleTimeMs
@@ -866,7 +916,9 @@ private[kafka] class Processor(
   isPrivilegedListener: Boolean,
   apiVersionManager: ApiVersionManager,
   threadName: String
-) extends Runnable with KafkaMetricsGroup {
+) extends Runnable with Logging {
+  private val metricsGroup = new KafkaMetricsGroup(this.getClass)
+
   val shouldRun = new AtomicBoolean(true)
 
   val thread = KafkaThread.nonDaemon(threadName, this)
@@ -895,13 +947,13 @@ private[kafka] class Processor(
     NetworkProcessorMetricTag -> id.toString
   ).asJava
 
-  newGauge(IdlePercentMetricName, () => {
+  metricsGroup.newGauge(IdlePercentMetricName, () => {
     Option(metrics.metric(metrics.metricName("io-wait-ratio", MetricsGroup, metricTags))).fold(0.0)(m =>
       Math.min(m.metricValue.asInstanceOf[Double], 1.0))
   },
     // for compatibility, only add a networkProcessor tag to the Yammer Metrics alias (the equivalent Selector metric
     // also includes the listener name)
-    Map(NetworkProcessorMetricTag -> id.toString)
+    Map(NetworkProcessorMetricTag -> id.toString).asJava
   )
 
   val expiredConnectionsKilledCount = new CumulativeSum()
@@ -1063,10 +1115,10 @@ private[kafka] class Processor(
 
   protected def parseRequestHeader(buffer: ByteBuffer): RequestHeader = {
     val header = RequestHeader.parse(buffer)
-    if (apiVersionManager.isApiEnabled(header.apiKey)) {
+    if (apiVersionManager.isApiEnabled(header.apiKey, header.apiVersion)) {
       header
     } else {
-      throw new InvalidRequestException(s"Received request api key ${header.apiKey} which is not enabled")
+      throw new InvalidRequestException(s"Received request api key ${header.apiKey} with version ${header.apiVersion} which is not enabled")
     }
   }
 
@@ -1130,10 +1182,11 @@ private[kafka] class Processor(
         val response = inflightResponses.remove(send.destinationId).getOrElse {
           throw new IllegalStateException(s"Send for ${send.destinationId} completed, but not in `inflightResponses`")
         }
-        updateRequestMetrics(response)
-
-        // Invoke send completion callback
+        
+        // Invoke send completion callback, and then update request metrics since there might be some
+        // request metrics got updated during callback
         response.onComplete.foreach(onComplete => onComplete(send))
+        updateRequestMetrics(response)
 
         // Try unmuting the channel. If there was no quota violation and the channel has not been throttled,
         // it will be unmuted immediately. If the channel has been throttled, it will unmuted only if the throttling
@@ -1253,7 +1306,7 @@ private[kafka] class Processor(
       close(channel.id)
     }
     selector.close()
-    removeMetric(IdlePercentMetricName, Map(NetworkProcessorMetricTag -> id.toString))
+    metricsGroup.removeMetric(IdlePercentMetricName, Map(NetworkProcessorMetricTag -> id.toString).asJava)
   }
 
   // 'protected` to allow override for testing
@@ -1321,7 +1374,7 @@ private[kafka] class Processor(
       beginShutdown()
       thread.join()
     } finally {
-      removeMetric("IdlePercent", Map("networkProcessor" -> id.toString))
+      metricsGroup.removeMetric("IdlePercent", Map("networkProcessor" -> id.toString).asJava)
       metrics.removeMetric(expiredConnectionsKilledCountMetricName)
     }
   }

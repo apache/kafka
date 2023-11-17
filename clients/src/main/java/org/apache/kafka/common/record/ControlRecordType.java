@@ -60,10 +60,14 @@ public enum ControlRecordType {
             new Field("version", Type.INT16),
             new Field("type", Type.INT16));
 
-    final short type;
+    private final short type;
 
     ControlRecordType(short type) {
         this.type = type;
+    }
+
+    public short type() {
+        return type;
     }
 
     public Struct recordKey() {

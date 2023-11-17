@@ -82,6 +82,11 @@ public class TxnOffsetCommitRequest extends AbstractRequest {
                             .setGroupInstanceId(groupInstanceId.orElse(null));
         }
 
+        public Builder(final TxnOffsetCommitRequestData data) {
+            super(ApiKeys.TXN_OFFSET_COMMIT);
+            this.data = data;
+        }
+
         @Override
         public TxnOffsetCommitRequest build(short version) {
             if (version < 3 && groupMetadataSet()) {
@@ -177,6 +182,30 @@ public class TxnOffsetCommitRequest extends AbstractRequest {
         return new TxnOffsetCommitResponse(new TxnOffsetCommitResponseData()
                                                .setThrottleTimeMs(throttleTimeMs)
                                                .setTopics(responseTopicData));
+    }
+
+    @Override
+    public TxnOffsetCommitResponse getErrorResponse(Throwable e) {
+        return getErrorResponse(AbstractResponse.DEFAULT_THROTTLE_TIME, e);
+    }
+
+    public static TxnOffsetCommitResponseData getErrorResponse(
+        TxnOffsetCommitRequestData request,
+        Errors error
+    ) {
+        TxnOffsetCommitResponseData response = new TxnOffsetCommitResponseData();
+        request.topics().forEach(topic -> {
+            TxnOffsetCommitResponseData.TxnOffsetCommitResponseTopic responseTopic = new TxnOffsetCommitResponseData.TxnOffsetCommitResponseTopic()
+                .setName(topic.name());
+            response.topics().add(responseTopic);
+
+            topic.partitions().forEach(partition -> {
+                responseTopic.partitions().add(new TxnOffsetCommitResponseData.TxnOffsetCommitResponsePartition()
+                    .setPartitionIndex(partition.partitionIndex())
+                    .setErrorCode(error.code()));
+            });
+        });
+        return response;
     }
 
     public static TxnOffsetCommitRequest parse(ByteBuffer buffer, short version) {

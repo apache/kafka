@@ -36,6 +36,7 @@ import static org.apache.kafka.common.config.ConfigResource.Type.TOPIC;
 import static org.apache.kafka.server.config.ConfigSynonym.HOURS_TO_MILLISECONDS;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 
@@ -97,6 +98,8 @@ public class KafkaConfigSchemaTest {
             DescribeConfigsResponse.ConfigSource.DYNAMIC_DEFAULT_BROKER_CONFIG);
         testTranslateConfigSource(ConfigEntry.ConfigSource.STATIC_BROKER_CONFIG,
             DescribeConfigsResponse.ConfigSource.STATIC_BROKER_CONFIG);
+        testTranslateConfigSource(ConfigEntry.ConfigSource.DYNAMIC_CLIENT_METRICS_CONFIG,
+            DescribeConfigsResponse.ConfigSource.CLIENT_METRICS_CONFIG);
         testTranslateConfigSource(ConfigEntry.ConfigSource.DEFAULT_CONFIG,
             DescribeConfigsResponse.ConfigSource.DEFAULT_CONFIG);
     }
@@ -118,8 +121,8 @@ public class KafkaConfigSchemaTest {
     @Test
     public void testGetConfigValueDefault() {
         assertEquals("1", SCHEMA.getDefault(BROKER, "foo.bar"));
-        assertEquals(null, SCHEMA.getDefault(BROKER, "foo.baz.quux"));
-        assertEquals(null, SCHEMA.getDefault(TOPIC, "abc"));
+        assertNull(SCHEMA.getDefault(BROKER, "foo.baz.quux"));
+        assertNull(SCHEMA.getDefault(TOPIC, "abc"));
         assertEquals("true", SCHEMA.getDefault(TOPIC, "ghi"));
     }
 

@@ -23,11 +23,11 @@ import java.nio.ByteBuffer
 import java.nio.channels.{SelectionKey, SocketChannel}
 import java.nio.charset.StandardCharsets
 import java.util
-import java.util.concurrent.{CompletableFuture, ConcurrentLinkedQueue, Executors, TimeUnit}
-import java.util.{Properties, Random}
-
+import java.util.concurrent.{CompletableFuture, ConcurrentLinkedQueue, ExecutionException, Executors, TimeUnit}
+import java.util.{Collections, Properties, Random}
 import com.fasterxml.jackson.databind.node.{JsonNodeFactory, ObjectNode, TextNode}
 import com.yammer.metrics.core.{Gauge, Meter}
+
 import javax.net.ssl._
 import kafka.cluster.EndPoint
 import kafka.security.CredentialProvider
@@ -46,12 +46,13 @@ import org.apache.kafka.common.requests._
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
 import org.apache.kafka.common.security.scram.internals.ScramMechanism
 import org.apache.kafka.common.utils.{AppInfoParser, LogContext, MockTime, Time, Utils}
+import org.apache.kafka.server.common.{Features, MetadataVersion}
 import org.apache.kafka.test.{TestSslUtils, TestUtils => JTestUtils}
 import org.apache.log4j.Level
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api._
-import java.util.concurrent.atomic.AtomicInteger
 
+import java.util.concurrent.atomic.AtomicInteger
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
 
 import scala.collection.mutable
@@ -77,9 +78,9 @@ class SocketServerTest {
   // Clean-up any metrics left around by previous tests
   TestUtils.clearYammerMetrics()
 
-  private val apiVersionManager = new SimpleApiVersionManager(ListenerType.ZK_BROKER)
+  private val apiVersionManager = new SimpleApiVersionManager(ListenerType.BROKER, true, false,
+    () => new Features(MetadataVersion.latest(), Collections.emptyMap[String, java.lang.Short], 0, true))
   val server = new SocketServer(config, metrics, Time.SYSTEM, credentialProvider, apiVersionManager)
-  server.enableRequestProcessing(Map.empty)
   val sockets = new ArrayBuffer[Socket]
 
   private val kafkaLogger = org.apache.log4j.LogManager.getLogger("kafka")
@@ -92,6 +93,7 @@ class SocketServerTest {
 
   @BeforeEach
   def setUp(): Unit = {
+    server.enableRequestProcessing(Map.empty).get(1, TimeUnit.MINUTES)
     // Run the tests with TRACE logging to exercise request logging path
     logLevelToRestore = kafkaLogger.getLevel
     kafkaLogger.setLevel(Level.TRACE)
@@ -137,6 +139,8 @@ class SocketServerTest {
   private def receiveRequest(channel: RequestChannel, timeout: Long = 2000L): RequestChannel.Request = {
     channel.receiveRequest(timeout) match {
       case request: RequestChannel.Request => request
+      case RequestChannel.WakeupRequest => throw new AssertionError("Unexpected wakeup received")
+      case request: RequestChannel.CallbackRequest => throw new AssertionError("Unexpected callback received")
       case RequestChannel.ShutdownRequest => throw new AssertionError("Unexpected shutdown received")
       case null => throw new AssertionError("receiveRequest timed out")
     }
@@ -162,7 +166,18 @@ class SocketServerTest {
               listenerName: ListenerName = ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT),
               localAddr: InetAddress = null,
               port: Int = 0): Socket = {
-    val socket = new Socket("localhost", s.boundPort(listenerName), localAddr, port)
+    val boundPort = try {
+      s.boundPort(listenerName)
+    } catch {
+      case e: Throwable => throw new RuntimeException("Unable to find bound port for listener " +
+        s"${listenerName}", e)
+    }
+    val socket = try {
+      new Socket("localhost", boundPort, localAddr, port)
+    } catch {
+      case e: Throwable => throw new RuntimeException(s"Unable to connect to remote port ${boundPort} " +
+        s"with local port ${port} on listener ${listenerName}", e)
+    }
     sockets += socket
     socket
   }
@@ -337,13 +352,14 @@ class SocketServerTest {
       val futures = Map(
         externalEndpoint -> externalReadyFuture,
         controlPlaneEndpoint -> CompletableFuture.completedFuture[Void](null))
-      testableServer.enableRequestProcessing(futures)
+      val requestProcessingFuture = testableServer.enableRequestProcessing(futures)
       TestUtils.waitUntilTrue(() => controlPlaneListenerStarted(), "Control plane listener not started")
       assertFalse(listenerStarted(config.interBrokerListenerName))
       assertFalse(listenerStarted(externalListener))
       externalReadyFuture.complete(null)
       TestUtils.waitUntilTrue(() => listenerStarted(config.interBrokerListenerName), "Inter-broker listener not started")
       TestUtils.waitUntilTrue(() => listenerStarted(externalListener), "External listener not started")
+      requestProcessingFuture.get(1, TimeUnit.MINUTES)
     } finally {
       shutdownServerAndMetrics(testableServer)
     }
@@ -361,6 +377,7 @@ class SocketServerTest {
     val config = KafkaConfig.fromProps(testProps)
     val connectionQueueSize = 1
     val testableServer = new TestableSocketServer(config, connectionQueueSize)
+    testableServer.enableRequestProcessing(Map()).get(1, TimeUnit.MINUTES)
 
     val socket1 = connect(testableServer, new ListenerName("EXTERNAL"), localAddr = InetAddress.getLocalHost)
     sendRequest(socket1, producerRequestBytes())
@@ -466,7 +483,7 @@ class SocketServerTest {
       time, credentialProvider, apiVersionManager)
 
     try {
-      overrideServer.enableRequestProcessing(Map.empty)
+      overrideServer.enableRequestProcessing(Map.empty).get(1, TimeUnit.MINUTES)
       val serializedBytes = producerRequestBytes()
 
       // Connection with no outstanding requests
@@ -534,7 +551,7 @@ class SocketServerTest {
     }
 
     try {
-      overrideServer.enableRequestProcessing(Map.empty)
+      overrideServer.enableRequestProcessing(Map.empty).get(1, TimeUnit.MINUTES)
       overrideServer.testableProcessor.setConnectionId(overrideConnectionId)
       val socket1 = connectAndWaitForConnectionRegister()
       TestUtils.waitUntilTrue(() => connectionCount == 1 && openChannel.isDefined, "Failed to create channel")
@@ -803,7 +820,7 @@ class SocketServerTest {
     val server = new SocketServer(KafkaConfig.fromProps(newProps), new Metrics(),
       Time.SYSTEM, credentialProvider, apiVersionManager)
     try {
-      server.enableRequestProcessing(Map.empty)
+      server.enableRequestProcessing(Map.empty).get(1, TimeUnit.MINUTES)
       // make the maximum allowable number of connections
       val conns = (0 until 5).map(_ => connect(server))
       // now try one more (should fail)
@@ -842,7 +859,7 @@ class SocketServerTest {
     val overrideServer = new SocketServer(KafkaConfig.fromProps(overrideProps), serverMetrics,
       Time.SYSTEM, credentialProvider, apiVersionManager)
     try {
-      overrideServer.enableRequestProcessing(Map.empty)
+      overrideServer.enableRequestProcessing(Map.empty).get(1, TimeUnit.MINUTES)
       // make the maximum allowable number of connections
       val conns = (0 until overrideNum).map(_ => connect(overrideServer))
 
@@ -872,7 +889,7 @@ class SocketServerTest {
       // except the Acceptor overriding a method to inject the exception
       override protected def createDataPlaneAcceptor(endPoint: EndPoint, isPrivilegedListener: Boolean, requestChannel: RequestChannel): DataPlaneAcceptor = {
 
-        new DataPlaneAcceptor(this, endPoint, config, nodeId, connectionQuotas, time, false, requestChannel, serverMetrics, credentialProvider, new LogContext(), MemoryPool.NONE, apiVersionManager) {
+        new DataPlaneAcceptor(this, endPoint, this.config, nodeId, connectionQuotas, time, false, requestChannel, serverMetrics, this.credentialProvider, new LogContext(), MemoryPool.NONE, this.apiVersionManager) {
           override protected def configureAcceptedSocketChannel(socketChannel: SocketChannel): Unit = {
             assertEquals(1, connectionQuotas.get(socketChannel.socket.getInetAddress))
             throw new IOException("test injected IOException")
@@ -882,7 +899,7 @@ class SocketServerTest {
     }
 
     try {
-      overrideServer.enableRequestProcessing(Map.empty)
+      overrideServer.enableRequestProcessing(Map.empty).get(1, TimeUnit.MINUTES)
       val conn = connect(overrideServer)
       conn.setSoTimeout(3000)
       assertEquals(-1, conn.getInputStream.read())
@@ -905,7 +922,7 @@ class SocketServerTest {
     // update the connection rate to 5
     overrideServer.connectionQuotas.updateIpConnectionRateQuota(None, Some(connectionRate))
     try {
-      overrideServer.enableRequestProcessing(Map.empty)
+      overrideServer.enableRequestProcessing(Map.empty).get(1, TimeUnit.MINUTES)
       // make the (maximum allowable number + 1) of connections
       (0 to connectionRate).map(_ => connect(overrideServer))
 
@@ -954,7 +971,7 @@ class SocketServerTest {
     val overrideServer = new SocketServer(KafkaConfig.fromProps(overrideProps), new Metrics(),
       time, credentialProvider, apiVersionManager)
     overrideServer.connectionQuotas.updateIpConnectionRateQuota(None, Some(connectionRate))
-    overrideServer.enableRequestProcessing(Map.empty)
+    overrideServer.enableRequestProcessing(Map.empty).get(1, TimeUnit.MINUTES)
     // make the maximum allowable number of connections
     (0 until connectionRate).map(_ => connect(overrideServer))
     // now try one more (should get throttled)
@@ -977,7 +994,7 @@ class SocketServerTest {
     val overrideServer = new SocketServer(KafkaConfig.fromProps(sslServerProps), serverMetrics,
       Time.SYSTEM, credentialProvider, apiVersionManager)
     try {
-      overrideServer.enableRequestProcessing(Map.empty)
+      overrideServer.enableRequestProcessing(Map.empty).get(1, TimeUnit.MINUTES)
       val sslContext = SSLContext.getInstance(TestSslUtils.DEFAULT_TLS_PROTOCOL_FOR_TESTS)
       sslContext.init(null, Array(TestUtils.trustAllCerts), new java.security.SecureRandom())
       val socketFactory = sslContext.getSocketFactory
@@ -1036,7 +1053,7 @@ class SocketServerTest {
     val time = new MockTime()
     val overrideServer = new TestableSocketServer(KafkaConfig.fromProps(overrideProps), time = time)
     try {
-      overrideServer.enableRequestProcessing(Map.empty)
+      overrideServer.enableRequestProcessing(Map.empty).get(1, TimeUnit.MINUTES)
       val socket = connect(overrideServer, ListenerName.forSecurityProtocol(SecurityProtocol.SASL_PLAINTEXT))
 
       val correlationId = -1
@@ -1116,7 +1133,7 @@ class SocketServerTest {
     val overrideServer = new TestableSocketServer(KafkaConfig.fromProps(props))
 
     try {
-      overrideServer.enableRequestProcessing(Map.empty)
+      overrideServer.enableRequestProcessing(Map.empty).get(1, TimeUnit.MINUTES)
       val conn: Socket = connect(overrideServer)
       overrideServer.testableProcessor.closeSocketOnSendResponse(conn)
       val serializedBytes = producerRequestBytes()
@@ -1148,7 +1165,7 @@ class SocketServerTest {
     val overrideServer = new TestableSocketServer(KafkaConfig.fromProps(props))
 
     try {
-      overrideServer.enableRequestProcessing(Map.empty)
+      overrideServer.enableRequestProcessing(Map.empty).get(1, TimeUnit.MINUTES)
       val selector = overrideServer.testableSelector
 
       // Create a channel, send some requests and close socket. Receive one pending request after socket was closed.
@@ -1176,7 +1193,7 @@ class SocketServerTest {
     val overrideServer = new SocketServer(KafkaConfig.fromProps(props), serverMetrics,
       Time.SYSTEM, credentialProvider, apiVersionManager)
     try {
-      overrideServer.enableRequestProcessing(Map.empty)
+      overrideServer.enableRequestProcessing(Map.empty).get(1, TimeUnit.MINUTES)
       conn = connect(overrideServer)
       val serializedBytes = producerRequestBytes()
       sendRequest(conn, serializedBytes)
@@ -1557,7 +1574,7 @@ class SocketServerTest {
     props.put(KafkaConfig.ConnectionsMaxIdleMsProp, idleTimeMs.toString)
     props ++= sslServerProps
     val testableServer = new TestableSocketServer(time = time)
-    testableServer.enableRequestProcessing(Map.empty)
+    testableServer.enableRequestProcessing(Map.empty).get(1, TimeUnit.MINUTES)
 
     assertTrue(testableServer.controlPlaneRequestChannelOpt.isEmpty)
 
@@ -1593,7 +1610,7 @@ class SocketServerTest {
     val time = new MockTime()
     props ++= sslServerProps
     val testableServer = new TestableSocketServer(time = time)
-    testableServer.enableRequestProcessing(Map.empty)
+    testableServer.enableRequestProcessing(Map.empty).get(1, TimeUnit.MINUTES)
     val proxyServer = new ProxyServer(testableServer)
     try {
       val testableSelector = testableServer.testableSelector
@@ -1739,7 +1756,7 @@ class SocketServerTest {
     val numConnections = 5
     props.put("max.connections.per.ip", numConnections.toString)
     val testableServer = new TestableSocketServer(KafkaConfig.fromProps(props), connectionQueueSize = 1)
-    testableServer.enableRequestProcessing(Map.empty)
+    testableServer.enableRequestProcessing(Map.empty).get(1, TimeUnit.MINUTES)
     val testableSelector = testableServer.testableSelector
     val errors = new mutable.HashSet[String]
 
@@ -1888,7 +1905,7 @@ class SocketServerTest {
 
     props ++= sslServerProps
     val testableServer = new TestableSocketServer(KafkaConfig.fromProps(props))
-    testableServer.enableRequestProcessing(Map.empty)
+    testableServer.enableRequestProcessing(Map.empty).get(1, TimeUnit.MINUTES)
     val testableSelector = testableServer.testableSelector
     val proxyServer = new ProxyServer(testableServer)
     val selectTimeoutMs = 5000
@@ -1916,11 +1933,65 @@ class SocketServerTest {
     }
   }
 
+  @Test
+  def testAuthorizerFailureCausesEnableRequestProcessingFailure(): Unit = {
+    shutdownServerAndMetrics(server)
+    val newServer = new SocketServer(config, metrics, Time.SYSTEM, credentialProvider, apiVersionManager)
+    try {
+      val failedFuture = new CompletableFuture[Void]()
+      failedFuture.completeExceptionally(new RuntimeException("authorizer startup failed"))
+      assertThrows(classOf[ExecutionException], () => {
+        newServer.enableRequestProcessing(Map(endpoint.toJava -> failedFuture)).get()
+      })
+    } finally {
+      shutdownServerAndMetrics(newServer)
+    }
+  }
+
+  @Test
+  def testFailedAcceptorStartupCausesEnableRequestProcessingFailure(): Unit = {
+    shutdownServerAndMetrics(server)
+    val newServer = new SocketServer(config, metrics, Time.SYSTEM, credentialProvider, apiVersionManager)
+    try {
+      newServer.dataPlaneAcceptors.values().forEach(a => a.shouldRun.set(false))
+      assertThrows(classOf[ExecutionException], () => {
+        newServer.enableRequestProcessing(Map()).get()
+      })
+    } finally {
+      shutdownServerAndMetrics(newServer)
+    }
+  }
+
+  @Test
+  def testAcceptorStartOpensPortIfNeeded(): Unit = {
+    shutdownServerAndMetrics(server)
+    val newServer = new SocketServer(config, metrics, Time.SYSTEM, credentialProvider, apiVersionManager)
+    try {
+      newServer.dataPlaneAcceptors.values().forEach(a => {
+        a.serverChannel.close()
+        a.serverChannel = null
+      })
+      val authorizerFuture = new CompletableFuture[Void]()
+      val enableFuture = newServer.enableRequestProcessing(
+        newServer.dataPlaneAcceptors.keys().asScala.
+          map(_.toJava).map(k => k -> authorizerFuture).toMap)
+      assertFalse(authorizerFuture.isDone())
+      assertFalse(enableFuture.isDone())
+      newServer.dataPlaneAcceptors.values().forEach(a => assertNull(a.serverChannel))
+      authorizerFuture.complete(null)
+      enableFuture.get(1, TimeUnit.MINUTES)
+      newServer.dataPlaneAcceptors.values().forEach(a => assertNotNull(a.serverChannel))
+    } finally {
+      shutdownServerAndMetrics(newServer)
+    }
+  }
+
   private def sslServerProps: Properties = {
     val trustStoreFile = TestUtils.tempFile("truststore", ".jks")
     val sslProps = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, interBrokerSecurityProtocol = Some(SecurityProtocol.SSL),
       trustStoreFile = Some(trustStoreFile))
     sslProps.put(KafkaConfig.ListenersProp, "SSL://localhost:0")
+    sslProps.put(KafkaConfig.NumNetworkThreadsProp, "1")
     sslProps
   }
 
@@ -1930,7 +2001,7 @@ class SocketServerTest {
     shutdownServerAndMetrics(server)
     val testableServer = new TestableSocketServer(config)
     if (startProcessingRequests) {
-      testableServer.enableRequestProcessing(Map.empty)
+      testableServer.enableRequestProcessing(Map.empty).get(1, TimeUnit.MINUTES)
     }
     try {
       testWithServer(testableServer)
@@ -2078,7 +2149,7 @@ class SocketServerTest {
   ) {
 
     override def createDataPlaneAcceptor(endPoint: EndPoint, isPrivilegedListener: Boolean, requestChannel: RequestChannel) : DataPlaneAcceptor = {
-      new TestableAcceptor(this, endPoint, config, 0, connectionQuotas, time, isPrivilegedListener, requestChannel, metrics, credentialProvider, new LogContext, MemoryPool.NONE, apiVersionManager, connectionQueueSize)
+      new TestableAcceptor(this, endPoint, this.config, 0, connectionQuotas, time, isPrivilegedListener, requestChannel, this.metrics, this.credentialProvider, new LogContext, MemoryPool.NONE, this.apiVersionManager, connectionQueueSize)
     }
 
     def testableSelector: TestableSelector =

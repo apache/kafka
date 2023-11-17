@@ -17,7 +17,6 @@
 
 package org.apache.kafka.streams.integration;
 
-import java.util.Collections;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringSerializer;
@@ -52,7 +51,6 @@ import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
 
 import java.io.IOException;
-import java.time.Duration;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
@@ -181,7 +179,7 @@ public class RangeQueryIntegrationTest {
         builder.table(inputStream, stateStoreConfig);
 
         try (final KafkaStreams kafkaStreams = new KafkaStreams(builder.build(), STREAMS_CONFIG)) {
-            IntegrationTestUtils.startApplicationAndWaitUntilRunning(Collections.singletonList(kafkaStreams), Duration.ofSeconds(60));
+            IntegrationTestUtils.startApplicationAndWaitUntilRunning(kafkaStreams);
 
             writeInputData();
 

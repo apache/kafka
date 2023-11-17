@@ -23,8 +23,8 @@ import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.utils.PrimitiveRef;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.server.common.MetadataVersion;
-import org.apache.kafka.server.log.internals.AppendOrigin;
-import org.apache.kafka.server.log.internals.LogValidator;
+import org.apache.kafka.storage.internals.log.AppendOrigin;
+import org.apache.kafka.storage.internals.log.LogValidator;
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.Fork;
 import org.openjdk.jmh.annotations.Measurement;
@@ -49,7 +49,7 @@ public class UncompressedRecordBatchValidationBenchmark extends BaseRecordBatchB
         MemoryRecords records = MemoryRecords.readableRecords(singleBatchBuffer.duplicate());
         new LogValidator(records, new TopicPartition("a", 0),
             Time.SYSTEM, CompressionType.NONE, CompressionType.NONE, false,
-            messageVersion, TimestampType.CREATE_TIME, Long.MAX_VALUE, 0, AppendOrigin.CLIENT,
+            messageVersion, TimestampType.CREATE_TIME, Long.MAX_VALUE, Long.MAX_VALUE, 0, AppendOrigin.CLIENT,
             MetadataVersion.latest()
         ).assignOffsetsNonCompressed(PrimitiveRef.ofLong(startingOffset), validatorMetricsRecorder);
     }

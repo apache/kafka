@@ -18,6 +18,8 @@ package org.apache.kafka.connect.cli;
 
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.connect.connector.policy.ConnectorClientConfigOverridePolicy;
+import org.apache.kafka.connect.json.JsonConverter;
+import org.apache.kafka.connect.json.JsonConverterConfig;
 import org.apache.kafka.connect.runtime.Herder;
 import org.apache.kafka.connect.runtime.Worker;
 import org.apache.kafka.connect.runtime.WorkerConfigTransformer;
@@ -37,6 +39,7 @@ import org.apache.kafka.connect.util.SharedTopicAdmin;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -76,7 +79,9 @@ public class ConnectDistributed extends AbstractConnectCli<DistributedConfig> {
         adminProps.put(CLIENT_ID_CONFIG, clientIdBase + "shared-admin");
         SharedTopicAdmin sharedAdmin = new SharedTopicAdmin(adminProps);
 
-        KafkaOffsetBackingStore offsetBackingStore = new KafkaOffsetBackingStore(sharedAdmin, () -> clientIdBase);
+        KafkaOffsetBackingStore offsetBackingStore = new KafkaOffsetBackingStore(sharedAdmin, () -> clientIdBase,
+                plugins.newInternalConverter(true, JsonConverter.class.getName(),
+                        Collections.singletonMap(JsonConverterConfig.SCHEMAS_ENABLE_CONFIG, "false")));
         offsetBackingStore.configure(config);
 
         Worker worker = new Worker(workerId, Time.SYSTEM, plugins, config, offsetBackingStore, connectorClientConfigOverridePolicy);
@@ -97,7 +102,8 @@ public class ConnectDistributed extends AbstractConnectCli<DistributedConfig> {
         // herder is stopped. This is easier than having to track and own the lifecycle ourselves.
         return new DistributedHerder(config, Time.SYSTEM, worker,
                 kafkaClusterId, statusBackingStore, configBackingStore,
-                restServer.advertisedUrl().toString(), restClient, connectorClientConfigOverridePolicy, sharedAdmin);
+                restServer.advertisedUrl().toString(), restClient, connectorClientConfigOverridePolicy,
+                Collections.emptyList(), sharedAdmin);
     }
 
     @Override

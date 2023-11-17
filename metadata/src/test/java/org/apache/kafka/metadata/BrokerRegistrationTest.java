@@ -41,26 +41,53 @@ import static org.junit.jupiter.api.Assertions.assertNotEquals;
 @Timeout(value = 40)
 public class BrokerRegistrationTest {
     private static final List<BrokerRegistration> REGISTRATIONS = Arrays.asList(
-        new BrokerRegistration(0, 0, Uuid.fromString("pc1GhUlBS92cGGaKXl6ipw"),
-            Arrays.asList(new Endpoint("INTERNAL", SecurityProtocol.PLAINTEXT, "localhost", 9090)),
-            Collections.singletonMap("foo", VersionRange.of((short) 1, (short) 2)),
-            Optional.empty(), false, false),
-        new BrokerRegistration(1, 0, Uuid.fromString("3MfdxWlNSn2UDYsmDP1pYg"),
-            Arrays.asList(new Endpoint("INTERNAL", SecurityProtocol.PLAINTEXT, "localhost", 9091)),
-            Collections.singletonMap("foo", VersionRange.of((short) 1, (short) 2)),
-            Optional.empty(), true, false),
-        new BrokerRegistration(2, 0, Uuid.fromString("eY7oaG1RREie5Kk9uy1l6g"),
-            Arrays.asList(new Endpoint("INTERNAL", SecurityProtocol.PLAINTEXT, "localhost", 9092)),
-            Stream.of(new SimpleEntry<>("foo", VersionRange.of((short) 2, (short) 3)),
+        new BrokerRegistration.Builder().
+            setId(0).
+            setEpoch(0).
+            setIncarnationId(Uuid.fromString("pc1GhUlBS92cGGaKXl6ipw")).
+            setListeners(Arrays.asList(new Endpoint("INTERNAL", SecurityProtocol.PLAINTEXT, "localhost", 9090))).
+            setSupportedFeatures(Collections.singletonMap("foo", VersionRange.of((short) 1, (short) 2))).
+            setRack(Optional.empty()).
+            setFenced(false).
+            setInControlledShutdown(false).build(),
+        new BrokerRegistration.Builder().
+            setId(1).
+            setEpoch(0).
+            setIncarnationId(Uuid.fromString("3MfdxWlNSn2UDYsmDP1pYg")).
+            setListeners(Arrays.asList(new Endpoint("INTERNAL", SecurityProtocol.PLAINTEXT, "localhost", 9091))).
+            setSupportedFeatures(Collections.singletonMap("foo", VersionRange.of((short) 1, (short) 2))).
+            setRack(Optional.empty()).
+            setFenced(true).
+            setInControlledShutdown(false).build(),
+        new BrokerRegistration.Builder().
+            setId(2).
+            setEpoch(0).
+            setIncarnationId(Uuid.fromString("eY7oaG1RREie5Kk9uy1l6g")).
+            setListeners(Arrays.asList(new Endpoint("INTERNAL", SecurityProtocol.PLAINTEXT, "localhost", 9092))).
+            setSupportedFeatures(Stream.of(new SimpleEntry<>("foo", VersionRange.of((short) 2, (short) 3)),
                 new SimpleEntry<>("bar", VersionRange.of((short) 1, (short) 4))).collect(
-                        Collectors.toMap(SimpleEntry::getKey, SimpleEntry::getValue)),
-            Optional.of("myrack"), false, true));
+                        Collectors.toMap(SimpleEntry::getKey, SimpleEntry::getValue))).
+            setRack(Optional.of("myrack")).
+            setFenced(false).
+            setInControlledShutdown(true).build(),
+        new BrokerRegistration.Builder().
+            setId(3).
+            setEpoch(0).
+            setIncarnationId(Uuid.fromString("1t8VyWx2TCSTpUWuqj-FOw")).
+            setListeners(Arrays.asList(new Endpoint("INTERNAL", SecurityProtocol.PLAINTEXT, "localhost", 9093))).
+            setSupportedFeatures(Stream.of(new SimpleEntry<>("metadata.version", VersionRange.of((short) 7, (short) 7)))
+                .collect(Collectors.toMap(SimpleEntry::getKey, SimpleEntry::getValue))).
+            setRack(Optional.empty()).
+            setFenced(false).
+            setInControlledShutdown(true).
+            setIsMigratingZkBroker(true).build());
 
     @Test
     public void testValues() {
         assertEquals(0, REGISTRATIONS.get(0).id());
         assertEquals(1, REGISTRATIONS.get(1).id());
         assertEquals(2, REGISTRATIONS.get(2).id());
+        assertEquals(3, REGISTRATIONS.get(3).id());
     }
 
     @Test
@@ -69,9 +96,13 @@ public class BrokerRegistrationTest {
         assertNotEquals(REGISTRATIONS.get(1), REGISTRATIONS.get(0));
         assertNotEquals(REGISTRATIONS.get(0), REGISTRATIONS.get(2));
         assertNotEquals(REGISTRATIONS.get(2), REGISTRATIONS.get(0));
+        assertNotEquals(REGISTRATIONS.get(3), REGISTRATIONS.get(0));
+        assertNotEquals(REGISTRATIONS.get(3), REGISTRATIONS.get(1));
+        assertNotEquals(REGISTRATIONS.get(3), REGISTRATIONS.get(2));
         assertEquals(REGISTRATIONS.get(0), REGISTRATIONS.get(0));
         assertEquals(REGISTRATIONS.get(1), REGISTRATIONS.get(1));
         assertEquals(REGISTRATIONS.get(2), REGISTRATIONS.get(2));
+        assertEquals(REGISTRATIONS.get(3), REGISTRATIONS.get(3));
     }
 
     @Test
@@ -88,6 +119,12 @@ public class BrokerRegistrationTest {
             "host='localhost', port=9092)], supportedFeatures={bar: 1-4, foo: 2-3}, " +
             "rack=Optional[myrack], fenced=false, inControlledShutdown=true, isMigratingZkBroker=false)",
             REGISTRATIONS.get(2).toString());
+        assertEquals("BrokerRegistration(id=3, epoch=0, " +
+            "incarnationId=1t8VyWx2TCSTpUWuqj-FOw, listeners=[Endpoint(" +
+            "listenerName='INTERNAL', securityProtocol=PLAINTEXT, " +
+            "host='localhost', port=9093)], supportedFeatures={metadata.version: 7}, " +
+            "rack=Optional.empty, fenced=false, inControlledShutdown=true, isMigratingZkBroker=true)",
+            REGISTRATIONS.get(3).toString());
     }
 
     @Test
@@ -95,6 +132,7 @@ public class BrokerRegistrationTest {
         testRoundTrip(REGISTRATIONS.get(0));
         testRoundTrip(REGISTRATIONS.get(1));
         testRoundTrip(REGISTRATIONS.get(2));
+        testRoundTrip(REGISTRATIONS.get(3));
     }
 
     private void testRoundTrip(BrokerRegistration registration) {
@@ -117,5 +155,7 @@ public class BrokerRegistrationTest {
             REGISTRATIONS.get(1).node("INTERNAL"));
         assertEquals(Optional.of(new Node(2, "localhost", 9092, "myrack")),
             REGISTRATIONS.get(2).node("INTERNAL"));
+        assertEquals(Optional.of(new Node(3, "localhost", 9093, null)),
+            REGISTRATIONS.get(3).node("INTERNAL"));
     }
 }

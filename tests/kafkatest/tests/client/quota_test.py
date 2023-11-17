@@ -77,10 +77,10 @@ class QuotaConfig(object):
                 self.configure_quota(kafka, QuotaConfig.LARGE_QUOTA, QuotaConfig.LARGE_QUOTA, ['clients', None])
 
     def configure_quota(self, kafka, producer_byte_rate, consumer_byte_rate, entity_args):
-        force_use_zk_conection = not kafka.all_nodes_configs_command_uses_bootstrap_server()
+        force_use_zk_connection = not kafka.all_nodes_configs_command_uses_bootstrap_server()
         node = kafka.nodes[0]
         cmd = "%s --alter --add-config producer_byte_rate=%d,consumer_byte_rate=%d" % \
-              (kafka.kafka_configs_cmd_with_optional_security_settings(node, force_use_zk_conection), producer_byte_rate, consumer_byte_rate)
+              (kafka.kafka_configs_cmd_with_optional_security_settings(node, force_use_zk_connection), producer_byte_rate, consumer_byte_rate)
         cmd += " --entity-type " + entity_args[0] + self.entity_name_opt(entity_args[1])
         if len(entity_args) > 2:
             cmd += " --entity-type " + entity_args[2] + self.entity_name_opt(entity_args[3])

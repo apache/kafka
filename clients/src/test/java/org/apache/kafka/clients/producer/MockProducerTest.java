@@ -40,6 +40,7 @@ import java.util.concurrent.Future;
 
 import static java.util.Arrays.asList;
 import static java.util.Collections.singletonList;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -101,7 +102,7 @@ public class MockProducerTest {
         Future<RecordMetadata> md2 = producer.send(record2);
         assertFalse(md2.isDone(), "Send shouldn't have completed");
         assertTrue(producer.completeNext(), "Complete the first request");
-        assertFalse(isError(md1), "Requst should be successful");
+        assertFalse(isError(md1), "Request should be successful");
         assertFalse(md2.isDone(), "Second request still incomplete");
         IllegalArgumentException e = new IllegalArgumentException("blah");
         assertTrue(producer.errorNext(e), "Complete the second request with an error");
@@ -702,7 +703,15 @@ public class MockProducerTest {
         producer.close();
         assertThrows(IllegalStateException.class, producer::flush);
     }
-    
+
+    @Test
+    public void shouldNotThrowOnFlushProducerIfProducerIsFenced() {
+        buildMockProducer(true);
+        producer.initTransactions();
+        producer.fenceProducer();
+        assertDoesNotThrow(producer::flush);
+    }
+
     @Test
     @SuppressWarnings("unchecked")
     public void shouldThrowClassCastException() {

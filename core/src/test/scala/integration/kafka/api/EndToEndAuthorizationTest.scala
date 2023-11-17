@@ -167,7 +167,7 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
 
     // create the test topic with all the brokers as replicas
     val superuserAdminClient = createSuperuserAdminClient()
-    TestUtils.createTopicWithAdmin(admin = superuserAdminClient, topic = topic, brokers = brokers,
+    TestUtils.createTopicWithAdmin(admin = superuserAdminClient, topic = topic, brokers = brokers, controllers = controllerServers,
       numPartitions = 1, replicationFactor = 3, topicConfig = new Properties)
   }
 
@@ -502,6 +502,7 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
     superuserAdminClient.deleteAcls(List(AclTopicWrite().toFilter).asJava).values
 
     brokers.foreach { s =>
+      TestUtils.waitAndVerifyAcls(TopicCreateAcl, s.dataPlaneRequestProcessor.authorizer.get, topicResource)
       TestUtils.waitAndVerifyAcls(GroupReadAcl, s.dataPlaneRequestProcessor.authorizer.get, groupResource)
     }
   }

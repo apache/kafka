@@ -16,18 +16,20 @@
  */
 package kafka.raft
 
-import kafka.log.{LogOffsetSnapshot, ProducerStateManagerConfig, SnapshotGenerated, UnifiedLog}
+import kafka.log.UnifiedLog
 import kafka.server.KafkaConfig.{MetadataLogSegmentBytesProp, MetadataLogSegmentMinBytesProp}
-import kafka.server.{BrokerTopicStats, FetchHighWatermark, FetchLogEnd, KafkaConfig, RequestLocal}
-import kafka.utils.{CoreUtils, Logging, Scheduler}
+import kafka.server.{BrokerTopicStats, KafkaConfig, RequestLocal}
+import kafka.utils.{CoreUtils, Logging}
 import org.apache.kafka.common.config.{AbstractConfig, TopicConfig}
 import org.apache.kafka.common.errors.InvalidConfigurationException
-import org.apache.kafka.common.record.{ControlRecordUtils, MemoryRecords, Records}
-import org.apache.kafka.common.utils.{BufferSupplier, Time}
+import org.apache.kafka.common.record.{MemoryRecords, Records}
+import org.apache.kafka.common.utils.Time
 import org.apache.kafka.common.{KafkaException, TopicPartition, Uuid}
 import org.apache.kafka.raft.{Isolation, KafkaRaftClient, LogAppendInfo, LogFetchInfo, LogOffsetMetadata, OffsetAndEpoch, OffsetMetadata, ReplicatedLog, ValidOffsetAndEpoch}
-import org.apache.kafka.server.log.internals.{AppendOrigin, LogConfig, LogDirFailureChannel}
+import org.apache.kafka.server.util.Scheduler
 import org.apache.kafka.snapshot.{FileRawSnapshotReader, FileRawSnapshotWriter, RawSnapshotReader, RawSnapshotWriter, SnapshotPath, Snapshots}
+import org.apache.kafka.storage.internals
+import org.apache.kafka.storage.internals.log.{AppendOrigin, FetchIsolation, LogConfig, LogDirFailureChannel, LogStartOffsetIncrementReason, ProducerStateManagerConfig}
 
 import java.io.File
 import java.nio.file.{Files, NoSuchFileException, Path}
@@ -51,8 +53,8 @@ final class KafkaMetadataLog private (
 
   override def read(startOffset: Long, readIsolation: Isolation): LogFetchInfo = {
     val isolation = readIsolation match {
-      case Isolation.COMMITTED => FetchHighWatermark
-      case Isolation.UNCOMMITTED => FetchLogEnd
+      case Isolation.COMMITTED => FetchIsolation.HIGH_WATERMARK
+      case Isolation.UNCOMMITTED => FetchIsolation.LOG_END
       case _ => throw new IllegalArgumentException(s"Unhandled read isolation $readIsolation")
     }
 
@@ -93,13 +95,11 @@ final class KafkaMetadataLog private (
     handleAndConvertLogAppendInfo(log.appendAsFollower(records.asInstanceOf[MemoryRecords]))
   }
 
-  private def handleAndConvertLogAppendInfo(appendInfo: kafka.log.LogAppendInfo): LogAppendInfo = {
-    appendInfo.firstOffset match {
-      case Some(firstOffset) =>
-        new LogAppendInfo(firstOffset.messageOffset, appendInfo.lastOffset)
-      case None =>
-        throw new KafkaException(s"Append failed unexpectedly: ${appendInfo.errorMessage}")
-    }
+  private def handleAndConvertLogAppendInfo(appendInfo: internals.log.LogAppendInfo): LogAppendInfo = {
+    if (appendInfo.firstOffset != UnifiedLog.UnknownOffset)
+      new LogAppendInfo(appendInfo.firstOffset, appendInfo.lastOffset)
+    else
+      throw new KafkaException(s"Append failed unexpectedly")
   }
 
   override def lastFetchedEpoch: Int = {
@@ -188,21 +188,30 @@ final class KafkaMetadataLog private (
   }
 
   override def updateHighWatermark(offsetMetadata: LogOffsetMetadata): Unit = {
-    offsetMetadata.metadata.asScala match {
-      case Some(segmentPosition: SegmentPosition) => log.updateHighWatermark(
-        new org.apache.kafka.server.log.internals.LogOffsetMetadata(
-          offsetMetadata.offset,
-          segmentPosition.baseOffset,
-          segmentPosition.relativePosition)
-      )
+    // This API returns the new high watermark, which may be different from the passed offset
+    val logHighWatermark = offsetMetadata.metadata.asScala match {
+      case Some(segmentPosition: SegmentPosition) =>
+        log.updateHighWatermark(
+          new internals.log.LogOffsetMetadata(
+            offsetMetadata.offset,
+            segmentPosition.baseOffset,
+            segmentPosition.relativePosition
+          )
+        )
       case _ =>
-        // FIXME: This API returns the new high watermark, which may be different from the passed offset
         log.updateHighWatermark(offsetMetadata.offset)
+    }
+
+    // Temporary log message until we fix KAFKA-14825
+    if (logHighWatermark != offsetMetadata.offset) {
+      warn(
+        s"Log's high watermark ($logHighWatermark) is different from the local replica's high watermark ($offsetMetadata)"
+      )
     }
   }
 
   override def highWatermark: LogOffsetMetadata = {
-    val LogOffsetSnapshot(_, _, hwm, _) = log.fetchOffsetSnapshot
+    val hwm = log.fetchOffsetSnapshot.highWatermark
     val segmentPosition: Optional[OffsetMetadata] = if (hwm.messageOffsetOnly) {
       Optional.of(SegmentPosition(hwm.segmentBaseOffset, hwm.relativePositionInSegment))
     } else {
@@ -214,10 +223,6 @@ final class KafkaMetadataLog private (
 
   override def flush(forceFlushActiveSegment: Boolean): Unit = {
     log.flush(forceFlushActiveSegment)
-  }
-
-  override def lastFlushedOffset(): Long = {
-    log.recoveryPoint
   }
 
   /**
@@ -341,7 +346,7 @@ final class KafkaMetadataLog private (
           snapshots.contains(snapshotId) &&
           startOffset < snapshotId.offset &&
           snapshotId.offset <= latestSnapshotId.offset &&
-          log.maybeIncrementLogStartOffset(snapshotId.offset, SnapshotGenerated) =>
+          log.maybeIncrementLogStartOffset(snapshotId.offset, LogStartOffsetIncrementReason.SnapshotGenerated) =>
             // Delete all segments that have a "last offset" less than the log start offset
             log.deleteOldSegments()
             // Remove older snapshots from the snapshots cache
@@ -367,18 +372,8 @@ final class KafkaMetadataLog private (
    * Return the max timestamp of the first batch in a snapshot, if the snapshot exists and has records
    */
   private def readSnapshotTimestamp(snapshotId: OffsetAndEpoch): Option[Long] = {
-    readSnapshot(snapshotId).asScala.flatMap { reader =>
-      val batchIterator = reader.records().batchIterator()
-
-      val firstBatch = batchIterator.next()
-      val records = firstBatch.streamingIterator(new BufferSupplier.GrowableBufferSupplier())
-      if (firstBatch.isControlBatch) {
-        val header = ControlRecordUtils.deserializedSnapshotHeaderRecord(records.next())
-        Some(header.lastContainedLogTimestamp())
-      } else {
-        warn("Did not find control record at beginning of snapshot")
-        None
-      }
+    readSnapshot(snapshotId).asScala.map { reader =>
+      Snapshots.lastContainedLogTimestamp(reader)
     }
   }
 
@@ -498,9 +493,9 @@ final class KafkaMetadataLog private (
     }
 
     if (expiredSnapshots.nonEmpty) {
-      scheduler.schedule(
+      scheduler.scheduleOnce(
         "delete-snapshot-files",
-        KafkaMetadataLog.deleteSnapshotFiles(log.dir.toPath, expiredSnapshots, this),
+        () => KafkaMetadataLog.deleteSnapshotFiles(log.dir.toPath, expiredSnapshots, this),
         config.fileDeleteDelayMs
       )
     }
@@ -591,7 +586,7 @@ object KafkaMetadataLog extends Logging {
       brokerTopicStats = new BrokerTopicStats,
       time = time,
       maxTransactionTimeoutMs = Int.MaxValue,
-      producerStateManagerConfig = new ProducerStateManagerConfig(Int.MaxValue),
+      producerStateManagerConfig = new ProducerStateManagerConfig(Int.MaxValue, false),
       producerIdExpirationCheckIntervalMs = Int.MaxValue,
       logDirFailureChannel = new LogDirFailureChannel(5),
       lastShutdownClean = false,
@@ -674,7 +669,7 @@ object KafkaMetadataLog extends Logging {
     logDir: Path,
     expiredSnapshots: mutable.TreeMap[OffsetAndEpoch, Option[FileRawSnapshotReader]],
     logging: Logging
-  ): () => Unit = () => {
+  ): Unit = {
     expiredSnapshots.foreach { case (snapshotId, snapshotReader) =>
       snapshotReader.foreach { reader =>
         CoreUtils.swallow(reader.close(), logging)

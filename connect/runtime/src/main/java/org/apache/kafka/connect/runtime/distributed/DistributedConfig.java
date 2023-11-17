@@ -44,11 +44,14 @@ import java.util.concurrent.TimeUnit;
 
 import static org.apache.kafka.common.config.ConfigDef.Range.atLeast;
 import static org.apache.kafka.common.config.ConfigDef.Range.between;
-import static org.apache.kafka.common.config.ConfigDef.ValidString.in;
+import static org.apache.kafka.common.config.ConfigDef.CaseInsensitiveValidString.in;
 import static org.apache.kafka.common.utils.Utils.enumOptions;
 import static org.apache.kafka.connect.runtime.TopicCreationConfig.PARTITIONS_VALIDATOR;
 import static org.apache.kafka.connect.runtime.TopicCreationConfig.REPLICATION_FACTOR_VALIDATOR;
 
+/**
+ * Provides configuration for Kafka Connect workers running in distributed mode.
+ */
 public class DistributedConfig extends WorkerConfig {
 
     private static final Logger log = LoggerFactory.getLogger(DistributedConfig.class);
@@ -209,7 +212,7 @@ public class DistributedConfig extends WorkerConfig {
         + "on other JVMs, no default is used and a value for this property must be manually specified in the worker config.";
     private Crypto crypto;
 
-    private enum ExactlyOnceSourceSupport {
+    public enum ExactlyOnceSourceSupport {
         DISABLED(false),
         PREPARING(true),
         ENABLED(true);
@@ -317,7 +320,7 @@ public class DistributedConfig extends WorkerConfig {
             .define(EXACTLY_ONCE_SOURCE_SUPPORT_CONFIG,
                     ConfigDef.Type.STRING,
                     EXACTLY_ONCE_SOURCE_SUPPORT_DEFAULT,
-                    ConfigDef.CaseInsensitiveValidString.in(enumOptions(ExactlyOnceSourceSupport.class)),
+                    in(enumOptions(ExactlyOnceSourceSupport.class)),
                     ConfigDef.Importance.HIGH,
                     EXACTLY_ONCE_SOURCE_SUPPORT_DOC)
             .define(CommonClientConfigs.METADATA_MAX_AGE_CONFIG,
@@ -334,13 +337,13 @@ public class DistributedConfig extends WorkerConfig {
             .define(CommonClientConfigs.SEND_BUFFER_CONFIG,
                     ConfigDef.Type.INT,
                     128 * 1024,
-                    atLeast(0),
+                    atLeast(CommonClientConfigs.SEND_BUFFER_LOWER_BOUND),
                     ConfigDef.Importance.MEDIUM,
                     CommonClientConfigs.SEND_BUFFER_DOC)
             .define(CommonClientConfigs.RECEIVE_BUFFER_CONFIG,
                     ConfigDef.Type.INT,
                     32 * 1024,
-                    atLeast(0),
+                    atLeast(CommonClientConfigs.RECEIVE_BUFFER_LOWER_BOUND),
                     ConfigDef.Importance.MEDIUM,
                     CommonClientConfigs.RECEIVE_BUFFER_DOC)
             .define(CommonClientConfigs.RECONNECT_BACKOFF_MS_CONFIG,
@@ -369,10 +372,16 @@ public class DistributedConfig extends WorkerConfig {
                     CommonClientConfigs.SOCKET_CONNECTION_SETUP_TIMEOUT_MAX_MS_DOC)
             .define(CommonClientConfigs.RETRY_BACKOFF_MS_CONFIG,
                     ConfigDef.Type.LONG,
-                    100L,
+                    CommonClientConfigs.DEFAULT_RETRY_BACKOFF_MS,
                     atLeast(0L),
                     ConfigDef.Importance.LOW,
                     CommonClientConfigs.RETRY_BACKOFF_MS_DOC)
+            .define(CommonClientConfigs.RETRY_BACKOFF_MAX_MS_CONFIG,
+                    ConfigDef.Type.LONG,
+                    CommonClientConfigs.DEFAULT_RETRY_BACKOFF_MAX_MS,
+                    atLeast(0L),
+                    ConfigDef.Importance.LOW,
+                    CommonClientConfigs.RETRY_BACKOFF_MAX_MS_DOC)
             .define(CommonClientConfigs.REQUEST_TIMEOUT_MS_CONFIG,
                     ConfigDef.Type.INT,
                     Math.toIntExact(TimeUnit.SECONDS.toMillis(40)),
@@ -506,7 +515,7 @@ public class DistributedConfig extends WorkerConfig {
     private final ExactlyOnceSourceSupport exactlyOnceSourceSupport;
 
     @Override
-    public Integer getRebalanceTimeout() {
+    public Integer rebalanceTimeout() {
         return getInt(DistributedConfig.REBALANCE_TIMEOUT_MS_CONFIG);
     }
 
@@ -551,11 +560,18 @@ public class DistributedConfig extends WorkerConfig {
         return getString(GROUP_ID_CONFIG);
     }
 
+    @Override
+    protected Map<String, Object> postProcessParsedConfig(final Map<String, Object> parsedValues) {
+        CommonClientConfigs.warnDisablingExponentialBackoff(this);
+        return super.postProcessParsedConfig(parsedValues);
+    }
+
     public DistributedConfig(Map<String, String> props) {
         this(Crypto.SYSTEM, props);
     }
 
     // Visible for testing
+    @SuppressWarnings("this-escape")
     DistributedConfig(Crypto crypto, Map<String, String> props) {
         super(config(crypto), props);
         this.crypto = crypto;

@@ -34,6 +34,7 @@ import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.StreamsConfig.InternalConfig;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.KStream;
@@ -87,9 +88,9 @@ import java.util.concurrent.atomic.AtomicReference;
 
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
+import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.startApplicationAndWaitUntilRunning;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.waitForEmptyConsumerGroup;
 import static org.apache.kafka.streams.query.StateQueryRequest.inStore;
-import static org.apache.kafka.test.StreamsTestUtils.startKafkaStreamsAndWaitForRunningState;
 import static org.apache.kafka.test.TestUtils.consumerConfig;
 import static org.apache.kafka.test.TestUtils.waitForCondition;
 import static org.hamcrest.CoreMatchers.equalTo;
@@ -149,17 +150,23 @@ public class EosIntegrationTest {
     private String stateTmpDir;
 
     @SuppressWarnings("deprecation")
-    @Parameters(name = "{0}")
-    public static Collection<String[]> data() {
-        return Arrays.asList(new String[][]{
-                {StreamsConfig.AT_LEAST_ONCE},
-                {StreamsConfig.EXACTLY_ONCE},
-                {StreamsConfig.EXACTLY_ONCE_V2}
+    @Parameters(name = "{0}, processing threads = {1}")
+    public static Collection<Object[]> data() {
+        return Arrays.asList(new Object[][]{
+                {StreamsConfig.AT_LEAST_ONCE, false},
+                {StreamsConfig.EXACTLY_ONCE, false},
+                {StreamsConfig.EXACTLY_ONCE_V2, false},
+                {StreamsConfig.AT_LEAST_ONCE, true},
+                {StreamsConfig.EXACTLY_ONCE, true},
+                {StreamsConfig.EXACTLY_ONCE_V2, true}
         });
     }
 
-    @Parameter
+    @Parameter(0)
     public String eosConfig;
+
+    @Parameter(1)
+    public boolean processingThreadsEnabled;
 
     @Before
     public void createTopics() throws Exception {
@@ -281,7 +288,7 @@ public class EosIntegrationTest {
             );
 
             try (final KafkaStreams streams = new KafkaStreams(builder.build(), config)) {
-                startKafkaStreamsAndWaitForRunningState(streams, MAX_WAIT_TIME_MS);
+                startApplicationAndWaitUntilRunning(streams);
 
                 final List<KeyValue<Long, Long>> committedRecords = readResult(outputTopic, inputData.size(), CONSUMER_GROUP_ID);
                 checkResultPerKey(committedRecords, inputData, "The committed records do not match what expected");
@@ -339,7 +346,7 @@ public class EosIntegrationTest {
             properties);
 
         try (final KafkaStreams streams = new KafkaStreams(builder.build(), config)) {
-            startKafkaStreamsAndWaitForRunningState(streams, MAX_WAIT_TIME_MS);
+            startApplicationAndWaitUntilRunning(streams);
 
             final List<KeyValue<Long, Long>> firstBurstOfData = prepareData(0L, 5L, 0L);
             final List<KeyValue<Long, Long>> secondBurstOfData = prepareData(5L, 8L, 0L);
@@ -380,7 +387,7 @@ public class EosIntegrationTest {
         // after fail over, we should read 40 committed records (even if 50 record got written)
 
         try (final KafkaStreams streams = getKafkaStreams("dummy", false, "appDir", 2, eosConfig, MAX_POLL_INTERVAL_MS)) {
-            startKafkaStreamsAndWaitForRunningState(streams, MAX_WAIT_TIME_MS);
+            startApplicationAndWaitUntilRunning(streams);
 
             final List<KeyValue<Long, Long>> committedDataBeforeFailure = prepareData(0L, 10L, 0L, 1L);
             final List<KeyValue<Long, Long>> uncommittedDataBeforeFailure = prepareData(10L, 15L, 0L, 1L);
@@ -488,7 +495,7 @@ public class EosIntegrationTest {
         // We need more processing time under "with state" situation, so increasing the max.poll.interval.ms
         // to avoid unexpected rebalance during test, which will cause unexpected fail over triggered
         try (final KafkaStreams streams = getKafkaStreams("dummy", true, "appDir", 2, eosConfig, 3 * MAX_POLL_INTERVAL_MS)) {
-            startKafkaStreamsAndWaitForRunningState(streams, MAX_WAIT_TIME_MS);
+            startApplicationAndWaitUntilRunning(streams);
 
             final List<KeyValue<Long, Long>> committedDataBeforeFailure = prepareData(0L, 10L, 0L, 1L);
             final List<KeyValue<Long, Long>> uncommittedDataBeforeFailure = prepareData(10L, 15L, 0L, 1L, 2L, 3L);
@@ -504,7 +511,7 @@ public class EosIntegrationTest {
 
             waitForCondition(
                 () -> commitRequested.get() == 2, MAX_WAIT_TIME_MS,
-                "SteamsTasks did not request commit.");
+                "StreamsTasks did not request commit.");
 
             // expected end state per output partition (C == COMMIT; A == ABORT; ---> indicate the changes):
             //
@@ -607,8 +614,8 @@ public class EosIntegrationTest {
             final KafkaStreams streams1 = getKafkaStreams("streams1", false, "appDir1", 1, eosConfig, MAX_POLL_INTERVAL_MS);
             final KafkaStreams streams2 = getKafkaStreams("streams2", false, "appDir2", 1, eosConfig, MAX_POLL_INTERVAL_MS)
         ) {
-            startKafkaStreamsAndWaitForRunningState(streams1, MAX_WAIT_TIME_MS);
-            startKafkaStreamsAndWaitForRunningState(streams2, MAX_WAIT_TIME_MS);
+            startApplicationAndWaitUntilRunning(streams1);
+            startApplicationAndWaitUntilRunning(streams2);
 
             final List<KeyValue<Long, Long>> committedDataBeforeStall = prepareData(0L, 10L, 0L, 1L);
             final List<KeyValue<Long, Long>> uncommittedDataBeforeStall = prepareData(10L, 15L, 0L, 1L);
@@ -626,7 +633,7 @@ public class EosIntegrationTest {
 
             waitForCondition(
                 () -> commitRequested.get() == 2, MAX_WAIT_TIME_MS,
-                "SteamsTasks did not request commit.");
+                "StreamsTasks did not request commit.");
 
             // expected end state per output partition (C == COMMIT; A == ABORT; ---> indicate the changes):
             //
@@ -757,11 +764,11 @@ public class EosIntegrationTest {
         try (final KafkaStreams streams = getKafkaStreams("streams", true, "appDir", 1, eosConfig, MAX_POLL_INTERVAL_MS)) {
             writeInputData(writtenData);
 
-            startKafkaStreamsAndWaitForRunningState(streams, MAX_WAIT_TIME_MS);
+            startApplicationAndWaitUntilRunning(streams);
 
             waitForCondition(
                     () -> commitRequested.get() == 2, MAX_WAIT_TIME_MS,
-                    "SteamsTasks did not request commit.");
+                    "StreamsTasks did not request commit.");
 
             final List<KeyValue<Long, Long>> committedRecords = readResult(SINGLE_PARTITION_OUTPUT_TOPIC, writtenData.size(), CONSUMER_GROUP_ID);
 
@@ -866,7 +873,7 @@ public class EosIntegrationTest {
                         this.context = context;
 
                         if (withState) {
-                            state = (KeyValueStore<Long, Long>) context.getStateStore(storeName);
+                            state = context.getStateStore(storeName);
                         }
                     }
 
@@ -876,9 +883,14 @@ public class EosIntegrationTest {
                             LOG.info(dummyHostName + " is executing the injected stall");
                             stallingHost.set(dummyHostName);
                             while (doStall) {
-                                final StreamThread thread = (StreamThread) Thread.currentThread();
-                                if (thread.isInterrupted() || !thread.isRunning()) {
+                                final Thread thread = Thread.currentThread();
+                                if (thread.isInterrupted()) {
                                     throw new RuntimeException("Detected we've been interrupted.");
+                                }
+                                if (!processingThreadsEnabled) {
+                                    if (!((StreamThread) thread).isRunning()) {
+                                        throw new RuntimeException("Detected we've been interrupted.");
+                                    }
                                 }
                                 try {
                                     Thread.sleep(100);
@@ -943,6 +955,7 @@ public class EosIntegrationTest {
         properties.put(StreamsConfig.STATESTORE_CACHE_MAX_BYTES_CONFIG, 0);
         properties.put(StreamsConfig.STATE_DIR_CONFIG, stateTmpDir + appDir);
         properties.put(StreamsConfig.APPLICATION_SERVER_CONFIG, dummyHostName + ":2142");
+        properties.put(InternalConfig.PROCESSING_THREADS_ENABLED, processingThreadsEnabled);
 
         final Properties config = StreamsTestUtils.getStreamsConfig(
             applicationId,

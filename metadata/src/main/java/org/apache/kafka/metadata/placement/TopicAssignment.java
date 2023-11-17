@@ -30,7 +30,7 @@ import java.util.Objects;
 public class TopicAssignment {
     private final List<PartitionAssignment> assignments;
 
-    public TopicAssignment(final List<PartitionAssignment> assignments) {
+    public TopicAssignment(List<PartitionAssignment> assignments) {
         this.assignments = Collections.unmodifiableList(new ArrayList<>(assignments));
     }
 
@@ -51,5 +51,12 @@ public class TopicAssignment {
     @Override
     public int hashCode() {
         return Objects.hash(assignments);
+    }
+
+    @Override
+    public String toString() {
+        return "TopicAssignment" +
+            "(assignments=" + assignments +
+            ")";
     }
 }

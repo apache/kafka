@@ -29,7 +29,9 @@ import kafka.utils._
 import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.utils.{Time, Utils}
-import org.apache.kafka.server.log.internals.{LogConfig, LogDirFailureChannel}
+import org.apache.kafka.server.util.{KafkaScheduler, Scheduler}
+import org.apache.kafka.server.util.CommandLineUtils
+import org.apache.kafka.storage.internals.log.{LogConfig, LogDirFailureChannel, ProducerStateManagerConfig}
 
 import scala.math._
 
@@ -143,16 +145,16 @@ object TestLinearWriteSpeed {
     while(totalWritten + bufferSize < bytesToWrite) {
       val start = System.nanoTime
       val writeSize = writables((count % numFiles).toInt.abs).write()
-      val ellapsed = System.nanoTime - start
-      maxLatency = max(ellapsed, maxLatency)
-      totalLatency += ellapsed
+      val elapsed = System.nanoTime - start
+      maxLatency = max(elapsed, maxLatency)
+      totalLatency += elapsed
       written += writeSize
       count += 1
       totalWritten += writeSize
       if((start - lastReport)/(1000.0*1000.0) > reportingInterval.doubleValue) {
-        val ellapsedSecs = (start - lastReport) / (1000.0*1000.0*1000.0)
+        val elapsedSecs = (start - lastReport) / (1000.0*1000.0*1000.0)
         val mb = written / (1024.0*1024.0)
-        println("%10.3f\t%10.3f\t%10.3f".format(mb / ellapsedSecs, totalLatency / count.toDouble / (1000.0*1000.0), maxLatency / (1000.0 * 1000.0)))
+        println("%10.3f\t%10.3f\t%10.3f".format(mb / elapsedSecs, totalLatency / count.toDouble / (1000.0*1000.0), maxLatency / (1000.0 * 1000.0)))
         lastReport = start
         written = 0
         maxLatency = 0L
@@ -218,7 +220,7 @@ object TestLinearWriteSpeed {
       brokerTopicStats = new BrokerTopicStats,
       time = Time.SYSTEM,
       maxTransactionTimeoutMs = 5 * 60 * 1000,
-      producerStateManagerConfig = new ProducerStateManagerConfig(kafka.server.Defaults.ProducerIdExpirationMs),
+      producerStateManagerConfig = new ProducerStateManagerConfig(kafka.server.Defaults.ProducerIdExpirationMs, false),
       producerIdExpirationCheckIntervalMs = kafka.server.Defaults.ProducerIdExpirationCheckIntervalMs,
       logDirFailureChannel = new LogDirFailureChannel(10),
       topicId = None,

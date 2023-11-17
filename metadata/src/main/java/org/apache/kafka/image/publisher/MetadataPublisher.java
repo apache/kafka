@@ -19,8 +19,8 @@ package org.apache.kafka.image.publisher;
 
 import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
-import org.apache.kafka.image.loader.LogDeltaManifest;
-import org.apache.kafka.image.loader.SnapshotManifest;
+import org.apache.kafka.image.loader.LoaderManifest;
+import org.apache.kafka.raft.LeaderAndEpoch;
 
 
 /**
@@ -40,33 +40,30 @@ public interface MetadataPublisher extends AutoCloseable {
     String name();
 
     /**
+     * Handle a change in the current controller.
+     *
+     * @param newLeaderAndEpoch The new quorum leader and epoch. The new leader will be
+     *                          OptionalInt.empty if there is currently no active controller.
+     */
+    default void onControllerChange(LeaderAndEpoch newLeaderAndEpoch) { }
+
+    /**
      * Publish a new cluster metadata snapshot that we loaded.
      *
      * @param delta    The delta between the previous state and the new one.
      * @param newImage The complete new state.
-     * @param manifest The contents of what was published.
+     * @param manifest A manifest which describes the contents of what was published.
+     *                 If we loaded a snapshot, this will be a SnapshotManifest.
+     *                 If we loaded a log delta, this will be a LogDeltaManifest.
      */
-    void publishSnapshot(
+    void onMetadataUpdate(
             MetadataDelta delta,
             MetadataImage newImage,
-            SnapshotManifest manifest
+            LoaderManifest manifest
     );
 
     /**
-     * Publish a change to the cluster metadata.
-     *
-     * @param delta    The delta between the previous state and the new one.
-     * @param newImage The complete new state.
-     * @param manifest The contents of what was published.
+     * Close this metadata publisher and free any associated resources.
      */
-    void publishLogDelta(
-            MetadataDelta delta,
-            MetadataImage newImage,
-            LogDeltaManifest manifest
-    );
-
-    /**
-     * Close this metadata publisher.
-     */
-    void close() throws Exception;
+    default void close() throws Exception { }
 }

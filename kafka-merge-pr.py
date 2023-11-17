@@ -70,7 +70,7 @@ TEMP_BRANCH_PREFIX = "PR_TOOL"
 
 DEV_BRANCH_NAME = "trunk"
 
-DEFAULT_FIX_VERSION = os.environ.get("DEFAULT_FIX_VERSION", "3.5.0")
+DEFAULT_FIX_VERSION = os.environ.get("DEFAULT_FIX_VERSION", "3.7.0")
 
 ORIGINAL_HEAD = ""
 
@@ -319,7 +319,7 @@ def resolve_jira_issue(merge_branches, comment, default_jira_id=""):
 def resolve_jira_issues(title, merge_branches, comment):
     jira_ids = re.findall("%s-[0-9]{4,5}" % CAPITALIZED_PROJECT_NAME, title)
 
-    if len(jira_ids) == 0:
+    if not jira_ids:
         resolve_jira_issue(merge_branches, comment)
     for jira_id in jira_ids:
         resolve_jira_issue(merge_branches, comment, jira_id)

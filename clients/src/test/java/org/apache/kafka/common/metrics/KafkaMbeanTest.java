@@ -116,21 +116,21 @@ public class KafkaMbeanTest {
     }
 
     @Test
-    public void testInvoke() throws Exception {
+    public void testInvoke() {
         RuntimeMBeanException e = assertThrows(RuntimeMBeanException.class,
             () -> mBeanServer.invoke(objectName(countMetricName), "something", null, null));
         assertEquals(UnsupportedOperationException.class, e.getCause().getClass());
     }
 
     @Test
-    public void testSetAttribute() throws Exception {
+    public void testSetAttribute() {
         RuntimeMBeanException e = assertThrows(RuntimeMBeanException.class,
             () -> mBeanServer.setAttribute(objectName(countMetricName), new Attribute("anything", 1)));
         assertEquals(UnsupportedOperationException.class, e.getCause().getClass());
     }
 
     @Test
-    public void testSetAttributes() throws Exception {
+    public void testSetAttributes() {
         RuntimeMBeanException e = assertThrows(RuntimeMBeanException.class,
             () -> mBeanServer.setAttributes(objectName(countMetricName), new AttributeList(1)));
         assertEquals(UnsupportedOperationException.class, e.getCause().getClass());

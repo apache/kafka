@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.clients.producer.internals;
 
+import java.util.Optional;
 import org.apache.kafka.clients.producer.Callback;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.KafkaException;
@@ -155,9 +156,9 @@ public class ProducerBatchTest {
             for (ProducerBatch splitProducerBatch : batches) {
                 for (RecordBatch splitBatch : splitProducerBatch.records().batches()) {
                     for (Record record : splitBatch) {
-                        assertTrue(record.headers().length == 1, "Header size should be 1.");
-                        assertTrue(record.headers()[0].key().equals("header-key"), "Header key should be 'header-key'.");
-                        assertTrue(new String(record.headers()[0].value()).equals("header-value"), "Header value should be 'header-value'.");
+                        assertEquals(1, record.headers().length, "Header size should be 1.");
+                        assertEquals("header-key", record.headers()[0].key(), "Header key should be 'header-key'.");
+                        assertEquals("header-value", new String(record.headers()[0].value()), "Header value should be 'header-value'.");
                     }
                 }
             }
@@ -261,6 +262,56 @@ public class ProducerBatchTest {
         RuntimeException topLevelException = new RuntimeException();
         assertThrows(NullPointerException.class, () ->
             testCompleteExceptionally(recordCount, topLevelException, null));
+    }
+
+    /**
+     * This tests that leader is correctly maintained & leader-change is correctly detected across retries
+     * of the batch. It does so by testing primarily testing methods
+     * 1. maybeUpdateLeaderEpoch
+     * 2. hasLeaderChangedForTheOngoingRetry
+     */
+
+    @Test
+    public void testWithLeaderChangesAcrossRetries() {
+        ProducerBatch batch = new ProducerBatch(new TopicPartition("topic", 1), memoryRecordsBuilder, now);
+
+        // Starting state for the batch, no attempt made to send it yet.
+        assertEquals(Optional.empty(), batch.currentLeaderEpoch());
+        assertEquals(0, batch.attemptsWhenLeaderLastChanged()); // default value
+        batch.maybeUpdateLeaderEpoch(Optional.empty());
+        assertFalse(batch.hasLeaderChangedForTheOngoingRetry());
+
+        // 1st attempt[Not a retry] to send the batch.
+        // Check leader isn't flagged as a new leader.
+        int batchLeaderEpoch = 100;
+        batch.maybeUpdateLeaderEpoch(Optional.of(batchLeaderEpoch));
+        assertFalse(batch.hasLeaderChangedForTheOngoingRetry(), "batch leader is assigned for 1st time");
+        assertEquals(batchLeaderEpoch, batch.currentLeaderEpoch().get());
+        assertEquals(0, batch.attemptsWhenLeaderLastChanged());
+
+        // 2nd attempt[1st retry] to send the batch to a new leader.
+        // Check leader change is detected.
+        batchLeaderEpoch = 101;
+        batch.reenqueued(0);
+        batch.maybeUpdateLeaderEpoch(Optional.of(batchLeaderEpoch));
+        assertTrue(batch.hasLeaderChangedForTheOngoingRetry(), "batch leader has changed");
+        assertEquals(batchLeaderEpoch, batch.currentLeaderEpoch().get());
+        assertEquals(1, batch.attemptsWhenLeaderLastChanged());
+
+        // 2nd attempt[1st retry] still ongoing, yet to be made.
+        // Check same leaderEpoch(101) is still considered as a leader-change.
+        batch.maybeUpdateLeaderEpoch(Optional.of(batchLeaderEpoch));
+        assertTrue(batch.hasLeaderChangedForTheOngoingRetry(), "batch leader has changed");
+        assertEquals(batchLeaderEpoch, batch.currentLeaderEpoch().get());
+        assertEquals(1, batch.attemptsWhenLeaderLastChanged());
+
+        // 3rd attempt[2nd retry] to the same leader-epoch(101).
+        // Check same leaderEpoch(101) as not detected as a leader-change.
+        batch.reenqueued(0);
+        batch.maybeUpdateLeaderEpoch(Optional.of(batchLeaderEpoch));
+        assertFalse(batch.hasLeaderChangedForTheOngoingRetry(), "batch leader has not changed");
+        assertEquals(batchLeaderEpoch, batch.currentLeaderEpoch().get());
+        assertEquals(1, batch.attemptsWhenLeaderLastChanged());
     }
 
     private void testCompleteExceptionally(

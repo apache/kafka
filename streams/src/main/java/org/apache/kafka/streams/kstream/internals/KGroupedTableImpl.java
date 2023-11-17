@@ -35,6 +35,7 @@ import org.apache.kafka.streams.state.KeyValueStore;
 import java.util.Collections;
 import java.util.Objects;
 import java.util.Set;
+import org.apache.kafka.streams.state.VersionedBytesStoreSupplier;
 
 /**
  * The implementation class of {@link KGroupedTable}.
@@ -90,8 +91,9 @@ public class KGroupedTableImpl<K, V> extends AbstractStream<K, V> implements KGr
         final StatefulProcessorNode statefulProcessorNode = new StatefulProcessorNode<>(
             funcName,
             new ProcessorParameters<>(aggregateSupplier, funcName),
-            new TimestampedKeyValueStoreMaterializer<>(materialized).materialize()
+            new KeyValueStoreMaterializer<>(materialized)
         );
+        statefulProcessorNode.setOutputVersioned(materialized.storeSupplier() instanceof VersionedBytesStoreSupplier);
 
         // now the repartition node must be the parent of the StateProcessorNode
         builder.addGraphNode(repartitionGraphNode, statefulProcessorNode);

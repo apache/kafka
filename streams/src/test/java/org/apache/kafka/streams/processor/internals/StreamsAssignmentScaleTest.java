@@ -39,9 +39,10 @@ import org.apache.kafka.test.MockApiProcessorSupplier;
 import org.apache.kafka.test.MockClientSupplier;
 import org.apache.kafka.test.MockInternalTopicManager;
 import org.apache.kafka.test.MockKeyValueStoreBuilder;
-import org.easymock.EasyMock;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
+import org.junit.runner.RunWith;
+import org.mockito.junit.MockitoJUnitRunner;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -58,18 +59,21 @@ import static org.apache.kafka.streams.processor.internals.assignment.Assignment
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.createMockAdminClientForAssignor;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.getInfo;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.uuidForInt;
-import static org.easymock.EasyMock.expect;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.mockito.ArgumentMatchers.anySet;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 @Category({IntegrationTest.class})
+@RunWith(MockitoJUnitRunner.StrictStubs.class)
 public class StreamsAssignmentScaleTest {
     final static long MAX_ASSIGNMENT_DURATION = 60 * 1000L; //each individual assignment should complete within 20s
     final static String APPLICATION_ID = "streams-assignment-scale-test";
 
     private final Logger log = LoggerFactory.getLogger(StreamsAssignmentScaleTest.class);
 
-    /************ HighAvailabilityTaskAssignor tests ************/
+    /* HighAvailabilityTaskAssignor tests */
 
     @Test(timeout = 120 * 1000)
     public void testHighAvailabilityTaskAssignorLargePartitionCount() {
@@ -91,7 +95,7 @@ public class StreamsAssignmentScaleTest {
         completeLargeAssignment(1_000, 10, 1000, 1, HighAvailabilityTaskAssignor.class);
     }
 
-    /************ StickyTaskAssignor tests ************/
+    /* StickyTaskAssignor tests */
 
     @Test(timeout = 120 * 1000)
     public void testStickyTaskAssignorLargePartitionCount() {
@@ -113,7 +117,7 @@ public class StreamsAssignmentScaleTest {
         completeLargeAssignment(1_000, 10, 1000, 1, StickyTaskAssignor.class);
     }
 
-    /************ FallbackPriorTaskAssignor tests ************/
+    /* FallbackPriorTaskAssignor tests */
 
     @Test(timeout = 120 * 1000)
     public void testFallbackPriorTaskAssignorLargePartitionCount() {
@@ -169,17 +173,18 @@ public class StreamsAssignmentScaleTest {
         final TopologyMetadata topologyMetadata = new TopologyMetadata(builder, new StreamsConfig(configMap));
         topologyMetadata.buildAndRewriteTopology();
 
-        final Consumer<byte[], byte[]> mainConsumer = EasyMock.createNiceMock(Consumer.class);
-        final TaskManager taskManager = EasyMock.createNiceMock(TaskManager.class);
-        expect(taskManager.topologyMetadata()).andStubReturn(topologyMetadata);
-        expect(mainConsumer.committed(new HashSet<>())).andStubReturn(Collections.emptyMap());
+        @SuppressWarnings("unchecked")
+        final Consumer<byte[], byte[]> mainConsumer = mock(Consumer.class);
+        final TaskManager taskManager = mock(TaskManager.class);
+        when(taskManager.topologyMetadata()).thenReturn(topologyMetadata);
+        when(mainConsumer.committed(anySet())).thenReturn(Collections.emptyMap());
         final AdminClient adminClient = createMockAdminClientForAssignor(changelogEndOffsets);
 
         final ReferenceContainer referenceContainer = new ReferenceContainer();
         referenceContainer.mainConsumer = mainConsumer;
         referenceContainer.adminClient = adminClient;
         referenceContainer.taskManager = taskManager;
-        referenceContainer.streamsMetadataState = EasyMock.createNiceMock(StreamsMetadataState.class);
+        referenceContainer.streamsMetadataState = mock(StreamsMetadataState.class);
         referenceContainer.time = new MockTime();
         configMap.put(InternalConfig.REFERENCE_CONTAINER_PARTITION_ASSIGNOR, referenceContainer);
         configMap.put(InternalConfig.INTERNAL_TASK_ASSIGNOR_CLASS, taskAssignor.getName());
@@ -191,7 +196,6 @@ public class StreamsAssignmentScaleTest {
             new MockClientSupplier().restoreConsumer,
             false
         );
-        EasyMock.replay(taskManager, adminClient, mainConsumer);
 
         final StreamsPartitionAssignor partitionAssignor = new StreamsPartitionAssignor();
         partitionAssignor.configure(configMap);

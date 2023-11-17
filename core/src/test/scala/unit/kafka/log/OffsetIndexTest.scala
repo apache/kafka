@@ -28,7 +28,7 @@ import scala.collection._
 import scala.util.Random
 import kafka.utils.TestUtils
 import org.apache.kafka.common.errors.InvalidOffsetException
-import org.apache.kafka.server.log.internals.{OffsetIndex, OffsetPosition}
+import org.apache.kafka.storage.internals.log.{OffsetIndex, OffsetPosition}
 
 import scala.annotation.nowarn
 

@@ -216,12 +216,12 @@ class _ReverseForwarder(object):
             r, w, x = select([sock, chan], [], [])
             if sock in r:
                 data = sock.recv(1024)
-                if len(data) == 0:
+                if not data:
                     break
                 chan.send(data)
             if chan in r:
                 data = chan.recv(1024)
-                if len(data) == 0:
+                if not data:
                     break
                 sock.send(data)
         chan.close()

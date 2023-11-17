@@ -20,17 +20,20 @@ import org.apache.kafka.streams.kstream.Predicate;
 import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.api.Record;
-import org.apache.kafka.streams.state.TimestampedKeyValueStore;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
+import org.apache.kafka.streams.state.internals.KeyValueStoreWrapper;
 
 import static org.apache.kafka.streams.state.ValueAndTimestamp.getValueOrNull;
+import static org.apache.kafka.streams.state.VersionedKeyValueStore.PUT_RETURN_CODE_NOT_PUT;
+import static org.apache.kafka.streams.state.internals.KeyValueStoreWrapper.PUT_RETURN_CODE_IS_LATEST;
 
-class KTableFilter<KIn, VIn> implements KTableProcessorSupplier<KIn, VIn, KIn, VIn> {
+public class KTableFilter<KIn, VIn> implements KTableProcessorSupplier<KIn, VIn, KIn, VIn> {
     private final KTableImpl<KIn, ?, VIn> parent;
     private final Predicate<? super KIn, ? super VIn> predicate;
     private final boolean filterNot;
     private final String queryableName;
     private boolean sendOldValues;
+    private boolean useVersionedSemantics = false;
 
     KTableFilter(final KTableImpl<KIn, ?, VIn> parent,
                  final Predicate<? super KIn, ? super VIn> predicate,
@@ -42,6 +45,15 @@ class KTableFilter<KIn, VIn> implements KTableProcessorSupplier<KIn, VIn, KIn, V
         this.queryableName = queryableName;
         // If upstream is already materialized, enable sending old values to avoid sending unnecessary tombstones:
         this.sendOldValues = parent.enableSendingOldValues(false);
+    }
+
+    public void setUseVersionedSemantics(final boolean useVersionedSemantics) {
+        this.useVersionedSemantics = useVersionedSemantics;
+    }
+
+    // VisibleForTesting
+    boolean isUseVersionedSemantics() {
+        return useVersionedSemantics;
     }
 
     @Override
@@ -88,16 +100,16 @@ class KTableFilter<KIn, VIn> implements KTableProcessorSupplier<KIn, VIn, KIn, V
 
     private class KTableFilterProcessor implements Processor<KIn, Change<VIn>, KIn, Change<VIn>> {
         private ProcessorContext<KIn, Change<VIn>> context;
-        private TimestampedKeyValueStore<KIn, VIn> store;
+        private KeyValueStoreWrapper<KIn, VIn> store;
         private TimestampedTupleForwarder<KIn, VIn> tupleForwarder;
 
         @Override
         public void init(final ProcessorContext<KIn, Change<VIn>> context) {
             this.context = context;
             if (queryableName != null) {
-                store = context.getStateStore(queryableName);
+                store = new KeyValueStoreWrapper<>(context, queryableName);
                 tupleForwarder = new TimestampedTupleForwarder<>(
-                    store,
+                    store.getStore(),
                     context,
                     new TimestampedCacheFlushListener<>(context),
                     sendOldValues);
@@ -112,15 +124,20 @@ class KTableFilter<KIn, VIn> implements KTableProcessorSupplier<KIn, VIn, KIn, V
             final VIn newValue = computeValue(key, change.newValue);
             final VIn oldValue = computeOldValue(key, change);
 
-            if (sendOldValues && oldValue == null && newValue == null) {
-                return; // unnecessary to forward here.
+            if (!useVersionedSemantics) {
+                if (sendOldValues && oldValue == null && newValue == null) {
+                    return; // unnecessary to forward here.
+                }
             }
 
             if (queryableName != null) {
-                store.put(key, ValueAndTimestamp.make(newValue, record.timestamp()));
-                tupleForwarder.maybeForward(record.withValue(new Change<>(newValue, oldValue)));
+                final long putReturnCode = store.put(key, newValue, record.timestamp());
+                // if not put to store, do not forward downstream either
+                if (putReturnCode != PUT_RETURN_CODE_NOT_PUT) {
+                    tupleForwarder.maybeForward(record.withValue(new Change<>(newValue, oldValue, putReturnCode == PUT_RETURN_CODE_IS_LATEST)));
+                }
             } else {
-                context.forward(record.withValue(new Change<>(newValue, oldValue)));
+                context.forward(record.withValue(new Change<>(newValue, oldValue, record.value().isLatest)));
             }
         }
 
@@ -168,13 +185,23 @@ class KTableFilter<KIn, VIn> implements KTableProcessorSupplier<KIn, VIn, KIn, V
         @Override
         public void init(final ProcessorContext<?, ?> context) {
             // This is the old processor context for compatibility with the other KTable processors.
-            // Once we migrte them all, we can swap this out.
+            // Once we migrate them all, we can swap this out.
             parentGetter.init(context);
         }
 
         @Override
         public ValueAndTimestamp<VIn> get(final KIn key) {
             return computeValue(key, parentGetter.get(key));
+        }
+
+        @Override
+        public ValueAndTimestamp<VIn> get(final KIn key, final long asOfTimestamp) {
+            return computeValue(key, parentGetter.get(key, asOfTimestamp));
+        }
+
+        @Override
+        public boolean isVersioned() {
+            return parentGetter.isVersioned();
         }
 
         @Override

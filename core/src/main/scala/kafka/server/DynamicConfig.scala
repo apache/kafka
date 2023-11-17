@@ -23,7 +23,7 @@ import org.apache.kafka.common.config.ConfigDef
 import org.apache.kafka.common.config.ConfigDef.Importance._
 import org.apache.kafka.common.config.ConfigDef.Range._
 import org.apache.kafka.common.config.ConfigDef.Type._
-import org.apache.kafka.server.log.internals.LogConfig
+import org.apache.kafka.storage.internals.log.LogConfig
 
 import scala.jdk.CollectionConverters._
 
@@ -71,7 +71,7 @@ object DynamicConfig {
   }
 
   object Client {
-    private val clientConfigs = org.apache.kafka.common.config.internals.QuotaConfigs.clientConfigs()
+    private val clientConfigs = org.apache.kafka.common.config.internals.QuotaConfigs.userAndClientQuotaConfigs()
 
     def configKeys = clientConfigs.configKeys
 
@@ -81,7 +81,7 @@ object DynamicConfig {
   }
 
   object User {
-    private val userConfigs = org.apache.kafka.common.config.internals.QuotaConfigs.userConfigs()
+    private val userConfigs = org.apache.kafka.common.config.internals.QuotaConfigs.scramMechanismsPlusUserAndClientQuotaConfigs()
 
     def configKeys = userConfigs.configKeys
 

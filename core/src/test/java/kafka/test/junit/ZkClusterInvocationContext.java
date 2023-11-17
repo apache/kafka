@@ -27,6 +27,7 @@ import kafka.test.ClusterInstance;
 import kafka.utils.EmptyTestInfo;
 import kafka.utils.TestUtils;
 import org.apache.kafka.clients.admin.Admin;
+import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.junit.jupiter.api.extension.AfterTestExecutionCallback;
@@ -198,6 +199,11 @@ public class ZkClusterInvocationContext implements TestTemplateInvocationContext
         }
 
         @Override
+        public String bootstrapControllers() {
+            throw new RuntimeException("Cannot use --bootstrap-controller with ZK-based clusters.");
+        }
+
+        @Override
         public Collection<SocketServer> brokerSocketServers() {
             return servers()
                     .map(KafkaServer::socketServer)
@@ -319,6 +325,7 @@ public class ZkClusterInvocationContext implements TestTemplateInvocationContext
                 clusterReference.get().killBroker(i);
             }
             clusterReference.get().restartDeadBrokers(true);
+            clusterReference.get().adminClientConfig().put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers());
         }
 
         @Override
@@ -336,9 +343,8 @@ public class ZkClusterInvocationContext implements TestTemplateInvocationContext
                 .orElseThrow(() -> new IllegalArgumentException("Unknown brokerId " + brokerId));
         }
 
-        private Stream<KafkaServer> servers() {
+        public Stream<KafkaServer> servers() {
             return JavaConverters.asJavaCollection(clusterReference.get().servers()).stream();
         }
-
     }
 }

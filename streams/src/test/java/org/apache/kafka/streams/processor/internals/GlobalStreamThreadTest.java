@@ -31,7 +31,7 @@ import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.internals.InternalNameProvider;
 import org.apache.kafka.streams.kstream.internals.MaterializedInternal;
-import org.apache.kafka.streams.kstream.internals.TimestampedKeyValueStoreMaterializer;
+import org.apache.kafka.streams.kstream.internals.KeyValueStoreMaterializer;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.api.ContextualProcessor;
 import org.apache.kafka.streams.processor.api.ProcessorSupplier;
@@ -100,7 +100,7 @@ public class GlobalStreamThreadTest {
             };
 
         builder.addGlobalStore(
-            new TimestampedKeyValueStoreMaterializer<>(materialized).materialize().withLoggingDisabled(),
+            new KeyValueStoreMaterializer<>(materialized).withLoggingDisabled(),
             "sourceName",
             null,
             null,

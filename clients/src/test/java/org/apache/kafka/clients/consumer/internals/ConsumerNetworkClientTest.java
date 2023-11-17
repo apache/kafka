@@ -64,7 +64,7 @@ public class ConsumerNetworkClientTest {
     private MockTime time = new MockTime(1);
     private Cluster cluster = TestUtils.singletonCluster(topicName, 1);
     private Node node = cluster.nodes().get(0);
-    private Metadata metadata = new Metadata(100, 50000, new LogContext(),
+    private Metadata metadata = new Metadata(100, 100, 50000, new LogContext(),
             new ClusterResourceListeners());
     private MockClient client = new MockClient(time, metadata);
     private ConsumerNetworkClient consumerClient = new ConsumerNetworkClient(new LogContext(),
@@ -221,12 +221,7 @@ public class ConsumerNetworkClientTest {
         final RequestFuture<ClientResponse> future = consumerClient.send(node, heartbeat());
 
         client.enableBlockingUntilWakeup(1);
-        Thread t = new Thread() {
-            @Override
-            public void run() {
-                consumerClient.poll(future);
-            }
-        };
+        Thread t = new Thread(() -> consumerClient.poll(future));
         t.start();
 
         consumerClient.disconnectAsync(node);
@@ -284,23 +279,13 @@ public class ConsumerNetworkClientTest {
         consumerClient.pollNoWakeup(); // dequeue and send the request
 
         client.enableBlockingUntilWakeup(2);
-        Thread t1 = new Thread() {
-            @Override
-            public void run() {
-                consumerClient.pollNoWakeup();
-            }
-        };
+        Thread t1 = new Thread(() -> consumerClient.pollNoWakeup());
         t1.start();
 
         // Sleep a little so that t1 is blocking in poll
         Thread.sleep(50);
 
-        Thread t2 = new Thread() {
-            @Override
-            public void run() {
-                consumerClient.poll(future);
-            }
-        };
+        Thread t2 = new Thread(() -> consumerClient.poll(future));
         t2.start();
 
         // Sleep a little so that t2 is awaiting the network client lock

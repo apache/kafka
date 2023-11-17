@@ -69,14 +69,12 @@ public class MemoryRecords extends AbstractRecords {
     }
 
     @Override
-    public long writeTo(TransferableChannel channel, long position, int length) throws IOException {
-        if (position > Integer.MAX_VALUE)
-            throw new IllegalArgumentException("position should not be greater than Integer.MAX_VALUE: " + position);
-        if (position + length > buffer.limit())
+    public int writeTo(TransferableChannel channel, int position, int length) throws IOException {
+        if (((long) position) + length > buffer.limit())
             throw new IllegalArgumentException("position+length should not be greater than buffer.limit(), position: "
                     + position + ", length: " + length + ", buffer.limit(): " + buffer.limit());
 
-        return Utils.tryWriteTo(channel, (int) position, length, buffer);
+        return Utils.tryWriteTo(channel, position, length, buffer);
     }
 
     /**
@@ -735,11 +733,13 @@ public class MemoryRecords extends AbstractRecords {
         return MemoryRecords.readableRecords(buffer);
     }
 
-    private static void writeLeaderChangeMessage(ByteBuffer buffer,
-                                                 long initialOffset,
-                                                 long timestamp,
-                                                 int leaderEpoch,
-                                                 LeaderChangeMessage leaderChangeMessage) {
+    private static void writeLeaderChangeMessage(
+        ByteBuffer buffer,
+        long initialOffset,
+        long timestamp,
+        int leaderEpoch,
+        LeaderChangeMessage leaderChangeMessage
+    ) {
         try (MemoryRecordsBuilder builder = new MemoryRecordsBuilder(
             buffer, RecordBatch.CURRENT_MAGIC_VALUE, CompressionType.NONE,
             TimestampType.CREATE_TIME, initialOffset, timestamp,
@@ -762,7 +762,8 @@ public class MemoryRecords extends AbstractRecords {
         return MemoryRecords.readableRecords(buffer);
     }
 
-    private static void writeSnapshotHeaderRecord(ByteBuffer buffer,
+    private static void writeSnapshotHeaderRecord(
+        ByteBuffer buffer,
         long initialOffset,
         long timestamp,
         int leaderEpoch,
@@ -790,7 +791,8 @@ public class MemoryRecords extends AbstractRecords {
         return MemoryRecords.readableRecords(buffer);
     }
 
-    private static void writeSnapshotFooterRecord(ByteBuffer buffer,
+    private static void writeSnapshotFooterRecord(
+        ByteBuffer buffer,
         long initialOffset,
         long timestamp,
         int leaderEpoch,

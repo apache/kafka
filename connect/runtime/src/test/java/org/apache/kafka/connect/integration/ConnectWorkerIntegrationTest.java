@@ -16,7 +16,12 @@
  */
 package org.apache.kafka.connect.integration;
 
+import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.utils.LogCaptureAppender;
+import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.runtime.distributed.DistributedConfig;
+import org.apache.kafka.connect.runtime.rest.entities.CreateConnectorRequest;
+import org.apache.kafka.connect.runtime.rest.resources.ConnectorsResource;
 import org.apache.kafka.connect.storage.StringConverter;
 import org.apache.kafka.connect.util.clusters.EmbeddedConnectCluster;
 import org.apache.kafka.connect.util.clusters.WorkerHandle;
@@ -29,9 +34,11 @@ import org.junit.experimental.categories.Category;
 import org.junit.rules.TestRule;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.slf4j.event.Level;
 
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Properties;
@@ -45,12 +52,16 @@ import static org.apache.kafka.connect.runtime.ConnectorConfig.CONNECTOR_CLIENT_
 import static org.apache.kafka.connect.runtime.ConnectorConfig.KEY_CONVERTER_CLASS_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.TASKS_MAX_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.VALUE_CONVERTER_CLASS_CONFIG;
+import static org.apache.kafka.connect.runtime.SinkConnectorConfig.TOPICS_CONFIG;
 import static org.apache.kafka.connect.runtime.TopicCreationConfig.DEFAULT_TOPIC_CREATION_PREFIX;
 import static org.apache.kafka.connect.runtime.TopicCreationConfig.PARTITIONS_CONFIG;
 import static org.apache.kafka.connect.runtime.TopicCreationConfig.REPLICATION_FACTOR_CONFIG;
 import static org.apache.kafka.connect.runtime.WorkerConfig.CONNECTOR_CLIENT_POLICY_CLASS_CONFIG;
 import static org.apache.kafka.connect.runtime.WorkerConfig.OFFSET_COMMIT_INTERVAL_MS_CONFIG;
-import static org.apache.kafka.connect.util.clusters.EmbeddedConnectClusterAssertions.CONNECTOR_SETUP_DURATION_MS;
+import static org.apache.kafka.connect.util.clusters.ConnectAssertions.CONNECTOR_SETUP_DURATION_MS;
+import static org.hamcrest.CoreMatchers.containsString;
+import static org.hamcrest.MatcherAssert.assertThat;
+import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
@@ -66,7 +77,7 @@ public class ConnectWorkerIntegrationTest {
     private static final int NUM_WORKERS = 3;
     private static final int NUM_TASKS = 4;
     private static final int MESSAGES_PER_POLL = 10;
-    private static final String CONNECTOR_NAME = "simple-source";
+    private static final String CONNECTOR_NAME = "simple-connector";
     private static final String TOPIC_NAME = "test-topic";
 
     private EmbeddedConnectCluster.Builder connectBuilder;
@@ -325,8 +336,443 @@ public class ConnectWorkerIntegrationTest {
         assertTrue("Connector and all tasks were not stopped in time", stopCounter.await(1, TimeUnit.MINUTES));
     }
 
+    /**
+     * Verify that the target state (started, paused, stopped) of a connector can be updated, with
+     * an emphasis on ensuring that the transitions between each state are correct.
+     * <p>
+     * The transitions we need to cover are:
+     * <ol>
+     *     <li>RUNNING -> PAUSED</li>
+     *     <li>RUNNING -> STOPPED</li>
+     *     <li>PAUSED -> RUNNING</li>
+     *     <li>PAUSED -> STOPPED</li>
+     *     <li>STOPPED -> RUNNING</li>
+     *     <li>STOPPED -> PAUSED</li>
+     * </ol>
+     * With some reordering, we can perform each transition just once:
+     * <ul>
+     *     <li>Start with RUNNING</li>
+     *     <li>Transition to STOPPED (2)</li>
+     *     <li>Transition to RUNNING (5)</li>
+     *     <li>Transition to PAUSED (1)</li>
+     *     <li>Transition to STOPPED (4)</li>
+     *     <li>Transition to PAUSED (6)</li>
+     *     <li>Transition to RUNNING (3)</li>
+     * </ul>
+     */
+    @Test
+    public void testPauseStopResume() throws Exception {
+        connect = connectBuilder.build();
+        // start the clusters
+        connect.start();
+
+        connect.assertions().assertAtLeastNumWorkersAreUp(NUM_WORKERS,
+                "Initial group of workers did not start in time.");
+
+        // Want to make sure to use multiple tasks
+        final int numTasks = 4;
+        Map<String, String> props = defaultSourceConnectorProps(TOPIC_NAME);
+        props.put(TASKS_MAX_CONFIG, Integer.toString(numTasks));
+
+        // Start with RUNNING
+        connect.configureConnector(CONNECTOR_NAME, props);
+        connect.assertions().assertConnectorAndExactlyNumTasksAreRunning(
+                CONNECTOR_NAME,
+                numTasks,
+                "Connector tasks did not start in time"
+        );
+
+        // Transition to STOPPED
+        connect.stopConnector(CONNECTOR_NAME);
+        // Issue a second request to ensure that this operation is idempotent
+        connect.stopConnector(CONNECTOR_NAME);
+        connect.assertions().assertConnectorIsStopped(
+                CONNECTOR_NAME,
+                "Connector did not stop in time"
+        );
+        // If the connector is truly stopped, we should also see an empty set of tasks and task configs
+        assertEquals(Collections.emptyList(), connect.connectorInfo(CONNECTOR_NAME).tasks());
+        assertEquals(Collections.emptyList(), connect.taskConfigs(CONNECTOR_NAME));
+
+        // Transition to RUNNING
+        connect.resumeConnector(CONNECTOR_NAME);
+        // Issue a second request to ensure that this operation is idempotent
+        connect.resumeConnector(CONNECTOR_NAME);
+        connect.assertions().assertConnectorAndExactlyNumTasksAreRunning(
+                CONNECTOR_NAME,
+                numTasks,
+                "Connector tasks did not resume in time"
+        );
+
+        // Transition to PAUSED
+        connect.pauseConnector(CONNECTOR_NAME);
+        // Issue a second request to ensure that this operation is idempotent
+        connect.pauseConnector(CONNECTOR_NAME);
+        connect.assertions().assertConnectorAndExactlyNumTasksArePaused(
+                CONNECTOR_NAME,
+                numTasks,
+                "Connector did not pause in time"
+        );
+
+        // Transition to STOPPED
+        connect.stopConnector(CONNECTOR_NAME);
+        connect.assertions().assertConnectorIsStopped(
+                CONNECTOR_NAME,
+                "Connector did not stop in time"
+        );
+        assertEquals(Collections.emptyList(), connect.connectorInfo(CONNECTOR_NAME).tasks());
+        assertEquals(Collections.emptyList(), connect.taskConfigs(CONNECTOR_NAME));
+
+        // Transition to PAUSED
+        connect.pauseConnector(CONNECTOR_NAME);
+        connect.assertions().assertConnectorAndExactlyNumTasksArePaused(
+                CONNECTOR_NAME,
+                0,
+                "Connector did not pause in time"
+        );
+
+        // Transition to RUNNING
+        connect.resumeConnector(CONNECTOR_NAME);
+        connect.assertions().assertConnectorAndExactlyNumTasksAreRunning(
+                CONNECTOR_NAME,
+                numTasks,
+                "Connector tasks did not resume in time"
+        );
+
+        // Delete the connector
+        connect.deleteConnector(CONNECTOR_NAME);
+        connect.assertions().assertConnectorDoesNotExist(
+                CONNECTOR_NAME,
+                "Connector wasn't deleted in time"
+        );
+    }
+
+    /**
+     * Test out the {@code STOPPED} state introduced in
+     * <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-875%3A+First-class+offsets+support+in+Kafka+Connect#KIP875:FirstclassoffsetssupportinKafkaConnect-Newtargetstate:STOPPED">KIP-875</a>,
+     * with an emphasis on correctly handling errors thrown from the connector.
+     */
+    @Test
+    public void testStoppedState() throws Exception {
+        connect = connectBuilder.build();
+        // start the clusters
+        connect.start();
+
+        connect.assertions().assertAtLeastNumWorkersAreUp(NUM_WORKERS,
+                "Initial group of workers did not start in time.");
+
+        Map<String, String> props = defaultSourceConnectorProps(TOPIC_NAME);
+        // Fail the connector on startup
+        props.put("connector.start.inject.error", "true");
+
+        // Start the connector (should fail immediately and generate no tasks)
+        connect.configureConnector(CONNECTOR_NAME, props);
+        connect.assertions().assertConnectorIsFailedAndTasksHaveFailed(
+                CONNECTOR_NAME,
+                0,
+                "Connector should have failed and not generated any tasks"
+        );
+
+        // Stopping a failed connector updates its state to STOPPED in the REST API
+        connect.stopConnector(CONNECTOR_NAME);
+        connect.assertions().assertConnectorIsStopped(
+                CONNECTOR_NAME,
+                "Connector did not stop in time"
+        );
+        // If the connector is truly stopped, we should also see an empty set of tasks and task configs
+        assertEquals(Collections.emptyList(), connect.connectorInfo(CONNECTOR_NAME).tasks());
+        assertEquals(Collections.emptyList(), connect.taskConfigs(CONNECTOR_NAME));
+
+        // Can resume a connector after its Connector has failed before shutdown after receiving a stop request
+        props.remove("connector.start.inject.error");
+        connect.configureConnector(CONNECTOR_NAME, props);
+        connect.resumeConnector(CONNECTOR_NAME);
+        connect.assertions().assertConnectorAndExactlyNumTasksAreRunning(
+                CONNECTOR_NAME,
+                NUM_TASKS,
+                "Connector or tasks did not start running healthily in time"
+        );
+
+        // Fail the connector on shutdown
+        props.put("connector.stop.inject.error", "true");
+        // Stopping a connector that fails during shutdown after receiving a stop request updates its state to STOPPED in the REST API
+        connect.configureConnector(CONNECTOR_NAME, props);
+        connect.stopConnector(CONNECTOR_NAME);
+        connect.assertions().assertConnectorIsStopped(
+                CONNECTOR_NAME,
+                "Connector did not stop in time"
+        );
+        assertEquals(Collections.emptyList(), connect.connectorInfo(CONNECTOR_NAME).tasks());
+        assertEquals(Collections.emptyList(), connect.taskConfigs(CONNECTOR_NAME));
+
+        // Can resume a connector after its Connector has failed during shutdown after receiving a stop request
+        connect.resumeConnector(CONNECTOR_NAME);
+        connect.assertions().assertConnectorAndExactlyNumTasksAreRunning(
+                CONNECTOR_NAME,
+                NUM_TASKS,
+                "Connector or tasks did not start running healthily in time"
+        );
+
+        // Can delete a stopped connector
+        connect.deleteConnector(CONNECTOR_NAME);
+        connect.assertions().assertConnectorDoesNotExist(
+                CONNECTOR_NAME,
+                "Connector wasn't deleted in time"
+        );
+    }
+
+    /**
+     * The <strong><em>GET /connectors/{connector}/tasks-config</em></strong> endpoint was deprecated in
+     * <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-970%3A+Deprecate+and+remove+Connect%27s+redundant+task+configurations+endpoint">KIP-970</a>
+     * and is slated for removal in the next major release. This test verifies that the deprecation warning log is emitted on trying to use the
+     * deprecated endpoint.
+     */
+    @Test
+    public void testTasksConfigDeprecation() throws Exception {
+        connect = connectBuilder.build();
+        // start the clusters
+        connect.start();
+
+        connect.assertions().assertAtLeastNumWorkersAreUp(
+            NUM_WORKERS,
+            "Initial group of workers did not start in time."
+        );
+
+        connect.configureConnector(CONNECTOR_NAME, defaultSourceConnectorProps(TOPIC_NAME));
+        connect.assertions().assertConnectorAndExactlyNumTasksAreRunning(
+            CONNECTOR_NAME,
+            NUM_TASKS,
+            "Connector tasks did not start in time"
+        );
+
+        try (LogCaptureAppender logCaptureAppender = LogCaptureAppender.createAndRegister(ConnectorsResource.class)) {
+            connect.requestGet(connect.endpointForResource("connectors/" + CONNECTOR_NAME + "/tasks-config"));
+            List<LogCaptureAppender.Event> logEvents = logCaptureAppender.getEvents();
+            assertEquals(1, logEvents.size());
+            assertEquals(Level.WARN.toString(), logEvents.get(0).getLevel());
+            assertThat(logEvents.get(0).getMessage(), containsString("deprecated"));
+        }
+
+    }
+
+    @Test
+    public void testCreateConnectorWithPausedInitialState() throws Exception {
+        connect = connectBuilder.build();
+        // start the clusters
+        connect.start();
+
+        connect.assertions().assertAtLeastNumWorkersAreUp(NUM_WORKERS,
+            "Initial group of workers did not start in time.");
+
+        CreateConnectorRequest createConnectorRequest = new CreateConnectorRequest(
+            CONNECTOR_NAME,
+            defaultSourceConnectorProps(TOPIC_NAME),
+            CreateConnectorRequest.InitialState.PAUSED
+        );
+        connect.configureConnector(createConnectorRequest);
+
+        // Verify that the connector's status is PAUSED and also that no tasks were spawned for the connector
+        connect.assertions().assertConnectorAndExactlyNumTasksArePaused(
+            CONNECTOR_NAME,
+            0,
+            "Connector was not created in a paused state"
+        );
+        assertEquals(Collections.emptyList(), connect.connectorInfo(CONNECTOR_NAME).tasks());
+        assertEquals(Collections.emptyList(), connect.taskConfigs(CONNECTOR_NAME));
+
+        // Verify that a connector created in the PAUSED state can be resumed successfully
+        connect.resumeConnector(CONNECTOR_NAME);
+        connect.assertions().assertConnectorAndExactlyNumTasksAreRunning(
+            CONNECTOR_NAME,
+            NUM_TASKS,
+            "Connector or tasks did not start running healthily in time"
+        );
+    }
+
+    @Test
+    public void testCreateSourceConnectorWithStoppedInitialStateAndModifyOffsets() throws Exception {
+        connect = connectBuilder.build();
+        // start the clusters
+        connect.start();
+
+        connect.assertions().assertAtLeastNumWorkersAreUp(NUM_WORKERS,
+            "Initial group of workers did not start in time.");
+
+        Map<String, String> props = defaultSourceConnectorProps(TOPIC_NAME);
+
+        // Configure the connector to produce a maximum of 10 messages
+        props.put("max.messages", "10");
+        props.put(TASKS_MAX_CONFIG, "1");
+        CreateConnectorRequest createConnectorRequest = new CreateConnectorRequest(
+            CONNECTOR_NAME,
+            props,
+            CreateConnectorRequest.InitialState.STOPPED
+        );
+        connect.configureConnector(createConnectorRequest);
+
+        // Verify that the connector's status is STOPPED and also that no tasks were spawned for the connector
+        connect.assertions().assertConnectorIsStopped(
+            CONNECTOR_NAME,
+            "Connector was not created in a stopped state"
+        );
+        assertEquals(Collections.emptyList(), connect.connectorInfo(CONNECTOR_NAME).tasks());
+        assertEquals(Collections.emptyList(), connect.taskConfigs(CONNECTOR_NAME));
+
+        // Verify that the offsets can be modified for a source connector created in the STOPPED state
+
+        // Alter the offsets so that only 5 messages are produced
+        connect.alterSourceConnectorOffset(
+            CONNECTOR_NAME,
+            Collections.singletonMap("task.id", CONNECTOR_NAME + "-0"),
+            Collections.singletonMap("saved", 5L)
+        );
+
+        // Verify that a connector created in the STOPPED state can be resumed successfully
+        connect.resumeConnector(CONNECTOR_NAME);
+        connect.assertions().assertConnectorAndExactlyNumTasksAreRunning(
+            CONNECTOR_NAME,
+            1,
+            "Connector or tasks did not start running healthily in time"
+        );
+
+        // Verify that only 5 messages were produced. We verify this by consuming all the messages from the topic after we've already ensured that at
+        // least 5 messages can be consumed.
+        long timeoutMs = TimeUnit.SECONDS.toMillis(10);
+        connect.kafka().consume(5, timeoutMs, TOPIC_NAME);
+        assertEquals(5, connect.kafka().consumeAll(timeoutMs, TOPIC_NAME).count());
+    }
+
+    @Test
+    public void testCreateSinkConnectorWithStoppedInitialStateAndModifyOffsets() throws Exception {
+        connect = connectBuilder.build();
+        // start the clusters
+        connect.start();
+
+        connect.assertions().assertAtLeastNumWorkersAreUp(NUM_WORKERS,
+            "Initial group of workers did not start in time.");
+
+        // Create topic and produce 10 messages
+        connect.kafka().createTopic(TOPIC_NAME);
+        for (int i = 0; i < 10; i++) {
+            connect.kafka().produce(TOPIC_NAME, "Message " + i);
+        }
+
+        Map<String, String> props = defaultSinkConnectorProps(TOPIC_NAME);
+        props.put(TASKS_MAX_CONFIG, "1");
+
+        CreateConnectorRequest createConnectorRequest = new CreateConnectorRequest(
+            CONNECTOR_NAME,
+            props,
+            CreateConnectorRequest.InitialState.STOPPED
+        );
+        connect.configureConnector(createConnectorRequest);
+
+        // Verify that the connector's status is STOPPED and also that no tasks were spawned for the connector
+        connect.assertions().assertConnectorIsStopped(
+            CONNECTOR_NAME,
+            "Connector was not created in a stopped state"
+        );
+        assertEquals(Collections.emptyList(), connect.connectorInfo(CONNECTOR_NAME).tasks());
+        assertEquals(Collections.emptyList(), connect.taskConfigs(CONNECTOR_NAME));
+
+        // Verify that the offsets can be modified for a sink connector created in the STOPPED state
+
+        // Alter the offsets so that the first 5 messages in the topic are skipped
+        connect.alterSinkConnectorOffset(CONNECTOR_NAME, new TopicPartition(TOPIC_NAME, 0), 5L);
+
+        // This will cause the connector task to fail if it encounters a record with offset < 5
+        TaskHandle taskHandle = RuntimeHandles.get().connectorHandle(CONNECTOR_NAME).taskHandle(CONNECTOR_NAME + "-0",
+            sinkRecord -> {
+                if (sinkRecord.kafkaOffset() < 5L) {
+                    throw new ConnectException("Unexpected record encountered: " + sinkRecord);
+                }
+            });
+
+        // We produced 10 records and altered the connector offsets to skip over the first 5, so we expect 5 records to be consumed
+        taskHandle.expectedRecords(5);
+
+        // Verify that a connector created in the STOPPED state can be resumed successfully
+        connect.resumeConnector(CONNECTOR_NAME);
+        connect.assertions().assertConnectorAndExactlyNumTasksAreRunning(
+            CONNECTOR_NAME,
+            1,
+            "Connector or tasks did not start running healthily in time"
+        );
+
+        taskHandle.awaitRecords(TimeUnit.SECONDS.toMillis(10));
+
+        // Confirm that the task is still running (i.e. it didn't fail due to encountering any records with offset < 5)
+        connect.assertions().assertConnectorAndExactlyNumTasksAreRunning(
+            CONNECTOR_NAME,
+            1,
+            "Connector or tasks did not start running healthily in time"
+        );
+    }
+
+    @Test
+    public void testDeleteConnectorCreatedWithPausedOrStoppedInitialState() throws Exception {
+        connect = connectBuilder.build();
+        // start the clusters
+        connect.start();
+
+        connect.assertions().assertAtLeastNumWorkersAreUp(NUM_WORKERS,
+            "Initial group of workers did not start in time.");
+
+        // Create a connector with PAUSED initial state
+        CreateConnectorRequest createConnectorRequest = new CreateConnectorRequest(
+            CONNECTOR_NAME,
+            defaultSourceConnectorProps(TOPIC_NAME),
+            CreateConnectorRequest.InitialState.PAUSED
+        );
+        connect.configureConnector(createConnectorRequest);
+
+        // Verify that the connector's status is PAUSED and also that no tasks were spawned for the connector
+        connect.assertions().assertConnectorAndExactlyNumTasksArePaused(
+            CONNECTOR_NAME,
+            0,
+            "Connector was not created in a paused state"
+        );
+        assertEquals(Collections.emptyList(), connect.connectorInfo(CONNECTOR_NAME).tasks());
+        assertEquals(Collections.emptyList(), connect.taskConfigs(CONNECTOR_NAME));
+
+        // Verify that a connector created in the PAUSED state can be deleted successfully
+        connect.deleteConnector(CONNECTOR_NAME);
+        connect.assertions().assertConnectorDoesNotExist(CONNECTOR_NAME, "Connector wasn't deleted in time");
+
+
+        // Create a connector with STOPPED initial state
+        createConnectorRequest = new CreateConnectorRequest(
+            CONNECTOR_NAME,
+            defaultSourceConnectorProps(TOPIC_NAME),
+            CreateConnectorRequest.InitialState.STOPPED
+        );
+        connect.configureConnector(createConnectorRequest);
+
+        // Verify that the connector's status is STOPPED and also that no tasks were spawned for the connector
+        connect.assertions().assertConnectorIsStopped(
+            CONNECTOR_NAME,
+            "Connector was not created in a stopped state"
+        );
+        assertEquals(Collections.emptyList(), connect.connectorInfo(CONNECTOR_NAME).tasks());
+        assertEquals(Collections.emptyList(), connect.taskConfigs(CONNECTOR_NAME));
+
+        // Verify that a connector created in the STOPPED state can be deleted successfully
+        connect.deleteConnector(CONNECTOR_NAME);
+        connect.assertions().assertConnectorDoesNotExist(CONNECTOR_NAME, "Connector wasn't deleted in time");
+    }
+
+    private Map<String, String> defaultSinkConnectorProps(String topics) {
+        // setup props for the sink connector
+        Map<String, String> props = new HashMap<>();
+        props.put(CONNECTOR_CLASS_CONFIG, MonitorableSinkConnector.class.getSimpleName());
+        props.put(TASKS_MAX_CONFIG, String.valueOf(NUM_TASKS));
+        props.put(TOPICS_CONFIG, topics);
+
+        return props;
+    }
+
     private Map<String, String> defaultSourceConnectorProps(String topic) {
-        // setup up props for the source connector
+        // setup props for the source connector
         Map<String, String> props = new HashMap<>();
         props.put(CONNECTOR_CLASS_CONFIG, MonitorableSourceConnector.class.getSimpleName());
         props.put(TASKS_MAX_CONFIG, String.valueOf(NUM_TASKS));

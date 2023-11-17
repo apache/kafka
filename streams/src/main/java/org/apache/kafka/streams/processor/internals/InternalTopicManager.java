@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import java.util.Map.Entry;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.Config;
 import org.apache.kafka.clients.admin.ConfigEntry;
@@ -27,6 +28,7 @@ import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.admin.TopicDescription;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.KafkaFuture;
+import org.apache.kafka.common.TopicPartitionInfo;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.config.ConfigResource.Type;
 import org.apache.kafka.common.config.TopicConfig;
@@ -57,8 +59,11 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
+
 import java.util.function.BiConsumer;
 import java.util.stream.Collectors;
+
+
 
 public class InternalTopicManager {
     private final static String BUG_ERROR_MESSAGE = "This indicates a bug. " +
@@ -275,10 +280,12 @@ public class InternalTopicManager {
     private void validateCleanupPolicy(final ValidationResult validationResult,
                                        final InternalTopicConfig topicConfig,
                                        final Config brokerSideTopicConfig) {
-        if (topicConfig instanceof UnwindowedChangelogTopicConfig) {
-            validateCleanupPolicyForUnwindowedChangelogs(validationResult, topicConfig, brokerSideTopicConfig);
+        if (topicConfig instanceof UnwindowedUnversionedChangelogTopicConfig) {
+            validateCleanupPolicyForUnwindowedUnversionedChangelogs(validationResult, topicConfig, brokerSideTopicConfig);
         } else if (topicConfig instanceof WindowedChangelogTopicConfig) {
             validateCleanupPolicyForWindowedChangelogs(validationResult, topicConfig, brokerSideTopicConfig);
+        } else if (topicConfig instanceof VersionedChangelogTopicConfig) {
+            validateCleanupPolicyForVersionedChangelogs(validationResult, topicConfig, brokerSideTopicConfig);
         } else if (topicConfig instanceof RepartitionTopicConfig) {
             validateCleanupPolicyForRepartitionTopic(validationResult, topicConfig, brokerSideTopicConfig);
         } else {
@@ -286,9 +293,9 @@ public class InternalTopicManager {
         }
     }
 
-    private void validateCleanupPolicyForUnwindowedChangelogs(final ValidationResult validationResult,
-                                                              final InternalTopicConfig topicConfig,
-                                                              final Config brokerSideTopicConfig) {
+    private void validateCleanupPolicyForUnwindowedUnversionedChangelogs(final ValidationResult validationResult,
+                                                                         final InternalTopicConfig topicConfig,
+                                                                         final Config brokerSideTopicConfig) {
         final String topicName = topicConfig.name();
         final String cleanupPolicy = getBrokerSideConfigValue(brokerSideTopicConfig, TopicConfig.CLEANUP_POLICY_CONFIG, topicName);
         if (cleanupPolicy.contains(TopicConfig.CLEANUP_POLICY_DELETE)) {
@@ -328,6 +335,35 @@ public class InternalTopicManager {
                         + topicName + " is set but it should be unset."
                 );
             }
+        }
+    }
+
+    private void validateCleanupPolicyForVersionedChangelogs(final ValidationResult validationResult,
+                                                             final InternalTopicConfig topicConfig,
+                                                             final Config brokerSideTopicConfig) {
+        final String topicName = topicConfig.name();
+        final String cleanupPolicy = getBrokerSideConfigValue(brokerSideTopicConfig, TopicConfig.CLEANUP_POLICY_CONFIG, topicName);
+
+        if (cleanupPolicy.contains(TopicConfig.CLEANUP_POLICY_DELETE)) {
+            validationResult.addMisconfiguration(
+                topicName,
+                "Cleanup policy (" + TopicConfig.CLEANUP_POLICY_CONFIG + ") of existing internal topic "
+                    + topicName + " should not contain \""
+                    + TopicConfig.CLEANUP_POLICY_DELETE + "\"."
+            );
+        }
+
+        final long brokerSideCompactionLagMs =
+            Long.parseLong(getBrokerSideConfigValue(brokerSideTopicConfig, TopicConfig.MIN_COMPACTION_LAG_MS_CONFIG, topicName));
+        final Map<String, String> streamsSideConfig =
+            topicConfig.getProperties(defaultTopicConfigs, windowChangeLogAdditionalRetention);
+        final long streamsSideCompactionLagMs = Long.parseLong(streamsSideConfig.get(TopicConfig.MIN_COMPACTION_LAG_MS_CONFIG));
+        if (brokerSideCompactionLagMs < streamsSideCompactionLagMs) {
+            validationResult.addMisconfiguration(
+                topicName,
+                "Min compaction lag (" + TopicConfig.MIN_COMPACTION_LAG_MS_CONFIG + ") of existing internal topic "
+                    + topicName + " is " + brokerSideCompactionLagMs + " but should be " + streamsSideCompactionLagMs + " or larger."
+            );
         }
     }
 
@@ -373,6 +409,43 @@ public class InternalTopicManager {
                 topicName + " could not be " + "retrieved from the brokers. " + BUG_ERROR_MESSAGE);
         }
         return brokerSideConfigEntry.value();
+    }
+
+    public Map<String, List<TopicPartitionInfo>> getTopicPartitionInfo(final Set<String> topics) {
+        log.debug("Starting to describe topics {} in partition assignor.", topics);
+
+        long currentWallClockMs = time.milliseconds();
+        final long deadlineMs = currentWallClockMs + retryTimeoutMs;
+
+        final Set<String> topicsToDescribe = new HashSet<>(topics);
+        final Map<String, List<TopicPartitionInfo>> topicPartitionInfo = new HashMap<>();
+
+        while (!topicsToDescribe.isEmpty()) {
+            final Map<String, List<TopicPartitionInfo>> existed = getTopicPartitionInfo(topicsToDescribe, null);
+            topicPartitionInfo.putAll(existed);
+            topicsToDescribe.removeAll(topicPartitionInfo.keySet());
+            if (!topicsToDescribe.isEmpty()) {
+                currentWallClockMs = time.milliseconds();
+
+                if (currentWallClockMs >= deadlineMs) {
+                    final String timeoutError = String.format(
+                        "Could not create topics within %d milliseconds. " +
+                            "This can happen if the Kafka cluster is temporarily not available.",
+                        retryTimeoutMs);
+                    log.error(timeoutError);
+                    throw new TimeoutException(timeoutError);
+                }
+                log.info(
+                    "Topics {} could not be describe fully. Will retry in {} milliseconds. Remaining time in milliseconds: {}",
+                    topics,
+                    retryBackOffMs,
+                    deadlineMs - currentWallClockMs
+                );
+                Utils.sleep(retryBackOffMs);
+            }
+        }
+        log.debug("Completed describing topics");
+        return topicPartitionInfo;
     }
 
     /**
@@ -466,6 +539,9 @@ public class InternalTopicManager {
                                                 topicName)
                                         );
                                     }
+                                } else if (cause instanceof TimeoutException) {
+                                    log.error("Creating topic {} timed out.\n" +
+                                            "Error message was: {}", topicName, cause.toString());
                                 } else {
                                     throw new StreamsException(
                                             String.format("Could not create topic %s.", topicName),
@@ -473,9 +549,6 @@ public class InternalTopicManager {
                                     );
                                 }
                             }
-                        } catch (final TimeoutException retriableException) {
-                            log.error("Creating topic {} timed out.\n" +
-                                    "Error message was: {}", topicName, retriableException.toString());
                         }
                     }
                 }
@@ -505,6 +578,57 @@ public class InternalTopicManager {
     }
 
     /**
+     * Try to get the partition information for the given topics; return the partition info for topics that already exists.
+     *
+     * Topics that were not able to get its description will simply not be returned
+     */
+    // visible for testing
+    protected Map<String, List<TopicPartitionInfo>> getTopicPartitionInfo(final Set<String> topics,
+                                                                          final Set<String> tempUnknownTopics) {
+        final DescribeTopicsResult describeTopicsResult = adminClient.describeTopics(topics);
+        final Map<String, KafkaFuture<TopicDescription>> futures = describeTopicsResult.topicNameValues();
+
+        final Map<String, List<TopicPartitionInfo>> topicPartitionInfo = new HashMap<>();
+        for (final Map.Entry<String, KafkaFuture<TopicDescription>> topicFuture : futures.entrySet()) {
+            final String topicName = topicFuture.getKey();
+            try {
+                final TopicDescription topicDescription = topicFuture.getValue().get();
+                topicPartitionInfo.put(topicName, topicDescription.partitions());
+            } catch (final InterruptedException fatalException) {
+                // this should not happen; if it ever happens it indicate a bug
+                Thread.currentThread().interrupt();
+                log.error(INTERRUPTED_ERROR_MESSAGE, fatalException);
+                throw new IllegalStateException(INTERRUPTED_ERROR_MESSAGE, fatalException);
+            } catch (final ExecutionException couldNotDescribeTopicException) {
+                final Throwable cause = couldNotDescribeTopicException.getCause();
+                if (cause instanceof UnknownTopicOrPartitionException) {
+                    // This topic didn't exist
+                    log.debug("Topic {} is unknown or not found, hence not existed yet.\n" +
+                        "Error message was: {}", topicName, cause.toString());
+                } else if (cause instanceof LeaderNotAvailableException) {
+                    if (tempUnknownTopics != null) {
+                        tempUnknownTopics.add(topicName);
+                    }
+                    log.debug("The leader of topic {} is not available.\n" +
+                        "Error message was: {}", topicName, cause.toString());
+                } else if (cause instanceof TimeoutException) {
+                    if (tempUnknownTopics != null) {
+                        tempUnknownTopics.add(topicName);
+                    }
+                    log.debug("Describing topic {} (to get number of partitions) timed out.\n" +
+                            "Error message was: {}", topicName, cause.toString());
+                } else {
+                    log.error("Unexpected error during topic description for {}.\n" +
+                        "Error message was: {}", topicName, cause.toString());
+                    throw new StreamsException(String.format("Could not create topic %s.", topicName), cause);
+                }
+            }
+        }
+
+        return topicPartitionInfo;
+    }
+
+    /**
      * Try to get the number of partitions for the given topics; return the number of partitions for topics that already exists.
      *
      * Topics that were not able to get its description will simply not be returned
@@ -514,43 +638,9 @@ public class InternalTopicManager {
                                                     final Set<String> tempUnknownTopics) {
         log.debug("Trying to check if topics {} have been created with expected number of partitions.", topics);
 
-        final DescribeTopicsResult describeTopicsResult = adminClient.describeTopics(topics);
-        final Map<String, KafkaFuture<TopicDescription>> futures = describeTopicsResult.topicNameValues();
-
-        final Map<String, Integer> existedTopicPartition = new HashMap<>();
-        for (final Map.Entry<String, KafkaFuture<TopicDescription>> topicFuture : futures.entrySet()) {
-            final String topicName = topicFuture.getKey();
-            try {
-                final TopicDescription topicDescription = topicFuture.getValue().get();
-                existedTopicPartition.put(topicName, topicDescription.partitions().size());
-            } catch (final InterruptedException fatalException) {
-                // this should not happen; if it ever happens it indicate a bug
-                Thread.currentThread().interrupt();
-                log.error(INTERRUPTED_ERROR_MESSAGE, fatalException);
-                throw new IllegalStateException(INTERRUPTED_ERROR_MESSAGE, fatalException);
-            } catch (final ExecutionException couldNotDescribeTopicException) {
-                final Throwable cause = couldNotDescribeTopicException.getCause();
-                if (cause instanceof UnknownTopicOrPartitionException) {
-                    // This topic didn't exist, proceed to try to create it
-                    log.debug("Topic {} is unknown or not found, hence not existed yet.\n" +
-                        "Error message was: {}", topicName, cause.toString());
-                } else if (cause instanceof LeaderNotAvailableException) {
-                    tempUnknownTopics.add(topicName);
-                    log.debug("The leader of topic {} is not available.\n" +
-                        "Error message was: {}", topicName, cause.toString());
-                } else {
-                    log.error("Unexpected error during topic description for {}.\n" +
-                        "Error message was: {}", topicName, cause.toString());
-                    throw new StreamsException(String.format("Could not create topic %s.", topicName), cause);
-                }
-            } catch (final TimeoutException retriableException) {
-                tempUnknownTopics.add(topicName);
-                log.debug("Describing topic {} (to get number of partitions) timed out.\n" +
-                    "Error message was: {}", topicName, retriableException.toString());
-            }
-        }
-
-        return existedTopicPartition;
+        final Map<String, List<TopicPartitionInfo>> topicPartitionInfo = getTopicPartitionInfo(topics, tempUnknownTopics);
+        return topicPartitionInfo.entrySet().stream().collect(Collectors.toMap(
+            Entry::getKey, e -> e.getValue().size()));
     }
 
     /**
@@ -577,7 +667,7 @@ public class InternalTopicManager {
                 if (!existedTopicPartition.get(topicName).equals(numberOfPartitions.get())) {
                     final String errorMsg = String.format("Existing internal topic %s has invalid partitions: " +
                             "expected: %d; actual: %d. " +
-                            "Use 'kafka.tools.StreamsResetter' tool to clean up invalid topics before processing.",
+                            "Use 'org.apache.kafka.tools.StreamsResetter' tool to clean up invalid topics before processing.",
                         topicName, numberOfPartitions.get(), existedTopicPartition.get(topicName));
                     log.error(errorMsg);
                     throw new StreamsException(errorMsg);

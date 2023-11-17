@@ -17,7 +17,9 @@
 package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.StreamsException;
+import org.apache.kafka.streams.internals.UpgradeFromValues;
 import org.apache.kafka.streams.kstream.KeyValueMapper;
 import org.apache.kafka.streams.processor.api.ContextualProcessor;
 import org.apache.kafka.streams.processor.api.Processor;
@@ -25,6 +27,8 @@ import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
+
+import java.util.Map;
 
 import static org.apache.kafka.streams.state.ValueAndTimestamp.getValueOrNull;
 
@@ -37,10 +41,20 @@ public class KTableRepartitionMap<K, V, K1, V1> implements KTableRepartitionMapS
 
     private final KTableImpl<K, ?, V> parent;
     private final KeyValueMapper<? super K, ? super V, KeyValue<K1, V1>> mapper;
+    private boolean useVersionedSemantics = false;
 
     KTableRepartitionMap(final KTableImpl<K, ?, V> parent, final KeyValueMapper<? super K, ? super V, KeyValue<K1, V1>> mapper) {
         this.parent = parent;
         this.mapper = mapper;
+    }
+
+    // VisibleForTesting
+    boolean isUseVersionedSemantics() {
+        return useVersionedSemantics;
+    }
+
+    public void setUseVersionedSemantics(final boolean useVersionedSemantics) {
+        this.useVersionedSemantics = useVersionedSemantics;
     }
 
     @Override
@@ -76,6 +90,49 @@ public class KTableRepartitionMap<K, V, K1, V1> implements KTableRepartitionMapS
 
     private class KTableMapProcessor extends ContextualProcessor<K, Change<V>, K1, Change<V1>> {
 
+        private boolean isNotUpgrade;
+
+        @SuppressWarnings("checkstyle:cyclomaticComplexity")
+        private boolean isNotUpgrade(final Map<String, ?> configs) {
+            final Object upgradeFrom = configs.get(StreamsConfig.UPGRADE_FROM_CONFIG);
+            if (upgradeFrom == null) {
+                return true;
+            }
+
+            switch (UpgradeFromValues.getValueFromString((String) upgradeFrom)) {
+                case UPGRADE_FROM_0100:
+                case UPGRADE_FROM_0101:
+                case UPGRADE_FROM_0102:
+                case UPGRADE_FROM_0110:
+                case UPGRADE_FROM_10:
+                case UPGRADE_FROM_11:
+                case UPGRADE_FROM_20:
+                case UPGRADE_FROM_21:
+                case UPGRADE_FROM_22:
+                case UPGRADE_FROM_23:
+                case UPGRADE_FROM_24:
+                case UPGRADE_FROM_25:
+                case UPGRADE_FROM_26:
+                case UPGRADE_FROM_27:
+                case UPGRADE_FROM_28:
+                case UPGRADE_FROM_30:
+                case UPGRADE_FROM_31:
+                case UPGRADE_FROM_32:
+                case UPGRADE_FROM_33:
+                case UPGRADE_FROM_34:
+                    // there is no need to add new versions here
+                    return false;
+                default:
+                    return true;
+            }
+        }
+
+        @Override
+        public void init(final ProcessorContext<K1, Change<V1>> context) {
+            super.init(context);
+            isNotUpgrade = isNotUpgrade(context().appConfigs());
+        }
+
         /**
          * @throws StreamsException if key is null
          */
@@ -86,6 +143,14 @@ public class KTableRepartitionMap<K, V, K1, V1> implements KTableRepartitionMapS
                 throw new StreamsException("Record key for the grouping KTable should not be null.");
             }
 
+            final boolean isLatest = record.value().isLatest;
+            if (useVersionedSemantics && !isLatest) {
+                // skip out-of-order records when aggregating a versioned table, since the
+                // aggregate should include latest-by-timestamp records only. as an optimization,
+                // do not forward the out-of-order record downstream to the repartition topic either.
+                return;
+            }
+
             // if the value is null, we do not need to forward its selected key-value further
             final KeyValue<? extends K1, ? extends V1> newPair = record.value().newValue == null ? null :
                 mapper.apply(record.key(), record.value().newValue);
@@ -94,12 +159,18 @@ public class KTableRepartitionMap<K, V, K1, V1> implements KTableRepartitionMapS
 
             // if the selected repartition key or value is null, skip
             // forward oldPair first, to be consistent with reduce and aggregate
-            if (oldPair != null && oldPair.key != null && oldPair.value != null) {
-                context().forward(record.withKey(oldPair.key).withValue(new Change<>(null, oldPair.value)));
-            }
+            final boolean oldPairNotNull = oldPair != null && oldPair.key != null && oldPair.value != null;
+            final boolean newPairNotNull = newPair != null && newPair.key != null && newPair.value != null;
+            if (isNotUpgrade && oldPairNotNull && newPairNotNull && oldPair.key.equals(newPair.key)) {
+                context().forward(record.withKey(oldPair.key).withValue(new Change<>(newPair.value, oldPair.value, isLatest)));
+            } else {
+                if (oldPairNotNull) {
+                    context().forward(record.withKey(oldPair.key).withValue(new Change<>(null, oldPair.value, isLatest)));
+                }
 
-            if (newPair != null && newPair.key != null && newPair.value != null) {
-                context().forward(record.withKey(newPair.key).withValue(new Change<>(newPair.value, null)));
+                if (newPairNotNull) {
+                    context().forward(record.withKey(newPair.key).withValue(new Change<>(newPair.value, null, isLatest)));
+                }
             }
 
         }
@@ -121,16 +192,29 @@ public class KTableRepartitionMap<K, V, K1, V1> implements KTableRepartitionMapS
 
         @Override
         public ValueAndTimestamp<KeyValue<K1, V1>> get(final K key) {
-            final ValueAndTimestamp<V> valueAndTimestamp = parentGetter.get(key);
-            return ValueAndTimestamp.make(
-                mapper.apply(key, getValueOrNull(valueAndTimestamp)),
-                valueAndTimestamp == null ? context.timestamp() : valueAndTimestamp.timestamp()
-            );
+            return mapValue(key, parentGetter.get(key));
+        }
+
+        @Override
+        public ValueAndTimestamp<KeyValue<K1, V1>> get(final K key, final long asOfTimestamp) {
+            return mapValue(key, parentGetter.get(key, asOfTimestamp));
+        }
+
+        @Override
+        public boolean isVersioned() {
+            return parentGetter.isVersioned();
         }
 
         @Override
         public void close() {
             parentGetter.close();
+        }
+
+        private ValueAndTimestamp<KeyValue<K1, V1>> mapValue(final K key, final ValueAndTimestamp<V> valueAndTimestamp) {
+            return ValueAndTimestamp.make(
+                mapper.apply(key, getValueOrNull(valueAndTimestamp)),
+                valueAndTimestamp == null ? context.timestamp() : valueAndTimestamp.timestamp()
+            );
         }
     }
 

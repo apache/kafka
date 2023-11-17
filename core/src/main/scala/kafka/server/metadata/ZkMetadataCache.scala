@@ -18,29 +18,29 @@
 package kafka.server.metadata
 
 import java.util
-import java.util.Collections
+import java.util.{Collections, Optional}
 import java.util.concurrent.locks.{ReentrantLock, ReentrantReadWriteLock}
-import kafka.admin.BrokerMetadata
-
 import scala.collection.{Seq, Set, mutable}
 import scala.jdk.CollectionConverters._
 import kafka.cluster.{Broker, EndPoint}
 import kafka.api._
 import kafka.controller.StateChangeLogger
-import kafka.server.{BrokerFeatures, CachedControllerId, FinalizedFeaturesAndEpoch, KRaftCachedControllerId, MetadataCache, ZkCachedControllerId}
+import kafka.server.{BrokerFeatures, CachedControllerId, KRaftCachedControllerId, MetadataCache, ZkCachedControllerId}
 import kafka.utils.CoreUtils._
 import kafka.utils.Logging
 import kafka.utils.Implicits._
+import org.apache.kafka.admin.BrokerMetadata
 import org.apache.kafka.common.internals.Topic
-import org.apache.kafka.common.message.UpdateMetadataRequestData.UpdateMetadataPartitionState
+import org.apache.kafka.common.message.UpdateMetadataRequestData.{UpdateMetadataPartitionState, UpdateMetadataTopicState}
 import org.apache.kafka.common.{Cluster, Node, PartitionInfo, TopicPartition, Uuid}
 import org.apache.kafka.common.message.MetadataResponseData.MetadataResponseTopic
 import org.apache.kafka.common.message.MetadataResponseData.MetadataResponsePartition
+import org.apache.kafka.common.message.UpdateMetadataRequestData
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.Errors
-import org.apache.kafka.common.requests.{ApiVersionsResponse, MetadataResponse, UpdateMetadataRequest}
+import org.apache.kafka.common.requests.{AbstractControlRequest, ApiVersionsResponse, MetadataResponse, UpdateMetadataRequest}
 import org.apache.kafka.common.security.auth.SecurityProtocol
-import org.apache.kafka.server.common.MetadataVersion
+import org.apache.kafka.server.common.{Features, MetadataVersion}
 
 import java.util.concurrent.{ThreadLocalRandom, TimeUnit}
 import scala.concurrent.TimeoutException
@@ -53,7 +53,61 @@ class FeatureCacheUpdateException(message: String) extends RuntimeException(mess
 trait ZkFinalizedFeatureCache {
   def waitUntilFeatureEpochOrThrow(minExpectedEpoch: Long, timeoutMs: Long): Unit
 
-  def getFeatureOption: Option[FinalizedFeaturesAndEpoch]
+  def getFeatureOption: Option[Features]
+}
+
+case class MetadataSnapshot(partitionStates: mutable.AnyRefMap[String, mutable.LongMap[UpdateMetadataPartitionState]],
+                            topicIds: Map[String, Uuid],
+                            controllerId: Option[CachedControllerId],
+                            aliveBrokers: mutable.LongMap[Broker],
+                            aliveNodes: mutable.LongMap[collection.Map[ListenerName, Node]]) {
+  val topicNames: Map[Uuid, String] = topicIds.map { case (topicName, topicId) => (topicId, topicName) }
+}
+
+object ZkMetadataCache {
+  /**
+   * Create topic deletions (leader=-2) for topics that are missing in a FULL UpdateMetadataRequest coming from a
+   * KRaft controller during a ZK migration. This will modify the UpdateMetadataRequest object passed into this method.
+   */
+  def maybeInjectDeletedPartitionsFromFullMetadataRequest(
+    currentMetadata: MetadataSnapshot,
+    requestControllerEpoch: Int,
+    requestTopicStates: util.List[UpdateMetadataTopicState],
+  ): Seq[Uuid] = {
+    val prevTopicIds = currentMetadata.topicIds.values.toSet
+    val requestTopics = requestTopicStates.asScala.map { topicState =>
+      topicState.topicName() -> topicState.topicId()
+    }.toMap
+
+    val deleteTopics = prevTopicIds -- requestTopics.values.toSet
+    if (deleteTopics.isEmpty) {
+      return Seq.empty
+    }
+
+    deleteTopics.foreach { deletedTopicId =>
+      val topicName = currentMetadata.topicNames(deletedTopicId)
+      val topicState = new UpdateMetadataRequestData.UpdateMetadataTopicState()
+        .setTopicId(deletedTopicId)
+        .setTopicName(topicName)
+        .setPartitionStates(new util.ArrayList())
+
+      currentMetadata.partitionStates(topicName).foreach { case (partitionId, partitionState) =>
+        val lisr = LeaderAndIsr.duringDelete(partitionState.isr().asScala.map(_.intValue()).toList)
+        val newPartitionState = new UpdateMetadataPartitionState()
+          .setPartitionIndex(partitionId.toInt)
+          .setTopicName(topicName)
+          .setLeader(lisr.leader)
+          .setLeaderEpoch(lisr.leaderEpoch)
+          .setControllerEpoch(requestControllerEpoch)
+          .setReplicas(partitionState.replicas())
+          .setZkVersion(lisr.partitionEpoch)
+          .setIsr(lisr.isr.map(Integer.valueOf).asJava)
+        topicState.partitionStates().add(newPartitionState)
+      }
+      requestTopicStates.add(topicState)
+    }
+    deleteTopics.toSeq
+  }
 }
 
 /**
@@ -64,7 +118,8 @@ class ZkMetadataCache(
   brokerId: Int,
   metadataVersion: MetadataVersion,
   brokerFeatures: BrokerFeatures,
-  kraftControllerNodes: Seq[Node] = Seq.empty)
+  kraftControllerNodes: Seq[Node] = Seq.empty,
+  zkMigrationEnabled: Boolean = false)
   extends MetadataCache with ZkFinalizedFeatureCache with Logging {
 
   private val partitionMetadataLock = new ReentrantReadWriteLock()
@@ -83,7 +138,7 @@ class ZkMetadataCache(
   private val stateChangeLogger = new StateChangeLogger(brokerId, inControllerContext = false, None)
 
   // Features are updated via ZK notification (see FinalizedFeatureChangeListener)
-  @volatile private var featuresAndEpoch: Option[FinalizedFeaturesAndEpoch] = Option.empty
+  @volatile private var _features: Option[Features] = Option.empty
   private val featureLock = new ReentrantLock()
   private val featureCond = featureLock.newCondition()
 
@@ -254,7 +309,7 @@ class ZkMetadataCache(
   override def hasAliveBroker(brokerId: Int): Boolean = metadataSnapshot.aliveBrokers.contains(brokerId)
 
   override def getAliveBrokers(): Iterable[BrokerMetadata] = {
-    metadataSnapshot.aliveBrokers.values.map(b => new BrokerMetadata(b.id, b.rack))
+    metadataSnapshot.aliveBrokers.values.map(b => new BrokerMetadata(b.id, Optional.ofNullable(b.rack.orNull)))
   }
 
   override def getAliveBrokerNode(brokerId: Int, listenerName: ListenerName): Option[Node] = {
@@ -377,6 +432,25 @@ class ZkMetadataCache(
   // This method returns the deleted TopicPartitions received from UpdateMetadataRequest
   def updateMetadata(correlationId: Int, updateMetadataRequest: UpdateMetadataRequest): Seq[TopicPartition] = {
     inWriteLock(partitionMetadataLock) {
+      if (
+        updateMetadataRequest.isKRaftController &&
+        updateMetadataRequest.updateType() == AbstractControlRequest.Type.FULL
+      ) {
+        if (!zkMigrationEnabled) {
+          stateChangeLogger.error(s"Received UpdateMetadataRequest with Type=FULL (2), but ZK migrations " +
+            s"are not enabled on this broker. Not treating this as a full metadata update")
+        } else {
+          val deletedTopicIds = ZkMetadataCache.maybeInjectDeletedPartitionsFromFullMetadataRequest(
+            metadataSnapshot, updateMetadataRequest.controllerEpoch(), updateMetadataRequest.topicStates())
+          if (deletedTopicIds.isEmpty) {
+            stateChangeLogger.trace(s"Received UpdateMetadataRequest with Type=FULL (2), " +
+              s"but no deleted topics were detected.")
+          } else {
+            stateChangeLogger.debug(s"Received UpdateMetadataRequest with Type=FULL (2), " +
+              s"found ${deletedTopicIds.size} deleted topic ID(s): $deletedTopicIds.")
+          }
+        }
+      }
 
       val aliveBrokers = new mutable.LongMap[Broker](metadataSnapshot.aliveBrokers.size)
       val aliveNodes = new mutable.LongMap[collection.Map[ListenerName, Node]](metadataSnapshot.aliveNodes.size)
@@ -478,21 +552,14 @@ class ZkMetadataCache(
     }
   }
 
-  case class MetadataSnapshot(partitionStates: mutable.AnyRefMap[String, mutable.LongMap[UpdateMetadataPartitionState]],
-                              topicIds: Map[String, Uuid],
-                              controllerId: Option[CachedControllerId],
-                              aliveBrokers: mutable.LongMap[Broker],
-                              aliveNodes: mutable.LongMap[collection.Map[ListenerName, Node]]) {
-    val topicNames: Map[Uuid, String] = topicIds.map { case (topicName, topicId) => (topicId, topicName) }
-  }
-
   override def metadataVersion(): MetadataVersion = metadataVersion
 
-  override def features(): FinalizedFeaturesAndEpoch = {
-    featuresAndEpoch match {
-      case Some(features) => features
-      case None => FinalizedFeaturesAndEpoch(Map.empty, ApiVersionsResponse.UNKNOWN_FINALIZED_FEATURES_EPOCH)
-    }
+  override def features(): Features = _features match {
+    case Some(features) => features
+    case None => new Features(metadataVersion,
+      Collections.emptyMap(),
+      ApiVersionsResponse.UNKNOWN_FINALIZED_FEATURES_EPOCH,
+      false)
   }
 
   /**
@@ -509,14 +576,18 @@ class ZkMetadataCache(
    *                         not modified.
    */
   def updateFeaturesOrThrow(latestFeatures: Map[String, Short], latestEpoch: Long): Unit = {
-    val latest = FinalizedFeaturesAndEpoch(latestFeatures, latestEpoch)
-    val existing = featuresAndEpoch.map(item => item.toString()).getOrElse("<empty>")
-    if (featuresAndEpoch.isDefined && featuresAndEpoch.get.epoch > latest.epoch) {
+    val latest = new Features(metadataVersion,
+      latestFeatures.map(kv => (kv._1, kv._2.asInstanceOf[java.lang.Short])).asJava,
+      latestEpoch,
+      false)
+    val existing = _features
+    if (existing.isDefined && existing.get.finalizedFeaturesEpoch() > latest.finalizedFeaturesEpoch()) {
       val errorMsg = s"FinalizedFeatureCache update failed due to invalid epoch in new $latest." +
         s" The existing cache contents are $existing."
       throw new FeatureCacheUpdateException(errorMsg)
     } else {
-      val incompatibleFeatures = brokerFeatures.incompatibleFeatures(latest.features)
+      val incompatibleFeatures = brokerFeatures.incompatibleFeatures(
+        latest.finalizedFeatures().asScala.map(kv => (kv._1, kv._2.toShort)).toMap)
       if (incompatibleFeatures.nonEmpty) {
         val errorMsg = "FinalizedFeatureCache update failed since feature compatibility" +
           s" checks failed! Supported ${brokerFeatures.supportedFeatures} has incompatibilities" +
@@ -525,7 +596,7 @@ class ZkMetadataCache(
       } else {
         val logMsg = s"Updated cache from existing $existing to latest $latest."
         inLock(featureLock) {
-          featuresAndEpoch = Some(latest)
+          _features = Some(latest)
           featureCond.signalAll()
         }
         info(logMsg)
@@ -533,13 +604,12 @@ class ZkMetadataCache(
     }
   }
 
-
   /**
    * Clears all existing finalized features and epoch from the cache.
    */
   def clearFeatures(): Unit = {
     inLock(featureLock) {
-      featuresAndEpoch = None
+      _features = None
       featureCond.signalAll()
     }
   }
@@ -565,12 +635,12 @@ class ZkMetadataCache(
     }
     val waitEndTimeNanos = System.nanoTime() + (timeoutMs * 1000000)
     inLock(featureLock) {
-      while (!(featuresAndEpoch.isDefined && featuresAndEpoch.get.epoch >= minExpectedEpoch)) {
+      while (!(_features.isDefined && _features.get.finalizedFeaturesEpoch() >= minExpectedEpoch)) {
         val nowNanos = System.nanoTime()
         if (nowNanos > waitEndTimeNanos) {
           throw new TimeoutException(
             s"Timed out after waiting for ${timeoutMs}ms for required condition to be met." +
-              s" Current epoch: ${featuresAndEpoch.map(fe => fe.epoch).getOrElse("<none>")}.")
+              s" Current epoch: ${_features.map(fe => fe.finalizedFeaturesEpoch()).getOrElse("<none>")}.")
         }
         val sleepTimeMs = max(1L, (waitEndTimeNanos - nowNanos) / 1000000)
         featureCond.await(sleepTimeMs, TimeUnit.MILLISECONDS)
@@ -578,10 +648,5 @@ class ZkMetadataCache(
     }
   }
 
-  /**
-   * @return   the latest known FinalizedFeaturesAndEpoch or empty if not defined in the cache.
-   */
-  def getFeatureOption: Option[FinalizedFeaturesAndEpoch] = {
-    featuresAndEpoch
-  }
+  override def getFeatureOption: Option[Features] = _features
 }

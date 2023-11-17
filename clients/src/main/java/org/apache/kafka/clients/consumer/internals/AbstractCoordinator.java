@@ -17,6 +17,7 @@
 package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.ClientResponse;
+import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.GroupRebalanceConfig;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
@@ -63,6 +64,7 @@ import org.apache.kafka.common.requests.LeaveGroupResponse;
 import org.apache.kafka.common.requests.OffsetCommitRequest;
 import org.apache.kafka.common.requests.SyncGroupRequest;
 import org.apache.kafka.common.requests.SyncGroupResponse;
+import org.apache.kafka.common.utils.ExponentialBackoff;
 import org.apache.kafka.common.utils.KafkaThread;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
@@ -131,6 +133,7 @@ public abstract class AbstractCoordinator implements Closeable {
 
     protected final Time time;
     protected final ConsumerNetworkClient client;
+    protected final ExponentialBackoff retryBackoff;
 
     private Node coordinator = null;
     private String rejoinReason = "";
@@ -163,6 +166,11 @@ public abstract class AbstractCoordinator implements Closeable {
         this.log = logContext.logger(this.getClass());
         this.client = client;
         this.time = time;
+        this.retryBackoff = new ExponentialBackoff(
+                rebalanceConfig.retryBackoffMs,
+                CommonClientConfigs.RETRY_BACKOFF_EXP_BASE,
+                rebalanceConfig.retryBackoffMaxMs,
+                CommonClientConfigs.RETRY_BACKOFF_JITTER);
         this.heartbeat = new Heartbeat(rebalanceConfig, time);
         this.sensors = new GroupCoordinatorMetrics(metrics, metricGrpPrefix);
     }
@@ -255,6 +263,7 @@ public abstract class AbstractCoordinator implements Closeable {
         if (!coordinatorUnknown())
             return true;
 
+        long attempts = 0L;
         do {
             if (fatalFindCoordinatorException != null) {
                 final RuntimeException fatalException = fatalFindCoordinatorException;
@@ -274,6 +283,7 @@ public abstract class AbstractCoordinator implements Closeable {
             if (future.failed()) {
                 if (future.isRetriable()) {
                     log.debug("Coordinator discovery failed, refreshing metadata", future.exception());
+                    timer.sleep(retryBackoff.backoff(attempts++));
                     client.awaitMetadataUpdate(timer);
                 } else {
                     fatalException = future.exception();
@@ -283,7 +293,7 @@ public abstract class AbstractCoordinator implements Closeable {
                 // we found the coordinator, but the connection has failed, so mark
                 // it dead and backoff before retrying discovery
                 markCoordinatorUnknown("coordinator unavailable");
-                timer.sleep(rebalanceConfig.retryBackoffMs);
+                timer.sleep(retryBackoff.backoff(attempts++));
             }
 
             clearFindCoordinatorFuture();
@@ -355,6 +365,10 @@ public abstract class AbstractCoordinator implements Closeable {
         // we don't need to send heartbeats
         if (state.hasNotJoinedGroup())
             return Long.MAX_VALUE;
+        if (heartbeatThread != null && heartbeatThread.hasFailed()) {
+            // if an exception occurs in the heartbeat thread, raise it.
+            throw heartbeatThread.failureCause();
+        }
         return heartbeat.timeToNextHeartbeat(now);
     }
 
@@ -497,16 +511,25 @@ public abstract class AbstractCoordinator implements Closeable {
                     final String fullReason = String.format("rebalance failed due to '%s' (%s)",
                         exception.getMessage(),
                         simpleName);
-                    requestRejoin(shortReason, fullReason);
+                    // Don't need to request rejoin again for MemberIdRequiredException since we've done that in JoinGroupResponseHandler
+                    if (!(exception instanceof MemberIdRequiredException)) {
+                        requestRejoin(shortReason, fullReason);
+                    }
                 }
 
                 if (exception instanceof UnknownMemberIdException ||
-                    exception instanceof IllegalGenerationException ||
-                    exception instanceof RebalanceInProgressException ||
-                    exception instanceof MemberIdRequiredException)
+                        exception instanceof IllegalGenerationException ||
+                        exception instanceof RebalanceInProgressException ||
+                        exception instanceof MemberIdRequiredException)
                     continue;
                 else if (!future.isRetriable())
                     throw exception;
+
+                // We need to return upon expired timer, in case if the client.poll returns immediately and the time
+                // has elapsed.
+                if (timer.isExpired()) {
+                    return false;
+                }
 
                 timer.sleep(rebalanceConfig.retryBackoffMs);
             }
@@ -1271,7 +1294,7 @@ public abstract class AbstractCoordinator implements Closeable {
         }
     }
 
-    protected Meter createMeter(Metrics metrics, String groupName, String baseName, String descriptiveName) {
+    protected final Meter createMeter(Metrics metrics, String groupName, String baseName, String descriptiveName) {
         return new Meter(new WindowedCount(),
                 metrics.metricName(baseName + "-rate", groupName,
                         String.format("The number of %s per second", descriptiveName)),
@@ -1477,7 +1500,8 @@ public abstract class AbstractCoordinator implements Closeable {
                             maybeLeaveGroup("consumer poll timeout has expired.");
                         } else if (!heartbeat.shouldHeartbeat(now)) {
                             // poll again after waiting for the retry backoff in case the heartbeat failed or the
-                            // coordinator disconnected
+                            // coordinator disconnected. Note that the heartbeat timing takes account of
+                            // exponential backoff.
                             AbstractCoordinator.this.wait(rebalanceConfig.retryBackoffMs);
                         } else {
                             heartbeat.sentHeartbeat(now);
@@ -1531,6 +1555,7 @@ public abstract class AbstractCoordinator implements Closeable {
                     this.failed.set(new RuntimeException(e));
             } finally {
                 log.debug("Heartbeat thread has closed");
+                this.closed = true;
             }
         }
 

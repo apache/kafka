@@ -29,8 +29,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.stream.Collectors;
 
-import static org.apache.kafka.clients.consumer.RangeAssignorTest.checkStaticAssignment;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -334,5 +334,14 @@ public class RoundRobinAssignorTest {
         partitionsPerTopic.put(topic1, numberOfPartitions1);
         partitionsPerTopic.put(topic2, numberOfPartitions2);
         return partitionsPerTopic;
+    }
+
+    private static Map<String, List<TopicPartition>> checkStaticAssignment(AbstractPartitionAssignor assignor,
+                                                                           Map<String, Integer> partitionsPerTopic,
+                                                                           Map<String, Subscription> consumers) {
+        Map<String, List<TopicPartition>> assignmentByMemberId = assignor.assign(partitionsPerTopic, consumers);
+        return consumers.entrySet().stream()
+                .filter(e -> e.getValue().groupInstanceId().isPresent())
+                .collect(Collectors.toMap(e -> e.getValue().groupInstanceId().get(), e -> assignmentByMemberId.get(e.getKey())));
     }
 }

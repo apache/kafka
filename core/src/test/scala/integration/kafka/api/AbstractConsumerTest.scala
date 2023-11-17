@@ -24,7 +24,7 @@ import org.apache.kafka.clients.consumer._
 import org.apache.kafka.clients.producer.{ProducerConfig, ProducerRecord}
 import org.apache.kafka.common.record.TimestampType
 import org.apache.kafka.common.TopicPartition
-import kafka.utils.{ShutdownableThread, TestUtils}
+import kafka.utils.TestUtils
 import kafka.server.{BaseRequestTest, KafkaConfig}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{BeforeEach, TestInfo}
@@ -33,6 +33,7 @@ import scala.jdk.CollectionConverters._
 import scala.collection.mutable.{ArrayBuffer, Buffer}
 import org.apache.kafka.clients.producer.KafkaProducer
 import org.apache.kafka.common.errors.WakeupException
+import org.apache.kafka.server.util.ShutdownableThread
 
 import scala.collection.mutable
 
@@ -96,7 +97,7 @@ abstract class AbstractConsumerTest extends BaseRequestTest {
     }
   }
 
-  protected def createConsumerWithGroupId(groupId: String): KafkaConsumer[Array[Byte], Array[Byte]] = {
+  protected def createConsumerWithGroupId(groupId: String): Consumer[Array[Byte], Array[Byte]] = {
     val groupOverrideConfig = new Properties
     groupOverrideConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, groupId)
     createConsumer(configOverrides = groupOverrideConfig)
@@ -230,11 +231,11 @@ abstract class AbstractConsumerTest extends BaseRequestTest {
     * @param subscriptions set of all topic partitions
     */
   def addConsumersToGroupAndWaitForGroupAssignment(numOfConsumersToAdd: Int,
-                                                   consumerGroup: mutable.Buffer[KafkaConsumer[Array[Byte], Array[Byte]]],
+                                                   consumerGroup: mutable.Buffer[Consumer[Array[Byte], Array[Byte]]],
                                                    consumerPollers: mutable.Buffer[ConsumerAssignmentPoller],
                                                    topicsToSubscribe: List[String],
                                                    subscriptions: Set[TopicPartition],
-                                                   group: String = group): (mutable.Buffer[KafkaConsumer[Array[Byte], Array[Byte]]], mutable.Buffer[ConsumerAssignmentPoller]) = {
+                                                   group: String = group): (mutable.Buffer[Consumer[Array[Byte], Array[Byte]]], mutable.Buffer[ConsumerAssignmentPoller]) = {
     assertTrue(consumerGroup.size + numOfConsumersToAdd <= subscriptions.size)
     addConsumersToGroup(numOfConsumersToAdd, consumerGroup, consumerPollers, topicsToSubscribe, subscriptions, group)
     // wait until topics get re-assigned and validate assignment
@@ -255,11 +256,11 @@ abstract class AbstractConsumerTest extends BaseRequestTest {
     * @param subscriptions set of all topic partitions
     */
   def addConsumersToGroup(numOfConsumersToAdd: Int,
-                          consumerGroup: mutable.Buffer[KafkaConsumer[Array[Byte], Array[Byte]]],
+                          consumerGroup: mutable.Buffer[Consumer[Array[Byte], Array[Byte]]],
                           consumerPollers: mutable.Buffer[ConsumerAssignmentPoller],
                           topicsToSubscribe: List[String],
                           subscriptions: Set[TopicPartition],
-                          group: String = group): (mutable.Buffer[KafkaConsumer[Array[Byte], Array[Byte]]], mutable.Buffer[ConsumerAssignmentPoller]) = {
+                          group: String = group): (mutable.Buffer[Consumer[Array[Byte], Array[Byte]]], mutable.Buffer[ConsumerAssignmentPoller]) = {
     for (_ <- 0 until numOfConsumersToAdd) {
       val consumer = createConsumerWithGroupId(group)
       consumerGroup += consumer

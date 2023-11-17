@@ -289,4 +289,4 @@ public class MiniTrogdorCluster implements AutoCloseable {
             coordinator.waitForShutdown();
         }
     }
-};
+}

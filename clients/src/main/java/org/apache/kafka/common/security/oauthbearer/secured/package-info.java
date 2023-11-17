@@ -16,6 +16,6 @@
  */
 /**
  * This package is deprecated.
- * @deprecated See {@link org.apache.kafka.common.security.oauthbearer}
+ * See {@link org.apache.kafka.common.security.oauthbearer}
  */
 package org.apache.kafka.common.security.oauthbearer.secured;

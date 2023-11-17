@@ -17,13 +17,12 @@
 
 package kafka.server.builders;
 
-import kafka.coordinator.group.GroupCoordinator;
-import kafka.coordinator.group.GroupCoordinatorAdapter;
 import kafka.coordinator.transaction.TransactionCoordinator;
 import kafka.network.RequestChannel;
 import kafka.server.ApiVersionManager;
 import kafka.server.AutoTopicCreationManager;
 import kafka.server.BrokerTopicStats;
+import kafka.server.ClientMetricsManager;
 import kafka.server.DelegationTokenManager;
 import kafka.server.FetchManager;
 import kafka.server.KafkaApis;
@@ -35,10 +34,12 @@ import kafka.server.ReplicaManager;
 import kafka.server.metadata.ConfigRepository;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.coordinator.group.GroupCoordinator;
 import org.apache.kafka.server.authorizer.Authorizer;
 
 import java.util.Collections;
 import java.util.Optional;
+
 import scala.compat.java8.OptionConverters;
 
 
@@ -62,6 +63,7 @@ public class KafkaApisBuilder {
     private Time time = Time.SYSTEM;
     private DelegationTokenManager tokenManager = null;
     private ApiVersionManager apiVersionManager = null;
+    private Optional<ClientMetricsManager> clientMetricsManager = Optional.empty();
 
     public KafkaApisBuilder setRequestChannel(RequestChannel requestChannel) {
         this.requestChannel = requestChannel;
@@ -158,6 +160,11 @@ public class KafkaApisBuilder {
         return this;
     }
 
+    public KafkaApisBuilder setClientMetricsManager(Optional<ClientMetricsManager> clientMetricsManager) {
+        this.clientMetricsManager = clientMetricsManager;
+        return this;
+    }
+
     public KafkaApis build() {
         if (requestChannel == null) throw new RuntimeException("you must set requestChannel");
         if (metadataSupport == null) throw new RuntimeException("you must set metadataSupport");
@@ -172,14 +179,13 @@ public class KafkaApisBuilder {
         if (metrics == null) throw new RuntimeException("You must set metrics");
         if (quotas == null) throw new RuntimeException("You must set quotas");
         if (fetchManager == null) throw new RuntimeException("You must set fetchManager");
-        if (brokerTopicStats == null) brokerTopicStats = new BrokerTopicStats();
+        if (brokerTopicStats == null) brokerTopicStats = new BrokerTopicStats(Optional.of(config));
         if (apiVersionManager == null) throw new RuntimeException("You must set apiVersionManager");
 
         return new KafkaApis(requestChannel,
                              metadataSupport,
                              replicaManager,
                              groupCoordinator,
-                             new GroupCoordinatorAdapter(groupCoordinator),
                              txnCoordinator,
                              autoTopicCreationManager,
                              brokerId,
@@ -194,6 +200,7 @@ public class KafkaApisBuilder {
                              clusterId,
                              time,
                              tokenManager,
-                             apiVersionManager);
+                             apiVersionManager,
+                             OptionConverters.toScala(clientMetricsManager));
     }
 }

@@ -22,22 +22,37 @@
   // Version 2 adds the support for new error code PRODUCER_FENCED.
   //
   // Version 3 enables flexible versions.
-  "validVersions": "0-3",
+  //
+  // Version 4 adds support to batch multiple transactions and a top level error code.
+  "validVersions": "0-4",
   "flexibleVersions": "3+",
   "fields": [
     { "name": "ThrottleTimeMs", "type": "int32", "versions": "0+",
       "about": "Duration in milliseconds for which the request was throttled due to a quota violation, or zero if the request did not violate any quota." },
-    { "name": "Results", "type": "[]AddPartitionsToTxnTopicResult", "versions": "0+",
-      "about": "The results for each topic.", "fields": [
+    { "name": "ErrorCode", "type": "int16", "versions": "4+", "ignorable": true,
+      "about": "The response top level error code." },
+    { "name": "ResultsByTransaction", "type": "[]AddPartitionsToTxnResult", "versions": "4+",
+      "about": "Results categorized by transactional ID.", "fields": [
+      { "name": "TransactionalId", "type": "string", "versions": "4+", "mapKey": true, "entityType": "transactionalId",
+        "about": "The transactional id corresponding to the transaction." },
+      { "name": "TopicResults", "type": "[]AddPartitionsToTxnTopicResult", "versions": "4+",
+        "about": "The results for each topic." }
+    ]},
+    { "name": "ResultsByTopicV3AndBelow", "type": "[]AddPartitionsToTxnTopicResult", "versions": "0-3",
+      "about": "The results for each topic." }
+  ],
+  "commonStructs": [
+    { "name": "AddPartitionsToTxnTopicResult", "versions": "0+", "fields": [
       { "name": "Name", "type": "string", "versions": "0+", "mapKey": true, "entityType": "topicName",
         "about": "The topic name." },
-      { "name": "Results", "type": "[]AddPartitionsToTxnPartitionResult", "versions": "0+", 
-        "about": "The results for each partition", "fields": [
-        { "name": "PartitionIndex", "type": "int32", "versions": "0+", "mapKey": true,
-          "about": "The partition indexes." },
-        { "name": "ErrorCode", "type": "int16", "versions": "0+",
-          "about": "The response error code."}
-      ]}
+      { "name": "ResultsByPartition", "type": "[]AddPartitionsToTxnPartitionResult", "versions": "0+",
+        "about": "The results for each partition" }
+    ]},
+    { "name": "AddPartitionsToTxnPartitionResult", "versions": "0+", "fields": [
+      { "name": "PartitionIndex", "type": "int32", "versions": "0+", "mapKey": true,
+        "about": "The partition indexes." },
+      { "name": "PartitionErrorCode", "type": "int16", "versions": "0+",
+        "about": "The response error code." }
     ]}
   ]
 }

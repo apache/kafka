@@ -27,7 +27,10 @@ import org.junit.jupiter.api.Test
 
 import java.util.{Collections, Properties}
 import org.apache.kafka.server.common.MetadataVersion.IBP_3_0_IV1
-import org.apache.kafka.server.log.internals.{LogConfig, ThrottledReplicaListValidator}
+import org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig
+import org.apache.kafka.storage.internals.log.{LogConfig, ThrottledReplicaListValidator}
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.ValueSource
 
 import scala.annotation.nowarn
 import scala.jdk.CollectionConverters._
@@ -57,18 +60,24 @@ class LogConfigTest {
   @Test
   def testKafkaConfigToProps(): Unit = {
     val millisInHour = 60L * 60L * 1000L
+    val millisInDay = 24L * millisInHour
+    val bytesInGB: Long = 1024 * 1024 * 1024
     val kafkaProps = TestUtils.createBrokerConfig(nodeId = 0, zkConnect = "")
     kafkaProps.put(KafkaConfig.LogRollTimeHoursProp, "2")
     kafkaProps.put(KafkaConfig.LogRollTimeJitterHoursProp, "2")
-    kafkaProps.put(KafkaConfig.LogRetentionTimeHoursProp, "2")
+    kafkaProps.put(KafkaConfig.LogRetentionTimeHoursProp, "960") // 40 days
     kafkaProps.put(KafkaConfig.LogMessageFormatVersionProp, "0.11.0")
+    kafkaProps.put(RemoteLogManagerConfig.LOG_LOCAL_RETENTION_MS_PROP, "2592000000") // 30 days
+    kafkaProps.put(RemoteLogManagerConfig.LOG_LOCAL_RETENTION_BYTES_PROP, "4294967296") // 4 GB
 
     val logProps = KafkaConfig.fromProps(kafkaProps).extractLogConfigMap
     assertEquals(2 * millisInHour, logProps.get(TopicConfig.SEGMENT_MS_CONFIG))
     assertEquals(2 * millisInHour, logProps.get(TopicConfig.SEGMENT_JITTER_MS_CONFIG))
-    assertEquals(2 * millisInHour, logProps.get(TopicConfig.RETENTION_MS_CONFIG))
+    assertEquals(40 * millisInDay, logProps.get(TopicConfig.RETENTION_MS_CONFIG))
     // The message format version should always be 3.0 if the inter-broker protocol version is 3.0 or higher
     assertEquals(IBP_3_0_IV1.version, logProps.get(TopicConfig.MESSAGE_FORMAT_VERSION_CONFIG))
+    assertEquals(30 * millisInDay, logProps.get(TopicConfig.LOCAL_LOG_RETENTION_MS_CONFIG))
+    assertEquals(4 * bytesInGB, logProps.get(TopicConfig.LOCAL_LOG_RETENTION_BYTES_CONFIG))
   }
 
   @nowarn("cat=deprecation")
@@ -218,8 +227,8 @@ class LogConfigTest {
     props.put(TopicConfig.RETENTION_MS_CONFIG, retentionMs.toString)
     val logConfig = new LogConfig(props)
 
-    assertEquals(retentionMs, logConfig.remoteLogConfig.localRetentionMs)
-    assertEquals(retentionBytes, logConfig.remoteLogConfig.localRetentionBytes)
+    assertEquals(retentionMs, logConfig.localRetentionMs)
+    assertEquals(retentionBytes, logConfig.localRetentionBytes)
   }
 
   @Test
@@ -227,8 +236,8 @@ class LogConfigTest {
     val logConfig = new LogConfig(new Properties())
 
     // Local retention defaults are derived from retention properties which can be default or custom.
-    assertEquals(LogConfig.DEFAULT_RETENTION_MS, logConfig.remoteLogConfig.localRetentionMs)
-    assertEquals(LogConfig.DEFAULT_RETENTION_BYTES, logConfig.remoteLogConfig.localRetentionBytes)
+    assertEquals(LogConfig.DEFAULT_RETENTION_MS, logConfig.localRetentionMs)
+    assertEquals(LogConfig.DEFAULT_RETENTION_BYTES, logConfig.localRetentionBytes)
   }
 
   @Test
@@ -243,8 +252,8 @@ class LogConfigTest {
     props.put(TopicConfig.LOCAL_LOG_RETENTION_BYTES_CONFIG, localRetentionBytes.toString)
     val logConfig = new LogConfig(props)
 
-    assertEquals(localRetentionMs, logConfig.remoteLogConfig.localRetentionMs)
-    assertEquals(localRetentionBytes, logConfig.remoteLogConfig.localRetentionBytes)
+    assertEquals(localRetentionMs, logConfig.localRetentionMs)
+    assertEquals(localRetentionBytes, logConfig.localRetentionBytes)
   }
 
   @Test
@@ -268,13 +277,142 @@ class LogConfigTest {
     doTestInvalidLocalLogRetentionProps(2000L, -1, 100, 1000L)
   }
 
-  private def doTestInvalidLocalLogRetentionProps(localRetentionMs: Long, localRetentionBytes: Int, retentionBytes: Int, retentionMs: Long) = {
+  private def doTestInvalidLocalLogRetentionProps(localRetentionMs: Long,
+                                                  localRetentionBytes: Int,
+                                                  retentionBytes: Int,
+                                                  retentionMs: Long) = {
+    val kafkaProps = TestUtils.createDummyBrokerConfig()
+    kafkaProps.put(RemoteLogManagerConfig.REMOTE_LOG_STORAGE_SYSTEM_ENABLE_PROP, "true")
+    val kafkaConfig = KafkaConfig.fromProps(kafkaProps)
+
     val props = new Properties()
+    props.put(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG, "true")
     props.put(TopicConfig.RETENTION_BYTES_CONFIG, retentionBytes.toString)
     props.put(TopicConfig.RETENTION_MS_CONFIG, retentionMs.toString)
 
     props.put(TopicConfig.LOCAL_LOG_RETENTION_MS_CONFIG, localRetentionMs.toString)
     props.put(TopicConfig.LOCAL_LOG_RETENTION_BYTES_CONFIG, localRetentionBytes.toString)
-    assertThrows(classOf[ConfigException], () => new LogConfig(props));
+    assertThrows(classOf[ConfigException],
+      () => LogConfig.validate(props, kafkaConfig.extractLogConfigMap, kafkaConfig.isRemoteLogStorageSystemEnabled))
+  }
+
+  @Test
+  def testEnableRemoteLogStorageOnCompactedTopic(): Unit = {
+    val kafkaProps = TestUtils.createDummyBrokerConfig()
+    kafkaProps.put(RemoteLogManagerConfig.REMOTE_LOG_STORAGE_SYSTEM_ENABLE_PROP, "true")
+    val kafkaConfig = KafkaConfig.fromProps(kafkaProps)
+
+    val logProps = new Properties()
+    logProps.put(TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_DELETE)
+    logProps.put(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG, "true")
+    LogConfig.validate(logProps, kafkaConfig.extractLogConfigMap, kafkaConfig.isRemoteLogStorageSystemEnabled)
+
+    logProps.put(TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_COMPACT)
+    assertThrows(classOf[ConfigException],
+      () => LogConfig.validate(logProps, kafkaConfig.extractLogConfigMap, kafkaConfig.isRemoteLogStorageSystemEnabled))
+    logProps.put(TopicConfig.CLEANUP_POLICY_CONFIG, "delete,compact")
+    assertThrows(classOf[ConfigException],
+      () => LogConfig.validate(logProps, kafkaConfig.extractLogConfigMap, kafkaConfig.isRemoteLogStorageSystemEnabled))
+    logProps.put(TopicConfig.CLEANUP_POLICY_CONFIG, "compact,delete")
+    assertThrows(classOf[ConfigException],
+      () => LogConfig.validate(logProps, kafkaConfig.extractLogConfigMap, kafkaConfig.isRemoteLogStorageSystemEnabled))
+  }
+
+  @ParameterizedTest(name = "testEnableRemoteLogStorage with sysRemoteStorageEnabled: {0}")
+  @ValueSource(booleans = Array(true, false))
+  def testEnableRemoteLogStorage(sysRemoteStorageEnabled: Boolean): Unit = {
+    val kafkaProps = TestUtils.createDummyBrokerConfig()
+    kafkaProps.put(RemoteLogManagerConfig.REMOTE_LOG_STORAGE_SYSTEM_ENABLE_PROP, sysRemoteStorageEnabled.toString)
+    val kafkaConfig = KafkaConfig.fromProps(kafkaProps)
+
+    val logProps = new Properties()
+    logProps.put(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG, "true")
+    if (sysRemoteStorageEnabled) {
+      LogConfig.validate(logProps, kafkaConfig.extractLogConfigMap, kafkaConfig.isRemoteLogStorageSystemEnabled)
+    } else {
+      val message = assertThrows(classOf[ConfigException],
+        () => LogConfig.validate(logProps, kafkaConfig.extractLogConfigMap, kafkaConfig.isRemoteLogStorageSystemEnabled))
+      assertTrue(message.getMessage.contains("Tiered Storage functionality is disabled in the broker"))
+    }
+  }
+
+  @ParameterizedTest(name = "testTopicCreationWithInvalidRetentionTime with sysRemoteStorageEnabled: {0}")
+  @ValueSource(booleans = Array(true, false))
+  def testTopicCreationWithInvalidRetentionTime(sysRemoteStorageEnabled: Boolean): Unit = {
+    val kafkaProps = TestUtils.createDummyBrokerConfig()
+    kafkaProps.put(RemoteLogManagerConfig.REMOTE_LOG_STORAGE_SYSTEM_ENABLE_PROP, sysRemoteStorageEnabled.toString)
+    kafkaProps.put(KafkaConfig.LogRetentionTimeMillisProp, "1000")
+    kafkaProps.put(RemoteLogManagerConfig.LOG_LOCAL_RETENTION_MS_PROP, "900")
+    val kafkaConfig = KafkaConfig.fromProps(kafkaProps)
+
+    // Topic local log retention time inherited from Broker is greater than the topic's complete log retention time
+    val logProps = new Properties()
+    logProps.put(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG, sysRemoteStorageEnabled.toString)
+    logProps.put(TopicConfig.RETENTION_MS_CONFIG, "500")
+    if (sysRemoteStorageEnabled) {
+      val message = assertThrows(classOf[ConfigException],
+        () => LogConfig.validate(logProps, kafkaConfig.extractLogConfigMap, kafkaConfig.isRemoteLogStorageSystemEnabled))
+      assertTrue(message.getMessage.contains(TopicConfig.LOCAL_LOG_RETENTION_MS_CONFIG))
+    } else {
+      LogConfig.validate(logProps, kafkaConfig.extractLogConfigMap, kafkaConfig.isRemoteLogStorageSystemEnabled)
+    }
+  }
+
+  @ParameterizedTest(name = "testTopicCreationWithInvalidRetentionSize with sysRemoteStorageEnabled: {0}")
+  @ValueSource(booleans = Array(true, false))
+  def testTopicCreationWithInvalidRetentionSize(sysRemoteStorageEnabled: Boolean): Unit = {
+    val props = TestUtils.createDummyBrokerConfig()
+    props.put(RemoteLogManagerConfig.REMOTE_LOG_STORAGE_SYSTEM_ENABLE_PROP, sysRemoteStorageEnabled.toString)
+    props.put(KafkaConfig.LogRetentionBytesProp, "1024")
+    props.put(RemoteLogManagerConfig.LOG_LOCAL_RETENTION_BYTES_PROP, "512")
+    val kafkaConfig = KafkaConfig.fromProps(props)
+
+    // Topic local retention size inherited from Broker is greater than the topic's complete log retention size
+    val logProps = new Properties()
+    logProps.put(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG, sysRemoteStorageEnabled.toString)
+    logProps.put(TopicConfig.RETENTION_BYTES_CONFIG, "128")
+    if (sysRemoteStorageEnabled) {
+      val message = assertThrows(classOf[ConfigException],
+        () => LogConfig.validate(logProps, kafkaConfig.extractLogConfigMap, kafkaConfig.isRemoteLogStorageSystemEnabled))
+      assertTrue(message.getMessage.contains(TopicConfig.LOCAL_LOG_RETENTION_BYTES_CONFIG))
+    } else {
+      LogConfig.validate(logProps, kafkaConfig.extractLogConfigMap, kafkaConfig.isRemoteLogStorageSystemEnabled)
+    }
+  }
+
+  @ParameterizedTest(name = "testValidateBrokerLogConfigs with sysRemoteStorageEnabled: {0}")
+  @ValueSource(booleans = Array(true, false))
+  def testValidateBrokerLogConfigs(sysRemoteStorageEnabled: Boolean): Unit = {
+    val props = TestUtils.createDummyBrokerConfig()
+    props.put(RemoteLogManagerConfig.REMOTE_LOG_STORAGE_SYSTEM_ENABLE_PROP, sysRemoteStorageEnabled.toString)
+    props.put(KafkaConfig.LogRetentionBytesProp, "1024")
+    props.put(RemoteLogManagerConfig.LOG_LOCAL_RETENTION_BYTES_PROP, "2048")
+    val kafkaConfig = KafkaConfig.fromProps(props)
+
+    if (sysRemoteStorageEnabled) {
+      val message = assertThrows(classOf[ConfigException],
+        () => LogConfig.validateBrokerLogConfigValues(kafkaConfig.extractLogConfigMap, kafkaConfig.isRemoteLogStorageSystemEnabled))
+      assertTrue(message.getMessage.contains(TopicConfig.LOCAL_LOG_RETENTION_BYTES_CONFIG))
+    } else {
+      LogConfig.validateBrokerLogConfigValues(kafkaConfig.extractLogConfigMap, kafkaConfig.isRemoteLogStorageSystemEnabled)
+    }
+  }
+
+  /* Verify that when the deprecated config LogMessageTimestampDifferenceMaxMsProp has non default value the new configs
+   * LogMessageTimestampBeforeMaxMsProp and LogMessageTimestampAfterMaxMsProp are not changed from the default we are using
+   * the deprecated config for backward compatibility.
+   * See `TopicConfig.MESSAGE_FORMAT_VERSION_CONFIG` for deprecation details */
+  @nowarn("cat=deprecation")
+  @Test
+  def testTimestampBeforeMaxMsUsesDeprecatedConfig(): Unit = {
+    val oneDayInMillis = 24 * 60 * 60 * 1000L
+    val kafkaProps = TestUtils.createBrokerConfig(nodeId = 0, zkConnect = "")
+    kafkaProps.put(KafkaConfig.LogMessageTimestampBeforeMaxMsProp, Long.MaxValue.toString)
+    kafkaProps.put(KafkaConfig.LogMessageTimestampAfterMaxMsProp, Long.MaxValue.toString)
+    kafkaProps.put(KafkaConfig.LogMessageTimestampDifferenceMaxMsProp, oneDayInMillis.toString)
+
+    val logProps = KafkaConfig.fromProps(kafkaProps).extractLogConfigMap
+    assertEquals(oneDayInMillis, logProps.get(TopicConfig.MESSAGE_TIMESTAMP_BEFORE_MAX_MS_CONFIG))
+    assertEquals(oneDayInMillis, logProps.get(TopicConfig.MESSAGE_TIMESTAMP_AFTER_MAX_MS_CONFIG))
   }
 }

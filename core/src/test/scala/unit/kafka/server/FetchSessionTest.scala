@@ -16,7 +16,6 @@
 */
 package kafka.server
 
-import kafka.utils.MockTime
 import org.apache.kafka.common.{TopicIdPartition, TopicPartition, Uuid}
 import org.apache.kafka.common.message.FetchResponseData
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
@@ -26,6 +25,7 @@ import org.apache.kafka.common.record.SimpleRecord
 import org.apache.kafka.common.requests.FetchMetadata.{FINAL_EPOCH, INVALID_SESSION_ID}
 import org.apache.kafka.common.requests.{FetchRequest, FetchResponse, FetchMetadata => JFetchMetadata}
 import org.apache.kafka.common.utils.Utils
+import org.apache.kafka.server.util.MockTime
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{Test, Timeout}
 import org.junit.jupiter.params.ParameterizedTest
@@ -34,7 +34,6 @@ import org.junit.jupiter.params.provider.{Arguments, MethodSource, ValueSource}
 import scala.jdk.CollectionConverters._
 import java.util
 import java.util.{Collections, Optional}
-
 import scala.collection.mutable.ArrayBuffer
 
 @Timeout(120)
@@ -140,14 +139,14 @@ class FetchSessionTest {
                     toForget: util.List[TopicIdPartition], isFromFollower: Boolean,
                     version: Short = ApiKeys.FETCH.latestVersion): FetchRequest = {
     new FetchRequest.Builder(version, version, if (isFromFollower) 1 else FetchRequest.CONSUMER_REPLICA_ID,
-      0, 0, fetchData).metadata(metadata).removed(toForget).build
+      if (isFromFollower) 1 else -1, 0, 0, fetchData).metadata(metadata).removed(toForget).build
   }
 
   def createRequestWithoutTopicIds(metadata: JFetchMetadata,
                     fetchData: util.Map[TopicPartition, FetchRequest.PartitionData],
                     toForget: util.List[TopicIdPartition], isFromFollower: Boolean): FetchRequest = {
     new FetchRequest.Builder(12, 12, if (isFromFollower) 1 else FetchRequest.CONSUMER_REPLICA_ID,
-      0, 0, fetchData).metadata(metadata).removed(toForget).build
+      if (isFromFollower) 1 else -1, 0, 0, fetchData).metadata(metadata).removed(toForget).build
   }
 
   @Test

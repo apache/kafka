@@ -18,11 +18,11 @@
 package org.apache.kafka.jmh.metadata;
 
 import kafka.controller.KafkaController;
-import kafka.coordinator.group.GroupCoordinator;
 import kafka.coordinator.transaction.TransactionCoordinator;
 import kafka.network.RequestChannel;
 import kafka.network.RequestConvertToJson;
 import kafka.server.AutoTopicCreationManager;
+import kafka.server.ZkBrokerEpochManager;
 import kafka.server.BrokerFeatures;
 import kafka.server.BrokerTopicStats;
 import kafka.server.ClientQuotaManager;
@@ -59,6 +59,8 @@ import org.apache.kafka.common.requests.UpdateMetadataRequest;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.coordinator.group.GroupCoordinator;
+import org.apache.kafka.server.common.Features;
 import org.apache.kafka.server.common.MetadataVersion;
 import org.mockito.Mockito;
 import org.openjdk.jmh.annotations.Benchmark;
@@ -111,7 +113,7 @@ public class MetadataRequestBenchmark {
     private Metrics metrics = new Metrics();
     private int brokerId = 1;
     private ZkMetadataCache metadataCache = MetadataCache.zkMetadataCache(brokerId,
-        MetadataVersion.latest(), BrokerFeatures.createEmpty(), null);
+        MetadataVersion.latest(), BrokerFeatures.createEmpty(), null, false);
     private ClientQuotaManager clientQuotaManager = Mockito.mock(ClientQuotaManager.class);
     private ClientRequestQuotaManager clientRequestQuotaManager = Mockito.mock(ClientRequestQuotaManager.class);
     private ControllerMutationQuotaManager controllerMutationQuotaManager = Mockito.mock(ControllerMutationQuotaManager.class);
@@ -120,7 +122,7 @@ public class MetadataRequestBenchmark {
         clientQuotaManager, clientRequestQuotaManager, controllerMutationQuotaManager, replicaQuotaManager,
         replicaQuotaManager, replicaQuotaManager, Option.empty());
     private FetchManager fetchManager = Mockito.mock(FetchManager.class);
-    private BrokerTopicStats brokerTopicStats = new BrokerTopicStats();
+    private BrokerTopicStats brokerTopicStats = new BrokerTopicStats(Optional.empty());
     private KafkaPrincipal principal = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "test-user");
     private KafkaApis kafkaApis;
     private RequestChannel.Request allTopicMetadataRequest;
@@ -180,7 +182,8 @@ public class MetadataRequestBenchmark {
         KafkaConfig config = new KafkaConfig(kafkaProps);
         return new KafkaApisBuilder().
             setRequestChannel(requestChannel).
-            setMetadataSupport(new ZkSupport(adminManager, kafkaController, kafkaZkClient, Option.empty(), metadataCache)).
+            setMetadataSupport(new ZkSupport(adminManager, kafkaController, kafkaZkClient,
+                Option.empty(), metadataCache, new ZkBrokerEpochManager(metadataCache, kafkaController, Option.empty()))).
             setReplicaManager(replicaManager).
             setGroupCoordinator(groupCoordinator).
             setTxnCoordinator(transactionCoordinator).
@@ -197,7 +200,11 @@ public class MetadataRequestBenchmark {
             setClusterId("clusterId").
             setTime(Time.SYSTEM).
             setTokenManager(null).
-            setApiVersionManager(new SimpleApiVersionManager(ApiMessageType.ListenerType.ZK_BROKER)).
+            setApiVersionManager(new SimpleApiVersionManager(
+                    ApiMessageType.ListenerType.ZK_BROKER,
+                    false,
+                    false,
+                    () -> Features.fromKRaftVersion(MetadataVersion.latest()))).
             build();
     }
 

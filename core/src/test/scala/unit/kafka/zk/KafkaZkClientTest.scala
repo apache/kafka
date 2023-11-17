@@ -44,7 +44,7 @@ import org.apache.kafka.common.{TopicPartition, Uuid}
 import org.apache.kafka.metadata.LeaderRecoveryState
 import org.apache.kafka.metadata.migration.ZkMigrationLeadershipState
 import org.apache.kafka.server.common.MetadataVersion
-import org.apache.kafka.server.log.internals.LogConfig
+import org.apache.kafka.storage.internals.log.LogConfig
 import org.apache.zookeeper.KeeperException.{Code, NoAuthException, NoNodeException, NodeExistsException}
 import org.apache.zookeeper.{CreateMode, ZooDefs}
 import org.apache.zookeeper.client.ZKClientConfig
@@ -1188,7 +1188,7 @@ class KafkaZkClientTest extends QuorumTestHarness {
 
     assertEquals(CreateResponse(Code.NODEEXISTS, ControllerEpochZNode.path, None, null, ResponseMetadata(0, 0)),
       eraseMetadata(zkClient.createControllerEpochRaw(0)),
-      "Attemt to create existing nodes should return NODEEXISTS")
+      "Attempt to create existing nodes should return NODEEXISTS")
 
     assertEquals(SetDataResponse(Code.OK, ControllerEpochZNode.path, None, statWithVersion(1), ResponseMetadata(0, 0)),
       eraseMetadataAndStat(zkClient.setControllerEpochRaw(1, 0)),
@@ -1414,7 +1414,7 @@ class KafkaZkClientTest extends QuorumTestHarness {
   }
 
   @Test
-  def testJuteMaxBufffer(): Unit = {
+  def testJuteMaxBuffer(): Unit = {
 
     def assertJuteMaxBufferConfig(clientConfig: ZKClientConfig, expectedValue: String): Unit = {
       val client = KafkaZkClient(zkConnect, zkAclsEnabled.getOrElse(JaasUtils.isZkSaslEnabled), zkSessionTimeout,
@@ -1442,8 +1442,8 @@ class KafkaZkClientTest extends QuorumTestHarness {
 
   @Test
   def testFailToUpdateMigrationZNode(): Unit = {
-    val (_, stat) = zkClient.getControllerEpoch.get
-    var migrationState = new ZkMigrationLeadershipState(3000, 42, 100, 42, Time.SYSTEM.milliseconds(), -1, stat.getVersion)
+    val (controllerEpoch, stat) = zkClient.getControllerEpoch.get
+    var migrationState = new ZkMigrationLeadershipState(3000, 42, 100, 42, Time.SYSTEM.milliseconds(), -1, controllerEpoch, stat.getVersion)
     migrationState = zkClient.getOrCreateMigrationState(migrationState)
     assertEquals(0, migrationState.migrationZkVersion())
 
@@ -1455,7 +1455,7 @@ class KafkaZkClientTest extends QuorumTestHarness {
       CreateRequest("/foo", Array(), zkClient.defaultAcls("/foo"), CreateMode.PERSISTENT),
     )
 
-    migrationState = migrationState.withControllerZkVersion(stat.getVersion)
+    migrationState = migrationState.withZkController(controllerEpoch, stat.getVersion)
     zkClient.retryMigrationRequestsUntilConnected(requests_bad, migrationState) match {
       case (zkVersion: Int, requests: Seq[AsyncRequest#Response]) =>
         assertEquals(0, zkVersion)
@@ -1477,7 +1477,7 @@ class KafkaZkClientTest extends QuorumTestHarness {
       CreateRequest("/foo/bar/eggs", Array(), zkClient.defaultAcls("/foo"), CreateMode.PERSISTENT),
     )
 
-    migrationState = migrationState.withControllerZkVersion(stat.getVersion)
+    migrationState = migrationState.withZkController(controllerEpoch, stat.getVersion)
     zkClient.retryMigrationRequestsUntilConnected(requests_good, migrationState) match {
       case (zkVersion: Int, requests: Seq[AsyncRequest#Response]) =>
         assertEquals(1, zkVersion)

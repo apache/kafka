@@ -42,6 +42,7 @@ import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 import java.util.OptionalInt;
+import java.util.OptionalLong;
 import java.util.concurrent.CompletableFuture;
 
 
@@ -58,12 +59,14 @@ public final class SnapshotFileReader implements AutoCloseable {
     private FileRecords fileRecords;
     private Iterator<FileChannelRecordBatch> batchIterator;
     private final MetadataRecordSerde serde = new MetadataRecordSerde();
+    private long lastOffset = -1L;
+    private volatile OptionalLong highWaterMark = OptionalLong.empty();
 
     public SnapshotFileReader(String snapshotPath, RaftClient.Listener<ApiMessageAndVersion> listener) {
         this.snapshotPath = snapshotPath;
         this.listener = listener;
         this.queue = new KafkaEventQueue(Time.SYSTEM,
-            new LogContext("[snapshotReaderQueue] "), "snapshotReaderQueue_");
+            new LogContext("[snapshotReaderQueue] "), "snapshotReaderQueue_", new ShutdownEvent());
         this.caughtUpFuture = new CompletableFuture<>();
     }
 
@@ -98,6 +101,7 @@ public final class SnapshotFileReader implements AutoCloseable {
         } else {
             handleMetadataBatch(batch);
         }
+        lastOffset = batch.lastOffset();
         scheduleHandleNextBatch();
     }
 
@@ -114,6 +118,10 @@ public final class SnapshotFileReader implements AutoCloseable {
                 beginShutdown("handleBatch error");
             }
         });
+    }
+
+    public OptionalLong highWaterMark() {
+        return highWaterMark;
     }
 
     private void handleControlBatch(FileChannelRecordBatch batch) {
@@ -174,22 +182,26 @@ public final class SnapshotFileReader implements AutoCloseable {
         } else {
             caughtUpFuture.completeExceptionally(new RuntimeException(reason));
         }
-        queue.beginShutdown(reason, new EventQueue.Event() {
-            @Override
-            public void run() throws Exception {
-                listener.beginShutdown();
-                if (fileRecords != null) {
-                    fileRecords.close();
-                    fileRecords = null;
-                }
-                batchIterator = null;
-            }
+        queue.beginShutdown(reason);
+    }
 
-            @Override
-            public void handleException(Throwable e) {
-                log.error("shutdown error", e);
+    class ShutdownEvent implements EventQueue.Event {
+        @Override
+        public void run() throws Exception {
+            // Expose the high water mark only once we've shut down.
+            highWaterMark = OptionalLong.of(lastOffset);
+
+            if (fileRecords != null) {
+                fileRecords.close();
+                fileRecords = null;
             }
-        });
+            batchIterator = null;
+        }
+
+        @Override
+        public void handleException(Throwable e) {
+            log.error("shutdown error", e);
+        }
     }
 
     @Override

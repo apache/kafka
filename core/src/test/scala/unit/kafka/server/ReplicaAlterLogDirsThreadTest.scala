@@ -16,7 +16,6 @@
   */
 package kafka.server
 
-import kafka.api.Request
 import kafka.cluster.{BrokerEndPoint, Partition}
 import kafka.log.{LogManager, UnifiedLog}
 import kafka.server.AbstractFetcherThread.ResultWithPartitions
@@ -31,14 +30,15 @@ import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.record.MemoryRecords
 import org.apache.kafka.common.requests.{FetchRequest, UpdateMetadataRequest}
 import org.apache.kafka.common.{TopicIdPartition, TopicPartition, Uuid}
-import org.apache.kafka.server.common.MetadataVersion
+import org.apache.kafka.server.common.{OffsetAndEpoch, MetadataVersion}
+import org.apache.kafka.storage.internals.log.{FetchIsolation, FetchParams, FetchPartitionData}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
 import org.mockito.ArgumentMatchers.{any, anyBoolean}
 import org.mockito.Mockito.{doNothing, mock, never, times, verify, when}
 import org.mockito.{ArgumentCaptor, ArgumentMatchers, Mockito}
 
-import java.util.{Collections, Optional}
+import java.util.{Collections, Optional, OptionalInt, OptionalLong}
 import scala.collection.{Map, Seq}
 import scala.jdk.CollectionConverters._
 
@@ -136,16 +136,16 @@ class ReplicaAlterLogDirsThreadTest {
 
     val fencedRequestData = new FetchRequest.PartitionData(topicId, 0L, 0L,
       config.replicaFetchMaxBytes, Optional.of(leaderEpoch - 1))
-    val fencedResponseData = FetchPartitionData(
-      error = Errors.FENCED_LEADER_EPOCH,
-      highWatermark = -1,
-      logStartOffset = -1,
-      records = MemoryRecords.EMPTY,
-      divergingEpoch = None,
-      lastStableOffset = None,
-      abortedTransactions = None,
-      preferredReadReplica = None,
-      isReassignmentFetch = false)
+    val fencedResponseData = new FetchPartitionData(
+      Errors.FENCED_LEADER_EPOCH,
+      -1,
+      -1,
+      MemoryRecords.EMPTY,
+      Optional.empty(),
+      OptionalLong.empty(),
+      Optional.empty(),
+      OptionalInt.empty(),
+      false)
     mockFetchFromCurrentLog(tid1p0, fencedRequestData, config, replicaManager, fencedResponseData)
 
     val endPoint = new BrokerEndPoint(0, "localhost", 1000)
@@ -177,16 +177,16 @@ class ReplicaAlterLogDirsThreadTest {
 
     val requestData = new FetchRequest.PartitionData(topicId, 0L, 0L,
       config.replicaFetchMaxBytes, Optional.of(leaderEpoch))
-    val responseData = FetchPartitionData(
-      error = Errors.NONE,
-      highWatermark = 0L,
-      logStartOffset = 0L,
-      records = MemoryRecords.EMPTY,
-      divergingEpoch = None,
-      lastStableOffset = None,
-      abortedTransactions = None,
-      preferredReadReplica = None,
-      isReassignmentFetch = false)
+    val responseData = new FetchPartitionData(
+      Errors.NONE,
+      0L,
+      0L,
+      MemoryRecords.EMPTY,
+      Optional.empty(),
+      OptionalLong.empty(),
+      Optional.empty(),
+      OptionalInt.empty(),
+      false)
     mockFetchFromCurrentLog(tid1p0, requestData, config, replicaManager, responseData)
 
     thread.doWork()
@@ -235,16 +235,16 @@ class ReplicaAlterLogDirsThreadTest {
 
     val requestData = new FetchRequest.PartitionData(topicId, 0L, 0L,
       config.replicaFetchMaxBytes, Optional.of(leaderEpoch))
-    val responseData = FetchPartitionData(
-      error = Errors.NONE,
-      highWatermark = 0L,
-      logStartOffset = 0L,
-      records = MemoryRecords.EMPTY,
-      divergingEpoch = None,
-      lastStableOffset = None,
-      abortedTransactions = None,
-      preferredReadReplica = None,
-      isReassignmentFetch = false)
+    val responseData = new FetchPartitionData(
+      Errors.NONE,
+      0L,
+      0L,
+      MemoryRecords.EMPTY,
+      Optional.empty(),
+      OptionalLong.empty(),
+      Optional.empty(),
+      OptionalInt.empty(),
+      false)
     mockFetchFromCurrentLog(tid1p0, requestData, config, replicaManager, responseData)
 
     val endPoint = new BrokerEndPoint(0, "localhost", 1000)
@@ -276,17 +276,16 @@ class ReplicaAlterLogDirsThreadTest {
     val callbackCaptor: ArgumentCaptor[Seq[(TopicIdPartition, FetchPartitionData)] => Unit] =
       ArgumentCaptor.forClass(classOf[Seq[(TopicIdPartition, FetchPartitionData)] => Unit])
 
-    val expectedFetchParams = FetchParams(
-      requestVersion = ApiKeys.FETCH.latestVersion,
-      replicaId = Request.FutureLocalReplicaId,
-      maxWaitMs = 0L,
-      minBytes = 0,
-      maxBytes = config.replicaFetchResponseMaxBytes,
-      isolation = FetchLogEnd,
-      clientMetadata = None
+    val expectedFetchParams = new FetchParams(
+      ApiKeys.FETCH.latestVersion,
+      FetchRequest.FUTURE_LOCAL_REPLICA_ID,
+      -1,
+      0L,
+      0,
+      config.replicaFetchResponseMaxBytes,
+      FetchIsolation.LOG_END,
+      Optional.empty()
     )
-
-    println(expectedFetchParams)
 
     when(replicaManager.fetchMessages(
       params = ArgumentMatchers.eq(expectedFetchParams),
@@ -294,7 +293,6 @@ class ReplicaAlterLogDirsThreadTest {
       quota = ArgumentMatchers.eq(UnboundedQuota),
       responseCallback = callbackCaptor.capture(),
     )).thenAnswer(_ => {
-      println("Did we get the callback?")
       callbackCaptor.getValue.apply(Seq((topicIdPartition, responseData)))
     })
   }
@@ -480,7 +478,7 @@ class ReplicaAlterLogDirsThreadTest {
 
     when(futureLogT1p0.latestEpoch).thenReturn(Some(leaderEpoch))
     when(futureLogT1p0.endOffsetForEpoch(leaderEpoch)).thenReturn(
-      Some(OffsetAndEpoch(futureReplicaLEO, leaderEpoch)))
+      Some(new OffsetAndEpoch(futureReplicaLEO, leaderEpoch)))
     when(partitionT1p0.lastOffsetForLeaderEpoch(Optional.of(1), leaderEpoch, fetchOnlyFromLeader = false))
       .thenReturn(new EpochEndOffset()
         .setPartition(partitionT1p0Id)
@@ -490,7 +488,7 @@ class ReplicaAlterLogDirsThreadTest {
 
     when(futureLogT1p1.latestEpoch).thenReturn(Some(leaderEpoch))
     when(futureLogT1p1.endOffsetForEpoch(leaderEpoch)).thenReturn(
-      Some(OffsetAndEpoch(futureReplicaLEO, leaderEpoch)))
+      Some(new OffsetAndEpoch(futureReplicaLEO, leaderEpoch)))
     when(partitionT1p1.lastOffsetForLeaderEpoch(Optional.of(1), leaderEpoch, fetchOnlyFromLeader = false))
       .thenReturn(new EpochEndOffset()
         .setPartition(partitionT1p1Id)
@@ -571,7 +569,7 @@ class ReplicaAlterLogDirsThreadTest {
         .setEndOffset(replicaLEO))
     // but future replica does not know about this leader epoch, so returns a smaller leader epoch
     when(futureLog.endOffsetForEpoch(leaderEpoch - 1)).thenReturn(
-      Some(OffsetAndEpoch(futureReplicaLEO, leaderEpoch - 2)))
+      Some(new OffsetAndEpoch(futureReplicaLEO, leaderEpoch - 2)))
     // finally, the leader replica knows about the leader epoch and returns end offset
     when(partition.lastOffsetForLeaderEpoch(Optional.of(1), leaderEpoch - 2, fetchOnlyFromLeader = false))
       .thenReturn(new EpochEndOffset()
@@ -580,7 +578,7 @@ class ReplicaAlterLogDirsThreadTest {
         .setLeaderEpoch(leaderEpoch - 2)
         .setEndOffset(replicaEpochEndOffset))
     when(futureLog.endOffsetForEpoch(leaderEpoch - 2)).thenReturn(
-      Some(OffsetAndEpoch(futureReplicaEpochEndOffset, leaderEpoch - 2)))
+      Some(new OffsetAndEpoch(futureReplicaEpochEndOffset, leaderEpoch - 2)))
 
     when(replicaManager.logManager).thenReturn(logManager)
     stubWithFetchMessages(log, null, futureLog, partition, replicaManager, responseCallback)
@@ -696,7 +694,7 @@ class ReplicaAlterLogDirsThreadTest {
     when(futureLog.logEndOffset).thenReturn(futureReplicaLEO)
     when(futureLog.latestEpoch).thenReturn(Some(futureReplicaLeaderEpoch))
     when(futureLog.endOffsetForEpoch(futureReplicaLeaderEpoch)).thenReturn(
-      Some(OffsetAndEpoch(futureReplicaLEO, futureReplicaLeaderEpoch)))
+      Some(new OffsetAndEpoch(futureReplicaLEO, futureReplicaLeaderEpoch)))
     when(replicaManager.localLog(t1p0)).thenReturn(Some(log))
 
     // this will cause fetchEpochsFromLeader return an error with undefined offset
@@ -789,7 +787,7 @@ class ReplicaAlterLogDirsThreadTest {
     when(futureLog.latestEpoch).thenReturn(Some(leaderEpoch))
     when(futureLog.logEndOffset).thenReturn(futureReplicaLEO)
     when(futureLog.endOffsetForEpoch(leaderEpoch)).thenReturn(
-      Some(OffsetAndEpoch(futureReplicaLEO, leaderEpoch)))
+      Some(new OffsetAndEpoch(futureReplicaLEO, leaderEpoch)))
     when(replicaManager.logManager).thenReturn(logManager)
     stubWithFetchMessages(log, null, futureLog, partition, replicaManager, responseCallback)
 

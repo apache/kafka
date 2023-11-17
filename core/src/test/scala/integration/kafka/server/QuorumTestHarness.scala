@@ -17,21 +17,23 @@
 
 package kafka.server
 
-import java.io.{ByteArrayOutputStream, File, PrintStream}
+import java.io.File
 import java.net.InetSocketAddress
 import java.util
-import java.util.{Collections, Properties}
-import java.util.concurrent.CompletableFuture
+import java.util.{Collections, Optional, OptionalInt, Properties}
+import java.util.concurrent.{CompletableFuture, TimeUnit}
 import javax.security.auth.login.Configuration
-import kafka.tools.StorageTool
 import kafka.utils.{CoreUtils, Logging, TestInfoUtils, TestUtils}
 import kafka.zk.{AdminZkClient, EmbeddedZookeeper, KafkaZkClient}
 import org.apache.kafka.common.metrics.Metrics
-import org.apache.kafka.common.Uuid
+import org.apache.kafka.common.{DirectoryId, Uuid}
 import org.apache.kafka.common.security.JaasUtils
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.utils.{Exit, Time}
 import org.apache.kafka.metadata.bootstrap.BootstrapMetadata
+import org.apache.kafka.common.metadata.FeatureLevelRecord
+import org.apache.kafka.metadata.properties.MetaPropertiesEnsemble.VerificationFlag.{REQUIRE_AT_LEAST_ONE_VALID, REQUIRE_METADATA_LOG_DIR}
+import org.apache.kafka.metadata.properties.{MetaProperties, MetaPropertiesEnsemble, MetaPropertiesVersion}
 import org.apache.kafka.raft.RaftConfig.{AddressSpec, InetAddressSpec}
 import org.apache.kafka.server.common.{ApiMessageAndVersion, MetadataVersion}
 import org.apache.kafka.server.fault.{FaultHandler, MockFaultHandler}
@@ -40,6 +42,8 @@ import org.apache.zookeeper.{WatchedEvent, Watcher, ZooKeeper}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterAll, AfterEach, BeforeAll, BeforeEach, Tag, TestInfo}
 
+import java.nio.file.{Files, Paths}
+import scala.collection.mutable.ArrayBuffer
 import scala.collection.mutable.ListBuffer
 import scala.collection.{Seq, immutable}
 import scala.compat.java8.OptionConverters._
@@ -94,17 +98,38 @@ class KRaftQuorumImplementation(
     startup: Boolean,
     threadNamePrefix: Option[String],
   ): KafkaBroker = {
+    val metaPropertiesEnsemble = {
+      val loader = new MetaPropertiesEnsemble.Loader()
+      config.logDirs.foreach(loader.addLogDir(_))
+      loader.addMetadataLogDir(config.metadataLogDir)
+      val ensemble = loader.load()
+      val copier = new MetaPropertiesEnsemble.Copier(ensemble)
+      ensemble.emptyLogDirs().forEach(logDir => {
+        copier.setLogDirProps(logDir, new MetaProperties.Builder().
+          setVersion(MetaPropertiesVersion.V1).
+          setClusterId(clusterId).
+          setNodeId(config.nodeId).
+          setDirectoryId(DirectoryId.random()).
+          build())
+      })
+      copier.setPreWriteHandler((logDir, _, _) => {
+        Files.createDirectories(Paths.get(logDir));
+      })
+      copier.writeLogDirChanges()
+      copier.copy()
+    }
+    metaPropertiesEnsemble.verify(Optional.of(clusterId),
+      OptionalInt.of(config.nodeId),
+      util.EnumSet.of(REQUIRE_AT_LEAST_ONE_VALID, REQUIRE_METADATA_LOG_DIR))
     val sharedServer = new SharedServer(config,
-      new MetaProperties(clusterId, config.nodeId),
+      metaPropertiesEnsemble,
       Time.SYSTEM,
       new Metrics(),
-      Option("Broker%02d_".format(config.nodeId)),
       controllerQuorumVotersFuture,
       faultHandlerFactory)
     var broker: BrokerServer = null
     try {
-      broker = new BrokerServer(sharedServer,
-        initialOfflineDirs = Seq())
+      broker = new BrokerServer(sharedServer)
       if (startup) broker.startup()
       broker
     } catch {
@@ -273,21 +298,7 @@ abstract class QuorumTestHarness extends Logging {
     CoreUtils.swallow(kRaftQuorumImplementation.controllerServer.shutdown(), kRaftQuorumImplementation.log)
   }
 
-  private def formatDirectories(directories: immutable.Seq[String],
-                                metaProperties: MetaProperties): Unit = {
-    val stream = new ByteArrayOutputStream()
-    var out: PrintStream = null
-    try {
-      out = new PrintStream(stream)
-      if (StorageTool.formatCommand(out, directories, metaProperties, metadataVersion, ignoreFormatted = false) != 0) {
-        throw new RuntimeException(stream.toString())
-      }
-      debug(s"Formatted storage directory(ies) ${directories}")
-    } finally {
-      if (out != null) out.close()
-      stream.close()
-    }
-  }
+  def optionalMetadataRecords: Option[ArrayBuffer[ApiMessageAndVersion]] = None
 
   private def newKRaftQuorum(testInfo: TestInfo): KRaftQuorumImplementation = {
     val propsList = kraftControllerConfigs()
@@ -295,14 +306,31 @@ abstract class QuorumTestHarness extends Logging {
       throw new RuntimeException("Only one KRaft controller is supported for now.")
     }
     val props = propsList(0)
+    props.setProperty(KafkaConfig.ServerMaxStartupTimeMsProp, TimeUnit.MINUTES.toMillis(10).toString)
     props.setProperty(KafkaConfig.ProcessRolesProp, "controller")
     if (props.getProperty(KafkaConfig.NodeIdProp) == null) {
       props.setProperty(KafkaConfig.NodeIdProp, "1000")
     }
     val nodeId = Integer.parseInt(props.getProperty(KafkaConfig.NodeIdProp))
     val metadataDir = TestUtils.tempDir()
-    val metaProperties = new MetaProperties(Uuid.randomUuid().toString, nodeId)
-    formatDirectories(immutable.Seq(metadataDir.getAbsolutePath), metaProperties)
+    val metaProperties = new MetaProperties.Builder().
+      setVersion(MetaPropertiesVersion.V1).
+      setClusterId(Uuid.randomUuid().toString).
+      setNodeId(nodeId).
+      build()
+    TestUtils.formatDirectories(immutable.Seq(metadataDir.getAbsolutePath), metaProperties, metadataVersion, optionalMetadataRecords)
+
+    val metadataRecords = new util.ArrayList[ApiMessageAndVersion]
+    metadataRecords.add(new ApiMessageAndVersion(new FeatureLevelRecord().
+                        setName(MetadataVersion.FEATURE_NAME).
+                        setFeatureLevel(metadataVersion.featureLevel()), 0.toShort));
+
+    optionalMetadataRecords.foreach { metadataArguments =>
+      for (record <- metadataArguments) metadataRecords.add(record)
+    }
+
+    val bootstrapMetadata = BootstrapMetadata.fromRecords(metadataRecords, "test harness")
+
     props.setProperty(KafkaConfig.MetadataLogDirProp, metadataDir.getAbsolutePath)
     val proto = controllerListenerSecurityProtocol.toString
     props.setProperty(KafkaConfig.ListenerSecurityProtocolMapProp, s"CONTROLLER:${proto}")
@@ -311,11 +339,16 @@ abstract class QuorumTestHarness extends Logging {
     props.setProperty(KafkaConfig.QuorumVotersProp, s"${nodeId}@localhost:0")
     val config = new KafkaConfig(props)
     val controllerQuorumVotersFuture = new CompletableFuture[util.Map[Integer, AddressSpec]]
+    val metaPropertiesEnsemble = new MetaPropertiesEnsemble.Loader().
+      addMetadataLogDir(metadataDir.getAbsolutePath).
+      load()
+    metaPropertiesEnsemble.verify(Optional.of(metaProperties.clusterId().get()),
+      OptionalInt.of(nodeId),
+      util.EnumSet.of(REQUIRE_AT_LEAST_ONE_VALID, REQUIRE_METADATA_LOG_DIR))
     val sharedServer = new SharedServer(config,
-      metaProperties,
+      metaPropertiesEnsemble,
       Time.SYSTEM,
       new Metrics(),
-      Option("Controller_" + testInfo.getDisplayName),
       controllerQuorumVotersFuture,
       faultHandlerFactory)
     var controllerServer: ControllerServer = null
@@ -323,7 +356,7 @@ abstract class QuorumTestHarness extends Logging {
       controllerServer = new ControllerServer(
         sharedServer,
         KafkaRaftServer.configSchema,
-        BootstrapMetadata.fromVersion(metadataVersion, "test harness")
+        bootstrapMetadata
       )
       controllerServer.socketServerFirstBoundPortFuture.whenComplete((port, e) => {
         if (e != null) {
@@ -345,7 +378,7 @@ abstract class QuorumTestHarness extends Logging {
       faultHandlerFactory,
       metadataDir,
       controllerQuorumVotersFuture,
-      metaProperties.clusterId,
+      metaProperties.clusterId.get(),
       this,
       faultHandler)
   }

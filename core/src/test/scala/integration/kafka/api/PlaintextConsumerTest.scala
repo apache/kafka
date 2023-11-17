@@ -15,12 +15,18 @@ package kafka.api
 import java.time.Duration
 import java.util
 import java.util.Arrays.asList
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.locks.ReentrantLock
 import java.util.regex.Pattern
 import java.util.{Locale, Optional, Properties}
+
+import kafka.server.{KafkaServer, QuotaType}
 import kafka.utils.TestUtils
+import org.apache.kafka.clients.admin.{NewPartitions, NewTopic}
 import org.apache.kafka.clients.consumer._
 import org.apache.kafka.clients.producer.{ProducerConfig, ProducerRecord}
 import org.apache.kafka.common.{MetricName, TopicPartition}
+import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.errors.{InvalidGroupIdException, InvalidTopicException}
 import org.apache.kafka.common.header.Headers
 import org.apache.kafka.common.record.{CompressionType, TimestampType}
@@ -29,20 +35,12 @@ import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.test.{MockConsumerInterceptor, MockProducerInterceptor}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
-
-import scala.jdk.CollectionConverters._
-import scala.collection.mutable.Buffer
-import kafka.server.QuotaType
-import kafka.server.KafkaServer
-import org.apache.kafka.clients.admin.NewPartitions
-import org.apache.kafka.clients.admin.NewTopic
-import org.apache.kafka.common.config.TopicConfig
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
 
-import java.util.concurrent.TimeUnit
-import java.util.concurrent.locks.ReentrantLock
 import scala.collection.mutable
+import scala.collection.mutable.Buffer
+import scala.jdk.CollectionConverters._
 
 /* We have some tests in this class instead of `BaseConsumerTest` in order to keep the build time under control. */
 class PlaintextConsumerTest extends BaseConsumerTest {
@@ -268,7 +266,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     consumer.subscribe(List(topic).asJava)
     awaitAssignment(consumer, Set(tp, tp2))
 
-    // should auto-commit seeked positions before closing
+    // should auto-commit sought positions before closing
     consumer.seek(tp, 300)
     consumer.seek(tp2, 500)
     consumer.close()
@@ -291,7 +289,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     consumer.subscribe(List(topic).asJava)
     awaitAssignment(consumer, Set(tp, tp2))
 
-    // should auto-commit seeked positions before closing
+    // should auto-commit sought positions before closing
     consumer.seek(tp, 300)
     consumer.seek(tp2, 500)
 
@@ -995,7 +993,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
 
     // subscribe all consumers to all topics and validate the assignment
 
-    val consumersInGroup = Buffer[KafkaConsumer[Array[Byte], Array[Byte]]]()
+    val consumersInGroup = Buffer[Consumer[Array[Byte], Array[Byte]]]()
     consumersInGroup += createConsumer()
     consumersInGroup += createConsumer()
 
@@ -1116,7 +1114,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     createTopic(topic1, 3)
     createTopic(topic2, 3)
 
-    val consumersInGroup = Buffer[KafkaConsumer[Array[Byte], Array[Byte]]]()
+    val consumersInGroup = Buffer[Consumer[Array[Byte], Array[Byte]]]()
     consumersInGroup += createConsumer()
     consumersInGroup += createConsumer()
 
@@ -1736,7 +1734,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     * @param topicsToSubscribe topics to which consumers will subscribe to
     * @return collection of consumer pollers
     */
-  def subscribeConsumers(consumerGroup: mutable.Buffer[KafkaConsumer[Array[Byte], Array[Byte]]],
+  def subscribeConsumers(consumerGroup: mutable.Buffer[Consumer[Array[Byte], Array[Byte]]],
                          topicsToSubscribe: List[String]): mutable.Buffer[ConsumerAssignmentPoller] = {
     val consumerPollers = mutable.Buffer[ConsumerAssignmentPoller]()
     for (consumer <- consumerGroup)
@@ -1757,9 +1755,9 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     */
   def createConsumerGroupAndWaitForAssignment(consumerCount: Int,
                                               topicsToSubscribe: List[String],
-                                              subscriptions: Set[TopicPartition]): (Buffer[KafkaConsumer[Array[Byte], Array[Byte]]], Buffer[ConsumerAssignmentPoller]) = {
+                                              subscriptions: Set[TopicPartition]): (Buffer[Consumer[Array[Byte], Array[Byte]]], Buffer[ConsumerAssignmentPoller]) = {
     assertTrue(consumerCount <= subscriptions.size)
-    val consumerGroup = Buffer[KafkaConsumer[Array[Byte], Array[Byte]]]()
+    val consumerGroup = Buffer[Consumer[Array[Byte], Array[Byte]]]()
     for (_ <- 0 until consumerCount)
       consumerGroup += createConsumer()
 
@@ -1949,22 +1947,4 @@ class PlaintextConsumerTest extends BaseConsumerTest {
 
     consumer2.close()
   }
-
-  @Test
-  def testConsumerRackIdPropagatedToPartitionAssignor(): Unit = {
-    consumerConfig.setProperty(ConsumerConfig.CLIENT_RACK_CONFIG, "rack-a")
-    consumerConfig.setProperty(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG, classOf[RackAwareAssignor].getName)
-    val consumer = createConsumer()
-    consumer.subscribe(Set(topic).asJava)
-    awaitAssignment(consumer, Set(tp, tp2))
-  }
 }
-
-class RackAwareAssignor extends RoundRobinAssignor {
-  override def assign(partitionsPerTopic: util.Map[String, Integer], subscriptions: util.Map[String, ConsumerPartitionAssignor.Subscription]): util.Map[String, util.List[TopicPartition]] = {
-    assertEquals(1, subscriptions.size())
-    assertEquals(Optional.of("rack-a"), subscriptions.values.asScala.head.rackId)
-    super.assign(partitionsPerTopic, subscriptions)
-  }
-}
-

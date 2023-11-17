@@ -203,6 +203,56 @@ class ZookeeperService(KafkaPathResolverMixin, Service):
                     result = match.groups()[0]
         return result
 
+    def get_children(self, path, chroot=None):
+        """
+        Queries zookeeper for data associated with 'path' and returns all fields in the schema
+        """
+        self._check_chroot(chroot)
+
+        chroot_path = ('' if chroot is None else chroot) + path
+
+        kafka_run_class = self.path.script("kafka-run-class.sh", DEV_BRANCH)
+        cmd = "%s %s -server %s %s ls %s" % \
+              (kafka_run_class, self.java_cli_class_name(), self.connect_setting(force_tls=self.zk_client_secure_port),
+               self.zkTlsConfigFileOption(True),
+               chroot_path)
+        self.logger.debug(cmd)
+
+        node = self.nodes[0]
+        result = None
+        for line in node.account.ssh_capture(cmd, allow_fail=True):
+            # loop through all lines in the output, but only hold on to the first match
+            if result is None:
+                match = re.match("^(\\[.+\\])$", line)
+                if match is not None:
+                    result = match.groups()[0]
+        if result is None:
+            return []
+        else:
+            return result.strip("[]").split(", ")
+
+    def delete(self, path, recursive, chroot=None):
+        """
+        Queries zookeeper for data associated with 'path' and returns all fields in the schema
+        """
+        self._check_chroot(chroot)
+
+        chroot_path = ('' if chroot is None else chroot) + path
+
+        kafka_run_class = self.path.script("kafka-run-class.sh", DEV_BRANCH)
+        if recursive:
+            op = "deleteall"
+        else:
+            op = "delete"
+        cmd = "%s %s -server %s %s %s %s" % \
+              (kafka_run_class, self.java_cli_class_name(), self.connect_setting(force_tls=self.zk_client_secure_port),
+               self.zkTlsConfigFileOption(True),
+               op, chroot_path)
+        self.logger.debug(cmd)
+
+        node = self.nodes[0]
+        node.account.ssh_capture(cmd)
+
     def create(self, path, chroot=None, value=""):
         """
         Create an znode at the given path

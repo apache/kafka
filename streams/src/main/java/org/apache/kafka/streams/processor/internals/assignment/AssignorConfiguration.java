@@ -25,6 +25,7 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.StreamsConfig.InternalConfig;
+import org.apache.kafka.streams.internals.UpgradeFromValues;
 import org.apache.kafka.streams.processor.internals.ClientUtils;
 import org.apache.kafka.streams.processor.internals.InternalTopicManager;
 import org.slf4j.Logger;
@@ -95,17 +96,17 @@ public final class AssignorConfiguration {
     public RebalanceProtocol rebalanceProtocol() {
         final String upgradeFrom = streamsConfig.getString(StreamsConfig.UPGRADE_FROM_CONFIG);
         if (upgradeFrom != null) {
-            switch (upgradeFrom) {
-                case StreamsConfig.UPGRADE_FROM_0100:
-                case StreamsConfig.UPGRADE_FROM_0101:
-                case StreamsConfig.UPGRADE_FROM_0102:
-                case StreamsConfig.UPGRADE_FROM_0110:
-                case StreamsConfig.UPGRADE_FROM_10:
-                case StreamsConfig.UPGRADE_FROM_11:
-                case StreamsConfig.UPGRADE_FROM_20:
-                case StreamsConfig.UPGRADE_FROM_21:
-                case StreamsConfig.UPGRADE_FROM_22:
-                case StreamsConfig.UPGRADE_FROM_23:
+            switch (UpgradeFromValues.getValueFromString(upgradeFrom)) {
+                case UPGRADE_FROM_0100:
+                case UPGRADE_FROM_0101:
+                case UPGRADE_FROM_0102:
+                case UPGRADE_FROM_0110:
+                case UPGRADE_FROM_10:
+                case UPGRADE_FROM_11:
+                case UPGRADE_FROM_20:
+                case UPGRADE_FROM_21:
+                case UPGRADE_FROM_22:
+                case UPGRADE_FROM_23:
                     // ATTENTION: The following log messages is used for verification in system test
                     // streams/streams_cooperative_rebalance_upgrade_test.py::StreamsCooperativeRebalanceUpgradeTest.test_upgrade_to_cooperative_rebalance
                     // If you change it, please do also change the system test accordingly and
@@ -114,14 +115,18 @@ public final class AssignorConfiguration {
                     log.warn("The eager rebalancing protocol is deprecated and will stop being supported in a future release." +
                         " Please be prepared to remove the 'upgrade.from' config soon.");
                     return RebalanceProtocol.EAGER;
-                case StreamsConfig.UPGRADE_FROM_24:
-                case StreamsConfig.UPGRADE_FROM_25:
-                case StreamsConfig.UPGRADE_FROM_26:
-                case StreamsConfig.UPGRADE_FROM_27:
-                case StreamsConfig.UPGRADE_FROM_28:
-                case StreamsConfig.UPGRADE_FROM_30:
-                case StreamsConfig.UPGRADE_FROM_31:
-                case StreamsConfig.UPGRADE_FROM_32:
+                case UPGRADE_FROM_24:
+                case UPGRADE_FROM_25:
+                case UPGRADE_FROM_26:
+                case UPGRADE_FROM_27:
+                case UPGRADE_FROM_28:
+                case UPGRADE_FROM_30:
+                case UPGRADE_FROM_31:
+                case UPGRADE_FROM_32:
+                case UPGRADE_FROM_33:
+                case UPGRADE_FROM_34:
+                    // we need to add new version when new "upgrade.from" values become available
+
                     // This config is for explicitly sending FK response to a requested partition
                     // and should not affect the rebalance protocol
                     break;
@@ -144,38 +149,42 @@ public final class AssignorConfiguration {
     public int configuredMetadataVersion(final int priorVersion) {
         final String upgradeFrom = streamsConfig.getString(StreamsConfig.UPGRADE_FROM_CONFIG);
         if (upgradeFrom != null) {
-            switch (upgradeFrom) {
-                case StreamsConfig.UPGRADE_FROM_0100:
+            switch (UpgradeFromValues.getValueFromString(upgradeFrom)) {
+                case UPGRADE_FROM_0100:
                     log.info(
                         "Downgrading metadata version from {} to 1 for upgrade from 0.10.0.x.",
                         LATEST_SUPPORTED_VERSION
                     );
                     return 1;
-                case StreamsConfig.UPGRADE_FROM_0101:
-                case StreamsConfig.UPGRADE_FROM_0102:
-                case StreamsConfig.UPGRADE_FROM_0110:
-                case StreamsConfig.UPGRADE_FROM_10:
-                case StreamsConfig.UPGRADE_FROM_11:
+                case UPGRADE_FROM_0101:
+                case UPGRADE_FROM_0102:
+                case UPGRADE_FROM_0110:
+                case UPGRADE_FROM_10:
+                case UPGRADE_FROM_11:
                     log.info(
                         "Downgrading metadata version from {} to 2 for upgrade from {}.x.",
                         LATEST_SUPPORTED_VERSION,
                         upgradeFrom
                     );
                     return 2;
-                case StreamsConfig.UPGRADE_FROM_20:
-                case StreamsConfig.UPGRADE_FROM_21:
-                case StreamsConfig.UPGRADE_FROM_22:
-                case StreamsConfig.UPGRADE_FROM_23:
+                case UPGRADE_FROM_20:
+                case UPGRADE_FROM_21:
+                case UPGRADE_FROM_22:
+                case UPGRADE_FROM_23:
                     // These configs are for cooperative rebalancing and should not affect the metadata version
                     break;
-                case StreamsConfig.UPGRADE_FROM_24:
-                case StreamsConfig.UPGRADE_FROM_25:
-                case StreamsConfig.UPGRADE_FROM_26:
-                case StreamsConfig.UPGRADE_FROM_27:
-                case StreamsConfig.UPGRADE_FROM_28:
-                case StreamsConfig.UPGRADE_FROM_30:
-                case StreamsConfig.UPGRADE_FROM_31:
-                case StreamsConfig.UPGRADE_FROM_32:
+                case UPGRADE_FROM_24:
+                case UPGRADE_FROM_25:
+                case UPGRADE_FROM_26:
+                case UPGRADE_FROM_27:
+                case UPGRADE_FROM_28:
+                case UPGRADE_FROM_30:
+                case UPGRADE_FROM_31:
+                case UPGRADE_FROM_32:
+                case UPGRADE_FROM_33:
+                case UPGRADE_FROM_34:
+                    // we need to add new version when new "upgrade.from" values become available
+
                     // This config is for explicitly sending FK response to a requested partition
                     // and should not affect the metadata version
                     break;
@@ -259,43 +268,52 @@ public final class AssignorConfiguration {
         void onAssignmentComplete(final boolean stable);
     }
 
-    /**
-     * NOTE: any StreamsConfig you add here MUST be passed in to the consumer via
-     * {@link StreamsConfig#getMainConsumerConfigs}
-     */
     public static class AssignmentConfigs {
         public final long acceptableRecoveryLag;
         public final int maxWarmupReplicas;
         public final int numStandbyReplicas;
-        public final boolean partitionAutoscalingEnabled;
-        public final long partitionAutoscalingTimeoutMs;
         public final long probingRebalanceIntervalMs;
         public final List<String> rackAwareAssignmentTags;
+        public final Integer rackAwareAssignmentTrafficCost;
+        public final Integer rackAwareAssignmentNonOverlapCost;
+        public final String rackAwareAssignmentStrategy;
 
         private AssignmentConfigs(final StreamsConfig configs) {
             acceptableRecoveryLag = configs.getLong(StreamsConfig.ACCEPTABLE_RECOVERY_LAG_CONFIG);
             maxWarmupReplicas = configs.getInt(StreamsConfig.MAX_WARMUP_REPLICAS_CONFIG);
             numStandbyReplicas = configs.getInt(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG);
-            partitionAutoscalingEnabled = configs.getBoolean(StreamsConfig.PARTITION_AUTOSCALING_ENABLED_CONFIG);
-            partitionAutoscalingTimeoutMs = configs.getLong(StreamsConfig.PARTITION_AUTOSCALING_TIMEOUT_MS_CONFIG);
             probingRebalanceIntervalMs = configs.getLong(StreamsConfig.PROBING_REBALANCE_INTERVAL_MS_CONFIG);
             rackAwareAssignmentTags = configs.getList(StreamsConfig.RACK_AWARE_ASSIGNMENT_TAGS_CONFIG);
+            rackAwareAssignmentTrafficCost = configs.getInt(StreamsConfig.RACK_AWARE_ASSIGNMENT_TRAFFIC_COST_CONFIG);
+            rackAwareAssignmentNonOverlapCost = configs.getInt(StreamsConfig.RACK_AWARE_ASSIGNMENT_NON_OVERLAP_COST_CONFIG);
+            rackAwareAssignmentStrategy = configs.getString(StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_CONFIG);
         }
 
         AssignmentConfigs(final Long acceptableRecoveryLag,
                           final Integer maxWarmupReplicas,
                           final Integer numStandbyReplicas,
-                          final boolean partitionAutoscalingEnabled,
-                          final long partitionAutoscalingTimeoutMs,
                           final Long probingRebalanceIntervalMs,
                           final List<String> rackAwareAssignmentTags) {
+            this(acceptableRecoveryLag, maxWarmupReplicas, numStandbyReplicas, probingRebalanceIntervalMs, rackAwareAssignmentTags,
+                null, null, StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_NONE);
+        }
+
+        AssignmentConfigs(final Long acceptableRecoveryLag,
+                          final Integer maxWarmupReplicas,
+                          final Integer numStandbyReplicas,
+                          final Long probingRebalanceIntervalMs,
+                          final List<String> rackAwareAssignmentTags,
+                          final Integer rackAwareAssignmentTrafficCost,
+                          final Integer rackAwareAssignmentNonOverlapCost,
+                          final String rackAwareAssignmentStrategy) {
             this.acceptableRecoveryLag = validated(StreamsConfig.ACCEPTABLE_RECOVERY_LAG_CONFIG, acceptableRecoveryLag);
             this.maxWarmupReplicas = validated(StreamsConfig.MAX_WARMUP_REPLICAS_CONFIG, maxWarmupReplicas);
             this.numStandbyReplicas = validated(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, numStandbyReplicas);
-            this.partitionAutoscalingEnabled = validated(StreamsConfig.PARTITION_AUTOSCALING_ENABLED_CONFIG, partitionAutoscalingEnabled);
-            this.partitionAutoscalingTimeoutMs = validated(StreamsConfig.PARTITION_AUTOSCALING_TIMEOUT_MS_CONFIG, partitionAutoscalingTimeoutMs);
             this.probingRebalanceIntervalMs = validated(StreamsConfig.PROBING_REBALANCE_INTERVAL_MS_CONFIG, probingRebalanceIntervalMs);
             this.rackAwareAssignmentTags = validated(StreamsConfig.RACK_AWARE_ASSIGNMENT_TAGS_CONFIG, rackAwareAssignmentTags);
+            this.rackAwareAssignmentTrafficCost = validated(StreamsConfig.RACK_AWARE_ASSIGNMENT_TRAFFIC_COST_CONFIG, rackAwareAssignmentTrafficCost);
+            this.rackAwareAssignmentNonOverlapCost = validated(StreamsConfig.RACK_AWARE_ASSIGNMENT_NON_OVERLAP_COST_CONFIG, rackAwareAssignmentNonOverlapCost);
+            this.rackAwareAssignmentStrategy = validated(StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_CONFIG, rackAwareAssignmentStrategy);
         }
 
         private static <T> T validated(final String configKey, final T value) {

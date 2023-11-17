@@ -16,22 +16,25 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import java.util.concurrent.atomic.AtomicBoolean;
 import org.apache.kafka.common.utils.Bytes;
 import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.mockito.junit.MockitoJUnitRunner;
 import org.rocksdb.RocksIterator;
 
-import java.util.Collections;
 import java.util.NoSuchElementException;
 
-import static org.easymock.EasyMock.mock;
-import static org.easymock.EasyMock.expect;
-import static org.easymock.EasyMock.expectLastCall;
-import static org.easymock.EasyMock.replay;
-import static org.easymock.EasyMock.verify;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.core.Is.is;
 import static org.junit.Assert.assertThrows;
+import static org.mockito.Mockito.doNothing;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
+@RunWith(MockitoJUnitRunner.StrictStubs.class)
 public class RocksDBRangeIteratorTest {
 
     private final String storeName = "store";
@@ -50,24 +53,21 @@ public class RocksDBRangeIteratorTest {
     @Test
     public void shouldReturnAllKeysInTheRangeInForwardDirection() {
         final RocksIterator rocksIterator = mock(RocksIterator.class);
-        rocksIterator.seek(key1Bytes.get());
-        expect(rocksIterator.isValid())
-            .andReturn(true)
-            .andReturn(true)
-            .andReturn(true)
-            .andReturn(false);
-        expect(rocksIterator.key())
-            .andReturn(key1Bytes.get())
-            .andReturn(key2Bytes.get())
-            .andReturn(key3Bytes.get());
-        expect(rocksIterator.value()).andReturn(valueBytes).times(3);
-        rocksIterator.next();
-        expectLastCall().times(3);
-        replay(rocksIterator);
+        doNothing().when(rocksIterator).seek(key1Bytes.get());
+        when(rocksIterator.isValid())
+            .thenReturn(true)
+            .thenReturn(true)
+            .thenReturn(true)
+            .thenReturn(false);
+        when(rocksIterator.key())
+            .thenReturn(key1Bytes.get())
+            .thenReturn(key2Bytes.get())
+            .thenReturn(key3Bytes.get());
+        when(rocksIterator.value()).thenReturn(valueBytes);
+        doNothing().when(rocksIterator).next();
         final RocksDBRangeIterator rocksDBRangeIterator = new RocksDBRangeIterator(
             storeName,
             rocksIterator,
-            Collections.emptySet(),
             key1Bytes,
             key3Bytes,
             true,
@@ -80,30 +80,28 @@ public class RocksDBRangeIteratorTest {
         assertThat(rocksDBRangeIterator.hasNext(), is(true));
         assertThat(rocksDBRangeIterator.next().key, is(key3Bytes));
         assertThat(rocksDBRangeIterator.hasNext(), is(false));
-        verify(rocksIterator);
+        verify(rocksIterator, times(3)).value();
+        verify(rocksIterator, times(3)).next();
     }
 
     @Test
     public void shouldReturnAllKeysInTheRangeReverseDirection() {
         final RocksIterator rocksIterator = mock(RocksIterator.class);
-        rocksIterator.seekForPrev(key3Bytes.get());
-        expect(rocksIterator.isValid())
-            .andReturn(true)
-            .andReturn(true)
-            .andReturn(true)
-            .andReturn(false);
-        expect(rocksIterator.key())
-            .andReturn(key3Bytes.get())
-            .andReturn(key2Bytes.get())
-            .andReturn(key1Bytes.get());
-        expect(rocksIterator.value()).andReturn(valueBytes).times(3);
-        rocksIterator.prev();
-        expectLastCall().times(3);
-        replay(rocksIterator);
+        doNothing().when(rocksIterator).seekForPrev(key3Bytes.get());
+        when(rocksIterator.isValid())
+            .thenReturn(true)
+            .thenReturn(true)
+            .thenReturn(true)
+            .thenReturn(false);
+        when(rocksIterator.key())
+            .thenReturn(key3Bytes.get())
+            .thenReturn(key2Bytes.get())
+            .thenReturn(key1Bytes.get());
+        when(rocksIterator.value()).thenReturn(valueBytes);
+        doNothing().when(rocksIterator).prev();
         final RocksDBRangeIterator rocksDBRangeIterator = new RocksDBRangeIterator(
             storeName,
             rocksIterator,
-            Collections.emptySet(),
             key1Bytes,
             key3Bytes,
             false,
@@ -116,33 +114,31 @@ public class RocksDBRangeIteratorTest {
         assertThat(rocksDBRangeIterator.hasNext(), is(true));
         assertThat(rocksDBRangeIterator.next().key, is(key1Bytes));
         assertThat(rocksDBRangeIterator.hasNext(), is(false));
-        verify(rocksIterator);
+        verify(rocksIterator, times(3)).value();
+        verify(rocksIterator, times(3)).prev();
     }
 
     @Test
     public void shouldReturnAllKeysWhenLastKeyIsGreaterThanLargestKeyInStateStoreInForwardDirection() {
         final Bytes toBytes = Bytes.increment(key4Bytes);
         final RocksIterator rocksIterator = mock(RocksIterator.class);
-        rocksIterator.seek(key1Bytes.get());
-        expect(rocksIterator.isValid())
-            .andReturn(true)
-            .andReturn(true)
-            .andReturn(true)
-            .andReturn(true)
-            .andReturn(false);
-        expect(rocksIterator.key())
-            .andReturn(key1Bytes.get())
-            .andReturn(key2Bytes.get())
-            .andReturn(key3Bytes.get())
-            .andReturn(key4Bytes.get());
-        expect(rocksIterator.value()).andReturn(valueBytes).times(4);
-        rocksIterator.next();
-        expectLastCall().times(4);
-        replay(rocksIterator);
+        doNothing().when(rocksIterator).seek(key1Bytes.get());
+        when(rocksIterator.isValid())
+            .thenReturn(true)
+            .thenReturn(true)
+            .thenReturn(true)
+            .thenReturn(true)
+            .thenReturn(false);
+        when(rocksIterator.key())
+            .thenReturn(key1Bytes.get())
+            .thenReturn(key2Bytes.get())
+            .thenReturn(key3Bytes.get())
+            .thenReturn(key4Bytes.get());
+        when(rocksIterator.value()).thenReturn(valueBytes);
+        doNothing().when(rocksIterator).next();
         final RocksDBRangeIterator rocksDBRangeIterator = new RocksDBRangeIterator(
             storeName,
             rocksIterator,
-            Collections.emptySet(),
             key1Bytes,
             toBytes,
             true,
@@ -157,33 +153,31 @@ public class RocksDBRangeIteratorTest {
         assertThat(rocksDBRangeIterator.hasNext(), is(true));
         assertThat(rocksDBRangeIterator.next().key, is(key4Bytes));
         assertThat(rocksDBRangeIterator.hasNext(), is(false));
-        verify(rocksIterator);
+        verify(rocksIterator, times(4)).value();
+        verify(rocksIterator, times(4)).next();
     }
 
 
     @Test
     public void shouldReturnAllKeysWhenLastKeyIsSmallerThanSmallestKeyInStateStoreInReverseDirection() {
         final RocksIterator rocksIterator = mock(RocksIterator.class);
-        rocksIterator.seekForPrev(key4Bytes.get());
-        expect(rocksIterator.isValid())
-            .andReturn(true)
-            .andReturn(true)
-            .andReturn(true)
-            .andReturn(true)
-            .andReturn(false);
-        expect(rocksIterator.key())
-            .andReturn(key4Bytes.get())
-            .andReturn(key3Bytes.get())
-            .andReturn(key2Bytes.get())
-            .andReturn(key1Bytes.get());
-        expect(rocksIterator.value()).andReturn(valueBytes).times(4);
-        rocksIterator.prev();
-        expectLastCall().times(4);
-        replay(rocksIterator);
+        doNothing().when(rocksIterator).seekForPrev(key4Bytes.get());
+        when(rocksIterator.isValid())
+            .thenReturn(true)
+            .thenReturn(true)
+            .thenReturn(true)
+            .thenReturn(true)
+            .thenReturn(false);
+        when(rocksIterator.key())
+            .thenReturn(key4Bytes.get())
+            .thenReturn(key3Bytes.get())
+            .thenReturn(key2Bytes.get())
+            .thenReturn(key1Bytes.get());
+        when(rocksIterator.value()).thenReturn(valueBytes);
+        doNothing().when(rocksIterator).prev();
         final RocksDBRangeIterator rocksDBRangeIterator = new RocksDBRangeIterator(
             storeName,
             rocksIterator,
-            Collections.emptySet(),
             key1Bytes,
             key4Bytes,
             false,
@@ -198,7 +192,8 @@ public class RocksDBRangeIteratorTest {
         assertThat(rocksDBRangeIterator.hasNext(), is(true));
         assertThat(rocksDBRangeIterator.next().key, is(key1Bytes));
         assertThat(rocksDBRangeIterator.hasNext(), is(false));
-        verify(rocksIterator);
+        verify(rocksIterator, times(4)).value();
+        verify(rocksIterator, times(4)).prev();
     }
 
 
@@ -206,20 +201,17 @@ public class RocksDBRangeIteratorTest {
     public void shouldReturnNoKeysWhenLastKeyIsSmallerThanSmallestKeyInStateStoreForwardDirection() {
         // key range in state store: [c-f]
         final RocksIterator rocksIterator = mock(RocksIterator.class);
-        rocksIterator.seek(key1Bytes.get());
-        expect(rocksIterator.isValid()).andReturn(false);
-        replay(rocksIterator);
+        doNothing().when(rocksIterator).seek(key1Bytes.get());
+        when(rocksIterator.isValid()).thenReturn(false);
         final RocksDBRangeIterator rocksDBRangeIterator = new RocksDBRangeIterator(
             storeName,
             rocksIterator,
-            Collections.emptySet(),
             key1Bytes,
             key2Bytes,
             true,
             true
         );
         assertThat(rocksDBRangeIterator.hasNext(), is(false));
-        verify(rocksIterator);
     }
 
     @Test
@@ -230,42 +222,36 @@ public class RocksDBRangeIteratorTest {
         final  Bytes fromBytes = Bytes.wrap(from.getBytes());
         final  Bytes toBytes = Bytes.wrap(to.getBytes());
         final RocksIterator rocksIterator = mock(RocksIterator.class);
-        rocksIterator.seekForPrev(toBytes.get());
-        expect(rocksIterator.isValid())
-            .andReturn(false);
-        replay(rocksIterator);
+        doNothing().when(rocksIterator).seekForPrev(toBytes.get());
+        when(rocksIterator.isValid())
+            .thenReturn(false);
         final RocksDBRangeIterator rocksDBRangeIterator = new RocksDBRangeIterator(
             storeName,
             rocksIterator,
-            Collections.emptySet(),
             fromBytes,
             toBytes,
             false,
             true
         );
         assertThat(rocksDBRangeIterator.hasNext(), is(false));
-        verify(rocksIterator);
     }
 
     @Test
     public void shouldReturnAllKeysInPartiallyOverlappingRangeInForwardDirection() {
         final RocksIterator rocksIterator = mock(RocksIterator.class);
-        rocksIterator.seek(key1Bytes.get());
-        expect(rocksIterator.isValid())
-            .andReturn(true)
-            .andReturn(true)
-            .andReturn(false);
-        expect(rocksIterator.key())
-            .andReturn(key2Bytes.get())
-            .andReturn(key3Bytes.get());
-        expect(rocksIterator.value()).andReturn(valueBytes).times(2);
-        rocksIterator.next();
-        expectLastCall().times(2);
-        replay(rocksIterator);
+        doNothing().when(rocksIterator).seek(key1Bytes.get());
+        when(rocksIterator.isValid())
+            .thenReturn(true)
+            .thenReturn(true)
+            .thenReturn(false);
+        when(rocksIterator.key())
+            .thenReturn(key2Bytes.get())
+            .thenReturn(key3Bytes.get());
+        when(rocksIterator.value()).thenReturn(valueBytes);
+        doNothing().when(rocksIterator).next();
         final RocksDBRangeIterator rocksDBRangeIterator = new RocksDBRangeIterator(
             storeName,
             rocksIterator,
-            Collections.emptySet(),
             key1Bytes,
             key3Bytes,
             true,
@@ -276,7 +262,8 @@ public class RocksDBRangeIteratorTest {
         assertThat(rocksDBRangeIterator.hasNext(), is(true));
         assertThat(rocksDBRangeIterator.next().key, is(key3Bytes));
         assertThat(rocksDBRangeIterator.hasNext(), is(false));
-        verify(rocksIterator);
+        verify(rocksIterator, times(2)).value();
+        verify(rocksIterator, times(2)).next();
     }
 
     @Test
@@ -284,22 +271,19 @@ public class RocksDBRangeIteratorTest {
         final RocksIterator rocksIterator = mock(RocksIterator.class);
         final String to = "e";
         final Bytes toBytes = Bytes.wrap(to.getBytes());
-        rocksIterator.seekForPrev(toBytes.get());
-        expect(rocksIterator.isValid())
-            .andReturn(true)
-            .andReturn(true)
-            .andReturn(false);
-        expect(rocksIterator.key())
-            .andReturn(key4Bytes.get())
-            .andReturn(key3Bytes.get());
-        expect(rocksIterator.value()).andReturn(valueBytes).times(2);
-        rocksIterator.prev();
-        expectLastCall().times(2);
-        replay(rocksIterator);
+        doNothing().when(rocksIterator).seekForPrev(toBytes.get());
+        when(rocksIterator.isValid())
+            .thenReturn(true)
+            .thenReturn(true)
+            .thenReturn(false);
+        when(rocksIterator.key())
+            .thenReturn(key4Bytes.get())
+            .thenReturn(key3Bytes.get());
+        when(rocksIterator.value()).thenReturn(valueBytes);
+        doNothing().when(rocksIterator).prev();
         final RocksDBRangeIterator rocksDBRangeIterator = new RocksDBRangeIterator(
             storeName,
             rocksIterator,
-            Collections.emptySet(),
             key3Bytes,
             toBytes,
             false,
@@ -310,28 +294,26 @@ public class RocksDBRangeIteratorTest {
         assertThat(rocksDBRangeIterator.hasNext(), is(true));
         assertThat(rocksDBRangeIterator.next().key, is(key3Bytes));
         assertThat(rocksDBRangeIterator.hasNext(), is(false));
-        verify(rocksIterator);
+        verify(rocksIterator, times(2)).value();
+        verify(rocksIterator, times(2)).prev();
     }
 
     @Test
     public void shouldReturnTheCurrentKeyOnInvokingPeekNextKeyInForwardDirection() {
         final RocksIterator rocksIterator = mock(RocksIterator.class);
-        rocksIterator.seek(key1Bytes.get());
-        expect(rocksIterator.isValid())
-            .andReturn(true)
-            .andReturn(true)
-            .andReturn(false);
-        expect(rocksIterator.key())
-            .andReturn(key2Bytes.get())
-            .andReturn(key3Bytes.get());
-        expect(rocksIterator.value()).andReturn(valueBytes).times(2);
-        rocksIterator.next();
-        expectLastCall().times(2);
-        replay(rocksIterator);
+        doNothing().when(rocksIterator).seek(key1Bytes.get());
+        when(rocksIterator.isValid())
+            .thenReturn(true)
+            .thenReturn(true)
+            .thenReturn(false);
+        when(rocksIterator.key())
+            .thenReturn(key2Bytes.get())
+            .thenReturn(key3Bytes.get());
+        when(rocksIterator.value()).thenReturn(valueBytes);
+        doNothing().when(rocksIterator).next();
         final RocksDBRangeIterator rocksDBRangeIterator = new RocksDBRangeIterator(
             storeName,
             rocksIterator,
-            Collections.emptySet(),
             key1Bytes,
             key3Bytes,
             true,
@@ -347,29 +329,27 @@ public class RocksDBRangeIteratorTest {
         assertThat(rocksDBRangeIterator.next().key, is(key3Bytes));
         assertThat(rocksDBRangeIterator.hasNext(), is(false));
         assertThrows(NoSuchElementException.class, rocksDBRangeIterator::peekNextKey);
-        verify(rocksIterator);
+        verify(rocksIterator, times(2)).value();
+        verify(rocksIterator, times(2)).next();
     }
 
     @Test
     public void shouldReturnTheCurrentKeyOnInvokingPeekNextKeyInReverseDirection() {
         final RocksIterator rocksIterator = mock(RocksIterator.class);
         final Bytes toBytes = Bytes.increment(key4Bytes);
-        rocksIterator.seekForPrev(toBytes.get());
-        expect(rocksIterator.isValid())
-            .andReturn(true)
-            .andReturn(true)
-            .andReturn(false);
-        expect(rocksIterator.key())
-            .andReturn(key4Bytes.get())
-            .andReturn(key3Bytes.get());
-        expect(rocksIterator.value()).andReturn(valueBytes).times(2);
-        rocksIterator.prev();
-        expectLastCall().times(2);
-        replay(rocksIterator);
+        doNothing().when(rocksIterator).seekForPrev(toBytes.get());
+        when(rocksIterator.isValid())
+            .thenReturn(true)
+            .thenReturn(true)
+            .thenReturn(false);
+        when(rocksIterator.key())
+            .thenReturn(key4Bytes.get())
+            .thenReturn(key3Bytes.get());
+        when(rocksIterator.value()).thenReturn(valueBytes);
+        doNothing().when(rocksIterator).prev();
         final RocksDBRangeIterator rocksDBRangeIterator = new RocksDBRangeIterator(
             storeName,
             rocksIterator,
-            Collections.emptySet(),
             key3Bytes,
             toBytes,
             false,
@@ -385,47 +365,59 @@ public class RocksDBRangeIteratorTest {
         assertThat(rocksDBRangeIterator.next().key, is(key3Bytes));
         assertThat(rocksDBRangeIterator.hasNext(), is(false));
         assertThrows(NoSuchElementException.class, rocksDBRangeIterator::peekNextKey);
-        verify(rocksIterator);
+        verify(rocksIterator, times(2)).value();
+        verify(rocksIterator, times(2)).prev();
     }
 
     @Test
     public void shouldCloseIterator() {
         final RocksIterator rocksIterator = mock(RocksIterator.class);
-        rocksIterator.seek(key1Bytes.get());
-        rocksIterator.close();
-        expectLastCall().times(1);
-        replay(rocksIterator);
+        doNothing().when(rocksIterator).seek(key1Bytes.get());
+        doNothing().when(rocksIterator).close();
         final RocksDBRangeIterator rocksDBRangeIterator = new RocksDBRangeIterator(
             storeName,
             rocksIterator,
-            Collections.emptySet(),
             key1Bytes,
             key2Bytes,
             true,
             true
         );
+        rocksDBRangeIterator.onClose(() -> { });
         rocksDBRangeIterator.close();
-        verify(rocksIterator);
+        verify(rocksIterator).close();
+    }
+
+    @Test
+    public void shouldCallCloseCallbackOnClose() {
+        final RocksIterator rocksIterator = mock(RocksIterator.class);
+        final RocksDBRangeIterator rocksDBRangeIterator = new RocksDBRangeIterator(
+            storeName,
+            rocksIterator,
+            key1Bytes,
+            key2Bytes,
+            true,
+            true
+        );
+        final AtomicBoolean callbackCalled = new AtomicBoolean(false);
+        rocksDBRangeIterator.onClose(() -> callbackCalled.set(true));
+        rocksDBRangeIterator.close();
+        assertThat(callbackCalled.get(), is(true));
     }
 
     @Test
     public void shouldExcludeEndOfRange() {
         final RocksIterator rocksIterator = mock(RocksIterator.class);
-        rocksIterator.seek(key1Bytes.get());
-        expect(rocksIterator.isValid())
-            .andReturn(true)
-            .andReturn(true);
-        expect(rocksIterator.key())
-            .andReturn(key1Bytes.get())
-            .andReturn(key2Bytes.get());
-        expect(rocksIterator.value()).andReturn(valueBytes).times(2);
-        rocksIterator.next();
-        expectLastCall().times(2);
-        replay(rocksIterator);
+        doNothing().when(rocksIterator).seek(key1Bytes.get());
+        when(rocksIterator.isValid())
+            .thenReturn(true);
+        when(rocksIterator.key())
+            .thenReturn(key1Bytes.get())
+            .thenReturn(key2Bytes.get());
+        when(rocksIterator.value()).thenReturn(valueBytes);
+        doNothing().when(rocksIterator).next();
         final RocksDBRangeIterator rocksDBRangeIterator = new RocksDBRangeIterator(
             storeName,
             rocksIterator,
-            Collections.emptySet(),
             key1Bytes,
             key2Bytes,
             true,
@@ -434,7 +426,8 @@ public class RocksDBRangeIteratorTest {
         assertThat(rocksDBRangeIterator.hasNext(), is(true));
         assertThat(rocksDBRangeIterator.next().key, is(key1Bytes));
         assertThat(rocksDBRangeIterator.hasNext(), is(false));
-        verify(rocksIterator);
+        verify(rocksIterator, times(2)).value();
+        verify(rocksIterator, times(2)).next();
     }
 
 }

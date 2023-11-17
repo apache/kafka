@@ -836,7 +836,7 @@ public interface KStream<K, V> {
 
     /**
      * Materialize this stream to a topic and creates a new {@code KStream} from the topic using default serializers,
-     * deserializers, and producer's {@link DefaultPartitioner}.
+     * deserializers, and producer's default partitioning strategy.
      * The specified topic should be manually created before it is used (i.e., before the Kafka Streams application is
      * started).
      * <p>
@@ -849,7 +849,7 @@ public interface KStream<K, V> {
      * @return a {@code KStream} that contains the exact same (and potentially repartitioned) records as this {@code KStream}
      * @deprecated since 2.6; use {@link #repartition()} instead
      */
-    // TODO: when removed, update `StreamsResetter` decription of --intermediate-topics
+    // TODO: when removed, update `StreamsResetter` description of --intermediate-topics
     @Deprecated
     KStream<K, V> through(final String topic);
 
@@ -876,7 +876,7 @@ public interface KStream<K, V> {
 
     /**
      * Materialize this stream to an auto-generated repartition topic and create a new {@code KStream}
-     * from the auto-generated topic using default serializers, deserializers, and producer's {@link DefaultPartitioner}.
+     * from the auto-generated topic using default serializers, deserializers, and producer's default partitioning strategy.
      * The number of partitions is determined based on the upstream topics partition numbers.
      * <p>
      * The created topic is considered as an internal topic and is meant to be used only by the current Kafka Streams instance.
@@ -910,7 +910,7 @@ public interface KStream<K, V> {
 
     /**
      * Materialize this stream to a topic using default serializers specified in the config and producer's
-     * {@link DefaultPartitioner}.
+     * default partitioning strategy.
      * The specified topic should be manually created before it is used (i.e., before the Kafka Streams application is
      * started).
      *
@@ -931,7 +931,7 @@ public interface KStream<K, V> {
 
     /**
      * Dynamically materialize this stream to topics using default serializers specified in the config and producer's
-     * {@link DefaultPartitioner}.
+     * default partitioning strategy.
      * The topic names for each record to send to is dynamically determined based on the {@link TopicNameExtractor}.
      *
      * @param topicExtractor    the extractor to determine the name of the Kafka topic to write to for each record
@@ -1508,7 +1508,7 @@ public interface KStream<K, V> {
      * The key of the result record is the same as for both joining input records.
      * Furthermore, for each input record of this {@code KStream} that does not satisfy the join predicate the provided
      * {@link ValueJoiner} will be called with a {@code null} value for the other stream.
-     * If an input record key or value is {@code null} the record will not be included in the join operation and thus no
+     * If an input record value is {@code null} the record will not be included in the join operation and thus no
      * output record will be added to the resulting {@code KStream}.
      * <p>
      * Example (assuming all input records belong to the correct windows):
@@ -1588,7 +1588,7 @@ public interface KStream<K, V> {
      * The key of the result record is the same as for both joining input records.
      * Furthermore, for each input record of this {@code KStream} that does not satisfy the join predicate the provided
      * {@link ValueJoinerWithKey} will be called with a {@code null} value for the other stream.
-     * If an input record key or value is {@code null} the record will not be included in the join operation and thus no
+     * If an input record value is {@code null} the record will not be included in the join operation and thus no
      * output record will be added to the resulting {@code KStream}.
      * <p>
      * Example (assuming all input records belong to the correct windows):
@@ -1669,7 +1669,7 @@ public interface KStream<K, V> {
      * The key of the result record is the same as for both joining input records.
      * Furthermore, for each input record of this {@code KStream} that does not satisfy the join predicate the provided
      * {@link ValueJoiner} will be called with a {@code null} value for the other stream.
-     * If an input record key or value is {@code null} the record will not be included in the join operation and thus no
+     * If an input record value is {@code null} the record will not be included in the join operation and thus no
      * output record will be added to the resulting {@code KStream}.
      * <p>
      * Example (assuming all input records belong to the correct windows):
@@ -1754,7 +1754,7 @@ public interface KStream<K, V> {
      * The key of the result record is the same as for both joining input records.
      * Furthermore, for each input record of this {@code KStream} that does not satisfy the join predicate the provided
      * {@link ValueJoinerWithKey} will be called with a {@code null} value for the other stream.
-     * If an input record key or value is {@code null} the record will not be included in the join operation and thus no
+     * If an input record value is {@code null} the record will not be included in the join operation and thus no
      * output record will be added to the resulting {@code KStream}.
      * <p>
      * Example (assuming all input records belong to the correct windows):
@@ -1837,7 +1837,7 @@ public interface KStream<K, V> {
      * The key of the result record is the same as for both joining input records.
      * Furthermore, for each input record of both {@code KStream}s that does not satisfy the join predicate the provided
      * {@link ValueJoiner} will be called with a {@code null} value for the this/other stream, respectively.
-     * If an input record key or value is {@code null} the record will not be included in the join operation and thus no
+     * If an input record value is {@code null} the record will not be included in the join operation and thus no
      * output record will be added to the resulting {@code KStream}.
      * <p>
      * Example (assuming all input records belong to the correct windows):
@@ -1918,7 +1918,7 @@ public interface KStream<K, V> {
      * The key of the result record is the same as for both joining input records.
      * Furthermore, for each input record of both {@code KStream}s that does not satisfy the join predicate the provided
      * {@link ValueJoinerWithKey} will be called with a {@code null} value for the this/other stream, respectively.
-     * If an input record key or value is {@code null} the record will not be included in the join operation and thus no
+     * If an input record value is {@code null} the record will not be included in the join operation and thus no
      * output record will be added to the resulting {@code KStream}.
      * <p>
      * Example (assuming all input records belong to the correct windows):
@@ -2086,7 +2086,7 @@ public interface KStream<K, V> {
      * The key of the result record is the same as for both joining input records.
      * Furthermore, for each input record of both {@code KStream}s that does not satisfy the join predicate the provided
      * {@link ValueJoinerWithKey} will be called with a {@code null} value for this/other stream, respectively.
-     * If an input record key or value is {@code null} the record will not be included in the join operation and thus no
+     * If an input record value is {@code null} the record will not be included in the join operation and thus no
      * output record will be added to the resulting {@code KStream}.
      * <p>
      * Example (assuming all input records belong to the correct windows):
@@ -2484,7 +2484,7 @@ public interface KStream<K, V> {
      * {@link ValueJoiner} will be called to compute a value (with arbitrary type) for the result record.
      * If no {@link KTable} record was found during lookup, a {@code null} value will be provided to {@link ValueJoiner}.
      * The key of the result record is the same as for both joining input records.
-     * If an {@code KStream} input record key or value is {@code null} the record will not be included in the join
+     * If an {@code KStream} input record value is {@code null} the record will not be included in the join
      * operation and thus no output record will be added to the resulting {@code KStream}.
      * <p>
      * Example:
@@ -2564,7 +2564,7 @@ public interface KStream<K, V> {
      * If no {@link KTable} record was found during lookup, a {@code null} value will be provided to {@link ValueJoinerWithKey}.
      * The key of the result record is the same as for both joining input records.
      * Note that the key is read-only and should not be modified, as this can lead to undefined behaviour.
-     * If an {@code KStream} input record key or value is {@code null} the record will not be included in the join
+     * If an {@code KStream} input record value is {@code null} the record will not be included in the join
      * operation and thus no output record will be added to the resulting {@code KStream}.
      * <p>
      * Example:
@@ -2643,7 +2643,7 @@ public interface KStream<K, V> {
      * {@link ValueJoiner} will be called to compute a value (with arbitrary type) for the result record.
      * If no {@link KTable} record was found during lookup, a {@code null} value will be provided to {@link ValueJoiner}.
      * The key of the result record is the same as for both joining input records.
-     * If an {@code KStream} input record key or value is {@code null} the record will not be included in the join
+     * If an {@code KStream} input record value is {@code null} the record will not be included in the join
      * operation and thus no output record will be added to the resulting {@code KStream}.
      * <p>
      * Example:
@@ -2726,7 +2726,7 @@ public interface KStream<K, V> {
      * If no {@link KTable} record was found during lookup, a {@code null} value will be provided to {@link ValueJoinerWithKey}.
      * The key of the result record is the same as for both joining input records.
      * Note that the key is read-only and should not be modified, as this can lead to undefined behaviour.
-     * If an {@code KStream} input record key or value is {@code null} the record will not be included in the join
+     * If an {@code KStream} input record value is {@code null} the record will not be included in the join
      * operation and thus no output record will be added to the resulting {@code KStream}.
      * <p>
      * Example:
@@ -2805,10 +2805,8 @@ public interface KStream<K, V> {
      * For each {@code KStream} record that finds a corresponding record in {@link GlobalKTable} the provided
      * {@link ValueJoiner} will be called to compute a value (with arbitrary type) for the result record.
      * The key of the result record is the same as the key of this {@code KStream}.
-     * If a {@code KStream} input record key or value is {@code null} the record will not be included in the join
-     * operation and thus no output record will be added to the resulting {@code KStream}.
-     * If {@code keyValueMapper} returns {@code null} implying no match exists, no output record will be added to the
-     * resulting {@code KStream}.
+     * If a {@code KStream} input value is {@code null} the record will not be included in the join operation
+     * and thus no output record will be added to the resulting {@code KStream}.
      *
      * @param globalTable    the {@link GlobalKTable} to be joined with this stream
      * @param keySelector    instance of {@link KeyValueMapper} used to map from the (key, value) of this stream
@@ -2839,10 +2837,8 @@ public interface KStream<K, V> {
      * {@link ValueJoinerWithKey} will be called to compute a value (with arbitrary type) for the result record.
      * The key of the result record is the same as the key of this {@code KStream}.
      * Note that the key is read-only and should not be modified, as this can lead to undefined behaviour.
-     * If a {@code KStream} input record key or value is {@code null} the record will not be included in the join
-     * operation and thus no output record will be added to the resulting {@code KStream}.
-     * If {@code keyValueMapper} returns {@code null} implying no match exists, no output record will be added to the
-     * resulting {@code KStream}.
+     * If a {@code KStream} input value is {@code null} the record will not be included in the join operation
+     * and thus no output record will be added to the resulting {@code KStream}.
      *
      * @param globalTable    the {@link GlobalKTable} to be joined with this stream
      * @param keySelector    instance of {@link KeyValueMapper} used to map from the (key, value) of this stream
@@ -2872,10 +2868,8 @@ public interface KStream<K, V> {
      * For each {@code KStream} record that finds a corresponding record in {@link GlobalKTable} the provided
      * {@link ValueJoiner} will be called to compute a value (with arbitrary type) for the result record.
      * The key of the result record is the same as the key of this {@code KStream}.
-     * If a {@code KStream} input record key or value is {@code null} the record will not be included in the join
-     * operation and thus no output record will be added to the resulting {@code KStream}.
-     * If {@code keyValueMapper} returns {@code null} implying no match exists, no output record will be added to the
-     * resulting {@code KStream}.
+     * If a {@code KStream} input value is {@code null} the record will not be included in the join operation
+     * and thus no output record will be added to the resulting {@code KStream}.
      *
      * @param globalTable    the {@link GlobalKTable} to be joined with this stream
      * @param keySelector    instance of {@link KeyValueMapper} used to map from the (key, value) of this stream
@@ -2908,10 +2902,8 @@ public interface KStream<K, V> {
      * {@link ValueJoinerWithKey} will be called to compute a value (with arbitrary type) for the result record.
      * The key of the result record is the same as the key of this {@code KStream}.
      * Note that the key is read-only and should not be modified, as this can lead to undefined behaviour.
-     * If a {@code KStream} input record key or value is {@code null} the record will not be included in the join
-     * operation and thus no output record will be added to the resulting {@code KStream}.
-     * If {@code keyValueMapper} returns {@code null} implying no match exists, no output record will be added to the
-     * resulting {@code KStream}.
+     * If a {@code KStream} input value is {@code null} the record will not be included in the join operation
+     * and thus no output record will be added to the resulting {@code KStream}.
      *
      * @param globalTable    the {@link GlobalKTable} to be joined with this stream
      * @param keySelector    instance of {@link KeyValueMapper} used to map from the (key, value) of this stream
@@ -2945,10 +2937,8 @@ public interface KStream<K, V> {
      * For each {@code KStream} record whether or not it finds a corresponding record in {@link GlobalKTable} the
      * provided {@link ValueJoiner} will be called to compute a value (with arbitrary type) for the result record.
      * The key of the result record is the same as this {@code KStream}.
-     * If a {@code KStream} input record key or value is {@code null} the record will not be included in the join
-     * operation and thus no output record will be added to the resulting {@code KStream}.
-     * If {@code keyValueMapper} returns {@code null} implying no match exists, a {@code null} value will be
-     * provided to {@link ValueJoiner}.
+     * If a {@code KStream} input value is {@code null} the record will not be included in the join operation
+     * and thus no output record will be added to the resulting {@code KStream}.
      * If no {@link GlobalKTable} record was found during lookup, a {@code null} value will be provided to
      * {@link ValueJoiner}.
      *
@@ -2983,10 +2973,8 @@ public interface KStream<K, V> {
      * provided {@link ValueJoinerWithKey} will be called to compute a value (with arbitrary type) for the result record.
      * The key of the result record is the same as this {@code KStream}.
      * Note that the key is read-only and should not be modified, as this can lead to undefined behaviour.
-     * If a {@code KStream} input record key or value is {@code null} the record will not be included in the join
-     * operation and thus no output record will be added to the resulting {@code KStream}.
-     * If {@code keyValueMapper} returns {@code null} implying no match exists, a {@code null} value will be
-     * provided to {@link ValueJoinerWithKey}.
+     * If a {@code KStream} input value is {@code null} the record will not be included in the join operation
+     * and thus no output record will be added to the resulting {@code KStream}.
      * If no {@link GlobalKTable} record was found during lookup, a {@code null} value will be provided to
      * {@link ValueJoiner}.
      *
@@ -3020,10 +3008,8 @@ public interface KStream<K, V> {
      * For each {@code KStream} record whether or not it finds a corresponding record in {@link GlobalKTable} the
      * provided {@link ValueJoiner} will be called to compute a value (with arbitrary type) for the result record.
      * The key of the result record is the same as this {@code KStream}.
-     * If a {@code KStream} input record key or value is {@code null} the record will not be included in the join
-     * operation and thus no output record will be added to the resulting {@code KStream}.
-     * If {@code keyValueMapper} returns {@code null} implying no match exists, a {@code null} value will be
-     * provided to {@link ValueJoiner}.
+     * If a {@code KStream} input value is {@code null} the record will not be included in the join operation
+     * and thus no output record will be added to the resulting {@code KStream}.
      * If no {@link GlobalKTable} record was found during lookup, a {@code null} value will be provided to
      * {@link ValueJoiner}.
      *
@@ -3059,10 +3045,8 @@ public interface KStream<K, V> {
      * For each {@code KStream} record whether or not it finds a corresponding record in {@link GlobalKTable} the
      * provided {@link ValueJoinerWithKey} will be called to compute a value (with arbitrary type) for the result record.
      * The key of the result record is the same as this {@code KStream}.
-     * If a {@code KStream} input record key or value is {@code null} the record will not be included in the join
-     * operation and thus no output record will be added to the resulting {@code KStream}.
-     * If {@code keyValueMapper} returns {@code null} implying no match exists, a {@code null} value will be
-     * provided to {@link ValueJoinerWithKey}.
+     * If a {@code KStream} input value is {@code null} the record will not be included in the join operation
+     * and thus no output record will be added to the resulting {@code KStream}.
      * If no {@link GlobalKTable} record was found during lookup, a {@code null} value will be provided to
      * {@link ValueJoinerWithKey}.
      *

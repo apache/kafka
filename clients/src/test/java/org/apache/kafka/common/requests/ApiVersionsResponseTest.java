@@ -31,6 +31,7 @@ import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.record.RecordVersion;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
@@ -49,7 +50,7 @@ public class ApiVersionsResponseTest {
     @ParameterizedTest
     @EnumSource(ApiMessageType.ListenerType.class)
     public void shouldHaveCorrectDefaultApiVersionsResponse(ApiMessageType.ListenerType scope) {
-        ApiVersionsResponse defaultResponse = ApiVersionsResponse.defaultApiVersionsResponse(scope);
+        ApiVersionsResponse defaultResponse = TestUtils.defaultApiVersionsResponse(scope);
         assertEquals(ApiKeys.apisForListener(scope).size(), defaultResponse.data().apiKeys().size(),
             "API versions for all API keys must be maintained.");
 
@@ -101,7 +102,8 @@ public class ApiVersionsResponseTest {
         ApiVersionCollection commonResponse = ApiVersionsResponse.intersectForwardableApis(
             ApiMessageType.ListenerType.ZK_BROKER,
             RecordVersion.current(),
-            activeControllerApiVersions
+            activeControllerApiVersions,
+            true
         );
 
         verifyVersions(forwardableAPIKey.id, minVersion, maxVersion, commonResponse);
@@ -119,7 +121,9 @@ public class ApiVersionsResponseTest {
             Collections.emptyMap(),
             ApiVersionsResponse.UNKNOWN_FINALIZED_FEATURES_EPOCH,
             null,
-            ListenerType.ZK_BROKER
+            ListenerType.ZK_BROKER,
+            true,
+            false
         );
         verifyApiKeysForMagic(response, RecordBatch.MAGIC_VALUE_V1);
         assertEquals(10, response.throttleTimeMs());
@@ -138,7 +142,9 @@ public class ApiVersionsResponseTest {
             Utils.mkMap(Utils.mkEntry("feature", (short) 3)),
             10L,
             null,
-            ListenerType.ZK_BROKER
+            ListenerType.ZK_BROKER,
+            true,
+            false
         );
 
         verifyApiKeysForMagic(response, RecordBatch.MAGIC_VALUE_V1);
@@ -156,8 +162,9 @@ public class ApiVersionsResponseTest {
         assertEquals(10, response.data().finalizedFeaturesEpoch());
     }
 
-    @Test
-    public void shouldReturnAllKeysWhenMagicIsCurrentValueAndThrottleMsIsDefaultThrottle() {
+    @ParameterizedTest
+    @EnumSource(names = {"ZK_BROKER", "BROKER"})
+    public void shouldReturnAllKeysWhenMagicIsCurrentValueAndThrottleMsIsDefaultThrottle(ListenerType listenerType) {
         ApiVersionsResponse response = ApiVersionsResponse.createApiVersionsResponse(
             AbstractResponse.DEFAULT_THROTTLE_TIME,
             RecordVersion.current(),
@@ -165,9 +172,11 @@ public class ApiVersionsResponseTest {
             Collections.emptyMap(),
             ApiVersionsResponse.UNKNOWN_FINALIZED_FEATURES_EPOCH,
             null,
-            ListenerType.ZK_BROKER
+            listenerType,
+            true,
+            false
         );
-        assertEquals(new HashSet<>(ApiKeys.zkBrokerApis()), apiKeysInResponse(response));
+        assertEquals(new HashSet<>(ApiKeys.apisForListener(listenerType)), apiKeysInResponse(response));
         assertEquals(AbstractResponse.DEFAULT_THROTTLE_TIME, response.throttleTimeMs());
         assertTrue(response.data().supportedFeatures().isEmpty());
         assertTrue(response.data().finalizedFeatures().isEmpty());
@@ -183,7 +192,9 @@ public class ApiVersionsResponseTest {
             Collections.emptyMap(),
             ApiVersionsResponse.UNKNOWN_FINALIZED_FEATURES_EPOCH,
             null,
-            ListenerType.ZK_BROKER
+            ListenerType.ZK_BROKER,
+            true,
+            false
         );
 
         // Ensure that APIs needed for the KRaft mode are not exposed through ApiVersions until we are ready for them

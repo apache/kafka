@@ -21,7 +21,8 @@ import kafka.cluster.BrokerEndPoint;
 import kafka.cluster.DelayedOperations;
 import kafka.cluster.AlterPartitionListener;
 import kafka.cluster.Partition;
-import kafka.log.LogAppendInfo;
+import org.apache.kafka.server.util.MockTime;
+import org.apache.kafka.storage.internals.log.LogAppendInfo;
 import kafka.log.LogManager;
 import kafka.server.AlterPartitionManager;
 import kafka.server.BrokerFeatures;
@@ -30,7 +31,6 @@ import kafka.server.FailedPartitions;
 import kafka.server.InitialFetchState;
 import kafka.server.KafkaConfig;
 import kafka.server.MetadataCache;
-import kafka.server.OffsetAndEpoch;
 import kafka.server.OffsetTruncationState;
 import kafka.server.QuotaFactory;
 import kafka.server.RemoteLeaderEndPoint;
@@ -43,8 +43,6 @@ import kafka.server.builders.ReplicaManagerBuilder;
 import kafka.server.checkpoints.OffsetCheckpoints;
 import kafka.server.metadata.MockConfigRepository;
 import kafka.server.metadata.ZkMetadataCache;
-import kafka.utils.KafkaScheduler;
-import kafka.utils.MockTime;
 import kafka.utils.Pool;
 import kafka.utils.TestUtils;
 import kafka.zk.KafkaZkClient;
@@ -68,10 +66,12 @@ import org.apache.kafka.common.requests.UpdateMetadataRequest;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.server.common.OffsetAndEpoch;
 import org.apache.kafka.server.common.MetadataVersion;
-import org.apache.kafka.server.log.internals.CleanerConfig;
-import org.apache.kafka.server.log.internals.LogConfig;
-import org.apache.kafka.server.log.internals.LogDirFailureChannel;
+import org.apache.kafka.storage.internals.log.CleanerConfig;
+import org.apache.kafka.storage.internals.log.LogConfig;
+import org.apache.kafka.storage.internals.log.LogDirFailureChannel;
+import org.apache.kafka.server.util.KafkaScheduler;
 import org.mockito.Mockito;
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.BenchmarkMode;
@@ -95,11 +95,11 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Optional;
 import java.util.Properties;
 import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 import scala.Option;
-import scala.Tuple2;
 import scala.collection.Iterator;
 import scala.collection.Map;
 
@@ -116,7 +116,7 @@ public class ReplicaFetcherThreadBenchmark {
     private ReplicaFetcherBenchThread fetcher;
     private LogManager logManager;
     private File logDir = new File(System.getProperty("java.io.tmpdir"), UUID.randomUUID().toString());
-    private KafkaScheduler scheduler = new KafkaScheduler(1, "scheduler", true);
+    private KafkaScheduler scheduler = new KafkaScheduler(1, true, "scheduler");
     private Pool<TopicPartition, Partition> pool = new Pool<TopicPartition, Partition>(Option.empty());
     private Metrics metrics = new Metrics();
     private ReplicaManager replicaManager;
@@ -134,7 +134,7 @@ public class ReplicaFetcherThreadBenchmark {
         KafkaConfig config = new KafkaConfig(props);
         LogConfig logConfig = createLogConfig();
 
-        BrokerTopicStats brokerTopicStats = new BrokerTopicStats();
+        BrokerTopicStats brokerTopicStats = new BrokerTopicStats(Optional.empty());
         LogDirFailureChannel logDirFailureChannel = Mockito.mock(LogDirFailureChannel.class);
         List<File> logDirs = Collections.singletonList(logDir);
         logManager = new LogManagerBuilder().
@@ -148,7 +148,7 @@ public class ReplicaFetcherThreadBenchmark {
             setFlushRecoveryOffsetCheckpointMs(10000L).
             setFlushStartOffsetCheckpointMs(10000L).
             setRetentionCheckMs(1000L).
-            setMaxProducerIdExpirationMs(60000).
+            setProducerStateManagerConfig(60000, false).
             setInterBrokerProtocolVersion(MetadataVersion.latest()).
             setScheduler(scheduler).
             setBrokerTopicStats(brokerTopicStats).
@@ -179,7 +179,7 @@ public class ReplicaFetcherThreadBenchmark {
             Mockito.when(offsetCheckpoints.fetch(logDir.getAbsolutePath(), tp)).thenReturn(Option.apply(0L));
             AlterPartitionManager isrChannelManager = Mockito.mock(AlterPartitionManager.class);
             Partition partition = new Partition(tp, 100, MetadataVersion.latest(),
-                    0, Time.SYSTEM, alterPartitionListener, new DelayedOperationsMock(tp),
+                    0, () -> -1, Time.SYSTEM, alterPartitionListener, new DelayedOperationsMock(tp),
                     Mockito.mock(MetadataCache.class), logManager, isrChannelManager);
 
             partition.makeFollower(partitionState, offsetCheckpoints, topicId);
@@ -218,7 +218,7 @@ public class ReplicaFetcherThreadBenchmark {
 
         // TODO: fix to support raft
         ZkMetadataCache metadataCache = MetadataCache.zkMetadataCache(0,
-            config.interBrokerProtocolVersion(), BrokerFeatures.createEmpty(), null);
+            config.interBrokerProtocolVersion(), BrokerFeatures.createEmpty(), null, false);
         metadataCache.updateMetadata(0, updateMetadataRequest);
 
         replicaManager = new ReplicaManagerBuilder().
@@ -259,10 +259,10 @@ public class ReplicaFetcherThreadBenchmark {
     }
 
     @TearDown(Level.Trial)
-    public void tearDown() throws IOException {
+    public void tearDown() throws IOException, InterruptedException {
         metrics.close();
         replicaManager.shutdown(false);
-        logManager.shutdown();
+        logManager.shutdown(-1L);
         scheduler.shutdown();
         Utils.delete(logDir);
     }
@@ -315,11 +315,12 @@ public class ReplicaFetcherThreadBenchmark {
                             config,
                             replicaManager,
                             replicaQuota,
-                            config::interBrokerProtocolVersion
+                            config::interBrokerProtocolVersion,
+                            () -> -1
                     ) {
                         @Override
-                        public Tuple2<Object, Object> fetchEarliestOffset(TopicPartition topicPartition, int currentLeaderEpoch) {
-                            return Tuple2.apply(0, 0);
+                        public OffsetAndEpoch fetchEarliestOffset(TopicPartition topicPartition, int currentLeaderEpoch) {
+                            return new OffsetAndEpoch(0L, 0);
                         }
 
                         @Override

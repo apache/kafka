@@ -26,7 +26,6 @@ import kafka.utils.{TestInfoUtils, TestUtils}
 import kafka.utils.TestUtils.waitUntilTrue
 import org.apache.kafka.clients.admin.{Admin, AlterConfigOp, NewTopic}
 import org.apache.kafka.clients.consumer._
-import org.apache.kafka.clients.consumer.internals.NoOpConsumerRebalanceListener
 import org.apache.kafka.clients.producer._
 import org.apache.kafka.common.acl.AclOperation._
 import org.apache.kafka.common.acl.AclPermissionType.{ALLOW, DENY}
@@ -173,6 +172,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     properties.put(KafkaConfig.TransactionsTopicPartitionsProp, "1")
     properties.put(KafkaConfig.TransactionsTopicReplicationFactorProp, "1")
     properties.put(KafkaConfig.TransactionsTopicMinISRProp, "1")
+    properties.put(KafkaConfig.UnstableApiVersionsEnableProp, "true")
     properties.put(BrokerSecurityConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG, classOf[PrincipalBuilder].getName)
   }
 
@@ -231,7 +231,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
       resp.errors.get(new ConfigResource(ConfigResource.Type.TOPIC, tp.topic)).error),
     ApiKeys.INIT_PRODUCER_ID -> ((resp: InitProducerIdResponse) => resp.error),
     ApiKeys.WRITE_TXN_MARKERS -> ((resp: WriteTxnMarkersResponse) => resp.errorsByProducerId.get(producerId).get(tp)),
-    ApiKeys.ADD_PARTITIONS_TO_TXN -> ((resp: AddPartitionsToTxnResponse) => resp.errors.get(tp)),
+    ApiKeys.ADD_PARTITIONS_TO_TXN -> ((resp: AddPartitionsToTxnResponse) => resp.errors.get(AddPartitionsToTxnResponse.V3_AND_BELOW_TXN_ID).get(tp)),
     ApiKeys.ADD_OFFSETS_TO_TXN -> ((resp: AddOffsetsToTxnResponse) => Errors.forCode(resp.data.errorCode)),
     ApiKeys.END_TXN -> ((resp: EndTxnResponse) => resp.error),
     ApiKeys.TXN_OFFSET_COMMIT -> ((resp: TxnOffsetCommitResponse) => resp.errors.get(tp)),
@@ -385,7 +385,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     partitionMap.put(tp, new requests.FetchRequest.PartitionData(getTopicIds().getOrElse(tp.topic, Uuid.ZERO_UUID),
       0, 0, 100, Optional.of(27)))
     val version = ApiKeys.FETCH.latestVersion
-    requests.FetchRequest.Builder.forReplica(version, 5000, 100, Int.MaxValue, partitionMap).build()
+    requests.FetchRequest.Builder.forReplica(version, 5000, -1, 100, Int.MaxValue, partitionMap).build()
   }
 
   private def createListOffsetsRequest = {
@@ -493,7 +493,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
         new OffsetCommitRequestData()
           .setGroupId(group)
           .setMemberId(JoinGroupRequest.UNKNOWN_MEMBER_ID)
-          .setGenerationId(1)
+          .setGenerationIdOrMemberEpoch(1)
           .setTopics(Collections.singletonList(
             new OffsetCommitRequestData.OffsetCommitRequestTopic()
               .setName(topic)
@@ -672,7 +672,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   private def describeLogDirsRequest = new DescribeLogDirsRequest.Builder(new DescribeLogDirsRequestData().setTopics(new DescribeLogDirsRequestData.DescribableLogDirTopicCollection(Collections.singleton(
     new DescribeLogDirsRequestData.DescribableLogDirTopic().setTopic(tp.topic).setPartitions(Collections.singletonList(tp.partition))).iterator()))).build()
 
-  private def addPartitionsToTxnRequest = new AddPartitionsToTxnRequest.Builder(transactionalId, 1, 1, Collections.singletonList(tp)).build()
+  private def addPartitionsToTxnRequest = AddPartitionsToTxnRequest.Builder.forClient(transactionalId, 1, 1, Collections.singletonList(tp)).build()
 
   private def addOffsetsToTxnRequest = new AddOffsetsToTxnRequest.Builder(
     new AddOffsetsToTxnRequestData()
@@ -1173,7 +1173,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     addAndVerifyAcls(Set(new AccessControlEntry(clientPrincipalString, WildcardHost, READ, ALLOW)), groupResource)
 
     val consumer = createConsumer()
-    consumer.subscribe(Pattern.compile(topicPattern), new NoOpConsumerRebalanceListener)
+    consumer.subscribe(Pattern.compile(topicPattern))
     consumer.poll(0)
     assertTrue(consumer.subscription.isEmpty)
   }
@@ -1339,7 +1339,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
       consumer.poll(Duration.ofMillis(50L))
       brokers.forall { broker =>
         broker.metadataCache.getPartitionInfo(newTopic, 0) match {
-          case Some(partitionState) => Request.isValidBrokerId(partitionState.leader)
+          case Some(partitionState) => FetchRequest.isValidBrokerId(partitionState.leader)
           case _ => false
         }
       }
@@ -2233,6 +2233,30 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
     val response = connectAndReceive[MetadataResponse](request)
     assertEquals(Collections.emptyMap, response.errorCounts)
     assertFalse(response.clusterId.isEmpty, "Cluster id not returned")
+  }
+
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testRetryProducerInitializationAfterPermissionFix(quorum: String): Unit = {
+    createTopicWithBrokerPrincipal(topic)
+    val wildcard = new ResourcePattern(TOPIC, ResourcePattern.WILDCARD_RESOURCE, LITERAL)
+    val prefixed = new ResourcePattern(TOPIC, "t", PREFIXED)
+    val literal = new ResourcePattern(TOPIC, topic, LITERAL)
+    val allowWriteAce = new AccessControlEntry(clientPrincipalString, WildcardHost, WRITE, ALLOW)
+    val denyWriteAce = new AccessControlEntry(clientPrincipalString, WildcardHost, WRITE, DENY)
+    val producer = buildIdempotentProducer()
+
+    addAndVerifyAcls(Set(denyWriteAce), wildcard)
+    assertThrows(classOf[Exception], () => {
+      val future = producer.send(new ProducerRecord[Array[Byte], Array[Byte]](topic, "hi".getBytes))
+      future.get()
+    })
+    removeAndVerifyAcls(Set(denyWriteAce), wildcard)
+    addAndVerifyAcls(Set(allowWriteAce), prefixed)
+    addAndVerifyAcls(Set(allowWriteAce), literal)
+    val future = producer.send(new ProducerRecord[Array[Byte], Array[Byte]](topic, "hi".getBytes))
+    assertDoesNotThrow(() => future.get())
+    producer.close()
   }
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)

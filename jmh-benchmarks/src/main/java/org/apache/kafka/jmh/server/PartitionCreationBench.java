@@ -30,8 +30,6 @@ import kafka.server.builders.ReplicaManagerBuilder;
 import kafka.server.checkpoints.OffsetCheckpoints;
 import kafka.server.metadata.ConfigRepository;
 import kafka.server.metadata.MockConfigRepository;
-import kafka.utils.KafkaScheduler;
-import kafka.utils.Scheduler;
 import kafka.utils.TestUtils;
 import kafka.zk.KafkaZkClient;
 import org.apache.kafka.common.TopicPartition;
@@ -41,9 +39,11 @@ import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.server.common.MetadataVersion;
-import org.apache.kafka.server.log.internals.CleanerConfig;
-import org.apache.kafka.server.log.internals.LogConfig;
-import org.apache.kafka.server.log.internals.LogDirFailureChannel;
+import org.apache.kafka.storage.internals.log.CleanerConfig;
+import org.apache.kafka.storage.internals.log.LogConfig;
+import org.apache.kafka.storage.internals.log.LogDirFailureChannel;
+import org.apache.kafka.server.util.KafkaScheduler;
+import org.apache.kafka.server.util.Scheduler;
 import org.openjdk.jmh.annotations.Benchmark;
 import org.openjdk.jmh.annotations.BenchmarkMode;
 import org.openjdk.jmh.annotations.Fork;
@@ -63,6 +63,7 @@ import java.io.File;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Optional;
 import java.util.Properties;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
@@ -105,7 +106,7 @@ public class PartitionCreationBench {
         else
             topicId = Option.empty();
 
-        this.scheduler = new KafkaScheduler(1, "scheduler-thread", true);
+        this.scheduler = new KafkaScheduler(1, true, "scheduler-thread");
         this.brokerProperties = KafkaConfig.fromProps(TestUtils.createBrokerConfig(
                 0, TestUtils.MockZkConnect(), true, true, 9092, Option.empty(), Option.empty(),
                 Option.empty(), true, false, 0, false, 0, false, 0, Option.empty(), 1, true, 1,
@@ -113,7 +114,7 @@ public class PartitionCreationBench {
         this.metrics = new Metrics();
         this.time = Time.SYSTEM;
         this.failureChannel = new LogDirFailureChannel(brokerProperties.logDirs().size());
-        final BrokerTopicStats brokerTopicStats = new BrokerTopicStats();
+        final BrokerTopicStats brokerTopicStats = new BrokerTopicStats(Optional.empty());
         final List<File> files =
                 JavaConverters.seqAsJavaList(brokerProperties.logDirs()).stream().map(File::new).collect(Collectors.toList());
         CleanerConfig cleanerConfig = new CleanerConfig(1,
@@ -133,7 +134,7 @@ public class PartitionCreationBench {
             setFlushRecoveryOffsetCheckpointMs(10000L).
             setFlushStartOffsetCheckpointMs(10000L).
             setRetentionCheckMs(1000L).
-            setMaxProducerIdExpirationMs(60000).
+            setProducerStateManagerConfig(60000, false).
             setInterBrokerProtocolVersion(MetadataVersion.latest()).
             setScheduler(scheduler).
             setBrokerTopicStats(brokerTopicStats).
@@ -161,7 +162,7 @@ public class PartitionCreationBench {
             setBrokerTopicStats(brokerTopicStats).
             setMetadataCache(MetadataCache.zkMetadataCache(this.brokerProperties.brokerId(),
                 this.brokerProperties.interBrokerProtocolVersion(), BrokerFeatures.createEmpty(),
-                null)).
+                null, false)).
             setLogDirFailureChannel(failureChannel).
             setAlterPartitionManager(alterPartitionManager).
             build();
@@ -172,7 +173,7 @@ public class PartitionCreationBench {
     @TearDown(Level.Invocation)
     public void tearDown() throws Exception {
         this.replicaManager.shutdown(false);
-        logManager.shutdown();
+        logManager.shutdown(-1L);
         this.metrics.close();
         this.scheduler.shutdown();
         this.quotaManagers.shutdown();

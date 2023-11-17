@@ -43,7 +43,7 @@ object Consumed {
     ConsumedJ.`with`(keySerde, valueSerde, timestampExtractor, resetPolicy)
 
   /**
-   * Create an instance of [[Consumed]] with key and value [[Serde]]s.
+   * Create an instance of [[Consumed]] with key and value Serdes.
    *
    * @tparam K         key type
    * @tparam V         value type
@@ -53,7 +53,7 @@ object Consumed {
     ConsumedJ.`with`(keySerde, valueSerde)
 
   /**
-   * Create an instance of [[Consumed]] with a [[TimestampExtractor]].
+   * Create an instance of [[Consumed]] with a `org.apache.kafka.streams.processor.TimestampExtractor`.
    *
    * @param timestampExtractor the timestamp extractor to used. If `null` the default timestamp extractor from
    *                           config will be used
@@ -67,7 +67,7 @@ object Consumed {
     ConsumedJ.`with`(timestampExtractor).withKeySerde(keySerde).withValueSerde(valueSerde)
 
   /**
-   * Create an instance of [[Consumed]] with a [[Topology.AutoOffsetReset]].
+   * Create an instance of [[Consumed]] with a `org.apache.kafka.streams.Topology.AutoOffsetReset`.
    *
    * @tparam K          key type
    * @tparam V          value type

@@ -31,7 +31,7 @@ import java.util.Objects;
 public class PartitionAssignment {
     private final List<Integer> replicas;
 
-    public PartitionAssignment(final List<Integer> replicas) {
+    public PartitionAssignment(List<Integer> replicas) {
         this.replicas = Collections.unmodifiableList(new ArrayList<>(replicas));
     }
 
@@ -52,5 +52,12 @@ public class PartitionAssignment {
     @Override
     public int hashCode() {
         return Objects.hash(replicas);
+    }
+
+    @Override
+    public String toString() {
+        return "PartitionAssignment" +
+            "(replicas=" + replicas +
+            ")";
     }
 }

@@ -23,39 +23,35 @@ import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.state.SessionBytesStoreSupplier;
 import org.apache.kafka.streams.state.SessionStore;
-import org.easymock.EasyMockRunner;
-import org.easymock.Mock;
-import org.easymock.MockType;
 import org.hamcrest.CoreMatchers;
 import org.junit.Before;
 import org.junit.Test;
 import org.junit.runner.RunWith;
+import org.mockito.Mock;
+import org.mockito.junit.MockitoJUnitRunner;
 
 import java.util.Collections;
 
-import static org.easymock.EasyMock.expect;
-import static org.easymock.EasyMock.replay;
-import static org.easymock.EasyMock.reset;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.core.IsInstanceOf.instanceOf;
 import static org.junit.Assert.assertThrows;
+import static org.mockito.Mockito.when;
 
-@RunWith(EasyMockRunner.class)
+@RunWith(MockitoJUnitRunner.StrictStubs.class)
 public class SessionStoreBuilderTest {
 
-    @Mock(type = MockType.NICE)
+    @Mock
     private SessionBytesStoreSupplier supplier;
-    @Mock(type = MockType.NICE)
+    @Mock
     private SessionStore<Bytes, byte[]> inner;
     private SessionStoreBuilder<String, String> builder;
 
     @Before
     public void setUp() {
-        expect(supplier.get()).andReturn(inner);
-        expect(supplier.name()).andReturn("name");
-        expect(supplier.metricsScope()).andReturn("metricScope");
-        replay(supplier);
+        when(supplier.get()).thenReturn(inner);
+        when(supplier.name()).thenReturn("name");
+        when(supplier.metricsScope()).thenReturn("metricScope");
 
         builder = new SessionStoreBuilder<>(
             supplier,
@@ -118,48 +114,28 @@ public class SessionStoreBuilderTest {
     }
 
     @Test
-    public void shouldThrowNullPointerIfInnerIsNull() {
+    public void shouldThrowNullPointerIfStoreSupplierIsNull() {
         final Exception e = assertThrows(NullPointerException.class, () -> new SessionStoreBuilder<>(null, Serdes.String(), Serdes.String(), new MockTime()));
         assertThat(e.getMessage(), equalTo("storeSupplier cannot be null"));
     }
 
     @Test
-    public void shouldThrowNullPointerIfKeySerdeIsNull() {
-        final Exception e = assertThrows(NullPointerException.class, () -> new SessionStoreBuilder<>(supplier, null, Serdes.String(), new MockTime()));
-        assertThat(e.getMessage(), equalTo("name cannot be null"));
-    }
-
-    @Test
-    public void shouldThrowNullPointerIfValueSerdeIsNull() {
-        final Exception e = assertThrows(NullPointerException.class, () -> new SessionStoreBuilder<>(supplier, Serdes.String(), null, new MockTime()));
+    public void shouldThrowNullPointerIfNameIsNull() {
+        when(supplier.name()).thenReturn(null);
+        final Exception e = assertThrows(NullPointerException.class, () -> new SessionStoreBuilder<>(supplier, Serdes.String(), Serdes.String(), new MockTime()));
         assertThat(e.getMessage(), equalTo("name cannot be null"));
     }
 
     @Test
     public void shouldThrowNullPointerIfTimeIsNull() {
-        reset(supplier);
-        expect(supplier.name()).andReturn("name");
-        replay(supplier);
         final Exception e = assertThrows(NullPointerException.class, () -> new SessionStoreBuilder<>(supplier, Serdes.String(), Serdes.String(), null));
         assertThat(e.getMessage(), equalTo("time cannot be null"));
     }
 
     @Test
     public void shouldThrowNullPointerIfMetricsScopeIsNull() {
-        reset(supplier);
-        expect(supplier.get()).andReturn(new RocksDBSessionStore(
-            new RocksDBSegmentedBytesStore(
-                "name",
-                null,
-                10L,
-                5L,
-                new SessionKeySchema())
-        ));
-        expect(supplier.name()).andReturn("name");
-        replay(supplier);
-
-        final Exception e = assertThrows(NullPointerException.class,
-            () -> new SessionStoreBuilder<>(supplier, Serdes.String(), Serdes.String(), new MockTime()));
+        when(supplier.metricsScope()).thenReturn(null);
+        final Exception e = assertThrows(NullPointerException.class, () -> new SessionStoreBuilder<>(supplier, Serdes.String(), Serdes.String(), new MockTime()));
         assertThat(e.getMessage(), equalTo("storeSupplier's metricsScope can't be null"));
     }
 

@@ -28,7 +28,7 @@ import org.apache.kafka.image.writer.RecordListWriter;
 import org.apache.kafka.metadata.LeaderRecoveryState;
 import org.apache.kafka.metadata.PartitionRegistration;
 import org.apache.kafka.metadata.RecordTestUtils;
-import org.apache.kafka.metadata.Replicas;
+import org.apache.kafka.server.immutable.ImmutableMap;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
@@ -41,6 +41,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 import static org.apache.kafka.common.metadata.MetadataRecordType.PARTITION_CHANGE_RECORD;
 import static org.apache.kafka.common.metadata.MetadataRecordType.PARTITION_RECORD;
@@ -48,15 +49,16 @@ import static org.apache.kafka.common.metadata.MetadataRecordType.REMOVE_TOPIC_R
 import static org.apache.kafka.common.metadata.MetadataRecordType.TOPIC_RECORD;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 
 @Timeout(value = 40)
 public class TopicsImageTest {
-    static final TopicsImage IMAGE1;
+    public static final TopicsImage IMAGE1;
 
-    static final List<ApiMessageAndVersion> DELTA1_RECORDS;
+    public static final List<ApiMessageAndVersion> DELTA1_RECORDS;
 
     static final TopicsDelta DELTA1;
 
@@ -73,23 +75,23 @@ public class TopicsImageTest {
         return new TopicImage(name, id, partitionMap);
     }
 
-    private static Map<Uuid, TopicImage> newTopicsByIdMap(Collection<TopicImage> topics) {
-        Map<Uuid, TopicImage> map = new HashMap<>();
+    private static ImmutableMap<Uuid, TopicImage> newTopicsByIdMap(Collection<TopicImage> topics) {
+        ImmutableMap<Uuid, TopicImage> map = TopicsImage.EMPTY.topicsById();
         for (TopicImage topic : topics) {
-            map.put(topic.id(), topic);
+            map = map.updated(topic.id(), topic);
         }
         return map;
     }
 
-    private static Map<String, TopicImage> newTopicsByNameMap(Collection<TopicImage> topics) {
-        Map<String, TopicImage> map = new HashMap<>();
+    private static ImmutableMap<String, TopicImage> newTopicsByNameMap(Collection<TopicImage> topics) {
+        ImmutableMap<String, TopicImage> map = TopicsImage.EMPTY.topicsByName();
         for (TopicImage topic : topics) {
-            map.put(topic.name(), topic);
+            map = map.updated(topic.name(), topic);
         }
         return map;
     }
 
-    private static final Uuid FOO_UUID = Uuid.fromString("ThIaNwRnSM2Nt9Mx1v0RvA");
+    public static final Uuid FOO_UUID = Uuid.fromString("ThIaNwRnSM2Nt9Mx1v0RvA");
 
     private static final Uuid BAR_UUID = Uuid.fromString("f62ptyETTjet8SL5ZeREiw");
 
@@ -98,15 +100,15 @@ public class TopicsImageTest {
     static {
         TOPIC_IMAGES1 = Arrays.asList(
             newTopicImage("foo", FOO_UUID,
-                new PartitionRegistration(new int[] {2, 3, 4},
-                    new int[] {2, 3}, Replicas.NONE, Replicas.NONE, 2, LeaderRecoveryState.RECOVERED, 1, 345),
-                new PartitionRegistration(new int[] {3, 4, 5},
-                    new int[] {3, 4, 5}, Replicas.NONE, Replicas.NONE, 3, LeaderRecoveryState.RECOVERED, 4, 684),
-                new PartitionRegistration(new int[] {2, 4, 5},
-                    new int[] {2, 4, 5}, Replicas.NONE, Replicas.NONE, 2, LeaderRecoveryState.RECOVERED, 10, 84)),
+                new PartitionRegistration.Builder().setReplicas(new int[] {2, 3, 4}).
+                    setIsr(new int[] {2, 3}).setLeader(2).setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).setLeaderEpoch(1).setPartitionEpoch(345).build(),
+                new PartitionRegistration.Builder().setReplicas(new int[] {3, 4, 5}).
+                    setIsr(new int[] {3, 4, 5}).setLeader(3).setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).setLeaderEpoch(4).setPartitionEpoch(684).build(),
+                new PartitionRegistration.Builder().setReplicas(new int[] {2, 4, 5}).
+                    setIsr(new int[] {2, 4, 5}).setLeader(2).setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).setLeaderEpoch(10).setPartitionEpoch(84).build()),
             newTopicImage("bar", BAR_UUID,
-                new PartitionRegistration(new int[] {0, 1, 2, 3, 4},
-                    new int[] {0, 1, 2, 3}, new int[] {1}, new int[] {3, 4}, 0, LeaderRecoveryState.RECOVERED, 1, 345)));
+                new PartitionRegistration.Builder().setReplicas(new int[] {0, 1, 2, 3, 4}).
+                    setIsr(new int[] {0, 1, 2, 3}).setRemovingReplicas(new int[] {1}).setAddingReplicas(new int[] {3, 4}).setLeader(0).setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).setLeaderEpoch(1).setPartitionEpoch(345).build()));
 
         IMAGE1 = new TopicsImage(newTopicsByIdMap(TOPIC_IMAGES1), newTopicsByNameMap(TOPIC_IMAGES1));
 
@@ -137,11 +139,11 @@ public class TopicsImageTest {
 
         List<TopicImage> topics2 = Arrays.asList(
             newTopicImage("bar", BAR_UUID,
-                new PartitionRegistration(new int[] {0, 1, 2, 3, 4},
-                    new int[] {0, 1, 2, 3}, new int[] {1}, new int[] {3, 4}, 1, LeaderRecoveryState.RECOVERED, 2, 346)),
+                new PartitionRegistration.Builder().setReplicas(new int[] {0, 1, 2, 3, 4}).
+                    setIsr(new int[] {0, 1, 2, 3}).setRemovingReplicas(new int[] {1}).setAddingReplicas(new int[] {3, 4}).setLeader(1).setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).setLeaderEpoch(2).setPartitionEpoch(346).build()),
             newTopicImage("baz", BAZ_UUID,
-                new PartitionRegistration(new int[] {1, 2, 3, 4},
-                    new int[] {3, 4}, new int[] {2}, new int[] {1}, 3, LeaderRecoveryState.RECOVERED, 2, 1)));
+                new PartitionRegistration.Builder().setReplicas(new int[] {1, 2, 3, 4}).
+                    setIsr(new int[] {3, 4}).setRemovingReplicas(new int[] {2}).setAddingReplicas(new int[] {1}).setLeader(3).setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).setLeaderEpoch(2).setPartitionEpoch(1).build()));
         IMAGE2 = new TopicsImage(newTopicsByIdMap(topics2), newTopicsByNameMap(topics2));
     }
 
@@ -160,7 +162,14 @@ public class TopicsImageTest {
     }
 
     private PartitionRegistration newPartition(int[] replicas) {
-        return new PartitionRegistration(replicas, replicas, Replicas.NONE, Replicas.NONE, replicas[0], LeaderRecoveryState.RECOVERED, 1, 1);
+        return new PartitionRegistration.Builder().
+            setReplicas(replicas).
+            setIsr(replicas).
+            setLeader(replicas[0]).
+            setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).
+            setLeaderEpoch(1).
+            setPartitionEpoch(1).
+            build();
     }
 
     @Test
@@ -217,6 +226,11 @@ public class TopicsImageTest {
             ),
             changes.followers().keySet()
         );
+
+        TopicsImage finalImage = delta.apply();
+        List<ApiMessageAndVersion> imageRecords = getImageRecords(IMAGE1);
+        imageRecords.addAll(topicRecords);
+        testToImage(finalImage, Optional.of(imageRecords));
     }
 
     @Test
@@ -257,6 +271,11 @@ public class TopicsImageTest {
         assertEquals(new HashSet<>(Arrays.asList(new TopicPartition("zoo", 0))), changes.deletes());
         assertEquals(Collections.emptyMap(), changes.leaders());
         assertEquals(Collections.emptyMap(), changes.followers());
+
+        TopicsImage finalImage = delta.apply();
+        List<ApiMessageAndVersion> imageRecords = getImageRecords(image);
+        imageRecords.addAll(topicRecords);
+        testToImage(finalImage, Optional.of(imageRecords));
     }
 
     @Test
@@ -357,35 +376,58 @@ public class TopicsImageTest {
             new HashSet<>(Arrays.asList(new TopicPartition("zoo", 1), new TopicPartition("zoo", 5))),
             changes.followers().keySet()
         );
+
+
+        TopicsImage finalImage = delta.apply();
+        List<ApiMessageAndVersion> imageRecords = getImageRecords(image);
+        imageRecords.addAll(topicRecords);
+        testToImage(finalImage, Optional.of(imageRecords));
     }
 
     @Test
-    public void testEmptyImageRoundTrip() throws Throwable {
-        testToImageAndBack(TopicsImage.EMPTY);
+    public void testEmptyImageRoundTrip() {
+        testToImage(TopicsImage.EMPTY);
     }
 
     @Test
-    public void testImage1RoundTrip() throws Throwable {
-        testToImageAndBack(IMAGE1);
+    public void testImage1RoundTrip() {
+        testToImage(IMAGE1);
     }
 
     @Test
-    public void testApplyDelta1() throws Throwable {
+    public void testApplyDelta1() {
         assertEquals(IMAGE2, DELTA1.apply());
+        // check image1 + delta1 = image2, since records for image1 + delta1 might differ from records from image2
+        List<ApiMessageAndVersion> records = getImageRecords(IMAGE1);
+        records.addAll(DELTA1_RECORDS);
+        testToImage(IMAGE2, records);
     }
 
     @Test
-    public void testImage2RoundTrip() throws Throwable {
-        testToImageAndBack(IMAGE2);
+    public void testImage2RoundTrip() {
+        testToImage(IMAGE2);
     }
 
-    private void testToImageAndBack(TopicsImage image) throws Throwable {
+    private static void testToImage(TopicsImage image) {
+        testToImage(image, Optional.empty());
+    }
+
+    private static void testToImage(TopicsImage image, Optional<List<ApiMessageAndVersion>> fromRecords) {
+        testToImage(image, fromRecords.orElseGet(() -> getImageRecords(image)));
+    }
+
+    private static void testToImage(TopicsImage image, List<ApiMessageAndVersion> fromRecords) {
+        // test from empty image stopping each of the various intermediate images along the way
+        new RecordTestUtils.TestThroughAllIntermediateImagesLeadingToFinalImageHelper<>(
+            () -> TopicsImage.EMPTY,
+            TopicsDelta::new
+        ).test(image, fromRecords);
+    }
+
+    private static List<ApiMessageAndVersion> getImageRecords(TopicsImage image) {
         RecordListWriter writer = new RecordListWriter();
         image.write(writer, new ImageWriterOptions.Builder().build());
-        TopicsDelta delta = new TopicsDelta(TopicsImage.EMPTY);
-        RecordTestUtils.replayAll(delta, writer.records());
-        TopicsImage nextImage = delta.apply();
-        assertEquals(image, nextImage);
+        return writer.records();
     }
 
     @Test
@@ -396,7 +438,7 @@ public class TopicsImageTest {
         assertTrue(map.containsKey("bar"));
         assertEquals(BAR_UUID, map.get("bar"));
         assertFalse(map.containsKey("baz"));
-        assertEquals(null, map.get("baz"));
+        assertNull(map.get("baz"));
         HashSet<Uuid> uuids = new HashSet<>();
         map.values().iterator().forEachRemaining(u -> uuids.add(u));
         HashSet<Uuid> expectedUuids = new HashSet<>(Arrays.asList(
@@ -415,7 +457,7 @@ public class TopicsImageTest {
         assertTrue(map.containsKey(BAR_UUID));
         assertEquals("bar", map.get(BAR_UUID));
         assertFalse(map.containsKey(BAZ_UUID));
-        assertEquals(null, map.get(BAZ_UUID));
+        assertNull(map.get(BAZ_UUID));
         HashSet<String> names = new HashSet<>();
         map.values().iterator().forEachRemaining(n -> names.add(n));
         HashSet<String> expectedNames = new HashSet<>(Arrays.asList("foo", "bar"));

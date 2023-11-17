@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
+import org.apache.kafka.common.utils.LogContext;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -25,6 +26,8 @@ public class RequestStateTest {
     @Test
     public void testRequestStateSimple() {
         RequestState state = new RequestState(
+                new LogContext(),
+                this.getClass().getSimpleName(),
                 100,
                 2,
                 1000,
@@ -32,11 +35,11 @@ public class RequestStateTest {
 
         // ensure not permitting consecutive requests
         assertTrue(state.canSendRequest(0));
-        state.updateLastSend(0);
+        state.onSendAttempt(0);
         assertFalse(state.canSendRequest(0));
-        state.updateLastFailedAttempt(35);
+        state.onFailedAttempt(35);
         assertTrue(state.canSendRequest(135));
-        state.updateLastFailedAttempt(140);
+        state.onFailedAttempt(140);
         assertFalse(state.canSendRequest(200));
         // exponential backoff
         assertTrue(state.canSendRequest(340));

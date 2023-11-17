@@ -361,6 +361,13 @@ class NamedCache {
         streamsMetrics.removeAllCacheLevelSensors(Thread.currentThread().getName(), taskName, storeName);
     }
 
+    synchronized void clear() {
+        head = tail = null;
+        currentSizeBytes = 0;
+        dirtyKeys.clear();
+        cache.clear();
+    }
+
     /**
      * A simple wrapper class to implement a doubly-linked list around MemoryLRUCacheBytesEntry
      */

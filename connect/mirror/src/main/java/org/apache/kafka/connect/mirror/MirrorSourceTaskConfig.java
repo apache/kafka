@@ -48,6 +48,11 @@ public class MirrorSourceTaskConfig extends MirrorSourceConfig {
         metricsReporters().forEach(metrics::addReporter);
         return metrics;
     }
+
+    @Override
+    String entityLabel() {
+        return super.entityLabel() + "-" + (getInt(TASK_INDEX) == null ? "?" : getInt(TASK_INDEX));
+    }
  
     protected static final ConfigDef TASK_CONFIG_DEF = new ConfigDef(CONNECTOR_CONFIG_DEF)
         .define(
@@ -55,5 +60,10 @@ public class MirrorSourceTaskConfig extends MirrorSourceConfig {
             ConfigDef.Type.LIST,
             null,
             ConfigDef.Importance.LOW,
-            TASK_TOPIC_PARTITIONS_DOC);
+            TASK_TOPIC_PARTITIONS_DOC)
+        .define(TASK_INDEX,
+                ConfigDef.Type.INT,
+                null,
+                ConfigDef.Importance.LOW,
+                "The index of the task");
 }

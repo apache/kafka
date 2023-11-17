@@ -92,7 +92,8 @@ public class RemoteLogSegmentLifecycleTest {
             });
 
             RemoteLogSegmentMetadataUpdate segment0Update = new RemoteLogSegmentMetadataUpdate(
-                    segment0Id, time.milliseconds(), RemoteLogSegmentState.COPY_SEGMENT_FINISHED, BROKER_ID_1);
+                    segment0Id, time.milliseconds(), Optional.empty(),
+                    RemoteLogSegmentState.COPY_SEGMENT_FINISHED, BROKER_ID_1);
             remoteLogSegmentLifecycleManager.updateRemoteLogSegmentMetadata(segment0Update);
             RemoteLogSegmentMetadata expectedSegment0Metadata = segment0Metadata.createWithUpdates(segment0Update);
 
@@ -167,6 +168,7 @@ public class RemoteLogSegmentLifecycleTest {
             remoteLogSegmentLifecycleManager
                     .updateRemoteLogSegmentMetadata(new RemoteLogSegmentMetadataUpdate(expectedSegment0Metadata.remoteLogSegmentId(),
                                                                                        time.milliseconds(),
+                                                                                       Optional.empty(),
                                                                                        RemoteLogSegmentState.DELETE_SEGMENT_STARTED,
                                                                                        BROKER_ID_1));
             Assertions.assertFalse(remoteLogSegmentLifecycleManager.remoteLogSegmentMetadata(0, 10).isPresent());
@@ -176,6 +178,7 @@ public class RemoteLogSegmentLifecycleTest {
             remoteLogSegmentLifecycleManager
                     .updateRemoteLogSegmentMetadata(new RemoteLogSegmentMetadataUpdate(expectedSegment0Metadata.remoteLogSegmentId(),
                                                                                        time.milliseconds(),
+                                                                                       Optional.empty(),
                                                                                        RemoteLogSegmentState.DELETE_SEGMENT_FINISHED,
                                                                                        BROKER_ID_1));
             Assertions.assertFalse(remoteLogSegmentLifecycleManager.remoteLogSegmentMetadata(0, 10).isPresent());
@@ -218,7 +221,9 @@ public class RemoteLogSegmentLifecycleTest {
                                                                                 time.milliseconds(), SEG_SIZE, segmentLeaderEpochs);
         remoteLogSegmentLifecycleManager.addRemoteLogSegmentMetadata(segmentMetadata);
 
-        RemoteLogSegmentMetadataUpdate segMetadataUpdate = new RemoteLogSegmentMetadataUpdate(segmentId, time.milliseconds(), state, BROKER_ID_1);
+        RemoteLogSegmentMetadataUpdate segMetadataUpdate = new RemoteLogSegmentMetadataUpdate(segmentId, time.milliseconds(),
+                Optional.empty(),
+                state, BROKER_ID_1);
         remoteLogSegmentLifecycleManager.updateRemoteLogSegmentMetadata(segMetadataUpdate);
 
         return segmentMetadata.createWithUpdates(segMetadataUpdate);
@@ -271,11 +276,13 @@ public class RemoteLogSegmentLifecycleTest {
             throws RemoteStorageException {
         // cache.listRemoteLogSegments(leaderEpoch) should contain the above segment.
         Iterator<RemoteLogSegmentMetadata> segmentsIter = remoteLogSegmentLifecycleManager.listRemoteLogSegments(leaderEpoch);
-        Assertions.assertTrue(segmentsIter.hasNext() && Objects.equals(segmentsIter.next(), expectedSegment));
+        Assertions.assertTrue(segmentsIter.hasNext());
+        Assertions.assertEquals(expectedSegment, segmentsIter.next());
 
         // cache.listAllRemoteLogSegments() should contain the above segment.
         Iterator<RemoteLogSegmentMetadata> allSegmentsIter = remoteLogSegmentLifecycleManager.listAllRemoteLogSegments();
-        Assertions.assertTrue(allSegmentsIter.hasNext() && Objects.equals(allSegmentsIter.next(), expectedSegment));
+        Assertions.assertTrue(allSegmentsIter.hasNext());
+        Assertions.assertEquals(expectedSegment, allSegmentsIter.next());
     }
 
     @ParameterizedTest(name = "remoteLogSegmentLifecycleManager = {0}")
@@ -285,7 +292,7 @@ public class RemoteLogSegmentLifecycleTest {
         try {
             remoteLogSegmentLifecycleManager.initialize(topicIdPartition);
 
-                // Create a segment with state COPY_SEGMENT_STARTED, and check for searching that segment and listing the
+            // Create a segment with state COPY_SEGMENT_STARTED, and check for searching that segment and listing the
             // segments.
             RemoteLogSegmentId segmentId = new RemoteLogSegmentId(topicIdPartition, Uuid.randomUuid());
             RemoteLogSegmentMetadata segmentMetadata = new RemoteLogSegmentMetadata(segmentId, 0L, 50L, -1L, BROKER_ID_0,
@@ -365,6 +372,7 @@ public class RemoteLogSegmentLifecycleTest {
 
             RemoteLogSegmentMetadataUpdate segmentMetadataUpdate = new RemoteLogSegmentMetadataUpdate(segmentMetadata.remoteLogSegmentId(),
                                                                                                       time.milliseconds(),
+                                                                                                      Optional.empty(),
                                                                                                       RemoteLogSegmentState.DELETE_SEGMENT_FINISHED,
                                                                                                       BROKER_ID_1);
             remoteLogSegmentLifecycleManager.updateRemoteLogSegmentMetadata(segmentMetadataUpdate);
@@ -474,13 +482,9 @@ public class RemoteLogSegmentLifecycleTest {
 
         @Override
         public void close() throws IOException {
-            tearDown();
+            super.close();
         }
 
-        @Override
-        public int brokerCount() {
-            return 3;
-        }
     }
 
     /**
@@ -498,13 +502,12 @@ public class RemoteLogSegmentLifecycleTest {
         }
 
         @Override
-        public Optional<Long> highestOffsetForEpoch(int epoch) throws RemoteStorageException {
+        public Optional<Long> highestOffsetForEpoch(int epoch) {
             return metadataCache.highestOffsetForEpoch(epoch);
         }
 
         @Override
-        public Optional<RemoteLogSegmentMetadata> remoteLogSegmentMetadata(int leaderEpoch,
-                                                                           long offset) throws RemoteStorageException {
+        public Optional<RemoteLogSegmentMetadata> remoteLogSegmentMetadata(int leaderEpoch, long offset) {
             return metadataCache.remoteLogSegmentMetadata(leaderEpoch, offset);
         }
 
@@ -519,7 +522,7 @@ public class RemoteLogSegmentLifecycleTest {
         }
 
         @Override
-        public void addRemoteLogSegmentMetadata(RemoteLogSegmentMetadata segmentMetadata) throws RemoteStorageException {
+        public void addRemoteLogSegmentMetadata(RemoteLogSegmentMetadata segmentMetadata) {
             metadataCache.addCopyInProgressSegment(segmentMetadata);
         }
     }

@@ -16,12 +16,11 @@
  */
 package org.apache.kafka.metadata.migration;
 
-import org.apache.kafka.common.Uuid;
-import org.apache.kafka.metadata.PartitionRegistration;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
+import org.apache.kafka.server.common.ProducerIdsBlock;
 
 import java.util.List;
-import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.function.Consumer;
 
@@ -36,7 +35,7 @@ public interface MigrationClient {
      * Read or initialize the ZK migration leader state in ZK. If the ZNode is absent, the given {@code initialState}
      * will be written and subsequently returned with the zkVersion of the node. If the ZNode is present, it will be
      * read and returned.
-     * @param initialState  An initial, emtpy, state to write to ZooKeeper for the migration state.
+     * @param initialState  An initial, empty, state to write to ZooKeeper for the migration state.
      * @return  The existing migration state, or the initial state given.
      */
     ZkMigrationLeadershipState getOrCreateMigrationRecoveryState(ZkMigrationLeadershipState initialState);
@@ -71,21 +70,22 @@ public interface MigrationClient {
      */
     ZkMigrationLeadershipState releaseControllerLeadership(ZkMigrationLeadershipState state);
 
-    ZkMigrationLeadershipState createTopic(
-        String topicName,
-        Uuid topicId,
-        Map<Integer, PartitionRegistration> topicPartitions,
-        ZkMigrationLeadershipState state
-    );
+    TopicMigrationClient topicClient();
 
-    ZkMigrationLeadershipState updateTopicPartitions(
-        Map<String, Map<Integer, PartitionRegistration>> topicPartitions,
+    ConfigMigrationClient configClient();
+
+    AclMigrationClient aclClient();
+
+    DelegationTokenMigrationClient delegationTokenClient();
+
+    Optional<ProducerIdsBlock> readProducerId();
+
+    ZkMigrationLeadershipState writeProducerId(
+        long nextProducerId,
         ZkMigrationLeadershipState state
     );
 
     void readAllMetadata(Consumer<List<ApiMessageAndVersion>> batchConsumer, Consumer<Integer> brokerIdConsumer);
 
     Set<Integer> readBrokerIds();
-
-    Set<Integer> readBrokerIdsFromTopicAssignments();
 }

@@ -22,8 +22,6 @@ import java.io.IOException
 import java.util.Properties
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.{ConcurrentLinkedQueue, TimeUnit}
-
-import kafka.utils.{CommandDefaultOptions, CommandLineUtils}
 import kafka.utils.Implicits._
 import kafka.utils.Logging
 import org.apache.kafka.common.utils.Utils
@@ -42,6 +40,7 @@ import org.apache.kafka.common.utils.{KafkaThread, Time}
 import org.apache.kafka.common.Node
 import org.apache.kafka.common.requests.{AbstractRequest, AbstractResponse, ApiVersionsRequest, ApiVersionsResponse, MetadataRequest, MetadataResponse}
 import org.apache.kafka.common.security.auth.SecurityProtocol
+import org.apache.kafka.server.util.{CommandDefaultOptions, CommandLineUtils}
 
 import scala.jdk.CollectionConverters._
 import scala.util.{Failure, Success, Try}
@@ -94,7 +93,7 @@ object BrokerApiVersionsCommand {
     checkArgs()
 
     def checkArgs(): Unit = {
-      CommandLineUtils.printHelpAndExitIfNeeded(this, "This tool helps to retrieve broker version information.")
+      CommandLineUtils.maybePrintHelpOrVersion(this, "This tool helps to retrieve broker version information.")
       // check required args
       CommandLineUtils.checkRequiredArgs(parser, options, bootstrapServerOpt)
     }
@@ -159,7 +158,7 @@ object BrokerApiVersionsCommand {
     private def getNodeApiVersions(node: Node): NodeApiVersions = {
       val response = send(node, new ApiVersionsRequest.Builder()).asInstanceOf[ApiVersionsResponse]
       Errors.forCode(response.data.errorCode).maybeThrow()
-      new NodeApiVersions(response.data.apiKeys, response.data.supportedFeatures)
+      new NodeApiVersions(response.data.apiKeys, response.data.supportedFeatures, response.data.zkMigrationReady)
     }
 
     /**
@@ -229,7 +228,7 @@ object BrokerApiVersionsCommand {
           CommonClientConfigs.SECURITY_PROTOCOL_CONFIG,
           ConfigDef.Type.STRING,
           CommonClientConfigs.DEFAULT_SECURITY_PROTOCOL,
-          in(Utils.enumOptions(classOf[SecurityProtocol]):_*),
+          ConfigDef.CaseInsensitiveValidString.in(Utils.enumOptions(classOf[SecurityProtocol]):_*),
           ConfigDef.Importance.MEDIUM,
           CommonClientConfigs.SECURITY_PROTOCOL_DOC)
         .define(
@@ -272,7 +271,9 @@ object BrokerApiVersionsCommand {
       val logContext = new LogContext(s"[LegacyAdminClient clientId=$clientId] ")
       val time = Time.SYSTEM
       val metrics = new Metrics(time)
-      val metadata = new Metadata(100L, 60 * 60 * 1000L, logContext,
+      val metadata = new Metadata(CommonClientConfigs.DEFAULT_RETRY_BACKOFF_MS,
+        CommonClientConfigs.DEFAULT_RETRY_BACKOFF_MAX_MS,
+        60 * 60 * 1000L, logContext,
         new ClusterResourceListeners)
       val channelBuilder = ClientUtils.createChannelBuilder(config, time, logContext)
       val requestTimeoutMs = config.getInt(CommonClientConfigs.REQUEST_TIMEOUT_MS_CONFIG)

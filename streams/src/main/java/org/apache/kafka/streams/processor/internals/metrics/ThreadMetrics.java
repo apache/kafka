@@ -27,8 +27,6 @@ import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetric
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.RATE_SUFFIX;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.RATIO_SUFFIX;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.RECORDS_SUFFIX;
-import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.ROLLUP_VALUE;
-import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.TASK_LEVEL_GROUP;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.THREAD_LEVEL_GROUP;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.TOTAL_DESCRIPTION;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.addAvgAndMaxToSensor;
@@ -78,10 +76,6 @@ public class ThreadMetrics {
     private static final String PUNCTUATE_RATE_DESCRIPTION = RATE_DESCRIPTION + PUNCTUATE_DESCRIPTION;
     private static final String PUNCTUATE_AVG_LATENCY_DESCRIPTION = "The average punctuate latency";
     private static final String PUNCTUATE_MAX_LATENCY_DESCRIPTION = "The maximum punctuate latency";
-    private static final String COMMIT_OVER_TASKS_DESCRIPTION =
-        "calls to commit over all tasks assigned to one stream thread";
-    private static final String COMMIT_OVER_TASKS_TOTAL_DESCRIPTION = TOTAL_DESCRIPTION + COMMIT_OVER_TASKS_DESCRIPTION;
-    private static final String COMMIT_OVER_TASKS_RATE_DESCRIPTION = RATE_DESCRIPTION + COMMIT_OVER_TASKS_DESCRIPTION;
     private static final String PROCESS_RATIO_DESCRIPTION =
         "The fraction of time the thread spent on processing active tasks";
     private static final String PUNCTUATE_RATIO_DESCRIPTION =
@@ -225,22 +219,6 @@ public class ThreadMetrics {
         );
     }
 
-    public static Sensor commitOverTasksSensor(final String threadId,
-                                               final StreamsMetricsImpl streamsMetrics) {
-        final Sensor commitOverTasksSensor =
-            streamsMetrics.threadLevelSensor(threadId, COMMIT, Sensor.RecordingLevel.DEBUG);
-        final Map<String, String> tagMap = streamsMetrics.taskLevelTagMap(threadId, ROLLUP_VALUE);
-        addInvocationRateAndCountToSensor(
-            commitOverTasksSensor,
-            TASK_LEVEL_GROUP,
-            tagMap,
-            COMMIT,
-            COMMIT_OVER_TASKS_RATE_DESCRIPTION,
-            COMMIT_OVER_TASKS_TOTAL_DESCRIPTION
-        );
-        return commitOverTasksSensor;
-    }
-
     public static Sensor processRatioSensor(final String threadId,
                                             final StreamsMetricsImpl streamsMetrics) {
         final Sensor sensor =
@@ -324,17 +302,18 @@ public class ThreadMetrics {
     }
 
     private static Sensor invocationRateAndCountSensor(final String threadId,
-                                                       final String metricName,
+                                                       final String operation,
                                                        final String descriptionOfRate,
                                                        final String descriptionOfCount,
                                                        final RecordingLevel recordingLevel,
                                                        final StreamsMetricsImpl streamsMetrics) {
-        final Sensor sensor = streamsMetrics.threadLevelSensor(threadId, metricName, recordingLevel);
+        // use operation name as the sensor suffix, and metric names
+        final Sensor sensor = streamsMetrics.threadLevelSensor(threadId, operation, recordingLevel);
         addInvocationRateAndCountToSensor(
             sensor,
             THREAD_LEVEL_GROUP,
             streamsMetrics.threadLevelTagMap(threadId),
-            metricName,
+            operation,
             descriptionOfRate,
             descriptionOfCount
         );
@@ -342,20 +321,21 @@ public class ThreadMetrics {
     }
 
     private static Sensor invocationRateAndCountAndAvgAndMaxLatencySensor(final String threadId,
-                                                                          final String metricName,
+                                                                          final String operation,
                                                                           final String descriptionOfRate,
                                                                           final String descriptionOfCount,
                                                                           final String descriptionOfAvg,
                                                                           final String descriptionOfMax,
                                                                           final RecordingLevel recordingLevel,
                                                                           final StreamsMetricsImpl streamsMetrics) {
-        final Sensor sensor = streamsMetrics.threadLevelSensor(threadId, metricName, recordingLevel);
+        // use operation name as the sensor suffix, and metric names
+        final Sensor sensor = streamsMetrics.threadLevelSensor(threadId, operation, recordingLevel);
         final Map<String, String> tagMap = streamsMetrics.threadLevelTagMap(threadId);
         addAvgAndMaxToSensor(
             sensor,
             THREAD_LEVEL_GROUP,
             tagMap,
-            metricName + LATENCY_SUFFIX,
+            operation + LATENCY_SUFFIX,
             descriptionOfAvg,
             descriptionOfMax
         );
@@ -363,7 +343,7 @@ public class ThreadMetrics {
             sensor,
             THREAD_LEVEL_GROUP,
             tagMap,
-            metricName,
+            operation,
             descriptionOfRate,
             descriptionOfCount
         );

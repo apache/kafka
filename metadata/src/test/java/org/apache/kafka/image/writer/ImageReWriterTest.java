@@ -18,11 +18,17 @@
 package org.apache.kafka.image.writer;
 
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.config.ConfigResource;
+import org.apache.kafka.common.metadata.ConfigRecord;
 import org.apache.kafka.common.metadata.TopicRecord;
 import org.apache.kafka.image.MetadataDelta;
+import org.apache.kafka.image.MetadataImage;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
+import java.util.Collections;
+
+import static org.apache.kafka.common.config.ConfigResource.Type.BROKER;
 import static org.apache.kafka.metadata.RecordTestUtils.testRecord;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -59,5 +65,29 @@ public class ImageReWriterTest {
                 writer.write(0, new TopicRecord().
                         setName("foo").
                         setTopicId(Uuid.fromString("3B134hrsQgKtz8Sp6QBIfg"))));
+    }
+
+    @Test
+    public void testCloseInvokesFinishSnapshot() {
+        MetadataDelta delta = new MetadataDelta.Builder().build();
+        ImageReWriter writer = new ImageReWriter(delta);
+        writer.write(0, new TopicRecord().
+                setName("foo").
+                setTopicId(Uuid.fromString("3B134hrsQgKtz8Sp6QBIfg")));
+        writer.close(true);
+
+        MetadataDelta delta2 = new MetadataDelta.Builder().setImage(writer.image()).build();
+        ImageReWriter writer2 = new ImageReWriter(delta2);
+        writer2.write(0, new ConfigRecord().
+                setResourceName("").
+                setResourceType(BROKER.id()).
+                setName("num.io.threads").
+                setValue("12"));
+        writer2.close(true);
+        MetadataImage newImage = writer2.image();
+
+        assertEquals(Collections.emptyMap(), newImage.topics().topicsById());
+        assertEquals(Collections.singletonMap("num.io.threads", "12"),
+            newImage.configs().configMapForResource(new ConfigResource(BROKER, "")));
     }
 }
