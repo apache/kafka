@@ -34,10 +34,17 @@ import java.util
 import java.util.{Collections, Properties}
 import java.util.concurrent.ThreadLocalRandom
 import org.apache.kafka.common.config.ConfigResource
+<<<<<<< HEAD
 import org.apache.kafka.common.message.DescribeTopicPartitionsResponseData.{DescribeTopicPartitionsResponsePartition, DescribeTopicPartitionsResponseTopic}
 import org.apache.kafka.common.message.{DescribeClientQuotasRequestData, DescribeClientQuotasResponseData}
 import org.apache.kafka.common.message.{DescribeUserScramCredentialsRequestData, DescribeUserScramCredentialsResponseData}
 import org.apache.kafka.metadata.{BrokerRegistration, PartitionRegistration, Replicas}
+=======
+import org.apache.kafka.common.errors.InvalidTopicException
+import org.apache.kafka.common.message.DescribeTopicPartitionsResponseData.{Cursor, DescribeTopicPartitionsResponsePartition, DescribeTopicPartitionsResponseTopic}
+import org.apache.kafka.common.message.{DescribeClientQuotasRequestData, DescribeClientQuotasResponseData, DescribeTopicPartitionsResponseData, DescribeUserScramCredentialsRequestData, DescribeUserScramCredentialsResponseData}
+import org.apache.kafka.metadata.{PartitionRegistration, Replicas}
+>>>>>>> 8725209059 (Update the schema.)
 import org.apache.kafka.server.common.{Features, MetadataVersion}
 
 import scala.collection.{Map, Seq, Set, mutable}
@@ -255,23 +262,28 @@ class KRaftMetadataCache(val brokerId: Int) extends MetadataCache with Logging w
 
   /**
    * Get the topic metadata for the given topics.
-   * For each topic, it tries to return the partition start from the first partition id.
    *
-   * The quota is used to limit the number of partitions to return. If a topic can only be partially returned due to
-   * quota limit reached, it will also return the next partition id in the response.
-   * If a topic can't return any partition due to quota limit reached, this topic will be returned with error
-   * REQUEST_LIMIT_REACHED.
+   * The quota is used to limit the number of partitions to return. The NextTopicPartition field points to the first
+   * partition can't be returned due the limit.
+   * If a topic can't return any partition due to quota limit reached, this topic will not be included in the response.
    *
-   * @param topics                      The set of topics and their corresponding first partition id to fetch.
-   * @param listenerName                The listener name.
-   * @param quota                       The max number of partitions to return.
+   * Note, the topics should be sorted in alphabetical order. The topics in the DescribeTopicPartitionsResponseData
+   * will also be sorted in alphabetical order.
+   *
+   * @param topics                        The set of topics and their corresponding first partition id to fetch.
+   * @param listenerName                  The listener name.
+   * @param firstTopicPartitionStartIndex The start partition index for the first topic
+   * @param quota                         The max number of partitions to return.
    */
-  def getTopicMetadataForDescribeTopicResponse(topics: Set[(String, Int)],
+  def getTopicMetadataForDescribeTopicResponse(topics: Seq[String],
                                                listenerName: ListenerName,
-                                               quota: Int): Seq[DescribeTopicPartitionsResponseTopic] = {
+                                               firstTopicPartitionStartIndex: Int,
+                                               quota: Int): DescribeTopicPartitionsResponseData = {
     val image = _currentImage
     var remaining = quota
-    topics.toSeq.flatMap { case(topicName, startIndex) =>
+    var startIndex = firstTopicPartitionStartIndex
+    val result = new DescribeTopicPartitionsResponseData()
+    topics.foreach { topicName =>
       if (remaining > 0) {
         val partitionResponse = getPartitionMetadataForDescribeTopicResponse(image, topicName, listenerName)
         partitionResponse.map( partitions => {
@@ -284,21 +296,47 @@ class KRaftMetadataCache(val brokerId: Int) extends MetadataCache with Logging w
             .setPartitions(partitions.filter(partition => {
               partition.partitionIndex() >= startIndex && partition.partitionIndex() < upperIndex
             }).asJava)
-          if (partitions.size > upperIndex) {
-            response.setNextPartition(upperIndex)
-          }
           remaining -= response.partitions().size()
-          response
+          result.topics().add(response)
+
+          if (upperIndex < partitions.size) {
+            result.setNextTopicPartition(new Cursor()
+              .setTopicName(topicName)
+              .setPartitionIndex(upperIndex)
+            )
+            remaining = -1
+          }
         })
-      } else {
-        List[DescribeTopicPartitionsResponseTopic](
-          new DescribeTopicPartitionsResponseTopic()
-            .setErrorCode(Errors.REQUEST_LIMIT_REACHED.code)
+
+        // start index only applies to the first topic. Reset it here.
+        startIndex = 0
+
+        if (!partitionResponse.isDefined) {
+          val error = try {
+            Topic.validate(topicName)
+            Errors.UNKNOWN_TOPIC_OR_PARTITION
+          } catch {
+            case _: InvalidTopicException =>
+              Errors.INVALID_TOPIC_EXCEPTION
+          }
+          result.topics().add(new DescribeTopicPartitionsResponseTopic()
+            .setErrorCode(error.code())
             .setName(topicName)
-            .setTopicId(Option(image.topics().getTopic(topicName).id()).getOrElse(Uuid.ZERO_UUID))
-            .setIsInternal(Topic.isInternal(topicName)))
+            .setTopicId(getTopicId(topicName))
+            .setIsInternal(Topic.isInternal(topicName))
+            .setPartitions(util.Collections.emptyList))
+        }
+      } else if (remaining == 0) {
+        // The cursor should point to the beginning of the current topic. All the partitions in the previous topic
+        // should be fulfilled. Note that, if a partition is pointed in the NextTopicPartition, it does not mean
+        // this topic exists.
+        result.setNextTopicPartition(new Cursor()
+          .setTopicName(topicName)
+          .setPartitionIndex(0))
+        remaining = -1
       }
     }
+    result
   }
 
   override def getAllTopics(): Set[String] = _currentImage.topics().topicsByName().keySet().asScala

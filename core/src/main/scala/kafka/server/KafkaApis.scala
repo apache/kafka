@@ -22,7 +22,7 @@ import kafka.controller.ReplicaAssignment
 import kafka.coordinator.transaction.{InitProducerIdResult, TransactionCoordinator}
 import kafka.network.RequestChannel
 import kafka.server.QuotaFactory.{QuotaManagers, UnboundedQuota}
-import kafka.server.metadata.{ConfigRepository, KRaftMetadataCache}
+import kafka.server.metadata.{ConfigRepository, KRaftMetadataCache, ZkMetadataCache}
 import kafka.utils.Implicits._
 import kafka.utils.{CoreUtils, Logging}
 import org.apache.kafka.admin.AdminUtils
@@ -1295,37 +1295,6 @@ class KafkaApis(val requestChannel: RequestChannel,
     }
   }
 
-  private def getTopicMetadataForDescribeTopicResponse(topics: Map[String, Int], listenerName: ListenerName): Seq[DescribeTopicPartitionsResponseTopic] = {
-    metadataCache match {
-      case cache: KRaftMetadataCache => {
-        val topicResponses = cache.getTopicMetadataForDescribeTopicResponse(
-          topics.map(kvp => (kvp._1, kvp._2)).toSet,
-          listenerName,
-          config.maxRequestPartitionSizeLimit)
-        val nonExistingTopics = topics.keySet.diff(topicResponses.map(_.name).toSet)
-        val nonExistingTopicResponses =
-          nonExistingTopics.map { topic =>
-            val error = try {
-              Topic.validate(topic)
-              Errors.UNKNOWN_TOPIC_OR_PARTITION
-            } catch {
-              case _: InvalidTopicException =>
-                Errors.INVALID_TOPIC_EXCEPTION
-            }
-
-            new DescribeTopicPartitionsResponseTopic()
-              .setErrorCode(error.code())
-              .setName(topic)
-              .setTopicId(cache.getTopicId(topic))
-              .setIsInternal(Topic.isInternal(topic))
-              .setPartitions(util.Collections.emptyList)
-          }
-        topicResponses ++ nonExistingTopicResponses
-      }
-      case _ => List()
-    }
-  }
-
   def handleTopicMetadataRequest(request: RequestChannel.Request): Unit = {
     val metadataRequest = request.body[MetadataRequest]
     val requestVersion = request.header.apiVersion
@@ -1456,24 +1425,38 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   def handleDescribeTopicPartitionsRequest(request: RequestChannel.Request): Unit = {
-    val DescribeTopicPartitionsRequest = request.body[DescribeTopicPartitionsRequest]
-
-    val topics = scala.collection.mutable.Map[String, Int]()
-    DescribeTopicPartitionsRequest.data.topics.forEach { topic =>
-      if (topic.name == null || topic.firstPartitionId() < 0) {
-        throw new InvalidRequestException(s"Topic name and first partition id must be set.")
-      }
-      topics.put(topic.name(), topic.firstPartitionId())
+    metadataCache match {
+      case _: ZkMetadataCache =>
+        throw new InvalidRequestException("ZK cluster does not handle DescribeTopicPartitions request")
+      case _ =>
     }
+    val KRaftMetadataCache = metadataCache.asInstanceOf[KRaftMetadataCache]
 
+    val describeTopicPartitionsRequest = request.body[DescribeTopicPartitionsRequest].data()
+    var topics = scala.collection.mutable.Set[String]()
+    describeTopicPartitionsRequest.topics().forEach(topic => topics.add(topic.name()))
+
+    val cursor = describeTopicPartitionsRequest.cursor()
     val fetchAllTopics = topics.isEmpty
     if (fetchAllTopics) {
-      metadataCache.getAllTopics().foreach(topic => topics.put(topic, 0))
+      metadataCache.getAllTopics().foreach(topic => topics.add(topic))
+      // Includes the cursor topic in case the cursor topic does not exist anymore.
+      if (cursor != null) {
+        topics.add(cursor.topicName())
+      }
+    } else if (cursor != null && !topics.contains(cursor.topicName())){
+      // The topic in cursor must be included in the topic list if provided.
+      throw new InvalidRequestException(s"DescribeTopicPartitionsRequest topic list should contain the cursor topic: ${cursor.topicName()}")
+    }
+
+    if (cursor != null) {
+      // Drop all the topics are ahead of the cursor topic.
+      topics = topics.filter(topicName => topicName.compareTo(cursor.topicName()) >= 0)
     }
 
     val authorizedForDescribeTopics = authHelper.filterByAuthorized(request.context, DESCRIBE, TOPIC,
-      topics.keySet)(identity)
-    val (authorizedTopics, unauthorizedForDescribeTopics) = topics.keySet.partition(authorizedForDescribeTopics.contains)
+      topics)(identity)
+    val (authorizedTopics, unauthorizedForDescribeTopics) = topics.partition(authorizedForDescribeTopics.contains)
 
     // Do not disclose the existence of topics unauthorized for Describe, so we've not even checked if they exist or not
     val unauthorizedForDescribeTopicMetadata = {
@@ -1486,27 +1469,30 @@ class KafkaApis(val requestChannel: RequestChannel,
       }
     }
 
-    val targetTopics = authorizedTopics.map(topicName => (topicName, topics.get(topicName).get)).toMap
-
-    val topicMetadata = getTopicMetadataForDescribeTopicResponse(targetTopics, request.context.listenerName)
+    val firstPartitionId = if (cursor == null) 0 else cursor.partitionIndex()
+    val response = KRaftMetadataCache.getTopicMetadataForDescribeTopicResponse(
+      authorizedTopics.toList.sorted,
+      request.context.listenerName,
+      firstPartitionId,
+      config.maxRequestPartitionSizeLimit)
 
     // get topic authorized operations
-    def setTopicAuthorizedOperations(topicMetadata: Seq[DescribeTopicPartitionsResponseTopic]): Unit = {
-      topicMetadata.foreach { topicData =>
-        topicData.setTopicAuthorizedOperations(authHelper.authorizedOperations(request, new Resource(ResourceType.TOPIC, topicData.name)))
-      }
+    def setTopicAuthorizedOperations(response: DescribeTopicPartitionsResponseData): Unit = {
+      response.topics().forEach(topicData =>
+        topicData.setTopicAuthorizedOperations(authHelper.authorizedOperations(request, new Resource(ResourceType.TOPIC, topicData.name))))
     }
 
-    setTopicAuthorizedOperations(topicMetadata)
+    setTopicAuthorizedOperations(response)
 
-    val completeTopicMetadata = topicMetadata ++ unauthorizedForDescribeTopicMetadata
+    response.topics().addAll(unauthorizedForDescribeTopicMetadata.asJava)
 
-    trace("Sending topic metadata %s for correlation id %d to client %s".format(completeTopicMetadata.mkString(","),
+    trace("Sending topic metadata %s for correlation id %d to client %s".format(response.topics().asScala.mkString(","),
       request.header.correlationId, request.header.clientId))
 
-    requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
-      DescribeTopicPartitionsResponse.prepareResponse(requestThrottleMs, completeTopicMetadata.asJava)
-    )
+    requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs => {
+      response.setThrottleTimeMs(requestThrottleMs)
+      new DescribeTopicPartitionsResponse(response)
+    })
   }
 
   /**

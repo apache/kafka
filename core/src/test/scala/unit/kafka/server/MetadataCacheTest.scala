@@ -22,6 +22,8 @@ import java.util
 import java.util.Arrays.asList
 import java.util.Collections
 import kafka.api.LeaderAndIsr
+import kafka.server.metadata.{KRaftMetadataCache, ZkMetadataCache}
+import org.apache.kafka.common.message.DescribeTopicPartitionsResponseData.{Cursor, DescribeTopicPartitionsResponsePartition}
 import org.apache.kafka.common.message.UpdateMetadataRequestData.{UpdateMetadataBroker, UpdateMetadataEndpoint, UpdateMetadataPartitionState, UpdateMetadataTopicState}
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.{ApiKeys, ApiMessage, Errors}
@@ -744,7 +746,7 @@ class MetadataCacheTest {
   }
 
   @Test
-  def testGetTopicMetadataForDescribeTopicResponse(): Unit = {
+  def testGetTopicMetadataForDescribeTopicPartitionsResponse(): Unit = {
     val metadataCache = MetadataCache.kRaftMetadataCache(0)
 
     val controllerId = 2
@@ -838,58 +840,70 @@ class MetadataCacheTest {
     }
 
     // Basic test
-    var result = metadataCache.getTopicMetadataForDescribeTopicResponse(Set((topic0, 0), (topic1, 0)), listenerName, 10).toList
+    var result = metadataCache.getTopicMetadataForDescribeTopicResponse(Seq(topic0, topic1), listenerName, 0, 10).topics().asScala.toList
     assertEquals(2, result.size)
-    result.foreach(responseTopic => {
-      if (responseTopic.name() == topic0) {
-        assertEquals(0, responseTopic.errorCode())
-        assertEquals(topicIds.get(topic0), responseTopic.topicId())
-        assertEquals(3, responseTopic.partitions().size())
-        checkTopicMetadata(topic0, Set(0, 1, 2), responseTopic.partitions().asScala)
-      } else {
-        assertEquals(0, responseTopic.errorCode())
-        assertEquals(topicIds.get(topic1), responseTopic.topicId())
-        assertEquals(1, responseTopic.partitions().size())
-        checkTopicMetadata(topic1, Set(0), responseTopic.partitions().asScala)
-      }
-    })
+    var resultTopic = result(0)
+    assertEquals(topic0, resultTopic.name())
+    assertEquals(0, resultTopic.errorCode())
+    assertEquals(topicIds.get(topic0), resultTopic.topicId())
+    assertEquals(3, resultTopic.partitions().size())
+    checkTopicMetadata(topic0, Set(0, 1, 2), resultTopic.partitions().asScala)
+
+    resultTopic = result(1)
+    assertEquals(topic1, resultTopic.name())
+    assertEquals(0, resultTopic.errorCode())
+    assertEquals(topicIds.get(topic1), resultTopic.topicId())
+    assertEquals(1, resultTopic.partitions().size())
+    checkTopicMetadata(topic1, Set(0), resultTopic.partitions().asScala)
 
     // Quota reached
-    result = metadataCache.getTopicMetadataForDescribeTopicResponse(Set((topic0, 0), (topic1, 0)), listenerName, 2).toList
-    assertEquals(2, result.size)
-    result.foreach(responseTopic => {
-      if (responseTopic.name() == topic0) {
-        assertEquals(0, responseTopic.errorCode())
-        assertEquals(topicIds.get(topic0), responseTopic.topicId())
-        assertEquals(2, responseTopic.partitions().size())
-        checkTopicMetadata(topic0, Set(0, 1), responseTopic.partitions().asScala)
-      } else {
-        assertEquals(117, responseTopic.errorCode())
-        assertEquals(topicIds.get(topic1), responseTopic.topicId())
-        assertEquals(0, responseTopic.partitions().size())
-      }
-    })
+    var response = metadataCache.getTopicMetadataForDescribeTopicResponse(Seq(topic0, topic1), listenerName, 0, 2)
+    result = response.topics().asScala.toList
+    assertEquals(1, result.size)
+    resultTopic = result(0)
+    assertEquals(topic0, resultTopic.name())
+    assertEquals(0, resultTopic.errorCode())
+    assertEquals(topicIds.get(topic0), resultTopic.topicId())
+    assertEquals(2, resultTopic.partitions().size())
+    checkTopicMetadata(topic0, Set(0, 1), resultTopic.partitions().asScala)
+    assertEquals(new Cursor().setTopicName(topic0).setPartitionIndex(2),response.nextTopicPartition())
 
     // With start index
-    result = metadataCache.getTopicMetadataForDescribeTopicResponse(Set((topic0, 1)), listenerName, 10).toList
+    result = metadataCache.getTopicMetadataForDescribeTopicResponse(Seq(topic0), listenerName, 1, 10).topics().asScala.toList
     assertEquals(1, result.size)
-    var responseTopic = result.apply(0)
-    assertEquals(0, responseTopic.errorCode())
-    assertEquals(topicIds.get(topic0), responseTopic.topicId())
-    assertEquals(topic0, responseTopic.name())
-    assertEquals(2, responseTopic.partitions().size())
-    checkTopicMetadata(topic0, Set(1, 2), responseTopic.partitions().asScala)
+    resultTopic = result(0)
+    assertEquals(topic0, resultTopic.name())
+    assertEquals(0, resultTopic.errorCode())
+    assertEquals(topicIds.get(topic0), resultTopic.topicId())
+    assertEquals(2, resultTopic.partitions().size())
+    checkTopicMetadata(topic0, Set(1, 2), resultTopic.partitions().asScala)
 
     // With start index and quota reached
-    result = metadataCache.getTopicMetadataForDescribeTopicResponse(Set((topic0, 1)), listenerName, 1).toList
+    response = metadataCache.getTopicMetadataForDescribeTopicResponse(Seq(topic0, topic1), listenerName, 2, 1)
+    result = response.topics().asScala.toList
     assertEquals(1, result.size)
-    responseTopic = result.apply(0)
-    assertEquals(0, responseTopic.errorCode())
-    assertEquals(topicIds.get(topic0), responseTopic.topicId())
-    assertEquals(topic0, responseTopic.name())
-    assertEquals(1, responseTopic.partitions().size())
-    assertEquals(2, responseTopic.nextPartition())
-    checkTopicMetadata(topic0, Set(1), responseTopic.partitions().asScala)
+
+    resultTopic = result(0)
+    assertEquals(topic0, resultTopic.name())
+    assertEquals(0, resultTopic.errorCode())
+    assertEquals(topicIds.get(topic0), resultTopic.topicId())
+    assertEquals(1, resultTopic.partitions().size())
+    checkTopicMetadata(topic0, Set(2), resultTopic.partitions().asScala)
+    assertEquals(new Cursor().setTopicName(topic1).setPartitionIndex(0),response.nextTopicPartition())
+
+    // When the first topic does not exist
+    result = metadataCache.getTopicMetadataForDescribeTopicResponse(Seq("Non-exist", topic0), listenerName, 1, 1).topics().asScala.toList
+    assertEquals(2, result.size)
+    resultTopic = result(0)
+    assertEquals("Non-exist", resultTopic.name())
+    assertEquals(3, resultTopic.errorCode())
+
+    resultTopic = result(1)
+    assertEquals(topic0, resultTopic.name())
+    assertEquals(0, resultTopic.errorCode())
+    assertEquals(topicIds.get(topic0), resultTopic.topicId())
+    assertEquals(1, resultTopic.partitions().size())
+    checkTopicMetadata(topic0, Set(0), resultTopic.partitions().asScala)
   }
 
   @ParameterizedTest

@@ -54,8 +54,13 @@
         { "name": "OfflineReplicas", "type": "[]int32", "versions": "0+", "ignorable": true, "entityType": "brokerId",
           "about": "The set of offline replicas of this partition." }]},
       { "name": "TopicAuthorizedOperations", "type": "int32", "versions": "0+", "default": "-2147483648",
-        "about": "32-bit bitfield to represent authorized operations for this topic." },
-      { "name": "NextPartition", "type": "int32", "versions": "0+", "default": "-1", "taggedVersions": "0+", "tag": 0,
-        "about": "The first partition that exceed the request limit. " }]}
+        "about": "32-bit bitfield to represent authorized operations for this topic." }]
+    },
+    { "name": "NextTopicPartition", "type": "Cursor", "versions": "0+", "nullableVersions": "0+", "default": "null",
+      "about": "The next topic and partition index to fetch details for.", "fields": [
+      { "name": "TopicName", "type": "string", "versions": "0+",
+        "about": "The name for the first topic to process", "versions": "0+", "entityType": "topicName"},
+      { "name": "PartitionIndex", "type": "int32", "versions": "0+", "about": "The partition index to start with"}
+    ]}
   ]
 }

@@ -25,10 +25,14 @@
       "about": "The topics to fetch details for.", "versions": "0+",
       "fields": [
         { "name": "Name", "type": "string", "versions": "0+",
-          "about": "The topic name", "versions": "0+", "entityType": "topicName"},
-        { "name": "FirstPartitionId", "type": "int32", "default": "0", "versions": "0+",
-          "about": "The first partition index to fetch details for."}
+          "about": "The topic name", "versions": "0+", "entityType": "topicName"}
       ]
-    }
+    },
+    { "name": "Cursor", "type": "Cursor", "versions": "0+", "nullableVersions": "0+", "default": "null",
+      "about": "The first topic and partition index to fetch details for.", "fields": [
+      { "name": "TopicName", "type": "string", "versions": "0+",
+        "about": "The name for the first topic to process", "versions": "0+", "entityType": "topicName"},
+      { "name": "PartitionIndex", "type": "int32", "versions": "0+", "about": "The partition index to start with"}
+    ]}
   ]
 }
