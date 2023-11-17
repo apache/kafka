@@ -21,6 +21,8 @@ import kafka.test.annotation.{ClusterConfigProperty, ClusterTest, ClusterTestDef
 import kafka.test.junit.ClusterTestExtensions
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests.JoinGroupRequest
+import org.apache.kafka.coordinator.group.generic.GenericGroupState
+import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.{Tag, Timeout}
 import org.junit.jupiter.api.extension.ExtendWith
 
@@ -30,7 +32,7 @@ import org.junit.jupiter.api.extension.ExtendWith
 @Tag("integration")
 class LeaveGroupRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBaseRequestTest(cluster) {
   @ClusterTest(serverProperties = Array(
-    new ClusterConfigProperty(key = "unstable.api.versions.enable", value = "true"),
+    new ClusterConfigProperty(key = "unstable.api.versions.enable", value = "false"),
     new ClusterConfigProperty(key = "group.coordinator.new.enable", value = "true"),
     new ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "1"),
     new ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1")
@@ -50,7 +52,6 @@ class LeaveGroupRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBa
   }
 
   private def testLeaveGroup(): Unit = {
-
     // Creates the __consumer_offsets topics because it won't be created automatically
     // in this test because it does not use FindCoordinator API.
     createOffsetsTopic()
@@ -62,7 +63,6 @@ class LeaveGroupRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBa
     )
 
     for (version <- ApiKeys.LEAVE_GROUP.oldestVersion() to ApiKeys.LEAVE_GROUP.latestVersion(isUnstableApiEnabled)) {
-
       // Join the consumer group. Note that we don't heartbeat here so we must use
       // a session long enough for the duration of the test.
       val (memberId1, _) = joinDynamicConsumerGroupWithOldProtocol("grp-1")
@@ -109,10 +109,19 @@ class LeaveGroupRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBa
       // Success GroupLeave request.
       leaveGroupWithOldProtocol(
         groupId = "grp-1",
-        memberIds = if (version >= 3) List(memberId1) else List(memberId1),
+        memberIds = List(memberId1),
         expectedLeaveGroupError = Errors.NONE,
         expectedMemberErrors = if (version >= 3) List(Errors.NONE) else List.empty,
         version = version.toShort
+      )
+
+      // grp-1 is empty.
+      assertEquals(
+        GenericGroupState.EMPTY.toString,
+        describeGroups(
+          groupIds = List("grp-1"),
+          version = ApiKeys.DESCRIBE_GROUPS.latestVersion(isUnstableApiEnabled)
+        ).head.groupState
       )
 
       if (version >= 3) {
@@ -120,7 +129,7 @@ class LeaveGroupRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBa
         leaveGroupWithOldProtocol(
           groupId = "grp-2",
           memberIds = List("member-id-fenced"),
-          groupInstanceId = "group-instance-id",
+          groupInstanceIds = List("group-instance-id"),
           expectedLeaveGroupError = Errors.NONE,
           expectedMemberErrors = List(Errors.FENCED_INSTANCE_ID),
           version = version.toShort
@@ -130,10 +139,19 @@ class LeaveGroupRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBa
         leaveGroupWithOldProtocol(
           groupId = "grp-2",
           memberIds = List(JoinGroupRequest.UNKNOWN_MEMBER_ID),
-          groupInstanceId = "group-instance-id",
+          groupInstanceIds = List("group-instance-id"),
           expectedLeaveGroupError = Errors.NONE,
           expectedMemberErrors = List(Errors.NONE),
           version = version.toShort
+        )
+
+        // grp-2 is empty.
+        assertEquals(
+          GenericGroupState.EMPTY.toString,
+          describeGroups(
+            groupIds = List("grp-2"),
+            version = ApiKeys.DESCRIBE_GROUPS.latestVersion(isUnstableApiEnabled)
+          ).head.groupState
         )
       }
     }

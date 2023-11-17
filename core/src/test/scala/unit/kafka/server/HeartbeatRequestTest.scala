@@ -19,9 +19,19 @@ package kafka.server
 import kafka.test.ClusterInstance
 import kafka.test.annotation.{ClusterConfigProperty, ClusterTest, ClusterTestDefaults, Type}
 import kafka.test.junit.ClusterTestExtensions
+import kafka.utils.TestUtils
+import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor
+import org.apache.kafka.clients.consumer.internals.ConsumerProtocol
+import org.apache.kafka.common.message.SyncGroupRequestData
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
+import org.apache.kafka.coordinator.group.generic.GenericGroupState
 import org.junit.jupiter.api.{Tag, Timeout}
 import org.junit.jupiter.api.extension.ExtendWith
+
+import java.util.Collections
+import scala.concurrent.ExecutionContext.Implicits.global
+import scala.concurrent.duration.Duration
+import scala.concurrent.{Await, Future}
 
 @Timeout(120)
 @ExtendWith(value = Array(classOf[ClusterTestExtensions]))
@@ -29,7 +39,7 @@ import org.junit.jupiter.api.extension.ExtendWith
 @Tag("integration")
 class HeartbeatRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBaseRequestTest(cluster) {
   @ClusterTest(serverProperties = Array(
-    new ClusterConfigProperty(key = "unstable.api.versions.enable", value = "true"),
+    new ClusterConfigProperty(key = "unstable.api.versions.enable", value = "false"),
     new ClusterConfigProperty(key = "group.coordinator.new.enable", value = "true"),
     new ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "1"),
     new ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1")
@@ -49,7 +59,6 @@ class HeartbeatRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBas
   }
 
   private def testHeartbeat(): Unit = {
-
     // Creates the __consumer_offsets topics because it won't be created automatically
     // in this test because it does not use FindCoordinator API.
     createOffsetsTopic()
@@ -61,9 +70,13 @@ class HeartbeatRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBas
     )
 
     for (version <- ApiKeys.HEARTBEAT.oldestVersion() to ApiKeys.HEARTBEAT.latestVersion(isUnstableApiEnabled)) {
+      val metadata = ConsumerProtocol.serializeSubscription(
+        new ConsumerPartitionAssignor.Subscription(Collections.singletonList("foo"))
+      ).array
 
-      val (memberId, memberEpoch) = joinDynamicConsumerGroupWithOldProtocol(
+      val (leaderMemberId, leaderEpoch) = joinDynamicConsumerGroupWithOldProtocol(
         groupId = "grp",
+        metadata = metadata,
         completeRebalance = false
       )
 
@@ -79,7 +92,7 @@ class HeartbeatRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBas
       // Heartbeat with unknown group id.
       heartbeat(
         groupId = "grp-unknown",
-        memberId = memberId,
+        memberId = leaderMemberId,
         generationId = -1,
         expectedError = Errors.UNKNOWN_MEMBER_ID,
         version = version.toShort
@@ -97,7 +110,7 @@ class HeartbeatRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBas
       // Heartbeat with unmatched generation id.
       heartbeat(
         groupId = "grp",
-        memberId = memberId,
+        memberId = leaderMemberId,
         generationId = -1,
         expectedError = Errors.ILLEGAL_GENERATION,
         version = version.toShort
@@ -106,28 +119,65 @@ class HeartbeatRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBas
       // Heartbeat COMPLETING_REBALANCE group.
       heartbeat(
         groupId = "grp",
-        memberId = memberId,
-        generationId = memberEpoch,
+        memberId = leaderMemberId,
+        generationId = leaderEpoch,
         version = version.toShort
       )
 
       syncGroupWithOldProtocol(
         groupId = "grp",
-        memberId = memberId,
-        generationId = memberEpoch
+        memberId = leaderMemberId,
+        generationId = leaderEpoch,
+        assignments = List(new SyncGroupRequestData.SyncGroupRequestAssignment()
+          .setMemberId(leaderMemberId)
+          .setAssignment(Array[Byte](1))
+        )
       )
 
       // Heartbeat STABLE group.
       heartbeat(
         groupId = "grp",
-        memberId = memberId,
-        generationId = memberEpoch,
+        memberId = leaderMemberId,
+        generationId = leaderEpoch,
         version = version.toShort
       )
 
+      // Join the second member.
+      val joinFollowerResponseData2 = sendJoinRequest(
+        groupId = "grp",
+        metadata = metadata
+      )
+
+      val reJoinFollowerFuture = Future { sendJoinRequest("grp", joinFollowerResponseData2.memberId, metadata = metadata) }
+      val verifyAndRejoinLeaderFuture = Future {
+        TestUtils.waitUntilTrue(() => {
+          val described = describeGroups(List("grp"), version = ApiKeys.DESCRIBE_GROUPS.latestVersion(isUnstableApiEnabled))
+          GenericGroupState.PREPARING_REBALANCE.toString == described.head.groupState()
+        }, msg = s"The group is not in PREPARING_REBALANCE state.")
+
+        // Heartbeat PREPARING_REBALANCE group.
+        heartbeat(
+          groupId = "grp",
+          memberId = leaderMemberId,
+          generationId = leaderEpoch,
+          expectedError = Errors.REBALANCE_IN_PROGRESS,
+          version = version.toShort
+        )
+        sendJoinRequest("grp", leaderMemberId, metadata = metadata)
+      }
+
+      Await.result(reJoinFollowerFuture, Duration.Inf)
+      Await.result(verifyAndRejoinLeaderFuture, Duration.Inf)
+
       leaveGroup(
         groupId = "grp",
-        memberId = memberId,
+        memberId = leaderMemberId,
+        useNewProtocol = false,
+        version = ApiKeys.LEAVE_GROUP.latestVersion(isUnstableApiEnabled)
+      )
+      leaveGroup(
+        groupId = "grp",
+        memberId = joinFollowerResponseData2.memberId,
         useNewProtocol = false,
         version = ApiKeys.LEAVE_GROUP.latestVersion(isUnstableApiEnabled)
       )
@@ -135,7 +185,7 @@ class HeartbeatRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBas
       // Heartbeat empty group.
       heartbeat(
         groupId = "grp",
-        memberId = memberId,
+        memberId = leaderMemberId,
         generationId = -1,
         expectedError = Errors.UNKNOWN_MEMBER_ID,
         version = version.toShort
