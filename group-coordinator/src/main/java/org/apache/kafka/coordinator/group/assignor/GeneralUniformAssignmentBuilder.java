@@ -75,6 +75,11 @@ public class GeneralUniformAssignmentBuilder extends AbstractUniformAssignmentBu
     private final Map<Uuid, List<String>> membersPerTopic;
 
     /**
+     * The new assignment that will be returned.
+     */
+    private final Map<String, MemberAssignment> targetAssignment;
+
+    /**
      * Rack information.
      */
     private final RackInfo rackInfo;
@@ -117,26 +122,12 @@ public class GeneralUniformAssignmentBuilder extends AbstractUniformAssignmentBu
      */
     private final PartitionMovements partitionMovements;
 
-    /**
-     * The new assignment that will be returned.
-     */
-    private final Map<String, MemberAssignment> targetAssignment;
-
     public GeneralUniformAssignmentBuilder(AssignmentSpec assignmentSpec, SubscribedTopicDescriber subscribedTopicDescriber) {
         this.members = assignmentSpec.members();
         this.subscribedTopicDescriber = subscribedTopicDescriber;
         this.subscribedTopicIds = new HashSet<>();
         this.membersPerTopic = new HashMap<>();
-        this.rackInfo = new RackInfo(assignmentSpec, subscribedTopicDescriber, subscribedTopicIds);
-        this.unassignedPartitions = new HashSet<>(topicIdPartitions(subscribedTopicIds, subscribedTopicDescriber));
-        this.assignedStickyPartitions = new HashSet<>();
-        this.assignmentManager = new AssignmentManager();
-        this.sortedMembersByAssignmentSize = assignmentManager.sortMembersByAssignmentSize(members.keySet());
-        this.currentPartitionOwners = new HashMap<>();
-        this.partitionOwnerInTargetAssignment = new HashMap<>();
-        this.partitionMovements = new PartitionMovements();
         this.targetAssignment = new HashMap<>();
-
         members.forEach((memberId, memberMetadata) -> {
             Collection<Uuid> topics = memberMetadata.subscribedTopicIds();
             topics.forEach(topicId -> {
@@ -152,6 +143,14 @@ public class GeneralUniformAssignmentBuilder extends AbstractUniformAssignmentBu
                 targetAssignment.put(memberId, new MemberAssignment(new HashMap<>()));
             });
         });
+        this.rackInfo = new RackInfo(assignmentSpec, subscribedTopicDescriber, subscribedTopicIds);
+        this.unassignedPartitions = new HashSet<>(topicIdPartitions(subscribedTopicIds, subscribedTopicDescriber));
+        this.assignedStickyPartitions = new HashSet<>();
+        this.assignmentManager = new AssignmentManager();
+        this.sortedMembersByAssignmentSize = assignmentManager.sortMembersByAssignmentSize(members.keySet());
+        this.currentPartitionOwners = new HashMap<>();
+        this.partitionOwnerInTargetAssignment = new HashMap<>();
+        this.partitionMovements = new PartitionMovements();
     }
 
     /**
