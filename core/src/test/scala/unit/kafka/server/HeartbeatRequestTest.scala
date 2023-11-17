@@ -143,15 +143,21 @@ class HeartbeatRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBas
       )
 
       // Join the second member.
-      val joinFollowerResponseData2 = sendJoinRequest(
+      val joinFollowerResponseData = sendJoinRequest(
         groupId = "grp",
         metadata = metadata
       )
 
-      val reJoinFollowerFuture = Future { sendJoinRequest("grp", joinFollowerResponseData2.memberId, metadata = metadata) }
+      val reJoinFollowerFuture = Future {
+        sendJoinRequest(
+          groupId = "grp",
+          memberId = joinFollowerResponseData.memberId,
+          metadata = metadata
+        )
+      }
       val verifyAndRejoinLeaderFuture = Future {
         TestUtils.waitUntilTrue(() => {
-          val described = describeGroups(List("grp"), version = ApiKeys.DESCRIBE_GROUPS.latestVersion(isUnstableApiEnabled))
+          val described = describeGroups(groupIds = List("grp"), version = ApiKeys.DESCRIBE_GROUPS.latestVersion(isUnstableApiEnabled))
           GenericGroupState.PREPARING_REBALANCE.toString == described.head.groupState()
         }, msg = s"The group is not in PREPARING_REBALANCE state.")
 
@@ -163,7 +169,12 @@ class HeartbeatRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBas
           expectedError = Errors.REBALANCE_IN_PROGRESS,
           version = version.toShort
         )
-        sendJoinRequest("grp", leaderMemberId, metadata = metadata)
+        
+        sendJoinRequest(
+          groupId = "grp",
+          memberId = leaderMemberId,
+          metadata = metadata
+        )
       }
 
       Await.result(reJoinFollowerFuture, Duration.Inf)
@@ -177,7 +188,7 @@ class HeartbeatRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBas
       )
       leaveGroup(
         groupId = "grp",
-        memberId = joinFollowerResponseData2.memberId,
+        memberId = joinFollowerResponseData.memberId,
         useNewProtocol = false,
         version = ApiKeys.LEAVE_GROUP.latestVersion(isUnstableApiEnabled)
       )

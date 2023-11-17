@@ -387,7 +387,7 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
     } else {
       // Note that we don't heartbeat and assume that the test will
       // complete within the session timeout.
-      joinDynamicConsumerGroupWithOldProtocol(groupId = groupId)
+      joinDynamicConsumerGroupWithOldProtocol(groupId)
     }
   }
 
