@@ -1788,7 +1788,8 @@ public class RemoteLogManagerTest {
         try (RemoteLogManager remoteLogManager = new RemoteLogManager(remoteLogManagerConfig, brokerId, logDir, clusterId, time,
                 tp -> Optional.of(mockLog),
                 (topicPartition, offset) -> logStartOffset.set(offset),
-                brokerTopicStats) {
+                brokerTopicStats,
+                Mockito.mock(MetadataCache.class)) {
             public RemoteStorageManager createRemoteStorageManager() {
                 return remoteStorageManager;
             }

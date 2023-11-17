@@ -311,8 +311,6 @@ class KafkaServer(
         _brokerState = BrokerState.RECOVERY
         logManager.startup(zkClient.getAllTopicsInCluster())
 
-        remoteLogManagerOpt = createRemoteLogManager()
-
         if (config.migrationEnabled) {
           kraftControllerNodes = RaftConfig.voterConnectionsToNodes(
             RaftConfig.parseVoterConnections(config.quorumVoters)).asScala
@@ -325,6 +323,9 @@ class KafkaServer(
           brokerFeatures,
           kraftControllerNodes,
           config.migrationEnabled)
+
+        remoteLogManagerOpt = createRemoteLogManager()
+
         val controllerNodeProvider = new MetadataCacheControllerNodeProvider(metadataCache, config)
 
         /* initialize feature change listener */
@@ -649,7 +650,8 @@ class KafkaServer(
             log.updateLogStartOffsetFromRemoteTier(remoteLogStartOffset)
           }
       },
-        brokerTopicStats));
+        brokerTopicStats,
+        metadataCache));
     } else {
       None
     }
