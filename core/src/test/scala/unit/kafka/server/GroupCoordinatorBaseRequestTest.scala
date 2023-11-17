@@ -25,7 +25,7 @@ import org.apache.kafka.common.message.DeleteGroupsResponseData.{DeletableGroupR
 import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity
 import org.apache.kafka.common.message.LeaveGroupResponseData.MemberResponse
 import org.apache.kafka.common.message.SyncGroupRequestData.SyncGroupRequestAssignment
-import org.apache.kafka.common.message.{ConsumerGroupHeartbeatRequestData, ConsumerGroupHeartbeatResponseData, DeleteGroupsRequestData, DeleteGroupsResponseData, DescribeGroupsRequestData, DescribeGroupsResponseData, HeartbeatRequestData, JoinGroupRequestData, LeaveGroupResponseData, ListGroupsRequestData, ListGroupsResponseData, OffsetCommitRequestData, OffsetCommitResponseData, OffsetDeleteRequestData, OffsetDeleteResponseData, OffsetFetchResponseData, SyncGroupRequestData}
+import org.apache.kafka.common.message.{ConsumerGroupHeartbeatRequestData, ConsumerGroupHeartbeatResponseData, DeleteGroupsRequestData, DeleteGroupsResponseData, DescribeGroupsRequestData, DescribeGroupsResponseData, HeartbeatRequestData, JoinGroupRequestData, JoinGroupResponseData, LeaveGroupResponseData, ListGroupsRequestData, ListGroupsResponseData, OffsetCommitRequestData, OffsetCommitResponseData, OffsetDeleteRequestData, OffsetDeleteResponseData, OffsetFetchResponseData, SyncGroupRequestData, SyncGroupResponseData}
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{AbstractRequest, AbstractResponse, ConsumerGroupHeartbeatRequest, ConsumerGroupHeartbeatResponse, DeleteGroupsRequest, DeleteGroupsResponse, DescribeGroupsRequest, DescribeGroupsResponse, HeartbeatRequest, HeartbeatResponse, JoinGroupRequest, JoinGroupResponse, LeaveGroupRequest, LeaveGroupResponse, ListGroupsRequest, ListGroupsResponse, OffsetCommitRequest, OffsetCommitResponse, OffsetDeleteRequest, OffsetDeleteResponse, OffsetFetchRequest, OffsetFetchResponse, SyncGroupRequest, SyncGroupResponse}
 import org.junit.jupiter.api.Assertions.{assertEquals, fail}
@@ -255,7 +255,7 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
     generationId: Int,
     assignments: List[SyncGroupRequestData.SyncGroupRequestAssignment] = List.empty,
     expectedError: Errors = Errors.NONE
-  ): Unit = {
+  ): SyncGroupResponseData = {
     val syncGroupRequestData = new SyncGroupRequestData()
       .setGroupId(groupId)
       .setMemberId(memberId)
@@ -267,6 +267,47 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
     val syncGroupRequest = new SyncGroupRequest.Builder(syncGroupRequestData).build()
     val syncGroupResponse = connectAndReceive[SyncGroupResponse](syncGroupRequest)
     assertEquals(expectedError.code, syncGroupResponse.data.errorCode)
+
+    syncGroupResponse.data
+  }
+
+  protected def sendJoinRequest(
+    groupId: String,
+    memberId: String = "",
+    groupInstanceId: String = null,
+    protocolType: String = "consumer",
+    protocolName: String = "consumer-range",
+    metadata: Array[Byte] = Array.empty,
+    version: Option[Short] = None
+  ): JoinGroupResponseData = {
+    val joinGroupRequestData = new JoinGroupRequestData()
+      .setGroupId(groupId)
+      .setMemberId(memberId)
+      .setGroupInstanceId(groupInstanceId)
+      .setRebalanceTimeoutMs(5 * 50 * 1000)
+      .setSessionTimeoutMs(600000)
+      .setProtocolType(protocolType)
+      .setProtocols(new JoinGroupRequestData.JoinGroupRequestProtocolCollection(
+        List(
+          new JoinGroupRequestData.JoinGroupRequestProtocol()
+            .setName(protocolName)
+            .setMetadata(metadata)
+        ).asJava.iterator
+      ))
+
+    // Send the request until receiving a successful response. There is a delay
+    // here because the group coordinator is loaded in the background.
+    val joinGroupRequest = version match {
+      case Some(v) => new JoinGroupRequest.Builder(joinGroupRequestData).build(v)
+      case None => new JoinGroupRequest.Builder(joinGroupRequestData).build()
+    }
+    var joinGroupResponse: JoinGroupResponse = null
+    TestUtils.waitUntilTrue(() => {
+      joinGroupResponse = connectAndReceive[JoinGroupResponse](joinGroupRequest)
+      joinGroupResponse != null
+    }, msg = s"Could not join the group successfully. Last response $joinGroupResponse.")
+
+    joinGroupResponse.data
   }
 
   protected def joinDynamicConsumerGroupWithOldProtocol(
@@ -275,48 +316,33 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
     assignment: Array[Byte] = Array.empty,
     completeRebalance: Boolean = true
   ): (String, Int) = {
-    val joinGroupRequestData = new JoinGroupRequestData()
-      .setGroupId(groupId)
-      .setRebalanceTimeoutMs(5 * 50 * 1000)
-      .setSessionTimeoutMs(600000)
-      .setProtocolType("consumer")
-      .setProtocols(new JoinGroupRequestData.JoinGroupRequestProtocolCollection(
-        List(
-          new JoinGroupRequestData.JoinGroupRequestProtocol()
-            .setName("consumer-range")
-            .setMetadata(metadata)
-        ).asJava.iterator
-      ))
-
-    // Join the group as a dynamic member.
-    // Send the request until receiving a successful response. There is a delay
-    // here because the group coordinator is loaded in the background.
-    var joinGroupRequest = new JoinGroupRequest.Builder(joinGroupRequestData).build()
-    var joinGroupResponse: JoinGroupResponse = null
-    TestUtils.waitUntilTrue(() => {
-      joinGroupResponse = connectAndReceive[JoinGroupResponse](joinGroupRequest)
-      joinGroupResponse.data.errorCode == Errors.MEMBER_ID_REQUIRED.code
-    }, msg = s"Could not join the group successfully. Last response $joinGroupResponse.")
+    val joinGroupResponseData = sendJoinRequest(
+      groupId = groupId,
+      metadata = metadata
+    )
+    assertEquals(Errors.MEMBER_ID_REQUIRED.code, joinGroupResponseData.errorCode)
 
     // Rejoin the group with the member id.
-    joinGroupRequestData.setMemberId(joinGroupResponse.data.memberId)
-    joinGroupRequest = new JoinGroupRequest.Builder(joinGroupRequestData).build()
-    joinGroupResponse = connectAndReceive[JoinGroupResponse](joinGroupRequest)
-    assertEquals(Errors.NONE.code, joinGroupResponse.data.errorCode)
+    val rejoinGroupResponseData = sendJoinRequest(
+      groupId = groupId,
+      memberId = joinGroupResponseData.memberId,
+      metadata = metadata
+    )
+    assertEquals(Errors.NONE.code, rejoinGroupResponseData.errorCode)
 
     if (completeRebalance) {
       // Send the sync group request to complete the rebalance.
       syncGroupWithOldProtocol(
         groupId = groupId,
-        memberId = joinGroupResponse.data.memberId(),
-        generationId = joinGroupResponse.data.generationId(),
+        memberId = rejoinGroupResponseData.memberId,
+        generationId = rejoinGroupResponseData.generationId,
         assignments = List(new SyncGroupRequestAssignment()
-          .setMemberId(joinGroupResponse.data.memberId)
+          .setMemberId(rejoinGroupResponseData.memberId)
           .setAssignment(assignment))
       )
     }
 
-    (joinGroupResponse.data.memberId, joinGroupResponse.data.generationId)
+    (rejoinGroupResponseData.memberId, rejoinGroupResponseData.generationId)
   }
 
   protected def joinStaticConsumerGroupWithOldProtocol(
@@ -325,40 +351,22 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
     metadata: Array[Byte] = Array.empty,
     completeRebalance: Boolean = true
   ): (String, Int) = {
-    val joinGroupRequestData = new JoinGroupRequestData()
-      .setGroupId(groupId)
-      .setGroupInstanceId(groupInstanceId)
-      .setRebalanceTimeoutMs(5 * 50 * 1000)
-      .setSessionTimeoutMs(600000)
-      .setProtocolType("consumer")
-      .setProtocols(new JoinGroupRequestData.JoinGroupRequestProtocolCollection(
-        List(
-          new JoinGroupRequestData.JoinGroupRequestProtocol()
-            .setName("consumer-range")
-            .setMetadata(metadata)
-        ).asJava.iterator
-      ))
-
-    // Join the group as a static member.
-    // Send the request until receiving a successful response. There is a delay
-    // here because the group coordinator is loaded in the background.
-    val joinGroupRequest = new JoinGroupRequest.Builder(joinGroupRequestData).build()
-    var joinGroupResponse: JoinGroupResponse = null
-    TestUtils.waitUntilTrue(() => {
-      joinGroupResponse = connectAndReceive[JoinGroupResponse](joinGroupRequest)
-      joinGroupResponse != null
-    }, msg = s"Could not join the group successfully. Last response $joinGroupResponse.")
+    val joinGroupResponseData = sendJoinRequest(
+      groupId = groupId,
+      groupInstanceId = groupInstanceId,
+      metadata = metadata
+    )
 
     if (completeRebalance) {
       // Send the sync group request to complete the rebalance.
       syncGroupWithOldProtocol(
         groupId = groupId,
-        memberId = joinGroupResponse.data.memberId(),
-        generationId = joinGroupResponse.data.generationId()
+        memberId = joinGroupResponseData.memberId,
+        generationId = joinGroupResponseData.generationId
       )
     }
 
-    (joinGroupResponse.data.memberId, joinGroupResponse.data.generationId)
+    (joinGroupResponseData.memberId, joinGroupResponseData.generationId)
   }
 
   protected def joinConsumerGroupWithNewProtocol(groupId: String): (String, Int) = {
@@ -379,7 +387,7 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
     } else {
       // Note that we don't heartbeat and assume that the test will
       // complete within the session timeout.
-      joinDynamicConsumerGroupWithOldProtocol(groupId)
+      joinDynamicConsumerGroupWithOldProtocol(groupId = groupId)
     }
   }
 
@@ -428,7 +436,7 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
     ).build(version)
 
     val heartbeatResponse = connectAndReceive[HeartbeatResponse](heartbeatRequest)
-    assertEquals(expectedError.code(), heartbeatResponse.data().errorCode())
+    assertEquals(expectedError.code, heartbeatResponse.data.errorCode)
   }
 
   protected def consumerGroupHeartbeat(
