@@ -19,10 +19,12 @@ package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
+import org.apache.kafka.clients.consumer.internals.Utils.TopicIdPartitionComparator;
 import org.apache.kafka.clients.consumer.internals.Utils.TopicPartitionComparator;
 import org.apache.kafka.common.ClusterResource;
 import org.apache.kafka.common.ClusterResourceListener;
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatResponseData;
@@ -102,7 +104,15 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
     /**
      * TopicPartition comparator based on topic name and partition id.
      */
-    private final static TopicPartitionComparator COMPARATOR = new TopicPartitionComparator();
+    private final static TopicPartitionComparator TOPIC_PARTITION_COMPARATOR =
+            new TopicPartitionComparator();
+
+    /**
+     * TopicIdPartition comparator based on topic name and partition id (ignoring ID while sorting,
+     * as this is sorted mainly for logging purposes).
+     */
+    private final static TopicIdPartitionComparator TOPIC_ID_PARTITION_COMPARATOR =
+            new TopicIdPartitionComparator();
 
     /**
      * Group ID of the consumer group the member will be part of, provided when creating the current
@@ -144,7 +154,7 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
     /**
      * Assignment that the member received from the server and successfully processed.
      */
-    private Set<TopicPartition> currentAssignment;
+    private Set<TopicIdPartition> currentAssignment;
 
     /**
      * Subscription state object holding the current assignment the member has for the topics it
@@ -195,7 +205,7 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
      * assignment ready to reconcile, even though the reconciliation might need to wait if there
      * is already another on in process.
      */
-    private final SortedSet<TopicPartition> assignmentReadyToReconcile;
+    private final SortedSet<TopicIdPartition> assignmentReadyToReconcile;
 
     /**
      * If there is a reconciliation running (triggering commit, callbacks) for the
@@ -252,7 +262,8 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
         this.metadata = metadata;
         this.assignedTopicNamesCache = new HashMap<>();
         this.assignmentUnresolved = new HashMap<>();
-        this.assignmentReadyToReconcile = new TreeSet<>(COMPARATOR);
+        this.assignmentReadyToReconcile = new TreeSet<>(TOPIC_ID_PARTITION_COMPARATOR);
+        this.currentAssignment = new HashSet<>();
         this.log = logContext.logger(MembershipManagerImpl.class);
     }
 
@@ -494,7 +505,7 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
      * @return Future that will complete when the callback execution completes.
      */
     private CompletableFuture<Void> invokeOnPartitionsRevokedOrLostToReleaseAssignment() {
-        SortedSet<TopicPartition> droppedPartitions = new TreeSet<>(COMPARATOR);
+        SortedSet<TopicPartition> droppedPartitions = new TreeSet<>(TOPIC_PARTITION_COMPARATOR);
         droppedPartitions.addAll(subscriptions.assignedPartitions());
 
         CompletableFuture<Void> callbackResult;
@@ -595,13 +606,20 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
      */
     boolean reconcile() {
         // Make copy of the assignment to reconcile as it could change as new assignments or metadata updates are received
-        SortedSet<TopicPartition> assignedPartitions = new TreeSet<>(COMPARATOR);
-        assignedPartitions.addAll(assignmentReadyToReconcile);
+        SortedSet<TopicIdPartition> assignedTopicIdPartitions = new TreeSet<>(TOPIC_ID_PARTITION_COMPARATOR);
+        assignedTopicIdPartitions.addAll(assignmentReadyToReconcile);
 
-        SortedSet<TopicPartition> ownedPartitions = new TreeSet<>(COMPARATOR);
+        SortedSet<TopicPartition> ownedPartitions = new TreeSet<>(TOPIC_PARTITION_COMPARATOR);
         ownedPartitions.addAll(subscriptions.assignedPartitions());
 
-        boolean sameAssignmentReceived = assignedPartitions.equals(ownedPartitions);
+        // Keep copy of assigned TopicPartitions created from the TopicIdPartitions that are
+        // being reconciled. Needed for interactions with the centralized subscription state that
+        // does not support topic IDs yet, and for the callbacks.
+        SortedSet<TopicPartition> assignedTopicPartition = toTopicPartitionSet(assignedTopicIdPartitions);
+
+        // Check same assignment. Based on topic names for now, until topic IDs are properly
+        // supported in the centralized subscription state object.
+        boolean sameAssignmentReceived = assignedTopicPartition.equals(ownedPartitions);
 
         if (reconciliationInProgress || sameAssignmentReceived) {
             String reason;
@@ -618,21 +636,21 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
         markReconciliationInProgress();
 
         // Partitions to assign (not previously owned)
-        SortedSet<TopicPartition> addedPartitions = new TreeSet<>(COMPARATOR);
-        addedPartitions.addAll(assignedPartitions);
+        SortedSet<TopicPartition> addedPartitions = new TreeSet<>(TOPIC_PARTITION_COMPARATOR);
+        addedPartitions.addAll(assignedTopicPartition);
         addedPartitions.removeAll(ownedPartitions);
 
         // Partitions to revoke
-        SortedSet<TopicPartition> revokedPartitions = new TreeSet<>(COMPARATOR);
+        SortedSet<TopicPartition> revokedPartitions = new TreeSet<>(TOPIC_PARTITION_COMPARATOR);
         revokedPartitions.addAll(ownedPartitions);
-        revokedPartitions.removeAll(assignedPartitions);
+        revokedPartitions.removeAll(assignedTopicPartition);
 
         log.info("Updating assignment with\n" +
                         "\tAssigned partitions:                       {}\n" +
                         "\tCurrent owned partitions:                  {}\n" +
                         "\tAdded partitions (assigned - owned):       {}\n" +
                         "\tRevoked partitions (owned - assigned):     {}\n",
-                assignedPartitions,
+                assignedTopicIdPartitions,
                 ownedPartitions,
                 addedPartitions,
                 revokedPartitions
@@ -655,7 +673,8 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
                     boolean memberHasRejoined = memberEpochOnReconciliationStart != memberEpoch;
                     if (state == MemberState.RECONCILING && !memberHasRejoined) {
                         // Apply assignment
-                        CompletableFuture<Void> assignResult = assignPartitions(assignedPartitions, addedPartitions);
+                        CompletableFuture<Void> assignResult = assignPartitions(assignedTopicPartition,
+                                addedPartitions);
 
                         // Clear topic names cache only for topics that are not in the subscription anymore
                         for (TopicPartition tp : revokedPartitions) {
@@ -692,12 +711,12 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
                     transitionTo(MemberState.ACKNOWLEDGING);
 
                     // Make assignment effective on the member group manager
-                    currentAssignment = assignedPartitions;
+                    currentAssignment = assignedTopicIdPartitions;
 
                     // Indicate that we completed reconciling a subset of the assignment ready to
                     // reconcile (new assignments might have been received or discovered in
                     // metadata)
-                    assignmentReadyToReconcile.removeAll(assignedPartitions);
+                    assignmentReadyToReconcile.removeAll(assignedTopicIdPartitions);
                 } else {
                     String reason = interruptedReconciliationErrorMessage();
                     log.error("Interrupting reconciliation after partitions assigned callback " +
@@ -707,6 +726,15 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
         });
 
         return true;
+    }
+
+    /**
+     * Build set of {@link TopicPartition} from the given set of {@link TopicIdPartition}.
+     */
+    private SortedSet<TopicPartition> toTopicPartitionSet(SortedSet<TopicIdPartition> topicIdPartitions) {
+        SortedSet<TopicPartition> result = new TreeSet<>(TOPIC_PARTITION_COMPARATOR);
+        topicIdPartitions.forEach(topicIdPartition -> result.add(topicIdPartition.topicPartition()));
+        return result;
     }
 
     /**
@@ -766,8 +794,9 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
             Optional<String> nameFromMetadata = findTopicNameInGlobalOrLocalCache(topicId);
             nameFromMetadata.ifPresent(resolvedTopicName -> {
                 // Name resolved, so assignment is ready for reconciliation.
-                assignmentReadyToReconcile.addAll(buildAssignedPartitionsWithTopicName(topicPartitions,
-                        resolvedTopicName));
+                SortedSet<TopicIdPartition> topicIdPartitions =
+                        buildAssignedPartitionsWithTopicName(topicId, resolvedTopicName, topicPartitions);
+                assignmentReadyToReconcile.addAll(topicIdPartitions);
                 it.remove();
             });
         }
@@ -806,11 +835,18 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
      * Build set of TopicPartition for the partitions included in the heartbeat topicPartitions,
      * and using the given topic name.
      */
-    private SortedSet<TopicPartition> buildAssignedPartitionsWithTopicName(
-            List<Integer> topicPartitions,
-            String topicName) {
-        SortedSet<TopicPartition> assignedPartitions = new TreeSet<>(COMPARATOR);
-        topicPartitions.forEach(tp -> assignedPartitions.add(new TopicPartition(topicName, tp)));
+    private SortedSet<TopicIdPartition> buildAssignedPartitionsWithTopicName(
+            Uuid topicId,
+            String topicName,
+            List<Integer> topicPartitions) {
+        SortedSet<TopicIdPartition> assignedPartitions =
+                new TreeSet<>(TOPIC_ID_PARTITION_COMPARATOR);
+        topicPartitions.forEach(tp -> {
+            TopicIdPartition topicIdPartition = new TopicIdPartition(
+                    topicId,
+                    new TopicPartition(topicName, tp));
+            assignedPartitions.add(topicIdPartition);
+        });
         return assignedPartitions;
     }
 
@@ -995,7 +1031,7 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
      * {@inheritDoc}
      */
     @Override
-    public Set<TopicPartition> currentAssignment() {
+    public Set<TopicIdPartition> currentAssignment() {
         return this.currentAssignment;
     }
 
@@ -1012,7 +1048,7 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
      * @return Topic partitions received in a target assignment that have been resolved in
      * metadata and are ready to be reconciled. Visible for testing.
      */
-    Set<TopicPartition> assignmentReadyToReconcile() {
+    Set<TopicIdPartition> assignmentReadyToReconcile() {
         return Collections.unmodifiableSet(assignmentReadyToReconcile);
     }
 

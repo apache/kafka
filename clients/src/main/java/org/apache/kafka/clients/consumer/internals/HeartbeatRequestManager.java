@@ -21,6 +21,8 @@ import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.internals.NetworkClientDelegate.PollResult;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEventHandler;
 import org.apache.kafka.clients.consumer.internals.events.ErrorBackgroundEvent;
+import org.apache.kafka.common.TopicIdPartition;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
 import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatRequestData;
@@ -34,6 +36,10 @@ import org.slf4j.Logger;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 /**
  * <p>Manages the request creation and response handling for the heartbeat. The module creates a
@@ -196,6 +202,9 @@ public class HeartbeatRequestManager implements RequestManager {
             // TODO: Pass the string to the GC if server side regex is used.
         } else {
             data.setSubscribedTopicNames(new ArrayList<>(this.subscriptions.subscription()));
+            List<ConsumerGroupHeartbeatRequestData.TopicPartitions> topicPartitions =
+                    buildTopicPartitionsList(membershipManager.currentAssignment());
+            data.setTopicPartitions(topicPartitions);
         }
 
         this.membershipManager.serverAssignor().ifPresent(data::setServerAssignor);
@@ -210,6 +219,26 @@ public class HeartbeatRequestManager implements RequestManager {
                 onFailure(exception, request.handler().completionTimeMs());
             }
         });
+    }
+
+    private List<ConsumerGroupHeartbeatRequestData.TopicPartitions> buildTopicPartitionsList(Set<TopicIdPartition> topicIdPartitions) {
+        List<ConsumerGroupHeartbeatRequestData.TopicPartitions> result = new ArrayList<>();
+        Map<Uuid, List<Integer>> partitionsPerTopicId = new HashMap<>();
+        for (TopicIdPartition topicIdPartition : topicIdPartitions) {
+            Uuid topicId = topicIdPartition.topicId();
+            if (!partitionsPerTopicId.containsKey(topicId)) {
+                partitionsPerTopicId.put(topicId, new ArrayList<>());
+            }
+            partitionsPerTopicId.get(topicId).add(topicIdPartition.partition());
+        }
+        for (Map.Entry<Uuid, List<Integer>> entry : partitionsPerTopicId.entrySet()) {
+            Uuid topicId = entry.getKey();
+            List<Integer> partitions = entry.getValue();
+            result.add(new ConsumerGroupHeartbeatRequestData.TopicPartitions()
+                    .setTopicId(topicId)
+                    .setPartitions(partitions));
+        }
+        return result;
     }
 
     private void onFailure(final Throwable exception, final long responseTimeMs) {

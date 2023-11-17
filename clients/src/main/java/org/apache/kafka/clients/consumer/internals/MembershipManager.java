@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
-import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatResponseData;
 
 import java.util.Optional;
@@ -90,7 +90,7 @@ public interface MembershipManager {
     /**
      * @return Current assignment for the member.
      */
-    Set<TopicPartition> currentAssignment();
+    Set<TopicIdPartition> currentAssignment();
 
     /**
      * Transition the member to the FENCED state, where the member will release the assignment by
