@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams;
 
-import java.util.Optional;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigDef.Importance;
@@ -32,6 +31,7 @@ import org.apache.kafka.streams.processor.internals.namedtopology.KafkaStreamsNa
 import org.apache.kafka.streams.state.DslStoreSuppliers;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import java.util.Optional;
 import java.util.Properties;
 import java.util.function.Supplier;
 

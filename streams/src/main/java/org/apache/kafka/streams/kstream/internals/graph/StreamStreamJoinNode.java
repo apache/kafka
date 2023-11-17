@@ -224,8 +224,8 @@ public class StreamStreamJoinNode<K, V1, V2, VR> extends BaseJoinProcessorNode<K
                                               thisWindowedStreamProcessorParameters,
                                               otherWindowedStreamProcessorParameters,
                                               thisStoreFactory,
-                    otherStoreFactory,
-                    outerJoinStoreFactory,
+                                              otherStoreFactory,
+                                              outerJoinStoreFactory,
                                               joined,
                                               enableSpuriousResultFix,
                                               selfJoinProcessorParameters);
