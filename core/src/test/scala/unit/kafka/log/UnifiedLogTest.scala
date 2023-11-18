@@ -40,8 +40,8 @@ import org.apache.kafka.storage.internals.log.{AbortedTxn, AppendOrigin, EpochEn
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.mockito.ArgumentMatchers
-import org.mockito.ArgumentMatchers.anyLong
-import org.mockito.Mockito.{mock, when}
+import org.mockito.ArgumentMatchers.{any, anyLong}
+import org.mockito.Mockito.{doThrow, mock, spy, when}
 
 import java.io._
 import java.nio.ByteBuffer
@@ -3581,7 +3581,7 @@ class UnifiedLogTest {
         val records = TestUtils.singletonRecords(value = s"test$i".getBytes)
         log.appendAsLeader(records, leaderEpoch = 0)
       }
-      
+
       log.updateHighWatermark(90L)
       log.maybeIncrementLogStartOffset(20L, LogStartOffsetIncrementReason.SegmentDeletion)
       assertEquals(20, log.logStartOffset)
@@ -3794,6 +3794,24 @@ class UnifiedLogTest {
     val verificationGuard = log.maybeStartTransactionVerification(producerId, sequence, producerEpoch)
     // Append should not throw error.
     log.appendAsLeader(transactionalRecords, leaderEpoch = 0, verificationGuard = verificationGuard)
+  }
+
+  @Test
+  def testRecoveryPointNotIncrementedOnProducerStateSnapshotFlushFailure(): Unit = {
+    val logConfig = LogTestUtils.createLogConfig()
+    val log = spy(createLog(logDir, logConfig))
+
+    doThrow(new KafkaStorageException("Injected exception")).when(log).flushProducerStateSnapshot(any())
+
+    log.appendAsLeader(TestUtils.singletonRecords("a".getBytes), leaderEpoch = 0)
+    try {
+      log.roll(Some(1L))
+    } catch {
+      case _: KafkaStorageException => // ignore
+    }
+
+    // check that the recovery point isn't incremented
+    assertEquals(0L, log.recoveryPoint)
   }
 
   private def appendTransactionalToBuffer(buffer: ByteBuffer,

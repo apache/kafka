@@ -43,7 +43,7 @@ import org.apache.kafka.storage.internals.epoch.LeaderEpochFileCache
 import org.apache.kafka.storage.internals.log.{AbortedTxn, AppendOrigin, BatchMetadata, CompletedTxn, EpochEntry, FetchDataInfo, FetchIsolation, LastRecord, LeaderHwChange, LogAppendInfo, LogConfig, LogDirFailureChannel, LogFileUtils, LogOffsetMetadata, LogOffsetSnapshot, LogOffsetsListener, LogStartOffsetIncrementReason, LogValidator, ProducerAppendInfo, ProducerStateManager, ProducerStateManagerConfig, RollParams}
 
 import java.io.{File, IOException}
-import java.nio.file.Files
+import java.nio.file.{Files, Path}
 import java.util
 import java.util.concurrent.{ConcurrentHashMap, ConcurrentMap}
 import java.util.{Collections, Optional, OptionalInt, OptionalLong}
@@ -1624,10 +1624,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
     updateHighWatermarkWithLogEndOffset()
     // Schedule an asynchronous flush of the old segment
     scheduler.scheduleOnce("flush-log", () => {
-      maybeSnapshot.ifPresent(f =>
-        maybeHandleIOException(s"Error while deleting producer state snapshot $f for $topicPartition in dir ${dir.getParent}") {
-          Utils.flushFileIfExists(f.toPath)
-        })
+      maybeSnapshot.ifPresent(f => flushProducerStateSnapshot(f.toPath))
       flushUptoOffsetExclusive(newSegment.baseOffset)
     })
     newSegment
@@ -1710,6 +1707,12 @@ class UnifiedLog(@volatile var logStartOffset: Long,
   // visible for testing
   private[log] def latestProducerStateEndOffset: Long = lock synchronized {
     producerStateManager.mapEndOffset
+  }
+
+  private[log] def flushProducerStateSnapshot(snapshot: Path): Unit = {
+    maybeHandleIOException(s"Error while deleting producer state snapshot $snapshot for $topicPartition in dir ${dir.getParent}") {
+      Utils.flushFileIfExists(snapshot)
+    }
   }
 
   /**
