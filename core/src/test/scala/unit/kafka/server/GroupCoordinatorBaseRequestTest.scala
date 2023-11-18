@@ -491,17 +491,18 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
   protected def leaveGroupWithOldProtocol(
     groupId: String,
     memberIds: List[String],
-    groupInstanceId: String = null,
+    groupInstanceIds: List[String] = null,
     expectedLeaveGroupError: Errors,
     expectedMemberErrors: List[Errors],
     version: Short
   ): Unit = {
     val leaveGroupRequest = new LeaveGroupRequest.Builder(
       groupId,
-      memberIds.map(memberId => new MemberIdentity()
-        .setMemberId(memberId)
-        .setGroupInstanceId(groupInstanceId)
-      ).asJava
+      List.tabulate(memberIds.length) { i =>
+        new MemberIdentity()
+          .setMemberId(memberIds(i))
+          .setGroupInstanceId(if (groupInstanceIds == null) null else groupInstanceIds(i))
+      }.asJava
     ).build(version)
 
     val expectedResponseData = new LeaveGroupResponseData()
@@ -512,7 +513,7 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
         .setMembers(List.tabulate(expectedMemberErrors.length) { i =>
           new MemberResponse()
             .setMemberId(memberIds(i))
-            .setGroupInstanceId(groupInstanceId)
+            .setGroupInstanceId(if (groupInstanceIds == null) null else groupInstanceIds(i))
             .setErrorCode(expectedMemberErrors(i).code)
         }.asJava)
     }
