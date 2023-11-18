@@ -1624,11 +1624,10 @@ class UnifiedLog(@volatile var logStartOffset: Long,
     updateHighWatermarkWithLogEndOffset()
     // Schedule an asynchronous flush of the old segment
     scheduler.scheduleOnce("flush-log", () => {
-      maybeSnapshot.ifPresent(f => {
+      maybeSnapshot.ifPresent(f =>
         maybeHandleIOException(s"Error while deleting producer state snapshot $f for $topicPartition in dir ${dir.getParent}") {
           Utils.flushFileIfExists(f.toPath)
-        }
-      })
+        })
       flushUptoOffsetExclusive(newSegment.baseOffset)
     })
     newSegment
