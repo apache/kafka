@@ -1138,11 +1138,12 @@ public class FetcherTest {
      * poll 2 should return 3,6
      * poll 3 should return 7,8
      * 
-     * Or similar :)
+     * Or it can be 6,7; then 8,1; then 2,3 because the order of topic-partitions returned is non-deterministic.
      */
     @Test
     public void testFetchMaxPollRecordsUnaligned() {
-        buildFetcher(2);
+        final int maxPollRecords = 2;
+        buildFetcher(maxPollRecords);
 
         Set<TopicPartition> tps = new HashSet<>();
         tps.add(tp0);
@@ -1154,32 +1155,35 @@ public class FetcherTest {
         client.prepareResponse(fetchResponse2(tidp0, records, 100L, tidp1, moreRecords, 100L));
         client.prepareResponse(fullFetchResponse(tidp0, emptyRecords, Errors.NONE, 100L, 0));
 
+        // Send fetch request because we do not have pending fetch responses to process.
+        // The first fetch response will return 3 records for tp0 and 3 more for tp1.
         assertEquals(1, sendFetches());
+        // The poll returns 2 records from one of the topic-partitions (non-deterministic).
+        // This leaves 1 record pending from that topic-partition, and the remaining 3 from the other.
+        pollAndValidateMaxPollRecordsNotExceeded(maxPollRecords);
+
+        // See if we need to send another fetch, which we do not because we have records in hand.
+        assertEquals(0, sendFetches());
+        // The poll returns 2 more records, 1 from the topic-partition we've already been
+        // processing, and 1 more from the other topic-partition. This means we have processed
+        // all records from the former, and 2 remain from the latter.
+        pollAndValidateMaxPollRecordsNotExceeded(maxPollRecords);
+
+        // See if we need to send another fetch, which we do because we've processed all of the records
+        // from one of the topic-partitions. The fetch response does not contain any more records.
+        assertEquals(1, sendFetches());
+        // The poll returns the final 2 records.
+        pollAndValidateMaxPollRecordsNotExceeded(maxPollRecords);
+    }
+
+    private void pollAndValidateMaxPollRecordsNotExceeded(int maxPollRecords) {
         consumerClient.poll(time.timer(0));
         Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> recordsByPartition = fetchRecords();
         int fetchedRecords = 0;
         for (List<ConsumerRecord<byte[], byte[]>> recordsToTest : recordsByPartition.values()) {
             fetchedRecords += recordsToTest.size();
         }
-        assertEquals(2, fetchedRecords);
-
-        assertEquals(0, sendFetches());
-        consumerClient.poll(time.timer(0));
-        recordsByPartition = fetchRecords();
-        fetchedRecords = 0;
-        for (List<ConsumerRecord<byte[], byte[]>> recordsToTest : recordsByPartition.values()) {
-            fetchedRecords += recordsToTest.size();
-        }
-        assertEquals(2, fetchedRecords);
-
-        assertTrue(sendFetches() > 0);
-        consumerClient.poll(time.timer(0));
-        recordsByPartition = fetchRecords();
-        fetchedRecords = 0;
-        for (List<ConsumerRecord<byte[], byte[]>> recordsToTest : recordsByPartition.values()) {
-            fetchedRecords += recordsToTest.size();
-        }
-        assertEquals(2, fetchedRecords);
+        assertEquals(maxPollRecords, fetchedRecords);
     }
 
     /**
