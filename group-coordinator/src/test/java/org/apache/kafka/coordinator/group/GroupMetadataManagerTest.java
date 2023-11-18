@@ -8728,6 +8728,34 @@ public class GroupMetadataManagerTest {
     }
 
     @Test
+    public void testConsumerGroupDescribeOffsetNotCommitted() {
+        String consumerGroupId = "consumerGroupId";
+
+        MockPartitionAssignor assignor = new MockPartitionAssignor("range");
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withAssignors(Collections.singletonList(assignor))
+            .build();
+
+        // Add group without committing
+        context.replay(newConsumerGroupMetadataRecord(
+            consumerGroupId,
+            new ConsumerGroupMetadataValue(),
+            MetadataVersion.latest()
+        ));
+
+        List<ConsumerGroupDescribeResponseData.DescribedGroup> actual = context.groupMetadataManager.consumerGroupDescribe(Collections.singletonList(consumerGroupId), context.lastCommittedOffset);
+        ConsumerGroupDescribeResponseData.DescribedGroup describedGroup = new ConsumerGroupDescribeResponseData.DescribedGroup();
+        describedGroup.setGroupId(consumerGroupId);
+        describedGroup.setErrorCode(Errors.GROUP_ID_NOT_FOUND.code());
+        describedGroup.setErrorMessage(Errors.GROUP_ID_NOT_FOUND.message());
+        List<ConsumerGroupDescribeResponseData.DescribedGroup> expected = Collections.singletonList(
+            describedGroup
+        );
+
+        assertEquals(expected, actual);
+    }
+
+    @Test
     public void testDescribeGroupStable() {
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
             .build();
@@ -9668,6 +9696,24 @@ public class GroupMetadataManagerTest {
             );
         }
         return protocols;
+    }
+
+    private static Record newConsumerGroupMetadataRecord(
+        String groupId,
+        ConsumerGroupMetadataValue value,
+        MetadataVersion metadataVersion
+    ) {
+        return new Record(
+            new ApiMessageAndVersion(
+                new ConsumerGroupMetadataKey()
+                    .setGroupId(groupId),
+                (short) 3
+            ),
+            new ApiMessageAndVersion(
+                value,
+                metadataVersion.groupMetadataValueVersion()
+            )
+        );
     }
 
     private static Record newGroupMetadataRecord(
