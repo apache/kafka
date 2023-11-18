@@ -550,7 +550,7 @@ public class ConsumerGroupMember {
     public ConsumerGroupDescribeResponseData.Member asConsumerGroupDescribeMember(Assignment targetAssignment) {
         return new ConsumerGroupDescribeResponseData.Member()
             .setMemberEpoch(memberEpoch)
-            .setMemberId(Uuid.fromString(memberId))
+            .setMemberId(memberId)
             .setAssignment(new ConsumerGroupDescribeResponseData.Assignment()
                 .setTopicPartitions(topicPartitionsFromMap(assignedPartitions)))
             .setTargetAssignment(new ConsumerGroupDescribeResponseData.Assignment()

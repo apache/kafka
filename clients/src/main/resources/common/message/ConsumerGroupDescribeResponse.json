@@ -50,7 +50,7 @@
         { "name": "Members", "type": "[]Member", "versions": "0+",
           "about": "The members.",
           "fields": [
-            { "name": "MemberId", "type": "uuid", "versions": "0+",
+            { "name": "MemberId", "type": "string", "versions": "0+",
               "about": "The member ID." },
             { "name": "InstanceId", "type": "string", "versions": "0+", "nullableVersions": "0+", "default": "null",
               "about": "The member instance ID." },

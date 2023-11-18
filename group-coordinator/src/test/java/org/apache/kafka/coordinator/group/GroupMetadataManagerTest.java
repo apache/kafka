@@ -8718,8 +8718,8 @@ public class GroupMetadataManagerTest {
         List<ConsumerGroupDescribeResponseData.DescribedGroup> actual = context.sendConsumerGroupDescribe(Collections.singletonList(groupId));
         ConsumerGroupDescribeResponseData.DescribedGroup describedGroup = new ConsumerGroupDescribeResponseData.DescribedGroup();
         describedGroup.setGroupId(groupId);
-        describedGroup.setErrorCode(Errors.INVALID_GROUP_ID.code());
-        describedGroup.setErrorMessage(Errors.INVALID_GROUP_ID.message());
+        describedGroup.setErrorCode(Errors.GROUP_ID_NOT_FOUND.code());
+        describedGroup.setErrorMessage(Errors.GROUP_ID_NOT_FOUND.message());
         List<ConsumerGroupDescribeResponseData.DescribedGroup> expected = Collections.singletonList(
             describedGroup
         );
