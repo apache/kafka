@@ -123,11 +123,13 @@ public class TimestampedWindowStoreBuilder<K, V>
 
 
     private final static class InMemoryTimestampedWindowStoreMarker
+        extends WrappedStateStore<WindowStore<Bytes, byte[]>, Bytes, byte[]>
         implements WindowStore<Bytes, byte[]>, TimestampedBytesStore {
 
         private final WindowStore<Bytes, byte[]> wrapped;
 
         private InMemoryTimestampedWindowStoreMarker(final WindowStore<Bytes, byte[]> wrapped) {
+            super(wrapped);
             if (wrapped.persistent()) {
                 throw new IllegalArgumentException("Provided store must not be a persistent store, but it is.");
             }

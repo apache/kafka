@@ -36,13 +36,15 @@ public class StreamJoined<K, V1, V2> implements NamedOperation<StreamJoined<K, V
     protected final Serde<K> keySerde;
     protected final Serde<V1> valueSerde;
     protected final Serde<V2> otherValueSerde;
-    protected final DslStoreSuppliers dslStoreSuppliers;
     protected final WindowBytesStoreSupplier thisStoreSupplier;
     protected final WindowBytesStoreSupplier otherStoreSupplier;
     protected final String name;
     protected final String storeName;
     protected final boolean loggingEnabled;
     protected final Map<String, String> topicConfig;
+
+    // not final because it is potentially overridden by TopologyConfig
+    protected DslStoreSuppliers dslStoreSuppliers;
 
     protected StreamJoined(final StreamJoined<K, V1, V2> streamJoined) {
         this(streamJoined.keySerde,

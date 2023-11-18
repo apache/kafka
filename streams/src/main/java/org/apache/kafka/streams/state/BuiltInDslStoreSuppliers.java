@@ -20,11 +20,18 @@ import org.apache.kafka.streams.kstream.EmitStrategy;
 import org.apache.kafka.streams.state.internals.RocksDbIndexedTimeOrderedWindowBytesStoreSupplier;
 import org.apache.kafka.streams.state.internals.RocksDbTimeOrderedSessionBytesStoreSupplier;
 
+/**
+ * Collection of builtin {@link DslStoreSuppliers} for Kafka Streams. Today we
+ * support RocksDb and InMemory stores out of the box.
+ */
 public class BuiltInDslStoreSuppliers {
 
     public static final DslStoreSuppliers ROCKS_DB = new RocksDBDslStoreSuppliers();
     public static final DslStoreSuppliers IN_MEMORY = new InMemoryDslStoreSuppliers();
 
+    /**
+     * A {@link DslStoreSuppliers} that supplies all stores backed by RocksDB
+     */
     public static class RocksDBDslStoreSuppliers implements DslStoreSuppliers {
 
         @Override
@@ -63,6 +70,9 @@ public class BuiltInDslStoreSuppliers {
         }
     }
 
+    /**
+     * A {@link DslStoreSuppliers} that supplies all stores backed by an in-memory map
+     */
     public static class InMemoryDslStoreSuppliers implements DslStoreSuppliers {
 
         @Override

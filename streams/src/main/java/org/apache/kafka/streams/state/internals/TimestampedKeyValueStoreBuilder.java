@@ -91,11 +91,13 @@ public class TimestampedKeyValueStoreBuilder<K, V>
     }
 
     private final static class InMemoryTimestampedKeyValueStoreMarker
+        extends WrappedStateStore<KeyValueStore<Bytes, byte[]>, Bytes, byte[]>
         implements KeyValueStore<Bytes, byte[]>, TimestampedBytesStore {
 
         final KeyValueStore<Bytes, byte[]> wrapped;
 
         private InMemoryTimestampedKeyValueStoreMarker(final KeyValueStore<Bytes, byte[]> wrapped) {
+            super(wrapped);
             if (wrapped.persistent()) {
                 throw new IllegalArgumentException("Provided store must not be a persistent store, but it is.");
             }

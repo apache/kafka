@@ -26,6 +26,7 @@ import org.apache.kafka.streams.kstream.JoinWindows;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.internals.StoreFactory;
 import org.apache.kafka.streams.state.DslKeyValueParams;
+import org.apache.kafka.streams.state.DslStoreSuppliers;
 import org.apache.kafka.streams.state.KeyValueBytesStoreSupplier;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StoreBuilder;
@@ -34,6 +35,7 @@ import org.apache.kafka.streams.state.internals.InMemoryWindowBytesStoreSupplier
 import org.apache.kafka.streams.state.internals.LeftOrRightValue;
 import org.apache.kafka.streams.state.internals.LeftOrRightValueSerde;
 import org.apache.kafka.streams.state.internals.ListValueStoreBuilder;
+import org.apache.kafka.streams.state.internals.RocksDbWindowBytesStoreSupplier;
 import org.apache.kafka.streams.state.internals.TimestampedKeyAndJoinSide;
 import org.apache.kafka.streams.state.internals.TimestampedKeyAndJoinSideSerde;
 
@@ -42,6 +44,8 @@ public class OuterStreamJoinStoreFactory<K, V1, V2> extends AbstractConfigurable
     private final String name;
     private final StreamJoinedInternal<K, V1, V2> streamJoined;
     private final JoinWindows windows;
+    private final DslStoreSuppliers streamJoinedDslStoreSuppliers;
+
     private boolean loggingEnabled;
 
     public enum Type {
@@ -56,6 +60,11 @@ public class OuterStreamJoinStoreFactory<K, V1, V2> extends AbstractConfigurable
             final Type type
     ) {
         super(streamJoined.dslStoreSuppliers());
+
+        // we store this one manually instead of relying on super#dslStoreSuppliers()
+        // so that we can differentiate between one that was explicitly passed in and
+        // one that was configured via super#configure()
+        this.streamJoinedDslStoreSuppliers = streamJoined.dslStoreSuppliers();
         this.name = buildOuterJoinWindowStoreName(streamJoined, name, type) + "-store";
         this.streamJoined = streamJoined;
         this.windows = windows;
@@ -86,13 +95,28 @@ public class OuterStreamJoinStoreFactory<K, V1, V2> extends AbstractConfigurable
         final TimestampedKeyAndJoinSideSerde<K> timestampedKeyAndJoinSideSerde = new TimestampedKeyAndJoinSideSerde<>(streamJoined.keySerde());
         final LeftOrRightValueSerde<V1, V2> leftOrRightValueSerde = new LeftOrRightValueSerde<>(streamJoined.valueSerde(), streamJoined.otherValueSerde());
 
-        // TODO: we should allow for configuration of this store explicitly instead of assuming that it should
-        // share the same type of store as thisStoreSupplier
-        final boolean useInMemoryStore = streamJoined.thisStoreSupplier() != null
-                && streamJoined.thisStoreSupplier() instanceof InMemoryWindowBytesStoreSupplier;
-        final KeyValueBytesStoreSupplier supplier = useInMemoryStore
-                ? Stores.inMemoryKeyValueStore(name)
-                : dslStoreSuppliers().keyValueStore(new DslKeyValueParams(name));
+        final KeyValueBytesStoreSupplier supplier;
+
+        if (streamJoinedDslStoreSuppliers != null) {
+            // case 1: dslStoreSuppliers was explicitly passed in
+            supplier = streamJoinedDslStoreSuppliers.keyValueStore(new DslKeyValueParams(name));
+        } else if (streamJoined.thisStoreSupplier() != null) {
+            // case 2: thisStoreSupplier was explicitly passed in, we match
+            // the type for that one
+            if (streamJoined.thisStoreSupplier() instanceof InMemoryWindowBytesStoreSupplier) {
+                supplier = Stores.inMemoryKeyValueStore(name);
+            } else if (streamJoined.thisStoreSupplier() instanceof RocksDbWindowBytesStoreSupplier) {
+                supplier = Stores.persistentKeyValueStore(name);
+            } else {
+                // couldn't determine the type of bytes store for thisStoreSupplier,
+                // fallback to the default
+                supplier = dslStoreSuppliers().keyValueStore(new DslKeyValueParams(name));
+            }
+        } else {
+            // case 3: nothing was explicitly passed in, fallback to default which
+            // was configured in super#configure()
+            supplier = dslStoreSuppliers().keyValueStore(new DslKeyValueParams(name));
+        }
 
         final StoreBuilder<KeyValueStore<TimestampedKeyAndJoinSide<K>, LeftOrRightValue<V1, V2>>>
                 builder =

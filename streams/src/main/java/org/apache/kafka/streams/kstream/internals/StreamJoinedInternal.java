@@ -18,6 +18,7 @@
 package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.common.serialization.Serde;
+import org.apache.kafka.streams.TopologyConfig;
 import org.apache.kafka.streams.kstream.StreamJoined;
 import org.apache.kafka.streams.state.DslStoreSuppliers;
 import org.apache.kafka.streams.state.WindowBytesStoreSupplier;
@@ -26,9 +27,21 @@ import java.util.Map;
 
 public class StreamJoinedInternal<K, V1, V2> extends StreamJoined<K, V1, V2> {
 
+    private final InternalStreamsBuilder builder;
+
     //Needs to be public for testing
-    public StreamJoinedInternal(final StreamJoined<K, V1, V2> streamJoined) {
+    public StreamJoinedInternal(
+        final StreamJoined<K, V1, V2> streamJoined,
+        final InternalStreamsBuilder builder
+    ) {
         super(streamJoined);
+        this.builder = builder;
+        if (dslStoreSuppliers == null) {
+            final TopologyConfig topologyConfig = builder.internalTopologyBuilder.topologyConfigs();
+            if (topologyConfig != null) {
+                dslStoreSuppliers = topologyConfig.resolveDslStoreSuppliers().orElse(null);
+            }
+        }
     }
 
     public Serde<K> keySerde() {
