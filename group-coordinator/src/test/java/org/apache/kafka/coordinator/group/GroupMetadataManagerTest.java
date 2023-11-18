@@ -8728,7 +8728,7 @@ public class GroupMetadataManagerTest {
     }
 
     @Test
-    public void testConsumerGroupDescribeOffsetNotCommitted() {
+    public void testConsumerGroupDescribeBeforeAndAfterCommittingOffset() {
         String consumerGroupId = "consumerGroupId";
 
         MockPartitionAssignor assignor = new MockPartitionAssignor("range");
@@ -8751,7 +8751,18 @@ public class GroupMetadataManagerTest {
         List<ConsumerGroupDescribeResponseData.DescribedGroup> expected = Collections.singletonList(
             describedGroup
         );
+        assertEquals(expected, actual);
 
+        // Commit the offset and test again
+        context.commit();
+
+        actual = context.groupMetadataManager.consumerGroupDescribe(Collections.singletonList(consumerGroupId), context.lastCommittedOffset);
+        describedGroup = new ConsumerGroupDescribeResponseData.DescribedGroup();
+        describedGroup.setGroupId(consumerGroupId);
+        describedGroup.setGroupState("empty");
+        expected = Collections.singletonList(
+            describedGroup
+        );
         assertEquals(expected, actual);
     }
 
