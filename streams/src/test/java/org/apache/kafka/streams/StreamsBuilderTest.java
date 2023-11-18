@@ -62,6 +62,7 @@ import org.apache.kafka.test.MockValueJoiner;
 import org.apache.kafka.test.NoopValueTransformer;
 import org.apache.kafka.test.NoopValueTransformerWithKey;
 import org.apache.kafka.test.StreamsTestUtils;
+import org.junit.Before;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.Timeout;
@@ -103,7 +104,12 @@ public class StreamsBuilderTest {
 
     private final StreamsBuilder builder = new StreamsBuilder();
 
-    private final Properties props = StreamsTestUtils.getStreamsConfig(Serdes.String(), Serdes.String());
+    private Properties props = StreamsTestUtils.getStreamsConfig(Serdes.String(), Serdes.String());
+
+    @Before
+    public void before() {
+        props = StreamsTestUtils.getStreamsConfig(Serdes.String(), Serdes.String());
+    }
 
     @Test
     public void shouldAddGlobalStore() {
@@ -411,6 +417,68 @@ public class StreamsBuilderTest {
                 .toStream();
 
         builder.build();
+        final ProcessorTopology topology = builder.internalTopologyBuilder.rewriteTopology(new StreamsConfig(props)).buildTopology();
+        assertTypesForStateStore(topology.stateStores(), InMemoryKeyValueStore.class);
+    }
+
+    @Test
+    public void shouldUseDslStoreSupplierDefinedInMaterializedOverTopologyOverrides() {
+        final String topic = "topic";
+
+        final Properties topoOverrides = new Properties();
+        topoOverrides.putAll(props);
+        topoOverrides.put(StreamsConfig.DSL_STORE_SUPPLIERS_CLASS_CONFIG, BuiltInDslStoreSuppliers.RocksDBDslStoreSuppliers.class);
+        final StreamsBuilder builder = new StreamsBuilder(new TopologyConfig(new StreamsConfig(topoOverrides)));
+
+        builder.stream(topic)
+                .groupByKey()
+                .count(Materialized.<Object, Long, KeyValueStore<Bytes, byte[]>>as("store")
+                        .withStoreType(BuiltInDslStoreSuppliers.IN_MEMORY))
+                .toStream();
+
+        builder.build();
+        final ProcessorTopology topology = builder.internalTopologyBuilder.rewriteTopology(new StreamsConfig(props)).buildTopology();
+        assertTypesForStateStore(topology.stateStores(), InMemoryKeyValueStore.class);
+    }
+
+    @SuppressWarnings("deprecation")
+    @Test
+    public void shouldUseDslStoreSupplierOverStoreType() {
+        final String topic = "topic";
+        final Properties topoOverrides = new Properties();
+        topoOverrides.putAll(props);
+        topoOverrides.put(StreamsConfig.DEFAULT_DSL_STORE_CONFIG, StreamsConfig.ROCKS_DB);
+        topoOverrides.put(StreamsConfig.DSL_STORE_SUPPLIERS_CLASS_CONFIG, BuiltInDslStoreSuppliers.InMemoryDslStoreSuppliers.class);
+        final StreamsBuilder builder = new StreamsBuilder(new TopologyConfig(new StreamsConfig(topoOverrides)));
+
+        builder.stream(topic)
+                .groupByKey()
+                .count(Materialized.<Object, Long, KeyValueStore<Bytes, byte[]>>as("store"))
+                .toStream();
+
+        builder.build();
+
+        final ProcessorTopology topology = builder.internalTopologyBuilder.rewriteTopology(new StreamsConfig(props)).buildTopology();
+        assertTypesForStateStore(topology.stateStores(), InMemoryKeyValueStore.class);
+    }
+
+    @SuppressWarnings("deprecation")
+    @Test
+    public void shouldUseTopologyOverrideStoreTypeOverConfiguredDslStoreSupplier() {
+        final String topic = "topic";
+        final Properties topoOverrides = new Properties();
+        topoOverrides.putAll(props);
+        topoOverrides.put(StreamsConfig.DEFAULT_DSL_STORE_CONFIG, StreamsConfig.IN_MEMORY);
+        final StreamsBuilder builder = new StreamsBuilder(new TopologyConfig(new StreamsConfig(topoOverrides)));
+
+        builder.stream(topic)
+                .groupByKey()
+                .count(Materialized.<Object, Long, KeyValueStore<Bytes, byte[]>>as("store"))
+                .toStream();
+
+        builder.build();
+
+        props.put(StreamsConfig.DSL_STORE_SUPPLIERS_CLASS_CONFIG, BuiltInDslStoreSuppliers.RocksDBDslStoreSuppliers.class);
         final ProcessorTopology topology = builder.internalTopologyBuilder.rewriteTopology(new StreamsConfig(props)).buildTopology();
         assertTypesForStateStore(topology.stateStores(), InMemoryKeyValueStore.class);
     }
