@@ -254,6 +254,7 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
     memberId: String,
     generationId: Int,
     assignments: List[SyncGroupRequestData.SyncGroupRequestAssignment] = List.empty,
+    expectedAssignment: Array[Byte] = Array.empty,
     expectedError: Errors = Errors.NONE
   ): SyncGroupResponseData = {
     val syncGroupRequestData = new SyncGroupRequestData()
@@ -266,7 +267,15 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
 
     val syncGroupRequest = new SyncGroupRequest.Builder(syncGroupRequestData).build()
     val syncGroupResponse = connectAndReceive[SyncGroupResponse](syncGroupRequest)
-    assertEquals(expectedError.code, syncGroupResponse.data.errorCode)
+
+    assertEquals(
+      new SyncGroupResponseData()
+        .setErrorCode(expectedError.code)
+        .setProtocolType("consumer")
+        .setProtocolName("consumer-range")
+        .setAssignment(expectedAssignment),
+      syncGroupResponse.data
+    )
 
     syncGroupResponse.data
   }
@@ -407,12 +416,13 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
 
   protected def describeGroups(
     groupIds: List[String],
-    version: Short
+    version: Option[Short] = None
   ): List[DescribeGroupsResponseData.DescribedGroup] = {
-    val describeGroupsRequest = new DescribeGroupsRequest.Builder(
-      new DescribeGroupsRequestData()
-        .setGroups(groupIds.asJava)
-    ).build(version)
+    val describeGroupsRequestData = new DescribeGroupsRequestData().setGroups(groupIds.asJava)
+    val describeGroupsRequest = version match {
+      case Some(v) => new DescribeGroupsRequest.Builder(describeGroupsRequestData).build(v)
+      case None => new DescribeGroupsRequest.Builder(describeGroupsRequestData).build()
+    }
 
     val describeGroupsResponse = connectAndReceive[DescribeGroupsResponse](describeGroupsRequest)
 

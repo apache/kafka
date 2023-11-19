@@ -1616,6 +1616,7 @@ public class GroupMetadataManager {
             responseFuture.complete(new JoinGroupResponseData()
                 .setMemberId(memberId)
                 .setErrorCode(Errors.INVALID_SESSION_TIMEOUT.code())
+                .setProtocolName(null)
             );
         } else {
             boolean isUnknownMember = memberId.equals(UNKNOWN_MEMBER_ID);
@@ -1629,6 +1630,7 @@ public class GroupMetadataManager {
                 responseFuture.complete(new JoinGroupResponseData()
                     .setMemberId(memberId)
                     .setErrorCode(Errors.forException(t).code())
+                    .setProtocolName(null)
                 );
                 return EMPTY_RESULT;
             }
@@ -1638,6 +1640,7 @@ public class GroupMetadataManager {
                 responseFuture.complete(new JoinGroupResponseData()
                     .setMemberId(UNKNOWN_MEMBER_ID)
                     .setErrorCode(Errors.GROUP_MAX_SIZE_REACHED.code())
+                    .setProtocolName(null)
                 );
             } else if (isUnknownMember) {
                 result = genericGroupJoinNewMember(
@@ -1666,7 +1669,8 @@ public class GroupMetadataManager {
                         log.warn("Failed to write empty metadata for group {}: {}", group.groupId(), t.getMessage());
 
                         responseFuture.complete(new JoinGroupResponseData()
-                            .setErrorCode(appendGroupMetadataErrorToResponseError(Errors.forException(t)).code()));
+                            .setErrorCode(appendGroupMetadataErrorToResponseError(Errors.forException(t)).code())
+                            .setProtocolName(null));
                     }
                 });
 
@@ -1723,11 +1727,13 @@ public class GroupMetadataManager {
             responseFuture.complete(new JoinGroupResponseData()
                 .setMemberId(UNKNOWN_MEMBER_ID)
                 .setErrorCode(COORDINATOR_NOT_AVAILABLE.code())
+                .setProtocolName(null)
             );
         } else if (!group.supportsProtocols(request.protocolType(), request.protocols())) {
             responseFuture.complete(new JoinGroupResponseData()
                 .setMemberId(UNKNOWN_MEMBER_ID)
                 .setErrorCode(Errors.INCONSISTENT_GROUP_PROTOCOL.code())
+                .setProtocolName(null)
             );
         } else {
             Optional<String> groupInstanceId = Optional.ofNullable(request.groupInstanceId());
@@ -1881,11 +1887,13 @@ public class GroupMetadataManager {
             responseFuture.complete(new JoinGroupResponseData()
                 .setMemberId(memberId)
                 .setErrorCode(COORDINATOR_NOT_AVAILABLE.code())
+                .setProtocolName(null)
             );
         } else if (!group.supportsProtocols(request.protocolType(), request.protocols())) {
             responseFuture.complete(new JoinGroupResponseData()
                 .setMemberId(memberId)
                 .setErrorCode(Errors.INCONSISTENT_GROUP_PROTOCOL.code())
+                .setProtocolName(null)
             );
         } else if (group.isPendingMember(memberId)) {
             // A rejoining pending member will be accepted. Note that pending member cannot be a static member.
@@ -2000,6 +2008,7 @@ public class GroupMetadataManager {
                 responseFuture.complete(new JoinGroupResponseData()
                     .setMemberId(memberId)
                     .setErrorCode(Errors.UNKNOWN_MEMBER_ID.code())
+                    .setProtocolName(null)
                 );
             }
         }
@@ -2187,6 +2196,7 @@ public class GroupMetadataManager {
         group.completeJoinFuture(member, new JoinGroupResponseData()
             .setMemberId(UNKNOWN_MEMBER_ID)
             .setErrorCode(Errors.UNKNOWN_MEMBER_ID.code())
+            .setProtocolName(null)
         );
         group.remove(member.memberId());
 
@@ -3136,6 +3146,7 @@ public class GroupMetadataManager {
             new JoinGroupResponseData()
                 .setMemberId(UNKNOWN_MEMBER_ID)
                 .setErrorCode(Errors.UNKNOWN_MEMBER_ID.code())
+                .setProtocolName(null)
         );
         group.remove(member.memberId());
     }

@@ -22,8 +22,9 @@ import kafka.test.junit.ClusterTestExtensions
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor
 import org.apache.kafka.clients.consumer.internals.ConsumerProtocol
 import org.apache.kafka.common.message.JoinGroupResponseData.JoinGroupResponseMember
-import org.apache.kafka.common.message.{JoinGroupResponseData, SyncGroupRequestData, SyncGroupResponseData}
+import org.apache.kafka.common.message.{JoinGroupResponseData, SyncGroupRequestData}
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
+import org.apache.kafka.coordinator.group.generic.GenericGroupState
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.{Tag, Timeout}
 import org.junit.jupiter.api.extension.ExtendWith
@@ -33,7 +34,6 @@ import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.duration.Duration
 import scala.concurrent.{Await, Future}
 import scala.jdk.CollectionConverters._
-
 
 @Timeout(120)
 @ExtendWith(value = Array(classOf[ClusterTestExtensions]))
@@ -77,6 +77,7 @@ class JoinGroupRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBas
         new ConsumerPartitionAssignor.Subscription(Collections.singletonList("foo"))
       ).array
 
+      // Join a dynamic member.
       val joinLeaderResponseData = sendJoinRequest(
         groupId = "grp",
         metadata = metadata,
@@ -106,20 +107,40 @@ class JoinGroupRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBas
         joinLeaderResponseData
       )
 
-      // Send leader SyncGroup request.
-      assertEquals(
-        new SyncGroupResponseData()
-          .setProtocolType("consumer")
-          .setProtocolName("consumer-range")
-          .setAssignment(Array[Byte](1)),
-        syncGroupWithOldProtocol(
+      // Send a SyncGroup request.
+      syncGroupWithOldProtocol(
+        groupId = "grp",
+        memberId = leaderMemberId,
+        generationId = rejoinLeaderResponseData.generationId,
+        assignments = List(new SyncGroupRequestData.SyncGroupRequestAssignment()
+          .setMemberId(leaderMemberId)
+          .setAssignment(Array[Byte](1))
+        ),
+        expectedAssignment = Array[Byte](1)
+      )
+
+      // Join with an unknown member id.
+      verifyJoinGroupResponseDataEquals(
+        new JoinGroupResponseData()
+          .setMemberId("member-id-unknown")
+          .setErrorCode(Errors.UNKNOWN_MEMBER_ID.code)
+          .setProtocolName(if (version >= 7) null else ""),
+        sendJoinRequest(
           groupId = "grp",
-          memberId = leaderMemberId,
-          generationId = rejoinLeaderResponseData.generationId,
-          assignments = List(new SyncGroupRequestData.SyncGroupRequestAssignment()
-            .setMemberId(leaderMemberId)
-            .setAssignment(Array[Byte](1))
-          )
+          memberId = "member-id-unknown",
+          version = Option(version.toShort)
+        )
+      )
+
+      // Join with an inconsistent protocolType.
+      verifyJoinGroupResponseDataEquals(
+        new JoinGroupResponseData()
+          .setErrorCode(Errors.INCONSISTENT_GROUP_PROTOCOL.code)
+          .setProtocolName(if (version >= 7) null else ""),
+        sendJoinRequest(
+          groupId = "grp",
+          protocolType = "connect",
+          version = Option(version.toShort)
         )
       )
 
@@ -178,44 +199,27 @@ class JoinGroupRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBas
       )
 
       // Send leader SyncGroup request.
-      val leaderSyncfuture = Future {
-        syncGroupWithOldProtocol(
-          groupId = "grp",
-          memberId = leaderMemberId,
-          generationId = rejoinLeaderFutureResponseData.generationId,
-          assignments = List(
-            new SyncGroupRequestData.SyncGroupRequestAssignment()
-              .setMemberId(leaderMemberId)
-              .setAssignment(Array[Byte](1)),
-            new SyncGroupRequestData.SyncGroupRequestAssignment()
-              .setMemberId(followerMemberId)
-              .setAssignment(Array[Byte](2))
-          )
-        )
-      }
+      syncGroupWithOldProtocol(
+        groupId = "grp",
+        memberId = leaderMemberId,
+        generationId = rejoinLeaderFutureResponseData.generationId,
+        assignments = List(
+          new SyncGroupRequestData.SyncGroupRequestAssignment()
+            .setMemberId(leaderMemberId)
+            .setAssignment(Array[Byte](1)),
+          new SyncGroupRequestData.SyncGroupRequestAssignment()
+            .setMemberId(followerMemberId)
+            .setAssignment(Array[Byte](2))
+        ),
+        expectedAssignment = Array[Byte](1)
+      )
 
       // Send follower SyncGroup request.
-      val followerSyncfuture = Future {
-        syncGroupWithOldProtocol(
-          groupId = "grp",
-          memberId = followerMemberId,
-          generationId = joinFollowerFutureResponseData.generationId
-        )
-      }
-
-      assertEquals(
-        new SyncGroupResponseData()
-          .setProtocolType("consumer")
-          .setProtocolName("consumer-range")
-          .setAssignment(Array[Byte](1)),
-        Await.result(leaderSyncfuture, Duration.Inf)
-      )
-      assertEquals(
-        new SyncGroupResponseData()
-          .setProtocolType("consumer")
-          .setProtocolName("consumer-range")
-          .setAssignment(Array[Byte](2)),
-        Await.result(followerSyncfuture, Duration.Inf)
+      syncGroupWithOldProtocol(
+        groupId = "grp",
+        memberId = followerMemberId,
+        generationId = joinFollowerFutureResponseData.generationId,
+        expectedAssignment = Array[Byte](2)
       )
 
       leaveGroup(
