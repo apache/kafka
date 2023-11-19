@@ -1266,7 +1266,7 @@ public class GroupMetadataManagerTest {
                 .setMemberEpoch(0)
                 .setRebalanceTimeoutMs(5000)
                 .setTopicPartitions(Collections.emptyList())));
-        assertEquals("SubscribedTopicNames or SubscribedTopicRegex must be set in first request.", ex.getMessage());
+        assertEquals("Either SubscribedTopicNames or SubscribedTopicRegex must be set in first request.", ex.getMessage());
 
         // SubscribedTopicNames or SubscribedTopicRegex should not be set at the same time
         ex = assertThrows(InvalidRequestException.class, () -> context.consumerGroupHeartbeat(
@@ -1277,7 +1277,7 @@ public class GroupMetadataManagerTest {
                         .setSubscribedTopicNames(Collections.singletonList("bar"))
                         .setSubscribedTopicRegex("regex")
                         .setTopicPartitions(Collections.emptyList())));
-        assertEquals("SubscribedTopicNames or SubscribedTopicRegex should not be set at the same time.", ex.getMessage());
+        assertEquals("Both SubscribedTopicNames and SubscribedTopicRegex should not be set at the same time.", ex.getMessage());
 
         // MemberId must be non-empty in all requests except for the first one where it
         // could be empty (epoch != 0).
@@ -9556,14 +9556,13 @@ public class GroupMetadataManagerTest {
         List<Record> records = new ArrayList<>();
         context.groupMetadataManager.maybeDeleteGroup("group-id", records);
         assertEquals(expectedRecords, records);
-
+        MetadataImage metadataImage = MetadataImage.EMPTY;
         records = new ArrayList<>();
         group.updateMember(new ConsumerGroupMember.Builder("member")
             .setMemberEpoch(10)
             .setTargetMemberEpoch(10)
             .setPreviousMemberEpoch(10)
-            .build()
-        );
+            .build(), metadataImage.topics());
         context.groupMetadataManager.maybeDeleteGroup("group-id", records);
         assertEquals(Collections.emptyList(), records);
     }

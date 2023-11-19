@@ -293,8 +293,8 @@ public class ConsumerGroup implements Group {
     /**
      * Updates the member.
      *
-     * @param topicsImage The current metadata for all available topics.
      * @param newMember The new member state.
+     * @param topicsImage The current metadata for all available topics.
      */
     public void updateMember(ConsumerGroupMember newMember, TopicsImage topicsImage) {
         if (newMember == null) {
@@ -310,8 +310,8 @@ public class ConsumerGroup implements Group {
     /**
      * Remove the member from the group.
      *
-     * @param topicsImage The current metadata for all available topics.
      * @param memberId The member id to remove.
+     * @param topicsImage The current metadata for all available topics.
      */
     public void removeMember(String memberId, TopicsImage topicsImage) {
         ConsumerGroupMember oldMember = members.remove(memberId);
@@ -759,10 +759,10 @@ public class ConsumerGroup implements Group {
         ConsumerGroupMember newMember
     ) {
         if (oldMember != null) {
-            processMemberSubscribedTopics(oldMember, ConsumerGroup::decValue);
+            processMemberSubscribedTopics(topicsImage, subscribedTopicCount, oldMember, ConsumerGroup::decValue);
         }
         if (newMember != null) {
-            processMemberSubscribedTopics(newMember, ConsumerGroup::incValue);
+            processMemberSubscribedTopics(topicsImage, subscribedTopicCount, newMember, ConsumerGroup::incValue);
         }
     }
 

@@ -852,8 +852,8 @@ public class ConsumerGroupTest {
 
         ConsumerGroup consumerGroup = createConsumerGroup("group-foo");
 
-        consumerGroup.updateMember(member1);
-        consumerGroup.updateMember(member2);
+        consumerGroup.updateMember(member1, image.topics());
+        consumerGroup.updateMember(member2, image.topics());
 
         assertEquals(
             mkMap(
@@ -871,10 +871,10 @@ public class ConsumerGroupTest {
         assertTrue(consumerGroup.isSubscribedToTopic("foo"));
         assertTrue(consumerGroup.isSubscribedToTopic("bar"));
 
-        consumerGroup.removeMember("member1");
+        consumerGroup.removeMember("member1", image.topics());
         assertFalse(consumerGroup.isSubscribedToTopic("foo"));
 
-        consumerGroup.removeMember("member2");
+        consumerGroup.removeMember("member2", image.topics());
         assertFalse(consumerGroup.isSubscribedToTopic("bar"));
     }
 }

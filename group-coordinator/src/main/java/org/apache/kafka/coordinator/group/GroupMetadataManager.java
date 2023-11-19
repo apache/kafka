@@ -667,13 +667,11 @@ public class GroupMetadataManager {
             if (request.topicPartitions() == null || !request.topicPartitions().isEmpty()) {
                 throw new InvalidRequestException("TopicPartitions must be empty when (re-)joining.");
             }
-            if (request.subscribedTopicNames() == null || request.subscribedTopicNames().isEmpty()) {
-                if (request.subscribedTopicRegex() == null || request.subscribedTopicRegex().isEmpty()) {
-                    throw new InvalidRequestException("SubscribedTopicNames or SubscribedTopicRegex must be set in first request.");
-                }
+            if (isSubscribedTopicNamesEmpty(request) && isSubscribedTopicRegexEmpty(request)) {
+                throw new InvalidRequestException("Either SubscribedTopicNames or SubscribedTopicRegex must be set in first request.");
             }
-            if (request.subscribedTopicRegex() != null && !request.subscribedTopicNames().isEmpty()  && !isEmpty(request.subscribedTopicRegex())) {
-                throw new InvalidRequestException("SubscribedTopicNames or SubscribedTopicRegex should not be set at the same time.");
+            if (!isSubscribedTopicNamesEmpty(request) && !isSubscribedTopicRegexEmpty(request)) {
+                throw new InvalidRequestException("Both SubscribedTopicNames and SubscribedTopicRegex should not be set at the same time.");
             }
         } else {
             throw new InvalidRequestException("MemberEpoch is invalid.");
@@ -3247,7 +3245,11 @@ public class GroupMetadataManager {
         return "sync-" + groupId;
     }
 
-    static boolean isEmpty(String str) {
-        return str == null || str.isEmpty();
+    private boolean isSubscribedTopicNamesEmpty(ConsumerGroupHeartbeatRequestData request) {
+        return request.subscribedTopicNames() == null || request.subscribedTopicNames().isEmpty();
+    }
+
+    private boolean isSubscribedTopicRegexEmpty(ConsumerGroupHeartbeatRequestData request) {
+        return request.subscribedTopicRegex() == null || request.subscribedTopicRegex().isEmpty();
     }
 }
