@@ -50,6 +50,7 @@ import org.slf4j.Logger;
 import java.io.IOException;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
+import java.net.UnknownHostException;
 import java.nio.BufferUnderflowException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
@@ -833,7 +834,8 @@ public class NetworkClient implements KafkaClient {
         for (String nodeId : nodeIds) {
             // close connection to the node
             this.selector.close(nodeId);
-            log.info("Disconnecting from node {} due to request timeout.", nodeId);
+            String host = obtainHost(nodeId);
+            log.info("Disconnecting from node (nodeId={}, host={}) due to request timeout.", nodeId, host);
             processTimeoutDisconnection(responses, nodeId, now);
         }
     }
@@ -855,10 +857,12 @@ public class NetworkClient implements KafkaClient {
         List<String> nodes = connectionStates.nodesWithConnectionSetupTimeout(now);
         for (String nodeId : nodes) {
             this.selector.close(nodeId);
+            String host = obtainHost(nodeId);
             log.info(
-                "Disconnecting from node {} due to socket connection setup timeout. " +
+                "Disconnecting from node (nodeId={}, host={}) due to socket connection setup timeout. " +
                 "The timeout value is {} ms.",
                 nodeId,
+                host,
                 connectionStates.connectionSetupTimeoutMs(nodeId));
             processTimeoutDisconnection(responses, nodeId, now);
         }
@@ -894,8 +898,12 @@ public class NetworkClient implements KafkaClient {
         int throttleTimeMs = response.throttleTimeMs();
         if (throttleTimeMs > 0 && response.shouldClientThrottle(apiVersion)) {
             connectionStates.throttle(nodeId, now + throttleTimeMs);
-            log.trace("Connection to node {} is throttled for {} ms until timestamp {}", nodeId, throttleTimeMs,
-                      now + throttleTimeMs);
+            String host = obtainHost(nodeId);
+            log.trace("Connection to node (nodeId={}, host={}) is throttled for {} ms until timestamp {}",
+                    nodeId,
+                    host,
+                    throttleTimeMs,
+                    now + throttleTimeMs);
         }
     }
 
@@ -915,8 +923,12 @@ public class NetworkClient implements KafkaClient {
                 throttleTimeSensor.record(response.throttleTimeMs(), now);
 
             if (log.isDebugEnabled()) {
-                log.debug("Received {} response from node {} for request with header {}: {}",
-                    req.header.apiKey(), req.destination, req.header, response);
+                log.debug("Received {} response from node (nodeId={}, host={}) for request with header {}: {}",
+                        req.header.apiKey(), 
+                        req.destination,
+                        obtainHost(req.destination),
+                        req.header, 
+                        response);
             }
 
             // If the received response includes a throttle delay, throttle the connection.
@@ -935,8 +947,9 @@ public class NetworkClient implements KafkaClient {
         final String node = req.destination;
         if (apiVersionsResponse.data().errorCode() != Errors.NONE.code()) {
             if (req.request.version() == 0 || apiVersionsResponse.data().errorCode() != Errors.UNSUPPORTED_VERSION.code()) {
-                log.warn("Received error {} from node {} when making an ApiVersionsRequest with correlation id {}. Disconnecting.",
-                        Errors.forCode(apiVersionsResponse.data().errorCode()), node, req.header.correlationId());
+                String host = obtainHost(node);
+                log.warn("Received error {} from node (nodeId={}, host={}) when making an ApiVersionsRequest with correlation id {}. Disconnecting.",
+                        Errors.forCode(apiVersionsResponse.data().errorCode()), node, host, req.header.correlationId());
                 this.selector.close(node);
                 processDisconnection(responses, node, now, ChannelState.LOCAL_CLOSE);
             } else {
@@ -988,12 +1001,13 @@ public class NetworkClient implements KafkaClient {
             // if SSL is enabled, the SSL handshake happens after the connection is established.
             // Therefore, it is still necessary to check isChannelReady before attempting to send on this
             // connection.
+            String host = obtainHost(node);
             if (discoverBrokerVersions) {
                 nodesNeedingApiVersionsFetch.put(node, new ApiVersionsRequest.Builder());
-                log.debug("Completed connection to node {}. Fetching API versions.", node);
+                log.debug("Completed connection to node (nodeId={}, host={}). Fetching API versions.", node, host);
             } else {
                 this.connectionStates.ready(node);
-                log.debug("Completed connection to node {}. Ready.", node);
+                log.debug("Completed connection to node (nodeId={}, host={}). Ready.", node, host);
             }
         }
     }
@@ -1004,7 +1018,8 @@ public class NetworkClient implements KafkaClient {
             Map.Entry<String, ApiVersionsRequest.Builder> entry = iter.next();
             String node = entry.getKey();
             if (selector.isChannelReady(node) && inFlightRequests.canSendMore(node)) {
-                log.debug("Initiating API versions fetch from node {}.", node);
+                String host = obtainHost(node);
+                log.debug("Initiating API versions fetch from node (nodeId={}, host={}).", node, host);
                 // We transition the connection to the CHECKING_API_VERSIONS state only when
                 // the ApiVersionsRequest is queued up to be sent out. Without this, the client
                 // could remain in the CHECKING_API_VERSIONS state forever if the channel does
@@ -1017,6 +1032,18 @@ public class NetworkClient implements KafkaClient {
             }
         }
     }
+    
+    //
+    private String obtainHost(String nodeId) {
+        String host = "unknown";
+        try {
+            host = this.connectionStates.currentAddress(nodeId).getHostAddress();
+        } catch (UnknownHostException e) {
+            //swallow
+        }
+        return host;
+    }
+
 
     /**
      * Initiate a connection to the given node
