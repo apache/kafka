@@ -31,6 +31,7 @@ import org.apache.kafka.metadata.PartitionRegistration;
 import org.apache.kafka.metadata.RecordTestUtils;
 import org.apache.kafka.server.immutable.ImmutableMap;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
+import org.apache.kafka.server.immutable.ImmutableNavigableMap;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
@@ -84,8 +85,8 @@ public class TopicsImageTest {
         return map;
     }
 
-    private static ImmutableMap<String, TopicImage> newTopicsByNameMap(Collection<TopicImage> topics) {
-        ImmutableMap<String, TopicImage> map = TopicsImage.EMPTY.topicsByName();
+    private static ImmutableNavigableMap<String, TopicImage> newTopicsByNameMap(Collection<TopicImage> topics) {
+        ImmutableNavigableMap<String, TopicImage> map = TopicsImage.EMPTY.topicsByName();
         for (TopicImage topic : topics) {
             map = map.updated(topic.name(), topic);
         }

@@ -27,6 +27,7 @@ import org.apache.kafka.common.metadata.TopicRecord;
 import org.apache.kafka.metadata.Replicas;
 import org.apache.kafka.server.immutable.ImmutableMap;
 import org.apache.kafka.server.common.MetadataVersion;
+import org.apache.kafka.server.immutable.ImmutableNavigableMap;
 
 import java.util.Collections;
 import java.util.HashMap;
@@ -128,7 +129,7 @@ public final class TopicsDelta {
 
     public TopicsImage apply() {
         ImmutableMap<Uuid, TopicImage> newTopicsById = image.topicsById();
-        ImmutableMap<String, TopicImage> newTopicsByName = image.topicsByName();
+        ImmutableNavigableMap<String, TopicImage> newTopicsByName = image.topicsByName();
         // apply all the deletes
         for (Uuid topicId: deletedTopicIds) {
             // it was deleted, so we have to remove it from the maps
