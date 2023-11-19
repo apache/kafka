@@ -24,7 +24,6 @@ import org.apache.kafka.clients.consumer.internals.ConsumerProtocol
 import org.apache.kafka.common.message.JoinGroupResponseData.JoinGroupResponseMember
 import org.apache.kafka.common.message.{JoinGroupResponseData, SyncGroupRequestData}
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
-import org.apache.kafka.coordinator.group.generic.GenericGroupState
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.{Tag, Timeout}
 import org.junit.jupiter.api.extension.ExtendWith
@@ -155,8 +154,8 @@ class JoinGroupRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBas
       }
 
       // The leader rejoins.
-      val rejoinLeaderFuture = Future {
-        // Sleep for a while to make sure the new join group request is processed first.
+      val rejoinLeaderFuture1 = Future {
+        // Sleep for a while to make sure the requests are processed according to the sequence.
         Thread.sleep(1000)
         sendJoinRequest(
           groupId = "grp",
@@ -167,7 +166,7 @@ class JoinGroupRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBas
       }
 
       val joinFollowerFutureResponseData = Await.result(joinFollowerFuture, Duration.Inf)
-      val rejoinLeaderFutureResponseData = Await.result(rejoinLeaderFuture, Duration.Inf)
+      val rejoinLeaderFutureResponseData1 = Await.result(rejoinLeaderFuture1, Duration.Inf)
       val followerMemberId = joinFollowerFutureResponseData.memberId
 
       verifyJoinGroupResponseDataEquals(
@@ -195,14 +194,14 @@ class JoinGroupRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBas
               .setGroupInstanceId("group-instance-id")
               .setMetadata(metadata)
           ).asJava),
-        rejoinLeaderFutureResponseData
+        rejoinLeaderFutureResponseData1
       )
 
       // Send leader SyncGroup request.
       syncGroupWithOldProtocol(
         groupId = "grp",
         memberId = leaderMemberId,
-        generationId = rejoinLeaderFutureResponseData.generationId,
+        generationId = rejoinLeaderFutureResponseData1.generationId,
         assignments = List(
           new SyncGroupRequestData.SyncGroupRequestAssignment()
             .setMemberId(leaderMemberId)
@@ -222,6 +221,100 @@ class JoinGroupRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBas
         expectedAssignment = Array[Byte](2)
       )
 
+      // The follower rejoin doesn't trigger a rebalance if it's unchanged.
+      verifyJoinGroupResponseDataEquals(
+        new JoinGroupResponseData()
+          .setGenerationId(2)
+          .setProtocolType(if (version >= 7) "consumer" else null)
+          .setProtocolName("consumer-range")
+          .setLeader(leaderMemberId)
+          .setMemberId(followerMemberId),
+        sendJoinRequest(
+          groupId = "grp",
+          groupInstanceId = "group-instance-id",
+          memberId = followerMemberId,
+          metadata = metadata,
+          version = Option(version.toShort)
+        )
+      )
+
+      // The leader rejoins and triggers a rebalance.
+      val rejoinLeaderFuture2 = Future {
+        sendJoinRequest(
+          groupId = "grp",
+          memberId = leaderMemberId,
+          metadata = metadata,
+          version = Option(version.toShort)
+        )
+      }
+
+      // A new follower with duplicated group instance id joins.
+      val joinNewFollowerFuture = Future {
+        // Sleep for a while to make sure the requests are processed according to the sequence.
+        Thread.sleep(1000)
+        sendJoinRequest(
+          groupId = "grp",
+          groupInstanceId = "group-instance-id",
+          metadata = metadata,
+          version = Option(version.toShort)
+        )
+      }
+
+      // The old follower rejoin request should be fenced.
+      val rejoinFollowerFuture = Future {
+        // Sleep for a while to make sure the requests are processed according to the sequence.
+        Thread.sleep(2000)
+        sendJoinRequest(
+          groupId = "grp",
+          memberId = followerMemberId,
+          groupInstanceId = "group-instance-id",
+          metadata = metadata,
+          version = Option(version.toShort)
+        )
+      }
+
+      val rejoinLeaderFutureResponseData2 = Await.result(rejoinLeaderFuture2, Duration.Inf)
+      val joinNewFollowerFutureResponseData = Await.result(joinNewFollowerFuture, Duration.Inf)
+      val rejoinFollowerFutureResponseData = Await.result(rejoinFollowerFuture, Duration.Inf)
+      val newFollowerMemberId = joinNewFollowerFutureResponseData.memberId
+
+      verifyJoinGroupResponseDataEquals(
+        new JoinGroupResponseData()
+          .setGenerationId(3)
+          .setProtocolType(if (version >= 7) "consumer" else null)
+          .setProtocolName("consumer-range")
+          .setLeader(leaderMemberId)
+          .setMemberId(leaderMemberId)
+          .setMembers(List(
+            new JoinGroupResponseMember()
+              .setMemberId(leaderMemberId)
+              .setMetadata(metadata),
+            new JoinGroupResponseMember()
+              .setMemberId(newFollowerMemberId)
+              .setGroupInstanceId("group-instance-id")
+              .setMetadata(metadata)
+          ).asJava),
+        rejoinLeaderFutureResponseData2
+      )
+
+      verifyJoinGroupResponseDataEquals(
+        new JoinGroupResponseData()
+          .setGenerationId(3)
+          .setProtocolType(if (version >= 7) "consumer" else null)
+          .setProtocolName("consumer-range")
+          .setLeader(leaderMemberId)
+          .setMemberId(newFollowerMemberId),
+        joinNewFollowerFutureResponseData
+      )
+
+      verifyJoinGroupResponseDataEquals(
+        new JoinGroupResponseData()
+          .setProtocolName(if (version >= 7) null else "")
+          .setMemberId(followerMemberId)
+          .setErrorCode(Errors.FENCED_INSTANCE_ID.code),
+        rejoinFollowerFutureResponseData
+      )
+
       leaveGroup(
         groupId = "grp",
         memberId = leaderMemberId,
@@ -230,7 +323,7 @@ class JoinGroupRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBas
       )
       leaveGroup(
         groupId = "grp",
-        memberId = followerMemberId,
+        memberId = newFollowerMemberId,
         useNewProtocol = false,
         version = ApiKeys.LEAVE_GROUP.latestVersion(isUnstableApiEnabled)
       )
