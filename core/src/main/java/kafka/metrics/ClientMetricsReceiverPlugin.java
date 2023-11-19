@@ -29,16 +29,10 @@ import java.util.List;
  */
 public class ClientMetricsReceiverPlugin {
 
-    private static final ClientMetricsReceiverPlugin INSTANCE = new ClientMetricsReceiverPlugin();
-
     private final List<ClientTelemetryReceiver> receivers;
 
-    private ClientMetricsReceiverPlugin() {
+    public ClientMetricsReceiverPlugin() {
         this.receivers = new ArrayList<>();
-    }
-
-    public static ClientMetricsReceiverPlugin instance() {
-        return INSTANCE;
     }
 
     public boolean isEmpty() {

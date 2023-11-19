@@ -38,52 +38,52 @@ public class ClientMetricsInstanceTest {
     }
 
     @Test
-    public void testMaybeUpdateRequestEpochValid() {
+    public void testMaybeUpdateRequestTimestampValid() {
         // First request should be accepted.
-        assertTrue(clientInstance.maybeUpdateGetRequestEpoch(System.currentTimeMillis()));
-        assertTrue(clientInstance.maybeUpdatePushRequestEpoch(System.currentTimeMillis()));
+        assertTrue(clientInstance.maybeUpdateGetRequestTimestamp(System.currentTimeMillis()));
+        assertTrue(clientInstance.maybeUpdatePushRequestTimestamp(System.currentTimeMillis()));
     }
 
     @Test
     public void testMaybeUpdateGetRequestAfterElapsedTimeValid() {
-        assertTrue(clientInstance.maybeUpdateGetRequestEpoch(System.currentTimeMillis() - ClientMetricsConfigs.DEFAULT_INTERVAL_MS));
+        assertTrue(clientInstance.maybeUpdateGetRequestTimestamp(System.currentTimeMillis() - ClientMetricsConfigs.DEFAULT_INTERVAL_MS));
         // Second request should be accepted as time since last request is greater than the push interval.
-        assertTrue(clientInstance.maybeUpdateGetRequestEpoch(System.currentTimeMillis()));
+        assertTrue(clientInstance.maybeUpdateGetRequestTimestamp(System.currentTimeMillis()));
     }
 
     @Test
     public void testMaybeUpdateGetRequestWithImmediateRetryFail() {
-        assertTrue(clientInstance.maybeUpdateGetRequestEpoch(System.currentTimeMillis()));
+        assertTrue(clientInstance.maybeUpdateGetRequestTimestamp(System.currentTimeMillis()));
         // Second request should be rejected as time since last request is less than the push interval.
-        assertFalse(clientInstance.maybeUpdateGetRequestEpoch(System.currentTimeMillis()));
+        assertFalse(clientInstance.maybeUpdateGetRequestTimestamp(System.currentTimeMillis()));
     }
 
     @Test
     public void testMaybeUpdatePushRequestAfterElapsedTimeValid() {
-        assertTrue(clientInstance.maybeUpdatePushRequestEpoch(System.currentTimeMillis() - ClientMetricsConfigs.DEFAULT_INTERVAL_MS));
+        assertTrue(clientInstance.maybeUpdatePushRequestTimestamp(System.currentTimeMillis() - ClientMetricsConfigs.DEFAULT_INTERVAL_MS));
         // Second request should be accepted as time since last request is greater than the push interval.
-        assertTrue(clientInstance.maybeUpdatePushRequestEpoch(System.currentTimeMillis()));
+        assertTrue(clientInstance.maybeUpdatePushRequestTimestamp(System.currentTimeMillis()));
     }
 
     @Test
     public void testMaybeUpdateGetRequestWithImmediateRetryAfterPushFail() {
-        assertTrue(clientInstance.maybeUpdatePushRequestEpoch(System.currentTimeMillis()));
+        assertTrue(clientInstance.maybeUpdatePushRequestTimestamp(System.currentTimeMillis()));
         // Next request after push should be rejected as time since last request is less than the push interval.
-        assertFalse(clientInstance.maybeUpdateGetRequestEpoch(System.currentTimeMillis() + 1));
+        assertFalse(clientInstance.maybeUpdateGetRequestTimestamp(System.currentTimeMillis() + 1));
     }
 
     @Test
     public void testMaybeUpdatePushRequestWithImmediateRetryFail() {
-        assertTrue(clientInstance.maybeUpdatePushRequestEpoch(System.currentTimeMillis()));
+        assertTrue(clientInstance.maybeUpdatePushRequestTimestamp(System.currentTimeMillis()));
         // Second request should be rejected as time since last request is less than the push interval.
-        assertFalse(clientInstance.maybeUpdatePushRequestEpoch(System.currentTimeMillis()));
+        assertFalse(clientInstance.maybeUpdatePushRequestTimestamp(System.currentTimeMillis()));
     }
 
     @Test
     public void testMaybeUpdatePushRequestWithImmediateRetryAfterGetValid() {
-        assertTrue(clientInstance.maybeUpdatePushRequestEpoch(System.currentTimeMillis() - ClientMetricsConfigs.DEFAULT_INTERVAL_MS));
-        assertTrue(clientInstance.maybeUpdateGetRequestEpoch(System.currentTimeMillis()));
+        assertTrue(clientInstance.maybeUpdatePushRequestTimestamp(System.currentTimeMillis() - ClientMetricsConfigs.DEFAULT_INTERVAL_MS));
+        assertTrue(clientInstance.maybeUpdateGetRequestTimestamp(System.currentTimeMillis()));
         // Next request after get should be accepted.
-        assertTrue(clientInstance.maybeUpdatePushRequestEpoch(System.currentTimeMillis() + 1));
+        assertTrue(clientInstance.maybeUpdatePushRequestTimestamp(System.currentTimeMillis() + 1));
     }
 }

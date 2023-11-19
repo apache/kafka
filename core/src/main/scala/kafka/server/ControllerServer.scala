@@ -145,7 +145,7 @@ class ControllerServer(
     try {
       this.logIdent = logContext.logPrefix()
       info("Starting controller")
-      config.dynamicConfig.initialize(zkClientOpt = None)
+      config.dynamicConfig.initialize(zkClientOpt = None, clientMetricsReceiverPluginOpt = None)
 
       maybeChangeStatus(STARTING, STARTED)
 

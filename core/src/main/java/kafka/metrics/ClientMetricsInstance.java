@@ -34,8 +34,8 @@ public class ClientMetricsInstance {
     private final Set<String> metrics;
     private final int pushIntervalMs;
 
-    private long lastGetRequestEpoch;
-    private long lastPushRequestEpoch;
+    private long lastGetRequestTimestamp;
+    private long lastPushRequestTimestamp;
     private volatile boolean terminating;
     private volatile Errors lastKnownError;
 
@@ -91,32 +91,32 @@ public class ClientMetricsInstance {
         this.lastKnownError = lastKnownError;
     }
 
-    public synchronized boolean maybeUpdateGetRequestEpoch(long currentTime) {
-        long lastRequestEpoch = Math.max(lastGetRequestEpoch, lastPushRequestEpoch);
-        long timeElapsedSinceLastMsg = currentTime - lastRequestEpoch;
+    public synchronized boolean maybeUpdateGetRequestTimestamp(long currentTime) {
+        long lastRequestTimestamp = Math.max(lastGetRequestTimestamp, lastPushRequestTimestamp);
+        long timeElapsedSinceLastMsg = currentTime - lastRequestTimestamp;
         if (timeElapsedSinceLastMsg >= pushIntervalMs) {
-            lastGetRequestEpoch = currentTime;
+            lastGetRequestTimestamp = currentTime;
             return true;
         }
         return false;
     }
 
-    public synchronized boolean maybeUpdatePushRequestEpoch(long currentTime) {
+    public synchronized boolean maybeUpdatePushRequestTimestamp(long currentTime) {
         /*
          Immediate push request after get subscriptions fetch can be accepted outside push interval
          time as client applies a jitter to the push interval, which might result in a request being
          sent between 0.5 * pushIntervalMs and 1.5 * pushIntervalMs.
         */
-        boolean canAccept = lastGetRequestEpoch > lastPushRequestEpoch;
+        boolean canAccept = lastGetRequestTimestamp > lastPushRequestTimestamp;
         if (!canAccept) {
-            long lastRequestEpoch = Math.max(lastGetRequestEpoch, lastPushRequestEpoch);
-            long timeElapsedSinceLastMsg = currentTime - lastRequestEpoch;
+            long lastRequestTimestamp = Math.max(lastGetRequestTimestamp, lastPushRequestTimestamp);
+            long timeElapsedSinceLastMsg = currentTime - lastRequestTimestamp;
             canAccept = timeElapsedSinceLastMsg >= pushIntervalMs;
         }
 
         // Update the timestamp only if the request can be accepted.
         if (canAccept) {
-            lastPushRequestEpoch = currentTime;
+            lastPushRequestTimestamp = currentTime;
         }
         return canAccept;
     }

@@ -17,8 +17,10 @@
 package kafka.metrics;
 
 import kafka.metrics.ClientMetricsTestUtils.TestClientMetricsReceiver;
+
 import org.apache.kafka.common.message.PushTelemetryRequestData;
 import org.apache.kafka.common.requests.PushTelemetryRequest;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.net.UnknownHostException;
@@ -30,20 +32,27 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class ClientMetricsReceiverPluginTest {
 
-    TestClientMetricsReceiver telemetryReceiver = new TestClientMetricsReceiver();
+    private TestClientMetricsReceiver telemetryReceiver;
+    private ClientMetricsReceiverPlugin clientMetricsReceiverPlugin;
+
+    @BeforeEach
+    public void setUp() {
+        telemetryReceiver = new TestClientMetricsReceiver();
+        clientMetricsReceiverPlugin = new ClientMetricsReceiverPlugin();
+    }
 
     @Test
     public void testExportMetrics() throws UnknownHostException {
-        assertTrue(ClientMetricsReceiverPlugin.instance().isEmpty());
+        assertTrue(clientMetricsReceiverPlugin.isEmpty());
 
-        ClientMetricsReceiverPlugin.instance().add(telemetryReceiver);
-        assertFalse(ClientMetricsReceiverPlugin.instance().isEmpty());
+        clientMetricsReceiverPlugin.add(telemetryReceiver);
+        assertFalse(clientMetricsReceiverPlugin.isEmpty());
 
         assertEquals(0, telemetryReceiver.exportMetricsInvokedCount);
         assertTrue(telemetryReceiver.metricsData.isEmpty());
 
         byte[] metrics = "test-metrics".getBytes(StandardCharsets.UTF_8);
-        ClientMetricsReceiverPlugin.instance().exportMetrics(ClientMetricsTestUtils.requestContext(),
+        clientMetricsReceiverPlugin.exportMetrics(ClientMetricsTestUtils.requestContext(),
             new PushTelemetryRequest.Builder(new PushTelemetryRequestData().setMetrics(metrics), true).build());
 
         assertEquals(1, telemetryReceiver.exportMetricsInvokedCount);

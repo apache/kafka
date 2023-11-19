@@ -103,9 +103,16 @@ class DynamicConfigPublisher(
               )
             case CLIENT_METRICS =>
               // Apply changes to client metrics subscription.
-              info(s"Updating client metrics subscription ${resource.name()} with new configuration : " +
-                toLoggableProps(resource, props).mkString(","))
-              dynamicConfigHandlers(ConfigType.ClientMetrics).processConfigChanges(resource.name(), props)
+              dynamicConfigHandlers.get(ConfigType.ClientMetrics).foreach(metricsConfigHandler =>
+                try {
+                  info(s"Updating client metrics ${resource.name()} with new configuration : " +
+                    toLoggableProps(resource, props).mkString(","))
+                  metricsConfigHandler.processConfigChanges(resource.name(), props)
+                } catch {
+                  case t: Throwable => faultHandler.handleFault("Error updating client metrics" +
+                    s"${resource.name()} with new configuration: ${toLoggableProps(resource, props).mkString(",")} " +
+                    s"in $deltaName", t)
+                })
             case _ => // nothing to do
           }
         }

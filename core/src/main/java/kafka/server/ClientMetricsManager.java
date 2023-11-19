@@ -73,6 +73,7 @@ public class ClientMetricsManager implements Closeable {
     // Max cache size (16k active client connections per broker)
     private static final int CM_CACHE_MAX_SIZE = 16384;
 
+    private final ClientMetricsReceiverPlugin receiverPlugin;
     private final Cache<Uuid, ClientMetricsInstance> clientInstanceCache;
     private final Map<String, SubscriptionInfo> subscriptionMap;
     private final KafkaConfig config;
@@ -82,7 +83,8 @@ public class ClientMetricsManager implements Closeable {
     // to re-evaluate the client instance subscription id as per changed subscriptions.
     private final AtomicInteger subscriptionUpdateVersion;
 
-    public ClientMetricsManager(KafkaConfig config, Time time) {
+    public ClientMetricsManager(ClientMetricsReceiverPlugin receiverPlugin, KafkaConfig config, Time time) {
+        this.receiverPlugin = receiverPlugin;
         this.subscriptionMap = new ConcurrentHashMap<>();
         this.subscriptionUpdateVersion = new AtomicInteger(0);
         this.clientInstanceCache = new SynchronizedCache<>(new LRUCache<>(CM_CACHE_MAX_SIZE));
@@ -100,12 +102,18 @@ public class ClientMetricsManager implements Closeable {
             if (subscriptionMap.containsKey(subscriptionName)) {
                 log.info("Removing subscription [{}] from the subscription map", subscriptionName);
                 subscriptionMap.remove(subscriptionName);
-                this.subscriptionUpdateVersion.incrementAndGet();
+                subscriptionUpdateVersion.incrementAndGet();
             }
             return;
         }
 
         updateClientSubscription(subscriptionName, new ClientMetricsConfigs(properties));
+        /*
+         Increment subscription update version to indicate that there is a change in the subscription. This will
+         be used to determine if the next telemetry request needs to re-evaluate the subscription id
+         as per the changed subscriptions.
+        */
+        subscriptionUpdateVersion.incrementAndGet();
     }
 
     public GetTelemetrySubscriptionsResponse processGetTelemetrySubscriptionRequest(
@@ -166,15 +174,19 @@ public class ClientMetricsManager implements Closeable {
         byte[] metrics = request.data().metrics();
         if (metrics != null && metrics.length > 0) {
             try {
-                ClientMetricsReceiverPlugin.instance().exportMetrics(requestContext, request);
+                receiverPlugin.exportMetrics(requestContext, request);
             } catch (Exception exception) {
                 clientInstance.lastKnownError(Errors.INVALID_RECORD);
-                return request.errorResponse(throttleMs, Errors.INVALID_RECORD);
+                return request.errorResponse(0, Errors.INVALID_RECORD);
             }
         }
 
         clientInstance.lastKnownError(Errors.NONE);
         return new PushTelemetryResponse(new PushTelemetryResponseData().setThrottleTimeMs(throttleMs));
+    }
+
+    public boolean isTelemetryReceiverConfigured() {
+        return !receiverPlugin.isEmpty();
     }
 
     @Override
@@ -187,15 +199,9 @@ public class ClientMetricsManager implements Closeable {
         int pushInterval = configs.getInt(ClientMetricsConfigs.PUSH_INTERVAL_MS);
         List<String> clientMatchPattern = configs.getList(ClientMetricsConfigs.CLIENT_MATCH_PATTERN);
 
-        /*
-         Update last subscription updated time to current time to indicate that there is a change
-         in the subscription. This will be used to determine if the next telemetry request needs
-         to re-evaluate the subscription id as per changes subscriptions.
-        */
-        int version = this.subscriptionUpdateVersion.incrementAndGet();
         SubscriptionInfo newSubscription =
             new SubscriptionInfo(subscriptionName, metrics, pushInterval,
-                ClientMetricsConfigs.parseMatchingPatterns(clientMatchPattern), version);
+                ClientMetricsConfigs.parseMatchingPatterns(clientMatchPattern));
 
         subscriptionMap.put(subscriptionName, newSubscription);
     }
@@ -267,14 +273,13 @@ public class ClientMetricsManager implements Closeable {
         Set<String> subscribedMetrics = new HashSet<>();
         boolean allMetricsSubscribed = false;
 
-        int currentSubscriptionVersion = 0;
+        int currentSubscriptionVersion = subscriptionUpdateVersion.get();
         for (SubscriptionInfo info : subscriptionMap.values()) {
             if (instanceMetadata.isMatch(info.matchPattern())) {
                 allMetricsSubscribed = allMetricsSubscribed || info.metrics().contains(
                     ClientMetricsConfigs.ALL_SUBSCRIBED_METRICS_CONFIG);
                 subscribedMetrics.addAll(info.metrics());
                 pushIntervalMs = Math.min(pushIntervalMs, info.intervalMs());
-                currentSubscriptionVersion = Math.max(currentSubscriptionVersion, info.version());
             }
         }
 
@@ -296,7 +301,7 @@ public class ClientMetricsManager implements Closeable {
 
     /**
      * Computes the SubscriptionId as a unique identifier for a client instance's subscription set,
-     * the id is generated by calculating a CRC32 of the configured metrics subscriptions including
+     * the id is generated by calculating a CRC32C of the configured metrics subscriptions including
      * the PushIntervalMs, XORed with the ClientInstanceId.
      */
     private int computeSubscriptionId(Set<String> metrics, int pushIntervalMs, Uuid clientInstanceId) {
@@ -325,7 +330,7 @@ public class ClientMetricsManager implements Closeable {
     private void validateGetRequest(GetTelemetrySubscriptionsRequest request,
         ClientMetricsInstance clientInstance, long timestamp) {
 
-        if (!clientInstance.maybeUpdateGetRequestEpoch(timestamp) && (clientInstance.lastKnownError() != Errors.UNKNOWN_SUBSCRIPTION_ID
+        if (!clientInstance.maybeUpdateGetRequestTimestamp(timestamp) && (clientInstance.lastKnownError() != Errors.UNKNOWN_SUBSCRIPTION_ID
             || clientInstance.lastKnownError() != Errors.UNSUPPORTED_COMPRESSION_TYPE)) {
             String msg = String.format("Request from the client [%s] arrived before the next push interval time",
                 request.data().clientInstanceId());
@@ -342,7 +347,7 @@ public class ClientMetricsManager implements Closeable {
             throw new InvalidRequestException(msg);
         }
 
-        if (!clientInstance.maybeUpdatePushRequestEpoch(timestamp) && !request.data().terminating()) {
+        if (!clientInstance.maybeUpdatePushRequestTimestamp(timestamp) && !request.data().terminating()) {
             String msg = String.format("Request from the client [%s] arrived before the next push interval time",
                 request.data().clientInstanceId());
             throw new ThrottlingQuotaExceededException(msg);
@@ -402,15 +407,13 @@ public class ClientMetricsManager implements Closeable {
         private final Set<String> metrics;
         private final int intervalMs;
         private final Map<String, Pattern> matchPattern;
-        private final int version;
 
         public SubscriptionInfo(String name, List<String> metrics, int intervalMs,
-            Map<String, Pattern> matchPattern, int version) {
+            Map<String, Pattern> matchPattern) {
             this.name = name;
             this.metrics = new HashSet<>(metrics);
             this.intervalMs = intervalMs;
             this.matchPattern = matchPattern;
-            this.version = version;
         }
 
         public String name() {
@@ -427,10 +430,6 @@ public class ClientMetricsManager implements Closeable {
 
         public Map<String, Pattern> matchPattern() {
             return matchPattern;
-        }
-
-        public int version() {
-            return version;
         }
     }
 }

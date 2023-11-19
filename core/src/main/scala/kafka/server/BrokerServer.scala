@@ -22,6 +22,7 @@ import kafka.coordinator.group.{CoordinatorLoaderImpl, CoordinatorPartitionWrite
 import kafka.coordinator.transaction.{ProducerIdManager, TransactionCoordinator}
 import kafka.log.LogManager
 import kafka.log.remote.RemoteLogManager
+import kafka.metrics.ClientMetricsReceiverPlugin
 import kafka.network.{DataPlaneAcceptor, SocketServer}
 import kafka.raft.KafkaRaftManager
 import kafka.security.CredentialProvider
@@ -175,7 +176,8 @@ class BrokerServer(
 
       info("Starting broker")
 
-      config.dynamicConfig.initialize(zkClientOpt = None)
+      val clientMetricsReceiverPlugin = new ClientMetricsReceiverPlugin()
+      config.dynamicConfig.initialize(zkClientOpt = None, Some(clientMetricsReceiverPlugin))
 
       lifecycleManager = new BrokerLifecycleManager(config,
         time,
@@ -314,7 +316,7 @@ class BrokerServer(
         config, Some(clientToControllerChannelManager), None, None,
         groupCoordinator, transactionCoordinator)
 
-      clientMetricsManager = new ClientMetricsManager(config, time)
+      clientMetricsManager = new ClientMetricsManager(clientMetricsReceiverPlugin, config, time)
 
       dynamicConfigHandlers = Map[String, ConfigHandler](
         ConfigType.Topic -> new TopicConfigHandler(replicaManager, config, quotaManagers, None),

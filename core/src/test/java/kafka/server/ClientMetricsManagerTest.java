@@ -18,6 +18,7 @@ package kafka.server;
 
 import kafka.metrics.ClientMetricsConfigs;
 import kafka.metrics.ClientMetricsInstance;
+import kafka.metrics.ClientMetricsReceiverPlugin;
 import kafka.metrics.ClientMetricsTestUtils;
 import kafka.server.ClientMetricsManager.SubscriptionInfo;
 import kafka.utils.TestUtils;
@@ -63,6 +64,7 @@ public class ClientMetricsManagerTest {
     private Properties props;
     private KafkaConfig config;
     private MockTime time;
+    private ClientMetricsReceiverPlugin clientMetricsReceiverPlugin;
     private ClientMetricsManager clientMetricsManager;
 
     @BeforeEach
@@ -71,7 +73,8 @@ public class ClientMetricsManagerTest {
         props.setProperty(KafkaConfig.ClientTelemetryMaxBytesProp(), "100");
         config = new KafkaConfig(props);
         time = new MockTime();
-        clientMetricsManager = new ClientMetricsManager(config, time);
+        clientMetricsReceiverPlugin = new ClientMetricsReceiverPlugin();
+        clientMetricsManager = new ClientMetricsManager(clientMetricsReceiverPlugin, config, time);
     }
 
     @Test
@@ -193,7 +196,7 @@ public class ClientMetricsManagerTest {
         // Remove telemetry max bytes property, default value should be used.
         props.remove(KafkaConfig.ClientTelemetryMaxBytesProp());
         config = new KafkaConfig(props);
-        clientMetricsManager = new ClientMetricsManager(config, time);
+        clientMetricsManager = new ClientMetricsManager(clientMetricsReceiverPlugin, config, time);
 
         clientMetricsManager.updateSubscription("sub-1", ClientMetricsTestUtils.defaultProperties());
         assertEquals(1, clientMetricsManager.subscriptions().size());
@@ -244,7 +247,7 @@ public class ClientMetricsManagerTest {
         assertNotNull(response.data().clientInstanceId());
         assertEquals(Errors.NONE, response.error());
 
-        time.setCurrentTimeMs(time.milliseconds() + ClientMetricsConfigs.DEFAULT_INTERVAL_MS);
+        time.sleep(ClientMetricsConfigs.DEFAULT_INTERVAL_MS);
 
         request = new GetTelemetrySubscriptionsRequest.Builder(
             new GetTelemetrySubscriptionsRequestData().setClientInstanceId(response.data().clientInstanceId()), true).build();
@@ -323,7 +326,7 @@ public class ClientMetricsManagerTest {
         // last request information but request should succeed as subscription id should match
         // the one with new client instance.
 
-        ClientMetricsManager newClientMetricsManager = new ClientMetricsManager(config, time);
+        ClientMetricsManager newClientMetricsManager = new ClientMetricsManager(clientMetricsReceiverPlugin, config, time);
 
         PushTelemetryRequest pushRequest = new Builder(
             new PushTelemetryRequestData()
@@ -538,7 +541,7 @@ public class ClientMetricsManagerTest {
         // client instance information but request should succeed as subscription id should match
         // the one with new client instance.
 
-        ClientMetricsManager newClientMetricsManager = new ClientMetricsManager(config, time);
+        ClientMetricsManager newClientMetricsManager = new ClientMetricsManager(clientMetricsReceiverPlugin, config, time);
 
         PushTelemetryRequest request = new PushTelemetryRequest.Builder(
             new PushTelemetryRequestData()
@@ -574,7 +577,7 @@ public class ClientMetricsManagerTest {
 
         assertEquals(Errors.NONE, response.error());
 
-        time.setCurrentTimeMs(time.milliseconds() + ClientMetricsTestUtils.DEFAULT_PUSH_INTERVAL_MS);
+        time.sleep(ClientMetricsTestUtils.DEFAULT_PUSH_INTERVAL_MS);
 
         response = clientMetricsManager.processPushTelemetryRequest(
             request, ClientMetricsTestUtils.requestContext(), 0);
@@ -786,7 +789,7 @@ public class ClientMetricsManagerTest {
         // Update properties to set max bytes to 1.
         props.setProperty(KafkaConfig.ClientTelemetryMaxBytesProp(), "1");
         config = new KafkaConfig(props);
-        clientMetricsManager = new ClientMetricsManager(config, time);
+        clientMetricsManager = new ClientMetricsManager(clientMetricsReceiverPlugin, config, time);
 
         GetTelemetrySubscriptionsRequest subscriptionsRequest = new GetTelemetrySubscriptionsRequest.Builder(
             new GetTelemetrySubscriptionsRequestData(), true).build();
@@ -837,7 +840,7 @@ public class ClientMetricsManagerTest {
         CountDownLatch lock = new CountDownLatch(2);
         List<PushTelemetryResponse> responses = Collections.synchronizedList(new ArrayList<>());
 
-        ClientMetricsManager newClientMetricsManager = new ClientMetricsManager(config, time);
+        ClientMetricsManager newClientMetricsManager = new ClientMetricsManager(clientMetricsReceiverPlugin, config, time);
 
         Thread thread = new Thread(() -> {
             try {
