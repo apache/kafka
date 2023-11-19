@@ -1841,6 +1841,7 @@ public class GroupMetadataManager {
             responseFuture.complete(new JoinGroupResponseData()
                 .setMemberId(newMemberId)
                 .setErrorCode(Errors.MEMBER_ID_REQUIRED.code())
+                .setProtocolName(null)
             );
         } else {
             log.info("Dynamic member with unknown member id joins group {} in state {}. " +
