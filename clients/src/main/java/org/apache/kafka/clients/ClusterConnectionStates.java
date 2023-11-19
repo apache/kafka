@@ -309,6 +309,8 @@ final class ClusterConnectionStates {
      /**
      * Returns the number of currently connected nodes.
      *
+     * @author trinadh
+     * 
      * @return the number of connected nodes
      */
     public int getConnectedNodeCount() {
