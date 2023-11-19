@@ -323,7 +323,8 @@ class KafkaServer(
           config.brokerId,
           config.interBrokerProtocolVersion,
           brokerFeatures,
-          kraftControllerNodes)
+          kraftControllerNodes,
+          config.migrationEnabled)
         val controllerNodeProvider = new MetadataCacheControllerNodeProvider(metadataCache, config)
 
         /* initialize feature change listener */
