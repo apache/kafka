@@ -19,7 +19,6 @@ package kafka.log.remote;
 import com.yammer.metrics.core.Gauge;
 import kafka.cluster.EndPoint;
 import kafka.cluster.Partition;
-import kafka.log.LogSegment;
 import kafka.log.UnifiedLog;
 import kafka.server.BrokerTopicStats;
 import kafka.server.KafkaConfig;
@@ -65,6 +64,8 @@ import org.apache.kafka.storage.internals.log.FetchDataInfo;
 import org.apache.kafka.storage.internals.log.FetchIsolation;
 import org.apache.kafka.storage.internals.log.LazyIndex;
 import org.apache.kafka.storage.internals.log.LogConfig;
+import org.apache.kafka.storage.internals.log.LogFileUtils;
+import org.apache.kafka.storage.internals.log.LogSegment;
 import org.apache.kafka.storage.internals.log.OffsetIndex;
 import org.apache.kafka.storage.internals.log.ProducerStateManager;
 import org.apache.kafka.storage.internals.log.RemoteStorageFetchInfo;
@@ -428,13 +429,13 @@ public class RemoteLogManagerTest {
         when(mockLog.lastStableOffset()).thenReturn(lastStableOffset);
         when(mockLog.logEndOffset()).thenReturn(logEndOffset);
 
-        LazyIndex idx = LazyIndex.forOffset(UnifiedLog.offsetIndexFile(tempDir, oldSegmentStartOffset, ""), oldSegmentStartOffset, 1000);
-        LazyIndex timeIdx = LazyIndex.forTime(UnifiedLog.timeIndexFile(tempDir, oldSegmentStartOffset, ""), oldSegmentStartOffset, 1500);
+        OffsetIndex idx = LazyIndex.forOffset(LogFileUtils.offsetIndexFile(tempDir, oldSegmentStartOffset, ""), oldSegmentStartOffset, 1000).get();
+        TimeIndex timeIdx = LazyIndex.forTime(LogFileUtils.timeIndexFile(tempDir, oldSegmentStartOffset, ""), oldSegmentStartOffset, 1500).get();
         File txnFile = UnifiedLog.transactionIndexFile(tempDir, oldSegmentStartOffset, "");
         txnFile.createNewFile();
         TransactionIndex txnIndex = new TransactionIndex(oldSegmentStartOffset, txnFile);
-        when(oldSegment.lazyTimeIndex()).thenReturn(timeIdx);
-        when(oldSegment.lazyOffsetIndex()).thenReturn(idx);
+        when(oldSegment.timeIndex()).thenReturn(timeIdx);
+        when(oldSegment.offsetIndex()).thenReturn(idx);
         when(oldSegment.txnIndex()).thenReturn(txnIndex);
 
         CompletableFuture<Void> dummyFuture = new CompletableFuture<>();
@@ -542,13 +543,13 @@ public class RemoteLogManagerTest {
         when(mockLog.lastStableOffset()).thenReturn(lastStableOffset);
         when(mockLog.logEndOffset()).thenReturn(logEndOffset);
 
-        LazyIndex idx = LazyIndex.forOffset(UnifiedLog.offsetIndexFile(tempDir, oldSegmentStartOffset, ""), oldSegmentStartOffset, 1000);
-        LazyIndex timeIdx = LazyIndex.forTime(UnifiedLog.timeIndexFile(tempDir, oldSegmentStartOffset, ""), oldSegmentStartOffset, 1500);
+        OffsetIndex idx = LazyIndex.forOffset(LogFileUtils.offsetIndexFile(tempDir, oldSegmentStartOffset, ""), oldSegmentStartOffset, 1000).get();
+        TimeIndex timeIdx = LazyIndex.forTime(LogFileUtils.timeIndexFile(tempDir, oldSegmentStartOffset, ""), oldSegmentStartOffset, 1500).get();
         File txnFile = UnifiedLog.transactionIndexFile(tempDir, oldSegmentStartOffset, "");
         txnFile.createNewFile();
         TransactionIndex txnIndex = new TransactionIndex(oldSegmentStartOffset, txnFile);
-        when(oldSegment.lazyTimeIndex()).thenReturn(timeIdx);
-        when(oldSegment.lazyOffsetIndex()).thenReturn(idx);
+        when(oldSegment.timeIndex()).thenReturn(timeIdx);
+        when(oldSegment.offsetIndex()).thenReturn(idx);
         when(oldSegment.txnIndex()).thenReturn(txnIndex);
 
         int customMetadataSizeLimit = 128;
@@ -628,13 +629,13 @@ public class RemoteLogManagerTest {
         when(mockStateManager.fetchSnapshot(anyLong())).thenReturn(Optional.of(mockProducerSnapshotIndex));
         when(mockLog.lastStableOffset()).thenReturn(250L);
 
-        LazyIndex idx = LazyIndex.forOffset(UnifiedLog.offsetIndexFile(tempDir, oldSegmentStartOffset, ""), oldSegmentStartOffset, 1000);
-        LazyIndex timeIdx = LazyIndex.forTime(UnifiedLog.timeIndexFile(tempDir, oldSegmentStartOffset, ""), oldSegmentStartOffset, 1500);
+        OffsetIndex idx = LazyIndex.forOffset(LogFileUtils.offsetIndexFile(tempDir, oldSegmentStartOffset, ""), oldSegmentStartOffset, 1000).get();
+        TimeIndex timeIdx = LazyIndex.forTime(LogFileUtils.timeIndexFile(tempDir, oldSegmentStartOffset, ""), oldSegmentStartOffset, 1500).get();
         File txnFile = UnifiedLog.transactionIndexFile(tempDir, oldSegmentStartOffset, "");
         txnFile.createNewFile();
         TransactionIndex txnIndex = new TransactionIndex(oldSegmentStartOffset, txnFile);
-        when(oldSegment.lazyTimeIndex()).thenReturn(timeIdx);
-        when(oldSegment.lazyOffsetIndex()).thenReturn(idx);
+        when(oldSegment.timeIndex()).thenReturn(timeIdx);
+        when(oldSegment.offsetIndex()).thenReturn(idx);
         when(oldSegment.txnIndex()).thenReturn(txnIndex);
 
         CompletableFuture<Void> dummyFuture = new CompletableFuture<>();
@@ -660,12 +661,12 @@ public class RemoteLogManagerTest {
     }
 
     private double yammerMetricValue(String name) {
-        Gauge<Double> guage = (Gauge) KafkaYammerMetrics.defaultRegistry().allMetrics().entrySet().stream()
+        Gauge<Double> gauge = (Gauge) KafkaYammerMetrics.defaultRegistry().allMetrics().entrySet().stream()
                 .filter(e -> e.getKey().getMBeanName().contains(name))
                 .findFirst()
                 .get()
                 .getValue();
-        return guage.value();
+        return gauge.value();
     }
 
     @Test
@@ -706,13 +707,13 @@ public class RemoteLogManagerTest {
         when(mockStateManager.fetchSnapshot(anyLong())).thenReturn(Optional.of(mockProducerSnapshotIndex));
         when(mockLog.lastStableOffset()).thenReturn(250L);
 
-        LazyIndex idx = LazyIndex.forOffset(UnifiedLog.offsetIndexFile(tempDir, oldSegmentStartOffset, ""), oldSegmentStartOffset, 1000);
-        LazyIndex timeIdx = LazyIndex.forTime(UnifiedLog.timeIndexFile(tempDir, oldSegmentStartOffset, ""), oldSegmentStartOffset, 1500);
+        OffsetIndex idx = LazyIndex.forOffset(LogFileUtils.offsetIndexFile(tempDir, oldSegmentStartOffset, ""), oldSegmentStartOffset, 1000).get();
+        TimeIndex timeIdx = LazyIndex.forTime(LogFileUtils.timeIndexFile(tempDir, oldSegmentStartOffset, ""), oldSegmentStartOffset, 1500).get();
         File txnFile = UnifiedLog.transactionIndexFile(tempDir, oldSegmentStartOffset, "");
         txnFile.createNewFile();
         TransactionIndex txnIndex = new TransactionIndex(oldSegmentStartOffset, txnFile);
-        when(oldSegment.lazyTimeIndex()).thenReturn(timeIdx);
-        when(oldSegment.lazyOffsetIndex()).thenReturn(idx);
+        when(oldSegment.timeIndex()).thenReturn(timeIdx);
+        when(oldSegment.offsetIndex()).thenReturn(idx);
         when(oldSegment.txnIndex()).thenReturn(txnIndex);
 
         CompletableFuture<Void> dummyFuture = new CompletableFuture<>();
@@ -856,8 +857,8 @@ public class RemoteLogManagerTest {
     }
 
     private void verifyLogSegmentData(LogSegmentData logSegmentData,
-                                      LazyIndex idx,
-                                      LazyIndex timeIdx,
+                                      OffsetIndex idx,
+                                      TimeIndex timeIdx,
                                       TransactionIndex txnIndex,
                                       File tempFile,
                                       File mockProducerSnapshotIndex,
@@ -884,7 +885,7 @@ public class RemoteLogManagerTest {
                 public RemoteStorageManager createRemoteStorageManager() {
                     return rsmManager;
                 }
-            };
+            }
         ) {
             assertEquals(rsmManager, remoteLogManager.storageManager());
         }
@@ -991,7 +992,7 @@ public class RemoteLogManagerTest {
         leaderEpochFileCache.assign(targetLeaderEpoch, startOffset);
         leaderEpochFileCache.assign(12, 500L);
 
-        doTestFindOffsetByTimestamp(ts, startOffset, targetLeaderEpoch, validSegmentEpochs);
+        doTestFindOffsetByTimestamp(ts, startOffset, targetLeaderEpoch, validSegmentEpochs, RemoteLogSegmentState.COPY_SEGMENT_FINISHED);
 
         // Fetching message for timestamp `ts` will return the message with startOffset+1, and `ts+1` as there are no
         // messages starting with the startOffset and with `ts`.
@@ -1025,7 +1026,7 @@ public class RemoteLogManagerTest {
         leaderEpochFileCache.assign(targetLeaderEpoch, startOffset);
         leaderEpochFileCache.assign(12, 500L);
 
-        doTestFindOffsetByTimestamp(ts, startOffset, targetLeaderEpoch, validSegmentEpochs);
+        doTestFindOffsetByTimestamp(ts, startOffset, targetLeaderEpoch, validSegmentEpochs, RemoteLogSegmentState.COPY_SEGMENT_FINISHED);
 
         // Fetch offsets for this segment returns empty as the segment epochs are not with in the leader epoch cache.
         Optional<FileRecords.TimestampAndOffset> maybeTimestampAndOffset1 = remoteLogManager.findOffsetByTimestamp(tp, ts, startOffset, leaderEpochFileCache);
@@ -1038,8 +1039,32 @@ public class RemoteLogManagerTest {
         assertEquals(Optional.empty(), maybeTimestampAndOffset3);
     }
 
+    @Test
+    void testFindOffsetByTimestampWithSegmentNotReady() throws IOException, RemoteStorageException {
+        TopicPartition tp = leaderTopicIdPartition.topicPartition();
+
+        long ts = time.milliseconds();
+        long startOffset = 120;
+        int targetLeaderEpoch = 10;
+
+        TreeMap<Integer, Long> validSegmentEpochs = new TreeMap<>();
+        validSegmentEpochs.put(targetLeaderEpoch, startOffset);
+
+        LeaderEpochFileCache leaderEpochFileCache = new LeaderEpochFileCache(tp, checkpoint);
+        leaderEpochFileCache.assign(4, 99L);
+        leaderEpochFileCache.assign(5, 99L);
+        leaderEpochFileCache.assign(targetLeaderEpoch, startOffset);
+        leaderEpochFileCache.assign(12, 500L);
+
+        doTestFindOffsetByTimestamp(ts, startOffset, targetLeaderEpoch, validSegmentEpochs, RemoteLogSegmentState.COPY_SEGMENT_STARTED);
+
+        Optional<FileRecords.TimestampAndOffset> maybeTimestampAndOffset = remoteLogManager.findOffsetByTimestamp(tp, ts, startOffset, leaderEpochFileCache);
+        assertEquals(Optional.empty(), maybeTimestampAndOffset);
+    }
+
     private void doTestFindOffsetByTimestamp(long ts, long startOffset, int targetLeaderEpoch,
-                                             TreeMap<Integer, Long> validSegmentEpochs) throws IOException, RemoteStorageException {
+                                             TreeMap<Integer, Long> validSegmentEpochs,
+                                             RemoteLogSegmentState state) throws IOException, RemoteStorageException {
         TopicPartition tp = leaderTopicIdPartition.topicPartition();
         RemoteLogSegmentId remoteLogSegmentId = new RemoteLogSegmentId(leaderTopicIdPartition, Uuid.randomUuid());
 
@@ -1049,6 +1074,7 @@ public class RemoteLogManagerTest {
         when(segmentMetadata.startOffset()).thenReturn(startOffset);
         when(segmentMetadata.endOffset()).thenReturn(startOffset + 2);
         when(segmentMetadata.segmentLeaderEpochs()).thenReturn(validSegmentEpochs);
+        when(segmentMetadata.state()).thenReturn(state);
 
         File tpDir = new File(logDir, tp.toString());
         Files.createDirectory(tpDir.toPath());
@@ -1056,12 +1082,12 @@ public class RemoteLogManagerTest {
         txnIdxFile.createNewFile();
         when(remoteStorageManager.fetchIndex(any(RemoteLogSegmentMetadata.class), any(IndexType.class)))
                 .thenAnswer(ans -> {
-                    RemoteLogSegmentMetadata metadata = ans.<RemoteLogSegmentMetadata>getArgument(0);
-                    IndexType indexType = ans.<IndexType>getArgument(1);
+                    RemoteLogSegmentMetadata metadata = ans.getArgument(0);
+                    IndexType indexType = ans.getArgument(1);
                     int maxEntries = (int) (metadata.endOffset() - metadata.startOffset());
-                    OffsetIndex offsetIdx = new OffsetIndex(new File(tpDir, String.valueOf(metadata.startOffset()) + UnifiedLog.IndexFileSuffix()),
+                    OffsetIndex offsetIdx = new OffsetIndex(new File(tpDir, metadata.startOffset() + UnifiedLog.IndexFileSuffix()),
                             metadata.startOffset(), maxEntries * 8);
-                    TimeIndex timeIdx = new TimeIndex(new File(tpDir, String.valueOf(metadata.startOffset()) + UnifiedLog.TimeIndexFileSuffix()),
+                    TimeIndex timeIdx = new TimeIndex(new File(tpDir, metadata.startOffset() + UnifiedLog.TimeIndexFileSuffix()),
                             metadata.startOffset(), maxEntries * 12);
                     switch (indexType) {
                         case OFFSET:
@@ -1240,7 +1266,7 @@ public class RemoteLogManagerTest {
                 segmentEpochs5), logEndOffset, leaderEpochToStartOffset));
 
         // Test whether any of the epoch's is not with in the leader epoch chain.
-        TreeMap<Integer, Long> segmentEpochs6 = new TreeMap<Integer, Long>();
+        TreeMap<Integer, Long> segmentEpochs6 = new TreeMap<>();
         segmentEpochs6.put(5, 55L);
         segmentEpochs6.put(6, 60L); // epoch 6 exists here but it is missing in leaderEpochToStartOffset
         segmentEpochs6.put(7, 70L);
@@ -1403,9 +1429,9 @@ public class RemoteLogManagerTest {
         assertNotNull(remoteLogManager.task(followerTopicIdPartition));
 
         when(remoteLogMetadataManager.listRemoteLogSegments(eq(leaderTopicIdPartition)))
-                .thenReturn(listRemoteLogSegmentMetadata(leaderTopicIdPartition, 5, 100, 1024).iterator());
+                .thenReturn(listRemoteLogSegmentMetadata(leaderTopicIdPartition, 5, 100, 1024, RemoteLogSegmentState.DELETE_SEGMENT_FINISHED).iterator());
         when(remoteLogMetadataManager.listRemoteLogSegments(eq(followerTopicIdPartition)))
-                .thenReturn(listRemoteLogSegmentMetadata(followerTopicIdPartition, 3, 100, 1024).iterator());
+                .thenReturn(listRemoteLogSegmentMetadata(followerTopicIdPartition, 3, 100, 1024, RemoteLogSegmentState.DELETE_SEGMENT_FINISHED).iterator());
         CompletableFuture<Void> dummyFuture = new CompletableFuture<>();
         dummyFuture.complete(null);
         when(remoteLogMetadataManager.updateRemoteLogSegmentMetadata(any()))
@@ -1545,7 +1571,7 @@ public class RemoteLogManagerTest {
         when(mockLog.logEndOffset()).thenReturn(200L);
 
         List<RemoteLogSegmentMetadata> metadataList =
-                listRemoteLogSegmentMetadata(leaderTopicIdPartition, 2, 100, 1024, epochEntries);
+                listRemoteLogSegmentMetadata(leaderTopicIdPartition, 2, 100, 1024, epochEntries, RemoteLogSegmentState.COPY_SEGMENT_FINISHED);
         when(remoteLogMetadataManager.listRemoteLogSegments(leaderTopicIdPartition))
                 .thenReturn(metadataList.iterator());
         when(remoteLogMetadataManager.listRemoteLogSegments(leaderTopicIdPartition, 0))
@@ -1573,7 +1599,7 @@ public class RemoteLogManagerTest {
         List<EpochEntry> epochEntries = Collections.singletonList(epochEntry0);
 
         List<RemoteLogSegmentMetadata> metadataList =
-                listRemoteLogSegmentMetadata(leaderTopicIdPartition, 2, 100, 1024, epochEntries);
+                listRemoteLogSegmentMetadata(leaderTopicIdPartition, 2, 100, 1024, epochEntries, RemoteLogSegmentState.COPY_SEGMENT_FINISHED);
         when(remoteLogMetadataManager.listRemoteLogSegments(leaderTopicIdPartition))
                 .thenReturn(metadataList.iterator());
         when(remoteLogMetadataManager.listRemoteLogSegments(leaderTopicIdPartition, 0))
@@ -1663,7 +1689,7 @@ public class RemoteLogManagerTest {
         when(mockLog.onlyLocalLogSegmentsSize()).thenReturn(localLogSegmentsSize);
 
         List<RemoteLogSegmentMetadata> segmentMetadataList = listRemoteLogSegmentMetadata(
-                leaderTopicIdPartition, segmentCount, recordsPerSegment, segmentSize, epochEntries);
+                leaderTopicIdPartition, segmentCount, recordsPerSegment, segmentSize, epochEntries, RemoteLogSegmentState.COPY_SEGMENT_FINISHED);
         verifyDeleteLogSegment(segmentMetadataList, deletableSegmentCount, currentLeaderEpoch);
     }
 
@@ -1700,7 +1726,7 @@ public class RemoteLogManagerTest {
         when(mockLog.onlyLocalLogSegmentsSize()).thenReturn(localLogSegmentsSize);
 
         List<RemoteLogSegmentMetadata> segmentMetadataList = listRemoteLogSegmentMetadataByTime(
-                leaderTopicIdPartition, segmentCount, deletableSegmentCount, recordsPerSegment, segmentSize, epochEntries);
+                leaderTopicIdPartition, segmentCount, deletableSegmentCount, recordsPerSegment, segmentSize, epochEntries, RemoteLogSegmentState.COPY_SEGMENT_FINISHED);
         verifyDeleteLogSegment(segmentMetadataList, deletableSegmentCount, currentLeaderEpoch);
     }
 
@@ -1734,20 +1760,76 @@ public class RemoteLogManagerTest {
         }
     }
 
-    private List<RemoteLogSegmentMetadata> listRemoteLogSegmentMetadata(TopicIdPartition topicIdPartition,
-                                                                        int segmentCount,
-                                                                        int recordsPerSegment,
-                                                                        int segmentSize) {
-        return listRemoteLogSegmentMetadata(topicIdPartition, segmentCount, recordsPerSegment, segmentSize, Collections.emptyList());
+
+    @Test
+    public void testDeleteRetentionMsOnExpiredSegment() throws RemoteStorageException, IOException {
+        AtomicLong logStartOffset = new AtomicLong(0);
+        try (RemoteLogManager remoteLogManager = new RemoteLogManager(remoteLogManagerConfig, brokerId, logDir, clusterId, time,
+                tp -> Optional.of(mockLog),
+                (topicPartition, offset) -> logStartOffset.set(offset),
+                brokerTopicStats) {
+            public RemoteStorageManager createRemoteStorageManager() {
+                return remoteStorageManager;
+            }
+            public RemoteLogMetadataManager createRemoteLogMetadataManager() {
+                return remoteLogMetadataManager;
+            }
+        }) {
+            RemoteLogManager.RLMTask task = remoteLogManager.new RLMTask(leaderTopicIdPartition, 128);
+            task.convertToLeader(0);
+
+            when(mockLog.topicPartition()).thenReturn(leaderTopicIdPartition.topicPartition());
+            when(mockLog.logEndOffset()).thenReturn(200L);
+
+            List<EpochEntry> epochEntries = Collections.singletonList(epochEntry0);
+
+            List<RemoteLogSegmentMetadata> remoteLogSegmentMetadatas = listRemoteLogSegmentMetadata(
+                    leaderTopicIdPartition, 2, 100, 1024, epochEntries, RemoteLogSegmentState.DELETE_SEGMENT_FINISHED);
+
+            when(remoteLogMetadataManager.listRemoteLogSegments(leaderTopicIdPartition))
+                    .thenReturn(remoteLogSegmentMetadatas.iterator());
+            when(remoteLogMetadataManager.listRemoteLogSegments(leaderTopicIdPartition, 0))
+                    .thenReturn(remoteLogSegmentMetadatas.iterator())
+                    .thenReturn(remoteLogSegmentMetadatas.iterator());
+
+            checkpoint.write(epochEntries);
+            LeaderEpochFileCache cache = new LeaderEpochFileCache(tp, checkpoint);
+            when(mockLog.leaderEpochCache()).thenReturn(Option.apply(cache));
+
+            Map<String, Long> logProps = new HashMap<>();
+            logProps.put("retention.bytes", -1L);
+            logProps.put("retention.ms", 0L);
+            LogConfig mockLogConfig = new LogConfig(logProps);
+            when(mockLog.config()).thenReturn(mockLogConfig);
+
+            when(remoteLogMetadataManager.updateRemoteLogSegmentMetadata(any(RemoteLogSegmentMetadataUpdate.class)))
+                    .thenAnswer(answer -> CompletableFuture.runAsync(() -> { }));
+
+            task.cleanupExpiredRemoteLogSegments();
+
+            verifyNoMoreInteractions(remoteStorageManager);
+            assertEquals(0L, logStartOffset.get());
+        } catch (ExecutionException | InterruptedException e) {
+            throw new RuntimeException(e);
+        }
     }
 
     private List<RemoteLogSegmentMetadata> listRemoteLogSegmentMetadata(TopicIdPartition topicIdPartition,
                                                                         int segmentCount,
                                                                         int recordsPerSegment,
                                                                         int segmentSize,
-                                                                        List<EpochEntry> epochEntries) {
+                                                                        RemoteLogSegmentState state) {
+        return listRemoteLogSegmentMetadata(topicIdPartition, segmentCount, recordsPerSegment, segmentSize, Collections.emptyList(), state);
+    }
+
+    private List<RemoteLogSegmentMetadata> listRemoteLogSegmentMetadata(TopicIdPartition topicIdPartition,
+                                                                        int segmentCount,
+                                                                        int recordsPerSegment,
+                                                                        int segmentSize,
+                                                                        List<EpochEntry> epochEntries,
+                                                                        RemoteLogSegmentState state) {
         return listRemoteLogSegmentMetadataByTime(
-                topicIdPartition, segmentCount, 0, recordsPerSegment, segmentSize, epochEntries);
+                topicIdPartition, segmentCount, 0, recordsPerSegment, segmentSize, epochEntries, state);
     }
 
     private List<RemoteLogSegmentMetadata> listRemoteLogSegmentMetadataByTime(TopicIdPartition topicIdPartition,
@@ -1755,7 +1837,8 @@ public class RemoteLogManagerTest {
                                                                               int deletableSegmentCount,
                                                                               int recordsPerSegment,
                                                                               int segmentSize,
-                                                                              List<EpochEntry> epochEntries) {
+                                                                              List<EpochEntry> epochEntries,
+                                                                              RemoteLogSegmentState state) {
         List<RemoteLogSegmentMetadata> segmentMetadataList = new ArrayList<>();
         for (int idx = 0; idx < segmentCount; idx++) {
             long timestamp = time.milliseconds();
@@ -1766,9 +1849,18 @@ public class RemoteLogManagerTest {
             long endOffset = startOffset + recordsPerSegment - 1;
             List<EpochEntry> localTotalEpochEntries = epochEntries.isEmpty() ? totalEpochEntries : epochEntries;
             Map<Integer, Long> segmentLeaderEpochs = truncateAndGetLeaderEpochs(localTotalEpochEntries, startOffset, endOffset);
-            segmentMetadataList.add(new RemoteLogSegmentMetadata(new RemoteLogSegmentId(topicIdPartition,
-                    Uuid.randomUuid()), startOffset, endOffset, timestamp, brokerId, timestamp, segmentSize,
-                    segmentLeaderEpochs));
+            RemoteLogSegmentMetadata metadata = new RemoteLogSegmentMetadata(
+                    new RemoteLogSegmentId(topicIdPartition, Uuid.randomUuid()),
+                    startOffset,
+                    endOffset,
+                    timestamp,
+                    brokerId,
+                    timestamp,
+                    segmentSize,
+                    Optional.empty(),
+                    state,
+                    segmentLeaderEpochs);
+            segmentMetadataList.add(metadata);
         }
         return segmentMetadataList;
     }
@@ -1833,7 +1925,7 @@ public class RemoteLogManagerTest {
             }
 
             // This is the key scenario that we are testing here
-            RecordBatch findFirstBatch(RemoteLogInputStream remoteLogInputStream, long offset) throws IOException {
+            RecordBatch findFirstBatch(RemoteLogInputStream remoteLogInputStream, long offset) {
                 return null;
             }
         }) {
@@ -1899,7 +1991,7 @@ public class RemoteLogManagerTest {
                 return 1;
             }
 
-            RecordBatch findFirstBatch(RemoteLogInputStream remoteLogInputStream, long offset) throws IOException {
+            RecordBatch findFirstBatch(RemoteLogInputStream remoteLogInputStream, long offset) {
                 when(firstBatch.sizeInBytes()).thenReturn(recordBatchSizeInBytes);
                 doNothing().when(firstBatch).writeTo(capture.capture());
                 return firstBatch;

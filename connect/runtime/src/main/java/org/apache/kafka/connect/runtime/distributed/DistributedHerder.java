@@ -279,7 +279,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                       ExecutorService forwardRequestExecutor,
                       // https://github.com/mockito/mockito/issues/2601 explains why we can't use varargs here
                       AutoCloseable[] uponShutdown) {
-        super(worker, workerId, kafkaClusterId, statusBackingStore, configBackingStore, connectorClientConfigOverridePolicy);
+        super(worker, workerId, kafkaClusterId, statusBackingStore, configBackingStore, connectorClientConfigOverridePolicy, time);
 
         this.time = time;
         this.herderMetrics = new HerderMetrics(metrics);
@@ -1051,6 +1051,12 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
     @Override
     public void putConnectorConfig(final String connName, final Map<String, String> config, final boolean allowReplace,
                                    final Callback<Created<ConnectorInfo>> callback) {
+        putConnectorConfig(connName, config, null, allowReplace, callback);
+    }
+
+    @Override
+    public void putConnectorConfig(final String connName, final Map<String, String> config, final TargetState targetState,
+                                   final boolean allowReplace, final Callback<Created<ConnectorInfo>> callback) {
         log.trace("Submitting connector config write request {}", connName);
         addRequest(
             () -> {
@@ -1081,7 +1087,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                             }
 
                             log.trace("Submitting connector config {} {} {}", connName, allowReplace, configState.connectors());
-                            writeToConfigTopicAsLeader(() -> configBackingStore.putConnectorConfig(connName, config));
+                            writeToConfigTopicAsLeader(() -> configBackingStore.putConnectorConfig(connName, config, targetState));
 
                             // Note that we use the updated connector config despite the fact that we don't have an updated
                             // snapshot yet. The existing task info should still be accurate.
@@ -1610,6 +1616,11 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
             return false;
         }
         return true;
+    }
+
+    @Override
+    public void setClusterLoggerLevel(String namespace, String level) {
+        configBackingStore.putLoggerLevel(namespace, level);
     }
 
     // Should only be called from work thread, so synchronization should not be needed
@@ -2375,6 +2386,11 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                 });
             }
             member.wakeup();
+        }
+
+        @Override
+        public void onLoggingLevelUpdate(String namespace, String level) {
+            setWorkerLoggerLevel(namespace, level);
         }
     }
 

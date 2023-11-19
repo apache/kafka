@@ -25,6 +25,7 @@ import org.apache.kafka.connect.runtime.rest.entities.ConfigKeyInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorOffsets;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorStateInfo;
+import org.apache.kafka.connect.runtime.rest.entities.LoggerLevel;
 import org.apache.kafka.connect.runtime.rest.entities.Message;
 import org.apache.kafka.connect.runtime.rest.entities.TaskInfo;
 import org.apache.kafka.connect.storage.StatusBackingStore;
@@ -106,6 +107,19 @@ public interface Herder {
      * @param callback callback to invoke when the configuration has been written
      */
     void putConnectorConfig(String connName, Map<String, String> config, boolean allowReplace, Callback<Created<ConnectorInfo>> callback);
+
+    /**
+     * Set the configuration for a connector, along with a target state optionally. This supports creation and updating.
+     * @param connName name of the connector
+     * @param config the connector's configuration
+     * @param targetState the desired target state for the connector; may be {@code null} if no target state change is desired. Note that the default
+     *                    target state is {@link TargetState#STARTED} if no target state exists previously
+     * @param allowReplace if true, allow overwriting previous configs; if false, throw {@link AlreadyExistsException}
+     *                     if a connector with the same name already exists
+     * @param callback callback to invoke when the configuration has been written
+     */
+    void putConnectorConfig(String connName, Map<String, String> config, TargetState targetState, boolean allowReplace,
+                            Callback<Created<ConnectorInfo>> callback);
 
     /**
      * Delete a connector and its configuration.
@@ -317,6 +331,39 @@ public interface Herder {
      * @param cb callback to invoke upon completion
      */
     void resetConnectorOffsets(String connName, Callback<Message> cb);
+
+    /**
+     * Get the level for a logger.
+     * @param logger the name of the logger to retrieve the level for; may not be null
+     * @return the level for the logger, or null if no logger with the given name exists
+     */
+    LoggerLevel loggerLevel(String logger);
+
+    /**
+     * Get the levels for all known loggers.
+     * @return a map of logger name to {@link LoggerLevel}; may be empty, but never null
+     */
+    Map<String, LoggerLevel> allLoggerLevels();
+
+    /**
+     * Set the level for a logging namespace (i.e., a specific logger and all of its children) on this
+     * worker. Changes should only last over the lifetime of the worker, and should be wiped if/when
+     * the worker is restarted.
+     * @param namespace the logging namespace to alter; may not be null
+     * @param level the new level to set for the namespace; may not be null
+     * @return all loggers that were affected by this action; may be empty (including if the specified
+     * level is not a valid logging level), but never null
+     */
+    List<String> setWorkerLoggerLevel(String namespace, String level);
+
+    /**
+     * Set the level for a logging namespace (i.e., a specific logger and all of its children) for all workers
+     * in the cluster. Changes should only last over the lifetime of workers, and should be wiped if/when
+     * workers are restarted.
+     * @param namespace the logging namespace to alter; may not be null
+     * @param level the new level to set for the namespace; may not be null
+     */
+    void setClusterLoggerLevel(String namespace, String level);
 
     enum ConfigReloadAction {
         NONE,

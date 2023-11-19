@@ -23,6 +23,7 @@ import org.apache.kafka.metadata.util.BatchFileWriter;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.common.MetadataVersion;
 
+import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -107,7 +108,7 @@ public class BootstrapDirectory {
                 "the binary bootstrap metadata file: " + binaryPath);
     }
 
-    public void writeBinaryFile(BootstrapMetadata bootstrapMetadata) throws Exception {
+    public void writeBinaryFile(BootstrapMetadata bootstrapMetadata) throws IOException {
         if (!Files.isDirectory(Paths.get(directoryPath))) {
             throw new RuntimeException("No such directory as " + directoryPath);
         }

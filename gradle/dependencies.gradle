@@ -93,6 +93,9 @@ versions += [
   argparse4j: "0.7.0",
   bcpkix: "1.75",
   caffeine: "2.9.3", // 3.x supports JDK 11 and above
+  // when updating checkstyle, check whether the exclusion of
+  // CVE-2023-2976 and CVE-2020-8908 can be dropped from
+  // gradle/resources/dependencycheck-suppressions.xml
   checkstyle: "8.36.2",
   commonsCli: "1.4",
   commonsValidator: "1.7",
@@ -136,14 +139,15 @@ versions += [
   kafka_30: "3.0.2",
   kafka_31: "3.1.2",
   kafka_32: "3.2.3",
-  kafka_33: "3.3.1",
+  kafka_33: "3.3.2",
   kafka_34: "3.4.1",
   kafka_35: "3.5.1",
   kafka_36: "3.6.0",
   lz4: "1.8.0",
   mavenArtifact: "3.8.8",
   metrics: "2.2.0",
-  netty: "4.1.94.Final",
+  netty: "4.1.100.Final",
+  opentelemetryProto: "1.0.0-alpha",
   pcollections: "4.0.1",
   powermock: "2.0.9",
   reflections: "0.10.2",
@@ -158,9 +162,9 @@ versions += [
   scoverage: "1.9.3",
   slf4j: "1.7.36",
   snappy: "1.1.10.5",
-  spotbugs: "4.7.3",
+  spotbugs: "4.8.0",
   zinc: "1.9.2",
-  zookeeper: "3.8.2",
+  zookeeper: "3.8.3",
   zstd: "1.5.5-6"
 ]
 
@@ -239,6 +243,7 @@ libs += [
   nettyHandler: "io.netty:netty-handler:$versions.netty",
   nettyTransportNativeEpoll: "io.netty:netty-transport-native-epoll:$versions.netty",
   pcollections: "org.pcollections:pcollections:$versions.pcollections",
+  opentelemetryProto: "io.opentelemetry.proto:opentelemetry-proto:$versions.opentelemetryProto",
   powermockJunit4: "org.powermock:powermock-module-junit4:$versions.powermock",
   powermockEasymock: "org.powermock:powermock-api-easymock:$versions.powermock",
   reflections: "org.reflections:reflections:$versions.reflections",

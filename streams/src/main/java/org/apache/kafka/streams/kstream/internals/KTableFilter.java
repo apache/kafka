@@ -185,7 +185,7 @@ public class KTableFilter<KIn, VIn> implements KTableProcessorSupplier<KIn, VIn,
         @Override
         public void init(final ProcessorContext<?, ?> context) {
             // This is the old processor context for compatibility with the other KTable processors.
-            // Once we migrte them all, we can swap this out.
+            // Once we migrate them all, we can swap this out.
             parentGetter.init(context);
         }
 

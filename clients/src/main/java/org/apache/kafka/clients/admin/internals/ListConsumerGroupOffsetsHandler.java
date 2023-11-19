@@ -165,6 +165,8 @@ public class ListConsumerGroupOffsetsHandler implements AdminApiHandler<Coordina
     ) {
         switch (error) {
             case GROUP_AUTHORIZATION_FAILED:
+            case UNKNOWN_MEMBER_ID:
+            case STALE_MEMBER_EPOCH:
                 log.debug("`OffsetFetch` request for group id {} failed due to error {}", groupId.idValue, error);
                 failed.put(groupId, error.exception());
                 break;

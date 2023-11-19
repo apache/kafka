@@ -63,7 +63,7 @@ public enum MemberState {
 
         RECONCILING.previousValidStates = Arrays.asList(STABLE, UNJOINED);
 
-        FAILED.previousValidStates = Arrays.asList(STABLE, RECONCILING);
+        FAILED.previousValidStates = Arrays.asList(UNJOINED, STABLE, RECONCILING);
 
         FENCED.previousValidStates = Arrays.asList(STABLE, RECONCILING);
 

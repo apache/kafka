@@ -31,7 +31,7 @@ import org.apache.kafka.common.acl.AclOperation.{DESCRIBE, READ, WRITE}
 import org.apache.kafka.common.acl.AclPermissionType.ALLOW
 import org.apache.kafka.common.acl.{AccessControlEntry, AclBinding}
 import org.apache.kafka.common.config.{ConfigResource, TopicConfig}
-import org.apache.kafka.common.errors.TimeoutException
+import org.apache.kafka.common.errors.{TimeoutException, UnknownTopicOrPartitionException}
 import org.apache.kafka.common.message.AllocateProducerIdsRequestData
 import org.apache.kafka.common.quota.{ClientQuotaAlteration, ClientQuotaEntity}
 import org.apache.kafka.common.requests.{AllocateProducerIdsRequest, AllocateProducerIdsResponse}
@@ -46,13 +46,13 @@ import org.apache.kafka.metadata.authorizer.StandardAcl
 import org.apache.kafka.metadata.migration.ZkMigrationLeadershipState
 import org.apache.kafka.raft.RaftConfig
 import org.apache.kafka.server.common.{ApiMessageAndVersion, MetadataVersion, ProducerIdsBlock}
-import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertNotEquals, assertNotNull, assertTrue}
-import org.junit.jupiter.api.Timeout
+import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertNotEquals, assertNotNull, assertTrue, fail}
+import org.junit.jupiter.api.{Assumptions, Timeout}
 import org.junit.jupiter.api.extension.ExtendWith
 import org.slf4j.LoggerFactory
 
 import java.util
-import java.util.concurrent.{CompletableFuture, TimeUnit}
+import java.util.concurrent.{CompletableFuture, ExecutionException, TimeUnit}
 import java.util.{Properties, UUID}
 import scala.collection.Seq
 import scala.jdk.CollectionConverters._
@@ -66,7 +66,13 @@ object ZkMigrationIntegrationTest {
   }
 
   def zkClustersForAllMigrationVersions(clusterGenerator: ClusterGenerator): Unit = {
-    Seq(MetadataVersion.IBP_3_4_IV0, MetadataVersion.IBP_3_5_IV2, MetadataVersion.IBP_3_6_IV2).foreach { mv =>
+    Seq(
+      MetadataVersion.IBP_3_4_IV0,
+      MetadataVersion.IBP_3_5_IV2,
+      MetadataVersion.IBP_3_6_IV2,
+      MetadataVersion.IBP_3_7_IV0,
+      MetadataVersion.IBP_3_7_IV1
+    ).foreach { mv =>
       val clusterConfig = ClusterConfig.defaultClusterBuilder()
         .metadataVersion(mv)
         .brokers(3)
@@ -263,6 +269,139 @@ class ZkMigrationIntegrationTest {
     }
 
     migrationState = migrationClient.releaseControllerLeadership(migrationState)
+  }
+
+  @ClusterTemplate("zkClustersForAllMigrationVersions")
+  def testMigrateTopicDeletions(zkCluster: ClusterInstance): Unit = {
+    // Create some topics in ZK mode
+    var admin = zkCluster.createAdminClient()
+    val newTopics = new util.ArrayList[NewTopic]()
+    newTopics.add(new NewTopic("test-topic-1", 10, 3.toShort))
+    newTopics.add(new NewTopic("test-topic-2", 10, 3.toShort))
+    newTopics.add(new NewTopic("test-topic-3", 10, 3.toShort))
+    val createTopicResult = admin.createTopics(newTopics)
+    createTopicResult.all().get(300, TimeUnit.SECONDS)
+    admin.close()
+    val zkClient = zkCluster.asInstanceOf[ZkClusterInstance].getUnderlying().zkClient
+
+    // Bootstrap the ZK cluster ID into KRaft
+    val clusterId = zkCluster.clusterId()
+    val kraftCluster = new KafkaClusterTestKit.Builder(
+      new TestKitNodes.Builder().
+        setBootstrapMetadataVersion(zkCluster.config().metadataVersion()).
+        setClusterId(Uuid.fromString(clusterId)).
+        setNumBrokerNodes(0).
+        setNumControllerNodes(1).build())
+      .setConfigProp(KafkaConfig.MigrationEnabledProp, "true")
+      .setConfigProp(KafkaConfig.ZkConnectProp, zkCluster.asInstanceOf[ZkClusterInstance].getUnderlying.zkConnect)
+      .build()
+    try {
+      kraftCluster.format()
+      kraftCluster.startup()
+      val readyFuture = kraftCluster.controllers().values().asScala.head.controller.waitForReadyBrokers(3)
+
+      // Enable migration configs and restart brokers
+      log.info("Restart brokers in migration mode")
+      zkCluster.config().serverProperties().put(KafkaConfig.MigrationEnabledProp, "true")
+      zkCluster.config().serverProperties().put(RaftConfig.QUORUM_VOTERS_CONFIG, kraftCluster.quorumVotersConfig())
+      zkCluster.config().serverProperties().put(KafkaConfig.ControllerListenerNamesProp, "CONTROLLER")
+      zkCluster.config().serverProperties().put(KafkaConfig.ListenerSecurityProtocolMapProp, "CONTROLLER:PLAINTEXT,EXTERNAL:PLAINTEXT,PLAINTEXT:PLAINTEXT")
+      zkCluster.rollingBrokerRestart()
+
+      // Emulate a ZK topic deletion
+      zkClient.createDeleteTopicPath("test-topic-1")
+      zkClient.createDeleteTopicPath("test-topic-2")
+      zkClient.createDeleteTopicPath("test-topic-3")
+
+      zkCluster.waitForReadyBrokers()
+      readyFuture.get(60, TimeUnit.SECONDS)
+
+      // Only continue with the test if there are some pending deletions to verify. If there are not any pending
+      // deletions, this will mark the test as "skipped" instead of failed.
+      val topicDeletions = zkClient.getTopicDeletions
+      Assumptions.assumeTrue(topicDeletions.nonEmpty,
+        "This test needs pending topic deletions after a migration in order to verify the behavior")
+
+      // Wait for migration to begin
+      log.info("Waiting for ZK migration to complete")
+      TestUtils.waitUntilTrue(
+        () => zkClient.getOrCreateMigrationState(ZkMigrationLeadershipState.EMPTY).initialZkMigrationComplete(),
+        "Timed out waiting for migration to complete",
+        30000)
+
+      // At this point, some of the topics may have been deleted by ZK controller and the rest will be
+      // implicitly deleted by the KRaft controller and remove from the ZK brokers as stray partitions
+      def topicsAllDeleted(admin: Admin): Boolean = {
+        val topics = admin.listTopics().names().get(60, TimeUnit.SECONDS)
+        topics.retainAll(util.Arrays.asList(
+          "test-topic-1", "test-topic-2", "test-topic-3"
+        ))
+        topics.isEmpty
+      }
+
+      admin = zkCluster.createAdminClient()
+      log.info("Waiting for topics to be deleted")
+      TestUtils.waitUntilTrue(
+        () => topicsAllDeleted(admin),
+        "Timed out waiting for topics to be deleted",
+        30000,
+        1000)
+
+      val newTopics = new util.ArrayList[NewTopic]()
+      newTopics.add(new NewTopic("test-topic-1", 2, 3.toShort))
+      newTopics.add(new NewTopic("test-topic-2", 1, 3.toShort))
+      newTopics.add(new NewTopic("test-topic-3", 10, 3.toShort))
+      val createTopicResult = admin.createTopics(newTopics)
+      createTopicResult.all().get(60, TimeUnit.SECONDS)
+
+      def topicsAllRecreated(admin: Admin): Boolean = {
+        val topics = admin.listTopics().names().get(60, TimeUnit.SECONDS)
+        topics.retainAll(util.Arrays.asList(
+          "test-topic-1", "test-topic-2", "test-topic-3"
+        ))
+        topics.size() == 3
+      }
+
+      log.info("Waiting for topics to be re-created")
+      TestUtils.waitUntilTrue(
+        () => topicsAllRecreated(admin),
+        "Timed out waiting for topics to be created",
+        30000,
+        1000)
+
+      TestUtils.retry(300000) {
+        // Need a retry here since topic metadata may be inconsistent between brokers
+        val topicDescriptions = try {
+          admin.describeTopics(util.Arrays.asList(
+            "test-topic-1", "test-topic-2", "test-topic-3"
+          )).topicNameValues().asScala.map { case (name, description) =>
+            name -> description.get(60, TimeUnit.SECONDS)
+          }.toMap
+        } catch {
+          case e: ExecutionException if e.getCause.isInstanceOf[UnknownTopicOrPartitionException] => Map.empty[String, TopicDescription]
+          case t: Throwable => fail("Error describing topics", t.getCause)
+        }
+
+        assertEquals(2, topicDescriptions("test-topic-1").partitions().size())
+        assertEquals(1, topicDescriptions("test-topic-2").partitions().size())
+        assertEquals(10, topicDescriptions("test-topic-3").partitions().size())
+        topicDescriptions.foreach { case (topic, description) =>
+          description.partitions().forEach(partition => {
+            assertEquals(3, partition.replicas().size(), s"Unexpected number of replicas for ${topic}-${partition.partition()}")
+            assertEquals(3, partition.isr().size(), s"Unexpected ISR for ${topic}-${partition.partition()}")
+          })
+        }
+
+        val absentTopics = admin.listTopics().names().get(60, TimeUnit.SECONDS).asScala
+        assertTrue(absentTopics.contains("test-topic-1"))
+        assertTrue(absentTopics.contains("test-topic-2"))
+        assertTrue(absentTopics.contains("test-topic-3"))
+      }
+
+      admin.close()
+    } finally {
+      shutdownInSequence(zkCluster, kraftCluster)
+    }
   }
 
   // SCRAM and Quota are intermixed. Test SCRAM Only here

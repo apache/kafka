@@ -17,10 +17,12 @@
 package kafka.api
 
 import kafka.utils.TestUtils.waitUntilTrue
+import org.apache.kafka.clients.consumer.{ConsumerConfig, GroupProtocol}
 import org.junit.jupiter.api.Assertions.{assertNotNull, assertNull, assertTrue}
 import org.junit.jupiter.api.Test
 
 import java.time.Duration
+import java.util.Properties
 import scala.jdk.CollectionConverters._
 
 class BaseAsyncConsumerTest extends AbstractConsumerTest {
@@ -28,7 +30,9 @@ class BaseAsyncConsumerTest extends AbstractConsumerTest {
 
   @Test
   def testCommitAsync(): Unit = {
-    val consumer = createAsyncConsumer()
+    val props = new Properties();
+    props.setProperty(ConsumerConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.CONSUMER.name());
+    val consumer = createConsumer(configOverrides = props)
     val producer = createProducer()
     val numRecords = 10000
     val startingTimestamp = System.currentTimeMillis()
@@ -49,7 +53,9 @@ class BaseAsyncConsumerTest extends AbstractConsumerTest {
 
   @Test
   def testCommitSync(): Unit = {
-    val consumer = createAsyncConsumer()
+    val props = new Properties();
+    props.setProperty(ConsumerConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.CONSUMER.name());
+    val consumer = createConsumer(configOverrides = props)
     val producer = createProducer()
     val numRecords = 10000
     val startingTimestamp = System.currentTimeMillis()

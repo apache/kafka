@@ -241,15 +241,15 @@ lz4-java-1.8.0
 maven-artifact-3.8.8
 metrics-core-4.1.12.1
 metrics-core-2.2.0
-netty-buffer-4.1.94.Final
-netty-codec-4.1.94.Final
-netty-common-4.1.94.Final
-netty-handler-4.1.94.Final
-netty-resolver-4.1.94.Final
-netty-transport-4.1.94.Final
-netty-transport-classes-epoll-4.1.94.Final
-netty-transport-native-epoll-4.1.94.Final
-netty-transport-native-unix-common-4.1.94.Final
+netty-buffer-4.1.100.Final
+netty-codec-4.1.100.Final
+netty-common-4.1.100.Final
+netty-handler-4.1.100.Final
+netty-resolver-4.1.100.Final
+netty-transport-4.1.100.Final
+netty-transport-classes-epoll-4.1.100.Final
+netty-transport-native-epoll-4.1.100.Final
+netty-transport-native-unix-common-4.1.100.Final
 plexus-utils-3.3.0
 reflections-0.10.2
 reload4j-1.2.25
@@ -261,8 +261,8 @@ scala-reflect-2.13.12
 scala-java8-compat_2.13-1.0.2
 snappy-java-1.1.10.5
 swagger-annotations-2.2.8
-zookeeper-3.8.2
-zookeeper-jute-3.8.2
+zookeeper-3.8.3
+zookeeper-jute-3.8.3
 
 ===============================================================================
 This product bundles various third-party components under other open source
