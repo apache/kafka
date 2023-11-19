@@ -836,7 +836,7 @@ public class NetworkClient implements KafkaClient {
             // close connection to the node
             this.selector.close(nodeId);
             String host = obtainHost(nodeId);
-            log.info("Disconnecting from node {} ({}) due to request timeout.", nodeId, host);
+            log.warn("Disconnecting from node {} ({}) due to request timeout.", nodeId, host);
             processTimeoutDisconnection(responses, nodeId, now);
         }
     }
@@ -859,7 +859,7 @@ public class NetworkClient implements KafkaClient {
         for (String nodeId : nodes) {
             this.selector.close(nodeId);
             String host = obtainHost(nodeId);
-            log.info(
+            log.warn(
                 "Disconnecting from node {} ({}) due to socket connection setup timeout. " +
                 "The timeout value is {} ms.",
                 nodeId,
