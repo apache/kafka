@@ -835,7 +835,7 @@ public class NetworkClient implements KafkaClient {
             // close connection to the node
             this.selector.close(nodeId);
             String host = obtainHost(nodeId);
-            log.info("Disconnecting from node (nodeId={}, host={}) due to request timeout.", nodeId, host);
+            log.info("Disconnecting from node {} ({}) due to request timeout.", nodeId, host);
             processTimeoutDisconnection(responses, nodeId, now);
         }
     }
@@ -859,7 +859,7 @@ public class NetworkClient implements KafkaClient {
             this.selector.close(nodeId);
             String host = obtainHost(nodeId);
             log.info(
-                "Disconnecting from node (nodeId={}, host={}) due to socket connection setup timeout. " +
+                "Disconnecting from node {} ({}) due to socket connection setup timeout. " +
                 "The timeout value is {} ms.",
                 nodeId,
                 host,
@@ -899,7 +899,7 @@ public class NetworkClient implements KafkaClient {
         if (throttleTimeMs > 0 && response.shouldClientThrottle(apiVersion)) {
             connectionStates.throttle(nodeId, now + throttleTimeMs);
             String host = obtainHost(nodeId);
-            log.trace("Connection to node (nodeId={}, host={}) is throttled for {} ms until timestamp {}",
+            log.trace("Connection to node {} ({}) is throttled for {} ms until timestamp {}",
                     nodeId,
                     host,
                     throttleTimeMs,
@@ -923,7 +923,7 @@ public class NetworkClient implements KafkaClient {
                 throttleTimeSensor.record(response.throttleTimeMs(), now);
 
             if (log.isDebugEnabled()) {
-                log.debug("Received {} response from node (nodeId={}, host={}) for request with header {}: {}",
+                log.debug("Received {} response from node {} ({}) for request with header {}: {}",
                         req.header.apiKey(), 
                         req.destination,
                         obtainHost(req.destination),
@@ -948,7 +948,7 @@ public class NetworkClient implements KafkaClient {
         if (apiVersionsResponse.data().errorCode() != Errors.NONE.code()) {
             if (req.request.version() == 0 || apiVersionsResponse.data().errorCode() != Errors.UNSUPPORTED_VERSION.code()) {
                 String host = obtainHost(node);
-                log.warn("Received error {} from node (nodeId={}, host={}) when making an ApiVersionsRequest with correlation id {}. Disconnecting.",
+                log.warn("Received error {} from node {} ({}) when making an ApiVersionsRequest with correlation id {}. Disconnecting.",
                         Errors.forCode(apiVersionsResponse.data().errorCode()), node, host, req.header.correlationId());
                 this.selector.close(node);
                 processDisconnection(responses, node, now, ChannelState.LOCAL_CLOSE);
@@ -987,7 +987,7 @@ public class NetworkClient implements KafkaClient {
     private void handleDisconnections(List<ClientResponse> responses, long now) {
         for (Map.Entry<String, ChannelState> entry : this.selector.disconnected().entrySet()) {
             String node = entry.getKey();
-            log.info("Node {} disconnected.", node);
+            log.info("Node {} ({}) disconnected.", node, obtainHost(node));
             processDisconnection(responses, node, now, entry.getValue());
         }
     }
@@ -1004,10 +1004,10 @@ public class NetworkClient implements KafkaClient {
             String host = obtainHost(node);
             if (discoverBrokerVersions) {
                 nodesNeedingApiVersionsFetch.put(node, new ApiVersionsRequest.Builder());
-                log.debug("Completed connection to node (nodeId={}, host={}). Fetching API versions.", node, host);
+                log.debug("Completed connection to node {} ({}). Fetching API versions.", node, host);
             } else {
                 this.connectionStates.ready(node);
-                log.debug("Completed connection to node (nodeId={}, host={}). Ready.", node, host);
+                log.debug("Completed connection to node {} ({}). Ready.", node, host);
             }
         }
     }
@@ -1019,7 +1019,7 @@ public class NetworkClient implements KafkaClient {
             String node = entry.getKey();
             if (selector.isChannelReady(node) && inFlightRequests.canSendMore(node)) {
                 String host = obtainHost(node);
-                log.debug("Initiating API versions fetch from node (nodeId={}, host={}).", node, host);
+                log.debug("Initiating API versions fetch from node {} ({}).", node, host);
                 // We transition the connection to the CHECKING_API_VERSIONS state only when
                 // the ApiVersionsRequest is queued up to be sent out. Without this, the client
                 // could remain in the CHECKING_API_VERSIONS state forever if the channel does
