@@ -61,9 +61,13 @@ class KStreamKStreamJoin<K, V1, V2, VOut> implements ProcessorSupplier<K, V1, K,
 
     private final TimeTrackerSupplier sharedTimeTrackerSupplier;
 
-    KStreamKStreamJoin(final boolean isLeftSide, final String otherWindowName, final JoinWindowsInternal windows,
-            final ValueJoinerWithKey<? super K, ? super V1, ? super V2, ? extends VOut> joiner, final boolean outer,
-            final Optional<String> outerJoinWindowName, final TimeTrackerSupplier sharedTimeTrackerSupplier) {
+    KStreamKStreamJoin(final boolean isLeftSide,
+                       final String otherWindowName,
+                       final JoinWindowsInternal windows,
+                       final ValueJoinerWithKey<? super K, ? super V1, ? super V2, ? extends VOut> joiner,
+                       final boolean outer,
+                       final Optional<String> outerJoinWindowName,
+                       final TimeTrackerSupplier sharedTimeTrackerSupplier) {
         this.isLeftSide = isLeftSide;
         this.otherWindowName = otherWindowName;
         if (isLeftSide) {
@@ -92,8 +96,7 @@ class KStreamKStreamJoin<K, V1, V2, VOut> implements ProcessorSupplier<K, V1, K,
     private class KStreamKStreamJoinProcessor extends ContextualProcessor<K, V1, K, VOut> {
         private WindowStore<K, V2> otherWindowStore;
         private Sensor droppedRecordsSensor;
-        private Optional<KeyValueStore<TimestampedKeyAndJoinSide<K>, LeftOrRightValue<V1, V2>>> outerJoinStore = Optional
-                .empty();
+        private Optional<KeyValueStore<TimestampedKeyAndJoinSide<K>, LeftOrRightValue<V1, V2>>> outerJoinStore = Optional.empty();
         private InternalProcessorContext<K, VOut> internalProcessorContext;
         private TimeTracker sharedTimeTracker;
 
@@ -103,16 +106,13 @@ class KStreamKStreamJoin<K, V1, V2, VOut> implements ProcessorSupplier<K, V1, K,
             internalProcessorContext = (InternalProcessorContext<K, VOut>) context;
 
             final StreamsMetricsImpl metrics = (StreamsMetricsImpl) context.metrics();
-            droppedRecordsSensor = droppedRecordsSensor(Thread.currentThread().getName(), context.taskId().toString(),
-                    metrics);
+            droppedRecordsSensor = droppedRecordsSensor(Thread.currentThread().getName(), context.taskId().toString(), metrics);
             otherWindowStore = context.getStateStore(otherWindowName);
             sharedTimeTracker = sharedTimeTrackerSupplier.get(context.taskId());
 
             if (enableSpuriousResultFix) {
                 outerJoinStore = outerJoinWindowName.map(context::getStateStore);
-
-                sharedTimeTracker.setEmitInterval(StreamsConfig.InternalConfig.getLong(context.appConfigs(),
-                        EMIT_INTERVAL_MS_KSTREAMS_OUTER_JOIN_SPURIOUS_RESULTS_FIX, 1000L));
+                sharedTimeTracker.setEmitInterval(StreamsConfig.InternalConfig.getLong(context.appConfigs(), EMIT_INTERVAL_MS_KSTREAMS_OUTER_JOIN_SPURIOUS_RESULTS_FIX, 1000L));
             }
         }
 
@@ -136,14 +136,13 @@ class KStreamKStreamJoin<K, V1, V2, VOut> implements ProcessorSupplier<K, V1, K,
                     final long otherRecordTimestamp = otherRecord.key;
 
                     outerJoinStore.ifPresent(store ->
-                    // Use putIfAbsent to first read and see if there's any values for the key,
-                    // if yes delete the key, otherwise do not issue a put;
-                    // we may delete some values with the same key early but since we are going
-                    // range over all values of the same key even after failure, since the other
-                    // window-store
-                    // is only cleaned up by stream time, so this is okay for at-least-once.
-                        store.putIfAbsent(TimestampedKeyAndJoinSide.make(!isLeftSide, record.key(), otherRecordTimestamp),
-                            null));
+                        // Use putIfAbsent to first read and see if there's any values for the key,
+                        // if yes delete the key, otherwise do not issue a put;
+                        // we may delete some values with the same key early but since we are going
+                        // range over all values of the same key even after failure, since the other
+                        // window-store
+                        // is only cleaned up by stream time, so this is okay for at-least-once.
+                        store.putIfAbsent(TimestampedKeyAndJoinSide.make(!isLeftSide, record.key(), otherRecordTimestamp), null));
 
                     context().forward(record.withValue(joiner.apply(record.key(), record.value(), otherRecord.value))
                             .withTimestamp(Math.max(inputRecordTimestamp, otherRecordTimestamp)));
@@ -177,8 +176,8 @@ class KStreamKStreamJoin<K, V1, V2, VOut> implements ProcessorSupplier<K, V1, K,
                     } else {
                         sharedTimeTracker.updatedMinTime(inputRecordTimestamp);
                         outerJoinStore.ifPresent(store -> store.put(
-                                TimestampedKeyAndJoinSide.make(isLeftSide, record.key(), inputRecordTimestamp),
-                                LeftOrRightValue.make(isLeftSide, record.value())));
+                            TimestampedKeyAndJoinSide.make(isLeftSide, record.key(), inputRecordTimestamp),
+                            LeftOrRightValue.make(isLeftSide, record.value())));
                     }
                 }
             }
