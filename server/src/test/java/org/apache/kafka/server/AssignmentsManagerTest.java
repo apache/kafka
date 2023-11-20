@@ -33,12 +33,10 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
@@ -76,22 +74,15 @@ public class AssignmentsManagerTest {
     }
 
     AssignReplicasToDirsRequestData normalize(AssignReplicasToDirsRequestData request) {
-        List<AssignReplicasToDirsRequestData.DirectoryData> directories = new ArrayList<>(request.directories());
-        directories.sort(Comparator.comparing(AssignReplicasToDirsRequestData.DirectoryData::id));
-        for (AssignReplicasToDirsRequestData.DirectoryData directory : directories) {
-            ArrayList<AssignReplicasToDirsRequestData.TopicData> topics = new ArrayList<>(directory.topics());
-            topics.sort(Comparator.comparing(AssignReplicasToDirsRequestData.TopicData::topicId));
-            for (AssignReplicasToDirsRequestData.TopicData topic : topics) {
-                ArrayList<AssignReplicasToDirsRequestData.PartitionData> partitions = new ArrayList<>(topic.partitions());
-                partitions.sort(Comparator.comparing(AssignReplicasToDirsRequestData.PartitionData::partitionIndex));
-                topic.setPartitions(partitions);
+        request = request.duplicate();
+        request.directories().sort(Comparator.comparing(AssignReplicasToDirsRequestData.DirectoryData::id));
+        for (AssignReplicasToDirsRequestData.DirectoryData directory : request.directories()) {
+            directory.topics().sort(Comparator.comparing(AssignReplicasToDirsRequestData.TopicData::topicId));
+            for (AssignReplicasToDirsRequestData.TopicData topic : directory.topics()) {
+                topic.partitions().sort(Comparator.comparing(AssignReplicasToDirsRequestData.PartitionData::partitionIndex));
             }
-            directory.setTopics(topics);
         }
-        return new AssignReplicasToDirsRequestData()
-                .setBrokerId(request.brokerId())
-                .setBrokerEpoch(request.brokerEpoch())
-                .setDirectories(directories);
+        return request;
     }
 
     void assertRequestEquals(AssignReplicasToDirsRequestData expected, AssignReplicasToDirsRequestData actual) {
