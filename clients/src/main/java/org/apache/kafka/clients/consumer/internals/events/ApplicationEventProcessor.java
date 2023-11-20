@@ -125,6 +125,11 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
         }
     }
 
+    @Override
+    protected Class<ApplicationEvent> getEventClass() {
+        return ApplicationEvent.class;
+    }
+
     private void process(final PollApplicationEvent event) {
         if (!requestManagers.commitRequestManager.isPresent()) {
             return;

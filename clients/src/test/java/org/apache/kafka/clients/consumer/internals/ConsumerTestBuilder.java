@@ -69,7 +69,7 @@ public class ConsumerTestBuilder implements Closeable {
     static final int DEFAULT_HEARTBEAT_INTERVAL_MS = 1000;
     static final double DEFAULT_HEARTBEAT_JITTER_MS = 0.0;
 
-    public final LogContext logContext = new LogContext();
+    final LogContext logContext = new LogContext();
     final Time time = new MockTime(0);
     public final BlockingQueue<ApplicationEvent> applicationEventQueue;
     public final BlockingQueue<BackgroundEvent> backgroundEventQueue;
@@ -322,6 +322,7 @@ public class ConsumerTestBuilder implements Closeable {
 
         @Override
         public void close() {
+            closeQuietly(backgroundEventProcessor, BackgroundEventProcessor.class.getSimpleName());
             closeQuietly(applicationEventHandler, ApplicationEventHandler.class.getSimpleName());
         }
     }

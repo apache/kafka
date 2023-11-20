@@ -37,11 +37,6 @@ import java.util.concurrent.BlockingQueue;
  */
 public abstract class EventProcessor<T> implements Closeable {
 
-    public interface ProcessHandler<T> {
-
-        void onProcess(T event, Optional<KafkaException> error);
-    }
-
     private final Logger log;
     private final BlockingQueue<T> eventQueue;
     private final IdempotentCloser closer;
@@ -52,11 +47,18 @@ public abstract class EventProcessor<T> implements Closeable {
         this.closer = new IdempotentCloser();
     }
 
-    public abstract void process(T event);
+    protected abstract void process(T event);
 
     @Override
     public void close() {
         closer.close(this::closeInternal, () -> log.warn("The event processor was already closed"));
+    }
+
+    protected abstract Class<T> getEventClass();
+
+    public interface ProcessHandler<T> {
+
+        void onProcess(T event, Optional<KafkaException> error);
     }
 
     /**
@@ -64,17 +66,18 @@ public abstract class EventProcessor<T> implements Closeable {
      * processing the individual events, these are submitted to the given {@link ProcessHandler}.
      */
     protected void process(ProcessHandler<T> processHandler) {
-        closer.assertOpen("The processor was previously closed, so no further processing can occur");
+        String eventClassName = getEventClass().getSimpleName();
+        closer.assertOpen(() -> String.format("The processor was previously closed, so no further %s processing can occur", eventClassName));
 
         List<T> events = drain();
 
         try {
-            log.trace("Starting processing of {} event(s)", events.size());
+            log.trace("Starting processing of {} {}(s)", events.size(), eventClassName);
 
             for (T event : events) {
                 try {
                     Objects.requireNonNull(event, "Attempted to process a null event");
-                    log.trace("Consuming event: {}", event);
+                    log.trace("Consuming {}: {}", eventClassName, event);
                     process(event);
                     processHandler.onProcess(event, Optional.empty());
                 } catch (Throwable t) {
@@ -89,7 +92,7 @@ public abstract class EventProcessor<T> implements Closeable {
                 }
             }
         } finally {
-            log.trace("Completed processing of {} event(s)", events.size());
+            log.debug("Completed processing of {} {}(s)", events.size(), eventClassName);
         }
     }
 
@@ -98,7 +101,8 @@ public abstract class EventProcessor<T> implements Closeable {
      * this case, we need to throw an exception to notify the user the consumer is closed.
      */
     private void closeInternal() {
-        log.trace("Closing event processor");
+        String eventClassName = getEventClass().getSimpleName();
+        log.trace("Closing event processor for {}", eventClassName);
         List<T> incompleteEvents = drain();
 
         if (incompleteEvents.isEmpty())
@@ -117,7 +121,7 @@ public abstract class EventProcessor<T> implements Closeable {
                     f.completeExceptionally(exception);
                 });
 
-        log.debug("Discarding {} event(s) because the consumer is closing", incompleteEvents.size());
+        log.debug("Discarding {} {}s because the consumer is closing", incompleteEvents.size(), eventClassName);
     }
 
     /**

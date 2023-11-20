@@ -58,9 +58,4 @@ public class EventHandler<T> implements Closeable {
     public void close(Duration timeout) {
         // Do nothing. Available for subclasses.
     }
-
-    public interface Watcher {
-
-        void updated();
-    }
 }

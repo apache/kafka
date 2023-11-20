@@ -81,6 +81,11 @@ public class BackgroundEventProcessor extends EventProcessor<BackgroundEvent> {
     }
 
     @Override
+    protected Class<BackgroundEvent> getEventClass() {
+        return BackgroundEvent.class;
+    }
+
+    @Override
     public void process(final BackgroundEvent event) {
         switch (event.type()) {
             case ERROR:
