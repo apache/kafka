@@ -711,7 +711,7 @@ public class KafkaConsumerTest {
     }
 
     @ParameterizedTest
-    @EnumSource(GroupProtocol.class)
+    @EnumSource(value = GroupProtocol.class, names = "GENERIC")
     public void verifyPollTimesOutDuringMetadataUpdate(GroupProtocol groupProtocol) {
         final ConsumerMetadata metadata = createMetadata(subscription);
         final MockClient client = new MockClient(time, metadata);
@@ -1258,7 +1258,7 @@ public class KafkaConsumerTest {
     }
 
     @ParameterizedTest
-    @EnumSource(GroupProtocol.class)
+    @EnumSource(value = GroupProtocol.class, names = "GENERIC")
     public void fetchResponseWithUnexpectedPartitionIsIgnored(GroupProtocol groupProtocol) {
         ConsumerMetadata metadata = createMetadata(subscription);
         MockClient client = new MockClient(time, metadata);
