@@ -131,8 +131,7 @@ class HeartbeatRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBas
         assignments = List(new SyncGroupRequestData.SyncGroupRequestAssignment()
           .setMemberId(leaderMemberId)
           .setAssignment(Array[Byte](1))
-        ),
-        expectedAssignment = Array[Byte](1)
+        )
       )
 
       // Heartbeat STABLE group.
