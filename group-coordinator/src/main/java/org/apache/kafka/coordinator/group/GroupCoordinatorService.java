@@ -501,6 +501,10 @@ public class GroupCoordinatorService implements GroupCoordinator {
         final Set<TopicPartition> existingPartitionSet = runtime.partitions();
         final AtomicInteger cnt = new AtomicInteger(existingPartitionSet.size());
 
+        if (existingPartitionSet.isEmpty()) {
+            return CompletableFuture.completedFuture(new ListGroupsResponseData());
+        }
+
         for (TopicPartition tp : existingPartitionSet) {
             runtime.scheduleReadOperation(
                 "list-groups",
