@@ -1239,11 +1239,13 @@ class KafkaApis(val requestChannel: RequestChannel,
       .setPartitions(partitionData)
   }
 
-  private def DescribeTopicPartitionsResponseTopic(error: Errors,
-                                                   topic: String,
-                                                   topicId: Uuid,
-                                                   isInternal: Boolean,
-                                                   partitionData: util.List[DescribeTopicPartitionsResponsePartition]): DescribeTopicPartitionsResponseTopic = {
+  private def DescribeTopicPartitionsResponseTopic(
+    error: Errors,
+    topic: String,
+    topicId: Uuid,
+    isInternal: Boolean,
+    partitionData: util.List[DescribeTopicPartitionsResponsePartition]
+  ): DescribeTopicPartitionsResponseTopic = {
     new DescribeTopicPartitionsResponseTopic()
       .setErrorCode(error.code)
       .setName(topic)
@@ -1475,7 +1477,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       authorizedTopics,
       request.context.listenerName,
       firstPartitionId,
-      config.maxRequestPartitionSizeLimit)
+      Math.min(config.maxRequestPartitionSizeLimit, describeTopicPartitionsRequest.responsePartitionLimit()))
 
     // get topic authorized operations
     def setTopicAuthorizedOperations(response: DescribeTopicPartitionsResponseData): Unit = {

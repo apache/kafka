@@ -4318,6 +4318,25 @@ class KafkaApisTest extends Logging {
     assertEquals(Errors.NONE.code(), topicToCheck.errorCode())
     assertEquals(authorizedTopic, topicToCheck.name())
     assertEquals(2, topicToCheck.partitions().size())
+
+    // 4.6 Fetch all topics with limit
+    DescribeTopicPartitionsRequest = new DescribeTopicPartitionsRequest(
+      new DescribeTopicPartitionsRequestData().setResponsePartitionLimit(1)
+    )
+    request = buildRequest(DescribeTopicPartitionsRequest, plaintextListener)
+    when(clientRequestQuotaManager.maybeRecordAndGetThrottleTimeMs(any[RequestChannel.Request](),
+      any[Long])).thenReturn(0)
+
+    api.handleDescribeTopicPartitionsRequest(request)
+    response = verifyNoThrottling[DescribeTopicPartitionsResponse](request)
+
+    topics = response.data().topics().asScala.toList
+    assertEquals(1, topics.size)
+    topicToCheck = topics(0)
+    assertEquals(authorizedTopicId, topicToCheck.topicId())
+    assertEquals(Errors.NONE.code(), topicToCheck.errorCode())
+    assertEquals(authorizedTopic, topicToCheck.name())
+    assertEquals(1, topicToCheck.partitions().size())
   }
 
   @Test

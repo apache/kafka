@@ -142,9 +142,11 @@ class KRaftMetadataCache(val brokerId: Int) extends MetadataCache with Logging w
     }
   }
 
-  private def getPartitionMetadataForDescribeTopicResponse(image: MetadataImage,
-                                                           topicName: String,
-                                                           listenerName: ListenerName): Option[List[DescribeTopicPartitionsResponsePartition]] = {
+  private def getPartitionMetadataForDescribeTopicResponse(
+    image: MetadataImage,
+    topicName: String,
+    listenerName: ListenerName
+  ): Option[List[DescribeTopicPartitionsResponsePartition]] = {
     Option(image.topics().getTopic(topicName)) match {
       case None => None
       case Some(topic) => {
@@ -267,14 +269,16 @@ class KRaftMetadataCache(val brokerId: Int) extends MetadataCache with Logging w
    * @param topics                        The set of topics and their corresponding first partition id to fetch.
    * @param listenerName                  The listener name.
    * @param firstTopicPartitionStartIndex The start partition index for the first topic
-   * @param quota                         The max number of partitions to return.
+   * @param maximumNumberOfPartition      The max number of partitions to return.
    */
-  def getTopicMetadataForDescribeTopicResponse(topics: Seq[String],
-                                               listenerName: ListenerName,
-                                               firstTopicPartitionStartIndex: Int,
-                                               quota: Int): DescribeTopicPartitionsResponseData = {
+  def getTopicMetadataForDescribeTopicResponse(
+    topics: Seq[String],
+    listenerName: ListenerName,
+    firstTopicPartitionStartIndex: Int,
+    maximumNumberOfPartition: Int
+  ): DescribeTopicPartitionsResponseData = {
     val image = _currentImage
-    var remaining = quota
+    var remaining = maximumNumberOfPartition
     var startIndex = firstTopicPartitionStartIndex
     val result = new DescribeTopicPartitionsResponseData()
     topics.foreach { topicName =>
