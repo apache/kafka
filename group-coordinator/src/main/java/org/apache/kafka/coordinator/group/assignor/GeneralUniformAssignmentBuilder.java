@@ -781,7 +781,7 @@ public class GeneralUniformAssignmentBuilder extends AbstractUniformAssignmentBu
             }
 
             if (memberData.currentAssignmentSize > 0) {
-                memberData.currentAssignmentSize --;
+                memberData.currentAssignmentSize--;
             }
         }
 
