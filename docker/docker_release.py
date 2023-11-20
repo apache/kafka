@@ -17,6 +17,8 @@
 
 """
 Python script to build and push docker image
+This script is used to prepare and publish docker release candidate
+
 Usage: docker_release.py
 
 Interactive utility to push the docker image to dockerhub

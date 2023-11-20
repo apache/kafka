@@ -57,3 +57,14 @@ Using the image in a docker container
     - File input
     - Default (lowest)
 - Any env variable that is commonly used in starting kafka(for example, CLUSTER_ID) can be supplied to docker container and it will be available when kafka starts
+
+Steps to release docker image
+-----------------------------
+- Make sure you have executed release.py script to prepare RC tarball in apache sftp server.
+- Use the RC tarball url as input kafka url to build docker image and run sanity tests.
+- Trigger github actions workflow using the RC branch, provide RC tarball url as kafka url.
+- This will generate test report and CVE report for docker images.
+- If the reports look fine, RC docker image can be built and published.
+- Execute `docker_release.py` script to build and publish RC docker image in your own dockerhub account.
+- Share the RC docker image, test report and CVE report with the community in RC vote email.
+- Once approved and ready, take help from someone in PMC to trigger `docker_promote.py` script and promote the RC docker image to apache/kafka dockerhub repo
