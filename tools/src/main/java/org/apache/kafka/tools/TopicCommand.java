@@ -247,7 +247,7 @@ public abstract class TopicCommand {
     }
 
     static class CommandTopicPartition {
-        private final Optional<String> name;
+        private final String name;
         private final Optional<Integer> partitions;
         private final Optional<Integer> replicationFactor;
         private final Map<Integer, List<Integer>> replicaAssignment;
@@ -257,7 +257,7 @@ public abstract class TopicCommand {
 
         public CommandTopicPartition(TopicCommandOptions options) {
             opts = options;
-            name = options.topic();
+            name = options.topic().get();
             partitions = options.partitions();
             replicationFactor = options.replicationFactor();
             replicaAssignment = options.replicaAssignment().orElse(Collections.emptyMap());
@@ -439,7 +439,7 @@ public abstract class TopicCommand {
 
         public void createTopic(TopicCommandOptions opts) throws Exception {
             CommandTopicPartition topic = new CommandTopicPartition(opts);
-            if (Topic.hasCollisionChars(topic.name.get())) {
+            if (Topic.hasCollisionChars(topic.name)) {
                 System.out.println("WARNING: Due to limitations in metric names, topics with a period ('.') or underscore ('_') could " +
                     "collide. To avoid issues it is best to use either, but not both.");
             }
@@ -457,9 +457,9 @@ public abstract class TopicCommand {
             try {
                 NewTopic newTopic;
                 if (topic.hasReplicaAssignment()) {
-                    newTopic = new NewTopic(topic.name.get(), topic.replicaAssignment);
+                    newTopic = new NewTopic(topic.name, topic.replicaAssignment);
                 } else {
-                    newTopic = new NewTopic(topic.name.get(), topic.partitions, topic.replicationFactor.map(Integer::shortValue));
+                    newTopic = new NewTopic(topic.name, topic.partitions, topic.replicationFactor.map(Integer::shortValue));
                 }
 
                 Map<String, String> configsMap = topic.configsToAdd.stringPropertyNames().stream()

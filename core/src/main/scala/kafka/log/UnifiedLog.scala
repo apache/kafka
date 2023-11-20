@@ -818,7 +818,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
             appendInfo.setMaxTimestamp(validateAndOffsetAssignResult.maxTimestampMs)
             appendInfo.setOffsetOfMaxTimestamp(validateAndOffsetAssignResult.shallowOffsetOfMaxTimestampMs)
             appendInfo.setLastOffset(offset.value - 1)
-            appendInfo.setRecordConversionStats(validateAndOffsetAssignResult.recordConversionStats)
+            appendInfo.setRecordValidationStats(validateAndOffsetAssignResult.recordValidationStats)
             if (config.messageTimestampType == TimestampType.LOG_APPEND_TIME)
               appendInfo.setLogAppendTime(validateAndOffsetAssignResult.logAppendTimeMs)
 
@@ -1188,7 +1188,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
       OptionalInt.empty()
 
     new LogAppendInfo(firstOffset, lastOffset, lastLeaderEpochOpt, maxTimestamp, offsetOfMaxTimestamp,
-      RecordBatch.NO_TIMESTAMP, logStartOffset, RecordConversionStats.EMPTY, sourceCompression,
+      RecordBatch.NO_TIMESTAMP, logStartOffset, RecordValidationStats.EMPTY, sourceCompression,
       validBytesCount, lastOffsetOfFirstBatch, Collections.emptyList[RecordError], LeaderHwChange.NONE)
   }
 
