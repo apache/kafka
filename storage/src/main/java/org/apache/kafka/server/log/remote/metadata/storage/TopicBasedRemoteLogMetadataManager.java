@@ -455,7 +455,12 @@ public class TopicBasedRemoteLogMetadataManager implements RemoteLogMetadataMana
                     .topicNameValues()
                     .get(topic)
                     .get();
-            log.info("Topic {} exists. Description: {}", topic, description);
+            if (description != null) {
+                log.info("Topic {} exists. TopicId: {}, numPartitions: {}, ", topic,
+                        description.topicId(), description.partitions().size());
+            } else {
+                log.info("Topic {} does not exist.", topic);
+            }
             return description != null;
         } catch (ExecutionException | InterruptedException ex) {
             log.info("Topic {} does not exist. Error: {}", topic, ex.getCause().getMessage());
