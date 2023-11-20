@@ -55,8 +55,7 @@ public class ApplicationEventHandler extends EventHandler<ApplicationEvent> {
                 time,
                 applicationEventProcessorSupplier,
                 networkClientDelegateSupplier,
-                requestManagersSupplier
-        );
+                requestManagersSupplier);
         this.networkThread.start();
     }
 
@@ -67,7 +66,7 @@ public class ApplicationEventHandler extends EventHandler<ApplicationEvent> {
      * @param event An event to enqueue for later processing
      */
     @Override
-    public void add(ApplicationEvent event) {
+    public void add(final ApplicationEvent event) {
         super.add(event);
         wakeupNetworkThread();
     }
