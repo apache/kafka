@@ -75,12 +75,12 @@ RUN set -eux ; \
     wget -nv -O KEYS https://downloads.apache.org/kafka/KEYS; \
     gpg --import KEYS; \
     gpg --batch --verify kafka.tgz.asc kafka.tgz; \
-    mkdir -p /var/lib/kafka/data /etc/kafka/secrets /var/log/kafka; \
+    mkdir -p /var/lib/kafka/data /etc/kafka/secrets; \
     mkdir -p /etc/kafka/docker /usr/logs /mnt/shared/config; \
     adduser -h /home/appuser -D --shell /bin/bash appuser; \
     chown appuser:appuser -R /usr/logs /opt/kafka /mnt/shared/config; \
-    chown appuser:root -R /var/lib/kafka /etc/kafka/secrets /var/lib/kafka /etc/kafka /var/log/kafka; \
-    chmod -R ug+w /etc/kafka /var/lib/kafka /var/lib/kafka /etc/kafka/secrets /etc/kafka /var/log/kafka; \
+    chown appuser:root -R /var/lib/kafka /etc/kafka/secrets /etc/kafka; \
+    chmod -R ug+w /etc/kafka /var/lib/kafka /etc/kafka/secrets; \
     rm kafka.tgz kafka.tgz.asc KEYS; \
     apk del curl wget gpg dirmngr gpg-agent; \
     apk cache clean;
