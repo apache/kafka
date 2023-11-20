@@ -19,6 +19,9 @@ package org.apache.kafka.clients.consumer.internals;
 import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
+import org.apache.kafka.clients.consumer.OffsetResetStrategy;
+import org.apache.kafka.clients.consumer.internals.events.AutoCommitCompletionBackgroundEvent;
+import org.apache.kafka.clients.consumer.internals.events.BackgroundEventHandler;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.DisconnectException;
@@ -53,6 +56,7 @@ import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.LinkedBlockingQueue;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -83,15 +87,16 @@ public class CommitRequestManagerTest {
     private MockTime time;
     private CoordinatorRequestManager coordinatorRequestManager;
     private Properties props;
+    private BackgroundEventHandler backgroundEventHandler;
 
     @BeforeEach
     public void setup() {
         this.logContext = new LogContext();
         this.time = new MockTime(0);
-        this.subscriptionState = mock(SubscriptionState.class);
+        this.subscriptionState = new SubscriptionState(new LogContext(), OffsetResetStrategy.EARLIEST);
         this.coordinatorRequestManager = mock(CoordinatorRequestManager.class);
         this.groupState = new GroupState(DEFAULT_GROUP_ID, Optional.empty());
-
+        this.backgroundEventHandler = spy(new BackgroundEventHandler(logContext, new LinkedBlockingQueue<>()));
         this.props = new Properties();
         this.props.put(ConsumerConfig.AUTO_COMMIT_INTERVAL_MS_CONFIG, 100);
         this.props.put(KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
@@ -122,16 +127,24 @@ public class CommitRequestManagerTest {
 
     @Test
     public void testPoll_EnsureAutocommitSent() {
+        TopicPartition tp = new TopicPartition("t1", 1);
+        subscriptionState.assignFromUser(Collections.singleton(tp));
+        subscriptionState.seek(tp, 100);
         CommitRequestManager commitRequestManger = create(true, 100);
         assertPoll(0, commitRequestManger);
 
         Map<TopicPartition, OffsetAndMetadata> offsets = new HashMap<>();
-        offsets.put(new TopicPartition("t1", 0), new OffsetAndMetadata(0));
+        offsets.put(tp, new OffsetAndMetadata(0));
         commitRequestManger.updateAutoCommitTimer(time.milliseconds());
-        when(subscriptionState.allConsumed()).thenReturn(offsets);
         time.sleep(100);
         commitRequestManger.updateAutoCommitTimer(time.milliseconds());
-        assertPoll(1, commitRequestManger);
+        List<NetworkClientDelegate.FutureCompletionHandler> pollResults = assertPoll(1, commitRequestManger);
+        pollResults.forEach(v -> v.onComplete(mockOffsetCommitResponse(
+                "t1",
+                1,
+                (short) 1,
+                Errors.NONE)));
+        verify(backgroundEventHandler).add(any(AutoCommitCompletionBackgroundEvent.class));
     }
 
     @Test
@@ -185,24 +198,35 @@ public class CommitRequestManagerTest {
     @Test
     public void testAutocommit_ResendAutocommitAfterException() {
         CommitRequestManager commitRequestManger = create(true, 100);
+        TopicPartition tp = new TopicPartition("topic", 1);
+        subscriptionState.assignFromUser(Collections.singleton(tp));
+        subscriptionState.seek(tp, 100);
         time.sleep(100);
         commitRequestManger.updateAutoCommitTimer(time.milliseconds());
-        List<CompletableFuture<ClientResponse>> futures = assertPoll(1, commitRequestManger);
+        List<NetworkClientDelegate.FutureCompletionHandler> futures = assertPoll(1, commitRequestManger);
         time.sleep(99);
         // complete the autocommit request (exceptionally)
-        futures.get(0).complete(mockOffsetCommitResponse(
+        futures.get(0).onComplete(mockOffsetCommitResponse(
             "topic",
             1,
             (short) 1,
             Errors.COORDINATOR_LOAD_IN_PROGRESS));
 
-        // we can then autocommit again
+        time.sleep(99);
         commitRequestManger.updateAutoCommitTimer(time.milliseconds());
         assertPoll(0, commitRequestManger);
-        time.sleep(1);
         commitRequestManger.updateAutoCommitTimer(time.milliseconds());
-        assertPoll(1, commitRequestManger);
+
+        time.sleep(1);
+        futures = assertPoll(1, commitRequestManger);
         assertEmptyPendingRequests(commitRequestManger);
+        futures.get(0).onComplete(mockOffsetCommitResponse(
+                "topic",
+                1,
+                (short) 1,
+                Errors.NONE));
+
+        verify(backgroundEventHandler).add(any(AutoCommitCompletionBackgroundEvent.class));
     }
 
     @Test
@@ -210,7 +234,7 @@ public class CommitRequestManagerTest {
         CommitRequestManager commitRequestManger = create(true, 100);
         time.sleep(100);
         commitRequestManger.updateAutoCommitTimer(time.milliseconds());
-        List<CompletableFuture<ClientResponse>> futures = assertPoll(1, commitRequestManger);
+        List<NetworkClientDelegate.FutureCompletionHandler> futures = assertPoll(1, commitRequestManger);
         time.sleep(100);
         commitRequestManger.updateAutoCommitTimer(time.milliseconds());
         // We want to make sure we don't resend autocommit if the previous request has not been completed
@@ -218,7 +242,7 @@ public class CommitRequestManagerTest {
         assertEmptyPendingRequests(commitRequestManger);
 
         // complete the unsent request and re-poll
-        futures.get(0).complete(buildOffsetCommitClientResponse(new OffsetCommitResponse(0, new HashMap<>()), Errors.NONE));
+        futures.get(0).onComplete(buildOffsetCommitClientResponse(new OffsetCommitResponse(0, new HashMap<>()), Errors.NONE));
         assertPoll(1, commitRequestManger);
     }
 
@@ -263,6 +287,7 @@ public class CommitRequestManagerTest {
             assertEmptyPendingRequests(commitRequestManger);
         }
 
+        assertExceptionHandling(commitRequestManger, error);
         assertCoordinatorDisconnect(error);
     }
 
@@ -475,13 +500,13 @@ public class CommitRequestManagerTest {
         assertEquals(0, res.unsentRequests.size());
     }
 
-    private List<CompletableFuture<ClientResponse>> assertPoll(
+    private List<NetworkClientDelegate.FutureCompletionHandler> assertPoll(
         final int numRes,
         final CommitRequestManager manager) {
         return assertPoll(true, numRes, manager);
     }
 
-    private List<CompletableFuture<ClientResponse>> assertPoll(
+    private List<NetworkClientDelegate.FutureCompletionHandler> assertPoll(
         final boolean coordinatorDiscovered,
         final int numRes,
         final CommitRequestManager manager) {
@@ -493,7 +518,7 @@ public class CommitRequestManagerTest {
         NetworkClientDelegate.PollResult res = manager.poll(time.milliseconds());
         assertEquals(numRes, res.unsentRequests.size());
 
-        return res.unsentRequests.stream().map(NetworkClientDelegate.UnsentRequest::future).collect(Collectors.toList());
+        return res.unsentRequests.stream().map(NetworkClientDelegate.UnsentRequest::handler).collect(Collectors.toList());
     }
 
     private CommitRequestManager create(final boolean autoCommitEnabled, final long autoCommitInterval) {
@@ -504,15 +529,16 @@ public class CommitRequestManagerTest {
             props.setProperty(GROUP_ID_CONFIG, TestUtils.randomString(10));
 
         return spy(new CommitRequestManager(
-            this.time,
-            this.logContext,
-            this.subscriptionState,
-            new ConsumerConfig(props),
-            this.coordinatorRequestManager,
-            this.groupState,
-            retryBackoffMs,
-            retryBackoffMaxMs,
-            0));
+                this.time,
+                this.logContext,
+                this.subscriptionState,
+                new ConsumerConfig(props),
+                this.coordinatorRequestManager,
+                this.backgroundEventHandler,
+                this.groupState,
+                retryBackoffMs,
+                retryBackoffMaxMs,
+                0));
     }
 
     private ClientResponse buildOffsetFetchClientResponse(

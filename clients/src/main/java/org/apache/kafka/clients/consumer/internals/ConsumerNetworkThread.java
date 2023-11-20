@@ -32,7 +32,9 @@ import org.slf4j.Logger;
 
 import java.io.Closeable;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
@@ -255,7 +257,7 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
     void cleanup() {
         log.trace("Closing the consumer network thread");
         Timer timer = time.timer(closeTimeout);
-        coordinatorOnClose(timer);
+        waitForClosingTasks(timer);
         runAtClose(requestManagers.entries(), networkClientDelegate, timer);
         closeQuietly(requestManagers, "request managers");
         closeQuietly(networkClientDelegate, "network client delegate");
@@ -263,13 +265,20 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
         log.debug("Closed the consumer network thread");
     }
 
-    void coordinatorOnClose(final Timer timer) {
+    /**
+     * We need to autocommit before shutting down the consumer. The method needs to first connect to the coordinator
+     * node to construct the closing requests.  Then wait for all closing requests to finish before returning.  The
+     * method is bounded by a closing timer.  We will continue closing down the consumer if the requests cannot be
+     * completed in time.
+     */
+    // Visible for testing
+    void waitForClosingTasks(final Timer timer) {
         if (!requestManagers.coordinatorRequestManager.isPresent())
             return;
 
         connectCoordinator(timer);
-
         List<NetworkClientDelegate.UnsentRequest> tasks = closingTasks();
+        networkClientDelegate.addAll(tasks);
         do {
             long currentTimeMs = timer.currentTimeMs();
             connectCoordinator(timer);
@@ -291,12 +300,11 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
 
     private void findCoordinatorSync(final Timer timer) {
         CoordinatorRequestManager coordinatorRequestManager = requestManagers.coordinatorRequestManager.get();
-        long currentTimeMs = timer.currentTimeMs();
         NetworkClientDelegate.PollResult request = coordinatorRequestManager.pollOnClose();
         networkClientDelegate.addAll(request);
         CompletableFuture<ClientResponse> findCoordinatorRequest = request.unsentRequests.get(0).future();
         while (timer.notExpired() && !findCoordinatorRequest.isDone()) {
-            networkClientDelegate.poll(timer.remainingMs(), currentTimeMs);
+            networkClientDelegate.poll(timer.remainingMs(), timer.currentTimeMs());
             timer.update();
         }
     }
@@ -305,12 +313,21 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
         if (!requestManagers.commitRequestManager.isPresent()) {
             return null;
         }
-        List<NetworkClientDelegate.UnsentRequest> autocommit = requestManagers.commitRequestManager.get().maybeAutoCommitOnClose();
-        networkClientDelegate.addAll(autocommit);
-        return autocommit;
+        Optional<NetworkClientDelegate.UnsentRequest> autocommit = requestManagers.commitRequestManager.get().maybeAutoCommit();
+        if (!autocommit.isPresent()) {
+            return Collections.emptyList();
+        }
+
+        return Collections.singletonList(autocommit.get());
     }
 
+    /**
+     * Aggregate all requests that need to be sent before closing.
+     */
     private List<NetworkClientDelegate.UnsentRequest> closingTasks() {
-        return maybeAutoCommitOnClose();
+        List<NetworkClientDelegate.UnsentRequest> closingRequests = new ArrayList<>();
+        // TODO: We need to send a closing heartbeat before closing
+        closingRequests.addAll(maybeAutoCommitOnClose());
+        return closingRequests;
     }
 }

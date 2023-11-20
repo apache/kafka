@@ -164,13 +164,19 @@ public class RequestManagers implements Closeable {
                             retryBackoffMaxMs,
                             backgroundEventHandler,
                             groupState.groupId);
-                    commit = new CommitRequestManager(time, logContext, subscriptions, config, coordinator, groupState);
                     membershipManager = new MembershipManagerImpl(
                             groupState.groupId,
                             subscriptions,
                             commit,
                             metadata,
                             logContext);
+                    commit = new CommitRequestManager(time,
+                            logContext,
+                            subscriptions,
+                            config,
+                            coordinator,
+                            backgroundEventHandler,
+                            groupState);
                     heartbeatRequestManager = new HeartbeatRequestManager(
                             logContext,
                             time,
