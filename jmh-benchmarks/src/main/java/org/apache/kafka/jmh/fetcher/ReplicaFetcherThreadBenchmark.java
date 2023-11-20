@@ -218,7 +218,7 @@ public class ReplicaFetcherThreadBenchmark {
 
         // TODO: fix to support raft
         ZkMetadataCache metadataCache = MetadataCache.zkMetadataCache(0,
-            config.interBrokerProtocolVersion(), BrokerFeatures.createEmpty(), null);
+            config.interBrokerProtocolVersion(), BrokerFeatures.createEmpty(), null, false);
         metadataCache.updateMetadata(0, updateMetadataRequest);
 
         replicaManager = new ReplicaManagerBuilder().
@@ -262,7 +262,7 @@ public class ReplicaFetcherThreadBenchmark {
     public void tearDown() throws IOException, InterruptedException {
         metrics.close();
         replicaManager.shutdown(false);
-        logManager.shutdown();
+        logManager.shutdown(-1L);
         scheduler.shutdown();
         Utils.delete(logDir);
     }

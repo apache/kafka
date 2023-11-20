@@ -19,57 +19,30 @@ package org.apache.kafka.clients.consumer.internals;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.IsolationLevel;
-import org.apache.kafka.common.serialization.Deserializer;
 
-import java.util.Objects;
+import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.configuredIsolationLevel;
 
 /**
  * {@link FetchConfig} represents the static configuration for fetching records from Kafka. It is simply a way
  * to bundle the immutable settings that were presented at the time the {@link Consumer} was created for later use by
  * classes like {@link Fetcher}, {@link CompletedFetch}, etc.
- *
- * <p/>
- *
- * In most cases, the values stored and returned by {@link FetchConfig} will be those stored in the following
- * {@link ConsumerConfig consumer configuration} settings:
- *
- * <ul>
- *     <li>{@link #minBytes}: {@link ConsumerConfig#FETCH_MIN_BYTES_CONFIG}</li>
- *     <li>{@link #maxBytes}: {@link ConsumerConfig#FETCH_MAX_BYTES_CONFIG}</li>
- *     <li>{@link #maxWaitMs}: {@link ConsumerConfig#FETCH_MAX_WAIT_MS_CONFIG}</li>
- *     <li>{@link #fetchSize}: {@link ConsumerConfig#MAX_PARTITION_FETCH_BYTES_CONFIG}</li>
- *     <li>{@link #maxPollRecords}: {@link ConsumerConfig#MAX_POLL_RECORDS_CONFIG}</li>
- *     <li>{@link #checkCrcs}: {@link ConsumerConfig#CHECK_CRCS_CONFIG}</li>
- *     <li>{@link #clientRackId}: {@link ConsumerConfig#CLIENT_RACK_CONFIG}</li>
- *     <li>{@link #deserializers}:
- *         {@link ConsumerConfig#KEY_DESERIALIZER_CLASS_CONFIG}/{@link ConsumerConfig#VALUE_DESERIALIZER_CLASS_CONFIG}
- *     </li>
- *     <li>{@link #isolationLevel}: {@link ConsumerConfig#ISOLATION_LEVEL_CONFIG}</li>
- * </ul>
- *
- * However, there are places in the code where additional logic is used to determine these fetch-related configuration
- * values. In those cases, the values are calculated outside of this class and simply passed in when constructed.
- *
- * <p/>
- *
- * Note: the {@link Deserializer deserializers} used for the key and value are not closed by this class. They should be
- * closed by the creator of the {@link FetchConfig}.
- *
- * @param <K> Type used to {@link Deserializer deserialize} the message/record key
- * @param <V> Type used to {@link Deserializer deserialize} the message/record value
  */
-public class FetchConfig<K, V> {
+public class FetchConfig {
 
-    final int minBytes;
-    final int maxBytes;
-    final int maxWaitMs;
-    final int fetchSize;
-    final int maxPollRecords;
-    final boolean checkCrcs;
-    final String clientRackId;
-    final Deserializers<K, V> deserializers;
-    final IsolationLevel isolationLevel;
+    public final int minBytes;
+    public final int maxBytes;
+    public final int maxWaitMs;
+    public final int fetchSize;
+    public final int maxPollRecords;
+    public final boolean checkCrcs;
+    public final String clientRackId;
+    public final IsolationLevel isolationLevel;
 
+    /**
+     * Constructs a new {@link FetchConfig} using explicitly provided values. This is provided here for tests that
+     * want to exercise different scenarios can construct specific configuration values rather than going through
+     * the hassle of constructing a {@link ConsumerConfig}.
+     */
     public FetchConfig(int minBytes,
                        int maxBytes,
                        int maxWaitMs,
@@ -77,7 +50,6 @@ public class FetchConfig<K, V> {
                        int maxPollRecords,
                        boolean checkCrcs,
                        String clientRackId,
-                       Deserializers<K, V> deserializers,
                        IsolationLevel isolationLevel) {
         this.minBytes = minBytes;
         this.maxBytes = maxBytes;
@@ -86,13 +58,27 @@ public class FetchConfig<K, V> {
         this.maxPollRecords = maxPollRecords;
         this.checkCrcs = checkCrcs;
         this.clientRackId = clientRackId;
-        this.deserializers = Objects.requireNonNull(deserializers, "Message deserializers provided to FetchConfig should not be null");
         this.isolationLevel = isolationLevel;
     }
 
-    public FetchConfig(ConsumerConfig config,
-                       Deserializers<K, V> deserializers,
-                       IsolationLevel isolationLevel) {
+    /**
+     * Constructs a new {@link FetchConfig} using values from the given {@link ConsumerConfig consumer configuration}
+     * settings:
+     *
+     * <ul>
+     *     <li>{@link #minBytes}: {@link ConsumerConfig#FETCH_MIN_BYTES_CONFIG}</li>
+     *     <li>{@link #maxBytes}: {@link ConsumerConfig#FETCH_MAX_BYTES_CONFIG}</li>
+     *     <li>{@link #maxWaitMs}: {@link ConsumerConfig#FETCH_MAX_WAIT_MS_CONFIG}</li>
+     *     <li>{@link #fetchSize}: {@link ConsumerConfig#MAX_PARTITION_FETCH_BYTES_CONFIG}</li>
+     *     <li>{@link #maxPollRecords}: {@link ConsumerConfig#MAX_POLL_RECORDS_CONFIG}</li>
+     *     <li>{@link #checkCrcs}: {@link ConsumerConfig#CHECK_CRCS_CONFIG}</li>
+     *     <li>{@link #clientRackId}: {@link ConsumerConfig#CLIENT_RACK_CONFIG}</li>
+     *     <li>{@link #isolationLevel}: {@link ConsumerConfig#ISOLATION_LEVEL_CONFIG}</li>
+     * </ul>
+     *
+     * @param config Consumer configuration
+     */
+    public FetchConfig(ConsumerConfig config) {
         this.minBytes = config.getInt(ConsumerConfig.FETCH_MIN_BYTES_CONFIG);
         this.maxBytes = config.getInt(ConsumerConfig.FETCH_MAX_BYTES_CONFIG);
         this.maxWaitMs = config.getInt(ConsumerConfig.FETCH_MAX_WAIT_MS_CONFIG);
@@ -100,8 +86,7 @@ public class FetchConfig<K, V> {
         this.maxPollRecords = config.getInt(ConsumerConfig.MAX_POLL_RECORDS_CONFIG);
         this.checkCrcs = config.getBoolean(ConsumerConfig.CHECK_CRCS_CONFIG);
         this.clientRackId = config.getString(ConsumerConfig.CLIENT_RACK_CONFIG);
-        this.deserializers = Objects.requireNonNull(deserializers, "Message deserializers provided to FetchConfig should not be null");
-        this.isolationLevel = isolationLevel;
+        this.isolationLevel = configuredIsolationLevel(config);
     }
 
     @Override
@@ -114,7 +99,6 @@ public class FetchConfig<K, V> {
                 ", maxPollRecords=" + maxPollRecords +
                 ", checkCrcs=" + checkCrcs +
                 ", clientRackId='" + clientRackId + '\'' +
-                ", deserializers=" + deserializers +
                 ", isolationLevel=" + isolationLevel +
                 '}';
     }

@@ -1038,6 +1038,83 @@ public class IncrementalCooperativeAssignorTest {
     }
 
     @Test
+    public void testLostAssignmentHandlingWhenScheduledDelayIsDisabled() {
+        // Customize assignor for this test case
+        rebalanceDelay = 0;
+        time = new MockTime();
+        initAssignor();
+
+        assertTrue(assignor.candidateWorkersForReassignment.isEmpty());
+        assertEquals(0, assignor.scheduledRebalance);
+        assertEquals(0, assignor.delay);
+
+        Map<String, WorkerLoad> configuredAssignment = new HashMap<>();
+        configuredAssignment.put("worker0", workerLoad("worker0", 0, 2, 0, 4));
+        configuredAssignment.put("worker1", workerLoad("worker1", 2, 2, 4, 4));
+        configuredAssignment.put("worker2", workerLoad("worker2", 4, 2, 8, 4));
+
+        // No lost assignments
+        assignor.handleLostAssignments(new ConnectorsAndTasks.Builder().build(),
+                new ConnectorsAndTasks.Builder(),
+                new ArrayList<>(configuredAssignment.values()));
+
+        assertEquals("Wrong set of workers for reassignments",
+                Collections.emptySet(),
+                assignor.candidateWorkersForReassignment);
+        assertEquals(0, assignor.scheduledRebalance);
+        assertEquals(0, assignor.delay);
+
+        assignor.previousMembers = new HashSet<>(configuredAssignment.keySet());
+
+        String veryFlakyWorker = "worker1";
+        WorkerLoad lostLoad = configuredAssignment.remove(veryFlakyWorker);
+        ConnectorsAndTasks lostAssignments = new ConnectorsAndTasks.Builder()
+                .with(lostLoad.connectors(), lostLoad.tasks()).build();
+
+        // Lost assignments detected - Immediately reassigned
+        ConnectorsAndTasks.Builder lostAssignmentsToReassign = new ConnectorsAndTasks.Builder();
+        assignor.handleLostAssignments(lostAssignments, lostAssignmentsToReassign,
+                new ArrayList<>(configuredAssignment.values()));
+
+        assertEquals("Wrong set of workers for reassignments",
+                Collections.emptySet(),
+                assignor.candidateWorkersForReassignment);
+        assertEquals(0, assignor.scheduledRebalance);
+        assertEquals(0, assignor.delay);
+        assertEquals("Wrong assignment of lost connectors",
+                lostAssignments.connectors(), lostAssignmentsToReassign.build().connectors());
+        assertEquals("Wrong assignment of lost tasks",
+                lostAssignments.tasks(), lostAssignmentsToReassign.build().tasks());
+    }
+
+    @Test
+    public void testScheduledDelayIsDisabled() {
+        // Customize assignor for this test case
+        rebalanceDelay = 0;
+        time = new MockTime();
+        initAssignor();
+
+        // First assignment with 2 workers and 2 connectors configured but not yet assigned
+        addNewEmptyWorkers("worker2");
+        performStandardRebalance();
+        assertDelay(0);
+        assertWorkers("worker1", "worker2");
+        assertConnectorAllocations(1, 1);
+        assertTaskAllocations(4, 4);
+        assertBalancedAndCompleteAllocation();
+
+        // Second assignment with only one worker remaining in the group. The worker that left the
+        // group was a follower. Re-assignments take place immediately
+        removeWorkers("worker2");
+        performStandardRebalance();
+        assertDelay(rebalanceDelay);
+        assertWorkers("worker1");
+        assertConnectorAllocations(2);
+        assertTaskAllocations(8);
+        assertBalancedAndCompleteAllocation();
+    }
+
+    @Test
     public void testTaskAssignmentWhenTasksDuplicatedInWorkerAssignment() {
         // First assignment with 1 worker and 2 connectors configured but not yet assigned
         performStandardRebalance();

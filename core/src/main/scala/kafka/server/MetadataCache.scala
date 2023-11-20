@@ -25,6 +25,7 @@ import org.apache.kafka.common.{Cluster, Node, TopicPartition, Uuid}
 import org.apache.kafka.server.common.{Features, MetadataVersion}
 
 import java.util
+import scala.collection._
 
 /**
  * Used to represent the controller id cached in the metadata cache of the broker. This trait is
@@ -115,9 +116,10 @@ object MetadataCache {
   def zkMetadataCache(brokerId: Int,
                       metadataVersion: MetadataVersion,
                       brokerFeatures: BrokerFeatures = BrokerFeatures.createEmpty(),
-                      kraftControllerNodes: collection.Seq[Node] = collection.Seq.empty[Node])
+                      kraftControllerNodes: collection.Seq[Node] = collection.Seq.empty[Node],
+                      zkMigrationEnabled: Boolean = false)
   : ZkMetadataCache = {
-    new ZkMetadataCache(brokerId, metadataVersion, brokerFeatures, kraftControllerNodes)
+    new ZkMetadataCache(brokerId, metadataVersion, brokerFeatures, kraftControllerNodes, zkMigrationEnabled)
   }
 
   def kRaftMetadataCache(brokerId: Int): KRaftMetadataCache = {

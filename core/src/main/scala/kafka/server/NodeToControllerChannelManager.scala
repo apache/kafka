@@ -31,10 +31,12 @@ import org.apache.kafka.common.requests.AbstractRequest
 import org.apache.kafka.common.security.JaasContext
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.utils.{LogContext, Time}
+import org.apache.kafka.server.{ControllerRequestCompletionHandler, NodeToControllerChannelManager}
 import org.apache.kafka.server.common.ApiMessageAndVersion
 import org.apache.kafka.server.util.{InterBrokerSendThread, RequestAndCompletionHandler}
 
 import java.util
+import java.util.Optional
 import scala.collection.Seq
 import scala.compat.java8.OptionConverters._
 import scala.jdk.CollectionConverters._
@@ -128,38 +130,6 @@ class RaftControllerNodeProvider(
   override def getControllerInfo(): ControllerInformation =
     ControllerInformation(raftManager.leaderAndEpoch.leaderId.asScala.map(idToNode),
       listenerName, securityProtocol, saslMechanism, isZkController = false)
-}
-
-object NodeToControllerChannelManager {
-  def apply(
-    controllerNodeProvider: ControllerNodeProvider,
-    time: Time,
-    metrics: Metrics,
-    config: KafkaConfig,
-    channelName: String,
-    threadNamePrefix: String,
-    retryTimeoutMs: Long
-  ): NodeToControllerChannelManager = {
-    new NodeToControllerChannelManagerImpl(
-      controllerNodeProvider,
-      time,
-      metrics,
-      config,
-      channelName,
-      threadNamePrefix,
-      retryTimeoutMs
-    )
-  }
-}
-
-trait NodeToControllerChannelManager {
-  def start(): Unit
-  def shutdown(): Unit
-  def controllerApiVersions(): Option[NodeApiVersions]
-  def sendRequest(
-    request: AbstractRequest.Builder[_ <: AbstractRequest],
-    callback: ControllerRequestCompletionHandler
-  ): Unit
 }
 
 /**
@@ -270,20 +240,11 @@ class NodeToControllerChannelManagerImpl(
     ))
   }
 
-  def controllerApiVersions(): Option[NodeApiVersions] = {
+  def controllerApiVersions(): Optional[NodeApiVersions] = {
     requestThread.activeControllerAddress().flatMap { activeController =>
       Option(apiVersions.get(activeController.idString))
-    }
+    }.asJava
   }
-}
-
-abstract class ControllerRequestCompletionHandler extends RequestCompletionHandler {
-
-  /**
-   * Fire when the request transmission time passes the caller defined deadline on the channel queue.
-   * It covers the total waiting time including retries which might be the result of individual request timeout.
-   */
-  def onTimeout(): Unit
 }
 
 case class NodeToControllerQueueItem(

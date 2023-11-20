@@ -161,7 +161,10 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
         <!-- Scala doesn't have checked exceptions so one cannot catch RuntimeException and rely
              on the compiler to fail if the code is changed to call a method that throws Exception.
              Given that, this bug pattern doesn't make sense for Scala code. -->
-        <Class name="kafka.log.Log"/>
+        <Or>
+            <Class name="kafka.log.Log"/>
+            <Class name="kafka.log.LocalLog$"/>
+        </Or>
         <Bug pattern="REC_CATCH_EXCEPTION"/>
     </Match>
 
@@ -286,6 +289,13 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
         <Class name="org.apache.kafka.connect.runtime.rest.entities.PluginInfo$NoVersionFilter"/>
         <Method name="equals"/>
         <Bug pattern="EQ_CHECK_FOR_OPERAND_NOT_COMPATIBLE_WITH_THIS"/>
+    </Match>
+
+    <Match>
+        <!-- Suppress aggressive and unnecessary warnings about switch fallthrough -->
+        <Class name="org.apache.kafka.connect.runtime.rest.resources.LoggingResource" />
+        <Method name="setLevel" />
+        <Bug pattern="SF_SWITCH_FALLTHROUGH" />
     </Match>
 
     <Match>
@@ -574,6 +584,16 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
         <!-- Suppress a warning about await not being in a loop - we expect the loop to be outside the method. -->
         <Class name="org.apache.kafka.streams.processor.internals.tasks.DefaultTaskManager"/>
         <Bug pattern="WA_AWAIT_NOT_IN_LOOP"/>
+    </Match>
+
+    <Match>
+        <!-- Suppress the warnings about the caller not using the return value from Consumer. KafkaConsumer now
+             delegates all API calls to an internal instance of Consumer, which confuses SpotBugs. -->
+        <Or>
+            <Class name="org.apache.kafka.tools.ClientCompatibilityTest"/>
+            <Class name="org.apache.kafka.tools.StreamsResetter"/>
+        </Or>
+        <Bug pattern="RV_RETURN_VALUE_IGNORED_NO_SIDE_EFFECT"/>
     </Match>
 
 </FindBugsFilter>
