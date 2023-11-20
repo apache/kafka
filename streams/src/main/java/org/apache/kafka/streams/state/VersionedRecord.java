@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.state;
 
 import java.util.Objects;
+import java.util.Optional;
 
 /**
  * Combines a value (from a key-value record) with a timestamp, for use as the return type
@@ -27,7 +28,7 @@ import java.util.Objects;
 public final class VersionedRecord<V> {
     private final V value;
     private final long timestamp;
-    private final long validTo;
+    private final Optional<Long> validTo;
 
     /**
      * Create a new {@link VersionedRecord} instance. {@code value} cannot be {@code null}.
@@ -38,7 +39,7 @@ public final class VersionedRecord<V> {
     public VersionedRecord(final V value, final long timestamp) {
         this.value = Objects.requireNonNull(value, "value cannot be null.");
         this.timestamp = timestamp;
-        this.validTo = Long.MAX_VALUE;
+        this.validTo = Optional.empty();
     }
 
     /**
@@ -48,7 +49,7 @@ public final class VersionedRecord<V> {
      * @param timestamp  The timestamp
      * @param validTo    The exclusive upper bound of the validity interval
      */
-    public VersionedRecord(final V value, final long timestamp, final long validTo) {
+    public VersionedRecord(final V value, final long timestamp, final Optional<Long> validTo) {
         this.value = Objects.requireNonNull(value);
         this.timestamp = timestamp;
         this.validTo = validTo;
@@ -63,7 +64,7 @@ public final class VersionedRecord<V> {
         return timestamp;
     }
 
-    public long validTo() {
+    public Optional<Long> validTo() {
         return validTo;
     }
 

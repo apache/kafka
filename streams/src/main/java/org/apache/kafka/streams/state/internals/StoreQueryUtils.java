@@ -224,9 +224,10 @@ public final class StoreQueryUtils {
 
     @SuppressWarnings("unchecked")
     private static <R> QueryResult<R> runKeyQuery(final Query<R> query,
-        final PositionBound positionBound,
-        final QueryConfig config,
-        final StateStore store) {
+                                                  final PositionBound positionBound,
+                                                  final QueryConfig config,
+                                                  final StateStore store) {
+
         if (store instanceof KeyValueStore) {
             final KeyQuery<Bytes, byte[]> rawKeyQuery = (KeyQuery<Bytes, byte[]>) query;
             final KeyValueStore<Bytes, byte[]> keyValueStore =
@@ -382,9 +383,10 @@ public final class StoreQueryUtils {
 
     @SuppressWarnings("unchecked")
     private static <R> QueryResult<R> runMultiVersionedKeyQuery(final Query<R> query,
-        final PositionBound positionBound,
-        final QueryConfig config,
-        final StateStore store) {
+                                                                final PositionBound positionBound,
+                                                                final QueryConfig config,
+                                                                final StateStore store) {
+
         if (store instanceof VersionedKeyValueStore) {
             final RocksDBVersionedStore rocksDBVersionedStore = (RocksDBVersionedStore) store;
             final MultiVersionedKeyQuery<Bytes, byte[]> rawKeyQuery = (MultiVersionedKeyQuery<Bytes, byte[]>) query;
@@ -392,7 +394,7 @@ public final class StoreQueryUtils {
                 final VersionedRecordIterator<byte[]> bytes = rocksDBVersionedStore.get(rawKeyQuery.key(),
                                                                                         rawKeyQuery.fromTime().get().toEpochMilli(),
                                                                                         rawKeyQuery.toTime().get().toEpochMilli(),
-                                                                                        rawKeyQuery.isAscending());
+                                                                                        rawKeyQuery.resultOrder());
                 return (QueryResult<R>) QueryResult.forResult(bytes);
             } catch (final Exception e) {
                 final String message = parseStoreException(e, store, query);

@@ -24,8 +24,7 @@ import org.apache.kafka.streams.state.VersionedRecordIterator;
 
 /**
  * Interactive query for retrieving a set of records with the same specified key and different timestamps within the specified time range.
- * The query returns the records with a global ascending order of keys. The records with the same key are ordered based on their insertion
- * timestamp in ascending order. Both the global and partial ordering are modifiable with the corresponding methods defined for the class.
+ * No ordering is guaranteed for the results, but the results can be sorted by timestamp (in ascending or descending order) by calling the corresponding defined methods.
  *
  *  @param <K> The type of the key.
  *  @param <V> The type of the result returned by this query.
@@ -36,13 +35,13 @@ public final class MultiVersionedKeyQuery<K, V> implements Query<VersionedRecord
     private final K key;
     private final Optional<Instant> fromTime;
     private final Optional<Instant> toTime;
-    private final boolean isAscending;
+    private final ResultOrder order;
 
-    private MultiVersionedKeyQuery(final K key, final Optional<Instant> fromTime, final Optional<Instant> toTime, final boolean isAscending) {
+    private MultiVersionedKeyQuery(final K key, final Optional<Instant> fromTime, final Optional<Instant> toTime, final ResultOrder order) {
         this.key = key;
         this.fromTime = fromTime;
         this.toTime = toTime;
-        this.isAscending = isAscending;
+        this.order = order;
     }
 
   /**
@@ -62,7 +61,7 @@ public final class MultiVersionedKeyQuery<K, V> implements Query<VersionedRecord
    */
     public static <K, V> MultiVersionedKeyQuery<K, V> withKey(final K key) {
         Objects.requireNonNull(key, "key cannot be null.");
-        return new MultiVersionedKeyQuery<>(key, Optional.empty(), Optional.empty(), true);
+        return new MultiVersionedKeyQuery<>(key, Optional.empty(), Optional.empty(), ResultOrder.UNORDERED);
     }
 
     /**
@@ -76,7 +75,7 @@ public final class MultiVersionedKeyQuery<K, V> implements Query<VersionedRecord
      * If {@code fromTime} is null, it will be considered as negative infinity, ie, no lower bound
      */
     public MultiVersionedKeyQuery<K, V> fromTime(final Instant fromTime) {
-        return new MultiVersionedKeyQuery<>(key, Optional.ofNullable(fromTime), toTime, true);
+        return new MultiVersionedKeyQuery<>(key, Optional.ofNullable(fromTime), toTime, order);
     }
 
     /**
@@ -87,21 +86,21 @@ public final class MultiVersionedKeyQuery<K, V> implements Query<VersionedRecord
      * If @param toTime is null, will be considered as positive infinity, ie, no upper bound
      */
     public MultiVersionedKeyQuery<K, V> toTime(final Instant toTime) {
-        return new MultiVersionedKeyQuery<>(key, fromTime, Optional.ofNullable(toTime), true);
+        return new MultiVersionedKeyQuery<>(key, fromTime, Optional.ofNullable(toTime), order);
     }
 
     /**
      * Specifies the order of the returned records by the query as descending by timestamp.
      */
     public MultiVersionedKeyQuery<K, V> withDescendingTimestamps() {
-        return new MultiVersionedKeyQuery<>(key, fromTime, toTime, false);
+        return new MultiVersionedKeyQuery<>(key, fromTime, toTime, ResultOrder.DESCENDING);
     }
 
     /**
      * Specifies the order of the returned records by the query as ascending by timestamp.
      */
     public MultiVersionedKeyQuery<K, V> withAscendingTimestamps() {
-        return new MultiVersionedKeyQuery<>(key, fromTime, toTime, true);
+        return new MultiVersionedKeyQuery<>(key, fromTime, toTime, ResultOrder.ASCENDING);
     }
 
     /**
@@ -130,9 +129,9 @@ public final class MultiVersionedKeyQuery<K, V> implements Query<VersionedRecord
 
     /**
      * The order of the returned records by timestamp.
-     * @return true if the query returns records in ascending order of timestamps
+     * @return UNORDERED, ASCENDING, or DESCENDING if the query returns records in an unordered, ascending, or descending order of timestamps.
      */
-    public boolean isAscending() {
-        return isAscending;
+    public ResultOrder resultOrder() {
+        return order;
     }
 }

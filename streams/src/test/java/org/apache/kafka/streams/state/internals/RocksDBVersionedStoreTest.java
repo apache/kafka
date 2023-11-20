@@ -44,6 +44,7 @@ import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.processor.StateStoreContext;
+import org.apache.kafka.streams.query.ResultOrder;
 import org.apache.kafka.streams.state.VersionedRecordIterator;
 import org.apache.kafka.streams.state.VersionedRecord;
 import org.apache.kafka.test.InternalMockProcessorContext;
@@ -506,49 +507,49 @@ public class RocksDBVersionedStoreTest {
         verifyTimestampedGetNullFromStore("k", SEGMENT_INTERVAL - 40, SEGMENT_INTERVAL - 35);
 
         // return values for the query with query time range in which values are still valid and there are multiple tombstones
-        verifyTimestampedGetValueFromStore("k", SEGMENT_INTERVAL - 30, SEGMENT_INTERVAL - 5, true,
+        verifyTimestampedGetValueFromStore("k", SEGMENT_INTERVAL - 30, SEGMENT_INTERVAL - 5, ResultOrder.UNORDERED,
                                             Arrays.asList("v4", "v3", "v2", "v1"),
                                             Arrays.asList(SEGMENT_INTERVAL - 5, SEGMENT_INTERVAL - 10, SEGMENT_INTERVAL - 25, SEGMENT_INTERVAL - 30),
                                             Arrays.asList(Long.MAX_VALUE, SEGMENT_INTERVAL - 5, SEGMENT_INTERVAL - 20, SEGMENT_INTERVAL - 25));
 
         // return values for the query with time range (MIN, MAX)
-        verifyTimestampedGetValueFromStore("k", Long.MIN_VALUE, Long.MAX_VALUE, true,
+        verifyTimestampedGetValueFromStore("k", Long.MIN_VALUE, Long.MAX_VALUE, ResultOrder.UNORDERED,
                                            Arrays.asList("v4", "v3", "v2", "v1"),
                                            Arrays.asList(SEGMENT_INTERVAL - 5, SEGMENT_INTERVAL - 10, SEGMENT_INTERVAL - 25, SEGMENT_INTERVAL - 30),
                                            Arrays.asList(Long.MAX_VALUE, SEGMENT_INTERVAL - 5, SEGMENT_INTERVAL - 20, SEGMENT_INTERVAL - 25));
 
         // return values before insertion of any tombstone
-        verifyTimestampedGetValueFromStore("k", SEGMENT_INTERVAL - 31, SEGMENT_INTERVAL - 21, true,
+        verifyTimestampedGetValueFromStore("k", SEGMENT_INTERVAL - 31, SEGMENT_INTERVAL - 21, ResultOrder.UNORDERED,
                                             Arrays.asList("v2", "v1"),
                                             Arrays.asList(SEGMENT_INTERVAL - 25, SEGMENT_INTERVAL - 30),
                                             Arrays.asList(SEGMENT_INTERVAL - 20, SEGMENT_INTERVAL - 25));
 
         // return values for the query with time range that covers both tombstones
-        verifyTimestampedGetValueFromStore("k", SEGMENT_INTERVAL - 24, SEGMENT_INTERVAL - 11, true,
+        verifyTimestampedGetValueFromStore("k", SEGMENT_INTERVAL - 24, SEGMENT_INTERVAL - 11, ResultOrder.UNORDERED,
                                            Collections.singletonList("v2"),
                                            Collections.singletonList(SEGMENT_INTERVAL - 25),
                                            Collections.singletonList(SEGMENT_INTERVAL - 20));
 
         // return values for the query with time range that after insertion of tombstones
-        verifyTimestampedGetValueFromStore("k", SEGMENT_INTERVAL - 11, SEGMENT_INTERVAL - 4, true,
+        verifyTimestampedGetValueFromStore("k", SEGMENT_INTERVAL - 11, SEGMENT_INTERVAL - 4, ResultOrder.UNORDERED,
                                            Arrays.asList("v4", "v3"),
                                            Arrays.asList(SEGMENT_INTERVAL - 5, SEGMENT_INTERVAL - 10),
                                            Arrays.asList(Long.MAX_VALUE, SEGMENT_INTERVAL - 5));
 
         // return all the records that are valid during the query time range but inserted beforehand
-        verifyTimestampedGetValueFromStore("k", SEGMENT_INTERVAL - 26, SEGMENT_INTERVAL - 5, true,
+        verifyTimestampedGetValueFromStore("k", SEGMENT_INTERVAL - 26, SEGMENT_INTERVAL - 5, ResultOrder.UNORDERED,
                                             Arrays.asList("v4", "v3", "v2", "v1"),
                                             Arrays.asList(SEGMENT_INTERVAL - 5, SEGMENT_INTERVAL - 10, SEGMENT_INTERVAL - 25, SEGMENT_INTERVAL - 30),
                                             Arrays.asList(Long.MAX_VALUE, SEGMENT_INTERVAL - 5, SEGMENT_INTERVAL - 20, SEGMENT_INTERVAL - 25));
 
         // return the valid record that is still valid till the beginning of query time range (validTo = query lower time bound)
-        verifyTimestampedGetValueFromStore("k", SEGMENT_INTERVAL - 20, SEGMENT_INTERVAL - 15, true,
+        verifyTimestampedGetValueFromStore("k", SEGMENT_INTERVAL - 20, SEGMENT_INTERVAL - 15, ResultOrder.UNORDERED,
                                             Collections.singletonList("v2"),
                                             Collections.singletonList(SEGMENT_INTERVAL - 25),
                                             Collections.singletonList(SEGMENT_INTERVAL - 20));
 
         // return the valid record that has been inserted at the end of query time range (validFrom = query upper time bound)
-        verifyTimestampedGetValueFromStore("k", SEGMENT_INTERVAL - 15, SEGMENT_INTERVAL - 10, true,
+        verifyTimestampedGetValueFromStore("k", SEGMENT_INTERVAL - 15, SEGMENT_INTERVAL - 10, ResultOrder.UNORDERED,
                                             Collections.singletonList("v3"),
                                             Collections.singletonList(SEGMENT_INTERVAL - 10),
                                             Collections.singletonList(SEGMENT_INTERVAL - 5));
@@ -564,7 +565,7 @@ public class RocksDBVersionedStoreTest {
 
         // presence of non-empty later segment does not affect results of getting from earlier segment
         verifyTimestampedGetNullFromStore("k", SEGMENT_INTERVAL - 40, SEGMENT_INTERVAL - 35);
-        verifyTimestampedGetValueFromStore("k", SEGMENT_INTERVAL - 30, SEGMENT_INTERVAL - 26, true,
+        verifyTimestampedGetValueFromStore("k", SEGMENT_INTERVAL - 30, SEGMENT_INTERVAL - 26, ResultOrder.UNORDERED,
                                             Collections.singletonList("v1"),
                                             Collections.singletonList(SEGMENT_INTERVAL - 30),
                                             Collections.singletonList(SEGMENT_INTERVAL - 25));
@@ -581,7 +582,7 @@ public class RocksDBVersionedStoreTest {
         putToStore("k", "v4", SEGMENT_INTERVAL - 5, PUT_RETURN_CODE_VALID_TO_UNDEFINED);
 
         // return values for the query with time range in which values are still valid and there are multiple tombstones
-        verifyTimestampedGetValueFromStore("k", SEGMENT_INTERVAL - 30, SEGMENT_INTERVAL - 5, false,
+        verifyTimestampedGetValueFromStore("k", SEGMENT_INTERVAL - 30, SEGMENT_INTERVAL - 5, ResultOrder.DESCENDING,
                                             Arrays.asList("v1", "v2", "v3", "v4"),
                                             Arrays.asList(SEGMENT_INTERVAL - 30, SEGMENT_INTERVAL - 25, SEGMENT_INTERVAL - 10, SEGMENT_INTERVAL - 5),
                                             Arrays.asList(SEGMENT_INTERVAL - 25, SEGMENT_INTERVAL - 10, SEGMENT_INTERVAL - 5, Long.MAX_VALUE));
@@ -593,7 +594,7 @@ public class RocksDBVersionedStoreTest {
         putToStore("k", "v", SEGMENT_INTERVAL - 10, PUT_RETURN_CODE_VALID_TO_UNDEFINED);
 
         // old record has not yet expired
-        verifyTimestampedGetValueFromStore("k", 0, SEGMENT_INTERVAL - 11, true,
+        verifyTimestampedGetValueFromStore("k", 0, SEGMENT_INTERVAL - 11, ResultOrder.UNORDERED,
                                             Collections.singletonList("v_old"),
                                             Collections.singletonList(0L),
                                             Collections.singletonList(SEGMENT_INTERVAL - 10));
@@ -601,7 +602,7 @@ public class RocksDBVersionedStoreTest {
         putToStore("ko", "vo", HISTORY_RETENTION + SEGMENT_INTERVAL - 11, PUT_RETURN_CODE_VALID_TO_UNDEFINED);
 
         // old record still has not yet expired
-        verifyTimestampedGetValueFromStore("k", 0, SEGMENT_INTERVAL - 11, true,
+        verifyTimestampedGetValueFromStore("k", 0, SEGMENT_INTERVAL - 11, ResultOrder.UNORDERED,
                                             Collections.singletonList("v_old"),
                                             Collections.singletonList(0L),
                                             Collections.singletonList(SEGMENT_INTERVAL - 10));
@@ -620,7 +621,7 @@ public class RocksDBVersionedStoreTest {
         putToStore("ko", "vo_new", HISTORY_RETENTION + 12, PUT_RETURN_CODE_VALID_TO_UNDEFINED);
 
         // expired get on key where latest satisfies timestamp bound still returns data
-        verifyTimestampedGetValueFromStore("k", 0, 10, true,
+        verifyTimestampedGetValueFromStore("k", 0, 10, ResultOrder.UNORDERED,
                                             Collections.singletonList("v"),
                                             Collections.singletonList(1L),
                                             Collections.singletonList(Long.MAX_VALUE));
@@ -827,8 +828,8 @@ public class RocksDBVersionedStoreTest {
         return deserializedRecord(versionedRecord);
     }
 
-    private List<VersionedRecord<String>> getFromStore(final String key, final long fromTime, final long toTime, final boolean isAscending) {
-        final VersionedRecordIterator<byte[]> resultRecords = store.get(new Bytes(STRING_SERIALIZER.serialize(null, key)), fromTime, toTime, isAscending);
+    private List<VersionedRecord<String>> getFromStore(final String key, final long fromTime, final long toTime, final ResultOrder order) {
+        final VersionedRecordIterator<byte[]> resultRecords = store.get(new Bytes(STRING_SERIALIZER.serialize(null, key)), fromTime, toTime, order);
         final List<VersionedRecord<String>> versionedRecordsList = new ArrayList<>();
         while (resultRecords.hasNext()) {
             versionedRecordsList.add(deserializedRecord(resultRecords.next()));
@@ -858,11 +859,11 @@ public class RocksDBVersionedStoreTest {
     private void verifyTimestampedGetValueFromStore(final String key,
                                                     final long fromTime,
                                                     final long toTime,
-                                                    final boolean isAscending,
+                                                    final ResultOrder order,
                                                     final List<String> expectedValues,
                                                     final List<Long> expectedTimestamps,
                                                     final List<Long> expectedValidTos) {
-        final List<VersionedRecord<String>> results = getFromStore(key, fromTime, toTime, isAscending);
+        final List<VersionedRecord<String>> results = getFromStore(key, fromTime, toTime, order);
         assertThat(results.size(), equalTo(expectedValues.size()));
         for (int i = 0; i < results.size(); i++) {
             final VersionedRecord<String> record = results.get(i);
@@ -878,7 +879,7 @@ public class RocksDBVersionedStoreTest {
     }
 
     private void verifyTimestampedGetNullFromStore(final String key, final long fromTime, final long toTime) {
-        final List<VersionedRecord<String>> results = getFromStore(key, fromTime, toTime, true);
+        final List<VersionedRecord<String>> results = getFromStore(key, fromTime, toTime, ResultOrder.UNORDERED);
         assertThat(results.size(), equalTo(0));
     }
 

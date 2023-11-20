@@ -57,6 +57,7 @@ import org.rocksdb.ReadOptions;
 import org.rocksdb.RocksDB;
 import org.rocksdb.RocksDBException;
 import org.rocksdb.RocksIterator;
+import org.rocksdb.Snapshot;
 import org.rocksdb.Statistics;
 import org.rocksdb.TableFormatConfig;
 import org.rocksdb.WriteBatch;
@@ -311,6 +312,14 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
         if (!open) {
             throw new InvalidStateStoreException("Store " + name + " is currently closed");
         }
+    }
+
+    public Snapshot getSnapshot() {
+        return db.getSnapshot();
+    }
+
+    public void releaseSnapshot(final Snapshot snapshot) {
+        db.releaseSnapshot(snapshot);
     }
 
     @Override

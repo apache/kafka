@@ -192,11 +192,11 @@ class LogicalKeyValueSegment implements Comparable<LogicalKeyValueSegment>, Segm
     }
 
     public Snapshot getSnapshot() {
-        return physicalStore.db.getSnapshot();
+        return physicalStore.getSnapshot();
     }
 
     public void releaseSnapshot(final Snapshot snapshot) {
-        physicalStore.db.releaseSnapshot(snapshot);
+        physicalStore.releaseSnapshot(snapshot);
     }
 
     @Override

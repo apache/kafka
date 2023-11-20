@@ -14,23 +14,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.streams.state;
 
-import java.io.Closeable;
-import java.util.Iterator;
+package org.apache.kafka.streams.query;
 
-
-/**
- * Iterator interface of {@link VersionedRecord VersionedRecord<V>}.
- * <p>
- * Users must call its {@code close} method explicitly upon completeness to release resources,
- * or use try-with-resources statement (available since JDK7) for this {@link Closeable} class.
- * Note that {@code remove()} is not supported.
- *
- * @param <V> Type of values
- */
-public interface VersionedRecordIterator<V> extends Iterator<VersionedRecord<V>>, Closeable {
-
-    @Override
-    void close();
+public enum ResultOrder {
+    UNORDERED,
+    ASCENDING,
+    DESCENDING
 }

@@ -25,6 +25,9 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.utils.Bytes;
@@ -46,6 +49,7 @@ import org.apache.kafka.streams.query.PositionBound;
 import org.apache.kafka.streams.query.Query;
 import org.apache.kafka.streams.query.QueryConfig;
 import org.apache.kafka.streams.query.QueryResult;
+import org.apache.kafka.streams.query.ResultOrder;
 import org.apache.kafka.streams.state.VersionedKeyValueStore;
 import org.apache.kafka.streams.state.VersionedRecord;
 import org.apache.kafka.streams.state.VersionedRecordIterator;
@@ -255,7 +259,7 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
                         .deserialize(rawSegmentValue)
                         .find(asOfTimestamp, true);
                 if (searchResult.value() != null) {
-                    return new VersionedRecord<>(searchResult.value(), searchResult.validFrom(), searchResult.validTo());
+                    return new VersionedRecord<>(searchResult.value(), searchResult.validFrom(), Optional.of(searchResult.validTo()));
                 } else {
                     return null;
                 }
@@ -266,7 +270,7 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
         return null;
     }
 
-    public VersionedRecordIterator<byte[]> get(final Bytes key, final long fromTimestamp, final long toTimestamp, final boolean isAscending) {
+    public VersionedRecordIterator<byte[]> get(final Bytes key, final long fromTimestamp, final long toTimestamp, final ResultOrder order) {
 
         Objects.requireNonNull(key, "key cannot be null");
         validateStoreOpen();
@@ -295,7 +299,15 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
             return new VersionedRecordIteratorImpl<>(queryResults.listIterator());
         } else {
             // take a RocksDB snapshot to return the segments content at the query time (in order to guarantee consistency)
-            final Snapshot snapshot = latestValueStore.getSnapshot();
+            final Lock lock = new ReentrantLock();
+            lock.lock();
+            final Snapshot snapshot;
+            try {
+                snapshot = latestValueStore.getSnapshot();
+            } finally {
+                lock.unlock();
+            }
+
             // first check the latest value store
             final byte[] rawLatestValueAndTimestamp = latestValueStore.get(key, snapshot);
             if (rawLatestValueAndTimestamp != null) {
@@ -324,11 +336,11 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
                                                                     .deserialize(rawSegmentValue)
                                                                     .findAll(fromTimestamp, toTimestamp);
                     for (final SegmentSearchResult searchResult : searchResults) {
-                        queryResults.add(new VersionedRecord<>(searchResult.value(), searchResult.validFrom(), searchResult.validTo()));
+                        queryResults.add(new VersionedRecord<>(searchResult.value(), searchResult.validFrom(), Optional.of(searchResult.validTo())));
                     }
                 }
             }
-            if (!isAscending) {
+            if (order.equals(ResultOrder.DESCENDING)) {
                 queryResults.sort((r1, r2) -> (int) (r1.timestamp() - r2.timestamp()));
             }
 
