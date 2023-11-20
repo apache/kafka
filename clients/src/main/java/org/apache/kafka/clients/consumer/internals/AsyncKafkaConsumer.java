@@ -421,14 +421,12 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                 applicationEventQueue,
                 requestManagersSupplier
         );
-        this.applicationEventHandler = new ApplicationEventHandler(
-                logContext,
+        this.applicationEventHandler = new ApplicationEventHandler(logContext,
                 time,
                 applicationEventQueue,
                 applicationEventProcessorSupplier,
                 networkClientDelegateSupplier,
-                requestManagersSupplier
-        );
+                requestManagersSupplier);
         this.backgroundEventProcessor = new BackgroundEventProcessor(
                 logContext,
                 backgroundEventQueue,
