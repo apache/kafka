@@ -17,17 +17,16 @@
 
 package kafka.server
 
-import java.io.{ByteArrayOutputStream, File, PrintStream}
+import java.io.File
 import java.net.InetSocketAddress
 import java.util
 import java.util.{Collections, Optional, OptionalInt, Properties}
 import java.util.concurrent.{CompletableFuture, TimeUnit}
 import javax.security.auth.login.Configuration
-import kafka.tools.StorageTool
 import kafka.utils.{CoreUtils, Logging, TestInfoUtils, TestUtils}
 import kafka.zk.{AdminZkClient, EmbeddedZookeeper, KafkaZkClient}
 import org.apache.kafka.common.metrics.Metrics
-import org.apache.kafka.common.Uuid
+import org.apache.kafka.common.{DirectoryId, Uuid}
 import org.apache.kafka.common.security.JaasUtils
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.utils.{Exit, Time}
@@ -110,6 +109,7 @@ class KRaftQuorumImplementation(
           setVersion(MetaPropertiesVersion.V1).
           setClusterId(clusterId).
           setNodeId(config.nodeId).
+          setDirectoryId(DirectoryId.random()).
           build())
       })
       copier.setPreWriteHandler((logDir, _, _) => {
@@ -300,25 +300,6 @@ abstract class QuorumTestHarness extends Logging {
 
   def optionalMetadataRecords: Option[ArrayBuffer[ApiMessageAndVersion]] = None
 
-  private def formatDirectories(directories: immutable.Seq[String],
-                                metaProperties: MetaProperties): Unit = {
-    val stream = new ByteArrayOutputStream()
-    var out: PrintStream = null
-    try {
-      out = new PrintStream(stream)
-      val bootstrapMetadata = StorageTool.buildBootstrapMetadata(metadataVersion,
-                                                                 optionalMetadataRecords, "format command")
-      if (StorageTool.formatCommand(out, directories, metaProperties, bootstrapMetadata, metadataVersion,
-                                    ignoreFormatted = false) != 0) {
-        throw new RuntimeException(stream.toString())
-      }
-      debug(s"Formatted storage directory(ies) ${directories}")
-    } finally {
-      if (out != null) out.close()
-      stream.close()
-    }
-  }
-
   private def newKRaftQuorum(testInfo: TestInfo): KRaftQuorumImplementation = {
     val propsList = kraftControllerConfigs()
     if (propsList.size != 1) {
@@ -337,7 +318,7 @@ abstract class QuorumTestHarness extends Logging {
       setClusterId(Uuid.randomUuid().toString).
       setNodeId(nodeId).
       build()
-    formatDirectories(immutable.Seq(metadataDir.getAbsolutePath), metaProperties)
+    TestUtils.formatDirectories(immutable.Seq(metadataDir.getAbsolutePath), metaProperties, metadataVersion, optionalMetadataRecords)
 
     val metadataRecords = new util.ArrayList[ApiMessageAndVersion]
     metadataRecords.add(new ApiMessageAndVersion(new FeatureLevelRecord().

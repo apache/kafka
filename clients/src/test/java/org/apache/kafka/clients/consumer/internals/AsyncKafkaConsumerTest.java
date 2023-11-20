@@ -113,6 +113,13 @@ public class AsyncKafkaConsumerTest {
     }
 
     @Test
+    public void testFailOnClosedConsumer() {
+        consumer.close();
+        final IllegalStateException res = assertThrows(IllegalStateException.class, consumer::assignment);
+        assertEquals("This consumer has already been closed.", res.getMessage());
+    }
+
+    @Test
     public void testCommitAsync_NullCallback() throws InterruptedException {
         CompletableFuture<Void> future = new CompletableFuture<>();
         Map<TopicPartition, OffsetAndMetadata> offsets = new HashMap<>();
