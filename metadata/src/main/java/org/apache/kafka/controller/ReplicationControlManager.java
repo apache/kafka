@@ -78,7 +78,6 @@ import org.apache.kafka.common.requests.AlterPartitionRequest;
 import org.apache.kafka.common.requests.ApiError;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.image.writer.ImageWriterOptions;
-import org.apache.kafka.controller.BrokersToIsrs.PartitionsOnReplicaIteratorChain;
 import org.apache.kafka.metadata.BrokerHeartbeatReply;
 import org.apache.kafka.metadata.BrokerRegistration;
 import org.apache.kafka.metadata.BrokerRegistrationFencingChange;
@@ -1316,10 +1315,9 @@ public class ReplicationControlManager {
     void handleBrokerUnregistered(int brokerId, long brokerEpoch,
                                   List<ApiMessageAndVersion> records) {
         generateLeaderAndIsrUpdates("handleBrokerUnregistered", brokerId, NO_LEADER, NO_LEADER, records,
-            new PartitionsOnReplicaIteratorChain(Arrays.asList(
-                brokersToIsrs.partitionsWithBrokerInIsr(brokerId),
-                brokersToElrs.partitionsWithBrokerInElr(brokerId))
-            .iterator()));
+            brokersToIsrs.partitionsWithBrokerInIsr(brokerId));
+        generateLeaderAndIsrUpdates("handleBrokerUnregistered", brokerId, NO_LEADER, NO_LEADER, records,
+            brokersToElrs.partitionsWithBrokerInElr(brokerId));
         records.add(new ApiMessageAndVersion(new UnregisterBrokerRecord().
             setBrokerId(brokerId).setBrokerEpoch(brokerEpoch),
             (short) 0));
@@ -1383,10 +1381,9 @@ public class ReplicationControlManager {
      */
     void handleBrokerUncleanShutdown(int brokerId, List<ApiMessageAndVersion> records) {
         generateLeaderAndIsrUpdates("handleBrokerUncleanShutdown", NO_LEADER, NO_LEADER, brokerId, records,
-            new PartitionsOnReplicaIteratorChain(Arrays.asList(
-                brokersToIsrs.partitionsWithBrokerInIsr(brokerId),
-                brokersToElrs.partitionsWithBrokerInElr(brokerId))
-            .iterator()));
+            brokersToIsrs.partitionsWithBrokerInIsr(brokerId));
+        generateLeaderAndIsrUpdates("handleBrokerUncleanShutdown", NO_LEADER, NO_LEADER, brokerId, records,
+            brokersToElrs.partitionsWithBrokerInElr(brokerId));
     }
 
     ControllerResult<ElectLeadersResponseData> electLeaders(ElectLeadersRequestData request) {
