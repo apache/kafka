@@ -68,6 +68,17 @@ class SyncGroupRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBas
     )
 
     for (version <- 0 to ApiKeys.SYNC_GROUP.latestVersion(isUnstableApiEnabled)) {
+      // Sync with unknown group id.
+      syncGroupWithOldProtocol(
+        groupId = "grp-unknown",
+        memberId = "member-id",
+        generationId = -1,
+        expectedProtocolType = null,
+        expectedProtocolName = null,
+        expectedError = Errors.UNKNOWN_MEMBER_ID,
+        version = Option(version.toShort)
+      )
+
       val metadata = ConsumerProtocol.serializeSubscription(
         new ConsumerPartitionAssignor.Subscription(Collections.singletonList("foo"))
       ).array
@@ -87,7 +98,76 @@ class SyncGroupRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBas
         metadata = metadata
       )
 
-      // Send a SyncGroup request.
+      if (version >= 5) {
+        // Sync the leader with unmatched protocolName.
+        syncGroupWithOldProtocol(
+          groupId = "grp",
+          memberId = leaderMemberId,
+          generationId = 1,
+          protocolName = "unmatched",
+          assignments = List(new SyncGroupRequestData.SyncGroupRequestAssignment()
+            .setMemberId(leaderMemberId)
+            .setAssignment(Array[Byte](1))
+          ),
+          expectedProtocolType = null,
+          expectedProtocolName = null,
+          expectedError = Errors.INCONSISTENT_GROUP_PROTOCOL,
+          version = Option(version.toShort)
+        )
+
+        // Sync the leader with unmatched protocolType.
+        syncGroupWithOldProtocol(
+          groupId = "grp",
+          memberId = leaderMemberId,
+          generationId = 1,
+          protocolType = "unmatched",
+          assignments = List(new SyncGroupRequestData.SyncGroupRequestAssignment()
+            .setMemberId(leaderMemberId)
+            .setAssignment(Array[Byte](1))
+          ),
+          expectedProtocolType = null,
+          expectedProtocolName = null,
+          expectedError = Errors.INCONSISTENT_GROUP_PROTOCOL,
+          version = Option(version.toShort)
+        )
+      }
+
+      // Sync with unknown member id.
+      syncGroupWithOldProtocol(
+        groupId = "grp",
+        memberId = "member-id-unknown",
+        generationId = -1,
+        expectedProtocolType = null,
+        expectedProtocolName = null,
+        expectedError = Errors.UNKNOWN_MEMBER_ID,
+        version = Option(version.toShort)
+      )
+
+      // Sync with illegal generation id.
+      syncGroupWithOldProtocol(
+        groupId = "grp",
+        memberId = leaderMemberId,
+        generationId = 2,
+        expectedProtocolType = null,
+        expectedProtocolName = null,
+        expectedError = Errors.ILLEGAL_GENERATION,
+        version = Option(version.toShort)
+      )
+
+      // Sync the leader with empty protocolType and protocolName.
+      syncGroupWithOldProtocol(
+        groupId = "grp",
+        memberId = leaderMemberId,
+        generationId = 1,
+        assignments = List(new SyncGroupRequestData.SyncGroupRequestAssignment()
+          .setMemberId(leaderMemberId)
+          .setAssignment(Array[Byte](1))
+        ),
+        expectedAssignment = Array[Byte](1),
+        version = Option(version.toShort)
+      )
+
+      // Sync the leader with matched protocolType and protocolName.
       syncGroupWithOldProtocol(
         groupId = "grp",
         memberId = leaderMemberId,
