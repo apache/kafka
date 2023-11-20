@@ -109,7 +109,8 @@ class DescribeGroupsRequestTest(cluster: ClusterInstance) extends GroupCoordinat
             .setGroupId("grp-unknown")
             .setGroupState(GenericGroupState.DEAD.toString) // Return DEAD group when the group does not exist.
         ),
-        describeGroups(List("grp-1", "grp-2", "grp-unknown"),
+        describeGroups(
+          groupIds = List("grp-1", "grp-2", "grp-unknown"),
           version = Option(version.toShort)
         )
       )
