@@ -22,7 +22,7 @@ import kafka.controller.{ControllerChannelContext, ControllerChannelManager, Rep
 import kafka.server.KafkaConfig
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.metrics.Metrics
-import org.apache.kafka.common.requests.LeaderAndIsrRequest
+import org.apache.kafka.common.requests.AbstractControlRequest
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.image.{ClusterImage, MetadataDelta, MetadataImage, TopicsImage}
 import org.apache.kafka.metadata.PartitionRegistration
@@ -138,6 +138,7 @@ class MigrationPropagator(
     }
     requestBatch.sendRequestsToBrokers(zkControllerEpoch)
     requestBatch.newBatch()
+    requestBatch.setUpdateType(AbstractControlRequest.Type.INCREMENTAL)
 
     // Now send LISR, UMR and StopReplica requests for both new zk brokers and existing zk
     // brokers based on the topic changes.
@@ -226,7 +227,7 @@ class MigrationPropagator(
     requestBatch.sendRequestsToBrokers(zkControllerEpoch)
 
     requestBatch.newBatch()
-    requestBatch.setUpdateType(LeaderAndIsrRequest.Type.FULL)
+    requestBatch.setUpdateType(AbstractControlRequest.Type.FULL)
     // When we need to send RPCs from the image, we're sending 'full' requests meaning we let
     // every broker know about all the metadata and all the LISR requests it needs to handle.
     // Note that we cannot send StopReplica requests from the image. We don't have any state
