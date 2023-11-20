@@ -840,7 +840,7 @@ public class NamedTopologyIntegrationTest {
             props.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.IntegerSerde.class);
             props.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.StringSerde.class);
 
-            // do not use the harness streams
+            // Discard the pre-created streams and replace with test-specific topology
             streams.close();
             streams = new KafkaStreamsNamedTopologyWrapper(props);
             streams.setUncaughtExceptionHandler(exception -> StreamThreadExceptionResponse.REPLACE_THREAD);

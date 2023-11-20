@@ -36,7 +36,6 @@ import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.api.Tag;
 
 import java.io.IOException;
-import java.time.Duration;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -120,14 +119,12 @@ public class MetricsReporterIntegrationTest {
         builder.stream(STREAM_INPUT, Consumed.with(Serdes.Integer(), Serdes.String()))
                 .to(STREAM_OUTPUT, Produced.with(Serdes.Integer(), Serdes.String()));
         final Topology topology = builder.build();
-        final KafkaStreams kafkaStreams = new KafkaStreams(topology, streamsConfiguration);
-
-        kafkaStreams.metrics().keySet().forEach(metricName -> {
-            final Object initialMetricValue = METRIC_NAME_TO_INITIAL_VALUE.get(metricName.name());
-            assertThat(initialMetricValue, notNullValue());
-        });
-
-        kafkaStreams.close(Duration.ofSeconds(30));
+        try (KafkaStreams kafkaStreams = new KafkaStreams(topology, streamsConfiguration)) {
+            kafkaStreams.metrics().keySet().forEach(metricName -> {
+                final Object initialMetricValue = METRIC_NAME_TO_INITIAL_VALUE.get(metricName.name());
+                assertThat(initialMetricValue, notNullValue());
+            });
+        }
     }
 
 }
