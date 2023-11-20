@@ -16,9 +16,6 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
-import java.util.ConcurrentModificationException;
-import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.atomic.AtomicLong;
 import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.ClientUtils;
 import org.apache.kafka.clients.CommonClientConfigs;
@@ -50,6 +47,8 @@ import org.apache.kafka.clients.consumer.internals.events.ListOffsetsApplication
 import org.apache.kafka.clients.consumer.internals.events.NewTopicsMetadataUpdateRequestEvent;
 import org.apache.kafka.clients.consumer.internals.events.OffsetFetchApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.ResetPositionsApplicationEvent;
+import org.apache.kafka.clients.consumer.internals.events.SubscriptionChangeApplicationEvent;
+import org.apache.kafka.clients.consumer.internals.events.UnsubscribeApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.ValidatePositionsApplicationEvent;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.IsolationLevel;
@@ -79,6 +78,7 @@ import java.time.Duration;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.ConcurrentModificationException;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -89,7 +89,10 @@ import java.util.OptionalLong;
 import java.util.Set;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
 import java.util.function.Supplier;
@@ -831,12 +834,12 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
 
     @Override
     public void enforceRebalance() {
-        throw new KafkaException("method not implemented");
+        log.warn("Operation not supported in new consumer group protocol");
     }
 
     @Override
     public void enforceRebalance(String reason) {
-        throw new KafkaException("method not implemented");
+        log.warn("Operation not supported in new consumer group protocol");
     }
 
     @Override
@@ -1022,6 +1025,16 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         acquireAndEnsureOpen();
         try {
             fetchBuffer.retainAll(Collections.emptySet());
+            if (groupId.isPresent()) {
+                UnsubscribeApplicationEvent unsubscribeApplicationEvent = new UnsubscribeApplicationEvent();
+                applicationEventHandler.add(unsubscribeApplicationEvent);
+                try {
+                    unsubscribeApplicationEvent.future().get();
+                    log.info("Unsubscribed all topics or patterns and assigned partitions");
+                } catch (InterruptedException | ExecutionException e) {
+                    log.error("Failed while waiting for the unsubscribe event to complete", e);
+                }
+            }
             subscriptions.unsubscribe();
         } finally {
             release();
@@ -1301,6 +1314,10 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                 log.info("Subscribed to topic(s): {}", join(topics, ", "));
                 if (subscriptions.subscribe(new HashSet<>(topics), listener))
                     metadata.requestUpdateForNewTopics();
+
+                // Trigger subscribe event to effectively join the group if not already part of it,
+                // or just send the new subscription to the broker.
+                applicationEventHandler.add(new SubscriptionChangeApplicationEvent());
             }
         } finally {
             release();
