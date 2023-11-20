@@ -33,12 +33,10 @@ public class EventHandler<T> implements Closeable {
 
     private final Logger log;
     private final BlockingQueue<T> queue;
-    private final Watcher watcher;
 
-    public EventHandler(final LogContext logContext, final BlockingQueue<T> queue, Watcher watcher) {
+    public EventHandler(final LogContext logContext, final BlockingQueue<T> queue) {
         this.log = logContext.logger(EventHandler.class);
         this.queue = queue;
-        this.watcher = watcher;
     }
 
     /**
@@ -51,11 +49,10 @@ public class EventHandler<T> implements Closeable {
         Objects.requireNonNull(event, "Event must be non-null");
         log.trace("Enqueued event: {}", event);
         queue.add(event);
-        watcher.updated();
     }
 
     public void notifyWatcher() {
-        watcher.updated();
+        // Do nothing...;
     }
 
     @Override

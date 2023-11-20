@@ -87,6 +87,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.OptionalLong;
 import java.util.Set;
+import java.util.SortedSet;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
@@ -238,7 +239,15 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                     metadata,
                     applicationEventQueue,
                     requestManagersSupplier);
-            ConsumerCoordinatorMetrics sensors = new ConsumerCoordinatorMetrics(
+            this.applicationEventHandler = new ApplicationEventHandler(
+                    logContext,
+                    time,
+                    applicationEventQueue,
+                    applicationEventProcessorSupplier,
+                    networkClientDelegateSupplier,
+                    requestManagersSupplier
+            );
+            ConsumerCoordinatorMetrics coordinatorMetrics = new ConsumerCoordinatorMetrics(
                     subscriptions,
                     metrics,
                     CONSUMER_METRIC_GROUP_PREFIX
@@ -247,19 +256,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                     logContext,
                     subscriptions,
                     time,
-                    sensors
-            );
-            ConsumerNetworkThread networkThread = new ConsumerNetworkThread(
-                    logContext,
-                    time,
-                    applicationEventProcessorSupplier,
-                    networkClientDelegateSupplier,
-                    requestManagersSupplier
-            );
-            this.applicationEventHandler = new InternalApplicationEventHandler(
-                    logContext,
-                    applicationEventQueue,
-                    networkThread
+                    coordinatorMetrics
             );
             this.backgroundEventProcessor = new BackgroundEventProcessor(
                     logContext,
@@ -303,45 +300,6 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         }
     }
 
-    // Visible for testing
-    AsyncKafkaConsumer(LogContext logContext,
-                       String clientId,
-                       Deserializers<K, V> deserializers,
-                       FetchBuffer fetchBuffer,
-                       FetchCollector<K, V> fetchCollector,
-                       ConsumerInterceptors<K, V> interceptors,
-                       Time time,
-                       ApplicationEventHandler applicationEventHandler,
-                       BackgroundEventProcessor backgroundEventProcessor,
-                       Metrics metrics,
-                       SubscriptionState subscriptions,
-                       ConsumerMetadata metadata,
-                       long retryBackoffMs,
-                       int defaultApiTimeoutMs,
-                       List<ConsumerPartitionAssignor> assignors,
-                       String groupId) {
-        this.log = logContext.logger(getClass());
-        this.subscriptions = subscriptions;
-        this.clientId = clientId;
-        this.fetchBuffer = fetchBuffer;
-        this.fetchCollector = fetchCollector;
-        this.isolationLevel = IsolationLevel.READ_UNCOMMITTED;
-        this.interceptors = Objects.requireNonNull(interceptors);
-        this.time = time;
-        this.backgroundEventProcessor = backgroundEventProcessor;
-        this.metrics = metrics;
-        this.groupId = Optional.ofNullable(groupId);
-        this.metadata = metadata;
-        this.retryBackoffMs = retryBackoffMs;
-        this.defaultApiTimeoutMs = defaultApiTimeoutMs;
-        this.deserializers = deserializers;
-        this.applicationEventHandler = applicationEventHandler;
-        this.assignors = assignors;
-        this.kafkaConsumerMetrics = new KafkaConsumerMetrics(metrics, "consumer");
-        this.groupInstanceId = Optional.empty();
-    }
-
-//    // Visible for testing
     AsyncKafkaConsumer(LogContext logContext,
                        Time time,
                        ConsumerConfig config,
@@ -379,8 +337,8 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         this.kafkaConsumerMetrics = new KafkaConsumerMetrics(metrics, "consumer");
 
         GroupRebalanceConfig groupRebalanceConfig = new GroupRebalanceConfig(
-            config,
-            GroupRebalanceConfig.ProtocolType.CONSUMER
+                config,
+                GroupRebalanceConfig.ProtocolType.CONSUMER
         );
 
         ConsumerCoordinatorMetrics coordinatorMetrics = new ConsumerCoordinatorMetrics(
@@ -391,38 +349,31 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
 
         BlockingQueue<ApplicationEvent> applicationEventQueue = new LinkedBlockingQueue<>();
         BlockingQueue<BackgroundEvent> backgroundEventQueue = new LinkedBlockingQueue<>();
-        this.applicationEventHandler = new ApplicationEventHandler(logContext, applicationEventQueue);
         ConsumerRebalanceListenerInvoker rebalanceListenerInvoker = new ConsumerRebalanceListenerInvoker(
-            logContext,
-            subscriptions,
-            time,
-            coordinatorMetrics
-        );
-        this.backgroundEventProcessor = new BackgroundEventProcessor(
-            logContext,
-            backgroundEventQueue,
-            applicationEventHandler,
-            rebalanceListenerInvoker
+                logContext,
+                subscriptions,
+                time,
+                coordinatorMetrics
         );
         ApiVersions apiVersions = new ApiVersions();
         Supplier<NetworkClientDelegate> networkClientDelegateSupplier = () -> new NetworkClientDelegate(
-            time,
-            config,
-            logContext,
-            client
+                time,
+                config,
+                logContext,
+                client
         );
         Supplier<RequestManagers> requestManagersSupplier = RequestManagers.supplier(
-            time,
-            logContext,
-            backgroundEventQueue,
-            metadata,
-            subscriptions,
-            fetchBuffer,
-            config,
-            groupRebalanceConfig,
-            apiVersions,
-            fetchMetricsManager,
-            networkClientDelegateSupplier
+                time,
+                logContext,
+                backgroundEventQueue,
+                metadata,
+                subscriptions,
+                fetchBuffer,
+                config,
+                groupRebalanceConfig,
+                apiVersions,
+                fetchMetricsManager,
+                networkClientDelegateSupplier
         );
         Supplier<ApplicationEventProcessor> applicationEventProcessorSupplier = ApplicationEventProcessor.supplier(
                 logContext,
@@ -430,6 +381,64 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                 applicationEventQueue,
                 requestManagersSupplier
         );
+        this.applicationEventHandler = new ApplicationEventHandler(
+                logContext,
+                time,
+                applicationEventQueue,
+                applicationEventProcessorSupplier,
+                networkClientDelegateSupplier,
+                requestManagersSupplier
+        );
+        this.backgroundEventProcessor = new BackgroundEventProcessor(
+                logContext,
+                backgroundEventQueue,
+                applicationEventHandler,
+                rebalanceListenerInvoker
+        );
+    }
+
+    // Visible for testing
+    AsyncKafkaConsumer(LogContext logContext,
+                       String clientId,
+                       Deserializers<K, V> deserializers,
+                       FetchBuffer fetchBuffer,
+                       FetchCollector<K, V> fetchCollector,
+                       ConsumerInterceptors<K, V> interceptors,
+                       Time time,
+                       ApplicationEventHandler applicationEventHandler,
+                       BlockingQueue<BackgroundEvent> backgroundEventQueue,
+                       ConsumerRebalanceListenerInvoker rebalanceListenerInvoker,
+                       Metrics metrics,
+                       SubscriptionState subscriptions,
+                       ConsumerMetadata metadata,
+                       long retryBackoffMs,
+                       int defaultApiTimeoutMs,
+                       List<ConsumerPartitionAssignor> assignors,
+                       String groupId) {
+        this.log = logContext.logger(getClass());
+        this.subscriptions = subscriptions;
+        this.clientId = clientId;
+        this.fetchBuffer = fetchBuffer;
+        this.fetchCollector = fetchCollector;
+        this.isolationLevel = IsolationLevel.READ_UNCOMMITTED;
+        this.interceptors = Objects.requireNonNull(interceptors);
+        this.time = time;
+        this.backgroundEventProcessor = new BackgroundEventProcessor(
+            logContext,
+            backgroundEventQueue,
+            applicationEventHandler,
+            rebalanceListenerInvoker
+        );
+        this.metrics = metrics;
+        this.groupId = Optional.ofNullable(groupId);
+        this.metadata = metadata;
+        this.retryBackoffMs = retryBackoffMs;
+        this.defaultApiTimeoutMs = defaultApiTimeoutMs;
+        this.deserializers = deserializers;
+        this.applicationEventHandler = applicationEventHandler;
+        this.assignors = assignors;
+        this.kafkaConsumerMetrics = new KafkaConsumerMetrics(metrics, "consumer");
+        this.groupInstanceId = Optional.empty();
     }
 
     /**
@@ -1057,21 +1066,27 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
 
     @Override
     public void unsubscribe() {
+        log.debug("unsubscribe - 1");
         acquireAndEnsureOpen();
+        log.debug("unsubscribe - 2");
         try {
+            log.debug("unsubscribe - 3");
             fetchBuffer.retainAll(Collections.emptySet());
+            log.debug("unsubscribe - 4");
             if (groupId.isPresent()) {
-                UnsubscribeApplicationEvent unsubscribeApplicationEvent = new UnsubscribeApplicationEvent();
-                applicationEventHandler.add(unsubscribeApplicationEvent);
-                try {
-                    unsubscribeApplicationEvent.future().get();
+                log.debug("unsubscribe - 5");
+                log.debug("unsubscribe - 6");
+                    log.debug("unsubscribe - 7");
+                    UnsubscribeApplicationEvent unsubscribeApplicationEvent = new UnsubscribeApplicationEvent();
+                    applicationEventHandler.addAndGet(unsubscribeApplicationEvent, time.timer(Duration.ofMillis(Long.MAX_VALUE)));
+                    log.debug("unsubscribe - 8");
                     log.info("Unsubscribed all topics or patterns and assigned partitions");
-                } catch (InterruptedException | ExecutionException e) {
-                    log.error("Failed while waiting for the unsubscribe event to complete", e);
-                }
             }
+            log.debug("unsubscribe - 9");
             subscriptions.unsubscribe();
+            log.debug("unsubscribe - 10");
         } finally {
+            log.debug("unsubscribe - 11");
             release();
         }
     }
@@ -1321,14 +1336,21 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
     }
 
     private void subscribeInternal(Collection<String> topics, Optional<ConsumerRebalanceListener> listener) {
+        log.debug("1");
         acquireAndEnsureOpen();
+        log.debug("2");
         try {
+            log.debug("3");
             maybeThrowInvalidGroupIdException();
+            log.debug("4");
             if (topics == null)
                 throw new IllegalArgumentException("Topic collection to subscribe to cannot be null");
+            log.debug("5");
             if (topics.isEmpty()) {
+                log.debug("6");
                 // treat subscribing to empty topic list as the same as unsubscribing
                 unsubscribe();
+                log.debug("7");
             } else {
                 for (String topic : topics) {
                     if (isBlank(topic))

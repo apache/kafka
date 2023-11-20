@@ -26,16 +26,9 @@ import java.util.concurrent.BlockingQueue;
  * {@link ConsumerNetworkThread network thread} which are then made available to the application thread
  * via the {@link BackgroundEventProcessor}.
  */
-
 public class BackgroundEventHandler extends EventHandler<BackgroundEvent> {
 
     public BackgroundEventHandler(final LogContext logContext, final BlockingQueue<BackgroundEvent> queue) {
-        this(logContext, queue, () -> { });
-    }
-
-    public BackgroundEventHandler(final LogContext logContext,
-                                  final BlockingQueue<BackgroundEvent> queue,
-                                  final Watcher watcher) {
-        super(logContext, queue, watcher);
+        super(logContext, queue);
     }
 }

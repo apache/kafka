@@ -61,9 +61,8 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
      * an event generates an error. In such cases, the processor will log an exception, but we do not want those
      * errors to be propagated to the caller.
      */
-    @Override
     public void process() {
-        process((event, error) -> { });
+        process((event, error) -> error.ifPresent(e -> log.warn("Error processing event {}", e.getMessage(), e)));
     }
 
     @Override
@@ -124,11 +123,6 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
             default:
                 log.warn("Application event type " + event.type() + " was not expected");
         }
-    }
-
-    @Override
-    protected Class<ApplicationEvent> getEventClass() {
-        return ApplicationEvent.class;
     }
 
     private void process(final PollApplicationEvent event) {

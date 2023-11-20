@@ -69,7 +69,7 @@ public class ConsumerTestBuilder implements Closeable {
     static final int DEFAULT_HEARTBEAT_INTERVAL_MS = 1000;
     static final double DEFAULT_HEARTBEAT_JITTER_MS = 0.0;
 
-    final LogContext logContext = new LogContext();
+    public final LogContext logContext = new LogContext();
     final Time time = new MockTime(0);
     public final BlockingQueue<ApplicationEvent> applicationEventQueue;
     public final BlockingQueue<BackgroundEvent> backgroundEventQueue;
@@ -92,8 +92,6 @@ public class ConsumerTestBuilder implements Closeable {
     final FetchRequestManager fetchRequestManager;
     final RequestManagers requestManagers;
     public final ApplicationEventProcessor applicationEventProcessor;
-    public final BackgroundEventProcessor backgroundEventProcessor;
-    public ApplicationEventHandler applicationEventHandler;
     public final BackgroundEventHandler backgroundEventHandler;
     public final ConsumerRebalanceListenerInvoker rebalanceListenerInvoker;
     final MockClient client;
@@ -107,10 +105,6 @@ public class ConsumerTestBuilder implements Closeable {
         this.groupInfo = groupInfo;
         this.applicationEventQueue = new LinkedBlockingQueue<>();
         this.backgroundEventQueue = new LinkedBlockingQueue<>();
-        this.applicationEventHandler = spy(new ApplicationEventHandler(
-                logContext,
-                applicationEventQueue
-        ));
         this.backgroundEventHandler = spy(new BackgroundEventHandler(logContext, backgroundEventQueue));
         GroupRebalanceConfig groupRebalanceConfig = new GroupRebalanceConfig(
                 100,
@@ -265,21 +259,12 @@ public class ConsumerTestBuilder implements Closeable {
                 time,
                 consumerCoordinatorMetrics
         );
-        this.backgroundEventProcessor = spy(
-                new BackgroundEventProcessor(
-                        logContext,
-                        backgroundEventQueue,
-                        applicationEventHandler,
-                        rebalanceListenerInvoker
-                )
-        );
     }
 
     @Override
     public void close() {
         closeQuietly(requestManagers, RequestManagers.class.getSimpleName());
         closeQuietly(applicationEventProcessor, ApplicationEventProcessor.class.getSimpleName());
-        closeQuietly(backgroundEventProcessor, BackgroundEventProcessor.class.getSimpleName());
     }
 
     public static class ConsumerNetworkThreadTestBuilder extends ConsumerTestBuilder {
@@ -307,7 +292,41 @@ public class ConsumerTestBuilder implements Closeable {
         }
     }
 
-    public static class AsyncKafkaConsumerTestBuilder extends ConsumerTestBuilder {
+    public static class ApplicationEventHandlerTestBuilder extends ConsumerTestBuilder {
+
+        public final ApplicationEventHandler applicationEventHandler;
+        public final BackgroundEventProcessor backgroundEventProcessor;
+
+        public ApplicationEventHandlerTestBuilder() {
+            this(createDefaultGroupInformation());
+        }
+
+        public ApplicationEventHandlerTestBuilder(Optional<GroupInformation> groupInfo) {
+            super(groupInfo);
+            this.applicationEventHandler = spy(new ApplicationEventHandler(
+                    logContext,
+                    time,
+                    applicationEventQueue,
+                    () -> applicationEventProcessor,
+                    () -> networkClientDelegate,
+                    () -> requestManagers));
+            this.backgroundEventProcessor = spy(
+                    new BackgroundEventProcessor(
+                            logContext,
+                            backgroundEventQueue,
+                            applicationEventHandler,
+                            rebalanceListenerInvoker
+                    )
+            );
+        }
+
+        @Override
+        public void close() {
+            closeQuietly(applicationEventHandler, ApplicationEventHandler.class.getSimpleName());
+        }
+    }
+
+    public static class AsyncKafkaConsumerTestBuilder extends ApplicationEventHandlerTestBuilder {
 
         final AsyncKafkaConsumer<String, String> consumer;
 
@@ -335,7 +354,8 @@ public class ConsumerTestBuilder implements Closeable {
                 new ConsumerInterceptors<>(Collections.emptyList()),
                 time,
                 applicationEventHandler,
-                backgroundEventProcessor,
+                backgroundEventQueue,
+                rebalanceListenerInvoker,
                 metrics,
                 subscriptions,
                 metadata,

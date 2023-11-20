@@ -22,12 +22,12 @@ import org.apache.kafka.clients.consumer.internals.ConsumerRebalanceListenerInvo
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.LogContext;
+import org.slf4j.Logger;
 
 import java.util.Optional;
 import java.util.SortedSet;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.atomic.AtomicReference;
-
 
 /**
  * An {@link EventProcessor} that is created and executes in the application thread for the purpose of processing
@@ -41,6 +41,7 @@ import java.util.concurrent.atomic.AtomicReference;
  */
 public class BackgroundEventProcessor extends EventProcessor<BackgroundEvent> {
 
+    private final Logger log;
     private final ApplicationEventHandler applicationEventHandler;
     private final ConsumerRebalanceListenerInvoker rebalanceListenerInvoker;
 
@@ -49,6 +50,7 @@ public class BackgroundEventProcessor extends EventProcessor<BackgroundEvent> {
                                     final ApplicationEventHandler applicationEventHandler,
                                     final ConsumerRebalanceListenerInvoker rebalanceListenerInvoker) {
         super(logContext, backgroundEventQueue);
+        this.log = logContext.logger(BackgroundEventProcessor.class);
         this.applicationEventHandler = applicationEventHandler;
         this.rebalanceListenerInvoker = rebalanceListenerInvoker;
     }
@@ -59,10 +61,20 @@ public class BackgroundEventProcessor extends EventProcessor<BackgroundEvent> {
      * In such cases, the processor will take a reference to the first error, continue to process the
      * remaining events, and then throw the first error that occurred.
      */
-    @Override
     public void process() {
         AtomicReference<KafkaException> firstError = new AtomicReference<>();
-        process((event, error) -> firstError.compareAndSet(null, error));
+
+        ProcessHandler<BackgroundEvent> processHandler = (event, error) -> {
+            if (error.isPresent()) {
+                KafkaException e = error.get();
+
+                if (!firstError.compareAndSet(null, e)) {
+                    log.warn("An error occurred when processing the event: {}", e.getMessage(), e);
+                }
+            }
+        };
+
+        process(processHandler);
 
         if (firstError.get() != null)
             throw firstError.get();
@@ -86,11 +98,6 @@ public class BackgroundEventProcessor extends EventProcessor<BackgroundEvent> {
             default:
                 throw new IllegalArgumentException("Background event type " + event.type() + " was not expected");
         }
-    }
-
-    @Override
-    protected Class<BackgroundEvent> getEventClass() {
-        return BackgroundEvent.class;
     }
 
     private void process(final ErrorBackgroundEvent event) {
