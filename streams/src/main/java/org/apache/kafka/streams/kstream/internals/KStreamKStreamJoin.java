@@ -16,11 +16,6 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
-import static org.apache.kafka.streams.StreamsConfig.InternalConfig.EMIT_INTERVAL_MS_KSTREAMS_OUTER_JOIN_SPURIOUS_RESULTS_FIX;
-import static org.apache.kafka.streams.processor.internals.metrics.TaskMetrics.droppedRecordsSensor;
-
-import java.util.Optional;
-
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
@@ -43,16 +38,21 @@ import org.apache.kafka.streams.state.internals.TimestampedKeyAndJoinSide;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.Optional;
+
+import static org.apache.kafka.streams.StreamsConfig.InternalConfig.EMIT_INTERVAL_MS_KSTREAMS_OUTER_JOIN_SPURIOUS_RESULTS_FIX;
+import static org.apache.kafka.streams.processor.internals.metrics.TaskMetrics.droppedRecordsSensor;
+
 class KStreamKStreamJoin<K, V1, V2, VOut> implements ProcessorSupplier<K, V1, K, VOut> {
     private static final Logger LOG = LoggerFactory.getLogger(KStreamKStreamJoin.class);
 
     private final String otherWindowName;
-    private final long windowsBeforeMs;
-    private final long windowsAfterMs;
     private final long joinBeforeMs;
     private final long joinAfterMs;
     private final long joinGraceMs;
     private final boolean enableSpuriousResultFix;
+    private final long windowsBeforeMs;
+    private final long windowsAfterMs;
 
     private final boolean outer;
     private final boolean isLeftSide;
@@ -77,7 +77,6 @@ class KStreamKStreamJoin<K, V1, V2, VOut> implements ProcessorSupplier<K, V1, K,
             this.joinBeforeMs = windows.afterMs;
             this.joinAfterMs = windows.beforeMs;
         }
-
         this.windowsAfterMs = windows.afterMs;
         this.windowsBeforeMs = windows.beforeMs;
         this.joinGraceMs = windows.gracePeriodMs();
@@ -112,22 +111,25 @@ class KStreamKStreamJoin<K, V1, V2, VOut> implements ProcessorSupplier<K, V1, K,
 
             if (enableSpuriousResultFix) {
                 outerJoinStore = outerJoinWindowName.map(context::getStateStore);
-                sharedTimeTracker.setEmitInterval(StreamsConfig.InternalConfig.getLong(context.appConfigs(), EMIT_INTERVAL_MS_KSTREAMS_OUTER_JOIN_SPURIOUS_RESULTS_FIX, 1000L));
+
+                sharedTimeTracker.setEmitInterval(
+                    StreamsConfig.InternalConfig.getLong(
+                        context.appConfigs(),
+                        EMIT_INTERVAL_MS_KSTREAMS_OUTER_JOIN_SPURIOUS_RESULTS_FIX,
+                        1000L
+                    )
+                );
             }
         }
 
         @SuppressWarnings("unchecked")
         @Override
         public void process(final Record<K, V1> record) {
-            if (StreamStreamJoinUtil.skipRecord(record, LOG, droppedRecordsSensor, context())) {
-                return;
-            }
-
             final long inputRecordTimestamp = record.timestamp();
             final long timeFrom = Math.max(0L, inputRecordTimestamp - joinBeforeMs);
             final long timeTo = Math.max(0L, inputRecordTimestamp + joinAfterMs);
-
             sharedTimeTracker.advanceStreamTime(inputRecordTimestamp);
+
             if (outer && record.key() == null && record.value() != null) {
                 context().forward(record.withValue(joiner.apply(record.key(), record.value(), null)));
                 return;
@@ -142,17 +144,18 @@ class KStreamKStreamJoin<K, V1, V2, VOut> implements ProcessorSupplier<K, V1, K,
                     final KeyValue<Long, V2> otherRecord = iter.next();
                     final long otherRecordTimestamp = otherRecord.key;
 
-                    outerJoinStore.ifPresent(store ->
-                        // Use putIfAbsent to first read and see if there's any values for the key,
+                    outerJoinStore.ifPresent(store -> {
+                        // use putIfAbsent to first read and see if there's any values for the key,
                         // if yes delete the key, otherwise do not issue a put;
                         // we may delete some values with the same key early but since we are going
-                        // range over all values of the same key even after failure, since the other
-                        // window-store
+                        // range over all values of the same key even after failure, since the other window-store
                         // is only cleaned up by stream time, so this is okay for at-least-once.
-                        store.putIfAbsent(TimestampedKeyAndJoinSide.make(!isLeftSide, record.key(), otherRecordTimestamp), null));
+                        store.putIfAbsent(TimestampedKeyAndJoinSide.make(!isLeftSide, record.key(), otherRecordTimestamp), null);
+                    });
 
-                    context().forward(record.withValue(joiner.apply(record.key(), record.value(), otherRecord.value))
-                            .withTimestamp(Math.max(inputRecordTimestamp, otherRecordTimestamp)));
+                    context().forward(
+                        record.withValue(joiner.apply(record.key(), record.value(), otherRecord.value))
+                               .withTimestamp(Math.max(inputRecordTimestamp, otherRecordTimestamp)));
                 }
 
                 if (needOuterJoin) {
@@ -161,22 +164,17 @@ class KStreamKStreamJoin<K, V1, V2, VOut> implements ProcessorSupplier<K, V1, K,
                     // problem:
                     //
                     // Say we have a window size of 5 seconds
-                    // 1. A non-joined record with time T10 is seen in the left-topic
-                    // (maxLeftStreamTime: 10)
-                    // The record is not processed yet, and is added to the outer-join store
-                    // 2. A non-joined record with time T2 is seen in the right-topic
-                    // (maxRightStreamTime: 2)
-                    // The record is not processed yet, and is added to the outer-join store
-                    // 3. A joined record with time T11 is seen in the left-topic
-                    // (maxLeftStreamTime: 11)
-                    // It is time to look at the expired records. T10 and T2 should be emitted, but
-                    // because T2 was late, then it is not fetched by the window store, so it is not
-                    // processed
+                    //  1. A non-joined record with time T10 is seen in the left-topic (maxLeftStreamTime: 10)
+                    //     The record is not processed yet, and is added to the outer-join store
+                    //  2. A non-joined record with time T2 is seen in the right-topic (maxRightStreamTime: 2)
+                    //     The record is not processed yet, and is added to the outer-join store
+                    //  3. A joined record with time T11 is seen in the left-topic (maxLeftStreamTime: 11)
+                    //     It is time to look at the expired records. T10 and T2 should be emitted, but
+                    //     because T2 was late, then it is not fetched by the window store, so it is not processed
                     //
                     // See KStreamKStreamLeftJoinTest.testLowerWindowBound() tests
                     //
-                    // This condition below allows us to process the out-of-order records without
-                    // the need
+                    // This condition below allows us to process the out-of-order records without the need
                     // to hold it in the temporary outer store
                     if (!outerJoinStore.isPresent() || timeTo < sharedTimeTracker.streamTime) {
                         context().forward(record.withValue(joiner.apply(record.key(), record.value(), null)));
@@ -197,15 +195,13 @@ class KStreamKStreamJoin<K, V1, V2, VOut> implements ProcessorSupplier<K, V1, K,
 
         @SuppressWarnings("unchecked")
         private void emitNonJoinedOuterRecords(
-                final KeyValueStore<TimestampedKeyAndJoinSide<K>, LeftOrRightValue<V1, V2>> store,
-                final Record<K, V1> record) {
+            final KeyValueStore<TimestampedKeyAndJoinSide<K>, LeftOrRightValue<V1, V2>> store,
+            final Record<K, V1> record) {
 
-            // calling `store.all()` creates an iterator what is an expensive operation on
-            // RocksDB;
+            // calling `store.all()` creates an iterator what is an expensive operation on RocksDB;
             // to reduce runtime cost, we try to avoid paying those cost
 
-            // only try to emit left/outer join results if there _might_ be any result
-            // records
+            // only try to emit left/outer join results if there _might_ be any result records
             if (sharedTimeTracker.minTime + joinAfterMs + joinGraceMs >= sharedTimeTracker.streamTime) {
                 return;
             }
@@ -216,8 +212,7 @@ class KStreamKStreamJoin<K, V1, V2, VOut> implements ProcessorSupplier<K, V1, K,
                 return;
             }
 
-            // Ensure `nextTimeToEmit` is synced with `currentSystemTimeMs`, if we dont set
-            // it everytime,
+            // Ensure `nextTimeToEmit` is synced with `currentSystemTimeMs`, if we dont set it everytime,
             // they can get out of sync during a clock drift
             sharedTimeTracker.nextTimeToEmit = internalProcessorContext.currentSystemTimeMs();
             sharedTimeTracker.advanceNextTimeToEmit();
@@ -227,9 +222,10 @@ class KStreamKStreamJoin<K, V1, V2, VOut> implements ProcessorSupplier<K, V1, K,
 
             try (final KeyValueIterator<TimestampedKeyAndJoinSide<K>, LeftOrRightValue<V1, V2>> it = store.all()) {
                 TimestampedKeyAndJoinSide<K> prevKey = null;
-                boolean outerJoinLeftBreak = false;
-                boolean outerJoinRightBreak = false;
+
                 while (it.hasNext()) {
+                    boolean outerJoinLeftBreak = false;
+                    boolean outerJoinRightBreak = false;
                     final KeyValue<TimestampedKeyAndJoinSide<K>, LeftOrRightValue<V1, V2>> next = it.next();
                     final TimestampedKeyAndJoinSide<K> timestampedKeyAndJoinSide = next.key;
                     final LeftOrRightValue<V1, V2> value = next.value;
@@ -252,21 +248,26 @@ class KStreamKStreamJoin<K, V1, V2, VOut> implements ProcessorSupplier<K, V1, K,
                             continue; // there are possibly candidates left on the other outerJoin-side
                         }
                     }
+
                     final VOut nullJoinedValue;
                     if (isLeftSide) {
-                        nullJoinedValue = joiner.apply(key, value.getLeftValue(), value.getRightValue());
+                        nullJoinedValue = joiner.apply(key,
+                                value.getLeftValue(),
+                                value.getRightValue());
                     } else {
-                        nullJoinedValue = joiner.apply(key, (V1) value.getRightValue(), (V2) value.getLeftValue());
+                        nullJoinedValue = joiner.apply(key,
+                                (V1) value.getRightValue(),
+                                (V2) value.getLeftValue());
                     }
 
-                    context().forward(record.withKey(key).withValue(nullJoinedValue).withTimestamp(timestamp));
+                    context().forward(
+                        record.withKey(key).withValue(nullJoinedValue).withTimestamp(timestamp)
+                    );
 
                     if (prevKey != null && !prevKey.equals(timestampedKeyAndJoinSide)) {
                         // blind-delete the previous key from the outer window store now it is emitted;
-                        // we do this because this delete would remove the whole list of values of the
-                        // same key,
-                        // and hence if we delete eagerly and then fail, we would miss emitting join
-                        // results of the later
+                        // we do this because this delete would remove the whole list of values of the same key,
+                        // and hence if we delete eagerly and then fail, we would miss emitting join results of the later
                         // values in the list.
                         // we do not use delete() calls since it would incur extra get()
                         store.put(prevKey, null);
