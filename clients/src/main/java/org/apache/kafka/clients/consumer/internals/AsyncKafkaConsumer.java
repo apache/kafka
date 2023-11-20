@@ -63,6 +63,7 @@ import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.errors.InvalidGroupIdException;
 import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.errors.TimeoutException;
+import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.requests.ListOffsetsRequest;
@@ -398,10 +399,10 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         );
         ApiVersions apiVersions = new ApiVersions();
         Supplier<NetworkClientDelegate> networkClientDelegateSupplier = () -> new NetworkClientDelegate(
-                time,
-                config,
-                logContext,
-                client
+            time,
+            config,
+            logContext,
+            client
         );
         Supplier<RequestManagers> requestManagersSupplier = RequestManagers.supplier(
             time,
@@ -1068,7 +1069,12 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             fetchBuffer.retainAll(Collections.emptySet());
             if (groupId.isPresent()) {
                 UnsubscribeApplicationEvent unsubscribeApplicationEvent = new UnsubscribeApplicationEvent();
-                applicationEventHandler.addAndGet(unsubscribeApplicationEvent, time.timer(Duration.ofMillis(Long.MAX_VALUE)));
+                try {
+                    applicationEventHandler.addAndGet(unsubscribeApplicationEvent, time.timer(Duration.ofMillis(Long.MAX_VALUE)));
+                    log.info("Unsubscribed all topics or patterns and assigned partitions");
+                } catch (TimeoutException e) {
+                    log.error("Failed while waiting for the unsubscribe event to complete", e);
+                }
             }
             subscriptions.unsubscribe();
         } finally {
@@ -1321,21 +1327,14 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
     }
 
     private void subscribeInternal(Collection<String> topics, Optional<ConsumerRebalanceListener> listener) {
-        log.debug("1");
         acquireAndEnsureOpen();
-        log.debug("2");
         try {
-            log.debug("3");
             maybeThrowInvalidGroupIdException();
-            log.debug("4");
             if (topics == null)
                 throw new IllegalArgumentException("Topic collection to subscribe to cannot be null");
-            log.debug("5");
             if (topics.isEmpty()) {
-                log.debug("6");
                 // treat subscribing to empty topic list as the same as unsubscribing
                 unsubscribe();
-                log.debug("7");
             } else {
                 for (String topic : topics) {
                     if (isBlank(topic))

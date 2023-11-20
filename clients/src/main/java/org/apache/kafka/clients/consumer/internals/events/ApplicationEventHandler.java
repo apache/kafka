@@ -51,12 +51,11 @@ public class ApplicationEventHandler extends EventHandler<ApplicationEvent> {
                                    final Supplier<RequestManagers> requestManagersSupplier) {
         super(logContext, applicationEventQueue);
         this.log = logContext.logger(ApplicationEventHandler.class);
-        this.networkThread = new ConsumerNetworkThread(
-            logContext,
-            time,
-            applicationEventProcessorSupplier,
-            networkClientDelegateSupplier,
-            requestManagersSupplier
+        this.networkThread = new ConsumerNetworkThread(logContext,
+                time,
+                applicationEventProcessorSupplier,
+                networkClientDelegateSupplier,
+                requestManagersSupplier
         );
         this.networkThread.start();
     }

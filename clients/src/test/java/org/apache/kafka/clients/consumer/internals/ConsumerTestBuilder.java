@@ -346,24 +346,23 @@ public class ConsumerTestBuilder implements Closeable {
                     metricsManager,
                     time);
             this.consumer = spy(new AsyncKafkaConsumer<>(
-                logContext,
-                clientId,
-                deserializers,
-                new FetchBuffer(logContext),
-                fetchCollector,
-                new ConsumerInterceptors<>(Collections.emptyList()),
-                time,
-                applicationEventHandler,
-                backgroundEventQueue,
-                rebalanceListenerInvoker,
-                metrics,
-                subscriptions,
-                metadata,
-                retryBackoffMs,
-                60000,
-                assignors,
-                groupInfo.map(groupInformation -> groupInformation.groupState.groupId).orElse(null)
-            ));
+                    logContext,
+                    clientId,
+                    deserializers,
+                    new FetchBuffer(logContext),
+                    fetchCollector,
+                    new ConsumerInterceptors<>(Collections.emptyList()),
+                    time,
+                    applicationEventHandler,
+                    backgroundEventQueue,
+                    rebalanceListenerInvoker,
+                    metrics,
+                    subscriptions,
+                    metadata,
+                    retryBackoffMs,
+                    60000,
+                    assignors,
+                    groupInfo.map(groupInformation -> groupInformation.groupState.groupId).orElse(null)));
         }
 
         @Override
