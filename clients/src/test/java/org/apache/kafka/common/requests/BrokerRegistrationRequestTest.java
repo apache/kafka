@@ -30,7 +30,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 class BrokerRegistrationRequestTest {
     private static Stream<Arguments> BrokerRegistrationRequestVersions() {
-        return IntStream.range(BrokerRegistrationRequestData.LOWEST_SUPPORTED_VERSION, BrokerRegistrationRequestData.HIGHEST_SUPPORTED_VERSION + 1).mapToObj(version -> Arguments.of((short) version));
+        return IntStream.range(BrokerRegistrationRequestData.LOWEST_SUPPORTED_VERSION,
+            BrokerRegistrationRequestData.HIGHEST_SUPPORTED_VERSION + 1).mapToObj(version -> Arguments.of((short) version));
     }
 
     @ParameterizedTest
