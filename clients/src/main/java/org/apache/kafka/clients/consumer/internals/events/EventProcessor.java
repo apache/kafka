@@ -56,7 +56,7 @@ public abstract class EventProcessor<T> implements Closeable {
 
     protected abstract Class<T> getEventClass();
 
-    public interface ProcessHandler<T> {
+    protected interface ProcessHandler<T> {
 
         void onProcess(T event, Optional<KafkaException> error);
     }
@@ -76,7 +76,7 @@ public abstract class EventProcessor<T> implements Closeable {
 
             for (T event : events) {
                 try {
-                    Objects.requireNonNull(event, "Attempted to process a null event");
+                    Objects.requireNonNull(event, () -> String.format("Attempted to process a null %s", eventClassName));
                     log.trace("Consuming {}: {}", eventClassName, event);
                     process(event);
                     processHandler.onProcess(event, Optional.empty());

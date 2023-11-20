@@ -81,11 +81,6 @@ public class BackgroundEventProcessor extends EventProcessor<BackgroundEvent> {
     }
 
     @Override
-    protected Class<BackgroundEvent> getEventClass() {
-        return BackgroundEvent.class;
-    }
-
-    @Override
     public void process(final BackgroundEvent event) {
         switch (event.type()) {
             case ERROR:
@@ -103,6 +98,11 @@ public class BackgroundEventProcessor extends EventProcessor<BackgroundEvent> {
             default:
                 throw new IllegalArgumentException("Background event type " + event.type() + " was not expected");
         }
+    }
+
+    @Override
+    protected Class<BackgroundEvent> getEventClass() {
+        return BackgroundEvent.class;
     }
 
     private void process(final ErrorBackgroundEvent event) {
