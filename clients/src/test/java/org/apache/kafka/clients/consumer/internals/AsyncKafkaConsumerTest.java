@@ -40,7 +40,6 @@ import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.ListOffsetsRequest;
-import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Timer;
 import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.AfterEach;
@@ -53,7 +52,6 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.ArgumentMatchers;
 import org.mockito.MockedConstruction;
 import org.mockito.stubbing.Answer;
-import org.slf4j.Logger;
 
 import java.time.Duration;
 import java.util.Collections;
@@ -530,16 +528,10 @@ public class AsyncKafkaConsumerTest {
 
     @Test
     public void testSubscribeToEmptyListActsAsUnsubscribe() {
-        Logger logger = new LogContext().logger(getClass());
-        logger.debug("a");
         consumer.subscribe(Collections.emptyList());
-        logger.debug("b");
         assertTrue(consumer.subscription().isEmpty());
-        logger.debug("c");
         assertTrue(consumer.assignment().isEmpty());
-        logger.debug("d");
         verify(applicationEventHandler).add(ArgumentMatchers.isA(UnsubscribeApplicationEvent.class));
-        logger.debug("e");
     }
 
     @Test

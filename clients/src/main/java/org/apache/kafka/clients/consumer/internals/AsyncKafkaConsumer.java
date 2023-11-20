@@ -63,7 +63,6 @@ import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.errors.InvalidGroupIdException;
 import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.errors.TimeoutException;
-import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.requests.ListOffsetsRequest;
@@ -243,8 +242,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                     applicationEventQueue,
                     applicationEventProcessorSupplier,
                     networkClientDelegateSupplier,
-                    requestManagersSupplier
-            );
+                    requestManagersSupplier);
             ConsumerCoordinatorMetrics coordinatorMetrics = new ConsumerCoordinatorMetrics(
                     subscriptions,
                     metrics,
