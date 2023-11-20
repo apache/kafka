@@ -862,7 +862,8 @@ public class GroupCoordinatorServiceTest {
         GroupCoordinatorService service = new GroupCoordinatorService(
             new LogContext(),
             createConfig(),
-            runtime
+            runtime,
+            new GroupCoordinatorMetrics()
         );
         int partitionCount = 0;
         service.startup(() -> partitionCount);
