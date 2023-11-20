@@ -255,7 +255,8 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
     generationId: Int,
     assignments: List[SyncGroupRequestData.SyncGroupRequestAssignment] = List.empty,
     expectedAssignment: Array[Byte] = Array.empty,
-    expectedError: Errors = Errors.NONE
+    expectedError: Errors = Errors.NONE,
+    version: Option[Short] = None
   ): SyncGroupResponseData = {
     val syncGroupRequestData = new SyncGroupRequestData()
       .setGroupId(groupId)
@@ -265,14 +266,17 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
       .setProtocolName("consumer-range")
       .setAssignments(assignments.asJava)
 
-    val syncGroupRequest = new SyncGroupRequest.Builder(syncGroupRequestData).build()
+    val syncGroupRequest = version match {
+      case Some(v) => new SyncGroupRequest.Builder(syncGroupRequestData).build(v)
+      case None => new SyncGroupRequest.Builder(syncGroupRequestData).build()
+    }
     val syncGroupResponse = connectAndReceive[SyncGroupResponse](syncGroupRequest)
 
     assertEquals(
       new SyncGroupResponseData()
         .setErrorCode(expectedError.code)
-        .setProtocolType("consumer")
-        .setProtocolName("consumer-range")
+        .setProtocolType(if (version.isEmpty || version.get >= 5) "consumer" else null)
+        .setProtocolName(if (version.isEmpty || version.get >= 5) "consumer-range" else null)
         .setAssignment(expectedAssignment),
       syncGroupResponse.data
     )

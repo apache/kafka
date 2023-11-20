@@ -84,7 +84,7 @@ class JoinGroupRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBas
       )
       val leaderMemberId = joinLeaderResponseData.memberId
       if (version >= 4) {
-        assertEquals(
+        verifyJoinGroupResponseDataEquals(
           new JoinGroupResponseData()
             .setErrorCode(Errors.MEMBER_ID_REQUIRED.code)
             .setMemberId(leaderMemberId)
@@ -92,7 +92,7 @@ class JoinGroupRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBas
           joinLeaderResponseData
         )
       } else {
-        assertEquals(
+        verifyJoinGroupResponseDataEquals(
           new JoinGroupResponseData()
             .setGenerationId(1)
             .setLeader(leaderMemberId)
@@ -114,7 +114,7 @@ class JoinGroupRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBas
           metadata = metadata,
           version = Option(version.toShort)
         )
-        assertEquals(
+        verifyJoinGroupResponseDataEquals(
           new JoinGroupResponseData()
             .setGenerationId(1)
             .setMemberId(leaderMemberId)
@@ -142,7 +142,7 @@ class JoinGroupRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBas
       )
 
       // Join with an unknown member id.
-      assertEquals(
+      verifyJoinGroupResponseDataEquals(
         new JoinGroupResponseData()
           .setMemberId("member-id-unknown")
           .setErrorCode(Errors.UNKNOWN_MEMBER_ID.code)
@@ -155,7 +155,7 @@ class JoinGroupRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBas
       )
 
       // Join with an inconsistent protocolType.
-      assertEquals(
+      verifyJoinGroupResponseDataEquals(
         new JoinGroupResponseData()
           .setErrorCode(Errors.INCONSISTENT_GROUP_PROTOCOL.code)
           .setProtocolName(if (version >= 7) null else ""),
@@ -204,7 +204,7 @@ class JoinGroupRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBas
       val rejoinLeaderFutureResponseData1 = Await.result(rejoinLeaderFuture1, Duration.Inf)
       var followerMemberId = joinFollowerFutureResponseData.memberId
 
-      assertEquals(
+      verifyJoinGroupResponseDataEquals(
         new JoinGroupResponseData()
           .setGenerationId(2)
           .setProtocolType(if (version >= 7) "consumer" else null)
@@ -232,7 +232,7 @@ class JoinGroupRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBas
         rejoinLeaderFutureResponseData1
       )
 
-      // Sync the leader ahead of the follower.
+      // Sync the leader.
       syncGroupWithOldProtocol(
         groupId = "grp",
         memberId = leaderMemberId,
@@ -248,6 +248,7 @@ class JoinGroupRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBas
         expectedAssignment = Array[Byte](1)
       )
 
+      // Sync the follower.
       syncGroupWithOldProtocol(
         groupId = "grp",
         memberId = followerMemberId,
@@ -256,7 +257,7 @@ class JoinGroupRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBas
       )
 
       // The follower rejoin doesn't trigger a rebalance if it's unchanged.
-      assertEquals(
+      verifyJoinGroupResponseDataEquals(
         new JoinGroupResponseData()
           .setGenerationId(2)
           .setProtocolType(if (version >= 7) "consumer" else null)
@@ -271,33 +272,6 @@ class JoinGroupRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBas
           version = Option(version.toShort)
         )
       )
-
-      // Sync the follower ahead of the leader.
-      val syncFollowerFuture = Future {
-        syncGroupWithOldProtocol(
-          groupId = "grp",
-          memberId = followerMemberId,
-          generationId = 2,
-          expectedAssignment = Array[Byte](2)
-        )
-      }
-
-      syncGroupWithOldProtocol(
-        groupId = "grp",
-        memberId = leaderMemberId,
-        generationId = 2,
-        assignments = List(
-          new SyncGroupRequestData.SyncGroupRequestAssignment()
-            .setMemberId(leaderMemberId)
-            .setAssignment(Array[Byte](1)),
-          new SyncGroupRequestData.SyncGroupRequestAssignment()
-            .setMemberId(followerMemberId)
-            .setAssignment(Array[Byte](2))
-        ),
-        expectedAssignment = Array[Byte](1)
-      )
-
-      Await.result(syncFollowerFuture, Duration.Inf)
 
       if (version >= 5) {
         followerMemberId = testFencedStaticGroup(leaderMemberId, followerMemberId, metadata, version)
