@@ -34,7 +34,7 @@ import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.security.scram.internals.ScramMechanism
 import org.apache.kafka.common.security.token.delegation.internals.DelegationTokenCache
 import org.apache.kafka.common.utils.{LogContext, Time}
-import org.apache.kafka.common.{ClusterResource, KafkaException, TopicPartition}
+import org.apache.kafka.common.{ClusterResource, KafkaException, TopicPartition, Uuid}
 import org.apache.kafka.coordinator.group
 import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorRuntimeMetrics
 import org.apache.kafka.coordinator.group.util.SystemTimerReaper
@@ -42,8 +42,9 @@ import org.apache.kafka.coordinator.group.{GroupCoordinator, GroupCoordinatorCon
 import org.apache.kafka.image.publisher.MetadataPublisher
 import org.apache.kafka.metadata.{BrokerState, ListenerInfo, VersionRange}
 import org.apache.kafka.raft.RaftConfig
+import org.apache.kafka.server.{AssignmentsManager, ClientMetricsManager, NodeToControllerChannelManager}
 import org.apache.kafka.server.authorizer.Authorizer
-import org.apache.kafka.server.common.ApiMessageAndVersion
+import org.apache.kafka.server.common.{ApiMessageAndVersion, DirectoryEventHandler, TopicIdPartition}
 import org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.apache.kafka.server.network.{EndpointReadyFutures, KafkaAuthorizerServerInfo}
@@ -56,7 +57,7 @@ import java.util.Optional
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.locks.ReentrantLock
 import java.util.concurrent.{CompletableFuture, ExecutionException, TimeUnit, TimeoutException}
-import scala.collection.{Map, Seq}
+import scala.collection.Map
 import scala.compat.java8.OptionConverters.RichOptionForJava8
 import scala.jdk.CollectionConverters._
 
@@ -65,8 +66,7 @@ import scala.jdk.CollectionConverters._
  * A Kafka broker that runs in KRaft (Kafka Raft) mode.
  */
 class BrokerServer(
-  val sharedServer: SharedServer,
-  val initialOfflineDirs: Seq[String],
+  val sharedServer: SharedServer
 ) extends KafkaBroker {
   val config = sharedServer.brokerConfig
   val time = sharedServer.time
@@ -85,6 +85,8 @@ class BrokerServer(
   this.logIdent = logContext.logPrefix
 
   @volatile var lifecycleManager: BrokerLifecycleManager = _
+
+  var assignmentsManager: AssignmentsManager = _
 
   private val isShuttingDown = new AtomicBoolean(false)
 
@@ -134,7 +136,7 @@ class BrokerServer(
 
   @volatile var brokerTopicStats: BrokerTopicStats = _
 
-  val clusterId: String = sharedServer.metaProps.clusterId
+  val clusterId: String = sharedServer.metaPropsEnsemble.clusterId().get()
 
   var brokerMetadataPublisher: BrokerMetadataPublisher = _
 
@@ -177,11 +179,6 @@ class BrokerServer(
 
       config.dynamicConfig.initialize(zkClientOpt = None)
 
-      lifecycleManager = new BrokerLifecycleManager(config,
-        time,
-        s"broker-${config.nodeId}-",
-        isZkBroker = false)
-
       /* start scheduler */
       kafkaScheduler = new KafkaScheduler(config.backgroundThreads)
       kafkaScheduler.startup()
@@ -197,10 +194,22 @@ class BrokerServer(
 
       // Create log manager, but don't start it because we need to delay any potential unclean shutdown log recovery
       // until we catch up on the metadata log and have up-to-date topic and broker configs.
-      logManager = LogManager(config, initialOfflineDirs, metadataCache, kafkaScheduler, time,
-        brokerTopicStats, logDirFailureChannel, keepPartitionMetadataFile = true)
+      logManager = LogManager(config,
+        sharedServer.metaPropsEnsemble.errorLogDirs().asScala.toSeq,
+        metadataCache,
+        kafkaScheduler,
+        time,
+        brokerTopicStats,
+        logDirFailureChannel,
+        keepPartitionMetadataFile = true)
 
       remoteLogManagerOpt = createRemoteLogManager()
+
+      lifecycleManager = new BrokerLifecycleManager(config,
+        time,
+        s"broker-${config.nodeId}-",
+        isZkBroker = false,
+        logDirs = logManager.directoryIds.values.toSet)
 
       // Enable delegation token cache for all SCRAM mechanisms to simplify dynamic update.
       // This keeps the cache up-to-date if new SCRAM mechanisms are enabled dynamically.
@@ -214,7 +223,7 @@ class BrokerServer(
       val controllerNodes = RaftConfig.voterConnectionsToNodes(voterConnections).asScala
       val controllerNodeProvider = RaftControllerNodeProvider(raftManager, config, controllerNodes)
 
-      clientToControllerChannelManager = NodeToControllerChannelManager(
+      clientToControllerChannelManager = new NodeToControllerChannelManagerImpl(
         controllerNodeProvider,
         time,
         metrics,
@@ -271,6 +280,28 @@ class BrokerServer(
         time
       )
 
+      val assignmentsChannelManager = new NodeToControllerChannelManagerImpl(
+        controllerNodeProvider,
+        time,
+        metrics,
+        config,
+        "directory-assignments",
+        s"broker-${config.nodeId}-",
+        retryTimeoutMs = 60000
+      )
+      assignmentsManager = new AssignmentsManager(
+        time,
+        assignmentsChannelManager,
+        config.brokerId,
+        () => lifecycleManager.brokerEpoch
+      )
+      val directoryEventHandler = new DirectoryEventHandler {
+        override def handleAssignment(partition: TopicIdPartition, directoryId: Uuid): Unit =
+          assignmentsManager.onAssignment(partition, directoryId)
+        override def handleFailure(directoryId: Uuid): Unit =
+          lifecycleManager.propagateDirectoryFailure(directoryId)
+      }
+
       this._replicaManager = new ReplicaManager(
         config = config,
         metrics = metrics,
@@ -288,7 +319,8 @@ class BrokerServer(
         threadNamePrefix = None, // The ReplicaManager only runs on the broker, and already includes the ID in thread names.
         delayedRemoteFetchPurgatoryParam = None,
         brokerEpochSupplier = () => lifecycleManager.brokerEpoch,
-        addPartitionsToTxnManager = Some(addPartitionsToTxnManager)
+        addPartitionsToTxnManager = Some(addPartitionsToTxnManager),
+        directoryEventHandler = directoryEventHandler
       )
 
       /* start token manager */
@@ -326,7 +358,7 @@ class BrokerServer(
           k -> VersionRange.of(v.min, v.max)
       }.asJava
 
-      val brokerLifecycleChannelManager = NodeToControllerChannelManager(
+      val brokerLifecycleChannelManager = new NodeToControllerChannelManagerImpl(
         controllerNodeProvider,
         time,
         metrics,
@@ -338,7 +370,7 @@ class BrokerServer(
       lifecycleManager.start(
         () => sharedServer.loader.lastAppliedOffset(),
         brokerLifecycleChannelManager,
-        sharedServer.metaProps.clusterId,
+        clusterId,
         listenerInfo.toBrokerRegistrationRequest,
         featuresRemapped,
         logManager.readBrokerEpochFromCleanShutdownFiles()
@@ -641,6 +673,9 @@ class BrokerServer(
 
       if (tokenManager != null)
         CoreUtils.swallow(tokenManager.shutdown(), this)
+
+      if (assignmentsManager != null)
+        CoreUtils.swallow(assignmentsManager.close(), this)
 
       if (replicaManager != null)
         CoreUtils.swallow(replicaManager.shutdown(), this)

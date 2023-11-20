@@ -833,6 +833,30 @@ public class GroupCoordinatorServiceTest {
     }
 
     @Test
+    public void testListGroupsWithEmptyTopicPartitions() throws ExecutionException, InterruptedException {
+        CoordinatorRuntime<GroupCoordinatorShard, Record> runtime = mockRuntime();
+        GroupCoordinatorService service = new GroupCoordinatorService(
+            new LogContext(),
+            createConfig(),
+            runtime
+        );
+        int partitionCount = 0;
+        service.startup(() -> partitionCount);
+
+        ListGroupsRequestData request = new ListGroupsRequestData();
+
+        CompletableFuture<ListGroupsResponseData> future = service.listGroups(
+            requestContext(ApiKeys.LIST_GROUPS),
+            request
+        );
+
+        assertEquals(
+            new ListGroupsResponseData(),
+            future.get()
+        );
+    }
+
+    @Test
     public void testListGroupsWhenNotStarted() throws ExecutionException, InterruptedException {
         CoordinatorRuntime<GroupCoordinatorShard, Record> runtime = mockRuntime();
         GroupCoordinatorService service = new GroupCoordinatorService(

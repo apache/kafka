@@ -25,7 +25,7 @@ import java.nio.file.{Files, StandardOpenOption}
 import java.security.cert.X509Certificate
 import java.time.Duration
 import java.util
-import java.util.concurrent.atomic.{AtomicBoolean, AtomicInteger}
+import java.util.concurrent.atomic.{AtomicBoolean, AtomicInteger, AtomicReference}
 import java.util.concurrent.{Callable, CompletableFuture, ExecutionException, Executors, TimeUnit}
 import java.util.{Arrays, Collections, Optional, Properties}
 import com.yammer.metrics.core.{Gauge, Histogram, Meter}
@@ -39,6 +39,7 @@ import kafka.network.RequestChannel
 import kafka.server._
 import kafka.server.checkpoints.OffsetCheckpointFile
 import kafka.server.metadata.{ConfigRepository, MockConfigRepository}
+import kafka.tools.StorageTool
 import kafka.utils.Implicits._
 import kafka.zk._
 import org.apache.kafka.admin.BrokerMetadata
@@ -69,8 +70,10 @@ import org.apache.kafka.common.serialization.{ByteArrayDeserializer, ByteArraySe
 import org.apache.kafka.common.utils.Utils._
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.controller.QuorumController
+import org.apache.kafka.metadata.properties.MetaProperties
+import org.apache.kafka.server.ControllerRequestCompletionHandler
 import org.apache.kafka.server.authorizer.{AuthorizableRequestContext, Authorizer => JAuthorizer}
-import org.apache.kafka.server.common.MetadataVersion
+import org.apache.kafka.server.common.{ApiMessageAndVersion, MetadataVersion}
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.apache.kafka.server.util.MockTime
 import org.apache.kafka.storage.internals.log.{CleanerConfig, LogConfig, LogDirFailureChannel, ProducerStateManagerConfig}
@@ -84,7 +87,7 @@ import org.mockito.Mockito
 
 import scala.annotation.nowarn
 import scala.collection.mutable.{ArrayBuffer, ListBuffer}
-import scala.collection.{Map, Seq, mutable}
+import scala.collection.{Map, Seq, immutable, mutable}
 import scala.concurrent.duration.FiniteDuration
 import scala.concurrent.{Await, ExecutionContext, Future}
 import scala.jdk.CollectionConverters._
@@ -455,6 +458,7 @@ object TestUtils extends Logging {
     admin: Admin,
     topic: String,
     brokers: Seq[B],
+    controllers: Seq[ControllerServer],
     numPartitions: Int = 1,
     replicationFactor: Int = 1,
     replicaAssignment: collection.Map[Int, Seq[Int]] = Map.empty,
@@ -492,6 +496,7 @@ object TestUtils extends Logging {
 
     // wait until we've propagated all partitions metadata to all brokers
     val allPartitionsMetadata = waitForAllPartitionsMetadata(brokers, topic, effectiveNumPartitions)
+    controllers.foreach(controller => ensureConsistentKRaftMetadata(brokers, controller))
 
     (0 until effectiveNumPartitions).map { i =>
       i -> allPartitionsMetadata.get(new TopicPartition(topic, i)).map(_.leader()).getOrElse(
@@ -521,7 +526,8 @@ object TestUtils extends Logging {
 
   def createOffsetsTopicWithAdmin[B <: KafkaBroker](
     admin: Admin,
-    brokers: Seq[B]
+    brokers: Seq[B],
+    controllers: Seq[ControllerServer]
   ): Map[Int, Int] = {
     val broker = brokers.head
     createTopicWithAdmin(
@@ -530,6 +536,7 @@ object TestUtils extends Logging {
       numPartitions = broker.config.getInt(KafkaConfig.OffsetsTopicPartitionsProp),
       replicationFactor = broker.config.getShort(KafkaConfig.OffsetsTopicReplicationFactorProp).toInt,
       brokers = brokers,
+      controllers = controllers,
       topicConfig = broker.groupCoordinator.groupMetadataTopicConfigs,
     )
   }
@@ -538,6 +545,7 @@ object TestUtils extends Logging {
     admin: Admin,
     topic: String,
     brokers: Seq[B],
+    controllers: Seq[ControllerServer]
   ): Unit = {
     try {
       admin.deleteTopics(Collections.singletonList(topic)).all().get()
@@ -547,6 +555,7 @@ object TestUtils extends Logging {
         // ignore
     }
     waitForAllPartitionsMetadata(brokers, topic, 0)
+    controllers.foreach(controller => ensureConsistentKRaftMetadata(brokers, controller))
   }
 
   /**
@@ -1404,6 +1413,27 @@ object TestUtils extends Logging {
     }.mkString("\n")
   }
 
+  def formatDirectories(
+    directories: immutable.Seq[String],
+    metaProperties: MetaProperties,
+    metadataVersion: MetadataVersion,
+    optionalMetadataRecords: Option[ArrayBuffer[ApiMessageAndVersion]]
+  ): Unit = {
+    val stream = new ByteArrayOutputStream()
+    var out: PrintStream = null
+    try {
+      out = new PrintStream(stream)
+      val bootstrapMetadata = StorageTool.buildBootstrapMetadata(metadataVersion, optionalMetadataRecords, "format command")
+      if (StorageTool.formatCommand(out, directories, metaProperties, bootstrapMetadata, metadataVersion, ignoreFormatted = false) != 0) {
+        throw new RuntimeException(stream.toString())
+      }
+      debug(s"Formatted storage directory(ies) ${directories}")
+    } finally {
+      if (out != null) out.close()
+      stream.close()
+    }
+  }
+
   /**
    * Create new LogManager instance with default configuration for testing
    */
@@ -1498,6 +1528,7 @@ object TestUtils extends Logging {
     val expands: AtomicInteger = new AtomicInteger(0)
     val shrinks: AtomicInteger = new AtomicInteger(0)
     val failures: AtomicInteger = new AtomicInteger(0)
+    val directory: AtomicReference[String] = new AtomicReference[String]()
 
     override def markIsrExpand(): Unit = expands.incrementAndGet()
 
@@ -1505,10 +1536,13 @@ object TestUtils extends Logging {
 
     override def markFailed(): Unit = failures.incrementAndGet()
 
+    override def assignDir(dir: String): Unit = directory.set(dir)
+
     def reset(): Unit = {
       expands.set(0)
       shrinks.set(0)
       failures.set(0)
+      directory.set(null)
     }
   }
 
