@@ -52,6 +52,7 @@ import org.apache.kafka.metadata.properties.MetaPropertiesEnsemble.VerificationF
 import org.apache.kafka.metadata.properties.{MetaProperties, MetaPropertiesEnsemble}
 import org.apache.kafka.metadata.{BrokerState, MetadataRecordSerde, VersionRange}
 import org.apache.kafka.raft.RaftConfig
+import org.apache.kafka.server.NodeToControllerChannelManager
 import org.apache.kafka.server.authorizer.Authorizer
 import org.apache.kafka.server.common.MetadataVersion._
 import org.apache.kafka.server.common.{ApiMessageAndVersion, MetadataVersion}
@@ -338,7 +339,7 @@ class KafkaServer(
         tokenCache = new DelegationTokenCache(ScramMechanism.mechanismNames)
         credentialProvider = new CredentialProvider(ScramMechanism.mechanismNames, tokenCache)
 
-        clientToControllerChannelManager = NodeToControllerChannelManager(
+        clientToControllerChannelManager = new NodeToControllerChannelManagerImpl(
           controllerNodeProvider = controllerNodeProvider,
           time = time,
           metrics = metrics,
@@ -428,7 +429,7 @@ class KafkaServer(
           )
           val controllerNodes = RaftConfig.voterConnectionsToNodes(controllerQuorumVotersFuture.get()).asScala
           val quorumControllerNodeProvider = RaftControllerNodeProvider(raftManager, config, controllerNodes)
-          val brokerToQuorumChannelManager = NodeToControllerChannelManager(
+          val brokerToQuorumChannelManager = new NodeToControllerChannelManagerImpl(
             controllerNodeProvider = quorumControllerNodeProvider,
             time = time,
             metrics = metrics,

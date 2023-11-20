@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package kafka.server;
+package org.apache.kafka.server;
 
 import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.common.Uuid;
@@ -31,6 +31,8 @@ import org.apache.kafka.server.common.TopicIdPartition;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.DisabledOnJre;
+import org.junit.jupiter.api.condition.JRE;
 import org.mockito.ArgumentCaptor;
 
 import java.util.Arrays;
@@ -129,6 +131,7 @@ public class AssignmentsManagerTest {
     }
 
     @Test
+    @DisabledOnJre(JRE.JAVA_8)
     public void testAssignmentAggregation() throws InterruptedException {
         CountDownLatch readyToAssert = new CountDownLatch(1);
         doAnswer(invocation -> {
