@@ -335,8 +335,8 @@ public class ClusterControlManager {
         int brokerId = request.brokerId();
         List<ApiMessageAndVersion> records = new ArrayList<>();
         BrokerRegistration existing = brokerRegistrations.get(brokerId);
-        if (version >= 2
-            && (existing == null || request.previousBrokerEpoch() != existing.epoch())
+        if (version < 2
+            || (existing == null || request.previousBrokerEpoch() != existing.epoch())
             && replicationControlManager != null) {
             replicationControlManager.handleBrokerUncleanShutdown(request.brokerId(), records);
         }
