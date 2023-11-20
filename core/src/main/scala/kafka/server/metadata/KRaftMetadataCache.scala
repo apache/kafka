@@ -269,16 +269,16 @@ class KRaftMetadataCache(val brokerId: Int) extends MetadataCache with Logging w
    * @param topics                        The set of topics and their corresponding first partition id to fetch.
    * @param listenerName                  The listener name.
    * @param firstTopicPartitionStartIndex The start partition index for the first topic
-   * @param maximumNumberOfPartition      The max number of partitions to return.
+   * @param maximumNumberOfPartitions     The max number of partitions to return.
    */
   def getTopicMetadataForDescribeTopicResponse(
     topics: Seq[String],
     listenerName: ListenerName,
     firstTopicPartitionStartIndex: Int,
-    maximumNumberOfPartition: Int
+    maximumNumberOfPartitions: Int
   ): DescribeTopicPartitionsResponseData = {
     val image = _currentImage
-    var remaining = maximumNumberOfPartition
+    var remaining = maximumNumberOfPartitions
     var startIndex = firstTopicPartitionStartIndex
     val result = new DescribeTopicPartitionsResponseData()
     topics.foreach { topicName =>
