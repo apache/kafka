@@ -31,8 +31,6 @@ import org.apache.kafka.server.common.TopicIdPartition;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.condition.DisabledOnJre;
-import org.junit.jupiter.api.condition.JRE;
 import org.mockito.ArgumentCaptor;
 
 import java.util.ArrayList;
@@ -157,7 +155,6 @@ public class AssignmentsManagerTest {
     }
 
     @Test
-    @DisabledOnJre(JRE.JAVA_8)
     public void testAssignmentAggregation() throws InterruptedException {
         CountDownLatch readyToAssert = new CountDownLatch(1);
         doAnswer(invocation -> {
