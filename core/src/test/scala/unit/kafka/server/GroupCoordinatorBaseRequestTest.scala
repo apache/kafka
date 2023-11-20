@@ -355,7 +355,8 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
         generationId = rejoinGroupResponseData.generationId,
         assignments = List(new SyncGroupRequestAssignment()
           .setMemberId(rejoinGroupResponseData.memberId)
-          .setAssignment(assignment))
+          .setAssignment(assignment)),
+        expectedAssignment = assignment
       )
     }
 
