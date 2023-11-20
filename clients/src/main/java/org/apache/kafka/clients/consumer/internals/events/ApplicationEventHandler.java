@@ -62,6 +62,18 @@ public class ApplicationEventHandler extends EventHandler<ApplicationEvent> {
     }
 
     /**
+     * Add an event to the underlying queue and internally invoke {@link #wakeupNetworkThread()} to alert it that
+     * it has an event to process.
+     *
+     * @param event An event to enqueue for later processing
+     */
+    @Override
+    public void add(ApplicationEvent event) {
+        super.add(event);
+        wakeupNetworkThread();
+    }
+
+    /**
      * Add a {@link CompletableApplicationEvent} to the underlying queue. The method blocks waiting for the result,
      * and will return the result value upon successful completion; otherwise throws an error.
      *
@@ -81,8 +93,7 @@ public class ApplicationEventHandler extends EventHandler<ApplicationEvent> {
         return event.get(timer);
     }
 
-    @Override
-    public void notifyWatcher() {
+    public void wakeupNetworkThread() {
         networkThread.wakeup();
     }
 

@@ -514,33 +514,33 @@ public class AsyncKafkaConsumerTest {
         verify(applicationEventHandler).add(ArgumentMatchers.isA(SubscriptionChangeApplicationEvent.class));
     }
 
-//    @Test
-//    public void testUnsubscribeGeneratesUnsubscribeEvent() {
-//        consumer.unsubscribe();
-//
-//        // Verify the unsubscribe event was generated and mock its completion.
-//        final ArgumentCaptor<UnsubscribeApplicationEvent> captor = ArgumentCaptor.forClass(UnsubscribeApplicationEvent.class);
-//        verify(applicationEventHandler).add(captor.capture());
-//        UnsubscribeApplicationEvent unsubscribeApplicationEvent = captor.getValue();
-//        unsubscribeApplicationEvent.future().complete(null);
-//
-//        assertTrue(consumer.subscription().isEmpty());
-//        assertTrue(consumer.assignment().isEmpty());
-//    }
+    @Test
+    public void testUnsubscribeGeneratesUnsubscribeEvent() {
+        consumer.unsubscribe();
 
-//    @Test
-//    public void testSubscribeToEmptyListActsAsUnsubscribe() {
-//        Logger logger = new LogContext().logger(getClass());
-//        logger.debug("a");
-//        consumer.subscribe(Collections.emptyList());
-//        logger.debug("b");
-//        assertTrue(consumer.subscription().isEmpty());
-//        logger.debug("c");
-//        assertTrue(consumer.assignment().isEmpty());
-//        logger.debug("d");
-//        verify(applicationEventHandler).add(ArgumentMatchers.isA(UnsubscribeApplicationEvent.class));
-//        logger.debug("e");
-//    }
+        // Verify the unsubscribe event was generated and mock its completion.
+        final ArgumentCaptor<UnsubscribeApplicationEvent> captor = ArgumentCaptor.forClass(UnsubscribeApplicationEvent.class);
+        verify(applicationEventHandler).add(captor.capture());
+        UnsubscribeApplicationEvent unsubscribeApplicationEvent = captor.getValue();
+        unsubscribeApplicationEvent.future().complete(null);
+
+        assertTrue(consumer.subscription().isEmpty());
+        assertTrue(consumer.assignment().isEmpty());
+    }
+
+    @Test
+    public void testSubscribeToEmptyListActsAsUnsubscribe() {
+        Logger logger = new LogContext().logger(getClass());
+        logger.debug("a");
+        consumer.subscribe(Collections.emptyList());
+        logger.debug("b");
+        assertTrue(consumer.subscription().isEmpty());
+        logger.debug("c");
+        assertTrue(consumer.assignment().isEmpty());
+        logger.debug("d");
+        verify(applicationEventHandler).add(ArgumentMatchers.isA(UnsubscribeApplicationEvent.class));
+        logger.debug("e");
+    }
 
     @Test
     public void testSubscribeToNullTopicCollection() {

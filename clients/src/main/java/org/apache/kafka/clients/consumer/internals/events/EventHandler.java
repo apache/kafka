@@ -40,8 +40,7 @@ public class EventHandler<T> implements Closeable {
     }
 
     /**
-     * Add an event to the underlying queue and internally invoke {@link #notifyWatcher} to alert the watcher that
-     * it has an event to process.
+     * Add an event to the underlying queue.
      *
      * @param event An event to enqueue for later processing
      */
@@ -49,10 +48,6 @@ public class EventHandler<T> implements Closeable {
         Objects.requireNonNull(event, "Event must be non-null");
         log.trace("Enqueued event: {}", event);
         queue.add(event);
-    }
-
-    public void notifyWatcher() {
-        // Do nothing...;
     }
 
     @Override
