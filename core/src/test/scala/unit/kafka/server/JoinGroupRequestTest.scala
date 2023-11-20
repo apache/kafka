@@ -70,36 +70,44 @@ class JoinGroupRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBas
       numPartitions = 3
     )
 
-    for (version <- 3 to ApiKeys.JOIN_GROUP.latestVersion(isUnstableApiEnabled)) {
+    for (version <- ApiKeys.JOIN_GROUP.oldestVersion to ApiKeys.JOIN_GROUP.latestVersion(isUnstableApiEnabled)) {
       val metadata = ConsumerProtocol.serializeSubscription(
         new ConsumerPartitionAssignor.Subscription(Collections.singletonList("foo"))
       ).array
 
       // Join a dynamic member without member id.
-      // Prior to version 4, a new member is immediately added if it sends a join group request with UNKNOWN_MEMBER_ID.
+      // Prior to JoinGroup version 4, a new member is immediately added if it sends a join group request with UNKNOWN_MEMBER_ID.
       val joinLeaderResponseData = sendJoinRequest(
         groupId = "grp",
         metadata = metadata,
         version = Option(version.toShort)
       )
       val leaderMemberId = joinLeaderResponseData.memberId
-      assertEquals(
-        new JoinGroupResponseData()
-          .setErrorCode(if (version >= 4) Errors.MEMBER_ID_REQUIRED.code else Errors.NONE.code)
-          .setGenerationId(if (version >= 4) -1 else 1)
-          .setLeader(if (version >= 4) "" else leaderMemberId)
-          .setMemberId(leaderMemberId)
-          .setProtocolName(if (version >= 7) null else if (version < 4) "consumer-range" else "")
-          .setMembers(if (version >= 4) List().asJava else List(
-            new JoinGroupResponseMember()
+      if (version >= 4) {
+        assertEquals(
+          new JoinGroupResponseData()
+            .setErrorCode(Errors.MEMBER_ID_REQUIRED.code)
+            .setMemberId(leaderMemberId)
+            .setProtocolName(if (version >= 7) null else ""),
+          joinLeaderResponseData
+        )
+      } else {
+        assertEquals(
+          new JoinGroupResponseData()
+            .setGenerationId(1)
+            .setLeader(leaderMemberId)
+            .setMemberId(leaderMemberId)
+            .setProtocolName("consumer-range")
+            .setMembers(List(new JoinGroupResponseMember()
               .setMemberId(leaderMemberId)
               .setMetadata(metadata)
-          ).asJava),
-        joinLeaderResponseData
-      )
+            ).asJava),
+          joinLeaderResponseData
+        )
+      }
 
+      // Rejoin the group with the member id.
       if (version >= 4) {
-        // Rejoin the group with the member id.
         val rejoinLeaderResponseData = sendJoinRequest(
           groupId = "grp",
           memberId = leaderMemberId,
@@ -159,7 +167,7 @@ class JoinGroupRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBas
       )
 
       // Join a second member.
-      // Non-null group instance id is not supported until version 5,
+      // Non-null group instance id is not supported until JoinGroup version 5,
       // so only version 4 needs to join a dynamic group (version < 5) and needs an extra join request to get the member id (version > 3).
       var joinFollowerResponseData: JoinGroupResponseData = null
       if (version == 4) {
@@ -224,7 +232,7 @@ class JoinGroupRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBas
         rejoinLeaderFutureResponseData1
       )
 
-      // Send leader SyncGroup request.
+      // Sync the leader ahead of the follower.
       syncGroupWithOldProtocol(
         groupId = "grp",
         memberId = leaderMemberId,
@@ -240,7 +248,6 @@ class JoinGroupRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBas
         expectedAssignment = Array[Byte](1)
       )
 
-      // Send follower SyncGroup request.
       syncGroupWithOldProtocol(
         groupId = "grp",
         memberId = followerMemberId,
@@ -265,85 +272,35 @@ class JoinGroupRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBas
         )
       )
 
-      if (version >= 5) {
-        // The leader rejoins and triggers a rebalance.
-        val rejoinLeaderFuture2 = Future {
-          sendJoinRequest(
-            groupId = "grp",
-            memberId = leaderMemberId,
-            metadata = metadata,
-            version = Option(version.toShort)
-          )
-        }
+      // Sync the follower ahead of the leader.
+      val syncFollowerFuture = Future {
+        syncGroupWithOldProtocol(
+          groupId = "grp",
+          memberId = followerMemberId,
+          generationId = 2,
+          expectedAssignment = Array[Byte](2)
+        )
+      }
 
-        // A new follower with duplicated group instance id joins.
-        val joinNewFollowerFuture = Future {
-          // Sleep for a while to make sure the requests are processed according to the sequence.
-          Thread.sleep(1000)
-          sendJoinRequest(
-            groupId = "grp",
-            groupInstanceId = "group-instance-id",
-            metadata = metadata,
-            version = Option(version.toShort)
-          )
-        }
-
-        // The old follower rejoin request should be fenced.
-        val rejoinFollowerFuture = Future {
-          // Sleep for a while to make sure the requests are processed according to the sequence.
-          Thread.sleep(2000)
-          sendJoinRequest(
-            groupId = "grp",
-            memberId = followerMemberId,
-            groupInstanceId = "group-instance-id",
-            metadata = metadata,
-            version = Option(version.toShort)
-          )
-        }
-
-        val rejoinLeaderFutureResponseData2 = Await.result(rejoinLeaderFuture2, Duration.Inf)
-        val joinNewFollowerFutureResponseData = Await.result(joinNewFollowerFuture, Duration.Inf)
-        val rejoinFollowerFutureResponseData = Await.result(rejoinFollowerFuture, Duration.Inf)
-        val newFollowerMemberId = joinNewFollowerFutureResponseData.memberId
-
-        verifyJoinGroupResponseDataEquals(
-          new JoinGroupResponseData()
-            .setGenerationId(3)
-            .setProtocolType(if (version >= 7) "consumer" else null)
-            .setProtocolName("consumer-range")
-            .setLeader(leaderMemberId)
+      syncGroupWithOldProtocol(
+        groupId = "grp",
+        memberId = leaderMemberId,
+        generationId = 2,
+        assignments = List(
+          new SyncGroupRequestData.SyncGroupRequestAssignment()
             .setMemberId(leaderMemberId)
-            .setMembers(List(
-              new JoinGroupResponseMember()
-                .setMemberId(leaderMemberId)
-                .setMetadata(metadata),
-              new JoinGroupResponseMember()
-                .setMemberId(newFollowerMemberId)
-                .setGroupInstanceId("group-instance-id")
-                .setMetadata(metadata)
-            ).asJava),
-          rejoinLeaderFutureResponseData2
-        )
-
-        verifyJoinGroupResponseDataEquals(
-          new JoinGroupResponseData()
-            .setGenerationId(3)
-            .setProtocolType(if (version >= 7) "consumer" else null)
-            .setProtocolName("consumer-range")
-            .setLeader(leaderMemberId)
-            .setMemberId(newFollowerMemberId),
-          joinNewFollowerFutureResponseData
-        )
-
-        verifyJoinGroupResponseDataEquals(
-          new JoinGroupResponseData()
-            .setProtocolName(if (version >= 7) null else "")
+            .setAssignment(Array[Byte](1)),
+          new SyncGroupRequestData.SyncGroupRequestAssignment()
             .setMemberId(followerMemberId)
-            .setErrorCode(Errors.FENCED_INSTANCE_ID.code),
-          rejoinFollowerFutureResponseData
-        )
+            .setAssignment(Array[Byte](2))
+        ),
+        expectedAssignment = Array[Byte](1)
+      )
 
-        followerMemberId = newFollowerMemberId
+      Await.result(syncFollowerFuture, Duration.Inf)
+
+      if (version >= 5) {
+        followerMemberId = testFencedStaticGroup(leaderMemberId, followerMemberId, metadata, version)
       }
 
       leaveGroup(
@@ -365,6 +322,92 @@ class JoinGroupRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBas
         version = ApiKeys.DELETE_GROUPS.latestVersion(isUnstableApiEnabled)
       )
     }
+  }
+
+  private def testFencedStaticGroup(
+    leaderMemberId: String,
+    followerMemberId: String,
+    metadata: Array[Byte],
+    version: Int,
+  ): String = {
+    // The leader rejoins and triggers a rebalance.
+    val rejoinLeaderFuture2 = Future {
+      sendJoinRequest(
+        groupId = "grp",
+        memberId = leaderMemberId,
+        metadata = metadata,
+        version = Option(version.toShort)
+      )
+    }
+
+    // A new follower with duplicated group instance id joins.
+    val joinNewFollowerFuture = Future {
+      // Sleep for a while to make sure the requests are processed according to the sequence.
+      Thread.sleep(1000)
+      sendJoinRequest(
+        groupId = "grp",
+        groupInstanceId = "group-instance-id",
+        metadata = metadata,
+        version = Option(version.toShort)
+      )
+    }
+
+    // The old follower rejoin request should be fenced.
+    val rejoinFollowerFuture = Future {
+      // Sleep for a while to make sure the requests are processed according to the sequence.
+      Thread.sleep(2000)
+      sendJoinRequest(
+        groupId = "grp",
+        memberId = followerMemberId,
+        groupInstanceId = "group-instance-id",
+        metadata = metadata,
+        version = Option(version.toShort)
+      )
+    }
+
+    val rejoinLeaderFutureResponseData2 = Await.result(rejoinLeaderFuture2, Duration.Inf)
+    val joinNewFollowerFutureResponseData = Await.result(joinNewFollowerFuture, Duration.Inf)
+    val rejoinFollowerFutureResponseData = Await.result(rejoinFollowerFuture, Duration.Inf)
+    val newFollowerMemberId = joinNewFollowerFutureResponseData.memberId
+
+    verifyJoinGroupResponseDataEquals(
+      new JoinGroupResponseData()
+        .setGenerationId(3)
+        .setProtocolType(if (version >= 7) "consumer" else null)
+        .setProtocolName("consumer-range")
+        .setLeader(leaderMemberId)
+        .setMemberId(leaderMemberId)
+        .setMembers(List(
+          new JoinGroupResponseMember()
+            .setMemberId(leaderMemberId)
+            .setMetadata(metadata),
+          new JoinGroupResponseMember()
+            .setMemberId(newFollowerMemberId)
+            .setGroupInstanceId("group-instance-id")
+            .setMetadata(metadata)
+        ).asJava),
+      rejoinLeaderFutureResponseData2
+    )
+
+    verifyJoinGroupResponseDataEquals(
+      new JoinGroupResponseData()
+        .setGenerationId(3)
+        .setProtocolType(if (version >= 7) "consumer" else null)
+        .setProtocolName("consumer-range")
+        .setLeader(leaderMemberId)
+        .setMemberId(newFollowerMemberId),
+      joinNewFollowerFutureResponseData
+    )
+
+    verifyJoinGroupResponseDataEquals(
+      new JoinGroupResponseData()
+        .setProtocolName(if (version >= 7) null else "")
+        .setMemberId(followerMemberId)
+        .setErrorCode(Errors.FENCED_INSTANCE_ID.code),
+      rejoinFollowerFutureResponseData
+    )
+
+    newFollowerMemberId
   }
 
   private def verifyJoinGroupResponseDataEquals(
