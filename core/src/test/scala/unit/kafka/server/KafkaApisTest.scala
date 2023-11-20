@@ -6474,22 +6474,20 @@ class KafkaApisTest {
 
     val future = new CompletableFuture[util.List[ConsumerGroupDescribeResponseData.DescribedGroup]]()
     when(groupCoordinator.consumerGroupDescribe(
-      requestChannelRequest.context,
-      consumerGroupDescribeRequestData.groupIds
-//      any[RequestContext],
-//      any[util.List[String]]
+      any[RequestContext],
+      any[util.List[String]]
     )).thenReturn(future)
 
     createKafkaApis(
       overrideProperties = Map(KafkaConfig.NewGroupCoordinatorEnableProp -> "true")
     ).handle(requestChannelRequest, RequestLocal.NoCaching)
 
-    val response = verifyNoThrottling[ConsumerGroupDescribeResponse](requestChannelRequest)
-
     val describedGroups = List(new DescribedGroup()).asJava
+    future.complete(describedGroups)
     val consumerGroupDescribeResponseData = new ConsumerGroupDescribeResponseData()
       .setGroups(describedGroups)
-    future.complete(describedGroups)
+
+    val response = verifyNoThrottling[ConsumerGroupDescribeResponse](requestChannelRequest)
 
     assertEquals(consumerGroupDescribeResponseData, response.data)
   }
