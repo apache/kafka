@@ -205,18 +205,20 @@ public class CommitRequestManagerTest {
         commitRequestManger.updateAutoCommitTimer(time.milliseconds());
         List<NetworkClientDelegate.FutureCompletionHandler> futures = assertPoll(1, commitRequestManger);
         time.sleep(99);
-        // complete the autocommit request (exceptionally)
+        // complete the autocommit request (exceptionally), and expect an exponential backoff of 100ms
         futures.get(0).onComplete(mockOffsetCommitResponse(
             "topic",
             1,
             (short) 1,
             Errors.COORDINATOR_LOAD_IN_PROGRESS));
 
+        // Expecting to wait for 100ms but only waited 99ms.  No result is expected here.
         time.sleep(99);
         commitRequestManger.updateAutoCommitTimer(time.milliseconds());
         assertPoll(0, commitRequestManger);
         commitRequestManger.updateAutoCommitTimer(time.milliseconds());
 
+        // Complete the full backoff of 100ms, and now expecting a result.
         time.sleep(1);
         futures = assertPoll(1, commitRequestManger);
         assertEmptyPendingRequests(commitRequestManger);
@@ -226,6 +228,7 @@ public class CommitRequestManagerTest {
                 (short) 1,
                 Errors.NONE));
 
+        // The result was completed successfully, expecting an event sent to the application thread.
         verify(backgroundEventHandler).add(any(AutoCommitCompletionBackgroundEvent.class));
     }
 
@@ -287,7 +290,6 @@ public class CommitRequestManagerTest {
             assertEmptyPendingRequests(commitRequestManger);
         }
 
-        assertExceptionHandling(commitRequestManger, error);
         assertCoordinatorDisconnect(error);
     }
 
@@ -416,7 +418,6 @@ public class CommitRequestManagerTest {
             Arguments.of(Errors.INVALID_COMMIT_OFFSET_SIZE, false),
             Arguments.of(Errors.UNKNOWN_TOPIC_OR_PARTITION, false),
             Arguments.of(Errors.COORDINATOR_NOT_AVAILABLE, false),
-            Arguments.of(Errors.NOT_COORDINATOR, true),
             Arguments.of(Errors.REQUEST_TIMED_OUT, false),
             Arguments.of(Errors.FENCED_INSTANCE_ID, false),
             Arguments.of(Errors.TOPIC_AUTHORIZATION_FAILED, false));

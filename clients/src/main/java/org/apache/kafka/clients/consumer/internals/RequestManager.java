@@ -35,6 +35,7 @@ public interface RequestManager {
      * synchronization protection in this method's implementation.
      *
      * <p/>
+     * 
      * <em>Note</em>: no network I/O occurs in this method. The method itself should not block for any reason. This
      * method is called from the consumer's network I/O thread, so quick execution of this method in <em>all</em>
      * request managers is critical to ensure that we can heartbeat in a timely fashion.

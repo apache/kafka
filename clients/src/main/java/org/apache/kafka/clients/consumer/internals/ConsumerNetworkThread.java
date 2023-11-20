@@ -34,7 +34,6 @@ import java.io.Closeable;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
@@ -94,12 +93,10 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
                 try {
                     runOnce();
                 } catch (final Throwable e) {
+                    // Swallow the exception and continue
                     log.error("Unexpected error caught in consumer network thread", e);
-                    // swallow the wakeup exception to prevent killing the thread.
                 }
             }
-        } catch (final Throwable t) {
-            log.error("The consumer network thread is shutting down due to unexpected error", t);
         } finally {
             cleanup();
         }
@@ -257,7 +254,7 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
     void cleanup() {
         log.trace("Closing the consumer network thread");
         Timer timer = time.timer(closeTimeout);
-        waitForClosingTasks(timer);
+        maybeAutoCommitAndLeaveGroup(timer);
         runAtClose(requestManagers.entries(), networkClientDelegate, timer);
         closeQuietly(requestManagers, "request managers");
         closeQuietly(networkClientDelegate, "network client delegate");
@@ -272,21 +269,21 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
      * completed in time.
      */
     // Visible for testing
-    void waitForClosingTasks(final Timer timer) {
+    void maybeAutoCommitAndLeaveGroup(final Timer timer) {
         if (!requestManagers.coordinatorRequestManager.isPresent())
             return;
 
-        connectCoordinator(timer);
-        List<NetworkClientDelegate.UnsentRequest> tasks = closingTasks();
+        ensureCoordinatorReady(timer);
+        List<NetworkClientDelegate.UnsentRequest> tasks = closingRequests();
         networkClientDelegate.addAll(tasks);
         do {
             long currentTimeMs = timer.currentTimeMs();
-            connectCoordinator(timer);
+            ensureCoordinatorReady(timer);
             networkClientDelegate.poll(timer.remainingMs(), currentTimeMs);
         } while (timer.notExpired() && !tasks.stream().allMatch(v -> v.future().isDone()));
     }
 
-    private void connectCoordinator(final Timer timer) {
+    private void ensureCoordinatorReady(final Timer timer) {
         while (!coordinatorReady()) {
             findCoordinatorSync(timer);
         }
@@ -300,7 +297,7 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
 
     private void findCoordinatorSync(final Timer timer) {
         CoordinatorRequestManager coordinatorRequestManager = requestManagers.coordinatorRequestManager.get();
-        NetworkClientDelegate.PollResult request = coordinatorRequestManager.pollOnClose();
+        NetworkClientDelegate.PollResult request = coordinatorRequestManager.poll(timer.currentTimeMs());
         networkClientDelegate.addAll(request);
         CompletableFuture<ClientResponse> findCoordinatorRequest = request.unsentRequests.get(0).future();
         while (timer.notExpired() && !findCoordinatorRequest.isDone()) {
@@ -309,25 +306,23 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
         }
     }
 
-    private List<NetworkClientDelegate.UnsentRequest> maybeAutoCommitOnClose() {
+    private Optional<NetworkClientDelegate.UnsentRequest> maybeAutoCommitOnClose() {
         if (!requestManagers.commitRequestManager.isPresent()) {
-            return null;
+            return Optional.empty();
         }
-        Optional<NetworkClientDelegate.UnsentRequest> autocommit = requestManagers.commitRequestManager.get().maybeAutoCommit();
-        if (!autocommit.isPresent()) {
-            return Collections.emptyList();
-        }
-
-        return Collections.singletonList(autocommit.get());
+        return requestManagers.commitRequestManager.get().maybeCreateAutoCommitRequest();
     }
 
+
     /**
-     * Aggregate all requests that need to be sent before closing.
+     * Return two closing requests if presented.  The closing requests are:
+     *   1. AutoCommit
+     *   2. Leave group heartbeat (with epoch = -1/-2)
      */
-    private List<NetworkClientDelegate.UnsentRequest> closingTasks() {
+    private List<NetworkClientDelegate.UnsentRequest> closingRequests() {
         List<NetworkClientDelegate.UnsentRequest> closingRequests = new ArrayList<>();
+        maybeAutoCommitOnClose().ifPresent(closingRequests::add);
         // TODO: We need to send a closing heartbeat before closing
-        closingRequests.addAll(maybeAutoCommitOnClose());
         return closingRequests;
     }
 }
