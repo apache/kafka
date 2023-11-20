@@ -41,6 +41,8 @@ import scala.collection.immutable.TreeMap
 import scala.reflect.ClassTag
 import org.apache.kafka.common.requests.ListOffsetsResponse
 
+import scala.collection.compat.immutable.ArraySeq
+
 object ConsumerGroupCommand extends Logging {
 
   def main(args: Array[String]): Unit = {
@@ -195,25 +197,75 @@ object ConsumerGroupCommand extends Logging {
     }
 
     def listGroups(): Unit = {
-      if (opts.options.has(opts.stateOpt)) {
-        val stateValue = opts.options.valueOf(opts.stateOpt)
-        val states = if (stateValue == null || stateValue.isEmpty)
-          Set[ConsumerGroupState]()
-        else
-          consumerGroupStatesFromString(stateValue)
+      val includeState = opts.options.has(opts.stateOpt)
+      val includeType = opts.options.has(opts.typeOpt)
+
+      val groupInfoMap = mutable.Map[String, (String, String)]() // Mutable map
+
+      if (includeState) {
+        val states = getStateValues()
         val listings = listConsumerGroupsWithState(states)
-        printGroupStates(listings.map(e => (e.groupId, e.state().toString)))
+        listings.foreach { e =>
+          groupInfoMap.update(e.groupId, (e.state().toString, groupInfoMap.getOrElse(e.groupId, ("", ""))._2))
+        }
       }
-      if (opts.options.has(opts.typeOpt)) {
-        val typeValue = opts.options.valueOf(opts.typeOpt)
-        val types = if (typeValue == null || typeValue.isEmpty)
-          Set[ConsumerGroupType]()
-        else
-          consumerGroupTypesFromString(typeValue)
+
+      if (includeType) {
+        val types = getTypeValues()
         val listings = listConsumerGroupsWithType(types)
-        printGroupTypes(listings.map(e => (e.groupId, e.groupType().toString)))
-      } else
+        listings.foreach { listing =>
+          val groupId = listing.groupId
+          val groupType = listing.groupType().toString
+          val currentState = groupInfoMap.getOrElse(groupId, ("", ""))._1
+          groupInfoMap.update(groupId, (currentState, groupType))
+        }
+      }
+
+      val groupInfoList = groupInfoMap.toList.map { case (groupId, (state, groupType)) => (groupId, state, groupType) }
+
+      if (groupInfoList.nonEmpty) {
+        printGroupInfo(groupInfoList, includeState, includeType)
+      } else {
         listConsumerGroups().foreach(println(_))
+      }
+    }
+
+    private def getStateValues(): Set[ConsumerGroupState] = {
+      val stateValue = opts.options.valueOf(opts.stateOpt)
+      if (stateValue == null || stateValue.isEmpty)
+        Set[ConsumerGroupState]()
+      else
+        consumerGroupStatesFromString(stateValue)
+    }
+
+    private def getTypeValues(): Set[ConsumerGroupType] = {
+      val typeValue = opts.options.valueOf(opts.typeOpt)
+      if (typeValue == null || typeValue.isEmpty)
+        Set[ConsumerGroupType]()
+      else
+        consumerGroupTypesFromString(typeValue)
+    }
+
+    private def printGroupInfo(groupsAndInfo: List[(String, String, String)], includeState: Boolean, includeType: Boolean): Unit = {
+      val maxGroupLen: Int = groupsAndInfo.foldLeft(15)((maxLen, group) => Math.max(maxLen, group._1.length))
+      var header = "GROUP"
+      var format = s"%-${maxGroupLen}s"
+
+      if (includeState) {
+        header += " STATE"
+        format += " %-20s"
+      }
+      if (includeType) {
+        header += " TYPE"
+        format += " %-20s"
+      }
+
+      println(format.format(ArraySeq.unsafeWrapArray(header.split(" ")): _*))
+
+      groupsAndInfo.foreach { case (groupId, state, groupType) =>
+        val info = List(groupId) ++ (if (includeState) List(state) else List()) ++ (if (includeType) List(groupType) else List())
+        println(format.format(info: _*))
+      }
     }
 
     def listConsumerGroups(): List[String] = {
@@ -234,32 +286,6 @@ object ConsumerGroupCommand extends Logging {
       listConsumerGroupsOptions.inTypes(types.asJava)
       val result = adminClient.listConsumerGroups(listConsumerGroupsOptions)
       result.all.get.asScala.toList
-    }
-
-    private def printGroupStates(groupsAndStates: List[(String, String)]): Unit = {
-      // find proper columns width
-      var maxGroupLen = 15
-      for ((groupId, _) <- groupsAndStates) {
-        maxGroupLen = Math.max(maxGroupLen, groupId.length)
-      }
-      val format = s"%${-maxGroupLen}s %s"
-      println(format.format("GROUP", "STATE"))
-      for ((groupId, state) <- groupsAndStates) {
-        println(format.format(groupId, state))
-      }
-    }
-
-    private def printGroupTypes(groupsAndTypes: List[(String, String)]): Unit = {
-      // find proper columns width
-      var maxGroupLen = 15
-      for ((groupId, _) <- groupsAndTypes) {
-        maxGroupLen = Math.max(maxGroupLen, groupId.length)
-      }
-      val format = s"%${-maxGroupLen}s %s"
-      println(format.format("GROUP", "TYPE"))
-      for ((groupId, groupType) <- groupsAndTypes) {
-        println(format.format(groupId, groupType))
-      }
     }
 
     private def shouldPrintMemberState(group: String, state: Option[String], numRows: Option[Int]): Boolean = {
