@@ -19,12 +19,12 @@ package kafka.admin
 import joptsimple.OptionException
 import org.junit.jupiter.api.Assertions._
 import kafka.utils.TestUtils
-import org.apache.kafka.common.ConsumerGroupState
 import org.apache.kafka.clients.admin.ConsumerGroupListing
-import java.util.Optional
-
+import org.apache.kafka.common.{ConsumerGroupState, ConsumerGroupType}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
+
+import java.util.Optional
 
 class ListConsumerGroupTest extends ConsumerGroupCommandTest {
 
@@ -64,8 +64,12 @@ class ListConsumerGroupTest extends ConsumerGroupCommandTest {
     val service = getConsumerGroupService(cgcArgs)
 
     val expectedListing = Set(
-      new ConsumerGroupListing(simpleGroup, true).setState(Optional.of(ConsumerGroupState.EMPTY)),
-      new ConsumerGroupListing(group, false).setState(Optional.of(ConsumerGroupState.STABLE)))
+      new ConsumerGroupListing(simpleGroup, true)
+        .setState(Optional.of(ConsumerGroupState.EMPTY)),
+      new ConsumerGroupListing(group, false)
+        .setState(Optional.of(ConsumerGroupState.STABLE))
+        .setType(Optional.of(ConsumerGroupType.CONSUMER))
+    )
 
     var foundListing = Set.empty[ConsumerGroupListing]
     TestUtils.waitUntilTrue(() => {
@@ -73,12 +77,11 @@ class ListConsumerGroupTest extends ConsumerGroupCommandTest {
       expectedListing == foundListing
     }, s"Expected to show groups $expectedListing, but found $foundListing")
 
-    val expectedListingStable = Set(
-      new ConsumerGroupListing(group, false).setState(Optional.of(ConsumerGroupState.STABLE)))
+    val expectedListingStable = Set.empty[ConsumerGroupListing]
 
     foundListing = Set.empty[ConsumerGroupListing]
     TestUtils.waitUntilTrue(() => {
-      foundListing = service.listConsumerGroupsWithState(Set(ConsumerGroupState.STABLE)).toSet
+      foundListing = service.listConsumerGroupsWithState(Set(ConsumerGroupState.PREPARING_REBALANCE)).toSet
       expectedListingStable == foundListing
     }, s"Expected to show groups $expectedListingStable, but found $foundListing")
   }
@@ -106,6 +109,25 @@ class ListConsumerGroupTest extends ConsumerGroupCommandTest {
 
   @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
+  def testConsumerGroupTypesFromString(quorum: String): Unit = {
+    var result = ConsumerGroupCommand.consumerGroupTypesFromString("consumer")
+    assertEquals(Set(ConsumerGroupType.CONSUMER), result)
+
+    result = ConsumerGroupCommand.consumerGroupTypesFromString("consumer, generic")
+    assertEquals(Set(ConsumerGroupType.CONSUMER, ConsumerGroupType.GENERIC), result)
+
+    assertThrows(classOf[IllegalArgumentException], () => ConsumerGroupCommand.consumerGroupTypesFromString("bad, wrong"))
+
+    assertThrows(classOf[IllegalArgumentException], () => ConsumerGroupCommand.consumerGroupTypesFromString("Consumer"))
+
+    assertThrows(classOf[IllegalArgumentException], () => ConsumerGroupCommand.consumerGroupTypesFromString("  bad, generic"))
+
+    assertThrows(classOf[IllegalArgumentException], () => ConsumerGroupCommand.consumerGroupTypesFromString("   ,   ,"))
+  }
+
+
+  @ParameterizedTest
+  @ValueSource(strings = Array("zk", "kraft"))
   def testListGroupCommand(quorum: String): Unit = {
     val simpleGroup = "simple-group"
     addSimpleGroupExecutor(group = simpleGroup)
@@ -121,25 +143,25 @@ class ListConsumerGroupTest extends ConsumerGroupCommandTest {
     cgcArgs = Array("--bootstrap-server", bootstrapServers(), "--list", "--state")
     TestUtils.waitUntilTrue(() => {
       out = TestUtils.grabConsoleOutput(ConsumerGroupCommand.main(cgcArgs))
-      out.contains("STATE") && out.contains(simpleGroup) && out.contains(group)
-    }, s"Expected to find $simpleGroup, $group and the header, but found $out")
+      out.contains("STATE") && !out.contains("TYPE") && out.contains(simpleGroup) && out.contains(group)
+    }, s"Expected 2 to find $simpleGroup, $group and the header, but found $out")
 
     cgcArgs = Array("--bootstrap-server", bootstrapServers(), "--list", "--type")
     TestUtils.waitUntilTrue(() => {
       out = TestUtils.grabConsoleOutput(ConsumerGroupCommand.main(cgcArgs))
-      out.contains("TYPE") && out.contains(simpleGroup) && out.contains(group)
-    }, s"Expected to find $simpleGroup, $group and the header, but found $out")
+      out.contains("TYPE") && !out.contains("STATE") && out.contains(simpleGroup) && out.contains(group)
+    }, s"Expected 3 to find $simpleGroup, $group and the header, but found $out")
 
     cgcArgs = Array("--bootstrap-server", bootstrapServers(), "--list", "--state", "--type")
     TestUtils.waitUntilTrue(() => {
       out = TestUtils.grabConsoleOutput(ConsumerGroupCommand.main(cgcArgs))
       out.contains("TYPE") && out.contains("STATE") && out.contains(simpleGroup) && out.contains(group)
-    }, s"Expected to find $simpleGroup, $group and the header, but found $out")
+    }, s"Expected 4 to find $simpleGroup, $group and the header, but found $out")
 
     cgcArgs = Array("--bootstrap-server", bootstrapServers(), "--list", "--state", "Stable")
     TestUtils.waitUntilTrue(() => {
       out = TestUtils.grabConsoleOutput(ConsumerGroupCommand.main(cgcArgs))
       out.contains("STATE") && out.contains(group) && out.contains("Stable")
-    }, s"Expected to find $group in state Stable and the header, but found $out")
+    }, s"Expected 5 to find $group in state Stable and the header, but found $out")
   }
 }
