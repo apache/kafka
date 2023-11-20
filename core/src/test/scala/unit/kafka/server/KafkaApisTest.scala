@@ -6467,9 +6467,9 @@ class KafkaApisTest {
 
   @Test
   def testConsumerGroupDescribe(): Unit = {
-    val groupId = "group0"
+    val groupIds = List("group-id-0", "group-id-1", "group-id-2").asJava
     val consumerGroupDescribeRequestData = new ConsumerGroupDescribeRequestData()
-    consumerGroupDescribeRequestData.groupIds.add(groupId)
+    consumerGroupDescribeRequestData.groupIds.addAll(groupIds)
     val requestChannelRequest = buildRequest(new ConsumerGroupDescribeRequest.Builder(consumerGroupDescribeRequestData, true).build())
 
     val future = new CompletableFuture[util.List[ConsumerGroupDescribeResponseData.DescribedGroup]]()
@@ -6482,7 +6482,12 @@ class KafkaApisTest {
       overrideProperties = Map(KafkaConfig.NewGroupCoordinatorEnableProp -> "true")
     ).handle(requestChannelRequest, RequestLocal.NoCaching)
 
-    val describedGroups = List(new DescribedGroup()).asJava
+    val describedGroups = List(
+      new DescribedGroup().setGroupId(groupIds[0]),
+      new DescribedGroup().setGroupId(groupIds[1]),
+      new DescribedGroup().setGroupId(groupIds[2])
+    ).asJava
+
     future.complete(describedGroups)
     val consumerGroupDescribeResponseData = new ConsumerGroupDescribeResponseData()
       .setGroups(describedGroups)
