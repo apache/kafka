@@ -39,7 +39,6 @@ import scala.concurrent.{Await, Future}
 @Tag("integration")
 class HeartbeatRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBaseRequestTest(cluster) {
   @ClusterTest(serverProperties = Array(
-    new ClusterConfigProperty(key = "unstable.api.versions.enable", value = "false"),
     new ClusterConfigProperty(key = "group.coordinator.new.enable", value = "true"),
     new ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "1"),
     new ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1")
@@ -49,7 +48,6 @@ class HeartbeatRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBas
   }
 
   @ClusterTest(clusterType = Type.ALL, serverProperties = Array(
-    new ClusterConfigProperty(key = "unstable.api.versions.enable", value = "false"),
     new ClusterConfigProperty(key = "group.coordinator.new.enable", value = "false"),
     new ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "1"),
     new ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1")
@@ -158,7 +156,7 @@ class HeartbeatRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBas
       val verifyAndRejoinLeaderFuture = Future {
         TestUtils.waitUntilTrue(() => {
           val described = describeGroups(groupIds = List("grp"), version = ApiKeys.DESCRIBE_GROUPS.latestVersion(isUnstableApiEnabled))
-          GenericGroupState.PREPARING_REBALANCE.toString == described.head.groupState()
+          GenericGroupState.PREPARING_REBALANCE.toString == described.head.groupState
         }, msg = s"The group is not in PREPARING_REBALANCE state.")
 
         // Heartbeat PREPARING_REBALANCE group.
