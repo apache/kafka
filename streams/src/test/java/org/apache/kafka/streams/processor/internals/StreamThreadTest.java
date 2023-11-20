@@ -3110,8 +3110,6 @@ public class StreamThreadTest {
         // expect not to try and commit task3, because it's not running.
         expect(taskManager.commit(mkSet(task1, task2))).andReturn(2).times(1);
 
-        final StreamsMetricsImpl streamsMetrics =
-            new StreamsMetricsImpl(metrics, CLIENT_ID, StreamsConfig.METRICS_LATEST, mockTime);
         final TopologyMetadata topologyMetadata = new TopologyMetadata(internalTopologyBuilder, config);
         topologyMetadata.buildAndRewriteTopology();
         thread = buildStreamThread(consumer, taskManager, config, topologyMetadata);
@@ -3152,17 +3150,6 @@ public class StreamThreadTest {
         mockConsumer.updateBeginningOffsets(Collections.singletonMap(t1p1, 0L));
         thread.rebalanceListener().onPartitionsAssigned(assignedPartitions);
         runOnce();
-
-        final MetricName skippedTotalMetric = metrics.metricName(
-            "skipped-records-total",
-            "stream-metrics",
-            Collections.singletonMap("client-id", thread.getName())
-        );
-        final MetricName skippedRateMetric = metrics.metricName(
-            "skipped-records-rate",
-            "stream-metrics",
-            Collections.singletonMap("client-id", thread.getName())
-        );
 
         try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(RecordQueue.class)) {
             long offset = -1;
