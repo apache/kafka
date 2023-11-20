@@ -54,16 +54,13 @@ public class ConsumerGroupDescribeRequestTest {
         List<ConsumerGroupDescribeResponseData.DescribedGroup> expectedDescribedGroupList = Arrays.asList(
             new ConsumerGroupDescribeResponseData.DescribedGroup()
                 .setGroupId("group-id-1")
-                .setErrorCode(Errors.COORDINATOR_LOAD_IN_PROGRESS.code())
-                .setErrorMessage(Errors.COORDINATOR_LOAD_IN_PROGRESS.message()),
+                .setErrorCode(Errors.COORDINATOR_LOAD_IN_PROGRESS.code()),
             new ConsumerGroupDescribeResponseData.DescribedGroup()
                 .setGroupId("group-id-2")
-                .setErrorCode(Errors.COORDINATOR_LOAD_IN_PROGRESS.code())
-                .setErrorMessage(Errors.COORDINATOR_LOAD_IN_PROGRESS.message()),
+                .setErrorCode(Errors.COORDINATOR_LOAD_IN_PROGRESS.code()),
             new ConsumerGroupDescribeResponseData.DescribedGroup()
                 .setGroupId("group-id-3")
                 .setErrorCode(Errors.COORDINATOR_LOAD_IN_PROGRESS.code())
-                .setErrorMessage(Errors.COORDINATOR_LOAD_IN_PROGRESS.message())
         );
 
         List<ConsumerGroupDescribeResponseData.DescribedGroup> describedGroupList = getErrorDescribedGroupList(

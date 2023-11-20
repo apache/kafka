@@ -8719,7 +8719,6 @@ public class GroupMetadataManagerTest {
         ConsumerGroupDescribeResponseData.DescribedGroup describedGroup = new ConsumerGroupDescribeResponseData.DescribedGroup();
         describedGroup.setGroupId(groupId);
         describedGroup.setErrorCode(Errors.GROUP_ID_NOT_FOUND.code());
-        describedGroup.setErrorMessage(Errors.GROUP_ID_NOT_FOUND.message());
         List<ConsumerGroupDescribeResponseData.DescribedGroup> expected = Collections.singletonList(
             describedGroup
         );
@@ -8747,7 +8746,6 @@ public class GroupMetadataManagerTest {
         ConsumerGroupDescribeResponseData.DescribedGroup describedGroup = new ConsumerGroupDescribeResponseData.DescribedGroup();
         describedGroup.setGroupId(consumerGroupId);
         describedGroup.setErrorCode(Errors.GROUP_ID_NOT_FOUND.code());
-        describedGroup.setErrorMessage(Errors.GROUP_ID_NOT_FOUND.message());
         List<ConsumerGroupDescribeResponseData.DescribedGroup> expected = Collections.singletonList(
             describedGroup
         );

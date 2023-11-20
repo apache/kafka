@@ -462,7 +462,6 @@ public class GroupMetadataManager {
             if (group == null || !CONSUMER.equals(group.type())) {
                 // We don't support upgrading/downgrading between protocols at the moment so
                 // we set an error if a group exists with the wrong type.
-                describedGroup.setErrorMessage(Errors.GROUP_ID_NOT_FOUND.message());
                 describedGroup.setErrorCode(Errors.GROUP_ID_NOT_FOUND.code());
             } else {
                 ConsumerGroup consumerGroup = (ConsumerGroup) group;
