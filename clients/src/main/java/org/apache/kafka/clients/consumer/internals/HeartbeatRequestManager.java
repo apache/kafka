@@ -21,6 +21,7 @@ import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.internals.NetworkClientDelegate.PollResult;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEventHandler;
 import org.apache.kafka.clients.consumer.internals.events.ErrorBackgroundEvent;
+import org.apache.kafka.clients.consumer.internals.events.GroupMetadataUpdateEvent;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
@@ -232,6 +233,12 @@ public class HeartbeatRequestManager implements RequestManager {
             this.heartbeatRequestState.onSuccessfulAttempt(currentTimeMs);
             this.heartbeatRequestState.resetTimer();
             this.membershipManager.onHeartbeatResponseReceived(response.data());
+            this.backgroundEventHandler.add(new GroupMetadataUpdateEvent(
+                membershipManager.groupId(),
+                membershipManager.memberEpoch(),
+                membershipManager.memberId(),
+                membershipManager.groupInstanceId()
+            ));
             return;
         }
         onErrorResponse(response, currentTimeMs);
