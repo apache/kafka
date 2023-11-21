@@ -181,7 +181,7 @@ public class ClientMetricsManager implements Closeable {
         }
 
         clientInstance.lastKnownError(Errors.NONE);
-        return new PushTelemetryResponse(new PushTelemetryResponseData().setThrottleTimeMs(throttleMs));
+        return new PushTelemetryResponse(new PushTelemetryResponseData());
     }
 
     public boolean isTelemetryReceiverConfigured() {

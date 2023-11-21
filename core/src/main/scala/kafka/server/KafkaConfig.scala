@@ -1593,6 +1593,7 @@ object KafkaConfig {
       case ConfigResource.Type.BROKER => KafkaConfig.maybeSensitive(KafkaConfig.configType(name))
       case ConfigResource.Type.TOPIC => KafkaConfig.maybeSensitive(LogConfig.configType(name).asScala)
       case ConfigResource.Type.BROKER_LOGGER => false
+      case ConfigResource.Type.CLIENT_METRICS => false
       case _ => true
     }
     if (maybeSensitive) Password.HIDDEN else value
