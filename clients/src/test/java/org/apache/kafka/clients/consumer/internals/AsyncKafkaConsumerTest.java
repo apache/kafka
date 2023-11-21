@@ -257,7 +257,7 @@ public class AsyncKafkaConsumerTest {
     @Test
     @SuppressWarnings("deprecation")
     public void testPollLongThrowsException() {
-        Exception e = assertThrows(KafkaException.class, () -> consumer.poll(0L));
+        Exception e = assertThrows(UnsupportedOperationException.class, () -> consumer.poll(0L));
         assertEquals("Consumer.poll(long) is not supported when \"group.protocol\" is \"consumer\". " +
             "This method is deprecated and will be removed in the next major release.", e.getMessage());
     }
