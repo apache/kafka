@@ -104,27 +104,10 @@ public class Graph<V extends Comparable<V>> {
         }
     }
 
-    private class KeyComparator implements Comparator<V> {
-
-        @Override
-        public int compare(final V o1, final V o2) {
-            if (o1 == null && o2 == null) {
-                return 0;
-            }
-            if (o1 == null) {
-                return -1;
-            }
-            if (o2 == null) {
-                return 1;
-            }
-            return o1.compareTo(o2);
-        }
-    }
-
     // Allow null as special internal node
-    private final SortedMap<V, SortedMap<V, Edge>> adjList = new TreeMap<>(new KeyComparator());
+    private final SortedMap<V, SortedMap<V, Edge>> adjList = new TreeMap<>(Comparator.nullsFirst(Comparator.naturalOrder()));
     // Allow null as special internal node
-    private final SortedSet<V> nodes = new TreeSet<>(new KeyComparator());
+    private final SortedSet<V> nodes = new TreeSet<>(Comparator.nullsFirst(Comparator.naturalOrder()));
     private final boolean isResidualGraph;
     private V sourceNode, sinkNode;
 
