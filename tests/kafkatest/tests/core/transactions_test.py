@@ -248,7 +248,7 @@ class TransactionsTest(Test):
         bounce_target=["brokers", "clients"],
         check_order=[True, False],
         use_group_metadata=[True, False],
-        metadata_quorum=quorum.zk,
+        metadata_quorum=[quorum.zk],
         use_new_coordinator=[True, False]
     )
     @matrix(
