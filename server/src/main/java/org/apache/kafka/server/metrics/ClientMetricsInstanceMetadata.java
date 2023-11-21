@@ -14,15 +14,15 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package kafka.metrics;
+package org.apache.kafka.server.metrics;
 
-import java.util.regex.Pattern;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.requests.RequestContext;
 
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
+import java.util.regex.Pattern;
 
 /**
  * Information from the client's metadata is gathered from the client's request.

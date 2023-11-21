@@ -16,11 +16,6 @@
  */
 package org.apache.kafka.server;
 
-import kafka.metrics.ClientMetricsConfigs;
-import kafka.metrics.ClientMetricsInstance;
-import kafka.metrics.ClientMetricsInstanceMetadata;
-import kafka.metrics.ClientMetricsReceiverPlugin;
-
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.cache.Cache;
 import org.apache.kafka.common.cache.LRUCache;
@@ -42,6 +37,10 @@ import org.apache.kafka.common.requests.PushTelemetryResponse;
 import org.apache.kafka.common.requests.RequestContext;
 import org.apache.kafka.common.utils.Crc32C;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.server.metrics.ClientMetricsConfigs;
+import org.apache.kafka.server.metrics.ClientMetricsInstance;
+import org.apache.kafka.server.metrics.ClientMetricsInstanceMetadata;
+import org.apache.kafka.server.metrics.ClientMetricsReceiverPlugin;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -76,19 +75,19 @@ public class ClientMetricsManager implements Closeable {
     private final ClientMetricsReceiverPlugin receiverPlugin;
     private final Cache<Uuid, ClientMetricsInstance> clientInstanceCache;
     private final Map<String, SubscriptionInfo> subscriptionMap;
-    private final KafkaConfig config;
+    private final int clientTelemetryMaxBytes;
     private final Time time;
 
     // The latest subscription version is used to determine if subscription has changed and needs
     // to re-evaluate the client instance subscription id as per changed subscriptions.
     private final AtomicInteger subscriptionUpdateVersion;
 
-    public ClientMetricsManager(ClientMetricsReceiverPlugin receiverPlugin, KafkaConfig config, Time time) {
+    public ClientMetricsManager(ClientMetricsReceiverPlugin receiverPlugin, int clientTelemetryMaxBytes, Time time) {
         this.receiverPlugin = receiverPlugin;
         this.subscriptionMap = new ConcurrentHashMap<>();
         this.subscriptionUpdateVersion = new AtomicInteger(0);
         this.clientInstanceCache = new SynchronizedCache<>(new LRUCache<>(CM_CACHE_MAX_SIZE));
-        this.config = config;
+        this.clientTelemetryMaxBytes = clientTelemetryMaxBytes;
         this.time = time;
     }
 
@@ -319,7 +318,7 @@ public class ClientMetricsManager implements Closeable {
             .setRequestedMetrics(new ArrayList<>(clientInstance.metrics()))
             .setAcceptedCompressionTypes(SUPPORTED_COMPRESSION_TYPES)
             .setPushIntervalMs(clientInstance.pushIntervalMs())
-            .setTelemetryMaxBytes(config.clientTelemetryMaxBytes())
+            .setTelemetryMaxBytes(clientTelemetryMaxBytes)
             .setDeltaTemporality(true)
             .setErrorCode(Errors.NONE.code())
             .setThrottleTimeMs(throttleMs);
@@ -365,9 +364,9 @@ public class ClientMetricsManager implements Closeable {
             throw new UnsupportedCompressionTypeException(msg);
         }
 
-        if (request.data().metrics() != null && request.data().metrics().length > config.clientTelemetryMaxBytes()) {
+        if (request.data().metrics() != null && request.data().metrics().length > clientTelemetryMaxBytes) {
             String msg = String.format("Telemetry request from [%s] is larger than the maximum allowed size [%s]",
-                request.data().clientInstanceId(), config.clientTelemetryMaxBytes());
+                request.data().clientInstanceId(), clientTelemetryMaxBytes);
             throw new TelemetryTooLargeException(msg);
         }
     }

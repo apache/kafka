@@ -14,12 +14,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package kafka.metrics;
-
-import kafka.metrics.ClientMetricsTestUtils.TestClientMetricsReceiver;
+package org.apache.kafka.server.metrics;
 
 import org.apache.kafka.common.message.PushTelemetryRequestData;
 import org.apache.kafka.common.requests.PushTelemetryRequest;
+import org.apache.kafka.server.metrics.ClientMetricsTestUtils.TestClientMetricsReceiver;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 

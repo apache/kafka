@@ -14,14 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package kafka.server;
-
-import kafka.metrics.ClientMetricsConfigs;
-import kafka.metrics.ClientMetricsInstance;
-import kafka.metrics.ClientMetricsReceiverPlugin;
-import kafka.metrics.ClientMetricsTestUtils;
-import kafka.server.ClientMetricsManager.SubscriptionInfo;
-import kafka.utils.TestUtils;
+package org.apache.kafka.server;
 
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.InvalidRequestException;
@@ -35,8 +28,15 @@ import org.apache.kafka.common.requests.PushTelemetryRequest;
 import org.apache.kafka.common.requests.PushTelemetryRequest.Builder;
 import org.apache.kafka.common.requests.PushTelemetryResponse;
 import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.server.ClientMetricsManager.SubscriptionInfo;
+import org.apache.kafka.server.metrics.ClientMetricsConfigs;
+import org.apache.kafka.server.metrics.ClientMetricsInstance;
+import org.apache.kafka.server.metrics.ClientMetricsReceiverPlugin;
+import org.apache.kafka.server.metrics.ClientMetricsTestUtils;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.net.UnknownHostException;
 import java.nio.charset.StandardCharsets;
@@ -48,8 +48,6 @@ import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -61,20 +59,15 @@ public class ClientMetricsManagerTest {
 
     private static final Logger LOG = LoggerFactory.getLogger(ClientMetricsManagerTest.class);
 
-    private Properties props;
-    private KafkaConfig config;
     private MockTime time;
     private ClientMetricsReceiverPlugin clientMetricsReceiverPlugin;
     private ClientMetricsManager clientMetricsManager;
 
     @BeforeEach
     public void setUp() {
-        props = TestUtils.createDummyBrokerConfig();
-        props.setProperty(KafkaConfig.ClientTelemetryMaxBytesProp(), "100");
-        config = new KafkaConfig(props);
         time = new MockTime();
         clientMetricsReceiverPlugin = new ClientMetricsReceiverPlugin();
-        clientMetricsManager = new ClientMetricsManager(clientMetricsReceiverPlugin, config, time);
+        clientMetricsManager = new ClientMetricsManager(clientMetricsReceiverPlugin, 100, time);
     }
 
     @Test
@@ -192,27 +185,6 @@ public class ClientMetricsManagerTest {
     }
 
     @Test
-    public void testGetTelemetryDefaultTelemetryMaxBytes() throws UnknownHostException {
-        // Remove telemetry max bytes property, default value should be used.
-        props.remove(KafkaConfig.ClientTelemetryMaxBytesProp());
-        config = new KafkaConfig(props);
-        clientMetricsManager = new ClientMetricsManager(clientMetricsReceiverPlugin, config, time);
-
-        clientMetricsManager.updateSubscription("sub-1", ClientMetricsTestUtils.defaultProperties());
-        assertEquals(1, clientMetricsManager.subscriptions().size());
-
-        GetTelemetrySubscriptionsRequest request = new GetTelemetrySubscriptionsRequest.Builder(
-            new GetTelemetrySubscriptionsRequestData(), true).build();
-
-        GetTelemetrySubscriptionsResponse response = clientMetricsManager.processGetTelemetrySubscriptionRequest(
-            request, ClientMetricsTestUtils.requestContext(), 0);
-
-        assertNotNull(response.data().clientInstanceId());
-        assertEquals(1024 * 1024, response.data().telemetryMaxBytes());
-        assertEquals(Errors.NONE, response.error());
-    }
-
-    @Test
     public void testGetTelemetryWithoutSubscription() throws UnknownHostException {
         assertTrue(clientMetricsManager.subscriptions().isEmpty());
 
@@ -326,7 +298,7 @@ public class ClientMetricsManagerTest {
         // last request information but request should succeed as subscription id should match
         // the one with new client instance.
 
-        ClientMetricsManager newClientMetricsManager = new ClientMetricsManager(clientMetricsReceiverPlugin, config, time);
+        ClientMetricsManager newClientMetricsManager = new ClientMetricsManager(clientMetricsReceiverPlugin, 100, time);
 
         PushTelemetryRequest pushRequest = new Builder(
             new PushTelemetryRequestData()
@@ -541,7 +513,7 @@ public class ClientMetricsManagerTest {
         // client instance information but request should succeed as subscription id should match
         // the one with new client instance.
 
-        ClientMetricsManager newClientMetricsManager = new ClientMetricsManager(clientMetricsReceiverPlugin, config, time);
+        ClientMetricsManager newClientMetricsManager = new ClientMetricsManager(clientMetricsReceiverPlugin, 100, time);
 
         PushTelemetryRequest request = new PushTelemetryRequest.Builder(
             new PushTelemetryRequestData()
@@ -786,10 +758,7 @@ public class ClientMetricsManagerTest {
 
     @Test
     public void testPushTelemetryMetricsTooLarge() throws UnknownHostException {
-        // Update properties to set max bytes to 1.
-        props.setProperty(KafkaConfig.ClientTelemetryMaxBytesProp(), "1");
-        config = new KafkaConfig(props);
-        clientMetricsManager = new ClientMetricsManager(clientMetricsReceiverPlugin, config, time);
+        clientMetricsManager = new ClientMetricsManager(clientMetricsReceiverPlugin, 1, time);
 
         GetTelemetrySubscriptionsRequest subscriptionsRequest = new GetTelemetrySubscriptionsRequest.Builder(
             new GetTelemetrySubscriptionsRequestData(), true).build();
@@ -840,7 +809,7 @@ public class ClientMetricsManagerTest {
         CountDownLatch lock = new CountDownLatch(2);
         List<PushTelemetryResponse> responses = Collections.synchronizedList(new ArrayList<>());
 
-        ClientMetricsManager newClientMetricsManager = new ClientMetricsManager(clientMetricsReceiverPlugin, config, time);
+        ClientMetricsManager newClientMetricsManager = new ClientMetricsManager(clientMetricsReceiverPlugin, 100, time);
 
         Thread thread = new Thread(() -> {
             try {

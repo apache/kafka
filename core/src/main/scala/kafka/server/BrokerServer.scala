@@ -22,7 +22,6 @@ import kafka.coordinator.group.{CoordinatorLoaderImpl, CoordinatorPartitionWrite
 import kafka.coordinator.transaction.{ProducerIdManager, TransactionCoordinator}
 import kafka.log.LogManager
 import kafka.log.remote.RemoteLogManager
-import kafka.metrics.ClientMetricsReceiverPlugin
 import kafka.network.{DataPlaneAcceptor, SocketServer}
 import kafka.raft.KafkaRaftManager
 import kafka.security.CredentialProvider
@@ -47,7 +46,7 @@ import org.apache.kafka.server.{AssignmentsManager, ClientMetricsManager, NodeTo
 import org.apache.kafka.server.authorizer.Authorizer
 import org.apache.kafka.server.common.{ApiMessageAndVersion, DirectoryEventHandler, TopicIdPartition}
 import org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig
-import org.apache.kafka.server.metrics.KafkaYammerMetrics
+import org.apache.kafka.server.metrics.{ClientMetricsReceiverPlugin, KafkaYammerMetrics}
 import org.apache.kafka.server.network.{EndpointReadyFutures, KafkaAuthorizerServerInfo}
 import org.apache.kafka.server.util.timer.SystemTimer
 import org.apache.kafka.server.util.{Deadline, FutureUtils, KafkaScheduler}
@@ -348,7 +347,7 @@ class BrokerServer(
         config, Some(clientToControllerChannelManager), None, None,
         groupCoordinator, transactionCoordinator)
 
-      clientMetricsManager = new ClientMetricsManager(clientMetricsReceiverPlugin, config, time)
+      clientMetricsManager = new ClientMetricsManager(clientMetricsReceiverPlugin, config.clientTelemetryMaxBytes, time)
 
       dynamicConfigHandlers = Map[String, ConfigHandler](
         ConfigType.Topic -> new TopicConfigHandler(replicaManager, config, quotaManagers, None),
