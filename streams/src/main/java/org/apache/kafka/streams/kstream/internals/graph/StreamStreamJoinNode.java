@@ -20,11 +20,7 @@ package org.apache.kafka.streams.kstream.internals.graph;
 import org.apache.kafka.streams.kstream.Joined;
 import org.apache.kafka.streams.kstream.ValueJoinerWithKey;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
-import org.apache.kafka.streams.state.KeyValueStore;
-import org.apache.kafka.streams.state.StoreBuilder;
-import org.apache.kafka.streams.state.WindowStore;
-import org.apache.kafka.streams.state.internals.TimestampedKeyAndJoinSide;
-import org.apache.kafka.streams.state.internals.LeftOrRightValue;
+import org.apache.kafka.streams.processor.internals.StoreFactory;
 
 import java.util.Optional;
 
@@ -34,9 +30,9 @@ import java.util.Optional;
 public class StreamStreamJoinNode<K, V1, V2, VR> extends BaseJoinProcessorNode<K, V1, V2, VR> {
     private final ProcessorParameters<K, V1, ?, ?> thisWindowedStreamProcessorParameters;
     private final ProcessorParameters<K, V2, ?, ?> otherWindowedStreamProcessorParameters;
-    private final StoreBuilder<WindowStore<K, V1>> thisWindowStoreBuilder;
-    private final StoreBuilder<WindowStore<K, V2>> otherWindowStoreBuilder;
-    private final Optional<StoreBuilder<KeyValueStore<TimestampedKeyAndJoinSide<K>, LeftOrRightValue<V1, V2>>>> outerJoinWindowStoreBuilder;
+    private final StoreFactory thisWindowStoreBuilder;
+    private final StoreFactory otherWindowStoreBuilder;
+    private final Optional<StoreFactory> outerJoinWindowStoreBuilder;
     private final Joined<K, V1, V2> joined;
     private final boolean enableSpuriousResultFix;
     private final ProcessorParameters<K, V1, ?, ?> selfJoinProcessorParameters;
@@ -49,9 +45,9 @@ public class StreamStreamJoinNode<K, V1, V2, VR> extends BaseJoinProcessorNode<K
                                  final ProcessorParameters<K, VR, ?, ?> joinMergeProcessorParameters,
                                  final ProcessorParameters<K, V1, ?, ?> thisWindowedStreamProcessorParameters,
                                  final ProcessorParameters<K, V2, ?, ?> otherWindowedStreamProcessorParameters,
-                                 final StoreBuilder<WindowStore<K, V1>> thisWindowStoreBuilder,
-                                 final StoreBuilder<WindowStore<K, V2>> otherWindowStoreBuilder,
-                                 final Optional<StoreBuilder<KeyValueStore<TimestampedKeyAndJoinSide<K>, LeftOrRightValue<V1, V2>>>> outerJoinWindowStoreBuilder,
+                                 final StoreFactory thisStoreFactory,
+                                 final StoreFactory otherStoreFactory,
+                                 final Optional<StoreFactory> outerJoinStoreFactory,
                                  final Joined<K, V1, V2> joined,
                                  final boolean enableSpuriousResultFix,
                                  final ProcessorParameters<K, V1, ?, ?> selfJoinProcessorParameters) {
@@ -64,12 +60,12 @@ public class StreamStreamJoinNode<K, V1, V2, VR> extends BaseJoinProcessorNode<K
               null,
               null);
 
-        this.thisWindowStoreBuilder = thisWindowStoreBuilder;
-        this.otherWindowStoreBuilder = otherWindowStoreBuilder;
+        this.thisWindowStoreBuilder = thisStoreFactory;
+        this.otherWindowStoreBuilder = otherStoreFactory;
         this.joined = joined;
         this.thisWindowedStreamProcessorParameters = thisWindowedStreamProcessorParameters;
         this.otherWindowedStreamProcessorParameters =  otherWindowedStreamProcessorParameters;
-        this.outerJoinWindowStoreBuilder = outerJoinWindowStoreBuilder;
+        this.outerJoinWindowStoreBuilder = outerJoinStoreFactory;
         this.enableSpuriousResultFix = enableSpuriousResultFix;
         this.selfJoinProcessorParameters = selfJoinProcessorParameters;
     }
@@ -141,9 +137,9 @@ public class StreamStreamJoinNode<K, V1, V2, VR> extends BaseJoinProcessorNode<K
         private ProcessorParameters<K, VR, ?, ?> joinMergeProcessorParameters;
         private ProcessorParameters<K, V1, ?, ?> thisWindowedStreamProcessorParameters;
         private ProcessorParameters<K, V2, ?, ?> otherWindowedStreamProcessorParameters;
-        private StoreBuilder<WindowStore<K, V1>> thisWindowStoreBuilder;
-        private StoreBuilder<WindowStore<K, V2>> otherWindowStoreBuilder;
-        private Optional<StoreBuilder<KeyValueStore<TimestampedKeyAndJoinSide<K>, LeftOrRightValue<V1, V2>>>> outerJoinWindowStoreBuilder;
+        private StoreFactory thisStoreFactory;
+        private StoreFactory otherStoreFactory;
+        private Optional<StoreFactory> outerJoinStoreFactory;
         private Joined<K, V1, V2> joined;
         private boolean enableSpuriousResultFix = false;
         private ProcessorParameters<K, V1, ?, ?> selfJoinProcessorParameters;
@@ -187,18 +183,18 @@ public class StreamStreamJoinNode<K, V1, V2, VR> extends BaseJoinProcessorNode<K
             return this;
         }
 
-        public StreamStreamJoinNodeBuilder<K, V1, V2, VR> withThisWindowStoreBuilder(final StoreBuilder<WindowStore<K, V1>> thisWindowStoreBuilder) {
-            this.thisWindowStoreBuilder = thisWindowStoreBuilder;
+        public StreamStreamJoinNodeBuilder<K, V1, V2, VR> withThisWindowStoreBuilder(final StoreFactory thisStoreFactory) {
+            this.thisStoreFactory = thisStoreFactory;
             return this;
         }
 
-        public StreamStreamJoinNodeBuilder<K, V1, V2, VR> withOtherWindowStoreBuilder(final StoreBuilder<WindowStore<K, V2>> otherWindowStoreBuilder) {
-            this.otherWindowStoreBuilder = otherWindowStoreBuilder;
+        public StreamStreamJoinNodeBuilder<K, V1, V2, VR> withOtherWindowStoreBuilder(final StoreFactory otherStoreFactory) {
+            this.otherStoreFactory = otherStoreFactory;
             return this;
         }
 
-        public StreamStreamJoinNodeBuilder<K, V1, V2, VR> withOuterJoinWindowStoreBuilder(final Optional<StoreBuilder<KeyValueStore<TimestampedKeyAndJoinSide<K>, LeftOrRightValue<V1, V2>>>> outerJoinWindowStoreBuilder) {
-            this.outerJoinWindowStoreBuilder = outerJoinWindowStoreBuilder;
+        public StreamStreamJoinNodeBuilder<K, V1, V2, VR> withOuterJoinWindowStoreBuilder(final Optional<StoreFactory> outerJoinWindowStoreBuilder) {
+            this.outerJoinStoreFactory = outerJoinWindowStoreBuilder;
             return this;
         }
 
@@ -227,9 +223,9 @@ public class StreamStreamJoinNode<K, V1, V2, VR> extends BaseJoinProcessorNode<K
                                               joinMergeProcessorParameters,
                                               thisWindowedStreamProcessorParameters,
                                               otherWindowedStreamProcessorParameters,
-                                              thisWindowStoreBuilder,
-                                              otherWindowStoreBuilder,
-                                              outerJoinWindowStoreBuilder,
+                                              thisStoreFactory,
+                                              otherStoreFactory,
+                                              outerJoinStoreFactory,
                                               joined,
                                               enableSpuriousResultFix,
                                               selfJoinProcessorParameters);
