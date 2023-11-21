@@ -116,7 +116,7 @@ public class ClientMetricsManager implements Closeable {
     }
 
     public GetTelemetrySubscriptionsResponse processGetTelemetrySubscriptionRequest(
-        GetTelemetrySubscriptionsRequest request, RequestContext requestContext, int throttleMs) {
+        GetTelemetrySubscriptionsRequest request, RequestContext requestContext) {
 
         long now = time.milliseconds();
         Uuid clientInstanceId = Optional.ofNullable(request.data().clientInstanceId())
@@ -141,11 +141,10 @@ public class ClientMetricsManager implements Closeable {
         }
 
         clientInstance.lastKnownError(Errors.NONE);
-        return createGetSubscriptionResponse(clientInstanceId, clientInstance, throttleMs);
+        return createGetSubscriptionResponse(clientInstanceId, clientInstance);
     }
 
-    public PushTelemetryResponse processPushTelemetryRequest(PushTelemetryRequest request,
-        RequestContext requestContext, int throttleMs) {
+    public PushTelemetryResponse processPushTelemetryRequest(PushTelemetryRequest request, RequestContext requestContext) {
 
         Uuid clientInstanceId = request.data().clientInstanceId();
         if (clientInstanceId == null || Uuid.RESERVED.contains(clientInstanceId)) {
@@ -310,7 +309,7 @@ public class ClientMetricsManager implements Closeable {
     }
 
     private GetTelemetrySubscriptionsResponse createGetSubscriptionResponse(Uuid clientInstanceId,
-        ClientMetricsInstance clientInstance, int throttleMs) {
+        ClientMetricsInstance clientInstance) {
 
         GetTelemetrySubscriptionsResponseData data = new GetTelemetrySubscriptionsResponseData()
             .setClientInstanceId(clientInstanceId)
@@ -320,8 +319,7 @@ public class ClientMetricsManager implements Closeable {
             .setPushIntervalMs(clientInstance.pushIntervalMs())
             .setTelemetryMaxBytes(clientTelemetryMaxBytes)
             .setDeltaTemporality(true)
-            .setErrorCode(Errors.NONE.code())
-            .setThrottleTimeMs(throttleMs);
+            .setErrorCode(Errors.NONE.code());
 
         return new GetTelemetrySubscriptionsResponse(data);
     }
