@@ -1680,7 +1680,7 @@ public interface Admin extends AutoCloseable {
      * @return The ListClientMetricsResourcesResult.
      */
     default ListClientMetricsResourcesResult listClientMetricsResources() {
-       return listClientMetricsResources(new ListClientMetricsResourcesOptions());
+        return listClientMetricsResources(new ListClientMetricsResourcesOptions());
     }
 
     /**

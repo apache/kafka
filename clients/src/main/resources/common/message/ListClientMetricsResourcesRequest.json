@@ -14,13 +14,13 @@
 // limitations under the License.
 
 {
-    "apiKey": 74,
-    "type": "request",
-    "listeners": ["broker"],
-    "name": "ListClientMetricsResourcesRequest",
-    "validVersions": "0",
-    "flexibleVersions": "0+",
-    "fields": [
-    ]
+  "apiKey": 74,
+  "type": "request",
+  "listeners": ["broker"],
+  "name": "ListClientMetricsResourcesRequest",
+  "validVersions": "0",
+  "flexibleVersions": "0+",
+  "fields": [
+  ]
 }
   
