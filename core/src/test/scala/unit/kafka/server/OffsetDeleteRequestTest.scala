@@ -30,7 +30,6 @@ import org.junit.jupiter.api.extension.ExtendWith
 @Tag("integration")
 class OffsetDeleteRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBaseRequestTest(cluster) {
   @ClusterTest(serverProperties = Array(
-    new ClusterConfigProperty(key = "unstable.api.versions.enable", value = "true"),
     new ClusterConfigProperty(key = "group.coordinator.new.enable", value = "true"),
     new ClusterConfigProperty(key = "group.consumer.max.session.timeout.ms", value = "600000"),
     new ClusterConfigProperty(key = "group.consumer.session.timeout.ms", value = "600000"),

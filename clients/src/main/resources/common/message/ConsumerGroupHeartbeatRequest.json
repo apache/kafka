@@ -18,10 +18,6 @@
   "type": "request",
   "listeners": ["zkBroker", "broker"],
   "name": "ConsumerGroupHeartbeatRequest",
-  // The ConsumerGroupHeartbeat API is added as part of KIP-848 and is still
-  // under development. Hence, the API is not exposed by default by brokers
-  // unless explicitly enabled.
-  "latestVersionUnstable": true,
   "validVersions": "0",
   "flexibleVersions": "0+",
   "fields": [
