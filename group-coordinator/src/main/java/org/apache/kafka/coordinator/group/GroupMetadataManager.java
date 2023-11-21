@@ -464,15 +464,7 @@ public class GroupMetadataManager {
                 // we set an error if a group exists with the wrong type.
                 describedGroup.setErrorCode(Errors.GROUP_ID_NOT_FOUND.code());
             } else {
-                ConsumerGroup consumerGroup = (ConsumerGroup) group;
-                describedGroup.setGroupState(consumerGroup.stateAsString())
-                    .setGroupEpoch(consumerGroup.groupEpoch())
-                    .setAssignmentEpoch(consumerGroup.assignmentEpoch())
-                    .setAssignorName(consumerGroup.preferredServerAssignor().isPresent() ?
-                        consumerGroup.preferredServerAssignor().get() : "");
-                consumerGroup.members().forEach(
-                    (id, member) -> describedGroup.members().add(member.asConsumerGroupDescribeMember(consumerGroup.targetAssignment(member.memberId())))
-                );
+                describedGroup = ((ConsumerGroup) group).asDescribedGroup(committedOffset);
             }
 
             response.add(describedGroup);

@@ -373,4 +373,14 @@ public class ConsumerGroupMemberTest {
 
         assertEquals(assignedPartitions, consumerGroupDescribeMember.assignment().topicPartitions().get(0).partitions());
     }
+
+    @Test
+    public void testAsConsumerGroupDescribeWithTargetAssignmentNull() {
+        ConsumerGroupMember member = new ConsumerGroupMember.Builder(Uuid.randomUuid().toString())
+            .build();
+
+        ConsumerGroupDescribeResponseData.Member consumerGroupDescribeMember = member.asConsumerGroupDescribeMember(null);
+
+        assertEquals(new ConsumerGroupDescribeResponseData.Assignment(), consumerGroupDescribeMember.targetAssignment());
+    }
 }

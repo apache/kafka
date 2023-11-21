@@ -554,7 +554,9 @@ public class ConsumerGroupMember {
             .setAssignment(new ConsumerGroupDescribeResponseData.Assignment()
                 .setTopicPartitions(topicPartitionsFromMap(assignedPartitions)))
             .setTargetAssignment(new ConsumerGroupDescribeResponseData.Assignment()
-                .setTopicPartitions(topicPartitionsFromMap(targetAssignment.partitions())))
+                .setTopicPartitions(topicPartitionsFromMap(
+                    targetAssignment != null ? targetAssignment.partitions() : Collections.emptyMap()
+                )))
             .setClientHost(clientHost)
             .setClientId(clientId)
             .setInstanceId(instanceId)

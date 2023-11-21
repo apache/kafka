@@ -20,6 +20,7 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.GroupNotEmptyException;
 import org.apache.kafka.common.errors.StaleMemberEpochException;
 import org.apache.kafka.common.errors.UnknownMemberIdException;
+import org.apache.kafka.common.message.ConsumerGroupDescribeResponseData;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.coordinator.group.GroupMetadataManagerTest;
@@ -769,5 +770,37 @@ public class ConsumerGroupTest {
 
         consumerGroup.removeMember("member2");
         assertFalse(consumerGroup.isSubscribedToTopic("bar"));
+    }
+
+    @Test
+    public void testAsDescribedGroup() {
+        SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
+        ConsumerGroup group = new ConsumerGroup(snapshotRegistry, "group-id-1");
+        snapshotRegistry.getOrCreateSnapshot(0);
+        assertEquals(ConsumerGroup.ConsumerGroupState.EMPTY.toString(), group.stateAsString(0));
+
+        group.updateMember(new ConsumerGroupMember.Builder("member1")
+                .setSubscribedTopicNames(Collections.singletonList("foo"))
+                .build());
+        group.updateMember(new ConsumerGroupMember.Builder("member2")
+                .build());
+        snapshotRegistry.getOrCreateSnapshot(1);
+
+        ConsumerGroupDescribeResponseData.DescribedGroup expected = new ConsumerGroupDescribeResponseData.DescribedGroup()
+            .setGroupId("group-id-1")
+            .setGroupState(ConsumerGroup.ConsumerGroupState.STABLE.toString())
+            .setGroupEpoch(0)
+            .setAssignmentEpoch(0)
+            .setMembers(Arrays.asList(
+                new ConsumerGroupDescribeResponseData.Member()
+                    .setMemberId("member1")
+                    .setSubscribedTopicNames(Collections.singletonList("foo"))
+                    .setSubscribedTopicRegex(""),
+                new ConsumerGroupDescribeResponseData.Member().setMemberId("member2")
+                    .setSubscribedTopicRegex("")
+            ));
+        ConsumerGroupDescribeResponseData.DescribedGroup actual = group.asDescribedGroup(1);
+
+        assertEquals(expected, actual);
     }
 }

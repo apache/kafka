@@ -8669,7 +8669,7 @@ public class GroupMetadataManagerTest {
     public void testConsumerGroupDescribeNoErrors() {
         String consumerGroupId = "consumerGroupId";
         int epoch = 10;
-        String memberId = Uuid.randomUuid().toString();
+        String memberId = "memberId";
         String topicName = "topicName";
 
         MockPartitionAssignor assignor = new MockPartitionAssignor("range");
@@ -8685,6 +8685,7 @@ public class GroupMetadataManagerTest {
             memberBuilder.build()
         ));
         context.replay(RecordHelpers.newGroupEpochRecord(consumerGroupId, epoch + 1));
+        context.commit();
 
         List<ConsumerGroupDescribeResponseData.DescribedGroup> actual = context.sendConsumerGroupDescribe(Arrays.asList(consumerGroupId));
         ConsumerGroupDescribeResponseData.DescribedGroup describedGroup = new ConsumerGroupDescribeResponseData.DescribedGroup();
