@@ -645,7 +645,7 @@ public class ProducerStateManager {
             // deletion, so ignoring the exception here just means that the intended operation was
             // already completed.
             try {
-                snapshotFile.renameToDelete(LogFileUtils.DELETED_FILE_SUFFIX);
+                snapshotFile.renameToDelete();
                 return Optional.of(snapshotFile);
             } catch (NoSuchFileException ex) {
                 log.info("Failed to rename producer state snapshot {} with deletion suffix because it was already deleted", snapshotFile.file().getAbsoluteFile());

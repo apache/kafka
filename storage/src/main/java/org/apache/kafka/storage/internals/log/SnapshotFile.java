@@ -60,8 +60,8 @@ public class SnapshotFile {
         return file;
     }
 
-    public void renameToDelete(String newSuffix) throws IOException {
-        File renamed = new File(Utils.replaceSuffix(file.getPath(), "", newSuffix));
+    public void renameToDelete() throws IOException {
+        File renamed = new File(Utils.replaceSuffix(file.getPath(), "", LogFileUtils.DELETED_FILE_SUFFIX));
         try {
             Utils.atomicMoveWithFallback(file.toPath(), renamed.toPath(), false);
         } finally {
