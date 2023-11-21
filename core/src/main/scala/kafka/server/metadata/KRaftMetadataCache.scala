@@ -298,7 +298,7 @@ class KRaftMetadataCache(val brokerId: Int) extends MetadataCache with Logging w
           result.topics().add(response)
 
           if (upperIndex < partitions.size) {
-            result.setNextTopicPartition(new Cursor()
+            result.setNextCursor(new Cursor()
               .setTopicName(topicName)
               .setPartitionIndex(upperIndex)
             )
@@ -328,7 +328,7 @@ class KRaftMetadataCache(val brokerId: Int) extends MetadataCache with Logging w
         // The cursor should point to the beginning of the current topic. All the partitions in the previous topic
         // should be fulfilled. Note that, if a partition is pointed in the NextTopicPartition, it does not mean
         // this topic exists.
-        result.setNextTopicPartition(new Cursor()
+        result.setNextCursor(new Cursor()
           .setTopicName(topicName)
           .setPartitionIndex(0))
         remaining = -1

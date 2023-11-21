@@ -866,7 +866,7 @@ class MetadataCacheTest {
     assertEquals(topicIds.get(topic0), resultTopic.topicId())
     assertEquals(2, resultTopic.partitions().size())
     checkTopicMetadata(topic0, Set(0, 1), resultTopic.partitions().asScala)
-    assertEquals(new Cursor().setTopicName(topic0).setPartitionIndex(2),response.nextTopicPartition())
+    assertEquals(new Cursor().setTopicName(topic0).setPartitionIndex(2),response.nextCursor())
 
     // With start index
     result = metadataCache.getTopicMetadataForDescribeTopicResponse(Seq(topic0), listenerName, 1, 10).topics().asScala.toList
@@ -889,7 +889,7 @@ class MetadataCacheTest {
     assertEquals(topicIds.get(topic0), resultTopic.topicId())
     assertEquals(1, resultTopic.partitions().size())
     checkTopicMetadata(topic0, Set(2), resultTopic.partitions().asScala)
-    assertEquals(new Cursor().setTopicName(topic1).setPartitionIndex(0),response.nextTopicPartition())
+    assertEquals(new Cursor().setTopicName(topic1).setPartitionIndex(0),response.nextCursor())
 
     // When the first topic does not exist
     result = metadataCache.getTopicMetadataForDescribeTopicResponse(Seq("Non-exist", topic0), listenerName, 1, 1).topics().asScala.toList

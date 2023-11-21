@@ -1239,7 +1239,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       .setPartitions(partitionData)
   }
 
-  private def DescribeTopicPartitionsResponseTopic(
+  private def describeTopicPartitionsResponseTopic(
     error: Errors,
     topic: String,
     topicId: Uuid,
@@ -1468,7 +1468,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       } else {
         // We should not return topicId when on unauthorized error, so we return zero uuid.
         unauthorizedForDescribeTopics.map(topic =>
-          DescribeTopicPartitionsResponseTopic(Errors.TOPIC_AUTHORIZATION_FAILED, topic, Uuid.ZERO_UUID, false, util.Collections.emptyList()))
+          describeTopicPartitionsResponseTopic(Errors.TOPIC_AUTHORIZATION_FAILED, topic, Uuid.ZERO_UUID, false, util.Collections.emptyList()))
       }
     }
 
