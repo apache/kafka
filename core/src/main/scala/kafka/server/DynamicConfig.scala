@@ -113,7 +113,7 @@ object DynamicConfig {
   }
 
   object ClientMetrics {
-    private val clientConfigs = kafka.metrics.ClientMetricsConfigs.configDef()
+    private val clientConfigs = org.apache.kafka.server.metrics.ClientMetricsConfigs.configDef()
 
     def names: util.Set[String] = clientConfigs.names
   }
