@@ -111,7 +111,7 @@ class DescribeGroupsRequestTest(cluster: ClusterInstance) extends GroupCoordinat
         ),
         describeGroups(
           groupIds = List("grp-1", "grp-2", "grp-unknown"),
-          version.toShort
+          version = version.toShort
         )
       )
     }

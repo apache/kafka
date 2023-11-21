@@ -421,8 +421,9 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
     groupIds: List[String],
     version: Short = ApiKeys.DESCRIBE_GROUPS.latestVersion(isUnstableApiEnabled)
   ): List[DescribeGroupsResponseData.DescribedGroup] = {
-    val describeGroupsRequestData = new DescribeGroupsRequestData().setGroups(groupIds.asJava)
-    val describeGroupsRequest = new DescribeGroupsRequest.Builder(describeGroupsRequestData).build(version)
+    val describeGroupsRequest = new DescribeGroupsRequest.Builder(
+      new DescribeGroupsRequestData().setGroups(groupIds.asJava)
+    ).build(version)
 
     val describeGroupsResponse = connectAndReceive[DescribeGroupsResponse](describeGroupsRequest)
 
