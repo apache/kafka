@@ -42,7 +42,6 @@ import scala.jdk.CollectionConverters._
 @Tag("integration")
 class JoinGroupRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBaseRequestTest(cluster) {
   @ClusterTest(serverProperties = Array(
-    new ClusterConfigProperty(key = "unstable.api.versions.enable", value = "false"),
     new ClusterConfigProperty(key = "group.coordinator.new.enable", value = "true"),
     new ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "1"),
     new ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1")
@@ -52,7 +51,6 @@ class JoinGroupRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBas
   }
 
   @ClusterTest(clusterType = Type.ALL, serverProperties = Array(
-    new ClusterConfigProperty(key = "unstable.api.versions.enable", value = "false"),
     new ClusterConfigProperty(key = "group.coordinator.new.enable", value = "false"),
     new ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "1"),
     new ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1")
@@ -386,17 +384,18 @@ class JoinGroupRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBas
     newFollowerMemberId
   }
 
+  private def normalize(responseData: JoinGroupResponseData): JoinGroupResponseData = {
+    val newResponseData = responseData.duplicate
+    Collections.sort(newResponseData.members,
+      (m1: JoinGroupResponseMember, m2: JoinGroupResponseMember) => m1.memberId.compareTo(m2.memberId)
+    )
+    newResponseData
+  }
+
   private def verifyJoinGroupResponseDataEquals(
     expected: JoinGroupResponseData,
     actual: JoinGroupResponseData
   ): Unit = {
-    assertEquals(expected.errorCode, actual.errorCode)
-    assertEquals(expected.generationId, actual.generationId)
-    assertEquals(expected.protocolType, actual.protocolType)
-    assertEquals(expected.protocolName, actual.protocolName)
-    assertEquals(expected.leader, actual.leader)
-    assertEquals(expected.skipAssignment, actual.skipAssignment)
-    assertEquals(expected.memberId, actual.memberId)
-    assertEquals(expected.members.asScala.toSet, actual.members.asScala.toSet)
+    assertEquals(normalize(expected), normalize(actual))
   }
 }
