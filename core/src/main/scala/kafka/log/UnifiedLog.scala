@@ -1471,10 +1471,9 @@ class UnifiedLog(@volatile var logStartOffset: Long,
 
         // Roll the active segment when it breaches the configured retention policy. The rolled segment will be
         // eligible for deletion and gets removed in the next iteration.
-        if (predicateResult && !isLastSegmentAndEmpty && remoteLogEnabled() && nextSegmentOpt.isEmpty) {
+        if (predicateResult && remoteLogEnabled() && nextSegmentOpt.isEmpty && segment.size > 0) {
           shouldRoll = true
         }
-
         if (predicateResult && !isLastSegmentAndEmpty && isSegmentEligibleForDeletion(upperBoundOffset)) {
           deletable += segment
           segmentOpt = nextSegmentOpt
