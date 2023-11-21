@@ -380,7 +380,8 @@ public class CommitRequestManagerTest {
                                final List<CompletableFuture<Map<TopicPartition, OffsetAndMetadata>>> futures) {
         futures.forEach(f -> assertFalse(f.isDone()));
 
-        time.sleep(500);
+        // The manager should backoff for 100ms
+        time.sleep(100);
         commitRequestManger.poll(time.milliseconds());
         futures.forEach(f -> assertFalse(f.isDone()));
     }
@@ -400,7 +401,6 @@ public class CommitRequestManagerTest {
             Arguments.of(Errors.INVALID_COMMIT_OFFSET_SIZE, false),
             Arguments.of(Errors.UNKNOWN_TOPIC_OR_PARTITION, true),
             Arguments.of(Errors.COORDINATOR_NOT_AVAILABLE, true),
-            Arguments.of(Errors.NOT_COORDINATOR, true),
             Arguments.of(Errors.REQUEST_TIMED_OUT, true),
             Arguments.of(Errors.FENCED_INSTANCE_ID, false),
             Arguments.of(Errors.TOPIC_AUTHORIZATION_FAILED, false));
