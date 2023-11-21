@@ -30,6 +30,7 @@ import org.apache.kafka.image.loader.MetadataLoader
 import org.apache.kafka.image.loader.metrics.MetadataLoaderMetrics
 import org.apache.kafka.image.publisher.{SnapshotEmitter, SnapshotGenerator}
 import org.apache.kafka.metadata.MetadataRecordSerde
+import org.apache.kafka.metadata.properties.MetaPropertiesEnsemble
 import org.apache.kafka.raft.RaftConfig.AddressSpec
 import org.apache.kafka.server.common.ApiMessageAndVersion
 import org.apache.kafka.server.fault.{FaultHandler, LoggingFaultHandler, ProcessTerminatingFaultHandler}
@@ -87,7 +88,7 @@ class StandardFaultHandlerFactory extends FaultHandlerFactory {
  */
 class SharedServer(
   private val sharedServerConfig: KafkaConfig,
-  val metaProps: MetaProperties,
+  val metaPropsEnsemble: MetaPropertiesEnsemble,
   val time: Time,
   private val _metrics: Metrics,
   val controllerQuorumVotersFuture: CompletableFuture[util.Map[Integer, AddressSpec]],
@@ -110,7 +111,9 @@ class SharedServer(
   @volatile var snapshotGenerator: SnapshotGenerator = _
   @volatile var metadataLoaderMetrics: MetadataLoaderMetrics = _
 
-  def clusterId(): String = metaProps.clusterId
+  def clusterId: String = metaPropsEnsemble.clusterId().get()
+
+  def nodeId: Int = metaPropsEnsemble.nodeId().getAsInt()
 
   def isUsed(): Boolean = synchronized {
     usedByController || usedByBroker
@@ -250,7 +253,7 @@ class SharedServer(
           controllerServerMetrics = new ControllerMetadataMetrics(Optional.of(KafkaYammerMetrics.defaultRegistry()))
         }
         val _raftManager = new KafkaRaftManager[ApiMessageAndVersion](
-          clusterId(),
+          clusterId,
           sharedServerConfig,
           new MetadataRecordSerde,
           KafkaRaftServer.MetadataPartition,
@@ -276,7 +279,7 @@ class SharedServer(
             new AtomicReference[MetadataProvenance](MetadataProvenance.EMPTY))
         }
         val loaderBuilder = new MetadataLoader.Builder().
-          setNodeId(metaProps.nodeId).
+          setNodeId(nodeId).
           setTime(time).
           setThreadNamePrefix(s"kafka-${sharedServerConfig.nodeId}-").
           setFaultHandler(metadataLoaderFaultHandler).
@@ -284,11 +287,11 @@ class SharedServer(
           setMetrics(metadataLoaderMetrics)
         loader = loaderBuilder.build()
         snapshotEmitter = new SnapshotEmitter.Builder().
-          setNodeId(metaProps.nodeId).
+          setNodeId(nodeId).
           setRaftClient(_raftManager.client).
           build()
         snapshotGenerator = new SnapshotGenerator.Builder(snapshotEmitter).
-          setNodeId(metaProps.nodeId).
+          setNodeId(nodeId).
           setTime(time).
           setFaultHandler(metadataPublishingFaultHandler).
           setMaxBytesSinceLastSnapshot(sharedServerConfig.metadataSnapshotMaxNewRecordBytes).

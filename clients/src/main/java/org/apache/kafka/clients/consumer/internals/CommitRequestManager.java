@@ -56,6 +56,7 @@ import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 
+import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.THROW_ON_FETCH_STABLE_OFFSET_UNSUPPORTED;
 import static org.apache.kafka.clients.consumer.internals.NetworkClientDelegate.PollResult.EMPTY;
 import static org.apache.kafka.common.protocol.Errors.COORDINATOR_LOAD_IN_PROGRESS;
 import static org.apache.kafka.common.protocol.Errors.COORDINATOR_NOT_AVAILABLE;
@@ -64,8 +65,6 @@ import static org.apache.kafka.common.protocol.Errors.REQUEST_TIMED_OUT;
 
 public class CommitRequestManager implements RequestManager {
 
-    // TODO: current in ConsumerConfig but inaccessible in the internal package.
-    private static final String THROW_ON_FETCH_STABLE_OFFSET_UNSUPPORTED = "internal.throw.on.fetch.stable.offset.unsupported";
     private final SubscriptionState subscriptions;
     private final LogContext logContext;
     private final Logger log;
@@ -147,7 +146,7 @@ public class CommitRequestManager implements RequestManager {
         if (!coordinatorRequestManager.coordinator().isPresent())
             return EMPTY;
 
-        maybeAutoCommit(this.subscriptions.allConsumed());
+        maybeAutoCommitAllConsumed();
         if (!pendingRequests.hasUnsentRequests())
             return EMPTY;
 
@@ -166,19 +165,41 @@ public class CommitRequestManager implements RequestManager {
             .orElse(Long.MAX_VALUE);
     }
 
-    public void maybeAutoCommit(final Map<TopicPartition, OffsetAndMetadata> offsets) {
+    /**
+     * Generate a request to commit offsets if auto-commit is enabled. The request will be
+     * returned to be sent out on the next call to {@link #poll(long)}. This will only generate a
+     * request if there is no other commit request already in-flight, and if the commit interval
+     * has elapsed.
+     *
+     * @param offsets Offsets to commit
+     * @return Future that will complete when a response is received for the request, or a
+     * completed future if no request is generated.
+     */
+    public CompletableFuture<Void> maybeAutoCommit(final Map<TopicPartition, OffsetAndMetadata> offsets) {
         if (!autoCommitState.isPresent()) {
-            return;
+            return CompletableFuture.completedFuture(null);
         }
 
         AutoCommitState autocommit = autoCommitState.get();
         if (!autocommit.canSendAutocommit()) {
-            return;
+            return CompletableFuture.completedFuture(null);
         }
 
-        sendAutoCommit(offsets);
+        CompletableFuture<Void> result = sendAutoCommit(offsets);
         autocommit.resetTimer();
         autocommit.setInflightCommitStatus(true);
+        return result;
+    }
+
+    /**
+     * If auto-commit is enabled, this will generate a commit offsets request for all assigned
+     * partitions and their current positions.
+     *
+     * @return Future that will complete when a response is received for the request, or a
+     * completed future if no request is generated.
+     */
+    public CompletableFuture<Void> maybeAutoCommitAllConsumed() {
+        return maybeAutoCommit(subscriptions.allConsumed());
     }
 
     /**
@@ -230,6 +251,22 @@ public class CommitRequestManager implements RequestManager {
         if (exception instanceof DisconnectException) {
             coordinatorRequestManager.markCoordinatorUnknown(exception.getMessage(), currentTimeMs);
         }
+    }
+
+
+    /**
+     * @return True if auto-commit is enabled as defined in the config {@link ConsumerConfig#ENABLE_AUTO_COMMIT_CONFIG}
+     */
+    public boolean autoCommitEnabled() {
+        return autoCommitState.isPresent();
+    }
+
+    /**
+     * Reset the auto-commit timer so that the next auto-commit is sent out on the interval
+     * starting from now. If auto-commit is not enabled this will perform no action.
+     */
+    public void resetAutoCommitTimer() {
+        autoCommitState.ifPresent(AutoCommitState::resetTimer);
     }
 
     private class OffsetCommitRequestState extends RequestState {

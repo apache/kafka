@@ -44,6 +44,7 @@ import org.apache.kafka.metadata.bootstrap.BootstrapMetadata
 import org.apache.kafka.metadata.migration.{KRaftMigrationDriver, LegacyPropagator}
 import org.apache.kafka.metadata.publisher.FeaturesPublisher
 import org.apache.kafka.raft.RaftConfig
+import org.apache.kafka.server.{ClientMetricsManager, NodeToControllerChannelManager}
 import org.apache.kafka.server.authorizer.Authorizer
 import org.apache.kafka.server.common.ApiMessageAndVersion
 import org.apache.kafka.server.metrics.{KafkaMetricsGroup, KafkaYammerMetrics}
@@ -137,7 +138,7 @@ class ControllerServer(
     true
   }
 
-  def clusterId: String = sharedServer.clusterId()
+  def clusterId: String = sharedServer.clusterId
 
   def startup(): Unit = {
     if (!maybeChangeStatus(SHUTDOWN, STARTING)) return
@@ -237,7 +238,7 @@ class ControllerServer(
 
         quorumControllerMetrics = new QuorumControllerMetrics(Optional.of(KafkaYammerMetrics.defaultRegistry), time, config.migrationEnabled)
 
-        new QuorumController.Builder(config.nodeId, sharedServer.metaProps.clusterId).
+        new QuorumController.Builder(config.nodeId, sharedServer.clusterId).
           setTime(time).
           setThreadNamePrefix(s"quorum-controller-${config.nodeId}-").
           setConfigSchema(configSchema).
@@ -428,7 +429,7 @@ class ControllerServer(
        * Start the KIP-919 controller registration manager.
        */
       val controllerNodeProvider = RaftControllerNodeProvider(raftManager, config, controllerNodes.asScala)
-      registrationChannelManager = NodeToControllerChannelManager(
+      registrationChannelManager = new NodeToControllerChannelManagerImpl(
         controllerNodeProvider,
         time,
         metrics,

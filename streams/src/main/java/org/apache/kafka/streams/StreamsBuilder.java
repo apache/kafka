@@ -38,6 +38,7 @@ import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 import org.apache.kafka.streams.processor.internals.ProcessorAdapter;
 import org.apache.kafka.streams.processor.internals.ProcessorNode;
 import org.apache.kafka.streams.processor.internals.SourceNode;
+import org.apache.kafka.streams.processor.internals.StoreBuilderWrapper;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
 import org.apache.kafka.streams.state.StoreBuilder;
@@ -520,7 +521,7 @@ public class StreamsBuilder {
      */
     public synchronized StreamsBuilder addStateStore(final StoreBuilder<?> builder) {
         Objects.requireNonNull(builder, "builder can't be null");
-        internalStreamsBuilder.addStateStore(builder);
+        internalStreamsBuilder.addStateStore(new StoreBuilderWrapper(builder));
         return this;
     }
 
@@ -563,7 +564,7 @@ public class StreamsBuilder {
         Objects.requireNonNull(storeBuilder, "storeBuilder can't be null");
         Objects.requireNonNull(consumed, "consumed can't be null");
         internalStreamsBuilder.addGlobalStore(
-            storeBuilder,
+            new StoreBuilderWrapper(storeBuilder),
             topic,
             new ConsumedInternal<>(consumed),
             () -> ProcessorAdapter.adapt(stateUpdateSupplier.get())
@@ -607,7 +608,7 @@ public class StreamsBuilder {
         Objects.requireNonNull(storeBuilder, "storeBuilder can't be null");
         Objects.requireNonNull(consumed, "consumed can't be null");
         internalStreamsBuilder.addGlobalStore(
-            storeBuilder,
+            new StoreBuilderWrapper(storeBuilder),
             topic,
             new ConsumedInternal<>(consumed),
             stateUpdateSupplier

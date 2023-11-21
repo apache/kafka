@@ -28,7 +28,7 @@ import java.util.List;
 
 public class FakeSnapshotWriter implements SnapshotWriter<ApiMessageAndVersion> {
     private final OffsetAndEpoch snapshotId;
-    private List<List<ApiMessageAndVersion>> batches = new ArrayList<>();
+    private final List<List<ApiMessageAndVersion>> batches = new ArrayList<>();
     private boolean frozen = false;
     private boolean closed = false;
 
@@ -79,7 +79,7 @@ public class FakeSnapshotWriter implements SnapshotWriter<ApiMessageAndVersion> 
     @Override
     public long freeze() {
         frozen = true;
-        return batches.size() * 100;
+        return batches.size() * 100L;
     }
 
     @Override
