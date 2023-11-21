@@ -221,8 +221,8 @@ public class ClusterImageTest {
         final AtomicReference<String> lossString = new AtomicReference<>("");
         testImage.write(writer, new ImageWriterOptions.Builder().
             setMetadataVersion(MetadataVersion.IBP_3_6_IV2).
-            setLossHandler(loss -> lossString.compareAndSet("controller registration data", loss.loss())).
+            setLossHandler(loss -> lossString.compareAndSet("", loss.loss())).
                 build());
-        assertEquals("", lossString.get());
+        assertEquals("controller registration data", lossString.get());
     }
 }
