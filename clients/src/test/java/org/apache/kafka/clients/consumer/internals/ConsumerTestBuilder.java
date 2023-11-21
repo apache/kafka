@@ -183,6 +183,7 @@ public class ConsumerTestBuilder implements Closeable {
                     subscriptions,
                     config,
                     coordinator,
+                    backgroundEventHandler,
                     groupState));
             MembershipManager mm = spy(
                     new MembershipManagerImpl(
