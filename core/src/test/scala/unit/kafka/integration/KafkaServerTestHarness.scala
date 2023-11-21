@@ -34,7 +34,6 @@ import org.apache.kafka.common.acl.AccessControlEntry
 import org.apache.kafka.common.{KafkaException, Uuid}
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.resource.ResourcePattern
-import org.apache.kafka.common.security.scram.ScramCredential
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.controller.ControllerRequestContextUtil.ANONYMOUS_CONTEXT
 

@@ -74,7 +74,6 @@ import scala.annotation.nowarn
 import scala.collection._
 import scala.collection.mutable.ArrayBuffer
 import scala.jdk.CollectionConverters._
-import scala.collection.Seq
 
 object DynamicBrokerReconfigurationTest {
   val Plain = "PLAIN"
