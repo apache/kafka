@@ -791,21 +791,24 @@ public class IQv2StoreIntegrationTest {
                     } else {
                         shouldHandleKeyQuery(2, 5);
                         shouldHandleRangeQueries();
+
                         if (kind.equals("DSL")) {
+                             shouldHandleTimestampedRangeQueries();
+//                            shouldHandleRangeQueries();
                             if (cache) {
                                 shouldHandleTimestampedKeyQuery(2, ValueAndTimestamp.make(5, WINDOW_START + Duration.ofMinutes(2).toMillis() * 5));
                             } else {
                                 shouldHandleTimestampedKeyQuery(2, ValueAndTimestamp.make(5, -1L));
                             }
-                            shouldHandleTimestampedRangeQuery(
-                                    Optional.of(0),
-                                    Optional.of(4),
-                                    true,
-                                    Arrays.asList(ValueAndTimestamp.make(1, -1L),
-                                            ValueAndTimestamp.make(5, -1L),
-                                            ValueAndTimestamp.make(9, -1L),
-                                            ValueAndTimestamp.make(3, -1L),
-                                            ValueAndTimestamp.make(7, -1L)));
+//                            shouldHandleTimestampedRangeQuery(
+//                                    Optional.of(0),
+//                                    Optional.of(4),
+//                                    true,
+//                                    Arrays.asList(ValueAndTimestamp.make(1, -1L),
+//                                            ValueAndTimestamp.make(5, -1L),
+//                                            ValueAndTimestamp.make(9, -1L),
+//                                            ValueAndTimestamp.make(3, -1L),
+//                                            ValueAndTimestamp.make(7, -1L)));
                         } else {
                             assertThrows(AssertionError.class, () -> shouldHandleTimestampedKeyQuery(2, ValueAndTimestamp.make(5, WINDOW_START + Duration.ofMinutes(2).toMillis() * 5)));
                             assertThrows(AssertionError.class, this::shouldHandleTimestampedRangeQueries);
