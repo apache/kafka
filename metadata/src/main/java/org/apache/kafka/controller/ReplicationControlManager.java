@@ -366,6 +366,7 @@ public class ReplicationControlManager {
 
     /**
      * A map of broker IDs to the partitions that the broker is in the ELR for.
+     * Note that, a broker should not be in both brokersToIsrs and brokersToElrs.
      */
     private final BrokersToElrs brokersToElrs;
 
@@ -1813,6 +1814,10 @@ public class ReplicationControlManager {
         // from the target ISR, but we need to exclude it here too, to handle the case
         // where there is an unclean leader election which chooses a leader from outside
         // the ISR.
+        //
+        // If the caller passed a valid broker ID for brokerWithUncleanShutdown, rather than
+        // passing NO_LEADER, this node should not be an acceptable leader. We also exclude
+        // brokerWithUncleanShutdown from ELR and ISR.
         IntPredicate isAcceptableLeader =
             r -> (r != brokerToRemove && r != brokerWithUncleanShutdown)
                 && (r == brokerToAdd || clusterControl.isActive(r));

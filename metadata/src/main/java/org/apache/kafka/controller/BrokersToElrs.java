@@ -31,6 +31,7 @@ import static org.apache.kafka.metadata.Replicas.NONE;
 public class BrokersToElrs {
     private final SnapshotRegistry snapshotRegistry;
 
+    // It maps from the broker id to the topic id partitions if the partition has ELR.
     private final TimelineHashMap<Integer, TimelineHashMap<Uuid, int[]>> elrMembers;
 
     BrokersToElrs(SnapshotRegistry snapshotRegistry) {

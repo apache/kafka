@@ -244,7 +244,7 @@ public class ClusterControlManager {
      */
     private final boolean zkMigrationEnabled;
 
-    private ReplicationControlManager replicationControlManager;
+    private HandleBrokerUncleanShutdownHelper handleBrokerUncleanShutdownHelper;
 
     /**
      * Maps controller IDs to controller registrations.
@@ -297,8 +297,8 @@ public class ClusterControlManager {
         heartbeatManager = null;
     }
 
-    public void setReplicationControlManager(ReplicationControlManager replicationControlManager) {
-        this.replicationControlManager = replicationControlManager;
+    public void setHandleBrokerUncleanShutdownHelper(HandleBrokerUncleanShutdownHelper handleBrokerUncleanShutdownHelper) {
+        this.handleBrokerUncleanShutdownHelper = handleBrokerUncleanShutdownHelper;
     }
 
     Map<Integer, BrokerRegistration> brokerRegistrations() {
@@ -335,10 +335,12 @@ public class ClusterControlManager {
         int brokerId = request.brokerId();
         List<ApiMessageAndVersion> records = new ArrayList<>();
         BrokerRegistration existing = brokerRegistrations.get(brokerId);
-        if (version < 2
-            || (existing == null || request.previousBrokerEpoch() != existing.epoch())
-            && replicationControlManager != null) {
-            replicationControlManager.handleBrokerUncleanShutdown(request.brokerId(), records);
+        if (version < 2 || existing == null || request.previousBrokerEpoch() != existing.epoch()) {
+            if (handleBrokerUncleanShutdownHelper == null) {
+                log.warn("No handleBrokerUncleanShutdownHelper provided");
+            } else {
+                handleBrokerUncleanShutdownHelper.apply(request.brokerId(), records);
+            }
         }
         if (existing != null) {
             if (heartbeatManager.hasValidSession(brokerId)) {
@@ -688,5 +690,10 @@ public class ClusterControlManager {
                         registration.supportedFeatures());
             }
         };
+    }
+
+    @FunctionalInterface
+    interface HandleBrokerUncleanShutdownHelper {
+        void apply(int brokerId, List<ApiMessageAndVersion> records);
     }
 }

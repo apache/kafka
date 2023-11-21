@@ -466,9 +466,9 @@ public class PartitionChangeBuilder {
             partition.lastKnownElr[0] != partition.leader)) {
             // Only update the last known leader when the first time the partition becomes leaderless.
             record.setLastKnownELR(Arrays.asList(partition.leader));
-        } else if ((recordHasLeader(record) || partition.leader != NO_LEADER)
+        } else if (record.leader() > 0 || (partition.leader != NO_LEADER && record.leader() != NO_LEADER)
             && partition.lastKnownElr.length > 0) {
-            // Clear the LastKnownElr field if the partition has/will have a valid leader.
+            // Clear the LastKnownElr field if the partition will have or continues to have a valid leader.
             record.setLastKnownELR(Collections.emptyList());
         }
     }
