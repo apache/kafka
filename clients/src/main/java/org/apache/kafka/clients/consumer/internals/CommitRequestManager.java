@@ -249,7 +249,7 @@ public class CommitRequestManager implements RequestManager {
      * {@link OffsetCommitRequestState} and enqueue it to send later.
      */
     public CompletableFuture<Void> addOffsetCommitRequest(final Map<TopicPartition, OffsetAndMetadata> offsets) {
-        return pendingRequests.addOffsetCommitRequest(offsets).future;
+        return pendingRequests.addOffsetCommitRequest(offsets).future();
     }
 
     /**
@@ -786,8 +786,8 @@ public class CommitRequestManager implements RequestManager {
         private boolean hasInflightCommit;
 
         public AutoCommitState(
-            final Time time,
-            final long autoCommitInterval) {
+                final Time time,
+                final long autoCommitInterval) {
             this.autoCommitInterval = autoCommitInterval;
             this.timer = time.timer(autoCommitInterval);
             this.hasInflightCommit = false;
