@@ -44,6 +44,7 @@ abstract class BaseConsumerTest extends AbstractConsumerTest {
     val startingTimestamp = System.currentTimeMillis()
     sendRecords(producer, numRecords, tp, startingTimestamp = startingTimestamp)
 
+    this.consumerConfig.setProperty(ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol)
     val consumer = createConsumer()
     assertEquals(0, consumer.assignment.size)
     consumer.assign(List(tp).asJava)
@@ -69,6 +70,7 @@ abstract class BaseConsumerTest extends AbstractConsumerTest {
     sendRecords(producer, numRecords, tp, startingTimestamp = startingTimestamp)
 
     val consumerProps = new Properties()
+    this.consumerConfig.setProperty(ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol)
     consumerProps.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, classOf[BaseConsumerTest.TestClusterResourceListenerDeserializer])
     consumerProps.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, classOf[BaseConsumerTest.TestClusterResourceListenerDeserializer])
     val consumer: Consumer[Array[Byte], Array[Byte]] = createConsumer(keyDeserializer = null, valueDeserializer = null, consumerProps)
@@ -82,6 +84,7 @@ abstract class BaseConsumerTest extends AbstractConsumerTest {
   @ValueSource(strings = Array("zk", "kraft", "kraft+kip848"))
   def testCoordinatorFailover(quorum: String): Unit = {
     val listener = new TestConsumerReassignmentListener()
+    this.consumerConfig.setProperty(ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol)
     this.consumerConfig.setProperty(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, "5001")
     this.consumerConfig.setProperty(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, "1000")
     // Use higher poll timeout to avoid consumer leaving the group due to timeout
