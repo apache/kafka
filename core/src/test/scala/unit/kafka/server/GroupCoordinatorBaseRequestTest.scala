@@ -272,7 +272,7 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
 
     val syncGroupRequest = new SyncGroupRequest.Builder(syncGroupRequestData).build(version)
     val syncGroupResponse = connectAndReceive[SyncGroupResponse](syncGroupRequest)
-
+    
     assertEquals(
       new SyncGroupResponseData()
         .setErrorCode(expectedError.code)

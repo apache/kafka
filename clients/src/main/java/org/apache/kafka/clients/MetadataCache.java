@@ -51,7 +51,7 @@ public class MetadataCache {
     private final Node controller;
     private final Map<TopicPartition, PartitionMetadata> metadataByPartition;
     private final Map<String, Uuid> topicIds;
-
+    private final Map<Uuid, String> topicNames;
     private Cluster clusterInstance;
 
     MetadataCache(String clusterId,
@@ -80,7 +80,10 @@ public class MetadataCache {
         this.invalidTopics = invalidTopics;
         this.internalTopics = internalTopics;
         this.controller = controller;
-        this.topicIds = topicIds;
+        this.topicIds = Collections.unmodifiableMap(topicIds);
+        this.topicNames = Collections.unmodifiableMap(
+            topicIds.entrySet().stream().collect(Collectors.toMap(Map.Entry::getValue, Map.Entry::getKey))
+        );
 
         this.metadataByPartition = new HashMap<>(partitions.size());
         for (PartitionMetadata p : partitions) {
@@ -100,6 +103,10 @@ public class MetadataCache {
 
     Map<String, Uuid> topicIds() {
         return topicIds;
+    }
+
+    Map<Uuid, String> topicNames() {
+        return topicNames;
     }
 
     Optional<Node> nodeById(int id) {
