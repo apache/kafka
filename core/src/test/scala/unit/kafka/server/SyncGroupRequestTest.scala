@@ -76,7 +76,7 @@ class SyncGroupRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBas
         expectedProtocolType = null,
         expectedProtocolName = null,
         expectedError = Errors.UNKNOWN_MEMBER_ID,
-        version = Option(version.toShort)
+        version = version.toShort
       )
 
       val metadata = ConsumerProtocol.serializeSubscription(
@@ -112,7 +112,7 @@ class SyncGroupRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBas
           expectedProtocolType = null,
           expectedProtocolName = null,
           expectedError = Errors.INCONSISTENT_GROUP_PROTOCOL,
-          version = Option(version.toShort)
+          version = version.toShort
         )
 
         // Sync the leader with unmatched protocolType.
@@ -128,7 +128,7 @@ class SyncGroupRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBas
           expectedProtocolType = null,
           expectedProtocolName = null,
           expectedError = Errors.INCONSISTENT_GROUP_PROTOCOL,
-          version = Option(version.toShort)
+          version = version.toShort
         )
       }
 
@@ -140,7 +140,7 @@ class SyncGroupRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBas
         expectedProtocolType = null,
         expectedProtocolName = null,
         expectedError = Errors.UNKNOWN_MEMBER_ID,
-        version = Option(version.toShort)
+        version = version.toShort
       )
 
       // Sync with illegal generation id.
@@ -151,7 +151,7 @@ class SyncGroupRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBas
         expectedProtocolType = null,
         expectedProtocolName = null,
         expectedError = Errors.ILLEGAL_GENERATION,
-        version = Option(version.toShort)
+        version = version.toShort
       )
 
       // Sync the leader with empty protocolType and protocolName.
@@ -164,7 +164,7 @@ class SyncGroupRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBas
           .setAssignment(Array[Byte](1))
         ),
         expectedAssignment = Array[Byte](1),
-        version = Option(version.toShort)
+        version = version.toShort
       )
 
       // Sync the leader with matched protocolType and protocolName.
@@ -177,7 +177,7 @@ class SyncGroupRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBas
           .setAssignment(Array[Byte](1))
         ),
         expectedAssignment = Array[Byte](1),
-        version = Option(version.toShort)
+        version = version.toShort
       )
 
       // Join a second member.
@@ -218,7 +218,7 @@ class SyncGroupRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBas
             .setAssignment(Array[Byte](2))
         ),
         expectedAssignment = Array[Byte](1),
-        version = Option(version.toShort)
+        version = version.toShort
       )
 
       syncGroupWithOldProtocol(
@@ -226,7 +226,7 @@ class SyncGroupRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBas
         memberId = followerMemberId,
         generationId = joinFollowerFutureResponseData.generationId,
         expectedAssignment = Array[Byte](2),
-        version = Option(version.toShort)
+        version = version.toShort
       )
 
       // Sync the follower ahead of the leader.
@@ -236,7 +236,7 @@ class SyncGroupRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBas
           memberId = followerMemberId,
           generationId = 2,
           expectedAssignment = Array[Byte](2),
-          version = Option(version.toShort)
+          version = version.toShort
         )
       }
 
@@ -253,7 +253,7 @@ class SyncGroupRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBas
             .setAssignment(Array[Byte](2))
         ),
         expectedAssignment = Array[Byte](1),
-        version = Option(version.toShort)
+        version = version.toShort
       )
 
       Await.result(syncFollowerFuture, Duration.Inf)

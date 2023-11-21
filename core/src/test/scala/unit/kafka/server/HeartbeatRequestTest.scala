@@ -155,7 +155,7 @@ class HeartbeatRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBas
       }
 
       TestUtils.waitUntilTrue(() => {
-        val described = describeGroups(groupIds = List("grp"), version = ApiKeys.DESCRIBE_GROUPS.latestVersion(isUnstableApiEnabled))
+        val described = describeGroups(groupIds = List("grp"))
         GenericGroupState.PREPARING_REBALANCE.toString == described.head.groupState
       }, msg = s"The group is not in PREPARING_REBALANCE state.")
 

@@ -80,7 +80,7 @@ class JoinGroupRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBas
       val joinLeaderResponseData = sendJoinRequest(
         groupId = "grp",
         metadata = metadata,
-        version = Option(version.toShort)
+        version = version.toShort
       )
       val leaderMemberId = joinLeaderResponseData.memberId
       if (version >= 4) {
@@ -112,7 +112,7 @@ class JoinGroupRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBas
           groupId = "grp",
           memberId = leaderMemberId,
           metadata = metadata,
-          version = Option(version.toShort)
+          version = version.toShort
         )
         verifyJoinGroupResponseDataEquals(
           new JoinGroupResponseData()
@@ -150,7 +150,7 @@ class JoinGroupRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBas
         sendJoinRequest(
           groupId = "grp",
           memberId = "member-id-unknown",
-          version = Option(version.toShort)
+          version = version.toShort
         )
       )
 
@@ -162,7 +162,7 @@ class JoinGroupRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBas
         sendJoinRequest(
           groupId = "grp",
           protocolType = "connect",
-          version = Option(version.toShort)
+          version = version.toShort
         )
       )
 
@@ -174,7 +174,7 @@ class JoinGroupRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBas
         joinFollowerResponseData = sendJoinRequest(
           groupId = "grp",
           metadata = metadata,
-          version = Option(version.toShort)
+          version = version.toShort
         )
       }
 
@@ -184,7 +184,7 @@ class JoinGroupRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBas
           memberId = if (version != 4) "" else joinFollowerResponseData.memberId,
           groupInstanceId = if (version >= 5) "group-instance-id" else null,
           metadata = metadata,
-          version = Option(version.toShort)
+          version = version.toShort
         )
       }
 
@@ -196,7 +196,7 @@ class JoinGroupRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBas
           groupId = "grp",
           memberId = leaderMemberId,
           metadata = metadata,
-          version = Option(version.toShort)
+          version = version.toShort
         )
       }
 
@@ -269,7 +269,7 @@ class JoinGroupRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBas
           groupInstanceId = if (version >= 5) "group-instance-id" else null,
           memberId = followerMemberId,
           metadata = metadata,
-          version = Option(version.toShort)
+          version = version.toShort
         )
       )
 
@@ -310,7 +310,7 @@ class JoinGroupRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBas
         groupId = "grp",
         memberId = leaderMemberId,
         metadata = metadata,
-        version = Option(version.toShort)
+        version = version.toShort
       )
     }
 
@@ -322,7 +322,7 @@ class JoinGroupRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBas
         groupId = "grp",
         groupInstanceId = "group-instance-id",
         metadata = metadata,
-        version = Option(version.toShort)
+        version = version.toShort
       )
     }
 
@@ -335,7 +335,7 @@ class JoinGroupRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBas
         memberId = followerMemberId,
         groupInstanceId = "group-instance-id",
         metadata = metadata,
-        version = Option(version.toShort)
+        version = version.toShort
       )
     }
 

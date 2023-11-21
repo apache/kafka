@@ -260,7 +260,7 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
     expectedProtocolName: String = "consumer-range",
     expectedAssignment: Array[Byte] = Array.empty,
     expectedError: Errors = Errors.NONE,
-    version: Option[Short] = None
+    version: Short = ApiKeys.SYNC_GROUP.latestVersion(isUnstableApiEnabled)
   ): SyncGroupResponseData = {
     val syncGroupRequestData = new SyncGroupRequestData()
       .setGroupId(groupId)
@@ -270,17 +270,14 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
       .setProtocolName(protocolName)
       .setAssignments(assignments.asJava)
 
-    val syncGroupRequest = version match {
-      case Some(v) => new SyncGroupRequest.Builder(syncGroupRequestData).build(v)
-      case None => new SyncGroupRequest.Builder(syncGroupRequestData).build()
-    }
+    val syncGroupRequest = new SyncGroupRequest.Builder(syncGroupRequestData).build(version)
     val syncGroupResponse = connectAndReceive[SyncGroupResponse](syncGroupRequest)
 
     assertEquals(
       new SyncGroupResponseData()
         .setErrorCode(expectedError.code)
-        .setProtocolType(if (version.isEmpty || version.get >= 5) expectedProtocolType else null)
-        .setProtocolName(if (version.isEmpty || version.get >= 5) expectedProtocolName else null)
+        .setProtocolType(if (version >= 5) expectedProtocolType else null)
+        .setProtocolName(if (version >= 5) expectedProtocolName else null)
         .setAssignment(expectedAssignment),
       syncGroupResponse.data
     )
@@ -422,13 +419,10 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
 
   protected def describeGroups(
     groupIds: List[String],
-    version: Option[Short] = None
+    version: Short = ApiKeys.DESCRIBE_GROUPS.latestVersion(isUnstableApiEnabled)
   ): List[DescribeGroupsResponseData.DescribedGroup] = {
     val describeGroupsRequestData = new DescribeGroupsRequestData().setGroups(groupIds.asJava)
-    val describeGroupsRequest = version match {
-      case Some(v) => new DescribeGroupsRequest.Builder(describeGroupsRequestData).build(v)
-      case None => new DescribeGroupsRequest.Builder(describeGroupsRequestData).build()
-    }
+    val describeGroupsRequest = new DescribeGroupsRequest.Builder(describeGroupsRequestData).build(version)
 
     val describeGroupsResponse = connectAndReceive[DescribeGroupsResponse](describeGroupsRequest)
 
