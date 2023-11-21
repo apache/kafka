@@ -17,7 +17,6 @@
 package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.common.errors.WakeupException;
-import org.apache.kafka.common.utils.LogContext;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.junit.jupiter.MockitoSettings;
@@ -75,8 +74,7 @@ public class WakeupTriggerTest {
 
     @Test
     public void testSettingFetchAction() {
-        final FetchBuffer fetchBuffer = new FetchBuffer(new LogContext());
-
+        final FetchBuffer fetchBuffer = mock(FetchBuffer.class);
         wakeupTrigger.setFetchAction(fetchBuffer);
 
         final WakeupTrigger.Wakeupable wakeupable = wakeupTrigger.getPendingTask();
@@ -86,7 +84,7 @@ public class WakeupTriggerTest {
 
     @Test
     public void testUnsetFetchAction() {
-        wakeupTrigger.setFetchAction(new FetchBuffer(new LogContext()));
+        wakeupTrigger.setFetchAction(mock(FetchBuffer.class));
 
         wakeupTrigger.clearTask();
 
@@ -125,7 +123,7 @@ public class WakeupTriggerTest {
 
     @Test
     public void testManualTriggerWhenWakeupCalledAndFetchActionSet() {
-        wakeupTrigger.setFetchAction(new FetchBuffer(new LogContext()));
+        wakeupTrigger.setFetchAction(mock(FetchBuffer.class));
         assertDoesNotThrow(() -> wakeupTrigger.maybeTriggerWakeup());
     }
 
