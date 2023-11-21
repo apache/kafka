@@ -785,17 +785,29 @@ public class IQv2StoreIntegrationTest {
                 if (storeToTest.keyValue()) {
                     if (storeToTest.timestamped()) {
                         shouldHandleKeyQuery(2,  5);
-                        shouldHandleTimestampedKeyQuery(2, 5);
+                        shouldHandleTimestampedKeyQuery(2, ValueAndTimestamp.makeAllowNullable(5, WINDOW_START + Duration.ofMinutes(2).toMillis() * 5));
                         shouldHandleRangeQueries();
                         shouldHandleTimestampedRangeQueries();
                     } else {
                         shouldHandleKeyQuery(2, 5);
                         shouldHandleRangeQueries();
                         if (kind.equals("DSL")) {
-                            shouldHandleTimestampedKeyQuery(2, 5);
-                            shouldHandleTimestampedRangeQueries();
+                            if (cache) {
+                                shouldHandleTimestampedKeyQuery(2, ValueAndTimestamp.make(5, WINDOW_START + Duration.ofMinutes(2).toMillis() * 5));
+                            } else {
+                                shouldHandleTimestampedKeyQuery(2, ValueAndTimestamp.make(5, -1L));
+                            }
+                            shouldHandleTimestampedRangeQuery(
+                                    Optional.of(0),
+                                    Optional.of(4),
+                                    true,
+                                    Arrays.asList(ValueAndTimestamp.make(1, -1L),
+                                            ValueAndTimestamp.make(5, -1L),
+                                            ValueAndTimestamp.make(9, -1L),
+                                            ValueAndTimestamp.make(3, -1L),
+                                            ValueAndTimestamp.make(7, -1L)));
                         } else {
-                            assertThrows(AssertionError.class, () -> shouldHandleTimestampedKeyQuery(2, 5));
+                            assertThrows(AssertionError.class, () -> shouldHandleTimestampedKeyQuery(2, ValueAndTimestamp.make(5, WINDOW_START + Duration.ofMinutes(2).toMillis() * 5)));
                             assertThrows(AssertionError.class, this::shouldHandleTimestampedRangeQueries);
                         }
 
@@ -919,71 +931,90 @@ public class IQv2StoreIntegrationTest {
             Optional.of(0),
             Optional.of(4),
             true,
-            Arrays.asList(1, 5, 9, 3, 7)
-        );
+            Arrays.asList(ValueAndTimestamp.make(1, WINDOW_START + Duration.ofMinutes(2).toMillis()),
+                          ValueAndTimestamp.make(5, WINDOW_START + Duration.ofMinutes(2).toMillis() * 5),
+                          ValueAndTimestamp.make(9, WINDOW_START + Duration.ofMinutes(2).toMillis() * 9),
+                          ValueAndTimestamp.make(3, WINDOW_START + Duration.ofMinutes(2).toMillis() * 3),
+                          ValueAndTimestamp.make(7, WINDOW_START + Duration.ofMinutes(2).toMillis() * 7)));
 
         shouldHandleTimestampedRangeQuery(
             Optional.of(1),
             Optional.of(3),
             true,
-            Arrays.asList(5, 3, 7)
-        );
+            Arrays.asList(ValueAndTimestamp.make(5, WINDOW_START + Duration.ofMinutes(2).toMillis() * 5),
+                          ValueAndTimestamp.make(3, WINDOW_START + Duration.ofMinutes(2).toMillis() * 3),
+                          ValueAndTimestamp.make(7, WINDOW_START + Duration.ofMinutes(2).toMillis() * 7)));
 
         shouldHandleTimestampedRangeQuery(
             Optional.of(3),
             Optional.empty(),
             true,
-            Arrays.asList(9, 7)
+            Arrays.asList(ValueAndTimestamp.make(9, WINDOW_START + Duration.ofMinutes(2).toMillis() * 9),
+                          ValueAndTimestamp.make(7, WINDOW_START + Duration.ofMinutes(2).toMillis() * 7))
         );
 
         shouldHandleTimestampedRangeQuery(
             Optional.empty(),
             Optional.of(3),
             true,
-            Arrays.asList(1, 5, 3, 7)
-        );
+            Arrays.asList(ValueAndTimestamp.make(1, WINDOW_START + Duration.ofMinutes(2).toMillis()),
+                          ValueAndTimestamp.make(5, WINDOW_START + Duration.ofMinutes(2).toMillis() * 5),
+                          ValueAndTimestamp.make(3, WINDOW_START + Duration.ofMinutes(2).toMillis() * 3),
+                          ValueAndTimestamp.make(7, WINDOW_START + Duration.ofMinutes(2).toMillis() * 7)));
 
         shouldHandleTimestampedRangeQuery(
             Optional.empty(),
             Optional.empty(),
             true,
-            Arrays.asList(1, 5, 9, 3, 7)
-        );
+            Arrays.asList(ValueAndTimestamp.make(1, WINDOW_START + Duration.ofMinutes(2).toMillis()),
+                          ValueAndTimestamp.make(5, WINDOW_START + Duration.ofMinutes(2).toMillis() * 5),
+                          ValueAndTimestamp.make(9, WINDOW_START + Duration.ofMinutes(2).toMillis() * 9),
+                          ValueAndTimestamp.make(3, WINDOW_START + Duration.ofMinutes(2).toMillis() * 3),
+                          ValueAndTimestamp.make(7, WINDOW_START + Duration.ofMinutes(2).toMillis() * 7)));
 
         shouldHandleTimestampedRangeQuery(
             Optional.of(0),
             Optional.of(4),
             false,
-            Arrays.asList(9, 5, 1, 7, 3)
-        );
+            Arrays.asList(ValueAndTimestamp.make(9, WINDOW_START + Duration.ofMinutes(2).toMillis() * 9),
+                          ValueAndTimestamp.make(5, WINDOW_START + Duration.ofMinutes(2).toMillis() * 5),
+                          ValueAndTimestamp.make(1, WINDOW_START + Duration.ofMinutes(2).toMillis()),
+                          ValueAndTimestamp.make(7, WINDOW_START + Duration.ofMinutes(2).toMillis() * 7),
+                          ValueAndTimestamp.make(3, WINDOW_START + Duration.ofMinutes(2).toMillis() * 3)));
 
         shouldHandleTimestampedRangeQuery(
             Optional.of(1),
             Optional.of(3),
             false,
-            Arrays.asList(5, 7, 3)
-        );
+            Arrays.asList(ValueAndTimestamp.make(5, WINDOW_START + Duration.ofMinutes(2).toMillis() * 5),
+                          ValueAndTimestamp.make(7, WINDOW_START + Duration.ofMinutes(2).toMillis() * 7),
+                          ValueAndTimestamp.make(3, WINDOW_START + Duration.ofMinutes(2).toMillis() * 3)));
 
         shouldHandleTimestampedRangeQuery(
             Optional.of(3),
             Optional.empty(),
             false,
-            Arrays.asList(9, 7)
-        );
+            Arrays.asList(ValueAndTimestamp.make(9, WINDOW_START + Duration.ofMinutes(2).toMillis() * 9),
+                          ValueAndTimestamp.make(7, WINDOW_START + Duration.ofMinutes(2).toMillis() * 7)));
 
         shouldHandleTimestampedRangeQuery(
             Optional.empty(),
             Optional.of(3),
             false,
-            Arrays.asList(5, 1, 7, 3)
-        );
+            Arrays.asList(ValueAndTimestamp.make(5, WINDOW_START + Duration.ofMinutes(2).toMillis() * 5),
+                          ValueAndTimestamp.make(1, WINDOW_START + Duration.ofMinutes(2).toMillis()),
+                          ValueAndTimestamp.make(7, WINDOW_START + Duration.ofMinutes(2).toMillis() * 7),
+                          ValueAndTimestamp.make(3, WINDOW_START + Duration.ofMinutes(2).toMillis() * 3)));
 
         shouldHandleTimestampedRangeQuery(
             Optional.empty(),
             Optional.empty(),
             false,
-            Arrays.asList(9, 5, 1, 7, 3)
-        );
+            Arrays.asList(ValueAndTimestamp.make(9, WINDOW_START + Duration.ofMinutes(2).toMillis() * 9),
+                          ValueAndTimestamp.make(5, WINDOW_START + Duration.ofMinutes(2).toMillis() * 5),
+                          ValueAndTimestamp.make(1, WINDOW_START + Duration.ofMinutes(2).toMillis()),
+                          ValueAndTimestamp.make(7, WINDOW_START + Duration.ofMinutes(2).toMillis() * 7),
+                          ValueAndTimestamp.make(3, WINDOW_START + Duration.ofMinutes(2).toMillis() * 3)));
     }
 
     private <T> void shouldHandleWindowKeyDSLQueries(final Function<T, Integer> extractor) {
@@ -1654,7 +1685,7 @@ public class IQv2StoreIntegrationTest {
 
     public <V> void shouldHandleTimestampedKeyQuery(
             final Integer key,
-            final Integer expectedValue) {
+            final ValueAndTimestamp expectedValueAndTimestamp) {
 
         final TimestampedKeyQuery<Integer, V> query = TimestampedKeyQuery.withKey(key);
         final StateQueryRequest<ValueAndTimestamp<V>> request =
@@ -1681,9 +1712,8 @@ public class IQv2StoreIntegrationTest {
                 queryResult::getFailureMessage
         );
 
-        final ValueAndTimestamp<V> result1 = queryResult.getResult();
-        final Integer integer = (Integer) result1.value();
-        assertThat(integer, is(expectedValue));
+        final ValueAndTimestamp<V> valueAndTimestamp = queryResult.getResult();
+        assertThat(valueAndTimestamp, is(expectedValueAndTimestamp));
         assertThat(queryResult.getExecutionInfo(), is(empty()));
         assertThat(queryResult.getPosition(), is(POSITION_0));
     }
@@ -1745,7 +1775,7 @@ public class IQv2StoreIntegrationTest {
         final Optional<Integer> lower,
         final Optional<Integer> upper,
         final boolean isKeyAscending,
-        final List<Integer> expectedValues) {
+        final List<ValueAndTimestamp> expectedValueAndTimestamp) {
 
         TimestampedRangeQuery<Integer, V> query;
 
@@ -1766,7 +1796,7 @@ public class IQv2StoreIntegrationTest {
         if (result.getGlobalResult() != null) {
             fail("global tables aren't implemented");
         } else {
-            final List<Integer> actualValues = new ArrayList<>();
+            final List<ValueAndTimestamp<V>> actualValueAndTimestamp = new ArrayList<>();
             final Map<Integer, QueryResult<KeyValueIterator<Integer, ValueAndTimestamp<V>>>> queryResult = result.getPartitionResults();
             final TreeSet<Integer> partitions = new TreeSet<>(queryResult.keySet());
             for (final int partition : partitions) {
@@ -1787,12 +1817,12 @@ public class IQv2StoreIntegrationTest {
 
                 try (final KeyValueIterator<Integer, ValueAndTimestamp<V>> iterator = queryResult.get(partition).getResult()) {
                     while (iterator.hasNext()) {
-                        actualValues.add((Integer) (iterator.next().value).value());
+                        actualValueAndTimestamp.add(iterator.next().value);
                     }
                 }
                 assertThat(queryResult.get(partition).getExecutionInfo(), is(empty()));
             }
-            assertThat("Result:" + result, actualValues, is(expectedValues));
+            assertThat("Result:" + result, actualValueAndTimestamp, is(expectedValueAndTimestamp));
             assertThat("Result:" + result, result.getPosition(), is(INPUT_POSITION));
         }
     }
