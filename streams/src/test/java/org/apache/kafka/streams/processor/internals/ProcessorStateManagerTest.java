@@ -123,8 +123,6 @@ public class ProcessorStateManagerTest {
     private StateDirectory stateDirectory;
 
     @Mock
-    private StateStore store;
-    @Mock
     private StateStoreMetadata storeMetadata;
     @Mock
     private InternalProcessorContext context;
@@ -314,8 +312,6 @@ public class ProcessorStateManagerTest {
         stateMgr.registerStore(store, noopStateRestoreCallback, null);
         assertTrue(changelogReader.isPartitionRegistered(persistentStorePartition));
 
-        when(store.name()).thenReturn(persistentStoreName);
-
         stateMgr.close();
         verify(store).close();
 
@@ -339,8 +335,6 @@ public class ProcessorStateManagerTest {
         assertFalse(changelogReader.isPartitionRegistered(persistentStorePartition));
         assertThat(stateMgr.getStore(persistentStoreName), equalTo(store));
 
-        when(store.name()).thenReturn(persistentStoreName);
-
         stateMgr.registerStateStores(singletonList(store), context);
 
         verify(context, times(2)).uninitialize();
@@ -363,6 +357,8 @@ public class ProcessorStateManagerTest {
         stateMgr.recycle();
         assertFalse(changelogReader.isPartitionRegistered(persistentStorePartition));
         assertThat(stateMgr.getStore(persistentStoreName), equalTo(store));
+
+        verify(store).clearCache();
     }
 
     @Test
