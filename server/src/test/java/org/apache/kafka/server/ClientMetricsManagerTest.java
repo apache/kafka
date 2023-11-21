@@ -28,7 +28,6 @@ import org.apache.kafka.common.requests.PushTelemetryRequest;
 import org.apache.kafka.common.requests.PushTelemetryRequest.Builder;
 import org.apache.kafka.common.requests.PushTelemetryResponse;
 import org.apache.kafka.common.utils.MockTime;
-import org.apache.kafka.server.ClientMetricsManager.SubscriptionInfo;
 import org.apache.kafka.server.metrics.ClientMetricsConfigs;
 import org.apache.kafka.server.metrics.ClientMetricsInstance;
 import org.apache.kafka.server.metrics.ClientMetricsReceiverPlugin;
@@ -80,7 +79,7 @@ public class ClientMetricsManagerTest {
         assertEquals(1, clientMetricsManager.subscriptions().size());
         assertNotNull(clientMetricsManager.subscriptionInfo("sub-1"));
 
-        SubscriptionInfo subscriptionInfo = clientMetricsManager.subscriptionInfo("sub-1");
+        ClientMetricsManager.SubscriptionInfo subscriptionInfo = clientMetricsManager.subscriptionInfo("sub-1");
         Set<String> metrics = subscriptionInfo.metrics();
 
         // Validate metrics.
