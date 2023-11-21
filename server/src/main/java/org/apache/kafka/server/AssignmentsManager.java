@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package kafka.server;
+package org.apache.kafka.server;
 
 import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.common.Uuid;
@@ -249,7 +249,7 @@ public class AssignmentsManager {
     /**
      * Callback for a {@link AssignReplicasToDirsRequest}.
      */
-    private class AssignReplicasToDirsRequestCompletionHandler extends ControllerRequestCompletionHandler {
+    private class AssignReplicasToDirsRequestCompletionHandler implements ControllerRequestCompletionHandler {
         @Override
         public void onTimeout() {
             log.warn("Request to controller timed out");

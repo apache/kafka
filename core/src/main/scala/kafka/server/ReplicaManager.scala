@@ -763,7 +763,7 @@ class ReplicaManager(val config: KafkaConfig,
    * @param entriesPerPartition           the records per partition to be appended
    * @param responseCallback              callback for sending the response
    * @param delayedProduceLock            lock for the delayed actions
-   * @param recordConversionStatsCallback callback for updating stats on record conversions
+   * @param recordValidationStatsCallback callback for updating stats on record conversions
    * @param requestLocal                  container for the stateful instances scoped to this request
    * @param transactionalId               transactional ID if the request is from a producer and the producer is transactional
    * @param actionQueue                   the action queue to use. ReplicaManager#defaultActionQueue is used by default.
@@ -775,7 +775,7 @@ class ReplicaManager(val config: KafkaConfig,
                     entriesPerPartition: Map[TopicPartition, MemoryRecords],
                     responseCallback: Map[TopicPartition, PartitionResponse] => Unit,
                     delayedProduceLock: Option[Lock] = None,
-                    recordConversionStatsCallback: Map[TopicPartition, RecordConversionStats] => Unit = _ => (),
+                    recordValidationStatsCallback: Map[TopicPartition, RecordValidationStats] => Unit = _ => (),
                     requestLocal: RequestLocal = RequestLocal.NoCaching,
                     transactionalId: String = null,
                     actionQueue: ActionQueue = this.defaultActionQueue): Unit = {
@@ -795,7 +795,7 @@ class ReplicaManager(val config: KafkaConfig,
 
       if (notYetVerifiedEntriesPerPartition.isEmpty || addPartitionsToTxnManager.isEmpty) {
         appendEntries(verifiedEntriesPerPartition, internalTopicsAllowed, origin, requiredAcks, verificationGuards.toMap,
-          errorsPerPartition, recordConversionStatsCallback, timeout, responseCallback, delayedProduceLock, actionQueue)(requestLocal, Map.empty)
+          errorsPerPartition, recordValidationStatsCallback, timeout, responseCallback, delayedProduceLock, actionQueue)(requestLocal, Map.empty)
       } else {
         // For unverified entries, send a request to verify. When verified, the append process will proceed via the callback.
         // We verify above that all partitions use the same producer ID.
@@ -813,7 +813,7 @@ class ReplicaManager(val config: KafkaConfig,
               requiredAcks,
               verificationGuards.toMap,
               errorsPerPartition,
-              recordConversionStatsCallback,
+              recordValidationStatsCallback,
               timeout,
               responseCallback,
               delayedProduceLock,
@@ -847,7 +847,7 @@ class ReplicaManager(val config: KafkaConfig,
                             requiredAcks: Short,
                             verificationGuards: Map[TopicPartition, VerificationGuard],
                             errorsPerPartition: Map[TopicPartition, Errors],
-                            recordConversionStatsCallback: Map[TopicPartition, RecordConversionStats] => Unit,
+                            recordConversionStatsCallback: Map[TopicPartition, RecordValidationStats] => Unit,
                             timeout: Long,
                             responseCallback: Map[TopicPartition, PartitionResponse] => Unit,
                             delayedProduceLock: Option[Lock],
@@ -920,7 +920,7 @@ class ReplicaManager(val config: KafkaConfig,
         }
     }
 
-    recordConversionStatsCallback(localProduceResults.map { case (k, v) => k -> v.info.recordConversionStats })
+    recordConversionStatsCallback(localProduceResults.map { case (k, v) => k -> v.info.recordValidationStats })
 
     if (delayedProduceRequestRequired(requiredAcks, allEntries, allResults)) {
       // create delayed produce operation
