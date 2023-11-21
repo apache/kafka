@@ -890,7 +890,7 @@ public class KStreamKStreamOuterJoinTest {
             time += 100;
             inputTopic1.pipeInput(expectedKeys[2], "A" + expectedKeys[2], time);
 
-            processor.checkAndClearProcessResult( 
+            processor.checkAndClearProcessResult(
                 new KeyValueTimestamp<>(2, "A2+a2", 201L)
             );
         }
