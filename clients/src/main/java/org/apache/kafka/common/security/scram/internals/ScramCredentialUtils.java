@@ -80,7 +80,7 @@ public final class ScramCredentialUtils {
     public static void createCache(CredentialCache cache, Collection<String> mechanisms) {
         for (String mechanism : ScramMechanism.mechanismNames()) {
             if (mechanisms.contains(mechanism))
-                cache.createCache(mechanism, ScramCredential.class);
+                cache.createScramCache(mechanism);
         }
     }
 }

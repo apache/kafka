@@ -1151,8 +1151,8 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
     List(JaasTestUtils.KafkaScramUser, JaasTestUtils.KafkaScramAdmin).foreach { scramUser =>
       servers.foreach { server =>
         ScramMechanism.values().filter(_ != ScramMechanism.UNKNOWN).foreach(mechanism =>
-          TestUtils.waitUntilTrue(() => server.credentialProvider.credentialCache.cache(
-            mechanism.mechanismName(), classOf[ScramCredential]).get(scramUser) != null,
+          TestUtils.waitUntilTrue(() => server.credentialProvider.credentialCache.scramCache(
+            mechanism.mechanismName()).get(scramUser) != null,
             s"$mechanism credentials not created for $scramUser"))
       }}
 

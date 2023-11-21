@@ -295,7 +295,7 @@ abstract class KafkaServerTestHarness extends QuorumTestHarness {
 
   def waitForUserScramCredentialToAppearOnAllBrokers(clientPrincipal: String, mechanismName: String): Unit = {
     _brokers.foreach { server =>
-      val cache = server.credentialProvider.credentialCache.cache(mechanismName, classOf[ScramCredential])
+      val cache = server.credentialProvider.credentialCache.scramCache(mechanismName)
       TestUtils.waitUntilTrue(() => cache.get(clientPrincipal) != null, s"SCRAM credentials not created for $clientPrincipal")
     }
   }
