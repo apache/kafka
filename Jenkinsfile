@@ -29,7 +29,7 @@ def isChangeRequest(env) {
   env.CHANGE_ID != null && !env.CHANGE_ID.isEmpty()
 }
 
-def doTest(env, target = "test") {
+def doTest(env, target = ":streams:test") {
   sh """./gradlew -PscalaVersion=$SCALA_VERSION ${target} \
       --profile --continue -PkeepAliveMode="session" -PtestLoggingEvents=started,passed,skipped,failed \
       --tests "org.apache.kafka.streams.integration.ConsistencyVectorIntegrationTest" \
