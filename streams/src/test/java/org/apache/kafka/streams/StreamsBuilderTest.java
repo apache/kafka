@@ -1303,6 +1303,45 @@ public class StreamsBuilderTest {
     }
 
     @Test
+    public void shouldUseThisStoreSupplierEvenIfDslStoreSuppliersConfiguredInTopologyConfig() {
+        final Properties topoOverrides = new Properties();
+        topoOverrides.putAll(props);
+        topoOverrides.put(StreamsConfig.DSL_STORE_SUPPLIERS_CLASS_CONFIG, BuiltInDslStoreSuppliers.RocksDBDslStoreSuppliers.class);
+        final StreamsBuilder builder = new StreamsBuilder(new TopologyConfig(new StreamsConfig(topoOverrides)));
+
+        final KStream<String, String> streamOne = builder.stream(STREAM_TOPIC);
+        final KStream<String, String> streamTwo = builder.stream(STREAM_TOPIC_TWO);
+
+        final JoinWindows windows = JoinWindows.ofTimeDifferenceWithNoGrace(Duration.ofHours(1));
+        streamOne.outerJoin(
+                streamTwo,
+                (value1, value2) -> value1,
+                windows,
+                StreamJoined.<String, String, String>as(STREAM_OPERATION_NAME)
+                        .withName(STREAM_OPERATION_NAME)
+                        .withThisStoreSupplier(Stores.inMemoryWindowStore(
+                                "thisSupplier",
+                                Duration.ofMillis(windows.size() + windows.gracePeriodMs()),
+                                Duration.ofMillis(windows.size()),
+                                true
+                        ))
+                        .withOtherStoreSupplier(Stores.persistentWindowStore(
+                                "otherSupplier",
+                                Duration.ofMillis(windows.size() + windows.gracePeriodMs()),
+                                Duration.ofMillis(windows.size()),
+                                true
+                        ))
+        );
+
+        builder.build();
+        final ProcessorTopology topology = builder.internalTopologyBuilder.rewriteTopology(new StreamsConfig(props)).buildTopology();
+        assertTypesForStateStore(topology.stateStores(),
+                InMemoryWindowStore.class,
+                RocksDBWindowStore.class,
+                InMemoryKeyValueStore.class);
+    }
+
+    @Test
     public void shouldUseSpecifiedNameForMergeOperation() {
         final String topic1 = "topic-1";
         final String topic2 = "topic-2";

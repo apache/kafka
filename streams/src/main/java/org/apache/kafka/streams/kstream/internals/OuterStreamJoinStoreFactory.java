@@ -44,7 +44,7 @@ public class OuterStreamJoinStoreFactory<K, V1, V2> extends AbstractConfigurable
     private final String name;
     private final StreamJoinedInternal<K, V1, V2> streamJoined;
     private final JoinWindows windows;
-    private final DslStoreSuppliers streamJoinedDslStoreSuppliers;
+    private final DslStoreSuppliers passedInDslStoreSuppliers;
 
     private boolean loggingEnabled;
 
@@ -64,7 +64,7 @@ public class OuterStreamJoinStoreFactory<K, V1, V2> extends AbstractConfigurable
         // we store this one manually instead of relying on super#dslStoreSuppliers()
         // so that we can differentiate between one that was explicitly passed in and
         // one that was configured via super#configure()
-        this.streamJoinedDslStoreSuppliers = streamJoined.dslStoreSuppliers();
+        this.passedInDslStoreSuppliers = streamJoined.passedInDslStoreSuppliers();
         this.name = buildOuterJoinWindowStoreName(streamJoined, name, type) + "-store";
         this.streamJoined = streamJoined;
         this.windows = windows;
@@ -97,9 +97,9 @@ public class OuterStreamJoinStoreFactory<K, V1, V2> extends AbstractConfigurable
 
         final KeyValueBytesStoreSupplier supplier;
 
-        if (streamJoinedDslStoreSuppliers != null) {
+        if (passedInDslStoreSuppliers != null) {
             // case 1: dslStoreSuppliers was explicitly passed in
-            supplier = streamJoinedDslStoreSuppliers.keyValueStore(new DslKeyValueParams(name));
+            supplier = passedInDslStoreSuppliers.keyValueStore(new DslKeyValueParams(name));
         } else if (streamJoined.thisStoreSupplier() != null) {
             // case 2: thisStoreSupplier was explicitly passed in, we match
             // the type for that one
@@ -114,7 +114,7 @@ public class OuterStreamJoinStoreFactory<K, V1, V2> extends AbstractConfigurable
             }
         } else {
             // case 3: nothing was explicitly passed in, fallback to default which
-            // was configured in super#configure()
+            // was configured via either the TopologyConfig or StreamsConfig globally
             supplier = dslStoreSuppliers().keyValueStore(new DslKeyValueParams(name));
         }
 

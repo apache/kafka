@@ -27,7 +27,10 @@ import java.util.Map;
 
 public class StreamJoinedInternal<K, V1, V2> extends StreamJoined<K, V1, V2> {
 
-    private final InternalStreamsBuilder builder;
+    // this tracks the original dsl store suppliers that were passed
+    // in -- this helps ensure that we can resolve the outer join
+    // store in the desired order (see comments in OuterStreamJoinFactory)
+    private final DslStoreSuppliers passedInDslStoreSuppliers;
 
     //Needs to be public for testing
     public StreamJoinedInternal(
@@ -35,7 +38,7 @@ public class StreamJoinedInternal<K, V1, V2> extends StreamJoined<K, V1, V2> {
         final InternalStreamsBuilder builder
     ) {
         super(streamJoined);
-        this.builder = builder;
+        passedInDslStoreSuppliers = dslStoreSuppliers;
         if (dslStoreSuppliers == null) {
             final TopologyConfig topologyConfig = builder.internalTopologyBuilder.topologyConfigs();
             if (topologyConfig != null) {
@@ -62,6 +65,10 @@ public class StreamJoinedInternal<K, V1, V2> extends StreamJoined<K, V1, V2> {
 
     public String storeName() {
         return storeName;
+    }
+
+    public DslStoreSuppliers passedInDslStoreSuppliers() {
+        return passedInDslStoreSuppliers;
     }
 
     public DslStoreSuppliers dslStoreSuppliers() {
