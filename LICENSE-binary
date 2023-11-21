@@ -205,7 +205,7 @@
 This project bundles some components that are also licensed under the Apache
 License Version 2.0:
 
-audience-annotations-0.13.0
+audience-annotations-0.12.0
 caffeine-2.9.3
 commons-beanutils-1.9.4
 commons-cli-1.4
@@ -327,6 +327,7 @@ zstd-jni-1.5.5-1 see: licenses/zstd-jni-BSD-2-clause
 BSD 3-Clause
 
 jline-3.22.0, see: licenses/jline-BSD-3-clause
+jsr305-3.0.2, see: licenses/jsr305-BSD-3-clause
 paranamer-2.8, see: licenses/paranamer-BSD-3-clause
 
 ---------------------------------------
