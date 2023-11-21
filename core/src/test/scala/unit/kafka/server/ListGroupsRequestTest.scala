@@ -45,7 +45,6 @@ class ListGroupsRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBa
   }
 
   @ClusterTest(serverProperties = Array(
-    new ClusterConfigProperty(key = "unstable.api.versions.enable", value = "true"),
     new ClusterConfigProperty(key = "group.coordinator.new.enable", value = "true"),
     new ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "1"),
     new ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1")
@@ -55,7 +54,6 @@ class ListGroupsRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBa
   }
 
   @ClusterTest(clusterType = Type.ALL, serverProperties = Array(
-    new ClusterConfigProperty(key = "unstable.api.versions.enable", value = "false"),
     new ClusterConfigProperty(key = "group.coordinator.new.enable", value = "false"),
     new ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "1"),
     new ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1")
@@ -81,22 +79,22 @@ class ListGroupsRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBa
 
     for (version <- ApiKeys.LIST_GROUPS.oldestVersion() to ApiKeys.LIST_GROUPS.latestVersion(isUnstableApiEnabled)) {
       // Create grp-1 in old protocol and complete a rebalance. Grp-1 is in STABLE state.
-      val (memberId1InGroup1, _) = joinConsumerGroupWithOldProtocol(groupId = "grp-1")
+      val (memberId1InGroup1, _) = joinDynamicConsumerGroupWithOldProtocol(groupId = "grp-1")
       val response1 = new ListGroupsResponseData.ListedGroup()
         .setGroupId("grp-1")
         .setGroupState(if (version >= 4) GenericGroupState.STABLE.toString else "")
         .setProtocolType("consumer")
 
       // Create grp-2 in old protocol without completing rebalance. Grp-2 is in COMPLETING_REBALANCE state.
-      val (memberId1InGroup2, _) = joinConsumerGroupWithOldProtocol(groupId = "grp-2", completeRebalance = false)
+      val (memberId1InGroup2, _) = joinDynamicConsumerGroupWithOldProtocol(groupId = "grp-2", completeRebalance = false)
       val response2 = new ListGroupsResponseData.ListedGroup()
         .setGroupId("grp-2")
         .setGroupState(if (version >= 4) GenericGroupState.COMPLETING_REBALANCE.toString else "")
         .setProtocolType("consumer")
 
       // Create grp-3 in old protocol and complete a rebalance. Then memeber 1 leaves grp-3. Grp-3 is in EMPTY state.
-      val (memberId1InGroup3, _) = joinConsumerGroupWithOldProtocol(groupId = "grp-3")
-      leaveGroup(groupId = "grp-3", memberId = memberId1InGroup3, useNewProtocol = false)
+      val (memberId1InGroup3, _) = joinDynamicConsumerGroupWithOldProtocol(groupId = "grp-3")
+      leaveGroup(groupId = "grp-3", memberId = memberId1InGroup3, useNewProtocol = false, ApiKeys.LEAVE_GROUP.latestVersion(isUnstableApiEnabled))
       val response3 = new ListGroupsResponseData.ListedGroup()
         .setGroupId("grp-3")
         .setGroupState(if (version >= 4) GenericGroupState.EMPTY.toString else "")
@@ -128,7 +126,7 @@ class ListGroupsRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBa
 
         // Create grp-6 in new protocol. Then member 1 leaves grp-6. Grp-6 is in Empty state.
         memberId1InGroup6 = joinConsumerGroup("grp-6", true)._1
-        leaveGroup(groupId = "grp-6", memberId = memberId1InGroup6, useNewProtocol = true)
+        leaveGroup(groupId = "grp-6", memberId = memberId1InGroup6, useNewProtocol = true, ApiKeys.LEAVE_GROUP.latestVersion(isUnstableApiEnabled))
         response6 = new ListGroupsResponseData.ListedGroup()
           .setGroupId("grp-6")
           .setGroupState(if (version >= 4) ConsumerGroupState.EMPTY.toString else "")
@@ -188,12 +186,12 @@ class ListGroupsRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBa
         )
       }
 
-      leaveGroup(groupId = "grp-1", memberId = memberId1InGroup1, useNewProtocol = false)
-      leaveGroup(groupId = "grp-2", memberId = memberId1InGroup2, useNewProtocol = false)
+      leaveGroup(groupId = "grp-1", memberId = memberId1InGroup1, useNewProtocol = false, ApiKeys.LEAVE_GROUP.latestVersion(isUnstableApiEnabled))
+      leaveGroup(groupId = "grp-2", memberId = memberId1InGroup2, useNewProtocol = false, ApiKeys.LEAVE_GROUP.latestVersion(isUnstableApiEnabled))
       if (useNewProtocol) {
-        leaveGroup(groupId = "grp-4", memberId = memberId1InGroup4, useNewProtocol = true)
-        leaveGroup(groupId = "grp-5", memberId = memberId1InGroup5, useNewProtocol = true)
-        leaveGroup(groupId = "grp-5", memberId = memberId2InGroup5, useNewProtocol = true)
+        leaveGroup(groupId = "grp-4", memberId = memberId1InGroup4, useNewProtocol = true, ApiKeys.LEAVE_GROUP.latestVersion(isUnstableApiEnabled))
+        leaveGroup(groupId = "grp-5", memberId = memberId1InGroup5, useNewProtocol = true, ApiKeys.LEAVE_GROUP.latestVersion(isUnstableApiEnabled))
+        leaveGroup(groupId = "grp-5", memberId = memberId2InGroup5, useNewProtocol = true, ApiKeys.LEAVE_GROUP.latestVersion(isUnstableApiEnabled))
       }
 
       deleteGroups(
