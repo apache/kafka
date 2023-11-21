@@ -19,11 +19,13 @@ package kafka.server
 import kafka.test.ClusterInstance
 import kafka.test.annotation.{ClusterConfigProperty, ClusterTest, ClusterTestDefaults, Type}
 import kafka.test.junit.ClusterTestExtensions
+import kafka.utils.TestUtils
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor
 import org.apache.kafka.clients.consumer.internals.ConsumerProtocol
 import org.apache.kafka.common.message.JoinGroupResponseData.JoinGroupResponseMember
 import org.apache.kafka.common.message.{JoinGroupResponseData, SyncGroupRequestData}
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
+import org.apache.kafka.coordinator.group.generic.GenericGroupState
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.{Tag, Timeout}
 import org.junit.jupiter.api.extension.ExtendWith
@@ -188,20 +190,20 @@ class JoinGroupRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBas
         )
       }
 
+      TestUtils.waitUntilTrue(() => {
+        val described = describeGroups(groupIds = List("grp"))
+        GenericGroupState.PREPARING_REBALANCE.toString == described.head.groupState
+      }, msg = s"The group is not in PREPARING_REBALANCE state.")
+
       // The leader rejoins.
-      val rejoinLeaderFuture1 = Future {
-        // Sleep for a while to make sure the requests are processed according to the sequence.
-        Thread.sleep(1000)
-        sendJoinRequest(
-          groupId = "grp",
-          memberId = leaderMemberId,
-          metadata = metadata,
-          version = version.toShort
-        )
-      }
+      val rejoinLeaderResponseData = sendJoinRequest(
+        groupId = "grp",
+        memberId = leaderMemberId,
+        metadata = metadata,
+        version = version.toShort
+      )
 
       val joinFollowerFutureResponseData = Await.result(joinFollowerFuture, Duration.Inf)
-      val rejoinLeaderFutureResponseData1 = Await.result(rejoinLeaderFuture1, Duration.Inf)
       var followerMemberId = joinFollowerFutureResponseData.memberId
 
       verifyJoinGroupResponseDataEquals(
@@ -229,14 +231,14 @@ class JoinGroupRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBas
               .setGroupInstanceId(if (version >= 5) "group-instance-id" else null)
               .setMetadata(metadata)
           ).asJava),
-        rejoinLeaderFutureResponseData1
+        rejoinLeaderResponseData
       )
 
       // Sync the leader.
       syncGroupWithOldProtocol(
         groupId = "grp",
         memberId = leaderMemberId,
-        generationId = rejoinLeaderFutureResponseData1.generationId,
+        generationId = rejoinLeaderResponseData.generationId,
         assignments = List(
           new SyncGroupRequestData.SyncGroupRequestAssignment()
             .setMemberId(leaderMemberId)
@@ -305,7 +307,7 @@ class JoinGroupRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBas
     version: Int,
   ): String = {
     // The leader rejoins and triggers a rebalance.
-    val rejoinLeaderFuture2 = Future {
+    val rejoinLeaderFuture = Future {
       sendJoinRequest(
         groupId = "grp",
         memberId = leaderMemberId,
@@ -314,35 +316,35 @@ class JoinGroupRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBas
       )
     }
 
+    TestUtils.waitUntilTrue(() => {
+      val described = describeGroups(groupIds = List("grp"))
+      GenericGroupState.PREPARING_REBALANCE.toString == described.head.groupState
+    }, msg = s"The group is not in PREPARING_REBALANCE state.")
+
     // A new follower with duplicated group instance id joins.
-    val joinNewFollowerFuture = Future {
-      // Sleep for a while to make sure the requests are processed according to the sequence.
-      Thread.sleep(1000)
-      sendJoinRequest(
-        groupId = "grp",
-        groupInstanceId = "group-instance-id",
-        metadata = metadata,
-        version = version.toShort
-      )
-    }
+    val joinNewFollowerResponseData = sendJoinRequest(
+      groupId = "grp",
+      groupInstanceId = "group-instance-id",
+      metadata = metadata,
+      version = version.toShort
+    )
+
+    TestUtils.waitUntilTrue(() => {
+      val described = describeGroups(groupIds = List("grp"))
+      GenericGroupState.COMPLETING_REBALANCE.toString == described.head.groupState
+    }, msg = s"The group is not in COMPLETING_REBALANCE state.")
 
     // The old follower rejoin request should be fenced.
-    val rejoinFollowerFuture = Future {
-      // Sleep for a while to make sure the requests are processed according to the sequence.
-      Thread.sleep(2000)
-      sendJoinRequest(
-        groupId = "grp",
-        memberId = followerMemberId,
-        groupInstanceId = "group-instance-id",
-        metadata = metadata,
-        version = version.toShort
-      )
-    }
+    val rejoinFollowerResponseData = sendJoinRequest(
+      groupId = "grp",
+      memberId = followerMemberId,
+      groupInstanceId = "group-instance-id",
+      metadata = metadata,
+      version = version.toShort
+    )
 
-    val rejoinLeaderFutureResponseData2 = Await.result(rejoinLeaderFuture2, Duration.Inf)
-    val joinNewFollowerFutureResponseData = Await.result(joinNewFollowerFuture, Duration.Inf)
-    val rejoinFollowerFutureResponseData = Await.result(rejoinFollowerFuture, Duration.Inf)
-    val newFollowerMemberId = joinNewFollowerFutureResponseData.memberId
+    val rejoinLeaderFutureResponseData = Await.result(rejoinLeaderFuture, Duration.Inf)
+    val newFollowerMemberId = joinNewFollowerResponseData.memberId
 
     verifyJoinGroupResponseDataEquals(
       new JoinGroupResponseData()
@@ -360,7 +362,7 @@ class JoinGroupRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBas
             .setGroupInstanceId("group-instance-id")
             .setMetadata(metadata)
         ).asJava),
-      rejoinLeaderFutureResponseData2
+      rejoinLeaderFutureResponseData
     )
 
     verifyJoinGroupResponseDataEquals(
@@ -370,7 +372,7 @@ class JoinGroupRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBas
         .setProtocolName("consumer-range")
         .setLeader(leaderMemberId)
         .setMemberId(newFollowerMemberId),
-      joinNewFollowerFutureResponseData
+      joinNewFollowerResponseData
     )
 
     verifyJoinGroupResponseDataEquals(
@@ -378,7 +380,7 @@ class JoinGroupRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBas
         .setProtocolName(if (version >= 7) null else "")
         .setMemberId(followerMemberId)
         .setErrorCode(Errors.FENCED_INSTANCE_ID.code),
-      rejoinFollowerFutureResponseData
+      rejoinFollowerResponseData
     )
 
     newFollowerMemberId

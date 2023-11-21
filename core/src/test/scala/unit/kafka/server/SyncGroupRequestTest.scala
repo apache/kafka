@@ -19,10 +19,12 @@ package kafka.server
 import kafka.test.ClusterInstance
 import kafka.test.annotation.{ClusterConfigProperty, ClusterTest, ClusterTestDefaults, Type}
 import kafka.test.junit.ClusterTestExtensions
+import kafka.utils.TestUtils
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor
 import org.apache.kafka.clients.consumer.internals.ConsumerProtocol
 import org.apache.kafka.common.message.SyncGroupRequestData
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
+import org.apache.kafka.coordinator.group.generic.GenericGroupState
 import org.junit.jupiter.api.{Tag, Timeout}
 import org.junit.jupiter.api.extension.ExtendWith
 
@@ -189,26 +191,26 @@ class SyncGroupRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBas
         )
       }
 
+      TestUtils.waitUntilTrue(() => {
+        val described = describeGroups(groupIds = List("grp"))
+        GenericGroupState.PREPARING_REBALANCE.toString == described.head.groupState
+      }, msg = s"The group is not in PREPARING_REBALANCE state.")
+
       // The leader rejoins.
-      val rejoinLeaderFuture1 = Future {
-        // Sleep for a while to make sure the requests are processed according to the sequence.
-        Thread.sleep(1000)
-        sendJoinRequest(
-          groupId = "grp",
-          memberId = leaderMemberId,
-          metadata = metadata
-        )
-      }
+      val rejoinLeaderResponseData = sendJoinRequest(
+        groupId = "grp",
+        memberId = leaderMemberId,
+        metadata = metadata
+      )
 
       val joinFollowerFutureResponseData = Await.result(joinFollowerFuture, Duration.Inf)
-      val rejoinLeaderFutureResponseData1 = Await.result(rejoinLeaderFuture1, Duration.Inf)
       val followerMemberId = joinFollowerFutureResponseData.memberId
 
       // Sync the leader ahead of the follower.
       syncGroupWithOldProtocol(
         groupId = "grp",
         memberId = leaderMemberId,
-        generationId = rejoinLeaderFutureResponseData1.generationId,
+        generationId = rejoinLeaderResponseData.generationId,
         assignments = List(
           new SyncGroupRequestData.SyncGroupRequestAssignment()
             .setMemberId(leaderMemberId)
