@@ -371,7 +371,8 @@ public class GeneralUniformAssignmentBuilder extends AbstractUniformAssignmentBu
      * Balance the current assignment after the initial round of assignments have completed.
      */
     private void balance() {
-        if (!unassignedPartitions.isEmpty()) unassignedPartitionsAssignment();
+        if (!unassignedPartitions.isEmpty())
+            throw new PartitionAssignorException("Some partitions were left unassigned");
         // Refill unassigned partitions with all the topicId partitions.
         unassignedPartitions.addAll(topicIdPartitions(subscribedTopicIds, subscribedTopicDescriber));
 
@@ -394,7 +395,7 @@ public class GeneralUniformAssignmentBuilder extends AbstractUniformAssignmentBu
         }
 
         // If all the partitions are fixed i.e. unassigned partitions is empty there is no point of re-balancing.
-        if (!unassignedPartitions.isEmpty() && !isBalanced()) performReassignments();
+        if (!unassignedPartitions.isEmpty()) performReassignments();
     }
 
     private void performReassignments() {
@@ -734,7 +735,7 @@ public class GeneralUniformAssignmentBuilder extends AbstractUniformAssignmentBu
          * @param memberId       The member Id.
          * @return The current assignment size for the given member.
          */
-        public int targetAssignmentSize(String memberId) {
+        private int targetAssignmentSize(String memberId) {
             MemberAssignmentData memberData = this.membersWithAssignmentSizes.get(memberId);
             if (memberData == null) {
                 LOG.warn("Member Id {} not found", memberId);
@@ -747,7 +748,7 @@ public class GeneralUniformAssignmentBuilder extends AbstractUniformAssignmentBu
          * @param memberId      The member Id.
          * @return The maximum assignment size for the given member.
          */
-        public int maxAssignmentSize(String memberId) {
+        private int maxAssignmentSize(String memberId) {
             MemberAssignmentData memberData = this.membersWithAssignmentSizes.get(memberId);
             if (memberData == null) {
                 LOG.warn("Member Id {} not found", memberId);
@@ -758,9 +759,17 @@ public class GeneralUniformAssignmentBuilder extends AbstractUniformAssignmentBu
 
         /**
          * @param memberId      The member Id.
+         * @return If the given member is at maximum capacity.
+         */
+        private boolean isMemberAtMaxCapacity(String memberId) {
+            return targetAssignmentSize(memberId) >= maxAssignmentSize(memberId);
+        }
+
+        /**
+         * @param memberId      The member Id.
          * Increment the current target assignment size for the member.
          */
-        public void incrementTargetAssignmentSize(String memberId) {
+        private void incrementTargetAssignmentSize(String memberId) {
             MemberAssignmentData memberData = this.membersWithAssignmentSizes.get(memberId);
             if (memberData == null) {
                 LOG.warn("Member Id {} not found", memberId);
@@ -773,7 +782,7 @@ public class GeneralUniformAssignmentBuilder extends AbstractUniformAssignmentBu
          * @param memberId      The member Id.
          * Decrement the current target assignment size for the member, if it's assignment size is greater than zero.
          */
-        public void decrementTargetAssignmentSize(String memberId) {
+        private void decrementTargetAssignmentSize(String memberId) {
             MemberAssignmentData memberData = this.membersWithAssignmentSizes.get(memberId);
             if (memberData == null) {
                 LOG.warn("Member Id {} not found", memberId);
@@ -808,7 +817,7 @@ public class GeneralUniformAssignmentBuilder extends AbstractUniformAssignmentBu
          * @param memberId              The Id of the member.
          * @return true if the partition was assigned, false otherwise.
          */
-        public boolean maybeAssignPartitionToMember(
+        private boolean maybeAssignPartitionToMember(
             TopicIdPartition topicIdPartition,
             String memberId
         ) {
@@ -818,7 +827,7 @@ public class GeneralUniformAssignmentBuilder extends AbstractUniformAssignmentBu
             }
 
             // If the member's current assignment is already at max, return false without assigning.
-            if (assignmentManager.targetAssignmentSize(memberId) >= assignmentManager.maxAssignmentSize(memberId)) {
+            if (isMemberAtMaxCapacity(memberId)) {
                 return false;
             }
 
@@ -847,7 +856,7 @@ public class GeneralUniformAssignmentBuilder extends AbstractUniformAssignmentBu
             assignmentManager.incrementTargetAssignmentSize(memberId);
 
             // Update current assignment size and re-add to queue if needed.
-            if (assignmentManager.targetAssignmentSize(memberId) < assignmentManager.maxAssignmentSize(memberId)) {
+            if (!isMemberAtMaxCapacity(memberId)) {
                 sortedMembersByAssignmentSize.add(memberId);
             }
 
@@ -879,7 +888,7 @@ public class GeneralUniformAssignmentBuilder extends AbstractUniformAssignmentBu
             assignmentManager.decrementTargetAssignmentSize(memberId);
 
             // Update current assignment size and re-add to set if needed.
-            if (assignmentManager.targetAssignmentSize(memberId) < assignmentManager.maxAssignmentSize(memberId)) {
+            if (!isMemberAtMaxCapacity(memberId)) {
                 sortedMembersByAssignmentSize.add(memberId);
             }
         }
@@ -891,7 +900,7 @@ public class GeneralUniformAssignmentBuilder extends AbstractUniformAssignmentBu
          * @param memberIds     Member Ids that need to be sorted.
          * @return A set that maintains the order of members by assignment size.
          */
-        public TreeSet<String> sortMembersByAssignmentSize(Collection<String> memberIds) {
+        private TreeSet<String> sortMembersByAssignmentSize(Collection<String> memberIds) {
             Comparator<String> comparator = Comparator
                 .comparingInt((String memberId) -> membersWithAssignmentSizes.get(memberId).currentAssignmentSize)
                 .thenComparing(memberId -> memberId);
