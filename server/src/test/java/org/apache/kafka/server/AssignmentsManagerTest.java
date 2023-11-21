@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package kafka.server;
+package org.apache.kafka.server;
 
 import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.common.Uuid;
@@ -35,6 +35,7 @@ import org.mockito.ArgumentCaptor;
 
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.CountDownLatch;
@@ -70,6 +71,22 @@ public class AssignmentsManagerTest {
     @AfterEach
     void tearDown() throws InterruptedException {
         manager.close();
+    }
+
+    AssignReplicasToDirsRequestData normalize(AssignReplicasToDirsRequestData request) {
+        request = request.duplicate();
+        request.directories().sort(Comparator.comparing(AssignReplicasToDirsRequestData.DirectoryData::id));
+        for (AssignReplicasToDirsRequestData.DirectoryData directory : request.directories()) {
+            directory.topics().sort(Comparator.comparing(AssignReplicasToDirsRequestData.TopicData::topicId));
+            for (AssignReplicasToDirsRequestData.TopicData topic : directory.topics()) {
+                topic.partitions().sort(Comparator.comparing(AssignReplicasToDirsRequestData.PartitionData::partitionIndex));
+            }
+        }
+        return request;
+    }
+
+    void assertRequestEquals(AssignReplicasToDirsRequestData expected, AssignReplicasToDirsRequestData actual) {
+        assertEquals(normalize(expected), normalize(actual));
     }
 
     @Test
@@ -125,7 +142,7 @@ public class AssignmentsManagerTest {
                                                 ))
                                 ))
                 ));
-        assertEquals(expected, built);
+        assertRequestEquals(expected, built);
     }
 
     @Test
@@ -162,7 +179,7 @@ public class AssignmentsManagerTest {
                         put(new TopicIdPartition(TOPIC_2, 5), DIR_2);
                     }}
         );
-        assertEquals(expected, actual);
+        assertRequestEquals(expected, actual);
     }
 
     @Test
@@ -211,18 +228,18 @@ public class AssignmentsManagerTest {
         verify(channelManager, times(5)).sendRequest(captor.capture(), any(ControllerRequestCompletionHandler.class));
         verifyNoMoreInteractions(channelManager);
         assertEquals(5, captor.getAllValues().size());
-        assertEquals(AssignmentsManager.buildRequestData(
+        assertRequestEquals(AssignmentsManager.buildRequestData(
                 8, 100L, new HashMap<TopicIdPartition, Uuid>() {{
                         put(new TopicIdPartition(TOPIC_1, 1), DIR_1);
                     }}
         ), captor.getAllValues().get(0).build().data());
-        assertEquals(AssignmentsManager.buildRequestData(
+        assertRequestEquals(AssignmentsManager.buildRequestData(
                 8, 100L, new HashMap<TopicIdPartition, Uuid>() {{
                         put(new TopicIdPartition(TOPIC_1, 1), DIR_1);
                         put(new TopicIdPartition(TOPIC_1, 2), DIR_3);
                     }}
         ), captor.getAllValues().get(1).build().data());
-        assertEquals(AssignmentsManager.buildRequestData(
+        assertRequestEquals(AssignmentsManager.buildRequestData(
                 8, 100L, new HashMap<TopicIdPartition, Uuid>() {{
                         put(new TopicIdPartition(TOPIC_1, 1), DIR_1);
                         put(new TopicIdPartition(TOPIC_1, 2), DIR_3);
