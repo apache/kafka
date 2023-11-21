@@ -40,7 +40,7 @@ public class StreamJoinedInternal<K, V1, V2> extends StreamJoined<K, V1, V2> {
         super(streamJoined);
         passedInDslStoreSuppliers = dslStoreSuppliers;
         if (dslStoreSuppliers == null) {
-            final TopologyConfig topologyConfig = builder.internalTopologyBuilder.topologyConfigs();
+            final TopologyConfig topologyConfig = builder.internalTopologyBuilder().topologyConfigs();
             if (topologyConfig != null) {
                 dslStoreSuppliers = topologyConfig.resolveDslStoreSuppliers().orElse(null);
             }
