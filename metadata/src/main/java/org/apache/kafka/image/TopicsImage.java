@@ -23,7 +23,6 @@ import org.apache.kafka.image.writer.ImageWriter;
 import org.apache.kafka.image.writer.ImageWriterOptions;
 import org.apache.kafka.metadata.PartitionRegistration;
 import org.apache.kafka.server.immutable.ImmutableMap;
-import org.apache.kafka.server.immutable.ImmutableNavigableMap;
 import org.apache.kafka.server.util.TranslatedValueMapView;
 
 import java.util.Map;
@@ -35,14 +34,14 @@ import java.util.Objects;
  * This class is thread-safe.
  */
 public final class TopicsImage {
-    public static final TopicsImage EMPTY =  new TopicsImage(ImmutableMap.empty(), ImmutableNavigableMap.empty());
+    public static final TopicsImage EMPTY =  new TopicsImage(ImmutableMap.empty(), ImmutableMap.empty());
 
     private final ImmutableMap<Uuid, TopicImage> topicsById;
-    private final ImmutableNavigableMap<String, TopicImage> topicsByName;
+    private final ImmutableMap<String, TopicImage> topicsByName;
 
     public TopicsImage(
         ImmutableMap<Uuid, TopicImage> topicsById,
-        ImmutableNavigableMap<String, TopicImage> topicsByName
+        ImmutableMap<String, TopicImage> topicsByName
     ) {
         this.topicsById = topicsById;
         this.topicsByName = topicsByName;
@@ -62,7 +61,7 @@ public final class TopicsImage {
         return topicsById;
     }
 
-    public ImmutableNavigableMap<String, TopicImage> topicsByName() {
+    public ImmutableMap<String, TopicImage> topicsByName() {
         return topicsByName;
     }
 

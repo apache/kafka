@@ -84,7 +84,7 @@ import java.util.concurrent.{CompletableFuture, ConcurrentHashMap}
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.{Collections, Optional, OptionalInt}
 import scala.annotation.nowarn
-import scala.collection.mutable.{ArrayBuffer, ListBuffer}
+import scala.collection.mutable.ArrayBuffer
 import scala.collection.{Map, Seq, Set, mutable}
 import scala.jdk.CollectionConverters._
 import scala.util.{Failure, Success, Try}
@@ -1432,34 +1432,33 @@ class KafkaApis(val requestChannel: RequestChannel,
         throw new InvalidRequestException("ZK cluster does not handle DescribeTopicPartitions request")
       case _ =>
     }
-    val kRaftMetadataCache = metadataCache.asInstanceOf[KRaftMetadataCache]
+    val KRaftMetadataCache = metadataCache.asInstanceOf[KRaftMetadataCache]
 
     val describeTopicPartitionsRequest = request.body[DescribeTopicPartitionsRequest].data()
-    val topicSet = mutable.SortedSet[String]()
-    describeTopicPartitionsRequest.topics().forEach(topic => topicSet.add(topic.name()))
-    val topics = ListBuffer[String]().addAll(topicSet)
+    var topics = scala.collection.mutable.Set[String]()
+    describeTopicPartitionsRequest.topics().forEach(topic => topics.add(topic.name()))
 
     val cursor = describeTopicPartitionsRequest.cursor()
     val fetchAllTopics = topics.isEmpty
     if (fetchAllTopics) {
-      kRaftMetadataCache.getAllTopics().foreach(topic => topics.append(topic))
+      metadataCache.getAllTopics().foreach(topic => topics.add(topic))
+      // Includes the cursor topic in case the cursor topic does not exist anymore.
+      if (cursor != null) {
+        topics.add(cursor.topicName())
+      }
     } else if (cursor != null && !topics.contains(cursor.topicName())){
       // The topic in cursor must be included in the topic list if provided.
       throw new InvalidRequestException(s"DescribeTopicPartitionsRequest topic list should contain the cursor topic: ${cursor.topicName()}")
     }
 
     if (cursor != null) {
-      val cursorTopic = cursor.topicName()
       // Drop all the topics are ahead of the cursor topic.
-      topics.filterInPlace(topicName => topicName.compareTo(cursorTopic) >= 0)
-      if (fetchAllTopics && (topics.isEmpty || topics.head != cursorTopic)) {
-        // Add the cursor topic if it does not exist when fetch all topics.
-        topics.prepend(cursorTopic)
-      }
+      topics = topics.filter(topicName => topicName.compareTo(cursor.topicName()) >= 0)
     }
 
-    val (authorizedTopics, unauthorizedForDescribeTopics) = authHelper.partitionSeqByAuthorized(request.context, DESCRIBE, TOPIC,
+    val authorizedForDescribeTopics = authHelper.filterByAuthorized(request.context, DESCRIBE, TOPIC,
       topics)(identity)
+    val (authorizedTopics, unauthorizedForDescribeTopics) = topics.partition(authorizedForDescribeTopics.contains)
 
     // Do not disclose the existence of topics unauthorized for Describe, so we've not even checked if they exist or not
     val unauthorizedForDescribeTopicMetadata = {
@@ -1473,8 +1472,8 @@ class KafkaApis(val requestChannel: RequestChannel,
     }
 
     val firstPartitionId = if (cursor == null) 0 else cursor.partitionIndex()
-    val response = kRaftMetadataCache.getTopicMetadataForDescribeTopicResponse(
-      authorizedTopics,
+    val response = KRaftMetadataCache.getTopicMetadataForDescribeTopicResponse(
+      authorizedTopics.toList.sorted,
       request.context.listenerName,
       firstPartitionId,
       Math.min(config.maxRequestPartitionSizeLimit, describeTopicPartitionsRequest.responsePartitionLimit()))
@@ -1487,7 +1486,7 @@ class KafkaApis(val requestChannel: RequestChannel,
 
     setTopicAuthorizedOperations(response)
 
-    response.topics().addAll(unauthorizedForDescribeTopicMetadata.toList.asJava)
+    response.topics().addAll(unauthorizedForDescribeTopicMetadata.asJava)
 
     trace("Sending topic metadata %s for correlation id %d to client %s".format(response.topics().asScala.mkString(","),
       request.header.correlationId, request.header.clientId))
