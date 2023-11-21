@@ -31,7 +31,10 @@ import org.apache.kafka.streams.kstream.internals.graph.ProcessorParameters;
 import org.apache.kafka.streams.kstream.internals.graph.StreamStreamJoinNode;
 import org.apache.kafka.streams.kstream.internals.graph.WindowedStreamProcessorNode;
 import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.state.KeyValueBytesStoreSupplier;
 import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.internals.InMemoryWindowBytesStoreSupplier;
+import org.apache.kafka.streams.state.internals.RocksDbWindowBytesStoreSupplier;
 import org.apache.kafka.streams.state.internals.TimestampedKeyAndJoinSide;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
@@ -42,6 +45,8 @@ import org.apache.kafka.streams.state.internals.TimestampedKeyAndJoinSideSerde;
 import org.apache.kafka.streams.state.internals.ListValueStoreBuilder;
 import org.apache.kafka.streams.state.internals.LeftOrRightValueSerde;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import java.time.Duration;
 import java.util.Arrays;
 import java.util.HashSet;
@@ -54,6 +59,8 @@ import static org.apache.kafka.streams.internals.ApiUtils.prepareMillisCheckFail
 import static org.apache.kafka.streams.internals.ApiUtils.validateMillisecondDuration;
 
 class KStreamImplJoin {
+
+    private final Logger log = LoggerFactory.getLogger(KStreamImplJoin.class);
 
     private final InternalStreamsBuilder builder;
     private final boolean leftOuter;
@@ -245,13 +252,21 @@ class KStreamImplJoin {
 
     private void assertWindowSettings(final WindowBytesStoreSupplier supplier, final JoinWindows joinWindows) {
         if (!supplier.retainDuplicates()) {
-            throw new StreamsException("The StoreSupplier must set retainDuplicates=true, found retainDuplicates=false");
+            throw new StreamsException(String.format(
+              "The StoreSupplier for join store %s must set retainDuplicates = true, found retainDuplicates = false",
+              supplier.name()));
         }
-        final boolean allMatch = supplier.retentionPeriod() == (joinWindows.size() + joinWindows.gracePeriodMs()) &&
-            supplier.windowSize() == joinWindows.size();
-        if (!allMatch) {
-            throw new StreamsException(String.format("Window settings mismatch. WindowBytesStoreSupplier settings %s must match JoinWindows settings %s" +
-                                                         " for the window size and retention period", supplier, joinWindows));
+        if (supplier.retentionPeriod() != joinWindows.size() + joinWindows.gracePeriodMs()) {
+            throw new StreamsException(String.format(
+              "The StoreSupplier for join store %s must set retentionPeriod = windowSize + gracePeriod,"
+                + " found retentionPeriod = %d, joinWindows.size = %d, joinWindows.gracePeriod = %d",
+              supplier.name(), supplier.retentionPeriod(), joinWindows.size(), joinWindows.gracePeriodMs()));
+        }
+        if (supplier.windowSize() != joinWindows.size()) {
+            throw new StreamsException(String.format(
+              "The StoreSupplier for join store %s must set supplier.windowSize = joinWindows.windowSize,"
+                + " found supplier.windowSize = %d, joinWindows.size = %d",
+              supplier.name(), supplier.windowSize(), joinWindows.size()));
         }
     }
 
@@ -309,8 +324,20 @@ class KStreamImplJoin {
     private <K, V1, V2> StoreBuilder<KeyValueStore<TimestampedKeyAndJoinSide<K>, LeftOrRightValue<V1, V2>>> sharedOuterJoinWindowStoreBuilder(final JoinWindows windows,
                                                                                                                                               final StreamJoinedInternal<K, V1, V2> streamJoinedInternal,
                                                                                                                                               final String joinThisGeneratedName) {
-        final boolean persistent = streamJoinedInternal.thisStoreSupplier() == null || streamJoinedInternal.thisStoreSupplier().get().persistent();
         final String storeName = buildOuterJoinWindowStoreName(streamJoinedInternal, joinThisGeneratedName) + "-store";
+
+        final WindowBytesStoreSupplier thisStoreSupplier = streamJoinedInternal.thisStoreSupplier();
+        final boolean persistent = thisStoreSupplier == null || thisStoreSupplier.get().persistent();
+
+        final KeyValueBytesStoreSupplier kvStoreSupplier =
+            persistent ? Stores.persistentKeyValueStore(storeName) : Stores.inMemoryKeyValueStore(storeName);
+
+        if (thisStoreSupplier != null &&
+          !(thisStoreSupplier instanceof RocksDbWindowBytesStoreSupplier || thisStoreSupplier instanceof InMemoryWindowBytesStoreSupplier)) {
+            log.warn("Note: stream-stream join %s was configured to use a custom window store type, "
+                       + "but an additional key-value store will also be created of the built-in %s type.",
+                     streamJoinedInternal.name(), persistent ? "RocksDBStore" : "InMemoryKeyValueStore");
+        }
 
         // we are using a key-value store with list-values for the shared store, and have the window retention / grace period
         // handled totally on the processor node level, and hence here we are only validating these values but not using them at all
@@ -338,7 +365,7 @@ class KStreamImplJoin {
 
         final StoreBuilder<KeyValueStore<TimestampedKeyAndJoinSide<K>, LeftOrRightValue<V1, V2>>> builder =
             new ListValueStoreBuilder<>(
-                persistent ? Stores.persistentKeyValueStore(storeName) : Stores.inMemoryKeyValueStore(storeName),
+                kvStoreSupplier,
                 timestampedKeyAndJoinSideSerde,
                 leftOrRightValueSerde,
                 Time.SYSTEM
