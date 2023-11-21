@@ -346,8 +346,8 @@ public class ConsumerTestBuilder implements Closeable {
         }
 
         public AsyncKafkaConsumerTestBuilder(Optional<GroupInformation> groupInfo,
-                                        FetchCollector<String, String> fetchCollector,
-                                        ApplicationEventHandler applicationEventHandler) {
+                                             FetchCollector<String, String> fetchCollector,
+                                             ApplicationEventHandler applicationEventHandler) {
             super(groupInfo);
             String clientId = config.getString(CommonClientConfigs.CLIENT_ID_CONFIG);
             List<ConsumerPartitionAssignor> assignors = ConsumerPartitionAssignor.getAssignorInstances(
