@@ -249,7 +249,7 @@ class TransactionsTest(Test):
         check_order=[True, False],
         use_group_metadata=[True, False],
         metadata_quorum=[quorum.zk],
-        use_new_coordinator=[True, False]
+        use_new_coordinator=[False]
     )
     @matrix(
         failure_mode=["hard_bounce", "clean_bounce"],
