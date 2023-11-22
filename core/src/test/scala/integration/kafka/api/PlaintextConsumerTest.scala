@@ -570,10 +570,8 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     val consumer = createConsumer()
     // First call would create the topic
     consumer.partitionsFor("non-exist-topic")
-    var partitions = consumer.partitionsFor("non-exist-topic")
     TestUtils.waitUntilTrue(() => {
-      partitions = consumer.partitionsFor("non-exist-topic")
-      !partitions.isEmpty
+      !consumer.partitionsFor("non-exist-topic").isEmpty
     }, s"Timed out while awaiting non empty partitions.")
   }
 
