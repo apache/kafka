@@ -16,15 +16,16 @@
  */
 package org.apache.kafka.common.requests;
 
-import org.apache.kafka.common.message.ConsumerGroupDescribeRequestData;
 import org.apache.kafka.common.message.ConsumerGroupInstallAssignmentRequestData;
 import org.apache.kafka.common.message.ConsumerGroupInstallAssignmentResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
+import org.apache.kafka.common.protocol.Errors;
 
 import java.nio.ByteBuffer;
 
 public class ConsumerGroupInstallAssignmentRequest extends AbstractRequest {
+
     public static class Builder extends AbstractRequest.Builder<ConsumerGroupInstallAssignmentRequest> {
         private final ConsumerGroupInstallAssignmentRequestData data;
 
@@ -57,8 +58,11 @@ public class ConsumerGroupInstallAssignmentRequest extends AbstractRequest {
 
     @Override
     public ConsumerGroupInstallAssignmentResponse getErrorResponse(int throttleTimeMs, Throwable e) {
-        //Not so sure what to do here
-        return null;
+        return new ConsumerGroupInstallAssignmentResponse(
+                new ConsumerGroupInstallAssignmentResponseData()
+                        .setThrottleTimeMs(throttleTimeMs)
+                        .setErrorCode(Errors.forException(e).code())
+        );
     }
 
     @Override
@@ -72,5 +76,6 @@ public class ConsumerGroupInstallAssignmentRequest extends AbstractRequest {
                 version
         );
     }
+
 }
 
