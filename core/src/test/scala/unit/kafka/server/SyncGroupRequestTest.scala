@@ -67,7 +67,7 @@ class SyncGroupRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBas
       numPartitions = 3
     )
 
-    for (version <- 0 to ApiKeys.SYNC_GROUP.latestVersion(isUnstableApiEnabled)) {
+    for (version <- ApiKeys.SYNC_GROUP.oldestVersion() to ApiKeys.SYNC_GROUP.latestVersion(isUnstableApiEnabled)) {
       // Sync with unknown group id.
       syncGroupWithOldProtocol(
         groupId = "grp-unknown",
@@ -154,28 +154,19 @@ class SyncGroupRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBas
         version = version.toShort
       )
 
-      // Sync the leader with empty protocolType and protocolName.
+      // Sync the leader with empty protocolType and protocolName if version < 5.
       syncGroupWithOldProtocol(
         groupId = "grp",
         memberId = leaderMemberId,
         generationId = 1,
+        protocolType = if (version < 5) null else "consumer",
+        protocolName = if (version < 5) null else "consumer-range",
         assignments = List(new SyncGroupRequestData.SyncGroupRequestAssignment()
           .setMemberId(leaderMemberId)
           .setAssignment(Array[Byte](1))
         ),
-        expectedAssignment = Array[Byte](1),
-        version = version.toShort
-      )
-
-      // Sync the leader with matched protocolType and protocolName.
-      syncGroupWithOldProtocol(
-        groupId = "grp",
-        memberId = leaderMemberId,
-        generationId = 1,
-        assignments = List(new SyncGroupRequestData.SyncGroupRequestAssignment()
-          .setMemberId(leaderMemberId)
-          .setAssignment(Array[Byte](1))
-        ),
+        expectedProtocolType = if (version < 5) null else "consumer",
+        expectedProtocolName = if (version < 5) null else "consumer-range",
         expectedAssignment = Array[Byte](1),
         version = version.toShort
       )
