@@ -24,10 +24,10 @@ import java.util.Map;
  * A snapshot of some timeline data structures.
  * <br>
  * The snapshot contains historical data for several timeline data structures.
- * We use an IdentityHashMap to store this data.  This way, we can easily drop all of
+ * We use an IdentityHashMap to store this data.  This way, we can easily drop all
  * the snapshot data.
  */
-class Snapshot {
+public class Snapshot {
     private final long epoch;
     private IdentityHashMap<Revertable, Delta> map = new IdentityHashMap<>(4);
     private Snapshot prev = this;
@@ -42,7 +42,7 @@ class Snapshot {
     }
 
     @SuppressWarnings("unchecked")
-    <T extends Delta> T getDelta(Revertable owner) {
+    public <T extends Delta> T getDelta(Revertable owner) {
         return (T) map.get(owner);
     }
 
@@ -73,11 +73,11 @@ class Snapshot {
         source.erase();
     }
 
-    Snapshot prev() {
+    public Snapshot prev() {
         return prev;
     }
 
-    Snapshot next() {
+    public Snapshot next() {
         return next;
     }
 

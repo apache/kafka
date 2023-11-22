@@ -21,7 +21,7 @@ package org.apache.kafka.timeline;
  * An API which all snapshot data structures implement, indicating that their contents
  * can be reverted to a point in time.
  */
-interface Revertable {
+public interface Revertable {
     /**
      * Revert to the target epoch.
      *
