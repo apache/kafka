@@ -82,7 +82,7 @@ class ConsumerGroupCommandTest(Test):
 
         if group:
             wait_until(lambda: re.search("topic-consumer-group-command",self.kafka.describe_consumer_group(group=group, node=kafka_node, command_config=command_config_file)), timeout_sec=10,
-                       err_msg="Timed out waiting to list expected consumer groups.")
+                       err_msg="Timed out waiting to describe expected consumer groups.")
         else:
             wait_until(lambda: "test-consumer-group" in self.kafka.list_consumer_groups(node=kafka_node, command_config=command_config_file), timeout_sec=10,
                        err_msg="Timed out waiting to list expected consumer groups.")
@@ -90,8 +90,17 @@ class ConsumerGroupCommandTest(Test):
         self.consumer.stop()
 
     @cluster(num_nodes=3)
-    @matrix(security_protocol=['PLAINTEXT', 'SSL'], metadata_quorum=quorum.all_non_upgrade)
-    def test_list_consumer_groups(self, security_protocol='PLAINTEXT', metadata_quorum=quorum.zk):
+    @matrix(
+        security_protocol=['PLAINTEXT', 'SSL'],
+        metadata_quorum=[quorum.zk],
+        use_new_coordinator=[False]
+    )
+    @matrix(
+        security_protocol=['PLAINTEXT', 'SSL'],
+        metadata_quorum=[quorum.isolated_kraft],
+        use_new_coordinator=[True, False]
+    )
+    def test_list_consumer_groups(self, security_protocol='PLAINTEXT', metadata_quorum=quorum.zk, use_new_coordinator=False):
         """
         Tests if ConsumerGroupCommand is listing correct consumer groups
         :return: None
@@ -99,8 +108,17 @@ class ConsumerGroupCommandTest(Test):
         self.setup_and_verify(security_protocol)
 
     @cluster(num_nodes=3)
-    @matrix(security_protocol=['PLAINTEXT', 'SSL'], metadata_quorum=quorum.all_non_upgrade)
-    def test_describe_consumer_group(self, security_protocol='PLAINTEXT', metadata_quorum=quorum.zk):
+    @matrix(
+        security_protocol=['PLAINTEXT', 'SSL'],
+        metadata_quorum=[quorum.zk],
+        use_new_coordinator=[False]
+    )
+    @matrix(
+        security_protocol=['PLAINTEXT', 'SSL'],
+        metadata_quorum=[quorum.isolated_kraft],
+        use_new_coordinator=[True, False]
+    )
+    def test_describe_consumer_group(self, security_protocol='PLAINTEXT', metadata_quorum=quorum.zk, use_new_coordinator=False):
         """
         Tests if ConsumerGroupCommand is describing a consumer group correctly
         :return: None

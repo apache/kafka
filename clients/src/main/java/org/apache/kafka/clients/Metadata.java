@@ -729,6 +729,13 @@ public class Metadata implements Closeable {
         return null;
     }
 
+    /**
+     * @return Mapping from topic IDs to topic names for all topics in the cache.
+     */
+    public synchronized Map<Uuid, String> topicNames() {
+        return cache.topicNames();
+    }
+
     protected boolean retainTopic(String topic, boolean isInternal, long nowMs) {
         return true;
     }

@@ -25,6 +25,7 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.coordinator.group.metrics.CoordinatorRuntimeMetrics;
+import org.apache.kafka.coordinator.group.metrics.CoordinatorMetrics;
 import org.apache.kafka.deferred.DeferredEvent;
 import org.apache.kafka.deferred.DeferredEventQueue;
 import org.apache.kafka.image.MetadataDelta;
@@ -91,6 +92,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
         private Time time = Time.SYSTEM;
         private Timer timer;
         private CoordinatorRuntimeMetrics runtimeMetrics;
+        private CoordinatorMetrics coordinatorMetrics;
 
         public Builder<S, U> withLogPrefix(String logPrefix) {
             this.logPrefix = logPrefix;
@@ -137,6 +139,11 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
             return this;
         }
 
+        public Builder<S, U> withCoordinatorMetrics(CoordinatorMetrics coordinatorMetrics) {
+            this.coordinatorMetrics = coordinatorMetrics;
+            return this;
+        }
+
         public CoordinatorRuntime<S, U> build() {
             if (logPrefix == null)
                 logPrefix = "";
@@ -156,6 +163,8 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
                 throw new IllegalArgumentException("Timer must be set.");
             if (runtimeMetrics == null)
                 throw new IllegalArgumentException("CoordinatorRuntimeMetrics must be set.");
+            if (coordinatorMetrics == null)
+                throw new IllegalArgumentException("CoordinatorMetrics must be set.");
 
             return new CoordinatorRuntime<>(
                 logPrefix,
@@ -166,7 +175,8 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
                 coordinatorShardBuilderSupplier,
                 time,
                 timer,
-                runtimeMetrics
+                runtimeMetrics,
+                coordinatorMetrics
             );
         }
     }
@@ -497,6 +507,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
             lastCommittedOffset = offset;
             deferredEventQueue.completeUpTo(offset);
             snapshotRegistry.deleteSnapshotsUpTo(offset);
+            coordinatorMetrics.onUpdateLastCommittedOffset(tp, offset);
         }
 
         /**
@@ -510,8 +521,8 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
             if (!newState.canTransitionFrom(state)) {
                 throw new IllegalStateException("Cannot transition from " + state + " to " + newState);
             }
-
             CoordinatorState oldState = state;
+
             log.debug("Transition from {} to {}.", state, newState);
             switch (newState) {
                 case LOADING:
@@ -525,6 +536,8 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
                         .withSnapshotRegistry(snapshotRegistry)
                         .withTime(time)
                         .withTimer(timer)
+                        .withCoordinatorMetrics(coordinatorMetrics)
+                        .withTopicPartition(tp)
                         .build();
                     break;
 
@@ -1047,6 +1060,11 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
     private final CoordinatorRuntimeMetrics runtimeMetrics;
 
     /**
+     * The coordinator metrics.
+     */
+    private final CoordinatorMetrics coordinatorMetrics;
+
+    /**
      * Atomic boolean indicating whether the runtime is running.
      */
     private final AtomicBoolean isRunning = new AtomicBoolean(true);
@@ -1077,7 +1095,8 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
         CoordinatorShardBuilderSupplier<S, U> coordinatorShardBuilderSupplier,
         Time time,
         Timer timer,
-        CoordinatorRuntimeMetrics runtimeMetrics
+        CoordinatorRuntimeMetrics runtimeMetrics,
+        CoordinatorMetrics coordinatorMetrics
     ) {
         this.logPrefix = logPrefix;
         this.logContext = logContext;
@@ -1091,6 +1110,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
         this.loader = loader;
         this.coordinatorShardBuilderSupplier = coordinatorShardBuilderSupplier;
         this.runtimeMetrics = runtimeMetrics;
+        this.coordinatorMetrics = coordinatorMetrics;
     }
 
     /**
