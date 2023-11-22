@@ -1147,6 +1147,21 @@ object TestUtils extends Logging {
   }
 
   /**
+   * Wait until the values are match, or throw an error if cannot
+   *
+   * @param expected   the function for getting expected value
+   * @param actual     the function for getting actual value
+   * @param waitTimeMs the wait time in milliseconds
+   * @param pause      the pause time between each try
+   */
+  def waitUntilAssertEquals[T](expected: T, actual: () => T,
+                            waitTimeMs: Long = JTestUtils.DEFAULT_MAX_WAIT_MS, pause: Long = 100L): Unit = {
+    tryUntilNoAssertionError() {
+      assertEquals(expected, actual())
+    }
+  }
+
+  /**
     * Invoke `compute` until `predicate` is true or `waitTime` elapses.
     *
     * Return the last `compute` result and a boolean indicating whether `predicate` succeeded for that value.

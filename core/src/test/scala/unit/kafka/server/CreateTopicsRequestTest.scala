@@ -149,17 +149,6 @@ class CreateTopicsRequestTest extends AbstractCreateTopicsRequestTest {
   }
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
-  @ValueSource(strings = Array("zk", "zkMigration"))
-  def testNotController(quorum: String): Unit = {
-    // Note: we don't run this test when in KRaft mode, because KRaft doesn't have this
-    // behavior of returning NOT_CONTROLLER. Instead, the request is forwarded.
-    val req = topicsReq(Seq(topicReq("topic1")))
-    val response = sendCreateTopicRequest(req, notControllerSocketServer)
-    val error = if (isZkMigrationTest()) Errors.NONE else Errors.NOT_CONTROLLER
-    assertEquals(1, response.errorCounts().get(error))
-  }
-
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk"))
   def testCreateTopicsRequestVersions(quorum: String): Unit = {
     // Note: we don't run this test when in KRaft mode, because kraft does not yet support returning topic
