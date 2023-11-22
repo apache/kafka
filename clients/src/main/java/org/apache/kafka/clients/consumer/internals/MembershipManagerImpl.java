@@ -605,6 +605,12 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
      * reconciliation loop.
      */
     boolean reconcile() {
+        if (reconciliationInProgress) {
+            log.info("Ignoring reconciliation attempt. Another reconciliation is already in progress. Assignment {}" +
+                " will be handled in the next reconciliation loop.", assignmentReadyToReconcile);
+            return false;
+        }
+
         // Make copy of the assignment to reconcile as it could change as new assignments or metadata updates are received
         SortedSet<TopicIdPartition> assignedTopicIdPartitions = new TreeSet<>(TOPIC_ID_PARTITION_COMPARATOR);
         assignedTopicIdPartitions.addAll(assignmentReadyToReconcile);
@@ -621,15 +627,11 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
         // supported in the centralized subscription state object.
         boolean sameAssignmentReceived = assignedTopicPartition.equals(ownedPartitions);
 
-        if (reconciliationInProgress || sameAssignmentReceived) {
-            String reason;
-            if (reconciliationInProgress) {
-                reason = "Another reconciliation is already in progress. Assignment " +
-                        assignmentReadyToReconcile + " will be handled in the next reconciliation loop.";
-            } else {
-                reason = "Target assignment ready to reconcile is equals to the member current assignment.";
-            }
-            log.debug("Ignoring reconciliation attempt. " + reason);
+        if (sameAssignmentReceived) {
+            log.info("Ignoring reconciliation attempt. Target assignment ready to reconcile {} is equals to the member current assignment {}.",
+                assignedTopicPartition, ownedPartitions);
+            transitionTo(MemberState.ACKNOWLEDGING);
+            transitionTo(MemberState.STABLE);
             return false;
         }
 
@@ -783,6 +785,8 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
      * </ol>
      */
     private void resolveMetadataForUnresolvedAssignment() {
+        assignmentReadyToReconcile.clear();
+
         // Try to resolve topic names from metadata cache or subscription cache, and move
         // assignments from the "unresolved" collection, to the "readyToReconcile" one.
         Iterator<Map.Entry<Uuid, List<Integer>>> it = assignmentUnresolved.entrySet().iterator();
