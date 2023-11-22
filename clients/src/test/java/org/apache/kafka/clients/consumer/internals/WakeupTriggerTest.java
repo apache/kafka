@@ -26,15 +26,15 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 
-//import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
-//import static org.junit.jupiter.api.Assertions.assertEquals;
-//import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNull;
-//import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
-//import static org.mockito.Mockito.mock;
-//import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 
 @MockitoSettings(strictness = Strictness.STRICT_STUBS)
 public class WakeupTriggerTest {
@@ -72,60 +72,66 @@ public class WakeupTriggerTest {
         assertNull(wakeupTrigger.getPendingTask());
     }
 
-//    @Test
-//    public void testSettingFetchAction() {
-//        final FetchBuffer fetchBuffer = mock(FetchBuffer.class);
-//        wakeupTrigger.setFetchAction(fetchBuffer);
-//
-//        final WakeupTrigger.Wakeupable wakeupable = wakeupTrigger.getPendingTask();
-//        assertInstanceOf(WakeupTrigger.FetchAction.class, wakeupable);
-//        assertEquals(fetchBuffer, ((WakeupTrigger.FetchAction) wakeupable).fetchBuffer());
-//    }
-//
-//    @Test
-//    public void testUnsetFetchAction() {
-//        wakeupTrigger.setFetchAction(mock(FetchBuffer.class));
-//
-//        wakeupTrigger.clearTask();
-//
-//        assertNull(wakeupTrigger.getPendingTask());
-//    }
-//
-//    @Test
-//    public void testWakeupFromFetchAction() {
-//        final FetchBuffer fetchBuffer = mock(FetchBuffer.class);
-//        wakeupTrigger.setFetchAction(fetchBuffer);
-//
-//        wakeupTrigger.wakeup();
-//
-//        verify(fetchBuffer).wakeup();
-//        final WakeupTrigger.Wakeupable wakeupable = wakeupTrigger.getPendingTask();
-//        assertInstanceOf(WakeupTrigger.WakeupFuture.class, wakeupable);
-//    }
-//
-//    @Test
-//    public void testManualTriggerWhenWakeupCalled() {
-//        wakeupTrigger.wakeup();
-//        assertThrows(WakeupException.class, () -> wakeupTrigger.maybeTriggerWakeup());
-//    }
-//
-//    @Test
-//    public void testManualTriggerWhenWakeupNotCalled() {
-//        assertDoesNotThrow(() -> wakeupTrigger.maybeTriggerWakeup());
-//    }
-//
-//    @Test
-//    public void testManualTriggerWhenWakeupCalledAndActiveTaskSet() {
-//        final CompletableFuture<Void> future = new CompletableFuture<>();
-//        wakeupTrigger.setActiveTask(future);
-//        assertDoesNotThrow(() -> wakeupTrigger.maybeTriggerWakeup());
-//    }
-//
-//    @Test
-//    public void testManualTriggerWhenWakeupCalledAndFetchActionSet() {
-//        wakeupTrigger.setFetchAction(mock(FetchBuffer.class));
-//        assertDoesNotThrow(() -> wakeupTrigger.maybeTriggerWakeup());
-//    }
+    @Test
+    public void testSettingFetchAction() {
+        try (final FetchBuffer fetchBuffer = mock(FetchBuffer.class)) {
+            wakeupTrigger.setFetchAction(fetchBuffer);
+
+            final WakeupTrigger.Wakeupable wakeupable = wakeupTrigger.getPendingTask();
+            assertInstanceOf(WakeupTrigger.FetchAction.class, wakeupable);
+            assertEquals(fetchBuffer, ((WakeupTrigger.FetchAction) wakeupable).fetchBuffer());
+        }
+    }
+
+    @Test
+    public void testUnsetFetchAction() {
+        try (final FetchBuffer fetchBuffer = mock(FetchBuffer.class)) {
+            wakeupTrigger.setFetchAction(fetchBuffer);
+
+            wakeupTrigger.clearTask();
+
+            assertNull(wakeupTrigger.getPendingTask());
+        }
+    }
+
+    @Test
+    public void testWakeupFromFetchAction() {
+        try (final FetchBuffer fetchBuffer = mock(FetchBuffer.class)) {
+            wakeupTrigger.setFetchAction(fetchBuffer);
+
+            wakeupTrigger.wakeup();
+
+            verify(fetchBuffer).wakeup();
+            final WakeupTrigger.Wakeupable wakeupable = wakeupTrigger.getPendingTask();
+            assertInstanceOf(WakeupTrigger.WakeupFuture.class, wakeupable);
+        }
+    }
+
+    @Test
+    public void testManualTriggerWhenWakeupCalled() {
+        wakeupTrigger.wakeup();
+        assertThrows(WakeupException.class, () -> wakeupTrigger.maybeTriggerWakeup());
+    }
+
+    @Test
+    public void testManualTriggerWhenWakeupNotCalled() {
+        assertDoesNotThrow(() -> wakeupTrigger.maybeTriggerWakeup());
+    }
+
+    @Test
+    public void testManualTriggerWhenWakeupCalledAndActiveTaskSet() {
+        final CompletableFuture<Void> future = new CompletableFuture<>();
+        wakeupTrigger.setActiveTask(future);
+        assertDoesNotThrow(() -> wakeupTrigger.maybeTriggerWakeup());
+    }
+
+    @Test
+    public void testManualTriggerWhenWakeupCalledAndFetchActionSet() {
+        try (final FetchBuffer fetchBuffer = mock(FetchBuffer.class)) {
+            wakeupTrigger.setFetchAction(fetchBuffer);
+            assertDoesNotThrow(() -> wakeupTrigger.maybeTriggerWakeup());
+        }
+    }
 
     private void assertWakeupExceptionIsThrown(final CompletableFuture<?> future) {
         assertTrue(future.isCompletedExceptionally());

@@ -234,13 +234,15 @@ public class AsyncKafkaConsumerTest {
 
     @Test
     public void testWakeupBeforeCallingPoll() {
-        ApplicationEventHandler applicationEventHandler = mock(ApplicationEventHandler.class);
-        try (final ConsumerTestBuilder.AsyncKafkaConsumerTestBuilder testBuilder =
-                 new ConsumerTestBuilder.AsyncKafkaConsumerTestBuilder(
-                     ConsumerTestBuilder.createDefaultGroupInformation(),
-                     fetchCollector,
-                     applicationEventHandler
-                 )) {
+        try (
+            final ApplicationEventHandler applicationEventHandler = mock(ApplicationEventHandler.class);
+            final ConsumerTestBuilder.AsyncKafkaConsumerTestBuilder testBuilder =
+                new ConsumerTestBuilder.AsyncKafkaConsumerTestBuilder(
+                    ConsumerTestBuilder.createDefaultGroupInformation(),
+                    fetchCollector,
+                    applicationEventHandler
+                )
+        ) {
             final AsyncKafkaConsumer<String, String> consumer = testBuilder.consumer;
             final String topicName = "foo";
             final int partition = 3;
@@ -261,13 +263,15 @@ public class AsyncKafkaConsumerTest {
 
     @Test
     public void testWakeupAfterEmptyFetch() {
-        ApplicationEventHandler applicationEventHandler = mock(ApplicationEventHandler.class);
-        try (final ConsumerTestBuilder.AsyncKafkaConsumerTestBuilder testBuilder =
-            new ConsumerTestBuilder.AsyncKafkaConsumerTestBuilder(
-                ConsumerTestBuilder.createDefaultGroupInformation(),
-                fetchCollector,
-                applicationEventHandler
-            )) {
+        try (
+            final ApplicationEventHandler applicationEventHandler = mock(ApplicationEventHandler.class);
+            final ConsumerTestBuilder.AsyncKafkaConsumerTestBuilder testBuilder =
+                new ConsumerTestBuilder.AsyncKafkaConsumerTestBuilder(
+                    ConsumerTestBuilder.createDefaultGroupInformation(),
+                    fetchCollector,
+                    applicationEventHandler
+                )
+        ) {
             final AsyncKafkaConsumer<String, String> consumer = testBuilder.consumer;
             final String topicName = "foo";
             final int partition = 3;
@@ -290,13 +294,15 @@ public class AsyncKafkaConsumerTest {
 
     @Test
     public void testWakeupAfterNonEmptyFetch() {
-        ApplicationEventHandler applicationEventHandler = mock(ApplicationEventHandler.class);
-        try (final ConsumerTestBuilder.AsyncKafkaConsumerTestBuilder testBuilder =
-            new ConsumerTestBuilder.AsyncKafkaConsumerTestBuilder(
-                ConsumerTestBuilder.createDefaultGroupInformation(),
-                fetchCollector,
-                applicationEventHandler
-            )) {
+        try (
+            final ApplicationEventHandler applicationEventHandler = mock(ApplicationEventHandler.class);
+            final ConsumerTestBuilder.AsyncKafkaConsumerTestBuilder testBuilder =
+                new ConsumerTestBuilder.AsyncKafkaConsumerTestBuilder(
+                    ConsumerTestBuilder.createDefaultGroupInformation(),
+                    fetchCollector,
+                    applicationEventHandler
+                )
+        ) {
             final AsyncKafkaConsumer<String, String> consumer = testBuilder.consumer;
             final String topicName = "foo";
             final int partition = 3;
@@ -324,13 +330,15 @@ public class AsyncKafkaConsumerTest {
 
     @Test
     public void testClearWakeupTriggerAfterPoll() {
-        ApplicationEventHandler applicationEventHandler = mock(ApplicationEventHandler.class);
-        try (final ConsumerTestBuilder.AsyncKafkaConsumerTestBuilder testBuilder =
-                 new ConsumerTestBuilder.AsyncKafkaConsumerTestBuilder(
-                     ConsumerTestBuilder.createDefaultGroupInformation(),
-                     fetchCollector,
-                     applicationEventHandler
-                 )) {
+        try (
+            final ApplicationEventHandler applicationEventHandler = mock(ApplicationEventHandler.class);
+            final ConsumerTestBuilder.AsyncKafkaConsumerTestBuilder testBuilder =
+                new ConsumerTestBuilder.AsyncKafkaConsumerTestBuilder(
+                    ConsumerTestBuilder.createDefaultGroupInformation(),
+                    fetchCollector,
+                    applicationEventHandler
+                )
+        ) {
             final AsyncKafkaConsumer<String, String> consumer = testBuilder.consumer;
             final String topicName = "foo";
             final int partition = 3;
