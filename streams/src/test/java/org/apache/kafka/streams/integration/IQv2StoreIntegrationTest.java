@@ -1700,9 +1700,6 @@ public class IQv2StoreIntegrationTest {
         final StateQueryResult<ValueAndTimestamp<V>> result =
                 IntegrationTestUtils.iqv2WaitForResult(kafkaStreams, request);
         final QueryResult<ValueAndTimestamp<V>> queryResult = result.getOnlyPartitionResult();
-        if (queryResult == null) {
-            throw new AssertionError("cannot use this query type to query result");
-        }
         final boolean failure = queryResult.isFailure();
         if (failure) {
             throw new AssertionError(queryResult.toString());

@@ -21,6 +21,7 @@ import org.apache.kafka.common.annotation.InterfaceStability.Evolving;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.stream.Collectors;
 
 /**
@@ -78,6 +79,12 @@ public class StateQueryResult<R> {
                 "The query did not return exactly one partition result: " + partitionResults
             );
         } else {
+            if (nonempty.isEmpty() && partitionResults.size() != 0 && partitionResults.get(0).isFailure()) {
+                FailureReason failureReason = partitionResults.get(0).getFailureReason();
+                if (failureReason.equals(FailureReason.UNKNOWN_QUERY_TYPE)) {
+                    return QueryResult.forFailure(FailureReason.UNKNOWN_QUERY_TYPE, "unknown query type");
+                }
+            }
             return nonempty.isEmpty() ? null : nonempty.get(0);
         }
     }
