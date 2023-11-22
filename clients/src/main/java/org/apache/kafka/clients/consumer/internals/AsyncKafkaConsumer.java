@@ -490,6 +490,9 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         maybeThrowFencedInstanceException();
         maybeThrowInvalidGroupIdException();
 
+        log.debug("Committing offsets: {}", offsets);
+        offsets.forEach(this::updateLastSeenEpochIfNewer);
+
         if (offsets.isEmpty()) {
             return CompletableFuture.completedFuture(null);
         }
@@ -634,7 +637,10 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             final OffsetFetchApplicationEvent event = new OffsetFetchApplicationEvent(partitions);
             wakeupTrigger.setActiveTask(event.future());
             try {
-                return applicationEventHandler.addAndGet(event, time.timer(timeout));
+                final Map<TopicPartition, OffsetAndMetadata> committedOffsets = applicationEventHandler.addAndGet(event,
+                    time.timer(timeout));
+                committedOffsets.forEach(this::updateLastSeenEpochIfNewer);
+                return committedOffsets;
             } finally {
                 wakeupTrigger.clearActiveTask();
             }
@@ -919,7 +925,6 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         long commitStart = time.nanoseconds();
         try {
             CompletableFuture<Void> commitFuture = commit(offsets, true);
-            offsets.forEach(this::updateLastSeenEpochIfNewer);
             ConsumerUtils.getResult(commitFuture, time.timer(timeout));
         } finally {
             wakeupTrigger.clearActiveTask();
