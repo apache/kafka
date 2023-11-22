@@ -1443,13 +1443,11 @@ public class RemoteLogManager implements Closeable {
                     int requestedEpoch = entry.getKey();
                     long endOffset = entry.getValue();
                     long highestRemoteOffset = highestRemoteOffsetOpt.get();
-                    // It is implicit that the (epoch == requestedEpoch) since we are traversing the leader-epoch-cache
-                    // in descending order.
                     if (endOffset <= highestRemoteOffset) {
-                        LOGGER.warn("The end-offset for epoch {}: ({}, {}) is less than or equal to the " +
+                        LOGGER.info("The end-offset for epoch {}: ({}, {}) is less than or equal to the " +
                                 "highest-remote-offset: {} for partition: {}", epoch, requestedEpoch, endOffset,
                                 highestRemoteOffset, topicIdPartition);
-                        offsetAndEpoch = new OffsetAndEpoch(endOffset - 1, epoch);
+                        offsetAndEpoch = new OffsetAndEpoch(endOffset - 1, requestedEpoch);
                     } else {
                         offsetAndEpoch = new OffsetAndEpoch(highestRemoteOffset, epoch);
                     }
