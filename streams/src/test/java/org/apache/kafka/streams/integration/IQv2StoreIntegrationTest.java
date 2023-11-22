@@ -787,31 +787,22 @@ public class IQv2StoreIntegrationTest {
                         shouldHandleKeyQuery(2,  5);
                         shouldHandleTimestampedKeyQuery(2, ValueAndTimestamp.makeAllowNullable(5, WINDOW_START + Duration.ofMinutes(2).toMillis() * 5));
                         shouldHandleRangeQueries();
-                        shouldHandleTimestampedRangeQueries();
+                        shouldHandleTimestampedRangeQueries(true);
                     } else {
                         shouldHandleKeyQuery(2, 5);
                         shouldHandleRangeQueries();
 
                         if (kind.equals("DSL")) {
-                             shouldHandleTimestampedRangeQueries();
-//                            shouldHandleRangeQueries();
+                            shouldHandleTimestampedRangeQueries(false);
+                            shouldHandleRangeQueries();
                             if (cache) {
                                 shouldHandleTimestampedKeyQuery(2, ValueAndTimestamp.make(5, WINDOW_START + Duration.ofMinutes(2).toMillis() * 5));
                             } else {
                                 shouldHandleTimestampedKeyQuery(2, ValueAndTimestamp.make(5, -1L));
                             }
-//                            shouldHandleTimestampedRangeQuery(
-//                                    Optional.of(0),
-//                                    Optional.of(4),
-//                                    true,
-//                                    Arrays.asList(ValueAndTimestamp.make(1, -1L),
-//                                            ValueAndTimestamp.make(5, -1L),
-//                                            ValueAndTimestamp.make(9, -1L),
-//                                            ValueAndTimestamp.make(3, -1L),
-//                                            ValueAndTimestamp.make(7, -1L)));
                         } else {
                             assertThrows(AssertionError.class, () -> shouldHandleTimestampedKeyQuery(2, ValueAndTimestamp.make(5, WINDOW_START + Duration.ofMinutes(2).toMillis() * 5)));
-                            assertThrows(AssertionError.class, this::shouldHandleTimestampedRangeQueries);
+                            assertThrows(AssertionError.class, () -> shouldHandleTimestampedRangeQueries(false));
                         }
 
                     }
@@ -929,95 +920,95 @@ public class IQv2StoreIntegrationTest {
         );
     }
 
-    private <T> void shouldHandleTimestampedRangeQueries() {
+    private <T> void shouldHandleTimestampedRangeQueries(final boolean isTimestamped) {
         shouldHandleTimestampedRangeQuery(
             Optional.of(0),
             Optional.of(4),
             true,
-            Arrays.asList(ValueAndTimestamp.make(1, WINDOW_START + Duration.ofMinutes(2).toMillis()),
-                          ValueAndTimestamp.make(5, WINDOW_START + Duration.ofMinutes(2).toMillis() * 5),
-                          ValueAndTimestamp.make(9, WINDOW_START + Duration.ofMinutes(2).toMillis() * 9),
-                          ValueAndTimestamp.make(3, WINDOW_START + Duration.ofMinutes(2).toMillis() * 3),
-                          ValueAndTimestamp.make(7, WINDOW_START + Duration.ofMinutes(2).toMillis() * 7)));
+            Arrays.asList(ValueAndTimestamp.make(1, isTimestamped ? WINDOW_START + Duration.ofMinutes(2).toMillis() : -1L),
+                          ValueAndTimestamp.make(5, isTimestamped ? WINDOW_START + Duration.ofMinutes(2).toMillis() * 5 : -1L),
+                          ValueAndTimestamp.make(9, isTimestamped ? WINDOW_START + Duration.ofMinutes(2).toMillis() * 9 : -1L),
+                          ValueAndTimestamp.make(3, isTimestamped ? WINDOW_START + Duration.ofMinutes(2).toMillis() * 3 : -1L),
+                          ValueAndTimestamp.make(7, isTimestamped ? WINDOW_START + Duration.ofMinutes(2).toMillis() * 7 : -1L)));
 
         shouldHandleTimestampedRangeQuery(
             Optional.of(1),
             Optional.of(3),
             true,
-            Arrays.asList(ValueAndTimestamp.make(5, WINDOW_START + Duration.ofMinutes(2).toMillis() * 5),
-                          ValueAndTimestamp.make(3, WINDOW_START + Duration.ofMinutes(2).toMillis() * 3),
-                          ValueAndTimestamp.make(7, WINDOW_START + Duration.ofMinutes(2).toMillis() * 7)));
+            Arrays.asList(ValueAndTimestamp.make(5, isTimestamped ? WINDOW_START + Duration.ofMinutes(2).toMillis() * 5 : -1L),
+                          ValueAndTimestamp.make(3, isTimestamped ? WINDOW_START + Duration.ofMinutes(2).toMillis() * 3 : -1L),
+                          ValueAndTimestamp.make(7, isTimestamped ? WINDOW_START + Duration.ofMinutes(2).toMillis() * 7 : -1L)));
 
         shouldHandleTimestampedRangeQuery(
             Optional.of(3),
             Optional.empty(),
             true,
-            Arrays.asList(ValueAndTimestamp.make(9, WINDOW_START + Duration.ofMinutes(2).toMillis() * 9),
-                          ValueAndTimestamp.make(7, WINDOW_START + Duration.ofMinutes(2).toMillis() * 7))
+            Arrays.asList(ValueAndTimestamp.make(9, isTimestamped ? WINDOW_START + Duration.ofMinutes(2).toMillis() * 9 : -1L),
+                          ValueAndTimestamp.make(7, isTimestamped ? WINDOW_START + Duration.ofMinutes(2).toMillis() * 7 : -1L))
         );
 
         shouldHandleTimestampedRangeQuery(
             Optional.empty(),
             Optional.of(3),
             true,
-            Arrays.asList(ValueAndTimestamp.make(1, WINDOW_START + Duration.ofMinutes(2).toMillis()),
-                          ValueAndTimestamp.make(5, WINDOW_START + Duration.ofMinutes(2).toMillis() * 5),
-                          ValueAndTimestamp.make(3, WINDOW_START + Duration.ofMinutes(2).toMillis() * 3),
-                          ValueAndTimestamp.make(7, WINDOW_START + Duration.ofMinutes(2).toMillis() * 7)));
+            Arrays.asList(ValueAndTimestamp.make(1, isTimestamped ? WINDOW_START + Duration.ofMinutes(2).toMillis() : -1L),
+                          ValueAndTimestamp.make(5, isTimestamped ? WINDOW_START + Duration.ofMinutes(2).toMillis() * 5 : -1L),
+                          ValueAndTimestamp.make(3, isTimestamped ? WINDOW_START + Duration.ofMinutes(2).toMillis() * 3 : -1L),
+                          ValueAndTimestamp.make(7, isTimestamped ? WINDOW_START + Duration.ofMinutes(2).toMillis() * 7 : -1L)));
 
         shouldHandleTimestampedRangeQuery(
             Optional.empty(),
             Optional.empty(),
             true,
-            Arrays.asList(ValueAndTimestamp.make(1, WINDOW_START + Duration.ofMinutes(2).toMillis()),
-                          ValueAndTimestamp.make(5, WINDOW_START + Duration.ofMinutes(2).toMillis() * 5),
-                          ValueAndTimestamp.make(9, WINDOW_START + Duration.ofMinutes(2).toMillis() * 9),
-                          ValueAndTimestamp.make(3, WINDOW_START + Duration.ofMinutes(2).toMillis() * 3),
-                          ValueAndTimestamp.make(7, WINDOW_START + Duration.ofMinutes(2).toMillis() * 7)));
+            Arrays.asList(ValueAndTimestamp.make(1, isTimestamped ? WINDOW_START + Duration.ofMinutes(2).toMillis() : -1L),
+                          ValueAndTimestamp.make(5, isTimestamped ? WINDOW_START + Duration.ofMinutes(2).toMillis() * 5 : -1L),
+                          ValueAndTimestamp.make(9, isTimestamped ? WINDOW_START + Duration.ofMinutes(2).toMillis() * 9 : -1L),
+                          ValueAndTimestamp.make(3, isTimestamped ? WINDOW_START + Duration.ofMinutes(2).toMillis() * 3 : -1L),
+                          ValueAndTimestamp.make(7, isTimestamped ? WINDOW_START + Duration.ofMinutes(2).toMillis() * 7 : -1L)));
 
         shouldHandleTimestampedRangeQuery(
             Optional.of(0),
             Optional.of(4),
             false,
-            Arrays.asList(ValueAndTimestamp.make(9, WINDOW_START + Duration.ofMinutes(2).toMillis() * 9),
-                          ValueAndTimestamp.make(5, WINDOW_START + Duration.ofMinutes(2).toMillis() * 5),
-                          ValueAndTimestamp.make(1, WINDOW_START + Duration.ofMinutes(2).toMillis()),
-                          ValueAndTimestamp.make(7, WINDOW_START + Duration.ofMinutes(2).toMillis() * 7),
-                          ValueAndTimestamp.make(3, WINDOW_START + Duration.ofMinutes(2).toMillis() * 3)));
+            Arrays.asList(ValueAndTimestamp.make(9, isTimestamped ? WINDOW_START + Duration.ofMinutes(2).toMillis() * 9 : -1L),
+                          ValueAndTimestamp.make(5, isTimestamped ? WINDOW_START + Duration.ofMinutes(2).toMillis() * 5 : -1L),
+                          ValueAndTimestamp.make(1, isTimestamped ? WINDOW_START + Duration.ofMinutes(2).toMillis() : -1L),
+                          ValueAndTimestamp.make(7, isTimestamped ? WINDOW_START + Duration.ofMinutes(2).toMillis() * 7 : -1L),
+                          ValueAndTimestamp.make(3, isTimestamped ? WINDOW_START + Duration.ofMinutes(2).toMillis() * 3 : -1L)));
 
         shouldHandleTimestampedRangeQuery(
             Optional.of(1),
             Optional.of(3),
             false,
-            Arrays.asList(ValueAndTimestamp.make(5, WINDOW_START + Duration.ofMinutes(2).toMillis() * 5),
-                          ValueAndTimestamp.make(7, WINDOW_START + Duration.ofMinutes(2).toMillis() * 7),
-                          ValueAndTimestamp.make(3, WINDOW_START + Duration.ofMinutes(2).toMillis() * 3)));
+            Arrays.asList(ValueAndTimestamp.make(5, isTimestamped ? WINDOW_START + Duration.ofMinutes(2).toMillis() * 5 : -1L),
+                          ValueAndTimestamp.make(7, isTimestamped ? WINDOW_START + Duration.ofMinutes(2).toMillis() * 7 : -1L),
+                          ValueAndTimestamp.make(3, isTimestamped ? WINDOW_START + Duration.ofMinutes(2).toMillis() * 3 : -1L)));
 
         shouldHandleTimestampedRangeQuery(
             Optional.of(3),
             Optional.empty(),
             false,
-            Arrays.asList(ValueAndTimestamp.make(9, WINDOW_START + Duration.ofMinutes(2).toMillis() * 9),
-                          ValueAndTimestamp.make(7, WINDOW_START + Duration.ofMinutes(2).toMillis() * 7)));
+            Arrays.asList(ValueAndTimestamp.make(9, isTimestamped ? WINDOW_START + Duration.ofMinutes(2).toMillis() * 9 : -1L),
+                          ValueAndTimestamp.make(7, isTimestamped ? WINDOW_START + Duration.ofMinutes(2).toMillis() * 7 : -1L)));
 
         shouldHandleTimestampedRangeQuery(
             Optional.empty(),
             Optional.of(3),
             false,
-            Arrays.asList(ValueAndTimestamp.make(5, WINDOW_START + Duration.ofMinutes(2).toMillis() * 5),
-                          ValueAndTimestamp.make(1, WINDOW_START + Duration.ofMinutes(2).toMillis()),
-                          ValueAndTimestamp.make(7, WINDOW_START + Duration.ofMinutes(2).toMillis() * 7),
-                          ValueAndTimestamp.make(3, WINDOW_START + Duration.ofMinutes(2).toMillis() * 3)));
+            Arrays.asList(ValueAndTimestamp.make(5, isTimestamped ? WINDOW_START + Duration.ofMinutes(2).toMillis() * 5 : -1L),
+                          ValueAndTimestamp.make(1, isTimestamped ? WINDOW_START + Duration.ofMinutes(2).toMillis() : -1L),
+                          ValueAndTimestamp.make(7, isTimestamped ? WINDOW_START + Duration.ofMinutes(2).toMillis() * 7 : -1L),
+                          ValueAndTimestamp.make(3, isTimestamped ? WINDOW_START + Duration.ofMinutes(2).toMillis() * 3 : -1L)));
 
         shouldHandleTimestampedRangeQuery(
             Optional.empty(),
             Optional.empty(),
             false,
-            Arrays.asList(ValueAndTimestamp.make(9, WINDOW_START + Duration.ofMinutes(2).toMillis() * 9),
-                          ValueAndTimestamp.make(5, WINDOW_START + Duration.ofMinutes(2).toMillis() * 5),
-                          ValueAndTimestamp.make(1, WINDOW_START + Duration.ofMinutes(2).toMillis()),
-                          ValueAndTimestamp.make(7, WINDOW_START + Duration.ofMinutes(2).toMillis() * 7),
-                          ValueAndTimestamp.make(3, WINDOW_START + Duration.ofMinutes(2).toMillis() * 3)));
+            Arrays.asList(ValueAndTimestamp.make(9, isTimestamped ? WINDOW_START + Duration.ofMinutes(2).toMillis() * 9 : -1L),
+                          ValueAndTimestamp.make(5, isTimestamped ? WINDOW_START + Duration.ofMinutes(2).toMillis() * 5 : -1L),
+                          ValueAndTimestamp.make(1, isTimestamped ? WINDOW_START + Duration.ofMinutes(2).toMillis() : -1L),
+                          ValueAndTimestamp.make(7, isTimestamped ? WINDOW_START + Duration.ofMinutes(2).toMillis() * 7 : -1L),
+                          ValueAndTimestamp.make(3, isTimestamped ? WINDOW_START + Duration.ofMinutes(2).toMillis() * 3 : -1L)));
     }
 
     private <T> void shouldHandleWindowKeyDSLQueries(final Function<T, Integer> extractor) {
