@@ -22,23 +22,25 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.ArrayList;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
 import org.apache.kafka.common.Uuid;
-import org.apache.kafka.common.message.CreateTopicsResponseData.CreatableTopicResult;
 import org.apache.kafka.common.message.BrokerHeartbeatRequestData;
+import org.apache.kafka.common.message.BrokerRegistrationRequestData;
 import org.apache.kafka.common.message.BrokerRegistrationRequestData.Listener;
 import org.apache.kafka.common.message.BrokerRegistrationRequestData.ListenerCollection;
-import org.apache.kafka.common.message.BrokerRegistrationRequestData;
 import org.apache.kafka.common.message.CreateTopicsRequestData;
 import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopic;
 import org.apache.kafka.common.message.CreateTopicsResponseData;
+import org.apache.kafka.common.message.CreateTopicsResponseData.CreatableTopicResult;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.metadata.BrokerHeartbeatReply;
 import org.apache.kafka.metadata.BrokerRegistrationReply;
 import org.apache.kafka.server.common.MetadataVersion;
+import org.apache.kafka.server.immutable.ImmutableSet;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -180,6 +182,41 @@ public class QuorumControllerIntegrationTestUtils {
             if (result.errorCode() != Errors.TOPIC_ALREADY_EXISTS.code()) {
                 assertEquals((short) 0, result.errorCode());
             }
+        }
+    }
+
+    /**
+     * Create a topic directly on the controller.
+     *
+     * @param controller                 The active controller.
+     * @param topicName                  The topic name.
+     * @param partitionReplicaAssignment The customized replica assignment.
+     */
+    public static void createTopic(
+            QuorumController controller,
+            String topicName,
+            Map<Integer, List<Integer>> partitionReplicaAssignment
+    ) throws Exception {
+        CreateTopicsRequestData request = new CreateTopicsRequestData();
+
+        List<CreateTopicsRequestData.CreatableReplicaAssignment> assignments = new ArrayList<>();
+        partitionReplicaAssignment.forEach((k, v) -> assignments.add(
+                new CreateTopicsRequestData.CreatableReplicaAssignment().
+                        setPartitionIndex(k).
+                        setBrokerIds(v)));
+        request.topics().add(
+                new CreatableTopic().
+                        setName(topicName).
+                        setNumPartitions(-1).
+                        setReplicationFactor((short) -1).
+                        setAssignments(new CreateTopicsRequestData.CreatableReplicaAssignmentCollection(assignments.iterator()))
+        );
+
+        CreateTopicsResponseData response =
+                controller.createTopics(ANONYMOUS_CONTEXT, request, ImmutableSet.singleton(topicName)).get();
+        CreatableTopicResult result = response.topics().find(topicName);
+        if (result.errorCode() != Errors.TOPIC_ALREADY_EXISTS.code()) {
+            assertEquals((short) 0, result.errorCode());
         }
     }
 
