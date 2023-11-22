@@ -23,6 +23,7 @@ import org.apache.kafka.common.config.SslConfigs;
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs;
 import org.apache.kafka.common.network.Mode;
 import org.apache.kafka.common.security.auth.SslEngineFactory;
+import org.apache.kafka.common.utils.ConfigUtils;
 import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -167,8 +168,8 @@ public class SslFactory implements Reconfigurable, Closeable {
                             "which a keystore was configured.");
                 }
 
-                boolean allowDnChanges = getBoolean(nextConfigs, BrokerSecurityConfigs.SSL_ALLOW_DN_CHANGES_CONFIG, BrokerSecurityConfigs.DEFAULT_SSL_ALLOW_DN_CHANGES_VALUE);
-                boolean allowSanChanges = getBoolean(nextConfigs, BrokerSecurityConfigs.SSL_ALLOW_SAN_CHANGES_CONFIG, BrokerSecurityConfigs.DEFAULT_SSL_ALLOW_SAN_CHANGES_VALUE);
+                boolean allowDnChanges = ConfigUtils.getBoolean(nextConfigs, BrokerSecurityConfigs.SSL_ALLOW_DN_CHANGES_CONFIG, BrokerSecurityConfigs.DEFAULT_SSL_ALLOW_DN_CHANGES_VALUE);
+                boolean allowSanChanges = ConfigUtils.getBoolean(nextConfigs, BrokerSecurityConfigs.SSL_ALLOW_SAN_CHANGES_CONFIG, BrokerSecurityConfigs.DEFAULT_SSL_ALLOW_SAN_CHANGES_VALUE);
 
                 CertificateEntries.ensureCompatible(newSslEngineFactory.keystore(), sslEngineFactory.keystore(), allowDnChanges, allowSanChanges);
             }
@@ -185,18 +186,6 @@ public class SslFactory implements Reconfigurable, Closeable {
         } catch (Exception e) {
             log.debug("Validation of dynamic config update of SSLFactory failed.", e);
             throw new ConfigException("Validation of dynamic config update of SSLFactory failed: " + e);
-        }
-    }
-
-    private static boolean getBoolean(final Map<String, Object> configs, final String key, final boolean defaultValue) {
-        final Object value = configs.getOrDefault(key, defaultValue);
-        if (value instanceof Boolean) {
-            return (boolean) value;
-        } else if (value instanceof String) {
-            return Boolean.parseBoolean((String) value);
-        } else {
-            log.warn("Invalid value (" + value + ") on configuration '" + key + "'. Please specify a true/false value.");
-            return defaultValue;
         }
     }
 
