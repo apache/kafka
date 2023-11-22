@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.coordinator.group;
 
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatRequestData;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatResponseData;
 import org.apache.kafka.common.message.DescribeGroupsResponseData;
@@ -57,6 +58,10 @@ import org.apache.kafka.coordinator.group.generated.GroupMetadataKey;
 import org.apache.kafka.coordinator.group.generated.GroupMetadataValue;
 import org.apache.kafka.coordinator.group.generated.OffsetCommitKey;
 import org.apache.kafka.coordinator.group.generated.OffsetCommitValue;
+import org.apache.kafka.coordinator.group.metrics.CoordinatorMetrics;
+import org.apache.kafka.coordinator.group.metrics.CoordinatorMetricsShard;
+import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetrics;
+import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetricsShard;
 import org.apache.kafka.coordinator.group.runtime.CoordinatorShard;
 import org.apache.kafka.coordinator.group.runtime.CoordinatorShardBuilder;
 import org.apache.kafka.coordinator.group.runtime.CoordinatorResult;
@@ -90,6 +95,8 @@ public class GroupCoordinatorShard implements CoordinatorShard<Record> {
         private SnapshotRegistry snapshotRegistry;
         private Time time;
         private CoordinatorTimer<Void, Record> timer;
+        private CoordinatorMetrics coordinatorMetrics;
+        private TopicPartition topicPartition;
 
         public Builder(
             GroupCoordinatorConfig config
@@ -122,6 +129,20 @@ public class GroupCoordinatorShard implements CoordinatorShard<Record> {
         }
 
         @Override
+        public CoordinatorShardBuilder<GroupCoordinatorShard, Record> withCoordinatorMetrics(
+            CoordinatorMetrics coordinatorMetrics
+        ) {
+            this.coordinatorMetrics = coordinatorMetrics;
+            return this;
+        }
+
+        @Override
+        public CoordinatorShardBuilder<GroupCoordinatorShard, Record> withTopicPartition(TopicPartition topicPartition) {
+            this.topicPartition = topicPartition;
+            return this;
+        }
+
+        @Override
         public CoordinatorShardBuilder<GroupCoordinatorShard, Record> withSnapshotRegistry(
             SnapshotRegistry snapshotRegistry
         ) {
@@ -140,6 +161,13 @@ public class GroupCoordinatorShard implements CoordinatorShard<Record> {
                 throw new IllegalArgumentException("Time must be set.");
             if (timer == null)
                 throw new IllegalArgumentException("Timer must be set.");
+            if (coordinatorMetrics == null || !(coordinatorMetrics instanceof GroupCoordinatorMetrics))
+                throw new IllegalArgumentException("CoordinatorMetrics must be set and be of type GroupCoordinatorMetrics.");
+            if (topicPartition == null)
+                throw new IllegalArgumentException("TopicPartition must be set.");
+
+            GroupCoordinatorMetricsShard metricsShard = ((GroupCoordinatorMetrics) coordinatorMetrics)
+                .newMetricsShard(snapshotRegistry, topicPartition);
 
             GroupMetadataManager groupMetadataManager = new GroupMetadataManager.Builder()
                 .withLogContext(logContext)
@@ -153,6 +181,7 @@ public class GroupCoordinatorShard implements CoordinatorShard<Record> {
                 .withGenericGroupNewMemberJoinTimeoutMs(config.genericGroupNewMemberJoinTimeoutMs)
                 .withGenericGroupMinSessionTimeoutMs(config.genericGroupMinSessionTimeoutMs)
                 .withGenericGroupMaxSessionTimeoutMs(config.genericGroupMaxSessionTimeoutMs)
+                .withGroupCoordinatorMetricsShard(metricsShard)
                 .build();
 
             OffsetMetadataManager offsetMetadataManager = new OffsetMetadataManager.Builder()
@@ -161,6 +190,7 @@ public class GroupCoordinatorShard implements CoordinatorShard<Record> {
                 .withTime(time)
                 .withGroupMetadataManager(groupMetadataManager)
                 .withGroupCoordinatorConfig(config)
+                .withGroupCoordinatorMetricsShard(metricsShard)
                 .build();
 
             return new GroupCoordinatorShard(
@@ -168,7 +198,9 @@ public class GroupCoordinatorShard implements CoordinatorShard<Record> {
                 groupMetadataManager,
                 offsetMetadataManager,
                 timer,
-                config
+                config,
+                coordinatorMetrics,
+                metricsShard
             );
         }
     }
@@ -206,24 +238,40 @@ public class GroupCoordinatorShard implements CoordinatorShard<Record> {
     private final GroupCoordinatorConfig config;
 
     /**
+     * The coordinator metrics.
+     */
+    private final CoordinatorMetrics coordinatorMetrics;
+
+    /**
+     * The coordinator metrics shard.
+     */
+    private final CoordinatorMetricsShard metricsShard;
+
+    /**
      * Constructor.
      *
      * @param logContext            The log context.
      * @param groupMetadataManager  The group metadata manager.
      * @param offsetMetadataManager The offset metadata manager.
+     * @param coordinatorMetrics    The coordinator metrics.
+     * @param metricsShard          The coordinator metrics shard.
      */
     GroupCoordinatorShard(
         LogContext logContext,
         GroupMetadataManager groupMetadataManager,
         OffsetMetadataManager offsetMetadataManager,
         CoordinatorTimer<Void, Record> timer,
-        GroupCoordinatorConfig config
+        GroupCoordinatorConfig config,
+        CoordinatorMetrics coordinatorMetrics,
+        CoordinatorMetricsShard metricsShard
     ) {
         this.log = logContext.logger(GroupCoordinatorShard.class);
         this.groupMetadataManager = groupMetadataManager;
         this.offsetMetadataManager = offsetMetadataManager;
         this.timer = timer;
         this.config = config;
+        this.coordinatorMetrics = coordinatorMetrics;
+        this.metricsShard = metricsShard;
     }
 
     /**
@@ -503,6 +551,7 @@ public class GroupCoordinatorShard implements CoordinatorShard<Record> {
         MetadataDelta emptyDelta = new MetadataDelta(newImage);
         groupMetadataManager.onNewMetadataImage(newImage, emptyDelta);
         offsetMetadataManager.onNewMetadataImage(newImage, emptyDelta);
+        coordinatorMetrics.activateMetricsShard(metricsShard);
 
         groupMetadataManager.onLoaded();
         scheduleGroupMetadataExpiration();
@@ -511,6 +560,7 @@ public class GroupCoordinatorShard implements CoordinatorShard<Record> {
     @Override
     public void onUnloaded() {
         timer.cancel(GROUP_EXPIRATION_KEY);
+        coordinatorMetrics.deactivateMetricsShard(metricsShard);
     }
 
     /**
