@@ -46,7 +46,7 @@ import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, Test}
 import org.mockito.Mockito
 
-import scala.collection.mutable
+import scala.collection.{immutable, mutable}
 import scala.jdk.CollectionConverters._
 import scala.util.Random
 
@@ -154,7 +154,7 @@ class ReplicaManagerConcurrencyTest {
       setClusterId(Uuid.randomUuid().toString).
       setNodeId(1).
       build()
-    TestUtils.formatDirectories(Seq(logDir.getAbsolutePath), metaProperties, MetadataVersion.latest(), None)
+    TestUtils.formatDirectories(immutable.Seq(logDir.getAbsolutePath), metaProperties, MetadataVersion.latest(), None)
 
     val props = new Properties
     props.put(KafkaConfig.QuorumVotersProp, "100@localhost:12345")

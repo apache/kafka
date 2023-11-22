@@ -21,12 +21,12 @@ import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.kstream.EmitStrategy;
 import org.apache.kafka.streams.kstream.SlidingWindows;
 import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.state.DslWindowParams;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.TimestampedWindowStore;
 import org.apache.kafka.streams.state.WindowBytesStoreSupplier;
 import org.apache.kafka.streams.state.WindowStore;
-import org.apache.kafka.streams.state.internals.RocksDbIndexedTimeOrderedWindowBytesStoreSupplier;
 
 public class SlidingWindowStoreMaterializer<K, V> extends MaterializedStoreFactory<K, V, WindowStore<Bytes, byte[]>> {
 
@@ -58,38 +58,16 @@ public class SlidingWindowStoreMaterializer<K, V> extends MaterializedStoreFacto
 
     @Override
     public StateStore build() {
-        WindowBytesStoreSupplier supplier = (WindowBytesStoreSupplier) materialized.storeSupplier();
-        if (supplier == null) {
-
-            switch (defaultStoreType) {
-                case IN_MEMORY:
-                    supplier = Stores.inMemoryWindowStore(
-                            materialized.storeName(),
-                            Duration.ofMillis(retentionPeriod),
-                            Duration.ofMillis(windows.timeDifferenceMs()),
-                            false
-                    );
-                    break;
-                case ROCKS_DB:
-                    supplier = emitStrategy.type() == EmitStrategy.StrategyType.ON_WINDOW_CLOSE ?
-                            RocksDbIndexedTimeOrderedWindowBytesStoreSupplier.create(
-                                    materialized.storeName(),
-                                    Duration.ofMillis(retentionPeriod),
-                                    Duration.ofMillis(windows.timeDifferenceMs()),
-                                    false,
-                                    true
-                            ) :
-                            Stores.persistentTimestampedWindowStore(
-                                    materialized.storeName(),
-                                    Duration.ofMillis(retentionPeriod),
-                                    Duration.ofMillis(windows.timeDifferenceMs()),
-                                    false
-                            );
-                    break;
-                default:
-                    throw new IllegalStateException("Unknown store type: " + materialized.storeType());
-            }
-        }
+        final WindowBytesStoreSupplier supplier = materialized.storeSupplier() == null
+                ? dslStoreSuppliers().windowStore(new DslWindowParams(
+                        materialized.storeName(),
+                        Duration.ofMillis(retentionPeriod),
+                        Duration.ofMillis(windows.timeDifferenceMs()),
+                        false,
+                        emitStrategy,
+                        true
+                ))
+                : (WindowBytesStoreSupplier) materialized.storeSupplier();
 
         final StoreBuilder<TimestampedWindowStore<K, V>> builder = Stores
                 .timestampedWindowStoreBuilder(

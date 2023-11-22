@@ -16,25 +16,30 @@
  */
 package org.apache.kafka.common.record;
 
-public class RecordConversionStats {
+/**
+ * This class tracks resource usage during broker record validation for eventual reporting in metrics.
+ * Record validation covers integrity checks on inbound data (e.g. checksum verification), structural
+ * validation to make sure that records are well-formed, and conversion between record formats if needed.
+ */
+public class RecordValidationStats {
 
-    public static final RecordConversionStats EMPTY = new RecordConversionStats();
+    public static final RecordValidationStats EMPTY = new RecordValidationStats();
 
     private long temporaryMemoryBytes;
     private int numRecordsConverted;
     private long conversionTimeNanos;
 
-    public RecordConversionStats(long temporaryMemoryBytes, int numRecordsConverted, long conversionTimeNanos) {
+    public RecordValidationStats(long temporaryMemoryBytes, int numRecordsConverted, long conversionTimeNanos) {
         this.temporaryMemoryBytes = temporaryMemoryBytes;
         this.numRecordsConverted = numRecordsConverted;
         this.conversionTimeNanos = conversionTimeNanos;
     }
 
-    public RecordConversionStats() {
+    public RecordValidationStats() {
         this(0, 0, 0);
     }
 
-    public void add(RecordConversionStats stats) {
+    public void add(RecordValidationStats stats) {
         temporaryMemoryBytes += stats.temporaryMemoryBytes;
         numRecordsConverted += stats.numRecordsConverted;
         conversionTimeNanos += stats.conversionTimeNanos;
@@ -64,7 +69,7 @@ public class RecordConversionStats {
 
     @Override
     public String toString() {
-        return String.format("RecordConversionStats(temporaryMemoryBytes=%d, numRecordsConverted=%d, conversionTimeNanos=%d)",
+        return String.format("RecordValidationStats(temporaryMemoryBytes=%d, numRecordsConverted=%d, conversionTimeNanos=%d)",
                 temporaryMemoryBytes, numRecordsConverted, conversionTimeNanos);
     }
 }

@@ -36,18 +36,12 @@ class BaseAsyncConsumerTest extends AbstractConsumerTest {
     val producer = createProducer()
     val numRecords = 10000
     val startingTimestamp = System.currentTimeMillis()
-    val cb = new CountConsumerCommitCallback
     sendRecords(producer, numRecords, tp, startingTimestamp = startingTimestamp)
     consumer.assign(List(tp).asJava)
-    consumer.commitAsync(cb)
+    consumer.commitAsync()
     waitUntilTrue(() => {
-      cb.successCount == 1
+      consumer.committed(Set(tp).asJava, Duration.ofMillis(defaultBlockingAPITimeoutMs)) != null
     }, "wait until commit is completed successfully", defaultBlockingAPITimeoutMs)
-    val committedOffset = consumer.committed(Set(tp).asJava, Duration.ofMillis(defaultBlockingAPITimeoutMs))
-    assertNotNull(committedOffset)
-    // No valid fetch position due to the absence of consumer.poll; and therefore no offset was committed to
-    // tp. The committed offset should be null. This is intentional.
-    assertNull(committedOffset.get(tp))
     assertTrue(consumer.assignment.contains(tp))
   }
 

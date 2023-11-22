@@ -109,7 +109,7 @@ class MockFetcherThread(val mockLeader: MockLeaderEndPoint,
       offsetOfMaxTimestamp,
       Time.SYSTEM.milliseconds(),
       state.logStartOffset,
-      RecordConversionStats.EMPTY,
+      RecordValidationStats.EMPTY,
       CompressionType.NONE,
       FetchResponse.recordsSize(partitionData),
       batches.headOption.map(_.lastOffset).getOrElse(-1)))
