@@ -100,12 +100,7 @@ class ConsumerGroupCommandTest(Test):
         metadata_quorum=[quorum.isolated_kraft],
         use_new_coordinator=[True, False]
     )
-    def test_list_consumer_groups(
-        self,
-        security_protocol='PLAINTEXT',
-        metadata_quorum=quorum.zk,
-        use_new_coordinator=False
-    ):
+    def test_list_consumer_groups(self, security_protocol='PLAINTEXT', metadata_quorum=quorum.zk, use_new_coordinator=False):
         """
         Tests if ConsumerGroupCommand is listing correct consumer groups
         :return: None
@@ -123,12 +118,7 @@ class ConsumerGroupCommandTest(Test):
         metadata_quorum=[quorum.isolated_kraft],
         use_new_coordinator=[True, False]
     )
-    def test_describe_consumer_group(
-        self,
-        security_protocol='PLAINTEXT',
-        metadata_quorum=quorum.zk,
-        use_new_coordinator=False
-    ):
+    def test_describe_consumer_group(self, security_protocol='PLAINTEXT', metadata_quorum=quorum.zk, use_new_coordinator=False):
         """
         Tests if ConsumerGroupCommand is describing a consumer group correctly
         :return: None
