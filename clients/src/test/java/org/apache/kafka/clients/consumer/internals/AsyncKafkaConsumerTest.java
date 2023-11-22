@@ -46,18 +46,13 @@ import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.function.Executable;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.ArgumentMatchers;
-import org.mockito.Mock;
 import org.mockito.MockedConstruction;
 import org.mockito.Mockito;
-import org.mockito.junit.jupiter.MockitoExtension;
-import org.mockito.junit.jupiter.MockitoSettings;
-import org.mockito.quality.Strictness;
 import org.mockito.stubbing.Answer;
 
 import java.time.Duration;
@@ -90,24 +85,20 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doThrow;
-import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.mockConstruction;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-@ExtendWith(MockitoExtension.class)
-@MockitoSettings(strictness = Strictness.STRICT_STUBS)
 public class AsyncKafkaConsumerTest {
 
     private AsyncKafkaConsumer<?, ?> consumer;
+    private FetchCollector<?, ?> fetchCollector;
     private ConsumerTestBuilder.AsyncKafkaConsumerTestBuilder testBuilder;
     private ApplicationEventHandler applicationEventHandler;
-
-    @Mock
-    private FetchCollector<String, String> fetchCollector;
 
     @BeforeEach
     public void setup() {
@@ -119,6 +110,7 @@ public class AsyncKafkaConsumerTest {
         testBuilder = new ConsumerTestBuilder.AsyncKafkaConsumerTestBuilder(groupInfo);
         applicationEventHandler = testBuilder.applicationEventHandler;
         consumer = testBuilder.consumer;
+        fetchCollector = testBuilder.fetchCollector;
     }
 
     @AfterEach
@@ -234,130 +226,78 @@ public class AsyncKafkaConsumerTest {
 
     @Test
     public void testWakeupBeforeCallingPoll() {
-        try (
-            final ApplicationEventHandler applicationEventHandler = mock(ApplicationEventHandler.class);
-            final ConsumerTestBuilder.AsyncKafkaConsumerTestBuilder testBuilder =
-                new ConsumerTestBuilder.AsyncKafkaConsumerTestBuilder(
-                    ConsumerTestBuilder.createDefaultGroupInformation(),
-                    fetchCollector,
-                    applicationEventHandler
-                )
-        ) {
-            final AsyncKafkaConsumer<String, String> consumer = testBuilder.consumer;
-            final String topicName = "foo";
-            final int partition = 3;
-            final TopicPartition tp = new TopicPartition(topicName, partition);
-            when(fetchCollector.collectFetch(Mockito.any(FetchBuffer.class)))
-                .thenReturn(Fetch.empty());
-            Map<TopicPartition, OffsetAndMetadata> offsets = mkMap(mkEntry(tp, new OffsetAndMetadata(1)));
-            when(applicationEventHandler.addAndGet(any(OffsetFetchApplicationEvent.class), any(Timer.class)))
-                .thenReturn(offsets);
-            consumer.assign(singleton(tp));
+        final String topicName = "foo";
+        final int partition = 3;
+        final TopicPartition tp = new TopicPartition(topicName, partition);
+        doReturn(Fetch.empty()).when(fetchCollector).collectFetch(any(FetchBuffer.class));
+        Map<TopicPartition, OffsetAndMetadata> offsets = mkMap(mkEntry(tp, new OffsetAndMetadata(1)));
+        doReturn(offsets).when(applicationEventHandler).addAndGet(any(OffsetFetchApplicationEvent.class), any(Timer.class));
+        consumer.assign(singleton(tp));
 
-            consumer.wakeup();
+        consumer.wakeup();
 
-            assertThrows(WakeupException.class, () -> consumer.poll(Duration.ZERO));
-            assertDoesNotThrow(() -> consumer.poll(Duration.ZERO));
-        }
+        assertThrows(WakeupException.class, () -> consumer.poll(Duration.ZERO));
+        assertDoesNotThrow(() -> consumer.poll(Duration.ZERO));
     }
 
     @Test
     public void testWakeupAfterEmptyFetch() {
-        try (
-            final ApplicationEventHandler applicationEventHandler = mock(ApplicationEventHandler.class);
-            final ConsumerTestBuilder.AsyncKafkaConsumerTestBuilder testBuilder =
-                new ConsumerTestBuilder.AsyncKafkaConsumerTestBuilder(
-                    ConsumerTestBuilder.createDefaultGroupInformation(),
-                    fetchCollector,
-                    applicationEventHandler
-                )
-        ) {
-            final AsyncKafkaConsumer<String, String> consumer = testBuilder.consumer;
-            final String topicName = "foo";
-            final int partition = 3;
-            final TopicPartition tp = new TopicPartition(topicName, partition);
-            when(fetchCollector.collectFetch(Mockito.any(FetchBuffer.class)))
-                .thenAnswer(invocation -> {
-                    consumer.wakeup();
-                    return Fetch.empty();
-                })
-                .thenReturn(Fetch.empty());
-            Map<TopicPartition, OffsetAndMetadata> offsets = mkMap(mkEntry(tp, new OffsetAndMetadata(1)));
-            when(applicationEventHandler.addAndGet(any(OffsetFetchApplicationEvent.class), any(Timer.class)))
-                .thenReturn(offsets);
-            consumer.assign(singleton(tp));
+        final String topicName = "foo";
+        final int partition = 3;
+        final TopicPartition tp = new TopicPartition(topicName, partition);
+        doAnswer(invocation -> {
+            consumer.wakeup();
+            return Fetch.empty();
+        }).when(fetchCollector).collectFetch(any(FetchBuffer.class));
+        Map<TopicPartition, OffsetAndMetadata> offsets = mkMap(mkEntry(tp, new OffsetAndMetadata(1)));
+        doReturn(offsets).when(applicationEventHandler).addAndGet(any(OffsetFetchApplicationEvent.class), any(Timer.class));
+        consumer.assign(singleton(tp));
 
-            assertThrows(WakeupException.class, () -> consumer.poll(Duration.ofMinutes(1)));
-            assertDoesNotThrow(() -> consumer.poll(Duration.ZERO));
-        }
+        assertThrows(WakeupException.class, () -> consumer.poll(Duration.ofMinutes(1)));
+        assertDoesNotThrow(() -> consumer.poll(Duration.ZERO));
     }
 
     @Test
     public void testWakeupAfterNonEmptyFetch() {
-        try (
-            final ApplicationEventHandler applicationEventHandler = mock(ApplicationEventHandler.class);
-            final ConsumerTestBuilder.AsyncKafkaConsumerTestBuilder testBuilder =
-                new ConsumerTestBuilder.AsyncKafkaConsumerTestBuilder(
-                    ConsumerTestBuilder.createDefaultGroupInformation(),
-                    fetchCollector,
-                    applicationEventHandler
-                )
-        ) {
-            final AsyncKafkaConsumer<String, String> consumer = testBuilder.consumer;
-            final String topicName = "foo";
-            final int partition = 3;
-            final TopicPartition tp = new TopicPartition(topicName, partition);
-            final List<ConsumerRecord<String, String>> records = asList(
-                new ConsumerRecord<>(topicName, partition, 2, "key1", "value1"),
-                new ConsumerRecord<>(topicName, partition, 3, "key2", "value2")
-            );
-            when(fetchCollector.collectFetch(Mockito.any(FetchBuffer.class)))
-                .thenAnswer(invocation -> {
-                    consumer.wakeup();
-                    return Fetch.forPartition(tp, records, true);
-                });
-            Map<TopicPartition, OffsetAndMetadata> offsets = mkMap(mkEntry(tp, new OffsetAndMetadata(1)));
-            when(applicationEventHandler.addAndGet(any(OffsetFetchApplicationEvent.class), any(Timer.class)))
-                .thenReturn(offsets);
-            consumer.assign(singleton(tp));
+        final String topicName = "foo";
+        final int partition = 3;
+        final TopicPartition tp = new TopicPartition(topicName, partition);
+        final List<ConsumerRecord<String, String>> records = asList(
+            new ConsumerRecord<>(topicName, partition, 2, "key1", "value1"),
+            new ConsumerRecord<>(topicName, partition, 3, "key2", "value2")
+        );
+        doAnswer(invocation -> {
+            consumer.wakeup();
+            return Fetch.forPartition(tp, records, true);
+        }).when(fetchCollector).collectFetch(Mockito.any(FetchBuffer.class));
+        Map<TopicPartition, OffsetAndMetadata> offsets = mkMap(mkEntry(tp, new OffsetAndMetadata(1)));
+        doReturn(offsets).when(applicationEventHandler).addAndGet(any(OffsetFetchApplicationEvent.class), any(Timer.class));
+        consumer.assign(singleton(tp));
 
-            // since wakeup() is called when the non-empty fetch is returned the wakeup should be ignored
-            assertDoesNotThrow(() -> consumer.poll(Duration.ofMinutes(1)));
-            // the previously ignored wake-up should not be ignored in the next call
-            assertThrows(WakeupException.class, () -> consumer.poll(Duration.ZERO));
-        }
+        // since wakeup() is called when the non-empty fetch is returned the wakeup should be ignored
+        assertDoesNotThrow(() -> consumer.poll(Duration.ofMinutes(1)));
+        // the previously ignored wake-up should not be ignored in the next call
+        assertThrows(WakeupException.class, () -> consumer.poll(Duration.ZERO));
     }
 
     @Test
     public void testClearWakeupTriggerAfterPoll() {
-        try (
-            final ApplicationEventHandler applicationEventHandler = mock(ApplicationEventHandler.class);
-            final ConsumerTestBuilder.AsyncKafkaConsumerTestBuilder testBuilder =
-                new ConsumerTestBuilder.AsyncKafkaConsumerTestBuilder(
-                    ConsumerTestBuilder.createDefaultGroupInformation(),
-                    fetchCollector,
-                    applicationEventHandler
-                )
-        ) {
-            final AsyncKafkaConsumer<String, String> consumer = testBuilder.consumer;
-            final String topicName = "foo";
-            final int partition = 3;
-            final TopicPartition tp = new TopicPartition(topicName, partition);
-            final List<ConsumerRecord<String, String>> records = asList(
-                new ConsumerRecord<>(topicName, partition, 2, "key1", "value1"),
-                new ConsumerRecord<>(topicName, partition, 3, "key2", "value2")
-            );
-            when(fetchCollector.collectFetch(Mockito.any(FetchBuffer.class)))
-                .thenReturn(Fetch.forPartition(tp, records, true));
-            Map<TopicPartition, OffsetAndMetadata> offsets = mkMap(mkEntry(tp, new OffsetAndMetadata(1)));
-            when(applicationEventHandler.addAndGet(any(OffsetFetchApplicationEvent.class), any(Timer.class)))
-                .thenReturn(offsets);
-            consumer.assign(singleton(tp));
+        final String topicName = "foo";
+        final int partition = 3;
+        final TopicPartition tp = new TopicPartition(topicName, partition);
+        final List<ConsumerRecord<String, String>> records = asList(
+            new ConsumerRecord<>(topicName, partition, 2, "key1", "value1"),
+            new ConsumerRecord<>(topicName, partition, 3, "key2", "value2")
+        );
+        doReturn(Fetch.forPartition(tp, records, true))
+            .when(fetchCollector).collectFetch(any(FetchBuffer.class));
+        Map<TopicPartition, OffsetAndMetadata> offsets = mkMap(mkEntry(tp, new OffsetAndMetadata(1)));
+        doReturn(offsets).when(applicationEventHandler).addAndGet(any(OffsetFetchApplicationEvent.class), any(Timer.class));
+        consumer.assign(singleton(tp));
 
-            consumer.poll(Duration.ZERO);
+        consumer.poll(Duration.ZERO);
 
-            assertDoesNotThrow(() -> consumer.poll(Duration.ZERO));
-        }
+        assertDoesNotThrow(() -> consumer.poll(Duration.ZERO));
     }
 
     @Test
