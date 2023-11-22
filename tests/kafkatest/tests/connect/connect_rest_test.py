@@ -90,8 +90,7 @@ class ConnectRestApiTest(KafkaTest):
         self.cc.set_configs(lambda node: self.render("connect-distributed.properties", node=node))
         self.cc.set_external_configs(lambda node: self.render("connect-file-external.properties", node=node))
 
-        self.logger.info("Waiting till Connect REST server is listening")
-        self.cc.start(mode=ConnectServiceBase.STARTUP_MODE_LISTEN)
+        self.cc.start()
 
         assert self.cc.list_connectors() == []
 
