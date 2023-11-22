@@ -193,7 +193,8 @@ public class ConsumerTestBuilder implements Closeable {
                         subscriptions,
                         commit,
                         metadata,
-                        logContext
+                        logContext,
+                        backgroundEventHandler
                 )
             );
             HeartbeatRequestManager.HeartbeatRequestState state = spy(new HeartbeatRequestManager.HeartbeatRequestState(logContext,
@@ -240,8 +241,7 @@ public class ConsumerTestBuilder implements Closeable {
                 fetchRequestManager,
                 coordinatorRequestManager,
                 commitRequestManager,
-                heartbeatRequestManager,
-                membershipManager);
+                heartbeatRequestManager);
         this.applicationEventProcessor = spy(new ApplicationEventProcessor(
                 logContext,
                 applicationEventQueue,

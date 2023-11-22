@@ -19,6 +19,7 @@ package org.apache.kafka.clients.consumer.internals.events;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.internals.ConsumerNetworkThread;
 import org.apache.kafka.clients.consumer.internals.ConsumerRebalanceListenerInvoker;
+import org.apache.kafka.clients.consumer.internals.ConsumerRebalanceListenerCallbackName;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.LogContext;
@@ -87,12 +88,8 @@ public class BackgroundEventProcessor extends EventProcessor<BackgroundEvent> {
                 process((ErrorBackgroundEvent) event);
                 return;
 
-            case PARTITION_RECONCILIATION_STARTED:
-                process((RebalanceStartedEvent) event);
-                return;
-
-            case PARTITION_LOST_STARTED:
-                process((PartitionLostStartedEvent) event);
+            case CONSUMER_REBALANCE_LISTENER_CALLBACK_NEEDED:
+                process((ConsumerRebalanceListenerCallbackNeededEvent) event);
                 return;
 
             default:
@@ -109,37 +106,40 @@ public class BackgroundEventProcessor extends EventProcessor<BackgroundEvent> {
         throw event.error();
     }
 
-    private void process(final RebalanceStartedEvent event) {
-        final SortedSet<TopicPartition> revokedPartitions = event.revokedPartitions();
-        final SortedSet<TopicPartition> assignedPartitions = event.assignedPartitions();
-        Optional<KafkaException> error = Optional.empty();
+    private void process(final ConsumerRebalanceListenerCallbackNeededEvent event) {
+        SortedSet<TopicPartition> partitions = event.partitions();
+        ConsumerRebalanceListenerCallbackName callbackName = event.callbackName();
+        final Exception e;
 
-        try {
-            rebalanceListenerInvoker.rebalance(revokedPartitions, assignedPartitions);
-        } catch (KafkaException e) {
-            error = Optional.of(e);
-            throw e;
-        } finally {
-            ApplicationEvent invokedEvent = new RebalanceCompleteEvent(
-                    revokedPartitions,
-                    assignedPartitions,
-                    error);
-            applicationEventHandler.add(invokedEvent);
+        switch (callbackName) {
+            case onPartitionsRevoked:
+                e = rebalanceListenerInvoker.invokePartitionsRevoked(partitions);
+                break;
+
+            case onPartitionsAssigned:
+                e = rebalanceListenerInvoker.invokePartitionsAssigned(partitions);
+                break;
+
+            case onPartitionsLost:
+                e = rebalanceListenerInvoker.invokePartitionsLost(partitions);
+                break;
+
+            default:
+                throw new IllegalArgumentException("Could not determine the " + ConsumerRebalanceListener.class.getSimpleName() + " to invoke from the callback name " + callbackName);
         }
-    }
 
-    private void process(final PartitionLostStartedEvent event) {
-        final SortedSet<TopicPartition> lostPartitions = event.lostPartitions();
-        Optional<KafkaException> error = Optional.empty();
+        final Optional<KafkaException> error;
 
-        try {
-            rebalanceListenerInvoker.lose(lostPartitions);
-        } catch (KafkaException e) {
-            error = Optional.of(e);
-            throw e;
-        } finally {
-            ApplicationEvent invokedEvent = new PartitionLostCompleteEvent(lostPartitions, error);
-            applicationEventHandler.add(invokedEvent);
+        if (e != null) {
+            if (e instanceof KafkaException)
+                error = Optional.of((KafkaException) e);
+            else
+                error = Optional.of(new KafkaException("User rebalance callback throws an error", e));
+        } else {
+            error = Optional.empty();
         }
+
+        ApplicationEvent invokedEvent = new ConsumerRebalanceListenerCallbackCompletedEvent(callbackName, partitions, error);
+        applicationEventHandler.add(invokedEvent);
     }
 }

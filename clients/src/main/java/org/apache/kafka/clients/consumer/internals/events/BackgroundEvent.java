@@ -26,7 +26,7 @@ import java.util.Objects;
 public abstract class BackgroundEvent {
 
     public enum Type {
-        ERROR, PARTITION_RECONCILIATION_STARTED, PARTITION_LOST_STARTED
+        ERROR, CONSUMER_REBALANCE_LISTENER_CALLBACK_NEEDED
     }
 
     private final Type type;

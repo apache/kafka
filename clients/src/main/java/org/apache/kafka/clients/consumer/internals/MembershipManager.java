@@ -16,6 +16,9 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
+import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
+import org.apache.kafka.clients.consumer.internals.events.ConsumerRebalanceListenerCallbackCompletedEvent;
+import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatResponseData;
 
@@ -137,4 +140,17 @@ public interface MembershipManager {
      * Note that list of topics of the subscription is taken from the shared subscription state.
      */
     void onSubscriptionUpdated();
+
+    /**
+     * Signals that a {@link ConsumerRebalanceListener} callback has completed. This is invoked when the
+     * application thread has completed the callback and has submitted a
+     * {@link ConsumerRebalanceListenerCallbackCompletedEvent} to the network I/O thread. At this point, we
+     * notify the state machine that it's complete so that it can move to the next appropriate step of the
+     * rebalance process.
+     *
+     * @param callbackName Method name of the callback that was executed
+     * @param error Optional error that was thrown by the callback, captured, and forwarded here
+     */
+    void consumerRebalanceListenerCallbackCompleted(ConsumerRebalanceListenerCallbackName callbackName,
+                                                    Optional<KafkaException> error);
 }

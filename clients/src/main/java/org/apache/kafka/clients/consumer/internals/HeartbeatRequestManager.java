@@ -181,6 +181,10 @@ public class HeartbeatRequestManager implements RequestManager {
         return new NetworkClientDelegate.PollResult(heartbeatRequestState.heartbeatIntervalMs, Collections.singletonList(request));
     }
 
+    public MembershipManager membershipManager() {
+        return membershipManager;
+    }
+
     private NetworkClientDelegate.UnsentRequest makeHeartbeatRequest() {
         // TODO: extract this logic for building the ConsumerGroupHeartbeatRequestData to a
         //  stateful builder (HeartbeatState), that will keep the last data sent, and determine

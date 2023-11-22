@@ -17,7 +17,6 @@
 package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
-import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.errors.WakeupException;
@@ -30,7 +29,6 @@ import org.slf4j.Logger;
 import java.util.Optional;
 import java.util.Set;
 import java.util.SortedSet;
-import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * This class encapsulates the invocation of the callback methods defined in the {@link ConsumerRebalanceListener}
@@ -54,7 +52,7 @@ public class ConsumerRebalanceListenerInvoker {
         this.coordinatorMetrics = coordinatorMetrics;
     }
 
-    Exception invokePartitionsAssigned(final SortedSet<TopicPartition> assignedPartitions) {
+    public Exception invokePartitionsAssigned(final SortedSet<TopicPartition> assignedPartitions) {
         log.info("Adding newly assigned partitions: {}", Utils.join(assignedPartitions, ", "));
 
         Optional<ConsumerRebalanceListener> listener = subscriptions.rebalanceListener();
@@ -76,7 +74,7 @@ public class ConsumerRebalanceListenerInvoker {
         return null;
     }
 
-    Exception invokePartitionsRevoked(final SortedSet<TopicPartition> revokedPartitions) {
+    public Exception invokePartitionsRevoked(final SortedSet<TopicPartition> revokedPartitions) {
         log.info("Revoke previously assigned partitions {}", Utils.join(revokedPartitions, ", "));
         Set<TopicPartition> revokePausedPartitions = subscriptions.pausedPartitions();
         revokePausedPartitions.retainAll(revokedPartitions);
@@ -102,7 +100,7 @@ public class ConsumerRebalanceListenerInvoker {
         return null;
     }
 
-    Exception invokePartitionsLost(final SortedSet<TopicPartition> lostPartitions) {
+    public Exception invokePartitionsLost(final SortedSet<TopicPartition> lostPartitions) {
         log.info("Lost previously assigned partitions {}", Utils.join(lostPartitions, ", "));
         Set<TopicPartition> lostPausedPartitions = subscriptions.pausedPartitions();
         lostPausedPartitions.retainAll(lostPartitions);
@@ -126,47 +124,5 @@ public class ConsumerRebalanceListenerInvoker {
         }
 
         return null;
-    }
-
-    public void rebalance(final SortedSet<TopicPartition> revokedPartitions,
-                          final SortedSet<TopicPartition> assignedPartitions) {
-        final AtomicReference<Exception> firstException = new AtomicReference<>(null);
-
-        if (!revokedPartitions.isEmpty()) {
-            // Revoke partitions that were previously owned but no longer assigned;
-            // note that we should only change the assignment (or update the assignor's state)
-            // AFTER we've triggered the revoke callback
-            firstException.compareAndSet(null, invokePartitionsRevoked(revokedPartitions));
-        }
-
-        if (!assignedPartitions.isEmpty()) {
-            // Add partitions that were not previously owned but are now assigned
-            firstException.compareAndSet(null, invokePartitionsAssigned(assignedPartitions));
-        }
-
-        if (firstException.get() == null)
-            return;
-
-        if (firstException.get() instanceof KafkaException)
-            throw (KafkaException) firstException.get();
-        else
-            throw new KafkaException("User rebalance callback throws an error", firstException.get());
-    }
-
-    public void lose(final SortedSet<TopicPartition> lostPartitions) {
-        if (lostPartitions.isEmpty())
-            return;
-
-        log.info("Giving away all assigned partitions as lost since generation/memberID has been reset, " +
-                 "indicating that consumer is in old state or no longer part of the group");
-        Exception e = invokePartitionsLost(lostPartitions);
-
-        if (e == null)
-            return;
-
-        if (e instanceof KafkaException)
-            throw (KafkaException) e;
-        else
-            throw new KafkaException("User rebalance callback throws an error", e);
     }
 }

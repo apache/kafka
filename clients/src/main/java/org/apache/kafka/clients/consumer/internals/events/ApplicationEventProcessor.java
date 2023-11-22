@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.clients.consumer.internals.events;
 
+import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.OffsetAndTimestamp;
 import org.apache.kafka.clients.consumer.internals.CachedSupplier;
 import org.apache.kafka.clients.consumer.internals.CommitRequestManager;
@@ -104,20 +105,16 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
                 processValidatePositionsEvent();
                 return;
 
-            case PARTITION_RECONCILIATION_COMPLETE:
-                process((RebalanceCompleteEvent) event);
-                return;
-
-            case PARTITION_LOST_COMPLETE:
-                process((PartitionLostCompleteEvent) event);
-                return;
-
             case SUBSCRIPTION_CHANGE:
                 processSubscriptionChangeEvent();
                 return;
 
             case UNSUBSCRIBE:
                 processUnsubscribeEvent((UnsubscribeApplicationEvent) event);
+                return;
+
+            case CONSUMER_REBALANCE_LISTENER_CALLBACK_COMPLETED:
+                process((ConsumerRebalanceListenerCallbackCompletedEvent) event);
                 return;
 
             default:
@@ -188,11 +185,11 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
      * it is already a member.
      */
     private void processSubscriptionChangeEvent() {
-        if (!requestManagers.membershipManager.isPresent()) {
+        if (!requestManagers.heartbeatRequestManager.isPresent()) {
             throw new RuntimeException("Group membership manager not present when processing a " +
                     "subscribe event");
         }
-        MembershipManager membershipManager = requestManagers.membershipManager.get();
+        MembershipManager membershipManager = requestManagers.heartbeatRequestManager.get().membershipManager();
         membershipManager.onSubscriptionUpdated();
     }
 
@@ -205,11 +202,11 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
      *              the group is sent out.
      */
     private void processUnsubscribeEvent(UnsubscribeApplicationEvent event) {
-        if (!requestManagers.membershipManager.isPresent()) {
+        if (!requestManagers.heartbeatRequestManager.isPresent()) {
             throw new RuntimeException("Group membership manager not present when processing an " +
                     "unsubscribe event");
         }
-        MembershipManager membershipManager = requestManagers.membershipManager.get();
+        MembershipManager membershipManager = requestManagers.heartbeatRequestManager.get().membershipManager();
         CompletableFuture<Void> result = membershipManager.leaveGroup();
         event.chain(result);
     }
@@ -228,14 +225,17 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
         event.chain(future);
     }
 
-    private void process(final RebalanceCompleteEvent event) {
-        // TODO: with this event, we need to signal to the consumer group protocol state machine that the
-        //       rebalance it'd started has completed...
-    }
-
-    private void process(final PartitionLostCompleteEvent event) {
-        // TODO: with this event, we need to signal to the consumer group protocol state machine that the
-        //       partitions have been "lost"...
+    private void process(final ConsumerRebalanceListenerCallbackCompletedEvent event) {
+        if (requestManagers.heartbeatRequestManager.isPresent()) {
+            MembershipManager manager = requestManagers.heartbeatRequestManager.get().membershipManager();
+            manager.consumerRebalanceListenerCallbackCompleted(event.callbackName(), event.error());
+        } else {
+            log.warn(
+                "An internal error occurred; the group membership manager was not present, so the notification of the {}.{} callback's execution could not be sent",
+                ConsumerRebalanceListener.class.getSimpleName(),
+                event.callbackName()
+            );
+        }
     }
 
     /**
