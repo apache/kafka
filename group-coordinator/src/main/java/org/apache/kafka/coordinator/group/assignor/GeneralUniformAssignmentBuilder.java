@@ -128,9 +128,8 @@ public class GeneralUniformAssignmentBuilder extends AbstractUniformAssignmentBu
         this.subscribedTopicIds = new HashSet<>();
         this.membersPerTopic = new HashMap<>();
         this.targetAssignment = new HashMap<>();
-        members.forEach((memberId, memberMetadata) -> {
-            Collection<Uuid> topics = memberMetadata.subscribedTopicIds();
-            topics.forEach(topicId -> {
+        members.forEach((memberId, memberMetadata) ->
+            memberMetadata.subscribedTopicIds().forEach(topicId -> {
                 // Check if the subscribed topic exists.
                 int partitionCount = subscribedTopicDescriber.numPartitions(topicId);
                 if (partitionCount == -1) {
@@ -141,12 +140,12 @@ public class GeneralUniformAssignmentBuilder extends AbstractUniformAssignmentBu
                 subscribedTopicIds.add(topicId);
                 membersPerTopic.computeIfAbsent(topicId, k -> new ArrayList<>()).add(memberId);
                 targetAssignment.put(memberId, new MemberAssignment(new HashMap<>()));
-            });
-        });
+            })
+        );
         this.rackInfo = new RackInfo(assignmentSpec, subscribedTopicDescriber, subscribedTopicIds);
         this.unassignedPartitions = new HashSet<>(topicIdPartitions(subscribedTopicIds, subscribedTopicDescriber));
         this.assignedStickyPartitions = new HashSet<>();
-        this.assignmentManager = new AssignmentManager();
+        this.assignmentManager = new AssignmentManager(this.members, this.subscribedTopicDescriber);
         this.sortedMembersByAssignmentSize = assignmentManager.sortMembersByAssignmentSize(members.keySet());
         this.currentPartitionOwners = new HashMap<>();
         this.partitionOwnerInTargetAssignment = new HashMap<>();
@@ -224,7 +223,7 @@ public class GeneralUniformAssignmentBuilder extends AbstractUniformAssignmentBu
                         if (rackInfo.useRackStrategy && rackInfo.racksMismatch(memberId, topicIdPartition)) {
                             currentPartitionOwners.put(topicIdPartition, memberId);
                         } else {
-                            assignmentManager.maybeAssignPartitionToMember(topicIdPartition, memberId);
+                            assignmentManager.addPartitionToTargetAssignment(topicIdPartition, memberId);
                             assignedStickyPartitions.add(topicIdPartition);
                         }
                     });
@@ -324,21 +323,25 @@ public class GeneralUniformAssignmentBuilder extends AbstractUniformAssignmentBu
     }
 
     /**
-     * Determine if the current assignment is a balanced one.
+     * Checks if the current assignments of partitions to members is balanced.
      *
-     * @return true if the given assignment is balanced; false otherwise.
+     * Balance is determined by first checking if the difference in the number of partitions assigned
+     * to any two members is one. If this is not true, it verifies that no member can
+     * receive additional partitions without disrupting the balance.
+     *
+     * @return true if the assignment is balanced, false otherwise.
      */
+
     private boolean isBalanced() {
         int min = assignmentManager.targetAssignmentSize(sortedMembersByAssignmentSize.first());
         int max = assignmentManager.targetAssignmentSize(sortedMembersByAssignmentSize.last());
 
-        // If minimum and maximum numbers of partitions assigned to consumers differ by at most one return true.
+        // If minimum and maximum numbers of partitions assigned to members differ by at most one return true.
         if (min >= max - 1)
             return true;
 
-        // For each member that does not have all the topic partitions it can get make sure none of the
-        // topic partitions it could but did not get cannot be moved to it (because that would break the balance).
-        // Members with the least assignment sizes are checked first to see if they can receive any more partitions.
+        // Ensure that members without a complete set of topic partitions cannot receive any additional partitions.
+        // This maintains balance. Start by checking members with the fewest assigned partitions to see if they can take more.
         for (String member : sortedMembersByAssignmentSize) {
             int memberPartitionCount = assignmentManager.targetAssignmentSize(member);
 
@@ -398,14 +401,26 @@ public class GeneralUniformAssignmentBuilder extends AbstractUniformAssignmentBu
         if (!unassignedPartitions.isEmpty()) performReassignments();
     }
 
+    /**
+     * Performs reassignments of partitions to balance the load across members.
+     * This method iteratively reassigns partitions until no further moves can improve the balance.
+     *
+     * The process involves sorting reassignable partitions for efficiency and considering rack matching
+     * and sticky partition assignments. Reassignments are made based on the comparative load of members
+     * and the adherence to rack policies.
+     *
+     * The method uses a do-while loop to ensure at least one pass over the partitions and continues
+     * reassigning as long as there are modifications to the current assignments. It checks for balance
+     * after each reassignment and exits if the balance is achieved.
+     *
+     * @throws PartitionAssignorException if there are inconsistencies in expected members per partition
+     *         or if a partition is expected to already be assigned but isn't.
+     */
     private void performReassignments() {
         boolean modified;
         boolean reassignmentOccurred;
         // Repeat reassignment until no partition can be moved to improve the balance.
         do {
-            // Before re-starting the round of reassignments check if the assignment is already balanced.
-            if (isBalanced()) break;
-
             modified = false;
             reassignmentOccurred = false;
             // Reassign all reassignable partitions sorted in descending order
@@ -420,21 +435,25 @@ public class GeneralUniformAssignmentBuilder extends AbstractUniformAssignmentBu
                 }
                 reassignmentOccurred = false;
 
-                // The topicIdPartition must have at least two consumers.
+                // The topicIdPartition must have at least two members.
                 if (membersPerTopic.get(reassignablePartition.topicId()).size() <= 1)
-                    LOG.error("Expected more than one potential member for topicIdPartition '{}'", reassignablePartition);
+                    throw new PartitionAssignorException(String.format("Expected more than one potential member for " +
+                        "topicIdPartition '%s'", reassignablePartition)
+                    );
 
-                // The topicIdPartition must have a current member.
-                String member = partitionOwnerInTargetAssignment.get(reassignablePartition);
-                if (member == null)
-                    LOG.error("Expected topicIdPartition '{}' to be assigned to a member", reassignablePartition);
+                // The topicIdPartition must have a current target owner.
+                String currentTargetOwner = partitionOwnerInTargetAssignment.get(reassignablePartition);
+                if (currentTargetOwner == null)
+                    throw new PartitionAssignorException(String.format("Expected topicIdPartition '%s' to be assigned " +
+                        "to a member", reassignablePartition)
+                    );
 
                 boolean foundMatchingRackMember = false;
 
                 // If rack strategy is used and the current assignment adheres to rack matching,
                 // check if another member in the same rack is better suited for this topicIdPartition.
                 if (rackInfo.useRackStrategy) {
-                    String memberRack = rackInfo.memberRacks.get(member);
+                    String memberRack = rackInfo.memberRacks.get(currentTargetOwner);
                     Set<String> partitionRacks = rackInfo.partitionRacks.get(reassignablePartition);
 
                     if (partitionRacks.contains(memberRack)) {
@@ -446,7 +465,7 @@ public class GeneralUniformAssignmentBuilder extends AbstractUniformAssignmentBu
                             String otherMemberRack = rackInfo.memberRacks.get(otherMember);
                             if (otherMemberRack == null || !partitionRacks.contains(otherMemberRack))
                                 continue;
-                            if (assignmentManager.targetAssignmentSize(member) > assignmentManager.targetAssignmentSize(otherMember) + 1) {
+                            if (assignmentManager.targetAssignmentSize(currentTargetOwner) > assignmentManager.targetAssignmentSize(otherMember) + 1) {
                                 reassignPartition(reassignablePartition, otherMember);
                                 modified = true;
                                 reassignmentOccurred = true;
@@ -467,7 +486,7 @@ public class GeneralUniformAssignmentBuilder extends AbstractUniformAssignmentBu
 
                     if (rackInfo.useRackStrategy && !isPartitionSticky && isCurrentOwnerKnown) {
                         String currentOwner = currentPartitionOwners.get(reassignablePartition);
-                        int currentMemberAssignmentSize = assignmentManager.targetAssignmentSize(member);
+                        int currentMemberAssignmentSize = assignmentManager.targetAssignmentSize(currentTargetOwner);
                         int currentOwnerAssignmentSize = assignmentManager.targetAssignmentSize(currentOwner);
 
                         // Check if reassignment is needed based on assignment sizes
@@ -481,7 +500,7 @@ public class GeneralUniformAssignmentBuilder extends AbstractUniformAssignmentBu
                     // The topicIdPartition is already sticky and no other member with matching rack is better suited.
                     if (!reassignmentOccurred) {
                         for (String otherMember : membersPerTopic.get(reassignablePartition.topicId())) {
-                            if (assignmentManager.targetAssignmentSize(member) > assignmentManager.targetAssignmentSize(otherMember) + 1) {
+                            if (assignmentManager.targetAssignmentSize(currentTargetOwner) > assignmentManager.targetAssignmentSize(otherMember) + 1) {
                                 reassignPartition(reassignablePartition);
                                 modified = true;
                                 reassignmentOccurred = true;
@@ -537,7 +556,7 @@ public class GeneralUniformAssignmentBuilder extends AbstractUniformAssignmentBu
     private void reassignPartition(TopicIdPartition partition, String newMember) {
         String member = partitionOwnerInTargetAssignment.get(partition);
         // Find the correct partition movement considering the stickiness requirement.
-        TopicIdPartition partitionToBeMoved = partitionMovements.getTheActualPartitionToBeMoved(
+        TopicIdPartition partitionToBeMoved = partitionMovements.computeActualPartitionToBeMoved(
             partition,
             member,
             newMember
@@ -555,9 +574,9 @@ public class GeneralUniformAssignmentBuilder extends AbstractUniformAssignmentBu
     }
 
     /**
-     * <code> MemberPair </code> represents a pair of member Ids involved in a partition reassignment. Each
-     * <code> MemberPair </code> object, which contains a source (<code>src</code>) and a destination (<code>dst</code>)
-     * element, normally corresponds to a particular partition or topic, and indicates that the particular partition or some
+     * This class represents a pair of member Ids involved in a partition reassignment.
+     * Each pair contains a source and a destination member Id.
+     * It normally corresponds to a particular partition or topic, and indicates that the particular partition or some
      * partition of the particular topic was moved from the source member to the destination member during the rebalance.
      */
     private static class MemberPair {
@@ -642,16 +661,32 @@ public class GeneralUniformAssignmentBuilder extends AbstractUniformAssignmentBu
             if (partitionMovementsByPartition.containsKey(partition)) {
                 // This partition was previously moved.
                 MemberPair existingPair = removeMovementRecordOfPartition(partition);
-                assert existingPair.dstMemberId.equals(oldOwner);
+                if (existingPair.dstMemberId.equals(oldOwner)) {
+                    throw new PartitionAssignorException("Mismatch in partition movement record with respect to " +
+                        "partition ownership during a rebalance"
+                    );
+                }
                 if (!existingPair.srcMemberId.equals(newOwner)) {
-                    // The partition is not moving back to its previous consumer.
+                    // The partition is not moving back to its previous member.
                     addPartitionMovementRecord(partition, new MemberPair(existingPair.srcMemberId, newOwner));
                 }
             } else
                 addPartitionMovementRecord(partition, pair);
         }
 
-        private TopicIdPartition getTheActualPartitionToBeMoved(
+        /**
+         * Computes the actual partition to be moved based on the current and proposed partition owners.
+         * This method determines the appropriate partition movement, considering existing partition movements
+         * and constraints within a topic.
+         *
+         * @param partition         The {@link TopicIdPartition} object representing the partition to be moved.
+         * @param oldOwner          The memberId of the current owner of the partition.
+         * @param newOwner          The memberId of the proposed new owner of the partition.
+         * @return The {@link TopicIdPartition} that should be moved, based on existing movement patterns
+         *         and ownership. Returns the original partition if no specific movement pattern applies.
+         * @throws PartitionAssignorException if the old owner does not match the expected value for the partition.
+         */
+        private TopicIdPartition computeActualPartitionToBeMoved(
             TopicIdPartition partition,
             String oldOwner,
             String newOwner
@@ -727,8 +762,17 @@ public class GeneralUniformAssignmentBuilder extends AbstractUniformAssignmentBu
         /**
          * Initializes an AssignmentManager, setting up the necessary data structures.
          */
-        public AssignmentManager() {
-            initializeAssignmentSizes();
+        public AssignmentManager(Map<String, AssignmentMemberSpec> members, SubscribedTopicDescriber subscribedTopicDescriber) {
+            members.forEach((memberId, member) -> {
+                int maxSize = member.subscribedTopicIds().stream()
+                    .mapToInt(subscribedTopicDescriber::numPartitions)
+                    .sum();
+
+                MemberAssignmentData memberAssignmentData = membersWithAssignmentSizes
+                    .computeIfAbsent(memberId, MemberAssignmentData::new);
+                memberAssignmentData.maxAssignmentSize = maxSize;
+                memberAssignmentData.currentAssignmentSize = 0;
+            });
         }
 
         /**
@@ -792,22 +836,6 @@ public class GeneralUniformAssignmentBuilder extends AbstractUniformAssignmentBu
             if (memberData.currentAssignmentSize > 0) {
                 memberData.currentAssignmentSize--;
             }
-        }
-
-        /**
-         * Computes and sets the maximum assignment size for each member.
-         */
-        private void initializeAssignmentSizes() {
-            members.forEach((memberId, member) -> {
-                int maxSize = member.subscribedTopicIds().stream()
-                    .mapToInt(subscribedTopicDescriber::numPartitions)
-                    .sum();
-
-                MemberAssignmentData memberAssignmentData = membersWithAssignmentSizes
-                    .computeIfAbsent(memberId, MemberAssignmentData::new);
-                memberAssignmentData.maxAssignmentSize = maxSize;
-                memberAssignmentData.currentAssignmentSize = 0;
-            });
         }
 
         /**
