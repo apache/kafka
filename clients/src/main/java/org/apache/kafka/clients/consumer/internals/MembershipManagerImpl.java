@@ -129,7 +129,7 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
      * Member ID assigned by the server to the member, received in a heartbeat response when
      * joining the group specified in {@link #groupId}
      */
-    private String memberId;
+    private String memberId = "";
 
     /**
      * Current epoch of the member. It will be set to 0 by the member, and provided to the server
@@ -137,7 +137,7 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
      * incremented as the member reconciles and acknowledges the assignments it receives. It will
      * be reset to 0 if the member gets fenced.
      */
-    private int memberEpoch;
+    private int memberEpoch = 0;
 
     /**
      * Current state of this member as part of the consumer group, as defined in {@link MemberState}

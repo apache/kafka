@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.coordinator.group.consumer;
 
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.GroupNotEmptyException;
 import org.apache.kafka.common.errors.StaleMemberEpochException;
@@ -26,6 +27,7 @@ import org.apache.kafka.coordinator.group.GroupMetadataManagerTest;
 import org.apache.kafka.coordinator.group.OffsetAndMetadata;
 import org.apache.kafka.coordinator.group.OffsetExpirationCondition;
 import org.apache.kafka.coordinator.group.OffsetExpirationConditionImpl;
+import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetricsShard;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.timeline.SnapshotRegistry;
 import org.junit.jupiter.api.Test;
@@ -46,12 +48,17 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.mock;
 
 public class ConsumerGroupTest {
 
     private ConsumerGroup createConsumerGroup(String groupId) {
         SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
-        return new ConsumerGroup(snapshotRegistry, groupId);
+        return new ConsumerGroup(
+            snapshotRegistry,
+            groupId,
+            mock(GroupCoordinatorMetricsShard.class)
+        );
     }
 
     @Test
@@ -642,7 +649,13 @@ public class ConsumerGroupTest {
     @Test
     public void testAsListedGroup() {
         SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
-        ConsumerGroup group = new ConsumerGroup(snapshotRegistry, "group-foo");
+        GroupCoordinatorMetricsShard metricsShard = new GroupCoordinatorMetricsShard(
+            snapshotRegistry,
+            Collections.emptyMap(),
+            Collections.emptyMap(),
+            new TopicPartition("__consumer_offsets", 0)
+        );
+        ConsumerGroup group = new ConsumerGroup(snapshotRegistry, "group-foo", metricsShard);
         snapshotRegistry.getOrCreateSnapshot(0);
         assertEquals(ConsumerGroup.ConsumerGroupState.EMPTY.toString(), group.stateAsString(0));
         group.updateMember(new ConsumerGroupMember.Builder("member1")
@@ -656,7 +669,11 @@ public class ConsumerGroupTest {
     @Test
     public void testValidateOffsetFetch() {
         SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
-        ConsumerGroup group = new ConsumerGroup(snapshotRegistry, "group-foo");
+        ConsumerGroup group = new ConsumerGroup(
+            snapshotRegistry,
+            "group-foo",
+            mock(GroupCoordinatorMetricsShard.class)
+        );
 
         // Simulate a call from the admin client without member id and member epoch.
         group.validateOffsetFetch(null, -1, Long.MAX_VALUE);
@@ -715,7 +732,7 @@ public class ConsumerGroupTest {
         long commitTimestamp = 20000L;
         long offsetsRetentionMs = 10000L;
         OffsetAndMetadata offsetAndMetadata = new OffsetAndMetadata(15000L, OptionalInt.empty(), "", commitTimestamp, OptionalLong.empty());
-        ConsumerGroup group = new ConsumerGroup(new SnapshotRegistry(new LogContext()), "group-id");
+        ConsumerGroup group = new ConsumerGroup(new SnapshotRegistry(new LogContext()), "group-id", mock(GroupCoordinatorMetricsShard.class));
 
         Optional<OffsetExpirationCondition> offsetExpirationCondition = group.offsetExpirationCondition();
         assertTrue(offsetExpirationCondition.isPresent());
