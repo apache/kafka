@@ -23,7 +23,7 @@ import kafka.server.KafkaRequestHandler.{threadCurrentRequest, threadRequestChan
 
 import java.util.concurrent.{CountDownLatch, TimeUnit}
 import java.util.concurrent.atomic.AtomicInteger
-import com.yammer.metrics.core.Meter
+import com.yammer.metrics.core.{Gauge, Meter}
 import org.apache.kafka.common.internals.FatalExitError
 import org.apache.kafka.common.utils.{KafkaThread, Time}
 import org.apache.kafka.server.log.remote.storage.RemoteStorageMetrics
@@ -254,7 +254,11 @@ class BrokerTopicMetrics(name: Option[String], configOpt: java.util.Optional[Kaf
     case Some(topic) => Map("topic" -> topic).asJava
   }
 
-  case class MeterWrapper(metricType: String, eventType: String) {
+  sealed trait MetricWrapper extends Product with Serializable {
+    def close(): Unit
+  }
+
+  case class MeterWrapper(metricType: String, eventType: String) extends MetricWrapper {
     @volatile private var lazyMeter: Meter = _
     private val meterLock = new Object
 
@@ -283,8 +287,37 @@ class BrokerTopicMetrics(name: Option[String], configOpt: java.util.Optional[Kaf
       meter()
   }
 
+  case class GaugeWrapper(metricType: String, brokerTopicAggregatedMetric: BrokerTopicAggregatedMetric) extends MetricWrapper {
+    @volatile private var lazyGauge: Gauge[Long] = _
+    private val gaugeLock = new Object
+
+    def gauge(): Gauge[Long] = {
+      var gauge = lazyGauge
+      if (gauge == null) {
+        gaugeLock synchronized {
+          gauge = lazyGauge
+          if (gauge == null) {
+            gauge = metricsGroup.newGauge(metricType, () => brokerTopicAggregatedMetric.value(), tags)
+            lazyGauge = gauge
+          }
+        }
+      }
+      gauge
+    }
+
+    def close(): Unit = gaugeLock synchronized {
+      if (lazyGauge != null) {
+        metricsGroup.removeMetric(metricType, tags)
+        lazyGauge = null
+      }
+    }
+
+    if (tags.isEmpty) // greedily initialize the general topic metrics
+      gauge()
+  }
+
   // an internal map for "lazy initialization" of certain metrics
-  private val metricTypeMap = new Pool[String, MeterWrapper]()
+  private val metricTypeMap = new Pool[String, MetricWrapper]()
   metricTypeMap.putAll(Map(
     BrokerTopicStats.MessagesInPerSec -> MeterWrapper(BrokerTopicStats.MessagesInPerSec, "messages"),
     BrokerTopicStats.BytesInPerSec -> MeterWrapper(BrokerTopicStats.BytesInPerSec, "bytes"),
@@ -299,7 +332,8 @@ class BrokerTopicMetrics(name: Option[String], configOpt: java.util.Optional[Kaf
     BrokerTopicStats.NoKeyCompactedTopicRecordsPerSec -> MeterWrapper(BrokerTopicStats.NoKeyCompactedTopicRecordsPerSec, "requests"),
     BrokerTopicStats.InvalidMagicNumberRecordsPerSec -> MeterWrapper(BrokerTopicStats.InvalidMagicNumberRecordsPerSec, "requests"),
     BrokerTopicStats.InvalidMessageCrcRecordsPerSec -> MeterWrapper(BrokerTopicStats.InvalidMessageCrcRecordsPerSec, "requests"),
-    BrokerTopicStats.InvalidOffsetOrSequenceRecordsPerSec -> MeterWrapper(BrokerTopicStats.InvalidOffsetOrSequenceRecordsPerSec, "requests")
+    BrokerTopicStats.InvalidOffsetOrSequenceRecordsPerSec -> MeterWrapper(BrokerTopicStats.InvalidOffsetOrSequenceRecordsPerSec, "requests"),
+    BrokerTopicStats.RemoteCopyLagBytes -> GaugeWrapper(BrokerTopicStats.RemoteCopyLagBytes, new BrokerTopicAggregatedMetric)
   ).asJava)
 
   if (name.isEmpty) {
@@ -311,7 +345,7 @@ class BrokerTopicMetrics(name: Option[String], configOpt: java.util.Optional[Kaf
 
   configOpt.ifPresent(config =>
     if (config.remoteLogManagerConfig.enableRemoteStorageSystem()) {
-      metricTypeMap.putAll(Map(
+      metricTypeMap.putAll(Map[String, MetricWrapper](
         RemoteStorageMetrics.REMOTE_COPY_BYTES_PER_SEC_METRIC.getName -> MeterWrapper(RemoteStorageMetrics.REMOTE_COPY_BYTES_PER_SEC_METRIC.getName, "bytes"),
         RemoteStorageMetrics.REMOTE_FETCH_BYTES_PER_SEC_METRIC.getName -> MeterWrapper(RemoteStorageMetrics.REMOTE_FETCH_BYTES_PER_SEC_METRIC.getName, "bytes"),
         RemoteStorageMetrics.REMOTE_FETCH_REQUESTS_PER_SEC_METRIC.getName -> MeterWrapper(RemoteStorageMetrics.REMOTE_FETCH_REQUESTS_PER_SEC_METRIC.getName, "requests"),
@@ -322,63 +356,65 @@ class BrokerTopicMetrics(name: Option[String], configOpt: java.util.Optional[Kaf
     })
 
   // used for testing only
-  def metricMap: Map[String, MeterWrapper] = metricTypeMap.toMap
+  def metricMap: Map[String, MetricWrapper] = metricTypeMap.toMap
 
-  def messagesInRate: Meter = metricTypeMap.get(BrokerTopicStats.MessagesInPerSec).meter()
+  def messagesInRate: Meter = metricTypeMap.get(BrokerTopicStats.MessagesInPerSec).asInstanceOf[MeterWrapper].meter()
 
-  def bytesInRate: Meter = metricTypeMap.get(BrokerTopicStats.BytesInPerSec).meter()
+  def bytesInRate: Meter = metricTypeMap.get(BrokerTopicStats.BytesInPerSec).asInstanceOf[MeterWrapper].meter()
 
-  def bytesOutRate: Meter = metricTypeMap.get(BrokerTopicStats.BytesOutPerSec).meter()
+  def bytesOutRate: Meter = metricTypeMap.get(BrokerTopicStats.BytesOutPerSec).asInstanceOf[MeterWrapper].meter()
 
-  def bytesRejectedRate: Meter = metricTypeMap.get(BrokerTopicStats.BytesRejectedPerSec).meter()
+  def bytesRejectedRate: Meter = metricTypeMap.get(BrokerTopicStats.BytesRejectedPerSec).asInstanceOf[MeterWrapper].meter()
 
   private[server] def replicationBytesInRate: Option[Meter] =
-    if (name.isEmpty) Some(metricTypeMap.get(BrokerTopicStats.ReplicationBytesInPerSec).meter())
+    if (name.isEmpty) Some(metricTypeMap.get(BrokerTopicStats.ReplicationBytesInPerSec).asInstanceOf[MeterWrapper].meter())
     else None
 
   private[server] def replicationBytesOutRate: Option[Meter] =
-    if (name.isEmpty) Some(metricTypeMap.get(BrokerTopicStats.ReplicationBytesOutPerSec).meter())
+    if (name.isEmpty) Some(metricTypeMap.get(BrokerTopicStats.ReplicationBytesOutPerSec).asInstanceOf[MeterWrapper].meter())
     else None
 
   private[server] def reassignmentBytesInPerSec: Option[Meter] =
-    if (name.isEmpty) Some(metricTypeMap.get(BrokerTopicStats.ReassignmentBytesInPerSec).meter())
+    if (name.isEmpty) Some(metricTypeMap.get(BrokerTopicStats.ReassignmentBytesInPerSec).asInstanceOf[MeterWrapper].meter())
     else None
 
   private[server] def reassignmentBytesOutPerSec: Option[Meter] =
-    if (name.isEmpty) Some(metricTypeMap.get(BrokerTopicStats.ReassignmentBytesOutPerSec).meter())
+    if (name.isEmpty) Some(metricTypeMap.get(BrokerTopicStats.ReassignmentBytesOutPerSec).asInstanceOf[MeterWrapper].meter())
     else None
 
-  def failedProduceRequestRate: Meter = metricTypeMap.get(BrokerTopicStats.FailedProduceRequestsPerSec).meter()
+  def failedProduceRequestRate: Meter = metricTypeMap.get(BrokerTopicStats.FailedProduceRequestsPerSec).asInstanceOf[MeterWrapper].meter()
 
-  def failedFetchRequestRate: Meter = metricTypeMap.get(BrokerTopicStats.FailedFetchRequestsPerSec).meter()
+  def failedFetchRequestRate: Meter = metricTypeMap.get(BrokerTopicStats.FailedFetchRequestsPerSec).asInstanceOf[MeterWrapper].meter()
 
-  def totalProduceRequestRate: Meter = metricTypeMap.get(BrokerTopicStats.TotalProduceRequestsPerSec).meter()
+  def totalProduceRequestRate: Meter = metricTypeMap.get(BrokerTopicStats.TotalProduceRequestsPerSec).asInstanceOf[MeterWrapper].meter()
 
-  def totalFetchRequestRate: Meter = metricTypeMap.get(BrokerTopicStats.TotalFetchRequestsPerSec).meter()
+  def totalFetchRequestRate: Meter = metricTypeMap.get(BrokerTopicStats.TotalFetchRequestsPerSec).asInstanceOf[MeterWrapper].meter()
 
-  def fetchMessageConversionsRate: Meter = metricTypeMap.get(BrokerTopicStats.FetchMessageConversionsPerSec).meter()
+  def fetchMessageConversionsRate: Meter = metricTypeMap.get(BrokerTopicStats.FetchMessageConversionsPerSec).asInstanceOf[MeterWrapper].meter()
 
-  def produceMessageConversionsRate: Meter = metricTypeMap.get(BrokerTopicStats.ProduceMessageConversionsPerSec).meter()
+  def produceMessageConversionsRate: Meter = metricTypeMap.get(BrokerTopicStats.ProduceMessageConversionsPerSec).asInstanceOf[MeterWrapper].meter()
 
-  def noKeyCompactedTopicRecordsPerSec: Meter = metricTypeMap.get(BrokerTopicStats.NoKeyCompactedTopicRecordsPerSec).meter()
+  def noKeyCompactedTopicRecordsPerSec: Meter = metricTypeMap.get(BrokerTopicStats.NoKeyCompactedTopicRecordsPerSec).asInstanceOf[MeterWrapper].meter()
 
-  def invalidMagicNumberRecordsPerSec: Meter = metricTypeMap.get(BrokerTopicStats.InvalidMagicNumberRecordsPerSec).meter()
+  def invalidMagicNumberRecordsPerSec: Meter = metricTypeMap.get(BrokerTopicStats.InvalidMagicNumberRecordsPerSec).asInstanceOf[MeterWrapper].meter()
 
-  def invalidMessageCrcRecordsPerSec: Meter = metricTypeMap.get(BrokerTopicStats.InvalidMessageCrcRecordsPerSec).meter()
+  def invalidMessageCrcRecordsPerSec: Meter = metricTypeMap.get(BrokerTopicStats.InvalidMessageCrcRecordsPerSec).asInstanceOf[MeterWrapper].meter()
 
-  def invalidOffsetOrSequenceRecordsPerSec: Meter = metricTypeMap.get(BrokerTopicStats.InvalidOffsetOrSequenceRecordsPerSec).meter()
+  def invalidOffsetOrSequenceRecordsPerSec: Meter = metricTypeMap.get(BrokerTopicStats.InvalidOffsetOrSequenceRecordsPerSec).asInstanceOf[MeterWrapper].meter()
 
-  def remoteCopyBytesRate: Meter = metricTypeMap.get(RemoteStorageMetrics.REMOTE_COPY_BYTES_PER_SEC_METRIC.getName).meter()
+  def remoteCopyLagBytesWrapper: BrokerTopicAggregatedMetric = metricTypeMap.get(BrokerTopicStats.RemoteCopyLagBytes).asInstanceOf[GaugeWrapper].brokerTopicAggregatedMetric
 
-  def remoteFetchBytesRate: Meter = metricTypeMap.get(RemoteStorageMetrics.REMOTE_FETCH_BYTES_PER_SEC_METRIC.getName).meter()
+  def remoteCopyBytesRate: Meter = metricTypeMap.get(RemoteStorageMetrics.REMOTE_COPY_BYTES_PER_SEC_METRIC.getName).asInstanceOf[MeterWrapper].meter()
 
-  def remoteFetchRequestRate: Meter = metricTypeMap.get(RemoteStorageMetrics.REMOTE_FETCH_REQUESTS_PER_SEC_METRIC.getName).meter()
+  def remoteFetchBytesRate: Meter = metricTypeMap.get(RemoteStorageMetrics.REMOTE_FETCH_BYTES_PER_SEC_METRIC.getName).asInstanceOf[MeterWrapper].meter()
 
-  def remoteCopyRequestRate: Meter = metricTypeMap.get(RemoteStorageMetrics.REMOTE_COPY_REQUESTS_PER_SEC_METRIC.getName).meter()
+  def remoteFetchRequestRate: Meter = metricTypeMap.get(RemoteStorageMetrics.REMOTE_FETCH_REQUESTS_PER_SEC_METRIC.getName).asInstanceOf[MeterWrapper].meter()
 
-  def failedRemoteFetchRequestRate: Meter = metricTypeMap.get(RemoteStorageMetrics.FAILED_REMOTE_FETCH_PER_SEC_METRIC.getName).meter()
+  def remoteCopyRequestRate: Meter = metricTypeMap.get(RemoteStorageMetrics.REMOTE_COPY_REQUESTS_PER_SEC_METRIC.getName).asInstanceOf[MeterWrapper].meter()
 
-  def failedRemoteCopyRequestRate: Meter = metricTypeMap.get(RemoteStorageMetrics.FAILED_REMOTE_COPY_PER_SEC_METRIC.getName).meter()
+  def failedRemoteFetchRequestRate: Meter = metricTypeMap.get(RemoteStorageMetrics.FAILED_REMOTE_FETCH_PER_SEC_METRIC.getName).asInstanceOf[MeterWrapper].meter()
+
+  def failedRemoteCopyRequestRate: Meter = metricTypeMap.get(RemoteStorageMetrics.FAILED_REMOTE_COPY_PER_SEC_METRIC.getName).asInstanceOf[MeterWrapper].meter()
 
   def closeMetric(metricType: String): Unit = {
     val meter = metricTypeMap.get(metricType)
@@ -387,6 +423,20 @@ class BrokerTopicMetrics(name: Option[String], configOpt: java.util.Optional[Kaf
   }
 
   def close(): Unit = metricTypeMap.values.foreach(_.close())
+}
+
+class BrokerTopicAggregatedMetric() {
+  private val partitionMetricValues = collection.concurrent.TrieMap[Int, Long]()
+
+  def setPartitionMetricValue(partition: Int, partitionValue: Long): Option[Long] = {
+    partitionMetricValues.put(partition, partitionValue)
+  }
+
+  def removePartition(partition: Int): Option[Long] = {
+    partitionMetricValues.remove(partition)
+  }
+
+  def value(): Long = partitionMetricValues.values.sum
 }
 
 object BrokerTopicStats {
@@ -404,6 +454,7 @@ object BrokerTopicStats {
   val ProduceMessageConversionsPerSec = "ProduceMessageConversionsPerSec"
   val ReassignmentBytesInPerSec = "ReassignmentBytesInPerSec"
   val ReassignmentBytesOutPerSec = "ReassignmentBytesOutPerSec"
+  val RemoteCopyLagBytes = "RemoteCopyLagBytes"
   // These following topics are for LogValidator for better debugging on failed records
   val NoKeyCompactedTopicRecordsPerSec = "NoKeyCompactedTopicRecordsPerSec"
   val InvalidMagicNumberRecordsPerSec = "InvalidMagicNumberRecordsPerSec"
