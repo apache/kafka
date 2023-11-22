@@ -426,10 +426,7 @@ public class ConsumerGroupTest {
             .setSubscribedTopicRegex("^foo.*")
             .setSubscribedTopicNames(Collections.emptyList())
             .build();
-        ConsumerGroupMember member5 = new ConsumerGroupMember.Builder("member4")
-            .setSubscribedTopicRegex("^bar.*")
-            .setSubscribedTopicNames(Collections.emptyList())
-            .build();
+
 
         ConsumerGroup consumerGroup = createConsumerGroup("group-foo");
 
@@ -631,6 +628,9 @@ public class ConsumerGroupTest {
         // Same member id with member1
         ConsumerGroupMember member2 = new ConsumerGroupMember.Builder(member1)
                 .setSubscribedTopicRegex("^z.*")
+                .setMemberEpoch(2)
+                .setPreviousMemberEpoch(1)
+                .setTargetMemberEpoch(2)
                 .build();
 
         ConsumerGroup consumerGroup = createConsumerGroup("group-foo");
@@ -652,9 +652,9 @@ public class ConsumerGroupTest {
         // Updating the group with member1.
         consumerGroup.updateMember(member1, image.topics());
 
-
         // Updating the group with member2.
         consumerGroup.updateMember(member2, image.topics());
+
 
         // It should return zar.
         assertEquals(

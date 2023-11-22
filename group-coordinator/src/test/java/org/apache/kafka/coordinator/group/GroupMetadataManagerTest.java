@@ -1686,6 +1686,101 @@ public class GroupMetadataManagerTest {
     }
 
     @Test
+    public void testUpdateRegexSubscriptionTriggersNewTargetAssignment() {
+        String groupId = "fooup";
+        String memberId = Uuid.randomUuid().toString();
+
+        Uuid fooTopicId = Uuid.randomUuid();
+        String fooTopicName = "foo";
+        Uuid foodTopicId = Uuid.randomUuid();
+        String foodTopicName = "food";
+
+
+        MockPartitionAssignor assignor = new MockPartitionAssignor("range");
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+                .withAssignors(Collections.singletonList(assignor))
+                .withMetadataImage(new MetadataImageBuilder()
+                        .addTopic(fooTopicId, fooTopicName, 6)
+                        .addTopic(foodTopicId, foodTopicName, 3)
+                        .addRacks()
+                        .build())
+                .build();
+
+        assignor.prepareGroupAssignment(new GroupAssignment(
+                Collections.singletonMap(memberId, new MemberAssignment(mkAssignment(
+                        mkTopicAssignment(fooTopicId, 0, 1, 2, 3, 4, 5),
+                        mkTopicAssignment(foodTopicId, 0, 1, 2)
+                )))
+        ));
+
+        assertThrows(GroupIdNotFoundException.class, () ->
+                context.groupMetadataManager.getOrMaybeCreateConsumerGroup(groupId, false));
+
+
+        CoordinatorResult<ConsumerGroupHeartbeatResponseData, Record> result = context.consumerGroupHeartbeat(
+                new ConsumerGroupHeartbeatRequestData()
+                        .setGroupId(groupId)
+                        .setMemberId(memberId)
+                        .setMemberEpoch(0)
+                        .setServerAssignor("range")
+                        .setRebalanceTimeoutMs(5000)
+                        .setSubscribedTopicRegex("^foo.*")
+                        .setTopicPartitions(Collections.emptyList()));
+
+
+        assertResponseEquals(
+                new ConsumerGroupHeartbeatResponseData()
+                        .setMemberId(memberId)
+                        .setMemberEpoch(1)
+                        .setHeartbeatIntervalMs(5000)
+                        .setAssignment(new ConsumerGroupHeartbeatResponseData.Assignment()
+                                .setTopicPartitions(Arrays.asList(
+                                        new ConsumerGroupHeartbeatResponseData.TopicPartitions()
+                                                .setTopicId(fooTopicId)
+                                                .setPartitions(Arrays.asList(0, 1, 2, 3, 4, 5)),
+                                        new ConsumerGroupHeartbeatResponseData.TopicPartitions()
+                                                .setTopicId(foodTopicId)
+                                                .setPartitions(Arrays.asList(0, 1, 2))
+                                ))),
+                result.response()
+        );
+
+        ConsumerGroupMember expectedMember = new ConsumerGroupMember.Builder(memberId)
+                .setMemberEpoch(1)
+                .setPreviousMemberEpoch(0)
+                .setTargetMemberEpoch(1)
+                .setClientId("client")
+                .setClientHost("localhost/127.0.0.1")
+                .setRebalanceTimeoutMs(5000)
+                .setSubscribedTopicRegex("^foo.*")
+                .setServerAssignorName("range")
+                .setAssignedPartitions(mkAssignment(
+                        mkTopicAssignment(fooTopicId, 0, 1, 2, 3, 4, 5),
+                        mkTopicAssignment(foodTopicId, 0, 1, 2)))
+                .build();
+
+        List<Record> expectedRecords = Arrays.asList(
+            RecordHelpers.newMemberSubscriptionRecord(groupId, expectedMember),
+            RecordHelpers.newGroupSubscriptionMetadataRecord(groupId, new HashMap<String, TopicMetadata>() {
+                {
+                    put(fooTopicName, new TopicMetadata(fooTopicId, fooTopicName, 6, mkMapOfPartitionRacks(3)));
+                    put(foodTopicName, new TopicMetadata(foodTopicId, foodTopicName, 3, mkMapOfPartitionRacks(6)));
+                }
+            }),
+            RecordHelpers.newGroupEpochRecord(groupId, 1),
+            RecordHelpers.newTargetAssignmentRecord(groupId, memberId, mkAssignment(
+                    mkTopicAssignment(fooTopicId, 0, 1, 2, 3, 4, 5),
+                    mkTopicAssignment(foodTopicId, 0, 1, 2)
+            )),
+            RecordHelpers.newTargetAssignmentEpochRecord(groupId, 1),
+            RecordHelpers.newCurrentAssignmentRecord(groupId, expectedMember)
+        );
+
+        assertRecordsEquals(expectedRecords, result.records());
+
+    }
+
+    @Test
     public void testNewJoiningMemberTriggersNewTargetAssignment() {
         String groupId = "fooup";
         // Use a static member id as it makes the test easier.
