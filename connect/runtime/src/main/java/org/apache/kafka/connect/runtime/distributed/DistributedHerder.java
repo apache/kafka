@@ -294,7 +294,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
         this.uponShutdown = Arrays.asList(uponShutdown);
 
         String clientIdConfig = config.getString(CommonClientConfigs.CLIENT_ID_CONFIG);
-        String clientId = clientIdConfig.isEmpty() ? workerId : clientIdConfig;
+        String clientId = clientIdConfig.isEmpty() ? "connect-" + workerId : clientIdConfig;
         // Thread factory uses String.format and '%' is handled as a placeholder
         // need to escape if the client.id contains an actual % character
         String escapedClientIdForThreadNameFormat = clientId.replace("%", "%%");
