@@ -304,6 +304,7 @@ class BrokerTopicMetrics(name: Option[String], configOpt: java.util.Optional[Kaf
     def close(): Unit = gaugeLock synchronized {
       if (lazyGauge != null) {
         metricsGroup.removeMetric(metricType, tags)
+        brokerTopicAggregatedMetric.close()
         lazyGauge = null
       }
     }
@@ -403,7 +404,15 @@ class BrokerTopicMetrics(name: Option[String], configOpt: java.util.Optional[Kaf
 
   def invalidOffsetOrSequenceRecordsPerSec: Meter = metricTypeMap.get(BrokerTopicStats.InvalidOffsetOrSequenceRecordsPerSec).meter()
 
-  def remoteCopyLagBytesWrapper: BrokerTopicAggregatedMetric = metricGaugeTypeMap.get(BrokerTopicStats.RemoteCopyLagBytes).brokerTopicAggregatedMetric
+  def remoteCopyLagBytesWrapper: Gauge[Long] = metricGaugeTypeMap.get(BrokerTopicStats.RemoteCopyLagBytes).gauge()
+
+  def remoteBrokerTopicAggregateMetrics: Option[BrokerTopicAggregatedMetric] = {
+    if (metricGaugeTypeMap.contains(BrokerTopicStats.RemoteCopyLagBytes)) {
+      Option.apply(metricGaugeTypeMap.get(BrokerTopicStats.RemoteCopyLagBytes).brokerTopicAggregatedMetric)
+    } else {
+      Option.empty[BrokerTopicAggregatedMetric]
+    }
+  }
 
   def remoteCopyBytesRate: Meter = metricTypeMap.get(RemoteStorageMetrics.REMOTE_COPY_BYTES_PER_SEC_METRIC.getName).meter()
 
@@ -423,7 +432,10 @@ class BrokerTopicMetrics(name: Option[String], configOpt: java.util.Optional[Kaf
       meter.close()
   }
 
-  def close(): Unit = metricTypeMap.values.foreach(_.close())
+  def close(): Unit = {
+    metricTypeMap.values.foreach(_.close())
+    metricGaugeTypeMap.values.foreach(_.close())
+  }
 }
 
 class BrokerTopicAggregatedMetric() {
@@ -438,6 +450,8 @@ class BrokerTopicAggregatedMetric() {
   }
 
   def value(): Long = partitionMetricValues.values.sum
+
+  def close(): Unit = partitionMetricValues.clear()
 }
 
 object BrokerTopicStats {
