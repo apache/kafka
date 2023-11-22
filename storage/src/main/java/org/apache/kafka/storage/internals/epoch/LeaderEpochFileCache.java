@@ -433,7 +433,7 @@ public class LeaderEpochFileCache {
     private void writeToFile(boolean sync) {
         lock.readLock().lock();
         try {
-            this.checkpoint.write(epochs.values(), sync);
+            checkpoint.write(epochs.values(), sync);
         } finally {
             lock.readLock().unlock();
         }
