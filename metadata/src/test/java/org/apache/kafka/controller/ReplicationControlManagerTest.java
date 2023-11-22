@@ -141,6 +141,7 @@ import static org.apache.kafka.controller.ControllerRequestContextUtil.QUOTA_EXC
 import static org.apache.kafka.controller.ControllerRequestContextUtil.anonymousContextFor;
 import static org.apache.kafka.controller.ControllerRequestContextUtil.anonymousContextWithMutationQuotaExceededFor;
 import static org.apache.kafka.metadata.LeaderConstants.NO_LEADER;
+import static org.apache.kafka.metadata.util.MetadataFeatureUtil.withDirectoryAssignmentSupport;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -345,15 +346,31 @@ public class ReplicationControlManagerTest {
         }
 
         void registerBrokers(Integer... brokerIds) throws Exception {
-            for (int brokerId : brokerIds) {
+            Object[] brokersAndDirs = new Object[brokerIds.length * 2];
+            for (int i = 0; i < brokerIds.length; i++) {
+                brokersAndDirs[i * 2] = brokerIds[i];
+                brokersAndDirs[i * 2 + 1] = Collections.singletonList(DirectoryId.UNASSIGNED);
+            }
+            registerBrokersWithDirs(brokersAndDirs);
+        }
+
+        @SuppressWarnings("unchecked")
+        void registerBrokersWithDirs(Object... brokerIdsAndDirs) throws Exception {
+            if (brokerIdsAndDirs.length % 2 != 0) {
+                throw new IllegalArgumentException("uneven number of arguments");
+            }
+            for (int i = 0; i < brokerIdsAndDirs.length / 2; i++) {
+                int brokerId = (int) brokerIdsAndDirs[i * 2];
+                List<Uuid> logDirs = (List<Uuid>) brokerIdsAndDirs[i * 2 + 1];
                 RegisterBrokerRecord brokerRecord = new RegisterBrokerRecord().
-                    setBrokerEpoch(defaultBrokerEpoch(brokerId)).setBrokerId(brokerId).setRack(null);
+                    setBrokerEpoch(defaultBrokerEpoch(brokerId)).setBrokerId(brokerId).
+                        setRack(null).setLogDirs(logDirs);
                 brokerRecord.endPoints().add(new RegisterBrokerRecord.BrokerEndpoint().
                     setSecurityProtocol(SecurityProtocol.PLAINTEXT.id).
                     setPort((short) 9092 + brokerId).
                     setName("PLAINTEXT").
                     setHost("localhost"));
-                replay(Collections.singletonList(new ApiMessageAndVersion(brokerRecord, (short) 0)));
+                replay(Collections.singletonList(new ApiMessageAndVersion(brokerRecord, (short) 3)));
             }
         }
 
@@ -508,7 +525,9 @@ public class ReplicationControlManagerTest {
 
     @Test
     public void testCreateTopics() throws Exception {
-        ReplicationControlTestContext ctx = new ReplicationControlTestContext.Builder().build();
+        ReplicationControlTestContext ctx = new ReplicationControlTestContext.Builder()
+                .setMetadataVersion(withDirectoryAssignmentSupport(MetadataVersion.latest()))
+                .build();
         ReplicationControlManager replicationControl = ctx.replicationControl;
         CreateTopicsRequestData request = new CreateTopicsRequestData();
         request.topics().add(new CreatableTopic().setName("foo").
@@ -550,6 +569,7 @@ public class ReplicationControlManagerTest {
         assertEquals(expectedResponse3, result3.response());
         ctx.replay(result3.records());
         assertEquals(new PartitionRegistration.Builder().setReplicas(new int[] {1, 2, 0}).
+            setDirectories(DirectoryId.migratingArray(3)).
             setIsr(new int[] {1, 2, 0}).setLeader(1).setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).setLeaderEpoch(0).setPartitionEpoch(0).build(),
             replicationControl.getPartition(
                 ((TopicRecord) result3.records().get(0).message()).topicId(), 0));
@@ -584,7 +604,9 @@ public class ReplicationControlManagerTest {
 
     @Test
     public void testCreateTopicsISRInvariants() throws Exception {
-        ReplicationControlTestContext ctx = new ReplicationControlTestContext.Builder().build();
+        ReplicationControlTestContext ctx = new ReplicationControlTestContext.Builder()
+                .setMetadataVersion(withDirectoryAssignmentSupport(MetadataVersion.latest()))
+                .build();
         ReplicationControlManager replicationControl = ctx.replicationControl;
 
         CreateTopicsRequestData request = new CreateTopicsRequestData();
@@ -612,6 +634,7 @@ public class ReplicationControlManagerTest {
         // cannot be in the ISR because it is in controlled shutdown.
         assertEquals(
             new PartitionRegistration.Builder().setReplicas(new int[]{1, 0, 2}).
+                setDirectories(DirectoryId.migratingArray(3)).
                 setIsr(new int[]{0}).
                 setLeader(0).
                 setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).
@@ -1515,6 +1538,7 @@ public class ReplicationControlManagerTest {
         // cannot be in the ISR because it is in controlled shutdown.
         assertEquals(
             new PartitionRegistration.Builder().setReplicas(new int[]{0, 1, 2}).
+                setDirectories(DirectoryId.migratingArray(3)).
                 setIsr(new int[]{0}).
                 setLeader(0).
                 setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).
@@ -1568,7 +1592,10 @@ public class ReplicationControlManagerTest {
     @ParameterizedTest
     @ApiKeyVersionsSource(apiKey = ApiKeys.ALTER_PARTITION)
     public void testReassignPartitions(short version) throws Exception {
-        ReplicationControlTestContext ctx = new ReplicationControlTestContext.Builder().build();
+        MetadataVersion metadataVersion = withDirectoryAssignmentSupport(MetadataVersion.latest());
+        ReplicationControlTestContext ctx = new ReplicationControlTestContext.Builder()
+                .setMetadataVersion(metadataVersion)
+                .build();
         ReplicationControlManager replication = ctx.replicationControl;
         ctx.registerBrokers(0, 1, 2, 3);
         ctx.unfenceBrokers(0, 1, 2, 3);
@@ -1634,9 +1661,9 @@ public class ReplicationControlManagerTest {
             new PartitionChangeRecord().setTopicId(fooId).
                 setPartitionId(1).
                 setReplicas(asList(2, 1, 3)).
+                setDirectories(asList(DirectoryId.migratingArray(3))).
                 setLeader(3).
                 setRemovingReplicas(Collections.emptyList()).
-                setDirectories(Arrays.asList(DirectoryId.unassignedArray(3))).
                 setAddingReplicas(Collections.emptyList()), MetadataVersion.latest().partitionChangeRecordVersion())),
             new AlterPartitionReassignmentsResponseData().setErrorMessage(null).setResponses(asList(
                 new ReassignableTopicResponse().setName("foo").setPartitions(asList(
@@ -1686,7 +1713,9 @@ public class ReplicationControlManagerTest {
     @ParameterizedTest
     @ApiKeyVersionsSource(apiKey = ApiKeys.ALTER_PARTITION)
     public void testAlterPartitionShouldRejectFencedBrokers(short version) throws Exception {
-        ReplicationControlTestContext ctx = new ReplicationControlTestContext.Builder().build();
+        ReplicationControlTestContext ctx = new ReplicationControlTestContext.Builder()
+                .setMetadataVersion(withDirectoryAssignmentSupport(MetadataVersion.latest()))
+                .build();
         ReplicationControlManager replication = ctx.replicationControl;
         ctx.registerBrokers(0, 1, 2, 3, 4);
         ctx.unfenceBrokers(0, 1, 2, 3, 4);
@@ -1702,6 +1731,7 @@ public class ReplicationControlManagerTest {
         assertEquals(
             new PartitionRegistration.Builder().
                 setReplicas(new int[] {1, 2, 3, 4}).
+                setDirectories(DirectoryId.migratingArray(4)).
                 setIsr(new int[] {1, 2, 4}).
                 setLeader(1).
                 setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).
@@ -1832,7 +1862,9 @@ public class ReplicationControlManagerTest {
     @ParameterizedTest
     @ApiKeyVersionsSource(apiKey = ApiKeys.ALTER_PARTITION)
     public void testAlterPartitionShouldRejectShuttingDownBrokers(short version) throws Exception {
-        ReplicationControlTestContext ctx = new ReplicationControlTestContext.Builder().build();
+        ReplicationControlTestContext ctx = new ReplicationControlTestContext.Builder()
+                .setMetadataVersion(withDirectoryAssignmentSupport(MetadataVersion.latest()))
+                .build();
         ReplicationControlManager replication = ctx.replicationControl;
         ctx.registerBrokers(0, 1, 2, 3, 4);
         ctx.unfenceBrokers(0, 1, 2, 3, 4);
@@ -1844,6 +1876,7 @@ public class ReplicationControlManagerTest {
         assertEquals(
             new PartitionRegistration.Builder().
                 setReplicas(new int[] {1, 2, 3, 4}).
+                setDirectories(DirectoryId.migratingArray(4)).
                 setIsr(new int[] {1, 2, 3, 4}).
                 setLeader(1).
                 setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).
@@ -1886,7 +1919,10 @@ public class ReplicationControlManagerTest {
 
     @Test
     public void testCancelReassignPartitions() throws Exception {
-        ReplicationControlTestContext ctx = new ReplicationControlTestContext.Builder().build();
+        MetadataVersion metadataVersion = withDirectoryAssignmentSupport(MetadataVersion.latest());
+        ReplicationControlTestContext ctx = new ReplicationControlTestContext.Builder()
+                .setMetadataVersion(metadataVersion)
+                .build();
         ReplicationControlManager replication = ctx.replicationControl;
         ctx.registerBrokers(0, 1, 2, 3, 4);
         ctx.unfenceBrokers(0, 1, 2, 3, 4);
@@ -1900,6 +1936,7 @@ public class ReplicationControlManagerTest {
         replication.handleBrokerFenced(3, fenceRecords);
         ctx.replay(fenceRecords);
         assertEquals(new PartitionRegistration.Builder().setReplicas(new int[] {1, 2, 3, 4}).setIsr(new int[] {1, 2, 4}).
+            setDirectories(DirectoryId.migratingArray(4)).
             setLeader(1).setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).setLeaderEpoch(0).setPartitionEpoch(1).build(), replication.getPartition(fooId, 0));
         ControllerResult<AlterPartitionReassignmentsResponseData> alterResult =
             replication.alterPartitionReassignments(
@@ -1937,10 +1974,13 @@ public class ReplicationControlManagerTest {
             alterResult.response());
         ctx.replay(alterResult.records());
         assertEquals(new PartitionRegistration.Builder().setReplicas(new int[] {1, 2, 3}).setIsr(new int[] {1, 2}).
+            setDirectories(DirectoryId.migratingArray(3)).
             setLeader(1).setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).setLeaderEpoch(1).setPartitionEpoch(2).build(), replication.getPartition(fooId, 0));
         assertEquals(new PartitionRegistration.Builder().setReplicas(new int[] {1, 2, 3, 0}).setIsr(new int[] {0, 1, 2}).
+            setDirectories(DirectoryId.migratingArray(4)).
             setLeader(0).setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).setLeaderEpoch(0).setPartitionEpoch(2).build(), replication.getPartition(fooId, 1));
         assertEquals(new PartitionRegistration.Builder().setReplicas(new int[] {1, 2, 3, 4, 0}).setIsr(new int[] {4, 2}).
+            setDirectories(DirectoryId.migratingArray(5)).
             setAddingReplicas(new int[] {0, 1}).setLeader(4).setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).setLeaderEpoch(0).setPartitionEpoch(2).build(), replication.getPartition(barId, 0));
         ListPartitionReassignmentsResponseData currentReassigning =
             new ListPartitionReassignmentsResponseData().setErrorMessage(null).
@@ -1987,8 +2027,8 @@ public class ReplicationControlManagerTest {
                     setPartitionId(0).
                     setLeader(4).
                     setReplicas(asList(2, 3, 4)).
+                    setDirectories(asList(DirectoryId.migratingArray(3))).
                     setRemovingReplicas(null).
-                    setDirectories(Arrays.asList(DirectoryId.unassignedArray(3))).
                     setAddingReplicas(Collections.emptyList()), MetadataVersion.latest().partitionChangeRecordVersion())),
             new AlterPartitionReassignmentsResponseData().setErrorMessage(null).setResponses(asList(
                 new ReassignableTopicResponse().setName("foo").setPartitions(asList(
@@ -2001,6 +2041,7 @@ public class ReplicationControlManagerTest {
         ctx.replay(cancelResult.records());
         assertEquals(NONE_REASSIGNING, replication.listPartitionReassignments(null, Long.MAX_VALUE));
         assertEquals(new PartitionRegistration.Builder().setReplicas(new int[] {2, 3, 4}).setIsr(new int[] {4, 2}).
+            setDirectories(DirectoryId.migratingArray(3)).
             setLeader(4).setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).setLeaderEpoch(1).setPartitionEpoch(3).build(), replication.getPartition(barId, 0));
     }
 
@@ -2014,7 +2055,9 @@ public class ReplicationControlManagerTest {
 
     @Test
     public void testCreatePartitionsFailsWithManualAssignmentWithAllFenced() throws Exception {
-        ReplicationControlTestContext ctx = new ReplicationControlTestContext.Builder().build();
+        ReplicationControlTestContext ctx = new ReplicationControlTestContext.Builder()
+                .setMetadataVersion(withDirectoryAssignmentSupport(MetadataVersion.latest()))
+                .build();
         ctx.registerBrokers(0, 1, 2, 3, 4, 5);
         ctx.unfenceBrokers(0, 1, 2);
         Uuid fooId = ctx.createTestTopic("foo", new int[][] {new int[] {0, 1, 2}}).topicId();
@@ -2022,6 +2065,7 @@ public class ReplicationControlManagerTest {
             INVALID_REPLICA_ASSIGNMENT.code());
         ctx.createPartitions(2, "foo", new int[][] {new int[] {2, 4, 5}}, NONE.code());
         assertEquals(new PartitionRegistration.Builder().setReplicas(new int[] {2, 4, 5}).
+                setDirectories(DirectoryId.migratingArray(3)).
                 setIsr(new int[] {2}).setLeader(2).setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).setLeaderEpoch(0).setPartitionEpoch(0).build(),
             ctx.replicationControl.getPartition(fooId, 1));
     }

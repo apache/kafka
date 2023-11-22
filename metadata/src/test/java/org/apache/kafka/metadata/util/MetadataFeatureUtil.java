@@ -15,26 +15,18 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.metadata.placement;
+package org.apache.kafka.metadata.util;
 
-import org.apache.kafka.common.Uuid;
-import org.apache.kafka.common.annotation.InterfaceStability;
+import org.apache.kafka.server.common.MetadataVersion;
+import org.mockito.internal.util.MockUtil;
 
-import java.util.Iterator;
+import static org.mockito.Mockito.spy;
+import static org.mockito.Mockito.when;
 
-
-/**
- * Can describe a cluster to a ReplicaPlacer.
- */
-@InterfaceStability.Unstable
-public interface ClusterDescriber extends DefaultDirProvider {
-    /**
-     * Get an iterator through the usable brokers.
-     */
-    Iterator<UsableBroker> usableBrokers();
-
-    /**
-     * Get the default directory for new partitions placed in a given broker.
-     */
-    Uuid defaultDir(int brokerId);
+public class MetadataFeatureUtil {
+    public static MetadataVersion withDirectoryAssignmentSupport(MetadataVersion metadataVersion) {
+        MetadataVersion spy = MockUtil.isMock(metadataVersion) ? metadataVersion : spy(metadataVersion);
+        when(spy.isDirectoryAssignmentSupported()).thenReturn(true);
+        return spy;
+    }
 }

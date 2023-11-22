@@ -18,23 +18,15 @@
 package org.apache.kafka.metadata.placement;
 
 import org.apache.kafka.common.Uuid;
-import org.apache.kafka.common.annotation.InterfaceStability;
-
-import java.util.Iterator;
-
 
 /**
- * Can describe a cluster to a ReplicaPlacer.
+ * Provide the default directory for new partitions in a given broker.
+ * For brokers that are registered with multiple directories, the return value
+ * should always be {@link org.apache.kafka.common.DirectoryId#UNASSIGNED}.
+ * For brokers that are registered with a single log directory, then the return
+ * value should be the ID for that directory.
  */
-@InterfaceStability.Unstable
-public interface ClusterDescriber extends DefaultDirProvider {
-    /**
-     * Get an iterator through the usable brokers.
-     */
-    Iterator<UsableBroker> usableBrokers();
-
-    /**
-     * Get the default directory for new partitions placed in a given broker.
-     */
+@FunctionalInterface
+public interface DefaultDirProvider {
     Uuid defaultDir(int brokerId);
 }
