@@ -205,15 +205,17 @@
 This project bundles some components that are also licensed under the Apache
 License Version 2.0:
 
-audience-annotations-0.13.0
+audience-annotations-0.12.0
 caffeine-2.9.3
 commons-beanutils-1.9.4
 commons-cli-1.4
 commons-collections-3.2.2
 commons-digester-2.1
+commons-io-2.11.0
 commons-lang3-3.8.1
 commons-logging-1.2
 commons-validator-1.7
+error_prone_annotations-2.10.0
 jackson-annotations-2.13.5
 jackson-core-2.13.5
 jackson-databind-2.13.5
@@ -250,7 +252,8 @@ netty-transport-4.1.100.Final
 netty-transport-classes-epoll-4.1.100.Final
 netty-transport-native-epoll-4.1.100.Final
 netty-transport-native-unix-common-4.1.100.Final
-plexus-utils-3.3.0
+opentelemetry-proto-1.0.0-alpha
+plexus-utils-3.3.1
 reflections-0.10.2
 reload4j-1.2.25
 rocksdbjni-7.9.2
@@ -310,6 +313,7 @@ activation-1.1.1
 MIT License
 
 argparse4j-0.7.0, see: licenses/argparse-MIT
+checker-qual-3.19.0, see: licenses/checker-qual-MIT
 jopt-simple-5.0.4, see: licenses/jopt-simple-MIT
 slf4j-api-1.7.36, see: licenses/slf4j-MIT
 slf4j-reload4j-1.7.36, see: licenses/slf4j-MIT
@@ -324,7 +328,9 @@ zstd-jni-1.5.5-6 see: licenses/zstd-jni-BSD-2-clause
 BSD 3-Clause
 
 jline-3.22.0, see: licenses/jline-BSD-3-clause
+jsr305-3.0.2, see: licenses/jsr305-BSD-3-clause
 paranamer-2.8, see: licenses/paranamer-BSD-3-clause
+protobuf-java-3.23.4, see: licenses/protobuf-java-BSD-3-clause
 
 ---------------------------------------
 Do What The F*ck You Want To Public License
