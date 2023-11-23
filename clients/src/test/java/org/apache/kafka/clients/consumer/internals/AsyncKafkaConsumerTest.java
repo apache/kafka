@@ -210,18 +210,21 @@ public class AsyncKafkaConsumerTest {
     public void testCommittedLeaderEpochUpdate() {
         final TopicPartition t0 = new TopicPartition("t0", 2);
         final TopicPartition t1 = new TopicPartition("t0", 3);
+        final TopicPartition t2 = new TopicPartition("t0", 4);
         HashMap<TopicPartition, OffsetAndMetadata> topicPartitionOffsets = new HashMap<>();
         topicPartitionOffsets.put(t0, new OffsetAndMetadata(10L, Optional.of(2), ""));
         topicPartitionOffsets.put(t1, null);
+        topicPartitionOffsets.put(t2, new OffsetAndMetadata(20L, Optional.of(3), ""));
 
         CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> committedFuture = new CompletableFuture<>();
         committedFuture.complete(topicPartitionOffsets);
 
         try (MockedConstruction<OffsetFetchApplicationEvent> ignored = offsetFetchEventMocker(committedFuture)) {
             assertDoesNotThrow(() -> consumer.committed(topicPartitionOffsets.keySet(), Duration.ofMillis(1000)));
-            verify(testBuilder.metadata).updateLastSeenEpochIfNewer(t0, 2);
-            verify(applicationEventHandler).add(ArgumentMatchers.isA(OffsetFetchApplicationEvent.class));
         }
+        verify(testBuilder.metadata).updateLastSeenEpochIfNewer(t0, 2);
+        verify(testBuilder.metadata).updateLastSeenEpochIfNewer(t2, 3);
+        verify(applicationEventHandler).add(ArgumentMatchers.isA(OffsetFetchApplicationEvent.class));
     }
 
     @Test
@@ -303,7 +306,6 @@ public class AsyncKafkaConsumerTest {
         verify(applicationEventHandler).add(ArgumentMatchers.isA(CommitApplicationEvent.class));
     }
 
-
     @Test
     public void testCommitAsyncLeaderEpochUpdate() {
         MockCommitCallback callback = new MockCommitCallback();
@@ -325,7 +327,6 @@ public class AsyncKafkaConsumerTest {
         verify(testBuilder.metadata).updateLastSeenEpochIfNewer(t1, 1);
         verify(applicationEventHandler).add(ArgumentMatchers.isA(CommitApplicationEvent.class));
     }
-
 
     @Test
     public void testEnsurePollExecutedCommitAsyncCallbacks() {
