@@ -1003,6 +1003,7 @@ public class InternalTopologyBuilderTest {
         assertThat(topologyBuilder.topologyConfigs().cacheSize, equalTo(200L));
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     @SuppressWarnings("deprecation")
     public void shouldSetBufferedPartitionsToNegativeValueWhenBothBufferedRecordsPerPartitionAndInputBufferMaxBytesConfigAreSet() {

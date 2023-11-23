@@ -132,10 +132,19 @@ class ReassignPartitionsTest(ProduceConsumeValidateTest):
         time.sleep(6)
 
     @cluster(num_nodes=8)
-    @matrix(bounce_brokers=[True, False],
-            reassign_from_offset_zero=[True, False],
-            metadata_quorum=quorum.all_non_upgrade)
-    def test_reassign_partitions(self, bounce_brokers, reassign_from_offset_zero, metadata_quorum):
+    @matrix(
+        bounce_brokers=[True, False],
+        reassign_from_offset_zero=[True, False],
+        metadata_quorum=[quorum.zk],
+        use_new_coordinator=[False]
+    )
+    @matrix(
+        bounce_brokers=[True, False],
+        reassign_from_offset_zero=[True, False],
+        metadata_quorum=[quorum.isolated_kraft],
+        use_new_coordinator=[True, False]
+    )
+    def test_reassign_partitions(self, bounce_brokers, reassign_from_offset_zero, metadata_quorum, use_new_coordinator=False):
         """Reassign partitions tests.
         Setup: 1 zk, 4 kafka nodes, 1 topic with partitions=20, replication-factor=3,
         and min.insync.replicas=3

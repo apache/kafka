@@ -306,11 +306,13 @@ public class DefaultStateUpdater implements StateUpdater {
 
         private void waitIfAllChangelogsCompletelyRead() {
             tasksAndActionsLock.lock();
+            final boolean noTasksToUpdate = changelogReader.allChangelogsCompleted() || updatingTasks.isEmpty();
             try {
                 while (isRunning.get() &&
-                    (changelogReader.allChangelogsCompleted() || updatingTasks.isEmpty()) &&
+                    noTasksToUpdate &&
                     tasksAndActions.isEmpty() &&
                     !isTopologyResumed.get()) {
+
                     isIdle.set(true);
                     tasksAndActionsCondition.await();
                 }
