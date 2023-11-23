@@ -1044,7 +1044,8 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
     @Override
     @Deprecated
     public ConsumerRecords<K, V> poll(final long timeoutMs) {
-        return poll(Duration.ofMillis(timeoutMs));
+        throw new UnsupportedOperationException("Consumer.poll(long) is not supported when \"group.protocol\" is \"consumer\". " +
+             "This method is deprecated and will be removed in the next major release.");
     }
 
     // Visible for testing

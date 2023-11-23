@@ -96,7 +96,7 @@ public class RecordsUtil {
         }
 
         buffer.flip();
-        RecordConversionStats stats = new RecordConversionStats(temporaryMemoryBytes, numRecordsConverted,
+        RecordValidationStats stats = new RecordValidationStats(temporaryMemoryBytes, numRecordsConverted,
                 time.nanoseconds() - startNanos);
         return new ConvertedRecords<>(MemoryRecords.readableRecords(buffer), stats);
     }

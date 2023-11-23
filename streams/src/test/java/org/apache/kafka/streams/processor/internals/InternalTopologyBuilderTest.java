@@ -1003,6 +1003,7 @@ public class InternalTopologyBuilderTest {
         assertThat(topologyBuilder.topologyConfigs().cacheSize, equalTo(200L));
     }
 
+    @SuppressWarnings("deprecation")
     @Test
     public void shouldOverrideGlobalStreamsConfigWhenGivenNamedTopologyProps() {
         final Properties topologyOverrides = new Properties();

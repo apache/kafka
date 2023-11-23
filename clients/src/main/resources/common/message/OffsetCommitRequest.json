@@ -34,9 +34,6 @@
   //
   // Version 9 is the first version that can be used with the new consumer group protocol (KIP-848). The
   // request is the same as version 8.
-  // Version 9 is added as part of KIP-848 and is still under development. Hence, the last version of the
-  // API is not exposed by default by brokers unless explicitly enabled.
-  "latestVersionUnstable": true,
   "validVersions": "0-9",
   "flexibleVersions": "8+",
   "fields": [

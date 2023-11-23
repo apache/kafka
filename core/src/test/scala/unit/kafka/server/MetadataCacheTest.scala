@@ -16,7 +16,7 @@
   */
 package kafka.server
 
-import org.apache.kafka.common.{Node, TopicPartition, Uuid}
+import org.apache.kafka.common.{DirectoryId, Node, TopicPartition, Uuid}
 
 import java.util
 import java.util.Arrays.asList
@@ -1005,5 +1005,46 @@ class MetadataCacheTest {
       assertTrue(cache.contains("test-topic-1"))
       assertTrue(cache.contains("test-topic-1"))
     }
+  }
+
+  @Test
+  def testGetOfflineReplicasConsidersDirAssignment(): Unit = {
+    case class Broker(id: Int, dirs: util.List[Uuid])
+    case class Partition(id: Int, replicas: util.List[Integer], dirs: util.List[Uuid])
+
+    def offlinePartitions(brokers: Seq[Broker], partitions: Seq[Partition]): Map[Int, util.List[Integer]] = {
+      val delta = new MetadataDelta.Builder().build()
+      brokers.foreach(broker => delta.replay(
+        new RegisterBrokerRecord().setFenced(false).
+          setBrokerId(broker.id).setLogDirs(broker.dirs).
+          setEndPoints(new BrokerEndpointCollection(Collections.singleton(
+            new RegisterBrokerRecord.BrokerEndpoint().setSecurityProtocol(SecurityProtocol.PLAINTEXT.id).
+              setPort(9093.toShort).setName("PLAINTEXT").setHost(s"broker-${broker.id}")).iterator()))))
+      val topicId = Uuid.fromString("95OVr1IPRYGrcNCLlpImCA")
+      delta.replay(new TopicRecord().setTopicId(topicId).setName("foo"))
+      partitions.foreach(partition => delta.replay(
+        new PartitionRecord().setTopicId(topicId).setPartitionId(partition.id).
+          setReplicas(partition.replicas).setDirectories(partition.dirs).
+          setLeader(partition.replicas.get(0)).setIsr(partition.replicas)))
+      val cache = MetadataCache.kRaftMetadataCache(1)
+      cache.setImage(delta.apply(MetadataProvenance.EMPTY))
+      val topicMetadata = cache.getTopicMetadata(Set("foo"), ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT)).head
+      topicMetadata.partitions().asScala.map(p => (p.partitionIndex(), p.offlineReplicas())).toMap
+    }
+
+    val brokers = Seq(
+      Broker(0, asList(Uuid.fromString("broker1logdirjEo71BG0w"))),
+      Broker(1, asList(Uuid.fromString("broker2logdirRmQQgLxgw")))
+    )
+    val partitions = Seq(
+      Partition(0, asList(0, 1), asList(Uuid.fromString("broker1logdirjEo71BG0w"), DirectoryId.LOST)),
+      Partition(1, asList(0, 1), asList(Uuid.fromString("unknownlogdirjEo71BG0w"), DirectoryId.UNASSIGNED)),
+      Partition(2, asList(0, 1), asList(DirectoryId.MIGRATING, Uuid.fromString("broker2logdirRmQQgLxgw")))
+    )
+    assertEquals(Map(
+      0 -> asList(1),
+      1 -> asList(0),
+      2 -> asList(),
+    ), offlinePartitions(brokers, partitions))
   }
 }
