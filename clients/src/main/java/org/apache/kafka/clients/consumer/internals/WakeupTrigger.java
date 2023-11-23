@@ -21,6 +21,7 @@ import org.apache.kafka.common.errors.WakeupException;
 
 import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 
 /**
@@ -44,6 +45,10 @@ public class WakeupTrigger {
                 ActiveFuture active = (ActiveFuture) task;
                 active.future().completeExceptionally(new WakeupException());
                 return null;
+            } else if (task instanceof FetchAction) {
+                FetchAction fetchAction = (FetchAction) task;
+                fetchAction.fetchBuffer().wakeup();
+                return new WakeupFuture();
             } else {
                 return task;
             }
@@ -75,15 +80,49 @@ public class WakeupTrigger {
         return currentTask;
     }
 
-    public void clearActiveTask() {
+    public void setFetchAction(final FetchBuffer fetchBuffer) {
+        final AtomicBoolean throwWakeupException = new AtomicBoolean(false);
+        pendingTask.getAndUpdate(task -> {
+            if (task == null) {
+                return new FetchAction(fetchBuffer);
+            } else if (task instanceof WakeupFuture) {
+                throwWakeupException.set(true);
+                return null;
+            }
+            // last active state is still active
+            throw new IllegalStateException("Last active task is still active");
+        });
+        if (throwWakeupException.get()) {
+            throw new WakeupException();
+        }
+    }
+
+    public void clearTask() {
         pendingTask.getAndUpdate(task -> {
             if (task == null) {
                 return null;
-            } else if (task instanceof ActiveFuture) {
+            } else if (task instanceof ActiveFuture || task instanceof FetchAction) {
                 return null;
             }
             return task;
         });
+    }
+
+    public void maybeTriggerWakeup() {
+        final AtomicBoolean throwWakeupException = new AtomicBoolean(false);
+        pendingTask.getAndUpdate(task -> {
+            if (task == null) {
+                return null;
+            } else if (task instanceof WakeupFuture) {
+                throwWakeupException.set(true);
+                return null;
+            } else {
+                return task;
+            }
+        });
+        if (throwWakeupException.get()) {
+            throw new WakeupException();
+        }
     }
 
     Wakeupable getPendingTask() {
@@ -105,4 +144,17 @@ public class WakeupTrigger {
     }
 
     static class WakeupFuture implements Wakeupable { }
+
+    static class FetchAction implements Wakeupable {
+
+        private final FetchBuffer fetchBuffer;
+
+        public FetchAction(FetchBuffer fetchBuffer) {
+            this.fetchBuffer = fetchBuffer;
+        }
+
+        public FetchBuffer fetchBuffer() {
+            return fetchBuffer;
+        }
+    }
 }
