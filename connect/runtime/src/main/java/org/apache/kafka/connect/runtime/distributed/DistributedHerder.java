@@ -1644,7 +1644,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
      * exclusively by the leader. For example, {@link ConfigBackingStore#putTargetState(String, TargetState)} does not require this
      * method, as it can be invoked by any worker in the cluster.
      * @param write the action that writes to the config topic, such as {@link ConfigBackingStore#putSessionKey(SessionKey)} or
-     *              {@link ConfigBackingStore#putConnectorConfig(String, Map)}.
+     *              {@link ConfigBackingStore#putConnectorConfig(String, Map, TargetState)}.
      */
     private void writeToConfigTopicAsLeader(Runnable write) {
         try {

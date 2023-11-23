@@ -14,54 +14,51 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.clients.consumer.internals.events;
-
-import org.apache.kafka.clients.consumer.internals.ConsumerNetworkThread;
+package org.apache.kafka.streams.state;
 
 import java.util.Objects;
 
 /**
- * This is the abstract definition of the events created by the {@link ConsumerNetworkThread network thread}.
+ * {@code DslKeyValueParams} is a wrapper class for all parameters that function
+ * as inputs to {@link DslStoreSuppliers#keyValueStore(DslKeyValueParams)}.
  */
-public abstract class BackgroundEvent {
+public class DslKeyValueParams {
 
-    public enum Type {
-        ERROR, AUTO_COMMIT_COMPLETION
+    private final String name;
+
+    /**
+     * @param name the name of the store (cannot be {@code null})
+     */
+    public DslKeyValueParams(final String name) {
+        Objects.requireNonNull(name);
+        this.name = name;
     }
 
-    protected final Type type;
-
-    public BackgroundEvent(Type type) {
-        this.type = Objects.requireNonNull(type);
-    }
-
-    public Type type() {
-        return type;
+    public String name() {
+        return name;
     }
 
     @Override
-    public boolean equals(Object o) {
-        if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
-
-        BackgroundEvent that = (BackgroundEvent) o;
-
-        return type == that.type;
+    public boolean equals(final Object o) {
+        if (this == o) {
+            return true;
+        }
+        if (o == null || getClass() != o.getClass()) {
+            return false;
+        }
+        final DslKeyValueParams that = (DslKeyValueParams) o;
+        return Objects.equals(name, that.name);
     }
 
     @Override
     public int hashCode() {
-        return type.hashCode();
-    }
-
-    protected String toStringBase() {
-        return "type=" + type;
+        return Objects.hash(name);
     }
 
     @Override
     public String toString() {
-        return "BackgroundEvent{" +
-                toStringBase() +
+        return "DslKeyValueParams{" +
+                "name='" + name + '\'' +
                 '}';
     }
 }
