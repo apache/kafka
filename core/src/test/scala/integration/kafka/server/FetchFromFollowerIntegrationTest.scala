@@ -27,6 +27,7 @@ import org.apache.kafka.common.requests.FetchResponse
 import org.apache.kafka.common.serialization.ByteArrayDeserializer
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 import org.junit.jupiter.api.{Disabled, Timeout}
+import org.junit.jupiter.api.Assertions.fail
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
 
@@ -226,11 +227,14 @@ class FetchFromFollowerIntegrationTest extends BaseFetchRequestTest {
 
       val recordFutures = consumers.zipWithIndex.map { case (consumer, i) =>
         executor.submit(() => {
-          TestUtils.pollUntilAtLeastNumRecords(consumer, assignments(i).size, waitTimeMs = 30000)
+          TestUtils.pollUntilAtLeastNumRecords(consumer, assignments(i).size, waitTimeMs = 30000, commitOffset = true)
         })
       }
       recordFutures.zipWithIndex.foreach { case (future, i) =>
         val records = future.get(30, TimeUnit.SECONDS)
+        if (records.size == 2 && records.head.topic == records.last.topic) {
+          fail(s"Expected ${assignments(i).size} records, but received ${records.size} records")
+        }
         assertEquals(assignments(i), records.map(r => new TopicPartition(r.topic, r.partition)).toSet)
       }
     }
