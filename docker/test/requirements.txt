@@ -1,3 +1,0 @@
-urllib3
-requests
-HTMLTestRunner-Python3

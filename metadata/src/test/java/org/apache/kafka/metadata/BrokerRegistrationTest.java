@@ -41,25 +41,46 @@ import static org.junit.jupiter.api.Assertions.assertNotEquals;
 @Timeout(value = 40)
 public class BrokerRegistrationTest {
     private static final List<BrokerRegistration> REGISTRATIONS = Arrays.asList(
-        new BrokerRegistration(0, 0, Uuid.fromString("pc1GhUlBS92cGGaKXl6ipw"),
-            Arrays.asList(new Endpoint("INTERNAL", SecurityProtocol.PLAINTEXT, "localhost", 9090)),
-            Collections.singletonMap("foo", VersionRange.of((short) 1, (short) 2)),
-            Optional.empty(), false, false),
-        new BrokerRegistration(1, 0, Uuid.fromString("3MfdxWlNSn2UDYsmDP1pYg"),
-            Arrays.asList(new Endpoint("INTERNAL", SecurityProtocol.PLAINTEXT, "localhost", 9091)),
-            Collections.singletonMap("foo", VersionRange.of((short) 1, (short) 2)),
-            Optional.empty(), true, false),
-        new BrokerRegistration(2, 0, Uuid.fromString("eY7oaG1RREie5Kk9uy1l6g"),
-            Arrays.asList(new Endpoint("INTERNAL", SecurityProtocol.PLAINTEXT, "localhost", 9092)),
-            Stream.of(new SimpleEntry<>("foo", VersionRange.of((short) 2, (short) 3)),
+        new BrokerRegistration.Builder().
+            setId(0).
+            setEpoch(0).
+            setIncarnationId(Uuid.fromString("pc1GhUlBS92cGGaKXl6ipw")).
+            setListeners(Arrays.asList(new Endpoint("INTERNAL", SecurityProtocol.PLAINTEXT, "localhost", 9090))).
+            setSupportedFeatures(Collections.singletonMap("foo", VersionRange.of((short) 1, (short) 2))).
+            setRack(Optional.empty()).
+            setFenced(false).
+            setInControlledShutdown(false).build(),
+        new BrokerRegistration.Builder().
+            setId(1).
+            setEpoch(0).
+            setIncarnationId(Uuid.fromString("3MfdxWlNSn2UDYsmDP1pYg")).
+            setListeners(Arrays.asList(new Endpoint("INTERNAL", SecurityProtocol.PLAINTEXT, "localhost", 9091))).
+            setSupportedFeatures(Collections.singletonMap("foo", VersionRange.of((short) 1, (short) 2))).
+            setRack(Optional.empty()).
+            setFenced(true).
+            setInControlledShutdown(false).build(),
+        new BrokerRegistration.Builder().
+            setId(2).
+            setEpoch(0).
+            setIncarnationId(Uuid.fromString("eY7oaG1RREie5Kk9uy1l6g")).
+            setListeners(Arrays.asList(new Endpoint("INTERNAL", SecurityProtocol.PLAINTEXT, "localhost", 9092))).
+            setSupportedFeatures(Stream.of(new SimpleEntry<>("foo", VersionRange.of((short) 2, (short) 3)),
                 new SimpleEntry<>("bar", VersionRange.of((short) 1, (short) 4))).collect(
-                        Collectors.toMap(SimpleEntry::getKey, SimpleEntry::getValue)),
-            Optional.of("myrack"), false, true),
-        new BrokerRegistration(3, 0, Uuid.fromString("1t8VyWx2TCSTpUWuqj-FOw"),
-            Arrays.asList(new Endpoint("INTERNAL", SecurityProtocol.PLAINTEXT, "localhost", 9093)),
-            Stream.of(new SimpleEntry<>("metadata.version", VersionRange.of((short) 7, (short) 7)))
-                .collect(Collectors.toMap(SimpleEntry::getKey, SimpleEntry::getValue)),
-            Optional.empty(), false, true, true));
+                        Collectors.toMap(SimpleEntry::getKey, SimpleEntry::getValue))).
+            setRack(Optional.of("myrack")).
+            setFenced(false).
+            setInControlledShutdown(true).build(),
+        new BrokerRegistration.Builder().
+            setId(3).
+            setEpoch(0).
+            setIncarnationId(Uuid.fromString("1t8VyWx2TCSTpUWuqj-FOw")).
+            setListeners(Arrays.asList(new Endpoint("INTERNAL", SecurityProtocol.PLAINTEXT, "localhost", 9093))).
+            setSupportedFeatures(Stream.of(new SimpleEntry<>("metadata.version", VersionRange.of((short) 7, (short) 7)))
+                .collect(Collectors.toMap(SimpleEntry::getKey, SimpleEntry::getValue))).
+            setRack(Optional.empty()).
+            setFenced(false).
+            setInControlledShutdown(true).
+            setIsMigratingZkBroker(true).build());
 
     @Test
     public void testValues() {

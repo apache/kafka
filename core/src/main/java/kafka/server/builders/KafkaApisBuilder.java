@@ -22,6 +22,7 @@ import kafka.network.RequestChannel;
 import kafka.server.ApiVersionManager;
 import kafka.server.AutoTopicCreationManager;
 import kafka.server.BrokerTopicStats;
+import kafka.server.ClientMetricsManager;
 import kafka.server.DelegationTokenManager;
 import kafka.server.FetchManager;
 import kafka.server.KafkaApis;
@@ -62,6 +63,7 @@ public class KafkaApisBuilder {
     private Time time = Time.SYSTEM;
     private DelegationTokenManager tokenManager = null;
     private ApiVersionManager apiVersionManager = null;
+    private Optional<ClientMetricsManager> clientMetricsManager = Optional.empty();
 
     public KafkaApisBuilder setRequestChannel(RequestChannel requestChannel) {
         this.requestChannel = requestChannel;
@@ -158,6 +160,11 @@ public class KafkaApisBuilder {
         return this;
     }
 
+    public KafkaApisBuilder setClientMetricsManager(Optional<ClientMetricsManager> clientMetricsManager) {
+        this.clientMetricsManager = clientMetricsManager;
+        return this;
+    }
+
     public KafkaApis build() {
         if (requestChannel == null) throw new RuntimeException("you must set requestChannel");
         if (metadataSupport == null) throw new RuntimeException("you must set metadataSupport");
@@ -193,6 +200,7 @@ public class KafkaApisBuilder {
                              clusterId,
                              time,
                              tokenManager,
-                             apiVersionManager);
+                             apiVersionManager,
+                             OptionConverters.toScala(clientMetricsManager));
     }
 }

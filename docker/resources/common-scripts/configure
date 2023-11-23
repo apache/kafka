@@ -35,27 +35,18 @@ then
   else
     ub ensure KAFKA_ADVERTISED_LISTENERS
   fi 
-else
-  echo "Only KRaft mode is supported KAFKA_PROCESS_ROLES is a mandatory config"
-  exit 1
 fi
 
 # By default, LISTENERS is derived from ADVERTISED_LISTENERS by replacing
 # hosts with 0.0.0.0. This is good default as it ensures that the broker
 # process listens on all ports.
-if [[ -z "${KAFKA_LISTENERS-}" ]] && ( [[ -z "${KAFKA_PROCESS_ROLES-}" ]] || [[ $KAFKA_PROCESS_ROLES != "controller" ]] )
+if [[ -z "${KAFKA_LISTENERS-}" ]] && ( [[ -z "${KAFKA_PROCESS_ROLES-}" ]] || [[ $KAFKA_PROCESS_ROLES != "controller" ]] ) && [[ -n "${KAFKA_ADVERTISED_LISTENERS}" ]]
 then
   export KAFKA_LISTENERS
   KAFKA_LISTENERS=$(echo "$KAFKA_ADVERTISED_LISTENERS" | sed -e 's|://[^:]*:|://0.0.0.0:|g')
 fi
 
-ub path /etc/kafka/ writable
-
-if [[ -z "${KAFKA_LOG_DIRS-}" ]]
-then
-  export KAFKA_LOG_DIRS
-  KAFKA_LOG_DIRS="/var/lib/kafka/data"
-fi
+ub path /opt/kafka/config/ writable
 
 # advertised.host, advertised.port, host and port are deprecated. Exit if these properties are set.
 if [[ -n "${KAFKA_ADVERTISED_PORT-}" ]]
@@ -139,8 +130,12 @@ then
   fi
 fi
 
+mv /etc/kafka/docker/server.properties /opt/kafka/config/server.properties
+mv /etc/kafka/docker/log4j.properties /opt/kafka/config/log4j.properties
+mv /etc/kafka/docker/tools-log4j.properties /opt/kafka/config/tools-log4j.properties
 
-# --- for broker
-ub render-properties /etc/kafka/docker/kafka-propertiesSpec.json > /etc/kafka/kafka.properties
-ub render-template /etc/kafka/docker/kafka-log4j.properties.template > /etc/kafka/log4j.properties
-ub render-template /etc/kafka/docker/kafka-tools-log4j.properties.template > /etc/kafka/tools-log4j.properties
+cp -R /mnt/shared/config/. /opt/kafka/config/
+
+echo -e "\n$(ub render-properties /etc/kafka/docker/kafka-propertiesSpec.json)" >> /opt/kafka/config/server.properties
+echo -e "\n$(ub render-template /etc/kafka/docker/kafka-log4j.properties.template)" >> /opt/kafka/config/log4j.properties
+echo -e "\n$(ub render-template /etc/kafka/docker/kafka-tools-log4j.properties.template)" >> /opt/kafka/config/tools-log4j.properties

@@ -16,13 +16,9 @@
 package main
 
 import (
-	"net"
-	"net/http"
-	"net/http/httptest"
 	"os"
 	"reflect"
 	"testing"
-	"time"
 )
 
 func assertEqual(a string, b string, t *testing.T) {
@@ -265,7 +261,6 @@ func Test_buildProperties(t *testing.T) {
 				environment: map[string]string{
 					"PATH":                          "thePath",
 					"KAFKA_BOOTSTRAP_SERVERS":       "localhost:9092",
-					"CONFLUENT_METRICS":             "metricsValue",
 					"KAFKA_IGNORED":                 "ignored",
 					"KAFKA_EXCLUDE_PREFIX_PROPERTY": "ignored",
 				},
@@ -276,7 +271,7 @@ func Test_buildProperties(t *testing.T) {
 			name: "server properties",
 			args: args{
 				spec: ConfigSpec{
-					Prefixes: map[string]bool{"KAFKA": false, "CONFLUENT": true},
+					Prefixes: map[string]bool{"KAFKA": false},
 					Excludes: []string{"KAFKA_IGNORED"},
 					Renamed:  map[string]string{},
 					Defaults: map[string]string{
@@ -288,18 +283,17 @@ func Test_buildProperties(t *testing.T) {
 				environment: map[string]string{
 					"PATH":                          "thePath",
 					"KAFKA_BOOTSTRAP_SERVERS":       "localhost:9092",
-					"CONFLUENT_METRICS":             "metricsValue",
 					"KAFKA_IGNORED":                 "ignored",
 					"KAFKA_EXCLUDE_PREFIX_PROPERTY": "ignored",
 				},
 			},
-			want: map[string]string{"bootstrap.servers": "localhost:9092", "confluent.metrics": "metricsValue", "default.property.key": "default.property.value"},
+			want: map[string]string{"bootstrap.servers": "localhost:9092", "default.property.key": "default.property.value"},
 		},
 		{
 			name: "kafka properties",
 			args: args{
 				spec: ConfigSpec{
-					Prefixes: map[string]bool{"KAFKA": false, "CONFLUENT": true},
+					Prefixes: map[string]bool{"KAFKA": false},
 					Excludes: []string{"KAFKA_IGNORED"},
 					Renamed:  map[string]string{},
 					Defaults: map[string]string{
@@ -355,106 +349,6 @@ func Test_splitToMapDefaults(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			if got := splitToMapDefaults(tt.args.separator, tt.args.defaultValues, tt.args.value); !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("splitToMapDefaults() = %v, want %v", got, tt.want)
-			}
-		})
-	}
-}
-
-func Test_waitForServer(t *testing.T) {
-	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-	}))
-	defer mockServer.Close()
-	port := mockServer.Listener.Addr().(*net.TCPAddr).Port
-
-	type args struct {
-		host    string
-		port    int
-		timeout time.Duration
-	}
-	tests := []struct {
-		name string
-		args args
-		want bool
-	}{
-		{
-			name: "invalid server address",
-			args: args{
-				host:    "localhost",
-				port:    port + 1,
-				timeout: time.Duration(5) * time.Second,
-			},
-			want: false,
-		},
-		{
-			name: "valid server address",
-			args: args{
-				host:    "localhost",
-				port:    port,
-				timeout: time.Duration(5) * time.Second,
-			},
-			want: true,
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if got := waitForServer(tt.args.host, tt.args.port, tt.args.timeout); !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("waitForServer() = %v, want %v", got, tt.want)
-			}
-		})
-	}
-}
-
-func Test_waitForHttp(t *testing.T) {
-	mockServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/names" {
-			w.WriteHeader(http.StatusOK)
-		} else {
-			http.NotFound(w, r)
-		}
-	}))
-	defer mockServer.Close()
-
-	serverURL := mockServer.URL
-
-	type args struct {
-		URL     string
-		timeout time.Duration
-	}
-	tests := []struct {
-		name    string
-		args    args
-		wantErr bool
-	}{
-		{
-			name: "valid server address, valid url",
-			args: args{
-				URL:     serverURL + "/names",
-				timeout: time.Duration(5) * time.Second,
-			},
-			wantErr: false,
-		},
-		{
-			name: "valid server address, invalid url",
-			args: args{
-				URL:     serverURL,
-				timeout: time.Duration(5) * time.Second,
-			},
-			wantErr: true,
-		},
-		{
-			name: "invalid server address",
-			args: args{
-				URL:     "http://invalidAddress:50111/names",
-				timeout: time.Duration(5) * time.Second,
-			},
-			wantErr: true,
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if err := waitForHttp(tt.args.URL, tt.args.timeout); (err != nil) != tt.wantErr {
-				t.Errorf("waitForHttp() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})
 	}

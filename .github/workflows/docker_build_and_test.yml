@@ -1,3 +1,18 @@
+# Licensed to the Apache Software Foundation (ASF) under one or more
+# contributor license agreements.  See the NOTICE file distributed with
+# this work for additional information regarding copyright ownership.
+# The ASF licenses this file to You under the Apache License, Version 2.0
+# (the "License"); you may not use this file except in compliance with
+# the License.  You may obtain a copy of the License at
+#
+#    http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
 name: Docker build test
 
 on:
@@ -24,12 +39,13 @@ jobs:
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
-        pip install -r docker/test/requirements.txt
-    - name: Run tests
+        pip install -r docker/requirements.txt
+    - name: Build image and run tests
       working-directory: ./docker
       run: |
         python docker_build_test.py kafka/test -tag=test -type=${{ github.event.inputs.image_type }} -u=${{ github.event.inputs.kafka_url }}
-    - name: Run Vulnerability scan
+    - name: Run CVE scan
+      if: always()
       uses: aquasecurity/trivy-action@master
       with:
         image-ref: 'kafka/test:test'
@@ -37,12 +53,17 @@ jobs:
         ignore-unfixed: true
         vuln-type: 'os,library'
         severity: 'CRITICAL,HIGH'
-        output: scan_${{ github.event.inputs.image_type }}.txt
-    - uses: actions/upload-artifact@v3
+        output: scan_report_${{ github.event.inputs.image_type }}.txt
+        exit-code: '1'
+    - name: Upload test report
+      if: always()
+      uses: actions/upload-artifact@v3
       with:
         name: report_${{ github.event.inputs.image_type }}.html
-        path: docker/test/report_${{ github.event.inputs.image_type }}.html
-    - uses: actions/upload-artifact@v3
+        path: docker/report_${{ github.event.inputs.image_type }}.html
+    - name: Upload CVE scan report
+      if: always()
+      uses: actions/upload-artifact@v3
       with:
-        name: scan_${{ github.event.inputs.image_type }}.txt
-        path: scan_${{ github.event.inputs.image_type }}.txt
+        name: scan_report_${{ github.event.inputs.image_type }}.txt
+        path: scan_report_${{ github.event.inputs.image_type }}.txt

@@ -759,6 +759,10 @@ https://kafka.apache.org/KEYS
 * Release artifacts to be voted upon (source and binary):
 https://home.apache.org/~%(apache_id)s/kafka-%(rc_tag)s/
 
+<USE docker/README.md FOR STEPS TO GENERATE DOCKER IMAGE>
+* Docker release artifact to be voted upon:
+<USERNAME>/<IMAGE_NAME>:<IMAGE:TAG>
+
 * Maven artifacts to be voted upon:
 https://repository.apache.org/content/groups/staging/org/apache/kafka/
 
@@ -777,6 +781,7 @@ https://kafka.apache.org/%(docs_version)s/protocol.html
 * Successful Jenkins builds for the %(dev_branch)s branch:
 Unit/integration tests: https://ci-builds.apache.org/job/Kafka/job/kafka/job/%(dev_branch)s/<BUILD NUMBER>/
 System tests: https://jenkins.confluent.io/job/system-test-kafka/job/%(dev_branch)s/<BUILD_NUMBER>/
+Docker Build Test Pipeline: https://github.com/apache/kafka/actions/runs/<RUN_NUMBER>
 
 /**************************************
 
