@@ -147,7 +147,6 @@ public class ConsumerGroupTest {
         assertFalse(consumerGroup.hasMember("member"));
         assertNull(consumerGroup.staticMember("instance"));
         assertNull(consumerGroup.staticMemberId("instance"));
-
     }
 
     @Test

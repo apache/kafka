@@ -193,15 +193,17 @@ public class TargetAssignmentBuilder {
      * not yet materialized in memory.
      *
      * @param memberId  The member id.
+     * @param instanceId The instance id.
      * @param member    The member to add or update.
      * @return This object.
      */
     public TargetAssignmentBuilder addOrUpdateMember(
         String memberId,
+        String instanceId,
         ConsumerGroupMember member
     ) {
-        if (member != null && member.instanceId() != null) {
-            this.staticMembers.put(memberId, member.instanceId());
+        if (instanceId != null && member != null) {
+            this.staticMembers.put(instanceId, memberId);
         }
         this.updatedMembers.put(memberId, member);
         return this;
@@ -212,13 +214,17 @@ public class TargetAssignmentBuilder {
      * is not yet materialized in memory.
      *
      * @param memberId The member id.
+     * @param instanceId The instance id.
      * @return This object.
      */
     public TargetAssignmentBuilder removeMember(
-        String memberId
+        String memberId,
+        String instanceId
     ) {
-        this.staticMembers.remove(memberId);
-        return addOrUpdateMember(memberId, null);
+        if (instanceId != null) {
+            this.staticMembers.remove(instanceId);
+        }
+        return addOrUpdateMember(memberId, instanceId, null);
     }
 
     /**
@@ -230,7 +236,6 @@ public class TargetAssignmentBuilder {
      */
     public TargetAssignmentResult build() throws PartitionAssignorException {
         Map<String, AssignmentMemberSpec> memberSpecs = new HashMap<>();
-        Map<String, Assignment> assignmentByInstanceId = new HashMap<>();
 
         // Prepare the member spec for all members.
         members.forEach((memberId, member) -> {
@@ -239,9 +244,6 @@ public class TargetAssignmentBuilder {
                 targetAssignment.getOrDefault(memberId, Assignment.EMPTY),
                 subscriptionMetadata
             ));
-            if (member.instanceId() != null) {
-                assignmentByInstanceId.put(member.instanceId(), targetAssignment.getOrDefault(memberId, Assignment.EMPTY));
-            }
         });
 
         // Update the member spec if updated or deleted members.
@@ -252,8 +254,8 @@ public class TargetAssignmentBuilder {
                 ConsumerGroupMember member = members.get(memberId);
                 Assignment assignment;
                 // A new static member joins and needs to replace an existing departed one.
-                if (member == null && staticMembers.containsKey(memberId)) {
-                    assignment = assignmentByInstanceId.get(staticMembers.get(memberId));
+                if (member == null && staticMembers.containsKey(updatedMemberOrNull.instanceId())) {
+                    assignment = targetAssignment.getOrDefault(staticMembers.get(updatedMemberOrNull.instanceId()), Assignment.EMPTY);
                 } else {
                     assignment = targetAssignment.getOrDefault(memberId, Assignment.EMPTY);
                 }

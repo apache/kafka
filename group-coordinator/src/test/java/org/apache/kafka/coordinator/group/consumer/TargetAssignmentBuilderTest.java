@@ -57,8 +57,8 @@ public class TargetAssignmentBuilderTest {
         private final Map<String, ConsumerGroupMember> updatedMembers = new HashMap<>();
         private final Map<String, Assignment> targetAssignment = new HashMap<>();
         private final Map<String, MemberAssignment> memberAssignments = new HashMap<>();
-        private final Map<String, ConsumerGroupMember> staticMembers = new HashMap<>();
-        private final Map<String, String> staticMembersMembersByInstanceId = new HashMap<>();
+        private final Map<String, String> staticMembers = new HashMap<>();
+        private final Map<String, String> staticMembersByInstanceId = new HashMap<>();
 
         public TargetAssignmentBuilderTestContext(
             String groupId,
@@ -92,27 +92,17 @@ public class TargetAssignmentBuilderTest {
                     VersionedMetadata.EMPTY
                 ));
             } else {
-                ConsumerGroupMember existingStaticMember = staticMembers.get(instanceId);
-                ConsumerGroupMember.Builder staticMemberBuilder = new ConsumerGroupMember.Builder(memberId)
+                members.put(memberId, new ConsumerGroupMember.Builder(memberId)
+                    .setSubscribedTopicNames(subscriptions)
                     .setInstanceId(instanceId)
-                    .setSubscribedTopicNames(subscriptions);
-                ConsumerGroupMember staticMember = existingStaticMember != null ? staticMemberBuilder
-                    .setAssignedPartitions(existingStaticMember.assignedPartitions())
-                    .setPartitionsPendingAssignment(existingStaticMember.partitionsPendingAssignment())
-                    .setPartitionsPendingRevocation(existingStaticMember.partitionsPendingRevocation()).build() :
-                    staticMemberBuilder.build();
-                if (existingStaticMember == null) {
-                    members.put(memberId, staticMember);
-                } else {
-                    updatedMembers.put(memberId, staticMember);
-                }
+                    .build());
                 targetAssignment.put(memberId, new Assignment(
                     (byte) 0,
                     targetPartitions,
                     VersionedMetadata.EMPTY
                 ));
-                staticMembers.put(instanceId, staticMember);
-                staticMembersMembersByInstanceId.put(memberId, instanceId);
+                staticMembers.put(instanceId, memberId);
+                staticMembersByInstanceId.put(memberId, instanceId);
             }
         }
 
@@ -169,6 +159,18 @@ public class TargetAssignmentBuilderTest {
             this.updatedMembers.put(memberId, null);
         }
 
+        public void removeMemberSubscription(
+            String memberId,
+            String instanceId
+        ) {
+            if (instanceId == null) {
+                removeMemberSubscription(memberId);
+            } else {
+                this.updatedMembers.put(memberId, null);
+                this.staticMembers.remove(instanceId);
+            }
+        }
+
         public void prepareMemberAssignment(
             String memberId,
             Map<Uuid, Set<Integer>> assignment
@@ -179,20 +181,15 @@ public class TargetAssignmentBuilderTest {
         public TargetAssignmentBuilder.TargetAssignmentResult build() {
             // Prepare expected member specs.
             Map<String, AssignmentMemberSpec> memberSpecs = new HashMap<>();
-            Map<String, Assignment> assignmentByInstanceId = new HashMap<>();
 
             // All the existing members are prepared.
-            members.forEach((memberId, member) -> {
+            members.forEach((memberId, member) ->
                 memberSpecs.put(memberId, createAssignmentMemberSpec(
-                        member,
-                        targetAssignment.getOrDefault(memberId, Assignment.EMPTY),
-                        subscriptionMetadata
-                    )
-                );
-                if (member.instanceId() != null) {
-                    assignmentByInstanceId.put(member.instanceId(), targetAssignment.getOrDefault(memberId, Assignment.EMPTY));
-                }
-            });
+                    member,
+                    targetAssignment.getOrDefault(memberId, Assignment.EMPTY),
+                    subscriptionMetadata
+                )
+            ));
 
             // All the updated are added and all the deleted
             // members are removed.
@@ -203,8 +200,8 @@ public class TargetAssignmentBuilderTest {
                     ConsumerGroupMember member = members.get(memberId);
                     Assignment assignment;
                     // A new static member joins and needs to replace an existing departed one.
-                    if (member == null && staticMembersMembersByInstanceId.containsKey(memberId)) {
-                        assignment = assignmentByInstanceId.get(staticMembersMembersByInstanceId.get(memberId));
+                    if (member == null && staticMembers.containsKey(updatedMemberOrNull.instanceId())) {
+                        assignment = targetAssignment.getOrDefault(staticMembers.get(updatedMemberOrNull.instanceId()), Assignment.EMPTY);
                     } else {
                         assignment = targetAssignment.getOrDefault(memberId, Assignment.EMPTY);
                     }
@@ -242,9 +239,9 @@ public class TargetAssignmentBuilderTest {
             // Add the updated members or delete the deleted members.
             updatedMembers.forEach((memberId, updatedMemberOrNull) -> {
                 if (updatedMemberOrNull != null) {
-                    builder.addOrUpdateMember(memberId, updatedMemberOrNull);
+                    builder.addOrUpdateMember(memberId, updatedMemberOrNull.instanceId(), updatedMemberOrNull);
                 } else {
-                    builder.removeMember(memberId);
+                    builder.removeMember(memberId, staticMembersByInstanceId.get(memberId));
                 }
             });
 
@@ -768,10 +765,12 @@ public class TargetAssignmentBuilderTest {
         context.updateMemberSubscription("member-3", Arrays.asList("foo", "bar", "zar"), Optional.of("member-3"), Optional.empty());
 
         // Static member 3 leaves
-        context.removeMemberSubscription("member-3");
+        context.removeMemberSubscription("member-3", "member-3");
 
         // Another static member joins with the same instance id as the departed one
         context.addGroupMember("member-3-a", "member-3", Arrays.asList("foo", "bar", "zar"), new HashMap<>());
+
+        context.updateMemberSubscription("member-3-a", Arrays.asList("foo", "bar", "zar"), Optional.of("member-3"), Optional.empty());
 
         context.prepareMemberAssignment("member-1", mkAssignment(
             mkTopicAssignment(fooTopicId, 1, 2),
