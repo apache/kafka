@@ -75,6 +75,7 @@ import org.apache.kafka.coordinator.group.generated.GroupMetadataValue;
 import org.apache.kafka.coordinator.group.generic.GenericGroup;
 import org.apache.kafka.coordinator.group.generic.GenericGroupMember;
 import org.apache.kafka.coordinator.group.generic.GenericGroupState;
+import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetricsShard;
 import org.apache.kafka.coordinator.group.runtime.CoordinatorResult;
 import org.apache.kafka.coordinator.group.runtime.CoordinatorTimer;
 import org.apache.kafka.image.MetadataDelta;
@@ -121,6 +122,9 @@ import static org.apache.kafka.coordinator.group.generic.GenericGroupState.DEAD;
 import static org.apache.kafka.coordinator.group.generic.GenericGroupState.EMPTY;
 import static org.apache.kafka.coordinator.group.generic.GenericGroupState.PREPARING_REBALANCE;
 import static org.apache.kafka.coordinator.group.generic.GenericGroupState.STABLE;
+import static org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetrics.GENERIC_GROUP_COMPLETED_REBALANCES_SENSOR_NAME;
+import static org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetrics.CONSUMER_GROUP_REBALANCES_SENSOR_NAME;
+import static org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetrics.GENERIC_GROUP_REBALANCES_SENSOR_NAME;
 
 /**
  * The GroupMetadataManager manages the metadata of all generic and consumer groups. It holds
@@ -150,6 +154,8 @@ public class GroupMetadataManager {
         private int genericGroupNewMemberJoinTimeoutMs = 5 * 60 * 1000;
         private int genericGroupMinSessionTimeoutMs;
         private int genericGroupMaxSessionTimeoutMs;
+        private GroupCoordinatorMetricsShard metrics;
+
         Builder withLogContext(LogContext logContext) {
             this.logContext = logContext;
             return this;
@@ -225,6 +231,11 @@ public class GroupMetadataManager {
             return this;
         }
 
+        Builder withGroupCoordinatorMetricsShard(GroupCoordinatorMetricsShard metrics) {
+            this.metrics = metrics;
+            return this;
+        }
+
         GroupMetadataManager build() {
             if (logContext == null) logContext = new LogContext();
             if (snapshotRegistry == null) snapshotRegistry = new SnapshotRegistry(logContext);
@@ -235,12 +246,15 @@ public class GroupMetadataManager {
                 throw new IllegalArgumentException("Timer must be set.");
             if (consumerGroupAssignors == null || consumerGroupAssignors.isEmpty())
                 throw new IllegalArgumentException("Assignors must be set before building.");
+            if (metrics == null)
+                throw new IllegalArgumentException("GroupCoordinatorMetricsShard must be set.");
 
             return new GroupMetadataManager(
                 snapshotRegistry,
                 logContext,
                 time,
                 timer,
+                metrics,
                 consumerGroupAssignors,
                 metadataImage,
                 consumerGroupMaxSize,
@@ -280,6 +294,11 @@ public class GroupMetadataManager {
      * The system timer.
      */
     private final CoordinatorTimer<Void, Record> timer;
+
+    /**
+     * The coordinator metrics.
+     */
+    private final GroupCoordinatorMetricsShard metrics;
 
     /**
      * The supported partition assignors keyed by their name.
@@ -365,6 +384,7 @@ public class GroupMetadataManager {
         LogContext logContext,
         Time time,
         CoordinatorTimer<Void, Record> timer,
+        GroupCoordinatorMetricsShard metrics,
         List<PartitionAssignor> assignors,
         MetadataImage metadataImage,
         int consumerGroupMaxSize,
@@ -382,6 +402,7 @@ public class GroupMetadataManager {
         this.snapshotRegistry = snapshotRegistry;
         this.time = time;
         this.timer = timer;
+        this.metrics = metrics;
         this.metadataImage = metadataImage;
         this.assignors = assignors.stream().collect(Collectors.toMap(PartitionAssignor::name, Function.identity()));
         this.defaultAssignor = assignors.get(0);
@@ -550,7 +571,7 @@ public class GroupMetadataManager {
         }
 
         if (group == null) {
-            ConsumerGroup consumerGroup = new ConsumerGroup(snapshotRegistry, groupId);
+            ConsumerGroup consumerGroup = new ConsumerGroup(snapshotRegistry, groupId, metrics);
             groups.put(groupId, consumerGroup);
             return consumerGroup;
         } else {
@@ -588,7 +609,7 @@ public class GroupMetadataManager {
         }
 
         if (group == null) {
-            GenericGroup genericGroup = new GenericGroup(logContext, groupId, GenericGroupState.EMPTY, time);
+            GenericGroup genericGroup = new GenericGroup(logContext, groupId, GenericGroupState.EMPTY, time, metrics);
             groups.put(groupId, genericGroup);
             return genericGroup;
         } else {
@@ -921,6 +942,7 @@ public class GroupMetadataManager {
                 groupEpoch += 1;
                 records.add(newGroupEpochRecord(groupId, groupEpoch));
                 log.info("[GroupId {}] Bumped group epoch to {}.", groupId, groupEpoch);
+                metrics.record(CONSUMER_GROUP_REBALANCES_SENSOR_NAME);
             }
 
             group.setMetadataRefreshDeadline(currentTimeMs + consumerGroupMetadataRefreshIntervalMs, groupEpoch);
@@ -1360,6 +1382,7 @@ public class GroupMetadataManager {
                     + " but did not receive ConsumerGroupTargetAssignmentMetadataValue tombstone.");
             }
             removeGroup(groupId);
+            metrics.onConsumerGroupStateTransition(consumerGroup.state(), null);
         }
 
     }
@@ -1568,6 +1591,11 @@ public class GroupMetadataManager {
 
         if (value == null)  {
             // Tombstone. Group should be removed.
+            Group group = groups.get(groupId);
+            if (group != null && group.type() == GENERIC) {
+                GenericGroup genericGroup = (GenericGroup) group;
+                metrics.onGenericGroupStateTransition(genericGroup.currentState(), null);
+            }
             removeGroup(groupId);
         } else {
             List<GenericGroupMember> loadedMembers = new ArrayList<>();
@@ -1602,6 +1630,7 @@ public class GroupMetadataManager {
                 groupId,
                 loadedMembers.isEmpty() ? EMPTY : STABLE,
                 time,
+                metrics,
                 value.generation(),
                 protocolType == null || protocolType.isEmpty() ? Optional.empty() : Optional.of(protocolType),
                 Optional.ofNullable(value.protocol()),
@@ -2385,6 +2414,7 @@ public class GroupMetadataManager {
         }
 
         group.transitionTo(PREPARING_REBALANCE);
+        metrics.record(GENERIC_GROUP_REBALANCES_SENSOR_NAME);
 
         log.info("Preparing to rebalance group {} in state {} with old generation {} (reason: {}).",
             group.groupId(), group.currentState(), group.generationId(), reason);
@@ -2851,6 +2881,7 @@ public class GroupMetadataManager {
                             // Update group's assignment and propagate to all members.
                             setAndPropagateAssignment(group, assignment);
                             group.transitionTo(STABLE);
+                            metrics.record(GENERIC_GROUP_COMPLETED_REBALANCES_SENSOR_NAME);
                         }
                     }
                 });

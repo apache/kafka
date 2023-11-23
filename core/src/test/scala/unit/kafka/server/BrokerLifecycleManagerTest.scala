@@ -20,13 +20,16 @@ package kafka.server
 import java.util.{Collections, OptionalLong, Properties}
 import kafka.utils.TestUtils
 import org.apache.kafka.common.Node
+import org.apache.kafka.common.Uuid
 import org.apache.kafka.common.message.{BrokerHeartbeatResponseData, BrokerRegistrationResponseData}
 import org.apache.kafka.common.protocol.Errors
-import org.apache.kafka.common.requests.{AbstractRequest, BrokerHeartbeatRequest, BrokerHeartbeatResponse, BrokerRegistrationRequest, BrokerRegistrationResponse}
+import org.apache.kafka.common.requests.{AbstractRequest, AbstractResponse, BrokerHeartbeatRequest, BrokerHeartbeatResponse, BrokerRegistrationRequest, BrokerRegistrationResponse}
 import org.apache.kafka.metadata.BrokerState
-import org.junit.jupiter.api.{Test, Timeout}
 import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.{Test, Timeout}
 
+import java.util.concurrent.{CompletableFuture, Future}
+import scala.jdk.CollectionConverters._
 
 @Timeout(value = 12)
 class BrokerLifecycleManagerTest {
@@ -38,6 +41,7 @@ class BrokerLifecycleManagerTest {
     properties.setProperty(KafkaConfig.QuorumVotersProp, s"2@localhost:9093")
     properties.setProperty(KafkaConfig.ControllerListenerNamesProp, "SSL")
     properties.setProperty(KafkaConfig.InitialBrokerRegistrationTimeoutMsProp, "300000")
+    properties.setProperty(KafkaConfig.BrokerHeartbeatIntervalMsProp, "100")
     properties
   }
 
@@ -180,6 +184,79 @@ class BrokerLifecycleManagerTest {
       assertEquals(BrokerState.SHUTTING_DOWN, manager.state)
     }
     manager.controlledShutdownFuture.get()
+    manager.close()
+  }
+
+  def prepareResponse[T<:AbstractRequest](ctx: RegistrationTestContext, response: AbstractResponse): Future[T] = {
+    val result = new CompletableFuture[T]()
+    ctx.mockClient.prepareResponseFrom(
+      (body: AbstractRequest) => result.complete(body.asInstanceOf[T]),
+      response,
+      ctx.controllerNodeProvider.node.get
+    )
+    result
+  }
+
+  def poll[T](context: RegistrationTestContext, manager: BrokerLifecycleManager, future: Future[T]): T = {
+    while (!future.isDone || context.mockClient.hasInFlightRequests) {
+      context.poll()
+      manager.eventQueue.wakeup()
+      context.time.sleep(100)
+    }
+    future.get
+  }
+
+  @Test
+  def testAlwaysSendsAccumulatedOfflineDirs(): Unit = {
+    val ctx = new RegistrationTestContext(configProperties)
+    val manager = new BrokerLifecycleManager(ctx.config, ctx.time, "offline-dirs-sent-in-heartbeat-", isZkBroker = false)
+    val controllerNode = new Node(3000, "localhost", 8021)
+    ctx.controllerNodeProvider.node.set(controllerNode)
+
+    val registration = prepareResponse(ctx, new BrokerRegistrationResponse(new BrokerRegistrationResponseData().setBrokerEpoch(1000)))
+    val heartbeats = Seq.fill(6)(prepareResponse[BrokerHeartbeatRequest](ctx, new BrokerHeartbeatResponse(new BrokerHeartbeatResponseData())))
+
+    manager.start(() => ctx.highestMetadataOffset.get(),
+      ctx.mockChannelManager, ctx.clusterId, ctx.advertisedListeners,
+      Collections.emptyMap(), OptionalLong.empty())
+    poll(ctx, manager, registration)
+
+    manager.propagateDirectoryFailure(Uuid.fromString("h3sC4Yk-Q9-fd0ntJTocCA"))
+    poll(ctx, manager, heartbeats(0)).data()
+    val dirs1 = poll(ctx, manager, heartbeats(1)).data().offlineLogDirs()
+
+    manager.propagateDirectoryFailure(Uuid.fromString("ej8Q9_d2Ri6FXNiTxKFiow"))
+    poll(ctx, manager, heartbeats(2)).data()
+    val dirs2 = poll(ctx, manager, heartbeats(3)).data().offlineLogDirs()
+
+    manager.propagateDirectoryFailure(Uuid.fromString("1iF76HVNRPqC7Y4r6647eg"))
+    poll(ctx, manager, heartbeats(4)).data()
+    val dirs3 = poll(ctx, manager, heartbeats(5)).data().offlineLogDirs()
+
+    assertEquals(Set("h3sC4Yk-Q9-fd0ntJTocCA").map(Uuid.fromString), dirs1.asScala.toSet)
+    assertEquals(Set("h3sC4Yk-Q9-fd0ntJTocCA", "ej8Q9_d2Ri6FXNiTxKFiow").map(Uuid.fromString), dirs2.asScala.toSet)
+    assertEquals(Set("h3sC4Yk-Q9-fd0ntJTocCA", "ej8Q9_d2Ri6FXNiTxKFiow", "1iF76HVNRPqC7Y4r6647eg").map(Uuid.fromString), dirs3.asScala.toSet)
+    manager.close()
+  }
+
+  @Test
+  def testRegistrationIncludesDirs(): Unit = {
+    val logDirs = Set("ad5FLIeCTnaQdai5vOjeng", "ybdzUKmYSLK6oiIpI6CPlw").map(Uuid.fromString)
+    val ctx = new RegistrationTestContext(configProperties)
+    val manager = new BrokerLifecycleManager(ctx.config, ctx.time, "registration-includes-dirs-",
+      isZkBroker = false, logDirs)
+    val controllerNode = new Node(3000, "localhost", 8021)
+    ctx.controllerNodeProvider.node.set(controllerNode)
+
+    val registration = prepareResponse(ctx, new BrokerRegistrationResponse(new BrokerRegistrationResponseData().setBrokerEpoch(1000)))
+
+    manager.start(() => ctx.highestMetadataOffset.get(),
+      ctx.mockChannelManager, ctx.clusterId, ctx.advertisedListeners,
+      Collections.emptyMap(), OptionalLong.empty())
+    val request = poll(ctx, manager, registration).asInstanceOf[BrokerRegistrationRequest]
+
+    assertEquals(logDirs, request.data.logDirs().asScala.toSet)
+
     manager.close()
   }
 }

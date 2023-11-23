@@ -20,13 +20,14 @@ package kafka.log
 import com.yammer.metrics.core.{Gauge, MetricName}
 import kafka.server.checkpoints.OffsetCheckpointFile
 import kafka.server.metadata.{ConfigRepository, MockConfigRepository}
-import kafka.server.{BrokerMetadataCheckpoint, BrokerTopicStats, KafkaServer, RawMetaProperties}
+import kafka.server.BrokerTopicStats
 import kafka.utils._
 import org.apache.directory.api.util.FileUtils
 import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.errors.OffsetOutOfRangeException
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.common.{KafkaException, TopicPartition, Uuid}
+import org.apache.kafka.metadata.properties.{MetaProperties, MetaPropertiesEnsemble, MetaPropertiesVersion, PropertiesUtils}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.mockito.ArgumentMatchers.any
@@ -36,7 +37,7 @@ import org.mockito.Mockito.{doAnswer, doNothing, mock, never, spy, times, verify
 import java.io._
 import java.nio.file.Files
 import java.util.concurrent.{ConcurrentHashMap, ConcurrentMap, Future}
-import java.util.{Collections, OptionalLong, Properties}
+import java.util.{Collections, Optional, OptionalLong, Properties}
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.apache.kafka.server.util.MockTime
 import org.apache.kafka.storage.internals.log.{FetchDataInfo, FetchIsolation, LogConfig, LogDirFailureChannel, ProducerStateManagerConfig, RemoteIndexCache}
@@ -1043,27 +1044,34 @@ class LogManagerTest {
 
   @Test
   def testLoadDirectoryIds(): Unit = {
-    def writeMetaProperties(dir: File, id: Option[String] = None): Unit = {
-      val rawProps = new RawMetaProperties()
-      rawProps.nodeId = 1
-      rawProps.clusterId = "IVT1Seu3QjacxS7oBTKhDQ"
-      id.foreach(v => rawProps.directoryId = v)
-      new BrokerMetadataCheckpoint(new File(dir, KafkaServer.brokerMetaPropsFile)).write(rawProps.props)
+    def writeMetaProperties(
+      dir: File,
+      directoryId: Optional[Uuid] = Optional.empty()
+    ): Unit = {
+      val metaProps = new MetaProperties.Builder().
+        setVersion(MetaPropertiesVersion.V0).
+        setClusterId("IVT1Seu3QjacxS7oBTKhDQ").
+        setNodeId(1).
+        setDirectoryId(directoryId).
+        build()
+      PropertiesUtils.writePropertiesFile(metaProps.toProperties,
+        new File(dir, MetaPropertiesEnsemble.META_PROPERTIES_NAME).getAbsolutePath, false)
     }
     val dirs: Seq[File] = Seq.fill(5)(TestUtils.tempDir())
     writeMetaProperties(dirs(0))
-    writeMetaProperties(dirs(1), Some("ZwkGXjB0TvSF6mjVh6gO7Q"))
+    writeMetaProperties(dirs(1), Optional.of(Uuid.fromString("ZwkGXjB0TvSF6mjVh6gO7Q")))
     // no meta.properties on dirs(2)
-    writeMetaProperties(dirs(3), Some("kQfNPJ2FTHq_6Qlyyv6Jqg"))
+    writeMetaProperties(dirs(3), Optional.of(Uuid.fromString("kQfNPJ2FTHq_6Qlyyv6Jqg")))
     writeMetaProperties(dirs(4))
 
     logManager = createLogManager(dirs)
 
-    assertTrue(logManager.directoryId(dirs(0).getAbsolutePath).isDefined)
+    assertFalse(logManager.directoryId(dirs(0).getAbsolutePath).isDefined)
+    assertTrue(logManager.directoryId(dirs(1).getAbsolutePath).isDefined)
     assertEquals(Some(Uuid.fromString("ZwkGXjB0TvSF6mjVh6gO7Q")), logManager.directoryId(dirs(1).getAbsolutePath))
     assertEquals(None, logManager.directoryId(dirs(2).getAbsolutePath))
     assertEquals(Some(Uuid.fromString("kQfNPJ2FTHq_6Qlyyv6Jqg")), logManager.directoryId(dirs(3).getAbsolutePath))
-    assertTrue(logManager.directoryId(dirs(4).getAbsolutePath).isDefined)
-    assertEquals(4, logManager.directoryIds.size)
+    assertTrue(logManager.directoryId(dirs(3).getAbsolutePath).isDefined)
+    assertEquals(2, logManager.directoryIds.size)
   }
 }

@@ -66,6 +66,7 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.coordinator.group.metrics.CoordinatorRuntimeMetrics;
+import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetrics;
 import org.apache.kafka.coordinator.group.runtime.CoordinatorShardBuilderSupplier;
 import org.apache.kafka.coordinator.group.runtime.CoordinatorEventProcessor;
 import org.apache.kafka.coordinator.group.runtime.CoordinatorLoader;
@@ -107,6 +108,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
         private Time time;
         private Timer timer;
         private CoordinatorRuntimeMetrics coordinatorRuntimeMetrics;
+        private GroupCoordinatorMetrics groupCoordinatorMetrics;
 
         public Builder(
             int nodeId,
@@ -141,6 +143,11 @@ public class GroupCoordinatorService implements GroupCoordinator {
             return this;
         }
 
+        public Builder withGroupCoordinatorMetrics(GroupCoordinatorMetrics groupCoordinatorMetrics) {
+            this.groupCoordinatorMetrics = groupCoordinatorMetrics;
+            return this;
+        }
+
         public GroupCoordinatorService build() {
             if (config == null)
                 throw new IllegalArgumentException("Config must be set.");
@@ -154,6 +161,8 @@ public class GroupCoordinatorService implements GroupCoordinator {
                 throw new IllegalArgumentException("Timer must be set.");
             if (coordinatorRuntimeMetrics == null)
                 throw new IllegalArgumentException("CoordinatorRuntimeMetrics must be set.");
+            if (groupCoordinatorMetrics == null)
+                throw new IllegalArgumentException("GroupCoordinatorMetrics must be set.");
 
             String logPrefix = String.format("GroupCoordinator id=%d", nodeId);
             LogContext logContext = new LogContext(String.format("[%s] ", logPrefix));
@@ -181,12 +190,14 @@ public class GroupCoordinatorService implements GroupCoordinator {
                     .withCoordinatorShardBuilderSupplier(supplier)
                     .withTime(time)
                     .withCoordinatorRuntimeMetrics(coordinatorRuntimeMetrics)
+                    .withCoordinatorMetrics(groupCoordinatorMetrics)
                     .build();
 
             return new GroupCoordinatorService(
                 logContext,
                 config,
-                runtime
+                runtime,
+                groupCoordinatorMetrics
             );
         }
     }
@@ -205,6 +216,11 @@ public class GroupCoordinatorService implements GroupCoordinator {
      * The coordinator runtime.
      */
     private final CoordinatorRuntime<GroupCoordinatorShard, Record> runtime;
+
+    /**
+     * The metrics registry.
+     */
+    private final GroupCoordinatorMetrics groupCoordinatorMetrics;
 
     /**
      * Boolean indicating whether the coordinator is active or not.
@@ -226,11 +242,13 @@ public class GroupCoordinatorService implements GroupCoordinator {
     GroupCoordinatorService(
         LogContext logContext,
         GroupCoordinatorConfig config,
-        CoordinatorRuntime<GroupCoordinatorShard, Record> runtime
+        CoordinatorRuntime<GroupCoordinatorShard, Record> runtime,
+        GroupCoordinatorMetrics groupCoordinatorMetrics
     ) {
         this.log = logContext.logger(CoordinatorLoader.class);
         this.config = config;
         this.runtime = runtime;
+        this.groupCoordinatorMetrics = groupCoordinatorMetrics;
     }
 
     /**
@@ -502,6 +520,10 @@ public class GroupCoordinatorService implements GroupCoordinator {
         final List<ListGroupsResponseData.ListedGroup> results = new ArrayList<>();
         final Set<TopicPartition> existingPartitionSet = runtime.partitions();
         final AtomicInteger cnt = new AtomicInteger(existingPartitionSet.size());
+
+        if (existingPartitionSet.isEmpty()) {
+            return CompletableFuture.completedFuture(new ListGroupsResponseData());
+        }
 
         for (TopicPartition tp : existingPartitionSet) {
             runtime.scheduleReadOperation(
@@ -1011,6 +1033,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
         log.info("Shutting down.");
         isActive.set(false);
         Utils.closeQuietly(runtime, "coordinator runtime");
+        Utils.closeQuietly(groupCoordinatorMetrics, "group coordinator metrics");
         log.info("Shutdown complete.");
     }
 

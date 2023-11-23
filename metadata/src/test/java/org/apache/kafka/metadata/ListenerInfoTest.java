@@ -116,14 +116,14 @@ public class ListenerInfoTest {
     }
 
     @Test
-    public void testToControllerRegistrationRequestFailsOnNullHost() throws Exception {
+    public void testToControllerRegistrationRequestFailsOnNullHost() {
         assertThrows(RuntimeException.class,
             () -> ListenerInfo.create(Arrays.asList(INTERNAL)).
                 toControllerRegistrationRequest());
     }
 
     @Test
-    public void testToControllerRegistrationRequestFailsOnZeroPort() throws Exception {
+    public void testToControllerRegistrationRequestFailsOnZeroPort() {
         assertThrows(RuntimeException.class,
             () -> ListenerInfo.create(Arrays.asList(INTERNAL)).
                 withWildcardHostnamesResolved().
@@ -141,14 +141,14 @@ public class ListenerInfoTest {
     }
 
     @Test
-    public void testToControllerRegistrationRecordFailsOnNullHost() throws Exception {
+    public void testToControllerRegistrationRecordFailsOnNullHost() {
         assertThrows(RuntimeException.class,
             () -> ListenerInfo.create(Arrays.asList(INTERNAL)).
                 toControllerRegistrationRecord());
     }
 
     @Test
-    public void testToControllerRegistrationRecordFailsOnZeroPort() throws Exception {
+    public void testToControllerRegistrationRecordFailsOnZeroPort() {
         assertThrows(RuntimeException.class,
             () -> ListenerInfo.create(Arrays.asList(INTERNAL)).
                 withWildcardHostnamesResolved().
@@ -166,14 +166,14 @@ public class ListenerInfoTest {
     }
 
     @Test
-    public void testToBrokerRegistrationRequestFailsOnNullHost() throws Exception {
+    public void testToBrokerRegistrationRequestFailsOnNullHost() {
         assertThrows(RuntimeException.class,
             () -> ListenerInfo.create(Arrays.asList(INTERNAL)).
                 toBrokerRegistrationRequest());
     }
 
     @Test
-    public void testToBrokerRegistrationRequestFailsOnZeroPort() throws Exception {
+    public void testToBrokerRegistrationRequestFailsOnZeroPort() {
         assertThrows(RuntimeException.class,
             () -> ListenerInfo.create(Arrays.asList(INTERNAL)).
                 withWildcardHostnamesResolved().
@@ -191,14 +191,14 @@ public class ListenerInfoTest {
     }
 
     @Test
-    public void testToBrokerRegistrationRecordFailsOnNullHost() throws Exception {
+    public void testToBrokerRegistrationRecordFailsOnNullHost() {
         assertThrows(RuntimeException.class,
             () -> ListenerInfo.create(Arrays.asList(INTERNAL)).
                 toBrokerRegistrationRecord());
     }
 
     @Test
-    public void testToBrokerRegistrationRecordFailsOnZeroPort() throws Exception {
+    public void testToBrokerRegistrationRecordFailsOnZeroPort() {
         assertThrows(RuntimeException.class,
             () -> ListenerInfo.create(Arrays.asList(INTERNAL)).
                 withWildcardHostnamesResolved().

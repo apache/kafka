@@ -16,40 +16,44 @@
  */
 package kafka.api
 
+import kafka.utils.TestInfoUtils
 import kafka.utils.TestUtils.waitUntilTrue
+import org.apache.kafka.clients.consumer.{ConsumerConfig, GroupProtocol}
 import org.junit.jupiter.api.Assertions.{assertNotNull, assertNull, assertTrue}
-import org.junit.jupiter.api.Test
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.ValueSource
 
 import java.time.Duration
+import java.util.Properties
 import scala.jdk.CollectionConverters._
 
 class BaseAsyncConsumerTest extends AbstractConsumerTest {
   val defaultBlockingAPITimeoutMs = 1000
 
-  @Test
-  def testCommitAsync(): Unit = {
-    val consumer = createAsyncConsumer()
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("kraft", "kraft+kip848"))
+  def testCommitAsync(quorum: String): Unit = {
+    val props = new Properties();
+    props.setProperty(ConsumerConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.CONSUMER.name());
+    val consumer = createConsumer(configOverrides = props)
     val producer = createProducer()
     val numRecords = 10000
     val startingTimestamp = System.currentTimeMillis()
-    val cb = new CountConsumerCommitCallback
     sendRecords(producer, numRecords, tp, startingTimestamp = startingTimestamp)
     consumer.assign(List(tp).asJava)
-    consumer.commitAsync(cb)
+    consumer.commitAsync()
     waitUntilTrue(() => {
-      cb.successCount == 1
+      consumer.committed(Set(tp).asJava, Duration.ofMillis(defaultBlockingAPITimeoutMs)) != null
     }, "wait until commit is completed successfully", defaultBlockingAPITimeoutMs)
-    val committedOffset = consumer.committed(Set(tp).asJava, Duration.ofMillis(defaultBlockingAPITimeoutMs))
-    assertNotNull(committedOffset)
-    // No valid fetch position due to the absence of consumer.poll; and therefore no offset was committed to
-    // tp. The committed offset should be null. This is intentional.
-    assertNull(committedOffset.get(tp))
     assertTrue(consumer.assignment.contains(tp))
   }
 
-  @Test
-  def testCommitSync(): Unit = {
-    val consumer = createAsyncConsumer()
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("kraft", "kraft+kip848"))
+  def testCommitSync(quorum: String): Unit = {
+    val props = new Properties();
+    props.setProperty(ConsumerConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.CONSUMER.name());
+    val consumer = createConsumer(configOverrides = props)
     val producer = createProducer()
     val numRecords = 10000
     val startingTimestamp = System.currentTimeMillis()
