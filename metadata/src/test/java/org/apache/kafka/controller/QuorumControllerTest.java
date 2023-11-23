@@ -1102,8 +1102,8 @@ public class QuorumControllerTest {
     }
 
     static class InitialSnapshot implements AutoCloseable {
-        File tempDir = null;
-        BatchFileWriter writer = null;
+        File tempDir;
+        BatchFileWriter writer;
 
         public InitialSnapshot(List<ApiMessageAndVersion> records) throws Exception {
             tempDir = TestUtils.tempDirectory();
@@ -1292,7 +1292,7 @@ public class QuorumControllerTest {
                     controllerBuilder.setZkMigrationEnabled(migrationEnabled);
                 }).
                 setBootstrapMetadata(BootstrapMetadata.fromVersion(metadataVersion, "test")).
-                build();
+                build()
         ) {
             QuorumController active = controlEnv.activeController();
             ZkMigrationState zkMigrationState = active.appendReadEvent("read migration state", OptionalLong.empty(),
@@ -1317,7 +1317,7 @@ public class QuorumControllerTest {
                         controllerBuilder.setZkMigrationEnabled(true);
                     }).
                     setBootstrapMetadata(bootstrapMetadata).
-                    build();
+                    build()
             ) {
                 QuorumController active = controlEnv.activeController();
                 assertEquals(active.featureControl().zkMigrationState(), ZkMigrationState.MIGRATION);
@@ -1453,7 +1453,7 @@ public class QuorumControllerTest {
     @Test
     public void testMigrationsEnabledForOldBootstrapMetadataVersion() throws Exception {
         try (
-            LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv.Builder(1).build();
+            LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv.Builder(1).build()
         ) {
             QuorumControllerTestEnv.Builder controlEnvBuilder = new QuorumControllerTestEnv.Builder(logEnv).
                     setControllerBuilderInitializer(controllerBuilder -> {
@@ -1571,7 +1571,7 @@ public class QuorumControllerTest {
     @Test
     public void testFailoverDuringMigrationTransaction() throws Exception {
         try (
-            LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv.Builder(3).build();
+            LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv.Builder(3).build()
         ) {
             QuorumControllerTestEnv.Builder controlEnvBuilder = new QuorumControllerTestEnv.Builder(logEnv).
                 setControllerBuilderInitializer(controllerBuilder -> controllerBuilder.setZkMigrationEnabled(true)).
@@ -1616,7 +1616,7 @@ public class QuorumControllerTest {
     @EnumSource(value = MetadataVersion.class, names = {"IBP_3_4_IV0", "IBP_3_5_IV0", "IBP_3_6_IV0", "IBP_3_6_IV1"})
     public void testBrokerHeartbeatDuringMigration(MetadataVersion metadataVersion) throws Exception {
         try (
-            LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv.Builder(1).build();
+            LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv.Builder(1).build()
         ) {
             QuorumControllerTestEnv.Builder controlEnvBuilder = new QuorumControllerTestEnv.Builder(logEnv).
                 setControllerBuilderInitializer(controllerBuilder ->

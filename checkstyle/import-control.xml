@@ -250,6 +250,7 @@
       <allow pkg="org.apache.kafka.test" />
       <allow pkg="org.apache.kafka.timeline" />
       <subpackage name="metrics">
+        <allow pkg="com.yammer.metrics"/>
         <allow pkg="org.apache.kafka.common.metrics" />
         <allow pkg="org.apache.kafka.server.metrics" />
       </subpackage>
@@ -535,6 +536,7 @@
     </subpackage>
 
     <subpackage name="cli">
+      <allow pkg="com.fasterxml.jackson" />
       <allow pkg="org.apache.kafka.connect.runtime" />
       <allow pkg="org.apache.kafka.connect.storage" />
       <allow pkg="org.apache.kafka.connect.util" />

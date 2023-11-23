@@ -37,6 +37,8 @@ import org.apache.kafka.coordinator.group.generated.OffsetCommitKey;
 import org.apache.kafka.coordinator.group.generated.OffsetCommitValue;
 import org.apache.kafka.coordinator.group.generic.GenericGroup;
 import org.apache.kafka.coordinator.group.generic.GenericGroupState;
+import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetricsShard;
+import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetrics;
 import org.apache.kafka.coordinator.group.runtime.CoordinatorResult;
 import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
@@ -55,6 +57,9 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.apache.kafka.common.requests.OffsetFetchResponse.INVALID_OFFSET;
+import static org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetrics.NUM_OFFSETS;
+import static org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetrics.OFFSET_DELETIONS_SENSOR_NAME;
+import static org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetrics.OFFSET_EXPIRED_SENSOR_NAME;
 
 /**
  * The OffsetMetadataManager manages the offsets of all the groups. It basically maintains
@@ -74,6 +79,7 @@ public class OffsetMetadataManager {
         private GroupMetadataManager groupMetadataManager = null;
         private MetadataImage metadataImage = null;
         private GroupCoordinatorConfig config = null;
+        private GroupCoordinatorMetricsShard metrics = null;
 
         Builder withLogContext(LogContext logContext) {
             this.logContext = logContext;
@@ -105,6 +111,11 @@ public class OffsetMetadataManager {
             return this;
         }
 
+        Builder withGroupCoordinatorMetricsShard(GroupCoordinatorMetricsShard metrics) {
+            this.metrics = metrics;
+            return this;
+        }
+
         public OffsetMetadataManager build() {
             if (logContext == null) logContext = new LogContext();
             if (snapshotRegistry == null) snapshotRegistry = new SnapshotRegistry(logContext);
@@ -115,13 +126,18 @@ public class OffsetMetadataManager {
                 throw new IllegalArgumentException("GroupMetadataManager cannot be null");
             }
 
+            if (metrics == null) {
+                throw new IllegalArgumentException("GroupCoordinatorMetricsShard cannot be null");
+            }
+
             return new OffsetMetadataManager(
                 snapshotRegistry,
                 logContext,
                 time,
                 metadataImage,
                 groupMetadataManager,
-                config
+                config,
+                metrics
             );
         }
     }
@@ -152,6 +168,11 @@ public class OffsetMetadataManager {
     private final GroupMetadataManager groupMetadataManager;
 
     /**
+     * The coordinator metrics.
+     */
+    private final GroupCoordinatorMetricsShard metrics;
+
+    /**
      * The group coordinator config.
      */
     private final GroupCoordinatorConfig config;
@@ -167,7 +188,8 @@ public class OffsetMetadataManager {
         Time time,
         MetadataImage metadataImage,
         GroupMetadataManager groupMetadataManager,
-        GroupCoordinatorConfig config
+        GroupCoordinatorConfig config,
+        GroupCoordinatorMetricsShard metrics
     ) {
         this.snapshotRegistry = snapshotRegistry;
         this.log = logContext.logger(OffsetMetadataManager.class);
@@ -175,6 +197,7 @@ public class OffsetMetadataManager {
         this.metadataImage = metadataImage;
         this.groupMetadataManager = groupMetadataManager;
         this.config = config;
+        this.metrics = metrics;
         this.offsetsByGroup = new TimelineHashMap<>(snapshotRegistry, 0);
     }
 
@@ -352,6 +375,10 @@ public class OffsetMetadataManager {
             });
         });
 
+        if (!records.isEmpty()) {
+            metrics.record(GroupCoordinatorMetrics.OFFSET_COMMITS_SENSOR_NAME, records.size());
+        }
+
         return new CoordinatorResult<>(records, response);
     }
 
@@ -408,6 +435,7 @@ public class OffsetMetadataManager {
                 .setPartitions(responsePartitionCollection)
             );
         });
+        metrics.record(OFFSET_DELETIONS_SENSOR_NAME, records.size());
 
         return new CoordinatorResult<>(
             records,
@@ -595,6 +623,7 @@ public class OffsetMetadataManager {
             log.info("[GroupId {}] Expiring offsets of partitions (allOffsetsExpired={}): {}",
                 groupId, allOffsetsExpired, String.join(", ", expiredPartitions));
         }
+        metrics.record(OFFSET_EXPIRED_SENSOR_NAME, expiredPartitions.size());
 
         return allOffsetsExpired.get();
     }
@@ -710,7 +739,9 @@ public class OffsetMetadataManager {
             .computeIfAbsent(groupId, __ -> new TimelineHashMap<>(snapshotRegistry, 0));
         TimelineHashMap<Integer, OffsetAndMetadata> partitionOffsets = topicOffsets
             .computeIfAbsent(topic, __ -> new TimelineHashMap<>(snapshotRegistry, 0));
-        partitionOffsets.put(partition, offsetAndMetadata);
+        if (partitionOffsets.put(partition, offsetAndMetadata) == null) {
+            metrics.incrementLocalGauge(NUM_OFFSETS);
+        }
     }
 
     /**
@@ -734,6 +765,7 @@ public class OffsetMetadataManager {
             return;
 
         partitionOffsets.remove(partition);
+        metrics.decrementLocalGauge(NUM_OFFSETS);
 
         if (partitionOffsets.isEmpty())
             topicOffsets.remove(topic);
