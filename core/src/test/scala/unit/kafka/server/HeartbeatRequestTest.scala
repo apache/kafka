@@ -128,7 +128,8 @@ class HeartbeatRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBas
         assignments = List(new SyncGroupRequestData.SyncGroupRequestAssignment()
           .setMemberId(leaderMemberId)
           .setAssignment(Array[Byte](1))
-        )
+        ),
+        expectedAssignment = Array[Byte](1)
       )
 
       // Heartbeat STABLE group.
@@ -154,7 +155,7 @@ class HeartbeatRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBas
       }
 
       TestUtils.waitUntilTrue(() => {
-        val described = describeGroups(groupIds = List("grp"), version = ApiKeys.DESCRIBE_GROUPS.latestVersion(isUnstableApiEnabled))
+        val described = describeGroups(groupIds = List("grp"))
         GenericGroupState.PREPARING_REBALANCE.toString == described.head.groupState
       }, msg = s"The group is not in PREPARING_REBALANCE state.")
 
