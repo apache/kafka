@@ -70,8 +70,17 @@ class TopicConfigHandler(private val replicaManager: ReplicaManager,
     val logs = logManager.logsByTopic(topic)
     val wasRemoteLogEnabledBeforeUpdate = logs.exists(_.remoteLogEnabled())
 
+    maybeFailIfDisablingRemoteStorage(props, wasRemoteLogEnabledBeforeUpdate)
     logManager.updateTopicConfig(topic, props, kafkaConfig.isRemoteLogStorageSystemEnabled)
     maybeBootstrapRemoteLogComponents(topic, logs, wasRemoteLogEnabledBeforeUpdate)
+  }
+
+  private[server] def maybeFailIfDisablingRemoteStorage(props: Properties,
+                                                        wasRemoteLogEnabledBeforeUpdate: Boolean): Unit = {
+    val isRemoteLogToBeEnabled = props.getProperty(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG, String.valueOf(wasRemoteLogEnabledBeforeUpdate))
+    if (wasRemoteLogEnabledBeforeUpdate && !java.lang.Boolean.parseBoolean(isRemoteLogToBeEnabled)) {
+      throw new IllegalArgumentException(s"Disabling remote log on the topic is not supported.")
+    }
   }
 
   private[server] def maybeBootstrapRemoteLogComponents(topic: String,

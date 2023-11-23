@@ -24,6 +24,7 @@ import kafka.server.{ConfigEntityName, ConfigType, DynamicConfig, KafkaConfig}
 import kafka.utils._
 import kafka.utils.Implicits._
 import org.apache.kafka.admin.{AdminUtils, BrokerMetadata}
+import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.{TopicPartition, Uuid}
 import org.apache.kafka.common.errors._
 import org.apache.kafka.common.internals.Topic
@@ -477,6 +478,14 @@ class AdminZkClient(zkClient: KafkaZkClient,
     Topic.validate(topic)
     if (!zkClient.topicExists(topic))
       throw new UnknownTopicOrPartitionException(s"Topic '$topic' does not exist.")
+
+    // fix: workaround to fail when trying to disable tiered storage instead of silently update value while logging warning
+    val currentRemoteStorageEnable = zkClient.getEntityConfigs(ConfigType.Topic, topic).getProperty(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG, "false")
+    val newRemoteStorageEnable = configs.getProperty(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG, currentRemoteStorageEnable)
+    if (java.lang.Boolean.parseBoolean(currentRemoteStorageEnable) && !java.lang.Boolean.parseBoolean(newRemoteStorageEnable)) {
+      throw new InvalidConfigurationException(s"Disabling remote log on the topic is not supported.")
+    }
+
     // remove the topic overrides
     LogConfig.validate(configs,
       kafkaConfig.map(_.extractLogConfigMap).getOrElse(Collections.emptyMap()),

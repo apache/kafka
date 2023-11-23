@@ -599,4 +599,18 @@ class DynamicConfigChangeUnitTest {
     configHandler.maybeBootstrapRemoteLogComponents(topic, Seq(log0), isRemoteLogEnabledBeforeUpdate)
     verify(rlm, never()).onLeadershipChange(any(), any(), any())
   }
+
+  @Test
+  def testDisableRemoteLogStorageOnTopicOnAlreadyEnabledTopic(): Unit = {
+    val rlm: RemoteLogManager = mock(classOf[RemoteLogManager])
+    val replicaManager: ReplicaManager = mock(classOf[ReplicaManager])
+    when(replicaManager.remoteLogManager).thenReturn(Some(rlm))
+
+    val isRemoteLogEnabledBeforeUpdate = true
+    val configHandler: TopicConfigHandler = new TopicConfigHandler(replicaManager, null, null, None)
+    val newProps = new Properties()
+    newProps.put(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG, "false")
+    assertThrows(classOf[IllegalArgumentException], () => configHandler.maybeFailIfDisablingRemoteStorage(newProps, isRemoteLogEnabledBeforeUpdate))
+    verify(rlm, never()).onLeadershipChange(any(), any(), any())
+  }
 }
