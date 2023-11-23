@@ -217,7 +217,7 @@ public final class TieredStorageTestContext implements AutoCloseable {
                 String.format("Could not consume %d records of %s from offset %d in %d ms. %d message(s) consumed:%s%s",
                         expectedTotalCount, topicPartition, fetchOffset, timeoutMs, records.size(), sep,
                         Utils.join(records, sep));
-        TestUtils.pollRecordsUntilTrue(consumer, pollAction, messageSupplier, timeoutMs);
+        TestUtils.pollRecordsUntilTrue(consumer, pollAction, messageSupplier, timeoutMs, false);
         return records;
     }
 
