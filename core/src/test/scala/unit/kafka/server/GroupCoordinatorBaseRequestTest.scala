@@ -253,20 +253,34 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
     groupId: String,
     memberId: String,
     generationId: Int,
+    protocolType: String = "consumer",
+    protocolName: String = "consumer-range",
     assignments: List[SyncGroupRequestData.SyncGroupRequestAssignment] = List.empty,
-    expectedError: Errors = Errors.NONE
+    expectedProtocolType: String = "consumer",
+    expectedProtocolName: String = "consumer-range",
+    expectedAssignment: Array[Byte] = Array.empty,
+    expectedError: Errors = Errors.NONE,
+    version: Short = ApiKeys.SYNC_GROUP.latestVersion(isUnstableApiEnabled)
   ): SyncGroupResponseData = {
     val syncGroupRequestData = new SyncGroupRequestData()
       .setGroupId(groupId)
       .setMemberId(memberId)
       .setGenerationId(generationId)
-      .setProtocolType("consumer")
-      .setProtocolName("consumer-range")
+      .setProtocolType(protocolType)
+      .setProtocolName(protocolName)
       .setAssignments(assignments.asJava)
 
-    val syncGroupRequest = new SyncGroupRequest.Builder(syncGroupRequestData).build()
+    val syncGroupRequest = new SyncGroupRequest.Builder(syncGroupRequestData).build(version)
     val syncGroupResponse = connectAndReceive[SyncGroupResponse](syncGroupRequest)
-    assertEquals(expectedError.code, syncGroupResponse.data.errorCode)
+    
+    assertEquals(
+      new SyncGroupResponseData()
+        .setErrorCode(expectedError.code)
+        .setProtocolType(if (version >= 5) expectedProtocolType else null)
+        .setProtocolName(if (version >= 5) expectedProtocolName else null)
+        .setAssignment(expectedAssignment),
+      syncGroupResponse.data
+    )
 
     syncGroupResponse.data
   }
@@ -335,7 +349,8 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
         generationId = rejoinGroupResponseData.generationId,
         assignments = List(new SyncGroupRequestAssignment()
           .setMemberId(rejoinGroupResponseData.memberId)
-          .setAssignment(assignment))
+          .setAssignment(assignment)),
+        expectedAssignment = assignment
       )
     }
 
@@ -384,7 +399,7 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
     } else {
       // Note that we don't heartbeat and assume that the test will
       // complete within the session timeout.
-      joinDynamicConsumerGroupWithOldProtocol(groupId)
+      joinDynamicConsumerGroupWithOldProtocol(groupId = groupId)
     }
   }
 
@@ -404,11 +419,10 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
 
   protected def describeGroups(
     groupIds: List[String],
-    version: Short
+    version: Short = ApiKeys.DESCRIBE_GROUPS.latestVersion(isUnstableApiEnabled)
   ): List[DescribeGroupsResponseData.DescribedGroup] = {
     val describeGroupsRequest = new DescribeGroupsRequest.Builder(
-      new DescribeGroupsRequestData()
-        .setGroups(groupIds.asJava)
+      new DescribeGroupsRequestData().setGroups(groupIds.asJava)
     ).build(version)
 
     val describeGroupsResponse = connectAndReceive[DescribeGroupsResponse](describeGroupsRequest)

@@ -328,9 +328,9 @@
 
     <!-- group coordinator -->
     <suppress checks="CyclomaticComplexity"
-              files="(ConsumerGroupMember|GroupMetadataManager).java"/>
+              files="(ConsumerGroupMember|GroupMetadataManager|GeneralUniformAssignmentBuilder).java"/>
     <suppress checks="(NPathComplexity|MethodLength)"
-              files="(GroupMetadataManager|ConsumerGroupTest|GroupMetadataManagerTest).java"/>
+              files="(GroupMetadataManager|ConsumerGroupTest|GroupMetadataManagerTest|GeneralUniformAssignmentBuilder).java"/>
     <suppress checks="NPathComplexity"
               files="CoordinatorRuntime.java"/>
     <suppress checks="ClassFanOutComplexity"
