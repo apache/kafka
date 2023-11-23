@@ -17,7 +17,25 @@
 package org.apache.kafka.clients.consumer.internals;
 
 import java.util.Arrays;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
+import java.time.Duration;
+
 import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetAndTimestamp;
 import org.apache.kafka.clients.consumer.OffsetCommitCallback;
@@ -34,6 +52,7 @@ import org.apache.kafka.clients.consumer.internals.events.SubscriptionChangeAppl
 import org.apache.kafka.clients.consumer.internals.events.UnsubscribeApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.ValidatePositionsApplicationEvent;
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
 import org.apache.kafka.common.errors.InvalidGroupIdException;
@@ -41,8 +60,13 @@ import org.apache.kafka.common.errors.NetworkException;
 import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.WakeupException;
+import org.apache.kafka.common.message.OffsetCommitResponseData;
+import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.requests.FindCoordinatorResponse;
 import org.apache.kafka.common.requests.ListOffsetsRequest;
+import org.apache.kafka.common.requests.OffsetCommitResponse;
+import org.apache.kafka.common.requests.RequestHeader;
 import org.apache.kafka.common.utils.Timer;
 import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.AfterEach;
@@ -56,22 +80,6 @@ import org.mockito.ArgumentMatchers;
 import org.mockito.MockedConstruction;
 import org.mockito.Mockito;
 import org.mockito.stubbing.Answer;
-
-import java.time.Duration;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
-import java.util.Set;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
-import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 import static java.util.Arrays.asList;
 import static java.util.Collections.singleton;
@@ -90,6 +98,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.mockConstruction;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -118,8 +127,51 @@ public class AsyncKafkaConsumerTest {
     @AfterEach
     public void cleanup() {
         if (testBuilder != null) {
+            doAnswer(invocation -> null).when(testBuilder.applicationEventHandler).close(any());
             testBuilder.close();
         }
+    }
+
+    private void prepClosing() {
+        Node node = testBuilder.metadata.fetch().nodes().get(0);
+        testBuilder.client.prepareResponse(FindCoordinatorResponse.prepareResponse(Errors.NONE, "group-id", node));
+        if (!testBuilder.subscriptions.allConsumed().isEmpty()) {
+            List<TopicPartition> topicPartitions = new ArrayList<>(testBuilder.subscriptions.assignedPartitionsList());
+            testBuilder.client.prepareResponse(mockClosingAutoCommit(
+                    topicPartitions,
+                    (short) 1,
+                    Errors.NONE).responseBody());
+        }
+    }
+
+    private ClientResponse mockClosingAutoCommit(final List<TopicPartition> topicPartitions,
+                                                final short apiKeyVersion,
+                                                final Errors error) {
+        OffsetCommitResponseData responseData = new OffsetCommitResponseData();
+        List<OffsetCommitResponseData.OffsetCommitResponseTopic> responseTopics = new ArrayList<>();
+        topicPartitions.forEach(tp -> {
+            responseTopics.add(new OffsetCommitResponseData.OffsetCommitResponseTopic()
+                    .setName(tp.topic())
+                    .setPartitions(Collections.singletonList(
+                            new OffsetCommitResponseData.OffsetCommitResponsePartition()
+                                    .setErrorCode(error.code())
+                                    .setPartitionIndex(tp.partition()))));
+        });
+
+        responseData.setTopics(responseTopics);
+        OffsetCommitResponse response = mock(OffsetCommitResponse.class);
+        when(response.data()).thenReturn(responseData);
+        return new ClientResponse(
+                new RequestHeader(ApiKeys.OFFSET_COMMIT, apiKeyVersion, "", 1),
+                null,
+                "-1",
+                testBuilder.time.milliseconds(),
+                testBuilder.time.milliseconds(),
+                false,
+                null,
+                null,
+                new OffsetCommitResponse(responseData)
+        );
     }
 
     private void resetWithEmptyGroupId() {
@@ -130,7 +182,7 @@ public class AsyncKafkaConsumerTest {
 
     @Test
     public void testSuccessfulStartupShutdown() {
-        assertDoesNotThrow(() -> consumer.close());
+        assertDoesNotThrow(() -> shutdown(Duration.ZERO));
     }
 
     @Test
@@ -142,7 +194,7 @@ public class AsyncKafkaConsumerTest {
 
     @Test
     public void testFailOnClosedConsumer() {
-        consumer.close();
+        shutdown(Duration.ZERO);
         final IllegalStateException res = assertThrows(IllegalStateException.class, consumer::assignment);
         assertEquals("This consumer has already been closed.", res.getMessage());
     }
@@ -432,19 +484,25 @@ public class AsyncKafkaConsumerTest {
         doReturn(future).when(consumer).commit(new HashMap<>(), false);
         assertDoesNotThrow(() -> consumer.commitAsync(new HashMap<>(), callback));
         future.complete(null);
-        assertMockCommitCallbackInvoked(() -> consumer.close(Duration.ZERO),
+        assertMockCommitCallbackInvoked(() -> shutdown(Duration.ZERO),
             callback,
             null);
     }
 
-    private void assertMockCommitCallbackInvoked(final Executable task, final MockCommitCallback callback,
-                                                 final Errors exception) {
+    private void shutdown(Duration duration) {
+        prepClosing();
+        consumer.close(duration);
+    }
+
+    private void assertMockCommitCallbackInvoked(final Executable task,
+                                                 final MockCommitCallback callback,
+                                                 final Errors errors) {
         assertDoesNotThrow(task);
         assertEquals(1, callback.invoked);
-        if (callback.exception instanceof RetriableException)
-            assertEquals(callback.exception.getClass(), RetriableCommitFailedException.class);
-        else
+        if (errors == null)
             assertNull(callback.exception);
+        else if (errors.exception() instanceof RetriableException)
+            assertTrue(callback.exception instanceof RetriableCommitFailedException);
     }
 
     private static class MockCommitCallback implements OffsetCommitCallback {

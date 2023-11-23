@@ -218,6 +218,10 @@ public class CommitRequestManager implements RequestManager {
             return Optional.empty();
         }
 
+        if (subscriptions.allConsumed().isEmpty()) {
+            return Optional.empty();
+        }
+
         OffsetCommitRequestState request = pendingRequests.createOffsetCommitRequest(subscriptions.allConsumed(), jitter);
         request.future.whenComplete(autoCommitCallback(subscriptions.allConsumed()));
         return Optional.of(request.toUnsentRequest());
