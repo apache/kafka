@@ -21,6 +21,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.CoordinatorLoadInProgressException;
 import org.apache.kafka.common.errors.NotCoordinatorException;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
@@ -618,6 +619,21 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
         final String name;
 
         /**
+         * The transactional id.
+         */
+        final String transactionalId;
+
+        /**
+         * The producer id.
+         */
+        final long producerId;
+
+        /**
+         * The producer epoch.
+         */
+        final short producerEpoch;
+
+        /**
          * The write operation to execute.
          */
         final CoordinatorWriteOperation<S, T, U> op;
@@ -651,9 +667,40 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
             TopicPartition tp,
             CoordinatorWriteOperation<S, T, U> op
         ) {
+            this(
+                name,
+                tp,
+                null,
+                RecordBatch.NO_PRODUCER_ID,
+                RecordBatch.NO_PRODUCER_EPOCH,
+                op
+            );
+        }
+
+        /**
+         * Constructor.
+         *
+         * @param name              The operation name.
+         * @param tp                The topic partition that the operation is applied to.
+         * @param transactionalId   The transactional id.
+         * @param producerId        The producer id.
+         * @param producerEpoch     The producer epoch.
+         * @param op                The write operation.
+         */
+        CoordinatorWriteEvent(
+            String name,
+            TopicPartition tp,
+            String transactionalId,
+            long producerId,
+            short producerEpoch,
+            CoordinatorWriteOperation<S, T, U> op
+        ) {
             this.tp = tp;
             this.name = name;
             this.op = op;
+            this.transactionalId = transactionalId;
+            this.producerId = producerId;
+            this.producerEpoch = producerEpoch;
             this.future = new CompletableFuture<>();
             this.createdTimeMs = time.milliseconds();
         }
@@ -697,12 +744,23 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
                         try {
                             // Apply the records to the state machine.
                             if (result.replayRecords()) {
-                                result.records().forEach(context.coordinator::replay);
+                                result.records().forEach(record ->
+                                    context.coordinator.replay(
+                                        producerId,
+                                        producerEpoch,
+                                        record
+                                    )
+                                );
                             }
 
                             // Write the records to the log and update the last written
                             // offset.
-                            long offset = partitionWriter.append(tp, result.records());
+                            long offset = partitionWriter.append(
+                                tp,
+                                producerId,
+                                producerEpoch,
+                                result.records()
+                            );
                             context.updateLastWrittenOffset(offset);
 
                             // Add the response to the deferred queue.
@@ -1235,6 +1293,43 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
         throwIfNotRunning();
         log.debug("Scheduled execution of write operation {}.", name);
         CoordinatorWriteEvent<T> event = new CoordinatorWriteEvent<>(name, tp, op);
+        enqueue(event);
+        return event.future;
+    }
+
+    /**
+     * Schedules a transactional write operation.
+     *
+     * @param name              The name of the write operation.
+     * @param tp                The address of the coordinator (aka its topic-partitions).
+     * @param transactionalId   The transactional id.
+     * @param producerId        The producer id.
+     * @param producerEpoch     The producer epoch.
+     * @param op                The write operation.
+     *
+     * @return A future that will be completed with the result of the write operation
+     * when the operation is completed or an exception if the write operation failed.
+     *
+     * @param <T> The type of the result.
+     */
+    public <T> CompletableFuture<T> scheduleTransactionalWriteOperation(
+        String name,
+        TopicPartition tp,
+        String transactionalId,
+        long producerId,
+        short producerEpoch,
+        CoordinatorWriteOperation<S, T, U> op
+    ) {
+        throwIfNotRunning();
+        log.debug("Scheduled execution of transactional write operation {}.", name);
+        CoordinatorWriteEvent<T> event = new CoordinatorWriteEvent<>(
+            name,
+            tp,
+            transactionalId,
+            producerId,
+            producerEpoch,
+            op
+        );
         enqueue(event);
         return event.future;
     }

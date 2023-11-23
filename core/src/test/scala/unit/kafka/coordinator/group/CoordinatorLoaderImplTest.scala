@@ -21,7 +21,7 @@ import kafka.server.ReplicaManager
 import kafka.utils.TestUtils
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.NotLeaderOrFollowerException
-import org.apache.kafka.common.record.{CompressionType, FileRecords, MemoryRecords, SimpleRecord}
+import org.apache.kafka.common.record.{CompressionType, FileRecords, MemoryRecords, RecordBatch, SimpleRecord}
 import org.apache.kafka.common.utils.{MockTime, Time}
 import org.apache.kafka.coordinator.group.runtime.CoordinatorLoader.UnknownRecordTypeException
 import org.apache.kafka.coordinator.group.runtime.{CoordinatorLoader, CoordinatorPlayback}
@@ -104,7 +104,7 @@ class CoordinatorLoaderImplTest {
     )) { loader =>
       when(replicaManager.getLog(tp)).thenReturn(Some(log))
       when(log.logStartOffset).thenReturn(0L)
-      when(replicaManager.getLogEndOffset(tp)).thenReturn(Some(5L))
+      when(replicaManager.getLogEndOffset(tp)).thenReturn(Some(7L))
 
       val readResult1 = logReadResult(startOffset = 0, records = Seq(
         new SimpleRecord("k1".getBytes, "v1".getBytes),
@@ -131,13 +131,27 @@ class CoordinatorLoaderImplTest {
         minOneMessage = true
       )).thenReturn(readResult2)
 
+      val readResult3 = logReadResult(startOffset = 5, producerId = 100L, producerEpoch = 5, records = Seq(
+        new SimpleRecord("k6".getBytes, "v6".getBytes),
+        new SimpleRecord("k7".getBytes, "v7".getBytes)
+      ))
+
+      when(log.read(
+        startOffset = 5L,
+        maxLength = 1000,
+        isolation = FetchIsolation.LOG_END,
+        minOneMessage = true
+      )).thenReturn(readResult3)
+
       assertNotNull(loader.load(tp, coordinator).get(10, TimeUnit.SECONDS))
 
-      verify(coordinator).replay(("k1", "v1"))
-      verify(coordinator).replay(("k2", "v2"))
-      verify(coordinator).replay(("k3", "v3"))
-      verify(coordinator).replay(("k4", "v4"))
-      verify(coordinator).replay(("k5", "v5"))
+      verify(coordinator).replay(RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, ("k1", "v1"))
+      verify(coordinator).replay(RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, ("k2", "v2"))
+      verify(coordinator).replay(RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, ("k3", "v3"))
+      verify(coordinator).replay(RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, ("k4", "v4"))
+      verify(coordinator).replay(RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, ("k5", "v5"))
+      verify(coordinator).replay(100L, 5.toShort, ("k6", "v6"))
+      verify(coordinator).replay(100L, 5.toShort, ("k7", "v7"))
     }
   }
 
@@ -220,7 +234,7 @@ class CoordinatorLoaderImplTest {
 
       loader.load(tp, coordinator).get(10, TimeUnit.SECONDS)
 
-      verify(coordinator).replay(("k2", "v2"))
+      verify(coordinator).replay(RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, ("k2", "v2"))
     }
   }
 
@@ -354,14 +368,28 @@ class CoordinatorLoaderImplTest {
 
   private def logReadResult(
     startOffset: Long,
+    producerId: Long = RecordBatch.NO_PRODUCER_ID,
+    producerEpoch: Short = RecordBatch.NO_PRODUCER_EPOCH,
     records: Seq[SimpleRecord]
   ): FetchDataInfo = {
     val fileRecords = mock(classOf[FileRecords])
-    val memoryRecords = MemoryRecords.withRecords(
-      startOffset,
-      CompressionType.NONE,
-      records: _*
-    )
+    val memoryRecords = if (producerId == RecordBatch.NO_PRODUCER_ID) {
+      MemoryRecords.withRecords(
+        startOffset,
+        CompressionType.NONE,
+        records: _*
+      )
+    } else {
+      MemoryRecords.withTransactionalRecords(
+        startOffset,
+        CompressionType.NONE,
+        producerId,
+        producerEpoch,
+        0,
+        RecordBatch.NO_PARTITION_LEADER_EPOCH,
+        records: _*
+      )
+    }
 
     when(fileRecords.sizeInBytes).thenReturn(memoryRecords.sizeInBytes)
 

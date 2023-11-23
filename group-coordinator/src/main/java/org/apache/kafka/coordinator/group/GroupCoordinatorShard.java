@@ -590,12 +590,18 @@ public class GroupCoordinatorShard implements CoordinatorShard<Record> {
 
     /**
      * Replays the Record to update the hard state of the group coordinator.
-
-     * @param record The record to apply to the state machine.
+     *
+     * @param producerId    The producer id.
+     * @param producerEpoch The producer epoch.
+     * @param record        The record to apply to the state machine.
      * @throws RuntimeException
      */
     @Override
-    public void replay(Record record) throws RuntimeException {
+    public void replay(
+        long producerId,
+        short producerEpoch,
+        Record record
+    ) throws RuntimeException {
         ApiMessageAndVersion key = record.key();
         ApiMessageAndVersion value = record.value();
 
