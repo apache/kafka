@@ -86,6 +86,7 @@ RUN set -eux ; \
     apk cache clean;
 
 COPY --from=build-jsa kafka.jsa /opt/kafka/kafka.jsa
+COPY --from=build-jsa storage.jsa /opt/kafka/storage.jsa
 COPY --chown=appuser:appuser --from=build-ub /build/ub /usr/bin
 COPY --chown=appuser:appuser resources/common-scripts /etc/kafka/docker
 COPY --chown=appuser:appuser launch /etc/kafka/docker/launch
