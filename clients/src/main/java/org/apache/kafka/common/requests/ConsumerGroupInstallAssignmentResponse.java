@@ -23,7 +23,6 @@ import org.apache.kafka.common.protocol.Errors;
 
 import java.nio.ByteBuffer;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.Map;
 
 /**
@@ -40,7 +39,7 @@ import java.util.Map;
  * - {@link Errors#STALE_MEMBER_EPOCH}
  * - {@link Errors#INVALID_REPLICA_ASSIGNMENT}
  */
-public class ConsumerGroupInstallAssignmentResponse extends AbstractResponse{
+public class ConsumerGroupInstallAssignmentResponse extends AbstractResponse {
 
     private final ConsumerGroupInstallAssignmentResponseData data;
 
