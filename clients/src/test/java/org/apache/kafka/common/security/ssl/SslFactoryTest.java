@@ -543,26 +543,33 @@ public abstract class SslFactoryTest {
     public void testDynamicUpdateCompatibility() throws Exception {
         KeyPair keyPair = TestSslUtils.generateKeyPair("RSA");
         KeyStore ks = createKeyStore(keyPair, "*.example.com", "Kafka", true, "localhost", "*.example.com");
-        ensureCompatible(ks, ks);
-        ensureCompatible(ks, createKeyStore(keyPair, "*.example.com", "Kafka", true, "localhost", "*.example.com"));
-        ensureCompatible(ks, createKeyStore(keyPair, " *.example.com", " Kafka ", true, "localhost", "*.example.com"));
-        ensureCompatible(ks, createKeyStore(keyPair, "*.example.COM", "Kafka", true, "localhost", "*.example.com"));
-        ensureCompatible(ks, createKeyStore(keyPair, "*.EXAMPLE.COM", "KAFKA", true, "localhost", "*.example.com"));
-        ensureCompatible(ks, createKeyStore(keyPair, "*.EXAMPLE.COM", "Kafka", true, "*.example.com"));
-        ensureCompatible(ks, createKeyStore(keyPair, "*.EXAMPLE.COM", "Kafka", true, "localhost"));
+        ensureCompatible(ks, ks, false, false);
+        ensureCompatible(ks, createKeyStore(keyPair, "*.example.com", "Kafka", true, "localhost", "*.example.com"), false, false);
+        ensureCompatible(ks, createKeyStore(keyPair, " *.example.com", " Kafka ", true, "localhost", "*.example.com"), false, false);
+        ensureCompatible(ks, createKeyStore(keyPair, "*.example.COM", "Kafka", true, "localhost", "*.example.com"), false, false);
+        ensureCompatible(ks, createKeyStore(keyPair, "*.EXAMPLE.COM", "KAFKA", true, "localhost", "*.example.com"), false, false);
+        ensureCompatible(ks, createKeyStore(keyPair, "*.EXAMPLE.COM", "Kafka", true, "*.example.com"), false, false);
+        ensureCompatible(ks, createKeyStore(keyPair, "*.EXAMPLE.COM", "Kafka", true, "localhost"), false, false);
 
-        ensureCompatible(ks, createKeyStore(keyPair, "*.example.com", "Kafka", false, "localhost", "*.example.com"));
-        ensureCompatible(ks, createKeyStore(keyPair, "*.example.COM", "Kafka", false, "localhost", "*.example.com"));
-        ensureCompatible(ks, createKeyStore(keyPair, "*.EXAMPLE.COM", "KAFKA", false, "localhost", "*.example.com"));
-        ensureCompatible(ks, createKeyStore(keyPair, "*.EXAMPLE.COM", "Kafka", false, "*.example.com"));
-        ensureCompatible(ks, createKeyStore(keyPair, "*.EXAMPLE.COM", "Kafka", false, "localhost"));
+        ensureCompatible(ks, createKeyStore(keyPair, "*.example.com", "Kafka", false, "localhost", "*.example.com"), false, false);
+        ensureCompatible(ks, createKeyStore(keyPair, "*.example.COM", "Kafka", false, "localhost", "*.example.com"), false, false);
+        ensureCompatible(ks, createKeyStore(keyPair, "*.EXAMPLE.COM", "KAFKA", false, "localhost", "*.example.com"), false, false);
+        ensureCompatible(ks, createKeyStore(keyPair, "*.EXAMPLE.COM", "Kafka", false, "*.example.com"), false, false);
+        ensureCompatible(ks, createKeyStore(keyPair, "*.EXAMPLE.COM", "Kafka", false, "localhost"), false, false);
 
         assertThrows(ConfigException.class, () ->
-                ensureCompatible(ks, createKeyStore(keyPair, " *.example.com", " Kafka ", false, "localhost", "*.example.com")));
+                ensureCompatible(ks, createKeyStore(keyPair, " *.example.com", " Kafka ", false, "localhost", "*.example.com"), false, false));
         assertThrows(ConfigException.class, () ->
-                ensureCompatible(ks, createKeyStore(keyPair, "*.another.example.com", "Kafka", true, "*.example.com")));
+                ensureCompatible(ks, createKeyStore(keyPair, "*.another.example.com", "Kafka", true, "*.example.com"), false, false));
         assertThrows(ConfigException.class, () ->
-                ensureCompatible(ks, createKeyStore(keyPair, "*.EXAMPLE.COM", "Kafka", true, "*.another.example.com")));
+                ensureCompatible(ks, createKeyStore(keyPair, "*.EXAMPLE.COM", "Kafka", true, "*.another.example.com"), false, false));
+
+        // Test disabling of validation
+        ensureCompatible(ks, createKeyStore(keyPair, " *.another.example.com", "Kafka ", true, "localhost", "*.another.example.com"), true, true);
+        ensureCompatible(ks, createKeyStore(keyPair, "*.example.com", "Kafka", true, "localhost", "*.another.example.com"), false, true);
+        assertThrows(ConfigException.class, () -> ensureCompatible(ks, createKeyStore(keyPair, "*.example.com", "Kafka", true, "localhost", "*.another.example.com"), true, false));
+        ensureCompatible(ks, createKeyStore(keyPair, "*.another.example.com", "Kafka", true, "localhost", "*.example.com"), true, false);
+        assertThrows(ConfigException.class, () -> ensureCompatible(ks, createKeyStore(keyPair, "*.another.example.com", "Kafka", true, "localhost", "*.example.com"), false, true));
     }
 
     private KeyStore createKeyStore(KeyPair keyPair, String commonName, String org, boolean utf8, String... dnsNames) throws Exception {
