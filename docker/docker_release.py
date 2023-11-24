@@ -26,17 +26,12 @@ Interactive utility to push the docker image to dockerhub
 
 from distutils.dir_util import copy_tree
 from datetime import date
-import shutil
 
-from common import execute, get_input
+from common import execute, get_input, jvm_image
 
-def push_jvm(image, kafka_url):
-    copy_tree("resources", "jvm/resources")
-    execute(["docker", "buildx", "build", "-f", "jvm/Dockerfile", "--build-arg", f"kafka_url={kafka_url}", "--build-arg", f"build_date={date.today()}",
-    "--push",
-    "--platform", "linux/amd64,linux/arm64",
-    "--tag", image, "jvm"])
-    shutil.rmtree("jvm/resources")
+def build_push_jvm(image, kafka_url):
+    jvm_image(f"docker buildx build -f $DOCKER_FILE --build-arg kafka_url={kafka_url} --build-arg build_date={date.today()} --push \
+              --platform linux/amd64,linux/arm64 --tag {image} $DOCKER_DIR")
 
 def login():
     execute(["docker", "login"])
@@ -57,10 +52,13 @@ if __name__ == "__main__":
     print("\
           This script will build and push docker images of apache kafka.\n\
           Please ensure that image has been sanity tested before pushing the image")
-    login()
     docker_registry = input("Enter the docker registry you want to push the image to [docker.io]: ")
     if docker_registry == "":
         docker_registry = "docker.io"
+    if docker_registry == "docker.io":
+        login()
+    else:
+        print("Please make sure you are logged in to your docker registry and continue")
     docker_namespace = input("Enter the docker namespace you want to push the image to: ")
     image_name = get_input("Enter the image name: ")
     image_tag = get_input("Enter the image tag for the image: ")
@@ -71,7 +69,7 @@ if __name__ == "__main__":
     if proceed == "y":
         print("Building and pushing the image")
         create_builder()
-        push_jvm(image, kafka_url)
+        build_push_jvm(image, kafka_url)
         remove_builder()
         print(f"Image has been pushed to {image}")
     else:

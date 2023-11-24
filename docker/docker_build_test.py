@@ -20,23 +20,13 @@ import argparse
 from distutils.dir_util import copy_tree
 import shutil
 from test.docker_sanity_test import run_tests
-from common import execute
+from common import execute, jvm_image
 import tempfile
 import os
 
 def build_jvm(image, tag, kafka_url):
     image = f'{image}:{tag}'
-    temp_dir_path = tempfile.mkdtemp()
-    current_dir = os.path.dirname(os.path.realpath(__file__))
-    copy_tree(f"{current_dir}/jvm", f"{temp_dir_path}/jvm")
-    copy_tree(f"{current_dir}/resources", f"{temp_dir_path}/jvm/resources")
-    try:
-        execute(["docker", "build", "-f", f"{temp_dir_path}/jvm/Dockerfile", "-t", image, "--build-arg", f"kafka_url={kafka_url}",
-                            "--build-arg", f'build_date={date.today()}', f"{temp_dir_path}/jvm"])
-    except:
-        print("Docker Image Build failed")
-    finally:
-        shutil.rmtree(temp_dir_path)
+    jvm_image(f"docker build -f $DOCKER_FILE -t {image} --build-arg kafka_url={kafka_url} --build-arg build_date={date.today()} $DOCKER_DIR")
 
 def run_jvm_tests(image, tag, kafka_url):
     temp_dir_path = tempfile.mkdtemp()
