@@ -3747,16 +3747,56 @@ class KafkaApis(val requestChannel: RequestChannel,
     CompletableFuture.completedFuture[Unit](())
   }
 
-  // Just a place holder for now.
   def handleGetTelemetrySubscriptionsRequest(request: RequestChannel.Request): Unit = {
-    requestHelper.sendMaybeThrottle(request, request.body[GetTelemetrySubscriptionsRequest].getErrorResponse(Errors.UNSUPPORTED_VERSION.exception))
-    CompletableFuture.completedFuture[Unit](())
+    val subscriptionRequest = request.body[GetTelemetrySubscriptionsRequest]
+
+    clientMetricsManager match {
+      case Some(metricsManager) =>
+        try {
+          if (metricsManager.isTelemetryReceiverConfigured) {
+            requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
+              metricsManager.processGetTelemetrySubscriptionRequest(subscriptionRequest, request.context))
+          } else {
+            info("Received get telemetry client request for metrics receiver, but no metrics receiver configured")
+            requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
+              subscriptionRequest.getErrorResponse(requestThrottleMs, Errors.UNSUPPORTED_VERSION.exception))
+          }
+        } catch {
+          case _: Exception =>
+            requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
+              subscriptionRequest.getErrorResponse(requestThrottleMs, Errors.INVALID_REQUEST.exception))
+        }
+      case None =>
+        info("Received get telemetry client request for zookeeper based cluster")
+        requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
+          subscriptionRequest.getErrorResponse(requestThrottleMs, Errors.UNSUPPORTED_VERSION.exception))
+    }
   }
 
-  // Just a place holder for now.
   def handlePushTelemetryRequest(request: RequestChannel.Request): Unit = {
-    requestHelper.sendMaybeThrottle(request, request.body[PushTelemetryRequest].getErrorResponse(Errors.UNSUPPORTED_VERSION.exception))
-    CompletableFuture.completedFuture[Unit](())
+    val pushTelemetryRequest = request.body[PushTelemetryRequest]
+
+    clientMetricsManager match {
+      case Some(metricsManager) =>
+        try {
+          if (metricsManager.isTelemetryReceiverConfigured) {
+            requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
+              metricsManager.processPushTelemetryRequest(pushTelemetryRequest, request.context))
+          } else {
+            info("Received push telemetry client request, but no metrics receiver configured")
+            requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
+              pushTelemetryRequest.getErrorResponse(requestThrottleMs, Errors.UNSUPPORTED_VERSION.exception))
+          }
+        } catch {
+          case _: Exception =>
+            requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
+              pushTelemetryRequest.getErrorResponse(requestThrottleMs, Errors.INVALID_REQUEST.exception))
+        }
+      case None =>
+        info("Received push telemetry client request for zookeeper based cluster")
+        requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
+          pushTelemetryRequest.getErrorResponse(requestThrottleMs, Errors.UNSUPPORTED_VERSION.exception))
+    }
   }
 
   private def updateRecordConversionStats(request: RequestChannel.Request,
