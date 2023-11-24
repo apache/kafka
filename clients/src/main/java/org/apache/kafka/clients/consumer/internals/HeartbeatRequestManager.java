@@ -41,6 +41,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
+import java.util.stream.Collectors;
 
 /**
  * <p>Manages the request creation and response handling for the heartbeat. The module creates a
@@ -410,7 +411,7 @@ public class HeartbeatRequestManager implements RequestManager {
         private TreeSet<String> sentSubscribedTopicNames;
         // private String sentSubscribedTopicRegex;
         private String sentServerAssignor;
-        private TreeSet<TopicIdPartition> sentTopicPartitions;
+        private TreeSet<String> sentTopicPartitions;
 
         public HeartbeatState(
             final SubscriptionState subscriptions,
@@ -421,18 +422,18 @@ public class HeartbeatRequestManager implements RequestManager {
             this.rebalanceTimeoutMs = rebalanceTimeoutMs;
             this.sentInstanceId = null;
             this.sentRebalanceTimeoutMs = -1;
-            this.sentSubscribedTopicNames = new TreeSet<>();
+            this.sentSubscribedTopicNames = null;
             this.sentServerAssignor = null;
-            this.sentTopicPartitions = new TreeSet<>();
+            this.sentTopicPartitions = null;
         }
 
 
         public void reset() {
             sentInstanceId = null;
             sentRebalanceTimeoutMs = -1;
-            sentSubscribedTopicNames.clear();
+            sentSubscribedTopicNames = null;
             sentServerAssignor = null;
-            sentTopicPartitions.clear();
+            sentTopicPartitions = null;
         }
 
         public ConsumerGroupHeartbeatRequestData buildRequestData() {
@@ -486,10 +487,11 @@ public class HeartbeatRequestManager implements RequestManager {
             // ClientAssignors - not supported yet
 
             // TopicPartitions - sent if hasn't changed since the last heartbeat
-            TreeSet<TopicIdPartition> assignedPartitions = new TreeSet<>(membershipManager.currentAssignment());
+            TreeSet<String> assignedPartitions = new TreeSet<>(membershipManager.currentAssignment().stream()
+                    .map(tp -> tp.topicId() + "-" + tp.partition()).collect(Collectors.toList()));
             if (!assignedPartitions.equals(sentTopicPartitions)) {
                 List<ConsumerGroupHeartbeatRequestData.TopicPartitions> topicPartitions =
-                        buildTopicPartitionsList(assignedPartitions);
+                        buildTopicPartitionsList(membershipManager.currentAssignment());
                 data.setTopicPartitions(topicPartitions);
                 sentTopicPartitions = assignedPartitions;
             }
