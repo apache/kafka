@@ -334,10 +334,7 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
             transitionTo(MemberState.RECONCILING);
             replaceUnresolvedAssignmentWithNewAssignment(assignment);
             resolveMetadataForUnresolvedAssignment();
-            boolean reconciliationInProgress = reconcile();
-            if (!reconciliationInProgress) {
-                transitionTo(MemberState.STABLE);
-            }
+            reconcile();
         } else if (allPendingAssignmentsReconciled()) {
             transitionTo(MemberState.STABLE);
         }
@@ -606,14 +603,12 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
      * can be in progress at a time. If there is already another one in progress when this is
      * triggered, it will be no-op, and the assignment will be reconciled on the next
      * reconciliation loop.
-     *
-     * @return <i>true</i> if reconciliation is in progress, else <i>false</i>
      */
     boolean reconcile() {
         if (reconciliationInProgress) {
             log.debug("Ignoring reconciliation attempt. Another reconciliation is already in progress. Assignment " +
                     assignmentReadyToReconcile + " will be handled in the next reconciliation loop.");
-            return true;
+            return false;
         }
 
         // Make copy of the assignment to reconcile as it could change as new assignments or metadata updates are received
@@ -633,7 +628,6 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
         boolean sameAssignmentReceived = assignedTopicPartitions.equals(ownedPartitions);
 
         if (sameAssignmentReceived) {
-            transitionTo(MemberState.ACKNOWLEDGING);
             log.debug("Ignoring reconciliation attempt. Target assignment ready to reconcile {} " +
                     "is equal to the member current assignment {}.", assignedTopicPartitions, ownedPartitions);
             return false;
