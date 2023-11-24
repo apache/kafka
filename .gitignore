@@ -60,4 +60,5 @@ jmh-benchmarks/src/main/generated
 
 storage/kafka-tiered-storage/
 
-docker/report_*.html
+docker/test/report_*.html
+__pycache__

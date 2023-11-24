@@ -21,22 +21,32 @@ from distutils.dir_util import copy_tree
 import shutil
 from test.docker_sanity_test import run_tests
 from common import execute
+import tempfile
+import os
 
 def build_jvm(image, tag, kafka_url):
     image = f'{image}:{tag}'
-    copy_tree("resources", "jvm/resources")
-    execute(["docker", "build", "-f", "jvm/Dockerfile", "-t", image, "--build-arg", f"kafka_url={kafka_url}",
-                            "--build-arg", f'build_date={date.today()}', "jvm"])
-
-    shutil.rmtree("jvm/resources")
+    temp_dir_path = tempfile.mkdtemp()
+    current_dir = os.path.dirname(os.path.realpath(__file__))
+    copy_tree(f"{current_dir}/jvm", f"{temp_dir_path}/jvm")
+    copy_tree(f"{current_dir}/resources", f"{temp_dir_path}/jvm/resources")
+    try:
+        execute(["docker", "build", "-f", f"{temp_dir_path}/jvm/Dockerfile", "-t", image, "--build-arg", f"kafka_url={kafka_url}",
+                            "--build-arg", f'build_date={date.today()}', f"{temp_dir_path}/jvm"])
+    except:
+        print("Docker Image Build failed")
+    finally:
+        shutil.rmtree(temp_dir_path)
 
 def run_jvm_tests(image, tag, kafka_url):
-    execute(["wget", "-nv", "-O", "kafka.tgz", kafka_url])
-    execute(["mkdir", "./test/fixtures/kafka"])
-    execute(["tar", "xfz", "kafka.tgz", "-C", "./test/fixtures/kafka", "--strip-components", "1"])
-    failure_count = run_tests(f"{image}:{tag}", "jvm")
-    execute(["rm", "kafka.tgz"])
-    shutil.rmtree("./test/fixtures/kafka")
+    temp_dir_path = tempfile.mkdtemp()
+    current_dir = os.path.dirname(os.path.realpath(__file__))
+    copy_tree(f"{current_dir}/test/fixtures", f"{temp_dir_path}/fixtures")
+    execute(["wget", "-nv", "-O", f"{temp_dir_path}/kafka.tgz", kafka_url])
+    execute(["mkdir", f"{temp_dir_path}/fixtures/kafka"])
+    execute(["tar", "xfz", f"{temp_dir_path}/kafka.tgz", "-C", f"{temp_dir_path}/fixtures/kafka", "--strip-components", "1"])
+    failure_count = run_tests(f"{image}:{tag}", "jvm", temp_dir_path)
+    shutil.rmtree(temp_dir_path)
     if failure_count != 0:
         raise SystemError("Test Failure. Error count is non 0")
 

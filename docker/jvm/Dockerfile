@@ -20,6 +20,8 @@ FROM golang:latest AS build-ub
 WORKDIR /build
 RUN useradd --no-log-init --create-home --shell /bin/bash appuser
 COPY --chown=appuser:appuser resources/ub/ ./
+
+# Generate utility belt (ub executable) for dealing with env variables
 RUN go build -ldflags="-w -s" ./ub.go
 USER appuser
 RUN go test ./...
@@ -42,6 +44,7 @@ RUN set -eux ; \
     wget -nv -O kafka.tgz "$kafka_url"; \
     tar xfz kafka.tgz -C /opt/kafka --strip-components 1;
 
+# Generate jsa files using dynamic CDS for kafka server start command and kafka storage format command
 RUN /etc/kafka/docker/jsa_launch
 
 
@@ -61,13 +64,12 @@ LABEL org.label-schema.name="kafka" \
       org.label-schema.description="Apache Kafka" \
       org.label-schema.build-date="${build_date}" \
       org.label-schema.vcs-url="https://github.com/apache/kafka" \
-      org.label-schema.schema-version="1.0" \
-      maintainer="apache"
+      maintainer="Apache Kafka"
 
 RUN set -eux ; \
     apk update ; \
     apk upgrade ; \
-    apk add --no-cache curl wget gpg dirmngr gpg-agent gcompat; \
+    apk add --no-cache wget gpg gpg-agent gcompat; \
     mkdir opt/kafka; \
     wget -nv -O kafka.tgz "$kafka_url"; \
     wget -nv -O kafka.tgz.asc "$kafka_url.asc"; \
@@ -82,7 +84,7 @@ RUN set -eux ; \
     chown appuser:root -R /var/lib/kafka /etc/kafka/secrets /etc/kafka; \
     chmod -R ug+w /etc/kafka /var/lib/kafka /etc/kafka/secrets; \
     rm kafka.tgz kafka.tgz.asc KEYS; \
-    apk del curl wget gpg dirmngr gpg-agent; \
+    apk del wget gpg gpg-agent; \
     apk cache clean;
 
 COPY --from=build-jsa kafka.jsa /opt/kafka/kafka.jsa
