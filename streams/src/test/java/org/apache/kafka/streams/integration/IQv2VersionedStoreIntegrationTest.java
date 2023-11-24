@@ -152,7 +152,7 @@ public class IQv2VersionedStoreIntegrationTest {
         // retrieve existing values in query defined time range
         shouldHandleMultiVersionedKeyQuery(RECORD_KEY, Optional.of(Instant.ofEpochMilli(RECORD_TIMESTAMPS[1] + 5)), Optional.of(Instant.now()),
                                            ResultOrder.ANY, 1, LAST_INDEX);
-        // there is no record for the provided `fromTime` timestamp
+        // there is no record in the query specified time range
         shouldVerifyGetNullForMultiVersionedKeyQuery(RECORD_KEY, Optional.of(Instant.ofEpochMilli(RECORD_TIMESTAMPS[0] - 100)), Optional.of(Instant.ofEpochMilli(RECORD_TIMESTAMPS[0] - 50)));
         // there is no record with this key
         shouldVerifyGetNullForMultiVersionedKeyQuery(NON_EXISTING_KEY, Optional.empty(), Optional.empty());

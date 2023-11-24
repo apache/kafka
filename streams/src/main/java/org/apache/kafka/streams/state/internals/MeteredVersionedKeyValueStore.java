@@ -272,7 +272,7 @@ public class MeteredVersionedKeyValueStore<K, V>
                         InternalQueryResultUtil.copyAndSubstituteDeserializedResult(rawResult, typedResult);
                 result = (QueryResult<R>) typedQueryResult;
             } else {
-              // the generic type doesn't matter, since failed queries have no result set.
+                // the generic type doesn't matter, since failed queries have no result set.
                 result = (QueryResult<R>) rawResult;
             }
             return result;
