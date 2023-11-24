@@ -52,4 +52,8 @@ object TestInfoUtils {
     }
   }
   final val TestWithParameterizedQuorumName = "{displayName}.quorum={0}"
+
+  def isNewGroupCoordinatorEnabled(testInfo: TestInfo): Boolean = {
+    testInfo.getDisplayName().contains("kraft+kip848")
+  }
 }

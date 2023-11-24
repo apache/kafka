@@ -26,9 +26,11 @@ import org.apache.kafka.common.utils.BufferSupplier;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.Timer;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import java.time.Duration;
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.Properties;
@@ -168,6 +170,20 @@ public class FetchBufferTest {
 
             fetchBuffer.retainAll(partitions());
             assertEquals(partitions(), fetchBuffer.bufferedPartitions());
+        }
+    }
+
+    @Test
+    public void testWakeup() throws Exception {
+        try (FetchBuffer fetchBuffer = new FetchBuffer(logContext)) {
+            final Thread waitingThread = new Thread(() -> {
+                final Timer timer = time.timer(Duration.ofMinutes(1));
+                fetchBuffer.awaitNotEmpty(timer);
+            });
+            waitingThread.start();
+            fetchBuffer.wakeup();
+            waitingThread.join(Duration.ofSeconds(30).toMillis());
+            assertFalse(waitingThread.isAlive());
         }
     }
 

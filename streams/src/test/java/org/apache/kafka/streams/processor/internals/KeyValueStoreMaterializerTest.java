@@ -18,11 +18,13 @@
 package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.internals.InternalNameProvider;
 import org.apache.kafka.streams.kstream.internals.MaterializedInternal;
 import org.apache.kafka.streams.kstream.internals.KeyValueStoreMaterializer;
 import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.state.BuiltInDslStoreSuppliers;
 import org.apache.kafka.streams.state.KeyValueBytesStoreSupplier;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.TimestampedKeyValueStore;
@@ -47,6 +49,7 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.core.IsInstanceOf.instanceOf;
 import static org.hamcrest.core.IsNot.not;
+import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.when;
 
 @RunWith(MockitoJUnitRunner.StrictStubs.class)
@@ -65,6 +68,8 @@ public class KeyValueStoreMaterializerTest {
     private final KeyValueStore<Bytes, byte[]> innerKeyValueStore = new InMemoryKeyValueStore(STORE_NAME);
     @Mock
     private VersionedBytesStore innerVersionedStore;
+    @Mock
+    private StreamsConfig streamsConfig;
 
     @Before
     public void setUp() {
@@ -76,6 +81,9 @@ public class KeyValueStoreMaterializerTest {
         when(versionedStoreSupplier.get()).thenReturn(innerVersionedStore);
         when(versionedStoreSupplier.name()).thenReturn(STORE_NAME);
         when(versionedStoreSupplier.metricsScope()).thenReturn(METRICS_SCOPE);
+
+        doReturn(BuiltInDslStoreSuppliers.RocksDBDslStoreSuppliers.class)
+                .when(streamsConfig).getClass(StreamsConfig.DSL_STORE_SUPPLIERS_CLASS_CONFIG);
     }
 
     @Test
@@ -227,16 +235,18 @@ public class KeyValueStoreMaterializerTest {
     }
 
     @SuppressWarnings("unchecked")
-    private static TimestampedKeyValueStore<String, String> getTimestampedStore(
+    private TimestampedKeyValueStore<String, String> getTimestampedStore(
         final MaterializedInternal<String, String, KeyValueStore<Bytes, byte[]>> materialized) {
         final KeyValueStoreMaterializer<String, String> materializer = new KeyValueStoreMaterializer<>(materialized);
+        materializer.configure(streamsConfig);
         return (TimestampedKeyValueStore<String, String>) ((StoreFactory) materializer).build();
     }
 
     @SuppressWarnings("unchecked")
-    private static VersionedKeyValueStore<String, String> getVersionedStore(
+    private VersionedKeyValueStore<String, String> getVersionedStore(
         final MaterializedInternal<String, String, KeyValueStore<Bytes, byte[]>> materialized) {
         final KeyValueStoreMaterializer<String, String> materializer = new KeyValueStoreMaterializer<>(materialized);
+        materializer.configure(streamsConfig);
         return (VersionedKeyValueStore<String, String>) ((StoreFactory) materializer).build();
     }
 }

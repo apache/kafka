@@ -149,10 +149,10 @@ class BrokerLifecycleManager(
   private var readyToUnfence = false
 
   /**
-   * List of offline directories pending to be sent.
+   * List of accumulated offline directories.
    * This variable can only be read or written from the event queue thread.
    */
-  private var offlineDirsPending = Set[Uuid]()
+  private var offlineDirs = Set[Uuid]()
 
   /**
    * True if we sent a event queue to the active controller requesting controlled
@@ -300,10 +300,10 @@ class BrokerLifecycleManager(
 
   private class OfflineDirEvent(val dir: Uuid) extends EventQueue.Event {
     override def run(): Unit = {
-      if (offlineDirsPending.isEmpty) {
-        offlineDirsPending = Set(dir)
+      if (offlineDirs.isEmpty) {
+        offlineDirs = Set(dir)
       } else {
-        offlineDirsPending = offlineDirsPending + dir
+        offlineDirs = offlineDirs + dir
       }
       if (registered) {
         scheduleNextCommunicationImmediately()
@@ -424,15 +424,15 @@ class BrokerLifecycleManager(
       setCurrentMetadataOffset(metadataOffset).
       setWantFence(!readyToUnfence).
       setWantShutDown(_state == BrokerState.PENDING_CONTROLLED_SHUTDOWN).
-      setOfflineLogDirs(offlineDirsPending.toSeq.asJava)
+      setOfflineLogDirs(offlineDirs.toSeq.asJava)
     if (isTraceEnabled) {
       trace(s"Sending broker heartbeat $data")
     }
-    val handler = new BrokerHeartbeatResponseHandler(offlineDirsPending)
+    val handler = new BrokerHeartbeatResponseHandler()
     _channelManager.sendRequest(new BrokerHeartbeatRequest.Builder(data), handler)
   }
 
-  private class BrokerHeartbeatResponseHandler(dirsInFlight: Set[Uuid]) extends ControllerRequestCompletionHandler {
+  private class BrokerHeartbeatResponseHandler() extends ControllerRequestCompletionHandler {
     override def onComplete(response: ClientResponse): Unit = {
       if (response.authenticationException() != null) {
         error(s"Unable to send broker heartbeat for $nodeId because of an " +
@@ -456,7 +456,7 @@ class BrokerLifecycleManager(
           // this response handler is not invoked from the event handler thread,
           // and processing a successful heartbeat response requires updating
           // state, so to continue we need to schedule an event
-          eventQueue.prepend(new BrokerHeartbeatResponseEvent(message.data(), dirsInFlight))
+          eventQueue.prepend(new BrokerHeartbeatResponseEvent(message.data()))
         } else {
           warn(s"Broker $nodeId sent a heartbeat request but received error $errorCode.")
           scheduleNextCommunicationAfterFailure()
@@ -470,10 +470,9 @@ class BrokerLifecycleManager(
     }
   }
 
-  private class BrokerHeartbeatResponseEvent(response: BrokerHeartbeatResponseData, dirsInFlight: Set[Uuid]) extends EventQueue.Event {
+  private class BrokerHeartbeatResponseEvent(response: BrokerHeartbeatResponseData) extends EventQueue.Event {
     override def run(): Unit = {
       failedAttempts = 0
-      offlineDirsPending = offlineDirsPending.diff(dirsInFlight)
       _state match {
         case BrokerState.STARTING =>
           if (response.isCaughtUp) {

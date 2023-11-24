@@ -16,9 +16,6 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
-import java.util.ConcurrentModificationException;
-import java.util.concurrent.atomic.AtomicInteger;
-import java.util.concurrent.atomic.AtomicLong;
 import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.ClientUtils;
 import org.apache.kafka.clients.CommonClientConfigs;
@@ -50,6 +47,8 @@ import org.apache.kafka.clients.consumer.internals.events.ListOffsetsApplication
 import org.apache.kafka.clients.consumer.internals.events.NewTopicsMetadataUpdateRequestEvent;
 import org.apache.kafka.clients.consumer.internals.events.OffsetFetchApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.ResetPositionsApplicationEvent;
+import org.apache.kafka.clients.consumer.internals.events.SubscriptionChangeApplicationEvent;
+import org.apache.kafka.clients.consumer.internals.events.UnsubscribeApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.ValidatePositionsApplicationEvent;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.IsolationLevel;
@@ -79,6 +78,7 @@ import java.time.Duration;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.ConcurrentModificationException;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -89,7 +89,10 @@ import java.util.OptionalLong;
 import java.util.Set;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Function;
 import java.util.function.Supplier;
@@ -404,6 +407,21 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
      *
      * @param timeout timeout of the poll loop
      * @return ConsumerRecord.  It can be empty if time timeout expires.
+     *
+     * @throws org.apache.kafka.common.errors.WakeupException if {@link #wakeup()} is called before or while this
+     *             function is called
+     * @throws org.apache.kafka.common.errors.InterruptException if the calling thread is interrupted before or while
+     *             this function is called
+     * @throws org.apache.kafka.common.errors.RecordTooLargeException if the fetched record is larger than the maximum
+     *             allowable size
+     * @throws org.apache.kafka.common.KafkaException for any other unrecoverable errors
+     * @throws java.lang.IllegalStateException if the consumer is not subscribed to any topics or manually assigned any
+     *             partitions to consume from or an unexpected error occurred
+     * @throws org.apache.kafka.clients.consumer.OffsetOutOfRangeException if the fetch position of the consumer is
+     *             out of range and no offset reset policy is configured.
+     * @throws org.apache.kafka.common.errors.TopicAuthorizationException if the consumer is not authorized to read
+     *             from a partition
+     * @throws org.apache.kafka.common.errors.SerializationException if the fetched records cannot be deserialized
      */
     @Override
     public ConsumerRecords<K, V> poll(final Duration timeout) {
@@ -411,6 +429,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
 
         acquireAndEnsureOpen();
         try {
+            wakeupTrigger.setFetchAction(fetchBuffer);
             kafkaConsumerMetrics.recordPollStart(timer.currentTimeMs());
 
             if (subscriptions.hasNoSubscriptionOrUserAssignment()) {
@@ -418,9 +437,14 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             }
 
             do {
+                // We must not allow wake-ups between polling for fetches and returning the records.
+                // If the polled fetches are not empty the consumed position has already been updated in the polling
+                // of the fetches. A wakeup between returned fetches and returning records would lead to never
+                // returning the records in the fetches. Thus, we trigger a possible wake-up before we poll fetches.
+                wakeupTrigger.maybeTriggerWakeup();
+
                 updateAssignmentMetadataIfNeeded(timer);
                 final Fetch<K, V> fetch = pollForFetches(timer);
-
                 if (!fetch.isEmpty()) {
                     if (fetch.records().isEmpty()) {
                         log.trace("Returning empty records from `poll()` "
@@ -435,6 +459,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             return ConsumerRecords.empty();
         } finally {
             kafkaConsumerMetrics.recordPollEnd(timer.currentTimeMs());
+            wakeupTrigger.clearTask();
             release();
         }
     }
@@ -486,6 +511,9 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         maybeInvokeCommitCallbacks();
         maybeThrowFencedInstanceException();
         maybeThrowInvalidGroupIdException();
+
+        log.debug("Committing offsets: {}", offsets);
+        offsets.forEach(this::updateLastSeenEpochIfNewer);
 
         if (offsets.isEmpty()) {
             return CompletableFuture.completedFuture(null);
@@ -631,9 +659,12 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             final OffsetFetchApplicationEvent event = new OffsetFetchApplicationEvent(partitions);
             wakeupTrigger.setActiveTask(event.future());
             try {
-                return applicationEventHandler.addAndGet(event, time.timer(timeout));
+                final Map<TopicPartition, OffsetAndMetadata> committedOffsets = applicationEventHandler.addAndGet(event,
+                    time.timer(timeout));
+                committedOffsets.forEach(this::updateLastSeenEpochIfNewer);
+                return committedOffsets;
             } finally {
-                wakeupTrigger.clearActiveTask();
+                wakeupTrigger.clearTask();
             }
         } finally {
             release();
@@ -831,12 +862,12 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
 
     @Override
     public void enforceRebalance() {
-        throw new KafkaException("method not implemented");
+        log.warn("Operation not supported in new consumer group protocol");
     }
 
     @Override
     public void enforceRebalance(String reason) {
-        throw new KafkaException("method not implemented");
+        log.warn("Operation not supported in new consumer group protocol");
     }
 
     @Override
@@ -916,10 +947,9 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         long commitStart = time.nanoseconds();
         try {
             CompletableFuture<Void> commitFuture = commit(offsets, true);
-            offsets.forEach(this::updateLastSeenEpochIfNewer);
             ConsumerUtils.getResult(commitFuture, time.timer(timeout));
         } finally {
-            wakeupTrigger.clearActiveTask();
+            wakeupTrigger.clearTask();
             kafkaConsumerMetrics.recordCommitSync(time.nanoseconds() - commitStart);
             release();
         }
@@ -1022,6 +1052,16 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         acquireAndEnsureOpen();
         try {
             fetchBuffer.retainAll(Collections.emptySet());
+            if (groupId.isPresent()) {
+                UnsubscribeApplicationEvent unsubscribeApplicationEvent = new UnsubscribeApplicationEvent();
+                applicationEventHandler.add(unsubscribeApplicationEvent);
+                try {
+                    unsubscribeApplicationEvent.future().get();
+                    log.info("Unsubscribed all topics or patterns and assigned partitions");
+                } catch (InterruptedException | ExecutionException e) {
+                    log.error("Failed while waiting for the unsubscribe event to complete", e);
+                }
+            }
             subscriptions.unsubscribe();
         } finally {
             release();
@@ -1031,7 +1071,8 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
     @Override
     @Deprecated
     public ConsumerRecords<K, V> poll(final long timeoutMs) {
-        return poll(Duration.ofMillis(timeoutMs));
+        throw new UnsupportedOperationException("Consumer.poll(long) is not supported when \"group.protocol\" is \"consumer\". " +
+             "This method is deprecated and will be removed in the next major release.");
     }
 
     // Visible for testing
@@ -1301,6 +1342,10 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                 log.info("Subscribed to topic(s): {}", join(topics, ", "));
                 if (subscriptions.subscribe(new HashSet<>(topics), listener))
                     metadata.requestUpdateForNewTopics();
+
+                // Trigger subscribe event to effectively join the group if not already part of it,
+                // or just send the new subscription to the broker.
+                applicationEventHandler.add(new SubscriptionChangeApplicationEvent());
             }
         } finally {
             release();
