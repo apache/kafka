@@ -230,7 +230,7 @@ public class RemoteLogManager implements Closeable {
         }
     }
 
-    RemoteStorageManager createRemoteStorageManager() {
+    RemoteStorageManager createRemoteStorageManager() { 
         return java.security.AccessController.doPrivileged(new PrivilegedAction<RemoteStorageManager>() {
             private final String classPath = rlmConfig.remoteStorageManagerClassPath();
 

@@ -16,7 +16,6 @@
  */
 package kafka.docker
 
-import kafka.tools.StorageTool
 import kafka.utils.Exit
 import net.sourceforge.argparse4j.ArgumentParsers
 import net.sourceforge.argparse4j.impl.Arguments.store
@@ -24,6 +23,8 @@ import net.sourceforge.argparse4j.inf.Namespace
 
 import java.nio.charset.StandardCharsets
 import java.nio.file.{Files, Path, Paths, StandardCopyOption, StandardOpenOption}
+
+import org.apache.kafka.tools.StorageTool
 
 object KafkaDockerWrapper {
   def main(args: Array[String]): Unit = {

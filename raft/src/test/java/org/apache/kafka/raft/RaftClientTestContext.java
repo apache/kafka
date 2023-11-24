@@ -62,9 +62,9 @@ import org.apache.kafka.test.TestCondition;
 import org.apache.kafka.test.TestUtils;
 
 import java.io.IOException;
-import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -225,19 +225,13 @@ public final class RaftClientTestContext {
             return this;
         }
 
-        Builder withClusterId(Uuid clusterId) {
-            this.clusterId = clusterId;
-            return this;
-        }
-
         public RaftClientTestContext build() throws IOException {
             Metrics metrics = new Metrics(time);
             MockNetworkChannel channel = new MockNetworkChannel(voters);
             MockListener listener = new MockListener(localId);
-            Map<Integer, RaftConfig.AddressSpec> voterAddressMap = voters.stream()
-                .collect(Collectors.toMap(id -> id, RaftClientTestContext::mockAddress));
-            RaftConfig raftConfig = new RaftConfig(voterAddressMap, requestTimeoutMs, RETRY_BACKOFF_MS, electionTimeoutMs,
-                    ELECTION_BACKOFF_MAX_MS, FETCH_TIMEOUT_MS, appendLingerMs);
+            List<String> voterAddressMap = voters.stream().map(id -> id + "@localhost:999" + id).collect(Collectors.toList());
+            RaftConfig raftConfig = new RaftConfig(voterAddressMap, requestTimeoutMs, RETRY_BACKOFF_MS, electionTimeoutMs, 
+                ELECTION_BACKOFF_MAX_MS, FETCH_TIMEOUT_MS, appendLingerMs, voters.stream().findFirst().get(), Arrays.asList("broker"));
 
             KafkaRaftClient<String> client = new KafkaRaftClient<>(
                 SERDE,
@@ -812,10 +806,6 @@ public final class RaftClientTestContext {
             requests.add(raftRequest);
         }
         return requests;
-    }
-
-    private static RaftConfig.AddressSpec mockAddress(int id) {
-        return new RaftConfig.InetAddressSpec(new InetSocketAddress("localhost", 9990 + id));
     }
 
     EndQuorumEpochResponseData endEpochResponse(
