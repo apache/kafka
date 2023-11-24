@@ -16,7 +16,9 @@
  */
 package org.apache.kafka.common.metrics;
 
+import java.util.concurrent.locks.StampedLock;
 import java.util.function.Supplier;
+
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.metrics.CompoundStat.NamedMeasurable;
 import org.apache.kafka.common.metrics.stats.TokenBucket;
@@ -47,6 +49,9 @@ public final class Sensor {
     private final Sensor[] parents;
     private final List<StatAndConfig> stats;
     private final Map<MetricName, KafkaMetric> metrics;
+
+    private final StampedLock metricsInnerLock;
+
     private final MetricConfig config;
     private final Time time;
     private volatile long lastRecordTime;
@@ -141,6 +146,7 @@ public final class Sensor {
         this.name = Objects.requireNonNull(name);
         this.parents = parents == null ? new Sensor[0] : parents;
         this.metrics = new LinkedHashMap<>();
+        this.metricsInnerLock = new StampedLock();
         this.stats = new ArrayList<>();
         this.config = config;
         this.time = time;
@@ -251,24 +257,26 @@ public final class Sensor {
     }
 
     public void checkQuotas(long timeMs) {
-        for (KafkaMetric metric : this.metrics.values()) {
-            MetricConfig config = metric.config();
-            if (config != null) {
-                Quota quota = config.quota();
-                if (quota != null) {
-                    double value = metric.measurableValue(timeMs);
-                    if (metric.measurable() instanceof TokenBucket) {
-                        if (value < 0) {
-                            throw new QuotaViolationException(metric, value, quota.bound());
-                        }
-                    } else {
-                        if (!quota.acceptable(value)) {
-                            throw new QuotaViolationException(metric, value, quota.bound());
+        withMetricsReadLock(() -> {
+            for (KafkaMetric metric : this.metrics.values()) {
+                MetricConfig config = metric.config();
+                if (config != null) {
+                    Quota quota = config.quota();
+                    if (quota != null) {
+                        double value = metric.measurableValue(timeMs);
+                        if (metric.measurable() instanceof TokenBucket) {
+                            if (value < 0) {
+                                throw new QuotaViolationException(metric, value, quota.bound());
+                            }
+                        } else {
+                            if (!quota.acceptable(value)) {
+                                throw new QuotaViolationException(metric, value, quota.bound());
+                            }
                         }
                     }
                 }
             }
-        }
+        });
     }
 
     /**
@@ -287,24 +295,27 @@ public final class Sensor {
      *        sensor.
      * @return true if stat is added to sensor, false if sensor is expired
      */
-    public synchronized boolean add(CompoundStat stat, MetricConfig config) {
-        if (hasExpired())
-            return false;
+    public boolean add(CompoundStat stat, MetricConfig config) {
+        return withMetricsWriteLock(() -> {
+            if (hasExpired())
+                return false;
 
-        final MetricConfig statConfig = config == null ? this.config : config;
-        stats.add(new StatAndConfig(Objects.requireNonNull(stat), () -> statConfig));
-        Object lock = metricLock();
-        for (NamedMeasurable m : stat.stats()) {
-            final KafkaMetric metric = new KafkaMetric(lock, m.name(), m.stat(), statConfig, time);
-            if (!metrics.containsKey(metric.metricName())) {
-                KafkaMetric existingMetric = registry.registerMetric(metric);
-                if (existingMetric != null) {
-                    throw new IllegalArgumentException("A metric named '" + metric.metricName() + "' already exists, can't register another one.");
+            final MetricConfig statConfig = config == null ? this.config : config;
+            stats.add(new StatAndConfig(Objects.requireNonNull(stat), () -> statConfig));
+            Object lock = metricLock();
+            for (NamedMeasurable m : stat.stats()) {
+                final KafkaMetric metric = new KafkaMetric(lock, m.name(), m.stat(), statConfig, time);
+                if (!metrics.containsKey(metric.metricName())) {
+                    KafkaMetric existingMetric = registry.registerMetric(metric);
+                    if (existingMetric != null) {
+                        throw new IllegalArgumentException("A metric named '" + metric.metricName() + "' already exists, can't register another one.");
+                    }
+                    metrics.put(metric.metricName(), metric);
                 }
-                metrics.put(metric.metricName(), metric);
             }
-        }
-        return true;
+            return true;
+        });
+
     }
 
     /**
@@ -325,28 +336,30 @@ public final class Sensor {
      * @param config     A special configuration for this metric. If null use the sensor default configuration.
      * @return true if metric is added to sensor, false if sensor is expired
      */
-    public synchronized boolean add(final MetricName metricName, final MeasurableStat stat, final MetricConfig config) {
-        if (hasExpired()) {
-            return false;
-        } else if (metrics.containsKey(metricName)) {
-            return true;
-        } else {
-            final MetricConfig statConfig = config == null ? this.config : config;
-            final KafkaMetric metric = new KafkaMetric(
-                metricLock(),
-                Objects.requireNonNull(metricName),
-                Objects.requireNonNull(stat),
-                statConfig,
-                time
-            );
-            KafkaMetric existingMetric = registry.registerMetric(metric);
-            if (existingMetric != null) {
-                throw new IllegalArgumentException("A metric named '" + metricName + "' already exists, can't register another one.");
+    public boolean add(final MetricName metricName, final MeasurableStat stat, final MetricConfig config) {
+        return withMetricsWriteLock(() -> {
+            if (hasExpired()) {
+                return false;
+            } else if (metrics.containsKey(metricName)) {
+                return true;
+            } else {
+                final MetricConfig statConfig = config == null ? this.config : config;
+                final KafkaMetric metric = new KafkaMetric(
+                    metricLock(),
+                    Objects.requireNonNull(metricName),
+                    Objects.requireNonNull(stat),
+                    statConfig,
+                    time
+                );
+                KafkaMetric existingMetric = registry.registerMetric(metric);
+                if (existingMetric != null) {
+                    throw new IllegalArgumentException("A metric named '" + metricName + "' already exists, can't register another one.");
+                }
+                metrics.put(metric.metricName(), metric);
+                stats.add(new StatAndConfig(Objects.requireNonNull(stat), metric::config));
+                return true;
             }
-            metrics.put(metric.metricName(), metric);
-            stats.add(new StatAndConfig(Objects.requireNonNull(stat), metric::config));
-            return true;
-        }
+        });
     }
 
     /**
@@ -354,8 +367,8 @@ public final class Sensor {
      *
      * @return true if metrics were registered, false otherwise
      */
-    public synchronized boolean hasMetrics() {
-        return !metrics.isEmpty();
+    public boolean hasMetrics() {
+        return withMetricsReadLock(() -> !metrics.isEmpty());
     }
 
     /**
@@ -366,8 +379,8 @@ public final class Sensor {
         return (time.milliseconds() - this.lastRecordTime) > this.inactiveSensorExpirationTimeMs;
     }
 
-    synchronized List<KafkaMetric> metrics() {
-        return unmodifiableList(new ArrayList<>(this.metrics.values()));
+    List<KafkaMetric> metrics() {
+        return withMetricsWriteLock(() -> unmodifiableList(new ArrayList<>(this.metrics.values())));
     }
 
     /**
@@ -392,5 +405,32 @@ public final class Sensor {
      */
     private Object metricLock() {
         return metricLock;
+    }
+
+    private <T> T withMetricsReadLock(Supplier<T> task) {
+        long readLock = metricsInnerLock.readLock();
+        try {
+            return task.get();
+        } finally {
+            metricsInnerLock.unlockRead(readLock);
+        }
+    }
+
+    private void withMetricsReadLock(Runnable task) {
+        long readLock = metricsInnerLock.readLock();
+        try {
+            task.run();
+        } finally {
+            metricsInnerLock.unlockRead(readLock);
+        }
+    }
+
+    private <T> T withMetricsWriteLock(Supplier<T> task) {
+        long writeLock = metricsInnerLock.writeLock();
+        try {
+            return task.get();
+        } finally {
+            metricsInnerLock.unlockWrite(writeLock);
+        }
     }
 }
