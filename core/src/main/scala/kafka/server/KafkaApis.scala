@@ -3789,17 +3789,15 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   // Just a placeholder for now.
-  def handleListClientMetricsResources(request: RequestChannel.Request): CompletableFuture[Unit] = {
+  def handleListClientMetricsResources(request: RequestChannel.Request): Unit = {
     val listClientMetricsResourcesRequest = request.body[ListClientMetricsResourcesRequest]
 
     if (!authHelper.authorize(request.context, DESCRIBE_CONFIGS, CLUSTER, CLUSTER_NAME)) {
       requestHelper.sendMaybeThrottle(request, listClientMetricsResourcesRequest.getErrorResponse(Errors.CLUSTER_AUTHORIZATION_FAILED.exception))
-      CompletableFuture.completedFuture[Unit](())
     } else {
       // Just return an empty list in the placeholder
       val data = new ListClientMetricsResourcesResponseData()
       requestHelper.sendMaybeThrottle(request, new ListClientMetricsResourcesResponse(data))
-      CompletableFuture.completedFuture[Unit](())
     }
   }
 

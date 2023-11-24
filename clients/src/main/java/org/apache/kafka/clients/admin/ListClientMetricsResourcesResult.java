@@ -45,7 +45,7 @@ public class ListClientMetricsResourcesResult {
      */
     public KafkaFuture<Collection<ClientMetricsResourceListing>> all() {
         final KafkaFutureImpl<Collection<ClientMetricsResourceListing>> result = new KafkaFutureImpl<>();
-        this.future.whenComplete((listings, throwable) -> {
+        future.whenComplete((listings, throwable) -> {
             if (throwable != null) {
                 result.completeExceptionally(throwable);
             } else {
