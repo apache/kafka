@@ -1081,7 +1081,9 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
     }
 
     private Fetch<K, V> pollForFetches(Timer timer) {
-        long pollTimeout = timer.remainingMs();
+        long pollTimeout = isCommittedOffsetsManagementEnabled()
+                ? Math.min(applicationEventHandler.maximumTimeToWait(), timer.remainingMs())
+                : timer.remainingMs();
 
         // if data is available already, return it immediately
         final Fetch<K, V> fetch = collectFetch();

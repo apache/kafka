@@ -181,6 +181,16 @@ public class HeartbeatRequestManager implements RequestManager {
         return new NetworkClientDelegate.PollResult(heartbeatRequestState.heartbeatIntervalMs, Collections.singletonList(request));
     }
 
+    /**
+     * Returns the delay before the next network request for this request manager. Used to ensure that
+     * waiting in the application thread does not delay beyond the point that a result can be returned.
+     */
+    @Override
+    public long timeUntilNextPoll(long currentTimeMs) {
+        boolean heartbeatNow = membershipManager.shouldHeartbeatNow() && !heartbeatRequestState.requestInFlight();
+        return heartbeatNow ? 0L : heartbeatRequestState.nextHeartbeatMs(currentTimeMs);
+    }
+
     private NetworkClientDelegate.UnsentRequest makeHeartbeatRequest() {
         // TODO: extract this logic for building the ConsumerGroupHeartbeatRequestData to a
         //  stateful builder (HeartbeatState), that will keep the last data sent, and determine

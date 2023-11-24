@@ -62,4 +62,17 @@ public interface RequestManager {
     default PollResult pollOnClose() {
         return EMPTY;
     }
+
+    /**
+     * Returns the delay before the next network request for this request manager. Used to ensure that
+     * waiting in the application thread does not delay beyond the point that a result can be returned.
+     *
+     * @param currentTimeMs The current system time at which the method was called; useful for determining if
+     *                      time-sensitive operations should be performed
+     *
+     * @return The delay in milliseconds before the next network request.
+     */
+    default long timeUntilNextPoll(long currentTimeMs) {
+        return Long.MAX_VALUE;
+    }
 }

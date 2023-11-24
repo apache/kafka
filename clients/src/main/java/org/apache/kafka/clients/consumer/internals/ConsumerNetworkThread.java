@@ -205,6 +205,24 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
             networkClientDelegate.wakeup();
     }
 
+    /**
+     * Returns the delay before the next network request for this request manager. Used to ensure that
+     * waiting in the application thread does not delay beyond the point that a result can be returned.
+     *
+     * @return The delay in milliseconds before the next network request.
+     */
+    public long timeUntilNextPoll() {
+        final long currentTimeMs = time.milliseconds();
+        if (requestManagers == null) {
+            return MAX_POLL_TIMEOUT_MS;
+        }
+        return requestManagers.entries().stream()
+                .filter(Optional::isPresent)
+                .map(Optional::get)
+                .map(rm -> rm.timeUntilNextPoll(currentTimeMs))
+                .reduce(Long.MAX_VALUE, Math::min);
+    }
+
     @Override
     public void close() {
         close(closeTimeout);

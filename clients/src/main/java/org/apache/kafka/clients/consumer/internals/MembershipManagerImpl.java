@@ -334,7 +334,10 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
             transitionTo(MemberState.RECONCILING);
             replaceUnresolvedAssignmentWithNewAssignment(assignment);
             resolveMetadataForUnresolvedAssignment();
-            reconcile();
+            boolean reconciliationInProgress = reconcile();
+            if (!reconciliationInProgress) {
+                transitionTo(MemberState.STABLE);
+            }
         } else if (allPendingAssignmentsReconciled()) {
             transitionTo(MemberState.STABLE);
         }
@@ -414,7 +417,7 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
      * Update a new assignment by setting the assigned partitions in the member subscription.
      *
      * @param assignedPartitions Topic partitions to take as the new subscription assignment
-     * @param clearAssignments True if the
+     * @param clearAssignments True if the pending assignments and metadata cache should be cleared
      */
     private void updateSubscription(Collection<TopicPartition> assignedPartitions,
                                     boolean clearAssignments) {
@@ -603,8 +606,16 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
      * can be in progress at a time. If there is already another one in progress when this is
      * triggered, it will be no-op, and the assignment will be reconciled on the next
      * reconciliation loop.
+     *
+     * @return <i>true</i> if reconciliation is in progress, else <i>false</i>
      */
     boolean reconcile() {
+        if (reconciliationInProgress) {
+            log.debug("Ignoring reconciliation attempt. Another reconciliation is already in progress. Assignment " +
+                    assignmentReadyToReconcile + " will be handled in the next reconciliation loop.");
+            return true;
+        }
+
         // Make copy of the assignment to reconcile as it could change as new assignments or metadata updates are received
         SortedSet<TopicIdPartition> assignedTopicIdPartitions = new TreeSet<>(TOPIC_ID_PARTITION_COMPARATOR);
         assignedTopicIdPartitions.addAll(assignmentReadyToReconcile);
@@ -615,21 +626,16 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
         // Keep copy of assigned TopicPartitions created from the TopicIdPartitions that are
         // being reconciled. Needed for interactions with the centralized subscription state that
         // does not support topic IDs yet, and for the callbacks.
-        SortedSet<TopicPartition> assignedTopicPartition = toTopicPartitionSet(assignedTopicIdPartitions);
+        SortedSet<TopicPartition> assignedTopicPartitions = toTopicPartitionSet(assignedTopicIdPartitions);
 
         // Check same assignment. Based on topic names for now, until topic IDs are properly
         // supported in the centralized subscription state object.
-        boolean sameAssignmentReceived = assignedTopicPartition.equals(ownedPartitions);
+        boolean sameAssignmentReceived = assignedTopicPartitions.equals(ownedPartitions);
 
-        if (reconciliationInProgress || sameAssignmentReceived) {
-            String reason;
-            if (reconciliationInProgress) {
-                reason = "Another reconciliation is already in progress. Assignment " +
-                        assignmentReadyToReconcile + " will be handled in the next reconciliation loop.";
-            } else {
-                reason = "Target assignment ready to reconcile is equals to the member current assignment.";
-            }
-            log.debug("Ignoring reconciliation attempt. " + reason);
+        if (sameAssignmentReceived) {
+            transitionTo(MemberState.ACKNOWLEDGING);
+            log.debug("Ignoring reconciliation attempt. Target assignment ready to reconcile {} " +
+                    "is equal to the member current assignment {}.", assignedTopicPartitions, ownedPartitions);
             return false;
         }
 
@@ -637,13 +643,13 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
 
         // Partitions to assign (not previously owned)
         SortedSet<TopicPartition> addedPartitions = new TreeSet<>(TOPIC_PARTITION_COMPARATOR);
-        addedPartitions.addAll(assignedTopicPartition);
+        addedPartitions.addAll(assignedTopicPartitions);
         addedPartitions.removeAll(ownedPartitions);
 
         // Partitions to revoke
         SortedSet<TopicPartition> revokedPartitions = new TreeSet<>(TOPIC_PARTITION_COMPARATOR);
         revokedPartitions.addAll(ownedPartitions);
-        revokedPartitions.removeAll(assignedTopicPartition);
+        revokedPartitions.removeAll(assignedTopicPartitions);
 
         log.info("Updating assignment with\n" +
                         "\tAssigned partitions:                       {}\n" +
@@ -673,7 +679,7 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
                     boolean memberHasRejoined = memberEpochOnReconciliationStart != memberEpoch;
                     if (state == MemberState.RECONCILING && !memberHasRejoined) {
                         // Apply assignment
-                        CompletableFuture<Void> assignResult = assignPartitions(assignedTopicPartition,
+                        CompletableFuture<Void> assignResult = assignPartitions(assignedTopicPartitions,
                                 addedPartitions);
 
                         // Clear topic names cache only for topics that are not in the subscription anymore
@@ -1074,6 +1080,7 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
     public void onUpdate(ClusterResource clusterResource) {
         resolveMetadataForUnresolvedAssignment();
         if (!assignmentReadyToReconcile.isEmpty()) {
+            transitionTo(MemberState.RECONCILING);
             reconcile();
         }
     }

@@ -159,11 +159,19 @@ public class CommitRequestManager implements RequestManager {
             return EMPTY;
 
         List<NetworkClientDelegate.UnsentRequest> requests = pendingRequests.drain(currentTimeMs);
+        return new NetworkClientDelegate.PollResult(timeUntilNextPoll(currentTimeMs), requests);
+    }
+
+    /**
+     * Returns the delay before the next network request for this request manager. Used to ensure that
+     * waiting in the application thread does not delay beyond the point that a result can be returned.
+     */
+    @Override
+    public long timeUntilNextPoll(long currentTimeMs) {
         // min of the remainingBackoffMs of all the request that are still backing off
-        final long timeUntilNextPoll = Math.min(
-            findMinTime(unsentOffsetCommitRequests(), currentTimeMs),
-            findMinTime(unsentOffsetFetchRequests(), currentTimeMs));
-        return new NetworkClientDelegate.PollResult(timeUntilNextPoll, requests);
+        return Math.min(
+                findMinTime(unsentOffsetCommitRequests(), currentTimeMs),
+                findMinTime(unsentOffsetFetchRequests(), currentTimeMs));
     }
 
     private static long findMinTime(final Collection<? extends RequestState> requests, final long currentTimeMs) {
