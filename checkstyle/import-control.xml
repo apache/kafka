@@ -279,6 +279,7 @@
 
   <subpackage name="tools">
     <allow pkg="org.apache.kafka.common"/>
+    <allow pkg="org.apache.kafka.common.metadata" />
     <allow pkg="org.apache.kafka.server.util" />
     <allow pkg="kafka.admin" />
     <allow pkg="kafka.server" />
@@ -289,9 +290,13 @@
     <allow pkg="org.apache.kafka.clients.admin" />
     <allow pkg="org.apache.kafka.clients.producer" />
     <allow pkg="org.apache.kafka.clients.consumer" />
+    <allow pkg="org.apache.kafka.raft" />
     <allow pkg="org.apache.kafka.test" />
     <allow pkg="org.apache.kafka.connect.runtime" />
     <allow pkg="org.apache.kafka.connect.runtime.isolation" />
+    <allow pkg="org.apache.kafka.metadata" />
+    <allow pkg="org.apache.kafka.metadata.properties" />
+    <allow pkg="org.apache.kafka.metadata.bootstrap" />
     <allow pkg="com.fasterxml.jackson" />
     <allow pkg="org.jose4j" />
     <allow pkg="net.sourceforge.argparse4j" />

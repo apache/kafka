@@ -18,7 +18,6 @@ package kafka.api
 
 import java.util.Properties
 import kafka.utils._
-import kafka.tools.StorageTool
 import kafka.zk.ConfigEntityChangeNotificationZNode
 import org.apache.kafka.clients.admin.{Admin, AdminClientConfig, CreateDelegationTokenOptions, ScramCredentialInfo, UserScramCredentialAlteration, UserScramCredentialUpsertion, ScramMechanism => PublicScramMechanism}
 import org.apache.kafka.common.config.SaslConfigs
@@ -34,6 +33,7 @@ import scala.jdk.CollectionConverters._
 import scala.collection.mutable.ArrayBuffer
 import org.apache.kafka.server.common.ApiMessageAndVersion
 import org.apache.kafka.server.config.DelegationTokenManagerConfigs
+import org.apache.kafka.tools.StorageTool
 
 class DelegationTokenEndToEndAuthorizationTest extends EndToEndAuthorizationTest {
 
@@ -74,11 +74,9 @@ class DelegationTokenEndToEndAuthorizationTest extends EndToEndAuthorizationTest
                    s"SCRAM-SHA-256=[name=${JaasTestUtils.KafkaScramAdmin},password=${JaasTestUtils.KafkaScramAdminPassword}]")
     val namespace = StorageTool.parseArguments(args.toArray)
     val metadataRecords : ArrayBuffer[ApiMessageAndVersion] = ArrayBuffer()
-    StorageTool.getUserScramCredentialRecords(namespace).foreach {
-      userScramCredentialRecords => for (record <- userScramCredentialRecords) {
-        metadataRecords.append(new ApiMessageAndVersion(record, 0.toShort))
-      }
-    }
+    StorageTool.getUserScramCredentialRecords(namespace).get().forEach(record =>
+      metadataRecords.append(new ApiMessageAndVersion(record, 0.toShort))
+    )
     Some(metadataRecords)
   }
 

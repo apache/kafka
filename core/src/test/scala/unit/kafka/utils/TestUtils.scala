@@ -24,7 +24,6 @@ import kafka.network.RequestChannel
 import kafka.server._
 import kafka.server.checkpoints.OffsetCheckpointFile
 import kafka.server.metadata.{ConfigRepository, MockConfigRepository}
-import kafka.tools.StorageTool
 import kafka.utils.Implicits._
 import kafka.zk._
 import org.apache.kafka.clients.admin.AlterConfigOp.OpType
@@ -67,6 +66,7 @@ import org.apache.kafka.server.util.timer.SystemTimer
 import org.apache.kafka.server.{ClientMetricsManager, ControllerRequestCompletionHandler}
 import org.apache.kafka.storage.internals.log.{CleanerConfig, LogConfig, LogDirFailureChannel, ProducerStateManagerConfig}
 import org.apache.kafka.test.{TestSslUtils, TestUtils => JTestUtils}
+import org.apache.kafka.tools.StorageTool
 import org.apache.zookeeper.KeeperException.SessionExpiredException
 import org.apache.zookeeper.ZooDefs._
 import org.apache.zookeeper.data.ACL
@@ -1157,8 +1157,9 @@ object TestUtils extends Logging {
     var out: PrintStream = null
     try {
       out = new PrintStream(stream)
-      val bootstrapMetadata = StorageTool.buildBootstrapMetadata(metadataVersion, optionalMetadataRecords, "format command")
-      if (StorageTool.formatCommand(out, directories, metaProperties, bootstrapMetadata, metadataVersion, ignoreFormatted = false) != 0) {
+      val bootstrapMetadata = StorageTool.buildBootstrapMetadata(metadataVersion, 
+        if (optionalMetadataRecords.isEmpty) Optional.empty() else Optional.of(optionalMetadataRecords.get.asJava), "format command")
+      if (StorageTool.formatCommand(out, directories.asJava, metaProperties, bootstrapMetadata, metadataVersion, false) != 0) {
         throw new RuntimeException(stream.toString())
       }
       debug(s"Formatted storage directory(ies) ${directories}")

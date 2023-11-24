@@ -32,7 +32,7 @@ import org.apache.kafka.common.utils.Time
 import org.apache.kafka.network.SocketServerConfigs
 import org.apache.kafka.raft.QuorumConfig
 import org.apache.kafka.server.config.{KRaftConfigs, ServerConfigs, ReplicationConfigs, ServerLogConfigs, ZkConfigs}
-import org.apache.kafka.server.ProcessRole
+import org.apache.kafka.server.common.ProcessRole
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.ParameterizedTest
@@ -41,7 +41,6 @@ import org.apache.kafka.server.fault.FaultHandler
 import org.mockito.Mockito._
 
 import scala.util.Using
-
 
 class RaftManagerTest {
   private def createZkBrokerConfig(

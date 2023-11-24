@@ -988,6 +988,7 @@ project(':core') {
     testImplementation project(':server-common').sourceSets.test.output
     testImplementation project(':storage:storage-api').sourceSets.test.output
     testImplementation project(':server').sourceSets.test.output
+    testImplementation project(':tools').sourceSets.main.output
     testImplementation libs.bcpkix
     testImplementation libs.mockitoCore
     testImplementation(libs.apacheda) {
@@ -1878,6 +1879,7 @@ project(':storage') {
     testImplementation project(':server')
     testImplementation project(':server-common')
     testImplementation project(':server-common').sourceSets.test.output
+    testImplementation project(':tools').sourceSets.main.output
     testImplementation libs.hamcrest
     testImplementation libs.junitJupiter
     testImplementation libs.mockitoCore
@@ -2042,6 +2044,9 @@ project(':tools') {
   dependencies {
     implementation project(':clients')
     implementation project(':storage')
+    implementation project(':metadata')
+    implementation project(':raft')
+    implementation project(':server')
     implementation project(':server-common')
     implementation project(':connect:runtime')
     implementation project(':log4j-appender')
