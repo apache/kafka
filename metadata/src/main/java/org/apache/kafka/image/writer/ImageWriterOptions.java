@@ -43,25 +43,15 @@ public final class ImageWriterOptions {
         }
 
         public Builder setMetadataVersion(MetadataVersion metadataVersion) {
-            setRequestedMetadataVersion(metadataVersion);
+            this.requestedMetadataVersion = metadataVersion;
             if (metadataVersion.isLessThan(MetadataVersion.MINIMUM_BOOTSTRAP_VERSION)) {
                 // When writing an image, all versions less than 3.3-IV0 are treated as 3.0-IV1.
                 // This is because those versions don't support FeatureLevelRecord.
-                setRawMetadataVersion(MetadataVersion.MINIMUM_KRAFT_VERSION);
+                this.metadataVersion = MetadataVersion.MINIMUM_KRAFT_VERSION;
             } else {
-                setRawMetadataVersion(metadataVersion);
+                this.metadataVersion = metadataVersion;
             }
             return this;
-        }
-
-        // Visible for testing
-        public Builder setRawMetadataVersion(MetadataVersion metadataVersion) {
-            this.metadataVersion = metadataVersion;
-            return this;
-        }
-
-        public void setRequestedMetadataVersion(MetadataVersion orgMetadataVersion) {
-            this.requestedMetadataVersion = orgMetadataVersion;
         }
 
         public MetadataVersion metadataVersion() {

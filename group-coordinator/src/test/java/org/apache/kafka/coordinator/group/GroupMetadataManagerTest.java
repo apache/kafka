@@ -90,6 +90,7 @@ import org.apache.kafka.coordinator.group.generated.GroupMetadataValue;
 import org.apache.kafka.coordinator.group.generic.GenericGroup;
 import org.apache.kafka.coordinator.group.generic.GenericGroupMember;
 import org.apache.kafka.coordinator.group.generic.GenericGroupState;
+import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetricsShard;
 import org.apache.kafka.coordinator.group.runtime.CoordinatorResult;
 import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
@@ -141,6 +142,9 @@ import static org.apache.kafka.coordinator.group.generic.GenericGroupState.DEAD;
 import static org.apache.kafka.coordinator.group.generic.GenericGroupState.EMPTY;
 import static org.apache.kafka.coordinator.group.generic.GenericGroupState.PREPARING_REBALANCE;
 import static org.apache.kafka.coordinator.group.generic.GenericGroupState.STABLE;
+import static org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetrics.GENERIC_GROUP_COMPLETED_REBALANCES_SENSOR_NAME;
+import static org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetrics.CONSUMER_GROUP_REBALANCES_SENSOR_NAME;
+import static org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetrics.GENERIC_GROUP_REBALANCES_SENSOR_NAME;
 import static org.junit.jupiter.api.AssertionFailureBuilder.assertionFailure;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -152,6 +156,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 public class GroupMetadataManagerTest {
@@ -317,6 +322,7 @@ public class GroupMetadataManagerTest {
             final private int genericGroupNewMemberJoinTimeoutMs = 5 * 60 * 1000;
             private int genericGroupMinSessionTimeoutMs = 10;
             private int genericGroupMaxSessionTimeoutMs = 10 * 60 * 1000;
+            private GroupCoordinatorMetricsShard metrics = mock(GroupCoordinatorMetricsShard.class);
 
             public Builder withMetadataImage(MetadataImage metadataImage) {
                 this.metadataImage = metadataImage;
@@ -371,6 +377,7 @@ public class GroupMetadataManagerTest {
                     time,
                     timer,
                     snapshotRegistry,
+                    metrics,
                     new GroupMetadataManager.Builder()
                         .withSnapshotRegistry(snapshotRegistry)
                         .withLogContext(logContext)
@@ -387,6 +394,7 @@ public class GroupMetadataManagerTest {
                         .withGenericGroupMaxSessionTimeoutMs(genericGroupMaxSessionTimeoutMs)
                         .withGenericGroupInitialRebalanceDelayMs(genericGroupInitialRebalanceDelayMs)
                         .withGenericGroupNewMemberJoinTimeoutMs(genericGroupNewMemberJoinTimeoutMs)
+                        .withGroupCoordinatorMetricsShard(metrics)
                         .build(),
                     genericGroupInitialRebalanceDelayMs,
                     genericGroupNewMemberJoinTimeoutMs
@@ -405,6 +413,7 @@ public class GroupMetadataManagerTest {
         final MockTime time;
         final MockCoordinatorTimer<Void, Record> timer;
         final SnapshotRegistry snapshotRegistry;
+        final GroupCoordinatorMetricsShard metrics;
         final GroupMetadataManager groupMetadataManager;
         final int genericGroupInitialRebalanceDelayMs;
         final int genericGroupNewMemberJoinTimeoutMs;
@@ -416,6 +425,7 @@ public class GroupMetadataManagerTest {
             MockTime time,
             MockCoordinatorTimer<Void, Record> timer,
             SnapshotRegistry snapshotRegistry,
+            GroupCoordinatorMetricsShard metrics,
             GroupMetadataManager groupMetadataManager,
             int genericGroupInitialRebalanceDelayMs,
             int genericGroupNewMemberJoinTimeoutMs
@@ -423,6 +433,7 @@ public class GroupMetadataManagerTest {
             this.time = time;
             this.timer = timer;
             this.snapshotRegistry = snapshotRegistry;
+            this.metrics = metrics;
             this.groupMetadataManager = groupMetadataManager;
             this.genericGroupInitialRebalanceDelayMs = genericGroupInitialRebalanceDelayMs;
             this.genericGroupNewMemberJoinTimeoutMs = genericGroupNewMemberJoinTimeoutMs;
@@ -3829,6 +3840,12 @@ public class GroupMetadataManagerTest {
             "group-id",
             STABLE,
             context.time,
+            new GroupCoordinatorMetricsShard(
+                context.snapshotRegistry,
+                Collections.emptyMap(),
+                Collections.emptyMap(),
+                new TopicPartition("__consumer_offsets", 0)
+            ),
             1,
             Optional.of("consumer"),
             Optional.of("range"),
@@ -9555,6 +9572,71 @@ public class GroupMetadataManagerTest {
         );
         context.groupMetadataManager.maybeDeleteGroup("group-id", records);
         assertEquals(Collections.emptyList(), records);
+    }
+
+    @Test
+    public void testGenericGroupCompletedRebalanceSensor() throws Exception {
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .build();
+        context.joinGenericGroupAsDynamicMemberAndCompleteRebalance("group-id");
+        verify(context.metrics).record(GENERIC_GROUP_COMPLETED_REBALANCES_SENSOR_NAME);
+    }
+
+    @Test
+    public void testGenericGroupRebalanceSensor() throws Exception {
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .build();
+        context.createGenericGroup("group-id");
+
+        context.joinGenericGroupAsDynamicMemberAndCompleteJoin(
+            new JoinGroupRequestBuilder()
+                .withGroupId("group-id")
+                .withMemberId(UNKNOWN_MEMBER_ID)
+                .withDefaultProtocolTypeAndProtocols()
+                .build()
+        );
+        verify(context.metrics).record(GENERIC_GROUP_REBALANCES_SENSOR_NAME);
+    }
+
+    @Test
+    public void testConsumerGroupRebalanceSensor() {
+        String groupId = "fooup";
+        // Use a static member id as it makes the test easier.
+        String memberId = Uuid.randomUuid().toString();
+
+        Uuid fooTopicId = Uuid.randomUuid();
+        String fooTopicName = "foo";
+        Uuid barTopicId = Uuid.randomUuid();
+        String barTopicName = "bar";
+
+        MockPartitionAssignor assignor = new MockPartitionAssignor("range");
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withAssignors(Collections.singletonList(assignor))
+            .withMetadataImage(new MetadataImageBuilder()
+                .addTopic(fooTopicId, fooTopicName, 6)
+                .addTopic(barTopicId, barTopicName, 3)
+                .addRacks()
+                .build())
+            .build();
+
+        assignor.prepareGroupAssignment(new GroupAssignment(
+            Collections.singletonMap(memberId, new MemberAssignment(mkAssignment(
+                mkTopicAssignment(fooTopicId, 0, 1, 2, 3, 4, 5),
+                mkTopicAssignment(barTopicId, 0, 1, 2)
+            )))
+        ));
+
+        context.consumerGroupHeartbeat(
+            new ConsumerGroupHeartbeatRequestData()
+                .setGroupId(groupId)
+                .setMemberId(memberId)
+                .setMemberEpoch(0)
+                .setServerAssignor("range")
+                .setRebalanceTimeoutMs(5000)
+                .setSubscribedTopicNames(Arrays.asList("foo", "bar"))
+                .setTopicPartitions(Collections.emptyList()));
+
+        verify(context.metrics).record(CONSUMER_GROUP_REBALANCES_SENSOR_NAME);
     }
 
     private static void assertNoOrEmptyResult(List<ExpiredTimeout<Void, Record>> timeouts) {
