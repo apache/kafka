@@ -24,6 +24,7 @@ import org.slf4j.Logger;
 
 import java.util.List;
 import java.util.Objects;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
@@ -131,17 +132,34 @@ public class MultiThreadedEventProcessor implements CoordinatorEventProcessor {
                 CoordinatorEvent event = accumulator.poll();
                 recordPollEndTime(time.milliseconds());
                 if (event != null) {
+                    CompletableFuture<Void> future = null;
                     try {
                         log.debug("Executing event: {}.", event);
                         long dequeuedTimeMs = time.milliseconds();
                         metrics.recordEventQueueTime(dequeuedTimeMs - event.createdTimeMs());
-                        event.run();
-                        metrics.recordEventQueueProcessingTime(time.milliseconds() - dequeuedTimeMs);
+                        future = event.runAsync();
+                        future.whenComplete((none, t) -> {
+                            try {
+                                metrics.recordEventQueueProcessingTime(time.milliseconds() - dequeuedTimeMs);
+                                if (t != null) {
+                                    log.error("Failed to run event {} due to: {}.", event, t.getMessage(), t);
+                                    event.complete(t);
+                                }
+                            } finally {
+                                accumulator.done(event);
+                            }
+                        });
                     } catch (Throwable t) {
-                        log.error("Failed to run event {} due to: {}.", event, t.getMessage(), t);
-                        event.complete(t);
+                        if (future == null) {
+                            // We failed before we managed to create the future, so do this inline.
+                            log.error("Failed to run event {} due to: {}.", event, t.getMessage(), t);
+                            event.complete(t);
+                        }
                     } finally {
-                        accumulator.done(event);
+                        if (future == null) {
+                            // We failed before we managed to create the future, so do this inline.
+                            accumulator.done(event);
+                        }
                     }
                 }
             }

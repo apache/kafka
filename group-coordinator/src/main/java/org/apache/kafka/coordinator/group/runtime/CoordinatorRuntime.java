@@ -48,6 +48,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Consumer;
+import java.util.function.Function;
 
 /**
  * The CoordinatorRuntime provides a framework to implement coordinators such as the group coordinator
@@ -673,8 +674,20 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
         @Override
         public void run() {
             try {
+                runAsync().get();
+            } catch (Throwable t) {
+                complete(t);
+            }
+        }
+
+        /**
+         * Called by the CoordinatorEventProcessor when the event is executed.
+         */
+        @Override
+        public CompletableFuture<Void> runAsync() {
+            try {
                 // Get the context of the coordinator or fail if the coordinator is not in active state.
-                withActiveContextOrThrow(tp, context -> {
+                return withActiveContextOrThrowAsync(tp, context -> {
                     long prevLastWrittenOffset = context.lastWrittenOffset;
 
                     // Execute the operation.
@@ -690,6 +703,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
                         } else {
                             complete(null);
                         }
+                        return CompletableFuture.completedFuture(null);
                     } else {
                         // If the records are not empty, first, they are applied to the state machine,
                         // second, then are written to the partition/log, and finally, the response
@@ -702,23 +716,31 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
 
                             // Write the records to the log and update the last written
                             // offset.
-                            long offset = partitionWriter.append(tp, result.records());
-                            context.updateLastWrittenOffset(offset);
+                            return partitionWriter.appendAsync(tp, result.records()).thenAccept(offset -> {
+                                context.updateLastWrittenOffset(offset);
 
-                            // Add the response to the deferred queue.
-                            if (!future.isDone()) {
-                                context.deferredEventQueue.add(offset, this);
-                            } else {
-                                complete(null);
-                            }
+                                // Add the response to the deferred queue.
+                                if (!future.isDone()) {
+                                    context.deferredEventQueue.add(offset, this);
+                                } else {
+                                    complete(null);
+                                }
+                            }).whenComplete((none, t) -> {
+                                if (t != null) {
+                                    context.revertLastWrittenOffset(prevLastWrittenOffset);
+                                    complete(t);
+                                }
+                            });
                         } catch (Throwable t) {
                             context.revertLastWrittenOffset(prevLastWrittenOffset);
                             complete(t);
+                            return CompletableFuture.completedFuture(null);
                         }
                     }
                 });
             } catch (Throwable t) {
                 complete(t);
+                return CompletableFuture.completedFuture(null);
             }
         }
 
@@ -1212,6 +1234,40 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
             }
         } finally {
             context.lock.unlock();
+        }
+    }
+
+    /**
+     * Calls the provided function with the context iff the context is active; throws
+     * an exception otherwise. This method ensures that the context lock is acquired
+     * before calling the function and releases afterwards.
+     *
+     * @param tp    The topic partition.
+     * @param asyncFunc  The function that will receive the context.
+     * @throws NotCoordinatorException
+     * @throws CoordinatorLoadInProgressException
+     */
+    private CompletableFuture<Void> withActiveContextOrThrowAsync(
+            TopicPartition tp,
+            Function<CoordinatorContext, CompletableFuture<Void>> asyncFunc
+    ) throws NotCoordinatorException, CoordinatorLoadInProgressException {
+        CoordinatorContext context = contextOrThrow(tp);
+
+        CompletableFuture<Void> result = null;
+        try {
+            context.lock.lock();
+            if (context.state == CoordinatorState.ACTIVE) {
+                // TODO: it's not a good practice to hold lock around async calls, should use event accumulator to synchronize
+                result = asyncFunc.apply(context).whenComplete((none, t) -> context.lock.unlock());
+                return result;
+            } else if (context.state == CoordinatorState.LOADING) {
+                throw Errors.COORDINATOR_LOAD_IN_PROGRESS.exception();
+            } else {
+                throw Errors.NOT_COORDINATOR.exception();
+            }
+        } finally {
+            if (result == null)
+                context.lock.unlock();
         }
     }
 
