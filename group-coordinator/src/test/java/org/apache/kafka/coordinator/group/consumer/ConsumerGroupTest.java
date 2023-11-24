@@ -675,25 +675,25 @@ public class ConsumerGroupTest {
 
         // Simulate a call from the admin client without member id and member epoch.
         // This should pass only if the group is empty.
-        group.validateOffsetCommit("", "", -1);
+        group.validateOffsetCommit("", "", -1, false);
 
         // The member does not exist.
         assertThrows(UnknownMemberIdException.class, () ->
-            group.validateOffsetCommit("member-id", null, 0));
+            group.validateOffsetCommit("member-id", null, 0, false));
 
         // Create a member.
         group.getOrMaybeCreateMember("member-id", true);
 
         // A call from the admin client should fail as the group is not empty.
         assertThrows(UnknownMemberIdException.class, () ->
-            group.validateOffsetCommit("", "", -1));
+            group.validateOffsetCommit("", "", -1, false));
 
         // The member epoch is stale.
         assertThrows(StaleMemberEpochException.class, () ->
-            group.validateOffsetCommit("member-id", "", 10));
+            group.validateOffsetCommit("member-id", "", 10, false));
 
         // This should succeed.
-        group.validateOffsetCommit("member-id", "", 0);
+        group.validateOffsetCommit("member-id", "", 0, false);
     }
 
     @Test
