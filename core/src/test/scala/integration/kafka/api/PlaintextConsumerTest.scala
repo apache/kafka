@@ -53,7 +53,6 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     val producer = createProducer()
     producer.send(record)
 
-    this.consumerConfig.setProperty(ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol)
     val consumer = createConsumer()
     assertEquals(0, consumer.assignment.size)
     consumer.assign(List(tp).asJava)
@@ -135,7 +134,6 @@ class PlaintextConsumerTest extends BaseConsumerTest {
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
   @MethodSource(Array("getTestQuorumAndGroupProtocolParametersGenericGroupProtocolOnly"))
   def testDeprecatedPollBlocksForAssignment(quorum: String, groupProtocol: String): Unit = {
-    this.consumerConfig.setProperty(ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol)
     val consumer = createConsumer()
     consumer.subscribe(Set(topic).asJava)
     consumer.poll(0)
@@ -149,7 +147,6 @@ class PlaintextConsumerTest extends BaseConsumerTest {
 
     val extendedDeserializer = new Deserializer[Array[Byte]] with DeserializerImpl
 
-    this.consumerConfig.setProperty(ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol)
     testHeadersSerializeDeserialize(extendedSerializer, extendedDeserializer)
   }
 
@@ -163,7 +160,6 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     val startingTimestamp = System.currentTimeMillis()
     sendRecords(producer, numRecords, tp, startingTimestamp = startingTimestamp)
 
-    this.consumerConfig.setProperty(ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol)
     this.consumerConfig.setProperty(ConsumerConfig.MAX_POLL_RECORDS_CONFIG, maxPollRecords.toString)
     val consumer = createConsumer()
     consumer.assign(List(tp).asJava)
@@ -175,7 +171,6 @@ class PlaintextConsumerTest extends BaseConsumerTest {
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
   @MethodSource(Array("getTestQuorumAndGroupProtocolParametersGenericGroupProtocolOnly"))
   def testMaxPollIntervalMs(quorum: String, groupProtocol: String): Unit = {
-    this.consumerConfig.setProperty(ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol)
     this.consumerConfig.setProperty(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, 1000.toString)
     this.consumerConfig.setProperty(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, 500.toString)
     this.consumerConfig.setProperty(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, 2000.toString)
@@ -203,7 +198,6 @@ class PlaintextConsumerTest extends BaseConsumerTest {
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
   @MethodSource(Array("getTestQuorumAndGroupProtocolParametersGenericGroupProtocolOnly"))
   def testMaxPollIntervalMsDelayInRevocation(quorum: String, groupProtocol: String): Unit = {
-    this.consumerConfig.setProperty(ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol)
     this.consumerConfig.setProperty(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, 5000.toString)
     this.consumerConfig.setProperty(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, 500.toString)
     this.consumerConfig.setProperty(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, 1000.toString)
@@ -246,7 +240,6 @@ class PlaintextConsumerTest extends BaseConsumerTest {
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
   @MethodSource(Array("getTestQuorumAndGroupProtocolParametersGenericGroupProtocolOnly"))
   def testMaxPollIntervalMsDelayInAssignment(quorum: String, groupProtocol: String): Unit = {
-    this.consumerConfig.setProperty(ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol)
     this.consumerConfig.setProperty(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, 5000.toString)
     this.consumerConfig.setProperty(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, 500.toString)
     this.consumerConfig.setProperty(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, 1000.toString)
@@ -273,7 +266,6 @@ class PlaintextConsumerTest extends BaseConsumerTest {
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
   @MethodSource(Array("getTestQuorumAndGroupProtocolParametersGenericGroupProtocolOnly"))
   def testAutoCommitOnClose(quorum: String, groupProtocol: String): Unit = {
-    this.consumerConfig.setProperty(ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol)
     this.consumerConfig.setProperty(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "true")
     val consumer = createConsumer()
 
@@ -299,7 +291,6 @@ class PlaintextConsumerTest extends BaseConsumerTest {
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
   @MethodSource(Array("getTestQuorumAndGroupProtocolParametersGenericGroupProtocolOnly"))
   def testAutoCommitOnCloseAfterWakeup(quorum: String, groupProtocol: String): Unit = {
-    this.consumerConfig.setProperty(ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol)
     this.consumerConfig.setProperty(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "true")
     val consumer = createConsumer()
 
@@ -332,7 +323,6 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     val startingTimestamp = System.currentTimeMillis()
     sendRecords(producer, numRecords = 1, tp, startingTimestamp = startingTimestamp)
 
-    this.consumerConfig.setProperty(ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol)
     val consumer = createConsumer()
     consumer.assign(List(tp).asJava)
     consumeAndVerifyRecords(consumer = consumer, numRecords = 1, startingOffset = 0, startingTimestamp = startingTimestamp)
@@ -345,7 +335,6 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     val startingTimestamp = System.currentTimeMillis()
     sendRecords(producer, numRecords = 10, tp, startingTimestamp = startingTimestamp)
 
-    this.consumerConfig.setProperty(ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol)
     val consumer = createConsumer()
     consumer.subscribe(List(topic).asJava)
     consumeAndVerifyRecords(consumer = consumer, numRecords = 1, startingOffset = 0, startingTimestamp = startingTimestamp)
@@ -383,7 +372,6 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     sendRecords(producer, numRecords = 1000, new TopicPartition(topic3, 0))
     sendRecords(producer, numRecords = 1000, new TopicPartition(topic3, 1))
 
-    this.consumerConfig.setProperty(ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol)
     val consumer = createConsumer()
     assertEquals(0, consumer.assignment().size)
 
@@ -424,7 +412,6 @@ class PlaintextConsumerTest extends BaseConsumerTest {
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
   @MethodSource(Array("getTestQuorumAndGroupProtocolParametersGenericGroupProtocolOnly"))
   def testSubsequentPatternSubscription(quorum: String, groupProtocol: String): Unit = {
-    this.consumerConfig.setProperty(ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol)
     this.consumerConfig.setProperty(ConsumerConfig.METADATA_MAX_AGE_CONFIG, "30000")
     val consumer = createConsumer()
 
@@ -487,7 +474,6 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     sendRecords(producer, numRecords = 1000, new TopicPartition(topic1, 0))
     sendRecords(producer, numRecords = 1000, new TopicPartition(topic1, 1))
 
-    this.consumerConfig.setProperty(ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol)
     val consumer = createConsumer()
     assertEquals(0, consumer.assignment().size)
 
@@ -506,7 +492,6 @@ class PlaintextConsumerTest extends BaseConsumerTest {
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
   @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
   def testCommitMetadata(quorum: String, groupProtocol: String): Unit = {
-    this.consumerConfig.setProperty(ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol)
     val consumer = createConsumer()
     consumer.assign(List(tp).asJava)
 
@@ -529,7 +514,6 @@ class PlaintextConsumerTest extends BaseConsumerTest {
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
   @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
   def testAsyncCommit(quorum: String, groupProtocol: String): Unit = {
-    this.consumerConfig.setProperty(ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol)
     val consumer = createConsumer()
     consumer.assign(List(tp).asJava)
 
@@ -552,7 +536,6 @@ class PlaintextConsumerTest extends BaseConsumerTest {
   def testExpandingTopicSubscriptions(quorum: String, groupProtocol: String): Unit = {
     val otherTopic = "other"
     val initialAssignment = Set(new TopicPartition(topic, 0), new TopicPartition(topic, 1))
-    this.consumerConfig.setProperty(ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol)
     val consumer = createConsumer()
     consumer.subscribe(List(topic).asJava)
     awaitAssignment(consumer, initialAssignment)
@@ -570,7 +553,6 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     val otherTopic = "other"
     createTopic(otherTopic, 2, brokerCount)
     val initialAssignment = Set(new TopicPartition(topic, 0), new TopicPartition(topic, 1), new TopicPartition(otherTopic, 0), new TopicPartition(otherTopic, 1))
-    this.consumerConfig.setProperty(ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol)
     val consumer = createConsumer()
     consumer.subscribe(List(topic, otherTopic).asJava)
     awaitAssignment(consumer, initialAssignment)
@@ -586,7 +568,6 @@ class PlaintextConsumerTest extends BaseConsumerTest {
   def testPartitionsFor(quorum: String, groupProtocol: String): Unit = {
     val numParts = 2
     createTopic("part-test", numParts, 1)
-    this.consumerConfig.setProperty(ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol)
     val consumer = createConsumer()
     val parts = consumer.partitionsFor("part-test")
     assertNotNull(parts)
@@ -597,7 +578,6 @@ class PlaintextConsumerTest extends BaseConsumerTest {
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
   @MethodSource(Array("getTestQuorumAndGroupProtocolParametersGenericGroupProtocolOnly"))
   def testPartitionsForAutoCreate(quorum: String, groupProtocol: String): Unit = {
-    this.consumerConfig.setProperty(ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol)
     val consumer = createConsumer()
     // First call would create the topic
     consumer.partitionsFor("non-exist-topic")
@@ -610,7 +590,6 @@ class PlaintextConsumerTest extends BaseConsumerTest {
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
   @MethodSource(Array("getTestQuorumAndGroupProtocolParametersGenericGroupProtocolOnly"))
   def testPartitionsForInvalidTopic(quorum: String, groupProtocol: String): Unit = {
-    this.consumerConfig.setProperty(ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol)
     val consumer = createConsumer()
     assertThrows(classOf[InvalidTopicException], () => consumer.partitionsFor(";3# ads,{234"))
   }
@@ -618,7 +597,6 @@ class PlaintextConsumerTest extends BaseConsumerTest {
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
   @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
   def testSeek(quorum: String, groupProtocol: String): Unit = {
-    this.consumerConfig.setProperty(ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol)
     val consumer = createConsumer()
     val totalRecords = 50L
     val mid = totalRecords / 2
@@ -680,7 +658,6 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     sendRecords(producer, numRecords = 5, tp, startingTimestamp = startingTimestamp)
 
     val topicPartition = new TopicPartition(topic, 15)
-    this.consumerConfig.setProperty(ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol)
     val consumer = createConsumer()
     assertNull(consumer.committed(Set(topicPartition).asJava).get(topicPartition))
 
@@ -714,7 +691,6 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     var startingTimestamp = System.currentTimeMillis()
     sendRecords(producer, numRecords = 5, tp, startingTimestamp = startingTimestamp)
 
-    this.consumerConfig.setProperty(ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol)
     val consumer = createConsumer()
     consumer.assign(partitions)
     consumeAndVerifyRecords(consumer = consumer, numRecords = 5, startingOffset = 0, startingTimestamp = startingTimestamp)
@@ -729,7 +705,6 @@ class PlaintextConsumerTest extends BaseConsumerTest {
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
   @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
   def testFetchInvalidOffset(quorum: String, groupProtocol: String): Unit = {
-    this.consumerConfig.setProperty(ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol)
     this.consumerConfig.setProperty(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "none")
     val consumer = createConsumer(configOverrides = this.consumerConfig)
 
@@ -756,7 +731,6 @@ class PlaintextConsumerTest extends BaseConsumerTest {
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
   @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
   def testFetchOutOfRangeOffsetResetConfigEarliest(quorum: String, groupProtocol: String): Unit = {
-    this.consumerConfig.setProperty(ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol)
     this.consumerConfig.setProperty(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest")
     // ensure no in-flight fetch request so that the offset can be reset immediately
     this.consumerConfig.setProperty(ConsumerConfig.FETCH_MAX_WAIT_MS_CONFIG, "0")
@@ -779,7 +753,6 @@ class PlaintextConsumerTest extends BaseConsumerTest {
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
   @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
   def testFetchOutOfRangeOffsetResetConfigLatest(quorum: String, groupProtocol: String): Unit = {
-    this.consumerConfig.setProperty(ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol)
     this.consumerConfig.setProperty(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "latest")
     // ensure no in-flight fetch request so that the offset can be reset immediately
     this.consumerConfig.setProperty(ConsumerConfig.FETCH_MAX_WAIT_MS_CONFIG, "0")
@@ -807,7 +780,6 @@ class PlaintextConsumerTest extends BaseConsumerTest {
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
   @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
   def testFetchRecordLargerThanFetchMaxBytes(quorum: String, groupProtocol: String): Unit = {
-    this.consumerConfig.setProperty(ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol)
     val maxFetchBytes = 10 * 1024
     this.consumerConfig.setProperty(ConsumerConfig.FETCH_MAX_BYTES_CONFIG, maxFetchBytes.toString)
     checkLargeRecord(maxFetchBytes + 1)
@@ -838,7 +810,6 @@ class PlaintextConsumerTest extends BaseConsumerTest {
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
   @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
   def testFetchHonoursFetchSizeIfLargeRecordNotFirst(quorum: String, groupProtocol: String): Unit = {
-    this.consumerConfig.setProperty(ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol)
     val maxFetchBytes = 10 * 1024
     this.consumerConfig.setProperty(ConsumerConfig.FETCH_MAX_BYTES_CONFIG, maxFetchBytes.toString)
     checkFetchHonoursSizeIfLargeRecordNotFirst(maxFetchBytes)
@@ -872,7 +843,6 @@ class PlaintextConsumerTest extends BaseConsumerTest {
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
   @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
   def testFetchHonoursMaxPartitionFetchBytesIfLargeRecordNotFirst(quorum: String, groupProtocol: String): Unit = {
-    this.consumerConfig.setProperty(ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol)
     val maxPartitionFetchBytes = 10 * 1024
     this.consumerConfig.setProperty(ConsumerConfig.MAX_PARTITION_FETCH_BYTES_CONFIG, maxPartitionFetchBytes.toString)
     checkFetchHonoursSizeIfLargeRecordNotFirst(maxPartitionFetchBytes)
@@ -881,7 +851,6 @@ class PlaintextConsumerTest extends BaseConsumerTest {
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
   @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
   def testFetchRecordLargerThanMaxPartitionFetchBytes(quorum: String, groupProtocol: String): Unit = {
-    this.consumerConfig.setProperty(ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol)
     val maxPartitionFetchBytes = 10 * 1024
     this.consumerConfig.setProperty(ConsumerConfig.MAX_PARTITION_FETCH_BYTES_CONFIG, maxPartitionFetchBytes.toString)
     checkLargeRecord(maxPartitionFetchBytes + 1)
@@ -891,7 +860,6 @@ class PlaintextConsumerTest extends BaseConsumerTest {
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
   @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
   def testLowMaxFetchSizeForRequestAndPartition(quorum: String, groupProtocol: String): Unit = {
-    this.consumerConfig.setProperty(ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol)
     // one of the effects of this is that there will be some log reads where `0 > remaining limit bytes < message size`
     // and we don't return the message because it's not the first message in the first non-empty partition of the fetch
     // this behaves a little different than when remaining limit bytes is 0 and it's important to test it
@@ -942,7 +910,6 @@ class PlaintextConsumerTest extends BaseConsumerTest {
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
   @MethodSource(Array("getTestQuorumAndGroupProtocolParametersGenericGroupProtocolOnly"))
   def testRoundRobinAssignment(quorum: String, groupProtocol: String): Unit = {
-    this.consumerConfig.setProperty(ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol)
     // 1 consumer using round-robin assignment
     this.consumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, "roundrobin-group")
     this.consumerConfig.setProperty(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG, classOf[RoundRobinAssignor].getName)
@@ -981,7 +948,6 @@ class PlaintextConsumerTest extends BaseConsumerTest {
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
   @MethodSource(Array("getTestQuorumAndGroupProtocolParametersGenericGroupProtocolOnly"))
   def testMultiConsumerRoundRobinAssignor(quorum: String, groupProtocol: String): Unit = {
-    this.consumerConfig.setProperty(ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol)
     this.consumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, "roundrobin-group")
     this.consumerConfig.setProperty(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG, classOf[RoundRobinAssignor].getName)
 
@@ -1025,7 +991,6 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     def reverse(m: Map[Long, Set[TopicPartition]]) =
       m.values.toSet.flatten.map(v => (v, m.keys.filter(m(_).contains(v)).head)).toMap
 
-    this.consumerConfig.setProperty(ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol)
     this.consumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, "sticky-group")
     this.consumerConfig.setProperty(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG, classOf[StickyAssignor].getName)
 
@@ -1080,7 +1045,6 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     // subscribe all consumers to all topics and validate the assignment
 
     val consumersInGroup = Buffer[Consumer[Array[Byte], Array[Byte]]]()
-    this.consumerConfig.setProperty(ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol)
     consumersInGroup += createConsumer()
     consumersInGroup += createConsumer()
 
@@ -1209,7 +1173,6 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     createTopic(topic2, 3)
 
     val consumersInGroup = Buffer[Consumer[Array[Byte], Array[Byte]]]()
-    this.consumerConfig.setProperty(ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol)
     consumersInGroup += createConsumer()
     consumersInGroup += createConsumer()
 
@@ -1236,7 +1199,6 @@ class PlaintextConsumerTest extends BaseConsumerTest {
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
   @MethodSource(Array("getTestQuorumAndGroupProtocolParametersGenericGroupProtocolOnly"))
   def testMultiConsumerSessionTimeoutOnStopPolling(quorum: String, groupProtocol: String): Unit = {
-    this.consumerConfig.setProperty(ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol)
     runMultiConsumerSessionTimeoutTest(false)
   }
 
@@ -1244,7 +1206,6 @@ class PlaintextConsumerTest extends BaseConsumerTest {
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
   @MethodSource(Array("getTestQuorumAndGroupProtocolParametersGenericGroupProtocolOnly"))
   def testMultiConsumerSessionTimeoutOnClose(quorum: String, groupProtocol: String): Unit = {
-    this.consumerConfig.setProperty(ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol)
     runMultiConsumerSessionTimeoutTest(true)
   }
 
@@ -1277,7 +1238,6 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     assertEquals(0, MockProducerInterceptor.ON_ERROR_WITH_METADATA_COUNT.intValue(), "Interceptor should not receive metadata with an exception when record is null")
 
     // create consumer with interceptor
-    this.consumerConfig.setProperty(ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol)
     this.consumerConfig.setProperty(ConsumerConfig.INTERCEPTOR_CLASSES_CONFIG, "org.apache.kafka.test.MockConsumerInterceptor")
     val testConsumer = createConsumer(keyDeserializer = new StringDeserializer, valueDeserializer = new StringDeserializer)
     testConsumer.assign(List(tp).asJava)
@@ -1325,7 +1285,6 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     }.foreach(_.get)
 
     // create consumer with interceptor
-    this.consumerConfig.setProperty(ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol)
     this.consumerConfig.setProperty(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "true")
     this.consumerConfig.setProperty(ConsumerConfig.INTERCEPTOR_CLASSES_CONFIG, "org.apache.kafka.test.MockConsumerInterceptor")
     val testConsumer = createConsumer(keyDeserializer = new StringDeserializer, valueDeserializer = new StringDeserializer)
@@ -1379,7 +1338,6 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     testProducer.send(new ProducerRecord(tp.topic(), tp.partition(), s"key".getBytes, s"value will not be modified".getBytes))
 
     // create consumer with interceptor that has different key and value types from the consumer
-    this.consumerConfig.setProperty(ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol)
     this.consumerConfig.setProperty(ConsumerConfig.INTERCEPTOR_CLASSES_CONFIG, "org.apache.kafka.test.MockConsumerInterceptor")
     val testConsumer = createConsumer()
 
@@ -1400,7 +1358,6 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     val producer = createProducer()
     val startingTimestamp = System.currentTimeMillis()
     sendRecords(producer, numRecords, tp, startingTimestamp = startingTimestamp)
-    this.consumerConfig.setProperty(ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol)
     val consumer = createConsumer()
     consumer.assign(List(tp).asJava)
     consumeAndVerifyRecords(consumer = consumer, numRecords = numRecords, startingOffset = 0, startingTimestamp = startingTimestamp)
@@ -1427,7 +1384,6 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     val producer = createProducer()
     sendRecords(producer, numRecords, tp1)
 
-    this.consumerConfig.setProperty(ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol)
     val consumer = createConsumer()
     consumer.assign(List(tp1).asJava)
     consumeAndVerifyRecords(consumer = consumer, numRecords = numRecords, tp = tp1, startingOffset = 0, startingKeyAndValueIndex = 0,
@@ -1453,7 +1409,6 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     createTopic(topic2, numParts, 1)
     createTopic(topic3, numParts, 1)
 
-    this.consumerConfig.setProperty(ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol)
     val consumer = createConsumer()
     val topics = consumer.listTopics()
     assertNotNull(topics)
@@ -1468,7 +1423,6 @@ class PlaintextConsumerTest extends BaseConsumerTest {
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
   @MethodSource(Array("getTestQuorumAndGroupProtocolParametersGenericGroupProtocolOnly"))
   def testUnsubscribeTopic(quorum: String, groupProtocol: String): Unit = {
-    this.consumerConfig.setProperty(ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol)
     this.consumerConfig.setProperty(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, "100") // timeout quickly to avoid slow test
     this.consumerConfig.setProperty(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, "30")
     val consumer = createConsumer()
@@ -1486,7 +1440,6 @@ class PlaintextConsumerTest extends BaseConsumerTest {
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
   @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
   def testPauseStateNotPreservedByRebalance(quorum: String, groupProtocol: String): Unit = {
-    this.consumerConfig.setProperty(ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol)
     this.consumerConfig.setProperty(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, "100") // timeout quickly to avoid slow test
     this.consumerConfig.setProperty(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, "30")
     val consumer = createConsumer()
@@ -1513,7 +1466,6 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     sendRecords(producer, numRecords = 5, tp)
     sendRecords(producer, numRecords = 7, tp2)
 
-    this.consumerConfig.setProperty(ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol)
     val consumer = createConsumer()
     consumer.assign(List(tp, tp2).asJava)
 
@@ -1542,7 +1494,6 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     val topic2 = "topic2"
     createTopic(topic2, 2, brokerCount)
 
-    this.consumerConfig.setProperty(ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol)
     this.consumerConfig.setProperty(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "true")
     val consumer = createConsumer()
 
@@ -1589,7 +1540,6 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     sendRecords(producer, numMessages, tp)
     // Test subscribe
     // Create a consumer and consumer some messages.
-    consumerConfig.setProperty(ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol)
     consumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, "testPerPartitionLeadMetricsCleanUpWithSubscribe")
     consumerConfig.setProperty(ConsumerConfig.CLIENT_ID_CONFIG, "testPerPartitionLeadMetricsCleanUpWithSubscribe")
     val consumer = createConsumer()
@@ -1631,7 +1581,6 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     sendRecords(producer, numMessages, tp)
     // Test subscribe
     // Create a consumer and consumer some messages.
-    consumerConfig.setProperty(ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol)
     consumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, "testPerPartitionLagMetricsCleanUpWithSubscribe")
     consumerConfig.setProperty(ConsumerConfig.CLIENT_ID_CONFIG, "testPerPartitionLagMetricsCleanUpWithSubscribe")
     val consumer = createConsumer()
@@ -1672,7 +1621,6 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     sendRecords(producer, numMessages, tp)
     sendRecords(producer, numMessages, tp2)
 
-    consumerConfig.setProperty(ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol)
     consumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, "testPerPartitionLeadMetricsCleanUpWithAssign")
     consumerConfig.setProperty(ConsumerConfig.CLIENT_ID_CONFIG, "testPerPartitionLeadMetricsCleanUpWithAssign")
     val consumer = createConsumer()
@@ -1703,7 +1651,6 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     sendRecords(producer, numMessages, tp)
     sendRecords(producer, numMessages, tp2)
 
-    consumerConfig.setProperty(ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol)
     consumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, "testPerPartitionLagMetricsCleanUpWithAssign")
     consumerConfig.setProperty(ConsumerConfig.CLIENT_ID_CONFIG, "testPerPartitionLagMetricsCleanUpWithAssign")
     val consumer = createConsumer()
@@ -1735,7 +1682,6 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     sendRecords(producer, numMessages, tp)
     sendRecords(producer, numMessages, tp2)
 
-    consumerConfig.setProperty(ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol)
     consumerConfig.setProperty(ConsumerConfig.ISOLATION_LEVEL_CONFIG, "read_committed")
     consumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, "testPerPartitionLagMetricsCleanUpWithAssign")
     consumerConfig.setProperty(ConsumerConfig.CLIENT_ID_CONFIG, "testPerPartitionLagMetricsCleanUpWithAssign")
@@ -1759,7 +1705,6 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     val producer = createProducer()
     sendRecords(producer, numMessages, tp)
 
-    consumerConfig.setProperty(ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol)
     consumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, "testPerPartitionLeadWithMaxPollRecords")
     consumerConfig.setProperty(ConsumerConfig.CLIENT_ID_CONFIG, "testPerPartitionLeadWithMaxPollRecords")
     consumerConfig.setProperty(ConsumerConfig.MAX_POLL_RECORDS_CONFIG, maxPollRecords.toString)
@@ -1783,7 +1728,6 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     val producer = createProducer()
     sendRecords(producer, numMessages, tp)
 
-    consumerConfig.setProperty(ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol)
     consumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, "testPerPartitionLagWithMaxPollRecords")
     consumerConfig.setProperty(ConsumerConfig.CLIENT_ID_CONFIG, "testPerPartitionLagWithMaxPollRecords")
     consumerConfig.setProperty(ConsumerConfig.MAX_POLL_RECORDS_CONFIG, maxPollRecords.toString)
@@ -1808,7 +1752,6 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     val startingTimestamp = System.currentTimeMillis()
     sendRecords(producer, numRecords, tp, startingTimestamp = startingTimestamp)
 
-    this.consumerConfig.setProperty(ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol)
     val consumer = createConsumer()
     consumer.assign(List(tp).asJava)
     consumer.seek(tp, 0)
@@ -1966,7 +1909,6 @@ class PlaintextConsumerTest extends BaseConsumerTest {
 
     // consumer 1 uses the default group id and consumes from earliest offset
     val consumer1Config = new Properties(consumerConfig)
-    consumer1Config.put(ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol)
     consumer1Config.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest")
     consumer1Config.put(ConsumerConfig.CLIENT_ID_CONFIG, "consumer1")
     val consumer1 = createConsumer(
@@ -1975,7 +1917,6 @@ class PlaintextConsumerTest extends BaseConsumerTest {
 
     // consumer 2 uses the default group id and consumes from latest offset
     val consumer2Config = new Properties(consumerConfig)
-    consumer2Config.put(ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol)
     consumer2Config.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "latest")
     consumer2Config.put(ConsumerConfig.CLIENT_ID_CONFIG, "consumer2")
     val consumer2 = createConsumer(
@@ -1984,7 +1925,6 @@ class PlaintextConsumerTest extends BaseConsumerTest {
 
     // consumer 3 uses the default group id and starts from an explicit offset
     val consumer3Config = new Properties(consumerConfig)
-    consumer3Config.put(ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol)
     consumer3Config.put(ConsumerConfig.CLIENT_ID_CONFIG, "consumer3")
     val consumer3 = createConsumer(
       configOverrides = consumer3Config,
@@ -2019,7 +1959,6 @@ class PlaintextConsumerTest extends BaseConsumerTest {
   @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
   def testNullGroupIdNotSupportedIfCommitting(quorum: String, groupProtocol: String): Unit = {
     val consumer1Config = new Properties(consumerConfig)
-    consumer1Config.put(ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol)
     consumer1Config.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest")
     consumer1Config.put(ConsumerConfig.CLIENT_ID_CONFIG, "consumer1")
     val consumer1 = createConsumer(
@@ -2046,7 +1985,6 @@ class PlaintextConsumerTest extends BaseConsumerTest {
 
     // consumer 1 uses the empty group id
     val consumer1Config = new Properties(consumerConfig)
-    consumer1Config.put(ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol)
     consumer1Config.put(ConsumerConfig.GROUP_ID_CONFIG, "")
     consumer1Config.put(ConsumerConfig.CLIENT_ID_CONFIG, "consumer1")
     consumer1Config.put(ConsumerConfig.MAX_POLL_RECORDS_CONFIG, "1")
@@ -2054,7 +1992,6 @@ class PlaintextConsumerTest extends BaseConsumerTest {
 
     // consumer 2 uses the empty group id and consumes from latest offset if there is no committed offset
     val consumer2Config = new Properties(consumerConfig)
-    consumer2Config.put(ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol)
     consumer2Config.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "latest")
     consumer2Config.put(ConsumerConfig.GROUP_ID_CONFIG, "")
     consumer2Config.put(ConsumerConfig.CLIENT_ID_CONFIG, "consumer2")
@@ -2084,7 +2021,6 @@ class PlaintextConsumerTest extends BaseConsumerTest {
   @MethodSource(Array("getTestQuorumAndGroupProtocolParametersConsumerGroupProtocolOnly"))
   def testEmptyGroupIdNotSupported(quorum:String, groupProtocol: String): Unit = {
     val consumer1Config = new Properties(consumerConfig)
-    consumer1Config.put(ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol)
     consumer1Config.put(ConsumerConfig.GROUP_ID_CONFIG, "")
     consumer1Config.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest")
     consumer1Config.put(ConsumerConfig.CLIENT_ID_CONFIG, "consumer1")
@@ -2106,7 +2042,6 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     admin.createTopics(Seq(new NewTopic(foo, 1, 1.toShort)).asJava).all.get
 
     val consumerConfig = new Properties
-    consumerConfig.put(ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol)
     consumerConfig.put(ConsumerConfig.GROUP_ID_CONFIG, "my-group-id")
     consumerConfig.put(ConsumerConfig.GROUP_INSTANCE_ID_CONFIG, "my-instance-id")
 
@@ -2130,7 +2065,6 @@ class PlaintextConsumerTest extends BaseConsumerTest {
   @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
   def testAssignAndCommitAsyncNotCommitted(quorum:String, groupProtocol: String): Unit = {
     val props = new Properties()
-    props.setProperty(ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol)
     val consumer = createConsumer(configOverrides = props)
     val producer = createProducer()
     val numRecords = 10000
@@ -2153,7 +2087,6 @@ class PlaintextConsumerTest extends BaseConsumerTest {
   @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
   def testAssignAndCommitSyncNotCommitted(quorum:String, groupProtocol: String): Unit = {
     val props = new Properties()
-    props.setProperty(ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol)
     val consumer = createConsumer(configOverrides = props)
     val producer = createProducer()
     val numRecords = 10000
@@ -2179,7 +2112,6 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     sendRecords(producer, numRecords, tp, startingTimestamp = startingTimestamp)
 
     val props = new Properties()
-    props.setProperty(ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol)
     val consumer = createConsumer(configOverrides = props)
     consumer.assign(List(tp).asJava)
     consumer.seek(tp, 0)
@@ -2202,7 +2134,6 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     sendRecords(producer, numRecords, tp, startingTimestamp = startingTimestamp)
 
     val props = new Properties()
-    props.setProperty(ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol)
     val consumer = createConsumer(configOverrides = props,
       configsToRemove = List(ConsumerConfig.GROUP_ID_CONFIG))
     consumer.assign(List(tp).asJava)
@@ -2221,7 +2152,6 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     sendRecords(producer, numRecords, tp, startingTimestamp = startingTimestamp)
 
     val props = new Properties()
-    props.setProperty(ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol)
     val consumer = createConsumer(configOverrides = props,
       configsToRemove = List(ConsumerConfig.GROUP_ID_CONFIG))
     consumer.assign(List(tp).asJava)
@@ -2242,7 +2172,6 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     val startingTimestamp = System.currentTimeMillis()
     sendRecords(producer, numRecords, tp, startingTimestamp = startingTimestamp)
     val props = new Properties()
-    props.setProperty(ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol)
     val consumer = createConsumer(configOverrides = props,
       configsToRemove = List(ConsumerConfig.GROUP_ID_CONFIG))
     consumer.assign(List(tp).asJava)
@@ -2270,7 +2199,6 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     val producer = createProducer()
     sendRecords(producer, numRecords, tp, startingTimestamp = startingTimestamp)
     val props = new Properties()
-    props.setProperty(ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol)
     val consumer = createConsumer(configOverrides = props)
     consumer.assign(List(tp).asJava)
     // First consumer consumes and commits offsets
@@ -2295,7 +2223,6 @@ class PlaintextConsumerTest extends BaseConsumerTest {
 
     // Commit offset with first consumer
     val props = new Properties()
-    props.setProperty(ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol)
     props.setProperty(ConsumerConfig.GROUP_ID_CONFIG, "group1")
     val consumer = createConsumer(configOverrides = props)
     consumer.assign(List(tp).asJava)
@@ -2323,7 +2250,6 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     sendRecords(producer, numRecords, tp, startingTimestamp = startingTimestamp)
 
     val props = new Properties()
-    props.setProperty(ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol)
     val consumer = createConsumer(configOverrides = props)
     consumer.assign(List(tp).asJava)
 
