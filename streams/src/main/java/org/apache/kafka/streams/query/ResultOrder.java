@@ -18,7 +18,7 @@
 package org.apache.kafka.streams.query;
 
 public enum ResultOrder {
-    UNORDERED,
+    ANY,
     ASCENDING,
     DESCENDING
 }

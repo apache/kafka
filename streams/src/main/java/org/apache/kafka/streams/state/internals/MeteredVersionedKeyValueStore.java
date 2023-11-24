@@ -23,6 +23,7 @@ import static org.apache.kafka.streams.kstream.internals.WrappingNullableUtils.p
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.maybeMeasureLatency;
 
 
+import java.security.InvalidParameterException;
 import java.time.Instant;
 import java.util.Map;
 import java.util.Objects;
@@ -252,6 +253,9 @@ public class MeteredVersionedKeyValueStore<K, V>
 
             final Instant fromTime = typedKeyQuery.fromTime().isPresent() ? typedKeyQuery.fromTime().get() : Instant.ofEpochMilli(Long.MIN_VALUE);
             final Instant toTime = typedKeyQuery.toTime().isPresent() ? typedKeyQuery.toTime().get() : Instant.ofEpochMilli(Long.MAX_VALUE);
+            if (fromTime.compareTo(toTime) > 0) {
+                throw new InvalidParameterException("The `fromTime` timestamp must be smaller than the `toTime` timestamp.");
+            }
             MultiVersionedKeyQuery<Bytes, byte[]> rawKeyQuery = MultiVersionedKeyQuery.withKey(keyBytes(typedKeyQuery.key()));
             rawKeyQuery = rawKeyQuery.fromTime(fromTime).toTime(toTime);
             if (typedKeyQuery.resultOrder().equals(ResultOrder.DESCENDING)) {
@@ -262,11 +266,13 @@ public class MeteredVersionedKeyValueStore<K, V>
 
             final QueryResult<VersionedRecordIterator<byte[]>> rawResult = wrapped().query(rawKeyQuery, positionBound, config);
             if (rawResult.isSuccess()) {
-                final MeteredMultiVersionedKeyQueryIterator<V> typedResult = new MeteredMultiVersionedKeyQueryIterator<V>(rawResult.getResult(), StoreQueryUtils.getDeserializeValue(plainValueSerdes));
-                final QueryResult<MeteredMultiVersionedKeyQueryIterator<V>> typedQueryResult = InternalQueryResultUtil.copyAndSubstituteDeserializedResult(rawResult, typedResult);
+                final MeteredMultiVersionedKeyQueryIterator<V> typedResult =
+                        new MeteredMultiVersionedKeyQueryIterator<V>(rawResult.getResult(), StoreQueryUtils.getDeserializeValue(plainValueSerdes));
+                final QueryResult<MeteredMultiVersionedKeyQueryIterator<V>> typedQueryResult =
+                        InternalQueryResultUtil.copyAndSubstituteDeserializedResult(rawResult, typedResult);
                 result = (QueryResult<R>) typedQueryResult;
             } else {
-                // the generic type doesn't matter, since failed queries have no result set.
+              // the generic type doesn't matter, since failed queries have no result set.
                 result = (QueryResult<R>) rawResult;
             }
             return result;

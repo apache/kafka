@@ -198,7 +198,6 @@ class LogicalKeyValueSegment implements Comparable<LogicalKeyValueSegment>, Segm
     public void releaseSnapshot(final Snapshot snapshot) {
         physicalStore.releaseSnapshot(snapshot);
     }
-
     @Override
     public synchronized KeyValueIterator<Bytes, byte[]> range(final Bytes from, final Bytes to) {
         // from bound is inclusive. if the provided bound is null, replace with prefix

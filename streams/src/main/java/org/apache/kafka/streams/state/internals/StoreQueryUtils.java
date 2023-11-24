@@ -391,11 +391,12 @@ public final class StoreQueryUtils {
             final RocksDBVersionedStore rocksDBVersionedStore = (RocksDBVersionedStore) store;
             final MultiVersionedKeyQuery<Bytes, byte[]> rawKeyQuery = (MultiVersionedKeyQuery<Bytes, byte[]>) query;
             try {
-                final VersionedRecordIterator<byte[]> bytes = rocksDBVersionedStore.get(rawKeyQuery.key(),
-                                                                                        rawKeyQuery.fromTime().get().toEpochMilli(),
-                                                                                        rawKeyQuery.toTime().get().toEpochMilli(),
-                                                                                        rawKeyQuery.resultOrder());
-                return (QueryResult<R>) QueryResult.forResult(bytes);
+                final VersionedRecordIterator<byte[]> segmentIterator =
+                        rocksDBVersionedStore.get(rawKeyQuery.key(),
+                                                  rawKeyQuery.fromTime().get().toEpochMilli(),
+                                                  rawKeyQuery.toTime().get().toEpochMilli(),
+                                                  rawKeyQuery.resultOrder());
+                return (QueryResult<R>) QueryResult.forResult(segmentIterator);
             } catch (final Exception e) {
                 final String message = parseStoreException(e, store, query);
                 return QueryResult.forFailure(FailureReason.STORE_EXCEPTION, message);

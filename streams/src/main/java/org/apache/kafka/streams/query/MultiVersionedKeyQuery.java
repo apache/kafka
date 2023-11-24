@@ -61,7 +61,7 @@ public final class MultiVersionedKeyQuery<K, V> implements Query<VersionedRecord
    */
     public static <K, V> MultiVersionedKeyQuery<K, V> withKey(final K key) {
         Objects.requireNonNull(key, "key cannot be null.");
-        return new MultiVersionedKeyQuery<>(key, Optional.empty(), Optional.empty(), ResultOrder.UNORDERED);
+        return new MultiVersionedKeyQuery<>(key, Optional.empty(), Optional.empty(), ResultOrder.ANY);
     }
 
     /**
