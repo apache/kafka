@@ -118,11 +118,13 @@ object BaseConsumerTest {
   // We want to test the following combinations:
   // * ZooKeeper and the generic group protocol
   // * KRaft and the generic group protocol
+  // * KRaft with the new group coordinator enabled and the generic group protocol
   // * KRaft with the new group coordinator enabled and the consumer group protocol
   def getTestQuorumAndGroupProtocolParametersAll() : java.util.stream.Stream[Arguments] = {
     java.util.stream.Stream.of(
         Arguments.of("zk", "generic"),
         Arguments.of("kraft", "generic"),
+        Arguments.of("kraft+kip848", "generic"),
         Arguments.of("kraft+kip848", "consumer"))
   }
 
@@ -136,10 +138,12 @@ object BaseConsumerTest {
   // For tests that only work with the generic group protocol, we want to test the following combinations:
   // * ZooKeeper and the generic group protocol
   // * KRaft and the generic group protocol
+  // * KRaft with the new group coordinator enabled and the generic group protocol
   def getTestQuorumAndGroupProtocolParametersGenericGroupProtocolOnly() : java.util.stream.Stream[Arguments] = {
     java.util.stream.Stream.of(
         Arguments.of("zk", "generic"),
-        Arguments.of("kraft", "generic"))
+        Arguments.of("kraft", "generic"),
+        Arguments.of("kraft+kip848", "generic"))
   }
 
   // For tests that only work with the consumer group protocol, we want to test the following combinations:
