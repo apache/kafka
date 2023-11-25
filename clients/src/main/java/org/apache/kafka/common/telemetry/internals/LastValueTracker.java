@@ -61,6 +61,10 @@ public class LastValueTracker<T> {
         return counters.containsKey(metricKey);
     }
 
+    public void reset() {
+        counters.clear();
+    }
+
     public static class InstantAndValue<T> {
 
         private final Instant intervalStart;

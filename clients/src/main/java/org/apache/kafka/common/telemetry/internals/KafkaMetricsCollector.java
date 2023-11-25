@@ -157,17 +157,24 @@ public class KafkaMetricsCollector implements MetricsCollector {
     }
 
     /**
-     * This is called whenever a metric is updated or added
+     * This is called whenever a metric is updated or added.
      */
     public void metricChange(KafkaMetric metric) {
         ledger.metricChange(metric);
     }
 
     /**
-     * This is called whenever a metric is removed
+     * This is called whenever a metric is removed.
      */
     public void metricRemoval(KafkaMetric metric) {
         ledger.metricRemoval(metric);
+    }
+
+    /**
+     * This is called whenever temporality changes, resets the value tracker for metrics.
+     */
+    public void metricsReset() {
+        ledger.metricsStateReset();
     }
 
     // Visible for testing
@@ -280,18 +287,18 @@ public class KafkaMetricsCollector implements MetricsCollector {
 
         private Instant instantAdded(MetricKey metricKey) {
             // lookup when the metric was added to use it as the interval start. That should always
-            // exist, but if it doesn't (e.g. if there's a race) then we use now.
+            // exist, but if it doesn't (e.g. changed metrics temporality) then we use now.
             return metricAdded.computeIfAbsent(metricKey, x -> Instant.ofEpochMilli(time.milliseconds()));
         }
 
-        public void init(List<KafkaMetric> metrics) {
+        private void init(List<KafkaMetric> metrics) {
             log.info("initializing Kafka metrics collector");
             for (KafkaMetric m : metrics) {
                 metricMap.put(metricNamingStrategy.metricKey(m.metricName()), m);
             }
         }
 
-        public void metricChange(KafkaMetric metric) {
+        private void metricChange(KafkaMetric metric) {
             MetricKey metricKey = metricNamingStrategy.metricKey(metric.metricName());
             metricMap.put(metricKey, metric);
             if (doubleDeltas.contains(metricKey)) {
@@ -310,7 +317,7 @@ public class KafkaMetricsCollector implements MetricsCollector {
             metricAdded.put(metricKey, Instant.ofEpochMilli(time.milliseconds()));
         }
 
-        public void metricRemoval(KafkaMetric metric) {
+        private void metricRemoval(KafkaMetric metric) {
             log.debug("removing kafka metric : {}", metric.metricName());
             MetricKey metricKey = metricNamingStrategy.metricKey(metric.metricName());
             metricMap.remove(metricKey);
@@ -318,16 +325,21 @@ public class KafkaMetricsCollector implements MetricsCollector {
             metricAdded.remove(metricKey);
         }
 
-        public Iterable<? extends Entry<MetricKey, KafkaMetric>> getMetrics() {
+        private Iterable<? extends Entry<MetricKey, KafkaMetric>> getMetrics() {
             return metricMap.entrySet();
         }
 
-        public InstantAndValue<Double> delta(MetricKey metricKey, Instant now, Double value) {
+        private InstantAndValue<Double> delta(MetricKey metricKey, Instant now, Double value) {
             Optional<InstantAndValue<Double>> lastValue = doubleDeltas.getAndSet(metricKey, now, value);
 
             return lastValue
                 .map(last -> new InstantAndValue<>(last.getIntervalStart(), value - last.getValue()))
                 .orElse(new InstantAndValue<>(instantAdded(metricKey), value));
+        }
+
+        private void metricsStateReset() {
+            metricAdded.clear();
+            doubleDeltas.reset();
         }
     }
 

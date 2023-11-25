@@ -60,6 +60,10 @@ public class TestEmitter implements MetricsEmitter {
         this.emittedMetrics.clear();
     }
 
+    public void onlyDeltaMetrics(boolean onlyDeltaMetrics) {
+        this.onlyDeltaMetrics = onlyDeltaMetrics;
+    }
+
     public void reconfigurePredicate(Predicate<? super MetricKeyable> metricsPredicate) {
         this.metricsPredicate = metricsPredicate;
     }
