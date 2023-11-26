@@ -17,18 +17,15 @@
 
 package kafka.admin
 
-import java.nio.charset.StandardCharsets
-import java.util.concurrent.TimeUnit
-import java.util.{Collections, Properties}
 import joptsimple._
 import kafka.server.DynamicConfig.QuotaConfigs
-import kafka.server.{ConfigEntityName, ConfigType, Defaults, DynamicBrokerConfig, DynamicConfig, KafkaConfig}
-import kafka.utils.{Exit, Logging, PasswordEncoder}
+import kafka.server._
 import kafka.utils.Implicits._
+import kafka.utils.{Exit, Logging, PasswordEncoder}
 import kafka.zk.{AdminZkClient, KafkaZkClient}
 import org.apache.kafka.clients.admin.{Admin, AlterClientQuotasOptions, AlterConfigOp, AlterConfigsOptions, ConfigEntry, DescribeClusterOptions, DescribeConfigsOptions, ListTopicsOptions, ScramCredentialInfo, UserScramCredentialDeletion, UserScramCredentialUpsertion, Config => JConfig, ScramMechanism => PublicScramMechanism}
-import org.apache.kafka.common.config.{ConfigResource, TopicConfig}
 import org.apache.kafka.common.config.types.Password
+import org.apache.kafka.common.config.{ConfigResource, TopicConfig}
 import org.apache.kafka.common.errors.InvalidConfigurationException
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.quota.{ClientQuotaAlteration, ClientQuotaEntity, ClientQuotaFilter, ClientQuotaFilterComponent}
@@ -39,9 +36,12 @@ import org.apache.kafka.server.util.{CommandDefaultOptions, CommandLineUtils}
 import org.apache.kafka.storage.internals.log.LogConfig
 import org.apache.zookeeper.client.ZKClientConfig
 
+import java.nio.charset.StandardCharsets
+import java.util.concurrent.TimeUnit
+import java.util.{Collections, Properties}
 import scala.annotation.nowarn
-import scala.jdk.CollectionConverters._
 import scala.collection._
+import scala.jdk.CollectionConverters._
 
 /**
  * This script can be used to change configs for topics/clients/users/brokers/ips dynamically

@@ -30,6 +30,8 @@ import java.util.TreeMap;
 import java.util.stream.Collectors;
 
 public class ToolsUtils {
+    public static final String NL = System.getProperty("line.separator");
+
     /**
      * print out the metrics in alphabetical order
      * @param metrics   the metrics to be printed out
