@@ -40,6 +40,7 @@ import org.apache.kafka.common.requests.FetchRequest;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.server.common.OffsetAndEpoch;
 import org.apache.kafka.server.log.remote.storage.ClassLoaderAwareRemoteStorageManager;
 import org.apache.kafka.server.log.remote.storage.LogSegmentData;
 import org.apache.kafka.server.log.remote.storage.NoOpRemoteLogMetadataManager;
@@ -238,17 +239,62 @@ public class RemoteLogManagerTest {
     }
 
     @Test
-    void testFindHighestRemoteOffset() throws RemoteStorageException {
+    void testFindHighestRemoteOffsetOnEmptyRemoteStorage() throws  RemoteStorageException {
+        List<EpochEntry> totalEpochEntries = Arrays.asList(
+                new EpochEntry(0, 0),
+                new EpochEntry(1, 500)
+        );
         checkpoint.write(totalEpochEntries);
         LeaderEpochFileCache cache = new LeaderEpochFileCache(tp, checkpoint);
         when(mockLog.leaderEpochCache()).thenReturn(Option.apply(cache));
         TopicIdPartition tpId = new TopicIdPartition(Uuid.randomUuid(), tp);
-        long offset = remoteLogManager.findHighestRemoteOffset(tpId, mockLog);
-        assertEquals(-1, offset);
+        OffsetAndEpoch offsetAndEpoch = remoteLogManager.findHighestRemoteOffset(tpId, mockLog);
+        assertEquals(new OffsetAndEpoch(-1L, -1), offsetAndEpoch);
+    }
 
-        when(remoteLogMetadataManager.highestOffsetForEpoch(tpId, 2)).thenReturn(Optional.of(200L));
-        long offset2 = remoteLogManager.findHighestRemoteOffset(tpId, mockLog);
-        assertEquals(200, offset2);
+    @Test
+    void testFindHighestRemoteOffset() throws RemoteStorageException {
+        List<EpochEntry> totalEpochEntries = Arrays.asList(
+                new EpochEntry(0, 0),
+                new EpochEntry(1, 500)
+        );
+        checkpoint.write(totalEpochEntries);
+        LeaderEpochFileCache cache = new LeaderEpochFileCache(tp, checkpoint);
+        when(mockLog.leaderEpochCache()).thenReturn(Option.apply(cache));
+        TopicIdPartition tpId = new TopicIdPartition(Uuid.randomUuid(), tp);
+        when(remoteLogMetadataManager.highestOffsetForEpoch(eq(tpId), anyInt())).thenAnswer(ans -> {
+            Integer epoch = ans.getArgument(1, Integer.class);
+            if (epoch == 0) {
+                return Optional.of(200L);
+            } else {
+                return Optional.empty();
+            }
+        });
+        OffsetAndEpoch offsetAndEpoch = remoteLogManager.findHighestRemoteOffset(tpId, mockLog);
+        assertEquals(new OffsetAndEpoch(200L, 0), offsetAndEpoch);
+    }
+
+    @Test
+    void testFindHighestRemoteOffsetWithUncleanLeaderElection() throws RemoteStorageException {
+        List<EpochEntry> totalEpochEntries = Arrays.asList(
+                new EpochEntry(0, 0),
+                new EpochEntry(1, 150),
+                new EpochEntry(2, 300)
+        );
+        checkpoint.write(totalEpochEntries);
+        LeaderEpochFileCache cache = new LeaderEpochFileCache(tp, checkpoint);
+        when(mockLog.leaderEpochCache()).thenReturn(Option.apply(cache));
+        TopicIdPartition tpId = new TopicIdPartition(Uuid.randomUuid(), tp);
+        when(remoteLogMetadataManager.highestOffsetForEpoch(eq(tpId), anyInt())).thenAnswer(ans -> {
+            Integer epoch = ans.getArgument(1, Integer.class);
+            if (epoch == 0) {
+                return Optional.of(200L);
+            } else {
+                return Optional.empty();
+            }
+        });
+        OffsetAndEpoch offsetAndEpoch = remoteLogManager.findHighestRemoteOffset(tpId, mockLog);
+        assertEquals(new OffsetAndEpoch(149L, 0), offsetAndEpoch);
     }
 
     @Test
@@ -484,7 +530,7 @@ public class RemoteLogManagerTest {
 
         // verify the highest remote offset is updated to the expected value
         ArgumentCaptor<Long> argument = ArgumentCaptor.forClass(Long.class);
-        verify(mockLog, times(1)).updateHighestOffsetInRemoteStorage(argument.capture());
+        verify(mockLog, times(2)).updateHighestOffsetInRemoteStorage(argument.capture());
         assertEquals(oldSegmentEndOffset, argument.getValue());
 
         // Verify the metric for remote writes is updated correctly
@@ -735,7 +781,7 @@ public class RemoteLogManagerTest {
         verify(remoteStorageManager, times(1)).copyLogSegmentData(any(RemoteLogSegmentMetadata.class), any(LogSegmentData.class));
 
         // Verify we should not have updated the highest offset because of write failure
-        verify(mockLog, times(0)).updateHighestOffsetInRemoteStorage(anyLong());
+        verify(mockLog).updateHighestOffsetInRemoteStorage(anyLong());
         // Verify the metric for remote write requests/failures was updated.
         assertEquals(1, brokerTopicStats.topicStats(leaderTopicIdPartition.topic()).remoteCopyRequestRate().count());
         assertEquals(1, brokerTopicStats.topicStats(leaderTopicIdPartition.topic()).failedRemoteCopyRequestRate().count());
@@ -775,7 +821,7 @@ public class RemoteLogManagerTest {
         verify(remoteLogMetadataManager, never()).addRemoteLogSegmentMetadata(any(RemoteLogSegmentMetadata.class));
         verify(remoteStorageManager, never()).copyLogSegmentData(any(RemoteLogSegmentMetadata.class), any(LogSegmentData.class));
         verify(remoteLogMetadataManager, never()).updateRemoteLogSegmentMetadata(any(RemoteLogSegmentMetadataUpdate.class));
-        verify(mockLog, never()).updateHighestOffsetInRemoteStorage(anyLong());
+        verify(mockLog).updateHighestOffsetInRemoteStorage(anyLong());
     }
 
     @Test

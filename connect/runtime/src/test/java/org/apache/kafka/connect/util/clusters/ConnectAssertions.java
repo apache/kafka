@@ -524,7 +524,7 @@ public class ConnectAssertions {
      * @param connectorState
      * @param numTasks the expected number of tasks
      * @param tasksState
-     * @return true if the connector and tasks are in RUNNING state; false otherwise
+     * @return true if the connector and tasks are in the expected state; false otherwise
      */
     protected Optional<Boolean> checkConnectorState(
             String connectorName,
@@ -554,7 +554,7 @@ public class ConnectAssertions {
      * @param connectorState
      * @param numTasks the expected number of tasks
      * @param tasksState
-     * @return true if the connector and tasks are in RUNNING state; false otherwise
+     * @return true if the connector and tasks are in the expected state; false otherwise
      */
     protected Optional<Boolean> checkConnectorState(
             String connectorName,
