@@ -150,9 +150,11 @@ public class LegacyKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             LogContext logContext = createLogContext(config, groupRebalanceConfig);
             this.log = logContext.logger(getClass());
             boolean enableAutoCommit = config.getBoolean(ENABLE_AUTO_COMMIT_CONFIG);
-
-            if (this.groupId.isPresent() && this.groupId.get().isEmpty())
-                throw new InvalidGroupIdException("The configured group.id should not be an empty string or whitespace");
+            groupId.ifPresent(groupIdStr -> {
+                if (groupIdStr.isEmpty()) {
+                    log.warn("Support for using the empty group id by consumers is deprecated and will be removed in the next major release.");
+                }
+            });
 
             log.debug("Initializing the Kafka consumer");
             this.requestTimeoutMs = config.getInt(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG);
