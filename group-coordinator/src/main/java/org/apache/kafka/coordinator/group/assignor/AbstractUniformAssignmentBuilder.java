@@ -223,22 +223,13 @@ public abstract class AbstractUniformAssignmentBuilder {
          * @return A sorted list of partitions with potential members in the same rack.
          */
         protected List<TopicIdPartition> sortPartitionsByRackMembers(Collection<TopicIdPartition> topicIdPartitions) {
-
-            List<TopicIdPartition> sortedPartitionsList = topicIdPartitions.stream()
-                .sorted(Comparator.comparing(TopicIdPartition::topicId).thenComparing(TopicIdPartition::partitionId))
+            return topicIdPartitions.stream()
+                .filter(tp -> membersWithSameRackAsPartition.containsKey(tp) && !membersWithSameRackAsPartition.get(tp).isEmpty())
+                .sorted(Comparator.comparing(
+                        (TopicIdPartition tp) -> membersWithSameRackAsPartition.getOrDefault(tp, Collections.emptyList()).size())
+                    .thenComparing(TopicIdPartition::topicId)
+                    .thenComparing(TopicIdPartition::partitionId))
                 .collect(Collectors.toList());
-
-            if (membersWithSameRackAsPartition.isEmpty())
-                return sortedPartitionsList;
-
-            return sortedPartitionsList.parallelStream()
-                .filter(tp -> {
-                    int count = membersWithSameRackAsPartition.get(tp).size();
-                    return count > 0;
-                })
-                .sorted(Comparator.comparing(tp ->
-                    membersWithSameRackAsPartition.getOrDefault(tp, Collections.emptyList()).size()
-                )).collect(Collectors.toList());
         }
 
         /**

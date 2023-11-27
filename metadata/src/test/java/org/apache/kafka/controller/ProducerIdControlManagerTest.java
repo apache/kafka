@@ -122,8 +122,6 @@ public class ProducerIdControlManagerTest {
 
     @Test
     public void testUnknownBrokerOrEpoch() {
-        ControllerResult<ProducerIdsBlock> result;
-
         assertThrows(StaleBrokerEpochException.class, () ->
             producerIdControlManager.generateNextProducerId(99, 0));
 
