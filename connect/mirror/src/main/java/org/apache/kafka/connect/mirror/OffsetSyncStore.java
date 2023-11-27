@@ -87,48 +87,16 @@ class OffsetSyncStore implements AutoCloseable {
     }
 
     private KafkaBasedLog<byte[], byte[]> createBackingStore(MirrorCheckpointConfig config, Consumer<byte[], byte[]> consumer, TopicAdmin admin) {
-        return new KafkaBasedLog<byte[], byte[]>(
+        return KafkaBasedLog.withExistingClients(
                 config.offsetSyncsTopic(),
-                Collections.emptyMap(),
-                Collections.emptyMap(),
-                () -> admin,
+                consumer,
+                null,
+                admin,
                 (error, record) -> this.handleRecord(record),
                 Time.SYSTEM,
-                ignored -> {
-                }
-        ) {
-
-            private boolean started = false;
-            @Override
-            protected Producer<byte[], byte[]> createProducer() {
-                return null;
-            }
-
-            @Override
-            protected Consumer<byte[], byte[]> createConsumer() {
-                return consumer;
-            }
-
-            @Override
-            protected boolean readPartition(TopicPartition topicPartition) {
-                return topicPartition.partition() == 0;
-            }
-
-            @Override
-            public void start() {
-                super.start();
-                started = true;
-            }
-
-            @Override
-            public void stop() {
-                super.stop();
-                // Close the consumer if the thread in the store responsible for closing the clients was never started.
-                if (!started) {
-                    Utils.closeQuietly(consumer, "consumer");
-                }
-            }
-        };
+                ignored -> {},
+                topicPartition -> topicPartition.partition() == 0
+        );
     }
 
     OffsetSyncStore() {

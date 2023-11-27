@@ -59,6 +59,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
+import java.util.function.Predicate;
 import java.util.function.Supplier;
 
 import static org.junit.Assert.assertEquals;
@@ -122,6 +123,7 @@ public class KafkaBasedLogTest {
     private KafkaProducer<String, String> producer;
     private TopicAdmin admin;
     private final Supplier<TopicAdmin> topicAdminSupplier = () -> admin;
+    private final Predicate<TopicPartition> predicate = ignored -> true;
     private MockConsumer<String, String> consumer;
 
     private final Map<TopicPartition, List<ConsumerRecord<String, String>>> consumedRecords = new HashMap<>();
@@ -483,7 +485,7 @@ public class KafkaBasedLogTest {
     @Test
     public void testWithExistingClientsStartAndStop() {
         admin = mock(TopicAdmin.class);
-        store = KafkaBasedLog.withExistingClients(TOPIC, consumer, producer, admin, consumedCallback, time, initializer);
+        store = KafkaBasedLog.withExistingClients(TOPIC, consumer, producer, admin, consumedCallback, time, initializer, predicate);
         store.start();
         store.stop();
         verifyStartAndStop();
@@ -492,7 +494,7 @@ public class KafkaBasedLogTest {
     @Test
     public void testWithExistingClientsStopOnly() {
         admin = mock(TopicAdmin.class);
-        store = KafkaBasedLog.withExistingClients(TOPIC, consumer, producer, admin, consumedCallback, time, initializer);
+        store = KafkaBasedLog.withExistingClients(TOPIC, consumer, producer, admin, consumedCallback, time, initializer, predicate);
         store.stop();
         verifyStop();
     }
