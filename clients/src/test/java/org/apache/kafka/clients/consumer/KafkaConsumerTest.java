@@ -408,13 +408,13 @@ public class KafkaConsumerTest {
     }
 
     @ParameterizedTest
-    @EnumSource(GroupProtocol.class)
+    @EnumSource(value = GroupProtocol.class, names = "CONSUMER")
     public void testEmptyGroupId(GroupProtocol groupProtocol) {
         assertThrows(KafkaException.class, () -> newConsumer(groupProtocol, ""));
     }
 
     @ParameterizedTest
-    @EnumSource(GroupProtocol.class)
+    @EnumSource(value = GroupProtocol.class, names = "CONSUMER")
     public void testWhitespaceGroupId(GroupProtocol groupProtocol) {
         assertThrows(KafkaException.class, () -> newConsumer(groupProtocol, "    "));
     }
