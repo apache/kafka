@@ -109,12 +109,11 @@ public class ConsumerTestBuilder implements Closeable {
                 100,
                 DEFAULT_MAX_POLL_INTERVAL_MS,
                 DEFAULT_HEARTBEAT_INTERVAL_MS,
-                groupInfo.map(gi -> gi.groupState.groupId).orElse(null),
-                groupInfo.flatMap(gi -> gi.groupState.groupInstanceId),
+                groupInfo.map(gi -> gi.groupId).orElse(null),
+                groupInfo.flatMap(gi -> gi.groupInstanceId),
                 DEFAULT_RETRY_BACKOFF_MS,
                 DEFAULT_RETRY_BACKOFF_MAX_MS,
                 true);
-        GroupState groupState = new GroupState(groupRebalanceConfig);
         ApiVersions apiVersions = new ApiVersions();
 
         Properties properties = new Properties();
@@ -125,8 +124,8 @@ public class ConsumerTestBuilder implements Closeable {
         properties.put(CommonClientConfigs.MAX_POLL_INTERVAL_MS_CONFIG, DEFAULT_MAX_POLL_INTERVAL_MS);
 
         groupInfo.ifPresent(gi -> {
-            properties.put(GROUP_ID_CONFIG, gi.groupState.groupId);
-            gi.groupState.groupInstanceId.ifPresent(groupInstanceId -> properties.put(GROUP_INSTANCE_ID_CONFIG, groupInstanceId));
+            properties.put(GROUP_ID_CONFIG, gi.groupId);
+            gi.groupInstanceId.ifPresent(groupInstanceId -> properties.put(GROUP_INSTANCE_ID_CONFIG, groupInstanceId));
         });
 
         this.config = new ConsumerConfig(properties);
@@ -166,6 +165,8 @@ public class ConsumerTestBuilder implements Closeable {
                 backgroundEventHandler,
                 logContext));
 
+        this.topicMetadataRequestManager = spy(new TopicMetadataRequestManager(logContext, config));
+
         if (groupInfo.isPresent()) {
             GroupInformation gi = groupInfo.get();
             CoordinatorRequestManager coordinator = spy(new CoordinatorRequestManager(
@@ -174,24 +175,26 @@ public class ConsumerTestBuilder implements Closeable {
                     DEFAULT_RETRY_BACKOFF_MS,
                     DEFAULT_RETRY_BACKOFF_MAX_MS,
                     backgroundEventHandler,
-                    gi.groupState.groupId
+                    gi.groupId
             ));
-            MembershipManager mm = spy(
-                    new MembershipManagerImpl(
-                            gi.groupState.groupId,
-                            gi.groupState.groupInstanceId.orElse(null),
-                            null,
-                            logContext
-                    )
-            );
             CommitRequestManager commit = spy(new CommitRequestManager(time,
                     logContext,
                     subscriptions,
                     config,
                     coordinator,
-                    groupState,
-                    mm));
-
+                    backgroundEventHandler,
+                    DEFAULT_GROUP_ID,
+                    Optional.of(DEFAULT_GROUP_INSTANCE_ID)));
+            MembershipManager mm = spy(new MembershipManagerImpl(
+                    gi.groupId,
+                    gi.groupInstanceId,
+                    Optional.empty(),
+                    subscriptions,
+                    commit,
+                    metadata,
+                    logContext
+                )
+            );
             HeartbeatRequestManager.HeartbeatRequestState state = spy(new HeartbeatRequestManager.HeartbeatRequestState(logContext,
                     time,
                     gi.heartbeatIntervalMs,
@@ -200,7 +203,6 @@ public class ConsumerTestBuilder implements Closeable {
                     gi.heartbeatJitterMs));
             HeartbeatRequestManager heartbeat = spy(new HeartbeatRequestManager(
                     logContext,
-                    time,
                     config,
                     coordinator,
                     subscriptions,
@@ -231,15 +233,14 @@ public class ConsumerTestBuilder implements Closeable {
                 metricsManager,
                 networkClientDelegate,
                 apiVersions));
-        this.topicMetadataRequestManager = spy(new TopicMetadataRequestManager(logContext,
-                config));
         this.requestManagers = new RequestManagers(logContext,
                 offsetsRequestManager,
                 topicMetadataRequestManager,
                 fetchRequestManager,
                 coordinatorRequestManager,
                 commitRequestManager,
-                heartbeatRequestManager);
+                heartbeatRequestManager,
+                membershipManager);
         this.applicationEventProcessor = spy(new ApplicationEventProcessor(
                 logContext,
                 applicationEventQueue,
@@ -306,11 +307,13 @@ public class ConsumerTestBuilder implements Closeable {
         }
     }
 
-    public static class PrototypeAsyncConsumerTestBuilder extends ApplicationEventHandlerTestBuilder {
+    public static class AsyncKafkaConsumerTestBuilder extends ApplicationEventHandlerTestBuilder {
 
-        final PrototypeAsyncConsumer<String, String> consumer;
+        final AsyncKafkaConsumer<String, String> consumer;
 
-        public PrototypeAsyncConsumerTestBuilder(Optional<GroupInformation> groupInfo) {
+        final FetchCollector<String, String> fetchCollector;
+
+        public AsyncKafkaConsumerTestBuilder(Optional<GroupInformation> groupInfo) {
             super(groupInfo);
             String clientId = config.getString(CommonClientConfigs.CLIENT_ID_CONFIG);
             List<ConsumerPartitionAssignor> assignors = ConsumerPartitionAssignor.getAssignorInstances(
@@ -318,14 +321,14 @@ public class ConsumerTestBuilder implements Closeable {
                     config.originals(Collections.singletonMap(ConsumerConfig.CLIENT_ID_CONFIG, clientId))
             );
             Deserializers<String, String> deserializers = new Deserializers<>(new StringDeserializer(), new StringDeserializer());
-            FetchCollector<String, String> fetchCollector = new FetchCollector<>(logContext,
+            this.fetchCollector = spy(new FetchCollector<>(logContext,
                     metadata,
                     subscriptions,
                     fetchConfig,
                     deserializers,
                     metricsManager,
-                    time);
-            this.consumer = spy(new PrototypeAsyncConsumer<>(
+                    time));
+            this.consumer = spy(new AsyncKafkaConsumer<>(
                     logContext,
                     clientId,
                     deserializers,
@@ -341,7 +344,7 @@ public class ConsumerTestBuilder implements Closeable {
                     retryBackoffMs,
                     60000,
                     assignors,
-                    groupInfo.map(groupInformation -> groupInformation.groupState.groupId).orElse(null)));
+                    groupInfo.map(groupInformation -> groupInformation.groupId).orElse(null)));
         }
 
         @Override
@@ -351,23 +354,26 @@ public class ConsumerTestBuilder implements Closeable {
     }
 
     public static class GroupInformation {
-
-        final GroupState groupState;
+        final String groupId;
+        final Optional<String> groupInstanceId;
         final int heartbeatIntervalMs;
         final double heartbeatJitterMs;
 
-        public GroupInformation(GroupState groupState) {
-            this(groupState, DEFAULT_HEARTBEAT_INTERVAL_MS, DEFAULT_HEARTBEAT_JITTER_MS);
+        public GroupInformation(String groupId, Optional<String> groupInstanceId) {
+            this(groupId, groupInstanceId, DEFAULT_HEARTBEAT_INTERVAL_MS,
+                    DEFAULT_HEARTBEAT_JITTER_MS);
         }
 
-        public GroupInformation(GroupState groupState, int heartbeatIntervalMs, double heartbeatJitterMs) {
-            this.groupState = groupState;
+        public GroupInformation(String groupId, Optional<String> groupInstanceId,
+                                int heartbeatIntervalMs, double heartbeatJitterMs) {
             this.heartbeatIntervalMs = heartbeatIntervalMs;
             this.heartbeatJitterMs = heartbeatJitterMs;
+            this.groupId = groupId;
+            this.groupInstanceId = groupInstanceId;
         }
     }
 
     static Optional<GroupInformation> createDefaultGroupInformation() {
-        return Optional.of(new GroupInformation(new GroupState(DEFAULT_GROUP_ID, Optional.empty())));
+        return Optional.of(new GroupInformation(DEFAULT_GROUP_ID, Optional.empty()));
     }
 }

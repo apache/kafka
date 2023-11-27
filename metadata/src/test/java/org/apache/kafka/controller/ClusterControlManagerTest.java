@@ -240,7 +240,7 @@ public class ClusterControlManagerTest {
     }
 
     @Test
-    public void testRegistrationWithIncorrectClusterId() throws Exception {
+    public void testRegistrationWithIncorrectClusterId() {
         SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
         FeatureControlManager featureControl = new FeatureControlManager.Builder().
             setSnapshotRegistry(snapshotRegistry).
@@ -317,7 +317,7 @@ public class ClusterControlManagerTest {
     }
 
     @Test
-    public void testUnregister() throws Exception {
+    public void testUnregister() {
         RegisterBrokerRecord brokerRecord = new RegisterBrokerRecord().
             setBrokerId(1).
             setBrokerEpoch(100).
@@ -365,7 +365,7 @@ public class ClusterControlManagerTest {
 
     @ParameterizedTest
     @ValueSource(ints = {3, 10})
-    public void testPlaceReplicas(int numUsableBrokers) throws Exception {
+    public void testPlaceReplicas(int numUsableBrokers) {
         MockTime time = new MockTime(0, 0, 0);
         SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
         FeatureControlManager featureControl = new FeatureControlManager.Builder().
@@ -418,7 +418,7 @@ public class ClusterControlManagerTest {
 
     @ParameterizedTest
     @EnumSource(value = MetadataVersion.class, names = {"IBP_3_3_IV2", "IBP_3_3_IV3"})
-    public void testRegistrationsToRecords(MetadataVersion metadataVersion) throws Exception {
+    public void testRegistrationsToRecords(MetadataVersion metadataVersion) {
         MockTime time = new MockTime(0, 0, 0);
         SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
         FeatureControlManager featureControl = new FeatureControlManager.Builder().

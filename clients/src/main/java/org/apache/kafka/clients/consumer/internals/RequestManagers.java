@@ -49,6 +49,7 @@ public class RequestManagers implements Closeable {
     public final Optional<CoordinatorRequestManager> coordinatorRequestManager;
     public final Optional<CommitRequestManager> commitRequestManager;
     public final Optional<HeartbeatRequestManager> heartbeatRequestManager;
+    public final Optional<MembershipManager> membershipManager;
     public final OffsetsRequestManager offsetsRequestManager;
     public final TopicMetadataRequestManager topicMetadataRequestManager;
     public final FetchRequestManager fetchRequestManager;
@@ -61,7 +62,8 @@ public class RequestManagers implements Closeable {
                            FetchRequestManager fetchRequestManager,
                            Optional<CoordinatorRequestManager> coordinatorRequestManager,
                            Optional<CommitRequestManager> commitRequestManager,
-                           Optional<HeartbeatRequestManager> heartbeatRequestManager) {
+                           Optional<HeartbeatRequestManager> heartbeatRequestManager,
+                           Optional<MembershipManager> membershipManager) {
         this.log = logContext.logger(RequestManagers.class);
         this.offsetsRequestManager = requireNonNull(offsetsRequestManager, "OffsetsRequestManager cannot be null");
         this.coordinatorRequestManager = coordinatorRequestManager;
@@ -69,6 +71,7 @@ public class RequestManagers implements Closeable {
         this.topicMetadataRequestManager = topicMetadataRequestManager;
         this.fetchRequestManager = fetchRequestManager;
         this.heartbeatRequestManager = heartbeatRequestManager;
+        this.membershipManager = membershipManager;
 
         List<Optional<? extends RequestManager>> list = new ArrayList<>();
         list.add(coordinatorRequestManager);
@@ -149,20 +152,33 @@ public class RequestManagers implements Closeable {
                         logContext,
                         config);
                 HeartbeatRequestManager heartbeatRequestManager = null;
+                MembershipManager membershipManager = null;
                 CoordinatorRequestManager coordinator = null;
                 CommitRequestManager commit = null;
 
                 if (groupRebalanceConfig != null && groupRebalanceConfig.groupId != null) {
-                    final GroupState groupState = new GroupState(groupRebalanceConfig);
                     coordinator = new CoordinatorRequestManager(time,
                             logContext,
                             retryBackoffMs,
                             retryBackoffMaxMs,
                             backgroundEventHandler,
-                            groupState.groupId);
-                    MembershipManager membershipManager = new MembershipManagerImpl(groupState.groupId, logContext);
-                    commit = new CommitRequestManager(time, logContext, subscriptions, config,
-                            coordinator, groupState, membershipManager);
+                            groupRebalanceConfig.groupId);
+                    commit = new CommitRequestManager(
+                            time,
+                            logContext,
+                            subscriptions,
+                            config,
+                            coordinator,
+                            backgroundEventHandler,
+                            groupRebalanceConfig.groupId,
+                            groupRebalanceConfig.groupInstanceId);
+                    membershipManager = new MembershipManagerImpl(
+                            groupRebalanceConfig.groupId,
+                            subscriptions,
+                            commit,
+                            metadata,
+                            logContext);
+                    membershipManager.registerStateListener(commit);
                     heartbeatRequestManager = new HeartbeatRequestManager(
                             logContext,
                             time,
@@ -180,7 +196,8 @@ public class RequestManagers implements Closeable {
                         fetch,
                         Optional.ofNullable(coordinator),
                         Optional.ofNullable(commit),
-                        Optional.ofNullable(heartbeatRequestManager)
+                        Optional.ofNullable(heartbeatRequestManager),
+                        Optional.ofNullable(membershipManager)
                 );
             }
         };

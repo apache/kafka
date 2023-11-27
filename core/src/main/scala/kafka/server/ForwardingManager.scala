@@ -18,13 +18,13 @@
 package kafka.server
 
 import java.nio.ByteBuffer
-
 import kafka.network.RequestChannel
 import kafka.utils.Logging
 import org.apache.kafka.clients.{ClientResponse, NodeApiVersions}
 import org.apache.kafka.common.errors.TimeoutException
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{AbstractRequest, AbstractResponse, EnvelopeRequest, EnvelopeResponse, RequestContext, RequestHeader}
+import org.apache.kafka.server.{ControllerRequestCompletionHandler, NodeToControllerChannelManager}
 
 import scala.compat.java8.OptionConverters._
 
@@ -165,7 +165,7 @@ class ForwardingManagerImpl(
   }
 
   override def controllerApiVersions: Option[NodeApiVersions] =
-    channelManager.controllerApiVersions()
+    channelManager.controllerApiVersions.asScala
 
   private def parseResponse(
     buffer: ByteBuffer,

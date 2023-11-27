@@ -28,10 +28,15 @@ import org.apache.kafka.clients.consumer.internals.events.NewTopicsMetadataUpdat
 import org.apache.kafka.clients.consumer.internals.events.ResetPositionsApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.TopicMetadataApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.ValidatePositionsApplicationEvent;
+import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.message.FindCoordinatorRequestData;
+import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.FindCoordinatorRequest;
+import org.apache.kafka.common.requests.FindCoordinatorResponse;
 import org.apache.kafka.common.requests.MetadataResponse;
+import org.apache.kafka.common.requests.OffsetCommitRequest;
+import org.apache.kafka.common.requests.OffsetCommitResponse;
 import org.apache.kafka.common.requests.RequestTestUtils;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.test.TestCondition;
@@ -42,6 +47,7 @@ import org.junit.jupiter.api.Test;
 
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
@@ -49,6 +55,8 @@ import java.util.Optional;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CompletableFuture;
 
+import static java.util.Collections.singleton;
+import static java.util.Collections.singletonMap;
 import static org.apache.kafka.clients.consumer.internals.ConsumerTestBuilder.DEFAULT_REQUEST_TIMEOUT_MS;
 import static org.apache.kafka.test.TestUtils.DEFAULT_MAX_WAIT_MS;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
@@ -74,9 +82,11 @@ public class ConsumerNetworkThreadTest {
     private BlockingQueue<ApplicationEvent> applicationEventsQueue;
     private ApplicationEventProcessor applicationEventProcessor;
     private OffsetsRequestManager offsetsRequestManager;
-    private CommitRequestManager commitManager;
+    private CommitRequestManager commitRequestManager;
+    private CoordinatorRequestManager coordinatorRequestManager;
     private ConsumerNetworkThread consumerNetworkThread;
     private MockClient client;
+    private SubscriptionState subscriptions;
 
     @BeforeEach
     public void setup() {
@@ -87,9 +97,11 @@ public class ConsumerNetworkThreadTest {
         client = testBuilder.client;
         applicationEventsQueue = testBuilder.applicationEventQueue;
         applicationEventProcessor = testBuilder.applicationEventProcessor;
-        commitManager = testBuilder.commitRequestManager.orElseThrow(IllegalStateException::new);
+        commitRequestManager = testBuilder.commitRequestManager.orElseThrow(IllegalStateException::new);
         offsetsRequestManager = testBuilder.offsetsRequestManager;
+        coordinatorRequestManager = testBuilder.coordinatorRequestManager.orElseThrow(IllegalStateException::new);
         consumerNetworkThread = testBuilder.consumerNetworkThread;
+        subscriptions = testBuilder.subscriptions;
         consumerNetworkThread.initializeResources();
     }
 
@@ -113,6 +125,7 @@ public class ConsumerNetworkThreadTest {
         TestUtils.waitForCondition(isStarted,
                 "The consumer network thread did not start within " + DEFAULT_MAX_WAIT_MS + " ms");
 
+        prepareTearDown();
         consumerNetworkThread.close(Duration.ofMillis(DEFAULT_MAX_WAIT_MS));
 
         TestUtils.waitForCondition(isClosed,
@@ -193,8 +206,8 @@ public class ConsumerNetworkThreadTest {
         consumerNetworkThread.runOnce();
         verify(applicationEventProcessor).process(any(AssignmentChangeApplicationEvent.class));
         verify(networkClient, times(1)).poll(anyLong(), anyLong());
-        verify(commitManager, times(1)).updateAutoCommitTimer(currentTimeMs);
-        verify(commitManager, times(1)).maybeAutoCommit(offset);
+        verify(commitRequestManager, times(1)).updateAutoCommitTimer(currentTimeMs);
+        verify(commitRequestManager, times(1)).maybeAutoCommit(offset);
     }
 
     @Test
@@ -244,6 +257,10 @@ public class ConsumerNetworkThreadTest {
 
     @Test
     void testEnsureEventsAreCompleted() {
+        Node node = metadata.fetch().nodes().get(0);
+        coordinatorRequestManager.markCoordinatorUnknown("test", time.milliseconds());
+        client.prepareResponse(FindCoordinatorResponse.prepareResponse(Errors.NONE, "group-id", node));
+        prepareOffsetCommitRequest(new HashMap<>(), Errors.NONE, false);
         CompletableApplicationEvent<Void> event1 = spy(new CommitApplicationEvent(Collections.emptyMap()));
         ApplicationEvent event2 = new CommitApplicationEvent(Collections.emptyMap());
         CompletableFuture<Void> future = new CompletableFuture<>();
@@ -256,6 +273,83 @@ public class ConsumerNetworkThreadTest {
         consumerNetworkThread.cleanup();
         assertTrue(future.isCompletedExceptionally());
         assertTrue(applicationEventsQueue.isEmpty());
+    }
+
+    @Test
+    void testCoordinatorConnectionOnClose() {
+        Node node = metadata.fetch().nodes().get(0);
+        coordinatorRequestManager.markCoordinatorUnknown("test", time.milliseconds());
+        client.prepareResponse(FindCoordinatorResponse.prepareResponse(Errors.NONE, "group-id", node));
+        prepareOffsetCommitRequest(new HashMap<>(), Errors.NONE, false);
+        consumerNetworkThread.maybeAutoCommitAndLeaveGroup(time.timer(1000));
+        assertTrue(coordinatorRequestManager.coordinator().isPresent());
+        assertFalse(client.hasPendingResponses());
+        assertFalse(client.hasInFlightRequests());
+    }
+
+    @Test
+    void testAutoCommitOnClose() {
+        TopicPartition tp = new TopicPartition("topic", 0);
+        Node node = metadata.fetch().nodes().get(0);
+        subscriptions.assignFromUser(singleton(tp));
+        subscriptions.seek(tp, 100);
+        coordinatorRequestManager.markCoordinatorUnknown("test", time.milliseconds());
+        client.prepareResponse(FindCoordinatorResponse.prepareResponse(Errors.NONE, "group-id", node));
+        prepareOffsetCommitRequest(singletonMap(tp, 100L), Errors.NONE, false);
+        consumerNetworkThread.maybeAutoCommitAndLeaveGroup(time.timer(1000));
+        assertTrue(coordinatorRequestManager.coordinator().isPresent());
+        verify(commitRequestManager).maybeCreateAutoCommitRequest();
+
+        assertFalse(client.hasPendingResponses());
+        assertFalse(client.hasInFlightRequests());
+    }
+
+    private void prepareTearDown() {
+        Node node = metadata.fetch().nodes().get(0);
+        client.prepareResponse(FindCoordinatorResponse.prepareResponse(Errors.NONE, "group-id", node));
+        prepareOffsetCommitRequest(new HashMap<>(), Errors.NONE, false);
+
+    }
+
+    private void prepareOffsetCommitRequest(final Map<TopicPartition, Long> expectedOffsets,
+                                            final Errors error,
+                                            final boolean disconnected) {
+        Map<TopicPartition, Errors> errors = partitionErrors(expectedOffsets.keySet(), error);
+        client.prepareResponse(offsetCommitRequestMatcher(expectedOffsets), offsetCommitResponse(errors), disconnected);
+    }
+
+    private Map<TopicPartition, Errors> partitionErrors(final Collection<TopicPartition> partitions,
+                                                        final Errors error) {
+        final Map<TopicPartition, Errors> errors = new HashMap<>();
+        for (TopicPartition partition : partitions) {
+            errors.put(partition, error);
+        }
+        return errors;
+    }
+
+    private OffsetCommitResponse offsetCommitResponse(final Map<TopicPartition, Errors> responseData) {
+        return new OffsetCommitResponse(responseData);
+    }
+
+    private MockClient.RequestMatcher offsetCommitRequestMatcher(final Map<TopicPartition, Long> expectedOffsets) {
+        return body -> {
+            OffsetCommitRequest req = (OffsetCommitRequest) body;
+            Map<TopicPartition, Long> offsets = req.offsets();
+            if (offsets.size() != expectedOffsets.size())
+                return false;
+
+            for (Map.Entry<TopicPartition, Long> expectedOffset : expectedOffsets.entrySet()) {
+                if (!offsets.containsKey(expectedOffset.getKey())) {
+                    return false;
+                } else {
+                    Long actualOffset = offsets.get(expectedOffset.getKey());
+                    if (!actualOffset.equals(expectedOffset.getValue())) {
+                        return false;
+                    }
+                }
+            }
+            return true;
+        };
     }
 
     private HashMap<TopicPartition, OffsetAndMetadata> mockTopicPartitionOffset() {
