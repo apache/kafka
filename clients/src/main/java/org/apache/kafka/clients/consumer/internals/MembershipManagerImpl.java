@@ -1132,6 +1132,12 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
         }
     }
 
+    /**
+     * Register a new listener that will be invoked whenever the member state changes, or a new
+     * member ID or epoch is received.
+     *
+     * @param listener Listener to invoke.
+     */
     @Override
     public void registerStateListener(MemberStateListener listener) {
         if (listener == null) {

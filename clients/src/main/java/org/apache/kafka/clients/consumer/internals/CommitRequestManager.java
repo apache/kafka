@@ -502,7 +502,6 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
 
             OffsetCommitRequest.Builder builder = new OffsetCommitRequest.Builder(data);
 
-
             NetworkClientDelegate.UnsentRequest resp = new NetworkClientDelegate.UnsentRequest(
                 builder,
                 coordinatorRequestManager.coordinator());
@@ -634,11 +633,22 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
         }
     }
 
+    /**
+     * Represents a request that can be retried or aborted, based on member ID and epoch
+     * information.
+     */
     abstract static class RetriableRequestState extends RequestState {
 
+        /**
+         * Member ID to be included in the request if present.
+         */
         Optional<String> memberId;
 
+        /**
+         * Member epoch to be included in the request if present.
+         */
         Optional<Integer> memberEpoch;
+
         RetriableRequestState(LogContext logContext, String owner, long retryBackoffMs, long retryBackoffMaxMs) {
             super(logContext, owner, retryBackoffMs, retryBackoffMaxMs);
             this.memberId = Optional.empty();
@@ -952,8 +962,8 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
         }
 
         /**
-         * Remove inflight request if this is an OffsetFetch request. For commit no in-flights
-         * are kept so no action required.
+         * Remove inflight request if this is an OffsetFetch request. For OffsetCommit requests no
+         * in-flights are kept so no action required.
          */
         private void removeInflightRequest(RetriableRequestState request) {
             if (request instanceof OffsetFetchRequestState) {
@@ -964,11 +974,11 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
         }
 
         /**
-         * Clear {@code unsentOffsetCommits} and moves all the sendable request in {@code unsentOffsetFetches} to the
-         * {@code inflightOffsetFetches} to bookkeep all the inflight requests.
-         * Note: Sendable requests are determined by their timer as we are expecting backoff on failed attempt. See
-         * {@link RequestState}.
-         **/
+         * Clear {@code unsentOffsetCommits} and moves all the sendable request in {@code
+         * unsentOffsetFetches} to the {@code inflightOffsetFetches} to bookkeep all the inflight
+         * requests. Note: Sendable requests are determined by their timer as we are expecting
+         * backoff on failed attempt. See {@link RequestState}.
+         */
         List<NetworkClientDelegate.UnsentRequest> drain(final long currentTimeMs) {
             List<NetworkClientDelegate.UnsentRequest> unsentRequests = new ArrayList<>();
 
