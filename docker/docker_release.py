@@ -63,11 +63,8 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     print(f"Docker image of type {args.image_type} containing kafka downloaded from {args.kafka_url} will be pushed to {args.image}")
-    proceed = input("Should we proceed? [y/N]: ")
-    if proceed == "y":
-        print("Building and pushing the image")
-        if args.image_type == "jvm":
-            build_push_jvm(args.image, args.kafka_url)
-        print(f"Image has been pushed to {args.image}")
-    else:
-        print("Image push aborted")
+
+    print("Building and pushing the image")
+    if args.image_type == "jvm":
+        build_push_jvm(args.image, args.kafka_url)
+    print(f"Image has been pushed to {args.image}")
