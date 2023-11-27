@@ -32,6 +32,7 @@ import org.junit.jupiter.api.{AfterEach, Test}
 import scala.jdk.CollectionConverters._
 import scala.collection.mutable
 
+// SslAdminIntegrationTest
 object SslAdminIntegrationTest {
   @volatile var semaphore: Option[Semaphore] = None
   @volatile var executor: Option[ExecutorService] = None
@@ -77,6 +78,7 @@ object SslAdminIntegrationTest {
   }
 }
 
+// SslAdminIntegrationTest
 class SslAdminIntegrationTest extends SaslSslAdminIntegrationTest {
   override val authorizationAdmin = new AclAuthorizationAdmin(classOf[SslAdminIntegrationTest.TestableAclAuthorizer], classOf[AclAuthorizer])
 

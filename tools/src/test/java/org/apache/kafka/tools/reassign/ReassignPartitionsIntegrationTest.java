@@ -350,7 +350,7 @@ public class ReassignPartitionsIntegrationTest extends QuorumTestHarness {
         TopicPartition part = new TopicPartition("baz", 2);
         try {
             consumer.assign(Collections.singleton(part));
-            TestUtils.pollUntilAtLeastNumRecords(consumer, 100, DEFAULT_MAX_WAIT_MS);
+            TestUtils.pollUntilAtLeastNumRecords(consumer, 100, DEFAULT_MAX_WAIT_MS, false);
         } finally {
             consumer.close();
         }
