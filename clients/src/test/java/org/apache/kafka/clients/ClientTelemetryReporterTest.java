@@ -21,8 +21,6 @@ import io.opentelemetry.proto.common.v1.KeyValue;
 import org.apache.kafka.clients.ClientTelemetryReporter.ClientTelemetrySubscription;
 import org.apache.kafka.clients.ClientTelemetryReporter.DefaultClientTelemetrySender;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
-import org.apache.kafka.clients.consumer.internals.ConsumerUtils;
-import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.GetTelemetrySubscriptionsRequestData;

@@ -21,8 +21,6 @@ import io.opentelemetry.proto.common.v1.KeyValue;
 import io.opentelemetry.proto.resource.v1.Resource;
 
 import org.apache.kafka.clients.consumer.ConsumerConfig;
-import org.apache.kafka.clients.consumer.internals.ConsumerUtils;
-import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.Configurable;
 import org.apache.kafka.common.metrics.MetricsContext;
