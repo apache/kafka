@@ -290,6 +290,15 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
         }
     }
 
+    /**
+     * Retry or cancel requests waiting for new member ID or epoch, according to the member new
+     * state. If the new state indicates that the member has failed, all requests waiting for new
+     * member ID or epoch will be cancelled. If the new state indicates that the member is leaving
+     * the group, all requests waiting for new member ID or epoch will be retried without
+     * including any member ID or epoch information.
+     *
+     * @param state New state for the member
+     */
     @Override
     public void onStateChange(MemberState state) {
         unsubscribed = state == MemberState.UNSUBSCRIBED || state == MemberState.PREPARE_LEAVING;
@@ -307,12 +316,32 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
         }
     }
 
+    /**
+     * Retry requests that have previously fail due to {@link Errors#UNKNOWN_MEMBER_ID}.
+     *
+     * @param memberId New member ID received by the member. To be included in the new request.
+     * @param epoch    Latest member epoch received. To be included in the new request.
+     */
     @Override
     public void onMemberIdUpdated(String memberId, int epoch) {
         // Retry the request now that there is a new member ID (including the latest epoch too)
         log.debug("Retrying failed requests now using new member ID {} and epoch {}",
                 memberId, epoch);
         retryRequestsWaitingForMemberId(Optional.of(memberId), Optional.of(epoch));
+    }
+
+    /**
+     * Retry requests that have previously fail due to {@link Errors#STALE_MEMBER_EPOCH}.
+     *
+     * @param epoch New member epoch received. To be included in the new request.
+     * @param memberId Current member ID. To be included in the new request.
+     */
+    @Override
+    public void onMemberEpochUpdated(int epoch, String memberId) {
+        // Retry the request now that there is a new member epoch (including the member ID too)
+        log.debug("Retrying failed requests now using new member ID {} and epoch {}",
+                memberId, epoch);
+        retryRequestsWaitingForMemberEpoch(Optional.of(memberId), Optional.of(epoch));
     }
 
     private void retryRequestsWaitingForMemberId(Optional<String> memberId,
@@ -323,14 +352,6 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
     private void retryRequestsWaitingForMemberEpoch(Optional<String> memberId,
                                                     Optional<Integer> epoch) {
         requestsWaitingForMemberEpoch.forEach(retriableRequest -> retriableRequest.retryOnMemberIdOrEpochUpdate(memberId, epoch));
-    }
-
-    @Override
-    public void onMemberEpochUpdated(int epoch, String memberId) {
-        // Retry the request now that there is a new member epoch (including the latest ID too)
-        log.debug("Retrying failed requests now using new member ID {} and epoch {}",
-                memberId, epoch);
-        retryRequestsWaitingForMemberEpoch(Optional.of(memberId), Optional.of(epoch));
     }
 
     private void retryWhenMemberIdUpdated(RetriableRequestState requestState) {
