@@ -30,6 +30,7 @@ import org.apache.kafka.connect.runtime.rest.entities.ConnectorInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorOffset;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorOffsets;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorStateInfo;
+import org.apache.kafka.connect.runtime.rest.entities.CreateConnectorRequest;
 import org.apache.kafka.connect.runtime.rest.entities.LoggerLevel;
 import org.apache.kafka.connect.runtime.rest.entities.ServerInfo;
 import org.apache.kafka.connect.runtime.rest.entities.TaskInfo;
@@ -187,12 +188,42 @@ abstract class EmbeddedConnect {
      *
      * @param connName   the name of the connector
      * @param connConfig the intended configuration
-     * @throws ConnectRestException if the REST api returns error status
+     * @throws ConnectRestException if the REST API returns error status
      * @throws ConnectException if the configuration fails to be serialized or if the request could not be sent
      */
     public String configureConnector(String connName, Map<String, String> connConfig) {
         String url = endpointForResource(String.format("connectors/%s/config", connName));
         return putConnectorConfig(url, connConfig);
+    }
+
+    /**
+     * Configure a new connector using the <strong><em>POST /connectors</em></strong> endpoint. If the connector already exists, a
+     * {@link ConnectRestException} will be thrown.
+     *
+     * @param createConnectorRequest the connector creation request
+     * @throws ConnectRestException if the REST API returns error status
+     * @throws ConnectException if the request could not be sent
+     */
+    public String configureConnector(CreateConnectorRequest createConnectorRequest) {
+        String url = endpointForResource("connectors");
+        ObjectMapper objectMapper = new ObjectMapper();
+
+        String requestBody;
+        try {
+            requestBody = objectMapper.writeValueAsString(createConnectorRequest);
+        } catch (IOException e) {
+            throw new ConnectException("Failed to serialize connector creation request: " + createConnectorRequest);
+        }
+
+        Response response = requestPost(url, requestBody, Collections.emptyMap());
+        if (response.getStatus() < Response.Status.BAD_REQUEST.getStatusCode()) {
+            return responseToString(response);
+        } else {
+            throw new ConnectRestException(
+                response.getStatus(),
+                "Could not execute 'POST /connectors' request. Error response: " + responseToString(response)
+            );
+        }
     }
 
     /**

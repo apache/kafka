@@ -40,6 +40,8 @@ import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 
+import static org.apache.kafka.clients.consumer.internals.NetworkClientDelegate.PollResult.EMPTY;
+
 /**
  * <p>
  * Manages the state of topic metadata requests. This manager returns a
@@ -84,9 +86,7 @@ public class TopicMetadataRequestManager implements RequestManager {
             .filter(Optional::isPresent)
             .map(Optional::get)
             .collect(Collectors.toList());
-        return requests.isEmpty() ?
-            new NetworkClientDelegate.PollResult(Long.MAX_VALUE, new ArrayList<>()) :
-            new NetworkClientDelegate.PollResult(0, Collections.unmodifiableList(requests));
+        return requests.isEmpty() ? EMPTY : new NetworkClientDelegate.PollResult(0, requests);
     }
 
     /**
@@ -152,15 +152,13 @@ public class TopicMetadataRequestManager implements RequestManager {
                 request,
                 Optional.empty());
 
-            unsent.future().whenComplete((response, exception) -> {
+            return unsent.whenComplete((response, exception) -> {
                 if (response == null) {
                     handleError(exception, unsent.handler().completionTimeMs());
                 } else {
                     handleResponse(response);
                 }
             });
-
-            return unsent;
         }
 
         private void handleError(final Throwable exception,
