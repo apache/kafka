@@ -131,8 +131,9 @@ object BaseConsumerTest {
   // We want to test the following combinations:
   // * ZooKeeper and the generic group protocol
   def getTestQuorumAndGroupProtocolParametersZkOnly() : java.util.stream.Stream[Arguments] = {
+    // For Scala 2.12, it is necessary to disambiguate the java.util.stream.Stream.of() method reference
     java.util.stream.Stream.of(
-        Arguments.of("zk", "generic"))
+        Seq(Arguments.of("zk", "generic")): _*)
   }
 
   // For tests that only work with the generic group protocol, we want to test the following combinations:
@@ -149,8 +150,9 @@ object BaseConsumerTest {
   // For tests that only work with the consumer group protocol, we want to test the following combinations:
   // * KRaft with the new group coordinator enabled and the consumer group protocol
   def getTestQuorumAndGroupProtocolParametersConsumerGroupProtocolOnly() : java.util.stream.Stream[Arguments] = {
+    // For Scala 2.12, it is necessary to disambiguate the java.util.stream.Stream.of() method reference
     java.util.stream.Stream.of(
-      Arguments.of("kraft+kip848", "consumer"))
+        Seq(Arguments.of("kraft+kip848", "consumer")): _*)
   }
 
   val updateProducerCount = new AtomicInteger()
