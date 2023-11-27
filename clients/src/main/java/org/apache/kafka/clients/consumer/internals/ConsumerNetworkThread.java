@@ -32,7 +32,6 @@ import org.slf4j.Logger;
 
 import java.io.Closeable;
 import java.time.Duration;
-import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
@@ -280,20 +279,23 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
             return;
         }
 
+        if (!requestManagers.commitRequestManager.get().autoCommitEnabled()) {
+            return;
+        }
+
         ensureCoordinatorReady(timer);
-        List<NetworkClientDelegate.UnsentRequest> tasks = new ArrayList<>();
         Optional<NetworkClientDelegate.UnsentRequest> autocommit = requestManagers.commitRequestManager.get().maybeCreateAutoCommitRequest();
         if (!autocommit.isPresent()) {
             return;
         }
 
-        tasks.add(autocommit.get());
-        networkClientDelegate.addAll(tasks);
+        List<NetworkClientDelegate.UnsentRequest> autocommitRequest = Collections.singletonList(autocommit.get());
+        networkClientDelegate.addAll(autocommitRequest);
         do {
             long currentTimeMs = timer.currentTimeMs();
             ensureCoordinatorReady(timer);
             networkClientDelegate.poll(timer.remainingMs(), currentTimeMs);
-        } while (timer.notExpired() && !tasks.stream().allMatch(v -> v.future().isDone()));
+        } while (timer.notExpired() && !autocommitRequest.get(0).future().isDone());
     }
 
     void maybeLeaveGroup(final Timer timer) {

@@ -214,10 +214,6 @@ public class CommitRequestManager implements RequestManager {
      * The consumer needs to send an auto commit during the shutdown if autocommit is enabled.
      */
     Optional<NetworkClientDelegate.UnsentRequest> maybeCreateAutoCommitRequest() {
-        if (!autoCommitState.isPresent()) {
-            return Optional.empty();
-        }
-
         if (subscriptions.allConsumed().isEmpty()) {
             return Optional.empty();
         }
