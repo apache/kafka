@@ -124,6 +124,7 @@ import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
+import static org.apache.kafka.common.requests.ConsumerGroupHeartbeatRequest.LEAVE_GROUP_STATIC_MEMBER_EPOCH;
 import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.apache.kafka.common.message.JoinGroupRequestData.JoinGroupRequestProtocol;
 import static org.apache.kafka.common.message.JoinGroupRequestData.JoinGroupRequestProtocolCollection;
@@ -1314,6 +1315,18 @@ public class GroupMetadataManagerTest {
                 .setMemberEpoch(1)
                 .setServerAssignor("bar")));
         assertEquals("ServerAssignor bar is not supported. Supported assignors: range.", ex.getMessage());
+
+        String memberId = Uuid.randomUuid().toString();
+        ex = assertThrows(InvalidRequestException.class, () -> context.consumerGroupHeartbeat(
+            new ConsumerGroupHeartbeatRequestData()
+                .setGroupId("foo")
+                .setMemberId(memberId)
+                .setMemberEpoch(LEAVE_GROUP_STATIC_MEMBER_EPOCH)
+                .setRebalanceTimeoutMs(5000)
+                .setSubscribedTopicNames(Arrays.asList("foo", "bar"))
+                .setTopicPartitions(Collections.emptyList())));
+
+        assertEquals("InstanceId can't be null. GroupId: foo, MemberId: " + memberId, ex.getMessage());
     }
 
     @Test
@@ -1997,7 +2010,7 @@ public class GroupMetadataManagerTest {
                     )));
                 }
             }
-            ));
+        ));
 
         // Member 3 joins the consumer group.
         CoordinatorResult<ConsumerGroupHeartbeatResponseData, Record> result = context.consumerGroupHeartbeat(
@@ -2197,14 +2210,14 @@ public class GroupMetadataManagerTest {
                 .setHeartbeatIntervalMs(5000)
                 .setAssignment(new ConsumerGroupHeartbeatResponseData.Assignment()
                     .setTopicPartitions(Arrays.asList(
-                    new ConsumerGroupHeartbeatResponseData.TopicPartitions()
-                        .setTopicId(fooTopicId)
-                        .setPartitions(Arrays.asList(3, 4, 5)),
-                    new ConsumerGroupHeartbeatResponseData.TopicPartitions()
-                        .setTopicId(barTopicId)
-                        .setPartitions(Collections.singletonList(2))
-                ))),
-                rejoinResult.response()
+                        new ConsumerGroupHeartbeatResponseData.TopicPartitions()
+                            .setTopicId(fooTopicId)
+                            .setPartitions(Arrays.asList(3, 4, 5)),
+                        new ConsumerGroupHeartbeatResponseData.TopicPartitions()
+                            .setTopicId(barTopicId)
+                            .setPartitions(Collections.singletonList(2))
+                    ))),
+            rejoinResult.response()
         );
 
         ConsumerGroupMember expectedRejoinedMember = new ConsumerGroupMember.Builder(member2RejoinId)
@@ -2218,8 +2231,8 @@ public class GroupMetadataManagerTest {
             .setSubscribedTopicNames(Arrays.asList("foo", "bar"))
             .setServerAssignorName("range")
             .setAssignedPartitions(mkAssignment(
-                    mkTopicAssignment(fooTopicId, 3, 4, 5),
-                    mkTopicAssignment(barTopicId, 2)))
+                mkTopicAssignment(fooTopicId, 3, 4, 5),
+                mkTopicAssignment(barTopicId, 2)))
             .build();
 
         List<Record> expectedRecordsAfterRejoin = Arrays.asList(
@@ -2241,7 +2254,7 @@ public class GroupMetadataManagerTest {
     }
 
     @Test
-    public void testNoGroupEpochBumpWhenStaticMemberLeaves() {
+    public void testNoGroupEpochBumpWhenStaticMemberTemporarilyLeaves() {
         String groupId = "fooup";
         // Use a static member id as it makes the test easier.
         String memberId1 = Uuid.randomUuid().toString();
@@ -2307,7 +2320,7 @@ public class GroupMetadataManagerTest {
                 .setGroupId(groupId)
                 .setMemberId(memberId2)
                 .setInstanceId(memberId2)
-                .setMemberEpoch(-2)
+                .setMemberEpoch(LEAVE_GROUP_STATIC_MEMBER_EPOCH)
                 .setRebalanceTimeoutMs(5000)
                 .setSubscribedTopicNames(Arrays.asList("foo", "bar"))
                 .setTopicPartitions(Collections.emptyList()));
@@ -2316,11 +2329,14 @@ public class GroupMetadataManagerTest {
         assertResponseEquals(
             new ConsumerGroupHeartbeatResponseData()
                 .setMemberId(memberId2)
-                .setMemberEpoch(-2),
+                .setMemberEpoch(LEAVE_GROUP_STATIC_MEMBER_EPOCH),
             result.response()
         );
 
-        ConsumerGroupMember member2UpdatedEpoch = new ConsumerGroupMember.Builder(member2).setMemberEpoch(-2).build();
+        ConsumerGroupMember member2UpdatedEpoch = new ConsumerGroupMember
+            .Builder(member2)
+            .setMemberEpoch(LEAVE_GROUP_STATIC_MEMBER_EPOCH)
+            .build();
         List<Record> expectedRecords = Collections.singletonList(
             RecordHelpers.newCurrentAssignmentRecord(groupId, member2UpdatedEpoch)
         );
@@ -2697,7 +2713,7 @@ public class GroupMetadataManagerTest {
                 .setGroupId(groupId)
                 .setMemberId(memberId1)
                 .setInstanceId("unknown-" + memberId1)
-                .setMemberEpoch(-2)
+                .setMemberEpoch(LEAVE_GROUP_STATIC_MEMBER_EPOCH)
                 .setRebalanceTimeoutMs(5000)
                 .setSubscribedTopicNames(Arrays.asList("foo", "bar"))
                 .setTopicPartitions(Collections.emptyList())));
@@ -2743,51 +2759,7 @@ public class GroupMetadataManagerTest {
                 .setGroupId(groupId)
                 .setMemberId("unknown-" + memberId1)
                 .setInstanceId(memberId1)
-                .setMemberEpoch(-2)
-                .setRebalanceTimeoutMs(5000)
-                .setSubscribedTopicNames(Arrays.asList("foo", "bar"))
-                .setTopicPartitions(Collections.emptyList())));
-    }
-
-    @Test
-    public void testShouldThrowInvalidRequestExceptionWhenInstanceIdIsNullForStaticMember() {
-        String groupId = "fooup";
-        // Use a static member id as it makes the test easier.
-        String memberId1 = Uuid.randomUuid().toString();
-
-        Uuid fooTopicId = Uuid.randomUuid();
-        String fooTopicName = "foo";
-
-        MockPartitionAssignor assignor = new MockPartitionAssignor("range");
-
-        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
-            .withAssignors(Collections.singletonList(assignor))
-            .withMetadataImage(new MetadataImageBuilder()
-                .addTopic(fooTopicId, fooTopicName, 6)
-                .build())
-            .withConsumerGroup(new ConsumerGroupBuilder(groupId, 10)
-                .withMember(new ConsumerGroupMember.Builder(memberId1)
-                    .setInstanceId(memberId1)
-                    .setMemberEpoch(10)
-                    .setPreviousMemberEpoch(9)
-                    .setTargetMemberEpoch(10)
-                    .setClientId("client")
-                    .setClientHost("localhost/127.0.0.1")
-                    .setSubscribedTopicNames(Arrays.asList("foo", "bar"))
-                    .setServerAssignorName("range")
-                    .setAssignedPartitions(mkAssignment(
-                            mkTopicAssignment(fooTopicId, 0, 1, 2)))
-                    .build())
-                .withAssignment(memberId1, mkAssignment(
-                    mkTopicAssignment(fooTopicId, 0, 1, 2)))
-                .withAssignmentEpoch(10))
-            .build();
-
-        assertThrows(InvalidRequestException.class, () -> context.consumerGroupHeartbeat(
-            new ConsumerGroupHeartbeatRequestData()
-                .setGroupId(groupId)
-                .setMemberId(memberId1)
-                .setMemberEpoch(-2)
+                .setMemberEpoch(LEAVE_GROUP_STATIC_MEMBER_EPOCH)
                 .setRebalanceTimeoutMs(5000)
                 .setSubscribedTopicNames(Arrays.asList("foo", "bar"))
                 .setTopicPartitions(Collections.emptyList())));
@@ -4244,14 +4216,14 @@ public class GroupMetadataManagerTest {
 
         // Static member sends a temporary leave group request
         result = context.consumerGroupHeartbeat(
-                new ConsumerGroupHeartbeatRequestData()
-                    .setGroupId(groupId)
-                    .setMemberId(memberId)
-                    .setInstanceId(memberId)
-                    .setMemberEpoch(-2)
-                    .setRebalanceTimeoutMs(90000)
-                    .setSubscribedTopicNames(Collections.singletonList("foo"))
-                    .setTopicPartitions(Collections.emptyList()));
+            new ConsumerGroupHeartbeatRequestData()
+                .setGroupId(groupId)
+                .setMemberId(memberId)
+                .setInstanceId(memberId)
+                .setMemberEpoch(LEAVE_GROUP_STATIC_MEMBER_EPOCH)
+                .setRebalanceTimeoutMs(90000)
+                .setSubscribedTopicNames(Collections.singletonList("foo"))
+                .setTopicPartitions(Collections.emptyList()));
 
         assertEquals(-2, result.response().memberEpoch());
 

@@ -411,6 +411,13 @@ public class ConsumerGroup implements Group {
     }
 
     /**
+     * @return An immutable Map containing all the static members keyed by instance id.
+     */
+    public Map<String, String> staticMembers() {
+        return Collections.unmodifiableMap(staticMembers);
+    }
+
+    /**
      * @return An immutable Set containing all the subscribed topic names.
      */
     public Set<String> subscribedTopicNames() {

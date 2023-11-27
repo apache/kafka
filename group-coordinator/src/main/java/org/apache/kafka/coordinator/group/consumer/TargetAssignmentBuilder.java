@@ -130,7 +130,7 @@ public class TargetAssignmentBuilder {
     /**
      * The static members in the group.
      */
-    private final Map<String, String> staticMembers = new HashMap<>();
+    private Map<String, String> staticMembers = new HashMap<>();
 
     /**
      * Constructs the object.
@@ -159,6 +159,19 @@ public class TargetAssignmentBuilder {
         Map<String, ConsumerGroupMember> members
     ) {
         this.members = members;
+        return this;
+    }
+
+    /**
+     * Adds all the existing static members.
+     *
+     * @param staticMembers   The existing static members in the consumer group.
+     * @return This object.
+     */
+    public TargetAssignmentBuilder withStaticMembers(
+        Map<String, String> staticMembers
+    ) {
+        this.staticMembers = staticMembers;
         return this;
     }
 
@@ -193,18 +206,13 @@ public class TargetAssignmentBuilder {
      * not yet materialized in memory.
      *
      * @param memberId  The member id.
-     * @param instanceId The instance id.
      * @param member    The member to add or update.
      * @return This object.
      */
     public TargetAssignmentBuilder addOrUpdateMember(
         String memberId,
-        String instanceId,
         ConsumerGroupMember member
     ) {
-        if (instanceId != null && member != null) {
-            this.staticMembers.put(instanceId, memberId);
-        }
         this.updatedMembers.put(memberId, member);
         return this;
     }
@@ -214,17 +222,12 @@ public class TargetAssignmentBuilder {
      * is not yet materialized in memory.
      *
      * @param memberId The member id.
-     * @param instanceId The instance id.
      * @return This object.
      */
     public TargetAssignmentBuilder removeMember(
-        String memberId,
-        String instanceId
+        String memberId
     ) {
-        if (instanceId != null) {
-            this.staticMembers.remove(instanceId);
-        }
-        return addOrUpdateMember(memberId, instanceId, null);
+        return addOrUpdateMember(memberId, null);
     }
 
     /**
@@ -238,13 +241,11 @@ public class TargetAssignmentBuilder {
         Map<String, AssignmentMemberSpec> memberSpecs = new HashMap<>();
 
         // Prepare the member spec for all members.
-        members.forEach((memberId, member) -> {
-            memberSpecs.put(memberId, createAssignmentMemberSpec(
-                member,
-                targetAssignment.getOrDefault(memberId, Assignment.EMPTY),
-                subscriptionMetadata
-            ));
-        });
+        members.forEach((memberId, member) -> memberSpecs.put(memberId, createAssignmentMemberSpec(
+            member,
+            targetAssignment.getOrDefault(memberId, Assignment.EMPTY),
+            subscriptionMetadata
+        )));
 
         // Update the member spec if updated or deleted members.
         updatedMembers.forEach((memberId, updatedMemberOrNull) -> {

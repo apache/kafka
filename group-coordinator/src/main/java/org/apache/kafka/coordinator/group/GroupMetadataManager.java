@@ -28,6 +28,8 @@ import org.apache.kafka.common.errors.InvalidRequestException;
 import org.apache.kafka.common.errors.UnknownMemberIdException;
 import org.apache.kafka.common.errors.UnknownServerException;
 import org.apache.kafka.common.errors.UnsupportedAssignorException;
+import org.apache.kafka.common.errors.FencedInstanceIdException;
+import org.apache.kafka.common.errors.UnreleasedInstanceIdException;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatRequestData;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatResponseData;
 import org.apache.kafka.common.message.DescribeGroupsResponseData;
@@ -710,8 +712,8 @@ public class GroupMetadataManager {
             }
         } else if (request.memberEpoch() == LEAVE_GROUP_STATIC_MEMBER_EPOCH) {
             throwIfEmptyString(request.memberId(), "MemberId can't be empty.");
-            throwIfNull(request.instanceId(), "InstanceId can't be null for Static Member. GroupId: "
-                    + request.groupId() + " MemberId: " + request.memberId());
+            throwIfNull(request.instanceId(), "InstanceId can't be null. GroupId: "
+                    + request.groupId() + ", MemberId: " + request.memberId());
         } else {
             throw new InvalidRequestException("MemberEpoch is invalid.");
         }
@@ -773,53 +775,6 @@ public class GroupMetadataManager {
     }
 
     /**
-     * Validates and throws an error when the validation fails for static member.
-     * @param groupId     The group id
-     * @param instanceId  The instance id
-     * @param member      The existing static member in the group.
-     * @param memberEpoch The member epoch with which the static member sends heartbeat.
-     * @param memberId    The member id with which the member joins now.
-     *
-     * @throws UnknownMemberIdException if member sends heartbeat with a non-zero epoch and no static member exists for
-     * the instance id.
-     * @throws org.apache.kafka.common.errors.FencedInstanceIdException If member joins with non-zero epoch but there
-     * already exists a static member with a different memberId.
-     * @throws org.apache.kafka.common.errors.UnreleasedInstanceIdException A new member is trying to leave the group
-     * but the existing static member hasn't requested leaving the group.
-
-     */
-    private void throwIfStaticMemberValidationFails(
-        String groupId,
-        String instanceId,
-        ConsumerGroupMember member,
-        int memberEpoch,
-        String memberId
-    ) {
-        if (memberEpoch != 0) {
-            // The member joined with a non-zero epoch but we haven't registered this static member
-            // This could be an unknown member for the coordinator.
-            if (member == null) {
-                throw Errors.UNKNOWN_MEMBER_ID.exception("No existing static member found against instance id: " +  instanceId);
-            }
-            // There already exists a different member id for the same instance id.
-            if (!member.memberId().equals(memberId)) {
-                log.info("Request memberId={} for static member with groupInstanceId={} " +
-                        "is fenced by existing memberId={}",
-                    memberId, instanceId, member.memberId());
-                throw Errors.FENCED_INSTANCE_ID.exception("Member " + memberId + " for static member with groupInstanceId " + instanceId +
-                " is fenced by existing memberId " + member.memberId());
-            }
-        } else {
-            // A new member with joined with an in-use instance id but the previous member using the same instance id
-            // hasn't requested leaving the group.
-            if (member != null && member.memberEpoch() != LEAVE_GROUP_STATIC_MEMBER_EPOCH) {
-                throw Errors.UNRELEASED_INSTANCE_ID.exception("Member " + memberId + " trying to join group "
-                    +  groupId + " but the instance id " + instanceId + " is already in use by member " + member.memberId());
-            }
-        }
-    }
-
-    /**
      * Validates the member epoch provided in the heartbeat request.
      *
      * @param member                The consumer group member.
@@ -834,11 +789,6 @@ public class GroupMetadataManager {
         int receivedMemberEpoch,
         List<ConsumerGroupHeartbeatRequestData.TopicPartitions> ownedTopicPartitions
     ) {
-        // If a static member rejoins, it's previous epoch would be -2. In such a
-        // case, we don't need to fence the member.
-        if (member.memberEpoch() == LEAVE_GROUP_STATIC_MEMBER_EPOCH && receivedMemberEpoch == 0) {
-            return;
-        }
         if (receivedMemberEpoch > member.memberEpoch()) {
             throw new FencedMemberEpochException("The consumer group member has a greater member "
                 + "epoch (" + receivedMemberEpoch + ") than the one known by the group coordinator ("
@@ -851,6 +801,59 @@ public class GroupMetadataManager {
                     + "epoch (" + receivedMemberEpoch + ") than the one known by the group coordinator ("
                     + member.memberEpoch() + "). The member must abandon all its partitions and rejoin.");
             }
+        }
+    }
+
+    /**
+     * Validates if the received instanceId has been released from the group
+     *
+     * @param member                The consumer group member.
+     * @param groupId               The consumer group id.
+     * @param receivedMemberId      The member id received in the request.
+     * @param receivedInstanceId    The instance id received in the request.
+     *
+     * @throws UnreleasedInstanceIdException if the instance id received in the request is still in use by an existing static member.
+     */
+    private void throwIfInstanceIdIsUnreleased(ConsumerGroupMember member, String groupId, String receivedMemberId, String receivedInstanceId) {
+        if (member.memberEpoch() != LEAVE_GROUP_STATIC_MEMBER_EPOCH) {
+            // The new member can't join.
+            log.info("[GroupId {}] Static member {} with instance id {} cannot join the group because the instance id is" +
+                    " in owned by member {}.", groupId, receivedMemberId, receivedInstanceId, member.memberId());
+            throw Errors.UNRELEASED_INSTANCE_ID.exception("Static member " + receivedMemberId + " with instance id "
+                + receivedInstanceId + " cannot join the group because the instance id is owned by " + member.memberId() + " member.");
+        }
+    }
+
+    /**
+     * Validates if the received instanceId has been released from the group
+     *
+     * @param member                The consumer group member.
+     * @param groupId               The consumer group id.
+     * @param receivedMemberId      The member id received in the request.
+     * @param receivedInstanceId    The instance id received in the request.
+     *
+     * @throws FencedInstanceIdException if the instance id provided is fenced because of another static member.
+     */
+    private void throwIfInstanceIdIsFenced(ConsumerGroupMember member, String groupId, String receivedMemberId, String receivedInstanceId) {
+        if (!member.memberId().equals(receivedMemberId)) {
+            log.info("[GroupId {}] Static member {} with instance id {} is fenced by existing member {}.",
+                groupId, receivedMemberId, receivedInstanceId, member.memberId());
+            throw Errors.FENCED_INSTANCE_ID.exception("Static member " + receivedMemberId + " with instance id "
+                + receivedInstanceId + " was fenced by member " + member.memberId() + ".");
+        }
+    }
+
+    /**
+     * Validates if the received instanceId has been released from the group
+     *
+     * @param staticMember          The static member in the group.
+     * @param receivedInstanceId    The instance id received in the request.
+     *
+     * @throws UnknownMemberIdException if no static member exists in the group against the provided instance id.
+     */
+    private void throwIfStaticMemberIsUnknown(ConsumerGroupMember staticMember, String receivedInstanceId) {
+        if (staticMember == null) {
+            throw Errors.UNKNOWN_MEMBER_ID.exception("Instance id " + receivedInstanceId + " is unknown.");
         }
     }
 
@@ -940,20 +943,21 @@ public class GroupMetadataManager {
                     // New static member.
                     member = group.getOrMaybeCreateMember(memberId, createIfNotExists);
                     updatedMemberBuilder = new ConsumerGroupMember.Builder(member);
-                    log.info("[GroupId {}] Static member {} with instance id {} joins the consumer group", groupId, memberId, instanceId);
+                    log.info("[GroupId {}] Static member {} with instance id {} joins the consumer group.", groupId, memberId, instanceId);
                 } else {
                     // Static member rejoins with a different member id so it should replace
-                    // the previous instance iff the previous member had sent a Leave group.
-                    throwIfInstanceIdIsUnreleased(groupId, memberId, instanceId, member);
+                    // the previous instance iff the previous member had sent a leave group.
+                    throwIfInstanceIdIsUnreleased(member, groupId, memberId, instanceId);
                     // Replace the current member.
                     staticMemberReplaced = true;
                     updatedMemberBuilder = new ConsumerGroupMember.Builder(memberId)
                         .setAssignedPartitions(member.assignedPartitions());
                     removeMemberAndCancelTimers(records, group.groupId(), member.memberId());
+                    log.info("[GroupId {}] Static member {} with instance id {} re-joins the consumer group.", groupId, memberId, instanceId);
                 }
             } else {
                 throwIfStaticMemberIsUnknown(member, instanceId);
-                throwIfInstanceIdIsFenced(memberId, instanceId, member);
+                throwIfInstanceIdIsFenced(member, groupId, memberId, instanceId);
                 throwIfMemberEpochIsInvalid(member, memberEpoch, ownedTopicPartitions);
                 updatedMemberBuilder = new ConsumerGroupMember.Builder(member);
             }
@@ -1037,16 +1041,17 @@ public class GroupMetadataManager {
                 TargetAssignmentBuilder assignmentResultBuilder =
                     new TargetAssignmentBuilder(groupId, groupEpoch, assignors.get(preferredServerAssignor))
                         .withMembers(group.members())
+                        .withStaticMembers(group.staticMembers())
                         .withSubscriptionMetadata(subscriptionMetadata)
                         .withTargetAssignment(group.targetAssignment())
-                        .addOrUpdateMember(memberId, instanceId, updatedMember);
+                        .addOrUpdateMember(memberId, updatedMember);
                 TargetAssignmentBuilder.TargetAssignmentResult assignmentResult;
                 // A new static member is replacing an older one with the same subscriptions.
                 // We just need to remove the older member and add the newer one. The new member should
                 // reuse the target assignment of the older member.
                 if (staticMemberReplaced) {
                     assignmentResult = assignmentResultBuilder
-                        .removeMember(member.memberId(), instanceId)
+                        .removeMember(member.memberId())
                         .build();
                 } else {
                     assignmentResult = assignmentResultBuilder
@@ -1118,30 +1123,6 @@ public class GroupMetadataManager {
         return new CoordinatorResult<>(records, response);
     }
 
-    private void throwIfInstanceIdIsUnreleased(String groupId, String memberId, String instanceId, ConsumerGroupMember member) {
-        if (member.memberEpoch() != LEAVE_GROUP_STATIC_MEMBER_EPOCH) {
-            // The new member can't join.
-            throw Errors.UNRELEASED_INSTANCE_ID.exception("Member " + memberId + " trying to join group "
-                + groupId + " but the instance id " + instanceId + " is already in use by member " + member.memberId());
-        }
-    }
-
-    private void throwIfInstanceIdIsFenced(String memberId, String instanceId, ConsumerGroupMember member) {
-        if (!member.memberId().equals(memberId)) {
-            log.info("Request memberId={} for static member with groupInstanceId={} " +
-                    "is fenced by existing memberId={}",
-                memberId, instanceId, member.memberId());
-            throw Errors.FENCED_INSTANCE_ID.exception("Member " + memberId + " for static member with groupInstanceId " + instanceId +
-                " is fenced by existing memberId " + member.memberId());
-        }
-    }
-
-    private void throwIfStaticMemberIsUnknown(ConsumerGroupMember staticMember, String instanceId) {
-        if (staticMember == null) {
-            throw Errors.UNKNOWN_MEMBER_ID.exception("No existing static member found against instance id: " +  instanceId);
-        }
-    }
-
     private void removeMemberAndCancelTimers(
         List<Record> records,
         String groupId,
@@ -1169,7 +1150,7 @@ public class GroupMetadataManager {
         int memberEpoch
     ) throws ApiException {
         ConsumerGroup group = getOrMaybeCreateConsumerGroup(groupId, false);
-        List<Record> records = new ArrayList<>();
+        List<Record> records;
         if (instanceId == null) {
             ConsumerGroupMember member = group.getOrMaybeCreateMember(memberId, false);
             log.info("[GroupId {}] Member {} left the consumer group.", groupId, memberId);
@@ -1177,13 +1158,13 @@ public class GroupMetadataManager {
         } else {
             ConsumerGroupMember member = group.staticMember(instanceId);
             throwIfStaticMemberIsUnknown(member, instanceId);
-            throwIfInstanceIdIsFenced(memberId, instanceId, member);
+            throwIfInstanceIdIsFenced(member, groupId, memberId, instanceId);
             if (memberEpoch == LEAVE_GROUP_STATIC_MEMBER_EPOCH) {
-                log.info("[GroupId {}] Static Member {} with instance id {} temporarily left the consumer group",
+                log.info("[GroupId {}] Static Member {} with instance id {} temporarily left the consumer group.",
                     group.groupId(), memberId, instanceId);
-                records.add(consumerGroupStaticMemberGroupLeave(group, member));
+                records = consumerGroupStaticMemberGroupLeave(group, member);
             } else {
-                log.info("[GroupId {}] Static Member {} with instance id {} left the consumer group",
+                log.info("[GroupId {}] Static Member {} with instance id {} left the consumer group.",
                     group.groupId(), memberId, instanceId);
                 records = consumerGroupFenceMember(group, member);
             }
@@ -1203,17 +1184,18 @@ public class GroupMetadataManager {
      * @param group      The group.
      * @param member     The static member in the group for the instance id.
      *
-     * @return A ConsumerGroupCurrentMemberAssignment record signifying that the static member is leaving.
+     * @return A list with a single record signifying that the static member is leaving.
      */
-    private Record consumerGroupStaticMemberGroupLeave(
+    private List<Record> consumerGroupStaticMemberGroupLeave(
         ConsumerGroup group,
         ConsumerGroupMember member
     ) {
         // We will write a member epoch of -2 for this departing static member.
         ConsumerGroupMember leavingStaticMember = new ConsumerGroupMember.Builder(member)
             .setMemberEpoch(LEAVE_GROUP_STATIC_MEMBER_EPOCH)
+            .setPartitionsPendingRevocation(Collections.emptyMap())
             .build();
-        return newCurrentAssignmentRecord(group.groupId(), leavingStaticMember);
+        return Collections.singletonList(newCurrentAssignmentRecord(group.groupId(), leavingStaticMember));
     }
 
     /**
