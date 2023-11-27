@@ -26,20 +26,29 @@ import org.apache.kafka.common.message.ApiMessageType;
 import org.apache.kafka.common.message.ApiVersionsResponseData;
 import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersion;
 import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersionCollection;
+import org.apache.kafka.common.message.GetTelemetrySubscriptionsRequestData;
+import org.apache.kafka.common.message.GetTelemetrySubscriptionsResponseData;
 import org.apache.kafka.common.message.ProduceRequestData;
 import org.apache.kafka.common.message.ProduceResponseData;
+import org.apache.kafka.common.message.PushTelemetryRequestData;
+import org.apache.kafka.common.message.PushTelemetryResponseData;
 import org.apache.kafka.common.network.NetworkReceive;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.AbstractResponse;
 import org.apache.kafka.common.requests.ApiVersionsResponse;
+import org.apache.kafka.common.requests.GetTelemetrySubscriptionsRequest;
+import org.apache.kafka.common.requests.GetTelemetrySubscriptionsResponse;
 import org.apache.kafka.common.requests.MetadataRequest;
 import org.apache.kafka.common.requests.MetadataResponse;
 import org.apache.kafka.common.requests.ProduceRequest;
 import org.apache.kafka.common.requests.ProduceResponse;
+import org.apache.kafka.common.requests.PushTelemetryRequest;
+import org.apache.kafka.common.requests.PushTelemetryResponse;
 import org.apache.kafka.common.requests.RequestHeader;
 import org.apache.kafka.common.requests.RequestTestUtils;
 import org.apache.kafka.common.security.authenticator.SaslClientAuthenticator;
+import org.apache.kafka.common.telemetry.internals.ClientTelemetrySender;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.test.DelayedReceive;
@@ -71,6 +80,12 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 public class NetworkClientTest {
 
@@ -992,32 +1007,48 @@ public class NetworkClientTest {
             return (mockHostResolver.useNewAddresses() && newAddresses.contains(inetAddress)) ||
                    (!mockHostResolver.useNewAddresses() && initialAddresses.contains(inetAddress));
         });
+
+        ClientTelemetrySender mockClientTelemetrySender = mock(ClientTelemetrySender.class);
+        when(mockClientTelemetrySender.timeToNextUpdate(anyLong())).thenReturn(0L);
+
         NetworkClient client = new NetworkClient(metadataUpdater, null, selector, "mock", Integer.MAX_VALUE,
                 reconnectBackoffMsTest, reconnectBackoffMaxMsTest, 64 * 1024, 64 * 1024,
                 defaultRequestTimeoutMs, connectionSetupTimeoutMsTest, connectionSetupTimeoutMaxMsTest,
-                time, false, new ApiVersions(), null, new LogContext(), mockHostResolver);
+                time, false, new ApiVersions(), null, new LogContext(), mockHostResolver, mockClientTelemetrySender);
 
         // Connect to one the initial addresses, then change the addresses and disconnect
         client.ready(node, time.milliseconds());
         time.sleep(connectionSetupTimeoutMaxMsTest);
         client.poll(0, time.milliseconds());
         assertTrue(client.isReady(node, time.milliseconds()));
+        // First poll should try to update the node but couldn't because node remains in connecting state
+        // i.e. connection handling is completed after telemetry update.
+        assertNull(client.telemetryConnectedNode());
+
+        client.poll(0, time.milliseconds());
+        assertEquals(node, client.telemetryConnectedNode());
 
         mockHostResolver.changeAddresses();
         selector.serverDisconnect(node.idString());
         client.poll(0, time.milliseconds());
         assertFalse(client.isReady(node, time.milliseconds()));
+        assertNull(client.telemetryConnectedNode());
 
         time.sleep(reconnectBackoffMaxMsTest);
         client.ready(node, time.milliseconds());
         time.sleep(connectionSetupTimeoutMaxMsTest);
         client.poll(0, time.milliseconds());
         assertTrue(client.isReady(node, time.milliseconds()));
+        assertNull(client.telemetryConnectedNode());
+
+        client.poll(0, time.milliseconds());
+        assertEquals(node, client.telemetryConnectedNode());
 
         // We should have tried to connect to one initial address and one new address, and resolved DNS twice
         assertEquals(1, initialAddressConns.get());
         assertEquals(1, newAddressConns.get());
         assertEquals(2, mockHostResolver.resolutionCount());
+        verify(mockClientTelemetrySender, times(5)).timeToNextUpdate(anyLong());
     }
 
     @Test
@@ -1036,16 +1067,21 @@ public class NetworkClientTest {
             // Refuse first connection attempt
             return initialAddressConns.get() > 1;
         });
+
+        ClientTelemetrySender mockClientTelemetrySender = mock(ClientTelemetrySender.class);
+        when(mockClientTelemetrySender.timeToNextUpdate(anyLong())).thenReturn(0L);
+
         NetworkClient client = new NetworkClient(metadataUpdater, null, selector, "mock", Integer.MAX_VALUE,
                 reconnectBackoffMsTest, reconnectBackoffMaxMsTest, 64 * 1024, 64 * 1024,
                 defaultRequestTimeoutMs, connectionSetupTimeoutMsTest, connectionSetupTimeoutMaxMsTest,
-                time, false, new ApiVersions(), null, new LogContext(), mockHostResolver);
+                time, false, new ApiVersions(), null, new LogContext(), mockHostResolver, mockClientTelemetrySender);
 
         // First connection attempt should fail
         client.ready(node, time.milliseconds());
         time.sleep(connectionSetupTimeoutMaxMsTest);
         client.poll(0, time.milliseconds());
         assertFalse(client.isReady(node, time.milliseconds()));
+        assertNull(client.telemetryConnectedNode());
 
         // Second connection attempt should succeed
         time.sleep(reconnectBackoffMaxMsTest);
@@ -1053,12 +1089,18 @@ public class NetworkClientTest {
         time.sleep(connectionSetupTimeoutMaxMsTest);
         client.poll(0, time.milliseconds());
         assertTrue(client.isReady(node, time.milliseconds()));
+        assertNull(client.telemetryConnectedNode());
+
+        // Next client poll after handling connection setup should update telemetry node.
+        client.poll(0, time.milliseconds());
+        assertEquals(node, client.telemetryConnectedNode());
 
         // We should have tried to connect to two of the initial addresses, none of the new address, and should
         // only have resolved DNS once
         assertEquals(2, initialAddressConns.get());
         assertEquals(0, newAddressConns.get());
         assertEquals(1, mockHostResolver.resolutionCount());
+        verify(mockClientTelemetrySender, times(3)).timeToNextUpdate(anyLong());
     }
 
     @Test
@@ -1077,21 +1119,30 @@ public class NetworkClientTest {
             // Refuse first connection attempt to the new addresses
             return initialAddresses.contains(inetAddress) || newAddressConns.get() > 1;
         });
+
+        ClientTelemetrySender mockClientTelemetrySender = mock(ClientTelemetrySender.class);
+        when(mockClientTelemetrySender.timeToNextUpdate(anyLong())).thenReturn(0L);
+
         NetworkClient client = new NetworkClient(metadataUpdater, null, selector, "mock", Integer.MAX_VALUE,
                 reconnectBackoffMsTest, reconnectBackoffMaxMsTest, 64 * 1024, 64 * 1024,
                 defaultRequestTimeoutMs, connectionSetupTimeoutMsTest, connectionSetupTimeoutMaxMsTest,
-                time, false, new ApiVersions(), null, new LogContext(), mockHostResolver);
+                time, false, new ApiVersions(), null, new LogContext(), mockHostResolver, mockClientTelemetrySender);
 
         // Connect to one the initial addresses, then change the addresses and disconnect
         client.ready(node, time.milliseconds());
         time.sleep(connectionSetupTimeoutMaxMsTest);
         client.poll(0, time.milliseconds());
         assertTrue(client.isReady(node, time.milliseconds()));
+        assertNull(client.telemetryConnectedNode());
+        // Next client poll after handling connection setup should update telemetry node.
+        client.poll(0, time.milliseconds());
+        assertEquals(node, client.telemetryConnectedNode());
 
         mockHostResolver.changeAddresses();
         selector.serverDisconnect(node.idString());
         client.poll(0, time.milliseconds());
         assertFalse(client.isReady(node, time.milliseconds()));
+        assertNull(client.telemetryConnectedNode());
 
         // First connection attempt to new addresses should fail
         time.sleep(reconnectBackoffMaxMsTest);
@@ -1099,6 +1150,7 @@ public class NetworkClientTest {
         time.sleep(connectionSetupTimeoutMaxMsTest);
         client.poll(0, time.milliseconds());
         assertFalse(client.isReady(node, time.milliseconds()));
+        assertNull(client.telemetryConnectedNode());
 
         // Second connection attempt to new addresses should succeed
         time.sleep(reconnectBackoffMaxMsTest);
@@ -1106,12 +1158,18 @@ public class NetworkClientTest {
         time.sleep(connectionSetupTimeoutMaxMsTest);
         client.poll(0, time.milliseconds());
         assertTrue(client.isReady(node, time.milliseconds()));
+        assertNull(client.telemetryConnectedNode());
+
+        // Next client poll after handling connection setup should update telemetry node.
+        client.poll(0, time.milliseconds());
+        assertEquals(node, client.telemetryConnectedNode());
 
         // We should have tried to connect to one of the initial addresses and two of the new addresses (the first one
         // failed), and resolved DNS twice, once for each set of addresses
         assertEquals(1, initialAddressConns.get());
         assertEquals(2, newAddressConns.get());
         assertEquals(2, mockHostResolver.resolutionCount());
+        verify(mockClientTelemetrySender, times(6)).timeToNextUpdate(anyLong());
     }
 
     @Test
@@ -1166,6 +1224,61 @@ public class NetworkClientTest {
         time.sleep((long) (connectionSetupTimeoutMsTest * 1.2) + 1);
         client.poll(0, time.milliseconds());
         assertTrue(client.connectionFailed(node));
+    }
+
+    @Test
+    public void testTelemetryRequest() {
+        ClientTelemetrySender mockClientTelemetrySender = mock(ClientTelemetrySender.class);
+        when(mockClientTelemetrySender.timeToNextUpdate(anyLong())).thenReturn(0L);
+
+        NetworkClient client = new NetworkClient(metadataUpdater, null, selector, "mock", Integer.MAX_VALUE,
+            reconnectBackoffMsTest, reconnectBackoffMaxMsTest, 64 * 1024, 64 * 1024,
+            defaultRequestTimeoutMs, connectionSetupTimeoutMsTest, connectionSetupTimeoutMaxMsTest,
+            time, true, new ApiVersions(), null, new LogContext(), new DefaultHostResolver(), mockClientTelemetrySender);
+
+        // Send the ApiVersionsRequest
+        client.ready(node, time.milliseconds());
+        client.poll(0, time.milliseconds());
+        assertNull(client.telemetryConnectedNode());
+        assertTrue(client.hasInFlightRequests(node.idString()));
+        delayedApiVersionsResponse(0, ApiKeys.API_VERSIONS.latestVersion(), TestUtils.defaultApiVersionsResponse(
+            ApiMessageType.ListenerType.BROKER));
+        // handle ApiVersionsResponse
+        client.poll(0, time.milliseconds());
+        // the ApiVersionsRequest is gone
+        assertFalse(client.hasInFlightRequests(node.idString()));
+        selector.clear();
+
+        GetTelemetrySubscriptionsRequest.Builder getRequest = new GetTelemetrySubscriptionsRequest.Builder(
+            new GetTelemetrySubscriptionsRequestData(), true);
+        when(mockClientTelemetrySender.createRequest()).thenReturn(Optional.of(getRequest));
+
+        GetTelemetrySubscriptionsResponse getResponse = new GetTelemetrySubscriptionsResponse(new GetTelemetrySubscriptionsResponseData());
+        ByteBuffer buffer = RequestTestUtils.serializeResponseWithHeader(getResponse, ApiKeys.GET_TELEMETRY_SUBSCRIPTIONS.latestVersion(), 1);
+        selector.completeReceive(new NetworkReceive(node.idString(), buffer));
+
+        // Initiate poll to send GetTelemetrySubscriptions request
+        client.poll(0, time.milliseconds());
+        assertTrue(client.isReady(node, time.milliseconds()));
+        assertEquals(node, client.telemetryConnectedNode());
+        verify(mockClientTelemetrySender, times(1)).handleResponse(any(GetTelemetrySubscriptionsResponse.class));
+        selector.clear();
+
+        PushTelemetryRequest.Builder pushRequest = new PushTelemetryRequest.Builder(
+            new PushTelemetryRequestData(), true);
+        when(mockClientTelemetrySender.createRequest()).thenReturn(Optional.of(pushRequest));
+
+        PushTelemetryResponse pushResponse = new PushTelemetryResponse(new PushTelemetryResponseData());
+        ByteBuffer pushBuffer = RequestTestUtils.serializeResponseWithHeader(pushResponse, ApiKeys.PUSH_TELEMETRY.latestVersion(), 2);
+        selector.completeReceive(new NetworkReceive(node.idString(), pushBuffer));
+
+        // Initiate poll to send PushTelemetry request
+        client.poll(0, time.milliseconds());
+        assertTrue(client.isReady(node, time.milliseconds()));
+        assertEquals(node, client.telemetryConnectedNode());
+        verify(mockClientTelemetrySender, times(1)).handleResponse(any(PushTelemetryResponse.class));
+        verify(mockClientTelemetrySender, times(4)).timeToNextUpdate(anyLong());
+        verify(mockClientTelemetrySender, times(2)).createRequest();
     }
 
     private RequestHeader parseHeader(ByteBuffer buffer) {

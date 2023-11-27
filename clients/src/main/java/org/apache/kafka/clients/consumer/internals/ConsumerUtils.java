@@ -38,6 +38,7 @@ import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.MetricsContext;
 import org.apache.kafka.common.metrics.MetricsReporter;
 import org.apache.kafka.common.metrics.Sensor;
+import org.apache.kafka.common.telemetry.internals.ClientTelemetrySender;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.slf4j.Logger;
@@ -81,7 +82,8 @@ public final class ConsumerUtils {
                                                                     Time time,
                                                                     Metadata metadata,
                                                                     Sensor throttleTimeSensor,
-                                                                    long retryBackoffMs) {
+                                                                    long retryBackoffMs,
+                                                                    ClientTelemetrySender clientTelemetrySender) {
         NetworkClient netClient = ClientUtils.createNetworkClient(config,
                 metrics,
                 CONSUMER_METRIC_GROUP_PREFIX,
@@ -90,7 +92,8 @@ public final class ConsumerUtils {
                 time,
                 CONSUMER_MAX_INFLIGHT_REQUESTS_PER_CONNECTION,
                 metadata,
-                throttleTimeSensor);
+                throttleTimeSensor,
+                clientTelemetrySender);
 
         // Will avoid blocking an extended period of time to prevent heartbeat thread starvation
         int heartbeatIntervalMs = config.getInt(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG);
@@ -130,6 +133,11 @@ public final class ConsumerUtils {
     }
 
     public static Metrics createMetrics(ConsumerConfig config, Time time) {
+        return createMetrics(config, time, CommonClientConfigs.metricsReporters(
+                config.getString(ConsumerConfig.CLIENT_ID_CONFIG), config));
+    }
+
+    public static Metrics createMetrics(ConsumerConfig config, Time time, List<MetricsReporter> reporters) {
         String clientId = config.getString(ConsumerConfig.CLIENT_ID_CONFIG);
         Map<String, String> metricsTags = Collections.singletonMap(CONSUMER_CLIENT_ID_METRIC_TAG, clientId);
         MetricConfig metricConfig = new MetricConfig()
@@ -137,7 +145,6 @@ public final class ConsumerUtils {
                 .timeWindow(config.getLong(ConsumerConfig.METRICS_SAMPLE_WINDOW_MS_CONFIG), TimeUnit.MILLISECONDS)
                 .recordLevel(Sensor.RecordingLevel.forName(config.getString(ConsumerConfig.METRICS_RECORDING_LEVEL_CONFIG)))
                 .tags(metricsTags);
-        List<MetricsReporter> reporters = CommonClientConfigs.metricsReporters(clientId, config);
         MetricsContext metricsContext = new KafkaMetricsContext(CONSUMER_JMX_PREFIX,
                 config.originalsWithPrefix(CommonClientConfigs.METRICS_CONTEXT_PREFIX));
         return new Metrics(metricConfig, reporters, time, metricsContext);
