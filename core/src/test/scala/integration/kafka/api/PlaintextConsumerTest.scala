@@ -2018,7 +2018,9 @@ class PlaintextConsumerTest extends BaseConsumerTest {
 
   // Empty group ID not supported with consumer group protocol
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersConsumerGroupProtocolOnly"))
+  @CsvSource(Array(
+    "kraft+kip848, consumer"
+  ))
   def testEmptyGroupIdNotSupported(quorum:String, groupProtocol: String): Unit = {
     val consumer1Config = new Properties(consumerConfig)
     consumer1Config.put(ConsumerConfig.GROUP_ID_CONFIG, "")
@@ -2165,7 +2167,9 @@ class PlaintextConsumerTest extends BaseConsumerTest {
 
   // partitionsFor not implemented in consumer group protocol and this test requires ZK also
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersZkOnly"))
+  @CsvSource(Array(
+    "zk, generic"
+  ))
   def testAssignAndConsumeWithLeaderChangeValidatingPositions(quorum:String, groupProtocol: String): Unit = {
     val numRecords = 10
     val producer = createProducer()

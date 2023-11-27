@@ -128,13 +128,14 @@ object BaseConsumerTest {
         Arguments.of("kraft+kip848", "consumer"))
   }
 
-  // We want to test the following combinations:
-  // * ZooKeeper and the generic group protocol
-  def getTestQuorumAndGroupProtocolParametersZkOnly() : java.util.stream.Stream[Arguments] = {
-    // For Scala 2.12, it is necessary to disambiguate the java.util.stream.Stream.of() method reference
-    java.util.stream.Stream.of(
-        Seq(Arguments.of("zk", "generic")): _*)
-  }
+  // In Scala 2.12, it is necessary to disambiguate the java.util.stream.Stream.of() method call
+  // in the case where there's only a single Arguments in the list. The following commented-out
+  // method works in Scala 2.13, but not 2.12. For this reason, tests which run against just a
+  // single combination are written using @CsvSource rather than the more elegant @MethodSource. 
+  // def getTestQuorumAndGroupProtocolParametersZkOnly() : java.util.stream.Stream[Arguments] = {
+  //   java.util.stream.Stream.of(
+  //       Arguments.of("zk", "generic"))
+  // }
 
   // For tests that only work with the generic group protocol, we want to test the following combinations:
   // * ZooKeeper and the generic group protocol
@@ -145,14 +146,6 @@ object BaseConsumerTest {
         Arguments.of("zk", "generic"),
         Arguments.of("kraft", "generic"),
         Arguments.of("kraft+kip848", "generic"))
-  }
-
-  // For tests that only work with the consumer group protocol, we want to test the following combinations:
-  // * KRaft with the new group coordinator enabled and the consumer group protocol
-  def getTestQuorumAndGroupProtocolParametersConsumerGroupProtocolOnly() : java.util.stream.Stream[Arguments] = {
-    // For Scala 2.12, it is necessary to disambiguate the java.util.stream.Stream.of() method reference
-    java.util.stream.Stream.of(
-        Seq(Arguments.of("kraft+kip848", "consumer")): _*)
   }
 
   val updateProducerCount = new AtomicInteger()
