@@ -753,7 +753,7 @@ public class TargetAssignmentBuilderTest {
         context.removeMemberSubscription("member-3", "member-3");
 
         // Another static member joins with the same instance id as the departed one
-        context.addGroupMember("member-3-a", "member-3", Arrays.asList("foo", "bar", "zar"), new HashMap<>());
+        context.updateMemberSubscription("member-3-a", Arrays.asList("foo", "bar", "zar"), Optional.of("member-3"), Optional.empty());
 
         context.prepareMemberAssignment("member-1", mkAssignment(
             mkTopicAssignment(fooTopicId, 1, 2),

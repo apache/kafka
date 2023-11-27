@@ -1316,17 +1316,16 @@ public class GroupMetadataManagerTest {
                 .setServerAssignor("bar")));
         assertEquals("ServerAssignor bar is not supported. Supported assignors: range.", ex.getMessage());
 
-        String memberId = Uuid.randomUuid().toString();
         ex = assertThrows(InvalidRequestException.class, () -> context.consumerGroupHeartbeat(
             new ConsumerGroupHeartbeatRequestData()
                 .setGroupId("foo")
-                .setMemberId(memberId)
+                .setMemberId(Uuid.randomUuid().toString())
                 .setMemberEpoch(LEAVE_GROUP_STATIC_MEMBER_EPOCH)
                 .setRebalanceTimeoutMs(5000)
                 .setSubscribedTopicNames(Arrays.asList("foo", "bar"))
                 .setTopicPartitions(Collections.emptyList())));
 
-        assertEquals("InstanceId can't be null. GroupId: foo, MemberId: " + memberId, ex.getMessage());
+        assertEquals("InstanceId can't be null.", ex.getMessage());
     }
 
     @Test
