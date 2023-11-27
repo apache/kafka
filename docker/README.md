@@ -26,7 +26,9 @@ Just choose the image type and provide kafka url to `Docker build test` workflow
 
 Creating a release
 ------------------
-`docker_release.py` provides an interactive way to build multi arch image and publish it to a docker registry.
+- `docker_release.py` script builds a multi architecture image and pushes it to provided docker registry.
+- Ensure you are logged in to the docker registry before triggering the script.
+- kafka binary tarball url along with image name (in the format `<registry>/<namespace>/<image_name>:<image_tag>`) and type is needed to build the image. For detailed usage description check `python docker_release.py --help`.
 
 Promoting a release
 -------------------
