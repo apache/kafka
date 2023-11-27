@@ -27,8 +27,10 @@ Usage:
         Get detailed description of argument
 
     Example command:-
-        docker_release <image> --kafka-url <kafka_url> -t <type>
-        This command will build the multiarch image of type <type> (jvm by default), named <image> using <kafka_url> to download kafka and push it to the docker image name <image> provided.
+        docker_release <image> --kafka-url <kafka_url> --image-type <type>
+
+        This command will build the multiarch image of type <type> (jvm by default),
+        named <image> using <kafka_url> to download kafka and push it to the docker image name <image> provided.
         Make sure image is in the format of <registry>/<namespace>/<image_name>:<image_tag>.
 """
 

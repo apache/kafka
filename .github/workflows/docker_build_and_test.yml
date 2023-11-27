@@ -60,7 +60,7 @@ jobs:
       uses: actions/upload-artifact@v3
       with:
         name: report_${{ github.event.inputs.image_type }}.html
-        path: docker/report_${{ github.event.inputs.image_type }}.html
+        path: docker/test/report_${{ github.event.inputs.image_type }}.html
     - name: Upload CVE scan report
       if: always()
       uses: actions/upload-artifact@v3
