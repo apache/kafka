@@ -170,8 +170,8 @@ public class CommitRequestManager implements RequestManager {
     public long timeUntilNextPoll(long currentTimeMs) {
         // min of the remainingBackoffMs of all the request that are still backing off
         return Math.min(
-                findMinTime(unsentOffsetCommitRequests(), currentTimeMs),
-                findMinTime(unsentOffsetFetchRequests(), currentTimeMs));
+            findMinTime(unsentOffsetCommitRequests(), currentTimeMs),
+            findMinTime(unsentOffsetFetchRequests(), currentTimeMs));
     }
 
     private static long findMinTime(final Collection<? extends RequestState> requests, final long currentTimeMs) {

@@ -404,14 +404,7 @@ public class HeartbeatRequestManager implements RequestManager {
         private final SubscriptionState subscriptions;
         private final MembershipManager membershipManager;
         private final int rebalanceTimeoutMs;
-
-        // Fields of ConsumerHeartbeatRequest sent in the most recent request
-        private String sentInstanceId;
-        private int sentRebalanceTimeoutMs;
-        private TreeSet<String> sentSubscribedTopicNames;
-        // private String sentSubscribedTopicRegex;
-        private String sentServerAssignor;
-        private TreeSet<String> sentTopicPartitions;
+        private final SentFields sentFields;
 
         public HeartbeatState(
             final SubscriptionState subscriptions,
@@ -420,20 +413,12 @@ public class HeartbeatRequestManager implements RequestManager {
             this.subscriptions = subscriptions;
             this.membershipManager = membershipManager;
             this.rebalanceTimeoutMs = rebalanceTimeoutMs;
-            this.sentInstanceId = null;
-            this.sentRebalanceTimeoutMs = -1;
-            this.sentSubscribedTopicNames = null;
-            this.sentServerAssignor = null;
-            this.sentTopicPartitions = null;
+            this.sentFields = new SentFields();
         }
 
 
         public void reset() {
-            sentInstanceId = null;
-            sentRebalanceTimeoutMs = -1;
-            sentSubscribedTopicNames = null;
-            sentServerAssignor = null;
-            sentTopicPartitions = null;
+            sentFields.reset();
         }
 
         public ConsumerGroupHeartbeatRequestData buildRequestData() {
@@ -450,24 +435,24 @@ public class HeartbeatRequestManager implements RequestManager {
 
             // InstanceId - sent if hasn't changed since the last heartbeat
             membershipManager.groupInstanceId().ifPresent(groupInstanceId -> {
-                if (!groupInstanceId.equals(sentInstanceId)) {
+                if (!groupInstanceId.equals(sentFields.instanceId)) {
                     data.setInstanceId(groupInstanceId);
-                    sentInstanceId = groupInstanceId;
+                    sentFields.instanceId = groupInstanceId;
                 }
             });
 
             // RebalanceTimeoutMs - sent if hasn't changed since the last heartbeat
-            if (sentRebalanceTimeoutMs != rebalanceTimeoutMs) {
+            if (sentFields.rebalanceTimeoutMs != rebalanceTimeoutMs) {
                 data.setRebalanceTimeoutMs(rebalanceTimeoutMs);
-                sentRebalanceTimeoutMs = rebalanceTimeoutMs;
+                sentFields.rebalanceTimeoutMs = rebalanceTimeoutMs;
             }
 
             if (!this.subscriptions.hasPatternSubscription()) {
                 // SubscribedTopicNames - sent if hasn't changed since the last heartbeat
                 TreeSet<String> subscribedTopicNames = new TreeSet<>(this.subscriptions.subscription());
-                if (!subscribedTopicNames.equals(sentSubscribedTopicNames)) {
+                if (!subscribedTopicNames.equals(sentFields.subscribedTopicNames)) {
                     data.setSubscribedTopicNames(new ArrayList<>(this.subscriptions.subscription()));
-                    sentSubscribedTopicNames = subscribedTopicNames;
+                    sentFields.subscribedTopicNames = subscribedTopicNames;
                 }
             } else {
                 // SubscribedTopicRegex - sent if hasn't changed since the last heartbeat
@@ -476,9 +461,9 @@ public class HeartbeatRequestManager implements RequestManager {
 
             // ServerAssignor - sent if hasn't changed since the last heartbeat
             this.membershipManager.serverAssignor().ifPresent(serverAssignor -> {
-                if (!serverAssignor.equals(sentServerAssignor)) {
+                if (!serverAssignor.equals(sentFields.serverAssignor)) {
                     data.setServerAssignor(serverAssignor);
-                    sentServerAssignor = serverAssignor;
+                    sentFields.serverAssignor = serverAssignor;
                 }
             });
 
@@ -487,11 +472,11 @@ public class HeartbeatRequestManager implements RequestManager {
             // TopicPartitions - sent if hasn't changed since the last heartbeat
             TreeSet<String> assignedPartitions = new TreeSet<>(membershipManager.currentAssignment().stream()
                     .map(tp -> tp.topicId() + "-" + tp.partition()).collect(Collectors.toList()));
-            if (!assignedPartitions.equals(sentTopicPartitions)) {
+            if (!assignedPartitions.equals(sentFields.topicPartitions)) {
                 List<ConsumerGroupHeartbeatRequestData.TopicPartitions> topicPartitions =
                         buildTopicPartitionsList(membershipManager.currentAssignment());
                 data.setTopicPartitions(topicPartitions);
-                sentTopicPartitions = assignedPartitions;
+                sentFields.topicPartitions = assignedPartitions;
             }
 
             return data;
@@ -502,10 +487,7 @@ public class HeartbeatRequestManager implements RequestManager {
             Map<Uuid, List<Integer>> partitionsPerTopicId = new HashMap<>();
             for (TopicIdPartition topicIdPartition : topicIdPartitions) {
                 Uuid topicId = topicIdPartition.topicId();
-                if (!partitionsPerTopicId.containsKey(topicId)) {
-                    partitionsPerTopicId.put(topicId, new ArrayList<>());
-                }
-                partitionsPerTopicId.get(topicId).add(topicIdPartition.partition());
+                partitionsPerTopicId.computeIfAbsent(topicId, __ -> new ArrayList<>()).add(topicIdPartition.partition());
             }
             for (Map.Entry<Uuid, List<Integer>> entry : partitionsPerTopicId.entrySet()) {
                 Uuid topicId = entry.getKey();
@@ -515,6 +497,25 @@ public class HeartbeatRequestManager implements RequestManager {
                         .setPartitions(partitions));
             }
             return result;
+        }
+
+        // Fields of ConsumerHeartbeatRequest sent in the most recent request
+        static class SentFields {
+            private String instanceId = null;
+            private int rebalanceTimeoutMs = -1;
+            private TreeSet<String> subscribedTopicNames = null;
+            private String serverAssignor = null;
+            private TreeSet<String> topicPartitions = null;
+
+            SentFields() {}
+
+            void reset() {
+                instanceId = null;
+                rebalanceTimeoutMs = -1;
+                subscribedTopicNames = null;
+                serverAssignor = null;
+                topicPartitions = null;
+            }
         }
     }
 }
