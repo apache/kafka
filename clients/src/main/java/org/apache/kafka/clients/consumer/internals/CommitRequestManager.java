@@ -154,7 +154,7 @@ public class CommitRequestManager implements RequestManager {
         if (!coordinatorRequestManager.coordinator().isPresent())
             return EMPTY;
 
-        maybeAutoCommitAllConsumed();
+        maybeAutoCommit();
         if (!pendingRequests.hasUnsentRequests())
             return EMPTY;
 
@@ -184,7 +184,7 @@ public class CommitRequestManager implements RequestManager {
      * completed future if no request is generated.
      */
     public CompletableFuture<Void> maybeAutoCommit(final Map<TopicPartition, OffsetAndMetadata> offsets) {
-        if (!autoCommitState.isPresent()) {
+        if (!canAutoCommit()) {
             return CompletableFuture.completedFuture(null);
         }
 
@@ -206,21 +206,21 @@ public class CommitRequestManager implements RequestManager {
      * @return Future that will complete when a response is received for the request, or a
      * completed future if no request is generated.
      */
-    public CompletableFuture<Void> maybeAutoCommitAllConsumed() {
+    public CompletableFuture<Void> maybeAutoCommit() {
         return maybeAutoCommit(subscriptions.allConsumed());
     }
 
-    /**
-     * The consumer needs to send an auto commit during the shutdown if autocommit is enabled.
-     */
-    Optional<NetworkClientDelegate.UnsentRequest> maybeCreateAutoCommitRequest() {
-        if (subscriptions.allConsumed().isEmpty()) {
-            return Optional.empty();
-        }
+    boolean canAutoCommit() {
+        return autoCommitState.isPresent() && !subscriptions.allConsumed().isEmpty();
+    }
 
+    /**
+     * Return an OffsetCommitRequest of all assigned topicPartitions and their current positions.
+     */
+    NetworkClientDelegate.UnsentRequest commitAllConsumedPositions() {
         OffsetCommitRequestState request = pendingRequests.createOffsetCommitRequest(subscriptions.allConsumed(), jitter);
         request.future.whenComplete(autoCommitCallback(subscriptions.allConsumed()));
-        return Optional.of(request.toUnsentRequest());
+        return request.toUnsentRequest();
     }
 
     private CompletableFuture<Void> sendAutoCommit(final Map<TopicPartition, OffsetAndMetadata> allConsumedOffsets) {

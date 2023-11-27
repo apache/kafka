@@ -279,17 +279,13 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
             return;
         }
 
-        if (!requestManagers.commitRequestManager.get().autoCommitEnabled()) {
+        if (!requestManagers.commitRequestManager.get().canAutoCommit()) {
             return;
         }
 
         ensureCoordinatorReady(timer);
-        Optional<NetworkClientDelegate.UnsentRequest> autocommit = requestManagers.commitRequestManager.get().maybeCreateAutoCommitRequest();
-        if (!autocommit.isPresent()) {
-            return;
-        }
-
-        List<NetworkClientDelegate.UnsentRequest> autocommitRequest = Collections.singletonList(autocommit.get());
+        List<NetworkClientDelegate.UnsentRequest> autocommitRequest =
+            Collections.singletonList(requestManagers.commitRequestManager.get().commitAllConsumedPositions());
         networkClientDelegate.addAll(autocommitRequest);
         do {
             long currentTimeMs = timer.currentTimeMs();

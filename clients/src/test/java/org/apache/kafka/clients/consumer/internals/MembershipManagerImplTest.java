@@ -879,7 +879,7 @@ public class MembershipManagerImplTest {
         if (withAutoCommit) {
             when(commitRequestManager.autoCommitEnabled()).thenReturn(true);
             CompletableFuture<Void> commitResult = new CompletableFuture<>();
-            when(commitRequestManager.maybeAutoCommitAllConsumed()).thenReturn(commitResult);
+            when(commitRequestManager.maybeAutoCommit()).thenReturn(commitResult);
             return commitResult;
         } else {
             return CompletableFuture.completedFuture(null);

@@ -287,7 +287,7 @@ public class ConsumerTestBuilder implements Closeable {
 
         @Override
         public void close() {
-            closeQuietly(consumerNetworkThread, ConsumerNetworkThread.class.getSimpleName());
+            consumerNetworkThread.close();
         }
     }
 

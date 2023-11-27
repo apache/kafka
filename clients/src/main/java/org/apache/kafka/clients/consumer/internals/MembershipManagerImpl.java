@@ -880,7 +880,7 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
         // Commit offsets if auto-commit enabled.
         CompletableFuture<Void> commitResult;
         if (commitRequestManager.autoCommitEnabled()) {
-            commitResult = commitRequestManager.maybeAutoCommitAllConsumed();
+            commitResult = commitRequestManager.maybeAutoCommit();
         } else {
             commitResult = CompletableFuture.completedFuture(null);
         }

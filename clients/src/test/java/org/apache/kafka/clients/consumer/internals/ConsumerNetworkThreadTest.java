@@ -276,9 +276,13 @@ public class ConsumerNetworkThreadTest {
 
     @Test
     void testCoordinatorConnectionOnClose() {
+        TopicPartition tp = new TopicPartition("topic", 0);
+        subscriptions.assignFromUser(singleton(new TopicPartition("topic", 0)));
+        subscriptions.seekUnvalidated(tp, new SubscriptionState.FetchPosition(100));
         Node node = metadata.fetch().nodes().get(0);
         coordinatorRequestManager.markCoordinatorUnknown("test", time.milliseconds());
         client.prepareResponse(FindCoordinatorResponse.prepareResponse(Errors.NONE, "group-id", node));
+        prepareOffsetCommitRequest(singletonMap(tp, 100L), Errors.NONE, false);
         consumerNetworkThread.cleanup();
         assertTrue(coordinatorRequestManager.coordinator().isPresent());
         assertFalse(client.hasPendingResponses());
@@ -296,7 +300,7 @@ public class ConsumerNetworkThreadTest {
         prepareOffsetCommitRequest(singletonMap(tp, 100L), Errors.NONE, false);
         consumerNetworkThread.maybeAutocommitOnClose(time.timer(1000));
         assertTrue(coordinatorRequestManager.coordinator().isPresent());
-        verify(commitRequestManager).maybeCreateAutoCommitRequest();
+        verify(commitRequestManager).commitAllConsumedPositions();
 
         assertFalse(client.hasPendingResponses());
         assertFalse(client.hasInFlightRequests());
