@@ -27,7 +27,6 @@ import org.apache.kafka.clients.admin.ListOffsetsResult.ListOffsetsResultInfo;
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.internals.ConsumerProtocol;
-import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.ConsumerGroupState;
 import org.apache.kafka.common.ElectionType;
@@ -407,6 +406,7 @@ public class KafkaAdminClientTest {
         KafkaAdminClient admin = (KafkaAdminClient) AdminClient.create(props);
 
         MockMetricsReporter mockMetricsReporter = (MockMetricsReporter) admin.metrics.reporters().get(0);
+
         assertEquals(admin.getClientId(), mockMetricsReporter.clientId);
         assertEquals(2, admin.metrics.reporters().size());
         admin.close();
@@ -7084,7 +7084,7 @@ public class KafkaAdminClientTest {
     @Test
     public void testClientInstanceIdInvalidTimeout() {
         Properties props = new Properties();
-        props.setProperty(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
+        props.setProperty(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
 
         KafkaAdminClient admin = (KafkaAdminClient) AdminClient.create(props);
         Exception exception = assertThrows(IllegalArgumentException.class, () -> admin.clientInstanceId(Duration.ofMillis(-1)));
@@ -7096,8 +7096,8 @@ public class KafkaAdminClientTest {
     @Test
     public void testClientInstanceIdNoTelemetryReporterRegistered() {
         Properties props = new Properties();
-        props.setProperty(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
-        props.setProperty(ProducerConfig.ENABLE_METRICS_PUSH_CONFIG, "false");
+        props.setProperty(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
+        props.setProperty(AdminClientConfig.ENABLE_METRICS_PUSH_CONFIG, "false");
 
         KafkaAdminClient admin = (KafkaAdminClient) AdminClient.create(props);
         Exception exception = assertThrows(IllegalStateException.class, () -> admin.clientInstanceId(Duration.ofMillis(0)));
