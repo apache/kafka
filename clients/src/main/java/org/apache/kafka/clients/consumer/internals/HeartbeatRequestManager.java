@@ -398,7 +398,7 @@ public class HeartbeatRequestManager implements RequestManager {
     /**
      * Builds the heartbeat requests correctly, ensuring that all information is sent according to
      * the protocol, but subsequent requests do not send information which has not changed. This
-     * is important to ensure that reconciliation completes succesfully.
+     * is important to ensure that reconciliation completes successfully.
      */
     static class HeartbeatState {
         private final SubscriptionState subscriptions;
@@ -442,10 +442,8 @@ public class HeartbeatRequestManager implements RequestManager {
             // GroupId - always sent
             data.setGroupId(membershipManager.groupId());
 
-            // MemberId - always sent, after it has been received from the coordinator
-            if (membershipManager.memberId() != null) {
-                data.setMemberId(membershipManager.memberId());
-            }
+            // MemberId - always sent, empty until it has been received from the coordinator
+            data.setMemberId(membershipManager.memberId());
 
             // MemberEpoch - always sent
             data.setMemberEpoch(membershipManager.memberEpoch());

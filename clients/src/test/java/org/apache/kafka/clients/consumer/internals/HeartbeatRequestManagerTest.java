@@ -20,7 +20,9 @@ import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEventHandler;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.TimeoutException;
+import org.apache.kafka.common.message.ConsumerGroupHeartbeatRequestData;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
@@ -68,6 +70,7 @@ public class HeartbeatRequestManagerTest {
     private HeartbeatRequestManager heartbeatRequestManager;
     private MembershipManager membershipManager;
     private HeartbeatRequestManager.HeartbeatRequestState heartbeatRequestState;
+    private HeartbeatRequestManager.HeartbeatState heartbeatState;
     private final String memberId = "member-id";
     private final int memberEpoch = 1;
     private BackgroundEventHandler backgroundEventHandler;
@@ -83,6 +86,7 @@ public class HeartbeatRequestManagerTest {
         coordinatorRequestManager = testBuilder.coordinatorRequestManager.orElseThrow(IllegalStateException::new);
         heartbeatRequestManager = testBuilder.heartbeatRequestManager.orElseThrow(IllegalStateException::new);
         heartbeatRequestState = testBuilder.heartbeatRequestState.orElseThrow(IllegalStateException::new);
+        heartbeatState = testBuilder.heartbeatState.orElseThrow(IllegalStateException::new);
         backgroundEventHandler = testBuilder.backgroundEventHandler;
         subscriptions = testBuilder.subscriptions;
         membershipManager = testBuilder.membershipManager.orElseThrow(IllegalStateException::new);
@@ -330,6 +334,72 @@ public class HeartbeatRequestManagerTest {
                 }
                 break;
         }
+    }
+
+    @Test
+    public void testHeartbeatState() {
+        // The initial ConsumerGroupHeartbeatRequest sets most fields to their initial empty values
+        ConsumerGroupHeartbeatRequestData data = heartbeatState.buildRequestData();
+        assertEquals(ConsumerTestBuilder.DEFAULT_GROUP_ID, data.groupId());
+        assertEquals("", data.memberId());
+        assertEquals(0, data.memberEpoch());
+        assertNull(data.instanceId());
+        assertEquals(ConsumerTestBuilder.DEFAULT_MAX_POLL_INTERVAL_MS, data.rebalanceTimeoutMs());
+        assertEquals(Collections.emptyList(), data.subscribedTopicNames());
+        assertNull(data.subscribedTopicRegex());
+        assertNull(data.serverAssignor());
+        assertEquals(Collections.emptyList(), data.topicPartitions());
+        membershipManager.onHeartbeatRequestSent();
+        assertEquals(MemberState.UNSUBSCRIBED, membershipManager.state());
+
+        // Mock a response from the group coordinator, that supplies the member ID and a new epoch
+        mockStableMember();
+        data = heartbeatState.buildRequestData();
+        assertEquals(ConsumerTestBuilder.DEFAULT_GROUP_ID, data.groupId());
+        assertEquals(memberId, data.memberId());
+        assertEquals(1, data.memberEpoch());
+        assertNull(data.instanceId());
+        assertEquals(-1, data.rebalanceTimeoutMs());
+        assertNull(data.subscribedTopicNames());
+        assertNull(data.subscribedTopicRegex());
+        assertNull(data.serverAssignor());
+        assertNull(data.topicPartitions());
+        membershipManager.onHeartbeatRequestSent();
+        assertEquals(MemberState.STABLE, membershipManager.state());
+
+        // Join the group and subscribe to a topic, but the response has not yet been received
+        String topic = "topic1";
+        subscriptions.subscribe(Collections.singleton(topic), Optional.empty());
+        membershipManager.onSubscriptionUpdated();
+        membershipManager.transitionToFenced(); // And indirect way of moving to JOINING state
+        data = heartbeatState.buildRequestData();
+        assertEquals(ConsumerTestBuilder.DEFAULT_GROUP_ID, data.groupId());
+        assertEquals(memberId, data.memberId());
+        assertEquals(0, data.memberEpoch());
+        assertNull(data.instanceId());
+        assertEquals(-1, data.rebalanceTimeoutMs());
+        assertEquals(Collections.singletonList(topic), data.subscribedTopicNames());
+        assertNull(data.subscribedTopicRegex());
+        assertNull(data.serverAssignor());
+        assertNull(data.topicPartitions());
+        membershipManager.onHeartbeatRequestSent();
+        assertEquals(MemberState.JOINING, membershipManager.state());
+
+        // Mock the response from the group coordinator which returns an assignment
+        ConsumerGroupHeartbeatResponseData.TopicPartitions tpTopic1 =
+            new ConsumerGroupHeartbeatResponseData.TopicPartitions();
+        tpTopic1.setTopicId(Uuid.randomUuid());
+        tpTopic1.setPartitions(Collections.singletonList(0));
+        ConsumerGroupHeartbeatResponseData.Assignment assignmentTopic1 =
+            new ConsumerGroupHeartbeatResponseData.Assignment();
+        assignmentTopic1.setTopicPartitions(Collections.singletonList(tpTopic1));
+        ConsumerGroupHeartbeatResponse rs1 = new ConsumerGroupHeartbeatResponse(new ConsumerGroupHeartbeatResponseData()
+                .setHeartbeatIntervalMs(DEFAULT_HEARTBEAT_INTERVAL_MS)
+                .setMemberId(memberId)
+                .setMemberEpoch(1)
+                .setAssignment(assignmentTopic1));
+        membershipManager.onHeartbeatResponseReceived(rs1.data());
+        assertEquals(MemberState.RECONCILING, membershipManager.state());
     }
 
     private void mockStableMember() {
