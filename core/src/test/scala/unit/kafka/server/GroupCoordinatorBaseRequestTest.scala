@@ -25,9 +25,9 @@ import org.apache.kafka.common.message.DeleteGroupsResponseData.{DeletableGroupR
 import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity
 import org.apache.kafka.common.message.LeaveGroupResponseData.MemberResponse
 import org.apache.kafka.common.message.SyncGroupRequestData.SyncGroupRequestAssignment
-import org.apache.kafka.common.message.{ConsumerGroupHeartbeatRequestData, ConsumerGroupHeartbeatResponseData, DeleteGroupsRequestData, DeleteGroupsResponseData, DescribeGroupsRequestData, DescribeGroupsResponseData, JoinGroupRequestData, LeaveGroupResponseData, ListGroupsRequestData, ListGroupsResponseData, OffsetCommitRequestData, OffsetCommitResponseData, OffsetDeleteRequestData, OffsetDeleteResponseData, OffsetFetchResponseData, SyncGroupRequestData}
-import org.apache.kafka.common.protocol.Errors
-import org.apache.kafka.common.requests.{AbstractRequest, AbstractResponse, ConsumerGroupHeartbeatRequest, ConsumerGroupHeartbeatResponse, DeleteGroupsRequest, DeleteGroupsResponse, DescribeGroupsRequest, DescribeGroupsResponse, JoinGroupRequest, JoinGroupResponse, LeaveGroupRequest, LeaveGroupResponse, ListGroupsRequest, ListGroupsResponse, OffsetCommitRequest, OffsetCommitResponse, OffsetDeleteRequest, OffsetDeleteResponse, OffsetFetchRequest, OffsetFetchResponse, SyncGroupRequest, SyncGroupResponse}
+import org.apache.kafka.common.message.{ConsumerGroupHeartbeatRequestData, ConsumerGroupHeartbeatResponseData, DeleteGroupsRequestData, DeleteGroupsResponseData, DescribeGroupsRequestData, DescribeGroupsResponseData, HeartbeatRequestData, HeartbeatResponseData, JoinGroupRequestData, JoinGroupResponseData, LeaveGroupResponseData, ListGroupsRequestData, ListGroupsResponseData, OffsetCommitRequestData, OffsetCommitResponseData, OffsetDeleteRequestData, OffsetDeleteResponseData, OffsetFetchResponseData, SyncGroupRequestData, SyncGroupResponseData}
+import org.apache.kafka.common.protocol.{ApiKeys, Errors}
+import org.apache.kafka.common.requests.{AbstractRequest, AbstractResponse, ConsumerGroupHeartbeatRequest, ConsumerGroupHeartbeatResponse, DeleteGroupsRequest, DeleteGroupsResponse, DescribeGroupsRequest, DescribeGroupsResponse, HeartbeatRequest, HeartbeatResponse, JoinGroupRequest, JoinGroupResponse, LeaveGroupRequest, LeaveGroupResponse, ListGroupsRequest, ListGroupsResponse, OffsetCommitRequest, OffsetCommitResponse, OffsetDeleteRequest, OffsetDeleteResponse, OffsetFetchRequest, OffsetFetchResponse, SyncGroupRequest, SyncGroupResponse}
 import org.junit.jupiter.api.Assertions.{assertEquals, fail}
 
 import java.util.Comparator
@@ -253,70 +253,132 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
     groupId: String,
     memberId: String,
     generationId: Int,
+    protocolType: String = "consumer",
+    protocolName: String = "consumer-range",
     assignments: List[SyncGroupRequestData.SyncGroupRequestAssignment] = List.empty,
-    expectedError: Errors = Errors.NONE
-  ): Unit = {
+    expectedProtocolType: String = "consumer",
+    expectedProtocolName: String = "consumer-range",
+    expectedAssignment: Array[Byte] = Array.empty,
+    expectedError: Errors = Errors.NONE,
+    version: Short = ApiKeys.SYNC_GROUP.latestVersion(isUnstableApiEnabled)
+  ): SyncGroupResponseData = {
     val syncGroupRequestData = new SyncGroupRequestData()
       .setGroupId(groupId)
       .setMemberId(memberId)
       .setGenerationId(generationId)
-      .setProtocolType("consumer")
-      .setProtocolName("consumer-range")
+      .setProtocolType(protocolType)
+      .setProtocolName(protocolName)
       .setAssignments(assignments.asJava)
 
-    val syncGroupRequest = new SyncGroupRequest.Builder(syncGroupRequestData).build()
+    val syncGroupRequest = new SyncGroupRequest.Builder(syncGroupRequestData).build(version)
     val syncGroupResponse = connectAndReceive[SyncGroupResponse](syncGroupRequest)
-    assertEquals(expectedError.code, syncGroupResponse.data.errorCode)
+    
+    assertEquals(
+      new SyncGroupResponseData()
+        .setErrorCode(expectedError.code)
+        .setProtocolType(if (version >= 5) expectedProtocolType else null)
+        .setProtocolName(if (version >= 5) expectedProtocolName else null)
+        .setAssignment(expectedAssignment),
+      syncGroupResponse.data
+    )
+
+    syncGroupResponse.data
   }
 
-  protected def joinConsumerGroupWithOldProtocol(
+  protected def sendJoinRequest(
+    groupId: String,
+    memberId: String = "",
+    groupInstanceId: String = null,
+    protocolType: String = "consumer",
+    protocolName: String = "consumer-range",
+    metadata: Array[Byte] = Array.empty,
+    version: Short = ApiKeys.JOIN_GROUP.latestVersion(isUnstableApiEnabled)
+  ): JoinGroupResponseData = {
+    val joinGroupRequestData = new JoinGroupRequestData()
+      .setGroupId(groupId)
+      .setMemberId(memberId)
+      .setGroupInstanceId(groupInstanceId)
+      .setRebalanceTimeoutMs(5 * 50 * 1000)
+      .setSessionTimeoutMs(600000)
+      .setProtocolType(protocolType)
+      .setProtocols(new JoinGroupRequestData.JoinGroupRequestProtocolCollection(
+        List(
+          new JoinGroupRequestData.JoinGroupRequestProtocol()
+            .setName(protocolName)
+            .setMetadata(metadata)
+        ).asJava.iterator
+      ))
+
+    // Send the request until receiving a successful response. There is a delay
+    // here because the group coordinator is loaded in the background.
+    val joinGroupRequest = new JoinGroupRequest.Builder(joinGroupRequestData).build(version)
+    var joinGroupResponse: JoinGroupResponse = null
+    TestUtils.waitUntilTrue(() => {
+      joinGroupResponse = connectAndReceive[JoinGroupResponse](joinGroupRequest)
+      joinGroupResponse != null
+    }, msg = s"Could not join the group successfully. Last response $joinGroupResponse.")
+
+    joinGroupResponse.data
+  }
+
+  protected def joinDynamicConsumerGroupWithOldProtocol(
     groupId: String,
     metadata: Array[Byte] = Array.empty,
     assignment: Array[Byte] = Array.empty,
     completeRebalance: Boolean = true
   ): (String, Int) = {
-    val joinGroupRequestData = new JoinGroupRequestData()
-      .setGroupId(groupId)
-      .setRebalanceTimeoutMs(5 * 50 * 1000)
-      .setSessionTimeoutMs(600000)
-      .setProtocolType("consumer")
-      .setProtocols(new JoinGroupRequestData.JoinGroupRequestProtocolCollection(
-        List(
-          new JoinGroupRequestData.JoinGroupRequestProtocol()
-            .setName("consumer-range")
-            .setMetadata(metadata)
-        ).asJava.iterator
-      ))
-
-    // Join the group as a dynamic member.
-    // Send the request until receiving a successful response. There is a delay
-    // here because the group coordinator is loaded in the background.
-    var joinGroupRequest = new JoinGroupRequest.Builder(joinGroupRequestData).build()
-    var joinGroupResponse: JoinGroupResponse = null
-    TestUtils.waitUntilTrue(() => {
-      joinGroupResponse = connectAndReceive[JoinGroupResponse](joinGroupRequest)
-      joinGroupResponse.data.errorCode == Errors.MEMBER_ID_REQUIRED.code
-    }, msg = s"Could not join the group successfully. Last response $joinGroupResponse.")
+    val joinGroupResponseData = sendJoinRequest(
+      groupId = groupId,
+      metadata = metadata
+    )
+    assertEquals(Errors.MEMBER_ID_REQUIRED.code, joinGroupResponseData.errorCode)
 
     // Rejoin the group with the member id.
-    joinGroupRequestData.setMemberId(joinGroupResponse.data.memberId)
-    joinGroupRequest = new JoinGroupRequest.Builder(joinGroupRequestData).build()
-    joinGroupResponse = connectAndReceive[JoinGroupResponse](joinGroupRequest)
-    assertEquals(Errors.NONE.code, joinGroupResponse.data.errorCode)
+    val rejoinGroupResponseData = sendJoinRequest(
+      groupId = groupId,
+      memberId = joinGroupResponseData.memberId,
+      metadata = metadata
+    )
+    assertEquals(Errors.NONE.code, rejoinGroupResponseData.errorCode)
 
     if (completeRebalance) {
       // Send the sync group request to complete the rebalance.
       syncGroupWithOldProtocol(
         groupId = groupId,
-        memberId = joinGroupResponse.data.memberId(),
-        generationId = joinGroupResponse.data.generationId(),
+        memberId = rejoinGroupResponseData.memberId,
+        generationId = rejoinGroupResponseData.generationId,
         assignments = List(new SyncGroupRequestAssignment()
-          .setMemberId(joinGroupResponse.data.memberId)
-          .setAssignment(assignment))
+          .setMemberId(rejoinGroupResponseData.memberId)
+          .setAssignment(assignment)),
+        expectedAssignment = assignment
       )
     }
 
-    (joinGroupResponse.data.memberId, joinGroupResponse.data.generationId)
+    (rejoinGroupResponseData.memberId, rejoinGroupResponseData.generationId)
+  }
+
+  protected def joinStaticConsumerGroupWithOldProtocol(
+    groupId: String,
+    groupInstanceId: String,
+    metadata: Array[Byte] = Array.empty,
+    completeRebalance: Boolean = true
+  ): (String, Int) = {
+    val joinGroupResponseData = sendJoinRequest(
+      groupId = groupId,
+      groupInstanceId = groupInstanceId,
+      metadata = metadata
+    )
+
+    if (completeRebalance) {
+      // Send the sync group request to complete the rebalance.
+      syncGroupWithOldProtocol(
+        groupId = groupId,
+        memberId = joinGroupResponseData.memberId,
+        generationId = joinGroupResponseData.generationId
+      )
+    }
+
+    (joinGroupResponseData.memberId, joinGroupResponseData.generationId)
   }
 
   protected def joinConsumerGroupWithNewProtocol(groupId: String): (String, Int) = {
@@ -337,7 +399,7 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
     } else {
       // Note that we don't heartbeat and assume that the test will
       // complete within the session timeout.
-      joinConsumerGroupWithOldProtocol(groupId)
+      joinDynamicConsumerGroupWithOldProtocol(groupId = groupId)
     }
   }
 
@@ -357,16 +419,37 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
 
   protected def describeGroups(
     groupIds: List[String],
-    version: Short
+    version: Short = ApiKeys.DESCRIBE_GROUPS.latestVersion(isUnstableApiEnabled)
   ): List[DescribeGroupsResponseData.DescribedGroup] = {
     val describeGroupsRequest = new DescribeGroupsRequest.Builder(
-      new DescribeGroupsRequestData()
-        .setGroups(groupIds.asJava)
+      new DescribeGroupsRequestData().setGroups(groupIds.asJava)
     ).build(version)
 
     val describeGroupsResponse = connectAndReceive[DescribeGroupsResponse](describeGroupsRequest)
 
     describeGroupsResponse.data.groups.asScala.toList
+  }
+
+  protected def heartbeat(
+    groupId: String,
+    generationId: Int,
+    memberId: String,
+    groupInstanceId: String = null,
+    expectedError: Errors = Errors.NONE,
+    version: Short
+  ): HeartbeatResponseData = {
+    val heartbeatRequest = new HeartbeatRequest.Builder(
+      new HeartbeatRequestData()
+        .setGroupId(groupId)
+        .setGenerationId(generationId)
+        .setMemberId(memberId)
+        .setGroupInstanceId(groupInstanceId)
+    ).build(version)
+
+    val heartbeatResponse = connectAndReceive[HeartbeatResponse](heartbeatRequest)
+    assertEquals(expectedError.code, heartbeatResponse.data.errorCode)
+
+    heartbeatResponse.data
   }
 
   protected def consumerGroupHeartbeat(
@@ -421,26 +504,32 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
   protected def leaveGroupWithOldProtocol(
     groupId: String,
     memberIds: List[String],
+    groupInstanceIds: List[String] = null,
     expectedLeaveGroupError: Errors,
-    expectedMemberErrors: List[Errors]
+    expectedMemberErrors: List[Errors],
+    version: Short
   ): Unit = {
-    if (memberIds.size != expectedMemberErrors.size) {
-      fail("genericGroupLeave: memberIds and expectedMemberErrors have unmatched sizes.")
-    }
-
     val leaveGroupRequest = new LeaveGroupRequest.Builder(
       groupId,
-      memberIds.map(memberId => new MemberIdentity().setMemberId(memberId)).asJava
-    ).build()
+      List.tabulate(memberIds.length) { i =>
+        new MemberIdentity()
+          .setMemberId(memberIds(i))
+          .setGroupInstanceId(if (groupInstanceIds == null) null else groupInstanceIds(i))
+      }.asJava
+    ).build(version)
 
     val expectedResponseData = new LeaveGroupResponseData()
-      .setErrorCode(expectedLeaveGroupError.code)
-      .setMembers(List.tabulate(memberIds.length) { i =>
-        new MemberResponse()
-          .setMemberId(memberIds(i))
-          .setGroupInstanceId(null)
-          .setErrorCode(expectedMemberErrors(i).code)
-      }.asJava)
+    if (expectedLeaveGroupError != Errors.NONE) {
+      expectedResponseData.setErrorCode(expectedLeaveGroupError.code)
+    } else {
+      expectedResponseData
+        .setMembers(List.tabulate(expectedMemberErrors.length) { i =>
+          new MemberResponse()
+            .setMemberId(memberIds(i))
+            .setGroupInstanceId(if (groupInstanceIds == null) null else groupInstanceIds(i))
+            .setErrorCode(expectedMemberErrors(i).code)
+        }.asJava)
+    }
 
     val leaveGroupResponse = connectAndReceive[LeaveGroupResponse](leaveGroupRequest)
     assertEquals(expectedResponseData, leaveGroupResponse.data)
@@ -449,12 +538,13 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
   protected def leaveGroup(
     groupId: String,
     memberId: String,
-    useNewProtocol: Boolean
+    useNewProtocol: Boolean,
+    version: Short
   ): Unit = {
     if (useNewProtocol) {
       leaveGroupWithNewProtocol(groupId, memberId)
     } else {
-      leaveGroupWithOldProtocol(groupId, List(memberId), Errors.NONE, List(Errors.NONE))
+      leaveGroupWithOldProtocol(groupId, List(memberId), null, Errors.NONE, List(Errors.NONE), version)
     }
   }
 
