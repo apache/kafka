@@ -20,7 +20,8 @@ Python script to build and push a multiarch docker image
 This script is used to prepare and publish docker release candidate
 
 Pre requisites:
-Ensure that you are logged in the docker registry and you have access to push to that registry.
+    Ensure that you are logged in the docker registry and you have access to push to that registry.
+    Ensure that docker buildx is enabled for you.
 
 Usage:
     docker_release.py --help
@@ -44,6 +45,8 @@ def build_push_jvm(image, kafka_url):
         create_builder()
         jvm_image(f"docker buildx build -f $DOCKER_FILE --build-arg kafka_url={kafka_url} --build-arg build_date={date.today()} --push \
               --platform linux/amd64,linux/arm64 --tag {image} $DOCKER_DIR")
+    except:
+        raise SystemError("Docker image push failed")
     finally:
         remove_builder()
 

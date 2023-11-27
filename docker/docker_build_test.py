@@ -47,13 +47,17 @@ def build_jvm(image, tag, kafka_url):
 
 def run_jvm_tests(image, tag, kafka_url):
     temp_dir_path = tempfile.mkdtemp()
-    current_dir = os.path.dirname(os.path.realpath(__file__))
-    copy_tree(f"{current_dir}/test/fixtures", f"{temp_dir_path}/fixtures")
-    execute(["wget", "-nv", "-O", f"{temp_dir_path}/kafka.tgz", kafka_url])
-    execute(["mkdir", f"{temp_dir_path}/fixtures/kafka"])
-    execute(["tar", "xfz", f"{temp_dir_path}/kafka.tgz", "-C", f"{temp_dir_path}/fixtures/kafka", "--strip-components", "1"])
-    failure_count = run_tests(f"{image}:{tag}", "jvm", temp_dir_path)
-    shutil.rmtree(temp_dir_path)
+    try:
+        current_dir = os.path.dirname(os.path.realpath(__file__))
+        copy_tree(f"{current_dir}/test/fixtures", f"{temp_dir_path}/fixtures")
+        execute(["wget", "-nv", "-O", f"{temp_dir_path}/kafka.tgz", kafka_url])
+        execute(["mkdir", f"{temp_dir_path}/fixtures/kafka"])
+        execute(["tar", "xfz", f"{temp_dir_path}/kafka.tgz", "-C", f"{temp_dir_path}/fixtures/kafka", "--strip-components", "1"])
+        failure_count = run_tests(f"{image}:{tag}", "jvm", temp_dir_path)
+    except:
+        raise SystemError("Failed to run the tests")
+    finally:
+        shutil.rmtree(temp_dir_path)
     test_report_location_text = f"To view test report please check {current_dir}/test/report_jvm.html"
     if failure_count != 0:
         raise SystemError(f"{failure_count} tests have failed. {test_report_location_text}")
