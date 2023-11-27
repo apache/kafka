@@ -103,4 +103,12 @@ public interface ClientTelemetrySender extends AutoCloseable {
      */
 
     Optional<Uuid> clientInstanceId(Duration timeout);
+
+    /**
+     * Initiates shutdown of this client. This method is called when the enclosing client instance
+     * is being closed. This method should not throw an exception if the client is already closed.
+     *
+     * @param timeoutMs The maximum time to wait for the client to close.
+     */
+    void initiateClose(long timeoutMs);
 }

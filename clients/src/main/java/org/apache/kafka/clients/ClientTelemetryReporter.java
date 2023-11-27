@@ -47,6 +47,7 @@ import org.apache.kafka.common.telemetry.internals.MetricsCollector;
 import org.apache.kafka.common.telemetry.internals.MetricsEmitter;
 import org.apache.kafka.common.telemetry.internals.SinglePointMetric;
 import org.apache.kafka.common.telemetry.internals.TelemetryMetricNamingConvention;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -110,25 +111,26 @@ public class ClientTelemetryReporter implements MetricsReporter {
     private static final Logger log = LoggerFactory.getLogger(ClientTelemetryReporter.class);
 
     public static final int DEFAULT_PUSH_INTERVAL_MS = 5 * 60 * 1000;
-    public static final long MAX_TERMINAL_PUSH_WAIT_MS = 1000;
 
     private final List<MetricsCollector> collectors;
     private final ClientTelemetryProvider telemetryProvider;
 
     private final ClientTelemetrySender clientTelemetrySender;
+    private final Time time;
     private Map<String, Object> rawOriginalConfig;
     private KafkaMetricsCollector kafkaMetricsCollector;
 
-    public ClientTelemetryReporter() {
-        this.collectors = new CopyOnWriteArrayList<>();
-        this.telemetryProvider = new ClientTelemetryProvider();
-        this.clientTelemetrySender = new DefaultClientTelemetrySender();
+    public ClientTelemetryReporter(Time time) {
+        this.time = time;
+        collectors = new CopyOnWriteArrayList<>();
+        telemetryProvider = new ClientTelemetryProvider();
+        clientTelemetrySender = new DefaultClientTelemetrySender();
     }
 
     @SuppressWarnings("unchecked")
     @Override
     public synchronized void configure(Map<String, ?> configs) {
-        rawOriginalConfig = (Map<String, Object>) configs;
+        rawOriginalConfig = (Map<String, Object>) Objects.requireNonNull(configs);
     }
 
     @Override
@@ -137,7 +139,7 @@ public class ClientTelemetryReporter implements MetricsReporter {
           If validation succeeds: initialize the provider, start the metric collection task,
           set metrics labels for services/libraries that expose metrics.
          */
-        Objects.requireNonNull(this.rawOriginalConfig, "configure() was not called before contextChange()");
+        Objects.requireNonNull(rawOriginalConfig, "configure() was not called before contextChange()");
         if (!metricsContext.contextLabels().containsKey(MetricsContext.NAMESPACE)) {
             log.warn("_namespace not found in metrics context. Metrics collection is disabled");
             return;
@@ -204,6 +206,19 @@ public class ClientTelemetryReporter implements MetricsReporter {
             clientTelemetrySender.close();
         } catch (Exception exception) {
             log.error("Failed to close client telemetry reporter", exception);
+        }
+    }
+
+    public synchronized void updateMetricsLabels(Map<String, String> labels) {
+        telemetryProvider.updateLabels(labels);
+    }
+
+    public void initiateClose(long timeoutMs) {
+        log.debug("Initiate close of ClientTelemetryReporter");
+        try {
+            clientTelemetrySender.initiateClose(timeoutMs);
+        } catch (Exception exception) {
+            log.error("Failed to initiate close of client telemetry reporter", exception);
         }
     }
 
@@ -280,15 +295,15 @@ public class ClientTelemetryReporter implements MetricsReporter {
         private boolean enabled;
 
         private DefaultClientTelemetrySender() {
-            this.enabled = true;
+            enabled = true;
         }
 
         @Override
         public long timeToNextUpdate(long requestTimeoutMs) {
-            final long now = System.currentTimeMillis();
+            final long now = time.milliseconds();
             final ClientTelemetryState localState;
             final long localLastRequestMs;
-            int localIntervalMs;
+            final int localIntervalMs;
 
             lock.readLock().lock();
             try {
@@ -304,32 +319,32 @@ public class ClientTelemetryReporter implements MetricsReporter {
             }
 
             final long timeMs;
+            final String apiName;
             final String msg;
 
             switch (localState) {
                 case SUBSCRIPTION_IN_PROGRESS:
                 case PUSH_IN_PROGRESS:
-                case TERMINATING_PUSH_IN_PROGRESS: {
                     /*
                      We have a network request in progress. We record the time of the request
                      submission, so wait that amount of the time PLUS the requestTimeout that
                      is provided.
                     */
-                    String apiName = (localState == ClientTelemetryState.SUBSCRIPTION_IN_PROGRESS) ? ApiKeys.GET_TELEMETRY_SUBSCRIPTIONS.name : ApiKeys.PUSH_TELEMETRY.name;
+                    apiName = (localState == ClientTelemetryState.SUBSCRIPTION_IN_PROGRESS) ? ApiKeys.GET_TELEMETRY_SUBSCRIPTIONS.name : ApiKeys.PUSH_TELEMETRY.name;
                     timeMs = requestTimeoutMs;
                     msg = String.format("the remaining wait time for the %s network API request, as specified by %s", apiName, CommonClientConfigs.REQUEST_TIMEOUT_MS_CONFIG);
                     break;
-                }
-
-                case TERMINATING_PUSH_NEEDED: {
+                case TERMINATING_PUSH_IN_PROGRESS:
+                    timeMs = Long.MAX_VALUE;
+                    msg = String.format("the terminating push is in progress, disabling telemetry for further requests");
+                    break;
+                case TERMINATING_PUSH_NEEDED:
                     timeMs = 0;
                     msg = String.format("the client should try to submit the final %s network API request ASAP before closing", ApiKeys.PUSH_TELEMETRY.name);
                     break;
-                }
-
                 case SUBSCRIPTION_NEEDED:
-                case PUSH_NEEDED: {
-                    String apiName = (localState == ClientTelemetryState.SUBSCRIPTION_NEEDED) ? ApiKeys.GET_TELEMETRY_SUBSCRIPTIONS.name : ApiKeys.PUSH_TELEMETRY.name;
+                case PUSH_NEEDED:
+                    apiName = (localState == ClientTelemetryState.SUBSCRIPTION_NEEDED) ? ApiKeys.GET_TELEMETRY_SUBSCRIPTIONS.name : ApiKeys.PUSH_TELEMETRY.name;
                     long timeRemainingBeforeRequest = localLastRequestMs + localIntervalMs - now;
                     if (timeRemainingBeforeRequest <= 0) {
                         timeMs = 0;
@@ -339,11 +354,8 @@ public class ClientTelemetryReporter implements MetricsReporter {
                         msg = String.format("the client will wait before submitting the next %s network API request", apiName);
                     }
                     break;
-                }
                 default:
-                    // Should never get to here
-                    timeMs = Long.MAX_VALUE;
-                    msg = "invalid telemetry state, disabling telemetry";
+                    throw new IllegalStateException("Unknown telemetry state: " + localState);
             }
 
             log.debug("For telemetry state {}, returning the value {} ms; {}", localState, timeMs, msg);
@@ -375,17 +387,28 @@ public class ClientTelemetryReporter implements MetricsReporter {
 
         @Override
         public void handleResponse(GetTelemetrySubscriptionsResponse response) {
-            final long now = System.currentTimeMillis();
-            GetTelemetrySubscriptionsResponseData data = response.data();
+            final long now = time.milliseconds();
+            final GetTelemetrySubscriptionsResponseData data = response.data();
+
+            final ClientTelemetryState oldState;
+            final ClientTelemetrySubscription oldSubscription;
+            lock.readLock().lock();
+            try {
+                oldState = state;
+                oldSubscription = subscription;
+            } finally {
+                lock.readLock().unlock();
+            }
+
             Optional<Integer> errorIntervalMsOpt = ClientTelemetryUtils.maybeFetchErrorIntervalMs(data.errorCode(),
-                subscription != null ? subscription.pushIntervalMs() : -1);
+                oldSubscription != null ? oldSubscription.pushIntervalMs() : -1);
             // If the error code indicates that the interval ms needs to be updated as per the error
             // code then update the interval ms and state so that the subscription can be retried.
             if (errorIntervalMsOpt.isPresent()) {
                 // Update the state from SUBSCRIPTION_INR_PROGRESS to SUBSCRIPTION_NEEDED as the error
                 // response indicates that the subscription is not valid.
                 if (!maybeSetState(ClientTelemetryState.SUBSCRIPTION_NEEDED)) {
-                    log.error("Unable to transition state after failed get telemetry subscriptions from state {}", state);
+                    log.error("Unable to transition state after failed get telemetry subscriptions from state {}", oldState);
                 }
                 updateErrorResult(errorIntervalMsOpt.get(), now);
                 return;
@@ -397,6 +420,16 @@ public class ClientTelemetryReporter implements MetricsReporter {
                 data.requestedMetrics());
             List<CompressionType> acceptedCompressionTypes = ClientTelemetryUtils.getCompressionTypesFromAcceptedList(
                 data.acceptedCompressionTypes());
+
+            // Check if the delta temporality has changed, if so, we need to reset the ledger tracking
+            // the last value sent for each metric.
+            if (oldSubscription != null && oldSubscription.deltaTemporality() != data.deltaTemporality()) {
+                log.info("Delta temporality has changed from {} to {}, resetting metric values",
+                    oldSubscription.deltaTemporality(), data.deltaTemporality());
+                if (kafkaMetricsCollector != null) {
+                    kafkaMetricsCollector.metricsReset();
+                }
+            }
 
             ClientTelemetrySubscription clientTelemetrySubscription = new ClientTelemetrySubscription(
                 clientInstanceId,
@@ -436,17 +469,17 @@ public class ClientTelemetryReporter implements MetricsReporter {
 
         @Override
         public void handleResponse(PushTelemetryResponse response) {
-            final long now = System.currentTimeMillis();
-            PushTelemetryResponseData data = response.data();
-            Optional<Integer> errorIntervalMsOpt = ClientTelemetryUtils.maybeFetchErrorIntervalMs(data.errorCode(),
-                subscription.pushIntervalMs());
+            final long now = time.milliseconds();
+            final PushTelemetryResponseData data = response.data();
 
-            // If the error code indicates that the interval ms needs to be updated as per the error
-            // code then update the interval ms and state so that the subscription can be re-fetched,
-            // and the push retried.
-            if (errorIntervalMsOpt.isPresent()) {
-                lock.writeLock().lock();
-                try {
+            lock.writeLock().lock();
+            try {
+                Optional<Integer> errorIntervalMsOpt = ClientTelemetryUtils.maybeFetchErrorIntervalMs(data.errorCode(),
+                    subscription.pushIntervalMs());
+                // If the error code indicates that the interval ms needs to be updated as per the error
+                // code then update the interval ms and state so that the subscription can be re-fetched,
+                // and the push retried.
+                if (errorIntervalMsOpt.isPresent()) {
                     // This is the case when client began termination sometime after the last push request
                     // was issued. Just getting the callback, hence need to ignore it.
                     if (isTerminatingState()) {
@@ -458,13 +491,8 @@ public class ClientTelemetryReporter implements MetricsReporter {
                     }
                     updateErrorResult(errorIntervalMsOpt.get(), now);
                     return;
-                } finally {
-                    lock.writeLock().unlock();
                 }
-            }
 
-            lock.writeLock().lock();
-            try {
                 lastRequestMs = now;
                 intervalMs = subscription.pushIntervalMs();
                 if (!maybeSetState(ClientTelemetryState.PUSH_NEEDED)) {
@@ -489,7 +517,7 @@ public class ClientTelemetryReporter implements MetricsReporter {
 
         @Override
         public Optional<Uuid> clientInstanceId(Duration timeout) {
-            long timeoutMs = timeout.toMillis();
+            final long timeoutMs = timeout.toMillis();
             if (timeoutMs < 0) {
                 throw new IllegalArgumentException("The timeout cannot be negative for fetching client instance id.");
             }
@@ -529,12 +557,10 @@ public class ClientTelemetryReporter implements MetricsReporter {
         public void close() {
             log.debug("close telemetry sender for client telemetry reporter instance");
 
-            maybeInitiateClose(Duration.ofMillis(MAX_TERMINAL_PUSH_WAIT_MS));
-
             boolean shouldClose = false;
             lock.writeLock().lock();
             try {
-                if (this.state != ClientTelemetryState.TERMINATED) {
+                if (state != ClientTelemetryState.TERMINATED) {
                     if (maybeSetState(ClientTelemetryState.TERMINATED)) {
                         shouldClose = true;
                     }
@@ -547,6 +573,41 @@ public class ClientTelemetryReporter implements MetricsReporter {
 
             if (shouldClose) {
                 collectors.forEach(MetricsCollector::stop);
+            }
+        }
+
+        @Override
+        public void initiateClose(long timeoutMs) {
+            log.debug("initiate close for client telemetry, check if terminal push required. Timeout {} ms.", timeoutMs);
+
+            lock.writeLock().lock();
+            try {
+                // If we never fetched a subscription, we can't really push anything.
+                if (lastRequestMs == 0) {
+                    log.info("Telemetry subscription not loaded, not attempting terminating push");
+                    return;
+                }
+
+                if (state == ClientTelemetryState.SUBSCRIPTION_NEEDED) {
+                    log.debug("Subscription not yet loaded, ignoring terminal push");
+                    return;
+                }
+
+                if (isTerminatingState() || !maybeSetState(ClientTelemetryState.TERMINATING_PUSH_NEEDED)) {
+                    log.debug("Ignoring subsequent initiateClose");
+                    return;
+                }
+
+                try {
+                    log.info("About to wait {} ms. for terminal telemetry push to be submitted", timeoutMs);
+                    if (!terminalPushInProgress.await(timeoutMs, TimeUnit.MILLISECONDS)) {
+                        log.info("Wait for terminal telemetry push to be submitted has elapsed; may not have actually sent request");
+                    }
+                } catch (InterruptedException e) {
+                    log.warn("Error during client telemetry close", e);
+                }
+            } finally {
+                lock.writeLock().unlock();
             }
         }
 
@@ -588,7 +649,7 @@ public class ClientTelemetryReporter implements MetricsReporter {
             try {
                 // We've already been terminated, or we've already issued our last push, so we
                 // should just exit now.
-                if (this.state == ClientTelemetryState.TERMINATED || this.state == ClientTelemetryState.TERMINATING_PUSH_IN_PROGRESS) {
+                if (state == ClientTelemetryState.TERMINATED || state == ClientTelemetryState.TERMINATING_PUSH_IN_PROGRESS) {
                     return Optional.empty();
                 }
 
@@ -647,11 +708,11 @@ public class ClientTelemetryReporter implements MetricsReporter {
                  all their data at the same time.
                 */
                 if (state == ClientTelemetryState.PUSH_NEEDED) {
-                    this.intervalMs = computeStaggeredIntervalMs(subscription.pushIntervalMs());
+                    intervalMs = computeStaggeredIntervalMs(subscription.pushIntervalMs());
                 } else {
-                    this.intervalMs = subscription.pushIntervalMs();
+                    intervalMs = subscription.pushIntervalMs();
                 }
-                this.lastRequestMs = timeMs;
+                lastRequestMs = timeMs;
 
                 log.debug("Updating subscription - subscription: {}; intervalMs: {}, lastRequestMs: {}",
                     subscription, intervalMs, lastRequestMs);
@@ -670,14 +731,14 @@ public class ClientTelemetryReporter implements MetricsReporter {
             lock.writeLock().lock();
             try {
                 this.intervalMs = intervalMs;
-                this.lastRequestMs = timeMs;
+                lastRequestMs = timeMs;
                 /*
                  If the interval time is set to Integer.MAX_VALUE, then it means that the telemetry sender
                  should not send any more telemetry requests. This is used when the client received
                  unrecoverable error from broker.
                 */
                 if (intervalMs == Integer.MAX_VALUE) {
-                    this.enabled = false;
+                    enabled = false;
                 }
 
                 log.debug("Updating intervalMs: {}, lastRequestMs: {}", intervalMs, lastRequestMs);
@@ -721,7 +782,7 @@ public class ClientTelemetryReporter implements MetricsReporter {
         }
 
         private void handleFailedRequest(boolean shouldWait) {
-            final long now = System.currentTimeMillis();
+            final long now = time.milliseconds();
             lock.writeLock().lock();
             try {
                 if (isTerminatingState()) {
@@ -763,41 +824,6 @@ public class ClientTelemetryReporter implements MetricsReporter {
                 log.error("Error constructing payload: ", e);
             }
             return builder.build().toByteArray();
-        }
-
-        private void maybeInitiateClose(Duration timeout) {
-            log.debug("initiate close for client telemetry, check if terminal push required");
-
-            long timeoutMs = timeout.toMillis();
-            lock.writeLock().lock();
-            try {
-                // If we never fetched a subscription, we can't really push anything.
-                if (lastRequestMs == 0) {
-                    log.info("Telemetry subscription not loaded, not attempting terminating push");
-                    return;
-                }
-
-                if (state == ClientTelemetryState.SUBSCRIPTION_NEEDED) {
-                    log.debug("Subscription not yet loaded, ignoring terminal push");
-                    return;
-                }
-
-                if (isTerminatingState() || !maybeSetState(ClientTelemetryState.TERMINATING_PUSH_NEEDED)) {
-                    log.debug("Ignoring subsequent initiateClose");
-                    return;
-                }
-
-                try {
-                    log.info("About to wait {} ms. for terminal telemetry push to be submitted", timeout);
-                    if (!terminalPushInProgress.await(timeoutMs, TimeUnit.MILLISECONDS)) {
-                        log.info("Wait for terminal telemetry push to be submitted has elapsed; may not have actually sent request");
-                    }
-                } catch (InterruptedException e) {
-                    log.warn("Error during client telemetry close", e);
-                }
-            } finally {
-                lock.writeLock().unlock();
-            }
         }
 
         // Visible for testing

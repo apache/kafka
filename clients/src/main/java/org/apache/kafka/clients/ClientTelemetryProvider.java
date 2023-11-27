@@ -38,12 +38,16 @@ public class ClientTelemetryProvider implements Configurable {
     public static final String CLIENT_RACK = "client_rack";
     public static final String GROUP_ID = "group_id";
     public static final String GROUP_INSTANCE_ID = "group_instance_id";
+    public static final String GROUP_MEMBER_ID = "group_member_id";
     public static final String TRANSACTIONAL_ID = "transactional_id";
+
+    private static final String PRODUCER_NAMESPACE = "kafka.producer";
+    private static final String CONSUMER_NAMESPACE = "kafka.consumer";
 
     private static final Map<String, String> PRODUCER_CONFIG_MAPPING = new HashMap<>();
     private static final Map<String, String> CONSUMER_CONFIG_MAPPING = new HashMap<>();
 
-    private Resource resource = null;
+    private volatile Resource resource = null;
     private Map<String, ?> config = null;
 
     static {
@@ -59,8 +63,7 @@ public class ClientTelemetryProvider implements Configurable {
     }
 
     /**
-     * Validate that all the data required for generating correct metrics is present. The provider
-     * will be disabled if validation fails.
+     * Validate that all the data required for generating correct metrics is present.
      *
      * @param metricsContext {@link MetricsContext}
      * @return false if all the data required for generating correct metrics is missing, true
@@ -79,18 +82,18 @@ public class ClientTelemetryProvider implements Configurable {
      *
      * @param metricsContext {@link MetricsContext}
      */
-    public void contextChange(MetricsContext metricsContext) {
+    public synchronized void contextChange(MetricsContext metricsContext) {
         final Resource.Builder resourceBuilder = Resource.newBuilder();
 
         final String namespace = metricsContext.contextLabels().get(MetricsContext.NAMESPACE);
-        if (KafkaProducer.JMX_PREFIX.equals(namespace)) {
+        if (PRODUCER_NAMESPACE.equals(namespace)) {
             // Add producer resource labels.
             PRODUCER_CONFIG_MAPPING.forEach((configKey, telemetryKey) -> {
                 if (config.containsKey(configKey)) {
                     addAttribute(resourceBuilder, telemetryKey, String.valueOf(config.get(configKey)));
                 }
             });
-        } else if (ConsumerUtils.CONSUMER_JMX_PREFIX.equals(namespace)) {
+        } else if (CONSUMER_NAMESPACE.equals(namespace)) {
             // Add consumer resource labels.
             CONSUMER_CONFIG_MAPPING.forEach((configKey, telemetryKey) -> {
                 if (config.containsKey(configKey)) {
@@ -104,7 +107,15 @@ public class ClientTelemetryProvider implements Configurable {
             addAttribute(resourceBuilder, CLIENT_RACK, String.valueOf(config.get(CommonClientConfigs.CLIENT_RACK_CONFIG)));
         }
 
-        this.resource = resourceBuilder.build();
+        resource = resourceBuilder.build();
+    }
+
+    public synchronized void updateLabels(Map<String, String> labels) {
+        final Resource.Builder resourceBuilder = resource.toBuilder();
+        labels.forEach((key, value) -> {
+            addAttribute(resourceBuilder, key, value);
+        });
+        resource = resourceBuilder.build();
     }
 
     /**
@@ -113,7 +124,7 @@ public class ClientTelemetryProvider implements Configurable {
      * @return A fully formed {@link Resource} with all the tags.
      */
     public Resource resource() {
-        return this.resource;
+        return resource;
     }
 
     /**

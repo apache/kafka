@@ -52,6 +52,7 @@ public class ClientTelemetryUtils {
      * <ul>
      *     <li>Invalid Request: Disable Telemetry</li>
      *     <li>Invalid Record: Disable Telemetry</li>
+     *     <li>Unsupported Version: Disable Telemetry</li>
      *     <li>UnknownSubscription or Unsupported Compression: Retry immediately</li>
      *     <li>TelemetryTooLarge or ThrottlingQuotaExceeded: Retry as per next interval</li>
      * </ul>
@@ -71,29 +72,26 @@ public class ClientTelemetryUtils {
         Errors error = Errors.forCode(errorCode);
         switch (error) {
             case INVALID_REQUEST:
-            case INVALID_RECORD: {
+            case INVALID_RECORD:
+            case UNSUPPORTED_VERSION:
                 pushIntervalMs = Integer.MAX_VALUE;
                 reason = "The broker response indicates the client sent an request that cannot be resolved"
                     + " by re-trying, hence disable telemetry";
                 break;
-            }
             case UNKNOWN_SUBSCRIPTION_ID:
-            case UNSUPPORTED_COMPRESSION_TYPE: {
+            case UNSUPPORTED_COMPRESSION_TYPE:
                 pushIntervalMs = 0;
                 reason = error.message();
                 break;
-            }
             case TELEMETRY_TOO_LARGE:
-            case THROTTLING_QUOTA_EXCEEDED: {
+            case THROTTLING_QUOTA_EXCEEDED:
                 reason = error.message();
                 pushIntervalMs = (intervalMs != -1) ? intervalMs : DEFAULT_PUSH_INTERVAL_MS;
                 break;
-            }
-            default: {
+            default:
                 reason = "Unwrapped error code";
                 log.error("Error code: {}. Unmapped error for telemetry, disable telemetry.", errorCode);
                 pushIntervalMs = Integer.MAX_VALUE;
-            }
         }
 
         log.debug("Error code: {}, reason: {}. Push interval update to {} ms.", errorCode, reason, pushIntervalMs);

@@ -39,6 +39,7 @@ import org.apache.kafka.common.requests.GetTelemetrySubscriptionsResponse;
 import org.apache.kafka.common.requests.PushTelemetryRequest;
 import org.apache.kafka.common.requests.PushTelemetryResponse;
 import org.apache.kafka.common.telemetry.ClientTelemetryState;
+import org.apache.kafka.common.utils.Time;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -56,6 +57,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class ClientTelemetryReporterTest {
@@ -68,7 +70,7 @@ public class ClientTelemetryReporterTest {
 
     @BeforeEach
     public void setUp() {
-        clientTelemetryReporter = new ClientTelemetryReporter();
+        clientTelemetryReporter = new ClientTelemetryReporter(Time.SYSTEM);
         configs = new HashMap<>();
         metricsContext = new KafkaMetricsContext("test");
         uuid = Uuid.randomUuid();
@@ -109,7 +111,7 @@ public class ClientTelemetryReporterTest {
         configs.put(CommonClientConfigs.CLIENT_RACK_CONFIG, "rack");
 
         clientTelemetryReporter.configure(configs);
-        clientTelemetryReporter.contextChange(new KafkaMetricsContext(KafkaProducer.JMX_PREFIX));
+        clientTelemetryReporter.contextChange(new KafkaMetricsContext("kafka.producer"));
         assertEquals(1, clientTelemetryReporter.collectors().size());
         assertNotNull(clientTelemetryReporter.telemetryProvider().resource());
 
@@ -133,7 +135,7 @@ public class ClientTelemetryReporterTest {
         configs.put(CommonClientConfigs.CLIENT_RACK_CONFIG, "rack");
 
         clientTelemetryReporter.configure(configs);
-        clientTelemetryReporter.contextChange(new KafkaMetricsContext(ConsumerUtils.CONSUMER_JMX_PREFIX));
+        clientTelemetryReporter.contextChange(new KafkaMetricsContext("kafka.consumer"));
         assertEquals(1, clientTelemetryReporter.collectors().size());
         assertNotNull(clientTelemetryReporter.telemetryProvider().resource());
 
@@ -189,10 +191,10 @@ public class ClientTelemetryReporterTest {
         assertEquals(0, telemetrySender.timeToNextUpdate(100));
 
         assertTrue(telemetrySender.maybeSetState(ClientTelemetryState.TERMINATING_PUSH_IN_PROGRESS));
-        assertEquals(100, telemetrySender.timeToNextUpdate(100));
+        assertEquals(Long.MAX_VALUE, telemetrySender.timeToNextUpdate(100));
 
         assertTrue(telemetrySender.maybeSetState(ClientTelemetryState.TERMINATED));
-        assertEquals(Long.MAX_VALUE, telemetrySender.timeToNextUpdate(100));
+        assertThrows(IllegalStateException.class, () -> telemetrySender.timeToNextUpdate(100));
     }
 
     @Test
