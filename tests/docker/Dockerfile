@@ -63,6 +63,7 @@ RUN mkdir -p "/opt/kafka-2.5.1" && chmod a+rw /opt/kafka-2.5.1 && curl -s "$KAFK
 RUN mkdir -p "/opt/kafka-2.6.3" && chmod a+rw /opt/kafka-2.6.3 && curl -s "$KAFKA_MIRROR/kafka_2.12-2.6.3.tgz" | tar xz --strip-components=1 -C "/opt/kafka-2.6.3"
 RUN mkdir -p "/opt/kafka-2.7.2" && chmod a+rw /opt/kafka-2.7.2 && curl -s "$KAFKA_MIRROR/kafka_2.12-2.7.2.tgz" | tar xz --strip-components=1 -C "/opt/kafka-2.7.2"
 RUN mkdir -p "/opt/kafka-2.8.2" && chmod a+rw /opt/kafka-2.8.2 && curl -s "$KAFKA_MIRROR/kafka_2.12-2.8.2.tgz" | tar xz --strip-components=1 -C "/opt/kafka-2.8.2"
+RUN mkdir -p "/opt/kafka-3.0.2" && chmod a+rw /opt/kafka-3.0.2 && curl -s "$KAFKA_MIRROR/kafka_2.12-3.0.2.tgz" | tar xz --strip-components=1 -C "/opt/kafka-3.0.2"
 
 # Streams test dependencies
 RUN curl -s "$KAFKA_MIRROR/kafka-streams-0.10.0.1-test.jar" -o /opt/kafka-0.10.0.1/libs/kafka-streams-0.10.0.1-test.jar

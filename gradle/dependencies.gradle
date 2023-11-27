@@ -114,7 +114,7 @@ versions += [
   snappy: "1.1.10.5",
   spotbugs: "4.2.2",
   zinc: "1.3.5",
-  zookeeper: "3.6.4",
+  zookeeper: "3.8.3",
   zstd: "1.5.0-2"
 ]
 libs += [
@@ -132,6 +132,7 @@ libs += [
   bcpkix: "org.bouncycastle:bcpkix-jdk15on:$versions.bcpkix",
   commonsCli: "commons-cli:commons-cli:$versions.commonsCli",
   commonsCodec: "commons-codec:commons-codec:$versions.commonsCodec",
+  dropwizardMetrics: "io.dropwizard.metrics:metrics-core:$versions.dropwizardMetrics",
   easymock: "org.easymock:easymock:$versions.easymock",
   jacksonAnnotations: "com.fasterxml.jackson.core:jackson-annotations:$versions.jackson",
   jacksonDatabind: "com.fasterxml.jackson.core:jackson-databind:$versions.jacksonDatabind",
