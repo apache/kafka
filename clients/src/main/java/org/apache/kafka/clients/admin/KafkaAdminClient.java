@@ -20,8 +20,6 @@ package org.apache.kafka.clients.admin;
 import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.ClientRequest;
 import org.apache.kafka.clients.ClientResponse;
-import org.apache.kafka.clients.ClientTelemetryReporter;
-import org.apache.kafka.clients.ClientTelemetryUtils;
 import org.apache.kafka.clients.ClientUtils;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.DefaultHostResolver;
@@ -142,6 +140,7 @@ import org.apache.kafka.common.message.DescribeUserScramCredentialsRequestData;
 import org.apache.kafka.common.message.DescribeUserScramCredentialsRequestData.UserName;
 import org.apache.kafka.common.message.DescribeUserScramCredentialsResponseData;
 import org.apache.kafka.common.message.ExpireDelegationTokenRequestData;
+import org.apache.kafka.common.message.GetTelemetrySubscriptionsRequestData;
 import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity;
 import org.apache.kafka.common.message.ListGroupsRequestData;
 import org.apache.kafka.common.message.ListGroupsResponseData;
@@ -209,6 +208,8 @@ import org.apache.kafka.common.requests.ElectLeadersRequest;
 import org.apache.kafka.common.requests.ElectLeadersResponse;
 import org.apache.kafka.common.requests.ExpireDelegationTokenRequest;
 import org.apache.kafka.common.requests.ExpireDelegationTokenResponse;
+import org.apache.kafka.common.requests.GetTelemetrySubscriptionsRequest;
+import org.apache.kafka.common.requests.GetTelemetrySubscriptionsResponse;
 import org.apache.kafka.common.requests.IncrementalAlterConfigsRequest;
 import org.apache.kafka.common.requests.IncrementalAlterConfigsResponse;
 import org.apache.kafka.common.requests.JoinGroupRequest;
@@ -378,7 +379,12 @@ public class KafkaAdminClient extends AdminClient {
     private final long retryBackoffMs;
     private final long retryBackoffMaxMs;
     private final ExponentialBackoff retryBackoff;
-    private final Optional<ClientTelemetryReporter> clientTelemetryReporter;
+    private final boolean clientTelemetryEnabled;
+
+    /**
+     * The telemetry requests client instance id.
+     */
+    private Uuid clientInstanceId;
 
     /**
      * Get or create a list value from a map.
@@ -505,8 +511,6 @@ public class KafkaAdminClient extends AdminClient {
                 adminAddresses.usingBootstrapControllers());
             metadataManager.update(Cluster.bootstrap(adminAddresses.addresses()), time.milliseconds());
             List<MetricsReporter> reporters = CommonClientConfigs.metricsReporters(clientId, config);
-            Optional<ClientTelemetryReporter> clientTelemetryReporter = CommonClientConfigs.telemetryReporter(clientId, config);
-            clientTelemetryReporter.ifPresent(reporters::add);
             Map<String, String> metricTags = Collections.singletonMap("client-id", clientId);
             MetricConfig metricConfig = new MetricConfig().samples(config.getInt(AdminClientConfig.METRICS_NUM_SAMPLES_CONFIG))
                 .timeWindow(config.getLong(AdminClientConfig.METRICS_SAMPLE_WINDOW_MS_CONFIG), TimeUnit.MILLISECONDS)
@@ -525,10 +529,9 @@ public class KafkaAdminClient extends AdminClient {
                 1,
                 (int) TimeUnit.HOURS.toMillis(1),
                 metadataManager.updater(),
-                (hostResolver == null) ? new DefaultHostResolver() : hostResolver,
-                clientTelemetryReporter.map(ClientTelemetryReporter::telemetrySender).orElse(null));
+                (hostResolver == null) ? new DefaultHostResolver() : hostResolver);
             return new KafkaAdminClient(config, clientId, time, metadataManager, metrics, networkClient,
-                timeoutProcessorFactory, logContext, clientTelemetryReporter);
+                timeoutProcessorFactory, logContext);
         } catch (Throwable exc) {
             closeQuietly(metrics, "Metrics");
             closeQuietly(networkClient, "NetworkClient");
@@ -548,7 +551,7 @@ public class KafkaAdminClient extends AdminClient {
             metrics = new Metrics(new MetricConfig(), new LinkedList<>(), time);
             LogContext logContext = createLogContext(clientId);
             return new KafkaAdminClient(config, clientId, time, metadataManager, metrics,
-                client, null, logContext, Optional.empty());
+                client, null, logContext);
         } catch (Throwable exc) {
             closeQuietly(metrics, "Metrics");
             throw new KafkaException("Failed to create new KafkaAdminClient", exc);
@@ -566,8 +569,7 @@ public class KafkaAdminClient extends AdminClient {
                              Metrics metrics,
                              KafkaClient client,
                              TimeoutProcessorFactory timeoutProcessorFactory,
-                             LogContext logContext,
-                             Optional<ClientTelemetryReporter> clientTelemetryReporter) {
+                             LogContext logContext) {
         this.clientId = clientId;
         this.log = logContext.logger(KafkaAdminClient.class);
         this.logContext = logContext;
@@ -590,7 +592,7 @@ public class KafkaAdminClient extends AdminClient {
             CommonClientConfigs.RETRY_BACKOFF_EXP_BASE,
             retryBackoffMaxMs,
             CommonClientConfigs.RETRY_BACKOFF_JITTER);
-        this.clientTelemetryReporter = clientTelemetryReporter;
+        this.clientTelemetryEnabled = config.getBoolean(AdminClientConfig.ENABLE_METRICS_PUSH_CONFIG);
         config.logUnused();
         AppInfoParser.registerAppInfo(JMX_PREFIX, clientId, metrics, time.milliseconds());
         log.debug("Kafka admin client initialized");
@@ -627,12 +629,9 @@ public class KafkaAdminClient extends AdminClient {
         long waitTimeMs = timeout.toMillis();
         if (waitTimeMs < 0)
             throw new IllegalArgumentException("The timeout cannot be negative.");
-        long timeoutMs = Math.min(TimeUnit.DAYS.toMillis(365), waitTimeMs); // Limit the timeout to a year.
-
-        clientTelemetryReporter.ifPresent(reporter -> reporter.initiateClose(timeoutMs));
-
+        waitTimeMs = Math.min(TimeUnit.DAYS.toMillis(365), waitTimeMs); // Limit the timeout to a year.
         long now = time.milliseconds();
-        long newHardShutdownTimeMs = now + timeoutMs;
+        long newHardShutdownTimeMs = now + waitTimeMs;
         long prev = INVALID_SHUTDOWN_TIME;
         while (true) {
             if (hardShutdownTimeMs.compareAndSet(prev, newHardShutdownTimeMs)) {
@@ -660,7 +659,7 @@ public class KafkaAdminClient extends AdminClient {
             // cause deadlock, so check for that condition.
             if (Thread.currentThread() != thread) {
                 // Wait for the thread to be joined.
-                thread.join(timeoutMs);
+                thread.join(waitTimeMs);
             }
             log.debug("Kafka admin client closed.");
         } catch (InterruptedException e) {
@@ -1449,7 +1448,6 @@ public class KafkaAdminClient extends AdminClient {
                 }
                 closeQuietly(client, "KafkaClient");
                 closeQuietly(metrics, "Metrics");
-                clientTelemetryReporter.ifPresent(reporter -> Utils.closeQuietly(reporter, "admin telemetry reporter"));
                 log.debug("Exiting AdminClientRunnable thread.");
             }
         }
@@ -4400,11 +4398,52 @@ public class KafkaAdminClient extends AdminClient {
 
     @Override
     public Uuid clientInstanceId(Duration timeout) {
-        if (!clientTelemetryReporter.isPresent()) {
+        if (timeout.isNegative()) {
+            throw new IllegalArgumentException("The timeout cannot be negative.");
+        }
+
+        if (!clientTelemetryEnabled) {
             throw new IllegalStateException("Telemetry is not enabled. Set config `enable.metrics.push` to `true`.");
         }
 
-        return ClientTelemetryUtils.fetchClientInstanceId(clientTelemetryReporter.get(), timeout);
+        if (clientInstanceId != null) {
+            return clientInstanceId;
+        }
+
+        final long now = time.milliseconds();
+        final KafkaFutureImpl<Uuid> future = new KafkaFutureImpl<>();
+        runnable.call(new Call("getTelemetrySubscriptions", calcDeadlineMs(now, (int) timeout.toMillis()),
+            new LeastLoadedNodeProvider()) {
+
+            @Override
+            GetTelemetrySubscriptionsRequest.Builder createRequest(int timeoutMs) {
+                return new GetTelemetrySubscriptionsRequest.Builder(new GetTelemetrySubscriptionsRequestData(), true);
+            }
+
+            @Override
+            void handleResponse(AbstractResponse abstractResponse) {
+                GetTelemetrySubscriptionsResponse response = (GetTelemetrySubscriptionsResponse) abstractResponse;
+                if (response.error() != Errors.NONE) {
+                    future.completeExceptionally(response.error().exception());
+                } else {
+                    future.complete(response.data().clientInstanceId());
+                }
+            }
+
+            @Override
+            void handleFailure(Throwable throwable) {
+                future.completeExceptionally(throwable);
+            }
+        }, now);
+
+        try {
+            clientInstanceId = future.get();
+        } catch (Exception e) {
+            log.error("Error occurred while fetching client instance id", e);
+            throw new KafkaException("Error occurred while fetching client instance id", e);
+        }
+
+        return clientInstanceId;
     }
 
     private <K, V> void invokeDriver(

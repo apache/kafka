@@ -185,8 +185,7 @@ public final class ClientUtils {
                                                     int maxInFlightRequestsPerConnection,
                                                     int requestTimeoutMs,
                                                     MetadataUpdater metadataUpdater,
-                                                    HostResolver hostResolver,
-                                                    ClientTelemetrySender clientTelemetrySender) {
+                                                    HostResolver hostResolver) {
         return createNetworkClient(config,
                 clientId,
                 metrics,
@@ -200,7 +199,7 @@ public final class ClientUtils {
                 metadataUpdater,
                 hostResolver,
                 null,
-                clientTelemetrySender);
+                null);
     }
 
     public static NetworkClient createNetworkClient(AbstractConfig config,
