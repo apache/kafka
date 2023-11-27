@@ -226,8 +226,11 @@ public class KafkaBasedLog<K, V> {
             @Override
             public void stop() {
                 super.stop();
-                Utils.closeQuietly(producer, "producer");
-                Utils.closeQuietly(consumer, "consumer");
+                // Close the clients here, if the thread that was responsible for closing them was never started.
+                if (thread == null) {
+                    Utils.closeQuietly(producer, "producer");
+                    Utils.closeQuietly(consumer, "consumer");
+                }
             }
         };
     }

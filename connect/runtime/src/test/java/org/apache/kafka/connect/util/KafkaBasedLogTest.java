@@ -480,10 +480,31 @@ public class KafkaBasedLogTest {
         verify(admin).endOffsets(eq(tps));
     }
 
+    @Test
+    public void testWithExistingClientsStartAndStop() {
+        admin = mock(TopicAdmin.class);
+        store = KafkaBasedLog.withExistingClients(TOPIC, consumer, producer, admin, consumedCallback, time, initializer);
+        store.start();
+        store.stop();
+        verifyStartAndStop();
+    }
+
+    @Test
+    public void testWithExistingClientsStopOnly() {
+        admin = mock(TopicAdmin.class);
+        store = KafkaBasedLog.withExistingClients(TOPIC, consumer, producer, admin, consumedCallback, time, initializer);
+        store.stop();
+        verifyStop();
+    }
+
     private void verifyStartAndStop() {
         verify(initializer).accept(admin);
+        verifyStop();
+        assertFalse(store.thread.isAlive());
+    }
+
+    private void verifyStop() {
         verify(producer).close();
         assertTrue(consumer.closed());
-        assertFalse(store.thread.isAlive());
     }
 }

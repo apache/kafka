@@ -97,6 +97,8 @@ class OffsetSyncStore implements AutoCloseable {
                 ignored -> {
                 }
         ) {
+
+            private boolean started = false;
             @Override
             protected Producer<byte[], byte[]> createProducer() {
                 return null;
@@ -113,9 +115,18 @@ class OffsetSyncStore implements AutoCloseable {
             }
 
             @Override
+            public void start() {
+                super.start();
+                started = true;
+            }
+
+            @Override
             public void stop() {
                 super.stop();
-                Utils.closeQuietly(consumer, "consumer");
+                // Close the consumer if the thread in the store responsible for closing the clients was never started.
+                if (!started) {
+                    Utils.closeQuietly(consumer, "consumer");
+                }
             }
         };
     }
