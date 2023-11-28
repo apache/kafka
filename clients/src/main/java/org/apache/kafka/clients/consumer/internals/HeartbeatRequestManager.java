@@ -22,7 +22,6 @@ import org.apache.kafka.clients.consumer.internals.NetworkClientDelegate.PollRes
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEventHandler;
 import org.apache.kafka.clients.consumer.internals.events.ErrorBackgroundEvent;
 import org.apache.kafka.common.TopicIdPartition;
-import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
 import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatRequestData;
@@ -221,24 +220,19 @@ public class HeartbeatRequestManager implements RequestManager {
         });
     }
 
-    private List<ConsumerGroupHeartbeatRequestData.TopicPartitions> buildTopicPartitionsList(Set<TopicIdPartition> topicIdPartitions) {
-        List<ConsumerGroupHeartbeatRequestData.TopicPartitions> result = new ArrayList<>();
-        Map<Uuid, List<Integer>> partitionsPerTopicId = new HashMap<>();
+    private List<ConsumerGroupHeartbeatRequestData.TopicPartitions> buildTopicPartitionsList(
+            Set<TopicIdPartition> topicIdPartitions) {
+        Map<ConsumerGroupHeartbeatRequestData.TopicPartitions, List<Integer>> topicPartitions =
+                new HashMap<>();
         for (TopicIdPartition topicIdPartition : topicIdPartitions) {
-            Uuid topicId = topicIdPartition.topicId();
-            if (!partitionsPerTopicId.containsKey(topicId)) {
-                partitionsPerTopicId.put(topicId, new ArrayList<>());
-            }
-            partitionsPerTopicId.get(topicId).add(topicIdPartition.partition());
+            ConsumerGroupHeartbeatRequestData.TopicPartitions emptyTopicPartitions =
+                    new ConsumerGroupHeartbeatRequestData.TopicPartitions()
+                            .setTopicId(topicIdPartition.topicId());
+            topicPartitions.computeIfAbsent(emptyTopicPartitions, k -> new ArrayList<>())
+                    .add(topicIdPartition.partition());
         }
-        for (Map.Entry<Uuid, List<Integer>> entry : partitionsPerTopicId.entrySet()) {
-            Uuid topicId = entry.getKey();
-            List<Integer> partitions = entry.getValue();
-            result.add(new ConsumerGroupHeartbeatRequestData.TopicPartitions()
-                    .setTopicId(topicId)
-                    .setPartitions(partitions));
-        }
-        return result;
+        topicPartitions.keySet().forEach(tp -> tp.setPartitions(topicPartitions.get(tp)));
+        return new ArrayList<>(topicPartitions.keySet());
     }
 
     private void onFailure(final Throwable exception, final long responseTimeMs) {
