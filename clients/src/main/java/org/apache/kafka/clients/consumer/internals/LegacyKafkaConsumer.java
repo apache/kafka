@@ -1124,6 +1124,7 @@ public class LegacyKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
 
         final Timer closeTimer = createTimerForRequest(timeout);
         clientTelemetryReporter.ifPresent(reporter -> reporter.initiateClose(timeout.toMillis()));
+        closeTimer.update();
         // Close objects with a timeout. The timeout is required because the coordinator & the fetcher send requests to
         // the server in the process of closing which may not respect the overall timeout defined for closing the
         // consumer.

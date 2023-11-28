@@ -72,6 +72,7 @@ import org.apache.kafka.common.utils.AppInfoParser;
 import org.apache.kafka.common.utils.KafkaThread;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.Timer;
 import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 
@@ -1354,17 +1355,22 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                         timeoutMs);
             } else {
                 // Try to close gracefully.
-                if (this.sender != null)
+                final Timer closeTimer = time.timer(timeout);
+                if (this.sender != null) {
                     this.sender.initiateClose();
+                    closeTimer.update();
+                }
                 if (this.ioThread != null) {
                     try {
-                        this.ioThread.join(timeoutMs);
+                        this.ioThread.join(closeTimer.remainingMs());
                     } catch (InterruptedException t) {
                         firstException.compareAndSet(null, new InterruptException(t));
                         log.error("Interrupted while joining ioThread", t);
+                    } finally {
+                        closeTimer.update();
                     }
                 }
-                clientTelemetryReporter.ifPresent(reporter -> reporter.initiateClose(timeoutMs));
+                clientTelemetryReporter.ifPresent(reporter -> reporter.initiateClose(closeTimer.remainingMs()));
             }
         }
 
