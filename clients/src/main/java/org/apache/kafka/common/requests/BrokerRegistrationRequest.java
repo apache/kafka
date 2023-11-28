@@ -45,6 +45,10 @@ public class BrokerRegistrationRequest extends AbstractRequest {
 
         @Override
         public BrokerRegistrationRequest build(short version) {
+            if (version < 2) {
+                // Reset the PreviousBrokerEpoch to default if not supported.
+                data.setPreviousBrokerEpoch(new BrokerRegistrationRequestData().previousBrokerEpoch());
+            }
             return new BrokerRegistrationRequest(data, version);
         }
 
