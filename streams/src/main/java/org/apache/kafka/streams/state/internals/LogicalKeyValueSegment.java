@@ -38,7 +38,7 @@ import org.apache.kafka.streams.state.internals.RocksDBVersionedStore.VersionedS
 import org.rocksdb.ReadOptions;
 import org.rocksdb.RocksDBException;
 import org.rocksdb.Snapshot;
-import org.rocksdb.WriteBatch;
+import org.rocksdb.WriteBatchInterface;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -239,7 +239,7 @@ class LogicalKeyValueSegment implements Comparable<LogicalKeyValueSegment>, Segm
     }
 
     @Override
-    public void addToBatch(final KeyValue<byte[], byte[]> record, final WriteBatch batch) throws RocksDBException {
+    public void addToBatch(final KeyValue<byte[], byte[]> record, final WriteBatchInterface batch) throws RocksDBException {
         physicalStore.addToBatch(
             new KeyValue<>(
                 prefixKeyFormatter.addPrefix(record.key),
@@ -248,7 +248,7 @@ class LogicalKeyValueSegment implements Comparable<LogicalKeyValueSegment>, Segm
     }
 
     @Override
-    public void write(final WriteBatch batch) throws RocksDBException {
+    public void write(final WriteBatchInterface batch) throws RocksDBException {
         // no key transformations here since they should've already been done as part
         // of adding to the write batch
         physicalStore.write(batch);
