@@ -154,7 +154,7 @@ public class CommitRequestManager implements RequestManager {
         if (!coordinatorRequestManager.coordinator().isPresent())
             return EMPTY;
 
-        maybeAutoCommit();
+        maybeAutoCommitAllConsumed();
         if (!pendingRequests.hasUnsentRequests())
             return EMPTY;
 
@@ -206,7 +206,7 @@ public class CommitRequestManager implements RequestManager {
      * @return Future that will complete when a response is received for the request, or a
      * completed future if no request is generated.
      */
-    public CompletableFuture<Void> maybeAutoCommit() {
+    public CompletableFuture<Void> maybeAutoCommitAllConsumed() {
         return maybeAutoCommit(subscriptions.allConsumed());
     }
 
@@ -215,10 +215,12 @@ public class CommitRequestManager implements RequestManager {
     }
 
     /**
-     * Return an OffsetCommitRequest of all assigned topicPartitions and their current positions.
+     * Returns an OffsetCommitRequest of all assigned topicPartitions and their current positions.
      */
     NetworkClientDelegate.UnsentRequest commitAllConsumedPositions() {
-        OffsetCommitRequestState request = pendingRequests.createOffsetCommitRequest(subscriptions.allConsumed(), jitter);
+        Map<TopicPartition, OffsetAndMetadata> offsets = subscriptions.allConsumed();
+        OffsetCommitRequestState request = pendingRequests.createOffsetCommitRequest(offsets, jitter);
+        log.debug("Sending synchronous auto-commit of offsets {}", offsets);
         request.future.whenComplete(autoCommitCallback(subscriptions.allConsumed()));
         return request.toUnsentRequest();
     }

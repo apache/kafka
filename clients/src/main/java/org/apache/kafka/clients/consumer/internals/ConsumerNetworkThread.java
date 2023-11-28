@@ -252,15 +252,20 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
     }
 
     void cleanup() {
-        log.trace("Closing the consumer network thread");
-        Timer timer = time.timer(closeTimeout);
-        maybeAutocommitOnClose(timer);
-        runAtClose(requestManagers.entries(), networkClientDelegate, timer);
-        maybeLeaveGroup(timer);
-        closeQuietly(requestManagers, "request managers");
-        closeQuietly(networkClientDelegate, "network client delegate");
-        closeQuietly(applicationEventProcessor, "application event processor");
-        log.debug("Closed the consumer network thread");
+        try {
+            log.trace("Closing the consumer network thread");
+            Timer timer = time.timer(closeTimeout);
+            maybeAutocommitOnClose(timer);
+            runAtClose(requestManagers.entries(), networkClientDelegate, timer);
+            maybeLeaveGroup(timer);
+        } catch (Exception e) {
+            log.error("Unexpected error during shutdown.  Proceed with closing.", e);
+        } finally {
+            closeQuietly(requestManagers, "request managers");
+            closeQuietly(networkClientDelegate, "network client delegate");
+            closeQuietly(applicationEventProcessor, "application event processor");
+            log.debug("Closed the consumer network thread");
+        }
     }
 
     /**
@@ -305,13 +310,15 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
     }
 
     private boolean coordinatorReady() {
-        CoordinatorRequestManager coordinatorRequestManager = requestManagers.coordinatorRequestManager.get();
+        CoordinatorRequestManager coordinatorRequestManager = requestManagers.coordinatorRequestManager.orElseThrow(
+                () -> new IllegalStateException("CoordinatorRequestManager uninitialized."));
         Optional<Node> coordinator = coordinatorRequestManager.coordinator();
         return coordinator.isPresent() && !networkClientDelegate.isUnavailable(coordinator.get());
     }
 
     private void findCoordinatorSync(final Timer timer) {
-        CoordinatorRequestManager coordinatorRequestManager = requestManagers.coordinatorRequestManager.get();
+        CoordinatorRequestManager coordinatorRequestManager = requestManagers.coordinatorRequestManager.orElseThrow(
+                () -> new IllegalStateException("CoordinatorRequestManager uninitialized."));
         NetworkClientDelegate.UnsentRequest request = coordinatorRequestManager.makeFindCoordinatorRequest(timer.currentTimeMs());
         networkClientDelegate.addAll(Collections.singletonList(request));
         CompletableFuture<ClientResponse> findCoordinatorRequest = request.future();

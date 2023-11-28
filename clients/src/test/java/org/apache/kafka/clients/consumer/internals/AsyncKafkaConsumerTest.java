@@ -113,7 +113,7 @@ public class AsyncKafkaConsumerTest {
 
     @BeforeEach
     public void setup() {
-        // groupId is configured and autocommit is disabled by default
+        // By default, the consumer is part of a group and autoCommit is enabled.
         setup(ConsumerTestBuilder.createDefaultGroupInformation(), true);
     }
 
@@ -127,11 +127,11 @@ public class AsyncKafkaConsumerTest {
     @AfterEach
     public void cleanup() {
         if (testBuilder != null) {
-            prepareShutdown();
+            shutDown();
         }
     }
 
-    private void prepareShutdown() {
+    private void shutDown() {
         prepAutocommitOnClose();
         testBuilder.close();
     }
