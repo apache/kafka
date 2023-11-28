@@ -16,9 +16,9 @@
  */
 package org.apache.kafka.clients.admin;
 
-import java.util.Objects;
-
 import org.apache.kafka.common.annotation.InterfaceStability;
+
+import java.util.Objects;
 
 @InterfaceStability.Evolving
 public class ClientMetricsResourceListing {

@@ -17,15 +17,14 @@
 package org.apache.kafka.common.requests;
 
 import org.apache.kafka.clients.admin.ClientMetricsResourceListing;
-import org.apache.kafka.common.message.ListClientMetricsResourcesResponseData.ClientMetricsResource;
 import org.apache.kafka.common.message.ListClientMetricsResourcesResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
 
 import java.nio.ByteBuffer;
-import java.util.ArrayList;
 import java.util.Collection;
+import java.util.stream.Collectors;
 import java.util.Map;
 
 public class ListClientMetricsResourcesResponse extends AbstractResponse {
@@ -70,11 +69,9 @@ public class ListClientMetricsResourcesResponse extends AbstractResponse {
     }
 
     public Collection<ClientMetricsResourceListing> clientMetricsResources() {
-        ArrayList<ClientMetricsResourceListing> resources = new ArrayList<>(data.clientMetricsResources().size());
-        for (ClientMetricsResource entry : data.clientMetricsResources()) {
-            ClientMetricsResourceListing cmrl = new ClientMetricsResourceListing(entry.name());
-            resources.add(cmrl);
-        }
-        return resources;
+        return data.clientMetricsResources()
+            .stream()
+            .map(entry -> new ClientMetricsResourceListing(entry.name()))
+            .collect(Collectors.toList());
     }
 }
