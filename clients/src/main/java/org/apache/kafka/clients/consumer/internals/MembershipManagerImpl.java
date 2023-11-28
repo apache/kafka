@@ -46,6 +46,7 @@ import java.util.Set;
 import java.util.SortedSet;
 import java.util.TreeSet;
 import java.util.concurrent.CompletableFuture;
+import java.util.stream.Collectors;
 
 /**
  * Group manager for a single consumer that has a group id defined in the config
@@ -365,6 +366,11 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
      */
     @Override
     public void transitionToFenced() {
+        if (state == MemberState.PREPARE_LEAVING || state == MemberState.LEAVING) {
+            log.debug("Member ID {} got fenced but it is already leaving the group with state {}," +
+                    "so it won't attempt to rejoin.", memberId, state);
+            return;
+        }
         transitionTo(MemberState.FENCED);
         resetEpoch();
         log.debug("Member {} with epoch {} transitioned to {} state. It will release its " +
@@ -510,10 +516,10 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
 
         CompletableFuture<Void> callbackResult;
         if (droppedPartitions.isEmpty()) {
-            // No assignment to release
+            // No assignment to release.
             callbackResult = CompletableFuture.completedFuture(null);
         } else {
-            // Release assignment
+            // Release assignment.
             if (memberEpoch > 0) {
                 // Member is part of the group. Invoke onPartitionsRevoked.
                 callbackResult = revokePartitions(droppedPartitions);
@@ -531,7 +537,13 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
      * request is sent out with it.
      */
     private void transitionToSendingLeaveGroup() {
-        memberEpoch = ConsumerGroupHeartbeatRequest.LEAVE_GROUP_MEMBER_EPOCH;
+        if (state == MemberState.FATAL) {
+            log.warn("Member won't send leave group request because it is in FATAL state");
+            return;
+        }
+        memberEpoch = groupInstanceId.isPresent() ?
+                ConsumerGroupHeartbeatRequest.LEAVE_GROUP_STATIC_MEMBER_EPOCH :
+                ConsumerGroupHeartbeatRequest.LEAVE_GROUP_MEMBER_EPOCH;
         currentAssignment = new HashSet<>();
         transitionTo(MemberState.LEAVING);
     }
@@ -667,22 +679,13 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
         }
 
         // Future that will complete when the full reconciliation process completes (revocation
-        // and assignment, executed sequentially)
+        // and assignment, executed sequentially).
         CompletableFuture<Void> reconciliationResult =
                 revocationResult.thenCompose(__ -> {
                     boolean memberHasRejoined = memberEpochOnReconciliationStart != memberEpoch;
                     if (state == MemberState.RECONCILING && !memberHasRejoined) {
                         // Apply assignment
-                        CompletableFuture<Void> assignResult = assignPartitions(assignedTopicPartition,
-                                addedPartitions);
-
-                        // Clear topic names cache only for topics that are not in the subscription anymore
-                        for (TopicPartition tp : revokedPartitions) {
-                            if (!subscriptions.subscription().contains(tp.topic())) {
-                                assignedTopicNamesCache.values().remove(tp.topic());
-                            }
-                        }
-                        return assignResult;
+                        return assignPartitions(assignedTopicPartition, addedPartitions);
                     } else {
                         log.debug("Revocation callback completed but the member already " +
                                 "transitioned out of the reconciling state for epoch {} into " +
@@ -710,12 +713,12 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
                     // Make assignment effective on the broker by transitioning to send acknowledge.
                     transitionTo(MemberState.ACKNOWLEDGING);
 
-                    // Make assignment effective on the member group manager
+                    // Make assignment effective on the member group manager.
                     currentAssignment = assignedTopicIdPartitions;
 
                     // Indicate that we completed reconciling a subset of the assignment ready to
                     // reconcile (new assignments might have been received or discovered in
-                    // metadata)
+                    // metadata).
                     assignmentReadyToReconcile.removeAll(assignedTopicIdPartitions);
                 } else {
                     String reason = interruptedReconciliationErrorMessage();
@@ -794,9 +797,7 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
             Optional<String> nameFromMetadata = findTopicNameInGlobalOrLocalCache(topicId);
             nameFromMetadata.ifPresent(resolvedTopicName -> {
                 // Name resolved, so assignment is ready for reconciliation.
-                SortedSet<TopicIdPartition> topicIdPartitions =
-                        buildAssignedPartitionsWithTopicName(topicId, resolvedTopicName, topicPartitions);
-                assignmentReadyToReconcile.addAll(topicIdPartitions);
+                addToAssignmentReadyToReconcile(topicId, resolvedTopicName, topicPartitions);
                 it.remove();
             });
         }
@@ -832,22 +833,17 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
     }
 
     /**
-     * Build set of TopicPartition for the partitions included in the heartbeat topicPartitions,
-     * and using the given topic name.
+     * Build a TopicPartition for each of the partitions included in the heartbeat topicPartitions,
+     * and using the given topic name. Add the created TopicPartition to the
+     * {@link #assignmentReadyToReconcile}.
      */
-    private SortedSet<TopicIdPartition> buildAssignedPartitionsWithTopicName(
-            Uuid topicId,
-            String topicName,
-            List<Integer> topicPartitions) {
-        SortedSet<TopicIdPartition> assignedPartitions =
-                new TreeSet<>(TOPIC_ID_PARTITION_COMPARATOR);
+    private void addToAssignmentReadyToReconcile(Uuid topicId, String topicName, List<Integer> topicPartitions) {
         topicPartitions.forEach(tp -> {
             TopicIdPartition topicIdPartition = new TopicIdPartition(
                     topicId,
                     new TopicPartition(topicName, tp));
-            assignedPartitions.add(topicIdPartition);
+            assignmentReadyToReconcile.add(topicIdPartition);
         });
-        return assignedPartitions;
     }
 
     /**
@@ -874,7 +870,7 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
         markPendingRevocationToPauseFetching(revokedPartitions);
 
         // Future that will complete when the revocation completes (including offset commit
-        // request and user callback execution)
+        // request and user callback execution).
         CompletableFuture<Void> revocationResult = new CompletableFuture<>();
 
         // Commit offsets if auto-commit enabled.
@@ -892,6 +888,19 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
                 // proceed with the revocation anyway).
                 log.error("Commit request before revocation failed with non-retriable error. Will" +
                         " proceed with the revocation anyway.", error);
+            }
+
+            // At this point we expect to be in a middle of a revocation triggered from RECONCILING
+            // or PREPARE_LEAVING, but it could be the case that the member received a fatal error
+            // while waiting for the commit to complete. Check if that's the case and abort the
+            // revocation.
+            if (state == MemberState.FATAL) {
+                String errorMsg = String.format("Member ID %s received a fatal error while " +
+                        "waiting for a revocation commit to complete. Will abort revocation " +
+                        "without triggering user callback.", memberId);
+                log.debug(errorMsg);
+                revocationResult.completeExceptionally(new KafkaException(errorMsg));
+                return;
             }
 
             CompletableFuture<Void> userCallbackResult = invokeOnPartitionsRevokedCallback(revokedPartitions);
@@ -912,7 +921,8 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
 
     /**
      * Make new assignment effective and trigger onPartitionsAssigned callback for the partitions
-     * added.
+     * added. This will also update the local topic names cache, removing from it all topics that
+     * are not assigned to the member anymore.
      *
      * @param assignedPartitions New assignment that will be updated in the member subscription
      *                           state.
@@ -928,8 +938,14 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
         // Make assignment effective on the client by updating the subscription state.
         updateSubscription(assignedPartitions, false);
 
-        // Invoke user call back
-        return invokeOnPartitionsAssignedCallback(addedPartitions);
+        // Invoke user call back.
+        CompletableFuture<Void> result = invokeOnPartitionsAssignedCallback(addedPartitions);
+
+        // Clear topic names cache, removing topics that are not assigned to the member anymore.
+        Set<String> assignedTopics = assignedPartitions.stream().map(TopicPartition::topic).collect(Collectors.toSet());
+        assignedTopicNamesCache.values().retainAll(assignedTopics);
+
+        return result;
     }
 
     /**

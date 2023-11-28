@@ -23,6 +23,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatResponseData;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.requests.ConsumerGroupHeartbeatRequest;
 import org.apache.kafka.common.requests.ConsumerGroupHeartbeatResponse;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -87,6 +88,14 @@ public class MembershipManagerImplTest {
         MembershipManagerImpl manager = spy(new MembershipManagerImpl(
                 GROUP_ID, subscriptionState, commitRequestManager,
                 metadata, testBuilder.logContext));
+        manager.transitionToJoining();
+        return manager;
+    }
+
+    private MembershipManagerImpl createMembershipManagerJoiningGroup(String groupInstanceId) {
+        MembershipManagerImpl manager = spy(new MembershipManagerImpl(
+                GROUP_ID, Optional.ofNullable(groupInstanceId), Optional.empty(),
+                subscriptionState, commitRequestManager, metadata, testBuilder.logContext));
         manager.transitionToJoining();
         return manager;
     }
@@ -223,8 +232,65 @@ public class MembershipManagerImplTest {
         verify(subscriptionState).assignFromSubscribed(Collections.emptySet());
     }
 
+    @Test
+    public void testFencingWhenStateIsPrepareLeaving() {
+        MembershipManagerImpl membershipManager = createMemberInStableState();
+
+        // Start leaving group, blocked waiting for commit of all consumed to complete.
+        CompletableFuture<Void>  commitResult = mockPrepareLeavingStuckCommitting();
+        membershipManager.leaveGroup();
+        assertEquals(MemberState.PREPARE_LEAVING, membershipManager.state());
+
+        // Get fenced while preparing to leave the group. Member should not try to rejoin and
+        // continue leaving the group as it was before getting fenced.
+        mockMemberHasAutoAssignedPartition();
+        membershipManager.transitionToFenced();
+        assertEquals(MemberState.PREPARE_LEAVING, membershipManager.state());
+        assertNotEquals(0, membershipManager.memberEpoch());
+
+        // When commit completes member should transition to LEAVE.
+        commitResult.complete(null);
+        assertEquals(MemberState.LEAVING, membershipManager.state());
+    }
+
+    @Test
+    public void testFencingWhenStateIsLeaving() {
+        MembershipManagerImpl membershipManager = createMemberInStableState();
+
+        // Start leaving group.
+        mockLeaveGroup();
+        membershipManager.leaveGroup();
+        assertEquals(MemberState.LEAVING, membershipManager.state());
+
+        // Get fenced while leaving. Member should not try to rejoin and continue leaving the
+        // group as it was before getting fenced.
+        mockMemberHasAutoAssignedPartition();
+        membershipManager.transitionToFenced();
+        assertEquals(MemberState.LEAVING, membershipManager.state());
+        assertNotEquals(0, membershipManager.memberEpoch());
+    }
+
+    @Test
+    public void testLeaveGroupEpoch() {
+        // Static member should leave the group with epoch -2.
+        MembershipManagerImpl membershipManager = createMemberInStableState("instance1");
+        mockLeaveGroup();
+        membershipManager.leaveGroup();
+        assertEquals(MemberState.LEAVING, membershipManager.state());
+        assertEquals(ConsumerGroupHeartbeatRequest.LEAVE_GROUP_STATIC_MEMBER_EPOCH,
+                membershipManager.memberEpoch());
+
+        // Dynamic member should leave the group with epoch -1.
+        membershipManager = createMemberInStableState(null);
+        mockLeaveGroup();
+        membershipManager.leaveGroup();
+        assertEquals(MemberState.LEAVING, membershipManager.state());
+        assertEquals(ConsumerGroupHeartbeatRequest.LEAVE_GROUP_MEMBER_EPOCH,
+                membershipManager.memberEpoch());
+    }
+
     /**
-     * This is the case where a member is stuck reconciling and transition out of the RECONCILING
+     * This is the case where a member is stuck reconciling and transitions out of the RECONCILING
      * state (due to failure). When the reconciliation completes it should not be applied because
      * it is not relevant anymore (it should not update the assignment on the member or send ack).
      */
@@ -239,17 +305,17 @@ public class MembershipManagerImplTest {
         // Reconciliation that does not complete stuck on revocation commit.
         CompletableFuture<Void> commitResult = mockEmptyAssignmentAndRevocationStuckOnCommit(membershipManager);
 
-        // Member received fatal error while reconciling
+        // Member received fatal error while reconciling.
         when(subscriptionState.hasAutoAssignedPartitions()).thenReturn(true);
         membershipManager.transitionToFatal();
         verify(subscriptionState).assignFromSubscribed(Collections.emptySet());
         clearInvocations(subscriptionState);
 
-        // Complete commit request
+        // Complete commit request.
         commitResult.complete(null);
 
         // Member should not update the subscription or send ack when the delayed reconciliation
-        // completed.
+        // completes.
         verify(subscriptionState, never()).assignFromSubscribed(anySet());
         assertNotEquals(MemberState.ACKNOWLEDGING, membershipManager.state());
     }
@@ -449,6 +515,41 @@ public class MembershipManagerImplTest {
         assertEquals(MemberState.STABLE, membershipManager.state());
 
         testStateUpdateOnFatalFailure(membershipManager);
+    }
+
+    @Test
+    public void testFatalFailureWhenStateIsPrepareLeaving() {
+        MembershipManagerImpl membershipManager = createMemberInStableState();
+
+        // Start leaving group, blocked waiting for commit of all consumed to complete.
+        CompletableFuture<Void>  commitResult = mockPrepareLeavingStuckCommitting();
+        membershipManager.leaveGroup();
+        assertEquals(MemberState.PREPARE_LEAVING, membershipManager.state());
+
+        testStateUpdateOnFatalFailure(membershipManager);
+
+        // When commit completes member should abort the leave operation and remain in FATAL state.
+        commitResult.complete(null);
+        assertEquals(MemberState.FATAL, membershipManager.state());
+    }
+
+    @Test
+    public void testFatalFailureWhenStateIsLeaving() {
+        MembershipManagerImpl membershipManager = createMemberInStableState();
+
+        // Start leaving group.
+        mockLeaveGroup();
+        membershipManager.leaveGroup();
+        assertEquals(MemberState.LEAVING, membershipManager.state());
+
+        // Get fatal failure while waiting to send the heartbeat to leave. Member should
+        // transition to FATAL, so the last heartbeat for leaving won't be sent because the member
+        // already failed.
+        testStateUpdateOnFatalFailure(membershipManager);
+
+        assertEquals(MemberState.FATAL, membershipManager.state());
+        membershipManager.onHeartbeatRequestSent();
+        assertEquals(MemberState.FATAL, membershipManager.state());
     }
 
     @Test
@@ -950,7 +1051,11 @@ public class MembershipManagerImplTest {
     }
 
     private MembershipManagerImpl createMemberInStableState() {
-        MembershipManagerImpl membershipManager = createMembershipManagerJoiningGroup();
+        return createMemberInStableState(null);
+    }
+
+    private MembershipManagerImpl createMemberInStableState(String groupInstanceId) {
+        MembershipManagerImpl membershipManager = createMembershipManagerJoiningGroup(groupInstanceId);
         ConsumerGroupHeartbeatResponse heartbeatResponse = createConsumerGroupHeartbeatResponse(null);
         membershipManager.onHeartbeatResponseReceived(heartbeatResponse.data());
         assertEquals(MemberState.STABLE, membershipManager.state());
@@ -1031,13 +1136,26 @@ public class MembershipManagerImplTest {
         doNothing().when(subscriptionState).markPendingRevocation(anySet());
     }
 
-    private void testStateUpdateOnFatalFailure(MembershipManager membershipManager) {
+    private CompletableFuture<Void> mockPrepareLeavingStuckCommitting() {
+        String topicName = "topic1";
+        TopicPartition ownedPartition = new TopicPartition(topicName, 0);
+        when(subscriptionState.assignedPartitions()).thenReturn(Collections.singleton(ownedPartition));
+        when(subscriptionState.hasAutoAssignedPartitions()).thenReturn(true);
+        when(subscriptionState.rebalanceListener()).thenReturn(Optional.empty());
+        doNothing().when(subscriptionState).markPendingRevocation(anySet());
+        when(commitRequestManager.autoCommitEnabled()).thenReturn(true);
+        CompletableFuture<Void> commitResult = new CompletableFuture<>();
+        when(commitRequestManager.maybeAutoCommitAllConsumed()).thenReturn(commitResult);
+        return commitResult;
+    }
+
+    private void testStateUpdateOnFatalFailure(MembershipManagerImpl membershipManager) {
         String memberId = membershipManager.memberId();
         int lastEpoch = membershipManager.memberEpoch();
         when(subscriptionState.hasAutoAssignedPartitions()).thenReturn(true);
         membershipManager.transitionToFatal();
         assertEquals(MemberState.FATAL, membershipManager.state());
-        // Should keep its last member id and epoch
+        // Should keep its last member id and epoch.
         assertEquals(memberId, membershipManager.memberId());
         assertEquals(lastEpoch, membershipManager.memberEpoch());
     }
