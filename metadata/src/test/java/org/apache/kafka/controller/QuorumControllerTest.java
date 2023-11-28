@@ -45,17 +45,20 @@ import java.util.stream.IntStream;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.BrokerIdNotRegisteredException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
+import org.apache.kafka.common.message.ControllerRegistrationRequestData;
 import org.apache.kafka.common.message.RequestHeaderData;
 import org.apache.kafka.common.metadata.AbortTransactionRecord;
 import org.apache.kafka.common.metadata.BeginTransactionRecord;
 import org.apache.kafka.common.metadata.BrokerRegistrationChangeRecord;
 import org.apache.kafka.common.metadata.ConfigRecord;
 import org.apache.kafka.common.metadata.EndTransactionRecord;
+import org.apache.kafka.common.metadata.RegisterControllerRecord;
 import org.apache.kafka.common.metadata.UnfenceBrokerRecord;
 import org.apache.kafka.common.metadata.ZkMigrationStateRecord;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.requests.AlterPartitionRequest;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
+import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
@@ -159,6 +162,7 @@ import static org.apache.kafka.controller.QuorumControllerIntegrationTestUtils.f
 import static org.apache.kafka.controller.QuorumControllerIntegrationTestUtils.pause;
 import static org.apache.kafka.controller.QuorumControllerIntegrationTestUtils.registerBrokersAndUnfence;
 import static org.apache.kafka.controller.QuorumControllerIntegrationTestUtils.sendBrokerHeartbeat;
+import static org.apache.kafka.controller.QuorumControllerIntegrationTestUtils.sendBrokerHeartbeatToUnfenceBrokers;
 import static org.apache.kafka.metadata.LeaderConstants.NO_LEADER;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -174,7 +178,7 @@ public class QuorumControllerTest {
     private final static Logger log = LoggerFactory.getLogger(QuorumControllerTest.class);
 
     static final BootstrapMetadata SIMPLE_BOOTSTRAP = BootstrapMetadata.
-            fromVersion(MetadataVersion.IBP_3_3_IV3, "test-provided bootstrap");
+            fromVersion(MetadataVersion.IBP_3_7_IV0, "test-provided bootstrap");
 
     /**
      * Test setting some configuration values and reading them back.
@@ -292,7 +296,7 @@ public class QuorumControllerTest {
                     new BrokerRegistrationRequestData().
                         setBrokerId(brokerId).
                         setClusterId(active.clusterId()).
-                        setFeatures(brokerFeatures(MetadataVersion.IBP_3_0_IV1, MetadataVersion.IBP_3_3_IV3)).
+                        setFeatures(brokerFeatures(MetadataVersion.IBP_3_0_IV1, MetadataVersion.IBP_3_7_IV0)).
                         setIncarnationId(Uuid.randomUuid()).
                         setListeners(listeners));
                 brokerEpochs.put(brokerId, reply.get().epoch());
@@ -305,7 +309,7 @@ public class QuorumControllerTest {
             });
 
             // Unfence all brokers and create a topic foo
-            sendBrokerHeartbeat(active, allBrokers, brokerEpochs);
+            sendBrokerHeartbeatToUnfenceBrokers(active, allBrokers, brokerEpochs);
             CreateTopicsRequestData createTopicsRequestData = new CreateTopicsRequestData().setTopics(
                 new CreatableTopicCollection(Collections.singleton(
                     new CreatableTopic().setName("foo").setNumPartitions(numberOfPartitions).
@@ -318,7 +322,7 @@ public class QuorumControllerTest {
 
             // Fence some of the brokers
             TestUtils.waitForCondition(() -> {
-                    sendBrokerHeartbeat(active, brokersToKeepUnfenced, brokerEpochs);
+                    sendBrokerHeartbeatToUnfenceBrokers(active, brokersToKeepUnfenced, brokerEpochs);
                     for (Integer brokerId : brokersToFence) {
                         if (active.clusterControl().isUnfenced(brokerId)) {
                             return false;
@@ -330,7 +334,7 @@ public class QuorumControllerTest {
             );
 
             // Send another heartbeat to the brokers we want to keep alive
-            sendBrokerHeartbeat(active, brokersToKeepUnfenced, brokerEpochs);
+            sendBrokerHeartbeatToUnfenceBrokers(active, brokersToKeepUnfenced, brokerEpochs);
 
             // At this point only the brokers we want fenced should be fenced.
             brokersToKeepUnfenced.forEach(brokerId -> {
@@ -523,7 +527,7 @@ public class QuorumControllerTest {
                     new BrokerRegistrationRequestData().
                         setBrokerId(brokerId).
                         setClusterId(active.clusterId()).
-                        setFeatures(brokerFeatures(MetadataVersion.IBP_3_0_IV1, MetadataVersion.IBP_3_3_IV3)).
+                        setFeatures(brokerFeatures(MetadataVersion.IBP_3_0_IV1, MetadataVersion.IBP_3_7_IV0)).
                         setIncarnationId(Uuid.randomUuid()).
                         setListeners(listeners));
                 brokerEpochs.put(brokerId, reply.get().epoch());
@@ -536,7 +540,7 @@ public class QuorumControllerTest {
             });
 
             // Unfence all brokers and create a topic foo
-            sendBrokerHeartbeat(active, allBrokers, brokerEpochs);
+            sendBrokerHeartbeatToUnfenceBrokers(active, allBrokers, brokerEpochs);
             CreateTopicsRequestData createTopicsRequestData = new CreateTopicsRequestData().setTopics(
                 new CreatableTopicCollection(Collections.singleton(
                     new CreatableTopic().setName("foo").setNumPartitions(numberOfPartitions).
@@ -549,7 +553,7 @@ public class QuorumControllerTest {
             // Fence some of the brokers
             TestUtils.waitForCondition(
                 () -> {
-                    sendBrokerHeartbeat(active, brokersToKeepUnfenced, brokerEpochs);
+                    sendBrokerHeartbeatToUnfenceBrokers(active, brokersToKeepUnfenced, brokerEpochs);
                     for (Integer brokerId : brokersToFence) {
                         if (active.clusterControl().isUnfenced(brokerId)) {
                             return false;
@@ -562,7 +566,7 @@ public class QuorumControllerTest {
             );
 
             // Send another heartbeat to the brokers we want to keep alive
-            sendBrokerHeartbeat(active, brokersToKeepUnfenced, brokerEpochs);
+            sendBrokerHeartbeatToUnfenceBrokers(active, brokersToKeepUnfenced, brokerEpochs);
 
             // At this point only the brokers we want fenced should be fenced.
             brokersToKeepUnfenced.forEach(brokerId -> {
@@ -584,14 +588,14 @@ public class QuorumControllerTest {
                     new BrokerRegistrationRequestData().
                         setBrokerId(brokerId).
                         setClusterId(active.clusterId()).
-                        setFeatures(brokerFeatures(MetadataVersion.IBP_3_0_IV1, MetadataVersion.IBP_3_3_IV3)).
+                        setFeatures(brokerFeatures(MetadataVersion.IBP_3_0_IV1, MetadataVersion.IBP_3_7_IV0)).
                         setIncarnationId(Uuid.randomUuid()).
                         setListeners(listeners));
                 brokerEpochs.put(brokerId, reply.get().epoch());
             }
 
             // Unfence all brokers
-            sendBrokerHeartbeat(active, allBrokers, brokerEpochs);
+            sendBrokerHeartbeatToUnfenceBrokers(active, allBrokers, brokerEpochs);
 
             // Let the unfenced broker, 3, join the ISR partition 2
             Set<TopicIdPartition> imbalancedPartitions = active.replicationControl().imbalancedPartitions();
@@ -617,14 +621,14 @@ public class QuorumControllerTest {
                 .Builder(alterPartitionRequest, false).build((short) 0).data()).get();
 
             AtomicLong lastHeartbeatMs = new AtomicLong(getMonotonicMs(active.time()));
-            sendBrokerHeartbeat(active, allBrokers, brokerEpochs);
+            sendBrokerHeartbeatToUnfenceBrokers(active, allBrokers, brokerEpochs);
             // Check that partitions are balanced
             TestUtils.waitForCondition(
                 () -> {
                     long currentMonotonicMs = getMonotonicMs(active.time());
                     if (currentMonotonicMs > lastHeartbeatMs.get() + (sessionTimeoutMillis / 2)) {
                         lastHeartbeatMs.set(currentMonotonicMs);
-                        sendBrokerHeartbeat(active, allBrokers, brokerEpochs);
+                        sendBrokerHeartbeatToUnfenceBrokers(active, allBrokers, brokerEpochs);
                     }
                     return !active.replicationControl().arePartitionLeadersImbalanced();
                 },
@@ -781,13 +785,37 @@ public class QuorumControllerTest {
                 build()
         ) {
             QuorumController active = controlEnv.activeController();
+            for (int i = 0; i < logEnv.logManagers().size(); i++) {
+                active.registerController(ANONYMOUS_CONTEXT,
+                    new ControllerRegistrationRequestData().
+                        setControllerId(i).
+                        setIncarnationId(new Uuid(3465346L, i)).
+                        setZkMigrationReady(false).
+                        setListeners(new ControllerRegistrationRequestData.ListenerCollection(
+                            Arrays.asList(
+                                new ControllerRegistrationRequestData.Listener().
+                                    setName("CONTROLLER").
+                                    setHost("localhost").
+                                    setPort(8000 + i).
+                                    setSecurityProtocol(SecurityProtocol.PLAINTEXT.id)
+                                ).iterator()
+                        )).
+                        setFeatures(new ControllerRegistrationRequestData.FeatureCollection(
+                            Arrays.asList(
+                                new ControllerRegistrationRequestData.Feature().
+                                    setName(MetadataVersion.FEATURE_NAME).
+                                    setMinSupportedVersion(MetadataVersion.MINIMUM_KRAFT_VERSION.featureLevel()).
+                                    setMaxSupportedVersion(MetadataVersion.IBP_3_7_IV0.featureLevel())
+                            ).iterator()
+                        ))).get();
+            }
             for (int i = 0; i < numBrokers; i++) {
                 BrokerRegistrationReply reply = active.registerBroker(ANONYMOUS_CONTEXT,
                     new BrokerRegistrationRequestData().
                         setBrokerId(i).
                         setRack(null).
                         setClusterId(active.clusterId()).
-                        setFeatures(brokerFeatures(MetadataVersion.IBP_3_0_IV1, MetadataVersion.IBP_3_3_IV3)).
+                        setFeatures(brokerFeatures(MetadataVersion.IBP_3_0_IV1, MetadataVersion.IBP_3_7_IV0)).
                         setIncarnationId(Uuid.fromString("kxAT73dKQsitIedpiPtwB" + i)).
                         setListeners(new ListenerCollection(Arrays.asList(new Listener().
                             setName("PLAINTEXT").setHost("localhost").
@@ -826,45 +854,101 @@ public class QuorumControllerTest {
 
     private List<ApiMessageAndVersion> generateTestRecords(Uuid fooId, Map<Integer, Long> brokerEpochs) {
         return Arrays.asList(
+            new ApiMessageAndVersion(new BeginTransactionRecord().
+                setName("Bootstrap records"), (short) 0),
             new ApiMessageAndVersion(new FeatureLevelRecord().
                 setName(MetadataVersion.FEATURE_NAME).
-                setFeatureLevel(MetadataVersion.IBP_3_3_IV3.featureLevel()), (short) 0),
+                setFeatureLevel(MetadataVersion.IBP_3_7_IV0.featureLevel()), (short) 0),
+            new ApiMessageAndVersion(new ZkMigrationStateRecord().
+                setZkMigrationState((byte) 0), (short) 0),
+            new ApiMessageAndVersion(new EndTransactionRecord(), (short) 0),
+            new ApiMessageAndVersion(new RegisterControllerRecord().
+                setControllerId(0).
+                setIncarnationId(Uuid.fromString("AAAAAAA04IIAAAAAAAAAAA")).
+                setEndPoints(new RegisterControllerRecord.ControllerEndpointCollection(
+                    Arrays.asList(
+                        new RegisterControllerRecord.ControllerEndpoint().
+                            setName("CONTROLLER").
+                            setHost("localhost").
+                            setPort(8000).
+                            setSecurityProtocol(SecurityProtocol.PLAINTEXT.id)).iterator())).
+                setFeatures(new RegisterControllerRecord.ControllerFeatureCollection(
+                    Arrays.asList(
+                        new RegisterControllerRecord.ControllerFeature().
+                            setName(MetadataVersion.FEATURE_NAME).
+                            setMinSupportedVersion(MetadataVersion.MINIMUM_KRAFT_VERSION.featureLevel()).
+                            setMaxSupportedVersion(MetadataVersion.IBP_3_7_IV0.featureLevel())).iterator())),
+                    (short) 0),
+            new ApiMessageAndVersion(new RegisterControllerRecord().
+                setControllerId(1).
+                setIncarnationId(Uuid.fromString("AAAAAAA04IIAAAAAAAAAAQ")).
+                setEndPoints(new RegisterControllerRecord.ControllerEndpointCollection(
+                    Arrays.asList(
+                        new RegisterControllerRecord.ControllerEndpoint().
+                            setName("CONTROLLER").
+                            setHost("localhost").
+                            setPort(8001).
+                            setSecurityProtocol(SecurityProtocol.PLAINTEXT.id)).iterator())).
+                setFeatures(new RegisterControllerRecord.ControllerFeatureCollection(
+                    Arrays.asList(
+                        new RegisterControllerRecord.ControllerFeature().
+                            setName(MetadataVersion.FEATURE_NAME).
+                            setMinSupportedVersion(MetadataVersion.MINIMUM_KRAFT_VERSION.featureLevel()).
+                            setMaxSupportedVersion(MetadataVersion.IBP_3_7_IV0.featureLevel())).iterator())),
+                    (short) 0),
+            new ApiMessageAndVersion(new RegisterControllerRecord().
+                setControllerId(2).
+                setIncarnationId(Uuid.fromString("AAAAAAA04IIAAAAAAAAAAg")).
+                setEndPoints(new RegisterControllerRecord.ControllerEndpointCollection(
+                    Arrays.asList(
+                        new RegisterControllerRecord.ControllerEndpoint().
+                            setName("CONTROLLER").
+                            setHost("localhost").
+                            setPort(8002).
+                            setSecurityProtocol(SecurityProtocol.PLAINTEXT.id)).iterator())).
+                setFeatures(new RegisterControllerRecord.ControllerFeatureCollection(
+                    Arrays.asList(
+                        new RegisterControllerRecord.ControllerFeature().
+                            setName(MetadataVersion.FEATURE_NAME).
+                            setMinSupportedVersion(MetadataVersion.MINIMUM_KRAFT_VERSION.featureLevel()).
+                            setMaxSupportedVersion(MetadataVersion.IBP_3_7_IV0.featureLevel())).iterator())),
+                (short) 0),
             new ApiMessageAndVersion(new RegisterBrokerRecord().
                 setBrokerId(0).setBrokerEpoch(brokerEpochs.get(0)).
                 setIncarnationId(Uuid.fromString("kxAT73dKQsitIedpiPtwB0")).
                 setEndPoints(new BrokerEndpointCollection(
                     Arrays.asList(new BrokerEndpoint().setName("PLAINTEXT").setHost("localhost").
                         setPort(9092).setSecurityProtocol((short) 0)).iterator())).
-                setFeatures(registrationFeatures(MetadataVersion.IBP_3_0_IV1, MetadataVersion.IBP_3_3_IV3)).
+                setFeatures(registrationFeatures(MetadataVersion.IBP_3_0_IV1, MetadataVersion.IBP_3_7_IV0)).
                 setRack(null).
-                setFenced(true), (short) 1),
+                setFenced(true), (short) 2),
             new ApiMessageAndVersion(new RegisterBrokerRecord().
                 setBrokerId(1).setBrokerEpoch(brokerEpochs.get(1)).
                 setIncarnationId(Uuid.fromString("kxAT73dKQsitIedpiPtwB1")).
                 setEndPoints(new BrokerEndpointCollection(Arrays.asList(
                     new BrokerEndpoint().setName("PLAINTEXT").setHost("localhost").
                         setPort(9093).setSecurityProtocol((short) 0)).iterator())).
-                setFeatures(registrationFeatures(MetadataVersion.IBP_3_0_IV1, MetadataVersion.IBP_3_3_IV3)).
+                setFeatures(registrationFeatures(MetadataVersion.IBP_3_0_IV1, MetadataVersion.IBP_3_7_IV0)).
                 setRack(null).
-                setFenced(true), (short) 1),
+                setFenced(true), (short) 2),
             new ApiMessageAndVersion(new RegisterBrokerRecord().
                 setBrokerId(2).setBrokerEpoch(brokerEpochs.get(2)).
                 setIncarnationId(Uuid.fromString("kxAT73dKQsitIedpiPtwB2")).
                 setEndPoints(new BrokerEndpointCollection(
                     Arrays.asList(new BrokerEndpoint().setName("PLAINTEXT").setHost("localhost").
                         setPort(9094).setSecurityProtocol((short) 0)).iterator())).
-                setFeatures(registrationFeatures(MetadataVersion.IBP_3_0_IV1, MetadataVersion.IBP_3_3_IV3)).
+                setFeatures(registrationFeatures(MetadataVersion.IBP_3_0_IV1, MetadataVersion.IBP_3_7_IV0)).
                 setRack(null).
-                setFenced(true), (short) 1),
+                setFenced(true), (short) 2),
             new ApiMessageAndVersion(new RegisterBrokerRecord().
                 setBrokerId(3).setBrokerEpoch(brokerEpochs.get(3)).
                 setIncarnationId(Uuid.fromString("kxAT73dKQsitIedpiPtwB3")).
                 setEndPoints(new BrokerEndpointCollection(Arrays.asList(
                     new BrokerEndpoint().setName("PLAINTEXT").setHost("localhost").
                         setPort(9095).setSecurityProtocol((short) 0)).iterator())).
-                setFeatures(registrationFeatures(MetadataVersion.IBP_3_0_IV1, MetadataVersion.IBP_3_3_IV3)).
+                setFeatures(registrationFeatures(MetadataVersion.IBP_3_0_IV1, MetadataVersion.IBP_3_7_IV0)).
                 setRack(null).
-                setFenced(true), (short) 1),
+                setFenced(true), (short) 2),
             new ApiMessageAndVersion(new BrokerRegistrationChangeRecord().
                 setBrokerId(0).
                 setBrokerEpoch(brokerEpochs.get(0)).
@@ -1237,8 +1321,8 @@ public class QuorumControllerTest {
     }
 
     static class InitialSnapshot implements AutoCloseable {
-        File tempDir = null;
-        BatchFileWriter writer = null;
+        File tempDir;
+        BatchFileWriter writer;
 
         public InitialSnapshot(List<ApiMessageAndVersion> records) throws Exception {
             tempDir = TestUtils.tempDirectory();
@@ -1427,7 +1511,7 @@ public class QuorumControllerTest {
                     controllerBuilder.setZkMigrationEnabled(migrationEnabled);
                 }).
                 setBootstrapMetadata(BootstrapMetadata.fromVersion(metadataVersion, "test")).
-                build();
+                build()
         ) {
             QuorumController active = controlEnv.activeController();
             ZkMigrationState zkMigrationState = active.appendReadEvent("read migration state", OptionalLong.empty(),
@@ -1452,7 +1536,7 @@ public class QuorumControllerTest {
                         controllerBuilder.setZkMigrationEnabled(true);
                     }).
                     setBootstrapMetadata(bootstrapMetadata).
-                    build();
+                    build()
             ) {
                 QuorumController active = controlEnv.activeController();
                 assertEquals(active.featureControl().zkMigrationState(), ZkMigrationState.MIGRATION);
@@ -1588,7 +1672,7 @@ public class QuorumControllerTest {
     @Test
     public void testMigrationsEnabledForOldBootstrapMetadataVersion() throws Exception {
         try (
-            LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv.Builder(1).build();
+            LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv.Builder(1).build()
         ) {
             QuorumControllerTestEnv.Builder controlEnvBuilder = new QuorumControllerTestEnv.Builder(logEnv).
                     setControllerBuilderInitializer(controllerBuilder -> {
@@ -1706,7 +1790,7 @@ public class QuorumControllerTest {
     @Test
     public void testFailoverDuringMigrationTransaction() throws Exception {
         try (
-            LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv.Builder(3).build();
+            LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv.Builder(3).build()
         ) {
             QuorumControllerTestEnv.Builder controlEnvBuilder = new QuorumControllerTestEnv.Builder(logEnv).
                 setControllerBuilderInitializer(controllerBuilder -> controllerBuilder.setZkMigrationEnabled(true)).
@@ -1751,7 +1835,7 @@ public class QuorumControllerTest {
     @EnumSource(value = MetadataVersion.class, names = {"IBP_3_4_IV0", "IBP_3_5_IV0", "IBP_3_6_IV0", "IBP_3_6_IV1"})
     public void testBrokerHeartbeatDuringMigration(MetadataVersion metadataVersion) throws Exception {
         try (
-            LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv.Builder(1).build();
+            LocalLogManagerTestEnv logEnv = new LocalLogManagerTestEnv.Builder(1).build()
         ) {
             QuorumControllerTestEnv.Builder controlEnvBuilder = new QuorumControllerTestEnv.Builder(logEnv).
                 setControllerBuilderInitializer(controllerBuilder ->

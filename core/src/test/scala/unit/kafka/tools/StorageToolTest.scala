@@ -22,14 +22,15 @@ import java.nio.charset.StandardCharsets
 import java.nio.file.{Files, Paths}
 import java.util
 import java.util.Properties
-import org.apache.kafka.common.{KafkaException, Uuid}
-import kafka.server.{BrokerMetadataCheckpoint, KafkaConfig, KafkaServer, MetaProperties}
+import org.apache.kafka.common.{DirectoryId, KafkaException}
+import kafka.server.KafkaConfig
 import kafka.utils.Exit
 import kafka.utils.TestUtils
 import org.apache.commons.io.output.NullOutputStream
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.server.common.MetadataVersion
 import org.apache.kafka.common.metadata.UserScramCredentialRecord
+import org.apache.kafka.metadata.properties.{MetaProperties, MetaPropertiesEnsemble, MetaPropertiesVersion, PropertiesUtils}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertThrows, assertTrue}
 import org.junit.jupiter.api.{Test, Timeout}
 
@@ -115,9 +116,10 @@ Found problem:
     val stream = new ByteArrayOutputStream()
     val tempDir = TestUtils.tempDir()
     try {
-      Files.write(tempDir.toPath.resolve(KafkaServer.brokerMetaPropsFile),
+      Files.write(tempDir.toPath.resolve(MetaPropertiesEnsemble.META_PROPERTIES_NAME),
         String.join("\n", util.Arrays.asList(
           "version=1",
+          "node.id=1",
           "cluster.id=XcZZOzUqS4yHOjhMQB6JLQ")).
             getBytes(StandardCharsets.UTF_8))
       assertEquals(1, StorageTool.
@@ -125,7 +127,7 @@ Found problem:
       assertEquals(s"""Found log directory:
   ${tempDir.toString}
 
-Found metadata: {cluster.id=XcZZOzUqS4yHOjhMQB6JLQ, version=1}
+Found metadata: {cluster.id=XcZZOzUqS4yHOjhMQB6JLQ, node.id=1, version=1}
 
 Found problem:
   The kafka configuration file appears to be for a legacy cluster, but the directories are formatted for a cluster in KRaft mode.
@@ -139,7 +141,7 @@ Found problem:
     val stream = new ByteArrayOutputStream()
     val tempDir = TestUtils.tempDir()
     try {
-      Files.write(tempDir.toPath.resolve(KafkaServer.brokerMetaPropsFile),
+      Files.write(tempDir.toPath.resolve(MetaPropertiesEnsemble.META_PROPERTIES_NAME),
         String.join("\n", util.Arrays.asList(
           "version=0",
           "broker.id=1",
@@ -163,8 +165,11 @@ Found problem:
   def testFormatEmptyDirectory(): Unit = {
     val tempDir = TestUtils.tempDir()
     try {
-      val metaProperties = MetaProperties(
-        clusterId = "XcZZOzUqS4yHOjhMQB6JLQ", nodeId = 2)
+      val metaProperties = new MetaProperties.Builder().
+        setVersion(MetaPropertiesVersion.V1).
+        setClusterId("XcZZOzUqS4yHOjhMQB6JLQ").
+        setNodeId(2).
+        build()
       val stream = new ByteArrayOutputStream()
       val bootstrapMetadata = StorageTool.buildBootstrapMetadata(MetadataVersion.latest(), None, "test format command")
       assertEquals(0, StorageTool.
@@ -367,18 +372,22 @@ Found problem:
   def testDirUuidGeneration(): Unit = {
     val tempDir = TestUtils.tempDir()
     try {
-      val metaProperties = MetaProperties(
-        clusterId = "XcZZOzUqS4yHOjhMQB6JLQ", nodeId = 2)
-      val bootstrapMetadata = StorageTool.buildBootstrapMetadata(MetadataVersion.latest(), None, "test format command")
+      val metaProperties = new MetaProperties.Builder().
+        setClusterId("XcZZOzUqS4yHOjhMQB6JLQ").
+        setNodeId(2).
+        build()
+      val bootstrapMetadata = StorageTool.
+        buildBootstrapMetadata(MetadataVersion.latest(), None, "test format command")
       assertEquals(0, StorageTool.
         formatCommand(new PrintStream(NullOutputStream.NULL_OUTPUT_STREAM), Seq(tempDir.toString), metaProperties, bootstrapMetadata, MetadataVersion.latest(), ignoreFormatted = false))
 
-      val metaPropertiesFile = Paths.get(tempDir.toURI).resolve(KafkaServer.brokerMetaPropsFile).toFile
+      val metaPropertiesFile = Paths.get(tempDir.toURI).resolve(MetaPropertiesEnsemble.META_PROPERTIES_NAME).toFile
       assertTrue(metaPropertiesFile.exists())
-      val properties = new BrokerMetadataCheckpoint(metaPropertiesFile).read().get
-      assertTrue(properties.containsKey("directory.id"))
-      val directoryId = Uuid.fromString(properties.getProperty("directory.id"))
-      assertFalse(Uuid.RESERVED.contains(directoryId))
+      val metaProps = new MetaProperties.Builder(
+        PropertiesUtils.readPropertiesFile(metaPropertiesFile.getAbsolutePath())).
+          build()
+      assertTrue(metaProps.directoryId().isPresent())
+      assertFalse(DirectoryId.reserved(metaProps.directoryId().get()))
     } finally Utils.delete(tempDir)
   }
 }

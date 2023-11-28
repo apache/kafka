@@ -480,6 +480,12 @@ public class WorkerCoordinator extends AbstractCoordinator implements Closeable 
                 return this;
             }
 
+            public ConnectorsAndTasks.Builder addAll(ConnectorsAndTasks connectorsAndTasks) {
+                return this
+                        .addConnectors(connectorsAndTasks.connectors())
+                        .addTasks(connectorsAndTasks.tasks());
+            }
+
             public ConnectorsAndTasks build() {
                 return new ConnectorsAndTasks(withConnectors, withTasks);
             }

@@ -18,6 +18,7 @@ package org.apache.kafka.coordinator.group.generic;
 
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor;
 import org.apache.kafka.clients.consumer.internals.ConsumerProtocol;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.CoordinatorNotAvailableException;
 import org.apache.kafka.common.errors.FencedInstanceIdException;
 import org.apache.kafka.common.errors.GroupIdNotFoundException;
@@ -36,6 +37,8 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.coordinator.group.OffsetAndMetadata;
 import org.apache.kafka.coordinator.group.OffsetExpirationCondition;
 import org.apache.kafka.coordinator.group.OffsetExpirationConditionImpl;
+import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetricsShard;
+import org.apache.kafka.timeline.SnapshotRegistry;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -59,6 +62,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.Mockito.mock;
 
 public class GenericGroupTest {
     private final String protocolType = "consumer";
@@ -68,12 +72,19 @@ public class GenericGroupTest {
     private final String clientHost = "clientHost";
     private final int rebalanceTimeoutMs = 60000;
     private final int sessionTimeoutMs = 10000;
+    private final LogContext logContext = new LogContext();
+    private final GroupCoordinatorMetricsShard metrics = new GroupCoordinatorMetricsShard(
+        new SnapshotRegistry(logContext),
+        Collections.emptyMap(),
+        Collections.emptyMap(),
+        new TopicPartition("__consumer_offsets", 0)
+    );
 
     private GenericGroup group = null;
     
     @BeforeEach
     public void initialize() {
-        group = new GenericGroup(new LogContext(), "groupId", EMPTY, Time.SYSTEM);
+        group = new GenericGroup(logContext, "groupId", EMPTY, Time.SYSTEM, metrics);
     }
     
     @Test
@@ -1099,7 +1110,7 @@ public class GenericGroupTest {
         OffsetAndMetadata offsetAndMetadata = new OffsetAndMetadata(15000L, OptionalInt.empty(), "", commitTimestamp, OptionalLong.empty());
         MockTime time = new MockTime();
         long currentStateTimestamp = time.milliseconds();
-        GenericGroup group = new GenericGroup(new LogContext(), "groupId", EMPTY, time);
+        GenericGroup group = new GenericGroup(new LogContext(), "groupId", EMPTY, time, mock(GroupCoordinatorMetricsShard.class));
 
         // 1. Test no protocol type. Simple consumer case, Base timestamp based off of last commit timestamp.
         Optional<OffsetExpirationCondition> offsetExpirationCondition = group.offsetExpirationCondition();
@@ -1174,7 +1185,7 @@ public class GenericGroupTest {
 
     @Test
     public void testIsSubscribedToTopic() {
-        GenericGroup group = new GenericGroup(new LogContext(), "groupId", EMPTY, Time.SYSTEM);
+        GenericGroup group = new GenericGroup(new LogContext(), "groupId", EMPTY, Time.SYSTEM, mock(GroupCoordinatorMetricsShard.class));
 
         // 1. group has no protocol type => not subscribed
         assertFalse(group.isSubscribedToTopic("topic"));

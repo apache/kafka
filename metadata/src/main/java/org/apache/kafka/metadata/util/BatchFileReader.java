@@ -113,8 +113,7 @@ public final class BatchFileReader implements Iterator<BatchFileReader.BatchAndT
 
     private BatchAndType nextControlBatch(FileChannelRecordBatch input) {
         List<ApiMessageAndVersion> messages = new ArrayList<>();
-        for (Iterator<Record> iter = input.iterator(); iter.hasNext(); ) {
-            Record record = iter.next();
+        for (Record record : input) {
             try {
                 short typeId = ControlRecordType.parseTypeId(record.key());
                 ControlRecordType type = ControlRecordType.fromTypeId(typeId);
@@ -179,6 +178,6 @@ public final class BatchFileReader implements Iterator<BatchFileReader.BatchAndT
         } catch (Exception e) {
             log.error("Error closing fileRecords", e);
         }
-        this.batchIterator = Collections.<FileChannelRecordBatch>emptyList().iterator();
+        this.batchIterator = Collections.emptyIterator();
     }
 }

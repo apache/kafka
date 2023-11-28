@@ -20,7 +20,6 @@ package org.apache.kafka.controller.metrics;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.Optional;
 
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.metadata.PartitionChangeRecord;
@@ -52,28 +51,24 @@ public class ControllerMetricsChangesTest {
         int brokerId,
         boolean fenced
     ) {
-        return new BrokerRegistration(brokerId,
-            100L,
-            Uuid.fromString("Pxi6QwS2RFuN8VSKjqJZyQ"),
-            Collections.emptyList(),
-            Collections.emptyMap(),
-            Optional.empty(),
-            fenced,
-            false);
+        return new BrokerRegistration.Builder().
+            setId(brokerId).
+            setEpoch(100L).
+            setIncarnationId(Uuid.fromString("Pxi6QwS2RFuN8VSKjqJZyQ")).
+            setFenced(fenced).
+            setInControlledShutdown(false).build();
     }
 
     private static BrokerRegistration zkBrokerRegistration(
         int brokerId
     ) {
-        return new BrokerRegistration(brokerId,
-            100L,
-            Uuid.fromString("Pxi6QwS2RFuN8VSKjqJZyQ"),
-            Collections.emptyList(),
-            Collections.emptyMap(),
-            Optional.empty(),
-            false,
-            false,
-            true);
+        return new BrokerRegistration.Builder().
+            setId(brokerId).
+            setEpoch(100L).
+            setIncarnationId(Uuid.fromString("Pxi6QwS2RFuN8VSKjqJZyQ")).
+            setFenced(false).
+            setInControlledShutdown(false).
+            setIsMigratingZkBroker(true).build();
     }
 
     @Test

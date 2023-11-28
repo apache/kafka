@@ -16,9 +16,11 @@
  */
 package org.apache.kafka.server.log.remote.metadata.storage;
 
+import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
@@ -40,6 +42,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Properties;
 import java.util.concurrent.TimeoutException;
 
 @SuppressWarnings("deprecation") // Added for Scala 2.12 compatibility for usages of JavaConverters
@@ -64,6 +67,28 @@ public class TopicBasedRemoteLogMetadataManagerTest {
 
     public TopicBasedRemoteLogMetadataManager topicBasedRlmm() {
         return remoteLogMetadataManagerHarness.remoteLogMetadataManager();
+    }
+
+    @Test
+    public void testInternalTopicExists() {
+        Properties adminConfig = remoteLogMetadataManagerHarness.adminClientConfig();
+        ListenerName listenerName = remoteLogMetadataManagerHarness.listenerName();
+        try (Admin admin = remoteLogMetadataManagerHarness.createAdminClient(listenerName, adminConfig)) {
+            String topic = topicBasedRlmm().config().remoteLogMetadataTopicName();
+            boolean doesTopicExist = topicBasedRlmm().doesTopicExist(admin, topic);
+            Assertions.assertTrue(doesTopicExist);
+        }
+    }
+
+    @Test
+    public void testTopicDoesNotExists() {
+        Properties adminConfig = remoteLogMetadataManagerHarness.adminClientConfig();
+        ListenerName listenerName = remoteLogMetadataManagerHarness.listenerName();
+        try (Admin admin = remoteLogMetadataManagerHarness.createAdminClient(listenerName, adminConfig)) {
+            String topic = "dummy-test-topic";
+            boolean doesTopicExist = topicBasedRlmm().doesTopicExist(admin, topic);
+            Assertions.assertFalse(doesTopicExist);
+        }
     }
 
     @Test

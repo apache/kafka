@@ -58,10 +58,17 @@ public class BackgroundEventProcessor extends EventProcessor<BackgroundEvent> {
 
     @Override
     public void process(final BackgroundEvent event) {
-        if (event.type() == BackgroundEvent.Type.ERROR)
-            process((ErrorBackgroundEvent) event);
-        else
-            throw new IllegalArgumentException("Background event type " + event.type() + " was not expected");
+        switch (event.type()) {
+            case ERROR:
+                process((ErrorBackgroundEvent) event);
+                break;
+            case AUTO_COMMIT_COMPLETION:
+                process((AutoCommitCompletionBackgroundEvent) event);
+                break;
+            default:
+                throw new IllegalArgumentException("Background event type " + event.type() + " was not expected");
+
+        }
     }
 
     @Override
@@ -71,5 +78,9 @@ public class BackgroundEventProcessor extends EventProcessor<BackgroundEvent> {
 
     private void process(final ErrorBackgroundEvent event) {
         throw event.error();
+    }
+
+    private void process(final AutoCommitCompletionBackgroundEvent event) {
+        // TODO: invoke OffsetCommitCallback
     }
 }

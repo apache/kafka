@@ -27,6 +27,13 @@ import java.nio.ByteBuffer;
 
 public class AssignReplicasToDirsRequest extends AbstractRequest {
 
+    /**
+     * The maximum number of assignments to be included in a single request.
+     * This limit was chosen based on the maximum size of AssignReplicasToDirsRequest for
+     * 10 different directory IDs, so that it still fits in a single TCP packet. i.e. 64KB.
+     */
+    public static final int MAX_ASSIGNMENTS_PER_REQUEST = 2250;
+
     public static class Builder extends AbstractRequest.Builder<AssignReplicasToDirsRequest> {
 
         private final AssignReplicasToDirsRequestData data;

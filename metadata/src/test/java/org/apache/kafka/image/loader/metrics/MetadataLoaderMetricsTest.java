@@ -45,10 +45,6 @@ public class MetadataLoaderMetricsTest {
             new AtomicReference<>(MetadataProvenance.EMPTY);
         final MetadataLoaderMetrics metrics;
 
-        FakeMetadataLoaderMetrics() {
-            this(Optional.empty());
-        }
-
         FakeMetadataLoaderMetrics(MetricsRegistry registry) {
             this(Optional.of(registry));
         }

@@ -17,14 +17,15 @@
 
 package kafka.tools
 
+import kafka.server.KafkaConfig
+
 import java.io.PrintStream
 import java.nio.file.{Files, Paths}
-import kafka.server.{BrokerMetadataCheckpoint, KafkaConfig, KafkaServer, MetaProperties, RawMetaProperties}
 import kafka.utils.{Exit, Logging}
 import net.sourceforge.argparse4j.ArgumentParsers
 import net.sourceforge.argparse4j.impl.Arguments.{append, store, storeTrue}
 import net.sourceforge.argparse4j.inf.Namespace
-import org.apache.kafka.common.{DirectoryId, Uuid}
+import org.apache.kafka.common.Uuid
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.metadata.bootstrap.{BootstrapDirectory, BootstrapMetadata}
 import org.apache.kafka.server.common.{ApiMessageAndVersion, MetadataVersion}
@@ -32,6 +33,8 @@ import org.apache.kafka.common.metadata.FeatureLevelRecord
 import org.apache.kafka.common.metadata.UserScramCredentialRecord
 import org.apache.kafka.common.security.scram.internals.ScramMechanism
 import org.apache.kafka.common.security.scram.internals.ScramFormatter
+import org.apache.kafka.metadata.properties.MetaPropertiesEnsemble.VerificationFlag
+import org.apache.kafka.metadata.properties.{MetaProperties, MetaPropertiesEnsemble, MetaPropertiesVersion, PropertiesUtils}
 
 import java.util
 import java.util.Base64
@@ -60,7 +63,11 @@ object StorageTool extends Logging {
           if (!metadataVersion.isKRaftSupported) {
             throw new TerseFailure(s"Must specify a valid KRaft metadata version of at least 3.0.")
           }
-          val metaProperties = buildMetadataProperties(clusterId, config.get)
+          val metaProperties = new MetaProperties.Builder().
+            setVersion(MetaPropertiesVersion.V1).
+            setClusterId(clusterId).
+            setNodeId(config.get.nodeId).
+            build()
           val metadataRecords : ArrayBuffer[ApiMessageAndVersion] = ArrayBuffer()
           getUserScramCredentialRecords(namespace).foreach(userScramCredentialRecords => {
             if (!metadataVersion.isScramSupported()) {
@@ -269,7 +276,7 @@ object StorageTool extends Logging {
   def infoCommand(stream: PrintStream, selfManagedMode: Boolean, directories: Seq[String]): Int = {
     val problems = new mutable.ArrayBuffer[String]
     val foundDirectories = new mutable.ArrayBuffer[String]
-    var prevMetadata: Option[RawMetaProperties] = None
+    var prevMetadata: Option[MetaProperties] = None
     directories.sorted.foreach(directory => {
       val directoryPath = Paths.get(directory)
       if (!Files.isDirectory(directoryPath)) {
@@ -280,27 +287,26 @@ object StorageTool extends Logging {
         }
       } else {
         foundDirectories += directoryPath.toString
-        val metaPath = directoryPath.resolve(KafkaServer.brokerMetaPropsFile)
+        val metaPath = directoryPath.resolve(MetaPropertiesEnsemble.META_PROPERTIES_NAME)
         if (!Files.exists(metaPath)) {
           problems += s"$directoryPath is not formatted."
         } else {
-          val properties = Utils.loadProps(metaPath.toString)
-          val rawMetaProperties = new RawMetaProperties(properties)
-
-          val curMetadata = rawMetaProperties.version match {
-            case 0 | 1 => Some(rawMetaProperties)
-            case v =>
-              problems += s"Unsupported version for $metaPath: $v"
-              None
-          }
-
-          if (prevMetadata.isEmpty) {
-            prevMetadata = curMetadata
-          } else {
-            if (!prevMetadata.get.equals(curMetadata.get)) {
-              problems += s"Metadata for $metaPath was ${curMetadata.get}, " +
-                s"but other directories featured ${prevMetadata.get}"
+          val properties = PropertiesUtils.readPropertiesFile(metaPath.toString)
+          try {
+            val curMetadata = new MetaProperties.Builder(properties).build()
+            if (prevMetadata.isEmpty) {
+              prevMetadata = Some(curMetadata)
+            } else {
+              if (!prevMetadata.get.clusterId().equals(curMetadata.clusterId())) {
+                problems += s"Mismatched cluster IDs between storage directories."
+              } else if (!prevMetadata.get.nodeId().equals(curMetadata.nodeId())) {
+                problems += s"Mismatched node IDs between storage directories."
+              }
             }
+          } catch {
+            case e: Exception =>
+              e.printStackTrace(System.out)
+              problems += s"Error loading $metaPath: ${e.getMessage}"
           }
         }
       }
@@ -308,11 +314,11 @@ object StorageTool extends Logging {
 
     prevMetadata.foreach { prev =>
       if (selfManagedMode) {
-        if (prev.version == 0) {
+        if (prev.version.equals(MetaPropertiesVersion.V0)) {
           problems += "The kafka configuration file appears to be for a cluster in KRaft mode, but " +
             "the directories are formatted for legacy mode."
         }
-      } else if (prev.version == 1) {
+      } else if (prev.version.equals(MetaPropertiesVersion.V1)) {
         problems += "The kafka configuration file appears to be for a legacy cluster, but " +
           "the directories are formatted for a cluster in KRaft mode."
       }
@@ -333,7 +339,9 @@ object StorageTool extends Logging {
       }
 
       prevMetadata.foreach { prev =>
-        stream.println(s"Found metadata: ${prev}")
+        val sortedOutput = new util.TreeMap[String, String]()
+        prev.toProperties().entrySet().forEach(e => sortedOutput.put(e.getKey.toString, e.getValue.toString))
+        stream.println(s"Found metadata: ${sortedOutput}")
         stream.println("")
       }
 
@@ -382,7 +390,10 @@ object StorageTool extends Logging {
     if (config.nodeId < 0) {
       throw new TerseFailure(s"The node.id must be set to a non-negative integer. We saw ${config.nodeId}")
     }
-    new MetaProperties(effectiveClusterId.toString, config.nodeId)
+    new MetaProperties.Builder().
+      setClusterId(effectiveClusterId.toString).
+      setNodeId(config.nodeId).
+      build()
   }
 
   def formatCommand(
@@ -407,36 +418,42 @@ object StorageTool extends Logging {
     if (directories.isEmpty) {
       throw new TerseFailure("No log directories found in the configuration.")
     }
+    val loader = new MetaPropertiesEnsemble.Loader()
+    directories.foreach(loader.addLogDir(_))
+    val metaPropertiesEnsemble = loader.load()
+    metaPropertiesEnsemble.verify(metaProperties.clusterId(), metaProperties.nodeId(),
+      util.EnumSet.noneOf(classOf[VerificationFlag]))
 
-    val unformattedDirectories = directories.filter(directory => {
-      if (!Files.isDirectory(Paths.get(directory)) || !Files.exists(Paths.get(directory, KafkaServer.brokerMetaPropsFile))) {
-          true
-      } else if (!ignoreFormatted) {
-        throw new TerseFailure(s"Log directory $directory is already formatted. " +
-          "Use --ignore-formatted to ignore this directory and format the others.")
-      } else {
-        false
-      }
-    })
-    if (unformattedDirectories.isEmpty) {
-      stream.println("All of the log directories are already formatted.")
+    System.out.println(s"metaPropertiesEnsemble=${metaPropertiesEnsemble}")
+    val copier = new MetaPropertiesEnsemble.Copier(metaPropertiesEnsemble)
+    if (!(ignoreFormatted || copier.logDirProps().isEmpty)) {
+      val firstLogDir = copier.logDirProps().keySet().iterator().next()
+      throw new TerseFailure(s"Log directory ${firstLogDir} is already formatted. " +
+        "Use --ignore-formatted to ignore this directory and format the others.")
     }
-    unformattedDirectories.foreach(directory => {
-      try {
-        Files.createDirectories(Paths.get(directory))
-      } catch {
-        case e: Throwable => throw new TerseFailure(s"Unable to create storage " +
-          s"directory $directory: ${e.getMessage}")
-      }
-      val metaPropertiesPath = Paths.get(directory, KafkaServer.brokerMetaPropsFile)
-      val checkpoint = new BrokerMetadataCheckpoint(metaPropertiesPath.toFile)
-      checkpoint.write(metaProperties.toPropertiesWithDirectoryId(DirectoryId.random().toString))
-
-      val bootstrapDirectory = new BootstrapDirectory(directory, Optional.empty())
-      bootstrapDirectory.writeBinaryFile(bootstrapMetadata)
-
-      stream.println(s"Formatting ${directory} with metadata.version ${metadataVersion}.")
-    })
+    if (!copier.errorLogDirs().isEmpty) {
+      val firstLogDir = copier.errorLogDirs().iterator().next()
+      throw new TerseFailure(s"I/O error trying to read log directory ${firstLogDir}.")
+    }
+    if (metaPropertiesEnsemble.emptyLogDirs().isEmpty) {
+      stream.println("All of the log directories are already formatted.")
+    } else {
+      metaPropertiesEnsemble.emptyLogDirs().forEach(logDir => {
+        copier.setLogDirProps(logDir, new MetaProperties.Builder(metaProperties).
+          setDirectoryId(copier.generateValidDirectoryId()).
+          build())
+        copier.setPreWriteHandler((logDir, isNew, metaProperties) => {
+          stream.println(s"Formatting ${logDir} with metadata.version ${metadataVersion}.")
+          Files.createDirectories(Paths.get(logDir))
+          val bootstrapDirectory = new BootstrapDirectory(logDir, Optional.empty())
+          bootstrapDirectory.writeBinaryFile(bootstrapMetadata)
+        })
+        copier.setWriteErrorHandler((logDir, e) => {
+          throw new TerseFailure(s"Error while writing meta.properties file ${logDir}: ${e.getMessage}")
+        })
+        copier.writeLogDirChanges()
+      })
+    }
     0
   }
 }

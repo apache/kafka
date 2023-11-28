@@ -26,7 +26,7 @@ import java.util.Objects;
 public abstract class BackgroundEvent {
 
     public enum Type {
-        ERROR,
+        ERROR, AUTO_COMMIT_COMPLETION
     }
 
     protected final Type type;
