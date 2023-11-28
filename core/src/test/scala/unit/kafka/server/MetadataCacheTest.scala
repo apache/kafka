@@ -22,7 +22,7 @@ import java.util
 import java.util.Arrays.asList
 import java.util.Collections
 import kafka.api.LeaderAndIsr
-import kafka.server.metadata.{KRaftMetadataCache, ZkMetadataCache}
+import kafka.server.metadata.{KRaftMetadataCache, MetadataSnapshot, ZkMetadataCache}
 import org.apache.kafka.common.message.DescribeTopicPartitionsResponseData.{Cursor, DescribeTopicPartitionsResponsePartition}
 import org.apache.kafka.common.message.UpdateMetadataRequestData.{UpdateMetadataBroker, UpdateMetadataEndpoint, UpdateMetadataPartitionState, UpdateMetadataTopicState}
 import org.apache.kafka.common.network.ListenerName

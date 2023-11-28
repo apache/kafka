@@ -37,7 +37,6 @@ import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.errors.InvalidTopicException
 import org.apache.kafka.common.message.DescribeTopicPartitionsResponseData.{Cursor, DescribeTopicPartitionsResponsePartition, DescribeTopicPartitionsResponseTopic}
 import org.apache.kafka.common.message.{DescribeClientQuotasRequestData, DescribeClientQuotasResponseData, DescribeTopicPartitionsResponseData, DescribeUserScramCredentialsRequestData, DescribeUserScramCredentialsResponseData}
-import org.apache.kafka.metadata.{PartitionRegistration, Replicas}
 import org.apache.kafka.metadata.{BrokerRegistration, PartitionRegistration, Replicas}
 import org.apache.kafka.server.common.{Features, MetadataVersion}
 
