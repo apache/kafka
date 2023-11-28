@@ -140,15 +140,11 @@ public class ClientTelemetryReporter implements MetricsReporter {
           set metrics labels for services/libraries that expose metrics.
          */
         Objects.requireNonNull(rawOriginalConfig, "configure() was not called before contextChange()");
-        if (!metricsContext.contextLabels().containsKey(MetricsContext.NAMESPACE)) {
-            log.warn("_namespace not found in metrics context. Metrics collection is disabled");
-            return;
-        }
-
         collectors.forEach(MetricsCollector::stop);
 
-        if (!telemetryProvider.validate(metricsContext, rawOriginalConfig)) {
-            log.warn("Validation failed for {} context {}, skip starting collectors", telemetryProvider.getClass(), metricsContext.contextLabels());
+        if (!telemetryProvider.validate(metricsContext)) {
+            log.warn("Validation failed for {} context {}, skip starting collectors. Metrics collection is disabled",
+                    telemetryProvider.getClass(), metricsContext.contextLabels());
             return;
         }
 
@@ -462,6 +458,7 @@ public class ClientTelemetryReporter implements MetricsReporter {
                 }
 
                 updateSubscriptionResult(clientTelemetrySubscription, now);
+                log.info("Client telemetry registered with client instance id: {}", subscription.clientInstanceId());
             } finally {
                 lock.writeLock().unlock();
             }

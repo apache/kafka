@@ -67,10 +67,8 @@ public class ClientTelemetryProvider implements Configurable {
      * @return false if all the data required for generating correct metrics is missing, true
      * otherwise.
      */
-    public boolean validate(MetricsContext metricsContext, Map<String, ?> config) {
-        // metric collection will be disabled for clients without a client id (e.g. transient admin clients)
-        return ClientTelemetryUtils.validateResourceLabel(config, CommonClientConfigs.CLIENT_ID_CONFIG) &&
-            ClientTelemetryUtils.validateRequiredResourceLabels(metricsContext.contextLabels());
+    public boolean validate(MetricsContext metricsContext) {
+        return ClientTelemetryUtils.validateRequiredResourceLabels(metricsContext.contextLabels());
     }
 
     /**
