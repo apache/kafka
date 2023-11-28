@@ -16,13 +16,15 @@
  */
 package kafka.api
 
+import kafka.utils.TestInfoUtils
 import org.apache.kafka.clients.consumer.{Consumer, ConsumerConfig}
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig}
 import org.apache.kafka.common.{ClusterResource, ClusterResourceListener, PartitionInfo}
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.serialization.{Deserializer, Serializer}
-import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.ValueSource
 
 import java.util.Properties
 import java.util.concurrent.atomic.AtomicInteger
@@ -34,8 +36,9 @@ import scala.collection.Seq
  */
 abstract class BaseConsumerTest extends AbstractConsumerTest {
 
-  @Test
-  def testSimpleConsumption(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft", "kraft+kip848"))
+  def testSimpleConsumption(quorum: String): Unit = {
     val numRecords = 10000
     val producer = createProducer()
     val startingTimestamp = System.currentTimeMillis()
@@ -53,8 +56,9 @@ abstract class BaseConsumerTest extends AbstractConsumerTest {
     sendAndAwaitAsyncCommit(consumer)
   }
 
-  @Test
-  def testClusterResourceListener(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft", "kraft+kip848"))
+  def testClusterResourceListener(quorum: String): Unit = {
     val numRecords = 100
     val producerProps = new Properties()
     producerProps.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, classOf[BaseConsumerTest.TestClusterResourceListenerSerializer])
@@ -74,8 +78,9 @@ abstract class BaseConsumerTest extends AbstractConsumerTest {
     assertNotEquals(0, BaseConsumerTest.updateConsumerCount.get())
   }
 
-  @Test
-  def testCoordinatorFailover(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft", "kraft+kip848"))
+  def testCoordinatorFailover(quorum: String): Unit = {
     val listener = new TestConsumerReassignmentListener()
     this.consumerConfig.setProperty(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, "5001")
     this.consumerConfig.setProperty(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, "1000")
@@ -98,7 +103,7 @@ abstract class BaseConsumerTest extends AbstractConsumerTest {
 
     // shutdown the coordinator
     val coordinator = parts.head.leader().id()
-    this.servers(coordinator).shutdown()
+    this.brokers(coordinator).shutdown()
 
     // the failover should not cause a rebalance
     ensureNoRebalance(consumer, listener)

@@ -700,4 +700,9 @@ public class InternalStreamsBuilder implements InternalNameProvider {
     public GraphNode root() {
         return root;
     }
+
+    public InternalTopologyBuilder internalTopologyBuilder() {
+        return internalTopologyBuilder;
+    }
+
 }
