@@ -26,6 +26,7 @@ import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.errors.InvalidReplicaAssignmentException;
 import org.apache.kafka.common.errors.PolicyViolationException;
 import org.apache.kafka.common.errors.StaleBrokerEpochException;
+import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.AlterPartitionRequestData;
 import org.apache.kafka.common.message.AlterPartitionRequestData.BrokerState;
 import org.apache.kafka.common.message.AlterPartitionRequestData.PartitionData;
@@ -37,6 +38,8 @@ import org.apache.kafka.common.message.AlterPartitionReassignmentsRequestData.Re
 import org.apache.kafka.common.message.AlterPartitionReassignmentsResponseData;
 import org.apache.kafka.common.message.AlterPartitionReassignmentsResponseData.ReassignablePartitionResponse;
 import org.apache.kafka.common.message.AlterPartitionReassignmentsResponseData.ReassignableTopicResponse;
+import org.apache.kafka.common.message.AssignReplicasToDirsRequestData;
+import org.apache.kafka.common.message.AssignReplicasToDirsResponseData;
 import org.apache.kafka.common.message.BrokerHeartbeatRequestData;
 import org.apache.kafka.common.message.CreatePartitionsRequestData.CreatePartitionsAssignment;
 import org.apache.kafka.common.message.CreatePartitionsRequestData.CreatePartitionsTopic;
@@ -75,6 +78,7 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.common.utils.annotation.ApiKeyVersionsSource;
 import org.apache.kafka.controller.BrokerHeartbeatManager.BrokerHeartbeatState;
 import org.apache.kafka.controller.ReplicationControlManager.KRaftClusterDescriber;
+import org.apache.kafka.metadata.AssignmentsHelper;
 import org.apache.kafka.metadata.BrokerHeartbeatReply;
 import org.apache.kafka.metadata.BrokerRegistration;
 import org.apache.kafka.metadata.BrokerRegistrationInControlledShutdownChange;
@@ -100,6 +104,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.Arrays;
+import java.util.Comparator;
 import java.util.TreeSet;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.ArrayList;
@@ -130,6 +135,7 @@ import static org.apache.kafka.common.protocol.Errors.INVALID_TOPIC_EXCEPTION;
 import static org.apache.kafka.common.protocol.Errors.NEW_LEADER_ELECTED;
 import static org.apache.kafka.common.protocol.Errors.NONE;
 import static org.apache.kafka.common.protocol.Errors.NOT_CONTROLLER;
+import static org.apache.kafka.common.protocol.Errors.NOT_LEADER_OR_FOLLOWER;
 import static org.apache.kafka.common.protocol.Errors.NO_REASSIGNMENT_IN_PROGRESS;
 import static org.apache.kafka.common.protocol.Errors.OPERATION_NOT_ATTEMPTED;
 import static org.apache.kafka.common.protocol.Errors.POLICY_VIOLATION;
@@ -488,6 +494,15 @@ public class ReplicationControlManagerTest {
             PartitionRegistration partition = replicationControl.
                 getPartition(topicIdPartition.topicId(), topicIdPartition.partitionId());
             return (partition.leader < 0) ? OptionalInt.empty() : OptionalInt.of(partition.leader);
+        }
+
+        ControllerResult<AssignReplicasToDirsResponseData> assignReplicasToDirs(int brokerId, Map<TopicIdPartition, Uuid> assignment) throws Exception {
+            ControllerResult<AssignReplicasToDirsResponseData> result = replicationControl.handleAssignReplicasToDirs(
+                    AssignmentsHelper.buildRequestData(brokerId, defaultBrokerEpoch(brokerId), assignment));
+            assertNotNull(result.response());
+            assertEquals(NONE.code(), result.response().errorCode());
+            replay(result.records());
+            return result;
         }
     }
 
@@ -2834,5 +2849,99 @@ public class ReplicationControlManagerTest {
                                 setName("foo").
                                 setTopicId(Uuid.fromString("8auUWq8zQqe_99H_m2LAmw")))).
                         getMessage());
+    }
+
+    @Test
+    void testHandleAssignReplicasToDirsFailsOnOlderMv() throws Exception {
+        ReplicationControlTestContext ctx = new ReplicationControlTestContext.Builder().
+            setMetadataVersion(MetadataVersion.IBP_3_7_IV1).
+            build();
+        assertThrows(UnsupportedVersionException.class,
+            () -> ctx.replicationControl.handleAssignReplicasToDirs(new AssignReplicasToDirsRequestData()));
+    }
+
+    @Test
+    void testHandleAssignReplicasToDirs() throws Exception {
+        ReplicationControlTestContext ctx = new ReplicationControlTestContext.Builder().build();
+        Uuid dir1b1 = Uuid.fromString("hO2YI5bgRUmByNPHiHxjNQ");
+        Uuid dir2b1 = Uuid.fromString("R3Gb1HLoTzuKMgAkH5Vtpw");
+        Uuid dir1b2 = Uuid.fromString("TBGa8UayQi6KguqF5nC0sw");
+        ctx.registerBrokersWithDirs(1, asList(dir1b1, dir2b1), 2, singletonList(dir1b2));
+        ctx.unfenceBrokers(1, 2);
+        Uuid topicA = ctx.createTestTopic("a", new int[][]{new int[]{1, 2}, new int[]{1, 2}}).topicId();
+        Uuid topicB = ctx.createTestTopic("b", new int[][]{new int[]{1, 2}, new int[]{1, 2}}).topicId();
+        Uuid topicC = ctx.createTestTopic("c", new int[][]{new int[]{2}}).topicId();
+
+        ControllerResult<AssignReplicasToDirsResponseData> controllerResult = ctx.assignReplicasToDirs(1, new HashMap<TopicIdPartition, Uuid>() {{
+                put(new TopicIdPartition(topicA, 0), dir1b1);
+                put(new TopicIdPartition(topicA, 1), dir2b1);
+                put(new TopicIdPartition(topicB, 0), dir1b1);
+                put(new TopicIdPartition(topicB, 1), DirectoryId.LOST);
+                put(new TopicIdPartition(Uuid.fromString("nLU9hKNXSZuMe5PO2A4dVQ"), 1), dir2b1); // expect UNKNOWN_TOPIC_ID
+                put(new TopicIdPartition(topicA, 137), dir1b1); // expect UNKNOWN_TOPIC_OR_PARTITION
+                put(new TopicIdPartition(topicC, 0), dir1b1); // expect NOT_LEADER_OR_FOLLOWER
+            }});
+
+        assertEquals(AssignmentsHelper.normalize(AssignmentsHelper.buildResponseData((short) 0, 0, new HashMap<Uuid, Map<TopicIdPartition, Errors>>() {{
+                put(dir1b1, new HashMap<TopicIdPartition, Errors>() {{
+                        put(new TopicIdPartition(topicA, 0), NONE);
+                        put(new TopicIdPartition(topicA, 137), UNKNOWN_TOPIC_OR_PARTITION);
+                        put(new TopicIdPartition(topicB, 0), NONE);
+                        put(new TopicIdPartition(topicC, 0), NOT_LEADER_OR_FOLLOWER);
+                    }});
+                put(dir2b1, new HashMap<TopicIdPartition, Errors>() {{
+                        put(new TopicIdPartition(topicA, 1), NONE);
+                        put(new TopicIdPartition(Uuid.fromString("nLU9hKNXSZuMe5PO2A4dVQ"), 1), UNKNOWN_TOPIC_ID);
+                    }});
+                put(DirectoryId.LOST, new HashMap<TopicIdPartition, Errors>() {{
+                        put(new TopicIdPartition(topicB, 1), NONE);
+                    }});
+            }})), AssignmentsHelper.normalize(controllerResult.response()));
+        short recordVersion = ctx.featureControl.metadataVersion().partitionChangeRecordVersion();
+        assertEquals(sortPartitionChangeRecords(asList(
+                new ApiMessageAndVersion(
+                        new PartitionChangeRecord().setTopicId(topicA).setPartitionId(0)
+                                .setDirectories(asList(dir1b1, dir1b2)), recordVersion),
+                new ApiMessageAndVersion(
+                        new PartitionChangeRecord().setTopicId(topicA).setPartitionId(1).
+                                setDirectories(asList(dir2b1, dir1b2)), recordVersion),
+                new ApiMessageAndVersion(
+                        new PartitionChangeRecord().setTopicId(topicB).setPartitionId(0).
+                                setDirectories(asList(dir1b1, dir1b2)), recordVersion),
+                new ApiMessageAndVersion(
+                        new PartitionChangeRecord().setTopicId(topicB).setPartitionId(1).
+                                setDirectories(asList(DirectoryId.LOST, dir1b2)), recordVersion),
+
+                // In addition to the directory assignment changes we expect an additional record,
+                // which elects a new leader for bar-1 which has been assigned to an offline directory.
+                new ApiMessageAndVersion(
+                        new PartitionChangeRecord().setTopicId(topicB).setPartitionId(1).
+                                setIsr(singletonList(2)).setLeader(2), recordVersion)
+        )), sortPartitionChangeRecords(controllerResult.records()));
+
+        ctx.replay(controllerResult.records());
+        assertEquals(new HashSet<TopicIdPartition>() {{
+                add(new TopicIdPartition(topicA, 0));
+                add(new TopicIdPartition(topicA, 1));
+                add(new TopicIdPartition(topicB, 0));
+            }}, RecordTestUtils.iteratorToSet(ctx.replicationControl.brokersToIsrs().iterator(1, true)));
+        assertEquals(new HashSet<TopicIdPartition>() {{
+                add(new TopicIdPartition(topicB, 1));
+                add(new TopicIdPartition(topicC, 0));
+            }},
+            RecordTestUtils.iteratorToSet(ctx.replicationControl.brokersToIsrs().iterator(2, true)));
+    }
+
+    /**
+     * Sorts {@link PartitionChangeRecord} by topic ID and partition ID,
+     * so that the order of the records is deterministic, and can be compared.
+     */
+    private static List<ApiMessageAndVersion> sortPartitionChangeRecords(List<ApiMessageAndVersion> records) {
+        records = new ArrayList<>(records);
+        records.sort(Comparator.comparing((ApiMessageAndVersion record) -> {
+            PartitionChangeRecord partitionChangeRecord = (PartitionChangeRecord) record.message();
+            return partitionChangeRecord.topicId() + "-" + partitionChangeRecord.partitionId();
+        }));
+        return records;
     }
 }

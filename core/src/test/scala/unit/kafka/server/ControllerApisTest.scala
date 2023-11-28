@@ -54,6 +54,7 @@ import org.apache.kafka.controller.{Controller, ControllerRequestContext, Result
 import org.apache.kafka.image.publisher.ControllerRegistrationsPublisher
 import org.apache.kafka.server.authorizer.{Action, AuthorizableRequestContext, AuthorizationResult, Authorizer}
 import org.apache.kafka.server.common.{ApiMessageAndVersion, Features, MetadataVersion, ProducerIdsBlock}
+import org.apache.kafka.server.util.FutureUtils
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, Test}
 import org.junit.jupiter.params.ParameterizedTest
@@ -1139,31 +1140,24 @@ class ControllerApisTest {
   }
 
   @Test
-  def testAssignReplicasToDirsReturnsUnsupportedVersion(): Unit = {
+  def testAssignReplicasToDirs(): Unit = {
     val controller = mock(classOf[Controller])
-    val controllerApis = createControllerApis(None, controller)
+    val authorizer = mock(classOf[Authorizer])
+    val controllerApis = createControllerApis(Some(authorizer), controller)
 
-    val request =
-      new AssignReplicasToDirsRequest.Builder(
-        new AssignReplicasToDirsRequestData()
-          .setBrokerId(1)
-          .setBrokerEpoch(123L)
-          .setDirectories(util.Arrays.asList(
-            new AssignReplicasToDirsRequestData.DirectoryData()
-              .setId(Uuid.randomUuid())
-              .setTopics(util.Arrays.asList(
-                new AssignReplicasToDirsRequestData.TopicData()
-                  .setTopicId(Uuid.fromString("pcPTaiQfRXyZG88kO9k2aA"))
-                  .setPartitions(util.Arrays.asList(
-                    new AssignReplicasToDirsRequestData.PartitionData()
-                      .setPartitionIndex(8)
-                  ))
-              ))
-          ))).build()
+    val request = new AssignReplicasToDirsRequest.Builder(new AssignReplicasToDirsRequestData()).build()
 
-    val expectedResponse = new AssignReplicasToDirsResponseData().setErrorCode(Errors.UNSUPPORTED_VERSION.code)
+    when(authorizer.authorize(any[RequestContext], ArgumentMatchers.eq(Collections.singletonList(new Action(
+      AclOperation.CLUSTER_ACTION,
+      new ResourcePattern(ResourceType.CLUSTER, Resource.CLUSTER_NAME, PatternType.LITERAL),
+      1, true, true
+    )))))
+      .thenReturn(Collections.singletonList(AuthorizationResult.ALLOWED))
+    when(controller.assignReplicasToDirs(any[ControllerRequestContext], ArgumentMatchers.eq(request.data)))
+      .thenReturn(FutureUtils.failedFuture(Errors.UNKNOWN_TOPIC_OR_PARTITION.exception()))
+
     val response = handleRequest[AssignReplicasToDirsResponse](request, controllerApis)
-    assertEquals(expectedResponse, response.data)
+    assertEquals(new AssignReplicasToDirsResponseData().setErrorCode(Errors.UNKNOWN_TOPIC_OR_PARTITION.code()), response.data)
   }
 
   private def handleRequest[T <: AbstractResponse](
