@@ -113,6 +113,9 @@ public class LogicalSegmentIterator implements VersionedRecordIterator {
                     }
                 }
             }
+            if (!queryResults.isEmpty()) {
+                break;
+            }
         }
         if (!queryResults.isEmpty()) {
             if (order.equals(ResultOrder.ASCENDING)) {

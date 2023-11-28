@@ -33,9 +33,12 @@ import java.util.Map.Entry;
 import java.util.Optional;
 import java.util.Properties;
 
+import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
+import org.apache.kafka.common.serialization.IntegerDeserializer;
 import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Utils;
@@ -134,11 +137,11 @@ public class IQv2VersionedStoreIntegrationTest {
     public void verifyStore() {
         /* Test Versioned Key Queries */
         // retrieve the latest value
-        shouldHandleVersionedKeyQuery(RECORD_KEY, Optional.empty(), RECORD_VALUES[3], RECORD_TIMESTAMPS[3], Optional.empty());
-        shouldHandleVersionedKeyQuery(RECORD_KEY, Optional.of(Instant.now()), RECORD_VALUES[3], RECORD_TIMESTAMPS[3], Optional.empty());
-        shouldHandleVersionedKeyQuery(RECORD_KEY, Optional.of(Instant.ofEpochMilli(RECORD_TIMESTAMPS[3])), RECORD_VALUES[3], RECORD_TIMESTAMPS[3], Optional.empty());
+        shouldHandleVersionedKeyQuery(Optional.empty(), RECORD_VALUES[3], RECORD_TIMESTAMPS[3], Optional.empty());
+        shouldHandleVersionedKeyQuery(Optional.of(Instant.now()), RECORD_VALUES[3], RECORD_TIMESTAMPS[3], Optional.empty());
+        shouldHandleVersionedKeyQuery(Optional.of(Instant.ofEpochMilli(RECORD_TIMESTAMPS[3])), RECORD_VALUES[3], RECORD_TIMESTAMPS[3], Optional.empty());
         // retrieve the old value
-        shouldHandleVersionedKeyQuery(RECORD_KEY, Optional.of(Instant.ofEpochMilli(RECORD_TIMESTAMPS[0])), RECORD_VALUES[0], RECORD_TIMESTAMPS[0], Optional.of(RECORD_TIMESTAMPS[1]));
+        shouldHandleVersionedKeyQuery(Optional.of(Instant.ofEpochMilli(RECORD_TIMESTAMPS[0])), RECORD_VALUES[0], RECORD_TIMESTAMPS[0], Optional.of(RECORD_TIMESTAMPS[1]));
         // there is no record for the provided timestamp
         shouldVerifyGetNullForVersionedKeyQuery(RECORD_KEY, Instant.ofEpochMilli(RECORD_TIMESTAMPS[0] - 50));
         // there is no record with this key
@@ -146,25 +149,26 @@ public class IQv2VersionedStoreIntegrationTest {
 
         /* Test Multi Versioned Key Queries */
         // retrieve all existing values
-        shouldHandleMultiVersionedKeyQuery(RECORD_KEY, Optional.empty(), Optional.empty(), ResultOrder.ANY, 0, LAST_INDEX);
+        shouldHandleMultiVersionedKeyQuery(Optional.empty(), Optional.empty(), ResultOrder.ANY, 0, LAST_INDEX);
         // retrieve all existing values in ascending order
-        shouldHandleMultiVersionedKeyQuery(RECORD_KEY, Optional.empty(), Optional.empty(), ResultOrder.ASCENDING, 0, LAST_INDEX);
+        shouldHandleMultiVersionedKeyQuery(Optional.empty(), Optional.empty(), ResultOrder.ASCENDING, 0, LAST_INDEX);
         // retrieve existing values in query defined time range
-        shouldHandleMultiVersionedKeyQuery(RECORD_KEY, Optional.of(Instant.ofEpochMilli(RECORD_TIMESTAMPS[1] + 5)), Optional.of(Instant.now()),
+        shouldHandleMultiVersionedKeyQuery(Optional.of(Instant.ofEpochMilli(RECORD_TIMESTAMPS[1] + 5)), Optional.of(Instant.now()),
                                            ResultOrder.ANY, 1, LAST_INDEX);
         // there is no record in the query specified time range
         shouldVerifyGetNullForMultiVersionedKeyQuery(RECORD_KEY, Optional.of(Instant.ofEpochMilli(RECORD_TIMESTAMPS[0] - 100)), Optional.of(Instant.ofEpochMilli(RECORD_TIMESTAMPS[0] - 50)));
         // there is no record with this key
         shouldVerifyGetNullForMultiVersionedKeyQuery(NON_EXISTING_KEY, Optional.empty(), Optional.empty());
+        // test concurrent write while retrieving records
+        shouldHandleRaceCondition();
     }
 
-    private void shouldHandleVersionedKeyQuery(final Integer key,
-                                               final Optional<Instant> queryTimestamp,
+    private void shouldHandleVersionedKeyQuery(final Optional<Instant> queryTimestamp,
                                                final Integer expectedValue,
                                                final Long expectedTimestamp,
                                                final Optional<Long> expectedValidToTime) {
 
-        VersionedKeyQuery<Integer, Integer> query = VersionedKeyQuery.withKey(key);
+        VersionedKeyQuery<Integer, Integer> query = VersionedKeyQuery.withKey(RECORD_KEY);
         if (queryTimestamp.isPresent()) {
             query = query.asOf(queryTimestamp.get());
         }
@@ -200,10 +204,10 @@ public class IQv2VersionedStoreIntegrationTest {
         assertThat(result.getOnlyPartitionResult(), nullValue());
     }
 
-    private void shouldHandleMultiVersionedKeyQuery(final Integer key, final Optional<Instant> fromTime, final Optional<Instant> toTime,
+    private void shouldHandleMultiVersionedKeyQuery(final Optional<Instant> fromTime, final Optional<Instant> toTime,
                                                     final ResultOrder order, final int expectedArrayLowerBound, final int expectedArrayUpperBound) {
         // define query
-        MultiVersionedKeyQuery<Integer, Integer> query = MultiVersionedKeyQuery.withKey(key);
+        MultiVersionedKeyQuery<Integer, Integer> query = MultiVersionedKeyQuery.withKey(RECORD_KEY);
         if (fromTime.isPresent()) {
             query = query.fromTime(fromTime.get());
         }
@@ -281,6 +285,96 @@ public class IQv2VersionedStoreIntegrationTest {
             try (final VersionedRecordIterator<Integer> iterator = partitionResultsEntry.getValue().getResult()) {
                 assertFalse(iterator.hasNext());
             }
+        }
+    }
+
+    private void shouldHandleRaceCondition() {
+        final MultiVersionedKeyQuery<Integer, Integer> query = MultiVersionedKeyQuery.withKey(RECORD_KEY);
+
+        final StateQueryRequest<VersionedRecordIterator<Integer>> request = StateQueryRequest.inStore(STORE_NAME).withQuery(query).withPositionBound(PositionBound.at(INPUT_POSITION));
+        final StateQueryResult<VersionedRecordIterator<Integer>> result = IntegrationTestUtils.iqv2WaitForResult(kafkaStreams, request);
+        final QueryResult<VersionedRecordIterator<Integer>> queryResult = result.getOnlyPartitionResult();
+        if (queryResult.isFailure()) {
+            throw new AssertionError(queryResult.toString());
+        }
+        assertThat(queryResult.isSuccess(), is(true));
+
+        assertThrows(IllegalArgumentException.class, queryResult::getFailureReason);
+        assertThrows(IllegalArgumentException.class, queryResult::getFailureMessage);
+
+        // verify results in two steps
+        final Map<Integer, QueryResult<VersionedRecordIterator<Integer>>> partitionResults = result.getPartitionResults();
+        for (final Entry<Integer, QueryResult<VersionedRecordIterator<Integer>>> partitionResultsEntry : partitionResults.entrySet()) {
+            try (final VersionedRecordIterator<Integer> iterator = partitionResultsEntry.getValue().getResult()) {
+                int i = LAST_INDEX;
+                int iteratorSize = 0;
+
+                // step 1:
+                while (iterator.hasNext()) {
+                    final VersionedRecord<Integer> record = iterator.next();
+                    final Long timestamp = record.timestamp();
+                    final Optional<Long> validTo = record.validTo();
+                    final Integer value = record.value();
+
+                    final Optional<Long> expectedValidTo = i < LAST_INDEX ? Optional.of(RECORD_TIMESTAMPS[i + 1]) : Optional.empty();
+                    assertThat(value, is(RECORD_VALUES[i]));
+                    assertThat(timestamp, is(RECORD_TIMESTAMPS[i]));
+                    assertThat(validTo, is(expectedValidTo));
+                    assertThat(queryResult.getExecutionInfo(), is(empty()));
+                    i--;
+                    iteratorSize++;
+                    if (i == 2)
+                        break;
+                }
+
+                // update the value of the oldest record
+                updateRecordValue();
+
+                // step 2: continue reading records from through the already opened iterator
+                while (iterator.hasNext()) {
+                    final VersionedRecord<Integer> record = iterator.next();
+                    final Long timestamp = record.timestamp();
+                    final Optional<Long> validTo = record.validTo();
+                    final Integer value = record.value();
+
+                    final Optional<Long> expectedValidTo = i < LAST_INDEX ? Optional.of(RECORD_TIMESTAMPS[i + 1]) : Optional.empty();
+                    assertThat(value, is(RECORD_VALUES[i]));
+                    assertThat(timestamp, is(RECORD_TIMESTAMPS[i]));
+                    assertThat(validTo, is(expectedValidTo));
+                    assertThat(queryResult.getExecutionInfo(), is(empty()));
+                    i--;
+                    iteratorSize++;
+                }
+
+                // The number of returned records by query is equal to expected number of records
+                assertThat(iteratorSize, equalTo(RECORD_NUMBER));
+            }
+        }
+    }
+
+    private void updateRecordValue() {
+        // update the record value at RECORD_TIMESTAMPS[0]
+        final Properties producerProps = new Properties();
+        producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
+        producerProps.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, IntegerSerializer.class);
+        producerProps.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, IntegerSerializer.class);
+        try (final KafkaProducer<Integer, Integer> producer = new KafkaProducer<>(producerProps)) {
+            producer.send(new ProducerRecord<>(INPUT_TOPIC_NAME, 0, RECORD_TIMESTAMPS[0], RECORD_KEY, 999999));
+        }
+        INPUT_POSITION.withComponent(INPUT_TOPIC_NAME, 0, 4);
+        assertThat(INPUT_POSITION, equalTo(Position.emptyPosition().withComponent(INPUT_TOPIC_NAME, 0, 4)));
+
+        // make sure that the new value is picked up by the store
+        final Properties consumerProps = new Properties();
+        consumerProps.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
+        consumerProps.setProperty(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, IntegerDeserializer.class.getName());
+        consumerProps.setProperty(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, IntegerDeserializer.class.getName());
+        consumerProps.setProperty(ConsumerConfig.GROUP_ID_CONFIG, "foo");
+        consumerProps.setProperty(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
+        try (final KafkaConsumer<Integer, Integer> consumer = new KafkaConsumer<>(consumerProps)) {
+            consumer.subscribe(Collections.singletonList(INPUT_TOPIC_NAME));
+            // the last record is the newly added one
+            assertThat(consumer.poll(Duration.ofMillis(1000)).count(), equalTo(RECORD_NUMBER + 1));
         }
     }
 }
