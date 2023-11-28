@@ -143,7 +143,7 @@ public class PartitionMakeFollowerBenchmark {
     @TearDown(Level.Trial)
     public void tearDown() throws IOException, InterruptedException {
         executorService.shutdownNow();
-        logManager.shutdown();
+        logManager.shutdown(-1L);
         scheduler.shutdown();
         Utils.delete(logDir);
     }

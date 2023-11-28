@@ -24,6 +24,8 @@ import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.coordinator.group.metrics.CoordinatorRuntimeMetrics;
+import org.apache.kafka.coordinator.group.metrics.CoordinatorMetrics;
 import org.apache.kafka.deferred.DeferredEvent;
 import org.apache.kafka.deferred.DeferredEventQueue;
 import org.apache.kafka.image.MetadataDelta;
@@ -59,7 +61,7 @@ import java.util.function.Consumer;
  *
  * (1) A write operation, aka a request, can read the full and potentially **uncommitted** state from state
  * machine to handle the operation. A write operation typically generates a response and a list of
- * records. The records are applies to the state machine and persisted to the partition. The response
+ * records. The records are applied to the state machine and persisted to the partition. The response
  * is parked until the records are committed and delivered when they are.
  *
  * (2) A read operation, aka a request, can only read the committed state from the state machine to handle
@@ -89,6 +91,8 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
         private CoordinatorShardBuilderSupplier<S, U> coordinatorShardBuilderSupplier;
         private Time time = Time.SYSTEM;
         private Timer timer;
+        private CoordinatorRuntimeMetrics runtimeMetrics;
+        private CoordinatorMetrics coordinatorMetrics;
 
         public Builder<S, U> withLogPrefix(String logPrefix) {
             this.logPrefix = logPrefix;
@@ -130,6 +134,16 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
             return this;
         }
 
+        public Builder<S, U> withCoordinatorRuntimeMetrics(CoordinatorRuntimeMetrics runtimeMetrics) {
+            this.runtimeMetrics = runtimeMetrics;
+            return this;
+        }
+
+        public Builder<S, U> withCoordinatorMetrics(CoordinatorMetrics coordinatorMetrics) {
+            this.coordinatorMetrics = coordinatorMetrics;
+            return this;
+        }
+
         public CoordinatorRuntime<S, U> build() {
             if (logPrefix == null)
                 logPrefix = "";
@@ -147,6 +161,10 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
                 throw new IllegalArgumentException("Time must be set.");
             if (timer == null)
                 throw new IllegalArgumentException("Timer must be set.");
+            if (runtimeMetrics == null)
+                throw new IllegalArgumentException("CoordinatorRuntimeMetrics must be set.");
+            if (coordinatorMetrics == null)
+                throw new IllegalArgumentException("CoordinatorMetrics must be set.");
 
             return new CoordinatorRuntime<>(
                 logPrefix,
@@ -156,7 +174,9 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
                 loader,
                 coordinatorShardBuilderSupplier,
                 time,
-                timer
+                timer,
+                runtimeMetrics,
+                coordinatorMetrics
             );
         }
     }
@@ -164,7 +184,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
     /**
      * The various state that a coordinator for a partition can be in.
      */
-    enum CoordinatorState {
+    public enum CoordinatorState {
         /**
          * Initial state when a coordinator is created.
          */
@@ -487,6 +507,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
             lastCommittedOffset = offset;
             deferredEventQueue.completeUpTo(offset);
             snapshotRegistry.deleteSnapshotsUpTo(offset);
+            coordinatorMetrics.onUpdateLastCommittedOffset(tp, offset);
         }
 
         /**
@@ -500,6 +521,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
             if (!newState.canTransitionFrom(state)) {
                 throw new IllegalStateException("Cannot transition from " + state + " to " + newState);
             }
+            CoordinatorState oldState = state;
 
             log.debug("Transition from {} to {}.", state, newState);
             switch (newState) {
@@ -514,6 +536,8 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
                         .withSnapshotRegistry(snapshotRegistry)
                         .withTime(time)
                         .withTimer(timer)
+                        .withCoordinatorMetrics(coordinatorMetrics)
+                        .withTopicPartition(tp)
                         .build();
                     break;
 
@@ -537,6 +561,8 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
                 default:
                     throw new IllegalArgumentException("Transitioning to " + newState + " is not supported.");
             }
+
+            runtimeMetrics.recordPartitionStateChange(oldState, state);
         }
 
         /**
@@ -609,6 +635,11 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
         CoordinatorResult<T, U> result;
 
         /**
+         * The time this event was created.
+         */
+        private final long createdTimeMs;
+
+        /**
          * Constructor.
          *
          * @param name  The operation name.
@@ -624,6 +655,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
             this.name = name;
             this.op = op;
             this.future = new CompletableFuture<>();
+            this.createdTimeMs = time.milliseconds();
         }
 
         /**
@@ -698,15 +730,20 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
          */
         @Override
         public void complete(Throwable exception) {
-            CompletableFuture<T> appendFuture = result != null ? result.appendFuture() : null;
+            CompletableFuture<Void> appendFuture = result != null ? result.appendFuture() : null;
 
             if (exception == null) {
-                if (appendFuture != null) result.appendFuture().complete(result.response());
+                if (appendFuture != null) result.appendFuture().complete(null);
                 future.complete(result.response());
             } else {
                 if (appendFuture != null) result.appendFuture().completeExceptionally(exception);
                 future.completeExceptionally(exception);
             }
+        }
+
+        @Override
+        public long createdTimeMs() {
+            return this.createdTimeMs;
         }
 
         @Override
@@ -769,6 +806,11 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
         T response;
 
         /**
+         * The time this event was created.
+         */
+        private final long createdTimeMs;
+
+        /**
          * Constructor.
          *
          * @param name  The operation name.
@@ -784,6 +826,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
             this.name = name;
             this.op = op;
             this.future = new CompletableFuture<>();
+            this.createdTimeMs = time.milliseconds();
         }
 
         /**
@@ -833,6 +876,11 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
         }
 
         @Override
+        public long createdTimeMs() {
+            return this.createdTimeMs;
+        }
+
+        @Override
         public String toString() {
             return "CoordinatorReadEvent(name=" + name + ")";
         }
@@ -858,6 +906,11 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
         final Runnable op;
 
         /**
+         * The time this event was created.
+         */
+        private final long createdTimeMs;
+
+        /**
          * Constructor.
          *
          * @param name  The operation name.
@@ -872,6 +925,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
             this.tp = tp;
             this.name = name;
             this.op = op;
+            this.createdTimeMs = time.milliseconds();
         }
 
         /**
@@ -905,6 +959,11 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
             if (exception != null) {
                 log.error("Execution of {} failed due to {}.", name, exception.getMessage(), exception);
             }
+        }
+
+        @Override
+        public long createdTimeMs() {
+            return this.createdTimeMs;
         }
 
         @Override
@@ -996,6 +1055,16 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
     private final CoordinatorShardBuilderSupplier<S, U> coordinatorShardBuilderSupplier;
 
     /**
+     * The coordinator runtime metrics.
+     */
+    private final CoordinatorRuntimeMetrics runtimeMetrics;
+
+    /**
+     * The coordinator metrics.
+     */
+    private final CoordinatorMetrics coordinatorMetrics;
+
+    /**
      * Atomic boolean indicating whether the runtime is running.
      */
     private final AtomicBoolean isRunning = new AtomicBoolean(true);
@@ -1025,7 +1094,9 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
         CoordinatorLoader<U> loader,
         CoordinatorShardBuilderSupplier<S, U> coordinatorShardBuilderSupplier,
         Time time,
-        Timer timer
+        Timer timer,
+        CoordinatorRuntimeMetrics runtimeMetrics,
+        CoordinatorMetrics coordinatorMetrics
     ) {
         this.logPrefix = logPrefix;
         this.logContext = logContext;
@@ -1038,6 +1109,8 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
         this.highWatermarklistener = new HighWatermarkListener();
         this.loader = loader;
         this.coordinatorShardBuilderSupplier = coordinatorShardBuilderSupplier;
+        this.runtimeMetrics = runtimeMetrics;
+        this.coordinatorMetrics = coordinatorMetrics;
     }
 
     /**
@@ -1242,7 +1315,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
                         case FAILED:
                         case INITIAL:
                             context.transitionTo(CoordinatorState.LOADING);
-                            loader.load(tp, context.coordinator).whenComplete((state, exception) -> {
+                            loader.load(tp, context.coordinator).whenComplete((summary, exception) -> {
                                 scheduleInternalOperation("CompleteLoad(tp=" + tp + ", epoch=" + partitionEpoch + ")", tp, () -> {
                                     withContextOrThrow(tp, ctx -> {
                                         if (ctx.state != CoordinatorState.LOADING) {
@@ -1254,8 +1327,11 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
                                         try {
                                             if (exception != null) throw exception;
                                             ctx.transitionTo(CoordinatorState.ACTIVE);
-                                            log.info("Finished loading of metadata from {} with epoch {}.",
-                                                tp, partitionEpoch
+                                            if (summary != null) {
+                                                runtimeMetrics.recordPartitionLoadSensor(summary.startTimeMs(), summary.endTimeMs());
+                                            }
+                                            log.info("Finished loading of metadata from {} with epoch {} and LoadSummary={}.",
+                                                tp, partitionEpoch, summary
                                             );
                                         } catch (Throwable ex) {
                                             log.error("Failed to load metadata from {} with epoch {} due to {}.",
@@ -1303,18 +1379,28 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
         log.info("Scheduling unloading of metadata for {} with epoch {}", tp, partitionEpoch);
 
         scheduleInternalOperation("UnloadCoordinator(tp=" + tp + ", epoch=" + partitionEpoch + ")", tp, () -> {
-            withContextOrThrow(tp, context -> {
-                if (context.epoch < partitionEpoch) {
-                    log.info("Started unloading metadata for {} with epoch {}.", tp, partitionEpoch);
-                    context.transitionTo(CoordinatorState.CLOSED);
-                    coordinators.remove(tp, context);
-                    log.info("Finished unloading metadata for {} with epoch {}.", tp, partitionEpoch);
-                } else {
-                    log.info("Ignored unloading metadata for {} in epoch {} since current epoch is {}.",
-                        tp, partitionEpoch, context.epoch
-                    );
+            CoordinatorContext context = coordinators.get(tp);
+            if (context != null) {
+                try {
+                    context.lock.lock();
+                    if (context.epoch < partitionEpoch) {
+                        log.info("Started unloading metadata for {} with epoch {}.", tp, partitionEpoch);
+                        context.transitionTo(CoordinatorState.CLOSED);
+                        coordinators.remove(tp, context);
+                        log.info("Finished unloading metadata for {} with epoch {}.", tp, partitionEpoch);
+                    } else {
+                        log.info("Ignored unloading metadata for {} in epoch {} since current epoch is {}.",
+                            tp, partitionEpoch, context.epoch
+                        );
+                    }
+                } finally {
+                    context.lock.unlock();
                 }
-            });
+            } else {
+                log.info("Ignored unloading metadata for {} in epoch {} since metadata was never loaded.",
+                    tp, partitionEpoch
+                );
+            }
         });
     }
 
@@ -1373,6 +1459,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
             context.transitionTo(CoordinatorState.CLOSED);
         });
         coordinators.clear();
+        Utils.closeQuietly(runtimeMetrics, "runtime metrics");
         log.info("Coordinator runtime closed.");
     }
 }

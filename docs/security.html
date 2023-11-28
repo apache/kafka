@@ -1195,11 +1195,15 @@ sasl.mechanism.inter.broker.protocol=GSSAPI (or one of the other enabled mechani
                 <li><h5 class="anchor-heading"><a id="security_token_management" class="anchor-link"></a><a href="#security_token_management">Token Management</a></h5>
                     <p> A secret is used to generate and verify delegation tokens. This is supplied using config
                         option <tt>delegation.token.secret.key</tt>. The same secret key must be configured across all the brokers.
-                        If the secret is not set or set to empty string, brokers will disable the delegation token authentication.</p>
+                        If using Kafka with KRaft the controllers must also be configured with the secret using the same config option.
+                        If the secret is not set or set to empty string, delegation token authentication and API operations will fail.</p>
 
-                    <p>In the current implementation, token details are stored in Zookeeper and is suitable for use in Kafka installations where
-                        Zookeeper is on a private network. Also currently, this secret is stored as plain text in the server.properties
-                        config file. We intend to make these configurable in a future Kafka release.</p>
+                    <p>When using Kafka with Zookeeper, the token details are stored in Zookeeper and delegation tokens are suitable
+                        for use in Kafka installations where Zookeeper is on a private network. When using Kafka with KRaft, the token
+                        details are stored with the other metadata on the controller nodes and delegation tokens are suitable for use
+                        when the controllers are on a private network or when all commnications between brokers and controllers is
+                        encrypted.  Currently, this secret is stored as plain text in the server.properties config file.
+                        We intend to make these configurable in a future Kafka release.</p>
 
                     <p>A token has a current life, and a maximum renewable life. By default, tokens must be renewed once every 24 hours
                         for up to 7 days. These can be configured using <tt>delegation.token.expiry.time.ms</tt>

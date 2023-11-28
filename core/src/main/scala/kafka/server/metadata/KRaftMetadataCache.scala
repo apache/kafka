@@ -23,7 +23,7 @@ import kafka.utils.Logging
 import org.apache.kafka.admin.BrokerMetadata
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.message.MetadataResponseData.{MetadataResponsePartition, MetadataResponseTopic}
-import org.apache.kafka.common.{Cluster, Node, PartitionInfo, TopicPartition, Uuid}
+import org.apache.kafka.common.{Cluster, DirectoryId, Node, PartitionInfo, TopicPartition, Uuid}
 import org.apache.kafka.common.message.UpdateMetadataRequestData.UpdateMetadataPartitionState
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.Errors
@@ -36,10 +36,10 @@ import java.util.concurrent.ThreadLocalRandom
 import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.message.{DescribeClientQuotasRequestData, DescribeClientQuotasResponseData}
 import org.apache.kafka.common.message.{DescribeUserScramCredentialsRequestData, DescribeUserScramCredentialsResponseData}
-import org.apache.kafka.metadata.{PartitionRegistration, Replicas}
+import org.apache.kafka.metadata.{BrokerRegistration, PartitionRegistration, Replicas}
 import org.apache.kafka.server.common.{Features, MetadataVersion}
 
-import scala.collection.{Seq, Set, mutable}
+import scala.collection.{Map, Seq, Set, mutable}
 import scala.jdk.CollectionConverters._
 import scala.compat.java8.OptionConverters._
 
@@ -143,19 +143,29 @@ class KRaftMetadataCache(val brokerId: Int) extends MetadataCache with Logging w
   private def getOfflineReplicas(image: MetadataImage,
                                  partition: PartitionRegistration,
                                  listenerName: ListenerName): util.List[Integer] = {
-    // TODO: in order to really implement this correctly, we would need JBOD support.
-    // That would require us to track which replicas were offline on a per-replica basis.
-    // See KAFKA-13005.
     val offlineReplicas = new util.ArrayList[Integer](0)
     for (brokerId <- partition.replicas) {
       Option(image.cluster().broker(brokerId)) match {
         case None => offlineReplicas.add(brokerId)
-        case Some(broker) => if (broker.fenced() || !broker.listeners().containsKey(listenerName.value())) {
+        case Some(broker) => if (isReplicaOffline(partition, listenerName, broker)) {
           offlineReplicas.add(brokerId)
         }
       }
     }
     offlineReplicas
+  }
+
+  private def isReplicaOffline(partition: PartitionRegistration, listenerName: ListenerName, broker: BrokerRegistration) = {
+    broker.fenced() || !broker.listeners().containsKey(listenerName.value()) || isInOfflineDir(broker, partition)
+  }
+
+  private def isInOfflineDir(broker: BrokerRegistration, partition: PartitionRegistration): Boolean = {
+    partition.directory(broker.id()) match {
+      case DirectoryId.LOST => true
+      case DirectoryId.MIGRATING => false
+      case DirectoryId.UNASSIGNED => false
+      case dir => !broker.hasOnlineDir(dir)
+    }
   }
 
   /**
@@ -279,15 +289,18 @@ class KRaftMetadataCache(val brokerId: Int) extends MetadataCache with Logging w
     val result = new mutable.HashMap[Int, Node]()
     Option(image.topics().getTopic(tp.topic())).foreach { topic =>
       topic.partitions().values().forEach { partition =>
-        partition.replicas.map { replicaId =>
-          result.put(replicaId, Option(image.cluster().broker(replicaId)) match {
-            case None => Node.noNode()
-            case Some(broker) => broker.node(listenerName.value()).asScala.getOrElse(Node.noNode())
-          })
+        partition.replicas.foreach { replicaId =>
+          val broker = image.cluster().broker(replicaId)
+          if (broker != null && !broker.fenced()) {
+            broker.node(listenerName.value).ifPresent { node =>
+              if (!node.isEmpty)
+                result.put(replicaId, node)
+            }
+          }
         }
       }
     }
-    result.toMap
+    result
   }
 
   /**
@@ -378,7 +391,9 @@ class KRaftMetadataCache(val brokerId: Int) extends MetadataCache with Logging w
     }
   }
 
-  def setImage(newImage: MetadataImage): Unit = _currentImage = newImage
+  def setImage(newImage: MetadataImage): Unit = {
+    _currentImage = newImage
+  }
 
   override def config(configResource: ConfigResource): Properties =
     _currentImage.configs().configProperties(configResource)

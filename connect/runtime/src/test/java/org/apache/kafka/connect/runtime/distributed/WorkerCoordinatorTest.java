@@ -97,6 +97,7 @@ public class WorkerCoordinatorTest {
     private final int rebalanceTimeoutMs = 60;
     private final int heartbeatIntervalMs = 2;
     private final long retryBackoffMs = 100;
+    private final long retryBackoffMaxMs = 1000;
     private MockTime time;
     private MockClient client;
     private Node node;
@@ -133,7 +134,7 @@ public class WorkerCoordinatorTest {
         LogContext logContext = new LogContext();
 
         this.time = new MockTime();
-        this.metadata = new Metadata(0, Long.MAX_VALUE, logContext, new ClusterResourceListeners());
+        this.metadata = new Metadata(0, 0, Long.MAX_VALUE, logContext, new ClusterResourceListeners());
         this.client = new MockClient(time, metadata);
         this.client.updateMetadata(RequestTestUtils.metadataUpdateWith(1, Collections.singletonMap("topic", 1)));
         this.node = metadata.fetch().nodes().get(0);
@@ -147,6 +148,7 @@ public class WorkerCoordinatorTest {
                                                         groupId,
                                                         Optional.empty(),
                                                         retryBackoffMs,
+                                                        retryBackoffMaxMs,
                                                         true);
         this.coordinator = new WorkerCoordinator(rebalanceConfig,
                                                  logContext,

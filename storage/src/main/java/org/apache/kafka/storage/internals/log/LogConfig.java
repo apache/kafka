@@ -343,7 +343,7 @@ public class LogConfig extends AbstractConfig {
         this(props, Collections.emptySet());
     }
 
-    @SuppressWarnings("deprecation")
+    @SuppressWarnings({"deprecation", "this-escape"})
     public LogConfig(Map<?, ?> props, Set<String> overriddenConfigs) {
         super(CONFIG, props, false);
         this.props = Collections.unmodifiableMap(props);
@@ -548,21 +548,26 @@ public class LogConfig extends AbstractConfig {
      * @param props The properties to be validated
      */
     private static void validateTopicLogConfigValues(Map<?, ?> props,
-                                                     boolean isRemoteLogStorageSystemEnabled) {
+                                                    boolean isRemoteLogStorageSystemEnabled) {
         validateValues(props);
         boolean isRemoteLogStorageEnabled = (Boolean) props.get(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG);
         if (isRemoteLogStorageEnabled) {
-            validateRemoteStorageOnlyIfSystemEnabled(isRemoteLogStorageSystemEnabled);
+            validateRemoteStorageOnlyIfSystemEnabled(props, isRemoteLogStorageSystemEnabled, false);
             validateNoRemoteStorageForCompactedTopic(props);
             validateRemoteStorageRetentionSize(props);
             validateRemoteStorageRetentionTime(props);
         }
     }
 
-    private static void validateRemoteStorageOnlyIfSystemEnabled(boolean isRemoteLogStorageSystemEnabled) {
-        if (!isRemoteLogStorageSystemEnabled) {
-            throw new ConfigException("Tiered Storage functionality is disabled in the broker. " +
-                    "Topic cannot be configured with remote log storage.");
+    public static void validateRemoteStorageOnlyIfSystemEnabled(Map<?, ?> props, boolean isRemoteLogStorageSystemEnabled, boolean isReceivingConfigFromStore) {
+        boolean isRemoteLogStorageEnabled = (Boolean) props.get(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG);
+        if (isRemoteLogStorageEnabled && !isRemoteLogStorageSystemEnabled) {
+            if (isReceivingConfigFromStore) {
+                throw new ConfigException("You have to delete all topics with the property remote.storage.enable=true before disabling tiered storage cluster-wide");
+            } else {
+                throw new ConfigException("Tiered Storage functionality is disabled in the broker. " +
+                        "Topic cannot be configured with remote log storage.");
+            }
         }
     }
 

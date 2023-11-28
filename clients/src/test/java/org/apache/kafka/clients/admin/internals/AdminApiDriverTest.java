@@ -17,6 +17,8 @@
 package org.apache.kafka.clients.admin.internals;
 
 import java.util.concurrent.ConcurrentHashMap;
+
+import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.admin.internals.AdminApiDriver.RequestSpec;
 import org.apache.kafka.clients.admin.internals.AdminApiHandler.ApiResult;
 import org.apache.kafka.clients.admin.internals.AdminApiLookupStrategy.LookupResult;
@@ -60,6 +62,7 @@ import static org.junit.jupiter.api.Assertions.fail;
 class AdminApiDriverTest {
     private static final int API_TIMEOUT_MS = 30000;
     private static final int RETRY_BACKOFF_MS = 100;
+    private static final int RETRY_BACKOFF_MAX_MS = 1000;
 
     @Test
     public void testCoalescedLookup() {
@@ -405,6 +408,7 @@ class AdminApiDriverTest {
             future,
             time.milliseconds() + API_TIMEOUT_MS,
             RETRY_BACKOFF_MS,
+            RETRY_BACKOFF_MAX_MS,
             new LogContext()
         );
 
@@ -542,7 +546,8 @@ class AdminApiDriverTest {
 
         RequestSpec<String> retrySpec = retrySpecs.get(0);
         assertEquals(1, retrySpec.tries);
-        assertEquals(ctx.time.milliseconds() + RETRY_BACKOFF_MS, retrySpec.nextAllowedTryMs);
+        assertEquals(ctx.time.milliseconds(), retrySpec.nextAllowedTryMs,
+                (long) (RETRY_BACKOFF_MS * CommonClientConfigs.RETRY_BACKOFF_JITTER));
     }
 
     private static void assertMappedKey(
@@ -651,6 +656,7 @@ class AdminApiDriverTest {
                 future,
                 time.milliseconds() + API_TIMEOUT_MS,
                 RETRY_BACKOFF_MS,
+                RETRY_BACKOFF_MAX_MS,
                 new LogContext()
             );
 

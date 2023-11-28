@@ -47,8 +47,17 @@ class ZkTopicMigrationClient(zkClient: KafkaZkClient) extends TopicMigrationClie
     if (!interests.contains(TopicVisitorInterest.TOPICS)) {
       throw new IllegalArgumentException("Must specify at least TOPICS in topic visitor interests.")
     }
-    val topics = zkClient.getAllTopicsInCluster()
-    val replicaAssignmentAndTopicIds = zkClient.getReplicaAssignmentAndTopicIdForTopics(topics)
+    val allTopics = zkClient.getAllTopicsInCluster()
+    val topicDeletions = readPendingTopicDeletions().asScala
+    val topicsToMigrated = allTopics -- topicDeletions
+    if (topicDeletions.nonEmpty) {
+      warn(s"Found ${topicDeletions.size} pending topic deletions. These will be not migrated " +
+        s"to KRaft. After the migration, the brokers will reconcile their logs with these pending topic deletions.")
+    }
+    topicDeletions.foreach {
+      deletion => logger.info(s"Not migrating pending deleted topic: $deletion")
+    }
+    val replicaAssignmentAndTopicIds = zkClient.getReplicaAssignmentAndTopicIdForTopics(topicsToMigrated)
     replicaAssignmentAndTopicIds.foreach { case TopicIdReplicaAssignment(topic, topicIdOpt, partitionAssignments) =>
       val topicAssignment = partitionAssignments.map { case (partition, assignment) =>
         partition.partition().asInstanceOf[Integer] -> assignment.replicas.map(Integer.valueOf).asJava
@@ -206,6 +215,7 @@ class ZkTopicMigrationClient(zkClient: KafkaZkClient) extends TopicMigrationClie
       DeleteRequest(ConfigEntityZNode.path(ConfigType.Topic, topicName), ZkVersion.MatchAnyVersion),
       DeleteRequest(TopicZNode.path(topicName), ZkVersion.MatchAnyVersion)
     )
+
     val (migrationZkVersion, responses) = zkClient.retryMigrationRequestsUntilConnected(deleteRequests, state)
     val resultCodes = responses.map { response => response.path -> response.resultCode }.toMap
     if (responses.last.resultCode.equals(Code.OK)) {
@@ -315,5 +325,26 @@ class ZkTopicMigrationClient(zkClient: KafkaZkClient) extends TopicMigrationClie
   ): SetDataRequest = {
     val (path, data) = partitionStatePathAndData(topicPartition, partitionRegistration, controllerEpoch)
     SetDataRequest(path, data, ZkVersion.MatchAnyVersion, Some(topicPartition))
+  }
+
+  override def readPendingTopicDeletions(): util.Set[String] = {
+    zkClient.getTopicDeletions.toSet.asJava
+  }
+
+  override def clearPendingTopicDeletions(
+    pendingTopicDeletions: util.Set[String],
+    state: ZkMigrationLeadershipState
+  ): ZkMigrationLeadershipState = {
+    val deleteRequests = pendingTopicDeletions.asScala.map { topicName =>
+      DeleteRequest(DeleteTopicsTopicZNode.path(topicName), ZkVersion.MatchAnyVersion)
+    }.toSeq
+
+    val (migrationZkVersion, responses) = zkClient.retryMigrationRequestsUntilConnected(deleteRequests.toSeq, state)
+    val resultCodes = responses.map { response => response.path -> response.resultCode }.toMap
+    if (resultCodes.forall { case (_, code) => code.equals(Code.OK) }) {
+      state.withMigrationZkVersion(migrationZkVersion)
+    } else {
+      throw new MigrationClientException(s"Failed to delete pending topic deletions: $pendingTopicDeletions. ZK transaction had results $resultCodes")
+    }
   }
 }

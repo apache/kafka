@@ -61,16 +61,17 @@ object CoreUtils {
     * @param logging The logging instance to use for logging the thrown exception.
     * @param logLevel The log level to use for logging.
     */
+  @noinline // inlining this method is not typically useful and it triggers spurious spotbugs warnings
   def swallow(action: => Unit, logging: Logging, logLevel: Level = Level.WARN): Unit = {
     try {
       action
     } catch {
       case e: Throwable => logLevel match {
-        case Level.ERROR => logger.error(e.getMessage, e)
-        case Level.WARN => logger.warn(e.getMessage, e)
-        case Level.INFO => logger.info(e.getMessage, e)
-        case Level.DEBUG => logger.debug(e.getMessage, e)
-        case Level.TRACE => logger.trace(e.getMessage, e)
+        case Level.ERROR => logging.error(e.getMessage, e)
+        case Level.WARN => logging.warn(e.getMessage, e)
+        case Level.INFO => logging.info(e.getMessage, e)
+        case Level.DEBUG => logging.debug(e.getMessage, e)
+        case Level.TRACE => logging.trace(e.getMessage, e)
       }
     }
   }
@@ -80,30 +81,6 @@ object CoreUtils {
    * @param files sequence of files to be deleted
    */
   def delete(files: Seq[String]): Unit = files.foreach(f => Utils.delete(new File(f)))
-
-  /**
-   * Invokes every function in `all` even if one or more functions throws an exception.
-   *
-   * If any of the functions throws an exception, the first one will be rethrown at the end with subsequent exceptions
-   * added as suppressed exceptions.
-   */
-  // Note that this is a generalised version of `Utils.closeAll`. We could potentially make it more general by
-  // changing the signature to `def tryAll[R](all: Seq[() => R]): Seq[R]`
-  def tryAll(all: Seq[() => Unit]): Unit = {
-    var exception: Throwable = null
-    all.foreach { element =>
-      try element.apply()
-      catch {
-        case e: Throwable =>
-          if (exception != null)
-            exception.addSuppressed(e)
-          else
-            exception = e
-      }
-    }
-    if (exception != null)
-      throw exception
-  }
 
   /**
    * Register the given mbean with the platform mbean server,
@@ -117,7 +94,7 @@ object CoreUtils {
    */
   def registerMBean(mbean: Object, name: String): Boolean = {
     try {
-      val mbs = ManagementFactory.getPlatformMBeanServer()
+      val mbs = ManagementFactory.getPlatformMBeanServer
       mbs synchronized {
         val objName = new ObjectName(name)
         if (mbs.isRegistered(objName))
@@ -164,7 +141,7 @@ object CoreUtils {
    * Create an instance of the class with the given class name
    */
   def createObject[T <: AnyRef](className: String, args: AnyRef*): T = {
-    val klass = Class.forName(className, true, Utils.getContextOrKafkaClassLoader()).asInstanceOf[Class[T]]
+    val klass = Class.forName(className, true, Utils.getContextOrKafkaClassLoader).asInstanceOf[Class[T]]
     val constructor = klass.getConstructor(args.map(_.getClass): _*)
     constructor.newInstance(args: _*)
   }
@@ -196,7 +173,7 @@ object CoreUtils {
   }
 
   def listenerListToEndPoints(listeners: String, securityProtocolMap: Map[ListenerName, SecurityProtocol]): Seq[EndPoint] = {
-    listenerListToEndPoints(listeners, securityProtocolMap, true)
+    listenerListToEndPoints(listeners, securityProtocolMap, requireDistinctPorts = true)
   }
 
   def checkDuplicateListenerPorts(endpoints: Seq[EndPoint], listeners: String): Unit = {

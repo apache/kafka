@@ -990,10 +990,10 @@ public class WorkerSourceTaskTest {
     private void assertShouldSkipCommit() {
         assertFalse(workerTask.shouldCommitOffsets());
 
-        LogCaptureAppender.setClassLoggerToTrace(SourceTaskOffsetCommitter.class);
-        LogCaptureAppender.setClassLoggerToTrace(WorkerSourceTask.class);
         try (LogCaptureAppender committerAppender = LogCaptureAppender.createAndRegister(SourceTaskOffsetCommitter.class);
              LogCaptureAppender taskAppender = LogCaptureAppender.createAndRegister(WorkerSourceTask.class)) {
+            committerAppender.setClassLoggerToTrace(SourceTaskOffsetCommitter.class);
+            taskAppender.setClassLoggerToTrace(WorkerSourceTask.class);
             SourceTaskOffsetCommitter.commit(workerTask);
             assertEquals(Collections.emptyList(), taskAppender.getMessages());
 

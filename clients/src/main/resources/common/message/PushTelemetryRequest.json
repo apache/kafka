@@ -1,0 +1,49 @@
+// Licensed to the Apache Software Foundation (ASF) under one or more
+// contributor license agreements.  See the NOTICE file distributed with
+// this work for additional information regarding copyright ownership.
+// The ASF licenses this file to You under the Apache License, Version 2.0
+// (the "License"); you may not use this file except in compliance with
+// the License.  You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+{
+  "apiKey": 72,
+  "type": "request",
+  "listeners": ["broker"],
+  "name": "PushTelemetryRequest",
+  "validVersions": "0",
+  "flexibleVersions": "0+",
+  // The Telemetry APIs are added as part of KIP-714 and are still under
+  // development. Hence, the APIs are not exposed by default unless explicitly
+  // enabled.
+  "latestVersionUnstable": true,
+  "fields": [
+    {
+      "name": "ClientInstanceId", "type": "uuid", "versions": "0+",
+      "about": "Unique id for this client instance."
+    },
+    {
+      "name": "SubscriptionId", "type": "int32", "versions": "0+",
+      "about": "Unique identifier for the current subscription."
+    },
+    {
+      "name": "Terminating", "type": "bool", "versions": "0+",
+      "about": "Client is terminating the connection."
+    },
+    {
+      "name": "CompressionType", "type": "int8", "versions": "0+",
+      "about": "Compression codec used to compress the metrics."
+    },
+    {
+      "name": "Metrics", "type": "bytes", "versions": "0+",
+      "about": "Metrics encoded in OpenTelemetry MetricsData v1 protobuf format."
+    }
+  ]
+}

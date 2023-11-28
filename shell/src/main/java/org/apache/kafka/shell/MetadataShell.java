@@ -177,9 +177,9 @@ public final class MetadataShell {
 
     public static void main(String[] args) throws Exception {
         ArgumentParser parser = ArgumentParsers
-            .newArgumentParser("metadata-tool")
+            .newArgumentParser("kafka-metadata-shell")
             .defaultHelp(true)
-            .description("The Apache Kafka metadata tool");
+            .description("The Apache Kafka metadata shell");
         parser.addArgument("--snapshot", "-s")
             .type(String.class)
             .help("The snapshot file to read.");

@@ -56,6 +56,7 @@ public class LeaderEpochFileCache {
      * @param topicPartition the associated topic partition
      * @param checkpoint     the checkpoint file
      */
+    @SuppressWarnings("this-escape")
     public LeaderEpochFileCache(TopicPartition topicPartition, LeaderEpochCheckpoint checkpoint) {
         this.checkpoint = checkpoint;
         this.topicPartition = topicPartition;
@@ -204,6 +205,15 @@ public class LeaderEpochFileCache {
         lock.readLock().lock();
         try {
             return toOptionalInt(epochs.lowerKey(epoch));
+        } finally {
+            lock.readLock().unlock();
+        }
+    }
+
+    public Optional<EpochEntry> previousEntry(int epoch) {
+        lock.readLock().lock();
+        try {
+            return Optional.ofNullable(epochs.lowerEntry(epoch)).map(Map.Entry::getValue);
         } finally {
             lock.readLock().unlock();
         }

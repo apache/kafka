@@ -475,7 +475,7 @@ public class NetworkClientTest {
      * @param requestTimeoutMs Timeout in ms
      */
     private void testRequestTimeout(int requestTimeoutMs) {
-        Metadata metadata = new Metadata(50, 5000, new LogContext(), new ClusterResourceListeners());
+        Metadata metadata = new Metadata(50, 50, 5000, new LogContext(), new ClusterResourceListeners());
         MetadataResponse metadataResponse = RequestTestUtils.metadataUpdateWith(2, Collections.emptyMap());
         metadata.updateWithCurrentRequestVersion(metadataResponse, false, time.milliseconds());
 
@@ -701,7 +701,7 @@ public class NetworkClientTest {
         int refreshBackoffMs = 50;
 
         MetadataResponse metadataResponse = RequestTestUtils.metadataUpdateWith(2, Collections.emptyMap());
-        Metadata metadata = new Metadata(refreshBackoffMs, 5000, new LogContext(), new ClusterResourceListeners());
+        Metadata metadata = new Metadata(refreshBackoffMs, refreshBackoffMs, 5000, new LogContext(), new ClusterResourceListeners());
         metadata.updateWithCurrentRequestVersion(metadataResponse, false, time.milliseconds());
 
         Cluster cluster = metadata.fetch();
@@ -712,7 +712,7 @@ public class NetworkClientTest {
 
         awaitReady(client, node1);
 
-        metadata.requestUpdate();
+        metadata.requestUpdate(true);
         time.sleep(refreshBackoffMs);
 
         client.poll(0, time.milliseconds());

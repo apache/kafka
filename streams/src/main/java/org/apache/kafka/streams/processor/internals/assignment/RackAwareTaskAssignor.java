@@ -212,8 +212,11 @@ public class RackAwareTaskAssignor {
             KeyValue<String, String> previousRackInfo = null;
             for (final Map.Entry<String, Optional<String>> rackEntry : entry.getValue().entrySet()) {
                 if (!rackEntry.getValue().isPresent()) {
-                    log.error(String.format("RackId doesn't exist for process %s and consumer %s",
-                        processId, rackEntry.getKey()));
+                    if (!StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_NONE.equals(assignmentConfigs.rackAwareAssignmentStrategy)) {
+                        log.error(
+                            String.format("RackId doesn't exist for process %s and consumer %s",
+                                processId, rackEntry.getKey()));
+                    }
                     return false;
                 }
                 if (previousRackInfo == null) {
@@ -232,7 +235,9 @@ public class RackAwareTaskAssignor {
                 }
             }
             if (previousRackInfo == null) {
-                log.error(String.format("RackId doesn't exist for process %s", processId));
+                if (!StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_NONE.equals(assignmentConfigs.rackAwareAssignmentStrategy)) {
+                    log.error(String.format("RackId doesn't exist for process %s", processId));
+                }
                 return false;
             }
             racksForProcess.put(entry.getKey(), previousRackInfo.value);

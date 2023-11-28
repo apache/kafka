@@ -71,10 +71,8 @@ public class EndpointReadyFutures {
             String name,
             Map<Endpoint, ? extends CompletionStage<?>> newFutures
         ) {
-            newFutures.forEach((endpoint, future) -> {
-                endpointStages.computeIfAbsent(endpoint, __ -> new ArrayList<>()).
-                    add(new EndpointCompletionStage(name, future));
-            });
+            newFutures.forEach((endpoint, future) -> endpointStages.computeIfAbsent(endpoint, __ -> new ArrayList<>()).
+                add(new EndpointCompletionStage(name, future)));
             return this;
         }
 
@@ -123,9 +121,7 @@ public class EndpointReadyFutures {
             addReadinessFutures("authorizerStart", effectiveStartFutures);
             stages.forEach(stage -> {
                 Map<Endpoint, CompletionStage<?>> newReadinessFutures = new HashMap<>();
-                info.endpoints().forEach(endpoint -> {
-                    newReadinessFutures.put(endpoint, stage.future);
-                });
+                info.endpoints().forEach(endpoint -> newReadinessFutures.put(endpoint, stage.future));
                 addReadinessFutures(stage.name, newReadinessFutures);
             });
             return new EndpointReadyFutures(logContext,
@@ -200,15 +196,13 @@ public class EndpointReadyFutures {
             stages.forEach(stage -> stageNames.add(stage.name));
             EndpointReadyFuture readyFuture = new EndpointReadyFuture(endpoint, stageNames);
             newFutures.put(endpoint, readyFuture.future);
-            stages.forEach(stage -> {
-                stage.future.whenComplete((__, exception) -> {
-                    if (exception != null) {
-                        readyFuture.failStage(stage.name, exception);
-                    } else {
-                        readyFuture.completeStage(stage.name);
-                    }
-                });
-            });
+            stages.forEach(stage -> stage.future.whenComplete((__, exception) -> {
+                if (exception != null) {
+                    readyFuture.failStage(stage.name, exception);
+                } else {
+                    readyFuture.completeStage(stage.name);
+                }
+            }));
         });
         this.futures = Collections.unmodifiableMap(newFutures);
     }

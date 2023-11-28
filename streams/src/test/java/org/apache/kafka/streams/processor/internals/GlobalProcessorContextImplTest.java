@@ -213,8 +213,8 @@ public class GlobalProcessorContextImplTest {
         } catch (final UnsupportedOperationException expected) { }
     }
 
-    @Test(expected = UnsupportedOperationException.class)
+    @Test
     public void shouldThrowOnCurrentStreamTime() {
-        globalContext.currentStreamTimeMs();
+        assertThrows(UnsupportedOperationException.class, () -> globalContext.currentStreamTimeMs());
     }
 }

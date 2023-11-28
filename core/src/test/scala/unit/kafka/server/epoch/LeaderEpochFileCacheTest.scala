@@ -27,7 +27,7 @@ import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
 
 import java.io.File
-import java.util.{Collections, OptionalInt}
+import java.util.{Collections, OptionalInt, Optional}
 import scala.collection.Seq
 import scala.jdk.CollectionConverters._
 
@@ -602,6 +602,23 @@ class LeaderEpochFileCacheTest {
 
     cache.truncateFromEnd(18)
     assertEquals(OptionalInt.of(2), cache.previousEpoch(cache.latestEpoch.getAsInt))
+  }
+
+  @Test
+  def testFindPreviousEntry(): Unit = {
+    assertEquals(Optional.empty(), cache.previousEntry(2))
+
+    cache.assign(2, 10)
+    assertEquals(Optional.empty(), cache.previousEntry(2))
+
+    cache.assign(4, 15)
+    assertEquals(Optional.of(new EpochEntry(2, 10)), cache.previousEntry(4))
+
+    cache.assign(10, 20)
+    assertEquals(Optional.of(new EpochEntry(4, 15)), cache.previousEntry(10))
+
+    cache.truncateFromEnd(18)
+    assertEquals(Optional.of(new EpochEntry(2, 10)), cache.previousEntry(cache.latestEpoch.getAsInt))
   }
 
   @Test

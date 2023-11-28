@@ -102,7 +102,7 @@ public abstract class RestServer {
     /**
      * Adds Jetty connector for each configured listener
      */
-    public void createConnectors(List<String> listeners, List<String> adminListeners) {
+    public final void createConnectors(List<String> listeners, List<String> adminListeners) {
         List<Connector> connectors = new ArrayList<>();
 
         for (String listener : listeners) {
@@ -125,14 +125,14 @@ public abstract class RestServer {
     /**
      * Creates regular (non-admin) Jetty connector according to configuration
      */
-    public Connector createConnector(String listener) {
+    public final Connector createConnector(String listener) {
         return createConnector(listener, false);
     }
 
     /**
      * Creates Jetty connector according to configuration
      */
-    public Connector createConnector(String listener, boolean isAdmin) {
+    public final Connector createConnector(String listener, boolean isAdmin) {
         Matcher listenerMatcher = LISTENER_PATTERN.matcher(listener);
 
         if (!listenerMatcher.matches())
@@ -348,6 +348,13 @@ public abstract class RestServer {
         log.info("Stopping REST server");
 
         try {
+            if (handlers.isRunning()) {
+                for (Handler handler : handlers.getHandlers()) {
+                    if (handler != null) {
+                        Utils.closeQuietly(handler::stop, handler.toString());
+                    }
+                }
+            }
             for (ConnectRestExtension connectRestExtension : connectRestExtensions) {
                 try {
                     connectRestExtension.close();
@@ -358,8 +365,13 @@ public abstract class RestServer {
             jettyServer.stop();
             jettyServer.join();
         } catch (Exception e) {
-            jettyServer.destroy();
             throw new ConnectException("Unable to stop REST server", e);
+        } finally {
+            try {
+                jettyServer.destroy();
+            } catch (Exception e) {
+                log.error("Unable to destroy REST server", e);
+            }
         }
 
         log.info("REST server stopped");

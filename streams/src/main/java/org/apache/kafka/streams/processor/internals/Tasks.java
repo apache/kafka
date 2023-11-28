@@ -20,6 +20,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.PendingUpdateAction.Action;
+import org.apache.kafka.streams.processor.internals.Task.State;
 import org.slf4j.Logger;
 
 import java.util.Collection;
@@ -240,8 +241,8 @@ class Tasks implements TasksRegistry {
     public synchronized void removeTask(final Task taskToRemove) {
         final TaskId taskId = taskToRemove.id();
 
-        if (taskToRemove.state() != Task.State.CLOSED) {
-            throw new IllegalStateException("Attempted to remove a task that is not closed: " + taskId);
+        if (taskToRemove.state() != Task.State.CLOSED && taskToRemove.state() != State.SUSPENDED) {
+            throw new IllegalStateException("Attempted to remove a task that is not closed or suspended: " + taskId);
         }
 
         if (taskToRemove.isActive()) {
@@ -346,6 +347,11 @@ class Tasks implements TasksRegistry {
             tasks.add(task(taskId));
         }
         return tasks;
+    }
+
+    @Override
+    public synchronized Collection<TaskId> activeTaskIds() {
+        return Collections.unmodifiableCollection(activeTasksPerId.keySet());
     }
 
     @Override

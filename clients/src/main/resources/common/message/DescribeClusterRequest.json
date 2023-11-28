@@ -16,12 +16,17 @@
 {
   "apiKey": 60,
   "type": "request",
-  "listeners": ["zkBroker", "broker"],
+  "listeners": ["zkBroker", "broker", "controller"],
   "name": "DescribeClusterRequest",
-  "validVersions": "0",
+  //
+  // Version 1 adds EndpointType for KIP-919 support.
+  //
+  "validVersions": "0-1",
   "flexibleVersions": "0+",
   "fields": [
     { "name": "IncludeClusterAuthorizedOperations", "type": "bool", "versions": "0+",
-      "about": "Whether to include cluster authorized operations." }
+      "about": "Whether to include cluster authorized operations." },
+    { "name": "EndpointType", "type": "int8", "versions": "1+", "default": "1",
+      "about": "The endpoint type to describe. 1=brokers, 2=controllers." }
   ]
 }

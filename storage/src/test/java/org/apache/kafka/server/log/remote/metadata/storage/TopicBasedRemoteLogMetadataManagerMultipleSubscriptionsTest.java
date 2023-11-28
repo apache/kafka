@@ -134,14 +134,14 @@ public class TopicBasedRemoteLogMetadataManagerMultipleSubscriptionsTest {
             0, 100, -1L, 0,
             time.milliseconds(), SEG_SIZE, Collections.singletonMap(0, 0L));
         ExecutionException exception = Assertions.assertThrows(ExecutionException.class, () -> rlmm().addRemoteLogSegmentMetadata(leaderSegmentMetadata).get());
-        Assertions.assertEquals("org.apache.kafka.common.KafkaException: This consumer is not assigned to the target partition 0. Partitions currently assigned: []",
+        Assertions.assertEquals("org.apache.kafka.common.KafkaException: This consumer is not assigned to the target partition 0. Currently assigned partitions: []",
             exception.getMessage());
 
         RemoteLogSegmentMetadata followerSegmentMetadata = new RemoteLogSegmentMetadata(new RemoteLogSegmentId(followerTopicIdPartition, Uuid.randomUuid()),
             0, 100, -1L, 0,
             time.milliseconds(), SEG_SIZE, Collections.singletonMap(0, 0L));
         exception = Assertions.assertThrows(ExecutionException.class, () -> rlmm().addRemoteLogSegmentMetadata(followerSegmentMetadata).get());
-        Assertions.assertEquals("org.apache.kafka.common.KafkaException: This consumer is not assigned to the target partition 0. Partitions currently assigned: []",
+        Assertions.assertEquals("org.apache.kafka.common.KafkaException: This consumer is not assigned to the target partition 0. Currently assigned partitions: []",
             exception.getMessage());
 
         // `listRemoteLogSegments` will receive an exception as these topic partitions are not yet registered.

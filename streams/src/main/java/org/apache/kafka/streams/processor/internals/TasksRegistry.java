@@ -85,6 +85,8 @@ public interface TasksRegistry {
 
     Collection<Task> tasks(final Collection<TaskId> taskIds);
 
+    Collection<TaskId> activeTaskIds();
+
     Collection<Task> activeTasks();
 
     Set<Task> allTasks();

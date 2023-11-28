@@ -18,14 +18,15 @@
 package kafka.integration
 
 import java.util.Properties
-
 import kafka.server.KafkaConfig
-import kafka.utils.{Logging, TestUtils}
+import kafka.utils.{Logging, TestInfoUtils, TestUtils}
 
 import scala.jdk.CollectionConverters._
-import org.junit.jupiter.api.{BeforeEach, Test, TestInfo}
+import org.junit.jupiter.api.{BeforeEach, TestInfo}
 import com.yammer.metrics.core.Gauge
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.ValueSource
 
 class MetricsDuringTopicCreationDeletionTest extends KafkaServerTestHarness with Logging {
 
@@ -48,7 +49,7 @@ class MetricsDuringTopicCreationDeletionTest extends KafkaServerTestHarness with
 
   @volatile private var running = true
 
-  override def generateConfigs = TestUtils.createBrokerConfigs(nodesNum, zkConnect)
+  override def generateConfigs = TestUtils.createBrokerConfigs(nodesNum, zkConnectOrNull)
     .map(KafkaConfig.fromProps(_, overridingProps))
 
   @BeforeEach
@@ -67,8 +68,9 @@ class MetricsDuringTopicCreationDeletionTest extends KafkaServerTestHarness with
   /*
    * checking all metrics we care in a single test is faster though it would be more elegant to have 3 @Test methods
    */
-  @Test
-  def testMetricsDuringTopicCreateDelete(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testMetricsDuringTopicCreateDelete(quorum: String): Unit = {
 
     // For UnderReplicatedPartitions, because of https://issues.apache.org/jira/browse/KAFKA-4605
     // we can't access the metrics value of each server. So instead we directly invoke the method

@@ -26,12 +26,14 @@ import java.util.function.Consumer
 import kafka.network.RequestChannel
 import kafka.raft.RaftManager
 import kafka.server.QuotaFactory.QuotaManagers
+import kafka.server.logger.RuntimeLoggerManager
+import kafka.server.metadata.KRaftMetadataCache
 import kafka.utils.Logging
-import org.apache.kafka.clients.admin.AlterConfigOp
+import org.apache.kafka.clients.admin.{AlterConfigOp, EndpointType}
 import org.apache.kafka.common.Uuid.ZERO_UUID
 import org.apache.kafka.common.acl.AclOperation.{ALTER, ALTER_CONFIGS, CLUSTER_ACTION, CREATE, CREATE_TOKENS, DELETE, DESCRIBE, DESCRIBE_CONFIGS}
 import org.apache.kafka.common.config.ConfigResource
-import org.apache.kafka.common.errors.{ApiException, ClusterAuthorizationException, InvalidRequestException, TopicDeletionDisabledException}
+import org.apache.kafka.common.errors.{ApiException, ClusterAuthorizationException, InvalidRequestException, TopicDeletionDisabledException, UnsupportedVersionException}
 import org.apache.kafka.common.internals.FatalExitError
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.message.AlterConfigsResponseData.{AlterConfigsResourceResponse => OldAlterConfigsResourceResponse}
@@ -47,9 +49,10 @@ import org.apache.kafka.common.requests._
 import org.apache.kafka.common.resource.Resource.CLUSTER_NAME
 import org.apache.kafka.common.resource.ResourceType.{CLUSTER, TOPIC, USER}
 import org.apache.kafka.common.utils.Time
-import org.apache.kafka.common.{Node, Uuid}
+import org.apache.kafka.common.Uuid
 import org.apache.kafka.controller.ControllerRequestContext.requestTimeoutMsToDeadlineNs
 import org.apache.kafka.controller.{Controller, ControllerRequestContext}
+import org.apache.kafka.image.publisher.ControllerRegistrationsPublisher
 import org.apache.kafka.metadata.{BrokerHeartbeatReply, BrokerRegistrationReply}
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.security.auth.SecurityProtocol
@@ -62,20 +65,25 @@ import scala.jdk.CollectionConverters._
 /**
  * Request handler for Controller APIs
  */
-class ControllerApis(val requestChannel: RequestChannel,
-                     val authorizer: Option[Authorizer],
-                     val quotas: QuotaManagers,
-                     val time: Time,
-                     val controller: Controller,
-                     val raftManager: RaftManager[ApiMessageAndVersion],
-                     val config: KafkaConfig,
-                     val metaProperties: MetaProperties,
-                     val controllerNodes: Seq[Node],
-                     val apiVersionManager: ApiVersionManager) extends ApiRequestHandler with Logging {
+class ControllerApis(
+  val requestChannel: RequestChannel,
+  val authorizer: Option[Authorizer],
+  val quotas: QuotaManagers,
+  val time: Time,
+  val controller: Controller,
+  val raftManager: RaftManager[ApiMessageAndVersion],
+  val config: KafkaConfig,
+  val clusterId: String,
+  val registrationsPublisher: ControllerRegistrationsPublisher,
+  val apiVersionManager: ApiVersionManager,
+  val metadataCache: KRaftMetadataCache
+) extends ApiRequestHandler with Logging {
 
   this.logIdent = s"[ControllerApis nodeId=${config.nodeId}] "
   val authHelper = new AuthHelper(authorizer)
+  val configHelper = new ConfigHelper(metadataCache, config, metadataCache)
   val requestHelper = new RequestHandlerHelper(requestChannel, quotas, time)
+  val runtimeLoggerManager = new RuntimeLoggerManager(config.nodeId, logger.underlying)
   private val aclApis = new AclApis(authHelper, authorizer, requestHelper, "controller", config)
 
   def isClosed: Boolean = aclApis.isClosed
@@ -112,11 +120,15 @@ class ControllerApis(val requestChannel: RequestChannel,
         case ApiKeys.SASL_AUTHENTICATE => handleSaslAuthenticateRequest(request)
         case ApiKeys.ALLOCATE_PRODUCER_IDS => handleAllocateProducerIdsRequest(request)
         case ApiKeys.CREATE_PARTITIONS => handleCreatePartitions(request)
+        case ApiKeys.DESCRIBE_CONFIGS => handleDescribeConfigsRequest(request)
         case ApiKeys.DESCRIBE_ACLS => aclApis.handleDescribeAcls(request)
         case ApiKeys.CREATE_ACLS => aclApis.handleCreateAcls(request)
         case ApiKeys.DELETE_ACLS => aclApis.handleDeleteAcls(request)
         case ApiKeys.ELECT_LEADERS => handleElectLeaders(request)
         case ApiKeys.UPDATE_FEATURES => handleUpdateFeatures(request)
+        case ApiKeys.DESCRIBE_CLUSTER => handleDescribeCluster(request)
+        case ApiKeys.CONTROLLER_REGISTRATION => handleControllerRegistration(request)
+        case ApiKeys.ASSIGN_REPLICAS_TO_DIRS => handleAssignReplicasToDirs(request)
         case _ => throw new ApiException(s"Unsupported ApiKey ${request.context.header.apiKey}")
       }
 
@@ -460,7 +472,7 @@ class ControllerApis(val requestChannel: RequestChannel,
   def authorizeAlterResource(requestContext: RequestContext,
                              resource: ConfigResource): ApiError = {
     resource.`type` match {
-      case ConfigResource.Type.BROKER =>
+      case ConfigResource.Type.BROKER | ConfigResource.Type.CLIENT_METRICS =>
         if (authHelper.authorize(requestContext, ALTER_CONFIGS, CLUSTER, CLUSTER_NAME)) {
           new ApiError(NONE)
         } else {
@@ -704,10 +716,26 @@ class ControllerApis(val requestChannel: RequestChannel,
     val duplicateResources = new util.HashSet[ConfigResource]
     val configChanges = new util.HashMap[ConfigResource,
       util.Map[String, Entry[AlterConfigOp.OpType, String]]]()
+    val brokerLoggerResponses = new util.ArrayList[AlterConfigsResourceResponse](1)
     alterConfigsRequest.data.resources.forEach { resource =>
       val configResource = new ConfigResource(
         ConfigResource.Type.forId(resource.resourceType), resource.resourceName())
-      if (configResource.`type`().equals(ConfigResource.Type.UNKNOWN)) {
+      if (configResource.`type`().equals(ConfigResource.Type.BROKER_LOGGER)) {
+        val apiError = try {
+          runtimeLoggerManager.applyChangesForResource(
+            authHelper.authorize(request.context, CLUSTER_ACTION, CLUSTER, CLUSTER_NAME),
+            alterConfigsRequest.data().validateOnly(),
+            resource)
+          ApiError.NONE
+        } catch {
+          case t: Throwable => ApiError.fromThrowable(t)
+        }
+        brokerLoggerResponses.add(new AlterConfigsResourceResponse().
+          setResourceName(resource.resourceName()).
+          setResourceType(resource.resourceType()).
+          setErrorCode(apiError.error().code()).
+          setErrorMessage(if (apiError.isFailure()) apiError.messageWithFallback() else null))
+      } else if (configResource.`type`().equals(ConfigResource.Type.UNKNOWN)) {
         response.responses().add(new AlterConfigsResourceResponse().
           setErrorCode(UNSUPPORTED_VERSION.code()).
           setErrorMessage("Unknown resource type " + resource.resourceType() + ".").
@@ -754,6 +782,7 @@ class ControllerApis(val requestChannel: RequestChannel,
               setErrorMessage(entry.getValue.message()).
               setResourceName(entry.getKey.name()).
               setResourceType(entry.getKey.`type`().id())))
+          brokerLoggerResponses.forEach(r => response.responses().add(r))
           requestHelper.sendResponseMaybeThrottle(request, throttleMs =>
             new IncrementalAlterConfigsResponse(response.setThrottleTimeMs(throttleMs)))
         }
@@ -784,6 +813,13 @@ class ControllerApis(val requestChannel: RequestChannel,
         })
       }
     }
+  }
+
+  def handleDescribeConfigsRequest(request: RequestChannel.Request): CompletableFuture[Unit] = {
+    val responseData = configHelper.handleDescribeConfigsRequest(request, authHelper)
+    requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
+      new DescribeConfigsResponse(responseData.setThrottleTimeMs(requestThrottleMs)))
+    CompletableFuture.completedFuture[Unit](())
   }
 
   def createPartitions(
@@ -822,6 +858,20 @@ class ControllerApis(val requestChannel: RequestChannel,
       results.forEach(response => responses.add(response))
       responses
     }
+  }
+
+  def handleControllerRegistration(request: RequestChannel.Request): CompletableFuture[Unit] = {
+    val registrationRequest = request.body[ControllerRegistrationRequest]
+    authHelper.authorizeClusterOperation(request, CLUSTER_ACTION)
+    val context = new ControllerRequestContext(request.context.header.data, request.context.principal,
+      OptionalLong.empty())
+
+    controller.registerController(context, registrationRequest.data)
+      .thenApply[Unit] { _ =>
+        requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
+          new ControllerRegistrationResponse(new ControllerRegistrationResponseData().
+            setThrottleTimeMs(requestThrottleMs)))
+      }
   }
 
   def handleAlterPartitionReassignments(request: RequestChannel.Request): CompletableFuture[Unit] = {
@@ -1004,5 +1054,34 @@ class ControllerApis(val requestChannel: RequestChannel,
             new UpdateFeaturesResponse(response.setThrottleTimeMs(requestThrottleMs)))
         }
       }
+  }
+
+  def handleDescribeCluster(request: RequestChannel.Request): CompletableFuture[Unit] = {
+    // Unlike on the broker, DESCRIBE_CLUSTER on the controller requires a high level of
+    // permissions (ALTER on CLUSTER).
+    if (!apiVersionManager.features.metadataVersion().isControllerRegistrationSupported()) {
+      throw new UnsupportedVersionException("Direct-to-controller communication is not " +
+        "supported with the current MetadataVersion.")
+    }
+    authHelper.authorizeClusterOperation(request, ALTER)
+    val response = authHelper.computeDescribeClusterResponse(
+      request,
+      EndpointType.CONTROLLER,
+      clusterId,
+      () => registrationsPublisher.describeClusterControllers(request.context.listenerName()),
+      () => raftManager.leaderAndEpoch.leaderId().orElse(-1)
+    )
+    requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
+      new DescribeClusterResponse(response.setThrottleTimeMs(requestThrottleMs)))
+    CompletableFuture.completedFuture[Unit](())
+  }
+
+  def handleAssignReplicasToDirs(request: RequestChannel.Request): CompletableFuture[Unit] = {
+    val assignReplicasToDirsRequest = request.body[AssignReplicasToDirsRequest]
+
+    // TODO KAFKA-15426
+    requestHelper.sendMaybeThrottle(request,
+      assignReplicasToDirsRequest.getErrorResponse(Errors.UNSUPPORTED_VERSION.exception))
+    CompletableFuture.completedFuture[Unit](())
   }
 }

@@ -20,9 +20,13 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.processor.internals.testutil.DummyStreamsConfig;
 import org.junit.Assert;
 import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.mockito.junit.MockitoJUnitRunner;
 
-import static org.easymock.EasyMock.mock;
+import static org.mockito.Mockito.mock;
 
+
+@RunWith(MockitoJUnitRunner.StrictStubs.class)
 public class TopologyMetadataTest {
     final static String TOPOLOGY1 = "topology1";
     final static String TOPOLOGY2 = "topology2";

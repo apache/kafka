@@ -18,6 +18,7 @@
 package org.apache.kafka.streams.kstream.internals.graph;
 
 
+import java.util.LinkedList;
 import java.util.Optional;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 
@@ -29,6 +30,8 @@ public abstract class GraphNode {
 
     private final Collection<GraphNode> childNodes = new LinkedHashSet<>();
     private final Collection<GraphNode> parentNodes = new LinkedHashSet<>();
+
+    private final Collection<Label> labels = new LinkedList<>();
     private final String nodeName;
     private boolean keyChangingOperation;
     private boolean valueChangingOperation;
@@ -151,5 +154,17 @@ public abstract class GraphNode {
                ", valueChangingOperation=" + valueChangingOperation +
                ", mergeNode=" + mergeNode +
                ", parentNodes=" + Arrays.toString(parentNames) + '}';
+    }
+
+    public void addLabel(final Label label) {
+        labels.add(label);
+    }
+
+    public Collection<Label> labels() {
+        return labels;
+    }
+
+    public enum Label {
+        NULL_KEY_RELAXED_JOIN
     }
 }

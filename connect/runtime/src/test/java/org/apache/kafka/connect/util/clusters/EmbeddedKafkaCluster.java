@@ -528,6 +528,19 @@ public class EmbeddedKafkaCluster {
     /**
      * Consume all currently-available records for the specified topics in a given duration, or throw an exception.
      * @param maxDurationMs the max duration to wait for these records (in milliseconds).
+     * @param topics the topics to consume from
+     * @return a {@link ConsumerRecords} collection containing the records for all partitions of the given topics
+     */
+    public ConsumerRecords<byte[], byte[]> consumeAll(
+        long maxDurationMs,
+        String... topics
+    ) throws TimeoutException, InterruptedException, ExecutionException {
+        return consumeAll(maxDurationMs, null, null, topics);
+    }
+
+    /**
+     * Consume all currently-available records for the specified topics in a given duration, or throw an exception.
+     * @param maxDurationMs the max duration to wait for these records (in milliseconds).
      * @param consumerProps overrides to the default properties the consumer is constructed with; may be null
      * @param adminProps overrides to the default properties the admin used to query Kafka cluster metadata is constructed with; may be null
      * @param topics the topics to consume from

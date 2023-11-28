@@ -57,7 +57,7 @@ public class ConnectRestServer extends RestServer {
     @Override
     protected Collection<ConnectResource> adminResources() {
         return Arrays.asList(
-                new LoggingResource()
+                new LoggingResource(herder)
         );
     }
 

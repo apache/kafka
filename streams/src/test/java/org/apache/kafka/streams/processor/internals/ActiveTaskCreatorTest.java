@@ -497,6 +497,7 @@ public class ActiveTaskCreatorTest {
             "clientId-StreamThread-0",
             uuid,
             new LogContext().logger(ActiveTaskCreator.class),
+            false,
             false);
 
         assertThat(

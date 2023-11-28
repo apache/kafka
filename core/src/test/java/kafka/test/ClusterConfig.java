@@ -146,6 +146,11 @@ public class ClusterConfig {
         copy.consumerProperties.putAll(consumerProperties);
         copy.saslServerProperties.putAll(saslServerProperties);
         copy.saslClientProperties.putAll(saslClientProperties);
+        perBrokerOverrideProperties.forEach((brokerId, props) -> {
+            Properties propsCopy = new Properties();
+            propsCopy.putAll(props);
+            copy.perBrokerOverrideProperties.put(brokerId, propsCopy);
+        });
         return copy;
     }
 
