@@ -220,6 +220,13 @@ public class GraphTest {
     }
 
     @Test
+    public void testNullNode() {
+        final Graph<Integer> graph1 = new Graph<>();
+        assertThrows(NullPointerException.class, () -> graph1.addEdge(null, 1, 1, 1, 1));
+        assertThrows(NullPointerException.class, () -> graph1.addEdge(1, null, 1, 1, 1));
+    }
+
+    @Test
     public void testJustSourceSink() {
         final Graph<Integer> graph1 = new Graph<>();
         graph1.addEdge(0, 1, 1, 1, 1);

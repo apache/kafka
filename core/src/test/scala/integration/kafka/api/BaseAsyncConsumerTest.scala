@@ -16,10 +16,12 @@
  */
 package kafka.api
 
+import kafka.utils.TestInfoUtils
 import kafka.utils.TestUtils.waitUntilTrue
 import org.apache.kafka.clients.consumer.{ConsumerConfig, GroupProtocol}
 import org.junit.jupiter.api.Assertions.{assertNotNull, assertNull, assertTrue}
-import org.junit.jupiter.api.Test
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.ValueSource
 
 import java.time.Duration
 import java.util.Properties
@@ -28,8 +30,9 @@ import scala.jdk.CollectionConverters._
 class BaseAsyncConsumerTest extends AbstractConsumerTest {
   val defaultBlockingAPITimeoutMs = 1000
 
-  @Test
-  def testCommitAsync(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("kraft", "kraft+kip848"))
+  def testCommitAsync(quorum: String): Unit = {
     val props = new Properties();
     props.setProperty(ConsumerConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.CONSUMER.name());
     val consumer = createConsumer(configOverrides = props)
@@ -45,8 +48,9 @@ class BaseAsyncConsumerTest extends AbstractConsumerTest {
     assertTrue(consumer.assignment.contains(tp))
   }
 
-  @Test
-  def testCommitSync(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("kraft", "kraft+kip848"))
+  def testCommitSync(quorum: String): Unit = {
     val props = new Properties();
     props.setProperty(ConsumerConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.CONSUMER.name());
     val consumer = createConsumer(configOverrides = props)
