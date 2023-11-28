@@ -18,6 +18,7 @@ package org.apache.kafka.clients.consumer.internals;
 
 import java.util.Arrays;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetAndTimestamp;
 import org.apache.kafka.clients.consumer.OffsetCommitCallback;
@@ -87,6 +88,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doThrow;
@@ -101,6 +103,8 @@ public class AsyncKafkaConsumerTest {
     private FetchCollector<?, ?> fetchCollector;
     private ConsumerTestBuilder.AsyncKafkaConsumerTestBuilder testBuilder;
     private ApplicationEventHandler applicationEventHandler;
+    private SubscriptionState subscriptions;
+    private Optional<HeartbeatRequestManager> heartbeatRequestManager;
 
     @BeforeEach
     public void setup() {
@@ -113,6 +117,8 @@ public class AsyncKafkaConsumerTest {
         applicationEventHandler = testBuilder.applicationEventHandler;
         consumer = testBuilder.consumer;
         fetchCollector = testBuilder.fetchCollector;
+        subscriptions = testBuilder.subscriptions;
+        heartbeatRequestManager = testBuilder.heartbeatRequestManager;
     }
 
     @AfterEach
@@ -727,7 +733,6 @@ public class AsyncKafkaConsumerTest {
         // Uncompleted future that will time out if used
         CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> committedFuture = new CompletableFuture<>();
 
-
         consumer.assign(singleton(new TopicPartition("t1", 1)));
 
         try (MockedConstruction<OffsetFetchApplicationEvent> ignored = offsetFetchEventMocker(committedFuture)) {
@@ -764,6 +769,42 @@ public class AsyncKafkaConsumerTest {
             verify(applicationEventHandler).add(ArgumentMatchers.isA(OffsetFetchApplicationEvent.class));
             verify(applicationEventHandler).add(ArgumentMatchers.isA(ResetPositionsApplicationEvent.class));
         }
+    }
+
+    @Test
+    public void testLongPollWaitIsLimited() {
+        String topicName = "topic1";
+        consumer.subscribe(singletonList(topicName));
+
+        assertEquals(singleton(topicName), consumer.subscription());
+        assertTrue(consumer.assignment().isEmpty());
+
+        final int partition = 3;
+        final TopicPartition tp = new TopicPartition(topicName, partition);
+        final List<ConsumerRecord<String, String>> records = asList(
+            new ConsumerRecord<>(topicName, partition, 2, "key1", "value1"),
+            new ConsumerRecord<>(topicName, partition, 3, "key2", "value2")
+        );
+
+        // The internal poll loop is limited to 100ms of waiting per iteration
+        HeartbeatRequestManager theHeartbeatRequestManager = heartbeatRequestManager.get();
+        when(theHeartbeatRequestManager.timeUntilNextPoll(anyLong())).thenReturn(100L);
+
+        // On the first iteration, return no data; on the second, return two records
+        doAnswer(invocation -> {
+            // Mock the subscription being assigned as the first fetch is collected
+            subscriptions.assignFromSubscribed(Collections.singleton(tp));
+            return Fetch.empty();
+        }).doAnswer(invocation -> {
+            return Fetch.forPartition(tp, records, true);
+        }).when(fetchCollector).collectFetch(any(FetchBuffer.class));
+
+        // And then poll for up to 10000ms, which should return 2 records in about 100ms without timing out
+        ConsumerRecords<?, ?> returnedRecords = consumer.poll(Duration.ofMillis(10000));
+        assertEquals(2, returnedRecords.count());
+
+        assertEquals(singleton(topicName), consumer.subscription());
+        assertEquals(singleton(tp), consumer.assignment());
     }
 
     private void assertNoPendingWakeup(final WakeupTrigger wakeupTrigger) {
