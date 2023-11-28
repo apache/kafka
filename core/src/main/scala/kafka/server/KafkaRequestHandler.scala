@@ -293,7 +293,7 @@ class BrokerTopicMetrics(name: Option[String], configOpt: java.util.Optional[Kaf
         gaugeLock synchronized {
           gauge = lazyGauge
           if (gauge == null) {
-            gauge = metricsGroup.newGauge(metricType, () => brokerTopicAggregatedMetric.value(), tags)
+            gauge = metricsGroup.newGauge(metricType, () => brokerTopicAggregatedMetric.value())
             lazyGauge = gauge
           }
         }
@@ -303,14 +303,13 @@ class BrokerTopicMetrics(name: Option[String], configOpt: java.util.Optional[Kaf
 
     def close(): Unit = gaugeLock synchronized {
       if (lazyGauge != null) {
-        metricsGroup.removeMetric(metricType, tags)
+        metricsGroup.removeMetric(metricType)
         brokerTopicAggregatedMetric.close()
         lazyGauge = null
       }
     }
 
-    if (tags.isEmpty) // greedily initialize the general topic metrics
-      gauge()
+    gauge() // greedily initialize the general topic metrics
   }
 
   // an internal map for "lazy initialization" of certain metrics
