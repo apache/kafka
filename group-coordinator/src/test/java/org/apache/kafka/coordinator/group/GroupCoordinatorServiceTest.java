@@ -1323,7 +1323,8 @@ public class GroupCoordinatorServiceTest {
         GroupCoordinatorService service = new GroupCoordinatorService(
             new LogContext(),
             createConfig(),
-            runtime
+            runtime,
+            new GroupCoordinatorMetrics()
         );
         int partitionCount = 2;
         service.startup(() -> partitionCount);
@@ -1364,7 +1365,8 @@ public class GroupCoordinatorServiceTest {
         GroupCoordinatorService service = new GroupCoordinatorService(
             new LogContext(),
             createConfig(),
-            runtime
+            runtime,
+            new GroupCoordinatorMetrics()
         );
         int partitionCount = 1;
         service.startup(() -> partitionCount);
@@ -1397,7 +1399,8 @@ public class GroupCoordinatorServiceTest {
         GroupCoordinatorService service = new GroupCoordinatorService(
             new LogContext(),
             createConfig(),
-            runtime
+            runtime,
+            new GroupCoordinatorMetrics()
         );
         int partitionCount = 1;
         service.startup(() -> partitionCount);
@@ -1429,7 +1432,8 @@ public class GroupCoordinatorServiceTest {
         GroupCoordinatorService service = new GroupCoordinatorService(
             new LogContext(),
             createConfig(),
-            runtime
+            runtime,
+            new GroupCoordinatorMetrics()
         );
         when(runtime.scheduleReadOperation(
             ArgumentMatchers.eq("consumer-group-describe"),

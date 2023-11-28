@@ -792,12 +792,13 @@ public class ConsumerGroupTest {
     @Test
     public void testAsDescribedGroup() {
         SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
-        ConsumerGroup group = new ConsumerGroup(snapshotRegistry, "group-id-1");
+        ConsumerGroup group = new ConsumerGroup(snapshotRegistry, "group-id-1", mock(GroupCoordinatorMetricsShard.class));
         snapshotRegistry.getOrCreateSnapshot(0);
         assertEquals(ConsumerGroup.ConsumerGroupState.EMPTY.toString(), group.stateAsString(0));
 
         group.updateMember(new ConsumerGroupMember.Builder("member1")
                 .setSubscribedTopicNames(Collections.singletonList("foo"))
+                .setServerAssignorName("assignorName")
                 .build());
         group.updateMember(new ConsumerGroupMember.Builder("member2")
                 .build());
@@ -808,6 +809,7 @@ public class ConsumerGroupTest {
             .setGroupState(ConsumerGroup.ConsumerGroupState.STABLE.toString())
             .setGroupEpoch(0)
             .setAssignmentEpoch(0)
+            .setAssignorName("assignorName")
             .setMembers(Arrays.asList(
                 new ConsumerGroupDescribeResponseData.Member()
                     .setMemberId("member1")
@@ -816,7 +818,7 @@ public class ConsumerGroupTest {
                 new ConsumerGroupDescribeResponseData.Member().setMemberId("member2")
                     .setSubscribedTopicRegex("")
             ));
-        ConsumerGroupDescribeResponseData.DescribedGroup actual = group.asDescribedGroup(1);
+        ConsumerGroupDescribeResponseData.DescribedGroup actual = group.asDescribedGroup(1, "");
 
         assertEquals(expected, actual);
     }

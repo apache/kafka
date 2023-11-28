@@ -8684,36 +8684,38 @@ public class GroupMetadataManagerTest {
 
     @Test
     public void testConsumerGroupDescribeNoErrors() {
-        String consumerGroupId = "consumerGroupId";
+        List<String> consumerGroupIds = Arrays.asList("group-id-1", "group-id-2");
         int epoch = 10;
-        String memberId = "memberId";
+        String memberId = "member-id";
         String topicName = "topicName";
+        ConsumerGroupMember.Builder memberBuilder = new ConsumerGroupMember.Builder(memberId)
+            .setSubscribedTopicNames(Collections.singletonList(topicName))
+            .setServerAssignorName("assignorName");
 
         MockPartitionAssignor assignor = new MockPartitionAssignor("range");
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
             .withAssignors(Collections.singletonList(assignor))
-            .withConsumerGroup(new ConsumerGroupBuilder(consumerGroupId, epoch))
+            .withConsumerGroup(new ConsumerGroupBuilder(consumerGroupIds.get(0), epoch))
+            .withConsumerGroup(new ConsumerGroupBuilder(consumerGroupIds.get(1), epoch)
+                .withMember(memberBuilder.build()))
             .build();
 
-        ConsumerGroupMember.Builder memberBuilder = new ConsumerGroupMember.Builder(memberId)
-            .setSubscribedTopicNames(Collections.singletonList(topicName));
-        context.replay(RecordHelpers.newMemberSubscriptionRecord(
-            consumerGroupId,
-            memberBuilder.build()
-        ));
-        context.replay(RecordHelpers.newGroupEpochRecord(consumerGroupId, epoch + 1));
-        context.commit();
-
-        List<ConsumerGroupDescribeResponseData.DescribedGroup> actual = context.sendConsumerGroupDescribe(Arrays.asList(consumerGroupId));
-        ConsumerGroupDescribeResponseData.DescribedGroup describedGroup = new ConsumerGroupDescribeResponseData.DescribedGroup();
-        describedGroup.setGroupEpoch(epoch + 1);
-        describedGroup.setGroupId(consumerGroupId);
-        describedGroup.setMembers(Collections.singletonList(memberBuilder.build().asConsumerGroupDescribeMember(new Assignment(Collections.emptyMap()))));
-        describedGroup.setAssignorName("");
-        describedGroup.setGroupState("assigning");
-        List<ConsumerGroupDescribeResponseData.DescribedGroup> expected = Collections.singletonList(
-            describedGroup
+        List<ConsumerGroupDescribeResponseData.DescribedGroup> expected = Arrays.asList(
+            new ConsumerGroupDescribeResponseData.DescribedGroup()
+                .setGroupEpoch(epoch)
+                .setGroupId(consumerGroupIds.get(0))
+                .setGroupState("empty")
+                .setAssignorName("range"),
+            new ConsumerGroupDescribeResponseData.DescribedGroup()
+                .setGroupEpoch(epoch)
+                .setGroupId(consumerGroupIds.get(1))
+                .setMembers(Arrays.asList(
+                    memberBuilder.build().asConsumerGroupDescribeMember(new Assignment(Collections.emptyMap()))
+                ))
+                .setGroupState("assigning")
+                .setAssignorName("assignorName")
         );
+        List<ConsumerGroupDescribeResponseData.DescribedGroup> actual = context.sendConsumerGroupDescribe(consumerGroupIds);
 
         assertEquals(expected, actual);
     }
@@ -8726,17 +8728,11 @@ public class GroupMetadataManagerTest {
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
             .withAssignors(Collections.singletonList(assignor))
             .build();
-        context.replay(newGroupMetadataRecord(
-            groupId,
-            new GroupMetadataValue()
-                .setMembers(Collections.emptyList()),
-            MetadataVersion.latest()
-        ));
 
         List<ConsumerGroupDescribeResponseData.DescribedGroup> actual = context.sendConsumerGroupDescribe(Collections.singletonList(groupId));
-        ConsumerGroupDescribeResponseData.DescribedGroup describedGroup = new ConsumerGroupDescribeResponseData.DescribedGroup();
-        describedGroup.setGroupId(groupId);
-        describedGroup.setErrorCode(Errors.GROUP_ID_NOT_FOUND.code());
+        ConsumerGroupDescribeResponseData.DescribedGroup describedGroup = new ConsumerGroupDescribeResponseData.DescribedGroup()
+            .setGroupId(groupId)
+            .setErrorCode(Errors.GROUP_ID_NOT_FOUND.code());
         List<ConsumerGroupDescribeResponseData.DescribedGroup> expected = Collections.singletonList(
             describedGroup
         );
@@ -8753,17 +8749,13 @@ public class GroupMetadataManagerTest {
             .withAssignors(Collections.singletonList(assignor))
             .build();
 
-        // Add group without committing
-        context.replay(newConsumerGroupMetadataRecord(
-            consumerGroupId,
-            new ConsumerGroupMetadataValue(),
-            MetadataVersion.latest()
-        ));
+        context.replay(RecordHelpers.newGroupEpochRecord(consumerGroupId, 0));
 
         List<ConsumerGroupDescribeResponseData.DescribedGroup> actual = context.groupMetadataManager.consumerGroupDescribe(Collections.singletonList(consumerGroupId), context.lastCommittedOffset);
-        ConsumerGroupDescribeResponseData.DescribedGroup describedGroup = new ConsumerGroupDescribeResponseData.DescribedGroup();
-        describedGroup.setGroupId(consumerGroupId);
-        describedGroup.setErrorCode(Errors.GROUP_ID_NOT_FOUND.code());
+        ConsumerGroupDescribeResponseData.DescribedGroup describedGroup = new ConsumerGroupDescribeResponseData.DescribedGroup()
+            .setGroupId(consumerGroupId)
+            .setErrorCode(Errors.GROUP_ID_NOT_FOUND.code())
+            .setAssignorName("range");
         List<ConsumerGroupDescribeResponseData.DescribedGroup> expected = Collections.singletonList(
             describedGroup
         );
@@ -8773,9 +8765,9 @@ public class GroupMetadataManagerTest {
         context.commit();
 
         actual = context.groupMetadataManager.consumerGroupDescribe(Collections.singletonList(consumerGroupId), context.lastCommittedOffset);
-        describedGroup = new ConsumerGroupDescribeResponseData.DescribedGroup();
-        describedGroup.setGroupId(consumerGroupId);
-        describedGroup.setGroupState("empty");
+        describedGroup = new ConsumerGroupDescribeResponseData.DescribedGroup()
+            .setGroupId(consumerGroupId)
+            .setGroupState("empty");
         expected = Collections.singletonList(
             describedGroup
         );
@@ -9788,24 +9780,6 @@ public class GroupMetadataManagerTest {
             );
         }
         return protocols;
-    }
-
-    private static Record newConsumerGroupMetadataRecord(
-        String groupId,
-        ConsumerGroupMetadataValue value,
-        MetadataVersion metadataVersion
-    ) {
-        return new Record(
-            new ApiMessageAndVersion(
-                new ConsumerGroupMetadataKey()
-                    .setGroupId(groupId),
-                (short) 3
-            ),
-            new ApiMessageAndVersion(
-                value,
-                metadataVersion.groupMetadataValueVersion()
-            )
-        );
     }
 
     private static Record newGroupMetadataRecord(

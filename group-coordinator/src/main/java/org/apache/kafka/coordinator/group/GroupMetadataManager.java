@@ -138,7 +138,6 @@ import static org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetrics
 public class GroupMetadataManager {
 
     public static class Builder {
-
         private LogContext logContext = null;
         private SnapshotRegistry snapshotRegistry = null;
         private Time time = null;
@@ -268,7 +267,6 @@ public class GroupMetadataManager {
                 genericGroupMaxSessionTimeoutMs
             );
         }
-
     }
     /**
      * The log context.
@@ -468,30 +466,49 @@ public class GroupMetadataManager {
     }
 
 
+    /**
+     * Handles a ConsumerGroupDescribe request.
+     * @param groupIds          The IDs of the groups to describe.
+     * @param committedOffset   A specified committed offset corresponding to this shard.
+     *
+     * @return A list containing the ConsumerGroupDescribeResponseData.DescribedGroup.
+     */
     public List<ConsumerGroupDescribeResponseData.DescribedGroup> consumerGroupDescribe(
         List<String> groupIds,
         long committedOffset
     ) {
-        List<ConsumerGroupDescribeResponseData.DescribedGroup> response = new ArrayList<>();
-
-        for (String groupId: groupIds) {
-            Group group = groups.get(groupId, committedOffset);
-
-            ConsumerGroupDescribeResponseData.DescribedGroup describedGroup = new ConsumerGroupDescribeResponseData.DescribedGroup()
-                .setGroupId(groupId);
-
-            if (group == null || !CONSUMER.equals(group.type())) {
-                // We don't support upgrading/downgrading between protocols at the moment so
-                // we set an error if a group exists with the wrong type.
-                describedGroup.setErrorCode(Errors.GROUP_ID_NOT_FOUND.code());
-            } else {
-                describedGroup = ((ConsumerGroup) group).asDescribedGroup(committedOffset);
+        final List<ConsumerGroupDescribeResponseData.DescribedGroup> describedGroups = new ArrayList<>();
+        groupIds.forEach(groupId -> {
+            try {
+                describedGroups.add(consumerGroup(groupId, committedOffset).asDescribedGroup(committedOffset, defaultAssignor.name()));
+            } catch (GroupIdNotFoundException exception) {
+                describedGroups.add(new ConsumerGroupDescribeResponseData.DescribedGroup()
+                    .setGroupId(groupId)
+                    .setGroupState(DEAD.toString())
+                );
             }
+        });
 
-            response.add(describedGroup);
-        }
-
-        return response;
+        return describedGroups;
+//
+//        for (String groupId: groupIds) {
+//            Group group = groups.get(groupId, committedOffset);
+//
+//            ConsumerGroupDescribeResponseData.DescribedGroup describedGroup = new ConsumerGroupDescribeResponseData.DescribedGroup()
+//                .setGroupId(groupId);
+//
+//            if (group == null || !CONSUMER.equals(group.type())) {
+//                // We don't support upgrading/downgrading between protocols at the moment so
+//                // we set an error if a group exists with the wrong type.
+//                describedGroup.setErrorCode(Errors.GROUP_ID_NOT_FOUND.code());
+//            } else {
+//                describedGroup = ((ConsumerGroup) group).asDescribedGroup(committedOffset, defaultAssignor.name());
+//            }
+//
+//            response.add(describedGroup);
+//        }
+//
+//        return response;
     }
 
     /**
@@ -645,6 +662,22 @@ public class GroupMetadataManager {
             // We don't support upgrading/downgrading between protocols at the moment so
             // we throw an exception if a group exists with the wrong type.
             throw new GroupIdNotFoundException(String.format("Group %s is not a generic group.",
+                groupId));
+        }
+    }
+
+    public ConsumerGroup consumerGroup(
+        String groupId,
+        long committedOffset
+    ) throws GroupIdNotFoundException {
+        Group group = group(groupId, committedOffset);
+
+        if (group.type() == CONSUMER) {
+            return (ConsumerGroup) group;
+        } else {
+            // We don't support upgrading/downgrading between protocols at the moment so
+            // we throw an exception if a group exists with the wrong type.
+            throw new GroupIdNotFoundException(String.format("Group %s is not a consumer group.",
                 groupId));
         }
     }

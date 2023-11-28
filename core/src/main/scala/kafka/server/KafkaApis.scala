@@ -3759,7 +3759,6 @@ class KafkaApis(val requestChannel: RequestChannel,
           response.groups.add(new ConsumerGroupDescribeResponseData.DescribedGroup()
             .setGroupId(groupId)
             .setErrorCode(Errors.GROUP_AUTHORIZATION_FAILED.code)
-            .setErrorMessage(Errors.GROUP_AUTHORIZATION_FAILED.message)
           )
         } else {
           authorizedGroups += groupId

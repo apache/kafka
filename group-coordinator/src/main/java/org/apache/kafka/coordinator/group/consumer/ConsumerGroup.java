@@ -884,11 +884,10 @@ public class ConsumerGroup implements Group {
         return value == null ? 1 : value + 1;
     }
 
-    public ConsumerGroupDescribeResponseData.DescribedGroup asDescribedGroup(long committedOffset) {
+    public ConsumerGroupDescribeResponseData.DescribedGroup asDescribedGroup(long committedOffset, String defaultAssignor) {
         ConsumerGroupDescribeResponseData.DescribedGroup describedGroup = new ConsumerGroupDescribeResponseData.DescribedGroup()
             .setGroupId(groupId)
-            .setAssignorName(preferredServerAssignor().isPresent() ?
-                preferredServerAssignor().get() : "")
+            .setAssignorName(preferredServerAssignor().orElse(defaultAssignor))
             .setGroupEpoch(groupEpoch.get(committedOffset))
             .setGroupState(state.get(committedOffset).toString())
             .setAssignmentEpoch(targetAssignmentEpoch.get(committedOffset));
