@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
+import java.util.Arrays;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetAndTimestamp;
@@ -24,6 +25,7 @@ import org.apache.kafka.clients.consumer.RetriableCommitFailedException;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEventHandler;
 import org.apache.kafka.clients.consumer.internals.events.AssignmentChangeApplicationEvent;
+import org.apache.kafka.clients.consumer.internals.events.CommitApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.ListOffsetsApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.NewTopicsMetadataUpdateRequestEvent;
 import org.apache.kafka.clients.consumer.internals.events.OffsetFetchApplicationEvent;
@@ -213,6 +215,27 @@ public class AsyncKafkaConsumerTest {
     }
 
     @Test
+    public void testCommittedLeaderEpochUpdate() {
+        final TopicPartition t0 = new TopicPartition("t0", 2);
+        final TopicPartition t1 = new TopicPartition("t0", 3);
+        final TopicPartition t2 = new TopicPartition("t0", 4);
+        HashMap<TopicPartition, OffsetAndMetadata> topicPartitionOffsets = new HashMap<>();
+        topicPartitionOffsets.put(t0, new OffsetAndMetadata(10L, Optional.of(2), ""));
+        topicPartitionOffsets.put(t1, null);
+        topicPartitionOffsets.put(t2, new OffsetAndMetadata(20L, Optional.of(3), ""));
+
+        CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> committedFuture = new CompletableFuture<>();
+        committedFuture.complete(topicPartitionOffsets);
+
+        try (MockedConstruction<OffsetFetchApplicationEvent> ignored = offsetFetchEventMocker(committedFuture)) {
+            assertDoesNotThrow(() -> consumer.committed(topicPartitionOffsets.keySet(), Duration.ofMillis(1000)));
+        }
+        verify(testBuilder.metadata).updateLastSeenEpochIfNewer(t0, 2);
+        verify(testBuilder.metadata).updateLastSeenEpochIfNewer(t2, 3);
+        verify(applicationEventHandler).add(ArgumentMatchers.isA(OffsetFetchApplicationEvent.class));
+    }
+
+    @Test
     public void testCommitted_ExceptionThrown() {
         Map<TopicPartition, OffsetAndMetadata> offsets = mockTopicPartitionOffset();
         CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> committedFuture = new CompletableFuture<>();
@@ -347,6 +370,49 @@ public class AsyncKafkaConsumerTest {
     }
 
     @Test
+    public void testCommitSyncLeaderEpochUpdate() {
+        final TopicPartition t0 = new TopicPartition("t0", 2);
+        final TopicPartition t1 = new TopicPartition("t0", 3);
+        HashMap<TopicPartition, OffsetAndMetadata> topicPartitionOffsets = new HashMap<>();
+        topicPartitionOffsets.put(t0, new OffsetAndMetadata(10L, Optional.of(2), ""));
+        topicPartitionOffsets.put(t1, new OffsetAndMetadata(20L, Optional.of(1), ""));
+
+        consumer.assign(Arrays.asList(t0, t1));
+
+        CompletableFuture<Void> commitFuture = new CompletableFuture<>();
+        commitFuture.complete(null);
+
+        try (MockedConstruction<CommitApplicationEvent> ignored = commitEventMocker(commitFuture)) {
+            assertDoesNotThrow(() -> consumer.commitSync(topicPartitionOffsets));
+        }
+        verify(testBuilder.metadata).updateLastSeenEpochIfNewer(t0, 2);
+        verify(testBuilder.metadata).updateLastSeenEpochIfNewer(t1, 1);
+        verify(applicationEventHandler).add(ArgumentMatchers.isA(CommitApplicationEvent.class));
+    }
+
+    @Test
+    public void testCommitAsyncLeaderEpochUpdate() {
+        MockCommitCallback callback = new MockCommitCallback();
+        final TopicPartition t0 = new TopicPartition("t0", 2);
+        final TopicPartition t1 = new TopicPartition("t0", 3);
+        HashMap<TopicPartition, OffsetAndMetadata> topicPartitionOffsets = new HashMap<>();
+        topicPartitionOffsets.put(t0, new OffsetAndMetadata(10L, Optional.of(2), ""));
+        topicPartitionOffsets.put(t1, new OffsetAndMetadata(20L, Optional.of(1), ""));
+
+        consumer.assign(Arrays.asList(t0, t1));
+
+        CompletableFuture<Void> commitFuture = new CompletableFuture<>();
+        commitFuture.complete(null);
+
+        try (MockedConstruction<CommitApplicationEvent> ignored = commitEventMocker(commitFuture)) {
+            assertDoesNotThrow(() -> consumer.commitAsync(topicPartitionOffsets, callback));
+        }
+        verify(testBuilder.metadata).updateLastSeenEpochIfNewer(t0, 2);
+        verify(testBuilder.metadata).updateLastSeenEpochIfNewer(t1, 1);
+        verify(applicationEventHandler).add(ArgumentMatchers.isA(CommitApplicationEvent.class));
+    }
+
+    @Test
     public void testEnsurePollExecutedCommitAsyncCallbacks() {
         MockCommitCallback callback = new MockCommitCallback();
         CompletableFuture<Void> future = new CompletableFuture<>();
@@ -425,6 +491,21 @@ public class AsyncKafkaConsumerTest {
         };
 
         return mockConstruction(OffsetFetchApplicationEvent.class, mockInitializer);
+    }
+
+    private static MockedConstruction<CommitApplicationEvent> commitEventMocker(CompletableFuture<Void> future) {
+        Answer<Void> getInvocationAnswer = invocation -> {
+            Timer timer = invocation.getArgument(0);
+            return ConsumerUtils.getResult(future, timer);
+        };
+
+        MockedConstruction.MockInitializer<CommitApplicationEvent> mockInitializer = (mock, ctx) -> {
+            when(mock.get(any())).thenAnswer(getInvocationAnswer);
+            when(mock.type()).thenReturn(ApplicationEvent.Type.COMMIT);
+            when(mock.future()).thenReturn(future);
+        };
+
+        return mockConstruction(CommitApplicationEvent.class, mockInitializer);
     }
 
     @Test

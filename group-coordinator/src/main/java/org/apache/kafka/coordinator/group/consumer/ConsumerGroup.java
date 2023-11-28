@@ -117,6 +117,11 @@ public class ConsumerGroup implements Group {
     private final TimelineHashMap<String, ConsumerGroupMember> members;
 
     /**
+     * The static group members.
+     */
+    private final TimelineHashMap<String, String> staticMembers;
+
+    /**
      * The number of members supporting each server assignor name.
      */
     private final TimelineHashMap<String, Integer> serverAssignors;
@@ -177,6 +182,7 @@ public class ConsumerGroup implements Group {
         this.state = new TimelineObject<>(snapshotRegistry, EMPTY);
         this.groupEpoch = new TimelineInteger(snapshotRegistry);
         this.members = new TimelineHashMap<>(snapshotRegistry, 0);
+        this.staticMembers = new TimelineHashMap<>(snapshotRegistry, 0);
         this.serverAssignors = new TimelineHashMap<>(snapshotRegistry, 0);
         this.subscribedTopicNames = new TimelineHashMap<>(snapshotRegistry, 0);
         this.subscribedTopicMetadata = new TimelineHashMap<>(snapshotRegistry, 0);
@@ -278,6 +284,18 @@ public class ConsumerGroup implements Group {
     }
 
     /**
+     * Get member id of a static member that matches the given group
+     * instance id.
+     *
+     * @param groupInstanceId The group instance id.
+     *
+     * @return The member id corresponding to the given instance id or null if it does not exist
+     */
+    public String staticMemberId(String groupInstanceId) {
+        return staticMembers.get(groupInstanceId);
+    }
+
+    /**
      * Gets or creates a member.
      *
      * @param memberId          The member id.
@@ -304,6 +322,18 @@ public class ConsumerGroup implements Group {
     }
 
     /**
+     * Gets a static member.
+     *
+     * @param instanceId The group instance id.
+     *
+     * @return The member corresponding to the given instance id or null if it does not exist
+     */
+    public ConsumerGroupMember staticMember(String instanceId) {
+        String existingMemberId = staticMemberId(instanceId);
+        return existingMemberId == null ? null : getOrMaybeCreateMember(existingMemberId, false);
+    }
+
+    /**
      * Updates the member.
      *
      * @param newMember The new member state.
@@ -316,7 +346,19 @@ public class ConsumerGroup implements Group {
         maybeUpdateSubscribedTopicNames(oldMember, newMember);
         maybeUpdateServerAssignors(oldMember, newMember);
         maybeUpdatePartitionEpoch(oldMember, newMember);
+        updateStaticMember(newMember);
         maybeUpdateGroupState();
+    }
+
+    /**
+     * Updates the member id stored against the instance id if the member is a static member.
+     *
+     * @param newMember The new member state.
+     */
+    private void updateStaticMember(ConsumerGroupMember newMember) {
+        if (newMember.instanceId() != null) {
+            staticMembers.put(newMember.instanceId(), newMember.memberId());
+        }
     }
 
     /**
@@ -329,7 +371,19 @@ public class ConsumerGroup implements Group {
         maybeUpdateSubscribedTopicNames(oldMember, null);
         maybeUpdateServerAssignors(oldMember, null);
         maybeRemovePartitionEpoch(oldMember);
+        removeStaticMember(oldMember);
         maybeUpdateGroupState();
+    }
+
+    /**
+     * Remove the static member mapping if the removed member is static.
+     *
+     * @param oldMember The member to remove.
+     */
+    private void removeStaticMember(ConsumerGroupMember oldMember) {
+        if (oldMember.instanceId() != null) {
+            staticMembers.remove(oldMember.instanceId());
+        }
     }
 
     /**
@@ -355,6 +409,13 @@ public class ConsumerGroup implements Group {
      */
     public Map<String, ConsumerGroupMember> members() {
         return Collections.unmodifiableMap(members);
+    }
+
+    /**
+     * @return An immutable Map containing all the static members keyed by instance id.
+     */
+    public Map<String, String> staticMembers() {
+        return Collections.unmodifiableMap(staticMembers);
     }
 
     /**
