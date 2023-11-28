@@ -127,7 +127,7 @@ public class QuorumControllerIntegrationTestUtils {
      * @param brokers       The broker IDs to send heartbeats for.
      * @param brokerEpochs  A map from broker ID to broker epoch.
      */
-    static void sendBrokerHeartbeat(
+    static void sendBrokerHeartbeatToUnfenceBrokers(
         QuorumController controller,
         List<Integer> brokers,
         Map<Integer, Long> brokerEpochs
