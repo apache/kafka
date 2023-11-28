@@ -594,6 +594,16 @@ public final class Utils {
     }
 
     /**
+     * Create a string representation of a collection joined by ", ".
+     * @param collection The list of items
+     * @return The string representation.
+     */
+    public static <T> String join(Collection<T> collection) {
+        Objects.requireNonNull(collection);
+        return mkString(collection.stream(), "", "", ", ");
+    }
+
+    /**
      * Create a string representation of a collection joined by the given separator
      * @param collection The list of items
      * @param separator The separator
