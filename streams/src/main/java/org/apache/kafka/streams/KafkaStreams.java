@@ -759,7 +759,10 @@ public class KafkaStreams implements AutoCloseable {
     final class DelegatingStandbyUpdateListener implements StandbyUpdateListener {
 
         @Override
-        public void onUpdateStart(final TopicPartition topicPartition, final String storeName, final long startingOffset, final long currentEndOffset) {
+public void onUpdateStart(final TopicPartition topicPartition, 
+                          final String storeName, 
+                          final long startingOffset, 
+                          final long currentEndOffset) {
             if (globalStandbyListener != null) {
                 globalStandbyListener.onUpdateStart(topicPartition, storeName, startingOffset, currentEndOffset);
             }
