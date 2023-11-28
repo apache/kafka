@@ -161,7 +161,6 @@ import static org.apache.kafka.controller.QuorumControllerIntegrationTestUtils.b
 import static org.apache.kafka.controller.QuorumControllerIntegrationTestUtils.forceRenounce;
 import static org.apache.kafka.controller.QuorumControllerIntegrationTestUtils.pause;
 import static org.apache.kafka.controller.QuorumControllerIntegrationTestUtils.registerBrokersAndUnfence;
-import static org.apache.kafka.controller.QuorumControllerIntegrationTestUtils.sendBrokerHeartbeat;
 import static org.apache.kafka.controller.QuorumControllerIntegrationTestUtils.sendBrokerHeartbeatToUnfenceBrokers;
 import static org.apache.kafka.metadata.LeaderConstants.NO_LEADER;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
@@ -405,7 +404,7 @@ public class QuorumControllerTest {
             });
 
             // Unfence all brokers and create a topic foo
-            sendBrokerHeartbeat(active, allBrokers, brokerEpochs);
+            sendBrokerHeartbeatToUnfenceBrokers(active, allBrokers, brokerEpochs);
             CreateTopicsRequestData createTopicsRequestData = new CreateTopicsRequestData().setTopics(
                 new CreatableTopicCollection(Collections.singleton(
                     new CreatableTopic().setName("foo").setNumPartitions(1).
@@ -479,7 +478,7 @@ public class QuorumControllerTest {
             assertArrayEquals(lastKnownElr, partition.lastKnownElr, partition.toString());
 
             // Unfence the last one in the ELR, it should be elected.
-            sendBrokerHeartbeat(active, Arrays.asList(brokerToBeTheLeader), brokerEpochs);
+            sendBrokerHeartbeatToUnfenceBrokers(active, Arrays.asList(brokerToBeTheLeader), brokerEpochs);
             TestUtils.waitForCondition(() -> {
                     return active.clusterControl().isUnfenced(brokerToBeTheLeader);
                 }, sessionTimeoutMillis * 3,
