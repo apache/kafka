@@ -158,7 +158,7 @@ import static org.apache.kafka.controller.QuorumControllerIntegrationTestUtils.b
 import static org.apache.kafka.controller.QuorumControllerIntegrationTestUtils.forceRenounce;
 import static org.apache.kafka.controller.QuorumControllerIntegrationTestUtils.pause;
 import static org.apache.kafka.controller.QuorumControllerIntegrationTestUtils.registerBrokersAndUnfence;
-import static org.apache.kafka.controller.QuorumControllerIntegrationTestUtils.sendBrokerHeartbeat;
+import static org.apache.kafka.controller.QuorumControllerIntegrationTestUtils.sendBrokerHeartbeatToUnfenceBrokers;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -304,7 +304,7 @@ public class QuorumControllerTest {
             });
 
             // Unfence all brokers and create a topic foo
-            sendBrokerHeartbeat(active, allBrokers, brokerEpochs);
+            sendBrokerHeartbeatToUnfenceBrokers(active, allBrokers, brokerEpochs);
             CreateTopicsRequestData createTopicsRequestData = new CreateTopicsRequestData().setTopics(
                 new CreatableTopicCollection(Collections.singleton(
                     new CreatableTopic().setName("foo").setNumPartitions(numberOfPartitions).
@@ -317,7 +317,7 @@ public class QuorumControllerTest {
 
             // Fence some of the brokers
             TestUtils.waitForCondition(() -> {
-                    sendBrokerHeartbeat(active, brokersToKeepUnfenced, brokerEpochs);
+                    sendBrokerHeartbeatToUnfenceBrokers(active, brokersToKeepUnfenced, brokerEpochs);
                     for (Integer brokerId : brokersToFence) {
                         if (active.clusterControl().isUnfenced(brokerId)) {
                             return false;
@@ -329,7 +329,7 @@ public class QuorumControllerTest {
             );
 
             // Send another heartbeat to the brokers we want to keep alive
-            sendBrokerHeartbeat(active, brokersToKeepUnfenced, brokerEpochs);
+            sendBrokerHeartbeatToUnfenceBrokers(active, brokersToKeepUnfenced, brokerEpochs);
 
             // At this point only the brokers we want fenced should be fenced.
             brokersToKeepUnfenced.forEach(brokerId -> {
@@ -404,7 +404,7 @@ public class QuorumControllerTest {
             });
 
             // Unfence all brokers and create a topic foo
-            sendBrokerHeartbeat(active, allBrokers, brokerEpochs);
+            sendBrokerHeartbeatToUnfenceBrokers(active, allBrokers, brokerEpochs);
             CreateTopicsRequestData createTopicsRequestData = new CreateTopicsRequestData().setTopics(
                 new CreatableTopicCollection(Collections.singleton(
                     new CreatableTopic().setName("foo").setNumPartitions(numberOfPartitions).
@@ -417,7 +417,7 @@ public class QuorumControllerTest {
             // Fence some of the brokers
             TestUtils.waitForCondition(
                 () -> {
-                    sendBrokerHeartbeat(active, brokersToKeepUnfenced, brokerEpochs);
+                    sendBrokerHeartbeatToUnfenceBrokers(active, brokersToKeepUnfenced, brokerEpochs);
                     for (Integer brokerId : brokersToFence) {
                         if (active.clusterControl().isUnfenced(brokerId)) {
                             return false;
@@ -430,7 +430,7 @@ public class QuorumControllerTest {
             );
 
             // Send another heartbeat to the brokers we want to keep alive
-            sendBrokerHeartbeat(active, brokersToKeepUnfenced, brokerEpochs);
+            sendBrokerHeartbeatToUnfenceBrokers(active, brokersToKeepUnfenced, brokerEpochs);
 
             // At this point only the brokers we want fenced should be fenced.
             brokersToKeepUnfenced.forEach(brokerId -> {
@@ -459,7 +459,7 @@ public class QuorumControllerTest {
             }
 
             // Unfence all brokers
-            sendBrokerHeartbeat(active, allBrokers, brokerEpochs);
+            sendBrokerHeartbeatToUnfenceBrokers(active, allBrokers, brokerEpochs);
 
             // Let the unfenced broker, 3, join the ISR partition 2
             Set<TopicIdPartition> imbalancedPartitions = active.replicationControl().imbalancedPartitions();
@@ -485,14 +485,14 @@ public class QuorumControllerTest {
                 .Builder(alterPartitionRequest, false).build((short) 0).data()).get();
 
             AtomicLong lastHeartbeatMs = new AtomicLong(getMonotonicMs(active.time()));
-            sendBrokerHeartbeat(active, allBrokers, brokerEpochs);
+            sendBrokerHeartbeatToUnfenceBrokers(active, allBrokers, brokerEpochs);
             // Check that partitions are balanced
             TestUtils.waitForCondition(
                 () -> {
                     long currentMonotonicMs = getMonotonicMs(active.time());
                     if (currentMonotonicMs > lastHeartbeatMs.get() + (sessionTimeoutMillis / 2)) {
                         lastHeartbeatMs.set(currentMonotonicMs);
-                        sendBrokerHeartbeat(active, allBrokers, brokerEpochs);
+                        sendBrokerHeartbeatToUnfenceBrokers(active, allBrokers, brokerEpochs);
                     }
                     return !active.replicationControl().arePartitionLeadersImbalanced();
                 },
