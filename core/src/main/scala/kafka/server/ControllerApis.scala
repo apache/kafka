@@ -1070,11 +1070,22 @@ class ControllerApis(
   }
 
   def handleAssignReplicasToDirs(request: RequestChannel.Request): CompletableFuture[Unit] = {
+    if (!apiVersionManager.features.metadataVersion().isDirectoryAssignmentSupported) {
+      throw new UnsupportedVersionException("AssignReplicasToDirs is not supported with the current MetadataVersion.")
+    }
+    authHelper.authorizeClusterOperation(request, CLUSTER_ACTION)
     val assignReplicasToDirsRequest = request.body[AssignReplicasToDirsRequest]
-
-    // TODO KAFKA-15426
-    requestHelper.sendMaybeThrottle(request,
-      assignReplicasToDirsRequest.getErrorResponse(Errors.UNSUPPORTED_VERSION.exception))
-    CompletableFuture.completedFuture[Unit](())
+    val context = new ControllerRequestContext(request.context.header.data, request.context.principal,
+      OptionalLong.empty())
+    controller.assignReplicasToDirs(context, assignReplicasToDirsRequest.data).thenApply { reply =>
+      def createResponseCallback(requestThrottleMs: Int,
+                                 reply: AssignReplicasToDirsResponseData): AssignReplicasToDirsResponse = {
+        new AssignReplicasToDirsResponse(new AssignReplicasToDirsResponseData().
+          setThrottleTimeMs(requestThrottleMs).
+          setDirectories(reply.directories))
+      }
+      requestHelper.sendResponseMaybeThrottle(request,
+        requestThrottleMs => createResponseCallback(requestThrottleMs, reply))
+    }
   }
 }

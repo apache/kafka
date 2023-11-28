@@ -33,14 +33,12 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.Comparator;
 import java.util.HashMap;
-import java.util.Map;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
+import static org.apache.kafka.metadata.AssignmentsHelper.buildRequestData;
+import static org.apache.kafka.metadata.AssignmentsHelper.normalize;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doAnswer;
@@ -73,76 +71,9 @@ public class AssignmentsManagerTest {
         manager.close();
     }
 
-    AssignReplicasToDirsRequestData normalize(AssignReplicasToDirsRequestData request) {
-        request = request.duplicate();
-        request.directories().sort(Comparator.comparing(AssignReplicasToDirsRequestData.DirectoryData::id));
-        for (AssignReplicasToDirsRequestData.DirectoryData directory : request.directories()) {
-            directory.topics().sort(Comparator.comparing(AssignReplicasToDirsRequestData.TopicData::topicId));
-            for (AssignReplicasToDirsRequestData.TopicData topic : directory.topics()) {
-                topic.partitions().sort(Comparator.comparing(AssignReplicasToDirsRequestData.PartitionData::partitionIndex));
-            }
-        }
-        return request;
-    }
 
     void assertRequestEquals(AssignReplicasToDirsRequestData expected, AssignReplicasToDirsRequestData actual) {
         assertEquals(normalize(expected), normalize(actual));
-    }
-
-    @Test
-    void testBuildRequestData() {
-        Map<TopicIdPartition, Uuid> assignment = new HashMap<TopicIdPartition, Uuid>() {{
-                put(new TopicIdPartition(TOPIC_1, 1), DIR_1);
-                put(new TopicIdPartition(TOPIC_1, 2), DIR_2);
-                put(new TopicIdPartition(TOPIC_1, 3), DIR_3);
-                put(new TopicIdPartition(TOPIC_1, 4), DIR_1);
-                put(new TopicIdPartition(TOPIC_2, 5), DIR_2);
-            }};
-        AssignReplicasToDirsRequestData built = AssignmentsManager.buildRequestData(8, 100L, assignment);
-        AssignReplicasToDirsRequestData expected = new AssignReplicasToDirsRequestData()
-                .setBrokerId(8)
-                .setBrokerEpoch(100L)
-                .setDirectories(Arrays.asList(
-                        new AssignReplicasToDirsRequestData.DirectoryData()
-                                .setId(DIR_2)
-                                .setTopics(Arrays.asList(
-                                        new AssignReplicasToDirsRequestData.TopicData()
-                                                .setTopicId(TOPIC_1)
-                                                .setPartitions(Collections.singletonList(
-                                                        new AssignReplicasToDirsRequestData.PartitionData()
-                                                                .setPartitionIndex(2)
-                                                )),
-                                        new AssignReplicasToDirsRequestData.TopicData()
-                                                .setTopicId(TOPIC_2)
-                                                .setPartitions(Collections.singletonList(
-                                                        new AssignReplicasToDirsRequestData.PartitionData()
-                                                                .setPartitionIndex(5)
-                                                ))
-                                )),
-                        new AssignReplicasToDirsRequestData.DirectoryData()
-                                .setId(DIR_3)
-                                .setTopics(Collections.singletonList(
-                                        new AssignReplicasToDirsRequestData.TopicData()
-                                                .setTopicId(TOPIC_1)
-                                                .setPartitions(Collections.singletonList(
-                                                        new AssignReplicasToDirsRequestData.PartitionData()
-                                                                .setPartitionIndex(3)
-                                                ))
-                                )),
-                        new AssignReplicasToDirsRequestData.DirectoryData()
-                                .setId(DIR_1)
-                                .setTopics(Collections.singletonList(
-                                        new AssignReplicasToDirsRequestData.TopicData()
-                                                .setTopicId(TOPIC_1)
-                                                .setPartitions(Arrays.asList(
-                                                        new AssignReplicasToDirsRequestData.PartitionData()
-                                                                .setPartitionIndex(4),
-                                                        new AssignReplicasToDirsRequestData.PartitionData()
-                                                                .setPartitionIndex(1)
-                                                ))
-                                ))
-                ));
-        assertRequestEquals(expected, built);
     }
 
     @Test
@@ -170,7 +101,7 @@ public class AssignmentsManagerTest {
         verifyNoMoreInteractions(channelManager);
         assertEquals(1, captor.getAllValues().size());
         AssignReplicasToDirsRequestData actual = captor.getValue().build().data();
-        AssignReplicasToDirsRequestData expected = AssignmentsManager.buildRequestData(
+        AssignReplicasToDirsRequestData expected = buildRequestData(
                 8, 100L, new HashMap<TopicIdPartition, Uuid>() {{
                         put(new TopicIdPartition(TOPIC_1, 1), DIR_1);
                         put(new TopicIdPartition(TOPIC_1, 2), DIR_2);
@@ -228,18 +159,18 @@ public class AssignmentsManagerTest {
         verify(channelManager, times(5)).sendRequest(captor.capture(), any(ControllerRequestCompletionHandler.class));
         verifyNoMoreInteractions(channelManager);
         assertEquals(5, captor.getAllValues().size());
-        assertRequestEquals(AssignmentsManager.buildRequestData(
+        assertRequestEquals(buildRequestData(
                 8, 100L, new HashMap<TopicIdPartition, Uuid>() {{
                         put(new TopicIdPartition(TOPIC_1, 1), DIR_1);
                     }}
         ), captor.getAllValues().get(0).build().data());
-        assertRequestEquals(AssignmentsManager.buildRequestData(
+        assertRequestEquals(buildRequestData(
                 8, 100L, new HashMap<TopicIdPartition, Uuid>() {{
                         put(new TopicIdPartition(TOPIC_1, 1), DIR_1);
                         put(new TopicIdPartition(TOPIC_1, 2), DIR_3);
                     }}
         ), captor.getAllValues().get(1).build().data());
-        assertRequestEquals(AssignmentsManager.buildRequestData(
+        assertRequestEquals(buildRequestData(
                 8, 100L, new HashMap<TopicIdPartition, Uuid>() {{
                         put(new TopicIdPartition(TOPIC_1, 1), DIR_1);
                         put(new TopicIdPartition(TOPIC_1, 2), DIR_3);

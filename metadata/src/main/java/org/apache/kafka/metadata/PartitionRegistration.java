@@ -206,11 +206,12 @@ public class PartitionRegistration {
     private PartitionRegistration(int[] replicas, Uuid[] directories, int[] isr, int[] removingReplicas,
                                  int[] addingReplicas, int leader, LeaderRecoveryState leaderRecoveryState,
                                  int leaderEpoch, int partitionEpoch, int[] elr, int[] lastKnownElr) {
-        if (directories != null && directories.length > 0 && directories.length != replicas.length) {
+        Objects.requireNonNull(directories);
+        if (directories.length > 0 && directories.length != replicas.length) {
             throw new IllegalArgumentException("The lengths for replicas and directories do not match.");
         }
         this.replicas = replicas;
-        this.directories = Objects.requireNonNull(directories);
+        this.directories = directories;
         this.isr = isr;
         this.removingReplicas = removingReplicas;
         this.addingReplicas = addingReplicas;

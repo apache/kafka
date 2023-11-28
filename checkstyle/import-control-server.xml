@@ -53,6 +53,7 @@
   <allow pkg="org.apache.kafka.common.protocol" />
   <allow pkg="org.apache.kafka.common.record" />
   <allow pkg="org.apache.kafka.common.requests" />
+  <allow pkg="org.apache.kafka.metadata" />
 
   <!-- utilities and reusable classes from server-common -->
   <allow pkg="org.apache.kafka.queue" />
