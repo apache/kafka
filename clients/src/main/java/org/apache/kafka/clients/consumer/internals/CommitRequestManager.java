@@ -189,7 +189,7 @@ public class CommitRequestManager implements RequestManager {
         }
 
         AutoCommitState autocommit = autoCommitState.get();
-        if (!autocommit.canSendAutocommit()) {
+        if (!autocommit.shouldAutoCommit()) {
             return CompletableFuture.completedFuture(null);
         }
 
@@ -217,7 +217,7 @@ public class CommitRequestManager implements RequestManager {
     /**
      * Returns an OffsetCommitRequest of all assigned topicPartitions and their current positions.
      */
-    NetworkClientDelegate.UnsentRequest commitAllConsumedPositions() {
+    NetworkClientDelegate.UnsentRequest createCommitAllConsumedRequest() {
         Map<TopicPartition, OffsetAndMetadata> offsets = subscriptions.allConsumed();
         OffsetCommitRequestState request = pendingRequests.createOffsetCommitRequest(offsets, jitter);
         log.debug("Sending synchronous auto-commit of offsets {}", offsets);
@@ -794,7 +794,7 @@ public class CommitRequestManager implements RequestManager {
             this.hasInflightCommit = false;
         }
 
-        public boolean canSendAutocommit() {
+        public boolean shouldAutoCommit() {
             return !this.hasInflightCommit && this.timer.isExpired();
         }
 

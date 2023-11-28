@@ -835,6 +835,7 @@ public class AsyncKafkaConsumerTest {
                 Errors.NONE).responseBody());
         }
     }
+
     private ClientResponse mockAutocommitResponse(final List<TopicPartition> topicPartitions,
                                                   final short apiKeyVersion,
                                                   final Errors error) {

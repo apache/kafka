@@ -237,12 +237,11 @@ public class CommitRequestManagerTest {
     public void testAutocommit_EnsureOnlyOneInflightRequest() {
         TopicPartition t1p = new TopicPartition("topic1", 0);
         subscriptionState.assignFromUser(singleton(t1p));
-        //subscriptionState.seekUnvalidated(t1p, new SubscriptionState.FetchPosition(100L));
 
         CommitRequestManager commitRequestManger = create(true, 100);
         time.sleep(100);
         commitRequestManger.updateAutoCommitTimer(time.milliseconds());
-        // Nothing consumed
+        // Nothing consumed therefore no commit request is sent
         assertPoll(0, commitRequestManger);
         time.sleep(10);
         subscriptionState.seekUnvalidated(t1p, new SubscriptionState.FetchPosition(100L));

@@ -236,6 +236,12 @@ public class NetworkClientDelegate implements AutoCloseable {
         }
     }
 
+    public void add(final UnsentRequest requests) {
+        Objects.requireNonNull(requests);
+        requests.setTimer(time, requestTimeoutMs);
+        unsentRequests.add(requests);
+    }
+
     public static class PollResult {
 
         public static final long WAIT_FOREVER = Long.MAX_VALUE;

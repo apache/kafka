@@ -300,7 +300,7 @@ public class ConsumerNetworkThreadTest {
         prepareOffsetCommitRequest(singletonMap(tp, 100L), Errors.NONE, false);
         consumerNetworkThread.maybeAutocommitOnClose(time.timer(1000));
         assertTrue(coordinatorRequestManager.coordinator().isPresent());
-        verify(commitRequestManager).commitAllConsumedPositions();
+        verify(commitRequestManager).createCommitAllConsumedRequest();
 
         assertFalse(client.hasPendingResponses());
         assertFalse(client.hasInFlightRequests());
