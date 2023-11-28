@@ -134,9 +134,9 @@ then
   fi
 fi
 
-mv /etc/kafka/docker/server.properties /opt/kafka/config/server.properties
-mv /etc/kafka/docker/log4j.properties /opt/kafka/config/log4j.properties
-mv /etc/kafka/docker/tools-log4j.properties /opt/kafka/config/tools-log4j.properties
+cp /etc/kafka/docker/server.properties /opt/kafka/config/server.properties
+cp /etc/kafka/docker/log4j.properties /opt/kafka/config/log4j.properties
+cp /etc/kafka/docker/tools-log4j.properties /opt/kafka/config/tools-log4j.properties
 
 cp -R /mnt/shared/config/. /opt/kafka/config/
 
