@@ -109,6 +109,19 @@ public interface Herder {
     void putConnectorConfig(String connName, Map<String, String> config, boolean allowReplace, Callback<Created<ConnectorInfo>> callback);
 
     /**
+     * Set the configuration for a connector, along with a target state optionally. This supports creation and updating.
+     * @param connName name of the connector
+     * @param config the connector's configuration
+     * @param targetState the desired target state for the connector; may be {@code null} if no target state change is desired. Note that the default
+     *                    target state is {@link TargetState#STARTED} if no target state exists previously
+     * @param allowReplace if true, allow overwriting previous configs; if false, throw {@link AlreadyExistsException}
+     *                     if a connector with the same name already exists
+     * @param callback callback to invoke when the configuration has been written
+     */
+    void putConnectorConfig(String connName, Map<String, String> config, TargetState targetState, boolean allowReplace,
+                            Callback<Created<ConnectorInfo>> callback);
+
+    /**
      * Delete a connector and its configuration.
      * @param connName name of the connector
      * @param callback callback to invoke when the configuration has been written

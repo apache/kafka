@@ -56,6 +56,13 @@ import java.util.concurrent.TimeUnit;
 
 public final class ConsumerUtils {
 
+    /**
+     * This configuration has only package-level visibility in {@link ConsumerConfig}, so it's inaccessible in the
+     * internals package where most of its uses live. Attempts were made to move things around, but it was deemed
+     * better to leave it as is.
+     */
+    static final String THROW_ON_FETCH_STABLE_OFFSET_UNSUPPORTED = "internal.throw.on.fetch.stable.offset.unsupported";
+    public static final long DEFAULT_CLOSE_TIMEOUT_MS = 30 * 1000;
     public static final String CONSUMER_JMX_PREFIX = "kafka.consumer";
     public static final String CONSUMER_METRIC_GROUP_PREFIX = "consumer";
 
@@ -142,12 +149,6 @@ public final class ConsumerUtils {
         return new FetchMetricsManager(metrics, metricsRegistry);
     }
 
-    public static <K, V> FetchConfig<K, V> createFetchConfig(ConsumerConfig config,
-                                                             Deserializers<K, V> deserializers) {
-        IsolationLevel isolationLevel = configuredIsolationLevel(config);
-        return new FetchConfig<>(config, deserializers, isolationLevel);
-    }
-
     @SuppressWarnings("unchecked")
     public static <K, V> List<ConsumerInterceptor<K, V>> configuredConsumerInterceptors(ConsumerConfig config) {
         return (List<ConsumerInterceptor<K, V>>) ClientUtils.configuredInterceptors(config, ConsumerConfig.INTERCEPTOR_CLASSES_CONFIG, ConsumerInterceptor.class);
@@ -168,14 +169,10 @@ public final class ConsumerUtils {
      *                           committed offsets' metadata.
      * @param subscriptions      Subscription state to update, setting partitions' offsets to the
      *                           committed offsets.
-     * @return False if null <code>offsetsAndMetadata</code> is provided, indicating that the
-     * refresh operation could not be performed. True in any other case.
      */
-    public static boolean refreshCommittedOffsets(final Map<TopicPartition, OffsetAndMetadata> offsetsAndMetadata,
-                                                  final ConsumerMetadata metadata,
-                                                  final SubscriptionState subscriptions) {
-        if (offsetsAndMetadata == null) return false;
-
+    public static void refreshCommittedOffsets(final Map<TopicPartition, OffsetAndMetadata> offsetsAndMetadata,
+                                               final ConsumerMetadata metadata,
+                                               final SubscriptionState subscriptions) {
         for (final Map.Entry<TopicPartition, OffsetAndMetadata> entry : offsetsAndMetadata.entrySet()) {
             final TopicPartition tp = entry.getKey();
             final OffsetAndMetadata offsetAndMetadata = entry.getValue();
@@ -200,7 +197,6 @@ public final class ConsumerUtils {
                 }
             }
         }
-        return true;
     }
 
     public static <T> T getResult(CompletableFuture<T> future, Timer timer) {

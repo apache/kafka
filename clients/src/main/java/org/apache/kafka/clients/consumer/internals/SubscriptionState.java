@@ -99,7 +99,7 @@ public class SubscriptionState {
     private final OffsetResetStrategy defaultResetStrategy;
 
     /* User-provided listener to be invoked when assignment changes */
-    private ConsumerRebalanceListener rebalanceListener;
+    private Optional<ConsumerRebalanceListener> rebalanceListener;
 
     private int assignmentId = 0;
 
@@ -162,13 +162,13 @@ public class SubscriptionState {
             throw new IllegalStateException(SUBSCRIPTION_EXCEPTION_MESSAGE);
     }
 
-    public synchronized boolean subscribe(Set<String> topics, ConsumerRebalanceListener listener) {
+    public synchronized boolean subscribe(Set<String> topics, Optional<ConsumerRebalanceListener> listener) {
         registerRebalanceListener(listener);
         setSubscriptionType(SubscriptionType.AUTO_TOPICS);
         return changeSubscription(topics);
     }
 
-    public synchronized void subscribe(Pattern pattern, ConsumerRebalanceListener listener) {
+    public synchronized void subscribe(Pattern pattern, Optional<ConsumerRebalanceListener> listener) {
         registerRebalanceListener(listener);
         setSubscriptionType(SubscriptionType.AUTO_PATTERN);
         this.subscribedPattern = pattern;
@@ -285,10 +285,8 @@ public class SubscriptionState {
         this.assignment.set(assignedPartitionStates);
     }
 
-    private void registerRebalanceListener(ConsumerRebalanceListener listener) {
-        if (listener == null)
-            throw new IllegalArgumentException("RebalanceListener cannot be null");
-        this.rebalanceListener = listener;
+    private void registerRebalanceListener(Optional<ConsumerRebalanceListener> listener) {
+        this.rebalanceListener = Objects.requireNonNull(listener, "RebalanceListener cannot be null");
     }
 
     /**
@@ -455,17 +453,22 @@ public class SubscriptionState {
     public synchronized boolean maybeValidatePositionForCurrentLeader(ApiVersions apiVersions,
                                                                       TopicPartition tp,
                                                                       Metadata.LeaderAndEpoch leaderAndEpoch) {
+        TopicPartitionState state = assignedStateOrNull(tp);
+        if (state == null) {
+            log.debug("Skipping validating position for partition {} which is not currently assigned.", tp);
+            return false;
+        }
         if (leaderAndEpoch.leader.isPresent()) {
             NodeApiVersions nodeApiVersions = apiVersions.get(leaderAndEpoch.leader.get().idString());
             if (nodeApiVersions == null || hasUsableOffsetForLeaderEpochVersion(nodeApiVersions)) {
-                return assignedState(tp).maybeValidatePosition(leaderAndEpoch);
+                return state.maybeValidatePosition(leaderAndEpoch);
             } else {
                 // If the broker does not support a newer version of OffsetsForLeaderEpoch, we skip validation
-                assignedState(tp).updatePositionLeaderNoValidation(leaderAndEpoch);
+                state.updatePositionLeaderNoValidation(leaderAndEpoch);
                 return false;
             }
         } else {
-            return assignedState(tp).maybeValidatePosition(leaderAndEpoch);
+            return state.maybeValidatePosition(leaderAndEpoch);
         }
     }
 
@@ -764,7 +767,7 @@ public class SubscriptionState {
         assignment.moveToEnd(tp);
     }
 
-    public synchronized ConsumerRebalanceListener rebalanceListener() {
+    public synchronized Optional<ConsumerRebalanceListener> rebalanceListener() {
         return rebalanceListener;
     }
 

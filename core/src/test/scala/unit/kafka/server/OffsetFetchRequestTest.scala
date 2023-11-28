@@ -39,7 +39,6 @@ import scala.jdk.CollectionConverters._
 class OffsetFetchRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBaseRequestTest(cluster) {
 
   @ClusterTest(serverProperties = Array(
-    new ClusterConfigProperty(key = "unstable.api.versions.enable", value = "true"),
     new ClusterConfigProperty(key = "group.coordinator.new.enable", value = "true"),
     new ClusterConfigProperty(key = "group.consumer.max.session.timeout.ms", value = "600000"),
     new ClusterConfigProperty(key = "group.consumer.session.timeout.ms", value = "600000"),
@@ -51,7 +50,6 @@ class OffsetFetchRequestTest(cluster: ClusterInstance) extends GroupCoordinatorB
   }
 
   @ClusterTest(serverProperties = Array(
-    new ClusterConfigProperty(key = "unstable.api.versions.enable", value = "true"),
     new ClusterConfigProperty(key = "group.coordinator.new.enable", value = "true"),
     new ClusterConfigProperty(key = "group.consumer.max.session.timeout.ms", value = "600000"),
     new ClusterConfigProperty(key = "group.consumer.session.timeout.ms", value = "600000"),
@@ -63,7 +61,6 @@ class OffsetFetchRequestTest(cluster: ClusterInstance) extends GroupCoordinatorB
   }
 
   @ClusterTest(clusterType = Type.ALL, serverProperties = Array(
-    new ClusterConfigProperty(key = "unstable.api.versions.enable", value = "false"),
     new ClusterConfigProperty(key = "group.coordinator.new.enable", value = "false"),
     new ClusterConfigProperty(key = "group.consumer.max.session.timeout.ms", value = "600000"),
     new ClusterConfigProperty(key = "group.consumer.session.timeout.ms", value = "600000"),
@@ -75,7 +72,6 @@ class OffsetFetchRequestTest(cluster: ClusterInstance) extends GroupCoordinatorB
   }
 
   @ClusterTest(serverProperties = Array(
-    new ClusterConfigProperty(key = "unstable.api.versions.enable", value = "true"),
     new ClusterConfigProperty(key = "group.coordinator.new.enable", value = "true"),
     new ClusterConfigProperty(key = "group.consumer.max.session.timeout.ms", value = "600000"),
     new ClusterConfigProperty(key = "group.consumer.session.timeout.ms", value = "600000"),
@@ -87,7 +83,6 @@ class OffsetFetchRequestTest(cluster: ClusterInstance) extends GroupCoordinatorB
   }
 
   @ClusterTest(serverProperties = Array(
-    new ClusterConfigProperty(key = "unstable.api.versions.enable", value = "true"),
     new ClusterConfigProperty(key = "group.coordinator.new.enable", value = "true"),
     new ClusterConfigProperty(key = "group.consumer.max.session.timeout.ms", value = "600000"),
     new ClusterConfigProperty(key = "group.consumer.session.timeout.ms", value = "600000"),
@@ -99,7 +94,6 @@ class OffsetFetchRequestTest(cluster: ClusterInstance) extends GroupCoordinatorB
   }
 
   @ClusterTest(clusterType = Type.ALL, serverProperties = Array(
-    new ClusterConfigProperty(key = "unstable.api.versions.enable", value = "false"),
     new ClusterConfigProperty(key = "group.coordinator.new.enable", value = "false"),
     new ClusterConfigProperty(key = "group.consumer.max.session.timeout.ms", value = "600000"),
     new ClusterConfigProperty(key = "group.consumer.session.timeout.ms", value = "600000"),
@@ -111,7 +105,6 @@ class OffsetFetchRequestTest(cluster: ClusterInstance) extends GroupCoordinatorB
   }
 
   @ClusterTest(serverProperties = Array(
-    new ClusterConfigProperty(key = "unstable.api.versions.enable", value = "true"),
     new ClusterConfigProperty(key = "group.coordinator.new.enable", value = "true"),
     new ClusterConfigProperty(key = "group.consumer.max.session.timeout.ms", value = "600000"),
     new ClusterConfigProperty(key = "group.consumer.session.timeout.ms", value = "600000"),
@@ -123,7 +116,6 @@ class OffsetFetchRequestTest(cluster: ClusterInstance) extends GroupCoordinatorB
   }
 
   @ClusterTest(serverProperties = Array(
-    new ClusterConfigProperty(key = "unstable.api.versions.enable", value = "true"),
     new ClusterConfigProperty(key = "group.coordinator.new.enable", value = "true"),
     new ClusterConfigProperty(key = "group.consumer.max.session.timeout.ms", value = "600000"),
     new ClusterConfigProperty(key = "group.consumer.session.timeout.ms", value = "600000"),
@@ -135,7 +127,6 @@ class OffsetFetchRequestTest(cluster: ClusterInstance) extends GroupCoordinatorB
   }
 
   @ClusterTest(clusterType = Type.ALL, serverProperties = Array(
-    new ClusterConfigProperty(key = "unstable.api.versions.enable", value = "false"),
     new ClusterConfigProperty(key = "group.coordinator.new.enable", value = "false"),
     new ClusterConfigProperty(key = "group.consumer.max.session.timeout.ms", value = "600000"),
     new ClusterConfigProperty(key = "group.consumer.session.timeout.ms", value = "600000"),
@@ -240,6 +231,43 @@ class OffsetFetchRequestTest(cluster: ClusterInstance) extends GroupCoordinatorB
           partitions = List(
             new TopicPartition("foo", 0),
             new TopicPartition("foo", 1),
+            new TopicPartition("foo", 5) // This one does not exist.
+          ),
+          requireStable = requireStable,
+          version = version.toShort
+        )
+      )
+
+      // Fetch with unknown group id with unknown topic or nonexistent partition.
+      assertEquals(
+        new OffsetFetchResponseData.OffsetFetchResponseGroup()
+          .setGroupId("unknown")
+          .setTopics(List(
+            new OffsetFetchResponseData.OffsetFetchResponseTopics()
+              .setName("foo")
+              .setPartitions(List(
+                new OffsetFetchResponseData.OffsetFetchResponsePartitions()
+                  .setPartitionIndex(0)
+                  .setCommittedOffset(-1L),
+                new OffsetFetchResponseData.OffsetFetchResponsePartitions()
+                  .setPartitionIndex(5)
+                  .setCommittedOffset(-1L)
+              ).asJava),
+            new OffsetFetchResponseData.OffsetFetchResponseTopics()
+              .setName("foo-unknown")
+              .setPartitions(List(
+                new OffsetFetchResponseData.OffsetFetchResponsePartitions()
+                  .setPartitionIndex(1)
+                  .setCommittedOffset(-1L)
+              ).asJava),
+          ).asJava),
+        fetchOffsets(
+          groupId = "unknown",
+          memberId = memberId,
+          memberEpoch = memberEpoch,
+          partitions = List(
+            new TopicPartition("foo", 0),
+            new TopicPartition("foo-unknown", 1),
             new TopicPartition("foo", 5) // This one does not exist.
           ),
           requireStable = requireStable,
@@ -486,7 +514,26 @@ class OffsetFetchRequestTest(cluster: ClusterInstance) extends GroupCoordinatorB
                     .setCommittedOffset(-1L)
                 ).asJava)
             ).asJava),
-        ),
+          // Fetch unknown group with unknown topic or nonexistent partition.
+          new OffsetFetchResponseData.OffsetFetchResponseGroup()
+            .setGroupId("grp-4")
+            .setTopics(List(
+              new OffsetFetchResponseData.OffsetFetchResponseTopics()
+                .setName("foo")
+                .setPartitions(List(
+                  new OffsetFetchResponseData.OffsetFetchResponsePartitions()
+                    .setPartitionIndex(5)
+                    .setCommittedOffset(-1L)
+                ).asJava),
+              new OffsetFetchResponseData.OffsetFetchResponseTopics()
+                .setName("foo-unknown")
+                .setPartitions(List(
+                  new OffsetFetchResponseData.OffsetFetchResponsePartitions()
+                    .setPartitionIndex(0)
+                    .setCommittedOffset(-1L)
+                ).asJava)
+            ).asJava),
+        ).toSet,
         fetchOffsets(
           groups = Map(
             "grp-0" -> List(
@@ -498,11 +545,15 @@ class OffsetFetchRequestTest(cluster: ClusterInstance) extends GroupCoordinatorB
             "grp-2" -> List.empty,
             "grp-3" -> List(
               new TopicPartition("foo", 0)
-            )
+            ),
+            "grp-4" -> List(
+              new TopicPartition("foo-unknown", 0), // unknown topic id
+              new TopicPartition("foo", 5)  // The partition doesn't exist.
+            ),
           ),
           requireStable = requireStable,
           version = version.toShort
-        )
+        ).toSet
       )
     }
   }

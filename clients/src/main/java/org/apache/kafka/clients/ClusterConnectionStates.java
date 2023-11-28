@@ -160,7 +160,7 @@ final class ClusterConnectionStates {
         // Create a new NodeConnectionState if nodeState does not already contain one
         // for the specified id or if the hostname associated with the node id changed.
         nodeState.put(id, new NodeConnectionState(ConnectionState.CONNECTING, now,
-                reconnectBackoff.backoff(0), connectionSetupTimeout.backoff(0), host, hostResolver));
+                reconnectBackoff.backoff(0), connectionSetupTimeout.backoff(0), host, hostResolver, log));
         connectingNodes.add(id);
     }
 
@@ -478,9 +478,11 @@ final class ClusterConnectionStates {
         private int addressIndex;
         private final String host;
         private final HostResolver hostResolver;
+        private InetAddress lastAttemptedAddress;
+        private Logger log;
 
         private NodeConnectionState(ConnectionState state, long lastConnectAttemptMs, long reconnectBackoffMs,
-                long connectionSetupTimeoutMs, String host, HostResolver hostResolver) {
+                long connectionSetupTimeoutMs, String host, HostResolver hostResolver, Logger log) {
             this.state = state;
             this.addresses = Collections.emptyList();
             this.addressIndex = -1;
@@ -492,6 +494,7 @@ final class ClusterConnectionStates {
             this.throttleUntilTimeMs = 0;
             this.host = host;
             this.hostResolver = hostResolver;
+            this.log = log;
         }
 
         public String host() {
@@ -505,12 +508,14 @@ final class ClusterConnectionStates {
          */
         private InetAddress currentAddress() throws UnknownHostException {
             if (addresses.isEmpty()) {
-                // (Re-)initialize list
-                addresses = ClientUtils.resolve(host, hostResolver);
-                addressIndex = 0;
+                resolveAddresses();
             }
 
-            return addresses.get(addressIndex);
+            // Save the address that we return so that we don't try it twice in a row when we re-resolve due to
+            // disconnecting or exhausting the addresses
+            InetAddress currentAddress = addresses.get(addressIndex);
+            lastAttemptedAddress = currentAddress;
+            return currentAddress;
         }
 
         /**
@@ -523,7 +528,24 @@ final class ClusterConnectionStates {
 
             addressIndex = (addressIndex + 1) % addresses.size();
             if (addressIndex == 0)
-                addresses = Collections.emptyList(); // Exhausted list. Re-resolve on next currentAddress() call
+                clearAddresses(); // Exhausted list. Re-resolve on next currentAddress() call
+        }
+
+        private void resolveAddresses() throws UnknownHostException {
+            // (Re-)initialize list
+            addresses = ClientUtils.resolve(host, hostResolver);
+            if (log.isDebugEnabled()) {
+                log.debug("Resolved host {} to addresses {}", host, addresses);
+            }
+            addressIndex = 0;
+
+            // We re-resolve DNS after disconnecting, but we don't want to immediately reconnect to the address we
+            // just disconnected from, in case we disconnected due to a problem with that IP (such as a load
+            // balancer instance failure). Check the first address in the list and skip it if it was the last address
+            // we tried and there are multiple addresses to choose from.
+            if (addresses.size() > 1 && addresses.get(addressIndex).equals(lastAttemptedAddress)) {
+                addressIndex++;
+            }
         }
 
         /**
