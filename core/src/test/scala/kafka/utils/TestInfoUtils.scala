@@ -21,6 +21,7 @@ import java.util
 import java.util.{Collections, Optional}
 
 import org.junit.jupiter.api.TestInfo
+import org.apache.kafka.clients.consumer.GroupProtocol
 
 class EmptyTestInfo extends TestInfo {
   override def getDisplayName: String = ""
@@ -53,7 +54,18 @@ object TestInfoUtils {
   }
   final val TestWithParameterizedQuorumName = "{displayName}.quorum={0}"
 
+  final val TestWithParameterizedQuorumAndGroupProtocolNames = "{displayName}.quorum={0}.groupProtocol={1}"
+
   def isNewGroupCoordinatorEnabled(testInfo: TestInfo): Boolean = {
     testInfo.getDisplayName().contains("kraft+kip848")
+  }
+
+  def maybeGroupProtocolSpecified(testInfo: TestInfo): Option[GroupProtocol] = {
+    if (testInfo.getDisplayName().contains("groupProtocol=generic"))
+      Some(GroupProtocol.GENERIC)
+    else if (testInfo.getDisplayName().contains("groupProtocol=consumer"))
+      Some(GroupProtocol.CONSUMER)
+    else
+      None
   }
 }
