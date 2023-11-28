@@ -197,10 +197,12 @@ public class ConsumerTestBuilder implements Closeable {
                         logContext
                 )
             );
-            HeartbeatRequestManager.HeartbeatState heartbeatState = spy(new HeartbeatRequestManager.HeartbeatState(subscriptions,
+            HeartbeatRequestManager.HeartbeatState heartbeatState = spy(new HeartbeatRequestManager.HeartbeatState(
+                    subscriptions,
                     mm,
                     DEFAULT_MAX_POLL_INTERVAL_MS));
-            HeartbeatRequestManager.HeartbeatRequestState heartbeatRequestState = spy(new HeartbeatRequestManager.HeartbeatRequestState(logContext,
+            HeartbeatRequestManager.HeartbeatRequestState heartbeatRequestState = spy(new HeartbeatRequestManager.HeartbeatRequestState(
+                    logContext,
                     time,
                     gi.heartbeatIntervalMs,
                     retryBackoffMs,
@@ -210,7 +212,6 @@ public class ConsumerTestBuilder implements Closeable {
                     logContext,
                     config,
                     coordinator,
-                    subscriptions,
                     mm,
                     heartbeatState,
                     heartbeatRequestState,

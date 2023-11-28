@@ -84,11 +84,6 @@ public class HeartbeatRequestManager implements RequestManager {
     private final CoordinatorRequestManager coordinatorRequestManager;
 
     /**
-     * SubscriptionState tracks the topic, partition and offset of the member
-     */
-    private final SubscriptionState subscriptions;
-
-    /**
      * HeartbeatRequestState manages heartbeat request timing and retries
      */
     private final HeartbeatRequestState heartbeatRequestState;
@@ -118,7 +113,6 @@ public class HeartbeatRequestManager implements RequestManager {
         final BackgroundEventHandler backgroundEventHandler) {
         this.coordinatorRequestManager = coordinatorRequestManager;
         this.logger = logContext.logger(getClass());
-        this.subscriptions = subscriptions;
         this.membershipManager = membershipManager;
         this.backgroundEventHandler = backgroundEventHandler;
         this.rebalanceTimeoutMs = config.getInt(CommonClientConfigs.MAX_POLL_INTERVAL_MS_CONFIG);
@@ -134,13 +128,11 @@ public class HeartbeatRequestManager implements RequestManager {
         final LogContext logContext,
         final ConsumerConfig config,
         final CoordinatorRequestManager coordinatorRequestManager,
-        final SubscriptionState subscriptions,
         final MembershipManager membershipManager,
         final HeartbeatState heartbeatState,
         final HeartbeatRequestState heartbeatRequestState,
         final BackgroundEventHandler backgroundEventHandler) {
         this.logger = logContext.logger(this.getClass());
-        this.subscriptions = subscriptions;
         this.rebalanceTimeoutMs = config.getInt(CommonClientConfigs.MAX_POLL_INTERVAL_MS_CONFIG);
         this.coordinatorRequestManager = coordinatorRequestManager;
         this.heartbeatRequestState = heartbeatRequestState;
@@ -433,7 +425,7 @@ public class HeartbeatRequestManager implements RequestManager {
             // MemberEpoch - always sent
             data.setMemberEpoch(membershipManager.memberEpoch());
 
-            // InstanceId - sent if hasn't changed since the last heartbeat
+            // InstanceId - only sent if has changed since the last heartbeat
             membershipManager.groupInstanceId().ifPresent(groupInstanceId -> {
                 if (!groupInstanceId.equals(sentFields.instanceId)) {
                     data.setInstanceId(groupInstanceId);
@@ -441,25 +433,25 @@ public class HeartbeatRequestManager implements RequestManager {
                 }
             });
 
-            // RebalanceTimeoutMs - sent if hasn't changed since the last heartbeat
+            // RebalanceTimeoutMs - only sent if has changed since the last heartbeat
             if (sentFields.rebalanceTimeoutMs != rebalanceTimeoutMs) {
                 data.setRebalanceTimeoutMs(rebalanceTimeoutMs);
                 sentFields.rebalanceTimeoutMs = rebalanceTimeoutMs;
             }
 
             if (!this.subscriptions.hasPatternSubscription()) {
-                // SubscribedTopicNames - sent if hasn't changed since the last heartbeat
+                // SubscribedTopicNames - only sent if has changed since the last heartbeat
                 TreeSet<String> subscribedTopicNames = new TreeSet<>(this.subscriptions.subscription());
                 if (!subscribedTopicNames.equals(sentFields.subscribedTopicNames)) {
                     data.setSubscribedTopicNames(new ArrayList<>(this.subscriptions.subscription()));
                     sentFields.subscribedTopicNames = subscribedTopicNames;
                 }
             } else {
-                // SubscribedTopicRegex - sent if hasn't changed since the last heartbeat
+                // SubscribedTopicRegex - only sent if has changed since the last heartbeat
                 //                      - not supported yet
             }
 
-            // ServerAssignor - sent if hasn't changed since the last heartbeat
+            // ServerAssignor - only sent if has changed since the last heartbeat
             this.membershipManager.serverAssignor().ifPresent(serverAssignor -> {
                 if (!serverAssignor.equals(sentFields.serverAssignor)) {
                     data.setServerAssignor(serverAssignor);
@@ -469,9 +461,14 @@ public class HeartbeatRequestManager implements RequestManager {
 
             // ClientAssignors - not supported yet
 
-            // TopicPartitions - sent if hasn't changed since the last heartbeat
-            TreeSet<String> assignedPartitions = new TreeSet<>(membershipManager.currentAssignment().stream()
-                    .map(tp -> tp.topicId() + "-" + tp.partition()).collect(Collectors.toList()));
+            // TopicPartitions - only sent if has changed since the last heartbeat
+            //   Note that TopicIdPartition.toString is being avoided here so that
+            //   the string consists of just the topic ID and the partition. 
+            //   When an assignment is received, we might not yet know the topic name
+            //   and then it is learnt subsequently by a metadata update.
+            TreeSet<String> assignedPartitions = membershipManager.currentAssignment().stream()
+                    .map(tp -> tp.topicId() + "-" + tp.partition())
+                    .collect(Collectors.toCollection(TreeSet::new));
             if (!assignedPartitions.equals(sentFields.topicPartitions)) {
                 List<ConsumerGroupHeartbeatRequestData.TopicPartitions> topicPartitions =
                         buildTopicPartitionsList(membershipManager.currentAssignment());
