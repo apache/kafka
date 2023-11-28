@@ -51,7 +51,7 @@ object TestInfoUtils {
       testInfo.getDisplayName().contains("quorum=zkMigration")
     }
   }
-  final val TestWithParameterizedQuorumName = "{displayName}.quorum={0}"
+  final val TestWithParameterizedQuorumName = "{displayName}.{argumentsWithNames}"
 
   def isNewGroupCoordinatorEnabled(testInfo: TestInfo): Boolean = {
     testInfo.getDisplayName().contains("kraft+kip848")
