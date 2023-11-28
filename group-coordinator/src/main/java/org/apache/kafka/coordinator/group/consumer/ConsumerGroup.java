@@ -28,6 +28,7 @@ import org.apache.kafka.coordinator.group.OffsetExpirationCondition;
 import org.apache.kafka.coordinator.group.OffsetExpirationConditionImpl;
 import org.apache.kafka.coordinator.group.Record;
 import org.apache.kafka.coordinator.group.RecordHelpers;
+import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetricsShard;
 import org.apache.kafka.image.ClusterImage;
 import org.apache.kafka.image.TopicImage;
 import org.apache.kafka.image.TopicsImage;
@@ -44,6 +45,11 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+
+import static org.apache.kafka.coordinator.group.consumer.ConsumerGroup.ConsumerGroupState.ASSIGNING;
+import static org.apache.kafka.coordinator.group.consumer.ConsumerGroup.ConsumerGroupState.EMPTY;
+import static org.apache.kafka.coordinator.group.consumer.ConsumerGroup.ConsumerGroupState.RECONCILING;
+import static org.apache.kafka.coordinator.group.consumer.ConsumerGroup.ConsumerGroupState.STABLE;
 
 /**
  * A Consumer Group. All the metadata in this class are backed by
@@ -144,6 +150,11 @@ public class ConsumerGroup implements Group {
     private final TimelineHashMap<Uuid, TimelineHashMap<Integer, Integer>> currentPartitionEpoch;
 
     /**
+     * The coordinator metrics.
+     */
+    private final GroupCoordinatorMetricsShard metrics;
+
+    /**
      * The metadata refresh deadline. It consists of a timestamp in milliseconds together with
      * the group epoch at the time of setting it. The metadata refresh time is considered as a
      * soft state (read that it is not stored in a timeline data structure). It is like this
@@ -157,11 +168,12 @@ public class ConsumerGroup implements Group {
 
     public ConsumerGroup(
         SnapshotRegistry snapshotRegistry,
-        String groupId
+        String groupId,
+        GroupCoordinatorMetricsShard metrics
     ) {
         this.snapshotRegistry = Objects.requireNonNull(snapshotRegistry);
         this.groupId = Objects.requireNonNull(groupId);
-        this.state = new TimelineObject<>(snapshotRegistry, ConsumerGroupState.EMPTY);
+        this.state = new TimelineObject<>(snapshotRegistry, EMPTY);
         this.groupEpoch = new TimelineInteger(snapshotRegistry);
         this.members = new TimelineHashMap<>(snapshotRegistry, 0);
         this.serverAssignors = new TimelineHashMap<>(snapshotRegistry, 0);
@@ -170,6 +182,9 @@ public class ConsumerGroup implements Group {
         this.targetAssignmentEpoch = new TimelineInteger(snapshotRegistry);
         this.targetAssignment = new TimelineHashMap<>(snapshotRegistry, 0);
         this.currentPartitionEpoch = new TimelineHashMap<>(snapshotRegistry, 0);
+        this.metrics = Objects.requireNonNull(metrics);
+
+        metrics.onConsumerGroupStateTransition(null, this.state.get());
     }
 
     /**
@@ -672,20 +687,23 @@ public class ConsumerGroup implements Group {
      * Updates the current state of the group.
      */
     private void maybeUpdateGroupState() {
+        ConsumerGroupState previousState = state.get();
+        ConsumerGroupState newState = STABLE;
         if (members.isEmpty()) {
-            state.set(ConsumerGroupState.EMPTY);
+            newState = EMPTY;
         } else if (groupEpoch.get() > targetAssignmentEpoch.get()) {
-            state.set(ConsumerGroupState.ASSIGNING);
+            newState = ASSIGNING;
         } else {
             for (ConsumerGroupMember member : members.values()) {
                 if (member.targetMemberEpoch() != targetAssignmentEpoch.get() || member.state() != ConsumerGroupMember.MemberState.STABLE) {
-                    state.set(ConsumerGroupState.RECONCILING);
-                    return;
+                    newState = RECONCILING;
+                    break;
                 }
             }
-
-            state.set(ConsumerGroupState.STABLE);
         }
+
+        state.set(newState);
+        metrics.onConsumerGroupStateTransition(previousState, newState);
     }
 
     /**

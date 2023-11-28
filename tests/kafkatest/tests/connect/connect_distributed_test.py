@@ -171,8 +171,19 @@ class ConnectDistributedTest(Test):
         return self._task_has_state(task_id, status, 'RUNNING')
 
     @cluster(num_nodes=5)
-    @matrix(exactly_once_source=[True, False], connect_protocol=['sessioned', 'compatible', 'eager'], metadata_quorum=quorum.all_non_upgrade)
-    def test_restart_failed_connector(self, exactly_once_source, connect_protocol, metadata_quorum):
+    @matrix(
+        exactly_once_source=[True, False],
+        connect_protocol=['sessioned', 'compatible', 'eager'],
+        metadata_quorum=[quorum.zk],
+        use_new_coordinator=[False]
+    )
+    @matrix(
+        exactly_once_source=[True, False],
+        connect_protocol=['sessioned', 'compatible', 'eager'],
+        metadata_quorum=[quorum.isolated_kraft],
+        use_new_coordinator=[True, False]
+    )
+    def test_restart_failed_connector(self, exactly_once_source, connect_protocol, metadata_quorum, use_new_coordinator=False):
         self.EXACTLY_ONCE_SOURCE_SUPPORT = 'enabled' if exactly_once_source else 'disabled'
         self.CONNECT_PROTOCOL = connect_protocol
         self.setup_services()
@@ -194,8 +205,19 @@ class ConnectDistributedTest(Test):
                    err_msg="Failed to see connector transition to the RUNNING state")
 
     @cluster(num_nodes=5)
-    @matrix(connector_type=['source', 'exactly-once source', 'sink'], connect_protocol=['sessioned', 'compatible', 'eager'], metadata_quorum=quorum.all_non_upgrade)
-    def test_restart_failed_task(self, connector_type, connect_protocol, metadata_quorum):
+    @matrix(
+        connector_type=['source', 'exactly-once source', 'sink'],
+        connect_protocol=['sessioned', 'compatible', 'eager'],
+        metadata_quorum=[quorum.zk],
+        use_new_coordinator=[False]
+    )
+    @matrix(
+        connector_type=['source', 'exactly-once source', 'sink'],
+        connect_protocol=['sessioned', 'compatible', 'eager'],
+        metadata_quorum=[quorum.isolated_kraft],
+        use_new_coordinator=[True, False]
+    )
+    def test_restart_failed_task(self, connector_type, connect_protocol, metadata_quorum, use_new_coordinator=False):
         self.EXACTLY_ONCE_SOURCE_SUPPORT = 'enabled' if connector_type == 'exactly-once source' else 'disabled'
         self.CONNECT_PROTOCOL = connect_protocol
         self.setup_services()
@@ -220,8 +242,17 @@ class ConnectDistributedTest(Test):
                    err_msg="Failed to see task transition to the RUNNING state")
 
     @cluster(num_nodes=5)
-    @matrix(connect_protocol=['sessioned', 'compatible', 'eager'], metadata_quorum=quorum.all_non_upgrade)
-    def test_restart_connector_and_tasks_failed_connector(self, connect_protocol, metadata_quorum):
+    @matrix(
+        connect_protocol=['sessioned', 'compatible', 'eager'],
+        metadata_quorum=[quorum.zk],
+        use_new_coordinator=[False]
+    )
+    @matrix(
+        connect_protocol=['sessioned', 'compatible', 'eager'],
+        metadata_quorum=[quorum.isolated_kraft],
+        use_new_coordinator=[True, False]
+    )
+    def test_restart_connector_and_tasks_failed_connector(self, connect_protocol, metadata_quorum, use_new_coordinator=False):
         self.CONNECT_PROTOCOL = connect_protocol
         self.setup_services()
         self.cc.set_configs(lambda node: self.render("connect-distributed.properties", node=node))
@@ -239,8 +270,19 @@ class ConnectDistributedTest(Test):
                    err_msg="Failed to see connector transition to the RUNNING state")
 
     @cluster(num_nodes=5)
-    @matrix(connector_type=['source', 'sink'], connect_protocol=['sessioned', 'compatible', 'eager'], metadata_quorum=quorum.all_non_upgrade)
-    def test_restart_connector_and_tasks_failed_task(self, connector_type, connect_protocol, metadata_quorum):
+    @matrix(
+        connector_type=['source', 'sink'],
+        connect_protocol=['sessioned', 'compatible', 'eager'],
+        metadata_quorum=[quorum.zk],
+        use_new_coordinator=[False]
+    )
+    @matrix(
+        connector_type=['source', 'sink'],
+        connect_protocol=['sessioned', 'compatible', 'eager'],
+        metadata_quorum=[quorum.isolated_kraft],
+        use_new_coordinator=[True, False]
+    )
+    def test_restart_connector_and_tasks_failed_task(self, connector_type, connect_protocol, metadata_quorum, use_new_coordinator=False):
         self.CONNECT_PROTOCOL = connect_protocol
         self.setup_services()
         self.cc.set_configs(lambda node: self.render("connect-distributed.properties", node=node))
@@ -264,8 +306,19 @@ class ConnectDistributedTest(Test):
                    err_msg="Failed to see task transition to the RUNNING state")
 
     @cluster(num_nodes=5)
-    @matrix(exactly_once_source=[True, False], connect_protocol=['sessioned', 'compatible', 'eager'], metadata_quorum=quorum.all_non_upgrade)
-    def test_pause_and_resume_source(self, exactly_once_source, connect_protocol, metadata_quorum):
+    @matrix(
+        exactly_once_source=[True, False],
+        connect_protocol=['sessioned', 'compatible', 'eager'],
+        metadata_quorum=[quorum.zk],
+        use_new_coordinator=[False]
+    )
+    @matrix(
+        exactly_once_source=[True, False],
+        connect_protocol=['sessioned', 'compatible', 'eager'],
+        metadata_quorum=[quorum.isolated_kraft],
+        use_new_coordinator=[True, False]
+    )
+    def test_pause_and_resume_source(self, exactly_once_source, connect_protocol, metadata_quorum, use_new_coordinator=False):
         """
         Verify that source connectors stop producing records when paused and begin again after
         being resumed.
@@ -306,8 +359,17 @@ class ConnectDistributedTest(Test):
                    err_msg="Failed to produce messages after resuming source connector")
 
     @cluster(num_nodes=5)
-    @matrix(connect_protocol=['sessioned', 'compatible', 'eager'], metadata_quorum=quorum.all_non_upgrade)
-    def test_pause_and_resume_sink(self, connect_protocol, metadata_quorum):
+    @matrix(
+        connect_protocol=['sessioned', 'compatible', 'eager'],
+        metadata_quorum=[quorum.zk],
+        use_new_coordinator=[False]
+    )
+    @matrix(
+        connect_protocol=['sessioned', 'compatible', 'eager'],
+        metadata_quorum=[quorum.isolated_kraft],
+        use_new_coordinator=[True, False]
+    )
+    def test_pause_and_resume_sink(self, connect_protocol, metadata_quorum, use_new_coordinator=False):
         """
         Verify that sink connectors stop consuming records when paused and begin again after
         being resumed.
@@ -354,8 +416,19 @@ class ConnectDistributedTest(Test):
                    err_msg="Failed to consume messages after resuming sink connector")
 
     @cluster(num_nodes=5)
-    @matrix(exactly_once_source=[True, False], connect_protocol=['sessioned', 'compatible', 'eager'], metadata_quorum=quorum.all_non_upgrade)
-    def test_pause_state_persistent(self, exactly_once_source, connect_protocol, metadata_quorum):
+    @matrix(
+        exactly_once_source=[True, False],
+        connect_protocol=['sessioned', 'compatible', 'eager'],
+        metadata_quorum=[quorum.zk],
+        use_new_coordinator=[False]
+    )
+    @matrix(
+        exactly_once_source=[True, False],
+        connect_protocol=['sessioned', 'compatible', 'eager'],
+        metadata_quorum=[quorum.isolated_kraft],
+        use_new_coordinator=[True, False]
+    )
+    def test_pause_state_persistent(self, exactly_once_source, connect_protocol, metadata_quorum, use_new_coordinator=False):
         """
         Verify that paused state is preserved after a cluster restart.
         """
@@ -560,8 +633,21 @@ class ConnectDistributedTest(Test):
         )
 
     @cluster(num_nodes=6)
-    @matrix(security_protocol=[SecurityConfig.PLAINTEXT, SecurityConfig.SASL_SSL], exactly_once_source=[True, False], connect_protocol=['sessioned', 'compatible', 'eager'], metadata_quorum=quorum.all_non_upgrade)
-    def test_file_source_and_sink(self, security_protocol, exactly_once_source, connect_protocol, metadata_quorum):
+    @matrix(
+        security_protocol=[SecurityConfig.PLAINTEXT, SecurityConfig.SASL_SSL],
+        exactly_once_source=[True, False],
+        connect_protocol=['sessioned', 'compatible', 'eager'],
+        metadata_quorum=[quorum.zk],
+        use_new_coordinator=[False]
+    )
+    @matrix(
+        security_protocol=[SecurityConfig.PLAINTEXT, SecurityConfig.SASL_SSL],
+        exactly_once_source=[True, False], 
+        connect_protocol=['sessioned', 'compatible', 'eager'],
+        metadata_quorum=[quorum.isolated_kraft],
+        use_new_coordinator=[True, False]
+    )
+    def test_file_source_and_sink(self, security_protocol, exactly_once_source, connect_protocol, metadata_quorum, use_new_coordinator=False):
         """
         Tests that a basic file connector works across clean rolling bounces. This validates that the connector is
         correctly created, tasks instantiated, and as nodes restart the work is rebalanced across nodes.
@@ -594,8 +680,19 @@ class ConnectDistributedTest(Test):
         wait_until(lambda: self._validate_file_output(self.FIRST_INPUT_LIST + self.SECOND_INPUT_LIST), timeout_sec=150, err_msg="Sink output file never converged to the same state as the input file")
 
     @cluster(num_nodes=6)
-    @matrix(clean=[True, False], connect_protocol=['sessioned', 'compatible', 'eager'], metadata_quorum=quorum.all_non_upgrade)
-    def test_bounce(self, clean, connect_protocol, metadata_quorum):
+    @matrix(
+        clean=[True, False],
+        connect_protocol=['sessioned', 'compatible', 'eager'],
+        metadata_quorum=[quorum.zk],
+        use_new_coordinator=[False]
+    )
+    @matrix(
+        clean=[True, False],
+        connect_protocol=['sessioned', 'compatible', 'eager'],
+        metadata_quorum=[quorum.isolated_kraft],
+        use_new_coordinator=[True, False]
+    )
+    def test_bounce(self, clean, connect_protocol, metadata_quorum, use_new_coordinator=False):
         """
         Validates that source and sink tasks that run continuously and produce a predictable sequence of messages
         run correctly and deliver messages exactly once when Kafka Connect workers undergo clean rolling bounces,
@@ -714,8 +811,19 @@ class ConnectDistributedTest(Test):
         assert success, "Found validation errors:\n" + "\n  ".join(errors)
 
     @cluster(num_nodes=6)
-    @matrix(clean=[True, False], connect_protocol=['sessioned', 'compatible', 'eager'], metadata_quorum=quorum.all_non_upgrade)
-    def test_exactly_once_source(self, clean, connect_protocol, metadata_quorum):
+    @matrix(
+        clean=[True, False],
+        connect_protocol=['sessioned', 'compatible', 'eager'],
+        metadata_quorum=[quorum.zk],
+        use_new_coordinator=[False]
+    )
+    @matrix(
+        clean=[True, False],
+        connect_protocol=['sessioned', 'compatible', 'eager'],
+        metadata_quorum=[quorum.isolated_kraft],
+        use_new_coordinator=[True, False]
+    )
+    def test_exactly_once_source(self, clean, connect_protocol, metadata_quorum, use_new_coordinator=False):
         """
         Validates that source tasks run correctly and deliver messages exactly once
         when Kafka Connect workers undergo bounces, both clean and unclean.
@@ -811,8 +919,17 @@ class ConnectDistributedTest(Test):
         assert success, "Found validation errors:\n" + "\n  ".join(errors)
 
     @cluster(num_nodes=6)
-    @matrix(connect_protocol=['sessioned', 'compatible', 'eager'], metadata_quorum=quorum.all_non_upgrade)
-    def test_transformations(self, connect_protocol, metadata_quorum):
+    @matrix(
+        connect_protocol=['sessioned', 'compatible', 'eager'],
+        metadata_quorum=[quorum.zk],
+        use_new_coordinator=[False]
+    )
+    @matrix(
+        connect_protocol=['sessioned', 'compatible', 'eager'],
+        metadata_quorum=[quorum.isolated_kraft],
+        use_new_coordinator=[True, False]
+    )
+    def test_transformations(self, connect_protocol, metadata_quorum, use_new_coordinator=False):
         self.CONNECT_PROTOCOL = connect_protocol
         self.setup_services(timestamp_type='CreateTime', include_filestream_connectors=True)
         self.cc.set_configs(lambda node: self.render("connect-distributed.properties", node=node))

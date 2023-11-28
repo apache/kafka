@@ -86,11 +86,15 @@ public class BackgroundEventProcessor extends EventProcessor<BackgroundEvent> {
         switch (event.type()) {
             case ERROR:
                 process((ErrorBackgroundEvent) event);
-                return;
+                break;
+
+            case AUTO_COMMIT_COMPLETION:
+                process((AutoCommitCompletionBackgroundEvent) event);
+                break;
 
             case CONSUMER_REBALANCE_LISTENER_CALLBACK_NEEDED:
                 process((ConsumerRebalanceListenerCallbackNeededEvent) event);
-                return;
+                break;
 
             default:
                 throw new IllegalArgumentException("Background event type " + event.type() + " was not expected");
@@ -141,5 +145,9 @@ public class BackgroundEventProcessor extends EventProcessor<BackgroundEvent> {
 
         ApplicationEvent invokedEvent = new ConsumerRebalanceListenerCallbackCompletedEvent(methodName, partitions, error);
         applicationEventHandler.add(invokedEvent);
+    }
+
+    private void process(final AutoCommitCompletionBackgroundEvent event) {
+        // TODO: invoke OffsetCommitCallback
     }
 }
