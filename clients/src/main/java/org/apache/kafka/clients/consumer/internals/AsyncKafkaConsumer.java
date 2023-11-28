@@ -1064,9 +1064,12 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         try {
             fetchBuffer.retainAll(Collections.emptySet());
             if (groupId.isPresent()) {
-                UnsubscribeApplicationEvent unsubscribeApplicationEvent = new UnsubscribeApplicationEvent();
                 try {
-                    applicationEventHandler.addAndGet(unsubscribeApplicationEvent, time.timer(Duration.ofMillis(Long.MAX_VALUE)));
+                    // The unsubscribe logic will issue the request to leave the group and then execute any callbacks
+                    // that the user provided. The existing implementation (LegacyKafkaConsumer) blocks the application
+                    // thread when it calls the user's callback. We will implement in kind to maintain compatibility.
+                    Timer timer = time.timer(Duration.ofMillis(Long.MAX_VALUE));
+                    applicationEventHandler.addAndGet(new UnsubscribeApplicationEvent(), timer);
                     log.info("Unsubscribed all topics or patterns and assigned partitions");
                 } catch (TimeoutException e) {
                     log.error("Failed while waiting for the unsubscribe event to complete", e);
