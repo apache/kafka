@@ -17,8 +17,8 @@
 package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.ClientResponse;
-import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
 import org.apache.kafka.clients.Metadata;
+import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEventHandler;
 import org.apache.kafka.clients.consumer.internals.events.GroupMetadataUpdateEvent;
 import org.apache.kafka.common.KafkaException;
@@ -54,9 +54,10 @@ import static org.apache.kafka.clients.consumer.internals.ConsumerTestBuilder.DE
 import static org.apache.kafka.clients.consumer.internals.ConsumerTestBuilder.DEFAULT_GROUP_INSTANCE_ID;
 import static org.apache.kafka.clients.consumer.internals.ConsumerTestBuilder.DEFAULT_HEARTBEAT_INTERVAL_MS;
 import static org.apache.kafka.clients.consumer.internals.ConsumerTestBuilder.DEFAULT_MAX_POLL_INTERVAL_MS;
-import static org.apache.kafka.clients.consumer.internals.ConsumerTestBuilder.DEFAULT_RETRY_BACKOFF_MS;
 import static org.apache.kafka.clients.consumer.internals.ConsumerTestBuilder.DEFAULT_REMOTE_ASSIGNOR;
+import static org.apache.kafka.clients.consumer.internals.ConsumerTestBuilder.DEFAULT_RETRY_BACKOFF_MS;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -507,6 +508,36 @@ public class HeartbeatRequestManagerTest {
         when(metadata.topicNames()).thenReturn(Collections.singletonMap(topicId, "topic1"));
         membershipManager.onHeartbeatResponseReceived(rs1.data());
         assertEquals(MemberState.ACKNOWLEDGING, membershipManager.state());
+    }
+    
+    public void testEnsureLeaveGroupWhenPollTimerExpires() {
+        membershipManager.transitionToJoining();
+        time.sleep(DEFAULT_HEARTBEAT_INTERVAL_MS);
+        // Sending first heartbeat and transitioning to stable
+        assertHeartbeat(heartbeatRequestManager);
+        assertFalse(heartbeatRequestManager.pollTimer().isExpired());
+        // Expires the poll timer, and ensure heartbeat is not sent
+        time.sleep(DEFAULT_MAX_POLL_INTERVAL_MS);
+        assertNoHeartbeat(heartbeatRequestManager);
+        assertTrue(heartbeatRequestManager.pollTimer().isExpired());
+        // Poll again, ensure we heartbeat again
+        time.sleep(1);
+        heartbeatRequestManager.ack();
+        assertHeartbeat(heartbeatRequestManager);
+        assertFalse(heartbeatRequestManager.pollTimer().isExpired());
+    }
+
+    private void assertHeartbeat(HeartbeatRequestManager hrm) {
+        NetworkClientDelegate.PollResult pollResult = hrm.poll(time.milliseconds());
+        assertEquals(1, pollResult.unsentRequests.size());
+        assertEquals(DEFAULT_HEARTBEAT_INTERVAL_MS, pollResult.timeUntilNextPollMs);
+        pollResult.unsentRequests.get(0).handler().onComplete(createHeartbeatResponse(pollResult.unsentRequests.get(0),
+            Errors.NONE));
+    }
+
+    private void assertNoHeartbeat(HeartbeatRequestManager hrm) {
+        NetworkClientDelegate.PollResult pollResult = hrm.poll(time.milliseconds());
+        assertEquals(0, pollResult.unsentRequests.size());
     }
 
     private void mockStableMember() {

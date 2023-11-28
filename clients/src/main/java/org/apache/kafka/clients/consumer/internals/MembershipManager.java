@@ -139,4 +139,14 @@ public interface MembershipManager {
      * Note that list of topics of the subscription is taken from the shared subscription state.
      */
     void onSubscriptionUpdated();
+
+    /**
+     * @return Completable future of the current leave group operation.
+     */
+    Optional<CompletableFuture<Void>> leaveGroupFuture();
+
+    /**
+     * Transition to the {@link MemberState#JOINING} state to attempt joining a group.
+     */
+    void transitionToJoining();
 }

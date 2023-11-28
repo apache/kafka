@@ -101,6 +101,7 @@ public class HeartbeatRequestManager implements RequestManager {
      * ErrorEventHandler allows the background thread to propagate errors back to the user
      */
     private final BackgroundEventHandler backgroundEventHandler;
+    private final Timer pollTimer;
 
     private GroupMetadataUpdateEvent previousGroupMetadataUpdateEvent = null;
 
@@ -122,11 +123,13 @@ public class HeartbeatRequestManager implements RequestManager {
         this.heartbeatState = new HeartbeatState(subscriptions, membershipManager, rebalanceTimeoutMs);
         this.heartbeatRequestState = new HeartbeatRequestState(logContext, time, 0, retryBackoffMs,
             retryBackoffMaxMs, rebalanceTimeoutMs);
+        this.pollTimer = time.timer(rebalanceTimeoutMs);
     }
 
     // Visible for testing
     HeartbeatRequestManager(
         final LogContext logContext,
+        final Time time,
         final ConsumerConfig config,
         final CoordinatorRequestManager coordinatorRequestManager,
         final MembershipManager membershipManager,
@@ -140,6 +143,7 @@ public class HeartbeatRequestManager implements RequestManager {
         this.heartbeatState = heartbeatState;
         this.membershipManager = membershipManager;
         this.backgroundEventHandler = backgroundEventHandler;
+        this.pollTimer = time.timer(rebalanceTimeoutMs);
     }
 
     /**
@@ -167,9 +171,21 @@ public class HeartbeatRequestManager implements RequestManager {
      */
     @Override
     public NetworkClientDelegate.PollResult poll(long currentTimeMs) {
-        if (!coordinatorRequestManager.coordinator().isPresent() || membershipManager.shouldSkipHeartbeat()) {
+        if (!coordinatorRequestManager.coordinator().isPresent() ||
+            membershipManager.shouldSkipHeartbeat() ||
+            pollTimer.isExpired()) {
             membershipManager.onHeartbeatRequestSkipped();
             return NetworkClientDelegate.PollResult.EMPTY;
+        }
+
+        pollTimer.update(currentTimeMs);
+        if (pollTimer.isExpired()) {
+            logger.warn("consumer poll timeout has expired. This means the time between subsequent calls to poll() " +
+                "was longer than the configured max.poll.interval.ms, which typically implies that " +
+                "the poll loop is spending too much time processing messages. You can address this " +
+                "either by increasing max.poll.interval.ms or by reducing the maximum size of batches " +
+                "returned in poll() with max.poll.records.");
+            return PollResult.EMPTY;
         }
 
         boolean heartbeatNow = membershipManager.shouldHeartbeatNow() && !heartbeatRequestState.requestInFlight();
@@ -197,6 +213,17 @@ public class HeartbeatRequestManager implements RequestManager {
     public long maximumTimeToWait(long currentTimeMs) {
         boolean heartbeatNow = membershipManager.shouldHeartbeatNow() && !heartbeatRequestState.requestInFlight();
         return heartbeatNow ? 0L : heartbeatRequestState.nextHeartbeatMs(currentTimeMs);
+    }
+
+    /**
+     * When consumer polls, we need to reset the pollTimer.  If member is already leaving the group
+     */
+    public void ack() {
+        pollTimer.reset(rebalanceTimeoutMs);
+    }
+
+    Timer pollTimer() {
+        return pollTimer;
     }
 
     private NetworkClientDelegate.UnsentRequest makeHeartbeatRequest() {

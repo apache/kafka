@@ -228,7 +228,7 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
      * (callbacks executed and heartbeat request to leave is sent out). This will be empty is the
      * member is not leaving.
      */
-    private Optional<CompletableFuture<Void>> leaveGroupInProgress;
+    private Optional<CompletableFuture<Void>> leaveGroupInProgress = Optional.empty();
 
     /**
      * True if the member has registered to be notified when the cluster metadata is updated.
@@ -481,7 +481,8 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
      * the user calls the subscribe API, or when the member wants to rejoin after getting fenced.
      * Visible for testing.
      */
-    void transitionToJoining() {
+    @Override
+    public void transitionToJoining() {
         if (state == MemberState.FATAL) {
             log.warn("No action taken to join the group with the updated subscription because " +
                     "the member is in FATAL state");
@@ -539,6 +540,11 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
         // Return future to indicate that the leave group is done when the callbacks
         // complete, and the transition to send the heartbeat has been made.
         return leaveResult;
+    }
+
+    @Override
+    public Optional<CompletableFuture<Void>> leaveGroupFuture() {
+        return leaveGroupInProgress;
     }
 
     /**
