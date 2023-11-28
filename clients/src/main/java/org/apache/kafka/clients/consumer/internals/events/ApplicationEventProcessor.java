@@ -228,12 +228,12 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
     private void process(final ConsumerRebalanceListenerCallbackCompletedEvent event) {
         if (requestManagers.heartbeatRequestManager.isPresent()) {
             MembershipManager manager = requestManagers.heartbeatRequestManager.get().membershipManager();
-            manager.consumerRebalanceListenerCallbackCompleted(event.callbackName(), event.error());
+            manager.consumerRebalanceListenerCallbackCompleted(event.methodName(), event.error());
         } else {
             log.warn(
                 "An internal error occurred; the group membership manager was not present, so the notification of the {}.{} callback's execution could not be sent",
                 ConsumerRebalanceListener.class.getSimpleName(),
-                event.callbackName()
+                event.methodName()
             );
         }
     }

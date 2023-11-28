@@ -19,7 +19,7 @@ package org.apache.kafka.clients.consumer.internals.events;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.internals.ConsumerNetworkThread;
 import org.apache.kafka.clients.consumer.internals.ConsumerRebalanceListenerInvoker;
-import org.apache.kafka.clients.consumer.internals.ConsumerRebalanceListenerCallbackName;
+import org.apache.kafka.clients.consumer.internals.ConsumerRebalanceListenerMethodName;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.LogContext;
@@ -108,10 +108,10 @@ public class BackgroundEventProcessor extends EventProcessor<BackgroundEvent> {
 
     private void process(final ConsumerRebalanceListenerCallbackNeededEvent event) {
         SortedSet<TopicPartition> partitions = event.partitions();
-        ConsumerRebalanceListenerCallbackName callbackName = event.callbackName();
+        ConsumerRebalanceListenerMethodName methodName = event.methodName();
         final Exception e;
 
-        switch (callbackName) {
+        switch (methodName) {
             case onPartitionsRevoked:
                 e = rebalanceListenerInvoker.invokePartitionsRevoked(partitions);
                 break;
@@ -125,7 +125,7 @@ public class BackgroundEventProcessor extends EventProcessor<BackgroundEvent> {
                 break;
 
             default:
-                throw new IllegalArgumentException("Could not determine the " + ConsumerRebalanceListener.class.getSimpleName() + " to invoke from the callback name " + callbackName);
+                throw new IllegalArgumentException("Could not determine the " + ConsumerRebalanceListener.class.getSimpleName() + " to invoke from the callback method " + methodName);
         }
 
         final Optional<KafkaException> error;
@@ -139,7 +139,7 @@ public class BackgroundEventProcessor extends EventProcessor<BackgroundEvent> {
             error = Optional.empty();
         }
 
-        ApplicationEvent invokedEvent = new ConsumerRebalanceListenerCallbackCompletedEvent(callbackName, partitions, error);
+        ApplicationEvent invokedEvent = new ConsumerRebalanceListenerCallbackCompletedEvent(methodName, partitions, error);
         applicationEventHandler.add(invokedEvent);
     }
 }

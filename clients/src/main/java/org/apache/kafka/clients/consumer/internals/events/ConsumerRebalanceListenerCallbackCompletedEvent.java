@@ -17,11 +17,10 @@
 package org.apache.kafka.clients.consumer.internals.events;
 
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
-import org.apache.kafka.clients.consumer.internals.ConsumerRebalanceListenerCallbackName;
+import org.apache.kafka.clients.consumer.internals.ConsumerRebalanceListenerMethodName;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.KafkaException;
 
-import java.util.Collection;
 import java.util.Collections;
 import java.util.Objects;
 import java.util.Optional;
@@ -33,21 +32,21 @@ import java.util.SortedSet;
  */
 public class ConsumerRebalanceListenerCallbackCompletedEvent extends ApplicationEvent {
 
-    private final ConsumerRebalanceListenerCallbackName callbackName;
+    private final ConsumerRebalanceListenerMethodName methodName;
     private final SortedSet<TopicPartition> partitions;
     private final Optional<KafkaException> error;
 
-    public ConsumerRebalanceListenerCallbackCompletedEvent(ConsumerRebalanceListenerCallbackName callbackName,
+    public ConsumerRebalanceListenerCallbackCompletedEvent(ConsumerRebalanceListenerMethodName methodName,
                                                            SortedSet<TopicPartition> partitions,
                                                            Optional<KafkaException> error) {
         super(Type.CONSUMER_REBALANCE_LISTENER_CALLBACK_COMPLETED);
-        this.callbackName = Objects.requireNonNull(callbackName);
+        this.methodName = Objects.requireNonNull(methodName);
         this.partitions = Collections.unmodifiableSortedSet(partitions);
         this.error = Objects.requireNonNull(error);
     }
 
-    public ConsumerRebalanceListenerCallbackName callbackName() {
-        return callbackName;
+    public ConsumerRebalanceListenerMethodName methodName() {
+        return methodName;
     }
 
     public SortedSet<TopicPartition> partitions() {
@@ -66,18 +65,18 @@ public class ConsumerRebalanceListenerCallbackCompletedEvent extends Application
 
         ConsumerRebalanceListenerCallbackCompletedEvent that = (ConsumerRebalanceListenerCallbackCompletedEvent) o;
 
-        return callbackName == that.callbackName && partitions.equals(that.partitions) && error.equals(that.error);
+        return methodName == that.methodName && partitions.equals(that.partitions) && error.equals(that.error);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(callbackName, partitions, error);
+        return Objects.hash(methodName, partitions, error);
     }
 
     @Override
     protected String toStringBase() {
         return super.toStringBase() +
-                ", callbackName=" + callbackName +
+                ", methodName=" + methodName +
                 ", partitions=" + partitions +
                 ", error=" + error;
     }

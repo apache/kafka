@@ -16,6 +16,6 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
-public enum ConsumerRebalanceListenerCallbackName {
+public enum ConsumerRebalanceListenerMethodName {
     onPartitionsRevoked, onPartitionsAssigned, onPartitionsLost;
 }
