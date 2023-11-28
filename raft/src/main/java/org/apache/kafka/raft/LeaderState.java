@@ -46,6 +46,7 @@ import java.util.stream.Collectors;
  */
 public class LeaderState<T> implements EpochState {
     static final long OBSERVER_SESSION_TIMEOUT_MS = 300_000L;
+    static final double CHECK_QUORUM_TIMEOUT_FACTOR = 1.5;
 
     private final int localId;
     private final int epoch;
@@ -57,9 +58,10 @@ public class LeaderState<T> implements EpochState {
     private final Map<Integer, ReplicaState> observerStates = new HashMap<>();
     private final Logger log;
     private final BatchAccumulator<T> accumulator;
+    // The set includes all of the followers voters that FETCH or FETCH_SNAPSHOT during the current checkQuorumTimer interval.
     private final Set<Integer> fetchedVoters = new HashSet<>();
-    private final Timer fetchTimer;
-    private final int fetchTimeoutMs;
+    private final Timer checkQuorumTimer;
+    private final int checkQuorumTimeoutMs;
 
     // This is volatile because resignation can be requested from an external thread.
     private volatile boolean resignRequested = false;
@@ -86,36 +88,52 @@ public class LeaderState<T> implements EpochState {
         this.grantingVoters = Collections.unmodifiableSet(new HashSet<>(grantingVoters));
         this.log = logContext.logger(LeaderState.class);
         this.accumulator = Objects.requireNonNull(accumulator, "accumulator must be non-null");
-        // use the 1.5x fetch timeout to tolerate some network transition time or other IO time.
-        this.fetchTimeoutMs = (int) (fetchTimeoutMs * 1.5);
-        this.fetchTimer = time.timer(fetchTimeoutMs);
+        // use the 1.5x of fetch timeout to tolerate some network transition time or other IO time.
+        this.checkQuorumTimeoutMs = (int) (fetchTimeoutMs * CHECK_QUORUM_TIMEOUT_FACTOR);
+        this.checkQuorumTimer = time.timer(checkQuorumTimeoutMs);
     }
 
-    // Check if the fetchTimer is expired because we didn't receive a valid fetch/fetchSnapshot request from the majority of
-    // the voters within fetch timeout.
-    public boolean hasMajorityFollowerFetchExpired(long currentTimeMs) {
-        fetchTimer.update(currentTimeMs);
-        boolean isExpired = fetchTimer.isExpired();
-        if (isExpired) {
-            log.info("Did not receive fetch request from the majority of the voters within {}ms. Current fetched voters are {}.",
-                    fetchTimeoutMs, fetchedVoters);
+    /**
+     * Get the remaining time in milliseconds until the checkQuorumTimer expires.
+     * This will happen if we didn't receive a valid fetch/fetchSnapshot request from the majority of the voters within checkQuorumTimeoutMs.
+     *
+     * @param currentTimeMs the current timestamp in millisecond
+     * @return the remainingMs before the checkQuorumTimer expired
+     */
+    public long timeUntilCheckQuorumExpires(long currentTimeMs) {
+        checkQuorumTimer.update(currentTimeMs);
+        long remainingMs = checkQuorumTimer.remainingMs();
+        if (remainingMs == 0) {
+            log.info(
+                    "Did not receive fetch request from the majority of the voters within {}ms. Current fetched voters are {}.",
+                    checkQuorumTimeoutMs,
+                    fetchedVoters);
         }
-        return isExpired;
+        return remainingMs;
     }
 
-    // Reset the fetch timer if we've received fetch/fetchSnapshot request from the majority of the voter
-    public void maybeResetMajorityFollowerFetchTimer(int id, long currentTimeMs) {
+    /**
+     * Reset the checkQuorumTimer if we've received fetch/fetchSnapshot request from the majority of the voter
+     *
+     * @param id the node id
+     * @param currentTimeMs the current timestamp in millisecond
+     */
+    public void updateCheckQuorumForFollowingVoter(int id, long currentTimeMs) {
         updateFetchedVoters(id);
         // The majority number of the voters excluding the leader. Ex: 3 voters, the value will be 1
         int majority = voterStates.size() / 2;
         if (fetchedVoters.size() >= majority) {
             fetchedVoters.clear();
-            fetchTimer.update(currentTimeMs);
-            fetchTimer.reset(fetchTimeoutMs);
+            checkQuorumTimer.update(currentTimeMs);
+            checkQuorumTimer.reset(checkQuorumTimeoutMs);
         }
     }
 
     private void updateFetchedVoters(int id) {
+        if (id == localId) {
+            throw new IllegalArgumentException("Received a FETCH/FETCH_SNAPSHOT request from the leader itself.");
+        }
+
         if (isVoter(id)) {
             fetchedVoters.add(id);
         }
@@ -327,7 +345,7 @@ public class LeaderState<T> implements EpochState {
             fetchOffsetMetadata,
             leaderEndOffsetOpt
         );
-        maybeResetMajorityFollowerFetchTimer(replicaId, currentTimeMs);
+        updateCheckQuorumForFollowingVoter(replicaId, currentTimeMs);
 
         return isVoter(state.nodeId) && maybeUpdateHighWatermark();
     }

@@ -1341,8 +1341,8 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
 
         UnalignedRecords records = snapshot.slice(partitionSnapshot.position(), Math.min(data.maxBytes(), maxSnapshotSize));
 
-        Optional<LeaderState<T>> state = quorum.maybeLeaderState();
-        state.ifPresent(s -> s.maybeResetMajorityFollowerFetchTimer(data.replicaId(), currentTimeMs));
+        LeaderState<T> state = quorum.leaderStateOrThrow();
+        state.updateCheckQuorumForFollowingVoter(data.replicaId(), currentTimeMs);
 
         return FetchSnapshotResponse.singleton(
             log.topicPartition(),
@@ -1995,7 +1995,8 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
         LeaderState<T> state = quorum.leaderStateOrThrow();
         maybeFireLeaderChange(state);
 
-        if (shutdown.get() != null || state.isResignRequested() || state.hasMajorityFollowerFetchExpired(currentTimeMs)) {
+        long timeUntilCheckQuorumExpires = state.timeUntilCheckQuorumExpires(currentTimeMs);
+        if (shutdown.get() != null || state.isResignRequested() || timeUntilCheckQuorumExpires == 0) {
             transitionToResigned(state.nonLeaderVotersByDescendingFetchOffset());
             return 0L;
         }
@@ -2011,7 +2012,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
             this::buildBeginQuorumEpochRequest
         );
 
-        return Math.min(timeUntilFlush, timeUntilSend);
+        return Math.min(timeUntilFlush, Math.min(timeUntilSend, timeUntilCheckQuorumExpires));
     }
 
     private long maybeSendVoteRequests(

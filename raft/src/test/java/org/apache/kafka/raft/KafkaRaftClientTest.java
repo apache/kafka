@@ -494,7 +494,7 @@ public class KafkaRaftClientTest {
         Set<Integer> voters = Utils.mkSet(localId, remoteId1, remoteId2);
 
         RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters).build();
-        int resignLeadershipTimeout = (int) (context.fetchTimeoutMs * 1.5);
+        int resignLeadershipTimeout = context.checkQuorumTimeoutMs;
 
         context.becomeLeader();
         int epoch = context.currentEpoch();

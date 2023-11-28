@@ -716,7 +716,7 @@ final public class KafkaRaftClientSnapshotTest {
                 .appendToLog(snapshotId.epoch(), Arrays.asList("a"))
                 .build();
 
-        int resignLeadershipTimeout = (int) (context.fetchTimeoutMs * 1.5);
+        int resignLeadershipTimeout = context.checkQuorumTimeoutMs;
         context.becomeLeader();
         int epoch = context.currentEpoch();
 
