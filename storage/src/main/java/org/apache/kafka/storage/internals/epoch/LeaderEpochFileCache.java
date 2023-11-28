@@ -215,6 +215,15 @@ public class LeaderEpochFileCache {
         }
     }
 
+    public Optional<EpochEntry> previousEntry(int epoch) {
+        lock.readLock().lock();
+        try {
+            return Optional.ofNullable(epochs.lowerEntry(epoch)).map(Map.Entry::getValue);
+        } finally {
+            lock.readLock().unlock();
+        }
+    }
+
     public OptionalInt nextEpoch(int epoch) {
         lock.readLock().lock();
         try {

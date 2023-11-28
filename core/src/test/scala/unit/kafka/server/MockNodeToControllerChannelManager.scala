@@ -32,7 +32,7 @@ class MockNodeToControllerChannelManager(
   val retryTimeoutMs: Int = 60000,
   val requestTimeoutMs: Int = 30000
 ) extends NodeToControllerChannelManager {
-  val unsentQueue = new java.util.ArrayDeque[NodeToControllerQueueItem]()
+  val unsentQueue = new java.util.concurrent.ConcurrentLinkedDeque[NodeToControllerQueueItem]()
 
   client.setNodeApiVersions(controllerApiVersions)
 
