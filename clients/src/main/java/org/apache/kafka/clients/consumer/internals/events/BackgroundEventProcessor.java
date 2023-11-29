@@ -88,10 +88,6 @@ public class BackgroundEventProcessor extends EventProcessor<BackgroundEvent> {
                 process((ErrorBackgroundEvent) event);
                 break;
 
-            case AUTO_COMMIT_COMPLETION:
-                process((AutoCommitCompletionBackgroundEvent) event);
-                break;
-
             case CONSUMER_REBALANCE_LISTENER_CALLBACK_NEEDED:
                 process((ConsumerRebalanceListenerCallbackNeededEvent) event);
                 break;
@@ -140,9 +136,5 @@ public class BackgroundEventProcessor extends EventProcessor<BackgroundEvent> {
 
         ApplicationEvent invokedEvent = new ConsumerRebalanceListenerCallbackCompletedEvent(methodName, partitions, error);
         applicationEventHandler.add(invokedEvent);
-    }
-
-    private void process(final AutoCommitCompletionBackgroundEvent event) {
-        // TODO: invoke OffsetCommitCallback
     }
 }
