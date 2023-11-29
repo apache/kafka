@@ -215,9 +215,9 @@ object AbstractCoordinatorConcurrencyTest {
       transactionVerificationEntries: TransactionVerificationEntries,
       transactionalId: String,
       requestLocal: RequestLocal,
-      postVerificationCallback: RequestLocal => (Map[TopicPartition, MemoryRecords], Map[TopicPartition, LogAppendResult]) => Unit): Unit = {
+      postVerificationCallback: RequestLocal => Map[TopicPartition, LogAppendResult] => Unit): Unit = {
 
-      postVerificationCallback(requestLocal)(entriesPerPartition, Map.empty)
+      postVerificationCallback(requestLocal)(Map.empty)
     }
 
 

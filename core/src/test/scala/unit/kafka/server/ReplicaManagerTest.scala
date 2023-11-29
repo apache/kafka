@@ -2950,13 +2950,13 @@ class ReplicaManagerTest {
     val transactionVerificationEntries = new ReplicaManager.TransactionVerificationEntries
 
     def postVerificationCallback(newRequestLocal: RequestLocal)
-                                (newlyVerifiedEntries: Map[TopicPartition, MemoryRecords], errorResults: Map[TopicPartition, LogAppendResult]): Unit = {
+                                (errorResults: Map[TopicPartition, LogAppendResult]): Unit = {
       replicaManager.appendRecords(
         timeout = 1000,
         requiredAcks = requiredAcks,
         internalTopicsAllowed = false,
         origin = origin,
-        entriesPerPartition = newlyVerifiedEntries ++ transactionVerificationEntries.verified,
+        entriesPerPartition = entriesToAppend,
         responseCallback = appendCallback,
         requestLocal = newRequestLocal,
         preAppendErrors = errorResults
@@ -2964,7 +2964,7 @@ class ReplicaManagerTest {
     }
 
     replicaManager.appendRecordsWithVerification(
-      entriesPerPartition = entriesToAppend,
+      entriesToAppend,
       transactionVerificationEntries,
       transactionalId,
       RequestLocal.NoCaching,
@@ -2988,15 +2988,16 @@ class ReplicaManagerTest {
       result.fire(response.get)
     }
 
+    val entriesPerPartition = Map(partition -> records)
     val transactionVerificationEntries = new ReplicaManager.TransactionVerificationEntries
     def postVerificationCallback(newRequestLocal: RequestLocal)
-                                (newlyVerifiedEntries: Map[TopicPartition, MemoryRecords], errorResults: Map[TopicPartition, LogAppendResult]): Unit = {
+                                (errorResults: Map[TopicPartition, LogAppendResult]): Unit = {
       replicaManager.appendRecords(
         timeout = 1000,
         requiredAcks = requiredAcks,
         internalTopicsAllowed = false,
         origin = origin,
-        entriesPerPartition = newlyVerifiedEntries ++ transactionVerificationEntries.verified,
+        entriesPerPartition = entriesPerPartition,
         responseCallback = appendCallback,
         requestLocal = newRequestLocal,
         preAppendErrors = errorResults
@@ -3004,7 +3005,7 @@ class ReplicaManagerTest {
     }
 
     replicaManager.appendRecordsWithVerification(
-      entriesPerPartition = Map(partition -> records),
+      entriesPerPartition,
       transactionVerificationEntries,
       transactionalId,
       RequestLocal.NoCaching,

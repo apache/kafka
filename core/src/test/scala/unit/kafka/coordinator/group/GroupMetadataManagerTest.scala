@@ -57,7 +57,7 @@ import org.mockito.ArgumentMatchers.{any, anyInt, anyLong, anyShort}
 import org.mockito.Mockito.{mock, reset, times, verify, when}
 
 import scala.jdk.CollectionConverters._
-import scala.collection._
+import scala.collection.{immutable, _}
 
 class GroupMetadataManagerTest {
 
@@ -1316,7 +1316,6 @@ class GroupMetadataManagerTest {
     val offset = 37
     val producerId = 232L
     val producerEpoch = 0.toShort
-    val transactionalId = "txnId"
 
     groupMetadataManager.addOwnedPartition(groupPartitionId)
 
@@ -1327,14 +1326,12 @@ class GroupMetadataManagerTest {
     val offsets = immutable.Map(topicIdPartition -> offsetAndMetadata)
 
     val capturedResponseCallback: ArgumentCaptor[Map[TopicPartition, PartitionResponse] => Unit] = ArgumentCaptor.forClass(classOf[Map[TopicPartition, PartitionResponse] => Unit])
-    when(replicaManager.getMagic(any())).thenReturn(Some(RecordBatch.CURRENT_MAGIC_VALUE))
     var commitErrors: Option[immutable.Map[TopicIdPartition, Errors]] = None
     def callback(errors: immutable.Map[TopicIdPartition, Errors]): Unit = {
       commitErrors = Some(errors)
     }
 
-    setUpTransactionVerification(replicaManager, transactionalId)
-    groupMetadataManager.storeOffsets(group, memberId, offsets, callback, transactionalId, producerId, producerEpoch)
+    storeOffsetsWithVerification(group, memberId, offsets, callback, producerId, producerEpoch)
     assertTrue(group.hasOffsets)
     assertTrue(group.allOffsets.isEmpty)
 
@@ -1350,7 +1347,6 @@ class GroupMetadataManagerTest {
       any(),
       any(),
       any())
-    verify(replicaManager).getMagic(any())
     capturedResponseCallback.getValue.apply(Map(groupTopicPartition ->
       new PartitionResponse(Errors.NONE, 0L, RecordBatch.NO_TIMESTAMP, 0L)))
 
@@ -1370,7 +1366,6 @@ class GroupMetadataManagerTest {
     val offset = 37
     val producerId = 232L
     val producerEpoch = 0.toShort
-    val transactionalId = "txnId"
 
     groupMetadataManager.addOwnedPartition(groupPartitionId)
 
@@ -1379,15 +1374,12 @@ class GroupMetadataManagerTest {
 
     val offsets = immutable.Map(topicIdPartition -> OffsetAndMetadata(offset, "", time.milliseconds()))
 
-
-    when(replicaManager.getMagic(any())).thenReturn(Some(RecordBatch.CURRENT_MAGIC_VALUE))
     var commitErrors: Option[immutable.Map[TopicIdPartition, Errors]] = None
     def callback(errors: immutable.Map[TopicIdPartition, Errors]): Unit = {
       commitErrors = Some(errors)
     }
 
-    setUpTransactionVerification(replicaManager, transactionalId)
-    groupMetadataManager.storeOffsets(group, memberId, offsets, callback, transactionalId, producerId, producerEpoch)
+    storeOffsetsWithVerification(group, memberId, offsets, callback, producerId, producerEpoch)
     assertTrue(group.hasOffsets)
     assertTrue(group.allOffsets.isEmpty)
     val capturedResponseCallback = verifyAppendAndCaptureCallback()
@@ -1413,7 +1405,6 @@ class GroupMetadataManagerTest {
       any(),
       any(),
       any())
-    verify(replicaManager).getMagic(any())
   }
 
   @Test
@@ -1423,7 +1414,6 @@ class GroupMetadataManagerTest {
     val offset = 37
     val producerId = 232L
     val producerEpoch = 0.toShort
-    val transactionalId = "txnId"
 
     groupMetadataManager.addOwnedPartition(groupPartitionId)
 
@@ -1432,15 +1422,12 @@ class GroupMetadataManagerTest {
 
     val offsets = immutable.Map(topicIdPartition -> OffsetAndMetadata(offset, "", time.milliseconds()))
 
-    when(replicaManager.getMagic(any())).thenReturn(Some(RecordBatch.CURRENT_MAGIC_VALUE))
-
     var commitErrors: Option[immutable.Map[TopicIdPartition, Errors]] = None
     def callback(errors: immutable.Map[TopicIdPartition, Errors]): Unit = {
       commitErrors = Some(errors)
     }
 
-    setUpTransactionVerification(replicaManager, transactionalId)
-    groupMetadataManager.storeOffsets(group, memberId, offsets, callback, transactionalId, producerId, producerEpoch)
+    storeOffsetsWithVerification(group, memberId, offsets, callback, producerId, producerEpoch)
     assertTrue(group.hasOffsets)
     assertTrue(group.allOffsets.isEmpty)
     val capturedResponseCallback = verifyAppendAndCaptureCallback()
@@ -1466,49 +1453,44 @@ class GroupMetadataManagerTest {
       any(),
       any(),
       any())
-    verify(replicaManager).getMagic(any())
   }
 
   @ParameterizedTest
   @EnumSource(value = classOf[Errors], names = Array("INVALID_TXN_STATE", "INVALID_PRODUCER_ID_MAPPING"))
   def testTransactionalCommitOffsetTransactionalErrors(error: Errors): Unit = {
     val memberId = ""
-    val topicIdPartition = new TopicIdPartition(Uuid.randomUuid(), 0, "foo")
+    val topicId = Uuid.randomUuid()
+    val topicIdPartition1 = new TopicIdPartition(topicId, 0, "foo")
+    val topicIdPartition2 = new TopicIdPartition(topicId, 1, "foo")
     val offset = 37
     val producerId = 232L
     val producerEpoch = 0.toShort
-    val transactionalId = "txnId"
 
     groupMetadataManager.addOwnedPartition(groupPartitionId)
 
     val group = new GroupMetadata(groupId, Empty, time)
     groupMetadataManager.addGroup(group)
 
-    val offsets = immutable.Map(topicIdPartition -> OffsetAndMetadata(offset, "", time.milliseconds()))
-
-    when(replicaManager.getMagic(any())).thenReturn(Some(RecordBatch.CURRENT_MAGIC_VALUE))
+    val offsets = immutable.Map(topicIdPartition1 -> OffsetAndMetadata(offset, "", time.milliseconds()),
+      topicIdPartition2 -> OffsetAndMetadata(offset, "", time.milliseconds()))
 
     var commitErrors: Option[immutable.Map[TopicIdPartition, Errors]] = None
     def callback(errors: immutable.Map[TopicIdPartition, Errors]): Unit = {
       commitErrors = Some(errors)
     }
 
-    setUpTransactionVerification(replicaManager, transactionalId)
-    groupMetadataManager.storeOffsets(group, memberId, offsets, callback, transactionalId, producerId, producerEpoch)
+    storeOffsetsWithVerification(group, memberId, offsets, callback, producerId, producerEpoch, immutable.Map(topicIdPartition1 -> error))
     assertTrue(group.hasOffsets)
-    assertTrue(group.allOffsets.isEmpty)
     val capturedResponseCallback = verifyAppendAndCaptureCallback()
     capturedResponseCallback.getValue.apply(Map(groupTopicPartition ->
-      new PartitionResponse(error, 0L, RecordBatch.NO_TIMESTAMP, 0L)))
+      new PartitionResponse(Errors.NONE, 0L, RecordBatch.NO_TIMESTAMP, 0L)))
 
-    assertFalse(group.hasOffsets)
-    assertTrue(group.allOffsets.isEmpty)
-
-    group.completePendingTxnOffsetCommit(producerId, isCommit = false)
-    assertFalse(group.hasOffsets)
-    assertTrue(group.allOffsets.isEmpty)
-    assertFalse(commitErrors.contains(topicIdPartition))
-    assertEquals(error, commitErrors.get(topicIdPartition))
+    group.completePendingTxnOffsetCommit(producerId, isCommit = true)
+    assertTrue(commitErrors.isDefined)
+    assertEquals(error, commitErrors.get(topicIdPartition1))
+    assertEquals(Errors.NONE, commitErrors.get(topicIdPartition2))
+    assertTrue(group.offset(topicIdPartition1.topicPartition).isEmpty)
+    assertTrue(group.offset(topicIdPartition2.topicPartition).isDefined)
 
     verify(replicaManager).appendRecords(anyLong(),
       anyShort(),
@@ -1522,7 +1504,6 @@ class GroupMetadataManagerTest {
       any(),
       any(),
       any())
-    verify(replicaManager).getMagic(any())
   }
 
   @Test
@@ -3128,11 +3109,27 @@ class GroupMetadataManagerTest {
     }
   }
 
-  def setUpTransactionVerification(replicaManager: ReplicaManager, transactionalId: String): Unit = {
-    val postVerificationCallback: ArgumentCaptor[RequestLocal => (Map[TopicPartition, MemoryRecords], Map[TopicPartition, LogAppendResult]) => Unit] = ArgumentCaptor.forClass(
-      classOf[RequestLocal => (Map[TopicPartition, MemoryRecords], Map[TopicPartition, LogAppendResult]) => Unit])
-    when(replicaManager.appendRecordsWithVerification(any(), any(), ArgumentMatchers.eq(transactionalId), any(), postVerificationCallback.capture())).thenAnswer(
-      _ => postVerificationCallback.getValue()(RequestLocal.NoCaching)(Map.empty, Map.empty)
-    )
+  def storeOffsetsWithVerification(group: GroupMetadata,
+                                   memberId: String,
+                                   offsets: immutable.Map[TopicIdPartition, OffsetAndMetadata],
+                                   callback: immutable.Map[TopicIdPartition, Errors] => Unit,
+                                   producerId: Long,
+                                   producerEpoch: Short,
+                                   errors: immutable.Map[TopicIdPartition, Errors] = immutable.Map.empty[TopicIdPartition, Errors]): Unit = {
+    val verifiedOffsets = offsets.filter { case (tp, _) =>
+      !errors.contains(tp)
+    }
+    val preAppendErrors = errors.map { case (tp, error) =>
+      tp.topicPartition -> LogAppendResult(
+        LogAppendInfo.UNKNOWN_LOG_APPEND_INFO,
+        Some(error.exception()),
+        hasCustomErrorMessage = false)
+    }
+
+    val records = groupMetadataManager.generateOffsetRecords(RecordBatch.CURRENT_MAGIC_VALUE, true, group.groupId, verifiedOffsets, producerId, producerEpoch)
+    val putCacheCallback = groupMetadataManager.createPutCacheCallback(true, group, memberId, offsets, verifiedOffsets, callback, producerId, records, preAppendErrors)
+
+
+    groupMetadataManager.storeOffsetsAfterVerification(group, verifiedOffsets, records, putCacheCallback, producerId, preAppendErrors)
   }
 }

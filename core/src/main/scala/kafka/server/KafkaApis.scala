@@ -711,13 +711,13 @@ class KafkaApis(val requestChannel: RequestChannel,
     val transactionVerificationEntries = new ReplicaManager.TransactionVerificationEntries
 
     def postVerificationCallback(newRequestLocal: RequestLocal)
-                                (newlyVerifiedEntries: Map[TopicPartition, MemoryRecords], errorResults: Map[TopicPartition, LogAppendResult]): Unit = {
+                                (errorResults: Map[TopicPartition, LogAppendResult]): Unit = {
       replicaManager.appendRecords(
         timeout = produceRequest.timeout.toLong,
         requiredAcks = produceRequest.acks,
         internalTopicsAllowed = internalTopicsAllowed,
         origin = AppendOrigin.CLIENT,
-        entriesPerPartition = newlyVerifiedEntries ++ transactionVerificationEntries.verified,
+        entriesPerPartition = authorizedRequestInfo,
         responseCallback = sendResponseCallback,
         recordConversionStatsCallback = processingStatsCallback,
         requestLocal = newRequestLocal,
@@ -731,7 +731,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     else {
       // call the replica manager to append messages to the replicas
       if (produceRequest.transactionalId == null){
-        postVerificationCallback(requestLocal)(Map.empty, Map.empty)
+        postVerificationCallback(requestLocal)(Map.empty)
       } else {
         replicaManager.appendRecordsWithVerification(
           entriesPerPartition = authorizedRequestInfo,

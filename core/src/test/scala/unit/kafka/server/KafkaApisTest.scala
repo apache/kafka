@@ -2690,8 +2690,8 @@ class KafkaApisTest {
       reset(replicaManager, clientQuotaManager, clientRequestQuotaManager, requestChannel, txnCoordinator)
 
       val responseCallback: ArgumentCaptor[Map[TopicPartition, PartitionResponse] => Unit] = ArgumentCaptor.forClass(classOf[Map[TopicPartition, PartitionResponse] => Unit])
-      val postVerificationCallback: ArgumentCaptor[RequestLocal => (Map[TopicPartition, MemoryRecords], Map[TopicPartition, LogAppendResult]) => Unit] = ArgumentCaptor.forClass(
-        classOf[RequestLocal => (Map[TopicPartition, MemoryRecords], Map[TopicPartition, LogAppendResult]) => Unit])
+      val postVerificationCallback: ArgumentCaptor[RequestLocal => Map[TopicPartition, LogAppendResult] => Unit] = ArgumentCaptor.forClass(
+        classOf[RequestLocal => Map[TopicPartition, LogAppendResult] => Unit])
 
       val tp = new TopicPartition("topic", 0)
 
@@ -2714,13 +2714,13 @@ class KafkaApisTest {
       val newRequestLocal = RequestLocal.NoCaching
 
       when(replicaManager.appendRecordsWithVerification(any(), any(), any(), any(), postVerificationCallback.capture())).thenAnswer(
-        arg => replicaManager.appendRecordsAfterVerification(arg.getArgument(0), arg.getArgument(1), postVerificationCallback.getValue())(newRequestLocal, Map.empty)
+        arg => replicaManager.appendRecordsAfterVerification(arg.getArgument(1), postVerificationCallback.getValue())(newRequestLocal, Map.empty)
       )
 
-      when(replicaManager.appendRecordsAfterVerification(any(), any(), postVerificationCallback.capture())(any(), any())).thenAnswer(
+      when(replicaManager.appendRecordsAfterVerification(any(), postVerificationCallback.capture())(any(), any())).thenAnswer(
         _ => {
           val callback = postVerificationCallback.getValue()
-          callback(RequestLocal.NoCaching)(Map.empty, Map.empty)
+          callback(RequestLocal.NoCaching)(Map.empty)
         }
       )
       
@@ -2735,7 +2735,6 @@ class KafkaApisTest {
       )
 
       verify(replicaManager).appendRecordsAfterVerification(
-        any(),
         any(),
         ArgumentMatchers.eq(postVerificationCallback.getValue()))(ArgumentMatchers.eq(newRequestLocal), any())
       

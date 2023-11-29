@@ -38,7 +38,7 @@ import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity
 import org.apache.kafka.server.util.timer.MockTimer
 import org.apache.kafka.server.util.{KafkaScheduler, MockTime}
-import org.apache.kafka.storage.internals.log.AppendOrigin
+import org.apache.kafka.storage.internals.log.{AppendOrigin, LogAppendInfo}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.junit.jupiter.params.ParameterizedTest
@@ -3782,6 +3782,45 @@ class GroupCoordinatorTest {
     assertTrue(groupCoordinator.tryCompleteHeartbeat(group, leaderMemberId, false, () => true))
   }
 
+  @Test
+  def testVerificationErrorsForTxnOffsetCommits(): Unit = {
+    val tip1 = new TopicIdPartition(Uuid.randomUuid(), 0, "topic-1")
+    val offset1 = offsetAndMetadata(0)
+    val tip2 = new TopicIdPartition(Uuid.randomUuid(), 0, "topic-2")
+    val offset2 = offsetAndMetadata(0)
+    val producerId = 1000L
+    val producerEpoch: Short = 2
+
+    def verifyErrors(errors: Map[TopicIdPartition, Errors]): Unit = {
+      val commitOffsetResult = commitTransactionalOffsets(groupId,
+        producerId,
+        producerEpoch,
+        Map(tip1 -> offset1, tip2 -> offset2),
+        verificationErrors = errors)
+      errors.foreach {
+        case (tip, error) => assertEquals(error, commitOffsetResult(tip))
+      }
+    }
+
+    verifyErrors(Map(tip1 -> Errors.INVALID_TXN_STATE, tip2 -> Errors.INVALID_PRODUCER_ID_MAPPING))
+    verifyErrors(Map(tip2 -> Errors.INVALID_TXN_STATE))
+  }
+
+  @Test
+  def testTxnOffsetMetadataTooLarge(): Unit = {
+    val tip = new TopicIdPartition(Uuid.randomUuid(), 0, "foo")
+    val offset = 37
+    val producerId = 100L
+    val producerEpoch: Short = 3
+
+    val offsets = Map(
+      tip -> OffsetAndMetadata(offset, "s" * (OffsetConfig.DefaultMaxMetadataSize + 1), 0)
+    )
+
+    val commitOffsetResult = commitTransactionalOffsets(groupId, producerId, producerEpoch, offsets)
+    assertEquals(Map(tip -> Errors.OFFSET_METADATA_TOO_LARGE), commitOffsetResult)
+  }
+
   private def getGroup(groupId: String): GroupMetadata = {
     val groupOpt = groupCoordinator.groupManager.getGroup(groupId)
     assertTrue(groupOpt.isDefined)
@@ -4070,7 +4109,8 @@ class GroupCoordinatorTest {
                                          offsets: Map[TopicIdPartition, OffsetAndMetadata],
                                          memberId: String = JoinGroupRequest.UNKNOWN_MEMBER_ID,
                                          groupInstanceId: Option[String] = Option.empty,
-                                         generationId: Int = JoinGroupRequest.UNKNOWN_GENERATION_ID) : CommitOffsetCallbackParams = {
+                                         generationId: Int = JoinGroupRequest.UNKNOWN_GENERATION_ID,
+                                         verificationErrors: Map[TopicIdPartition, Errors] = Map.empty[TopicIdPartition, Errors]) : CommitOffsetCallbackParams = {
     val (responseFuture, responseCallback) = setupCommitOffsetsCallback
 
     val capturedArgument: ArgumentCaptor[scala.collection.Map[TopicPartition, PartitionResponse] => Unit] = ArgumentCaptor.forClass(classOf[scala.collection.Map[TopicPartition, PartitionResponse] => Unit])
@@ -4078,10 +4118,17 @@ class GroupCoordinatorTest {
     // Since transactional ID is only used in appendRecords, we can use a dummy value. Ensure it passes through.
     val transactionalId = "dummy-txn-id"
 
-    val postVerificationCallback: ArgumentCaptor[RequestLocal => (SMap[TopicPartition, MemoryRecords], SMap[TopicPartition, LogAppendResult]) => Unit] = ArgumentCaptor.forClass(
-      classOf[RequestLocal => (SMap[TopicPartition, MemoryRecords], SMap[TopicPartition, LogAppendResult]) => Unit])
+    val preAppendErrors = verificationErrors.map { case (tp, error) =>
+      tp.topicPartition -> LogAppendResult(
+        LogAppendInfo.UNKNOWN_LOG_APPEND_INFO,
+        Some(error.exception()),
+        hasCustomErrorMessage = false)
+    }
+
+    val postVerificationCallback: ArgumentCaptor[RequestLocal => SMap[TopicPartition, LogAppendResult] => Unit] = ArgumentCaptor.forClass(
+      classOf[RequestLocal => SMap[TopicPartition, LogAppendResult] => Unit])
     when(replicaManager.appendRecordsWithVerification(any(), any(), ArgumentMatchers.eq(transactionalId), any(), postVerificationCallback.capture())).thenAnswer(
-      _ => postVerificationCallback.getValue()(RequestLocal.NoCaching)(Map.empty, Map.empty)
+      _ => postVerificationCallback.getValue()(RequestLocal.NoCaching)(preAppendErrors)
     )
     when(replicaManager.appendRecords(anyLong,
       anyShort(),

@@ -250,8 +250,6 @@ object ReplicaManager {
   }
 
   class TransactionVerificationEntries {
-
-    val verified = mutable.Map[TopicPartition, MemoryRecords]()
     val unverified = mutable.Map[TopicPartition, MemoryRecords]()
     val errors = mutable.Map[TopicPartition, Errors]()
     val verificationGuards = mutable.Map[TopicPartition, VerificationGuard]()
@@ -771,9 +769,13 @@ class ReplicaManager(val config: KafkaConfig,
       return
     }
 
+    val nonErrorEntriesPerPartition = entriesPerPartition.filter {
+      case (tp, _) => !preAppendErrors.contains(tp)
+    }
+
     val sTime = time.milliseconds
     val localProduceResults = appendToLocalLog(internalTopicsAllowed = internalTopicsAllowed,
-      origin, entriesPerPartition, requiredAcks, requestLocal, verificationGuards.toMap)
+      origin, nonErrorEntriesPerPartition, requiredAcks, requestLocal, verificationGuards.toMap)
     debug("Produce to local log in %d ms".format(time.milliseconds - sTime))
 
     val allResults = localProduceResults ++ preAppendErrors
@@ -872,15 +874,15 @@ class ReplicaManager(val config: KafkaConfig,
                                     transactionVerificationEntries: TransactionVerificationEntries,
                                     transactionalId: String,
                                     requestLocal: RequestLocal,
-                                    postVerificationCallback: RequestLocal => (Map[TopicPartition, MemoryRecords], Map[TopicPartition, LogAppendResult]) => Unit): Unit = {
+                                    postVerificationCallback: RequestLocal => Map[TopicPartition, LogAppendResult] => Unit): Unit = {
     if (transactionalId != null && config.transactionPartitionVerificationEnable && addPartitionsToTxnManager.isDefined)
       partitionEntriesForVerification(transactionVerificationEntries, entriesPerPartition)
 
-    val onVerificationComplete: (RequestLocal, Map[TopicPartition, Errors]) => Unit = appendRecordsAfterVerification(
-      entriesPerPartition,
-      transactionVerificationEntries,
-      postVerificationCallback,
-    )
+    val onVerificationComplete: (RequestLocal, Map[TopicPartition, Errors]) => Unit =
+      appendRecordsAfterVerification(
+        transactionVerificationEntries,
+        postVerificationCallback,
+      )
 
     if (transactionVerificationEntries.unverified.isEmpty) {
       onVerificationComplete(requestLocal, transactionVerificationEntries.errors.toMap)
@@ -921,18 +923,9 @@ class ReplicaManager(val config: KafkaConfig,
    * @param requestLocal                  container for the stateful instances scoped to this request
    * @param unverifiedEntries             the records per partition for topic partitions that were not verified by the transaction coordinator
    */
-  def appendRecordsAfterVerification(allEntries: Map[TopicPartition, MemoryRecords],
-                                     transactionVerificationEntries: TransactionVerificationEntries,
-                                     postVerificationCallback: RequestLocal => (Map[TopicPartition, MemoryRecords], Map[TopicPartition, LogAppendResult]) => Unit)
+  def appendRecordsAfterVerification(transactionVerificationEntries: TransactionVerificationEntries,
+                                     postVerificationCallback: RequestLocal => Map[TopicPartition, LogAppendResult] => Unit)
                                     (requestLocal: RequestLocal, unverifiedEntries: Map[TopicPartition, Errors] = Map.empty): Unit = {
-    val verifiedEntries =
-      if (unverifiedEntries.isEmpty)
-        allEntries
-      else
-        allEntries.filter { case (tp, _) =>
-          !unverifiedEntries.contains(tp)
-        }
-
     val errorResults = (unverifiedEntries ++ transactionVerificationEntries.errors).map {
       case (topicPartition, error) =>
         // translate transaction coordinator errors to known producer response errors
@@ -952,7 +945,7 @@ class ReplicaManager(val config: KafkaConfig,
           hasCustomErrorMessage = customException.isDefined
         )
     }
-    postVerificationCallback(requestLocal)(verifiedEntries, errorResults)
+    postVerificationCallback(requestLocal)(errorResults)
   }
 
   private def partitionEntriesForVerification(transactionVerificationEntries: TransactionVerificationEntries, entriesPerPartition: Map[TopicPartition, MemoryRecords]): TransactionVerificationEntries = {
@@ -963,6 +956,7 @@ class ReplicaManager(val config: KafkaConfig,
         val transactionalBatches = records.batches.asScala.filter(batch => batch.hasProducerId && batch.isTransactional)
         transactionalBatches.foreach(batch => transactionalProducerIds.add(batch.producerId))
 
+        // If there is no producer ID or transactional records in the batches, no need to verify.
         if (transactionalBatches.nonEmpty) {
           // We return VerificationGuard if the partition needs to be verified. If no state is present, no need to verify.
           val firstBatch = records.firstBatch
@@ -970,11 +964,7 @@ class ReplicaManager(val config: KafkaConfig,
           if (verificationGuard != VerificationGuard.SENTINEL) {
             transactionVerificationEntries.verificationGuards.put(topicPartition, verificationGuard)
             transactionVerificationEntries.unverified.put(topicPartition, records)
-          } else
-            transactionVerificationEntries.verified.put(topicPartition, records)
-        } else {
-          // If there is no producer ID or transactional records in the batches, no need to verify.
-          transactionVerificationEntries.verified.put(topicPartition, records)
+          }
         }
       } catch {
         case e: Exception => transactionVerificationEntries.errors.put(topicPartition, Errors.forException(e))
