@@ -282,7 +282,7 @@ public class Graph<V extends Comparable<V>> {
         }
 
         Map<V, V> parents = new HashMap<>();
-        while (bfs(sourceNode, sinkNode, parents)) {
+        while (breadthFirstSearch(sourceNode, sinkNode, parents)) {
             int flow = Integer.MAX_VALUE;
             for (V node = sinkNode; node != sourceNode; node = parents.get(node)) {
                 final V parent = parents.get(node);
@@ -299,7 +299,7 @@ public class Graph<V extends Comparable<V>> {
         }
     }
 
-    private boolean bfs(final V source, final V target, final Map<V, V> parents) {
+    private boolean breadthFirstSearch(final V source, final V target, final Map<V, V> parents) {
         final Set<V> visited = new HashSet<>();
         final Queue<V> queue = new LinkedList<>();
         queue.add(source);
