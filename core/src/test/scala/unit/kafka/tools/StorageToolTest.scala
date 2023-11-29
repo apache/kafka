@@ -206,7 +206,7 @@ Found problem:
     val namespace = StorageTool.parseArguments(Array("format", "-c", "config.props", "-t", "XcZZOzUqS4yHOjhMQB6JLQ"))
     val mv = StorageTool.getMetadataVersion(namespace, defaultVersionString = None)
     assertEquals(MetadataVersion.LATEST_PRODUCTION.featureLevel(), mv.featureLevel(),
-      "Expected the default metadata.version to be the latest version")
+      "Expected the default metadata.version to be the latest production version")
   }
 
   @Test
