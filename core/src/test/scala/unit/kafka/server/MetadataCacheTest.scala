@@ -821,7 +821,7 @@ class MetadataCacheTest {
       new TopicRecord().setName(topic0).setTopicId(topicIds.get(topic0)),
       new TopicRecord().setName(topic1).setTopicId(topicIds.get(topic1))
     )
-    recordSeq = recordSeq.appendedAll(partitionMap.values.toSeq)
+    recordSeq = recordSeq ++ partitionMap.values.toSeq
     MetadataCacheTest.updateCache(metadataCache, updateMetadataRequest, recordSeq)
 
     def checkTopicMetadata(topic: String, partitionIds: Set[Int], partitions: mutable.Buffer[DescribeTopicPartitionsResponsePartition]): Unit = {
