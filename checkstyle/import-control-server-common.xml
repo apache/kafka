@@ -72,6 +72,7 @@
 
         <subpackage name="metrics">
             <allow pkg="com.yammer.metrics" />
+            <allow pkg="org.apache.kafka.server.telemetry" />
         </subpackage>
 
         <subpackage name="network">
