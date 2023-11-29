@@ -44,7 +44,7 @@ import org.apache.kafka.metadata.bootstrap.BootstrapMetadata
 import org.apache.kafka.metadata.migration.{KRaftMigrationDriver, LegacyPropagator}
 import org.apache.kafka.metadata.publisher.FeaturesPublisher
 import org.apache.kafka.raft.RaftConfig
-import org.apache.kafka.server.{ClientMetricsManager, NodeToControllerChannelManager}
+import org.apache.kafka.server.NodeToControllerChannelManager
 import org.apache.kafka.server.authorizer.Authorizer
 import org.apache.kafka.server.common.ApiMessageAndVersion
 import org.apache.kafka.server.metrics.{KafkaMetricsGroup, KafkaYammerMetrics}
@@ -125,7 +125,6 @@ class ControllerServer(
   @volatile var incarnationId: Uuid = _
   @volatile var registrationManager: ControllerRegistrationManager = _
   @volatile var registrationChannelManager: NodeToControllerChannelManager = _
-  var clientMetricsManager: ClientMetricsManager = _
 
   private def maybeChangeStatus(from: ProcessStatus, to: ProcessStatus): Boolean = {
     lock.lock()
@@ -147,7 +146,7 @@ class ControllerServer(
     try {
       this.logIdent = logContext.logPrefix()
       info("Starting controller")
-      config.dynamicConfig.initialize(zkClientOpt = None)
+      config.dynamicConfig.initialize(zkClientOpt = None, clientMetricsReceiverPluginOpt = None)
 
       maybeChangeStatus(STARTING, STARTED)
 
@@ -334,8 +333,6 @@ class ControllerServer(
         DataPlaneAcceptor.ThreadPrefix,
         "controller")
 
-      clientMetricsManager = ClientMetricsManager.instance()
-
       // Set up the metadata cache publisher.
       metadataPublishers.add(metadataCachePublisher)
 
@@ -366,8 +363,7 @@ class ControllerServer(
         sharedServer.metadataPublishingFaultHandler,
         immutable.Map[String, ConfigHandler](
           // controllers don't host topics, so no need to do anything with dynamic topic config changes here
-          ConfigType.Broker -> new BrokerConfigHandler(config, quotaManagers),
-          ConfigType.ClientMetrics -> new ClientMetricsConfigHandler(clientMetricsManager)
+          ConfigType.Broker -> new BrokerConfigHandler(config, quotaManagers)
         ),
         "controller"))
 
