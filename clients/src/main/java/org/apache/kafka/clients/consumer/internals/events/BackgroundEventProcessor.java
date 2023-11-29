@@ -62,9 +62,6 @@ public class BackgroundEventProcessor extends EventProcessor<BackgroundEvent> {
             case ERROR:
                 process((ErrorBackgroundEvent) event);
                 break;
-            case AUTO_COMMIT_COMPLETION:
-                process((AutoCommitCompletionBackgroundEvent) event);
-                break;
             default:
                 throw new IllegalArgumentException("Background event type " + event.type() + " was not expected");
 
@@ -80,7 +77,4 @@ public class BackgroundEventProcessor extends EventProcessor<BackgroundEvent> {
         throw event.error();
     }
 
-    private void process(final AutoCommitCompletionBackgroundEvent event) {
-        // TODO: invoke OffsetCommitCallback
-    }
 }

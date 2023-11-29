@@ -255,7 +255,7 @@ class KafkaServer(
 
         // initialize dynamic broker configs from ZooKeeper. Any updates made after this will be
         // applied after ZkConfigManager starts.
-        config.dynamicConfig.initialize(Some(zkClient))
+        config.dynamicConfig.initialize(Some(zkClient), clientMetricsReceiverPluginOpt = None)
 
         /* start scheduler */
         kafkaScheduler = new KafkaScheduler(config.backgroundThreads)
@@ -283,7 +283,9 @@ class KafkaServer(
               setClusterId(_clusterId).
               setNodeId(config.brokerId)
             if (!builder.directoryId().isPresent()) {
-              builder.setDirectoryId(copier.generateValidDirectoryId())
+              if (config.migrationEnabled) {
+                builder.setDirectoryId(copier.generateValidDirectoryId())
+              }
             }
             copier.setLogDirProps(logDir, builder.build())
           })

@@ -20,7 +20,6 @@ import java.nio.charset.StandardCharsets
 import java.util.UUID
 import java.util.concurrent.atomic.{AtomicBoolean, AtomicInteger}
 import java.util.concurrent.{ArrayBlockingQueue, ConcurrentLinkedQueue, CountDownLatch, Executors, Semaphore, TimeUnit}
-
 import scala.collection.Seq
 import com.yammer.metrics.core.{Gauge, Meter, MetricName}
 import kafka.server.KafkaConfig
@@ -35,7 +34,7 @@ import org.apache.zookeeper.ZooKeeper.States
 import org.apache.zookeeper.client.ZKClientConfig
 import org.apache.zookeeper.{CreateMode, WatchedEvent, ZooDefs}
 import org.junit.jupiter.api.Assertions.{assertArrayEquals, assertEquals, assertFalse, assertThrows, assertTrue, fail}
-import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, TestInfo}
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, TestInfo, Timeout}
 
 import scala.jdk.CollectionConverters._
 
@@ -333,6 +332,7 @@ class ZooKeeperClientTest extends QuorumTestHarness {
   }
 
   @Test
+  @Timeout(60)
   def testBlockOnRequestCompletionFromStateChangeHandler(): Unit = {
     // This tests the scenario exposed by KAFKA-6879 in which the expiration callback awaits
     // completion of a request which is handled by another thread
