@@ -296,25 +296,8 @@ public class ConsumerNetworkThreadTest {
         prepareOffsetCommitRequest(singletonMap(tp, 100L), Errors.NONE, false);
         consumerNetworkThread.cleanup();
         assertTrue(coordinatorRequestManager.coordinator().isPresent());
-        assertFalse(client.hasPendingResponses());
-        assertFalse(client.hasInFlightRequests());
-    }
-
-    @Test
-    void testAutoCommitOnClose() {
-        TopicPartition tp = new TopicPartition("topic", 0);
-        Node node = metadata.fetch().nodes().get(0);
-        subscriptions.assignFromUser(singleton(tp));
-        subscriptions.seek(tp, 100);
-        coordinatorRequestManager.markCoordinatorUnknown("test", time.milliseconds());
-        client.prepareResponse(FindCoordinatorResponse.prepareResponse(Errors.NONE, "group-id", node));
-        prepareOffsetCommitRequest(singletonMap(tp, 100L), Errors.NONE, false);
-        consumerNetworkThread.maybeAutocommitOnClose(time.timer(1000));
-        assertTrue(coordinatorRequestManager.coordinator().isPresent());
-        verify(commitRequestManager).createCommitAllConsumedRequest();
-
-        assertFalse(client.hasPendingResponses());
-        assertFalse(client.hasInFlightRequests());
+        assertFalse(client.hasPendingResponses(), "There should be no pending responses but found " + client.futureResponses());
+        assertFalse(client.hasInFlightRequests(), "There should be no pending requests, but found " + client.requests());
     }
 
     private void prepareTearDown() {

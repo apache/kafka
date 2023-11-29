@@ -38,7 +38,10 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
@@ -62,6 +65,7 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
     private ApplicationEventProcessor applicationEventProcessor;
     private NetworkClientDelegate networkClientDelegate;
     private RequestManagers requestManagers;
+    private Optional<MembershipManager> membershipManager;
     private volatile boolean running;
     private final IdempotentCloser closer = new IdempotentCloser();
     private volatile Duration closeTimeout = Duration.ofMillis(DEFAULT_CLOSE_TIMEOUT_MS);
@@ -106,6 +110,7 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
         applicationEventProcessor = applicationEventProcessorSupplier.get();
         networkClientDelegate = networkClientDelegateSupplier.get();
         requestManagers = requestManagersSupplier.get();
+        membershipManager = requestManagersSupplier.get().membershipManager;
     }
 
     /**
@@ -274,15 +279,15 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
     }
 
     void cleanup() {
+        log.trace("Closing the consumer network thread");
+        Timer timer = time.timer(closeTimeout);
         try {
-            log.trace("Closing the consumer network thread");
-            Timer timer = time.timer(closeTimeout);
-            maybeAutocommitOnClose(timer);
             runAtClose(requestManagers.entries(), networkClientDelegate, timer);
             maybeLeaveGroup(timer);
         } catch (Exception e) {
             log.error("Unexpected error during shutdown.  Proceed with closing.", e);
         } finally {
+            networkClientDelegate.awaitPendingRequests(timer);
             closeQuietly(requestManagers, "request managers");
             closeQuietly(networkClientDelegate, "network client delegate");
             closeQuietly(applicationEventProcessor, "application event processor");
@@ -291,38 +296,49 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
     }
 
     /**
-     * We need to autocommit before shutting down the consumer. The method needs to first connect to the coordinator
-     * node to construct the closing requests.  Then wait for all closing requests to finish before returning.  The
-     * method is bounded by a closing timer.  We will continue closing down the consumer if the requests cannot be
-     * completed in time.
+     * Leave the group when the consumer is shutting down.
      */
-    // Visible for testing
-    void maybeAutocommitOnClose(final Timer timer) {
-        if (!requestManagers.coordinatorRequestManager.isPresent())
-            return;
-
-        if (!requestManagers.commitRequestManager.isPresent()) {
-            log.error("Expecting a CommitRequestManager but the object was never initialized. Shutting down.");
+    void maybeLeaveGroup(final Timer timer) throws ExecutionException, InterruptedException, TimeoutException {
+        if (!membershipManager.isPresent()) {
             return;
         }
-
-        if (!requestManagers.commitRequestManager.get().canAutoCommit()) {
-            return;
-        }
-
-        ensureCoordinatorReady(timer);
-        NetworkClientDelegate.UnsentRequest autocommitRequest =
-            requestManagers.commitRequestManager.get().createCommitAllConsumedRequest();
-        networkClientDelegate.add(autocommitRequest);
-        do {
-            long currentTimeMs = timer.currentTimeMs();
-            ensureCoordinatorReady(timer);
-            networkClientDelegate.poll(timer.remainingMs(), currentTimeMs);
-        } while (timer.notExpired() && !autocommitRequest.future().isDone());
+        // The partition should already been revoked at this point, so we invoke leaveGroup to complete the state
+        // transition and poll the heartbeatRequestManager one last time.
+        membershipManager.get().leaveGroup().get(timer.remainingMs(), TimeUnit.MILLISECONDS);
+        sendLeaveGroupOnClose(timer);
     }
 
-    void maybeLeaveGroup(final Timer timer) {
-        // TODO: Leave group upon closing the consumer
+    private void sendLeaveGroupOnClose(final Timer timer) {
+        ensureCoordinatorReady(timer);
+        HeartbeatRequestManager hrm = requestManagers.heartbeatRequestManager.orElseThrow(() ->
+            new IllegalStateException(
+                "Expecting a HeartbeatRequestManager but the object was never initialized."));
+        long nowMs = time.milliseconds();
+        // Ensure the request gets sent out
+        networkClientDelegate.addAll(hrm.poll(nowMs));
+        networkClientDelegate.poll(0, nowMs);
+    }
+
+    private void completePartitionRevocationOnClose(final Timer timer) throws ExecutionException, InterruptedException, TimeoutException {
+        CompletableFuture<Void> leaveGroupFuture = membershipManager.get().leaveGroup();
+        while (timer.notExpired() && !leaveGroupFuture.isDone()) {
+            networkClientDelegate.poll(timer.remainingMs(), timer.currentTimeMs());
+            if (pollAssignmentChangeEvents(timer)) {
+                // Expecting a partitionRevocation completion event from the application thread
+                // Once completed. We are done with partition revocation and
+                break;
+            }
+            timer.update();
+        }
+    }
+
+    /**
+     * We need to continue to poll the ApplicationEventQueue during closing so that we can process the callback
+     * completion events and finish the leave group.
+     */
+    private boolean pollAssignmentChangeEvents(final Timer timer) {
+        // TODO: To be implemented with KAFKA-15276
+        return true;
     }
 
     private void ensureCoordinatorReady(final Timer timer) {

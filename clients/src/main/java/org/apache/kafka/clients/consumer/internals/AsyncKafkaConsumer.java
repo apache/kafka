@@ -97,6 +97,7 @@ import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
@@ -233,6 +234,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
     private final Metrics metrics;
     private final long retryBackoffMs;
     private final int defaultApiTimeoutMs;
+    private final boolean autoCommitEnabled;
     private volatile boolean closed = false;
     private final List<ConsumerPartitionAssignor> assignors;
     private final Optional<ClientTelemetryReporter> clientTelemetryReporter;
@@ -264,6 +266,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                 GroupRebalanceConfig.ProtocolType.CONSUMER
             );
             this.clientId = config.getString(CommonClientConfigs.CLIENT_ID_CONFIG);
+            this.autoCommitEnabled = config.getBoolean(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG);
             LogContext logContext = createLogContext(config, groupRebalanceConfig);
             this.log = logContext.logger(getClass());
 
@@ -378,7 +381,8 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                        long retryBackoffMs,
                        int defaultApiTimeoutMs,
                        List<ConsumerPartitionAssignor> assignors,
-                       String groupId) {
+                       String groupId,
+                       boolean autoCommitEnabled) {
         this.log = logContext.logger(getClass());
         this.subscriptions = subscriptions;
         this.clientId = clientId;
@@ -398,6 +402,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         this.assignors = assignors;
         this.kafkaConsumerMetrics = new KafkaConsumerMetrics(metrics, "consumer");
         this.clientTelemetryReporter = Optional.empty();
+        this.autoCommitEnabled = autoCommitEnabled;
     }
 
     // Visible for testing
@@ -413,6 +418,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         this.log = logContext.logger(getClass());
         this.subscriptions = subscriptions;
         this.clientId = config.getString(ConsumerConfig.CLIENT_ID_CONFIG);
+        this.autoCommitEnabled = config.getBoolean(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG);
         this.fetchBuffer = new FetchBuffer(logContext);
         this.isolationLevel = IsolationLevel.READ_UNCOMMITTED;
         this.interceptors = new ConsumerInterceptors<>(Collections.emptyList());
@@ -1031,6 +1037,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         // Invoke all callbacks after the background thread exists in case if there are unsent async
         // commits
         maybeInvokeCommitCallbacks();
+        closeQuietly(() -> shutdownNetworkThread(timeout), "Failed to shutdown network thread", firstException);
 
         closeQuietly(fetchBuffer, "Failed to close the fetch buffer", firstException);
         closeQuietly(interceptors, "consumer interceptors", firstException);
@@ -1048,6 +1055,49 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             }
             throw new KafkaException("Failed to close kafka consumer", exception);
         }
+    }
+
+    private void shutdownNetworkThread(final Duration timeout) {
+        try {
+            prepShutdown(time.timer(timeout));
+        } catch (Exception e) {
+            log.error("Error occurred during shutdown.  Proceed closing the consumer.", e);
+        } finally {
+            // Once all partitions are revoked, we proceed with sending a leave group request and closing the network
+            // thread.
+            subscriptions.assignFromSubscribed(Collections.emptySet());
+            if (applicationEventHandler != null)
+                applicationEventHandler.close(timeout);
+        }
+    }
+    /**
+     * Prior to closing the network thread, we need to make sure the following operations happen in the right sequence:
+     * 1. autocommit offsets
+     * 2. invoke completed offset commit callbacks
+     * 3. revoke all partitions
+     */
+    private void prepShutdown(final Timer timer) throws ExecutionException, InterruptedException, java.util.concurrent.TimeoutException {
+        if (autoCommitEnabled) {
+            Map<TopicPartition, OffsetAndMetadata> allConsumed = subscriptions.allConsumed();
+            commitSync(allConsumed, Duration.ofMillis(timer.remainingMs()));
+        }
+        // Invoke all callbacks after the background thread exists in case if there are unsent async
+        // commits
+        maybeInvokeCommitCallbacks();
+        timer.update();
+        revokePartitionsOnUnsubscribe().get(timer.remainingMs(), TimeUnit.MILLISECONDS);
+        subscriptions.assignFromSubscribed(Collections.emptySet());
+    }
+
+    private CompletableFuture<Void> revokePartitionsOnUnsubscribe() {
+        Set<TopicPartition> droppedPartitions = new HashSet<>();
+        droppedPartitions.addAll(subscriptions.assignedPartitions());
+        if (!subscriptions.hasAutoAssignedPartitions() || droppedPartitions.isEmpty()) {
+            return CompletableFuture.completedFuture(null);
+        }
+
+        // TODO: KAFKA-15276
+        return CompletableFuture.completedFuture(null);
     }
 
     @Override

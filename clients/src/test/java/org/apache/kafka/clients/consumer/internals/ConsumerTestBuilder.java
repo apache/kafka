@@ -328,34 +328,35 @@ public class ConsumerTestBuilder implements Closeable {
             super(groupInfo, enableAutoCommit, enableAutoTick);
             String clientId = config.getString(CommonClientConfigs.CLIENT_ID_CONFIG);
             List<ConsumerPartitionAssignor> assignors = ConsumerPartitionAssignor.getAssignorInstances(
-                    config.getList(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG),
-                    config.originals(Collections.singletonMap(ConsumerConfig.CLIENT_ID_CONFIG, clientId))
+                config.getList(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG),
+                config.originals(Collections.singletonMap(ConsumerConfig.CLIENT_ID_CONFIG, clientId))
             );
             Deserializers<String, String> deserializers = new Deserializers<>(new StringDeserializer(), new StringDeserializer());
             this.fetchCollector = spy(new FetchCollector<>(logContext,
-                    metadata,
-                    subscriptions,
-                    fetchConfig,
-                    deserializers,
-                    metricsManager,
-                    time));
+                metadata,
+                subscriptions,
+                fetchConfig,
+                deserializers,
+                metricsManager,
+                time));
             this.consumer = spy(new AsyncKafkaConsumer<>(
-                    logContext,
-                    clientId,
-                    deserializers,
-                    new FetchBuffer(logContext),
-                    fetchCollector,
-                    new ConsumerInterceptors<>(Collections.emptyList()),
-                    time,
-                    applicationEventHandler,
-                    backgroundEventQueue,
-                    metrics,
-                    subscriptions,
-                    metadata,
-                    retryBackoffMs,
-                    60000,
-                    assignors,
-                    groupInfo.map(groupInformation -> groupInformation.groupState.groupId).orElse(null)));
+                logContext,
+                clientId,
+                deserializers,
+                new FetchBuffer(logContext),
+                fetchCollector,
+                new ConsumerInterceptors<>(Collections.emptyList()),
+                time,
+                applicationEventHandler,
+                backgroundEventQueue,
+                metrics,
+                subscriptions,
+                metadata,
+                retryBackoffMs,
+                60000,
+                assignors,
+                groupInfo.map(groupInformation -> groupInformation.groupState.groupId).orElse(null),
+                enableAutoCommit));
         }
 
         @Override
