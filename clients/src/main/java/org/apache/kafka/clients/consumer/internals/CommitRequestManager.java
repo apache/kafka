@@ -21,7 +21,6 @@ import org.apache.kafka.clients.consumer.CommitFailedException;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.RetriableCommitFailedException;
-import org.apache.kafka.clients.consumer.internals.events.AutoCommitCompletionBackgroundEvent;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEventHandler;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
@@ -234,8 +233,6 @@ public class CommitRequestManager implements RequestManager {
         return (response, throwable) -> {
             autoCommitState.ifPresent(autoCommitState -> autoCommitState.setInflightCommitStatus(false));
             if (throwable == null) {
-                // We need to notify the application thread to execute OffsetCommitCallback
-                backgroundEventHandler.add(new AutoCommitCompletionBackgroundEvent());
                 log.debug("Completed asynchronous auto-commit of offsets {}", allConsumedOffsets);
             } else if (throwable instanceof RetriableCommitFailedException) {
                 log.debug("Asynchronous auto-commit of offsets {} failed due to retriable error: {}",
