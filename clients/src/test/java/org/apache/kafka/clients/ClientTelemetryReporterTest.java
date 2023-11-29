@@ -37,7 +37,7 @@ import org.apache.kafka.common.requests.GetTelemetrySubscriptionsResponse;
 import org.apache.kafka.common.requests.PushTelemetryRequest;
 import org.apache.kafka.common.requests.PushTelemetryResponse;
 import org.apache.kafka.common.telemetry.ClientTelemetryState;
-import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.MockTime;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -55,11 +55,13 @@ import java.util.concurrent.atomic.AtomicReference;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class ClientTelemetryReporterTest {
 
+    private MockTime time;
     private ClientTelemetryReporter clientTelemetryReporter;
     private Map<String, Object> configs;
     private MetricsContext metricsContext;
@@ -68,7 +70,8 @@ public class ClientTelemetryReporterTest {
 
     @BeforeEach
     public void setUp() {
-        clientTelemetryReporter = new ClientTelemetryReporter(Time.SYSTEM);
+        time = new MockTime();
+        clientTelemetryReporter = new ClientTelemetryReporter(time);
         configs = new HashMap<>();
         metricsContext = new KafkaMetricsContext("test");
         uuid = Uuid.randomUuid();
@@ -83,7 +86,7 @@ public class ClientTelemetryReporterTest {
 
         clientTelemetryReporter.configure(configs);
         clientTelemetryReporter.contextChange(metricsContext);
-        assertEquals(1, clientTelemetryReporter.collectors().size());
+        assertNotNull(clientTelemetryReporter.metricsCollector());
         assertNotNull(clientTelemetryReporter.telemetryProvider().resource());
         assertEquals(1, clientTelemetryReporter.telemetryProvider().resource().getAttributesCount());
         assertEquals(ClientTelemetryProvider.CLIENT_RACK, clientTelemetryReporter.telemetryProvider().resource().getAttributes(0).getKey());
@@ -92,12 +95,12 @@ public class ClientTelemetryReporterTest {
 
     @Test
     public void testInitTelemetryReporterNoCollector() {
-        // Skip client id config which skips the collector initialization.
-        configs.put(CommonClientConfigs.CLIENT_RACK_CONFIG, "rack");
+        // Remove namespace config which skips the collector initialization.
+        MetricsContext metricsContext = Collections::emptyMap;
 
         clientTelemetryReporter.configure(configs);
         clientTelemetryReporter.contextChange(metricsContext);
-        assertTrue(clientTelemetryReporter.collectors().isEmpty());
+        assertNull(clientTelemetryReporter.metricsCollector());
     }
 
     @Test
@@ -110,7 +113,7 @@ public class ClientTelemetryReporterTest {
 
         clientTelemetryReporter.configure(configs);
         clientTelemetryReporter.contextChange(new KafkaMetricsContext("kafka.producer"));
-        assertEquals(1, clientTelemetryReporter.collectors().size());
+        assertNotNull(clientTelemetryReporter.metricsCollector());
         assertNotNull(clientTelemetryReporter.telemetryProvider().resource());
 
         List<KeyValue> attributes = clientTelemetryReporter.telemetryProvider().resource().getAttributesList();
@@ -134,7 +137,7 @@ public class ClientTelemetryReporterTest {
 
         clientTelemetryReporter.configure(configs);
         clientTelemetryReporter.contextChange(new KafkaMetricsContext("kafka.consumer"));
-        assertEquals(1, clientTelemetryReporter.collectors().size());
+        assertNotNull(clientTelemetryReporter.metricsCollector());
         assertNotNull(clientTelemetryReporter.telemetryProvider().resource());
 
         List<KeyValue> attributes = clientTelemetryReporter.telemetryProvider().resource().getAttributesList();
@@ -151,7 +154,7 @@ public class ClientTelemetryReporterTest {
     }
 
     @Test
-    public void testTelemetryReporterClose() throws Exception {
+    public void testTelemetryReporterClose() {
         clientTelemetryReporter.close();
         assertEquals(ClientTelemetryState.TERMINATED, ((DefaultClientTelemetrySender) clientTelemetryReporter
             .telemetrySender()).state());
@@ -172,7 +175,7 @@ public class ClientTelemetryReporterTest {
         assertEquals(ClientTelemetryState.SUBSCRIPTION_NEEDED, telemetrySender.state());
         assertEquals(0, telemetrySender.timeToNextUpdate(100));
 
-        telemetrySender.updateSubscriptionResult(subscription, System.currentTimeMillis());
+        telemetrySender.updateSubscriptionResult(subscription, time.milliseconds());
         assertEquals(20000, telemetrySender.timeToNextUpdate(100), 200);
 
         assertTrue(telemetrySender.maybeSetState(ClientTelemetryState.SUBSCRIPTION_IN_PROGRESS));
@@ -207,7 +210,7 @@ public class ClientTelemetryReporterTest {
         GetTelemetrySubscriptionsRequest request = (GetTelemetrySubscriptionsRequest) requestOptional.get().build();
 
         GetTelemetrySubscriptionsRequest expectedResult = new GetTelemetrySubscriptionsRequest.Builder(
-            new GetTelemetrySubscriptionsRequestData().setClientInstanceId(Uuid.ZERO_UUID)).build();
+            new GetTelemetrySubscriptionsRequestData().setClientInstanceId(Uuid.ZERO_UUID), true).build();
 
         assertEquals(expectedResult.data(), request.data());
         assertEquals(ClientTelemetryState.SUBSCRIPTION_IN_PROGRESS, telemetrySender.state());
@@ -216,7 +219,7 @@ public class ClientTelemetryReporterTest {
     @Test
     public void testCreateRequestSubscriptionNeededAfterExistingSubscription() {
         DefaultClientTelemetrySender telemetrySender = (DefaultClientTelemetrySender) clientTelemetryReporter.telemetrySender();
-        telemetrySender.updateSubscriptionResult(subscription, System.currentTimeMillis());
+        telemetrySender.updateSubscriptionResult(subscription, time.milliseconds());
         assertEquals(ClientTelemetryState.SUBSCRIPTION_NEEDED, telemetrySender.state());
 
         Optional<AbstractRequest.Builder<?>> requestOptional = telemetrySender.createRequest();
@@ -226,7 +229,7 @@ public class ClientTelemetryReporterTest {
         GetTelemetrySubscriptionsRequest request = (GetTelemetrySubscriptionsRequest) requestOptional.get().build();
 
         GetTelemetrySubscriptionsRequest expectedResult = new GetTelemetrySubscriptionsRequest.Builder(
-            new GetTelemetrySubscriptionsRequestData().setClientInstanceId(subscription.clientInstanceId())).build();
+            new GetTelemetrySubscriptionsRequestData().setClientInstanceId(subscription.clientInstanceId()), true).build();
 
         assertEquals(expectedResult.data(), request.data());
         assertEquals(ClientTelemetryState.SUBSCRIPTION_IN_PROGRESS, telemetrySender.state());
@@ -234,9 +237,12 @@ public class ClientTelemetryReporterTest {
 
     @Test
     public void testCreateRequestPushNeeded() {
+        clientTelemetryReporter.configure(configs);
+        clientTelemetryReporter.contextChange(metricsContext);
+
         DefaultClientTelemetrySender telemetrySender = (DefaultClientTelemetrySender) clientTelemetryReporter.telemetrySender();
         // create request to move state to SUBSCRIPTION_IN_PROGRESS
-        telemetrySender.updateSubscriptionResult(subscription, System.currentTimeMillis());
+        telemetrySender.updateSubscriptionResult(subscription, time.milliseconds());
         telemetrySender.createRequest();
         assertTrue(telemetrySender.maybeSetState(ClientTelemetryState.PUSH_NEEDED));
 
@@ -248,7 +254,7 @@ public class ClientTelemetryReporterTest {
 
         PushTelemetryRequest expectedResult = new PushTelemetryRequest.Builder(
             new PushTelemetryRequestData().setClientInstanceId(subscription.clientInstanceId())
-                .setSubscriptionId(subscription.subscriptionId())).build();
+                .setSubscriptionId(subscription.subscriptionId()), true).build();
 
         assertEquals(expectedResult.data(), request.data());
         assertEquals(ClientTelemetryState.PUSH_IN_PROGRESS, telemetrySender.state());
@@ -270,6 +276,7 @@ public class ClientTelemetryReporterTest {
     @Test
     public void testCreateRequestInvalidState() {
         DefaultClientTelemetrySender telemetrySender = (DefaultClientTelemetrySender) clientTelemetryReporter.telemetrySender();
+        telemetrySender.updateSubscriptionResult(subscription, time.milliseconds());
 
         assertTrue(telemetrySender.maybeSetState(ClientTelemetryState.SUBSCRIPTION_IN_PROGRESS));
         assertFalse(telemetrySender.createRequest().isPresent());
@@ -286,6 +293,26 @@ public class ClientTelemetryReporterTest {
 
         assertTrue(telemetrySender.maybeSetState(ClientTelemetryState.TERMINATED));
         assertFalse(telemetrySender.createRequest().isPresent());
+    }
+
+    @Test
+    public void testCreateRequestPushNoCollector() {
+        final long now = time.milliseconds();
+        DefaultClientTelemetrySender telemetrySender = (DefaultClientTelemetrySender) clientTelemetryReporter.telemetrySender();
+        // create request to move state to SUBSCRIPTION_IN_PROGRESS
+        telemetrySender.createRequest();
+        assertTrue(telemetrySender.maybeSetState(ClientTelemetryState.PUSH_NEEDED));
+
+        telemetrySender.updateSubscriptionResult(subscription, now);
+        long interval = telemetrySender.timeToNextUpdate(100);
+        assertTrue(interval > 0 && interval != 2000 && interval >= 0.5 * interval && interval <= 1.5 * interval);
+
+        time.sleep(1000);
+        Optional<AbstractRequest.Builder<?>> requestOptional = telemetrySender.createRequest();
+        assertFalse(requestOptional.isPresent());
+
+        assertEquals(20000, telemetrySender.timeToNextUpdate(100));
+        assertEquals(now + 1000, telemetrySender.lastRequestMs());
     }
 
     @Test
@@ -353,6 +380,7 @@ public class ClientTelemetryReporterTest {
         assertEquals(ClientTelemetryState.SUBSCRIPTION_NEEDED, telemetrySender.state());
         assertEquals(300000, telemetrySender.intervalMs());
         assertTrue(telemetrySender.enabled());
+        assertTrue(telemetrySender.maybeSetState(ClientTelemetryState.SUBSCRIPTION_IN_PROGRESS));
 
         // invalid request error
         response = new GetTelemetrySubscriptionsResponse(
@@ -362,6 +390,18 @@ public class ClientTelemetryReporterTest {
         assertEquals(ClientTelemetryState.SUBSCRIPTION_NEEDED, telemetrySender.state());
         assertEquals(Integer.MAX_VALUE, telemetrySender.intervalMs());
         assertFalse(telemetrySender.enabled());
+        assertTrue(telemetrySender.maybeSetState(ClientTelemetryState.SUBSCRIPTION_IN_PROGRESS));
+
+        // unsupported version error
+        telemetrySender.enabled(true);
+        response = new GetTelemetrySubscriptionsResponse(
+            new GetTelemetrySubscriptionsResponseData().setErrorCode(Errors.UNSUPPORTED_VERSION.code()));
+
+        telemetrySender.handleResponse(response);
+        assertEquals(ClientTelemetryState.SUBSCRIPTION_NEEDED, telemetrySender.state());
+        assertEquals(Integer.MAX_VALUE, telemetrySender.intervalMs());
+        assertFalse(telemetrySender.enabled());
+        assertTrue(telemetrySender.maybeSetState(ClientTelemetryState.SUBSCRIPTION_IN_PROGRESS));
 
         // unknown error
         telemetrySender.enabled(true);
@@ -372,12 +412,13 @@ public class ClientTelemetryReporterTest {
         assertEquals(ClientTelemetryState.SUBSCRIPTION_NEEDED, telemetrySender.state());
         assertEquals(Integer.MAX_VALUE, telemetrySender.intervalMs());
         assertFalse(telemetrySender.enabled());
+        assertTrue(telemetrySender.maybeSetState(ClientTelemetryState.SUBSCRIPTION_IN_PROGRESS));
     }
 
     @Test
     public void testHandleResponsePushTelemetry() {
         DefaultClientTelemetrySender telemetrySender = (DefaultClientTelemetrySender) clientTelemetryReporter.telemetrySender();
-        telemetrySender.updateSubscriptionResult(subscription, System.currentTimeMillis());
+        telemetrySender.updateSubscriptionResult(subscription, time.milliseconds());
         assertTrue(telemetrySender.maybeSetState(ClientTelemetryState.SUBSCRIPTION_IN_PROGRESS));
         assertTrue(telemetrySender.maybeSetState(ClientTelemetryState.PUSH_NEEDED));
         assertTrue(telemetrySender.maybeSetState(ClientTelemetryState.PUSH_IN_PROGRESS));
@@ -393,7 +434,7 @@ public class ClientTelemetryReporterTest {
     @Test
     public void testHandleResponsePushTelemetryErrorResponse() {
         DefaultClientTelemetrySender telemetrySender = (DefaultClientTelemetrySender) clientTelemetryReporter.telemetrySender();
-        telemetrySender.updateSubscriptionResult(subscription, System.currentTimeMillis());
+        telemetrySender.updateSubscriptionResult(subscription, time.milliseconds());
         assertTrue(telemetrySender.maybeSetState(ClientTelemetryState.SUBSCRIPTION_IN_PROGRESS));
         assertTrue(telemetrySender.maybeSetState(ClientTelemetryState.PUSH_NEEDED));
         assertTrue(telemetrySender.maybeSetState(ClientTelemetryState.PUSH_IN_PROGRESS));
@@ -406,6 +447,9 @@ public class ClientTelemetryReporterTest {
         assertEquals(ClientTelemetryState.SUBSCRIPTION_NEEDED, telemetrySender.state());
         assertEquals(0, telemetrySender.intervalMs());
         assertTrue(telemetrySender.enabled());
+        assertTrue(telemetrySender.maybeSetState(ClientTelemetryState.SUBSCRIPTION_IN_PROGRESS));
+        assertTrue(telemetrySender.maybeSetState(ClientTelemetryState.PUSH_NEEDED));
+        assertTrue(telemetrySender.maybeSetState(ClientTelemetryState.PUSH_IN_PROGRESS));
 
         // unsupported compression type
         response = new PushTelemetryResponse(
@@ -415,6 +459,9 @@ public class ClientTelemetryReporterTest {
         assertEquals(ClientTelemetryState.SUBSCRIPTION_NEEDED, telemetrySender.state());
         assertEquals(0, telemetrySender.intervalMs());
         assertTrue(telemetrySender.enabled());
+        assertTrue(telemetrySender.maybeSetState(ClientTelemetryState.SUBSCRIPTION_IN_PROGRESS));
+        assertTrue(telemetrySender.maybeSetState(ClientTelemetryState.PUSH_NEEDED));
+        assertTrue(telemetrySender.maybeSetState(ClientTelemetryState.PUSH_IN_PROGRESS));
 
         // telemetry too large
         response = new PushTelemetryResponse(
@@ -424,6 +471,9 @@ public class ClientTelemetryReporterTest {
         assertEquals(ClientTelemetryState.SUBSCRIPTION_NEEDED, telemetrySender.state());
         assertEquals(20000, telemetrySender.intervalMs());
         assertTrue(telemetrySender.enabled());
+        assertTrue(telemetrySender.maybeSetState(ClientTelemetryState.SUBSCRIPTION_IN_PROGRESS));
+        assertTrue(telemetrySender.maybeSetState(ClientTelemetryState.PUSH_NEEDED));
+        assertTrue(telemetrySender.maybeSetState(ClientTelemetryState.PUSH_IN_PROGRESS));
 
         // throttling quota exceeded
         response = new PushTelemetryResponse(
@@ -433,6 +483,9 @@ public class ClientTelemetryReporterTest {
         assertEquals(ClientTelemetryState.SUBSCRIPTION_NEEDED, telemetrySender.state());
         assertEquals(20000, telemetrySender.intervalMs());
         assertTrue(telemetrySender.enabled());
+        assertTrue(telemetrySender.maybeSetState(ClientTelemetryState.SUBSCRIPTION_IN_PROGRESS));
+        assertTrue(telemetrySender.maybeSetState(ClientTelemetryState.PUSH_NEEDED));
+        assertTrue(telemetrySender.maybeSetState(ClientTelemetryState.PUSH_IN_PROGRESS));
 
         // invalid request error
         response = new PushTelemetryResponse(
@@ -442,6 +495,22 @@ public class ClientTelemetryReporterTest {
         assertEquals(ClientTelemetryState.SUBSCRIPTION_NEEDED, telemetrySender.state());
         assertEquals(Integer.MAX_VALUE, telemetrySender.intervalMs());
         assertFalse(telemetrySender.enabled());
+        assertTrue(telemetrySender.maybeSetState(ClientTelemetryState.SUBSCRIPTION_IN_PROGRESS));
+        assertTrue(telemetrySender.maybeSetState(ClientTelemetryState.PUSH_NEEDED));
+        assertTrue(telemetrySender.maybeSetState(ClientTelemetryState.PUSH_IN_PROGRESS));
+
+        // unsupported version error
+        telemetrySender.enabled(true);
+        response = new PushTelemetryResponse(
+            new PushTelemetryResponseData().setErrorCode(Errors.UNSUPPORTED_VERSION.code()));
+
+        telemetrySender.handleResponse(response);
+        assertEquals(ClientTelemetryState.SUBSCRIPTION_NEEDED, telemetrySender.state());
+        assertEquals(Integer.MAX_VALUE, telemetrySender.intervalMs());
+        assertFalse(telemetrySender.enabled());
+        assertTrue(telemetrySender.maybeSetState(ClientTelemetryState.SUBSCRIPTION_IN_PROGRESS));
+        assertTrue(telemetrySender.maybeSetState(ClientTelemetryState.PUSH_NEEDED));
+        assertTrue(telemetrySender.maybeSetState(ClientTelemetryState.PUSH_IN_PROGRESS));
 
         // invalid record
         telemetrySender.enabled(true);
@@ -452,6 +521,9 @@ public class ClientTelemetryReporterTest {
         assertEquals(ClientTelemetryState.SUBSCRIPTION_NEEDED, telemetrySender.state());
         assertEquals(Integer.MAX_VALUE, telemetrySender.intervalMs());
         assertFalse(telemetrySender.enabled());
+        assertTrue(telemetrySender.maybeSetState(ClientTelemetryState.SUBSCRIPTION_IN_PROGRESS));
+        assertTrue(telemetrySender.maybeSetState(ClientTelemetryState.PUSH_NEEDED));
+        assertTrue(telemetrySender.maybeSetState(ClientTelemetryState.PUSH_IN_PROGRESS));
 
         // unknown error
         telemetrySender.enabled(true);
@@ -482,7 +554,7 @@ public class ClientTelemetryReporterTest {
 
         new Thread(() -> {
             try {
-                telemetrySender.updateSubscriptionResult(subscription, System.currentTimeMillis());
+                telemetrySender.updateSubscriptionResult(subscription, time.milliseconds());
             } finally {
                 lock.countDown();
             }

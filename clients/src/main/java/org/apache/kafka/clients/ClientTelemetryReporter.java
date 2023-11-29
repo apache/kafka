@@ -60,7 +60,6 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.StringJoiner;
-import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.Condition;
@@ -109,20 +108,17 @@ import java.util.function.Predicate;
 public class ClientTelemetryReporter implements MetricsReporter {
 
     private static final Logger log = LoggerFactory.getLogger(ClientTelemetryReporter.class);
-
     public static final int DEFAULT_PUSH_INTERVAL_MS = 5 * 60 * 1000;
 
-    private final List<MetricsCollector> collectors;
     private final ClientTelemetryProvider telemetryProvider;
-
     private final ClientTelemetrySender clientTelemetrySender;
     private final Time time;
+
     private Map<String, Object> rawOriginalConfig;
     private KafkaMetricsCollector kafkaMetricsCollector;
 
     public ClientTelemetryReporter(Time time) {
         this.time = time;
-        collectors = new CopyOnWriteArrayList<>();
         telemetryProvider = new ClientTelemetryProvider();
         clientTelemetrySender = new DefaultClientTelemetrySender();
     }
@@ -140,7 +136,9 @@ public class ClientTelemetryReporter implements MetricsReporter {
           set metrics labels for services/libraries that expose metrics.
          */
         Objects.requireNonNull(rawOriginalConfig, "configure() was not called before contextChange()");
-        collectors.forEach(MetricsCollector::stop);
+        if (kafkaMetricsCollector != null) {
+            kafkaMetricsCollector.stop();
+        }
 
         if (!telemetryProvider.validate(metricsContext)) {
             log.warn("Validation failed for {} context {}, skip starting collectors. Metrics collection is disabled",
@@ -226,7 +224,6 @@ public class ClientTelemetryReporter implements MetricsReporter {
         kafkaMetricsCollector = new KafkaMetricsCollector(
             TelemetryMetricNamingConvention.getClientTelemetryMetricNamingStrategy(
                 telemetryProvider.domain()));
-        collectors.add(kafkaMetricsCollector);
     }
 
     private ResourceMetrics buildMetric(Metric metric) {
@@ -238,12 +235,8 @@ public class ClientTelemetryReporter implements MetricsReporter {
     }
 
     // Visible for testing, only for unit tests
-    List<MetricsCollector> collectors() {
-        if (kafkaMetricsCollector == null) {
-            return Collections.emptyList();
-        }
-
-        return Collections.singletonList(kafkaMetricsCollector);
+    MetricsCollector metricsCollector() {
+        return kafkaMetricsCollector;
     }
 
     // Visible for testing, only for unit tests
@@ -569,7 +562,9 @@ public class ClientTelemetryReporter implements MetricsReporter {
             }
 
             if (shouldClose) {
-                collectors.forEach(MetricsCollector::stop);
+                if (kafkaMetricsCollector != null) {
+                    kafkaMetricsCollector.stop();
+                }
             }
         }
 
@@ -641,6 +636,15 @@ public class ClientTelemetryReporter implements MetricsReporter {
                 return Optional.empty();
             }
 
+            // Don't send a push request if we don't have the collector initialized. Re-attempt
+            // the push on the next interval.
+            if (kafkaMetricsCollector == null) {
+                log.warn("Cannot make telemetry request as collector is not initialized");
+                // Update last accessed time for push request to be retried on next interval.
+                updateErrorResult(localSubscription.pushIntervalMs, time.milliseconds());
+                return Optional.empty();
+            }
+
             boolean terminating;
             lock.writeLock().lock();
             try {
@@ -663,7 +667,7 @@ public class ClientTelemetryReporter implements MetricsReporter {
             byte[] payload;
             try (MetricsEmitter emitter = new ClientTelemetryEmitter(localSubscription.selector(), localSubscription.deltaTemporality())) {
                 emitter.init();
-                collectors.forEach(mc -> mc.collect(emitter));
+                kafkaMetricsCollector.collect(emitter);
                 payload = createPayload(emitter.emittedMetrics());
             }
 
@@ -848,6 +852,16 @@ public class ClientTelemetryReporter implements MetricsReporter {
             lock.readLock().lock();
             try {
                 return intervalMs;
+            } finally {
+                lock.readLock().unlock();
+            }
+        }
+
+        // Visible for testing
+        long lastRequestMs() {
+            lock.readLock().lock();
+            try {
+                return lastRequestMs;
             } finally {
                 lock.readLock().unlock();
             }
