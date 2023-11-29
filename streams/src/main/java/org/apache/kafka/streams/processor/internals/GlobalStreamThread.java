@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
-import org.apache.kafka.clients.admin.KafkaAdminClient;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
@@ -45,9 +44,6 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
-import java.util.concurrent.CompletionStage;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 
 import static org.apache.kafka.streams.processor.internals.GlobalStreamThread.State.CREATED;
@@ -75,7 +71,7 @@ public class GlobalStreamThread extends Thread {
     private java.util.function.Consumer<Throwable> streamsUncaughtExceptionHandler;
     private volatile Uuid globalConsumerClientInstanceId = null;
     private volatile long fetchDeadline = -1;
-    private KafkaFutureImpl<Uuid> clientInstanceIdFuture;
+    private volatile KafkaFutureImpl<Uuid> clientInstanceIdFuture;
 
     /**
      * The states that the global stream thread can be in

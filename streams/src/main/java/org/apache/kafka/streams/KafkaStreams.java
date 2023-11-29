@@ -1802,16 +1802,12 @@ public class KafkaStreams implements AutoCloseable {
      * @throws IllegalStateException If {@code KafkaStreams} is not running.
      * @throws TimeoutException Indicates that a request timed out.
      */
-    public ClientInstanceIds clientInstanceIds(Duration timeout) {
+    public ClientInstanceIds clientInstanceIds(final Duration timeout) {
         if (state().hasNotStarted()) {
-            throw new IllegalStateException(
-                "KafkaStreams has not been started, you can retry after calling start()."
-            );
+            throw new IllegalStateException("KafkaStreams has not been started, you can retry after calling start().");
         }
         if (state().isShuttingDown() || state.hasCompletedShutdown()) {
-            throw new IllegalStateException(
-                "KafkaStreams has been stopped (" + state + ")."
-            );
+            throw new IllegalStateException("KafkaStreams has been stopped (" + state + ").");
         }
 
         final ClientInstanceIdsImpl clientInstanceIds = new ClientInstanceIdsImpl();
