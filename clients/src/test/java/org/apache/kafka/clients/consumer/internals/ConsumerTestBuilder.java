@@ -260,7 +260,8 @@ public class ConsumerTestBuilder implements Closeable {
                 logContext,
                 applicationEventQueue,
                 requestManagers,
-                metadata)
+                metadata,
+                networkClientDelegate)
         );
         ConsumerCoordinatorMetrics consumerCoordinatorMetrics = new ConsumerCoordinatorMetrics(
                 subscriptions,

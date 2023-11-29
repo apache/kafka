@@ -33,6 +33,7 @@ import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
 import org.apache.kafka.clients.consumer.internals.events.CommitApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.CompletableApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.CompletableBackgroundEvent;
+import org.apache.kafka.clients.consumer.internals.events.ConsumerCloseApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.ConsumerRebalanceListenerCallbackNeededEvent;
 import org.apache.kafka.clients.consumer.internals.events.ErrorBackgroundEvent;
 import org.apache.kafka.clients.consumer.internals.events.EventProcessor;
@@ -112,6 +113,7 @@ import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -340,7 +342,6 @@ public class AsyncKafkaConsumerTest {
         assertDoesNotThrow(() -> consumer.poll(Duration.ZERO));
     }
 
-    @Test
     public void testWakeupAfterNonEmptyFetch() {
         consumer = newConsumer();
         final String topicName = "foo";
@@ -456,6 +457,8 @@ public class AsyncKafkaConsumerTest {
         topicPartitionOffsets.put(t1, new OffsetAndMetadata(20L, Optional.of(1), ""));
 
         consumer.assign(Arrays.asList(t0, t1));
+        consumer.seek(t0, 10);
+        consumer.seek(t1, 20);
 
         assertDoesNotThrow(() -> consumer.commitAsync(topicPartitionOffsets, callback));
 
@@ -488,6 +491,15 @@ public class AsyncKafkaConsumerTest {
         assertMockCommitCallbackInvoked(() -> consumer.close(),
             callback,
             null);
+    }
+
+    @Test
+    public void testVerifyApplicationEventOnShutdown() {
+        consumer = newConsumer();
+        doReturn(null).when(applicationEventHandler).addAndGet(any(), any());
+        consumer.close();
+        verify(applicationEventHandler, times(2)).addAndGet(any(ConsumerCloseApplicationEvent.class), any());
+        verify(applicationEventHandler).add(any(CommitApplicationEvent.class));
     }
 
     private void assertMockCommitCallbackInvoked(final Executable task,
@@ -657,7 +669,7 @@ public class AsyncKafkaConsumerTest {
 
         Map<TopicPartition, OffsetAndTimestamp> result =
                 assertDoesNotThrow(() -> consumer.offsetsForTimes(timestampToSearch,
-                        Duration.ofMillis(0)));
+                        Duration.ZERO));
         assertEquals(expectedResult, result);
         verify(applicationEventHandler, never()).addAndGet(ArgumentMatchers.isA(ListOffsetsApplicationEvent.class),
             ArgumentMatchers.isA(Timer.class));
@@ -1005,7 +1017,8 @@ public class AsyncKafkaConsumerTest {
 
     @Test
     public void testGroupIdNotNullAndValid() {
-        final Properties props = requiredConsumerPropertiesAndGroupId("consumerGroupA");
+        final Properties props = requiredConsumerProperties();
+        props.put(ConsumerConfig.GROUP_ID_CONFIG, "consumerGroupA");
         props.put(ConsumerConfig.AUTO_COMMIT_INTERVAL_MS_CONFIG, 10000);
         props.put(THROW_ON_FETCH_STABLE_OFFSET_UNSUPPORTED, true);
         final ConsumerConfig config = new ConsumerConfig(props);

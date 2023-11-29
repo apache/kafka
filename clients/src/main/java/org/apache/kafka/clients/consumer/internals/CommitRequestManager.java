@@ -317,10 +317,11 @@ public class CommitRequestManager implements RequestManager {
      */
     @Override
     public NetworkClientDelegate.PollResult pollOnClose() {
-        if (!pendingRequests.hasUnsentRequests() || !coordinatorRequestManager.coordinator().isPresent())
+        if (!pendingRequests.hasUnsentRequests())
             return EMPTY;
 
         List<NetworkClientDelegate.UnsentRequest> requests = pendingRequests.drainOnClose();
+        System.out.print("ddraining + " + requests);
         return new NetworkClientDelegate.PollResult(Long.MAX_VALUE, requests);
     }
 
@@ -785,7 +786,7 @@ public class CommitRequestManager implements RequestManager {
             unsentOffsetFetches.clear();
         }
 
-        private List<NetworkClientDelegate.UnsentRequest> drainOnClose() {
+        public List<NetworkClientDelegate.UnsentRequest> drainOnClose() {
             ArrayList<NetworkClientDelegate.UnsentRequest> res = new ArrayList<>();
             res.addAll(unsentOffsetCommits.stream().map(OffsetCommitRequestState::toUnsentRequest).collect(Collectors.toList()));
             clearAll();

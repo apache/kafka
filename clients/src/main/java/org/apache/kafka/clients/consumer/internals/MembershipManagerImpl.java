@@ -114,14 +114,14 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
     /**
      * TopicPartition comparator based on topic name and partition id.
      */
-    private final static TopicPartitionComparator TOPIC_PARTITION_COMPARATOR =
+    final static TopicPartitionComparator TOPIC_PARTITION_COMPARATOR =
             new TopicPartitionComparator();
 
     /**
      * TopicIdPartition comparator based on topic name and partition id (ignoring ID while sorting,
      * as this is sorted mainly for logging purposes).
      */
-    private final static TopicIdPartitionComparator TOPIC_ID_PARTITION_COMPARATOR =
+    final static TopicIdPartitionComparator TOPIC_ID_PARTITION_COMPARATOR =
             new TopicIdPartitionComparator();
 
     /**
@@ -594,6 +594,28 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
         // Return future to indicate that the leave group is done when the callbacks
         // complete, and the transition to send the heartbeat has been made.
         return leaveResult;
+    }
+
+    /**
+     * When closing down the consumer.  The partitions are already revoked by the application thread therefore we just
+     * need to transition the state to LEAVING and set the epoch to -1/-2.
+     */
+    @Override
+    public void leaveGroupOnClose() {
+        if (state == MemberState.UNSUBSCRIBED ||
+                state == MemberState.FATAL ||
+                state == MemberState.LEAVING) {
+            return;
+        }
+
+        if (state == MemberState.PREPARE_LEAVING) {
+            transitionToSendingLeaveGroup();
+            return;
+        }
+
+        transitionTo(MemberState.PREPARE_LEAVING);
+        transitionToSendingLeaveGroup();
+        leaveGroupInProgress = Optional.of(CompletableFuture.completedFuture(null));
     }
 
     /**
