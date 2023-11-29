@@ -90,6 +90,7 @@ public class MockAdminClient extends AdminClient {
     private final String clusterId;
     private final List<List<String>> brokerLogDirs;
     private final List<Map<String, String>> brokerConfigs;
+    private final Map<String, Map<String, String>> clientMetricsConfigs;
 
     private Node controller;
     private int timeoutNextRequests = 0;
@@ -238,6 +239,7 @@ public class MockAdminClient extends AdminClient {
         this.defaultReplicationFactor = defaultReplicationFactor;
         this.brokerLogDirs = brokerLogDirs;
         this.brokerConfigs = new ArrayList<>();
+        this.clientMetricsConfigs = new HashMap<>();
         for (int i = 0; i < brokers.size(); i++) {
             final Map<String, String> config = new HashMap<>();
             config.put("default.replication.factor", String.valueOf(defaultReplicationFactor));
@@ -823,6 +825,13 @@ public class MockAdminClient extends AdminClient {
                 }
                 throw new UnknownTopicOrPartitionException("Resource " + resource + " not found.");
             }
+            case CLIENT_METRICS: {
+                String resourceName = resource.name();
+                if (resourceName.isEmpty()) {
+                    throw new InvalidRequestException("Empty resource name");
+                }
+                return toConfigObject(clientMetricsConfigs.get(resourceName));
+            }
             default:
                 throw new UnsupportedOperationException("Not implemented yet");
         }
@@ -914,6 +923,34 @@ public class MockAdminClient extends AdminClient {
                     }
                 }
                 topicMetadata.configs = newMap;
+                return null;
+            }
+            case CLIENT_METRICS: {
+                String resourceName = resource.name();
+
+                if (resourceName.isEmpty()) {
+                    return new InvalidRequestException("Empty resource name");
+                }
+
+                if (!clientMetricsConfigs.containsKey(resourceName)) {
+                    clientMetricsConfigs.put(resourceName, new HashMap<>());
+                }
+
+                HashMap<String, String> newMap = new HashMap<>(clientMetricsConfigs.get(resourceName));
+                for (AlterConfigOp op : ops) {
+                    switch (op.opType()) {
+                        case SET:
+                            newMap.put(op.configEntry().name(), op.configEntry().value());
+                            break;
+                        case DELETE:
+                            newMap.remove(op.configEntry().name());
+                            break;
+                        default:
+                            return new InvalidRequestException(
+                                "Unsupported op type " + op.opType());
+                    }
+                }
+                clientMetricsConfigs.put(resourceName, newMap);
                 return null;
             }
             default:

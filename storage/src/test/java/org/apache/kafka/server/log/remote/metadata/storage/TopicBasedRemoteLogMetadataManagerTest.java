@@ -70,18 +70,20 @@ public class TopicBasedRemoteLogMetadataManagerTest {
     }
 
     @Test
-    public void testInternalTopicExists() {
+    public void testDoesTopicExist() {
         Properties adminConfig = remoteLogMetadataManagerHarness.adminClientConfig();
         ListenerName listenerName = remoteLogMetadataManagerHarness.listenerName();
         try (Admin admin = remoteLogMetadataManagerHarness.createAdminClient(listenerName, adminConfig)) {
-            String topic = topicBasedRlmm().config().remoteLogMetadataTopicName();
+            String topic = "test-topic-exist";
+            remoteLogMetadataManagerHarness.createTopic(topic, 1, 1, new Properties(),
+                    listenerName, adminConfig);
             boolean doesTopicExist = topicBasedRlmm().doesTopicExist(admin, topic);
             Assertions.assertTrue(doesTopicExist);
         }
     }
 
     @Test
-    public void testTopicDoesNotExists() {
+    public void testTopicDoesNotExist() {
         Properties adminConfig = remoteLogMetadataManagerHarness.adminClientConfig();
         ListenerName listenerName = remoteLogMetadataManagerHarness.listenerName();
         try (Admin admin = remoteLogMetadataManagerHarness.createAdminClient(listenerName, adminConfig)) {
