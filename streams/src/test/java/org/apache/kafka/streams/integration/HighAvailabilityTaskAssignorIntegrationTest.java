@@ -138,7 +138,7 @@ public class HighAvailabilityTaskAssignorIntegrationTest {
         );
 
         final String storeName = "store" + testId;
-        final String storeChangelog = appId + "-store" + testId + "-changelog";
+        final String storeChangelog = appId + "-store-changelog";
         final Set<TopicPartition> changelogTopicPartitions = mkSet(
             new TopicPartition(storeChangelog, 0),
             new TopicPartition(storeChangelog, 1)
