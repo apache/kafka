@@ -23,25 +23,24 @@ import java.util.List;
 import java.util.Map;
 
 public class DirectoryId {
-
     /**
-     * A Uuid that is used to identify new or unknown dir assignments.
-     */
-    public static final Uuid UNASSIGNED = new Uuid(0L, 0L);
-
-    /**
-     * A Uuid that is used to represent unspecified offline dirs.
-     */
-    public static final Uuid LOST = new Uuid(0L, 1L);
-
-    /**
-     * A Uuid that is used to represent and unspecified log directory,
+     * A Uuid that is used to represent an unspecified log directory,
      * that is expected to have been previously selected to host an
      * associated replica. This contrasts with {@code UNASSIGNED_DIR},
      * which is associated with (typically new) replicas that may not
      * yet have been placed in any log directory.
      */
-    public static final Uuid MIGRATING = new Uuid(0L, 2L);
+    public static final Uuid MIGRATING = new Uuid(0L, 0L);
+
+    /**
+     * A Uuid that is used to represent directories that are pending an assignment.
+     */
+    public static final Uuid UNASSIGNED = new Uuid(0L, 1L);
+
+    /**
+     * A Uuid that is used to represent unspecified offline dirs.
+     */
+    public static final Uuid LOST = new Uuid(0L, 2L);
 
     /**
      * Static factory to generate a directory ID.
