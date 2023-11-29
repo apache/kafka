@@ -171,9 +171,19 @@ public class CoordinatorRuntimeTest {
         }
 
         @Override
-        public long append(TopicPartition tp, List<String> records) throws KafkaException {
+        public long append(
+            TopicPartition tp,
+            long producerId,
+            short producerEpoch,
+            List<String> records
+        ) throws KafkaException {
             if (records.size() <= maxRecordsInBatch) {
-                return super.append(tp, records);
+                return super.append(
+                    tp,
+                    producerId,
+                    producerEpoch,
+                    records
+                );
             } else {
                 throw new KafkaException(String.format("Number of records %d greater than the maximum allowed %d.",
                     records.size(), maxRecordsInBatch));
@@ -197,7 +207,11 @@ public class CoordinatorRuntimeTest {
         }
 
         @Override
-        public void replay(String record) throws RuntimeException {
+        public void replay(
+            long producerId,
+            short producerEpoch,
+            String record
+        ) throws RuntimeException {
             records.add(record);
         }
 
@@ -844,7 +858,11 @@ public class CoordinatorRuntimeTest {
         // an exception when replay is called.
         ctx.coordinator = new MockCoordinatorShard(ctx.snapshotRegistry, ctx.timer) {
             @Override
-            public void replay(String record) throws RuntimeException {
+            public void replay(
+                long producerId,
+                short producerEpoch,
+                String record
+            ) throws RuntimeException {
                 throw new IllegalArgumentException("error");
             }
         };
@@ -908,6 +926,75 @@ public class CoordinatorRuntimeTest {
         assertEquals(0L, ctx.lastCommittedOffset);
         assertEquals(Arrays.asList(0L, 2L), ctx.snapshotRegistry.epochsList());
         assertEquals(mkSet("record1", "record2"), ctx.coordinator.records());
+    }
+
+    @Test
+    public void testScheduleTransactionalWriteOp() {
+        MockTimer timer = new MockTimer();
+        MockPartitionWriter writer = mock(MockPartitionWriter.class);
+        MockCoordinatorShard coordinator = mock(MockCoordinatorShard.class);
+        MockCoordinatorShardBuilder shardBuilder = new MockCoordinatorShardBuilder() {
+            @Override
+            public MockCoordinatorShard build() {
+                return coordinator;
+            }
+        };
+        MockCoordinatorShardBuilderSupplier shardBuilderSupplier = new MockCoordinatorShardBuilderSupplier() {
+            @Override
+            public CoordinatorShardBuilder<MockCoordinatorShard, String> get() {
+                return shardBuilder;
+            }
+        };
+
+        CoordinatorRuntime<MockCoordinatorShard, String> runtime =
+            new CoordinatorRuntime.Builder<MockCoordinatorShard, String>()
+                .withTime(timer.time())
+                .withTimer(timer)
+                .withLoader(new MockCoordinatorLoader())
+                .withEventProcessor(new DirectEventProcessor())
+                .withPartitionWriter(writer)
+                .withCoordinatorShardBuilderSupplier(shardBuilderSupplier)
+                .withCoordinatorRuntimeMetrics(mock(GroupCoordinatorRuntimeMetrics.class))
+                .withCoordinatorMetrics(mock(GroupCoordinatorMetrics.class))
+                .build();
+
+        // Schedule the loading.
+        runtime.scheduleLoadOperation(TP, 10);
+
+        // Verify that the listener was registered.
+        verify(writer, times(1)).registerListener(eq(TP), any());
+
+        // Schedule a transactional write.
+        runtime.scheduleTransactionalWriteOperation(
+            "tnx-write",
+            TP,
+            "transactional-id",
+            100L,
+            (short) 50,
+            state -> new CoordinatorResult<>(Arrays.asList("record1", "record2"), "response")
+        );
+
+        // Verify that the writer got the records with the correct
+        // producer id and producer epoch.
+        verify(writer, times(1)).append(
+            eq(TP),
+            eq(100L),
+            eq((short) 50),
+            eq(Arrays.asList("record1", "record2"))
+        );
+
+        // Verify that the coordinator got the records with the correct
+        // producer id and producer epoch.
+        verify(coordinator, times(1)).replay(
+            eq(100L),
+            eq((short) 50),
+            eq("record1")
+        );
+        verify(coordinator, times(1)).replay(
+            eq(100L),
+            eq((short) 50),
+            eq("record2")
+        );
     }
 
     @Test
