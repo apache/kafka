@@ -21,8 +21,7 @@ import java.nio.charset.StandardCharsets
 import java.util.concurrent.TimeUnit
 import java.util.{Collections, Properties}
 import joptsimple._
-import kafka.server.DynamicConfig.QuotaConfigs
-import kafka.server.{Defaults, DynamicBrokerConfig, DynamicConfig, KafkaConfig}
+import kafka.server.{Defaults, DynamicBrokerConfig, KafkaConfig}
 import kafka.utils.{Exit, Logging, PasswordEncoder}
 import kafka.utils.Implicits._
 import kafka.zk.{AdminZkClient, KafkaZkClient}
@@ -35,6 +34,8 @@ import org.apache.kafka.common.quota.{ClientQuotaAlteration, ClientQuotaEntity, 
 import org.apache.kafka.common.security.JaasUtils
 import org.apache.kafka.common.security.scram.internals.{ScramCredentialUtils, ScramFormatter, ScramMechanism}
 import org.apache.kafka.common.utils.{Sanitizer, Time, Utils}
+import org.apache.kafka.server.DynamicConfig
+import org.apache.kafka.server.DynamicConfig.QuotaConfigs
 import org.apache.kafka.server.config.{ConfigEntityName, ConfigType}
 import org.apache.kafka.server.util.{CommandDefaultOptions, CommandLineUtils}
 import org.apache.kafka.storage.internals.log.LogConfig
@@ -444,7 +445,7 @@ object ConfigCommand extends Logging {
           alterUserScramCredentialConfigs(adminClient, entityNames.head, scramConfigsToAddMap, scramConfigsToDelete)
         }
       case ConfigType.IP =>
-        val unknownConfigs = (configsToBeAdded.keys ++ configsToBeDeleted).filterNot(key => DynamicConfig.Ip.names.contains(key))
+        val unknownConfigs = (configsToBeAdded.keys ++ configsToBeDeleted).filterNot(key => DynamicConfig.Ip.NAMES.contains(key))
         if (unknownConfigs.nonEmpty)
           throw new IllegalArgumentException(s"Only connection quota configs can be added for '${ConfigType.IP}' using --bootstrap-server. Unexpected config names: ${unknownConfigs.mkString(",")}")
         alterQuotaConfigs(adminClient, entityTypes, entityNames, configsToBeAddedMap, configsToBeDeleted)
@@ -824,11 +825,11 @@ object ConfigCommand extends Logging {
     val nl = System.getProperty("line.separator")
     val addConfig = parser.accepts("add-config", "Key Value pairs of configs to add. Square brackets can be used to group values which contain commas: 'k1=v1,k2=[v1,v2,v2],k3=v3'. The following is a list of valid configurations: " +
       "For entity-type '" + ConfigType.TOPIC + "': " + LogConfig.configNames.asScala.map("\t" + _).mkString(nl, nl, nl) +
-      "For entity-type '" + ConfigType.BROKER + "': " + DynamicConfig.Broker.names.asScala.toSeq.sorted.map("\t" + _).mkString(nl, nl, nl) +
-      "For entity-type '" + ConfigType.USER + "': " + DynamicConfig.User.names.asScala.toSeq.sorted.map("\t" + _).mkString(nl, nl, nl) +
-      "For entity-type '" + ConfigType.CLIENT + "': " + DynamicConfig.Client.names.asScala.toSeq.sorted.map("\t" + _).mkString(nl, nl, nl) +
-      "For entity-type '" + ConfigType.IP + "': " + DynamicConfig.Ip.names.asScala.toSeq.sorted.map("\t" + _).mkString(nl, nl, nl) +
-      "For entity-type '" + ConfigType.CLIENT_METRICS + "': " + DynamicConfig.ClientMetrics.names.asScala.toSeq.sorted.map("\t" + _).mkString(nl, nl, nl) +
+      "For entity-type '" + ConfigType.BROKER + "': " + DynamicConfig.Broker.NAMES.asScala.toSeq.sorted.map("\t" + _).mkString(nl, nl, nl) +
+      "For entity-type '" + ConfigType.USER + "': " + DynamicConfig.User.NAMES.asScala.toSeq.sorted.map("\t" + _).mkString(nl, nl, nl) +
+      "For entity-type '" + ConfigType.CLIENT + "': " + DynamicConfig.Client.NAMES.asScala.toSeq.sorted.map("\t" + _).mkString(nl, nl, nl) +
+      "For entity-type '" + ConfigType.IP + "': " + DynamicConfig.Ip.NAMES.asScala.toSeq.sorted.map("\t" + _).mkString(nl, nl, nl) +
+      "For entity-type '" + ConfigType.CLIENT_METRICS + "': " + DynamicConfig.ClientMetrics.NAMES.asScala.toSeq.sorted.map("\t" + _).mkString(nl, nl, nl) +
       s"Entity types '${ConfigType.USER}' and '${ConfigType.CLIENT}' may be specified together to update config for clients of a specific user.")
       .withRequiredArg
       .ofType(classOf[String])

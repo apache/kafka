@@ -17,7 +17,7 @@
 
 package kafka.zk.migration
 
-import kafka.server.{DynamicBrokerConfig, DynamicConfig, ZkAdminManager}
+import kafka.server.{DynamicBrokerConfig, ZkAdminManager}
 import kafka.utils.{Logging, PasswordEncoder}
 import kafka.zk.ZkMigrationClient.{logAndRethrow, wrapZkException}
 import kafka.zk._
@@ -31,6 +31,7 @@ import org.apache.kafka.common.quota.ClientQuotaEntity
 import org.apache.kafka.common.security.scram.internals.ScramCredentialUtils
 import org.apache.kafka.metadata.migration.ConfigMigrationClient.ClientQuotaVisitor
 import org.apache.kafka.metadata.migration.{ConfigMigrationClient, MigrationClientException, ZkMigrationLeadershipState}
+import org.apache.kafka.server.DynamicConfig
 import org.apache.kafka.server.config.{ConfigEntityName, ConfigType}
 import org.apache.zookeeper.KeeperException.Code
 import org.apache.zookeeper.{CreateMode, KeeperException}
@@ -255,14 +256,14 @@ class ZkConfigMigrationClient(
     val props = new Properties()
 
     val (configType, path, configKeys) = if (user.isDefined && client.isEmpty) {
-      (Some(ConfigType.USER), user, DynamicConfig.User.configKeys)
+      (Some(ConfigType.USER), user, DynamicConfig.User.CONFIG_KEYS)
     } else if (user.isDefined && client.isDefined) {
       (Some(ConfigType.USER), Some(s"${user.get}/clients/${client.get}"),
-        DynamicConfig.User.configKeys)
+        DynamicConfig.User.CONFIG_KEYS)
     } else if (client.isDefined) {
-      (Some(ConfigType.CLIENT), client, DynamicConfig.Client.configKeys)
+      (Some(ConfigType.CLIENT), client, DynamicConfig.Client.CONFIG_KEYS)
     } else if (ip.isDefined) {
-      (Some(ConfigType.IP), ip, DynamicConfig.Ip.configKeys)
+      (Some(ConfigType.IP), ip, DynamicConfig.Ip.CONFIG_KEYS)
     } else {
       (None, None, Map.empty.asJava)
     }
