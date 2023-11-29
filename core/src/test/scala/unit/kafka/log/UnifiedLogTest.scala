@@ -36,7 +36,7 @@ import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.apache.kafka.server.util.{KafkaScheduler, MockTime, Scheduler}
 import org.apache.kafka.storage.internals.checkpoint.{LeaderEpochCheckpointFile, PartitionMetadataFile}
 import org.apache.kafka.storage.internals.epoch.LeaderEpochFileCache
-import org.apache.kafka.storage.internals.log.{AbortedTxn, AppendOrigin, EpochEntry, FetchIsolation, LogConfig, LogFileUtils, LogOffsetMetadata, LogOffsetSnapshot, LogOffsetsListener, LogSegment, LogStartOffsetIncrementReason, ProducerStateManager, ProducerStateManagerConfig, RecordValidationException, VerificationGuard}
+import org.apache.kafka.storage.internals.log.{AbortedTxn, AppendOrigin, EpochEntry, FetchIsolation, LogConfig, LogFileUtils, LogOffsetMetadata, LogOffsetSnapshot, LogOffsetsListener, LogSegment, LogSegments, LogStartOffsetIncrementReason, ProducerStateManager, ProducerStateManagerConfig, RecordValidationException, VerificationGuard}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.junit.jupiter.params.ParameterizedTest
@@ -3909,6 +3909,121 @@ class UnifiedLogTest {
     val verificationGuard = log.maybeStartTransactionVerification(producerId, sequence, producerEpoch)
     // Append should not throw error.
     log.appendAsLeader(transactionalRecords, leaderEpoch = 0, verificationGuard = verificationGuard)
+  }
+
+  @Test
+  def testDeletableSegmentsFilter(): Unit = {
+    val logConfig = LogTestUtils.createLogConfig(segmentBytes = 1024 * 1024)
+    val log = createLog(logDir, logConfig)
+    for (_ <- 0 to 8) {
+      val records = TestUtils.records(List(
+        new SimpleRecord(mockTime.milliseconds, "a".getBytes),
+      ))
+      log.appendAsLeader(records, leaderEpoch = 0)
+      log.roll()
+    }
+    log.maybeIncrementHighWatermark(log.logEndOffsetMetadata)
+
+    assertEquals(10, log.logSegments.size())
+
+    {
+      val deletable = log.deletableSegments(
+        (segment: LogSegment, _: Option[LogSegment]) => segment.baseOffset <= 5)
+      val expected = log.nonActiveLogSegmentsFrom(0L).asScala.filter(segment => segment.baseOffset <= 5).toList
+      assertEquals(6, expected.length)
+      assertEquals(expected, deletable.toList)
+    }
+
+    {
+      val deletable = log.deletableSegments((_: LogSegment, _: Option[LogSegment]) => true)
+      val expected = log.nonActiveLogSegmentsFrom(0L).asScala.toList
+      assertEquals(9, expected.length)
+      assertEquals(expected, deletable.toList)
+    }
+
+    {
+      val records = TestUtils.records(List(
+        new SimpleRecord(mockTime.milliseconds, "a".getBytes),
+      ))
+      log.appendAsLeader(records, leaderEpoch = 0)
+      log.maybeIncrementHighWatermark(log.logEndOffsetMetadata)
+      val deletable = log.deletableSegments((_: LogSegment, _: Option[LogSegment]) => true)
+      val expected = log.logSegments.asScala.toList
+      assertEquals(10, expected.length)
+      assertEquals(expected, deletable.toList)
+    }
+  }
+
+  @Test
+  def testDeletableSegmentsIteration(): Unit = {
+    val logConfig = LogTestUtils.createLogConfig(segmentBytes = 1024 * 1024)
+    val log = createLog(logDir, logConfig)
+    for (_ <- 0 to 8) {
+      val records = TestUtils.records(List(
+        new SimpleRecord(mockTime.milliseconds, "a".getBytes),
+      ))
+      log.appendAsLeader(records, leaderEpoch = 0)
+      log.roll()
+    }
+    log.maybeIncrementHighWatermark(log.logEndOffsetMetadata)
+
+    assertEquals(10, log.logSegments.size())
+
+    var offset = 0
+    val deletableSegments = log.deletableSegments(
+      (segment: LogSegment, nextSegmentOpt: Option[LogSegment]) => {
+        assertEquals(offset, segment.baseOffset)
+        val logSegments = new LogSegments(log.topicPartition)
+        log.logSegments.forEach(segment => logSegments.add(segment))
+        val floorSegmentOpt = logSegments.floorSegment(offset)
+        assertTrue(floorSegmentOpt.isPresent)
+        assertEquals(floorSegmentOpt.get, segment)
+        if (offset == log.logEndOffset) {
+          assertFalse(nextSegmentOpt.isDefined)
+        } else {
+          assertTrue(nextSegmentOpt.isDefined)
+          val higherSegmentOpt = logSegments.higherSegment(segment.baseOffset)
+          assertTrue(higherSegmentOpt.isPresent)
+          assertEquals(segment.baseOffset + 1, higherSegmentOpt.get.baseOffset)
+          assertEquals(higherSegmentOpt.get, nextSegmentOpt.get)
+        }
+        offset += 1
+        true
+      })
+    assertEquals(10L, log.logSegments.size())
+    assertEquals(log.nonActiveLogSegmentsFrom(0L).asScala.toSeq, deletableSegments.toSeq)
+  }
+
+  @Test
+  def testActiveSegmentDeletionDueToRetentionTimeBreachWithRemoteStorage(): Unit = {
+    val logConfig = LogTestUtils.createLogConfig(indexIntervalBytes = 1, segmentIndexBytes = 12,
+      retentionMs = 3, localRetentionMs = 1, fileDeleteDelayMs = 0, remoteLogStorageEnable = true)
+    val log = createLog(logDir, logConfig, remoteStorageSystemEnable = true)
+
+    // Append 1 message to the active segment
+    log.appendAsLeader(TestUtils.records(List(new SimpleRecord(mockTime.milliseconds(), "a".getBytes))),
+      leaderEpoch = 0)
+    // Update the highWatermark so that these segments will be eligible for deletion.
+    log.updateHighWatermark(log.logEndOffset)
+    assertEquals(1, log.logSegments.size)
+    assertEquals(0, log.activeSegment.baseOffset())
+
+    mockTime.sleep(2)
+    // It should have rolled the active segment as they are eligible for deletion
+    log.deleteOldSegments()
+    assertEquals(2, log.logSegments.size)
+    log.logSegments.asScala.zipWithIndex.foreach {
+      case (segment, idx) => assertEquals(idx, segment.baseOffset)
+    }
+
+    // Once rolled, the segment should be uploaded to remote storage and eligible for deletion
+    log.updateHighestOffsetInRemoteStorage(1)
+    log.deleteOldSegments()
+    assertEquals(1, log.logSegments.size)
+    assertEquals(1, log.logSegments.asScala.head.baseOffset())
+    assertEquals(1, log.localLogStartOffset())
+    assertEquals(1, log.logEndOffset)
+    assertEquals(0, log.logStartOffset)
   }
 
   private def appendTransactionalToBuffer(buffer: ByteBuffer,

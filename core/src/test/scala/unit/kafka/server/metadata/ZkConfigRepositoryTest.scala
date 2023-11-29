@@ -22,6 +22,7 @@ import kafka.server.metadata.ZkConfigRepository
 import kafka.zk.KafkaZkClient
 import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.config.ConfigResource.Type
+import org.apache.kafka.common.errors.InvalidRequestException
 import org.junit.jupiter.api.Assertions.{assertEquals, assertThrows}
 import org.junit.jupiter.api.Test
 import org.mockito.Mockito.{mock, when}
@@ -48,7 +49,9 @@ class ZkConfigRepositoryTest {
   def testUnsupportedTypes(): Unit = {
     val zkClient: KafkaZkClient = mock(classOf[KafkaZkClient])
     val zkConfigRepository = ZkConfigRepository(zkClient)
-    Type.values().foreach(value => if (value != Type.BROKER && value != Type.TOPIC)
+    Type.values().foreach(value => if (value != Type.BROKER && value != Type.TOPIC && value != Type.CLIENT_METRICS)
       assertThrows(classOf[IllegalArgumentException], () => zkConfigRepository.config(new ConfigResource(value, value.toString))))
+    // Validate exception for CLIENT_METRICS.
+    assertThrows(classOf[InvalidRequestException], () => zkConfigRepository.config(new ConfigResource(Type.CLIENT_METRICS, Type.CLIENT_METRICS.toString)))
   }
 }

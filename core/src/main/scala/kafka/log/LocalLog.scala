@@ -32,7 +32,7 @@ import java.util
 import java.util.concurrent.atomic.AtomicLong
 import java.util.regex.Pattern
 import java.util.{Collections, Optional}
-import scala.collection.mutable.{ArrayBuffer, ListBuffer}
+import scala.collection.mutable.ListBuffer
 import scala.collection.{Seq, immutable}
 import scala.compat.java8.OptionConverters._
 import scala.jdk.CollectionConverters._
@@ -254,36 +254,6 @@ class LocalLog(@volatile private var _dir: File,
       removeAndDeleteSegments(segments.values.asScala, asyncDelete = false, LogDeletion(this))
       isMemoryMappedBufferClosed = true
       deletableSegments
-    }
-  }
-
-  /**
-   * Find segments starting from the oldest until the user-supplied predicate is false.
-   * A final segment that is empty will never be returned.
-   *
-   * @param predicate A function that takes in a candidate log segment, the next higher segment
-   *                  (if there is one). It returns true iff the segment is deletable.
-   * @return the segments ready to be deleted
-   */
-  private[log] def deletableSegments(predicate: (LogSegment, Option[LogSegment]) => Boolean): Iterable[LogSegment] = {
-    if (segments.isEmpty) {
-      Seq.empty
-    } else {
-      val deletable = ArrayBuffer.empty[LogSegment]
-      val segmentsIterator = segments.values.iterator
-      var segmentOpt = nextOption(segmentsIterator)
-      while (segmentOpt.isDefined) {
-        val segment = segmentOpt.get
-        val nextSegmentOpt = nextOption(segmentsIterator)
-        val isLastSegmentAndEmpty = nextSegmentOpt.isEmpty && segment.size == 0
-        if (predicate(segment, nextSegmentOpt) && !isLastSegmentAndEmpty) {
-          deletable += segment
-          segmentOpt = nextSegmentOpt
-        } else {
-          segmentOpt = Option.empty
-        }
-      }
-      deletable
     }
   }
 
@@ -982,7 +952,7 @@ object LocalLog extends Logging {
    * @tparam T the type of object held within the iterator
    * @return Some(iterator.next) if a next element exists, None otherwise.
    */
-  private def nextOption[T](iterator: util.Iterator[T]): Option[T] = {
+  private[log] def nextOption[T](iterator: util.Iterator[T]): Option[T] = {
     if (iterator.hasNext)
       Some(iterator.next())
     else

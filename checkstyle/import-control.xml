@@ -198,6 +198,7 @@
     </subpackage>
 
     <subpackage name="telemetry">
+      <allow pkg="io.opentelemetry.proto"/>
       <allow pkg="org.apache.kafka.common" />
     </subpackage>
 

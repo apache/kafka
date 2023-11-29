@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.processor.internals.assignment;
 
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
@@ -26,7 +27,6 @@ import java.util.SortedMap;
 import java.util.SortedSet;
 import java.util.TreeMap;
 import java.util.TreeSet;
-import java.util.stream.Collectors;
 
 public class Graph<V extends Comparable<V>> {
     public class Edge {
@@ -103,8 +103,10 @@ public class Graph<V extends Comparable<V>> {
         }
     }
 
-    private final SortedMap<V, SortedMap<V, Edge>> adjList = new TreeMap<>();
-    private final SortedSet<V> nodes = new TreeSet<>();
+    // Allow null as special internal node
+    private final SortedMap<V, SortedMap<V, Edge>> adjList = new TreeMap<>(Comparator.nullsFirst(Comparator.naturalOrder()));
+    // Allow null as special internal node
+    private final SortedSet<V> nodes = new TreeSet<>(Comparator.nullsFirst(Comparator.naturalOrder()));
     private final boolean isResidualGraph;
     private V sourceNode, sinkNode;
 
@@ -117,6 +119,8 @@ public class Graph<V extends Comparable<V>> {
     }
 
     public void addEdge(final V u, final V v, final int capacity, final int cost, final int flow) {
+        Objects.requireNonNull(u);
+        Objects.requireNonNull(v);
         addEdge(u, new Edge(v, capacity, cost, capacity - flow, flow));
     }
 
@@ -200,13 +204,40 @@ public class Graph<V extends Comparable<V>> {
         return residualGraph;
     }
 
+    private void addDummySourceNode(final Graph<V> residualGraph) {
+        if (!residualGraph.isResidualGraph) {
+            throw new IllegalStateException("Graph should be residual graph to add dummy source node");
+        }
+
+        // Add a dummy null node connected to every existing node with residual flow 1 and cost 0
+        // Then try to find negative cylce starting using dummy node as source node. Since there's no
+        // path from original nodes to null node, negative cycles must be within original nodes.
+        final TreeMap<V, Edge> destMap = new TreeMap<>();
+        for (final V node : residualGraph.nodes) {
+            final Edge edge = new Edge(node, 1, 0, 1, 0);
+            destMap.put(node, edge);
+        }
+        residualGraph.adjList.put(null, destMap);
+        residualGraph.nodes.add(null);
+    }
+
+    private void removeDummySourceNode(final Graph<V> residualGraph) {
+        if (!residualGraph.isResidualGraph) {
+            throw new IllegalStateException("Graph should be residual graph to remove dummy source node");
+        }
+        residualGraph.adjList.remove(null);
+        residualGraph.nodes.remove(null);
+    }
+
     /**
      * Solve min cost flow with cycle canceling algorithm.
      */
     public void solveMinCostFlow() {
         validateMinCostGraph();
         final Graph<V> residualGraph = residualGraph();
+        addDummySourceNode(residualGraph);
         residualGraph.cancelNegativeCycles();
+        removeDummySourceNode(residualGraph);
 
         for (final Entry<V, SortedMap<V, Edge>> nodeEdges : adjList.entrySet()) {
             final V node = nodeEdges.getKey();
@@ -290,25 +321,23 @@ public class Graph<V extends Comparable<V>> {
         boolean cyclePossible = true;
         while (cyclePossible) {
             cyclePossible = false;
-            for (final V node : nodes) {
-                final Map<V, V> parentNodes = new HashMap<>();
-                final Map<V, Edge> parentEdges = new HashMap<>();
-                final V possibleNodeInCycle = detectNegativeCycles(node, parentNodes, parentEdges);
+            final Map<V, V> parentNodes = new HashMap<>();
+            final Map<V, Edge> parentEdges = new HashMap<>();
+            final V possibleNodeInCycle = detectNegativeCycles(null, parentNodes, parentEdges);
 
-                if (possibleNodeInCycle == null) {
-                    continue;
-                }
-
-                final Set<V> visited = new HashSet<>();
-                V nodeInCycle = possibleNodeInCycle;
-                while (!visited.contains(nodeInCycle)) {
-                    visited.add(nodeInCycle);
-                    nodeInCycle = parentNodes.get(nodeInCycle);
-                }
-
-                cyclePossible = true;
-                cancelNegativeCycle(nodeInCycle, parentNodes, parentEdges);
+            if (possibleNodeInCycle == null) {
+                continue;
             }
+
+            final Set<V> visited = new HashSet<>();
+            V nodeInCycle = possibleNodeInCycle;
+            while (!visited.contains(nodeInCycle)) {
+                visited.add(nodeInCycle);
+                nodeInCycle = parentNodes.get(nodeInCycle);
+            }
+
+            cyclePossible = true;
+            cancelNegativeCycle(nodeInCycle, parentNodes, parentEdges);
         }
     }
 
@@ -350,7 +379,7 @@ public class Graph<V extends Comparable<V>> {
     }
 
     /**
-     * Detect negative cycle using Bellman-ford shortest path algorithm.
+     * Detect negative cycle using Bellman-ford's shortest path algorithm.
      * @param source Source node
      * @param parentNodes Parent nodes to store negative cycle nodes
      * @param parentEdges Parent edges to store negative cycle edges
@@ -359,30 +388,33 @@ public class Graph<V extends Comparable<V>> {
      */
     V detectNegativeCycles(final V source, final Map<V, V> parentNodes, final Map<V, Edge> parentEdges) {
         // Use long to account for any overflow
-        final Map<V, Long> distance = nodes.stream().collect(Collectors.toMap(node -> node, node -> (long) Integer.MAX_VALUE));
+        final Map<V, Long> distance = new HashMap<>();
         distance.put(source, 0L);
         final int nodeCount = nodes.size();
 
-        // Iterate nodeCount iterations since Bellaman-Ford will find shortest path in nodeCount - 1
+        // Iterate nodeCount iterations since Bellaman-Ford will find the shortest path in nodeCount - 1
         // iterations. If the distance can still be relaxed in nodeCount iteration, there's a negative
         // cycle
         for (int i = 0; i < nodeCount; i++) {
             // Iterate through all edges
             for (final Entry<V, SortedMap<V, Edge>> nodeEdges : adjList.entrySet()) {
-                final V u = nodeEdges.getKey();
+                final V start = nodeEdges.getKey();
                 for (final Entry<V, Edge> nodeEdge : nodeEdges.getValue().entrySet()) {
                     final Edge edge = nodeEdge.getValue();
                     if (edge.residualFlow == 0) {
                         continue;
                     }
-                    final V v = edge.destination;
-                    if (distance.get(v) > distance.get(u) + edge.cost) {
+                    final V end = edge.destination;
+                    final Long distanceStart = distance.get(start);
+                    final Long distanceEnd = distance.get(end);
+                    // There's a path to u and either we haven't computed V or distance to V is shorter
+                    if (distanceStart != null && (distanceEnd == null || distanceEnd > distanceStart + edge.cost)) {
                         if (i == nodeCount - 1) {
-                            return v;
+                            return end;
                         }
-                        distance.put(v, distance.get(u) + edge.cost);
-                        parentNodes.put(v, u);
-                        parentEdges.put(v, edge);
+                        distance.put(end, distanceStart + edge.cost);
+                        parentNodes.put(end, start);
+                        parentEdges.put(end, edge);
                     }
                 }
             }
