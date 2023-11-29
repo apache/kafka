@@ -29,6 +29,7 @@ import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.TimeoutException;
+import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.errors.LockException;
@@ -88,6 +89,7 @@ public class TaskManager {
     private final TaskExecutor taskExecutor;
 
     private Consumer<byte[], byte[]> mainConsumer;
+    private StreamThread streamThread;
 
     private DeleteRecordsResult deleteRecordsResult;
 
@@ -140,6 +142,10 @@ public class TaskManager {
 
     void setMainConsumer(final Consumer<byte[], byte[]> mainConsumer) {
         this.mainConsumer = mainConsumer;
+    }
+
+    void setStreamThread(final StreamThread streamThread) {
+        this.streamThread = streamThread;
     }
 
     public double totalProducerBlockedTime() {
@@ -1133,6 +1139,20 @@ public class TaskManager {
         removeLostActiveTasksFromStateUpdater();
 
         if (processingMode == EXACTLY_ONCE_V2) {
+            if (!streamThread.threadProducerInstanceIdFuture.isDone()) {
+                streamThread.threadProducerInstanceIdFuture.complete(null);
+            }
+            streamThread.threadProducerInstanceIdFuture = new KafkaFutureImpl<>();
+
+            streamThread.producerInstanceIdFuture = new KafkaFutureImpl<>();
+            streamThread.producerInstanceIdFuture.complete(
+                Collections.singletonMap(
+                    streamThread.getName() + "-producer",
+                    streamThread.threadProducerInstanceIdFuture
+                )
+            );
+
+
             activeTaskCreator.reInitializeThreadProducer();
         }
     }

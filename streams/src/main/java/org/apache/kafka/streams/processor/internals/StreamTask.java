@@ -22,8 +22,10 @@ import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.header.internals.RecordHeaders;
+import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
@@ -111,6 +113,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
     private boolean commitRequested = false;
     private boolean hasPendingTxCommit = false;
     private Optional<Long> timeCurrentIdlingStarted;
+    KafkaFutureImpl<Uuid> producerInstanceId;
 
     @SuppressWarnings({"rawtypes", "this-escape", "checkstyle:ParameterNumber"})
     public StreamTask(final TaskId id,
@@ -715,6 +718,10 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         record = null;
         closeTaskSensor.record();
         partitionsToResume.clear();
+        if (producerInstanceId != null) {
+            producerInstanceId.complete(null);
+            producerInstanceId = null;
+        }
 
         transitionTo(State.CLOSED);
     }

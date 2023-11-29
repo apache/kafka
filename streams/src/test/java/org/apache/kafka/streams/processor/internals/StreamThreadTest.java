@@ -30,11 +30,13 @@ import org.apache.kafka.clients.producer.MockProducer;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.ProducerFencedException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.header.internals.RecordHeaders;
@@ -124,6 +126,7 @@ import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
@@ -150,6 +153,7 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.empty;
 import static org.hamcrest.Matchers.is;
 import static org.hamcrest.Matchers.isA;
+import static org.hamcrest.core.IsInstanceOf.instanceOf;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
@@ -3303,6 +3307,147 @@ public class StreamThreadTest {
 
         Mockito.verify(mainConsumer).poll(Duration.ZERO);
     }
+
+    @Test
+    public void shouldGetThreadProducerInstanceId() throws Exception {
+        getProducerInstanceId(false, StreamsConfig.EXACTLY_ONCE_V2);
+    }
+
+    @Test
+    public void shouldGetThreadProducerInstanceIdWithInternalTimeout() throws Exception {
+        getProducerInstanceId(true, StreamsConfig.AT_LEAST_ONCE);
+    }
+
+    @SuppressWarnings("deprecation")
+    @Test
+    public void shouldGetTaskProducerInstanceIdWithStateUpdatedDisabled() throws Exception {
+        Assume.assumeFalse(stateUpdaterEnabled);
+
+        getProducerInstanceId(false, StreamsConfig.EXACTLY_ONCE);
+    }
+
+    @SuppressWarnings("deprecation")
+    private void getProducerInstanceId(
+        final boolean injectTimeException,
+        final String processingGuarantee
+    ) throws Exception {
+
+        final Uuid producerInstanceId1 = Uuid.randomUuid();
+        final MockProducer<byte[], byte[]> producer = new MockProducer<>();
+        producer.setClientInstanceId(producerInstanceId1);
+        if (injectTimeException) {
+            producer.injectTimeoutException(1);
+        }
+        clientSupplier.prepareProducer(producer);
+
+        final Uuid producerInstanceId2 = Uuid.randomUuid();
+        final MockProducer<byte[], byte[]> producer2 = new MockProducer<>();
+        producer2.setClientInstanceId(producerInstanceId2);
+        if (injectTimeException) {
+            producer2.injectTimeoutException(1);
+        }
+        clientSupplier.prepareProducer(producer2);
+
+        internalTopologyBuilder.addSource(null, "source1", null, null, null, topic1);
+        internalStreamsBuilder.buildAndOptimizeTopology();
+
+        final Properties config = configProps(false);
+        config.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, processingGuarantee);
+        thread = createStreamThread("clientId", new StreamsConfig(config));
+        thread.setState(State.STARTING);
+
+        if (processingGuarantee.equals(StreamsConfig.EXACTLY_ONCE)) {
+            final Map<TaskId, Set<TopicPartition>> activeTasks = new HashMap<>();
+            activeTasks.put(task1, Collections.singleton(t1p1));
+            activeTasks.put(task2, Collections.singleton(t1p1));
+            thread.taskManager().handleAssignment(activeTasks, emptyMap());
+            thread.rebalanceListener().onPartitionsAssigned(Collections.singleton(t1p1));
+        }
+
+
+        final KafkaFuture<Map<String, KafkaFuture<Uuid>>> producerInstanceIdFutures =
+            thread.producersClientInstanceIds(Duration.ZERO);
+
+        thread.maybeGetClientInstanceIds(); // triggers internal timeout; should not crash
+        thread.maybeGetClientInstanceIds();
+
+        if (processingGuarantee.equals(StreamsConfig.EXACTLY_ONCE)) {
+            final Map<String, KafkaFuture<Uuid>> taskFutures = producerInstanceIdFutures.get();
+
+            {
+                final Uuid producerUuid = taskFutures.get("clientId-StreamThread-1-" + task1 + "-producer").get();
+                assertThat(producerUuid, equalTo(producerInstanceId2));
+            }
+
+            {
+                final Uuid producerUuid = taskFutures.get("clientId-StreamThread-1-" + task2 + "-producer").get();
+                assertThat(producerUuid, equalTo(producerInstanceId1));
+            }
+        } else {
+            final KafkaFuture<Uuid> producerFuture = producerInstanceIdFutures.get().get("clientId-StreamThread-1-producer");
+            final Uuid producerUuid = producerFuture.get();
+            assertThat(producerUuid, equalTo(producerInstanceId1));
+        }
+    }
+
+    @Test
+    public void shouldReturnErrorIfProducerInstanceIdNotInitialized() throws Exception {
+        thread = createStreamThread("clientId");
+        thread.setState(State.STARTING);
+
+        final Map<String, KafkaFuture<Uuid>> producerFutures = thread.producersClientInstanceIds(Duration.ZERO).get();
+
+        thread.maybeGetClientInstanceIds();
+
+        final KafkaFuture<Uuid> future = producerFutures.get("clientId-StreamThread-1-producer");
+        final ExecutionException error = assertThrows(ExecutionException.class, future::get);
+        assertThat(error.getCause(), instanceOf(UnsupportedOperationException.class));
+        assertThat(error.getCause().getMessage(), equalTo("clientInstanceId not set"));
+    }
+
+    @Test
+    public void shouldReturnNullIfProducerTelemetryDisabled() throws Exception {
+        final MockProducer<byte[], byte[]> producer = new MockProducer<>();
+        producer.disableTelemetry();
+        clientSupplier.prepareProducer(producer);
+
+        thread = createStreamThread("clientId");
+        thread.setState(State.STARTING);
+
+        final Map<String, KafkaFuture<Uuid>> producerFutures = thread.producersClientInstanceIds(Duration.ZERO).get();
+
+        thread.maybeGetClientInstanceIds();
+
+        final KafkaFuture<Uuid> future = producerFutures.get("clientId-StreamThread-1-producer");
+        final Uuid clientInstanceId = future.get();
+        assertThat(clientInstanceId, equalTo(null));
+    }
+
+    @Test
+    public void shouldTimeOutOnProducerInstanceId() throws Exception {
+        final MockProducer<byte[], byte[]> producer = new MockProducer<>();
+        producer.setClientInstanceId(Uuid.randomUuid());
+        producer.injectTimeoutException(-1);
+        clientSupplier.prepareProducer(producer);
+
+        thread = createStreamThread("clientId");
+        thread.setState(State.STARTING);
+
+        final Map<String, KafkaFuture<Uuid>> producerFutures = thread.producersClientInstanceIds(Duration.ZERO).get();
+
+        mockTime.sleep(1L);
+
+        thread.maybeGetClientInstanceIds();
+
+        final KafkaFuture<Uuid> future = producerFutures.get("clientId-StreamThread-1-producer");
+        final ExecutionException error = assertThrows(ExecutionException.class, future::get);
+        assertThat(error.getCause(), instanceOf(TimeoutException.class));
+        assertThat(
+            error.getCause().getMessage(),
+            equalTo("Could not retrieve thread producer client instance id.")
+        );
+    }
+
 
     private StreamThread setUpThread(final Properties streamsConfigProps) {
         final StreamsConfig config = new StreamsConfig(streamsConfigProps);

@@ -67,6 +67,7 @@ import java.util.stream.Collectors;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.apache.kafka.common.security.token.delegation.DelegationToken;
 import org.apache.kafka.common.security.token.delegation.TokenInformation;
+import org.apache.kafka.common.utils.Time;
 
 public class MockAdminClient extends AdminClient {
     public static final String DEFAULT_CLUSTER_ID = "I4ZmrWqfT2e-upky_4fdPA";
@@ -99,7 +100,8 @@ public class MockAdminClient extends AdminClient {
     private boolean telemetryDisabled = false;
     private Uuid clientInstanceId;
     private int injectTimeoutExceptionCounter;
-
+    private Time mockTime;
+    private long blockingTimeMs;
     private KafkaException listConsumerGroupOffsetsException;
 
     private Map<MetricName, Metric> mockMetrics = new HashMap<>();
@@ -1370,6 +1372,11 @@ public class MockAdminClient extends AdminClient {
         this.injectTimeoutExceptionCounter = injectTimeoutExceptionCounter;
     }
 
+    public void advanceTimeOnClientInstanceId(final Time mockTime, final long blockingTimeMs) {
+        this.mockTime = mockTime;
+        this.blockingTimeMs = blockingTimeMs;
+    }
+
     public void setClientInstanceId(final Uuid instanceId) {
         clientInstanceId = instanceId;
     }
@@ -1388,6 +1395,10 @@ public class MockAdminClient extends AdminClient {
                 --injectTimeoutExceptionCounter;
             }
             throw new TimeoutException();
+        }
+
+        if (mockTime != null) {
+            mockTime.sleep(blockingTimeMs);
         }
 
         return clientInstanceId;
