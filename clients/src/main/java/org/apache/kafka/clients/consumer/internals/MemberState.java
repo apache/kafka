@@ -111,7 +111,7 @@ public enum MemberState {
         ACKNOWLEDGING.previousValidStates = Arrays.asList(RECONCILING);
 
         FATAL.previousValidStates = Arrays.asList(JOINING, STABLE, RECONCILING, ACKNOWLEDGING,
-                PREPARE_LEAVING, LEAVING);
+                PREPARE_LEAVING, LEAVING, UNSUBSCRIBED);
 
         FENCED.previousValidStates = Arrays.asList(JOINING, STABLE, RECONCILING, ACKNOWLEDGING,
                 PREPARE_LEAVING, LEAVING);

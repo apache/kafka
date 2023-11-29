@@ -237,18 +237,21 @@ public class MembershipManagerImplTest {
         MembershipManagerImpl membershipManager = createMemberInStableState();
 
         // Start leaving group, blocked waiting for commit of all consumed to complete.
-        CompletableFuture<Void>  commitResult = mockPrepareLeavingStuckCommitting();
+        CompletableFuture<Void> commitResult = mockPrepareLeavingStuckCommitting();
         membershipManager.leaveGroup();
         assertEquals(MemberState.PREPARE_LEAVING, membershipManager.state());
 
-        // Get fenced while preparing to leave the group. Member should not try to rejoin and
-        // continue leaving the group as it was before getting fenced.
-        mockMemberHasAutoAssignedPartition();
+        // Get fenced while preparing to leave the group. Member should not trigger any
+        // callback or try to rejoin, and should continue leaving the group as it was
+        // before getting fenced.
+        MockRebalanceListener rebalanceListener = new MockRebalanceListener();
+        when(subscriptionState.rebalanceListener()).thenReturn(Optional.of(rebalanceListener));
         membershipManager.transitionToFenced();
         assertEquals(MemberState.PREPARE_LEAVING, membershipManager.state());
-        assertNotEquals(0, membershipManager.memberEpoch());
+        testFenceIsNoOp(membershipManager, rebalanceListener);
 
         // When commit completes member should transition to LEAVE.
+        when(subscriptionState.rebalanceListener()).thenReturn(Optional.empty());
         commitResult.complete(null);
         assertEquals(MemberState.LEAVING, membershipManager.state());
     }
@@ -262,12 +265,22 @@ public class MembershipManagerImplTest {
         membershipManager.leaveGroup();
         assertEquals(MemberState.LEAVING, membershipManager.state());
 
-        // Get fenced while leaving. Member should not try to rejoin and continue leaving the
-        // group as it was before getting fenced.
-        mockMemberHasAutoAssignedPartition();
+        // Get fenced while leaving. Member should not trigger any callback or try to
+        // rejoin, and should continue leaving the group as it was before getting fenced.
+        MockRebalanceListener rebalanceListener = new MockRebalanceListener();
+        when(subscriptionState.rebalanceListener()).thenReturn(Optional.of(rebalanceListener));
         membershipManager.transitionToFenced();
+        testFenceIsNoOp(membershipManager, rebalanceListener);
         assertEquals(MemberState.LEAVING, membershipManager.state());
-        assertNotEquals(0, membershipManager.memberEpoch());
+
+        membershipManager.onHeartbeatRequestSent();
+        assertEquals(MemberState.UNSUBSCRIBED, membershipManager.state());
+
+        // Last heartbeat sent is expected to fail, leading to a call to transitionToFenced. That
+        // should be no-op because the member already left.
+        membershipManager.transitionToFenced();
+        testFenceIsNoOp(membershipManager, rebalanceListener);
+        assertEquals(MemberState.UNSUBSCRIBED, membershipManager.state());
     }
 
     @Test
@@ -522,7 +535,7 @@ public class MembershipManagerImplTest {
         MembershipManagerImpl membershipManager = createMemberInStableState();
 
         // Start leaving group, blocked waiting for commit of all consumed to complete.
-        CompletableFuture<Void>  commitResult = mockPrepareLeavingStuckCommitting();
+        CompletableFuture<Void> commitResult = mockPrepareLeavingStuckCommitting();
         membershipManager.leaveGroup();
         assertEquals(MemberState.PREPARE_LEAVING, membershipManager.state());
 
@@ -549,6 +562,29 @@ public class MembershipManagerImplTest {
 
         assertEquals(MemberState.FATAL, membershipManager.state());
         membershipManager.onHeartbeatRequestSent();
+        assertEquals(MemberState.FATAL, membershipManager.state());
+    }
+
+    @Test
+    public void testFatalFailureWhenMemberAlreadyLeft() {
+        MembershipManagerImpl membershipManager = createMemberInStableState();
+
+        // Start leaving group.
+        mockLeaveGroup();
+        membershipManager.leaveGroup();
+        assertEquals(MemberState.LEAVING, membershipManager.state());
+
+        // Last heartbeat sent.
+        membershipManager.onHeartbeatRequestSent();
+        assertEquals(MemberState.UNSUBSCRIBED, membershipManager.state());
+
+        // Fatal error received in response for the last heartbeat. Member should remain in FATAL
+        // state but no callbacks should be triggered because the member already left the group.
+        MockRebalanceListener rebalanceListener = new MockRebalanceListener();
+        when(subscriptionState.rebalanceListener()).thenReturn(Optional.of(rebalanceListener));
+        membershipManager.transitionToFatal();
+        assertEquals(0, rebalanceListener.lostCount);
+
         assertEquals(MemberState.FATAL, membershipManager.state());
     }
 
@@ -889,6 +925,13 @@ public class MembershipManagerImplTest {
         clearInvocations(membershipManager);
         membershipManager.onSubscriptionUpdated();
         verify(membershipManager, never()).transitionToJoining();
+    }
+
+    private void testFenceIsNoOp(MembershipManagerImpl membershipManager,
+                                 MockRebalanceListener rebalanceListener) {
+        assertNotEquals(0, membershipManager.memberEpoch());
+        assertEquals(0, rebalanceListener.lostCount);
+        assertEquals(0, rebalanceListener.revokedCount);
     }
 
     private MembershipManagerImpl mockMemberSuccessfullyReceivesAndAcksAssignment(

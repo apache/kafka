@@ -279,7 +279,7 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
             throw new IllegalStateException(String.format("Invalid state transition from %s to %s",
                     state, nextState));
         }
-        log.trace("Member {} transitioned from {} to {}.", memberId, state, nextState);
+        log.trace("Member {} with epoch {} transitioned from {} to {}.", memberId, memberEpoch, state, nextState);
         this.state = nextState;
     }
 
@@ -367,8 +367,13 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
     @Override
     public void transitionToFenced() {
         if (state == MemberState.PREPARE_LEAVING || state == MemberState.LEAVING) {
-            log.debug("Member ID {} got fenced but it is already leaving the group with state {}," +
-                    "so it won't attempt to rejoin.", memberId, state);
+            log.debug("Member {} with epoch {} got fenced but it is already leaving the group " +
+                    "with state {}, so it won't attempt to rejoin.", memberId, memberEpoch, state);
+            return;
+        }
+        if (state == MemberState.UNSUBSCRIBED) {
+            log.debug("Member {} with epoch {} got fenced but it already left the group, so it " +
+                    "won't attempt to rejoin.", memberId, memberEpoch);
             return;
         }
         transitionTo(MemberState.FENCED);
@@ -393,8 +398,15 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
      */
     @Override
     public void transitionToFatal() {
+        MemberState previousState = state;
         transitionTo(MemberState.FATAL);
         log.error("Member {} with epoch {} transitioned to {} state", memberId, memberEpoch, MemberState.FATAL);
+
+        if (previousState == MemberState.UNSUBSCRIBED) {
+            log.debug("Member {} with epoch {} got fatal error from the broker but it already " +
+                    "left the group, so onPartitionsLost callback won't be triggered.", memberId, memberEpoch);
+            return;
+        }
 
         // Release assignment
         CompletableFuture<Void> callbackResult = invokeOnPartitionsLostCallback(subscriptions.assignedPartitions());
@@ -538,7 +550,8 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
      */
     private void transitionToSendingLeaveGroup() {
         if (state == MemberState.FATAL) {
-            log.warn("Member won't send leave group request because it is in FATAL state");
+            log.warn("Member {} with epoch {} won't send leave group request because it is in " +
+                    "FATAL state", memberId, memberEpoch);
             return;
         }
         memberEpoch = groupInstanceId.isPresent() ?
@@ -895,9 +908,9 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
             // while waiting for the commit to complete. Check if that's the case and abort the
             // revocation.
             if (state == MemberState.FATAL) {
-                String errorMsg = String.format("Member ID %s received a fatal error while " +
-                        "waiting for a revocation commit to complete. Will abort revocation " +
-                        "without triggering user callback.", memberId);
+                String errorMsg = String.format("Member %s with epoch %s received a fatal error " +
+                        "while waiting for a revocation commit to complete. Will abort revocation " +
+                        "without triggering user callback.", memberId, memberEpoch);
                 log.debug(errorMsg);
                 revocationResult.completeExceptionally(new KafkaException(errorMsg));
                 return;
