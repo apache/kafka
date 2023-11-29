@@ -24,7 +24,7 @@ import java.util.Map;
 
 public class DirectoryId {
     /**
-     * A Uuid that is used to represent and unspecified log directory,
+     * A Uuid that is used to represent an unspecified log directory,
      * that is expected to have been previously selected to host an
      * associated replica. This contrasts with {@code UNASSIGNED_DIR},
      * which is associated with (typically new) replicas that may not
@@ -33,7 +33,7 @@ public class DirectoryId {
     public static final Uuid MIGRATING = new Uuid(0L, 0L);
 
     /**
-     * A Uuid that is used to directories that are pending an assignment.
+     * A Uuid that is used to represent directories that are pending an assignment.
      */
     public static final Uuid UNASSIGNED = new Uuid(0L, 1L);
 
