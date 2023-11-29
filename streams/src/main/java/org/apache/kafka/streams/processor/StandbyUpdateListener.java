@@ -63,6 +63,7 @@ public interface StandbyUpdateListener {
      * Method called after a Standby Task is closed, either because the Standby Task was promoted to an Active Task
      * or because the Standby Task was migrated to another instance (in which case the data will be cleaned up
      * after state.cleanup.delay.ms).
+     *
      * @param topicPartition the TopicPartition containing the values to restore
      * @param storeName the name of the store undergoing restoration
      * @param storeOffset is the offset of the last changelog record that was read and put into the store at the time

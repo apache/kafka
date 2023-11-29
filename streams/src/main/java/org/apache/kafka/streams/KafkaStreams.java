@@ -583,6 +583,12 @@ public class KafkaStreams implements AutoCloseable {
         }
     }
 
+    /**
+     * Set the listener which is triggered whenever a standby task is updated
+     *
+     * @param globalStandbyListener The listener triggered when a standby task is updated.
+     * @throws IllegalStateException if this {@code KafkaStreams} instance has already been started.
+     */
     public void setStandbyUpdateListener(final StandbyUpdateListener globalStandbyListener) {
         synchronized (stateLock) {
             if (state.hasNotStarted()) {
