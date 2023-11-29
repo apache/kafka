@@ -198,6 +198,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
             if (brokerNode != null) {
                 props.putAll(brokerNode.propertyOverrides());
             }
+            props.putIfAbsent(KafkaConfig$.MODULE$.UnstableMetadataVersionsEnableProp(), "true");
             return new KafkaConfig(props, false, Option.empty());
         }
 

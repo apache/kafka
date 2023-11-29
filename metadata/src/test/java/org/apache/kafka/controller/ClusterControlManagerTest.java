@@ -76,7 +76,7 @@ public class ClusterControlManagerTest {
         FeatureControlManager featureControl = new FeatureControlManager.Builder().
             setSnapshotRegistry(snapshotRegistry).
             setQuorumFeatures(new QuorumFeatures(0,
-                QuorumFeatures.defaultFeatureMap(),
+                QuorumFeatures.defaultFeatureMap(true),
                 Collections.singletonList(0))).
             setMetadataVersion(MetadataVersion.latest()).
             build();
@@ -137,7 +137,7 @@ public class ClusterControlManagerTest {
         FeatureControlManager featureControl = new FeatureControlManager.Builder().
             setSnapshotRegistry(snapshotRegistry).
             setQuorumFeatures(new QuorumFeatures(0,
-                QuorumFeatures.defaultFeatureMap(),
+                QuorumFeatures.defaultFeatureMap(true),
                 Collections.singletonList(0))).
             setMetadataVersion(MetadataVersion.latest()).
             build();
@@ -190,7 +190,7 @@ public class ClusterControlManagerTest {
         FeatureControlManager featureControl = new FeatureControlManager.Builder().
             setSnapshotRegistry(snapshotRegistry).
             setQuorumFeatures(new QuorumFeatures(0,
-                QuorumFeatures.defaultFeatureMap(),
+                QuorumFeatures.defaultFeatureMap(true),
                 Collections.singletonList(0))).
             setMetadataVersion(MetadataVersion.latest()).
             build();
@@ -245,7 +245,7 @@ public class ClusterControlManagerTest {
         FeatureControlManager featureControl = new FeatureControlManager.Builder().
             setSnapshotRegistry(snapshotRegistry).
             setQuorumFeatures(new QuorumFeatures(0,
-                QuorumFeatures.defaultFeatureMap(),
+                QuorumFeatures.defaultFeatureMap(true),
                 Collections.singletonList(0))).
             setMetadataVersion(MetadataVersion.latest()).
             build();
@@ -275,7 +275,7 @@ public class ClusterControlManagerTest {
         FeatureControlManager featureControl = new FeatureControlManager.Builder().
             setSnapshotRegistry(snapshotRegistry).
             setQuorumFeatures(new QuorumFeatures(0,
-                QuorumFeatures.defaultFeatureMap(),
+                QuorumFeatures.defaultFeatureMap(true),
                 Collections.singletonList(0))).
             setMetadataVersion(metadataVersion).
             build();
@@ -332,7 +332,7 @@ public class ClusterControlManagerTest {
         FeatureControlManager featureControl = new FeatureControlManager.Builder().
             setSnapshotRegistry(snapshotRegistry).
             setQuorumFeatures(new QuorumFeatures(0,
-                QuorumFeatures.defaultFeatureMap(),
+                QuorumFeatures.defaultFeatureMap(true),
                 Collections.singletonList(0))).
             setMetadataVersion(MetadataVersion.latest()).
             build();
@@ -371,7 +371,7 @@ public class ClusterControlManagerTest {
         FeatureControlManager featureControl = new FeatureControlManager.Builder().
             setSnapshotRegistry(snapshotRegistry).
             setQuorumFeatures(new QuorumFeatures(0,
-                QuorumFeatures.defaultFeatureMap(),
+                QuorumFeatures.defaultFeatureMap(true),
                 Collections.singletonList(0))).
             setMetadataVersion(MetadataVersion.latest()).
             build();
@@ -424,7 +424,7 @@ public class ClusterControlManagerTest {
         FeatureControlManager featureControl = new FeatureControlManager.Builder().
             setSnapshotRegistry(snapshotRegistry).
             setQuorumFeatures(new QuorumFeatures(0,
-                QuorumFeatures.defaultFeatureMap(),
+                QuorumFeatures.defaultFeatureMap(true),
                 Collections.singletonList(0))).
             setMetadataVersion(metadataVersion).
             build();

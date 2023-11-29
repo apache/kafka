@@ -46,7 +46,7 @@ import org.apache.kafka.metadata.publisher.FeaturesPublisher
 import org.apache.kafka.raft.RaftConfig
 import org.apache.kafka.server.{ClientMetricsManager, NodeToControllerChannelManager}
 import org.apache.kafka.server.authorizer.Authorizer
-import org.apache.kafka.server.common.{ApiMessageAndVersion, MetadataVersion}
+import org.apache.kafka.server.common.ApiMessageAndVersion
 import org.apache.kafka.server.metrics.{KafkaMetricsGroup, KafkaYammerMetrics}
 import org.apache.kafka.server.network.{EndpointReadyFutures, KafkaAuthorizerServerInfo}
 import org.apache.kafka.server.policy.{AlterConfigPolicy, CreateTopicPolicy}
@@ -217,7 +217,7 @@ class ControllerServer(
         startupDeadline, time)
       val controllerNodes = RaftConfig.voterConnectionsToNodes(voterConnections)
       val quorumFeatures = new QuorumFeatures(config.nodeId,
-        QuorumFeatures.defaultFeatureMap(),
+        QuorumFeatures.defaultFeatureMap(config.unstableMetadataVersionsEnabled),
         controllerNodes.asScala.map(node => Integer.valueOf(node.id())).asJava)
 
       val delegationTokenKeyString = {
@@ -350,7 +350,7 @@ class ControllerServer(
         clusterId,
         time,
         s"controller-${config.nodeId}-",
-        QuorumFeatures.defaultFeatureMap(),
+        QuorumFeatures.defaultFeatureMap(config.unstableMetadataVersionsEnabled),
         config.migrationEnabled,
         incarnationId,
         listenerInfo)

@@ -65,7 +65,11 @@ object StorageTool extends Logging {
             throw new TerseFailure(s"Must specify a valid KRaft metadata version of at least 3.0.")
           }
           if (!metadataVersion.isProduction()) {
-            throw new TerseFailure(s"Metadata version ${metadataVersion} is not ready for production use yet.")
+            if (config.get.unstableMetadataVersionsEnabled) {
+              System.out.println(s"WARNING: using pre-production metadata version ${metadataVersion}.")
+            } else {
+              throw new TerseFailure(s"Metadata version ${metadataVersion} is not ready for production use yet.")
+            }
           }
           val metaProperties = new MetaProperties.Builder().
             setVersion(MetaPropertiesVersion.V1).

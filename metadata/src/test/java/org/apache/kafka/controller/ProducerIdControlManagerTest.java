@@ -49,7 +49,7 @@ public class ProducerIdControlManagerTest {
         featureControl = new FeatureControlManager.Builder().
             setSnapshotRegistry(snapshotRegistry).
             setQuorumFeatures(new QuorumFeatures(0,
-                QuorumFeatures.defaultFeatureMap(),
+                QuorumFeatures.defaultFeatureMap(true),
                 Collections.singletonList(0))).
             setMetadataVersion(MetadataVersion.latest()).
             build();

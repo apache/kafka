@@ -33,6 +33,8 @@ import org.apache.kafka.common.metadata.UserScramCredentialRecord
 import org.apache.kafka.metadata.properties.{MetaProperties, MetaPropertiesEnsemble, MetaPropertiesVersion, PropertiesUtils}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertThrows, assertTrue}
 import org.junit.jupiter.api.{Test, Timeout}
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.ValueSource
 
 import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer
@@ -389,5 +391,46 @@ Found problem:
       assertTrue(metaProps.directoryId().isPresent())
       assertFalse(DirectoryId.reserved(metaProps.directoryId().get()))
     } finally Utils.delete(tempDir)
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = Array(false, true))
+  def testFormattingUnstableMetadataVersionBlocked(enableUnstable: Boolean): Unit = {
+    var exitString: String = ""
+    var exitStatus: Int = 1
+    def exitProcedure(status: Int, message: Option[String]) : Nothing = {
+      exitStatus = status
+      exitString = message.getOrElse("")
+      throw new StorageToolTestException(exitString)
+    }
+    Exit.setExitProcedure(exitProcedure)
+    val properties = newSelfManagedProperties()
+    val propsFile = TestUtils.tempFile()
+    val propsStream = Files.newOutputStream(propsFile.toPath)
+    try {
+      properties.setProperty(KafkaConfig.LogDirsProp, TestUtils.tempDir().toString)
+      properties.setProperty(KafkaConfig.UnstableMetadataVersionsEnableProp, enableUnstable.toString)
+      properties.store(propsStream, "config.props")
+    } finally {
+      propsStream.close()
+    }
+    val args = Array("format", "-c", s"${propsFile.toPath}",
+      "-t", "XcZZOzUqS4yHOjhMQB6JLQ",
+      "--release-version", MetadataVersion.latest().toString)
+    try {
+      StorageTool.main(args)
+    } catch {
+      case _: StorageToolTestException =>
+    } finally {
+      Exit.resetExitProcedure()
+    }
+    if (enableUnstable) {
+      assertEquals("", exitString)
+      assertEquals(0, exitStatus)
+    } else {
+      assertEquals(s"Metadata version ${MetadataVersion.latest().toString} is not ready for " +
+        "production use yet.", exitString)
+      assertEquals(1, exitStatus)
+    }
   }
 }
