@@ -36,6 +36,7 @@ import org.apache.kafka.common.acl.AclBinding;
 import org.apache.kafka.common.acl.AclBindingFilter;
 import org.apache.kafka.common.acl.AclOperation;
 import org.apache.kafka.common.config.ConfigResource;
+import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.errors.InvalidReplicationFactorException;
 import org.apache.kafka.common.errors.InvalidRequestException;
 import org.apache.kafka.common.errors.InvalidUpdateVersionException;
@@ -96,6 +97,9 @@ public class MockAdminClient extends AdminClient {
     private int timeoutNextRequests = 0;
     private final int defaultPartitions;
     private final int defaultReplicationFactor;
+    private boolean telemetryDisabled = false;
+    private Uuid clientInstanceId;
+    private int injectTimeoutExceptionCounter;
 
     private KafkaException listConsumerGroupOffsetsException;
 
@@ -1349,9 +1353,38 @@ public class MockAdminClient extends AdminClient {
         mockMetrics.put(name, metric);
     }
 
+    public void disableTelemetry() {
+        telemetryDisabled = true;
+    }
+
+    /**
+     * @param injectTimeoutExceptionCounter use -1 for infinite
+     */
+    public void injectTimeoutException(final int injectTimeoutExceptionCounter) {
+        this.injectTimeoutExceptionCounter = injectTimeoutExceptionCounter;
+    }
+
+    public void setClientInstanceId(final Uuid instanceId) {
+        clientInstanceId = instanceId;
+    }
+
     @Override
     public Uuid clientInstanceId(Duration timeout) {
-        throw new UnsupportedOperationException("Not implemented yet");
+        if (telemetryDisabled) {
+            throw new IllegalStateException();
+        }
+        if (clientInstanceId == null) {
+            throw new UnsupportedOperationException("clientInstanceId not set");
+        }
+        if (injectTimeoutExceptionCounter != 0) {
+            // -1 is used as "infinite"
+            if (injectTimeoutExceptionCounter > 0) {
+                --injectTimeoutExceptionCounter;
+            }
+            throw new TimeoutException();
+        }
+
+        return clientInstanceId;
     }
 
     @Override

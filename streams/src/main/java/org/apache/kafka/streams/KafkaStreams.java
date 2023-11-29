@@ -47,6 +47,7 @@ import org.apache.kafka.streams.errors.StreamsNotStartedException;
 import org.apache.kafka.streams.errors.StreamsStoppedException;
 import org.apache.kafka.streams.errors.StreamsUncaughtExceptionHandler;
 import org.apache.kafka.streams.errors.UnknownStateStoreException;
+import org.apache.kafka.streams.internals.ClientInstanceIdsImpl;
 import org.apache.kafka.streams.internals.metrics.ClientMetrics;
 import org.apache.kafka.streams.processor.StateRestoreListener;
 import org.apache.kafka.streams.processor.StateStore;
@@ -1789,6 +1790,58 @@ public class KafkaStreams implements AutoCloseable {
         for (final StreamThread thread : copy) consumer.accept(thread);
 
         return copy.size();
+    }
+
+    /**
+     * Returns the internal clients' assigned {@code client instance ids}.
+     *
+     * @return The internal clients' assigned instance ids used for metrics collection.
+     *
+     * @throws IllegalArgumentException If {@code timeout} is negative.
+     * @throws IllegalStateException If {@code KafkaStreams} is not running.
+     * @throws TimeoutException Indicates that a request timed out.
+     * @throws StreamsException For any other error that might occur.
+     */
+    public ClientInstanceIds clientInstanceIds(final Duration timeout) {
+        if (timeout.isNegative()) {
+            throw new IllegalArgumentException("The timeout cannot be negative.");
+        }
+        if (state().hasNotStarted()) {
+            throw new IllegalStateException("KafkaStreams has not been started, you can retry after calling start().");
+        }
+        if (state().isShuttingDown() || state.hasCompletedShutdown()) {
+            throw new IllegalStateException("KafkaStreams has been stopped (" + state + ").");
+        }
+
+        final ClientInstanceIdsImpl clientInstanceIds = new ClientInstanceIdsImpl();
+
+        // (1) fan-out calls to threads
+
+        // StreamThread for main/restore consumers and producer(s)
+
+        // GlobalThread
+
+        // (2) get admin client instance id in a blocking fashion, while Stream/GlobalThreads work in parallel
+        try {
+            clientInstanceIds.setAdminInstanceId(adminClient.clientInstanceId(timeout));
+        } catch (final IllegalStateException telemetryDisabledError) {
+            // swallow
+            log.debug("Telemetry is disabled on the admin client.");
+        } catch (final TimeoutException timeoutException) {
+            throw timeoutException;
+        } catch (final Exception error) {
+            throw new StreamsException("Could not retrieve admin client instance id.", error);
+        }
+
+        // (3) collect client instance ids from threads
+
+        // (3a) collect consumers from StreamsThread
+
+        // (3b) collect producers from StreamsThread
+
+        // (3c) collect from GlobalThread
+
+        return clientInstanceIds;
     }
 
     /**
