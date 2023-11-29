@@ -46,13 +46,16 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
     private final Logger log;
     private final ConsumerMetadata metadata;
     private final RequestManagers requestManagers;
+    private final BackgroundEventHandler backgroundEventHandler;
 
     public ApplicationEventProcessor(final LogContext logContext,
                                      final BlockingQueue<ApplicationEvent> applicationEventQueue,
+                                     final BackgroundEventHandler backgroundEventHandler,
                                      final RequestManagers requestManagers,
                                      final ConsumerMetadata metadata) {
-        super(logContext, applicationEventQueue);
+        super(new LogContext("[Application event processor]" + (logContext.logPrefix() != null ? " " + logContext.logPrefix() : "")), applicationEventQueue);
         this.log = logContext.logger(ApplicationEventProcessor.class);
+        this.backgroundEventHandler = backgroundEventHandler;
         this.requestManagers = requestManagers;
         this.metadata = metadata;
     }
@@ -117,14 +120,13 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
                 process((ConsumerRebalanceListenerCallbackCompletedEvent) event);
                 return;
 
+            case WAIT_FOR_JOIN_GROUP:
+                process((WaitForJoinGroupApplicationEvent) event);
+                return;
+
             default:
                 log.warn("Application event type " + event.type() + " was not expected");
         }
-    }
-
-    @Override
-    protected Class<ApplicationEvent> getEventClass() {
-        return ApplicationEvent.class;
     }
 
     private void process(final PollApplicationEvent event) {
@@ -186,9 +188,11 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
      */
     private void processSubscriptionChangeEvent() {
         if (!requestManagers.heartbeatRequestManager.isPresent()) {
-            throw new RuntimeException("Group membership manager not present when processing a " +
-                    "subscribe event");
+            KafkaException error = new KafkaException("Group membership manager not present when processing a subscribe event");
+            backgroundEventHandler.add(new ErrorBackgroundEvent(error));
+            return;
         }
+
         MembershipManager membershipManager = requestManagers.heartbeatRequestManager.get().membershipManager();
         membershipManager.onSubscriptionUpdated();
     }
@@ -203,9 +207,11 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
      */
     private void processUnsubscribeEvent(UnsubscribeApplicationEvent event) {
         if (!requestManagers.heartbeatRequestManager.isPresent()) {
-            throw new RuntimeException("Group membership manager not present when processing an " +
-                    "unsubscribe event");
+            KafkaException error = new KafkaException("Group membership manager not present when processing an unsubscribe event");
+            backgroundEventHandler.add(new ErrorBackgroundEvent(error));
+            return;
         }
+
         MembershipManager membershipManager = requestManagers.heartbeatRequestManager.get().membershipManager();
         CompletableFuture<Void> result = membershipManager.leaveGroup();
         event.chain(result);
@@ -238,6 +244,17 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
         }
     }
 
+    private void process(final WaitForJoinGroupApplicationEvent event) {
+        if (!requestManagers.heartbeatRequestManager.isPresent()) {
+            KafkaException error = new KafkaException("Group membership manager not present when waiting to join a group");
+            backgroundEventHandler.add(new ErrorBackgroundEvent(error));
+            return;
+        }
+
+        MembershipManager membershipManager = requestManagers.heartbeatRequestManager.get().membershipManager();
+        membershipManager.notifyOnStable(event.future());
+    }
+
     /**
      * Creates a {@link Supplier} for deferred creation during invocation by
      * {@link ConsumerNetworkThread}.
@@ -245,6 +262,7 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
     public static Supplier<ApplicationEventProcessor> supplier(final LogContext logContext,
                                                                final ConsumerMetadata metadata,
                                                                final BlockingQueue<ApplicationEvent> applicationEventQueue,
+                                                               final BackgroundEventHandler backgroundEventHandler,
                                                                final Supplier<RequestManagers> requestManagersSupplier) {
         return new CachedSupplier<ApplicationEventProcessor>() {
             @Override
@@ -253,6 +271,7 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
                 return new ApplicationEventProcessor(
                         logContext,
                         applicationEventQueue,
+                        backgroundEventHandler,
                         requestManagers,
                         metadata
                 );

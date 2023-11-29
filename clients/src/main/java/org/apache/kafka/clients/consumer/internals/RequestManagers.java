@@ -108,7 +108,7 @@ public class RequestManagers implements Closeable {
      */
     public static Supplier<RequestManagers> supplier(final Time time,
                                                      final LogContext logContext,
-                                                     final BlockingQueue<BackgroundEvent> backgroundEventQueue,
+                                                     final BackgroundEventHandler backgroundEventHandler,
                                                      final ConsumerMetadata metadata,
                                                      final SubscriptionState subscriptions,
                                                      final FetchBuffer fetchBuffer,
@@ -121,7 +121,6 @@ public class RequestManagers implements Closeable {
             @Override
             protected RequestManagers create() {
                 final NetworkClientDelegate networkClientDelegate = networkClientDelegateSupplier.get();
-                final BackgroundEventHandler backgroundEventHandler = new BackgroundEventHandler(logContext, backgroundEventQueue);
                 final FetchConfig fetchConfig = new FetchConfig(config);
                 long retryBackoffMs = config.getLong(ConsumerConfig.RETRY_BACKOFF_MS_CONFIG);
                 long retryBackoffMaxMs = config.getLong(ConsumerConfig.RETRY_BACKOFF_MAX_MS_CONFIG);

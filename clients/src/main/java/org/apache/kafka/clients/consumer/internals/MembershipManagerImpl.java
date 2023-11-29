@@ -38,6 +38,7 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
@@ -252,6 +253,13 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
     private Optional<CompletableFuture<Void>> leaveGroupInProgress;
 
     /**
+     * The Consumer may wish to wait until it's officially part of a {@link MemberState#STABLE stable}
+     * consumer group. Code that runs within the {@link ConsumerNetworkThread background thread} can elect
+     * to be notified when this occurs via the {@link #notifyOnStable(CompletableFuture)} method.
+     */
+    private final List<CompletableFuture<Void>> notifyOnStableFutures = new ArrayList<>();
+
+    /**
      * True if the member has registered to be notified when the cluster metadata is updated.
      * This is initially false, as the member that is not part of a consumer group does not
      * require metadata updated. This becomes true the first time the member joins on the
@@ -316,7 +324,7 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
             throw new IllegalStateException(String.format("Invalid state transition from %s to %s",
                     state, nextState));
         }
-        log.trace("Member {} transitioned from {} to {}.", memberId, state, nextState);
+        log.trace("Member {} transitioned from {} to {}.", memberIdForLogging(), state, nextState);
         this.state = nextState;
     }
 
@@ -342,6 +350,10 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
     @Override
     public String memberId() {
         return memberId;
+    }
+
+    private String memberIdForLogging() {
+        return memberId != null && !memberId.trim().isEmpty() ? memberId : "<unknown ID>";
     }
 
     /**
@@ -374,7 +386,28 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
             resolveMetadataForUnresolvedAssignment();
             reconcile();
         } else if (allPendingAssignmentsReconciled()) {
-            transitionTo(MemberState.STABLE);
+            transitionToStable();
+        }
+    }
+
+    @Override
+    public void notifyOnStable(CompletableFuture<Void> future) {
+        if (state == MemberState.STABLE) {
+            future.complete(null);
+            log.debug(
+                "Completed future {} since member {} is already in the {} state",
+                future,
+                memberIdForLogging(),
+                MemberState.STABLE
+            );
+        } else {
+            notifyOnStableFutures.add(future);
+            log.debug(
+                "Registered future {} for notification when member {} transitions to the {} state",
+                future,
+                memberIdForLogging(),
+                MemberState.STABLE
+            );
         }
     }
 
@@ -406,10 +439,10 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
         transitionTo(MemberState.FENCED);
         resetEpoch();
         log.debug("Member {} with epoch {} transitioned to {} state. It will release its " +
-                "assignment and rejoin the group.", memberId, memberEpoch, MemberState.FENCED);
+                "assignment and rejoin the group.", memberIdForLogging(), memberEpoch, MemberState.FENCED);
 
         // Release assignment
-        CompletableFuture<Void> callbackResult = invokeOnPartitionsLostCallback(subscriptions.assignedPartitions());
+        CompletableFuture<Void> callbackResult = enqueueOnPartitionsLostCallback(subscriptions.assignedPartitions());
         callbackResult.whenComplete((result, error) -> {
             if (error != null) {
                 log.error("onPartitionsLost callback invocation failed while releasing assignment" +
@@ -426,10 +459,10 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
     @Override
     public void transitionToFatal() {
         transitionTo(MemberState.FATAL);
-        log.error("Member {} with epoch {} transitioned to {} state", memberId, memberEpoch, MemberState.FATAL);
+        log.error("Member {} with epoch {} transitioned to {} state", memberIdForLogging(), memberEpoch, MemberState.FATAL);
 
         // Release assignment
-        CompletableFuture<Void> callbackResult = invokeOnPartitionsLostCallback(subscriptions.assignedPartitions());
+        CompletableFuture<Void> callbackResult = enqueueOnPartitionsLostCallback(subscriptions.assignedPartitions());
         callbackResult.whenComplete((result, error) -> {
             if (error != null) {
                 log.error("onPartitionsLost callback invocation failed while releasing assignment" +
@@ -480,6 +513,20 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
         registerForMetadataUpdates();
     }
 
+    private void transitionToStable() {
+        transitionTo(MemberState.STABLE);
+        notifyOnStableFutures.forEach(future -> {
+            future.complete(null);
+            log.debug(
+                "Completed future {} as member {} has transitioned to the {} state",
+                future,
+                memberIdForLogging(),
+                MemberState.STABLE
+            );
+        });
+        notifyOnStableFutures.clear();
+    }
+
     /**
      * Register to get notified when the cluster metadata is updated, via the
      * {@link #onUpdate(ClusterResource)}. Register only if the manager is not register already.
@@ -512,7 +559,7 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
         CompletableFuture<Void> leaveResult = new CompletableFuture<>();
         leaveGroupInProgress = Optional.of(leaveResult);
 
-        CompletableFuture<Void> callbackResult = invokeOnPartitionsRevokedOrLostToReleaseAssignment();
+        CompletableFuture<Void> callbackResult = enqueueOnPartitionsRevokedOrLostToReleaseAssignment();
         callbackResult.whenComplete((result, error) -> {
             // Clear the subscription, no matter if the callback execution failed or succeeded.
             updateSubscription(Collections.emptySet(), true);
@@ -542,7 +589,7 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
      *
      * @return Future that will complete when the callback execution completes.
      */
-    private CompletableFuture<Void> invokeOnPartitionsRevokedOrLostToReleaseAssignment() {
+    private CompletableFuture<Void> enqueueOnPartitionsRevokedOrLostToReleaseAssignment() {
         SortedSet<TopicPartition> droppedPartitions = new TreeSet<>(TOPIC_PARTITION_COMPARATOR);
         droppedPartitions.addAll(subscriptions.assignedPartitions());
 
@@ -557,7 +604,7 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
                 callbackResult = revokePartitions(droppedPartitions);
             } else {
                 // Member is not part of the group anymore. Invoke onPartitionsLost.
-                callbackResult = invokeOnPartitionsLostCallback(droppedPartitions);
+                callbackResult = enqueueOnPartitionsLostCallback(droppedPartitions);
             }
         }
         return callbackResult;
@@ -591,11 +638,11 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
         MemberState state = state();
         if (state == MemberState.ACKNOWLEDGING) {
             if (allPendingAssignmentsReconciled()) {
-                transitionTo(MemberState.STABLE);
+                transitionToStable();
             } else {
                 log.debug("Member {} with epoch {} transitioned to {} after a heartbeat was sent " +
                         "to ack a previous reconciliation. New assignments are ready to " +
-                        "be reconciled.", memberId, memberEpoch, MemberState.RECONCILING);
+                        "be reconciled.", memberIdForLogging(), memberEpoch, MemberState.RECONCILING);
                 transitionTo(MemberState.RECONCILING);
             }
         } else if (state == MemberState.LEAVING) {
@@ -610,7 +657,7 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
     public void onHeartbeatRequestSkipped() {
         if (state == MemberState.LEAVING) {
             log.debug("Heartbeat for leaving group could not be sent. Member {} with epoch {} will transition to {}.",
-                    memberId, memberEpoch, MemberState.UNSUBSCRIBED);
+                    memberIdForLogging(), memberEpoch, MemberState.UNSUBSCRIBED);
             transitionToUnsubscribed();
         }
     }
@@ -932,7 +979,7 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
                         " proceed with the revocation anyway.", error);
             }
 
-            CompletableFuture<Void> userCallbackResult = invokeOnPartitionsRevokedCallback(revokedPartitions);
+            CompletableFuture<Void> userCallbackResult = enqueueOnPartitionsRevokedCallback(revokedPartitions);
             userCallbackResult.whenComplete((callbackResult, callbackError) -> {
                 if (callbackError != null) {
                     log.error("onPartitionsRevoked callback invocation failed for partitions {}",
@@ -967,7 +1014,7 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
         updateSubscription(assignedPartitions, false);
 
         // Invoke user call back
-        return invokeOnPartitionsAssignedCallback(addedPartitions);
+        return enqueueOnPartitionsAssignedCallback(addedPartitions);
     }
 
     /**
@@ -990,7 +1037,7 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
         subscriptions.markPendingRevocation(partitionsToRevoke);
     }
 
-    private CompletableFuture<Void> invokeOnPartitionsRevokedCallback(Set<TopicPartition> partitionsRevoked) {
+    private CompletableFuture<Void> enqueueOnPartitionsRevokedCallback(Set<TopicPartition> partitionsRevoked) {
         // This should not trigger the callback if partitionsRevoked is empty, to keep the
         // current behaviour.
         Optional<ConsumerRebalanceListener> listener = subscriptions.rebalanceListener();
@@ -1001,7 +1048,7 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
         }
     }
 
-    private CompletableFuture<Void> invokeOnPartitionsAssignedCallback(Set<TopicPartition> partitionsAssigned) {
+    private CompletableFuture<Void> enqueueOnPartitionsAssignedCallback(Set<TopicPartition> partitionsAssigned) {
         // This should always trigger the callback, even if partitionsAssigned is empty, to keep
         // the current behaviour.
         Optional<ConsumerRebalanceListener> listener = subscriptions.rebalanceListener();
@@ -1012,7 +1059,7 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
         }
     }
 
-    private CompletableFuture<Void> invokeOnPartitionsLostCallback(Set<TopicPartition> partitionsLost) {
+    private CompletableFuture<Void> enqueueOnPartitionsLostCallback(Set<TopicPartition> partitionsLost) {
         // This should not trigger the callback if partitionsLost is empty, to keep the current
         // behaviour.
         Optional<ConsumerRebalanceListener> listener = subscriptions.rebalanceListener();
@@ -1026,14 +1073,14 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
     private CompletableFuture<Void> enqueueCallbackEvent(ConsumerRebalanceListenerMethodName methodName,
                                                          Set<TopicPartition> partitions) {
         String fullMethodName = String.format(
-                "%s.%s",
-                ConsumerRebalanceListener.class.getSimpleName(),
-                methodName
+            "%s.%s",
+            ConsumerRebalanceListener.class.getSimpleName(),
+            methodName
         );
 
         CompletableFuture<Void> future = new CompletableFuture<>();
         ConsumerRebalanceListenerCallbackBreadcrumb newBreadcrumb = new ConsumerRebalanceListenerCallbackBreadcrumb(
-                methodName,
+            methodName,
             future
         );
 
@@ -1046,9 +1093,6 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
             BackgroundEvent event = new ConsumerRebalanceListenerCallbackNeededEvent(methodName, sortedPartitions);
             backgroundEventHandler.add(event);
             log.debug("The event to trigger the {} method execution was enqueued successfully", fullMethodName);
-            if (true)
-                throw new IllegalStateException();
-
         } else {
             // In this case, there was an existing breadcrumb, so we need to report the matter back to the user.
             String s = "An internal error occurred; an attempt to schedule the " +
@@ -1064,9 +1108,9 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
     public void consumerRebalanceListenerCallbackCompleted(ConsumerRebalanceListenerMethodName methodName,
                                                            Optional<KafkaException> error) {
         String fullMethodName = String.format(
-                "%s.%s",
-                ConsumerRebalanceListener.class.getSimpleName(),
-                methodName
+            "%s.%s",
+            ConsumerRebalanceListener.class.getSimpleName(),
+            methodName
         );
 
         if (breadcrumb != null && breadcrumb.methodName == methodName) {
@@ -1078,26 +1122,19 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
             breadcrumb = null;
 
             if (error.isPresent()) {
-                KafkaException callbackError = error.get();
-
                 log.warn(
                     "The {} method completed with an error; signaling to continue to the next phase of rebalance",
                     fullMethodName,
-                    callbackError
+                    error.get()
                 );
-
-                future.completeExceptionally(callbackError);
             } else {
-                if (true)
-                    throw new IllegalStateException();
-
                 log.debug(
                     "The {} method completed successfully; signaling to continue to the next phase of rebalance",
                     fullMethodName
                 );
-
-                future.complete(null);
             }
+
+            future.complete(null);
         } else if (breadcrumb != null) {
             // We have a breadcrumb that implicitly does NOT match the one we expect. We need to abort the
             // rebalance process, because we're in an inconsistent state. We do that by completing the Future

@@ -153,4 +153,13 @@ public interface MembershipManager {
      */
     void consumerRebalanceListenerCallbackCompleted(ConsumerRebalanceListenerMethodName methodName,
                                                     Optional<KafkaException> error);
+
+    /**
+     * Allows the caller to block until the member has joined the consumer group in the
+     * {@link MemberState#STABLE stable} state.
+     *
+     * @param future Future that will be completed when the member has fully joined the consumer group
+     *               (exceptionally or normally)
+     */
+    void notifyOnStable(CompletableFuture<Void> future);
 }

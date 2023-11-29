@@ -50,7 +50,7 @@ public class BackgroundEventProcessor extends EventProcessor<BackgroundEvent> {
                                     final BlockingQueue<BackgroundEvent> backgroundEventQueue,
                                     final ApplicationEventHandler applicationEventHandler,
                                     final ConsumerRebalanceListenerInvoker rebalanceListenerInvoker) {
-        super(logContext, backgroundEventQueue);
+        super(new LogContext("[Background event processor]" + (logContext.logPrefix() != null ? " " + logContext.logPrefix() : "")), backgroundEventQueue);
         this.log = logContext.logger(BackgroundEventProcessor.class);
         this.applicationEventHandler = applicationEventHandler;
         this.rebalanceListenerInvoker = rebalanceListenerInvoker;
@@ -99,11 +99,6 @@ public class BackgroundEventProcessor extends EventProcessor<BackgroundEvent> {
             default:
                 throw new IllegalArgumentException("Background event type " + event.type() + " was not expected");
         }
-    }
-
-    @Override
-    protected Class<BackgroundEvent> getEventClass() {
-        return BackgroundEvent.class;
     }
 
     private void process(final ErrorBackgroundEvent event) {

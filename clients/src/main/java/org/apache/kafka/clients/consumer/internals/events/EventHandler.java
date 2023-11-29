@@ -46,8 +46,8 @@ public class EventHandler<T> implements Closeable {
      */
     public void add(final T event) {
         Objects.requireNonNull(event, "Event must be non-null");
-        log.trace("Enqueued event: {}", event);
         queue.add(event);
+        log.trace("Enqueued event: {}", event);
     }
 
     @Override

@@ -58,15 +58,17 @@ public class ConsumerRebalanceListenerInvoker {
         Optional<ConsumerRebalanceListener> listener = subscriptions.rebalanceListener();
 
         if (listener.isPresent()) {
+            ConsumerRebalanceListener consumerRebalanceListener = listener.get();
+
             try {
                 final long startMs = time.milliseconds();
-                listener.get().onPartitionsAssigned(assignedPartitions);
+                consumerRebalanceListener.onPartitionsAssigned(assignedPartitions);
                 coordinatorMetrics.assignCallbackSensor.record(time.milliseconds() - startMs);
             } catch (WakeupException | InterruptException e) {
                 throw e;
             } catch (Exception e) {
                 log.error("User provided listener {} failed on invocation of onPartitionsAssigned for partitions {}",
-                        listener.getClass().getName(), assignedPartitions, e);
+                        consumerRebalanceListener.getClass().getName(), assignedPartitions, e);
                 return e;
             }
         }
@@ -84,15 +86,17 @@ public class ConsumerRebalanceListenerInvoker {
         Optional<ConsumerRebalanceListener> listener = subscriptions.rebalanceListener();
 
         if (listener.isPresent()) {
+            ConsumerRebalanceListener consumerRebalanceListener = listener.get();
+
             try {
                 final long startMs = time.milliseconds();
-                listener.get().onPartitionsRevoked(revokedPartitions);
+                consumerRebalanceListener.onPartitionsRevoked(revokedPartitions);
                 coordinatorMetrics.revokeCallbackSensor.record(time.milliseconds() - startMs);
             } catch (WakeupException | InterruptException e) {
                 throw e;
             } catch (Exception e) {
                 log.error("User provided listener {} failed on invocation of onPartitionsRevoked for partitions {}",
-                        listener.getClass().getName(), revokedPartitions, e);
+                        consumerRebalanceListener.getClass().getName(), revokedPartitions, e);
                 return e;
             }
         }
@@ -110,15 +114,17 @@ public class ConsumerRebalanceListenerInvoker {
         Optional<ConsumerRebalanceListener> listener = subscriptions.rebalanceListener();
 
         if (listener.isPresent()) {
+            ConsumerRebalanceListener consumerRebalanceListener = listener.get();
+
             try {
                 final long startMs = time.milliseconds();
-                listener.get().onPartitionsLost(lostPartitions);
+                consumerRebalanceListener.onPartitionsLost(lostPartitions);
                 coordinatorMetrics.loseCallbackSensor.record(time.milliseconds() - startMs);
             } catch (WakeupException | InterruptException e) {
                 throw e;
             } catch (Exception e) {
                 log.error("User provided listener {} failed on invocation of onPartitionsLost for partitions {}",
-                        listener.getClass().getName(), lostPartitions, e);
+                        consumerRebalanceListener.getClass().getName(), lostPartitions, e);
                 return e;
             }
         }

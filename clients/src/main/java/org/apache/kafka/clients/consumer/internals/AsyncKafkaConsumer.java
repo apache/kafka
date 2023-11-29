@@ -41,6 +41,7 @@ import org.apache.kafka.clients.consumer.internals.events.ApplicationEventHandle
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEventProcessor;
 import org.apache.kafka.clients.consumer.internals.events.AssignmentChangeApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
+import org.apache.kafka.clients.consumer.internals.events.BackgroundEventHandler;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEventProcessor;
 import org.apache.kafka.clients.consumer.internals.events.CommitApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.ListOffsetsApplicationEvent;
@@ -50,6 +51,7 @@ import org.apache.kafka.clients.consumer.internals.events.ResetPositionsApplicat
 import org.apache.kafka.clients.consumer.internals.events.SubscriptionChangeApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.UnsubscribeApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.ValidatePositionsApplicationEvent;
+import org.apache.kafka.clients.consumer.internals.events.WaitForJoinGroupApplicationEvent;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.KafkaException;
@@ -212,6 +214,10 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             ApiVersions apiVersions = new ApiVersions();
             final BlockingQueue<ApplicationEvent> applicationEventQueue = new LinkedBlockingQueue<>();
             final BlockingQueue<BackgroundEvent> backgroundEventQueue = new LinkedBlockingQueue<>();
+            final BackgroundEventHandler backgroundEventHandler = new BackgroundEventHandler(
+                    logContext,
+                    backgroundEventQueue
+            );
 
             // This FetchBuffer is shared between the application and network threads.
             this.fetchBuffer = new FetchBuffer(logContext);
@@ -224,7 +230,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                     fetchMetricsManager);
             final Supplier<RequestManagers> requestManagersSupplier = RequestManagers.supplier(time,
                     logContext,
-                    backgroundEventQueue,
+                    backgroundEventHandler,
                     metadata,
                     subscriptions,
                     fetchBuffer,
@@ -236,6 +242,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             final Supplier<ApplicationEventProcessor> applicationEventProcessorSupplier = ApplicationEventProcessor.supplier(logContext,
                     metadata,
                     applicationEventQueue,
+                    backgroundEventHandler,
                     requestManagersSupplier);
             this.applicationEventHandler = new ApplicationEventHandler(logContext,
                     time,
@@ -389,6 +396,10 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
 
         BlockingQueue<ApplicationEvent> applicationEventQueue = new LinkedBlockingQueue<>();
         BlockingQueue<BackgroundEvent> backgroundEventQueue = new LinkedBlockingQueue<>();
+        BackgroundEventHandler backgroundEventHandler = new BackgroundEventHandler(
+            logContext,
+            backgroundEventQueue
+        );
         ConsumerRebalanceListenerInvoker rebalanceListenerInvoker = new ConsumerRebalanceListenerInvoker(
             logContext,
             subscriptions,
@@ -405,7 +416,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         Supplier<RequestManagers> requestManagersSupplier = RequestManagers.supplier(
             time,
             logContext,
-            backgroundEventQueue,
+            backgroundEventHandler,
             metadata,
             subscriptions,
             fetchBuffer,
@@ -419,6 +430,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                 logContext,
                 metadata,
                 applicationEventQueue,
+                backgroundEventHandler,
                 requestManagersSupplier
         );
         this.applicationEventHandler = new ApplicationEventHandler(logContext,
@@ -1259,14 +1271,63 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
 
     @Override
     public boolean updateAssignmentMetadataIfNeeded(Timer timer) {
+        if (isCommittedOffsetsManagementEnabled() && !coordinatorPoll(timer)) {
+            return false;
+        }
+
+        return updateFetchPositions(timer);
+    }
+
+    /**
+     * This method is an approximation of the logic that the {@link ConsumerCoordinator#poll(Timer, boolean)} method
+     * performs when it is called by the {@link LegacyKafkaConsumer#poll(Duration)} code.
+     *
+     * <p/>
+     *
+     * To mimic the behavior of the {@link ConsumerCoordinator#ensureActiveGroup(Timer)}, we want to block the
+     * application thread until the consumer fully joins the group. However, we can't block the application thread
+     * for the full length of the given {@link Timer timer} because we need the application thread to perform
+     * any {@link ConsumerRebalanceListener} callbacks that are invoked as part of the initial assignment. So we
+     * have a loop that executes the following until the timer expires:
+     *
+     * <ul>
+     *     <li>Block for a 100 ms.</li>
+     *     <li>Execute any callbacks</li>
+     * </ul>
+     *
+     * @param timer Timer that limits the time the method will wait to join the group
+     * @return {@code true} if the join was successful, {@code false} otherwise
+     */
+    private boolean coordinatorPoll(Timer timer) {
         maybeInvokeCommitCallbacks();
         maybeThrowFencedInstanceException();
-        backgroundEventProcessor.process();
 
-        // Keeping this updateAssignmentMetadataIfNeeded wrapping up the updateFetchPositions as
-        // in the previous implementation, because it will eventually involve group coordination
-        // logic
-        return updateFetchPositions(timer);
+        WaitForJoinGroupApplicationEvent event = null;
+
+        do {
+            backgroundEventProcessor.process();
+
+            try {
+                log.debug("Waiting for consumer to join group and transition to {} state", MemberState.STABLE);
+
+                if (event == null) {
+                    // Create and enqueue the event once, but repeatedly wait on the same Future until complete
+                    // or the timer expires.
+                    event = new WaitForJoinGroupApplicationEvent();
+                    applicationEventHandler.add(event);
+                }
+
+                ConsumerUtils.getResult(event.future(), time.timer(100));
+
+                return true;
+            } catch (TimeoutException e) {
+                // Ignore this as we will retry the event until the timeout expires.
+            } finally {
+                timer.update(time.milliseconds());
+            }
+        } while (timer.notExpired());
+
+        return false;
     }
 
     @Override
