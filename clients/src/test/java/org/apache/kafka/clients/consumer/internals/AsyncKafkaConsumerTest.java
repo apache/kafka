@@ -17,6 +17,7 @@
 package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.ClientResponse;
+import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetAndTimestamp;
@@ -49,6 +50,7 @@ import org.apache.kafka.common.requests.FindCoordinatorResponse;
 import org.apache.kafka.common.requests.ListOffsetsRequest;
 import org.apache.kafka.common.requests.OffsetCommitResponse;
 import org.apache.kafka.common.requests.RequestHeader;
+import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.utils.Timer;
 import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.AfterEach;
@@ -62,6 +64,7 @@ import org.mockito.ArgumentMatchers;
 import org.mockito.MockedConstruction;
 import org.mockito.Mockito;
 import org.mockito.stubbing.Answer;
+import org.opentest4j.AssertionFailedError;
 
 import java.time.Duration;
 import java.util.ArrayList;
@@ -72,6 +75,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
@@ -84,6 +88,7 @@ import java.util.stream.Stream;
 import static java.util.Arrays.asList;
 import static java.util.Collections.singleton;
 import static java.util.Collections.singletonList;
+import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.THROW_ON_FETCH_STABLE_OFFSET_UNSUPPORTED;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
@@ -750,6 +755,70 @@ public class AsyncKafkaConsumerTest {
     public void testSubscriptionOnEmptyTopic() {
         String emptyTopic = "  ";
         assertThrows(IllegalArgumentException.class, () -> consumer.subscribe(singletonList(emptyTopic)));
+    }
+
+    @Test
+    public void testGroupIdIsNull() {
+        final Properties props = requiredConsumerProperties();
+        props.put(ConsumerConfig.AUTO_COMMIT_INTERVAL_MS_CONFIG, 10000);
+        props.put(THROW_ON_FETCH_STABLE_OFFSET_UNSUPPORTED, true);
+        final ConsumerConfig config = new ConsumerConfig(props);
+
+        try (AsyncKafkaConsumer<String, String> consumer =
+                 new AsyncKafkaConsumer<>(config, new StringDeserializer(), new StringDeserializer())) {
+            assertFalse(config.unused().contains(ConsumerConfig.AUTO_COMMIT_INTERVAL_MS_CONFIG));
+            assertFalse(config.unused().contains(THROW_ON_FETCH_STABLE_OFFSET_UNSUPPORTED));
+        } catch (final Exception exception) {
+            throw new AssertionFailedError("The following exception was not expected:", exception);
+        }
+    }
+
+    @Test
+    public void testGroupIdIsNotNullAndValid() {
+        final Properties props = requiredConsumerProperties();
+        props.put(ConsumerConfig.GROUP_ID_CONFIG, "consumerGroupA");
+        props.put(ConsumerConfig.AUTO_COMMIT_INTERVAL_MS_CONFIG, 10000);
+        props.put(THROW_ON_FETCH_STABLE_OFFSET_UNSUPPORTED, true);
+        final ConsumerConfig config = new ConsumerConfig(props);
+
+        try (AsyncKafkaConsumer<String, String> consumer =
+                 new AsyncKafkaConsumer<>(config, new StringDeserializer(), new StringDeserializer())) {
+            assertTrue(config.unused().contains(ConsumerConfig.AUTO_COMMIT_INTERVAL_MS_CONFIG));
+            assertTrue(config.unused().contains(THROW_ON_FETCH_STABLE_OFFSET_UNSUPPORTED));
+        } catch (final Exception exception) {
+            throw new AssertionFailedError("The following exception was not expected:", exception);
+        }
+    }
+
+    @Test
+    public void testGroupIdEmpty() {
+        testGroupId("");
+    }
+
+    @Test
+    public void testGroupIdOnlyWhitespaces() {
+        testGroupId("       ");
+    }
+
+    private void testGroupId(final String groupId) {
+        final Properties props = requiredConsumerProperties();
+        props.put(ConsumerConfig.GROUP_ID_CONFIG, groupId);
+        final ConsumerConfig config = new ConsumerConfig(props);
+
+        final Exception exception = assertThrows(
+            KafkaException.class,
+            () -> new AsyncKafkaConsumer<>(config, new StringDeserializer(), new StringDeserializer())
+        );
+
+        assertEquals("Failed to construct kafka consumer", exception.getMessage());
+    }
+
+    private Properties requiredConsumerProperties() {
+        final Properties props = new Properties();
+        props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
+        props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
+        props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9091");
+        return props;
     }
 
     private void testUpdateFetchPositionsWithFetchCommittedOffsetsTimeout(boolean committedOffsetsEnabled) {

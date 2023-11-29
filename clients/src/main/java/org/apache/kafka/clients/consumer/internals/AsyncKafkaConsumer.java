@@ -65,6 +65,7 @@ import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.requests.JoinGroupRequest;
 import org.apache.kafka.common.requests.ListOffsetsRequest;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.utils.AppInfoParser;
@@ -133,7 +134,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
 
     private final ApplicationEventHandler applicationEventHandler;
     private final Time time;
-    private final Optional<String> groupId;
+    private Optional<ConsumerGroupMetadata> groupMetadata;
     private final KafkaConsumerMetrics kafkaConsumerMetrics;
     private Logger log;
     private final String clientId;
@@ -163,8 +164,6 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
     private boolean cachedSubscriptionHasAllFetchPositions;
     private final WakeupTrigger wakeupTrigger = new WakeupTrigger();
     private boolean isFenced = false;
-    private final Optional<String> groupInstanceId;
-
     private final OffsetCommitCallbackInvoker invoker = new OffsetCommitCallbackInvoker();
 
     // currentThread holds the threadId of the current thread accessing the AsyncKafkaConsumer
@@ -176,18 +175,13 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                        final Deserializer<K> keyDeserializer,
                        final Deserializer<V> valueDeserializer) {
         try {
-            GroupRebalanceConfig groupRebalanceConfig = new GroupRebalanceConfig(config,
-                    GroupRebalanceConfig.ProtocolType.CONSUMER);
-            this.groupInstanceId = groupRebalanceConfig.groupInstanceId;
-            this.groupId = Optional.ofNullable(groupRebalanceConfig.groupId);
+            GroupRebalanceConfig groupRebalanceConfig = new GroupRebalanceConfig(
+                config,
+                GroupRebalanceConfig.ProtocolType.CONSUMER
+            );
             this.clientId = config.getString(CommonClientConfigs.CLIENT_ID_CONFIG);
             LogContext logContext = createLogContext(config, groupRebalanceConfig);
             this.log = logContext.logger(getClass());
-            groupId.ifPresent(groupIdStr -> {
-                if (groupIdStr.isEmpty()) {
-                    log.warn("Support for using the empty group id by consumers is deprecated and will be removed in the next major release.");
-                }
-            });
 
             log.debug("Initializing the Kafka consumer");
             this.defaultApiTimeoutMs = config.getInt(ConsumerConfig.DEFAULT_API_TIMEOUT_MS_CONFIG);
@@ -250,11 +244,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                     config.originals(Collections.singletonMap(ConsumerConfig.CLIENT_ID_CONFIG, clientId))
             );
 
-            // no coordinator will be constructed for the default (null) group id
-            if (!groupId.isPresent()) {
-                config.ignore(ConsumerConfig.AUTO_COMMIT_INTERVAL_MS_CONFIG);
-                config.ignore(THROW_ON_FETCH_STABLE_OFFSET_UNSUPPORTED);
-            }
+            this.groupMetadata = initializeGroupMetadata(config, groupRebalanceConfig);
 
             // The FetchCollector is only used on the application thread.
             this.fetchCollector = new FetchCollector<>(logContext,
@@ -308,7 +298,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         this.time = time;
         this.backgroundEventProcessor = new BackgroundEventProcessor(logContext, backgroundEventQueue);
         this.metrics = metrics;
-        this.groupId = Optional.ofNullable(groupId);
+        this.groupMetadata = initializeGroupMetadata(groupId, Optional.empty());
         this.metadata = metadata;
         this.retryBackoffMs = retryBackoffMs;
         this.defaultApiTimeoutMs = defaultApiTimeoutMs;
@@ -316,7 +306,6 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         this.applicationEventHandler = applicationEventHandler;
         this.assignors = assignors;
         this.kafkaConsumerMetrics = new KafkaConsumerMetrics(metrics, "consumer");
-        this.groupInstanceId = Optional.empty();
     }
 
     // Visible for testing
@@ -337,13 +326,11 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         this.interceptors = new ConsumerInterceptors<>(Collections.emptyList());
         this.time = time;
         this.metrics = new Metrics(time);
-        this.groupId = Optional.ofNullable(config.getString(ConsumerConfig.GROUP_ID_CONFIG));
         this.metadata = metadata;
         this.retryBackoffMs = config.getLong(ConsumerConfig.RETRY_BACKOFF_MS_CONFIG);
         this.defaultApiTimeoutMs = config.getInt(ConsumerConfig.DEFAULT_API_TIMEOUT_MS_CONFIG);
         this.deserializers = new Deserializers<>(keyDeserializer, valueDeserializer);
         this.assignors = assignors;
-        this.groupInstanceId = Optional.ofNullable(config.getString(ConsumerConfig.GROUP_INSTANCE_ID_CONFIG));
 
         ConsumerMetrics metricsRegistry = new ConsumerMetrics(CONSUMER_METRIC_GROUP_PREFIX);
         FetchMetricsManager fetchMetricsManager = new FetchMetricsManager(metrics, metricsRegistry.fetcherMetrics);
@@ -360,6 +347,8 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             config,
             GroupRebalanceConfig.ProtocolType.CONSUMER
         );
+
+        this.groupMetadata = initializeGroupMetadata(config, groupRebalanceConfig);
 
         BlockingQueue<ApplicationEvent> applicationEventQueue = new LinkedBlockingQueue<>();
         BlockingQueue<BackgroundEvent> backgroundEventQueue = new LinkedBlockingQueue<>();
@@ -396,6 +385,38 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                 applicationEventProcessorSupplier,
                 networkClientDelegateSupplier,
                 requestManagersSupplier);
+    }
+
+    private Optional<ConsumerGroupMetadata> initializeGroupMetadata(final ConsumerConfig config,
+                                                                    final GroupRebalanceConfig groupRebalanceConfig) {
+        final Optional<ConsumerGroupMetadata> groupMetadata = initializeGroupMetadata(
+            groupRebalanceConfig.groupId,
+            groupRebalanceConfig.groupInstanceId
+        );
+        if (!groupMetadata.isPresent()) {
+            config.ignore(ConsumerConfig.AUTO_COMMIT_INTERVAL_MS_CONFIG);
+            config.ignore(THROW_ON_FETCH_STABLE_OFFSET_UNSUPPORTED);
+        }
+        return groupMetadata;
+    }
+
+    private Optional<ConsumerGroupMetadata> initializeGroupMetadata(final String groupId,
+                                                                    final Optional<String> groupInstanceId) {
+        if (groupId != null) {
+            if (groupId.isEmpty()) {
+                throwInInvalidGroupIdException();
+                return Optional.empty();
+            } else {
+                return Optional.of(new ConsumerGroupMetadata(
+                    groupId,
+                    JoinGroupRequest.UNKNOWN_GENERATION_ID,
+                    JoinGroupRequest.UNKNOWN_MEMBER_ID,
+                    groupInstanceId
+                ));
+            }
+        } else {
+            return Optional.empty();
+        }
     }
 
     /**
@@ -672,10 +693,14 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
     }
 
     private void maybeThrowInvalidGroupIdException() {
-        if (!groupId.isPresent() || groupId.get().isEmpty()) {
-            throw new InvalidGroupIdException("To use the group management or offset commit APIs, you must " +
-                    "provide a valid " + ConsumerConfig.GROUP_ID_CONFIG + " in the consumer configuration.");
+        if (!groupMetadata.isPresent()) {
+            throwInInvalidGroupIdException();
         }
+    }
+
+    private void throwInInvalidGroupIdException() {
+        throw new InvalidGroupIdException("To use the group management or offset commit APIs, you must " +
+            "provide a valid " + ConsumerConfig.GROUP_ID_CONFIG + " in the consumer configuration.");
     }
 
     @Override
@@ -1052,7 +1077,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         acquireAndEnsureOpen();
         try {
             fetchBuffer.retainAll(Collections.emptySet());
-            if (groupId.isPresent()) {
+            if (groupMetadata.isPresent()) {
                 UnsubscribeApplicationEvent unsubscribeApplicationEvent = new UnsubscribeApplicationEvent();
                 applicationEventHandler.add(unsubscribeApplicationEvent);
                 try {
@@ -1181,7 +1206,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
      * according to config {@link CommonClientConfigs#GROUP_ID_CONFIG}
      */
     private boolean isCommittedOffsetsManagementEnabled() {
-        return groupId.isPresent();
+        return groupMetadata.isPresent();
     }
 
     /**
@@ -1370,7 +1395,11 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
     private void maybeThrowFencedInstanceException() {
         if (isFenced) {
             throw new FencedInstanceIdException("Get fenced exception for group.instance.id " +
-                groupInstanceId.orElse("null"));
+                groupMetadata.orElseThrow(
+                    () -> new IllegalStateException("No group metadata found although a group ID was provided. This is a bug!")
+                ).groupInstanceId().orElseThrow(
+                    () -> new IllegalStateException("No group instance ID found although the consumer is fenced. This is a bug!")
+                ));
         }
     }
 
