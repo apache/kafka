@@ -1911,6 +1911,10 @@ public class KafkaStreams implements AutoCloseable {
         }
 
         // GlobalThread
+        KafkaFuture<Uuid> globalThreadFuture = null;
+        if (globalStreamThread != null) {
+            globalThreadFuture = globalStreamThread.globalConsumerInstanceId(timeout);
+        }
 
         // (2) get admin client instance id in a blocking fashion, while Stream/GlobalThreads work in parallel
         try {
@@ -1957,6 +1961,22 @@ public class KafkaStreams implements AutoCloseable {
         // (3b) collect producers from StreamsThread
 
         // (3c) collect from GlobalThread
+        if (globalThreadFuture != null) {
+            final Uuid instanceId = getOrThrowException(
+                globalThreadFuture,
+                () -> "Could not retrieve global consumer client instance id."
+            );
+
+            // could be `null` if telemetry is disabled on the client itself
+            if (instanceId != null) {
+                clientInstanceIds.addConsumerInstanceId(
+                    globalStreamThread.getName(),
+                    instanceId
+                );
+            } else {
+                log.debug("Telemetry is disabled for the global consumer.");
+            }
+        }
 
         return clientInstanceIds;
     }
