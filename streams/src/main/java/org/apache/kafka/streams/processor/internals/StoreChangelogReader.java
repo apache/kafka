@@ -651,11 +651,7 @@ public class StoreChangelogReader implements ChangelogReader {
         if (numRecords != 0) {
             final List<ConsumerRecord<byte[], byte[]>> records = changelogMetadata.bufferedRecords.subList(0, numRecords);
             final OptionalLong optionalLag = restoreConsumer.currentLag(partition);
-            Long currentLag = null;
-            if (optionalLag.isPresent()) {
-                currentLag = optionalLag.getAsLong();
-            }
-            stateManager.restore(storeMetadata, records, currentLag);
+            stateManager.restore(storeMetadata, records, optionalLag);
 
             // NOTE here we use removeRange of ArrayList in order to achieve efficiency with range shifting,
             // otherwise one-at-a-time removal or addition would be very costly; if all records are restored
@@ -1021,8 +1017,8 @@ public class StoreChangelogReader implements ChangelogReader {
                 // no records to restore; in this case we just initialize the sensor to zero
                 final long recordsToRestore = Math.max(changelogMetadata.restoreEndOffset - startOffset, 0L);
                 task.recordRestoration(time, recordsToRestore, true);
-            }  else if (changelogMetadata.stateManager.taskType() == TaskType.STANDBY && storeMetadata.endOffset() != null) {
-                standbyUpdateListener.onUpdateStart(partition, storeName, startOffset, storeMetadata.endOffset());
+            }  else if (changelogMetadata.stateManager.taskType() == TaskType.STANDBY) {
+                standbyUpdateListener.onUpdateStart(partition, storeName, startOffset);
             }
         }
     }

@@ -758,27 +758,48 @@ public class KafkaStreams implements AutoCloseable {
 
     final class DelegatingStandbyUpdateListener implements StandbyUpdateListener {
 
+        private void throwOnFatalException(final Exception fatalUserException,
+                                           final TopicPartition topicPartition,
+                                           final String storeName) {
+            throw new StreamsException(
+                    String.format("Fatal user code error in standby update listener for store %s, partition %s.",
+                            storeName,
+                            topicPartition),
+                    fatalUserException);
+        }
+
         @Override
-public void onUpdateStart(final TopicPartition topicPartition, 
+        public void onUpdateStart(final TopicPartition topicPartition,
                           final String storeName, 
-                          final long startingOffset, 
-                          final long currentEndOffset) {
+                          final long startingOffset) {
             if (globalStandbyListener != null) {
-                globalStandbyListener.onUpdateStart(topicPartition, storeName, startingOffset, currentEndOffset);
+                try {
+                    globalStandbyListener.onUpdateStart(topicPartition, storeName, startingOffset);
+                } catch (final Exception fatalUserException) {
+                    throwOnFatalException(fatalUserException, topicPartition, storeName);
+                }
             }
         }
 
         @Override
         public void onBatchLoaded(final TopicPartition topicPartition, final String storeName, final TaskId taskId, final long batchEndOffset, final long numRestored, final long currentEndOffset) {
             if (globalStandbyListener != null) {
-                globalStandbyListener.onBatchLoaded(topicPartition, storeName, taskId, batchEndOffset, numRestored, currentEndOffset);
+                try {
+                    globalStandbyListener.onBatchLoaded(topicPartition, storeName, taskId, batchEndOffset, numRestored, currentEndOffset);
+                } catch (final Exception fatalUserException) {
+                    throwOnFatalException(fatalUserException, topicPartition, storeName);
+                }
             }
         }
 
         @Override
         public void onUpdateSuspended(final TopicPartition topicPartition, final String storeName, final long storeOffset, final long currentEndOffset, final SuspendReason reason) {
             if (globalStandbyListener != null) {
-                globalStandbyListener.onUpdateSuspended(topicPartition, storeName, storeOffset, currentEndOffset, reason);
+                try {
+                    globalStandbyListener.onUpdateSuspended(topicPartition, storeName, storeOffset, currentEndOffset, reason);
+                } catch (final Exception fatalUserException) {
+                    throwOnFatalException(fatalUserException, topicPartition, storeName);
+                }
             }
         }
     }

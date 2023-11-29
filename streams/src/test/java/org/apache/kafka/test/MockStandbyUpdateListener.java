@@ -36,7 +36,7 @@ public final class MockStandbyUpdateListener implements StandbyUpdateListener {
     public TopicPartition updatePartition;
 
     @Override
-    public void onUpdateStart(TopicPartition partition, String storeName, long startingOffset, long currentEndOffset) {
+    public void onUpdateStart(TopicPartition partition, String storeName, long startingOffset) {
         storeNameCalledUpdate.put(UPDATE_START, storeName);
         this.updatePartition = partition;
     }

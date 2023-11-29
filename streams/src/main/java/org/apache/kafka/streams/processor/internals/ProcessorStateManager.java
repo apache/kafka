@@ -46,6 +46,7 @@ import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.OptionalLong;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -453,7 +454,7 @@ public class ProcessorStateManager implements StateManager {
     }
 
     // used by the changelog reader only
-    void restore(final StateStoreMetadata storeMetadata, final List<ConsumerRecord<byte[], byte[]>> restoreRecords, final Long consumerLag) {
+    void restore(final StateStoreMetadata storeMetadata, final List<ConsumerRecord<byte[], byte[]>> restoreRecords, final OptionalLong optionalLag) {
         if (!stores.containsValue(storeMetadata)) {
             throw new IllegalStateException("Restoring " + storeMetadata + " which is not registered in this state manager, " +
                 "this should not happen.");
@@ -478,8 +479,8 @@ public class ProcessorStateManager implements StateManager {
 
             storeMetadata.setOffset(batchEndOffset);
             // If null means the lag for this partition is not known yet
-            if (consumerLag != null) {
-                storeMetadata.setEndOffset(consumerLag + batchEndOffset);
+            if (optionalLag.isPresent()) {
+                storeMetadata.setEndOffset(optionalLag.getAsLong() + batchEndOffset);
             }
         }
     }

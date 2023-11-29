@@ -31,12 +31,10 @@ public interface StandbyUpdateListener {
      * @param topicPartition   the TopicPartition of the Standby Task.
      * @param storeName        the name of the store being watched by this Standby Task.
      * @param startingOffset   the offset from which the Standby Task starts watching.
-     * @param currentEndOffset the current latest offset on the associated changelog partition.
      */
     void onUpdateStart(final TopicPartition topicPartition,
                        final String storeName,
-                       final long startingOffset,
-                       final long currentEndOffset);
+                       final long startingOffset);
 
     /**
      * Method called after restoring a batch of records. In this case the maximum size of the batch is whatever

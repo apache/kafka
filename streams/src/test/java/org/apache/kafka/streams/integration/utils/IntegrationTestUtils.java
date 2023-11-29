@@ -1552,7 +1552,7 @@ public class IntegrationTestUtils {
 
 
         @Override
-        public void onUpdateStart(final TopicPartition topicPartition, final String storeName, final long startingOffset, final long currentEndOffset) {
+        public void onUpdateStart(final TopicPartition topicPartition, final String storeName, final long startingOffset) {
 
         }
 
