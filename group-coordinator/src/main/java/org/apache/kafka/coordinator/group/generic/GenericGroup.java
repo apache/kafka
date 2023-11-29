@@ -37,6 +37,7 @@ import org.apache.kafka.coordinator.group.OffsetExpirationCondition;
 import org.apache.kafka.coordinator.group.OffsetExpirationConditionImpl;
 import org.apache.kafka.coordinator.group.Record;
 import org.apache.kafka.coordinator.group.RecordHelpers;
+import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetricsShard;
 import org.slf4j.Logger;
 
 import java.nio.ByteBuffer;
@@ -185,17 +186,24 @@ public class GenericGroup implements Group {
      */
     private boolean newMemberAdded = false;
 
+    /**
+     * Coordinator metrics.
+     */
+    private final GroupCoordinatorMetricsShard metrics;
+
     public GenericGroup(
         LogContext logContext,
         String groupId,
         GenericGroupState initialState,
-        Time time
+        Time time,
+        GroupCoordinatorMetricsShard metrics
     ) {
         this(
             logContext,
             groupId,
             initialState,
             time,
+            metrics,
             0,
             Optional.empty(),
             Optional.empty(),
@@ -209,6 +217,7 @@ public class GenericGroup implements Group {
         String groupId,
         GenericGroupState initialState,
         Time time,
+        GroupCoordinatorMetricsShard metrics,
         int generationId,
         Optional<String> protocolType,
         Optional<String> protocolName,
@@ -221,11 +230,13 @@ public class GenericGroup implements Group {
         this.state = Objects.requireNonNull(initialState);
         this.previousState = DEAD;
         this.time = Objects.requireNonNull(time);
+        this.metrics = Objects.requireNonNull(metrics);
         this.generationId = generationId;
         this.protocolType = protocolType;
         this.protocolName = protocolName;
         this.leaderId = leaderId;
         this.currentStateTimestamp = currentStateTimestamp;
+        metrics.onGenericGroupStateTransition(null, initialState);
     }
 
     /**
@@ -973,6 +984,7 @@ public class GenericGroup implements Group {
         previousState = state;
         state = groupState;
         currentStateTimestamp = Optional.of(time.milliseconds());
+        metrics.onGenericGroupStateTransition(previousState, state);
     }
 
     /**

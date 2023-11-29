@@ -52,6 +52,7 @@ import org.apache.kafka.metadata.properties.MetaPropertiesEnsemble.VerificationF
 import org.apache.kafka.metadata.properties.{MetaProperties, MetaPropertiesEnsemble}
 import org.apache.kafka.metadata.{BrokerState, MetadataRecordSerde, VersionRange}
 import org.apache.kafka.raft.RaftConfig
+import org.apache.kafka.server.NodeToControllerChannelManager
 import org.apache.kafka.server.authorizer.Authorizer
 import org.apache.kafka.server.common.MetadataVersion._
 import org.apache.kafka.server.common.{ApiMessageAndVersion, MetadataVersion}
@@ -196,6 +197,7 @@ class KafkaServer(
   def kafkaController: KafkaController = _kafkaController
 
   var lifecycleManager: BrokerLifecycleManager = _
+  private var raftManager: KafkaRaftManager[ApiMessageAndVersion] = _
 
   @volatile var brokerEpochManager: ZkBrokerEpochManager = _
 
@@ -253,7 +255,7 @@ class KafkaServer(
 
         // initialize dynamic broker configs from ZooKeeper. Any updates made after this will be
         // applied after ZkConfigManager starts.
-        config.dynamicConfig.initialize(Some(zkClient))
+        config.dynamicConfig.initialize(Some(zkClient), clientMetricsReceiverPluginOpt = None)
 
         /* start scheduler */
         kafkaScheduler = new KafkaScheduler(config.backgroundThreads)
@@ -281,7 +283,9 @@ class KafkaServer(
               setClusterId(_clusterId).
               setNodeId(config.brokerId)
             if (!builder.directoryId().isPresent()) {
-              builder.setDirectoryId(copier.generateValidDirectoryId())
+              if (config.migrationEnabled) {
+                builder.setDirectoryId(copier.generateValidDirectoryId())
+              }
             }
             copier.setLogDirProps(logDir, builder.build())
           })
@@ -338,7 +342,7 @@ class KafkaServer(
         tokenCache = new DelegationTokenCache(ScramMechanism.mechanismNames)
         credentialProvider = new CredentialProvider(ScramMechanism.mechanismNames, tokenCache)
 
-        clientToControllerChannelManager = NodeToControllerChannelManager(
+        clientToControllerChannelManager = new NodeToControllerChannelManagerImpl(
           controllerNodeProvider = controllerNodeProvider,
           time = time,
           metrics = metrics,
@@ -414,7 +418,7 @@ class KafkaServer(
           // If the ZK broker is in migration mode, start up a RaftManager to learn about the new KRaft controller
           val controllerQuorumVotersFuture = CompletableFuture.completedFuture(
             RaftConfig.parseVoterConnections(config.quorumVoters))
-          val raftManager = new KafkaRaftManager[ApiMessageAndVersion](
+          raftManager = new KafkaRaftManager[ApiMessageAndVersion](
             metaPropsEnsemble.clusterId().get(),
             config,
             new MetadataRecordSerde,
@@ -428,7 +432,7 @@ class KafkaServer(
           )
           val controllerNodes = RaftConfig.voterConnectionsToNodes(controllerQuorumVotersFuture.get()).asScala
           val quorumControllerNodeProvider = RaftControllerNodeProvider(raftManager, config, controllerNodes)
-          val brokerToQuorumChannelManager = NodeToControllerChannelManager(
+          val brokerToQuorumChannelManager = new NodeToControllerChannelManagerImpl(
             controllerNodeProvider = quorumControllerNodeProvider,
             time = time,
             metrics = metrics,
@@ -1008,6 +1012,9 @@ class KafkaServer(
 
         // Clear all reconfigurable instances stored in DynamicBrokerConfig
         config.dynamicConfig.clear()
+
+        if (raftManager != null)
+          CoreUtils.swallow(raftManager.shutdown(), this)
 
         if (lifecycleManager != null) {
           lifecycleManager.close()

@@ -48,6 +48,7 @@ import org.apache.kafka.streams.processor.TimestampExtractor;
 import org.apache.kafka.streams.processor.internals.DefaultKafkaClientSupplier;
 import org.apache.kafka.streams.processor.internals.StreamsPartitionAssignor;
 import org.apache.kafka.streams.processor.internals.assignment.RackAwareTaskAssignor;
+import org.apache.kafka.streams.state.BuiltInDslStoreSuppliers;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -529,13 +530,23 @@ public class StreamsConfig extends AbstractConfig {
     private static final String DEFAULT_PRODUCTION_EXCEPTION_HANDLER_CLASS_DOC = "Exception handling class that implements the <code>org.apache.kafka.streams.errors.ProductionExceptionHandler</code> interface.";
 
     /** {@code default.dsl.store} */
+    @Deprecated
     @SuppressWarnings("WeakerAccess")
     public static final String DEFAULT_DSL_STORE_CONFIG = "default.dsl.store";
+    @Deprecated
     public static final String DEFAULT_DSL_STORE_DOC = "The default state store type used by DSL operators.";
 
+    @Deprecated
     public static final String ROCKS_DB = "rocksDB";
+    @Deprecated
     public static final String IN_MEMORY = "in_memory";
+    @Deprecated
     public static final String DEFAULT_DSL_STORE = ROCKS_DB;
+
+    /** {@code dsl.store.suppliers.class } */
+    public static final String DSL_STORE_SUPPLIERS_CLASS_CONFIG = "dsl.store.suppliers.class";
+    static final String DSL_STORE_SUPPLIERS_CLASS_DOC = "Defines which store implementations to plug in to DSL operators. Must implement the <code>org.apache.kafka.streams.state.DslStoreSuppliers</code> interface.";
+    static final Class<?> DSL_STORE_SUPPLIERS_CLASS_DEFAULT = BuiltInDslStoreSuppliers.RocksDBDslStoreSuppliers.class;
 
     /** {@code default.windowed.key.serde.inner} */
     @SuppressWarnings("WeakerAccess")
@@ -760,13 +771,14 @@ public class StreamsConfig extends AbstractConfig {
 
     public static final String RACK_AWARE_ASSIGNMENT_STRATEGY_NONE = "none";
     public static final String RACK_AWARE_ASSIGNMENT_STRATEGY_MIN_TRAFFIC = "min_traffic";
+    public static final String RACK_AWARE_ASSIGNMENT_STRATEGY_BALANCE_SUBTOPOLOGY = "balance_subtopology";
 
     /** {@code } rack.aware.assignment.strategy */
     @SuppressWarnings("WeakerAccess")
     public static final String RACK_AWARE_ASSIGNMENT_STRATEGY_CONFIG = "rack.aware.assignment.strategy";
     public static final String RACK_AWARE_ASSIGNMENT_STRATEGY_DOC = "The strategy we use for rack aware assignment. Rack aware assignment will take <code>client.rack</code> and <code>racks</code> of <code>TopicPartition</code> into account when assigning"
         + " tasks to minimize cross rack traffic. Valid settings are : <code>" + RACK_AWARE_ASSIGNMENT_STRATEGY_NONE + "</code> (default), which will disable rack aware assignment; <code>" + RACK_AWARE_ASSIGNMENT_STRATEGY_MIN_TRAFFIC
-        + "</code>, which will compute minimum cross rack traffic assignment.";
+        + "</code>, which will compute minimum cross rack traffic assignment; <code>" + RACK_AWARE_ASSIGNMENT_STRATEGY_BALANCE_SUBTOPOLOGY + "</code>, which will compute minimum cross rack traffic and try to balance the tasks of same subtopolgies across different clients";
 
     @SuppressWarnings("WeakerAccess")
     public static final String RACK_AWARE_ASSIGNMENT_TRAFFIC_COST_CONFIG = "rack.aware.assignment.traffic_cost";
@@ -924,7 +936,7 @@ public class StreamsConfig extends AbstractConfig {
             .define(RACK_AWARE_ASSIGNMENT_STRATEGY_CONFIG,
                     Type.STRING,
                     RACK_AWARE_ASSIGNMENT_STRATEGY_NONE,
-                    in(RACK_AWARE_ASSIGNMENT_STRATEGY_NONE, RACK_AWARE_ASSIGNMENT_STRATEGY_MIN_TRAFFIC),
+                    in(RACK_AWARE_ASSIGNMENT_STRATEGY_NONE, RACK_AWARE_ASSIGNMENT_STRATEGY_MIN_TRAFFIC, RACK_AWARE_ASSIGNMENT_STRATEGY_BALANCE_SUBTOPOLOGY),
                     Importance.MEDIUM,
                     RACK_AWARE_ASSIGNMENT_STRATEGY_DOC)
             .define(RACK_AWARE_ASSIGNMENT_TAGS_CONFIG,
@@ -1005,6 +1017,11 @@ public class StreamsConfig extends AbstractConfig {
                     in(ROCKS_DB, IN_MEMORY),
                     Importance.LOW,
                     DEFAULT_DSL_STORE_DOC)
+            .define(DSL_STORE_SUPPLIERS_CLASS_CONFIG,
+                    Type.CLASS,
+                    DSL_STORE_SUPPLIERS_CLASS_DEFAULT,
+                    Importance.LOW,
+                    DSL_STORE_SUPPLIERS_CLASS_DOC)
             .define(DEFAULT_CLIENT_SUPPLIER_CONFIG,
                     Type.CLASS,
                     DefaultKafkaClientSupplier.class.getName(),

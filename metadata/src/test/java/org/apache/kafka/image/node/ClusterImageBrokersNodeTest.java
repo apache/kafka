@@ -45,6 +45,7 @@ public class ClusterImageBrokersNodeTest {
                     setSupportedFeatures(Collections.singletonMap(MetadataVersion.FEATURE_NAME, VersionRange.of(1, 4))).
                     setRack(Optional.empty()).
                     setFenced(false).
+                    setDirectories(Arrays.asList(Uuid.fromString("anCdBWcFTlu8gE1wP6bh3g"), Uuid.fromString("JsnDDNVyTL289kYk6sPzig"))).
                     setInControlledShutdown(false).build()),
             Collections.emptyMap());
 
@@ -66,7 +67,9 @@ public class ClusterImageBrokersNodeTest {
             "rack=Optional.empty, " +
             "fenced=false, " +
             "inControlledShutdown=false, " +
-            "isMigratingZkBroker=false)", child.stringify());
+            "isMigratingZkBroker=false, " +
+            "directories=[JsnDDNVyTL289kYk6sPzig, anCdBWcFTlu8gE1wP6bh3g])",
+            child.stringify());
     }
 
     @Test

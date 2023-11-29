@@ -28,7 +28,6 @@ import kafka.cluster.{Broker, Partition}
 import kafka.controller.{ControllerContext, KafkaController}
 import kafka.coordinator.transaction.{InitProducerIdResult, TransactionCoordinator}
 import kafka.log.UnifiedLog
-import kafka.metrics.ClientMetricsTestUtils
 import kafka.network.{RequestChannel, RequestMetrics}
 import kafka.server.QuotaFactory.QuotaManagers
 import kafka.server.metadata.{ConfigRepository, KRaftMetadataCache, MockConfigRepository, ZkMetadataCache}
@@ -98,6 +97,7 @@ import org.apache.kafka.common.message.OffsetDeleteResponseData.{OffsetDeleteRes
 import org.apache.kafka.coordinator.group.GroupCoordinator
 import org.apache.kafka.server.common.{Features, MetadataVersion}
 import org.apache.kafka.server.common.MetadataVersion.{IBP_0_10_2_IV0, IBP_2_2_IV1}
+import org.apache.kafka.server.metrics.ClientMetricsTestUtils
 import org.apache.kafka.server.util.MockTime
 import org.apache.kafka.storage.internals.log.{AppendOrigin, FetchParams, FetchPartitionData, LogConfig}
 

@@ -36,16 +36,17 @@ import org.apache.kafka.common.security.token.delegation.internals.DelegationTok
 import org.apache.kafka.common.utils.{LogContext, Time}
 import org.apache.kafka.common.{ClusterResource, KafkaException, TopicPartition, Uuid}
 import org.apache.kafka.coordinator.group
-import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorRuntimeMetrics
+import org.apache.kafka.coordinator.group.metrics.{GroupCoordinatorMetrics, GroupCoordinatorRuntimeMetrics}
 import org.apache.kafka.coordinator.group.util.SystemTimerReaper
 import org.apache.kafka.coordinator.group.{GroupCoordinator, GroupCoordinatorConfig, GroupCoordinatorService, RecordSerde}
 import org.apache.kafka.image.publisher.MetadataPublisher
 import org.apache.kafka.metadata.{BrokerState, ListenerInfo, VersionRange}
 import org.apache.kafka.raft.RaftConfig
+import org.apache.kafka.server.{AssignmentsManager, ClientMetricsManager, NodeToControllerChannelManager}
 import org.apache.kafka.server.authorizer.Authorizer
 import org.apache.kafka.server.common.{ApiMessageAndVersion, DirectoryEventHandler, TopicIdPartition}
 import org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig
-import org.apache.kafka.server.metrics.KafkaYammerMetrics
+import org.apache.kafka.server.metrics.{ClientMetricsReceiverPlugin, KafkaYammerMetrics}
 import org.apache.kafka.server.network.{EndpointReadyFutures, KafkaAuthorizerServerInfo}
 import org.apache.kafka.server.util.timer.SystemTimer
 import org.apache.kafka.server.util.{Deadline, FutureUtils, KafkaScheduler}
@@ -176,7 +177,8 @@ class BrokerServer(
 
       info("Starting broker")
 
-      config.dynamicConfig.initialize(zkClientOpt = None)
+      val clientMetricsReceiverPlugin = new ClientMetricsReceiverPlugin()
+      config.dynamicConfig.initialize(zkClientOpt = None, Some(clientMetricsReceiverPlugin))
 
       /* start scheduler */
       kafkaScheduler = new KafkaScheduler(config.backgroundThreads)
@@ -222,7 +224,7 @@ class BrokerServer(
       val controllerNodes = RaftConfig.voterConnectionsToNodes(voterConnections).asScala
       val controllerNodeProvider = RaftControllerNodeProvider(raftManager, config, controllerNodes)
 
-      clientToControllerChannelManager = NodeToControllerChannelManager(
+      clientToControllerChannelManager = new NodeToControllerChannelManagerImpl(
         controllerNodeProvider,
         time,
         metrics,
@@ -279,7 +281,7 @@ class BrokerServer(
         time
       )
 
-      val assignmentsChannelManager = NodeToControllerChannelManager(
+      val assignmentsChannelManager = new NodeToControllerChannelManagerImpl(
         controllerNodeProvider,
         time,
         metrics,
@@ -345,7 +347,7 @@ class BrokerServer(
         config, Some(clientToControllerChannelManager), None, None,
         groupCoordinator, transactionCoordinator)
 
-      clientMetricsManager = ClientMetricsManager.instance()
+      clientMetricsManager = new ClientMetricsManager(clientMetricsReceiverPlugin, config.clientTelemetryMaxBytes, time)
 
       dynamicConfigHandlers = Map[String, ConfigHandler](
         ConfigType.Topic -> new TopicConfigHandler(replicaManager, config, quotaManagers, None),
@@ -357,7 +359,7 @@ class BrokerServer(
           k -> VersionRange.of(v.min, v.max)
       }.asJava
 
-      val brokerLifecycleChannelManager = NodeToControllerChannelManager(
+      val brokerLifecycleChannelManager = new NodeToControllerChannelManagerImpl(
         controllerNodeProvider,
         time,
         metrics,
@@ -587,6 +589,7 @@ class BrokerServer(
         .withLoader(loader)
         .withWriter(writer)
         .withCoordinatorRuntimeMetrics(new GroupCoordinatorRuntimeMetrics(metrics))
+        .withGroupCoordinatorMetrics(new GroupCoordinatorMetrics(KafkaYammerMetrics.defaultRegistry, metrics))
         .build()
     } else {
       GroupCoordinatorAdapter(

@@ -197,6 +197,9 @@ public class PartitionRegistration {
     private PartitionRegistration(int[] replicas, Uuid[] directories, int[] isr, int[] removingReplicas,
                                  int[] addingReplicas, int leader, LeaderRecoveryState leaderRecoveryState,
                                  int leaderEpoch, int partitionEpoch, int[] elr, int[] lastKnownElr) {
+        if (directories != null && directories.length > 0 && directories.length != replicas.length) {
+            throw new IllegalArgumentException("The lengths for replicas and directories do not match.");
+        }
         this.replicas = replicas;
         this.directories = directories != null && directories.length > 0 ? directories : DirectoryId.unassignedArray(replicas.length);
         this.isr = isr;
@@ -215,8 +218,14 @@ public class PartitionRegistration {
     public PartitionRegistration merge(PartitionChangeRecord record) {
         int[] newReplicas = (record.replicas() == null) ?
             replicas : Replicas.toArray(record.replicas());
-        Uuid[] newDirectories = (record.directories() == null) ?
-                directories : Uuid.toArray(checkDirectories(record));
+        Uuid[] newDirectories;
+        if (record.directories() != null && !record.directories().isEmpty()) {
+            newDirectories = Uuid.toArray(checkDirectories(record));
+        } else if (record.replicas() != null) {
+            newDirectories = Uuid.toArray(DirectoryId.createDirectoriesFrom(replicas, directories, record.replicas()));
+        } else {
+            newDirectories = directories;
+        }
         int[] newIsr = (record.isr() == null) ? isr : Replicas.toArray(record.isr());
         int[] newRemovingReplicas = (record.removingReplicas() == null) ?
             removingReplicas : Replicas.toArray(record.removingReplicas());
@@ -337,6 +346,15 @@ public class PartitionRegistration {
         return replicas.length == 0 ? LeaderConstants.NO_LEADER : replicas[0];
     }
 
+    public Uuid directory(int replica) {
+        for (int i = 0; i < replicas.length; i++) {
+            if (replicas[i] == replica) {
+                return directories[i];
+            }
+        }
+        throw new IllegalArgumentException("Replica " + replica + " is not assigned to this partition.");
+    }
+
     public ApiMessageAndVersion toRecord(Uuid topicId, int partitionId, ImageWriterOptions options) {
         PartitionRecord record = new PartitionRecord().
             setPartitionId(partitionId).
@@ -388,7 +406,7 @@ public class PartitionRegistration {
     @Override
     public int hashCode() {
         return Objects.hash(Arrays.hashCode(replicas), Arrays.hashCode(isr), Arrays.hashCode(removingReplicas),
-            Arrays.hashCode(elr), Arrays.hashCode(lastKnownElr),
+            Arrays.hashCode(directories), Arrays.hashCode(elr), Arrays.hashCode(lastKnownElr),
             Arrays.hashCode(addingReplicas), leader, leaderRecoveryState, leaderEpoch, partitionEpoch);
     }
 
@@ -397,6 +415,7 @@ public class PartitionRegistration {
         if (!(o instanceof PartitionRegistration)) return false;
         PartitionRegistration other = (PartitionRegistration) o;
         return Arrays.equals(replicas, other.replicas) &&
+            Arrays.equals(directories, other.directories) &&
             Arrays.equals(isr, other.isr) &&
             Arrays.equals(removingReplicas, other.removingReplicas) &&
             Arrays.equals(addingReplicas, other.addingReplicas) &&
@@ -412,6 +431,7 @@ public class PartitionRegistration {
     public String toString() {
         StringBuilder builder = new StringBuilder("PartitionRegistration(");
         builder.append("replicas=").append(Arrays.toString(replicas));
+        builder.append(", directories=").append(Arrays.toString(directories));
         builder.append(", isr=").append(Arrays.toString(isr));
         builder.append(", removingReplicas=").append(Arrays.toString(removingReplicas));
         builder.append(", addingReplicas=").append(Arrays.toString(addingReplicas));
@@ -427,6 +447,7 @@ public class PartitionRegistration {
 
     public boolean hasSameAssignment(PartitionRegistration registration) {
         return Arrays.equals(this.replicas, registration.replicas) &&
+            Arrays.equals(this.directories, registration.directories) &&
             Arrays.equals(this.addingReplicas, registration.addingReplicas) &&
             Arrays.equals(this.removingReplicas, registration.removingReplicas);
     }

@@ -25,6 +25,7 @@ import java.util.concurrent.{CompletableFuture, TimeUnit}
 import javax.security.auth.login.Configuration
 import kafka.utils.{CoreUtils, Logging, TestInfoUtils, TestUtils}
 import kafka.zk.{AdminZkClient, EmbeddedZookeeper, KafkaZkClient}
+import org.apache.kafka.clients.consumer.GroupProtocol
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.{DirectoryId, Uuid}
 import org.apache.kafka.common.security.JaasUtils
@@ -187,6 +188,14 @@ abstract class QuorumTestHarness extends Logging {
 
   def isZkMigrationTest(): Boolean = {
     TestInfoUtils.isZkMigrationTest(testInfo)
+  }
+
+  def isNewGroupCoordinatorEnabled(): Boolean = {
+    TestInfoUtils.isNewGroupCoordinatorEnabled(testInfo)
+  }
+
+  def maybeGroupProtocolSpecified(testInfo: TestInfo): Option[GroupProtocol] = {
+    TestInfoUtils.maybeGroupProtocolSpecified(testInfo)
   }
 
   def checkIsZKTest(): Unit = {

@@ -39,4 +39,19 @@ public class JoinGroupResponseTest {
             assertNull(joinGroupResponse.data().protocolName());
         }
     }
+
+    @ParameterizedTest
+    @ApiKeyVersionsSource(apiKey = ApiKeys.JOIN_GROUP)
+    public void testProtocolNameComplianceWithVersion7AndAbove(short version) {
+        JoinGroupResponseData data = new JoinGroupResponseData()
+            .setProtocolName("");
+
+        JoinGroupResponse joinGroupResponse = new JoinGroupResponse(data, version);
+
+        if (version < 7) {
+            assertEquals("", joinGroupResponse.data().protocolName());
+        } else {
+            assertNull(joinGroupResponse.data().protocolName());
+        }
+    }
 }

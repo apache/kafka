@@ -3710,38 +3710,43 @@ foo
   <ul>
     <li>Supporting JBOD configurations with multiple storage directories</li>
     <li>Modifying certain dynamic configurations on the standalone KRaft controller</li>
-    <li>Delegation tokens</li>
   </ul>
 
   <h4 class="anchor-heading"><a id="kraft_zk_migration" class="anchor-link"></a><a href="#kraft_zk_migration">ZooKeeper to KRaft Migration</a></h4>
 
   <p>
     <b>ZooKeeper to KRaft migration is considered an Early Access feature and is not recommended for production clusters.</b>
-  </p>
-
-  <p>The following features are not yet supported for ZK to KRaft migrations:</p>
-
-  <ul>
-    <li>Downgrading to ZooKeeper mode during or after the migration</li>
-    <li>Other features <a href="#kraft_missing">not yet supported in KRaft</a></li>
-  </ul>
-
-  <p>
     Please report issues with ZooKeeper to KRaft migration using the
     <a href="https://issues.apache.org/jira/projects/KAFKA" target="_blank">project JIRA</a> and the "kraft" component.
   </p>
 
   <h3>Terminology</h3>
-  <p>
-    We use the term "migration" here to refer to the process of changing a Kafka cluster's metadata
-    system from ZooKeeper to KRaft and migrating existing metadata. An "upgrade" refers to installing a newer version of Kafka. It is not recommended to
-    upgrade the software at the same time as performing a metadata migration.
-  </p>
+  <ul>
+    <li>Brokers that are in <b>ZK mode</b> store their metadata in Apache ZooKepeer. This is the old mode of handling metadata.</li>
+    <li>Brokers that are in <b>KRaft mode</b> store their metadata in a KRaft quorum. This is the new and improved mode of handling metadata.</li>
+    <li><b>Migration</b> is the process of moving cluster metadata from ZooKeeper into a KRaft quorum.</li>
+  </ul>
 
-  <p>
-    We also use the term "ZK mode" to refer to Kafka brokers which are using ZooKeeper as their metadata
-    system. "KRaft mode" refers Kafka brokers which are using a KRaft controller quorum as their metadata system.
-  </p>
+  <h3>Migration Phases</h3>
+  In general, the migration process passes through several phases.
+
+  <ul>
+    <li>In the <b>initial phase</b>, all the brokers are in ZK mode, and there is a ZK-based controller.</li>
+    <li>During the <b>initial metadata load</b>, a KRaft quorum loads the metadata from ZooKeeper,</li>
+    <li>In <b>hybrid phase</b>, some brokers are in ZK mode, but there is a KRaft controller.</li>
+    <li>In <b>dual-write phase</b>, all brokers are KRaft, but the KRaft controller is continuing to write to ZK.</li>
+    <li>When the migration has been <b>finalized</b>, we no longer write metadata to ZooKeeper.</li>
+  </ul>
+
+  <h3>Limitations</h3>
+  <ul>
+    <li>While a cluster is being migrated from ZK mode to KRaft mode, we do not support changing the <i>metadata
+      version</i> (also known as the <i>inter.broker.protocol</i> version.) Please do not attempt to do this during
+      a migration, or you may break the cluster.</li>
+    <li>After the migration has been finalized, it is not possible to revert back to ZooKeeper mode.</li>
+    <li><a href="#kraft_missing">As noted above</a>, some features are not fully implemented in KRaft mode. If you are
+      using one of those features, you will not be able to migrate to KRaft yet.</li>
+  </ul>
 
   <h3>Preparing for migration</h3>
   <p>
@@ -3885,6 +3890,14 @@ controller.listener.names=CONTROLLER</pre>
   <p>
     Each broker is restarted with a KRaft configuration until the entire cluster is running in KRaft mode.
   </p>
+
+  <h3>Reverting to ZooKeeper mode During the Migration</h3>
+    While the cluster is still in migration mode, it is possible to revert to ZK mode. In order to do this:
+    <ol>
+      <li>One by one, take each KRaft broker down. Remove the __cluster_metadata directory on the broker. Then, restart the broker in ZooKeeper mode.</li>
+      <li>Take down the KRaft quorum.</li>
+      <li>Using ZooKeeper shell, delete the controller node using <code>rmr /controller</code>, so that a ZooKeeper-based broker can become the next controller.</li>
+    </ol>
 
   <h3>Finalizing the migration</h3>
   <p>

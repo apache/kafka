@@ -752,6 +752,27 @@ class ReplicaManager(val config: KafkaConfig,
 
   def tryCompleteActions(): Unit = defaultActionQueue.tryCompleteActions()
 
+  /**
+   * Append messages to leader replicas of the partition, and wait for them to be replicated to other replicas;
+   * the callback function will be triggered either when timeout or the required acks are satisfied;
+   * if the callback function itself is already synchronized on some object then pass this object to avoid deadlock.
+   *
+   * Noted that all pending delayed check operations are stored in a queue. All callers to ReplicaManager.appendRecords()
+   * are expected to call ActionQueue.tryCompleteActions for all affected partitions, without holding any conflicting
+   * locks.
+   *
+   * @param timeout                       maximum time we will wait to append before returning
+   * @param requiredAcks                  number of replicas who must acknowledge the append before sending the response
+   * @param internalTopicsAllowed         boolean indicating whether internal topics can be appended to
+   * @param origin                        source of the append request (ie, client, replication, coordinator)
+   * @param entriesPerPartition           the records per partition to be appended
+   * @param responseCallback              callback for sending the response
+   * @param delayedProduceLock            lock for the delayed actions
+   * @param recordValidationStatsCallback callback for updating stats on record conversions
+   * @param requestLocal                  container for the stateful instances scoped to this request
+   * @param transactionalId               transactional ID if the request is from a producer and the producer is transactional
+   * @param actionQueue                   the action queue to use. ReplicaManager#defaultActionQueue is used by default.
+   */
   def appendRecords(timeout: Long,
                     requiredAcks: Short,
                     internalTopicsAllowed: Boolean,
@@ -759,7 +780,7 @@ class ReplicaManager(val config: KafkaConfig,
                     entriesPerPartition: Map[TopicPartition, MemoryRecords],
                     responseCallback: Map[TopicPartition, PartitionResponse] => Unit,
                     delayedProduceLock: Option[Lock] = None,
-                    recordConversionStatsCallback: Map[TopicPartition, RecordConversionStats] => Unit = _ => (),
+                    recordValidationStatsCallback: Map[TopicPartition, RecordValidationStats] => Unit = _ => (),
                     requestLocal: RequestLocal = RequestLocal.NoCaching,
                     actionQueue: ActionQueue = this.defaultActionQueue,
                     verificationGuards: Map[TopicPartition, VerificationGuard] = Map.empty,
@@ -813,7 +834,7 @@ class ReplicaManager(val config: KafkaConfig,
         }
     }
 
-    recordConversionStatsCallback(localProduceResults.map { case (k, v) => k -> v.info.recordConversionStats })
+    recordValidationStatsCallback(localProduceResults.map { case (k, v) => k -> v.info.recordValidationStats })
 
     if (delayedProduceRequestRequired(requiredAcks, entriesPerPartition, allResults)) {
       // create delayed produce operation
@@ -849,27 +870,6 @@ class ReplicaManager(val config: KafkaConfig,
     responseCallback(responseStatus)
   }
 
-  /**
-   * Append messages to leader replicas of the partition, and wait for them to be replicated to other replicas;
-   * the callback function will be triggered either when timeout or the required acks are satisfied;
-   * if the callback function itself is already synchronized on some object then pass this object to avoid deadlock.
-   *
-   * Noted that all pending delayed check operations are stored in a queue. All callers to ReplicaManager.appendRecords()
-   * are expected to call ActionQueue.tryCompleteActions for all affected partitions, without holding any conflicting
-   * locks.
-   *
-   * @param timeout                       maximum time we will wait to append before returning
-   * @param requiredAcks                  number of replicas who must acknowledge the append before sending the response
-   * @param internalTopicsAllowed         boolean indicating whether internal topics can be appended to
-   * @param origin                        source of the append request (ie, client, replication, coordinator)
-   * @param entriesPerPartition           the records per partition to be appended
-   * @param responseCallback              callback for sending the response
-   * @param delayedProduceLock            lock for the delayed actions
-   * @param recordConversionStatsCallback callback for updating stats on record conversions
-   * @param requestLocal                  container for the stateful instances scoped to this request
-   * @param transactionalId               transactional ID if the request is from a producer and the producer is transactional
-   * @param actionQueue                   the action queue to use. ReplicaManager#defaultActionQueue is used by default.
-   */
   def appendRecordsWithVerification(entriesPerPartition: Map[TopicPartition, MemoryRecords],
                                     transactionVerificationEntries: TransactionVerificationEntries,
                                     transactionalId: String,
@@ -915,7 +915,6 @@ class ReplicaManager(val config: KafkaConfig,
    * @param requiredAcks                  number of replicas who must acknowledge the append before sending the response
    * @param verificationGuards            verificationGuards for ensuring a partition has been added to the transaction
    * @param errorsPerPartition            the mapping from partition to errors we have already seen
-   * @param recordConversionStatsCallback callback for updating stats on record conversions
    * @param timeout                       maximum time we will wait to append before returning
    * @param responseCallback              callback for sending the response
    * @param delayedProduceLock            lock for the delayed actions

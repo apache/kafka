@@ -16,51 +16,86 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
+import org.apache.kafka.clients.ClientResponse;
+import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetAndTimestamp;
 import org.apache.kafka.clients.consumer.OffsetCommitCallback;
+import org.apache.kafka.clients.consumer.RetriableCommitFailedException;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEventHandler;
 import org.apache.kafka.clients.consumer.internals.events.AssignmentChangeApplicationEvent;
+import org.apache.kafka.clients.consumer.internals.events.CommitApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.ListOffsetsApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.NewTopicsMetadataUpdateRequestEvent;
 import org.apache.kafka.clients.consumer.internals.events.OffsetFetchApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.ResetPositionsApplicationEvent;
+import org.apache.kafka.clients.consumer.internals.events.SubscriptionChangeApplicationEvent;
+import org.apache.kafka.clients.consumer.internals.events.UnsubscribeApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.ValidatePositionsApplicationEvent;
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.GroupAuthorizationException;
 import org.apache.kafka.common.errors.InvalidGroupIdException;
+import org.apache.kafka.common.errors.NetworkException;
+import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.WakeupException;
+import org.apache.kafka.common.message.OffsetCommitResponseData;
+import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.requests.FindCoordinatorResponse;
 import org.apache.kafka.common.requests.ListOffsetsRequest;
+import org.apache.kafka.common.requests.OffsetCommitResponse;
+import org.apache.kafka.common.requests.RequestHeader;
 import org.apache.kafka.common.utils.Timer;
 import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.function.Executable;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.MethodSource;
+import org.mockito.ArgumentCaptor;
 import org.mockito.ArgumentMatchers;
 import org.mockito.MockedConstruction;
+import org.mockito.Mockito;
 import org.mockito.stubbing.Answer;
 
 import java.time.Duration;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
+import static java.util.Arrays.asList;
 import static java.util.Collections.singleton;
+import static java.util.Collections.singletonList;
+import static org.apache.kafka.common.utils.Utils.mkEntry;
+import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
@@ -72,32 +107,44 @@ import static org.mockito.Mockito.when;
 public class AsyncKafkaConsumerTest {
 
     private AsyncKafkaConsumer<?, ?> consumer;
+    private FetchCollector<?, ?> fetchCollector;
     private ConsumerTestBuilder.AsyncKafkaConsumerTestBuilder testBuilder;
     private ApplicationEventHandler applicationEventHandler;
 
     @BeforeEach
     public void setup() {
-        // By default, the consumer is part of a group.
-        setup(ConsumerTestBuilder.createDefaultGroupInformation());
+        // By default, the consumer is part of a group and autoCommit is enabled.
+        setup(ConsumerTestBuilder.createDefaultGroupInformation(), true);
     }
 
-    private void setup(Optional<ConsumerTestBuilder.GroupInformation> groupInfo) {
-        testBuilder = new ConsumerTestBuilder.AsyncKafkaConsumerTestBuilder(groupInfo);
+    private void setup(Optional<ConsumerTestBuilder.GroupInformation> groupInfo, boolean enableAutoCommit) {
+        testBuilder = new ConsumerTestBuilder.AsyncKafkaConsumerTestBuilder(groupInfo, enableAutoCommit);
         applicationEventHandler = testBuilder.applicationEventHandler;
         consumer = testBuilder.consumer;
+        fetchCollector = testBuilder.fetchCollector;
     }
 
     @AfterEach
     public void cleanup() {
         if (testBuilder != null) {
-            testBuilder.close();
+            shutDown();
         }
+    }
+
+    private void shutDown() {
+        prepAutocommitOnClose();
+        testBuilder.close();
     }
 
     private void resetWithEmptyGroupId() {
         // Create a consumer that is not configured as part of a group.
         cleanup();
-        setup(Optional.empty());
+        setup(Optional.empty(), false);
+    }
+
+    private void resetWithAutoCommitEnabled() {
+        cleanup();
+        setup(ConsumerTestBuilder.createDefaultGroupInformation(), true);
     }
 
     @Test
@@ -106,10 +153,26 @@ public class AsyncKafkaConsumerTest {
     }
 
     @Test
+    public void testSuccessfulStartupShutdownWithAutoCommit() {
+        resetWithAutoCommitEnabled();
+        TopicPartition tp = new TopicPartition("topic", 0);
+        consumer.assign(singleton(tp));
+        consumer.seek(tp, 100);
+        prepAutocommitOnClose();
+    }
+
+    @Test
     public void testInvalidGroupId() {
         // Create consumer without group id
         resetWithEmptyGroupId();
         assertThrows(InvalidGroupIdException.class, () -> consumer.committed(new HashSet<>()));
+    }
+
+    @Test
+    public void testFailOnClosedConsumer() {
+        consumer.close();
+        final IllegalStateException res = assertThrows(IllegalStateException.class, consumer::assignment);
+        assertEquals("This consumer has already been closed.", res.getMessage());
     }
 
     @Test
@@ -129,19 +192,42 @@ public class AsyncKafkaConsumerTest {
         assertFalse(future.isCompletedExceptionally());
     }
 
-    @Test
-    public void testCommitAsync_UserSuppliedCallback() {
+    @ParameterizedTest
+    @MethodSource("commitExceptionSupplier")
+    public void testCommitAsync_UserSuppliedCallback(Exception exception) {
         CompletableFuture<Void> future = new CompletableFuture<>();
 
         Map<TopicPartition, OffsetAndMetadata> offsets = new HashMap<>();
-        offsets.put(new TopicPartition("my-topic", 0), new OffsetAndMetadata(100L));
         offsets.put(new TopicPartition("my-topic", 1), new OffsetAndMetadata(200L));
 
         doReturn(future).when(consumer).commit(offsets, false);
-        OffsetCommitCallback customCallback = mock(OffsetCommitCallback.class);
-        consumer.commitAsync(offsets, customCallback);
-        future.complete(null);
-        verify(customCallback).onComplete(offsets, null);
+        MockCommitCallback callback = new MockCommitCallback();
+        assertDoesNotThrow(() -> consumer.commitAsync(offsets, callback));
+
+        if (exception == null) {
+            future.complete(null);
+            consumer.maybeInvokeCommitCallbacks();
+            assertNull(callback.exception);
+        } else {
+            future.completeExceptionally(exception);
+            consumer.maybeInvokeCommitCallbacks();
+            assertSame(exception.getClass(), callback.exception.getClass());
+        }
+    }
+
+    private static Stream<Exception> commitExceptionSupplier() {
+        return Stream.of(
+                null,  // For the successful completion scenario
+                new KafkaException("Test exception"),
+                new GroupAuthorizationException("Group authorization exception"));
+    }
+
+    @Test
+    public void testFencedInstanceException() {
+        CompletableFuture<Void> future = new CompletableFuture<>();
+        doReturn(future).when(consumer).commit(new HashMap<>(), false);
+        assertDoesNotThrow(() -> consumer.commitAsync());
+        future.completeExceptionally(Errors.FENCED_INSTANCE_ID.exception());
     }
 
     @Test
@@ -157,6 +243,27 @@ public class AsyncKafkaConsumerTest {
     }
 
     @Test
+    public void testCommittedLeaderEpochUpdate() {
+        final TopicPartition t0 = new TopicPartition("t0", 2);
+        final TopicPartition t1 = new TopicPartition("t0", 3);
+        final TopicPartition t2 = new TopicPartition("t0", 4);
+        HashMap<TopicPartition, OffsetAndMetadata> topicPartitionOffsets = new HashMap<>();
+        topicPartitionOffsets.put(t0, new OffsetAndMetadata(10L, Optional.of(2), ""));
+        topicPartitionOffsets.put(t1, null);
+        topicPartitionOffsets.put(t2, new OffsetAndMetadata(20L, Optional.of(3), ""));
+
+        CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> committedFuture = new CompletableFuture<>();
+        committedFuture.complete(topicPartitionOffsets);
+
+        try (MockedConstruction<OffsetFetchApplicationEvent> ignored = offsetFetchEventMocker(committedFuture)) {
+            assertDoesNotThrow(() -> consumer.committed(topicPartitionOffsets.keySet(), Duration.ofMillis(1000)));
+        }
+        verify(testBuilder.metadata).updateLastSeenEpochIfNewer(t0, 2);
+        verify(testBuilder.metadata).updateLastSeenEpochIfNewer(t2, 3);
+        verify(applicationEventHandler).add(ArgumentMatchers.isA(OffsetFetchApplicationEvent.class));
+    }
+
+    @Test
     public void testCommitted_ExceptionThrown() {
         Map<TopicPartition, OffsetAndMetadata> offsets = mockTopicPartitionOffset();
         CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> committedFuture = new CompletableFuture<>();
@@ -168,6 +275,219 @@ public class AsyncKafkaConsumerTest {
         }
     }
 
+    @Test
+    public void testWakeupBeforeCallingPoll() {
+        final String topicName = "foo";
+        final int partition = 3;
+        final TopicPartition tp = new TopicPartition(topicName, partition);
+        doReturn(Fetch.empty()).when(fetchCollector).collectFetch(any(FetchBuffer.class));
+        Map<TopicPartition, OffsetAndMetadata> offsets = mkMap(mkEntry(tp, new OffsetAndMetadata(1)));
+        doReturn(offsets).when(applicationEventHandler).addAndGet(any(OffsetFetchApplicationEvent.class), any(Timer.class));
+        consumer.assign(singleton(tp));
+
+        consumer.wakeup();
+
+        assertThrows(WakeupException.class, () -> consumer.poll(Duration.ZERO));
+        assertDoesNotThrow(() -> consumer.poll(Duration.ZERO));
+    }
+
+    @Test
+    public void testWakeupAfterEmptyFetch() {
+        final String topicName = "foo";
+        final int partition = 3;
+        final TopicPartition tp = new TopicPartition(topicName, partition);
+        doAnswer(invocation -> {
+            consumer.wakeup();
+            return Fetch.empty();
+        }).when(fetchCollector).collectFetch(any(FetchBuffer.class));
+        Map<TopicPartition, OffsetAndMetadata> offsets = mkMap(mkEntry(tp, new OffsetAndMetadata(1)));
+        doReturn(offsets).when(applicationEventHandler).addAndGet(any(OffsetFetchApplicationEvent.class), any(Timer.class));
+        consumer.assign(singleton(tp));
+
+        assertThrows(WakeupException.class, () -> consumer.poll(Duration.ofMinutes(1)));
+        assertDoesNotThrow(() -> consumer.poll(Duration.ZERO));
+    }
+
+    @Test
+    public void testWakeupAfterNonEmptyFetch() {
+        final String topicName = "foo";
+        final int partition = 3;
+        final TopicPartition tp = new TopicPartition(topicName, partition);
+        final List<ConsumerRecord<String, String>> records = asList(
+            new ConsumerRecord<>(topicName, partition, 2, "key1", "value1"),
+            new ConsumerRecord<>(topicName, partition, 3, "key2", "value2")
+        );
+        doAnswer(invocation -> {
+            consumer.wakeup();
+            return Fetch.forPartition(tp, records, true);
+        }).when(fetchCollector).collectFetch(Mockito.any(FetchBuffer.class));
+        Map<TopicPartition, OffsetAndMetadata> offsets = mkMap(mkEntry(tp, new OffsetAndMetadata(1)));
+        doReturn(offsets).when(applicationEventHandler).addAndGet(any(OffsetFetchApplicationEvent.class), any(Timer.class));
+        consumer.assign(singleton(tp));
+
+        // since wakeup() is called when the non-empty fetch is returned the wakeup should be ignored
+        assertDoesNotThrow(() -> consumer.poll(Duration.ofMinutes(1)));
+        // the previously ignored wake-up should not be ignored in the next call
+        assertThrows(WakeupException.class, () -> consumer.poll(Duration.ZERO));
+    }
+
+    @Test
+    public void testClearWakeupTriggerAfterPoll() {
+        final String topicName = "foo";
+        final int partition = 3;
+        final TopicPartition tp = new TopicPartition(topicName, partition);
+        final List<ConsumerRecord<String, String>> records = asList(
+            new ConsumerRecord<>(topicName, partition, 2, "key1", "value1"),
+            new ConsumerRecord<>(topicName, partition, 3, "key2", "value2")
+        );
+        doReturn(Fetch.forPartition(tp, records, true))
+            .when(fetchCollector).collectFetch(any(FetchBuffer.class));
+        Map<TopicPartition, OffsetAndMetadata> offsets = mkMap(mkEntry(tp, new OffsetAndMetadata(1)));
+        doReturn(offsets).when(applicationEventHandler).addAndGet(any(OffsetFetchApplicationEvent.class), any(Timer.class));
+        consumer.assign(singleton(tp));
+
+        consumer.poll(Duration.ZERO);
+
+        assertDoesNotThrow(() -> consumer.poll(Duration.ZERO));
+    }
+
+    @Test
+    public void testEnsureCallbackExecutedByApplicationThread() {
+        final String currentThread = Thread.currentThread().getName();
+        ExecutorService backgroundExecutor = Executors.newSingleThreadExecutor();
+        MockCommitCallback callback = new MockCommitCallback();
+        CountDownLatch latch = new CountDownLatch(1);  // Initialize the latch with a count of 1
+        try {
+            CompletableFuture<Void> future = new CompletableFuture<>();
+            doReturn(future).when(consumer).commit(new HashMap<>(), false);
+            assertDoesNotThrow(() -> consumer.commitAsync(new HashMap<>(), callback));
+            // Simulating some background work
+            backgroundExecutor.submit(() -> {
+                future.complete(null);
+                latch.countDown();
+            });
+            latch.await();
+            assertEquals(1, consumer.callbacks());
+            consumer.maybeInvokeCommitCallbacks();
+            assertEquals(currentThread, callback.completionThread);
+        } catch (Exception e) {
+            fail("Not expecting an exception");
+        } finally {
+            backgroundExecutor.shutdown();
+        }
+    }
+
+    @Test
+    public void testEnsureCommitSyncExecutedCommitAsyncCallbacks() {
+        MockCommitCallback callback = new MockCommitCallback();
+        CompletableFuture<Void> future = new CompletableFuture<>();
+        doReturn(future).when(consumer).commit(new HashMap<>(), false);
+        assertDoesNotThrow(() -> consumer.commitAsync(new HashMap<>(), callback));
+        future.completeExceptionally(new NetworkException("Test exception"));
+        assertMockCommitCallbackInvoked(() -> consumer.commitSync(),
+            callback,
+            Errors.NETWORK_EXCEPTION);
+    }
+
+    @Test
+    @SuppressWarnings("deprecation")
+    public void testPollLongThrowsException() {
+        Exception e = assertThrows(UnsupportedOperationException.class, () -> consumer.poll(0L));
+        assertEquals("Consumer.poll(long) is not supported when \"group.protocol\" is \"consumer\". " +
+            "This method is deprecated and will be removed in the next major release.", e.getMessage());
+    }
+
+    @Test
+    public void testCommitSyncLeaderEpochUpdate() {
+        final TopicPartition t0 = new TopicPartition("t0", 2);
+        final TopicPartition t1 = new TopicPartition("t0", 3);
+        HashMap<TopicPartition, OffsetAndMetadata> topicPartitionOffsets = new HashMap<>();
+        topicPartitionOffsets.put(t0, new OffsetAndMetadata(10L, Optional.of(2), ""));
+        topicPartitionOffsets.put(t1, new OffsetAndMetadata(20L, Optional.of(1), ""));
+
+        consumer.assign(Arrays.asList(t0, t1));
+
+        CompletableFuture<Void> commitFuture = new CompletableFuture<>();
+        commitFuture.complete(null);
+
+        try (MockedConstruction<CommitApplicationEvent> ignored = commitEventMocker(commitFuture)) {
+            assertDoesNotThrow(() -> consumer.commitSync(topicPartitionOffsets));
+        }
+        verify(testBuilder.metadata).updateLastSeenEpochIfNewer(t0, 2);
+        verify(testBuilder.metadata).updateLastSeenEpochIfNewer(t1, 1);
+        verify(applicationEventHandler).add(ArgumentMatchers.isA(CommitApplicationEvent.class));
+    }
+
+    @Test
+    public void testCommitAsyncLeaderEpochUpdate() {
+        MockCommitCallback callback = new MockCommitCallback();
+        final TopicPartition t0 = new TopicPartition("t0", 2);
+        final TopicPartition t1 = new TopicPartition("t0", 3);
+        HashMap<TopicPartition, OffsetAndMetadata> topicPartitionOffsets = new HashMap<>();
+        topicPartitionOffsets.put(t0, new OffsetAndMetadata(10L, Optional.of(2), ""));
+        topicPartitionOffsets.put(t1, new OffsetAndMetadata(20L, Optional.of(1), ""));
+
+        consumer.assign(Arrays.asList(t0, t1));
+
+        CompletableFuture<Void> commitFuture = new CompletableFuture<>();
+        commitFuture.complete(null);
+
+        try (MockedConstruction<CommitApplicationEvent> ignored = commitEventMocker(commitFuture)) {
+            assertDoesNotThrow(() -> consumer.commitAsync(topicPartitionOffsets, callback));
+        }
+        verify(testBuilder.metadata).updateLastSeenEpochIfNewer(t0, 2);
+        verify(testBuilder.metadata).updateLastSeenEpochIfNewer(t1, 1);
+        verify(applicationEventHandler).add(ArgumentMatchers.isA(CommitApplicationEvent.class));
+    }
+
+    @Test
+    public void testEnsurePollExecutedCommitAsyncCallbacks() {
+        MockCommitCallback callback = new MockCommitCallback();
+        CompletableFuture<Void> future = new CompletableFuture<>();
+        consumer.assign(Collections.singleton(new TopicPartition("foo", 0)));
+        doReturn(future).when(consumer).commit(new HashMap<>(), false);
+        assertDoesNotThrow(() -> consumer.commitAsync(new HashMap<>(), callback));
+        future.complete(null);
+        assertMockCommitCallbackInvoked(() -> consumer.poll(Duration.ZERO),
+            callback,
+            null);
+    }
+
+    @Test
+    public void testEnsureShutdownExecutedCommitAsyncCallbacks() {
+        MockCommitCallback callback = new MockCommitCallback();
+        CompletableFuture<Void> future = new CompletableFuture<>();
+        doReturn(future).when(consumer).commit(new HashMap<>(), false);
+        assertDoesNotThrow(() -> consumer.commitAsync(new HashMap<>(), callback));
+        future.complete(null);
+        assertMockCommitCallbackInvoked(() -> consumer.close(),
+            callback,
+            null);
+    }
+
+    private void assertMockCommitCallbackInvoked(final Executable task,
+                                                 final MockCommitCallback callback,
+                                                 final Errors errors) {
+        assertDoesNotThrow(task);
+        assertEquals(1, callback.invoked);
+        if (errors == null)
+            assertNull(callback.exception);
+        else if (errors.exception() instanceof RetriableException)
+            assertTrue(callback.exception instanceof RetriableCommitFailedException);
+    }
+
+    private static class MockCommitCallback implements OffsetCommitCallback {
+        public int invoked = 0;
+        public Exception exception = null;
+        public String completionThread;
+
+        @Override
+        public void onComplete(Map<TopicPartition, OffsetAndMetadata> offsets, Exception exception) {
+            invoked++;
+            this.completionThread = Thread.currentThread().getName();
+            this.exception = exception;
+        }
+    }
     /**
      * This is a rather ugly bit of code. Not my choice :(
      *
@@ -200,6 +520,21 @@ public class AsyncKafkaConsumerTest {
         };
 
         return mockConstruction(OffsetFetchApplicationEvent.class, mockInitializer);
+    }
+
+    private static MockedConstruction<CommitApplicationEvent> commitEventMocker(CompletableFuture<Void> future) {
+        Answer<Void> getInvocationAnswer = invocation -> {
+            Timer timer = invocation.getArgument(0);
+            return ConsumerUtils.getResult(future, timer);
+        };
+
+        MockedConstruction.MockInitializer<CommitApplicationEvent> mockInitializer = (mock, ctx) -> {
+            when(mock.get(any())).thenAnswer(getInvocationAnswer);
+            when(mock.type()).thenReturn(ApplicationEvent.Type.COMMIT);
+            when(mock.future()).thenReturn(future);
+        };
+
+        return mockConstruction(CommitApplicationEvent.class, mockInitializer);
     }
 
     @Test
@@ -370,10 +705,56 @@ public class AsyncKafkaConsumerTest {
         testUpdateFetchPositionsWithFetchCommittedOffsetsTimeout(false);
     }
 
+    @Test
+    public void testSubscribeGeneratesEvent() {
+        String topic = "topic1";
+        consumer.subscribe(singletonList(topic));
+        assertEquals(singleton(topic), consumer.subscription());
+        assertTrue(consumer.assignment().isEmpty());
+        verify(applicationEventHandler).add(ArgumentMatchers.isA(SubscriptionChangeApplicationEvent.class));
+    }
+
+    @Test
+    public void testUnsubscribeGeneratesUnsubscribeEvent() {
+        consumer.unsubscribe();
+
+        // Verify the unsubscribe event was generated and mock its completion.
+        final ArgumentCaptor<UnsubscribeApplicationEvent> captor = ArgumentCaptor.forClass(UnsubscribeApplicationEvent.class);
+        verify(applicationEventHandler).add(captor.capture());
+        UnsubscribeApplicationEvent unsubscribeApplicationEvent = captor.getValue();
+        unsubscribeApplicationEvent.future().complete(null);
+
+        assertTrue(consumer.subscription().isEmpty());
+        assertTrue(consumer.assignment().isEmpty());
+    }
+
+    @Test
+    public void testSubscribeToEmptyListActsAsUnsubscribe() {
+        consumer.subscribe(Collections.emptyList());
+        assertTrue(consumer.subscription().isEmpty());
+        assertTrue(consumer.assignment().isEmpty());
+        verify(applicationEventHandler).add(ArgumentMatchers.isA(UnsubscribeApplicationEvent.class));
+    }
+
+    @Test
+    public void testSubscribeToNullTopicCollection() {
+        assertThrows(IllegalArgumentException.class, () -> consumer.subscribe((List<String>) null));
+    }
+
+    @Test
+    public void testSubscriptionOnNullTopic() {
+        assertThrows(IllegalArgumentException.class, () -> consumer.subscribe(singletonList(null)));
+    }
+
+    @Test
+    public void testSubscriptionOnEmptyTopic() {
+        String emptyTopic = "  ";
+        assertThrows(IllegalArgumentException.class, () -> consumer.subscribe(singletonList(emptyTopic)));
+    }
+
     private void testUpdateFetchPositionsWithFetchCommittedOffsetsTimeout(boolean committedOffsetsEnabled) {
         // Uncompleted future that will time out if used
         CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> committedFuture = new CompletableFuture<>();
-
 
         consumer.assign(singleton(new TopicPartition("t1", 1)));
 
@@ -402,7 +783,6 @@ public class AsyncKafkaConsumerTest {
         CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> committedFuture = new CompletableFuture<>();
         committedFuture.complete(committedOffsets);
         consumer.assign(partitions);
-
         try (MockedConstruction<OffsetFetchApplicationEvent> ignored = offsetFetchEventMocker(committedFuture)) {
             // Poll with 0 timeout to run a single iteration of the poll loop
             consumer.poll(Duration.ofMillis(0));
@@ -442,6 +822,47 @@ public class AsyncKafkaConsumerTest {
         timestampToSearch.put(t0, 1L);
         timestampToSearch.put(t1, 2L);
         return timestampToSearch;
+    }
+
+    private void prepAutocommitOnClose() {
+        Node node = testBuilder.metadata.fetch().nodes().get(0);
+        testBuilder.client.prepareResponse(FindCoordinatorResponse.prepareResponse(Errors.NONE, "group-id", node));
+        if (!testBuilder.subscriptions.allConsumed().isEmpty()) {
+            List<TopicPartition> topicPartitions = new ArrayList<>(testBuilder.subscriptions.assignedPartitionsList());
+            testBuilder.client.prepareResponse(mockAutocommitResponse(
+                topicPartitions,
+                (short) 1,
+                Errors.NONE).responseBody());
+        }
+    }
+
+    private ClientResponse mockAutocommitResponse(final List<TopicPartition> topicPartitions,
+                                                  final short apiKeyVersion,
+                                                  final Errors error) {
+        OffsetCommitResponseData responseData = new OffsetCommitResponseData();
+        List<OffsetCommitResponseData.OffsetCommitResponseTopic> responseTopics = new ArrayList<>();
+        topicPartitions.forEach(tp -> {
+            responseTopics.add(new OffsetCommitResponseData.OffsetCommitResponseTopic()
+                .setName(tp.topic())
+                .setPartitions(Collections.singletonList(
+                    new OffsetCommitResponseData.OffsetCommitResponsePartition()
+                        .setErrorCode(error.code())
+                        .setPartitionIndex(tp.partition()))));
+        });
+        responseData.setTopics(responseTopics);
+        OffsetCommitResponse response = mock(OffsetCommitResponse.class);
+        when(response.data()).thenReturn(responseData);
+        return new ClientResponse(
+            new RequestHeader(ApiKeys.OFFSET_COMMIT, apiKeyVersion, "", 1),
+            null,
+            "-1",
+            testBuilder.time.milliseconds(),
+            testBuilder.time.milliseconds(),
+            false,
+            null,
+            null,
+            new OffsetCommitResponse(responseData)
+        );
     }
 }
 
