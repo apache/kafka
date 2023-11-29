@@ -14,21 +14,15 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.storage.internals.checkpoint;
+package org.apache.kafka.common.errors;
 
-import org.apache.kafka.storage.internals.log.EpochEntry;
+/**
+ * This exception indicates that the size of the telemetry metrics data is too large.
+ */
+public class TelemetryTooLargeException extends ApiException {
 
-import java.util.Collection;
-import java.util.List;
-
-public interface LeaderEpochCheckpoint {
-    // in file-backed checkpoint implementation, the content should be
-    // synced to the device if `sync` is true
-    void write(Collection<EpochEntry> epochs, boolean sync);
-
-    default void write(Collection<EpochEntry> epochs) {
-        write(epochs, true);
+    public TelemetryTooLargeException(String message) {
+        super(message);
     }
-
-    List<EpochEntry> read();
 }
+

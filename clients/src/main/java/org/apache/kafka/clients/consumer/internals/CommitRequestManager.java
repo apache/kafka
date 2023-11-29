@@ -184,12 +184,12 @@ public class CommitRequestManager implements RequestManager {
      * completed future if no request is generated.
      */
     public CompletableFuture<Void> maybeAutoCommit(final Map<TopicPartition, OffsetAndMetadata> offsets) {
-        if (!autoCommitState.isPresent()) {
+        if (!canAutoCommit()) {
             return CompletableFuture.completedFuture(null);
         }
 
         AutoCommitState autocommit = autoCommitState.get();
-        if (!autocommit.canSendAutocommit()) {
+        if (!autocommit.shouldAutoCommit()) {
             return CompletableFuture.completedFuture(null);
         }
 
@@ -210,17 +210,19 @@ public class CommitRequestManager implements RequestManager {
         return maybeAutoCommit(subscriptions.allConsumed());
     }
 
-    /**
-     * The consumer needs to send an auto commit during the shutdown if autocommit is enabled.
-     */
-    Optional<NetworkClientDelegate.UnsentRequest> maybeCreateAutoCommitRequest() {
-        if (!autoCommitState.isPresent()) {
-            return Optional.empty();
-        }
+    boolean canAutoCommit() {
+        return autoCommitState.isPresent() && !subscriptions.allConsumed().isEmpty();
+    }
 
-        OffsetCommitRequestState request = pendingRequests.createOffsetCommitRequest(subscriptions.allConsumed(), jitter);
+    /**
+     * Returns an OffsetCommitRequest of all assigned topicPartitions and their current positions.
+     */
+    NetworkClientDelegate.UnsentRequest createCommitAllConsumedRequest() {
+        Map<TopicPartition, OffsetAndMetadata> offsets = subscriptions.allConsumed();
+        OffsetCommitRequestState request = pendingRequests.createOffsetCommitRequest(offsets, jitter);
+        log.debug("Sending synchronous auto-commit of offsets {}", offsets);
         request.future.whenComplete(autoCommitCallback(subscriptions.allConsumed()));
-        return Optional.of(request.toUnsentRequest());
+        return request.toUnsentRequest();
     }
 
     private CompletableFuture<Void> sendAutoCommit(final Map<TopicPartition, OffsetAndMetadata> allConsumedOffsets) {
@@ -792,7 +794,7 @@ public class CommitRequestManager implements RequestManager {
             this.hasInflightCommit = false;
         }
 
-        public boolean canSendAutocommit() {
+        public boolean shouldAutoCommit() {
             return !this.hasInflightCommit && this.timer.isExpired();
         }
 
