@@ -25,12 +25,17 @@ package org.apache.kafka.coordinator.group.runtime;
  * @param <U> The type of the record.
  */
 public interface CoordinatorPlayback<U> {
-
     /**
      * Applies the given record to this object.
      *
-     * @param record A record.
+     * @param producerId    The producer id.
+     * @param producerEpoch The producer epoch.
+     * @param record        A record.
      * @throws RuntimeException if the record can not be applied.
      */
-    void replay(U record) throws RuntimeException;
+    void replay(
+        long producerId,
+        short producerEpoch,
+        U record
+    ) throws RuntimeException;
 }
