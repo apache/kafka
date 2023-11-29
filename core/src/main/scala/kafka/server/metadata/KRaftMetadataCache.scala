@@ -320,8 +320,7 @@ class KRaftMetadataCache(val brokerId: Int) extends MetadataCache with Logging w
             .setErrorCode(error.code())
             .setName(topicName)
             .setTopicId(getTopicId(topicName))
-            .setIsInternal(Topic.isInternal(topicName))
-            .setPartitions(util.Collections.emptyList))
+            .setIsInternal(Topic.isInternal(topicName)))
         }
       } else if (remaining == 0) {
         // The cursor should point to the beginning of the current topic. All the partitions in the previous topic
