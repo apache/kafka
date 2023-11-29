@@ -105,9 +105,9 @@ public class LeaderState<T> implements EpochState {
         long remainingMs = checkQuorumTimer.remainingMs();
         if (remainingMs == 0) {
             log.info(
-                    "Did not receive fetch request from the majority of the voters within {}ms. Current fetched voters are {}.",
-                    checkQuorumTimeoutMs,
-                    fetchedVoters);
+                "Did not receive fetch request from the majority of the voters within {}ms. Current fetched voters are {}.",
+                checkQuorumTimeoutMs,
+                fetchedVoters);
         }
         return remainingMs;
     }
