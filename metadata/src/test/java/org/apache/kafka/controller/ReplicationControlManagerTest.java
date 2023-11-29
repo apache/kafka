@@ -17,6 +17,7 @@
 
 package org.apache.kafka.controller;
 
+import org.apache.kafka.common.DirectoryId;
 import org.apache.kafka.common.ElectionType;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
@@ -1635,6 +1636,7 @@ public class ReplicationControlManagerTest {
                 setReplicas(asList(2, 1, 3)).
                 setLeader(3).
                 setRemovingReplicas(Collections.emptyList()).
+                setDirectories(Arrays.asList(DirectoryId.unassignedArray(3))).
                 setAddingReplicas(Collections.emptyList()), MetadataVersion.latest().partitionChangeRecordVersion())),
             new AlterPartitionReassignmentsResponseData().setErrorMessage(null).setResponses(asList(
                 new ReassignableTopicResponse().setName("foo").setPartitions(asList(
@@ -1986,6 +1988,7 @@ public class ReplicationControlManagerTest {
                     setLeader(4).
                     setReplicas(asList(2, 3, 4)).
                     setRemovingReplicas(null).
+                    setDirectories(Arrays.asList(DirectoryId.unassignedArray(3))).
                     setAddingReplicas(Collections.emptyList()), MetadataVersion.latest().partitionChangeRecordVersion())),
             new AlterPartitionReassignmentsResponseData().setErrorMessage(null).setResponses(asList(
                 new ReassignableTopicResponse().setName("foo").setPartitions(asList(

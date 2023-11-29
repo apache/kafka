@@ -46,7 +46,7 @@ import org.apache.kafka.metadata.publisher.FeaturesPublisher
 import org.apache.kafka.raft.RaftConfig
 import org.apache.kafka.server.{ClientMetricsManager, NodeToControllerChannelManager}
 import org.apache.kafka.server.authorizer.Authorizer
-import org.apache.kafka.server.common.ApiMessageAndVersion
+import org.apache.kafka.server.common.{ApiMessageAndVersion, MetadataVersion}
 import org.apache.kafka.server.metrics.{KafkaMetricsGroup, KafkaYammerMetrics}
 import org.apache.kafka.server.network.{EndpointReadyFutures, KafkaAuthorizerServerInfo}
 import org.apache.kafka.server.policy.{AlterConfigPolicy, CreateTopicPolicy}
@@ -84,7 +84,7 @@ case class ControllerMigrationSupport(
 class ControllerServer(
   val sharedServer: SharedServer,
   val configSchema: KafkaConfigSchema,
-  val bootstrapMetadata: BootstrapMetadata,
+  val bootstrapMetadata: BootstrapMetadata
 ) extends Logging {
 
   import kafka.server.Server._
