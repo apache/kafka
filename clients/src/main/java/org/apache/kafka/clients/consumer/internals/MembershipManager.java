@@ -125,6 +125,11 @@ public interface MembershipManager {
     CompletableFuture<Void> leaveGroup();
 
     /**
+     * Leaving the group when the user closes the consumer.
+     */
+    void leaveGroupOnClose();
+
+    /**
      * @return True if the member should send heartbeat to the coordinator without waiting for
      * the interval.
      */

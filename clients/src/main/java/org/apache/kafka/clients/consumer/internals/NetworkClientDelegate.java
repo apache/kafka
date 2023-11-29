@@ -64,10 +64,10 @@ public class NetworkClientDelegate implements AutoCloseable {
     private final long retryBackoffMs;
 
     public NetworkClientDelegate(
-            final Time time,
-            final ConsumerConfig config,
-            final LogContext logContext,
-            final KafkaClient client) {
+        final Time time,
+        final ConsumerConfig config,
+        final LogContext logContext,
+        final KafkaClient client) {
         this.time = time;
         this.client = client;
         this.log = logContext.logger(getClass());
@@ -128,6 +128,21 @@ public class NetworkClientDelegate implements AutoCloseable {
         }
         this.client.poll(pollTimeoutMs, currentTimeMs);
         checkDisconnects(currentTimeMs);
+    }
+
+    /**
+     * Block until all pending requests from the given node have finished.
+     */
+    public void awaitPendingRequests(Timer timer) {
+        while (!unsentRequests().isEmpty() && timer.notExpired()) {
+            poll(timer.remainingMs(), timer.currentTimeMs());
+            timer.update();
+        }
+
+        if (!unsentRequests.isEmpty()) {
+            log.warn("Close timed out with {} pending requests to coordinator, terminating client connections",
+                unsentRequests.size());
+        }
     }
 
     /**
@@ -310,11 +325,11 @@ public class NetworkClientDelegate implements AutoCloseable {
         @Override
         public String toString() {
             return "UnsentRequest{" +
-                    "requestBuilder=" + requestBuilder +
-                    ", handler=" + handler +
-                    ", node=" + node +
-                    ", timer=" + timer +
-                    '}';
+                "requestBuilder=" + requestBuilder +
+                ", handler=" + handler +
+                ", node=" + node +
+                ", timer=" + timer +
+                '}';
         }
     }
 
