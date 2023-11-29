@@ -16,28 +16,26 @@
  */
 package org.apache.kafka.clients.consumer.internals.events;
 
-import java.util.Objects;
-
-/**
- * This is the abstract definition of the events created by the KafkaConsumer API
- */
-public abstract class ApplicationEvent {
-
-    public enum Type {
-        COMMIT, POLL, FETCH_COMMITTED_OFFSETS, NEW_TOPICS_METADATA_UPDATE, ASSIGNMENT_CHANGE,
-        LIST_OFFSETS, RESET_POSITIONS, VALIDATE_POSITIONS, TOPIC_METADATA, SUBSCRIPTION_CHANGE,
-        UNSUBSCRIBE, CONSUMER_REBALANCE_LISTENER_CALLBACK_COMPLETED,
-        PREP_CLOSING
+public class ConsumerCloseApplicationEvent extends CompletableApplicationEvent<Void> {
+    public enum Task {
+        COMMIT, LEAVE_GROUP
     }
 
-    private final Type type;
+    private final Task task;
+    private final long timeout;
 
-    protected ApplicationEvent(Type type) {
-        this.type = Objects.requireNonNull(type);
+    public ConsumerCloseApplicationEvent(final Task task, final long timeout) {
+        super(ApplicationEvent.Type.PREP_CLOSING);
+        this.task = task;
+        this.timeout = timeout;
     }
 
-    public Type type() {
-        return type;
+    public Task task() {
+        return task;
+    }
+
+    public long timeout() {
+        return timeout;
     }
 
     @Override
@@ -45,23 +43,23 @@ public abstract class ApplicationEvent {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
 
-        ApplicationEvent that = (ApplicationEvent) o;
+        ConsumerCloseApplicationEvent that = (ConsumerCloseApplicationEvent) o;
 
-        return type == that.type;
+        return task == that.task;
     }
 
     @Override
     public int hashCode() {
-        return type.hashCode();
+        return task.hashCode();
     }
 
     protected String toStringBase() {
-        return "type=" + type;
+        return "task=" + task;
     }
 
     @Override
     public String toString() {
-        return "ApplicationEvent{" +
+        return "ConsumerCloseApplicationEvent{" +
                 toStringBase() +
                 '}';
     }
