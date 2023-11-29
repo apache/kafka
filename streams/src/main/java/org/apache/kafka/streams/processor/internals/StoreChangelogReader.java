@@ -1048,12 +1048,16 @@ public class StoreChangelogReader implements ChangelogReader {
                                 throw new StreamsException("State restore listener failed on restore paused", e);
                             }
                         } else if (changelogMetadata.stateManager.taskType() == TaskType.STANDBY) {
+                            final StateStoreMetadata storeMetadata = changelogMetadata.stateManager.storeMetadata(partition);
+                            // endOffset and storeOffset may be unknown at this point
+                            final long storeOffset = storeMetadata.offset() != null ? storeMetadata.offset() : -1;
+                            final long endOffset = storeMetadata.endOffset() != null ? storeMetadata.endOffset() : -1;
                             StandbyUpdateListener.SuspendReason suspendReason = StandbyUpdateListener.SuspendReason.MIGRATED;
                             // Unregistering running standby tasks means the task has been promoted to active.
                             if (changelogMetadata.stateManager.taskState() == Task.State.RUNNING) {
                                 suspendReason = StandbyUpdateListener.SuspendReason.PROMOTED;
                             }
-                            standbyUpdateListener.onUpdateSuspended(partition, storeName, changelogMetadata.restoreEndOffset, changelogMetadata.endOffset(), suspendReason);
+                            standbyUpdateListener.onUpdateSuspended(partition, storeName, storeOffset, endOffset, suspendReason);
                         }
                     }
                 }
