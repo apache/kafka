@@ -587,6 +587,7 @@ public class OffsetMetadataManager {
      * @return True if no offsets exist or if all offsets expired, false otherwise.
      */
     public boolean cleanupExpiredOffsets(String groupId, List<Record> records) {
+        Long startMs = time.milliseconds();
         TimelineHashMap<String, TimelineHashMap<Integer, OffsetAndMetadata>> offsetsByTopic = offsetsByGroup.get(groupId);
         if (offsetsByTopic == null) {
             return true;
@@ -620,8 +621,9 @@ public class OffsetMetadataManager {
         });
 
         if (!expiredPartitions.isEmpty()) {
-            log.info("[GroupId {}] Expiring offsets of partitions (allOffsetsExpired={}): {}",
-                groupId, allOffsetsExpired, String.join(", ", expiredPartitions));
+            log.info("[GroupId {}] Expiring {} offsets (allOffsetsExpired={}) in {} milliseconds.",
+                groupId, expiredPartitions.size(), allOffsetsExpired, time.milliseconds() - startMs);
+            log.debug("[GroupId {}] Expired partitions: {}", groupId, String.join(", ", expiredPartitions));
         }
         metrics.record(OFFSET_EXPIRED_SENSOR_NAME, expiredPartitions.size());
 

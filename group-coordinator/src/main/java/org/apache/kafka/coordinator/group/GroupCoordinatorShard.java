@@ -537,6 +537,7 @@ public class GroupCoordinatorShard implements CoordinatorShard<Record> {
             config.offsetsRetentionCheckIntervalMs,
             TimeUnit.MILLISECONDS,
             true,
+            config.offsetsRetentionCheckIntervalMs,
             this::cleanupGroupMetadata
         );
     }
