@@ -14,8 +14,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-# --- for broker
-
 # If KAFKA_PROCESS_ROLES is defined it means we are running in KRaft mode
 
 # unset KAFKA_ADVERTISED_LISTENERS from ENV in KRaft mode when running as controller only
@@ -36,8 +34,6 @@ then
       # Unset in case env variable is set with empty value
       unset KAFKA_ADVERTISED_LISTENERS
     fi
-  else
-    ub ensure KAFKA_ADVERTISED_LISTENERS
   fi 
 fi
 
@@ -51,31 +47,6 @@ then
 fi
 
 ub path /opt/kafka/config/ writable
-
-# advertised.host, advertised.port, host and port are deprecated. Exit if these properties are set.
-if [[ -n "${KAFKA_ADVERTISED_PORT-}" ]]
-then
-  echo "advertised.port is deprecated. Please use KAFKA_ADVERTISED_LISTENERS instead."
-  exit 1
-fi
-
-if [[ -n "${KAFKA_ADVERTISED_HOST-}" ]]
-then
-  echo "advertised.host is deprecated. Please use KAFKA_ADVERTISED_LISTENERS instead."
-  exit 1
-fi
-
-if [[ -n "${KAFKA_HOST-}" ]]
-then
-  echo "host is deprecated. Please use KAFKA_ADVERTISED_LISTENERS instead."
-  exit 1
-fi
-
-if [[ -n "${KAFKA_PORT-}" ]]
-then
-  echo "port is deprecated. Please use KAFKA_ADVERTISED_LISTENERS instead."
-  exit 1
-fi
 
 # Set if ADVERTISED_LISTENERS has SSL:// or SASL_SSL:// endpoints.
 if [[ -n "${KAFKA_ADVERTISED_LISTENERS-}" ]] && [[ $KAFKA_ADVERTISED_LISTENERS == *"SSL://"* ]]
@@ -110,7 +81,6 @@ then
       export KAFKA_SSL_TRUSTSTORE_PASSWORD
       KAFKA_SSL_TRUSTSTORE_PASSWORD=$(cat "$KAFKA_SSL_TRUSTSTORE_CREDENTIALS_LOCATION")
   fi
-  
 fi
 
 # Set if KAFKA_ADVERTISED_LISTENERS has SASL_PLAINTEXT:// or SASL_SSL:// endpoints.
