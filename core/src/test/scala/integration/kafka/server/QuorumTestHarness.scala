@@ -189,6 +189,10 @@ abstract class QuorumTestHarness extends Logging {
     TestInfoUtils.isZkMigrationTest(testInfo)
   }
 
+  def isNewGroupCoordinatorEnabled(): Boolean = {
+    TestInfoUtils.isNewGroupCoordinatorEnabled(testInfo)
+  }
+
   def checkIsZKTest(): Unit = {
     if (isKRaftTest()) {
       throw new RuntimeException("This function can't be accessed when running the test " +

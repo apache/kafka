@@ -122,10 +122,7 @@ class DeleteGroupsRequestTest(cluster: ClusterInstance) extends GroupCoordinator
             .setGroupId("grp")
             .setGroupState(GenericGroupState.DEAD.toString)
           ),
-          describeGroups(
-            groupIds = List("grp"),
-            version = ApiKeys.DESCRIBE_GROUPS.latestVersion(isUnstableApiEnabled)
-          )
+          describeGroups(List("grp"))
         )
       }
     }

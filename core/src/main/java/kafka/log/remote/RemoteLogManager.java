@@ -41,6 +41,7 @@ import org.apache.kafka.common.utils.KafkaThread;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.server.common.OffsetAndEpoch;
 import org.apache.kafka.server.log.remote.metadata.storage.ClassLoaderAwareRemoteLogMetadataManager;
 import org.apache.kafka.server.log.remote.storage.ClassLoaderAwareRemoteStorageManager;
 import org.apache.kafka.server.log.remote.storage.LogSegmentData;
@@ -590,7 +591,7 @@ public class RemoteLogManager implements Closeable {
 
         // The copied and log-start offset is empty initially for a new leader RLMTask, and needs to be fetched inside
         // the task's run() method.
-        private volatile OptionalLong copiedOffsetOption = OptionalLong.empty();
+        private volatile Optional<OffsetAndEpoch> copiedOffsetOption = Optional.empty();
         private volatile boolean isLogStartOffsetUpdatedOnBecomingLeader = false;
 
         public void convertToLeader(int leaderEpochVal) {
@@ -601,7 +602,7 @@ public class RemoteLogManager implements Closeable {
                 leaderEpoch = leaderEpochVal;
             }
             // Reset copied and log-start offset, so that it is set in next run of RLMTask
-            copiedOffsetOption = OptionalLong.empty();
+            copiedOffsetOption = Optional.empty();
             isLogStartOffsetUpdatedOnBecomingLeader = false;
         }
 
@@ -625,9 +626,10 @@ public class RemoteLogManager implements Closeable {
                 // of a segment with that epoch copied into remote storage. If it can not find an entry then it checks for the
                 // previous leader epoch till it finds an entry, If there are no entries till the earliest leader epoch in leader
                 // epoch cache then it starts copying the segments from the earliest epoch entry's offset.
-                copiedOffsetOption = OptionalLong.of(findHighestRemoteOffset(topicIdPartition, log));
+                copiedOffsetOption = Optional.of(findHighestRemoteOffset(topicIdPartition, log));
                 logger.info("Found the highest copiedRemoteOffset: {} for partition: {} after becoming leader, " +
                                 "leaderEpoch: {}", copiedOffsetOption, topicIdPartition, leaderEpoch);
+                copiedOffsetOption.ifPresent(offsetAndEpoch ->  log.updateHighestOffsetInRemoteStorage(offsetAndEpoch.offset()));
             }
         }
 
@@ -664,7 +666,7 @@ public class RemoteLogManager implements Closeable {
             try {
                 maybeUpdateLogStartOffsetOnBecomingLeader(log);
                 maybeUpdateCopiedOffset(log);
-                long copiedOffset = copiedOffsetOption.getAsLong();
+                long copiedOffset = copiedOffsetOption.get().offset();
 
                 // LSO indicates the offset below are ready to be consumed (high-watermark or committed)
                 long lso = log.lastStableOffset();
@@ -767,7 +769,11 @@ public class RemoteLogManager implements Closeable {
             brokerTopicStats.topicStats(log.topicPartition().topic())
                 .remoteCopyBytesRate().mark(copySegmentStartedRlsm.segmentSizeInBytes());
             brokerTopicStats.allTopicsStats().remoteCopyBytesRate().mark(copySegmentStartedRlsm.segmentSizeInBytes());
-            copiedOffsetOption = OptionalLong.of(endOffset);
+
+            // `epochEntries` cannot be empty, there is a pre-condition validation in RemoteLogSegmentMetadata
+            // constructor
+            int lastEpochInSegment = epochEntries.get(epochEntries.size() - 1).epoch;
+            copiedOffsetOption = Optional.of(new OffsetAndEpoch(endOffset, lastEpochInSegment));
             // Update the highest offset in remote storage for this partition's log so that the local log segments
             // are not deleted before they are copied to remote storage.
             log.updateHighestOffsetInRemoteStorage(endOffset);
@@ -796,10 +802,10 @@ public class RemoteLogManager implements Closeable {
                     // Cleanup/delete expired remote log segments
                     cleanupExpiredRemoteLogSegments();
                 } else {
-                    long offset = findHighestRemoteOffset(topicIdPartition, log);
+                    OffsetAndEpoch offsetAndEpoch = findHighestRemoteOffset(topicIdPartition, log);
                     // Update the highest offset in remote storage for this partition's log so that the local log segments
                     // are not deleted before they are copied to remote storage.
-                    log.updateHighestOffsetInRemoteStorage(offset);
+                    log.updateHighestOffsetInRemoteStorage(offsetAndEpoch.offset());
                 }
             } catch (InterruptedException ex) {
                 if (!isCancelled()) {
@@ -1422,20 +1428,37 @@ public class RemoteLogManager implements Closeable {
         return nextBatch;
     }
 
-    long findHighestRemoteOffset(TopicIdPartition topicIdPartition, UnifiedLog log) throws RemoteStorageException {
-        Optional<Long> offset = Optional.empty();
-
-        Option<LeaderEpochFileCache> maybeLeaderEpochFileCache = log.leaderEpochCache();
-        if (maybeLeaderEpochFileCache.isDefined()) {
-            LeaderEpochFileCache cache = maybeLeaderEpochFileCache.get();
-            OptionalInt epoch = cache.latestEpoch();
-            while (!offset.isPresent() && epoch.isPresent()) {
-                offset = remoteLogMetadataManager.highestOffsetForEpoch(topicIdPartition, epoch.getAsInt());
-                epoch = cache.previousEpoch(epoch.getAsInt());
+    OffsetAndEpoch findHighestRemoteOffset(TopicIdPartition topicIdPartition, UnifiedLog log) throws RemoteStorageException {
+        OffsetAndEpoch offsetAndEpoch = null;
+        Option<LeaderEpochFileCache> leaderEpochCacheOpt = log.leaderEpochCache();
+        if (leaderEpochCacheOpt.isDefined()) {
+            LeaderEpochFileCache cache = leaderEpochCacheOpt.get();
+            Optional<EpochEntry> maybeEpochEntry = cache.latestEntry();
+            while (offsetAndEpoch == null && maybeEpochEntry.isPresent()) {
+                int epoch = maybeEpochEntry.get().epoch;
+                Optional<Long> highestRemoteOffsetOpt =
+                        remoteLogMetadataManager.highestOffsetForEpoch(topicIdPartition, epoch);
+                if (highestRemoteOffsetOpt.isPresent()) {
+                    Map.Entry<Integer, Long> entry = cache.endOffsetFor(epoch, log.logEndOffset());
+                    int requestedEpoch = entry.getKey();
+                    long endOffset = entry.getValue();
+                    long highestRemoteOffset = highestRemoteOffsetOpt.get();
+                    if (endOffset <= highestRemoteOffset) {
+                        LOGGER.info("The end-offset for epoch {}: ({}, {}) is less than or equal to the " +
+                                "highest-remote-offset: {} for partition: {}", epoch, requestedEpoch, endOffset,
+                                highestRemoteOffset, topicIdPartition);
+                        offsetAndEpoch = new OffsetAndEpoch(endOffset - 1, requestedEpoch);
+                    } else {
+                        offsetAndEpoch = new OffsetAndEpoch(highestRemoteOffset, epoch);
+                    }
+                }
+                maybeEpochEntry = cache.previousEntry(epoch);
             }
         }
-
-        return offset.orElse(-1L);
+        if (offsetAndEpoch == null) {
+            offsetAndEpoch = new OffsetAndEpoch(-1L, RecordBatch.NO_PARTITION_LEADER_EPOCH);
+        }
+        return offsetAndEpoch;
     }
 
     long findLogStartOffset(TopicIdPartition topicIdPartition, UnifiedLog log) throws RemoteStorageException {
@@ -1667,5 +1690,4 @@ public class RemoteLogManager implements Closeable {
                     '}';
         }
     }
-
 }
