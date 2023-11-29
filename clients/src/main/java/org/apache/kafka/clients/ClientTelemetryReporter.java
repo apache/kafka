@@ -576,7 +576,7 @@ public class ClientTelemetryReporter implements MetricsReporter {
             try {
                 // If we never fetched a subscription, we can't really push anything.
                 if (lastRequestMs == 0) {
-                    log.info("Telemetry subscription not loaded, not attempting terminating push");
+                    log.debug("Telemetry subscription not loaded, not attempting terminating push");
                     return;
                 }
 
