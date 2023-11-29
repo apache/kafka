@@ -265,8 +265,6 @@ public class HeartbeatRequestManager implements RequestManager {
         Errors error = Errors.forCode(response.data().errorCode());
         String errorMessage = response.data().errorMessage();
         String message;
-        // TODO: upon encountering a fatal/fenced error, trigger onPartitionLost logic to give up the current
-        //  assignments.
         switch (error) {
             case NOT_COORDINATOR:
                 // the manager should retry immediately when the coordinator node becomes available again
