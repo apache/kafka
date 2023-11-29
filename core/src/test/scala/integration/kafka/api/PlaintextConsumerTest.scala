@@ -24,7 +24,7 @@ import kafka.utils.{TestInfoUtils, TestUtils}
 import org.apache.kafka.clients.admin.{NewPartitions, NewTopic}
 import org.apache.kafka.clients.consumer._
 import org.apache.kafka.clients.producer.{ProducerConfig, ProducerRecord}
-import org.apache.kafka.common.{MetricName, TopicPartition}
+import org.apache.kafka.common.{MetricName, PartitionInfo, TopicPartition}
 import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.errors.{InvalidGroupIdException, InvalidTopicException}
 import org.apache.kafka.common.header.Headers
@@ -34,18 +34,17 @@ import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.test.{MockConsumerInterceptor, MockProducerInterceptor}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.{CsvSource, ValueSource}
+import org.junit.jupiter.params.provider.{CsvSource, MethodSource}
 
 import scala.collection.mutable
 import scala.collection.mutable.Buffer
 import scala.jdk.CollectionConverters._
 
-/* We have some tests in this class instead of `BaseConsumerTest` in order to keep the build time under control. */
 class PlaintextConsumerTest extends BaseConsumerTest {
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
-  @ValueSource(strings = Array("zk", "kraft", "kraft+kip848"))
-  def testHeaders(quorum: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
+  def testHeaders(quorum: String, groupProtocol: String): Unit = {
     val numRecords = 1
     val record = new ProducerRecord(tp.topic, tp.partition, null, "key".getBytes, "value".getBytes)
 
@@ -130,19 +129,20 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     assertEquals(numRecords, records.size)
   }
 
+  // Deprecated poll(timeout) not supported for consumer group protocol
   @deprecated("poll(Duration) is the replacement", since = "2.0")
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
-  @ValueSource(strings = Array("zk", "kraft", "kraft+kip848"))
-  def testDeprecatedPollBlocksForAssignment(quorum: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersGenericGroupProtocolOnly"))
+  def testDeprecatedPollBlocksForAssignment(quorum: String, groupProtocol: String): Unit = {
     val consumer = createConsumer()
     consumer.subscribe(Set(topic).asJava)
     consumer.poll(0)
     assertEquals(Set(tp, tp2), consumer.assignment().asScala)
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
-  @ValueSource(strings = Array("zk", "kraft", "kraft+kip848"))
-  def testHeadersSerializerDeserializer(quorum: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
+  def testHeadersSerializerDeserializer(quorum: String, groupProtocol: String): Unit = {
     val extendedSerializer = new Serializer[Array[Byte]] with SerializerImpl
 
     val extendedDeserializer = new Deserializer[Array[Byte]] with DeserializerImpl
@@ -150,9 +150,9 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     testHeadersSerializeDeserialize(extendedSerializer, extendedDeserializer)
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
-  @ValueSource(strings = Array("zk", "kraft", "kraft+kip848"))
-  def testMaxPollRecords(quorum: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
+  def testMaxPollRecords(quorum: String, groupProtocol: String): Unit = {
     val maxPollRecords = 2
     val numRecords = 10000
 
@@ -167,9 +167,10 @@ class PlaintextConsumerTest extends BaseConsumerTest {
       startingTimestamp = startingTimestamp)
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
-  @ValueSource(strings = Array("zk", "kraft", "kraft+kip848"))
-  def testMaxPollIntervalMs(quorum: String): Unit = {
+  // ConsumerRebalanceListener temporarily not supported for the consumer group protocol
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersGenericGroupProtocolOnly"))
+  def testMaxPollIntervalMs(quorum: String, groupProtocol: String): Unit = {
     this.consumerConfig.setProperty(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, 1000.toString)
     this.consumerConfig.setProperty(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, 500.toString)
     this.consumerConfig.setProperty(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, 2000.toString)
@@ -193,9 +194,10 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     assertEquals(1, listener.callsToRevoked)
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
-  @ValueSource(strings = Array("zk", "kraft", "kraft+kip848"))
-  def testMaxPollIntervalMsDelayInRevocation(quorum: String): Unit = {
+  // ConsumerRebalanceListener temporarily not supported for the consumer group protocol
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersGenericGroupProtocolOnly"))
+  def testMaxPollIntervalMsDelayInRevocation(quorum: String, groupProtocol: String): Unit = {
     this.consumerConfig.setProperty(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, 5000.toString)
     this.consumerConfig.setProperty(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, 500.toString)
     this.consumerConfig.setProperty(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, 1000.toString)
@@ -234,9 +236,10 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     assertTrue(commitCompleted)
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
-  @ValueSource(strings = Array("zk", "kraft", "kraft+kip848"))
-  def testMaxPollIntervalMsDelayInAssignment(quorum: String): Unit = {
+  // ConsumerRebalanceListener temporarily not supported for consumer group protocol
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersGenericGroupProtocolOnly"))
+  def testMaxPollIntervalMsDelayInAssignment(quorum: String, groupProtocol: String): Unit = {
     this.consumerConfig.setProperty(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, 5000.toString)
     this.consumerConfig.setProperty(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, 500.toString)
     this.consumerConfig.setProperty(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, 1000.toString)
@@ -259,9 +262,10 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     ensureNoRebalance(consumer, listener)
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
-  @ValueSource(strings = Array("zk", "kraft", "kraft+kip848"))
-  def testAutoCommitOnClose(quorum: String): Unit = {
+  // Consumer group protocol temporarily does not commit offsets on consumer close
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersGenericGroupProtocolOnly"))
+  def testAutoCommitOnClose(quorum: String, groupProtocol: String): Unit = {
     this.consumerConfig.setProperty(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "true")
     val consumer = createConsumer()
 
@@ -283,9 +287,10 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     assertEquals(500, anotherConsumer.committed(Set(tp2).asJava).get(tp2).offset)
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
-  @ValueSource(strings = Array("zk", "kraft", "kraft+kip848"))
-  def testAutoCommitOnCloseAfterWakeup(quorum: String): Unit = {
+  // Consumer group protocol temporarily does not commit offsets on consumer close
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersGenericGroupProtocolOnly"))
+  def testAutoCommitOnCloseAfterWakeup(quorum: String, groupProtocol: String): Unit = {
     this.consumerConfig.setProperty(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "true")
     val consumer = createConsumer()
 
@@ -311,9 +316,9 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     assertEquals(500, anotherConsumer.committed(Set(tp2).asJava).get(tp2).offset)
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
-  @ValueSource(strings = Array("zk", "kraft", "kraft+kip848"))
-  def testAutoOffsetReset(quorum: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
+  def testAutoOffsetReset(quorum: String, groupProtocol: String): Unit = {
     val producer = createProducer()
     val startingTimestamp = System.currentTimeMillis()
     sendRecords(producer, numRecords = 1, tp, startingTimestamp = startingTimestamp)
@@ -323,9 +328,9 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     consumeAndVerifyRecords(consumer = consumer, numRecords = 1, startingOffset = 0, startingTimestamp = startingTimestamp)
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
-  @ValueSource(strings = Array("zk", "kraft", "kraft+kip848"))
-  def testGroupConsumption(quorum: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
+  def testGroupConsumption(quorum: String, groupProtocol: String): Unit = {
     val producer = createProducer()
     val startingTimestamp = System.currentTimeMillis()
     sendRecords(producer, numRecords = 10, tp, startingTimestamp = startingTimestamp)
@@ -344,9 +349,10 @@ class PlaintextConsumerTest extends BaseConsumerTest {
    * metadata refresh the consumer becomes subscribed to this new topic and all partitions
    * of that topic are assigned to it.
    */
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
-  @ValueSource(strings = Array("zk", "kraft", "kraft+kip848"))
-  def testPatternSubscription(quorum: String): Unit = {
+  // Pattern subscriptions temporarily not supported for consumer group protocol
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersGenericGroupProtocolOnly"))
+  def testPatternSubscription(quorum: String, groupProtocol: String): Unit = {
     val numRecords = 10000
     val producer = createProducer()
     sendRecords(producer, numRecords, tp)
@@ -402,9 +408,10 @@ class PlaintextConsumerTest extends BaseConsumerTest {
    * The metadata refresh interval is intentionally increased to a large enough value to guarantee
    * that it is the subscription call that triggers a metadata refresh, and not the timeout.
    */
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
-  @ValueSource(strings = Array("zk", "kraft", "kraft+kip848"))
-  def testSubsequentPatternSubscription(quorum: String): Unit = {
+  // Pattern subscriptions temporarily not supported for consumer group protocol
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersGenericGroupProtocolOnly"))
+  def testSubsequentPatternSubscription(quorum: String, groupProtocol: String): Unit = {
     this.consumerConfig.setProperty(ConsumerConfig.METADATA_MAX_AGE_CONFIG, "30000")
     val consumer = createConsumer()
 
@@ -454,9 +461,10 @@ class PlaintextConsumerTest extends BaseConsumerTest {
    * When consumer unsubscribes from all its subscriptions, it is expected that its
    * assignments are cleared right away.
    */
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
-  @ValueSource(strings = Array("zk", "kraft", "kraft+kip848"))
-  def testPatternUnsubscription(quorum: String): Unit = {
+  // Pattern subscriptions temporarily not supported for consumer group protocol
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersGenericGroupProtocolOnly"))
+  def testPatternUnsubscription(quorum: String, groupProtocol: String): Unit = {
     val numRecords = 10000
     val producer = createProducer()
     sendRecords(producer, numRecords, tp)
@@ -481,9 +489,9 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     assertEquals(0, consumer.assignment().size)
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
-  @ValueSource(strings = Array("zk", "kraft", "kraft+kip848"))
-  def testCommitMetadata(quorum: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
+  def testCommitMetadata(quorum: String, groupProtocol: String): Unit = {
     val consumer = createConsumer()
     consumer.assign(List(tp).asJava)
 
@@ -503,9 +511,9 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     assertEquals(nullMetadata, consumer.committed(Set(tp).asJava).get(tp))
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
-  @ValueSource(strings = Array("zk", "kraft", "kraft+kip848"))
-  def testAsyncCommit(quorum: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
+  def testAsyncCommit(quorum: String, groupProtocol: String): Unit = {
     val consumer = createConsumer()
     consumer.assign(List(tp).asJava)
 
@@ -523,9 +531,9 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     assertEquals(new OffsetAndMetadata(count), consumer.committed(Set(tp).asJava).get(tp))
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
-  @ValueSource(strings = Array("zk", "kraft", "kraft+kip848"))
-  def testExpandingTopicSubscriptions(quorum: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
+  def testExpandingTopicSubscriptions(quorum: String, groupProtocol: String): Unit = {
     val otherTopic = "other"
     val initialAssignment = Set(new TopicPartition(topic, 0), new TopicPartition(topic, 1))
     val consumer = createConsumer()
@@ -538,9 +546,10 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     awaitAssignment(consumer, expandedAssignment)
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
-  @ValueSource(strings = Array("zk", "kraft", "kraft+kip848"))
-  def testShrinkingTopicSubscriptions(quorum: String): Unit = {
+  // Consumer group protocol temporarily does not properly handle assignment change
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersGenericGroupProtocolOnly"))
+  def testShrinkingTopicSubscriptions(quorum: String, groupProtocol: String): Unit = {
     val otherTopic = "other"
     createTopic(otherTopic, 2, brokerCount)
     val initialAssignment = Set(new TopicPartition(topic, 0), new TopicPartition(topic, 1), new TopicPartition(otherTopic, 0), new TopicPartition(otherTopic, 1))
@@ -553,9 +562,10 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     awaitAssignment(consumer, shrunkenAssignment)
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
-  @ValueSource(strings = Array("zk", "kraft", "kraft+kip848"))
-  def testPartitionsFor(quorum: String): Unit = {
+  // partitionsFor not implemented in consumer group protocol
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersGenericGroupProtocolOnly"))
+  def testPartitionsFor(quorum: String, groupProtocol: String): Unit = {
     val numParts = 2
     createTopic("part-test", numParts, 1)
     val consumer = createConsumer()
@@ -564,9 +574,10 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     assertEquals(2, parts.size)
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
-  @ValueSource(strings = Array("zk", "kraft", "kraft+kip848"))
-  def testPartitionsForAutoCreate(quorum: String): Unit = {
+  // partitionsFor not implemented in consumer group protocol
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersGenericGroupProtocolOnly"))
+  def testPartitionsForAutoCreate(quorum: String, groupProtocol: String): Unit = {
     val consumer = createConsumer()
     // First call would create the topic
     consumer.partitionsFor("non-exist-topic")
@@ -575,16 +586,17 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     }, s"Timed out while awaiting non empty partitions.")
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
-  @ValueSource(strings = Array("zk", "kraft", "kraft+kip848"))
-  def testPartitionsForInvalidTopic(quorum: String): Unit = {
+  // partitionsFor not implemented in consumer group protocol
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersGenericGroupProtocolOnly"))
+  def testPartitionsForInvalidTopic(quorum: String, groupProtocol: String): Unit = {
     val consumer = createConsumer()
     assertThrows(classOf[InvalidTopicException], () => consumer.partitionsFor(";3# ads,{234"))
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
-  @ValueSource(strings = Array("zk", "kraft", "kraft+kip848"))
-  def testSeek(quorum: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
+  def testSeek(quorum: String, groupProtocol: String): Unit = {
     val consumer = createConsumer()
     val totalRecords = 50L
     val mid = totalRecords / 2
@@ -638,9 +650,9 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     producer.close()
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
-  @ValueSource(strings = Array("zk", "kraft", "kraft+kip848"))
-  def testPositionAndCommit(quorum: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
+  def testPositionAndCommit(quorum: String, groupProtocol: String): Unit = {
     val producer = createProducer()
     var startingTimestamp = System.currentTimeMillis()
     sendRecords(producer, numRecords = 5, tp, startingTimestamp = startingTimestamp)
@@ -671,9 +683,9 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     consumeAndVerifyRecords(consumer = otherConsumer, numRecords = 1, startingOffset = 5, startingTimestamp = startingTimestamp)
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
-  @ValueSource(strings = Array("zk", "kraft", "kraft+kip848"))
-  def testPartitionPauseAndResume(quorum: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
+  def testPartitionPauseAndResume(quorum: String, groupProtocol: String): Unit = {
     val partitions = List(tp).asJava
     val producer = createProducer()
     var startingTimestamp = System.currentTimeMillis()
@@ -690,9 +702,9 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     consumeAndVerifyRecords(consumer = consumer, numRecords = 5, startingOffset = 5, startingTimestamp = startingTimestamp)
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
-  @ValueSource(strings = Array("zk", "kraft", "kraft+kip848"))
-  def testFetchInvalidOffset(quorum: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
+  def testFetchInvalidOffset(quorum: String, groupProtocol: String): Unit = {
     this.consumerConfig.setProperty(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "none")
     val consumer = createConsumer(configOverrides = this.consumerConfig)
 
@@ -716,9 +728,9 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     assertEquals(outOfRangePos.toLong, outOfRangePartitions.get(tp))
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
-  @ValueSource(strings = Array("zk", "kraft", "kraft+kip848"))
-  def testFetchOutOfRangeOffsetResetConfigEarliest(quorum: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
+  def testFetchOutOfRangeOffsetResetConfigEarliest(quorum: String, groupProtocol: String): Unit = {
     this.consumerConfig.setProperty(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest")
     // ensure no in-flight fetch request so that the offset can be reset immediately
     this.consumerConfig.setProperty(ConsumerConfig.FETCH_MAX_WAIT_MS_CONFIG, "0")
@@ -738,9 +750,9 @@ class PlaintextConsumerTest extends BaseConsumerTest {
   }
 
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
-  @ValueSource(strings = Array("zk", "kraft", "kraft+kip848"))
-  def testFetchOutOfRangeOffsetResetConfigLatest(quorum: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
+  def testFetchOutOfRangeOffsetResetConfigLatest(quorum: String, groupProtocol: String): Unit = {
     this.consumerConfig.setProperty(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "latest")
     // ensure no in-flight fetch request so that the offset can be reset immediately
     this.consumerConfig.setProperty(ConsumerConfig.FETCH_MAX_WAIT_MS_CONFIG, "0")
@@ -765,9 +777,9 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     assertEquals(totalRecords, nextRecord.offset())
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
-  @ValueSource(strings = Array("zk", "kraft", "kraft+kip848"))
-  def testFetchRecordLargerThanFetchMaxBytes(quorum: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
+  def testFetchRecordLargerThanFetchMaxBytes(quorum: String, groupProtocol: String): Unit = {
     val maxFetchBytes = 10 * 1024
     this.consumerConfig.setProperty(ConsumerConfig.FETCH_MAX_BYTES_CONFIG, maxFetchBytes.toString)
     checkLargeRecord(maxFetchBytes + 1)
@@ -795,9 +807,9 @@ class PlaintextConsumerTest extends BaseConsumerTest {
   }
 
   /** We should only return a large record if it's the first record in the first non-empty partition of the fetch request */
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
-  @ValueSource(strings = Array("zk", "kraft", "kraft+kip848"))
-  def testFetchHonoursFetchSizeIfLargeRecordNotFirst(quorum: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
+  def testFetchHonoursFetchSizeIfLargeRecordNotFirst(quorum: String, groupProtocol: String): Unit = {
     val maxFetchBytes = 10 * 1024
     this.consumerConfig.setProperty(ConsumerConfig.FETCH_MAX_BYTES_CONFIG, maxFetchBytes.toString)
     checkFetchHonoursSizeIfLargeRecordNotFirst(maxFetchBytes)
@@ -828,26 +840,26 @@ class PlaintextConsumerTest extends BaseConsumerTest {
   }
 
   /** We should only return a large record if it's the first record in the first partition of the fetch request */
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
-  @ValueSource(strings = Array("zk", "kraft", "kraft+kip848"))
-  def testFetchHonoursMaxPartitionFetchBytesIfLargeRecordNotFirst(quorum: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
+  def testFetchHonoursMaxPartitionFetchBytesIfLargeRecordNotFirst(quorum: String, groupProtocol: String): Unit = {
     val maxPartitionFetchBytes = 10 * 1024
     this.consumerConfig.setProperty(ConsumerConfig.MAX_PARTITION_FETCH_BYTES_CONFIG, maxPartitionFetchBytes.toString)
     checkFetchHonoursSizeIfLargeRecordNotFirst(maxPartitionFetchBytes)
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
-  @ValueSource(strings = Array("zk", "kraft", "kraft+kip848"))
-  def testFetchRecordLargerThanMaxPartitionFetchBytes(quorum: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
+  def testFetchRecordLargerThanMaxPartitionFetchBytes(quorum: String, groupProtocol: String): Unit = {
     val maxPartitionFetchBytes = 10 * 1024
     this.consumerConfig.setProperty(ConsumerConfig.MAX_PARTITION_FETCH_BYTES_CONFIG, maxPartitionFetchBytes.toString)
     checkLargeRecord(maxPartitionFetchBytes + 1)
   }
 
   /** Test that we consume all partitions if fetch max bytes and max.partition.fetch.bytes are low */
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
-  @ValueSource(strings = Array("zk", "kraft", "kraft+kip848"))
-  def testLowMaxFetchSizeForRequestAndPartition(quorum: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
+  def testLowMaxFetchSizeForRequestAndPartition(quorum: String, groupProtocol: String): Unit = {
     // one of the effects of this is that there will be some log reads where `0 > remaining limit bytes < message size`
     // and we don't return the message because it's not the first message in the first non-empty partition of the fetch
     // this behaves a little different than when remaining limit bytes is 0 and it's important to test it
@@ -894,9 +906,10 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     assertEquals(expected, actual)
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
-  @ValueSource(strings = Array("zk", "kraft", "kraft+kip848"))
-  def testRoundRobinAssignment(quorum: String): Unit = {
+  // Only the generic group protocol supports client-side assignors
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersGenericGroupProtocolOnly"))
+  def testRoundRobinAssignment(quorum: String, groupProtocol: String): Unit = {
     // 1 consumer using round-robin assignment
     this.consumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, "roundrobin-group")
     this.consumerConfig.setProperty(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG, classOf[RoundRobinAssignor].getName)
@@ -931,9 +944,10 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     assertEquals(0, consumer.assignment().size)
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
-  @ValueSource(strings = Array("zk", "kraft", "kraft+kip848"))
-  def testMultiConsumerRoundRobinAssignor(quorum: String): Unit = {
+  // Only the generic group protocol supports client-side assignors
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersGenericGroupProtocolOnly"))
+  def testMultiConsumerRoundRobinAssignor(quorum: String, groupProtocol: String): Unit = {
     this.consumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, "roundrobin-group")
     this.consumerConfig.setProperty(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG, classOf[RoundRobinAssignor].getName)
 
@@ -969,9 +983,10 @@ class PlaintextConsumerTest extends BaseConsumerTest {
    *  - (#par / 10) partition per consumer, where one partition from each of the early (#par mod 9) consumers
    *    will move to consumer #10, leading to a total of (#par mod 9) partition movement
    */
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
-  @ValueSource(strings = Array("zk", "kraft", "kraft+kip848"))
-  def testMultiConsumerStickyAssignor(quorum: String): Unit = {
+  // Only the generic group protocol supports client-side assignors
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersGenericGroupProtocolOnly"))
+  def testMultiConsumerStickyAssignor(quorum: String, groupProtocol: String): Unit = {
 
     def reverse(m: Map[Long, Set[TopicPartition]]) =
       m.values.toSet.flatten.map(v => (v, m.keys.filter(m(_).contains(v)).head)).toMap
@@ -1016,9 +1031,10 @@ class PlaintextConsumerTest extends BaseConsumerTest {
    * This test re-uses BaseConsumerTest's consumers.
    * As a result, it is testing the default assignment strategy set by BaseConsumerTest
    */
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
-  @ValueSource(strings = Array("zk", "kraft", "kraft+kip848"))
-  def testMultiConsumerDefaultAssignor(quorum: String): Unit = {
+  // Only the generic group protocol supports client-side assignors
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersGenericGroupProtocolOnly"))
+  def testMultiConsumerDefaultAssignor(quorum: String, groupProtocol: String): Unit = {
     // use consumers and topics defined in this class + one more topic
     val producer = createProducer()
     sendRecords(producer, numRecords = 100, tp)
@@ -1052,17 +1068,17 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     }
   }
 
+  // Only the generic group protocol supports client-side assignors
   @ParameterizedTest
   @CsvSource(Array(
     "org.apache.kafka.clients.consumer.CooperativeStickyAssignor,   zk",
     "org.apache.kafka.clients.consumer.RangeAssignor,               zk",
     "org.apache.kafka.clients.consumer.CooperativeStickyAssignor,   kraft",
-    "org.apache.kafka.clients.consumer.RangeAssignor,               kraft",
-    "org.apache.kafka.clients.consumer.CooperativeStickyAssignor,   kraft+kip848",
-    "org.apache.kafka.clients.consumer.RangeAssignor,               kraft+kip848"
+    "org.apache.kafka.clients.consumer.RangeAssignor,               kraft"
   ))
   def testRebalanceAndRejoin(assignmentStrategy: String, quorum: String): Unit = {
     // create 2 consumers
+    this.consumerConfig.setProperty(ConsumerConfig.GROUP_PROTOCOL_CONFIG, "generic")
     this.consumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, "rebalance-and-rejoin-group")
     this.consumerConfig.setProperty(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG, assignmentStrategy)
     this.consumerConfig.setProperty(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "true")
@@ -1145,9 +1161,10 @@ class PlaintextConsumerTest extends BaseConsumerTest {
    * As a result, it is testing the default assignment strategy set by BaseConsumerTest
    * It tests the assignment results is expected using default assignor (i.e. Range assignor)
    */
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
-  @ValueSource(strings = Array("zk", "kraft", "kraft+kip848"))
-  def testMultiConsumerDefaultAssignorAndVerifyAssignment(quorum: String): Unit = {
+  // Only the generic group protocol supports client-side assignors
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersGenericGroupProtocolOnly"))
+  def testMultiConsumerDefaultAssignorAndVerifyAssignment(quorum: String, groupProtocol: String): Unit = {
     // create two new topics, each having 3 partitions
     val topic1 = "topic1"
     val topic2 = "topic2"
@@ -1178,21 +1195,24 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     }
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
-  @ValueSource(strings = Array("zk", "kraft", "kraft+kip848"))
-  def testMultiConsumerSessionTimeoutOnStopPolling(quorum: String): Unit = {
+  // ConsumerRebalanceListener temporarily not supported for consumer group protocol
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersGenericGroupProtocolOnly"))
+  def testMultiConsumerSessionTimeoutOnStopPolling(quorum: String, groupProtocol: String): Unit = {
     runMultiConsumerSessionTimeoutTest(false)
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
-  @ValueSource(strings = Array("zk", "kraft", "kraft+kip848"))
-  def testMultiConsumerSessionTimeoutOnClose(quorum: String): Unit = {
+  // ConsumerRebalanceListener temporarily not supported for consumer group protocol
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersGenericGroupProtocolOnly"))
+  def testMultiConsumerSessionTimeoutOnClose(quorum: String, groupProtocol: String): Unit = {
     runMultiConsumerSessionTimeoutTest(true)
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
-  @ValueSource(strings = Array("zk", "kraft", "kraft+kip848"))
-  def testInterceptors(quorum: String): Unit = {
+  // Consumer interceptors temporarily not supported for consumer group protocol
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersGenericGroupProtocolOnly"))
+  def testInterceptors(quorum: String, groupProtocol: String): Unit = {
     val appendStr = "mock"
     MockConsumerInterceptor.resetCounters()
     MockProducerInterceptor.resetCounters()
@@ -1250,9 +1270,10 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     MockProducerInterceptor.resetCounters()
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
-  @ValueSource(strings = Array("zk", "kraft", "kraft+kip848"))
-  def testAutoCommitIntercept(quorum: String): Unit = {
+  // Consumer interceptors temporarily not supported for consumer group protocol
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersGenericGroupProtocolOnly"))
+  def testAutoCommitIntercept(quorum: String, groupProtocol: String): Unit = {
     val topic2 = "topic2"
     createTopic(topic2, 2, brokerCount)
 
@@ -1301,9 +1322,10 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     MockConsumerInterceptor.resetCounters()
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
-  @ValueSource(strings = Array("zk", "kraft", "kraft+kip848"))
-  def testInterceptorsWithWrongKeyValue(quorum: String): Unit = {
+  // Consumer interceptors temporarily not supported for consumer group protocol
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersGenericGroupProtocolOnly"))
+  def testInterceptorsWithWrongKeyValue(quorum: String, groupProtocol: String): Unit = {
     val appendStr = "mock"
     // create producer with interceptor that has different key and value types from the producer
     val producerProps = new Properties()
@@ -1328,9 +1350,9 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     assertEquals(s"value will not be modified", new String(record.value()))
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
-  @ValueSource(strings = Array("zk", "kraft", "kraft+kip848"))
-  def testConsumeMessagesWithCreateTime(quorum: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
+  def testConsumeMessagesWithCreateTime(quorum: String, groupProtocol: String): Unit = {
     val numRecords = 50
     // Test non-compressed messages
     val producer = createProducer()
@@ -1346,9 +1368,9 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     consumeAndVerifyRecords(consumer = consumer, numRecords = numRecords, tp = tp2, startingOffset = 0)
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
-  @ValueSource(strings = Array("zk", "kraft", "kraft+kip848"))
-  def testConsumeMessagesWithLogAppendTime(quorum: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
+  def testConsumeMessagesWithLogAppendTime(quorum: String, groupProtocol: String): Unit = {
     val topicName = "testConsumeMessagesWithLogAppendTime"
     val topicProps = new Properties()
     topicProps.setProperty(TopicConfig.MESSAGE_TIMESTAMP_TYPE_CONFIG, "LogAppendTime")
@@ -1375,9 +1397,10 @@ class PlaintextConsumerTest extends BaseConsumerTest {
       startingTimestamp = startTime, timestampType = TimestampType.LOG_APPEND_TIME)
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
-  @ValueSource(strings = Array("zk", "kraft", "kraft+kip848"))
-  def testListTopics(quorum: String): Unit = {
+  // listTopics temporarily not supported for consumer group protocol
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersGenericGroupProtocolOnly"))
+  def testListTopics(quorum: String, groupProtocol: String): Unit = {
     val numParts = 2
     val topic1 = "part-test-topic-1"
     val topic2 = "part-test-topic-2"
@@ -1396,9 +1419,10 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     assertEquals(2, topics.get(topic3).size)
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
-  @ValueSource(strings = Array("zk", "kraft", "kraft+kip848"))
-  def testUnsubscribeTopic(quorum: String): Unit = {
+  // ConsumerRebalanceListener temporarily not supported for consumer group protocol
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersGenericGroupProtocolOnly"))
+  def testUnsubscribeTopic(quorum: String, groupProtocol: String): Unit = {
     this.consumerConfig.setProperty(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, "100") // timeout quickly to avoid slow test
     this.consumerConfig.setProperty(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, "30")
     val consumer = createConsumer()
@@ -1413,9 +1437,9 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     assertEquals(0, consumer.assignment.size())
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
-  @ValueSource(strings = Array("zk", "kraft", "kraft+kip848"))
-  def testPauseStateNotPreservedByRebalance(quorum: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
+  def testPauseStateNotPreservedByRebalance(quorum: String, groupProtocol: String): Unit = {
     this.consumerConfig.setProperty(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, "100") // timeout quickly to avoid slow test
     this.consumerConfig.setProperty(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, "30")
     val consumer = createConsumer()
@@ -1435,9 +1459,9 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     consumeAndVerifyRecords(consumer = consumer, numRecords = 0, startingOffset = 5, startingTimestamp = startingTimestamp)
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
-  @ValueSource(strings = Array("zk", "kraft", "kraft+kip848"))
-  def testCommitSpecifiedOffsets(quorum: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
+  def testCommitSpecifiedOffsets(quorum: String, groupProtocol: String): Unit = {
     val producer = createProducer()
     sendRecords(producer, numRecords = 5, tp)
     sendRecords(producer, numRecords = 7, tp2)
@@ -1463,9 +1487,10 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     assertEquals(7, consumer.committed(Set(tp2).asJava).get(tp2).offset)
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
-  @ValueSource(strings = Array("zk", "kraft", "kraft+kip848"))
-  def testAutoCommitOnRebalance(quorum: String): Unit = {
+  // ConsumerRebalanceListener temporarily not supported for consumer group protocol
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersGenericGroupProtocolOnly"))
+  def testAutoCommitOnRebalance(quorum: String, groupProtocol: String): Unit = {
     val topic2 = "topic2"
     createTopic(topic2, 2, brokerCount)
 
@@ -1503,9 +1528,10 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     assertEquals(500, consumer.committed(Set(tp2).asJava).get(tp2).offset)
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
-  @ValueSource(strings = Array("zk", "kraft", "kraft+kip848"))
-  def testPerPartitionLeadMetricsCleanUpWithSubscribe(quorum: String): Unit = {
+  // ConsumerRebalanceListener temporarily not supported for consumer group protocol
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersGenericGroupProtocolOnly"))
+  def testPerPartitionLeadMetricsCleanUpWithSubscribe(quorum: String, groupProtocol: String): Unit = {
     val numMessages = 1000
     val topic2 = "topic2"
     createTopic(topic2, 2, brokerCount)
@@ -1543,9 +1569,10 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     assertNull(consumer.metrics.get(new MetricName("records-lead", "consumer-fetch-manager-metrics", "", tags2)))
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
-  @ValueSource(strings = Array("zk", "kraft", "kraft+kip848"))
-  def testPerPartitionLagMetricsCleanUpWithSubscribe(quorum: String): Unit = {
+  // ConsumerRebalanceListener temporarily not supported for consumer group protocol
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersGenericGroupProtocolOnly"))
+  def testPerPartitionLagMetricsCleanUpWithSubscribe(quorum: String, groupProtocol: String): Unit = {
     val numMessages = 1000
     val topic2 = "topic2"
     createTopic(topic2, 2, brokerCount)
@@ -1584,9 +1611,9 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     assertNull(consumer.metrics.get(new MetricName("records-lag", "consumer-fetch-manager-metrics", "", tags2)))
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
-  @ValueSource(strings = Array("zk", "kraft", "kraft+kip848"))
-  def testPerPartitionLeadMetricsCleanUpWithAssign(quorum: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
+  def testPerPartitionLeadMetricsCleanUpWithAssign(quorum: String, groupProtocol: String): Unit = {
     val numMessages = 1000
     // Test assign
     // send some messages.
@@ -1614,9 +1641,9 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     assertNull(consumer.metrics.get(new MetricName("records-lead", "consumer-fetch-manager-metrics", "", tags)))
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
-  @ValueSource(strings = Array("zk", "kraft", "kraft+kip848"))
-  def testPerPartitionLagMetricsCleanUpWithAssign(quorum: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
+  def testPerPartitionLagMetricsCleanUpWithAssign(quorum: String, groupProtocol: String): Unit = {
     val numMessages = 1000
     // Test assign
     // send some messages.
@@ -1646,9 +1673,9 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     assertNull(consumer.metrics.get(new MetricName("records-lag", "consumer-fetch-manager-metrics", "", tags)))
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
-  @ValueSource(strings = Array("zk", "kraft", "kraft+kip848"))
-  def testPerPartitionLagMetricsWhenReadCommitted(quorum: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
+  def testPerPartitionLagMetricsWhenReadCommitted(quorum: String, groupProtocol: String): Unit = {
     val numMessages = 1000
     // send some messages.
     val producer = createProducer()
@@ -1670,9 +1697,9 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     assertNotNull(fetchLag)
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
-  @ValueSource(strings = Array("zk", "kraft", "kraft+kip848"))
-  def testPerPartitionLeadWithMaxPollRecords(quorum: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
+  def testPerPartitionLeadWithMaxPollRecords(quorum: String, groupProtocol: String): Unit = {
     val numMessages = 1000
     val maxPollRecords = 10
     val producer = createProducer()
@@ -1693,9 +1720,9 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     assertEquals(maxPollRecords, lead.metricValue().asInstanceOf[Double], s"The lead should be $maxPollRecords")
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
-  @ValueSource(strings = Array("zk", "kraft", "kraft+kip848"))
-  def testPerPartitionLagWithMaxPollRecords(quorum: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
+  def testPerPartitionLagWithMaxPollRecords(quorum: String, groupProtocol: String): Unit = {
     val numMessages = 1000
     val maxPollRecords = 10
     val producer = createProducer()
@@ -1717,9 +1744,9 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     assertEquals(numMessages - records.count, lag.metricValue.asInstanceOf[Double], epsilon, s"The lag should be ${numMessages - records.count}")
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
-  @ValueSource(strings = Array("zk", "kraft", "kraft+kip848"))
-  def testQuotaMetricsNotCreatedIfNoQuotasConfigured(quorum: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
+  def testQuotaMetricsNotCreatedIfNoQuotasConfigured(quorum: String, groupProtocol: String): Unit = {
     val numRecords = 1000
     val producer = createProducer()
     val startingTimestamp = System.currentTimeMillis()
@@ -1866,19 +1893,13 @@ class PlaintextConsumerTest extends BaseConsumerTest {
         s"The current assignment is ${consumer.assignment()}")
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
-  @ValueSource(strings = Array("zk", "kraft", "kraft+kip848"))
-  def testConsumingWithNullGroupId(quorum: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
+  def testConsumingWithNullGroupId(quorum: String, groupProtocol: String): Unit = {
     val topic = "test_topic"
-    val partition = 0;
+    val partition = 0
     val tp = new TopicPartition(topic, partition)
     createTopic(topic, 1, 1)
-
-    if (!isKRaftTest()) {
-      TestUtils.waitUntilTrue(() => {
-        this.zkClientOrNull.topicExists(topic)
-      }, "Failed to create topic")
-    }
 
     val producer = createProducer()
     producer.send(new ProducerRecord(topic, partition, "k1".getBytes, "v1".getBytes)).get()
@@ -1934,19 +1955,28 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     assertEquals(2, numRecords3, "Expected consumer3 to consume from offset 1")
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
-  @ValueSource(strings = Array("zk", "kraft", "kraft+kip848"))
-  def testConsumingWithEmptyGroupId(quorum: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
+  def testNullGroupIdNotSupportedIfCommitting(quorum: String, groupProtocol: String): Unit = {
+    val consumer1Config = new Properties(consumerConfig)
+    consumer1Config.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest")
+    consumer1Config.put(ConsumerConfig.CLIENT_ID_CONFIG, "consumer1")
+    val consumer1 = createConsumer(
+      configOverrides = consumer1Config,
+      configsToRemove = List(ConsumerConfig.GROUP_ID_CONFIG))
+
+    consumer1.assign(List(tp).asJava)
+    assertThrows(classOf[InvalidGroupIdException], () => consumer1.commitSync())
+  }
+
+  // Empty group ID only supported for generic group protocol
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersGenericGroupProtocolOnly"))
+  def testConsumingWithEmptyGroupId(quorum: String, groupProtocol: String): Unit = {
     val topic = "test_topic"
-    val partition = 0;
+    val partition = 0
     val tp = new TopicPartition(topic, partition)
     createTopic(topic, 1, 1)
-
-    if (!isKRaftTest()) {
-      TestUtils.waitUntilTrue(() => {
-        this.zkClientOrNull.topicExists(topic)
-      }, "Failed to create topic")
-    }
 
     val producer = createProducer()
     producer.send(new ProducerRecord(topic, partition, "k1".getBytes, "v1".getBytes)).get()
@@ -1986,9 +2016,26 @@ class PlaintextConsumerTest extends BaseConsumerTest {
       "Expected consumer2 to consume one message from offset 1, which is the committed offset of consumer1")
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
-  @ValueSource(strings = Array("zk", "kraft", "kraft+kip848"))
-  def testStaticConsumerDetectsNewPartitionCreatedAfterRestart(quorum: String): Unit = {
+  // Empty group ID not supported with consumer group protocol
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @CsvSource(Array(
+    "kraft+kip848, consumer"
+  ))
+  def testEmptyGroupIdNotSupported(quorum:String, groupProtocol: String): Unit = {
+    val consumer1Config = new Properties(consumerConfig)
+    consumer1Config.put(ConsumerConfig.GROUP_ID_CONFIG, "")
+    consumer1Config.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest")
+    consumer1Config.put(ConsumerConfig.CLIENT_ID_CONFIG, "consumer1")
+    val consumer1 = createConsumer(configOverrides = consumer1Config)
+
+    consumer1.assign(List(tp).asJava)
+    assertThrows(classOf[InvalidGroupIdException], () => consumer1.commitSync())
+  }
+
+  // Static membership temporarily not supported in consumer group protocol
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersGenericGroupProtocolOnly"))
+  def testStaticConsumerDetectsNewPartitionCreatedAfterRestart(quorum:String, groupProtocol: String): Unit = {
     val foo = "foo"
     val foo0 = new TopicPartition(foo, 0)
     val foo1 = new TopicPartition(foo, 1)
@@ -2014,5 +2061,210 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     awaitAssignment(consumer2, Set(foo0, foo1))
 
     consumer2.close()
+  }
+
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
+  def testAssignAndCommitAsyncNotCommitted(quorum:String, groupProtocol: String): Unit = {
+    val props = new Properties()
+    val consumer = createConsumer(configOverrides = props)
+    val producer = createProducer()
+    val numRecords = 10000
+    val startingTimestamp = System.currentTimeMillis()
+    val cb = new CountConsumerCommitCallback
+    sendRecords(producer, numRecords, tp, startingTimestamp = startingTimestamp)
+    consumer.assign(List(tp).asJava)
+    consumer.commitAsync(cb)
+    TestUtils.pollUntilTrue(consumer, () => cb.successCount >= 1 || cb.lastError.isDefined,
+      "Failed to observe commit callback before timeout", waitTimeMs = 10000)
+    val committedOffset = consumer.committed(Set(tp).asJava)
+    assertNotNull(committedOffset)
+    // No valid fetch position due to the absence of consumer.poll; and therefore no offset was committed to
+    // tp. The committed offset should be null. This is intentional.
+    assertNull(committedOffset.get(tp))
+    assertTrue(consumer.assignment.contains(tp))
+  }
+
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
+  def testAssignAndCommitSyncNotCommitted(quorum:String, groupProtocol: String): Unit = {
+    val props = new Properties()
+    val consumer = createConsumer(configOverrides = props)
+    val producer = createProducer()
+    val numRecords = 10000
+    val startingTimestamp = System.currentTimeMillis()
+    sendRecords(producer, numRecords, tp, startingTimestamp = startingTimestamp)
+    consumer.assign(List(tp).asJava)
+    consumer.commitSync()
+    val committedOffset = consumer.committed(Set(tp).asJava)
+    assertNotNull(committedOffset)
+    // No valid fetch position due to the absence of consumer.poll; and therefore no offset was committed to
+    // tp. The committed offset should be null. This is intentional.
+    assertNull(committedOffset.get(tp))
+    assertTrue(consumer.assignment.contains(tp))
+  }
+
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
+  def testAssignAndCommitSyncAllConsumed(quorum:String, groupProtocol: String): Unit = {
+    val numRecords = 10000
+
+    val producer = createProducer()
+    val startingTimestamp = System.currentTimeMillis()
+    sendRecords(producer, numRecords, tp, startingTimestamp = startingTimestamp)
+
+    val props = new Properties()
+    val consumer = createConsumer(configOverrides = props)
+    consumer.assign(List(tp).asJava)
+    consumer.seek(tp, 0)
+    consumeAndVerifyRecords(consumer = consumer, numRecords, startingOffset = 0, startingTimestamp = startingTimestamp)
+
+    consumer.commitSync()
+    val committedOffset = consumer.committed(Set(tp).asJava)
+    assertNotNull(committedOffset)
+    assertNotNull(committedOffset.get(tp))
+    assertEquals(numRecords, committedOffset.get(tp).offset())
+  }
+
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
+  def testAssignAndConsume(quorum:String, groupProtocol: String): Unit = {
+    val numRecords = 10
+
+    val producer = createProducer()
+    val startingTimestamp = System.currentTimeMillis()
+    sendRecords(producer, numRecords, tp, startingTimestamp = startingTimestamp)
+
+    val props = new Properties()
+    val consumer = createConsumer(configOverrides = props,
+      configsToRemove = List(ConsumerConfig.GROUP_ID_CONFIG))
+    consumer.assign(List(tp).asJava)
+    consumeAndVerifyRecords(consumer = consumer, numRecords, startingOffset = 0, startingTimestamp = startingTimestamp)
+
+    assertEquals(numRecords, consumer.position(tp))
+  }
+
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
+  def testAssignAndConsumeSkippingPosition(quorum:String, groupProtocol: String): Unit = {
+    val numRecords = 10
+
+    val producer = createProducer()
+    val startingTimestamp = System.currentTimeMillis()
+    sendRecords(producer, numRecords, tp, startingTimestamp = startingTimestamp)
+
+    val props = new Properties()
+    val consumer = createConsumer(configOverrides = props,
+      configsToRemove = List(ConsumerConfig.GROUP_ID_CONFIG))
+    consumer.assign(List(tp).asJava)
+    val offset = 1
+    consumer.seek(tp, offset)
+    consumeAndVerifyRecords(consumer = consumer, numRecords - offset, startingOffset = offset,
+      startingKeyAndValueIndex = offset, startingTimestamp = startingTimestamp + offset)
+
+    assertEquals(numRecords, consumer.position(tp))
+  }
+
+  // partitionsFor not implemented in consumer group protocol and this test requires ZK also
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @CsvSource(Array(
+    "zk, generic"
+  ))
+  def testAssignAndConsumeWithLeaderChangeValidatingPositions(quorum:String, groupProtocol: String): Unit = {
+    val numRecords = 10
+    val producer = createProducer()
+    val startingTimestamp = System.currentTimeMillis()
+    sendRecords(producer, numRecords, tp, startingTimestamp = startingTimestamp)
+    val props = new Properties()
+    val consumer = createConsumer(configOverrides = props,
+      configsToRemove = List(ConsumerConfig.GROUP_ID_CONFIG))
+    consumer.assign(List(tp).asJava)
+    consumeAndVerifyRecords(consumer = consumer, numRecords, startingOffset = 0, startingTimestamp = startingTimestamp)
+
+    // Force leader epoch change to trigger position validation
+    var parts: mutable.Buffer[PartitionInfo] = null
+    while (parts == null)
+      parts = consumer.partitionsFor(tp.topic()).asScala
+    val leader = parts.head.leader().id()
+    this.servers(leader).shutdown()
+    this.servers(leader).startup()
+
+    // Consume after leader change
+    sendRecords(producer, numRecords, tp, startingTimestamp = startingTimestamp)
+    consumeAndVerifyRecords(consumer = consumer, numRecords, startingOffset = 10,
+      startingTimestamp = startingTimestamp)
+  }
+
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
+  def testAssignAndFetchCommittedOffsets(quorum:String, groupProtocol: String): Unit = {
+    val numRecords = 100
+    val startingTimestamp = System.currentTimeMillis()
+    val producer = createProducer()
+    sendRecords(producer, numRecords, tp, startingTimestamp = startingTimestamp)
+    val props = new Properties()
+    val consumer = createConsumer(configOverrides = props)
+    consumer.assign(List(tp).asJava)
+    // First consumer consumes and commits offsets
+    consumer.seek(tp, 0)
+    consumeAndVerifyRecords(consumer = consumer, numRecords, startingOffset = 0,
+      startingTimestamp = startingTimestamp)
+    consumer.commitSync()
+    assertEquals(numRecords, consumer.committed(Set(tp).asJava).get(tp).offset)
+    // We should see the committed offsets from another consumer
+    val anotherConsumer = createConsumer(configOverrides = props)
+    anotherConsumer.assign(List(tp).asJava)
+    assertEquals(numRecords, anotherConsumer.committed(Set(tp).asJava).get(tp).offset)
+  }
+
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
+  def testAssignAndConsumeFromCommittedOffsets(quorum:String, groupProtocol: String): Unit = {
+    val producer = createProducer()
+    val numRecords = 100
+    val startingTimestamp = System.currentTimeMillis()
+    sendRecords(producer, numRecords = numRecords, tp, startingTimestamp = startingTimestamp)
+
+    // Commit offset with first consumer
+    val props = new Properties()
+    props.setProperty(ConsumerConfig.GROUP_ID_CONFIG, "group1")
+    val consumer = createConsumer(configOverrides = props)
+    consumer.assign(List(tp).asJava)
+    val offset = 10
+    consumer.commitSync(Map[TopicPartition, OffsetAndMetadata]((tp, new OffsetAndMetadata(offset)))
+      .asJava)
+    assertEquals(offset, consumer.committed(Set(tp).asJava).get(tp).offset)
+    consumer.close()
+
+    // Consume from committed offsets with another consumer in same group
+    val anotherConsumer = createConsumer(configOverrides = props)
+    assertEquals(offset, anotherConsumer.committed(Set(tp).asJava).get(tp).offset)
+    anotherConsumer.assign(List(tp).asJava)
+    consumeAndVerifyRecords(consumer = anotherConsumer, numRecords - offset,
+      startingOffset = offset, startingKeyAndValueIndex = offset,
+      startingTimestamp = startingTimestamp + offset)
+  }
+
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
+  def testAssignAndRetrievingCommittedOffsetsMultipleTimes(quorum:String, groupProtocol: String): Unit = {
+    val numRecords = 100
+    val startingTimestamp = System.currentTimeMillis()
+    val producer = createProducer()
+    sendRecords(producer, numRecords, tp, startingTimestamp = startingTimestamp)
+
+    val props = new Properties()
+    val consumer = createConsumer(configOverrides = props)
+    consumer.assign(List(tp).asJava)
+
+    // Consume and commit offsets
+    consumer.seek(tp, 0)
+    consumeAndVerifyRecords(consumer = consumer, numRecords, startingOffset = 0,
+      startingTimestamp = startingTimestamp)
+    consumer.commitSync()
+
+    // Check committed offsets twice with same consumer
+    assertEquals(numRecords, consumer.committed(Set(tp).asJava).get(tp).offset)
+    assertEquals(numRecords, consumer.committed(Set(tp).asJava).get(tp).offset)
   }
 }

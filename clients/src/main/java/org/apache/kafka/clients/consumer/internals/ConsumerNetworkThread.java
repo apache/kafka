@@ -32,8 +32,8 @@ import org.slf4j.Logger;
 
 import java.io.Closeable;
 import java.time.Duration;
-import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
@@ -252,14 +252,20 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
     }
 
     void cleanup() {
-        log.trace("Closing the consumer network thread");
-        Timer timer = time.timer(closeTimeout);
-        maybeAutoCommitAndLeaveGroup(timer);
-        runAtClose(requestManagers.entries(), networkClientDelegate, timer);
-        closeQuietly(requestManagers, "request managers");
-        closeQuietly(networkClientDelegate, "network client delegate");
-        closeQuietly(applicationEventProcessor, "application event processor");
-        log.debug("Closed the consumer network thread");
+        try {
+            log.trace("Closing the consumer network thread");
+            Timer timer = time.timer(closeTimeout);
+            maybeAutocommitOnClose(timer);
+            runAtClose(requestManagers.entries(), networkClientDelegate, timer);
+            maybeLeaveGroup(timer);
+        } catch (Exception e) {
+            log.error("Unexpected error during shutdown.  Proceed with closing.", e);
+        } finally {
+            closeQuietly(requestManagers, "request managers");
+            closeQuietly(networkClientDelegate, "network client delegate");
+            closeQuietly(applicationEventProcessor, "application event processor");
+            log.debug("Closed the consumer network thread");
+        }
     }
 
     /**
@@ -269,60 +275,56 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
      * completed in time.
      */
     // Visible for testing
-    void maybeAutoCommitAndLeaveGroup(final Timer timer) {
+    void maybeAutocommitOnClose(final Timer timer) {
         if (!requestManagers.coordinatorRequestManager.isPresent())
             return;
 
+        if (!requestManagers.commitRequestManager.isPresent()) {
+            log.error("Expecting a CommitRequestManager but the object was never initialized. Shutting down.");
+            return;
+        }
+
+        if (!requestManagers.commitRequestManager.get().canAutoCommit()) {
+            return;
+        }
+
         ensureCoordinatorReady(timer);
-        List<NetworkClientDelegate.UnsentRequest> tasks = closingRequests();
-        networkClientDelegate.addAll(tasks);
+        NetworkClientDelegate.UnsentRequest autocommitRequest =
+            requestManagers.commitRequestManager.get().createCommitAllConsumedRequest();
+        networkClientDelegate.add(autocommitRequest);
         do {
             long currentTimeMs = timer.currentTimeMs();
             ensureCoordinatorReady(timer);
             networkClientDelegate.poll(timer.remainingMs(), currentTimeMs);
-        } while (timer.notExpired() && !tasks.stream().allMatch(v -> v.future().isDone()));
+        } while (timer.notExpired() && !autocommitRequest.future().isDone());
+    }
+
+    void maybeLeaveGroup(final Timer timer) {
+        // TODO: Leave group upon closing the consumer
     }
 
     private void ensureCoordinatorReady(final Timer timer) {
-        while (!coordinatorReady()) {
+        while (!coordinatorReady() && timer.notExpired()) {
             findCoordinatorSync(timer);
         }
     }
 
     private boolean coordinatorReady() {
-        CoordinatorRequestManager coordinatorRequestManager = requestManagers.coordinatorRequestManager.get();
+        CoordinatorRequestManager coordinatorRequestManager = requestManagers.coordinatorRequestManager.orElseThrow(
+                () -> new IllegalStateException("CoordinatorRequestManager uninitialized."));
         Optional<Node> coordinator = coordinatorRequestManager.coordinator();
         return coordinator.isPresent() && !networkClientDelegate.isUnavailable(coordinator.get());
     }
 
     private void findCoordinatorSync(final Timer timer) {
-        CoordinatorRequestManager coordinatorRequestManager = requestManagers.coordinatorRequestManager.get();
-        NetworkClientDelegate.PollResult request = coordinatorRequestManager.poll(timer.currentTimeMs());
-        networkClientDelegate.addAll(request);
-        CompletableFuture<ClientResponse> findCoordinatorRequest = request.unsentRequests.get(0).future();
+        CoordinatorRequestManager coordinatorRequestManager = requestManagers.coordinatorRequestManager.orElseThrow(
+                () -> new IllegalStateException("CoordinatorRequestManager uninitialized."));
+        NetworkClientDelegate.UnsentRequest request = coordinatorRequestManager.makeFindCoordinatorRequest(timer.currentTimeMs());
+        networkClientDelegate.addAll(Collections.singletonList(request));
+        CompletableFuture<ClientResponse> findCoordinatorRequest = request.future();
         while (timer.notExpired() && !findCoordinatorRequest.isDone()) {
             networkClientDelegate.poll(timer.remainingMs(), timer.currentTimeMs());
             timer.update();
         }
-    }
-
-    private Optional<NetworkClientDelegate.UnsentRequest> maybeAutoCommitOnClose() {
-        if (!requestManagers.commitRequestManager.isPresent()) {
-            return Optional.empty();
-        }
-        return requestManagers.commitRequestManager.get().maybeCreateAutoCommitRequest();
-    }
-
-
-    /**
-     * Return two closing requests if presented.  The closing requests are:
-     *   1. AutoCommit
-     *   2. Leave group heartbeat (with epoch = -1/-2)
-     */
-    private List<NetworkClientDelegate.UnsentRequest> closingRequests() {
-        List<NetworkClientDelegate.UnsentRequest> closingRequests = new ArrayList<>();
-        maybeAutoCommitOnClose().ifPresent(closingRequests::add);
-        // TODO: We need to send a closing heartbeat before closing
-        return closingRequests;
     }
 }

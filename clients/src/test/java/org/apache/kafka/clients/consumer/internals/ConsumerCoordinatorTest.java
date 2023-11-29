@@ -3568,8 +3568,6 @@ public abstract class ConsumerCoordinatorTest {
             assertFalse(client.hasPendingResponses());
             assertEquals(1, client.inFlightRequestCount());
 
-            System.out.println(client.requests());
-
             // Retry join should then succeed
             client.respond(joinGroupFollowerResponse(generationId, memberId, "leader", Errors.NONE));
             client.prepareResponse(syncGroupResponse(partitions, Errors.NONE));
