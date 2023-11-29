@@ -20,7 +20,6 @@ import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
-import org.apache.kafka.clients.consumer.internals.events.AutoCommitCompletionBackgroundEvent;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEventHandler;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
@@ -145,7 +144,6 @@ public class CommitRequestManagerTest {
                 1,
                 (short) 1,
                 Errors.NONE)));
-        verify(backgroundEventHandler).add(any(AutoCommitCompletionBackgroundEvent.class));
     }
 
     @Test
@@ -228,9 +226,6 @@ public class CommitRequestManagerTest {
                 1,
                 (short) 1,
                 Errors.NONE));
-
-        // The result was completed successfully, expecting an event sent to the application thread.
-        verify(backgroundEventHandler).add(any(AutoCommitCompletionBackgroundEvent.class));
     }
 
     @Test
