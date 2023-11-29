@@ -73,7 +73,7 @@ public class LeaderEpochFileCache {
         EpochEntry entry = new EpochEntry(epoch, startOffset);
         if (assign(entry)) {
             log.debug("Appended new epoch entry {}. Cache now contains {} entries.", entry, epochs.size());
-            flush();
+            writeToFile(true);
         }
     }
 
@@ -83,7 +83,7 @@ public class LeaderEpochFileCache {
                 log.debug("Appended new epoch entry {}. Cache now contains {} entries.", entry, epochs.size());
             }
         });
-        if (!entries.isEmpty()) flush();
+        if (!entries.isEmpty()) writeToFile(true);
     }
 
     private boolean isUpdateNeeded(EpochEntry entry) {
@@ -150,11 +150,6 @@ public class LeaderEpochFileCache {
         }
 
         return removedEpochs;
-    }
-
-    public LeaderEpochFileCache cloneWithLeaderEpochCheckpoint(LeaderEpochCheckpoint leaderEpochCheckpoint) {
-        flushTo(leaderEpochCheckpoint);
-        return new LeaderEpochFileCache(this.topicPartition, leaderEpochCheckpoint);
     }
 
     public boolean nonEmpty() {
@@ -318,7 +313,14 @@ public class LeaderEpochFileCache {
             if (endOffset >= 0 && epochEntry.isPresent() && epochEntry.get().startOffset >= endOffset) {
                 List<EpochEntry> removedEntries = removeFromEnd(x -> x.startOffset >= endOffset);
 
-                flush();
+                // We intentionally don't force flushing change to the device here because:
+                // - To avoid fsync latency
+                //   * fsync latency could be huge on a disk glitch, which is not rare in spinning drives
+                //   * This method is called by ReplicaFetcher threads, which could block replica fetching
+                //     then causing ISR shrink or high produce response time degradation in remote scope on high fsync latency.
+                // - Even when stale epochs remained in LeaderEpoch file due to the unclean shutdown, it will be handled by
+                //   another truncateFromEnd call on log loading procedure so it won't be a problem
+                writeToFile(false);
 
                 log.debug("Cleared entries {} from epoch cache after truncating to end offset {}, leaving {} entries in the cache.", removedEntries, endOffset, epochs.size());
             }
@@ -345,7 +347,14 @@ public class LeaderEpochFileCache {
                 EpochEntry updatedFirstEntry = new EpochEntry(firstBeforeStartOffset.epoch, startOffset);
                 epochs.put(updatedFirstEntry.epoch, updatedFirstEntry);
 
-                flush();
+                // We intentionally don't force flushing change to the device here because:
+                // - To avoid fsync latency
+                //   * fsync latency could be huge on a disk glitch, which is not rare in spinning drives
+                //   * This method is called as part of deleteRecords with holding UnifiedLog#lock.
+                //      - Meanwhile all produces against the partition will be blocked, which causes req-handlers to exhaust
+                // - Even when stale epochs remained in LeaderEpoch file due to the unclean shutdown, it will be recovered by
+                //   another truncateFromStart call on log loading procedure so it won't be a problem
+                writeToFile(false);
 
                 log.debug("Cleared entries {} and rewrote first entry {} after truncating to start offset {}, leaving {} in the cache.", removedEntries, updatedFirstEntry, startOffset, epochs.size());
             }
@@ -394,7 +403,7 @@ public class LeaderEpochFileCache {
         lock.writeLock().lock();
         try {
             epochs.clear();
-            flush();
+            writeToFile(true);
         } finally {
             lock.writeLock().unlock();
         }
@@ -431,16 +440,12 @@ public class LeaderEpochFileCache {
         }
     }
 
-    private void flushTo(LeaderEpochCheckpoint leaderEpochCheckpoint) {
+    private void writeToFile(boolean sync) {
         lock.readLock().lock();
         try {
-            leaderEpochCheckpoint.write(epochs.values());
+            checkpoint.write(epochs.values(), sync);
         } finally {
             lock.readLock().unlock();
         }
-    }
-
-    private void flush() {
-        flushTo(this.checkpoint);
     }
 }
