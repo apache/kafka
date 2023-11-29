@@ -283,7 +283,9 @@ class KafkaServer(
               setClusterId(_clusterId).
               setNodeId(config.brokerId)
             if (!builder.directoryId().isPresent()) {
-              builder.setDirectoryId(copier.generateValidDirectoryId())
+              if (config.migrationEnabled) {
+                builder.setDirectoryId(copier.generateValidDirectoryId())
+              }
             }
             copier.setLogDirProps(logDir, builder.build())
           })
