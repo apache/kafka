@@ -248,6 +248,37 @@ public class StandaloneHerderTest {
     }
 
     @Test
+    public void testCreateConnectorWithStoppedInitialState() throws Exception {
+        connector = PowerMock.createMock(BogusSinkConnector.class);
+        Map<String, String> config = connectorConfig(SourceSink.SINK);
+        Connector connectorMock = PowerMock.createMock(SinkConnector.class);
+        expectConfigValidation(connectorMock, false, config);
+        EasyMock.expect(plugins.newConnector(EasyMock.anyString())).andReturn(connectorMock);
+
+        // Only the connector should be created; we expect no tasks to be spawned for a connector created with a paused or stopped initial state
+        Capture<Callback<TargetState>> onStart = EasyMock.newCapture();
+        worker.startConnector(eq(CONNECTOR_NAME), eq(config), EasyMock.anyObject(HerderConnectorContext.class),
+            eq(herder), eq(TargetState.STOPPED), EasyMock.capture(onStart));
+        EasyMock.expectLastCall().andAnswer(() -> {
+            onStart.getValue().onCompletion(null, TargetState.STOPPED);
+            return true;
+        });
+        EasyMock.expect(worker.isRunning(CONNECTOR_NAME)).andReturn(true).anyTimes();
+        EasyMock.expect(herder.connectorType(anyObject())).andReturn(ConnectorType.SINK);
+
+        PowerMock.replayAll();
+
+        herder.putConnectorConfig(CONNECTOR_NAME, config, TargetState.STOPPED, false, createCallback);
+        Herder.Created<ConnectorInfo> connectorInfo = createCallback.get(1000L, TimeUnit.SECONDS);
+        assertEquals(
+            new ConnectorInfo(CONNECTOR_NAME, connectorConfig(SourceSink.SINK), Collections.emptyList(), ConnectorType.SINK),
+            connectorInfo.result()
+        );
+
+        PowerMock.verifyAll();
+    }
+
+    @Test
     public void testDestroyConnector() throws Exception {
         connector = PowerMock.createMock(BogusSourceConnector.class);
         expectAdd(SourceSink.SOURCE);

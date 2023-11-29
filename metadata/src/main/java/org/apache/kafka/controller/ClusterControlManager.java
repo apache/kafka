@@ -449,10 +449,18 @@ public class ClusterControlManager {
         }
         // Update broker registrations.
         BrokerRegistration prevRegistration = brokerRegistrations.put(brokerId,
-                new BrokerRegistration(brokerId, record.brokerEpoch(),
-                    record.incarnationId(), listenerInfo.listeners(), features,
-                    Optional.ofNullable(record.rack()), record.fenced(),
-                    record.inControlledShutdown(), record.isMigratingZkBroker()));
+            new BrokerRegistration.Builder().
+                setId(brokerId).
+                setEpoch(record.brokerEpoch()).
+                setIncarnationId(record.incarnationId()).
+                setListeners(listenerInfo.listeners()).
+                setSupportedFeatures(features).
+                setRack(Optional.ofNullable(record.rack())).
+                setFenced(record.fenced()).
+                setInControlledShutdown(record.inControlledShutdown()).
+                setIsMigratingZkBroker(record.isMigratingZkBroker()).
+                setDirectories(record.logDirs()).
+                    build());
         if (heartbeatManager != null) {
             if (prevRegistration != null) heartbeatManager.remove(brokerId);
             heartbeatManager.register(brokerId, record.fenced());

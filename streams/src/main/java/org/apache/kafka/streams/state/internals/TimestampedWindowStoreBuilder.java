@@ -20,10 +20,7 @@ import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.kstream.Windowed;
-import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
-import org.apache.kafka.streams.processor.StateStoreContext;
-import org.apache.kafka.streams.query.Position;
 import org.apache.kafka.streams.query.PositionBound;
 import org.apache.kafka.streams.query.Query;
 import org.apache.kafka.streams.query.QueryConfig;
@@ -123,54 +120,41 @@ public class TimestampedWindowStoreBuilder<K, V>
 
 
     private final static class InMemoryTimestampedWindowStoreMarker
+        extends WrappedStateStore<WindowStore<Bytes, byte[]>, Bytes, byte[]>
         implements WindowStore<Bytes, byte[]>, TimestampedBytesStore {
 
-        private final WindowStore<Bytes, byte[]> wrapped;
-
         private InMemoryTimestampedWindowStoreMarker(final WindowStore<Bytes, byte[]> wrapped) {
+            super(wrapped);
             if (wrapped.persistent()) {
                 throw new IllegalArgumentException("Provided store must not be a persistent store, but it is.");
             }
-            this.wrapped = wrapped;
-        }
-
-        @Deprecated
-        @Override
-        public void init(final ProcessorContext context,
-                         final StateStore root) {
-            wrapped.init(context, root);
-        }
-
-        @Override
-        public void init(final StateStoreContext context, final StateStore root) {
-            wrapped.init(context, root);
         }
 
         @Override
         public void put(final Bytes key,
                         final byte[] value,
                         final long windowStartTimestamp) {
-            wrapped.put(key, value, windowStartTimestamp);
+            wrapped().put(key, value, windowStartTimestamp);
         }
 
         @Override
         public byte[] fetch(final Bytes key,
                             final long time) {
-            return wrapped.fetch(key, time);
+            return wrapped().fetch(key, time);
         }
 
         @Override
         public WindowStoreIterator<byte[]> fetch(final Bytes key,
                                                  final long timeFrom,
                                                  final long timeTo) {
-            return wrapped.fetch(key, timeFrom, timeTo);
+            return wrapped().fetch(key, timeFrom, timeTo);
         }
 
         @Override
         public WindowStoreIterator<byte[]> backwardFetch(final Bytes key,
                                                          final long timeFrom,
                                                          final long timeTo) {
-            return wrapped.backwardFetch(key, timeFrom, timeTo);
+            return wrapped().backwardFetch(key, timeFrom, timeTo);
         }
 
         @Override
@@ -178,7 +162,7 @@ public class TimestampedWindowStoreBuilder<K, V>
                                                                final Bytes keyTo,
                                                                final long timeFrom,
                                                                final long timeTo) {
-            return wrapped.fetch(keyFrom, keyTo, timeFrom, timeTo);
+            return wrapped().fetch(keyFrom, keyTo, timeFrom, timeTo);
         }
 
         @Override
@@ -186,44 +170,29 @@ public class TimestampedWindowStoreBuilder<K, V>
                                                                        final Bytes keyTo,
                                                                        final long timeFrom,
                                                                        final long timeTo) {
-            return wrapped.backwardFetch(keyFrom, keyTo, timeFrom, timeTo);
+            return wrapped().backwardFetch(keyFrom, keyTo, timeFrom, timeTo);
         }
 
         @Override
         public KeyValueIterator<Windowed<Bytes>, byte[]> fetchAll(final long timeFrom,
                                                                   final long timeTo) {
-            return wrapped.fetchAll(timeFrom, timeTo);
+            return wrapped().fetchAll(timeFrom, timeTo);
         }
 
         @Override
         public KeyValueIterator<Windowed<Bytes>, byte[]> backwardFetchAll(final long timeFrom,
                                                                           final long timeTo) {
-            return wrapped.backwardFetchAll(timeFrom, timeTo);
+            return wrapped().backwardFetchAll(timeFrom, timeTo);
         }
 
         @Override
         public KeyValueIterator<Windowed<Bytes>, byte[]> all() {
-            return wrapped.all();
+            return wrapped().all();
         }
 
         @Override
         public KeyValueIterator<Windowed<Bytes>, byte[]> backwardAll() {
-            return wrapped.backwardAll();
-        }
-
-        @Override
-        public void flush() {
-            wrapped.flush();
-        }
-
-        @Override
-        public void close() {
-            wrapped.close();
-        }
-
-        @Override
-        public boolean isOpen() {
-            return wrapped.isOpen();
+            return wrapped().backwardAll();
         }
 
         @Override
@@ -232,22 +201,12 @@ public class TimestampedWindowStoreBuilder<K, V>
             final QueryConfig config) {
 
             final long start = config.isCollectExecutionInfo() ? System.nanoTime() : -1L;
-            final QueryResult<R> result = wrapped.query(query, positionBound, config);
+            final QueryResult<R> result = wrapped().query(query, positionBound, config);
             if (config.isCollectExecutionInfo()) {
                 final long end = System.nanoTime();
                 result.addExecutionInfo("Handled in " + getClass() + " in " + (end - start) + "ns");
             }
             return result;
-        }
-
-        @Override
-        public Position getPosition() {
-            return wrapped.getPosition();
-        }
-
-        @Override
-        public String name() {
-            return wrapped.name();
         }
 
         @Override

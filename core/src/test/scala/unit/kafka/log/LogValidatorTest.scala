@@ -177,7 +177,7 @@ class LogValidatorTest {
     val expectedMaxTimestampOffset = if (magic >= RecordBatch.MAGIC_VALUE_V2) 2 else 0
     assertEquals(expectedMaxTimestampOffset, validatedResults.shallowOffsetOfMaxTimestampMs,
       s"The offset of max timestamp should be $expectedMaxTimestampOffset")
-    verifyRecordConversionStats(validatedResults.recordConversionStats, numConvertedRecords = 0, records,
+    verifyRecordValidationStats(validatedResults.recordValidationStats, numConvertedRecords = 0, records,
       compressed = false)
   }
 
@@ -224,8 +224,8 @@ class LogValidatorTest {
     assertTrue(validatedResults.messageSizeMaybeChanged,
       "Message size may have been changed")
 
-    val stats = validatedResults.recordConversionStats
-    verifyRecordConversionStats(stats, numConvertedRecords = 3, records, compressed = true)
+    val stats = validatedResults.recordValidationStats
+    verifyRecordValidationStats(stats, numConvertedRecords = 3, records, compressed = true)
   }
 
   @Test
@@ -276,7 +276,7 @@ class LogValidatorTest {
     assertFalse(validatedResults.messageSizeMaybeChanged,
       "Message size should not have been changed")
 
-    verifyRecordConversionStats(validatedResults.recordConversionStats, numConvertedRecords = 0, records,
+    verifyRecordValidationStats(validatedResults.recordValidationStats, numConvertedRecords = 0, records,
       compressed = true)
   }
 
@@ -350,11 +350,14 @@ class LogValidatorTest {
         (RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, RecordBatch.NO_SEQUENCE, false,
           RecordBatch.NO_PARTITION_LEADER_EPOCH)
 
-    val records = MemoryRecords.withRecords(magic, 0L, CompressionType.GZIP, TimestampType.CREATE_TIME, producerId,
-      producerEpoch, baseSequence, partitionLeaderEpoch, isTransactional,
+    val recordList = List(
       new SimpleRecord(timestampSeq(0), "hello".getBytes),
       new SimpleRecord(timestampSeq(1), "there".getBytes),
-      new SimpleRecord(timestampSeq(2), "beautiful".getBytes))
+      new SimpleRecord(timestampSeq(2), "beautiful".getBytes)
+    )
+
+    val records = MemoryRecords.withRecords(magic, 0L, CompressionType.GZIP, TimestampType.CREATE_TIME, producerId,
+      producerEpoch, baseSequence, partitionLeaderEpoch, isTransactional, recordList: _*)
 
     val offsetCounter = PrimitiveRef.ofLong(0);
     val validatingResults = new LogValidator(records,
@@ -399,12 +402,20 @@ class LogValidatorTest {
     assertEquals(i, offsetCounter.value);
     assertEquals(now + 1, validatingResults.maxTimestampMs,
       s"Max timestamp should be ${now + 1}")
-    assertEquals(1, validatingResults.shallowOffsetOfMaxTimestampMs,
+
+    val expectedShallowOffsetOfMaxTimestamp = if (magic >= RecordVersion.V2.value) {
+      // v2 records are always batched, even when not compressed.
+      // the shallow offset of max timestamp is the last offset of the batch
+      recordList.size - 1
+    } else {
+      1
+    }
+    assertEquals(expectedShallowOffsetOfMaxTimestamp, validatingResults.shallowOffsetOfMaxTimestampMs,
       s"Offset of max timestamp should be 1")
+
     assertFalse(validatingResults.messageSizeMaybeChanged,
       "Message size should not have been changed")
-
-    verifyRecordConversionStats(validatingResults.recordConversionStats, numConvertedRecords = 0, records,
+    verifyRecordValidationStats(validatingResults.recordValidationStats, numConvertedRecords = 0, records,
       compressed = false)
   }
 
@@ -478,7 +489,7 @@ class LogValidatorTest {
     assertTrue(validatingResults.messageSizeMaybeChanged,
       "Message size should have been changed")
 
-    verifyRecordConversionStats(validatingResults.recordConversionStats, numConvertedRecords = 3, records,
+    verifyRecordValidationStats(validatingResults.recordValidationStats, numConvertedRecords = 3, records,
       compressed = true)
   }
 
@@ -529,7 +540,7 @@ class LogValidatorTest {
       s"Offset of max timestamp should be ${validatedRecords.records.asScala.size - 1}")
     assertTrue(validatedResults.messageSizeMaybeChanged, "Message size should have been changed")
 
-    verifyRecordConversionStats(validatedResults.recordConversionStats, numConvertedRecords = 3, records,
+    verifyRecordValidationStats(validatedResults.recordValidationStats, numConvertedRecords = 3, records,
       compressed = true)
   }
 
@@ -576,7 +587,7 @@ class LogValidatorTest {
       s"Offset of max timestamp should be ${validatedRecords.records.asScala.size - 1}")
     assertTrue(validatedResults.messageSizeMaybeChanged, "Message size should have been changed")
 
-    verifyRecordConversionStats(validatedResults.recordConversionStats, numConvertedRecords = 3, records,
+    verifyRecordValidationStats(validatedResults.recordValidationStats, numConvertedRecords = 3, records,
       compressed = true)
   }
 
@@ -596,11 +607,14 @@ class LogValidatorTest {
         (RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, RecordBatch.NO_SEQUENCE, false,
           RecordBatch.NO_PARTITION_LEADER_EPOCH)
 
-    val records = MemoryRecords.withRecords(magic, 0L, CompressionType.GZIP, TimestampType.CREATE_TIME, producerId,
-      producerEpoch, baseSequence, partitionLeaderEpoch, isTransactional,
+    val recordList = List(
       new SimpleRecord(timestampSeq(0), "hello".getBytes),
       new SimpleRecord(timestampSeq(1), "there".getBytes),
-      new SimpleRecord(timestampSeq(2), "beautiful".getBytes))
+      new SimpleRecord(timestampSeq(2), "beautiful".getBytes)
+    )
+
+    val records = MemoryRecords.withRecords(magic, 0L, CompressionType.GZIP, TimestampType.CREATE_TIME, producerId,
+      producerEpoch, baseSequence, partitionLeaderEpoch, isTransactional, recordList: _*)
 
     val validatedResults = new LogValidator(records,
       topicPartition,
@@ -639,11 +653,15 @@ class LogValidatorTest {
       }
     }
     assertEquals(now + 1, validatedResults.maxTimestampMs, s"Max timestamp should be ${now + 1}")
-    assertEquals(validatedRecords.records.asScala.size - 1, validatedResults.shallowOffsetOfMaxTimestampMs,
+
+    // All versions have an outer batch when compressed, so the shallow offset
+    // of max timestamp is always the offset of the last record in the batch.
+    val expectedShallowOffsetOfMaxTimestamp = recordList.size - 1
+    assertEquals(expectedShallowOffsetOfMaxTimestamp, validatedResults.shallowOffsetOfMaxTimestampMs,
       s"Offset of max timestamp should be ${validatedRecords.records.asScala.size - 1}")
     assertFalse(validatedResults.messageSizeMaybeChanged, "Message size should not have been changed")
 
-    verifyRecordConversionStats(validatedResults.recordConversionStats, numConvertedRecords = 0, records,
+    verifyRecordValidationStats(validatedResults.recordValidationStats, numConvertedRecords = 0, records,
       compressed = true)
   }
 
@@ -926,7 +944,7 @@ class LogValidatorTest {
       PrimitiveRef.ofLong(offset), metricsRecorder, RequestLocal.withThreadConfinedCaching.bufferSupplier
     )
     checkOffsets(validatedResults.validatedRecords, offset)
-    verifyRecordConversionStats(validatedResults.recordConversionStats, numConvertedRecords = 3, records,
+    verifyRecordValidationStats(validatedResults.recordValidationStats, numConvertedRecords = 3, records,
       compressed = false)
   }
 
@@ -952,7 +970,7 @@ class LogValidatorTest {
       PrimitiveRef.ofLong(offset), metricsRecorder, RequestLocal.withThreadConfinedCaching.bufferSupplier
     )
     checkOffsets(validatedResults.validatedRecords, offset)
-    verifyRecordConversionStats(validatedResults.recordConversionStats, numConvertedRecords = 3, records,
+    verifyRecordValidationStats(validatedResults.recordValidationStats, numConvertedRecords = 3, records,
       compressed = false)
   }
 
@@ -978,7 +996,7 @@ class LogValidatorTest {
       PrimitiveRef.ofLong(offset), metricsRecorder, RequestLocal.withThreadConfinedCaching.bufferSupplier
     )
     checkOffsets(validatedResults.validatedRecords, offset)
-    verifyRecordConversionStats(validatedResults.recordConversionStats, numConvertedRecords = 3, records,
+    verifyRecordValidationStats(validatedResults.recordValidationStats, numConvertedRecords = 3, records,
       compressed = true)
   }
 
@@ -1004,7 +1022,7 @@ class LogValidatorTest {
       PrimitiveRef.ofLong(offset), metricsRecorder, RequestLocal.withThreadConfinedCaching.bufferSupplier
     )
     checkOffsets(validatedResults.validatedRecords, offset)
-    verifyRecordConversionStats(validatedResults.recordConversionStats, numConvertedRecords = 3, records,
+    verifyRecordValidationStats(validatedResults.recordValidationStats, numConvertedRecords = 3, records,
       compressed = true)
   }
 
@@ -1641,7 +1659,7 @@ class LogValidatorTest {
     }
   }
 
-  def verifyRecordConversionStats(stats: RecordConversionStats, numConvertedRecords: Int, records: MemoryRecords,
+  def verifyRecordValidationStats(stats: RecordValidationStats, numConvertedRecords: Int, records: MemoryRecords,
                                   compressed: Boolean): Unit = {
     assertNotNull(stats, "Records processing info is null")
     assertEquals(numConvertedRecords, stats.numRecordsConverted)

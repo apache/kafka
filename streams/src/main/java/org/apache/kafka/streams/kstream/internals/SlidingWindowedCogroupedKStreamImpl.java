@@ -19,6 +19,7 @@ package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.kstream.Aggregator;
+import org.apache.kafka.streams.kstream.EmitStrategy;
 import org.apache.kafka.streams.kstream.Initializer;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Materialized;
@@ -27,15 +28,8 @@ import org.apache.kafka.streams.kstream.SlidingWindows;
 import org.apache.kafka.streams.kstream.TimeWindowedCogroupedKStream;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.internals.graph.GraphNode;
-import org.apache.kafka.streams.processor.internals.StoreBuilderWrapper;
-import org.apache.kafka.streams.processor.internals.StoreFactory;
-import org.apache.kafka.streams.state.StoreBuilder;
-import org.apache.kafka.streams.state.Stores;
-import org.apache.kafka.streams.state.TimestampedWindowStore;
-import org.apache.kafka.streams.state.WindowBytesStoreSupplier;
 import org.apache.kafka.streams.state.WindowStore;
 
-import java.time.Duration;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -91,71 +85,13 @@ public class SlidingWindowedCogroupedKStreamImpl<K, V> extends AbstractStream<K,
             groupPatterns,
             initializer,
             new NamedInternal(named),
-            materialize(materializedInternal),
+            new SlidingWindowStoreMaterializer<>(materializedInternal, windows, EmitStrategy.onWindowUpdate()),
             materializedInternal.keySerde() != null ?
                 new FullTimeWindowedSerde<>(materializedInternal.keySerde(), windows.timeDifferenceMs())
                 : null,
             materializedInternal.valueSerde(),
             materializedInternal.queryableStoreName(),
             windows);
-    }
-
-    private StoreFactory materialize(final MaterializedInternal<K, V, WindowStore<Bytes, byte[]>> materialized) {
-        WindowBytesStoreSupplier supplier = (WindowBytesStoreSupplier) materialized.storeSupplier();
-        if (supplier == null) {
-            final long retentionPeriod = materialized.retention() != null ? materialized.retention().toMillis() : windows.gracePeriodMs() + 2 * windows.timeDifferenceMs();
-
-            if ((windows.timeDifferenceMs() * 2 + windows.gracePeriodMs()) > retentionPeriod) {
-                throw new IllegalArgumentException("The retention period of the window store "
-                    + name
-                    + " must be no smaller than 2 * time difference plus the grace period."
-                    + " Got time difference=[" + windows.timeDifferenceMs() + "],"
-                    + " grace=[" + windows.gracePeriodMs()
-                    + "],"
-                    + " retention=[" + retentionPeriod
-                    + "]");
-            }
-
-            switch (materialized.storeType()) {
-                case IN_MEMORY:
-                    supplier = Stores.inMemoryWindowStore(
-                        materialized.storeName(),
-                        Duration.ofMillis(retentionPeriod),
-                        Duration.ofMillis(windows.timeDifferenceMs()),
-                        false
-                    );
-                    break;
-                case ROCKS_DB:
-                    supplier = Stores.persistentTimestampedWindowStore(
-                        materialized.storeName(),
-                        Duration.ofMillis(retentionPeriod),
-                        Duration.ofMillis(windows.timeDifferenceMs()),
-                        false
-                    );
-                    break;
-                default:
-                    throw new IllegalStateException("Unknown store type: " + materialized.storeType());
-            }
-        }
-
-        final StoreBuilder<TimestampedWindowStore<K, V>> builder = Stores
-            .timestampedWindowStoreBuilder(
-                supplier,
-                materialized.keySerde(),
-                materialized.valueSerde()
-            );
-
-        if (materialized.loggingEnabled()) {
-            builder.withLoggingEnabled(materialized.logConfig());
-        } else {
-            builder.withLoggingDisabled();
-        }
-        if (materialized.cachingEnabled()) {
-            builder.withCachingEnabled();
-        } else {
-            builder.withCachingDisabled();
-        }
-        return new StoreBuilderWrapper(builder);
     }
 
 }

@@ -921,8 +921,8 @@ public class ReplicationControlManagerTest {
             shrinkIsrResult, topicIdPartition, NONE);
         assertConsistentAlterPartitionResponse(replicationControl, topicIdPartition, shrinkIsrResponse);
         PartitionRegistration partition = replicationControl.getPartition(topicIdPartition.topicId(), topicIdPartition.partitionId());
-        assertTrue(Arrays.equals(new int[]{1, 2}, partition.elr), partition.toString());
-        assertTrue(Arrays.equals(new int[]{}, partition.lastKnownElr), partition.toString());
+        assertArrayEquals(new int[]{1, 2}, partition.elr, partition.toString());
+        assertArrayEquals(new int[]{}, partition.lastKnownElr, partition.toString());
 
         PartitionData expandIsrRequest = newAlterPartition(
             replicationControl, topicIdPartition, isrWithDefaultEpoch(0, 1), LeaderRecoveryState.RECOVERED);
@@ -932,8 +932,8 @@ public class ReplicationControlManagerTest {
             expandIsrResult, topicIdPartition, NONE);
         assertConsistentAlterPartitionResponse(replicationControl, topicIdPartition, expandIsrResponse);
         partition = replicationControl.getPartition(topicIdPartition.topicId(), topicIdPartition.partitionId());
-        assertTrue(Arrays.equals(new int[]{}, partition.elr), partition.toString());
-        assertTrue(Arrays.equals(new int[]{}, partition.lastKnownElr), partition.toString());
+        assertArrayEquals(new int[]{}, partition.elr, partition.toString());
+        assertArrayEquals(new int[]{}, partition.lastKnownElr, partition.toString());
     }
 
     @Test
@@ -952,19 +952,19 @@ public class ReplicationControlManagerTest {
         ctx.fenceBrokers(Utils.mkSet(2, 3));
 
         PartitionRegistration partition = replicationControl.getPartition(topicIdPartition.topicId(), topicIdPartition.partitionId());
-        assertTrue(Arrays.equals(new int[]{3}, partition.elr), partition.toString());
-        assertTrue(Arrays.equals(new int[]{}, partition.lastKnownElr), partition.toString());
+        assertArrayEquals(new int[]{3}, partition.elr, partition.toString());
+        assertArrayEquals(new int[]{}, partition.lastKnownElr, partition.toString());
 
         ctx.fenceBrokers(Utils.mkSet(1, 2, 3));
 
         partition = replicationControl.getPartition(topicIdPartition.topicId(), topicIdPartition.partitionId());
-        assertTrue(Arrays.equals(new int[]{1, 3}, partition.elr), partition.toString());
-        assertTrue(Arrays.equals(new int[]{}, partition.lastKnownElr), partition.toString());
+        assertArrayEquals(new int[]{1, 3}, partition.elr, partition.toString());
+        assertArrayEquals(new int[]{}, partition.lastKnownElr, partition.toString());
 
         ctx.unfenceBrokers(0, 1, 2, 3);
         partition = replicationControl.getPartition(topicIdPartition.topicId(), topicIdPartition.partitionId());
-        assertTrue(Arrays.equals(new int[]{1, 3}, partition.elr), partition.toString());
-        assertTrue(Arrays.equals(new int[]{}, partition.lastKnownElr), partition.toString());
+        assertArrayEquals(new int[]{1, 3}, partition.elr, partition.toString());
+        assertArrayEquals(new int[]{}, partition.lastKnownElr, partition.toString());
     }
 
     @Test
@@ -1000,16 +1000,16 @@ public class ReplicationControlManagerTest {
         ctx.fenceBrokers(Utils.mkSet(1, 2, 3));
 
         PartitionRegistration partition = replicationControl.getPartition(topicIdPartition.topicId(), topicIdPartition.partitionId());
-        assertTrue(Arrays.equals(new int[]{2, 3}, partition.elr), partition.toString());
-        assertTrue(Arrays.equals(new int[]{}, partition.lastKnownElr), partition.toString());
+        assertArrayEquals(new int[]{2, 3}, partition.elr, partition.toString());
+        assertArrayEquals(new int[]{}, partition.lastKnownElr, partition.toString());
 
         ctx.unfenceBrokers(2);
         ctx.fenceBrokers(Utils.mkSet(0, 1));
         partition = replicationControl.getPartition(topicIdPartition.topicId(), topicIdPartition.partitionId());
-        assertTrue(Arrays.equals(new int[]{0, 3}, partition.elr), partition.toString());
-        assertTrue(Arrays.equals(new int[]{2}, partition.isr), partition.toString());
+        assertArrayEquals(new int[]{0, 3}, partition.elr, partition.toString());
+        assertArrayEquals(new int[]{2}, partition.isr, partition.toString());
         assertEquals(2, partition.leader, partition.toString());
-        assertTrue(Arrays.equals(new int[]{}, partition.lastKnownElr), partition.toString());
+        assertArrayEquals(new int[]{}, partition.lastKnownElr, partition.toString());
     }
 
     @ParameterizedTest
@@ -1152,7 +1152,7 @@ public class ReplicationControlManagerTest {
         long brokerEpoch,
         Uuid topicId,
         AlterPartitionRequestData.PartitionData partitionData
-    ) throws Exception {
+    ) {
         AlterPartitionRequestData request = new AlterPartitionRequestData()
             .setBrokerId(brokerId)
             .setBrokerEpoch(brokerEpoch);
@@ -1424,7 +1424,6 @@ public class ReplicationControlManagerTest {
             anonymousContextFor(ApiKeys.CREATE_TOPICS);
         ControllerResult<CreateTopicsResponseData> createResult =
             replicationControl.createTopics(createTopicsRequestContext, request, Collections.singleton("foo"));
-        CreateTopicsResponseData expectedResponse = new CreateTopicsResponseData();
         CreatableTopicResult createdTopic = createResult.response().topics().find("foo");
         assertEquals(NONE.code(), createdTopic.errorCode());
         ctx.replay(createResult.records());

@@ -17,20 +17,17 @@
 package kafka.server
 
 import java.io.File
-
-
 import scala.collection.Seq
 import scala.concurrent._
 import scala.concurrent.duration._
 import ExecutionContext.Implicits._
-
-import kafka.common.{InconsistentBrokerMetadataException, InconsistentClusterIdException}
 import kafka.utils.TestUtils
-import kafka.server.QuorumTestHarness
-
+import org.apache.kafka.metadata.properties.{MetaProperties, MetaPropertiesEnsemble, MetaPropertiesVersion, PropertiesUtils}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, TestInfo}
 import org.apache.kafka.test.TestUtils.isValidClusterId
+
+import java.util.Optional
 
 
 class ServerGenerateClusterIdTest extends QuorumTestHarness {
@@ -173,7 +170,7 @@ class ServerGenerateClusterIdTest extends QuorumTestHarness {
     val server = new KafkaServer(config1, threadNamePrefix = Option(this.getClass.getName))
 
     // Startup fails
-    assertThrows(classOf[InconsistentClusterIdException], () => server.startup())
+    assertThrows(classOf[RuntimeException], () => server.startup())
 
     server.shutdown()
 
@@ -197,7 +194,7 @@ class ServerGenerateClusterIdTest extends QuorumTestHarness {
     val server = new KafkaServer(config, threadNamePrefix = Option(this.getClass.getName))
 
     // Startup fails
-    assertThrows(classOf[InconsistentBrokerMetadataException], () => server.startup())
+    assertThrows(classOf[RuntimeException], () => server.startup())
 
     server.shutdown()
 
@@ -211,23 +208,24 @@ class ServerGenerateClusterIdTest extends QuorumTestHarness {
   }
 
   def forgeBrokerMetadata(logDir: String, brokerId: Int, clusterId: String): Unit = {
-    val checkpoint = new BrokerMetadataCheckpoint(
-      new File(logDir + File.separator + KafkaServer.brokerMetaPropsFile))
-    checkpoint.write(ZkMetaProperties(clusterId, brokerId).toProperties)
+    val metaProps = new MetaProperties.Builder().
+      setVersion(MetaPropertiesVersion.V0).
+      setNodeId(brokerId).
+      setClusterId(clusterId).
+      build()
+    PropertiesUtils.writePropertiesFile(metaProps.toProperties(),
+      new File(logDir, MetaPropertiesEnsemble.META_PROPERTIES_NAME).getAbsolutePath, false)
   }
 
   def verifyBrokerMetadata(logDirs: Seq[String], clusterId: String): Boolean = {
     for (logDir <- logDirs) {
-      val brokerMetadataOpt = new BrokerMetadataCheckpoint(
-        new File(logDir + File.separator + KafkaServer.brokerMetaPropsFile)).read()
-      brokerMetadataOpt match {
-        case Some(properties) =>
-          val brokerMetadata = new RawMetaProperties(properties)
-          if (brokerMetadata.clusterId.exists(_ != clusterId)) return false
-        case _ => return false
+      val properties = PropertiesUtils.readPropertiesFile(
+        new File(logDir, MetaPropertiesEnsemble.META_PROPERTIES_NAME).getAbsolutePath)
+      val metaProps = new MetaProperties.Builder(properties).build()
+      if (!metaProps.clusterId().equals(Optional.of(clusterId))) {
+        return false
       }
     }
     true
   }
-
 }

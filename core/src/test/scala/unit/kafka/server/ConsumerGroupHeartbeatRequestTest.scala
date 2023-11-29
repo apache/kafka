@@ -24,12 +24,11 @@ import kafka.utils.TestUtils
 import org.apache.kafka.common.message.{ConsumerGroupHeartbeatRequestData, ConsumerGroupHeartbeatResponseData}
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{ConsumerGroupHeartbeatRequest, ConsumerGroupHeartbeatResponse}
-import org.junit.jupiter.api.Assertions.{assertEquals, assertNotNull, assertThrows}
+import org.junit.jupiter.api.Assertions.{assertEquals, assertNotNull}
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Timeout
 import org.junit.jupiter.api.extension.ExtendWith
 
-import java.io.EOFException
 import java.util.stream.Collectors
 import scala.jdk.CollectionConverters._
 
@@ -39,20 +38,10 @@ import scala.jdk.CollectionConverters._
 @Tag("integration")
 class ConsumerGroupHeartbeatRequestTest(cluster: ClusterInstance) {
 
-  @ClusterTest
-  def testConsumerGroupHeartbeatIsDisabledByDefault(): Unit = {
-    val consumerGroupHeartbeatRequest = new ConsumerGroupHeartbeatRequest.Builder(
-      new ConsumerGroupHeartbeatRequestData(),
-      true
-    ).build()
-    assertThrows(classOf[EOFException], () => connectAndReceive(consumerGroupHeartbeatRequest))
-  }
-
-  @ClusterTest(serverProperties = Array(new ClusterConfigProperty(key = "unstable.api.versions.enable", value = "true")))
+  @ClusterTest()
   def testConsumerGroupHeartbeatIsAccessibleWhenEnabled(): Unit = {
     val consumerGroupHeartbeatRequest = new ConsumerGroupHeartbeatRequest.Builder(
-      new ConsumerGroupHeartbeatRequestData(),
-      true
+      new ConsumerGroupHeartbeatRequestData()
     ).build()
 
     val consumerGroupHeartbeatResponse = connectAndReceive(consumerGroupHeartbeatRequest)
@@ -61,7 +50,6 @@ class ConsumerGroupHeartbeatRequestTest(cluster: ClusterInstance) {
   }
 
   @ClusterTest(clusterType = Type.KRAFT, serverProperties = Array(
-    new ClusterConfigProperty(key = "unstable.api.versions.enable", value = "true"),
     new ClusterConfigProperty(key = "group.coordinator.new.enable", value = "true"),
     new ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "1"),
     new ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1")
@@ -86,8 +74,7 @@ class ConsumerGroupHeartbeatRequestTest(cluster: ClusterInstance) {
         .setMemberEpoch(0)
         .setRebalanceTimeoutMs(5 * 60 * 1000)
         .setSubscribedTopicNames(List("foo").asJava)
-        .setTopicPartitions(List.empty.asJava),
-      true
+        .setTopicPartitions(List.empty.asJava)
     ).build()
 
     // Send the request until receiving a successful response. There is a delay
@@ -115,8 +102,7 @@ class ConsumerGroupHeartbeatRequestTest(cluster: ClusterInstance) {
       new ConsumerGroupHeartbeatRequestData()
         .setGroupId("grp")
         .setMemberId(consumerGroupHeartbeatResponse.data.memberId)
-        .setMemberEpoch(consumerGroupHeartbeatResponse.data.memberEpoch),
-      true
+        .setMemberEpoch(consumerGroupHeartbeatResponse.data.memberEpoch)
     ).build()
 
     // This is the expected assignment.
@@ -142,8 +128,7 @@ class ConsumerGroupHeartbeatRequestTest(cluster: ClusterInstance) {
       new ConsumerGroupHeartbeatRequestData()
         .setGroupId("grp")
         .setMemberId(consumerGroupHeartbeatResponse.data.memberId)
-        .setMemberEpoch(-1),
-      true
+        .setMemberEpoch(-1)
     ).build()
 
     consumerGroupHeartbeatResponse = connectAndReceive(consumerGroupHeartbeatRequest)

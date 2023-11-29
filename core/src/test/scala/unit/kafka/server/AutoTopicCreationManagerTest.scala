@@ -21,7 +21,6 @@ import java.net.InetAddress
 import java.nio.ByteBuffer
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.{Collections, Optional, Properties}
-
 import kafka.controller.KafkaController
 import kafka.coordinator.transaction.TransactionCoordinator
 import kafka.utils.TestUtils
@@ -38,6 +37,7 @@ import org.apache.kafka.common.requests._
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, KafkaPrincipalSerde, SecurityProtocol}
 import org.apache.kafka.common.utils.{SecurityUtils, Utils}
 import org.apache.kafka.coordinator.group.GroupCoordinator
+import org.apache.kafka.server.{ControllerRequestCompletionHandler, NodeToControllerChannelManager}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertThrows, assertTrue}
 import org.junit.jupiter.api.{BeforeEach, Test}
 import org.mockito.ArgumentMatchers.any
@@ -327,7 +327,7 @@ class AutoTopicCreationManagerTest {
       .setMinVersion(0)
       .setMaxVersion(0)
     Mockito.when(brokerToController.controllerApiVersions())
-      .thenReturn(Some(NodeApiVersions.create(Collections.singleton(createTopicApiVersion))))
+      .thenReturn(Optional.of(NodeApiVersions.create(Collections.singleton(createTopicApiVersion))))
 
     Mockito.when(controller.isActive).thenReturn(false)
 
