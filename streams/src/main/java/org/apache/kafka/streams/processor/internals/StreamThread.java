@@ -428,8 +428,7 @@ public class StreamThread extends Thread {
             adminClient,
             stateDirectory,
             stateUpdater,
-            schedulingTaskManager,
-            userStandbyUpdateListener
+            schedulingTaskManager
         );
         referenceContainer.taskManager = taskManager;
 

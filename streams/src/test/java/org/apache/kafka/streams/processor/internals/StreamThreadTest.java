@@ -1041,8 +1041,7 @@ public class StreamThreadTest {
             null,
             null,
             null,
-            null,
-                null
+            null
         ) {
             @Override
             int commit(final Collection<Task> tasksToCommit) {
@@ -1160,8 +1159,7 @@ public class StreamThreadTest {
             null,
             null,
             stateUpdater,
-            schedulingTaskManager,
-            new MockStandbyUpdateListener()
+            schedulingTaskManager
         ) {
             @Override
             int commit(final Collection<Task> tasksToCommit) {

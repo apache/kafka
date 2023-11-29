@@ -39,7 +39,7 @@ public interface StandbyUpdateListener {
                        final long currentEndOffset);
 
     /**
-     * Method called after restoring a batch of records.  In this case the maximum size of the batch is whatever
+     * Method called after restoring a batch of records. In this case the maximum size of the batch is whatever
      * the value of the MAX_POLL_RECORDS is set to.
      *
      * This method is called after restoring each batch and it is advised to keep processing to a minimum.

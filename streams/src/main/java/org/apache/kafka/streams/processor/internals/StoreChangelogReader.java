@@ -992,7 +992,6 @@ public class StoreChangelogReader implements ChangelogReader {
             restoreConsumer.seekToBeginning(newPartitionsWithoutStartOffset);
         }
 
-        // do not trigger restore listener if we are processing standby tasks
         for (final ChangelogMetadata changelogMetadata : newPartitionsToRestore) {
             final StateStoreMetadata storeMetadata = changelogMetadata.storeMetadata;
             final TopicPartition partition = storeMetadata.changelogPartition();
@@ -1044,13 +1043,21 @@ public class StoreChangelogReader implements ChangelogReader {
                     // if the changelog is not in RESTORING, it means
                     // the corresponding onRestoreStart was not called; in this case
                     // we should not call onRestoreSuspended either
-                    if (changelogMetadata.stateManager.taskType() == Task.TaskType.ACTIVE &&
-                        changelogMetadata.state().equals(ChangelogState.RESTORING)) {
-                        try {
-                            final String storeName = changelogMetadata.storeMetadata.store().name();
-                            stateRestoreListener.onRestoreSuspended(partition, storeName, changelogMetadata.totalRestored);
-                        } catch (final Exception e) {
-                            throw new StreamsException("State restore listener failed on restore paused", e);
+                    if (changelogMetadata.state().equals(ChangelogState.RESTORING)) {
+                        final String storeName = changelogMetadata.storeMetadata.store().name();
+                        if (changelogMetadata.stateManager.taskType() == Task.TaskType.ACTIVE) {
+                            try {
+                                stateRestoreListener.onRestoreSuspended(partition, storeName, changelogMetadata.totalRestored);
+                            } catch (final Exception e) {
+                                throw new StreamsException("State restore listener failed on restore paused", e);
+                            }
+                        } else if (changelogMetadata.stateManager.taskType() == TaskType.STANDBY) {
+                            StandbyUpdateListener.SuspendReason suspendReason = StandbyUpdateListener.SuspendReason.MIGRATED;
+                            // Unregistering running standby tasks means the task has been promoted to active.
+                            if (changelogMetadata.stateManager.taskState() == Task.State.RUNNING) {
+                                suspendReason = StandbyUpdateListener.SuspendReason.PROMOTED;
+                            }
+                            standbyUpdateListener.onUpdateSuspended(partition, storeName, changelogMetadata.restoreEndOffset, changelogMetadata.endOffset(), suspendReason);
                         }
                     }
                 }

@@ -168,6 +168,7 @@ public class ProcessorStateManager implements StateManager {
     private String logPrefix;
 
     private final TaskId taskId;
+    private Task.State taskState;
     private final boolean eosEnabled;
     private final ChangelogRegister changelogReader;
     private final Collection<TopicPartition> sourcePartitions;
@@ -421,6 +422,14 @@ public class ProcessorStateManager implements StateManager {
 
     TaskId taskId() {
         return taskId;
+    }
+
+    void transitionTaskState(final Task.State taskState) {
+        this.taskState = taskState;
+    }
+
+    Task.State taskState() {
+        return taskState;
     }
 
     // used by the changelog reader only
