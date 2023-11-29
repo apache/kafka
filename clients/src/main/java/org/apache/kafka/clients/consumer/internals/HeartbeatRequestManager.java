@@ -186,6 +186,9 @@ public class HeartbeatRequestManager implements RequestManager {
     /**
      * Returns the delay before the next network request for this request manager. Used to ensure that
      * waiting in the application thread does not delay beyond the point that a result can be returned.
+     *
+     * <p>In the event that heartbeats are currently being skipped, this still returns the next heartbeat
+     * delay rather than {@code Long.MAX_VALUE} so that the application thread remains responsive.
      */
     @Override
     public long timeUntilNextPoll(long currentTimeMs) {

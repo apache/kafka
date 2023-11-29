@@ -88,7 +88,6 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doThrow;
@@ -104,7 +103,6 @@ public class AsyncKafkaConsumerTest {
     private ConsumerTestBuilder.AsyncKafkaConsumerTestBuilder testBuilder;
     private ApplicationEventHandler applicationEventHandler;
     private SubscriptionState subscriptions;
-    private Optional<HeartbeatRequestManager> heartbeatRequestManager;
 
     @BeforeEach
     public void setup() {
@@ -118,7 +116,6 @@ public class AsyncKafkaConsumerTest {
         consumer = testBuilder.consumer;
         fetchCollector = testBuilder.fetchCollector;
         subscriptions = testBuilder.subscriptions;
-        heartbeatRequestManager = testBuilder.heartbeatRequestManager;
     }
 
     @AfterEach
@@ -786,10 +783,6 @@ public class AsyncKafkaConsumerTest {
             new ConsumerRecord<>(topicName, partition, 3, "key2", "value2")
         );
 
-        // The internal poll loop is limited to 100ms of waiting per iteration
-        HeartbeatRequestManager theHeartbeatRequestManager = heartbeatRequestManager.get();
-        when(theHeartbeatRequestManager.timeUntilNextPoll(anyLong())).thenReturn(100L);
-
         // On the first iteration, return no data; on the second, return two records
         doAnswer(invocation -> {
             // Mock the subscription being assigned as the first fetch is collected
@@ -799,7 +792,7 @@ public class AsyncKafkaConsumerTest {
             return Fetch.forPartition(tp, records, true);
         }).when(fetchCollector).collectFetch(any(FetchBuffer.class));
 
-        // And then poll for up to 10000ms, which should return 2 records in about 100ms without timing out
+        // And then poll for up to 10000ms, which should return 2 records without timing out
         ConsumerRecords<?, ?> returnedRecords = consumer.poll(Duration.ofMillis(10000));
         assertEquals(2, returnedRecords.count());
 
