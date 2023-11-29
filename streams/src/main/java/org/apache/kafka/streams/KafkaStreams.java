@@ -1903,9 +1903,11 @@ public class KafkaStreams implements AutoCloseable {
 
         // StreamThread for main/restore consumers and producer(s)
         final Map<String, KafkaFuture<Uuid>> consumerFutures = new HashMap<>();
+        final Map<String, KafkaFuture<Map<String, KafkaFuture<Uuid>>>> producerFutures = new HashMap<>();
         synchronized (changeThreadCount) {
             for (final StreamThread streamThread : threads) {
                 consumerFutures.putAll(streamThread.consumerClientInstanceIds(timeout));
+                producerFutures.put(streamThread.getName(), streamThread.producersClientInstanceIds(timeout));
             }
         }
 
@@ -1954,7 +1956,43 @@ public class KafkaStreams implements AutoCloseable {
         }
 
         // (3b) collect producers from StreamsThread
+        for (final Map.Entry<String, KafkaFuture<Map<String, KafkaFuture<Uuid>>>> threadProducerFuture : producerFutures.entrySet()) {
+            final Map<String, KafkaFuture<Uuid>> streamThreadProducerFutures = getOrThrowException(
+                threadProducerFuture.getValue(),
+                remainingTimeMs,
+                () -> String.format(
+                    "Could not retrieve producer instance id for %s.",
+                    threadProducerFuture.getKey()
+                )
+            );
+            long nowMs = time.milliseconds();
+            remainingTimeMs -= nowMs - startTimestampMs;
+            startTimestampMs = nowMs;
 
+            for (final Map.Entry<String, KafkaFuture<Uuid>> producerFuture : streamThreadProducerFutures.entrySet()) {
+                final Uuid instanceId = getOrThrowException(
+                    producerFuture.getValue(),
+                    remainingTimeMs,
+                    () -> String.format(
+                        "Could not retrieve producer instance id for %s.",
+                        producerFuture.getKey()
+                    )
+                );
+                nowMs = time.milliseconds();
+                remainingTimeMs -= nowMs - startTimestampMs;
+                startTimestampMs = nowMs;
+
+                // could be `null` if telemetry is disabled on the producer itself
+                if (instanceId != null) {
+                    clientInstanceIds.addProducerInstanceId(
+                        producerFuture.getKey(),
+                        instanceId
+                    );
+                } else {
+                    log.debug(String.format("Telemetry is disabled for %s.", producerFuture.getKey()));
+                }
+            }
+        }
         // (3c) collect from GlobalThread
         if (globalThreadFuture != null) {
             final Uuid instanceId = getOrThrowException(
