@@ -168,12 +168,12 @@ public abstract class AbstractCoordinator implements Closeable {
     }
 
     public AbstractCoordinator(GroupRebalanceConfig rebalanceConfig,
-        LogContext logContext,
-        ConsumerNetworkClient client,
-        Metrics metrics,
-        String metricGrpPrefix,
-        Time time,
-        Optional<ClientTelemetryReporter> clientTelemetryReporter) {
+                               LogContext logContext,
+                               ConsumerNetworkClient client,
+                               Metrics metrics,
+                               String metricGrpPrefix,
+                               Time time,
+                               Optional<ClientTelemetryReporter> clientTelemetryReporter) {
         Objects.requireNonNull(rebalanceConfig.groupId,
                                "Expected a non-null group id for coordinator construction");
         this.rebalanceConfig = rebalanceConfig;
