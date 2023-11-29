@@ -24,6 +24,8 @@ import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.errors.InterruptException;
+import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.utils.LogContext;
 
@@ -71,6 +73,8 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
     private Duration lastPollTimeout;
     private boolean closed;
     private boolean shouldRebalance;
+    private Uuid clientInstanceId;
+    private Duration clientInstanceIdBlockingTime;
 
     public MockConsumer(OffsetResetStrategy offsetResetStrategy) {
         this.subscriptions = new SubscriptionState(new LogContext(), offsetResetStrategy);
@@ -396,9 +400,28 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
         endOffsets.putAll(newOffsets);
     }
 
+    public void setClientInstanceId(final Uuid instanceId, final Duration blockingTime) {
+        clientInstanceId = instanceId;
+        clientInstanceIdBlockingTime = blockingTime;
+    }
+
     @Override
     public Uuid clientInstanceId(Duration timeout) {
-        throw new UnsupportedOperationException("Not implemented yet.");
+        if (clientInstanceId == null) {
+            throw new IllegalStateException("clientInstanceId not set");
+        }
+
+        if (timeout.toMillis() > clientInstanceIdBlockingTime.toMillis()) {
+            throw new TimeoutException();
+        }
+
+        try {
+            Thread.sleep(clientInstanceIdBlockingTime.toMillis());
+        } catch (final InterruptedException error) {
+            throw new InterruptException(error);
+        }
+
+        return clientInstanceId;
     }
 
     @Override

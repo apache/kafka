@@ -16,13 +16,18 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import org.apache.kafka.clients.admin.KafkaAdminClient;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.InvalidOffsetException;
+import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.errors.TimeoutException;
+import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
@@ -40,6 +45,9 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.CompletionStage;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 
 import static org.apache.kafka.streams.processor.internals.GlobalStreamThread.State.CREATED;
@@ -65,6 +73,9 @@ public class GlobalStreamThread extends Thread {
     private final AtomicLong cacheSize;
     private volatile StreamsException startupException;
     private java.util.function.Consumer<Throwable> streamsUncaughtExceptionHandler;
+    private volatile Uuid globalConsumerClientInstanceId = null;
+    private volatile long fetchDeadline = -1;
+    private KafkaFutureImpl<Uuid> clientInstanceIdFuture;
 
     /**
      * The states that the global stream thread can be in
@@ -310,6 +321,25 @@ public class GlobalStreamThread extends Thread {
                     cache.resize(size);
                 }
                 stateConsumer.pollAndUpdate();
+
+                if (fetchDeadline != -1) {
+                    if (fetchDeadline > time.milliseconds()) {
+                        try {
+                            globalConsumerClientInstanceId = globalConsumer.clientInstanceId(Duration.ZERO);
+                            clientInstanceIdFuture.complete(globalConsumerClientInstanceId);
+                            fetchDeadline = -1;
+                        } catch (final TimeoutException swallow) {
+                            // swallow
+                        } catch (final Exception error) {
+                            clientInstanceIdFuture.completeExceptionally(error);
+                            fetchDeadline = -1;
+                        }
+                    } else {
+                        clientInstanceIdFuture.completeExceptionally(
+                            new TimeoutException("Could not retrieve global consumer client-instance-id")
+                        );
+                    }
+                }
             }
         } catch (final InvalidOffsetException recoverableException) {
             wipeStateStore = true;
@@ -453,5 +483,20 @@ public class GlobalStreamThread extends Thread {
 
     public Map<MetricName, Metric> consumerMetrics() {
         return Collections.unmodifiableMap(globalConsumer.metrics());
+    }
+
+    public KafkaFuture<Uuid> globalConsumerInstanceId(final Duration timeout) {
+        if (globalConsumerClientInstanceId != null) {
+            final KafkaFutureImpl<Uuid> success = new KafkaFutureImpl<>();
+            success.complete(globalConsumerClientInstanceId);
+            return success;
+        }
+
+        // need to set `clientInstancIdFuture` before `fetchDeadline`
+        // to avoid a race condition potentially leading to a null-pointed-exception
+        clientInstanceIdFuture = new KafkaFutureImpl<>();
+        fetchDeadline = time.milliseconds() + timeout.toMillis();
+
+        return clientInstanceIdFuture;
     }
 }

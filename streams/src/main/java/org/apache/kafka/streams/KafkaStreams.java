@@ -24,9 +24,11 @@ import org.apache.kafka.clients.admin.RemoveMembersFromConsumerGroupOptions;
 import org.apache.kafka.clients.admin.RemoveMembersFromConsumerGroupResult;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.producer.KafkaProducer;
+import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.annotation.InterfaceStability.Evolving;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.metrics.KafkaMetricsContext;
@@ -47,6 +49,7 @@ import org.apache.kafka.streams.errors.StreamsNotStartedException;
 import org.apache.kafka.streams.errors.StreamsStoppedException;
 import org.apache.kafka.streams.errors.StreamsUncaughtExceptionHandler;
 import org.apache.kafka.streams.errors.UnknownStateStoreException;
+import org.apache.kafka.streams.internals.ClientInstanceIdsImpl;
 import org.apache.kafka.streams.internals.metrics.ClientMetrics;
 import org.apache.kafka.streams.processor.StateRestoreListener;
 import org.apache.kafka.streams.processor.StateStore;
@@ -1789,6 +1792,56 @@ public class KafkaStreams implements AutoCloseable {
         for (final StreamThread thread : copy) consumer.accept(thread);
 
         return copy.size();
+    }
+
+    /**
+     * Returns the internal clients' assigned {@code client instance ids}.
+     *
+     * @return the internal clients' assigned instance ids used for metrics collection.
+     *
+     * @throws IllegalStateException If {@code KafkaStreams} is not running.
+     * @throws TimeoutException Indicates that a request timed out.
+     */
+    public ClientInstanceIds clientInstanceIds(Duration timeout) {
+        if (state().hasNotStarted()) {
+            throw new IllegalStateException(
+                "KafkaStreams has not been started, you can retry after calling start()."
+            );
+        }
+        if (state().isShuttingDown() || state.hasCompletedShutdown()) {
+            throw new IllegalStateException(
+                "KafkaStreams has been stopped (" + state + ")."
+            );
+        }
+
+        final ClientInstanceIdsImpl clientInstanceIds = new ClientInstanceIdsImpl();
+
+        KafkaFuture<Uuid> globalThreadFuture = null;
+        if (globalStreamThread != null) {
+            globalThreadFuture = globalStreamThread.globalConsumerInstanceId(timeout);
+        }
+
+        try {
+            clientInstanceIds.setAdminInstanceId(adminClient.clientInstanceId(timeout));
+        } catch (final TimeoutException timeoutException) {
+            log.warn("Could not get admin client-instance-id due to timeout.");
+        }
+
+        if (globalThreadFuture != null) {
+            try {
+                clientInstanceIds.addConsumerInstanceId(globalStreamThread.getName(), globalThreadFuture.get());
+            } catch (final ExecutionException exception) {
+                if (exception.getCause() instanceof TimeoutException) {
+                    log.warn("Could not get global consumer client-instance-id due to timeout.");
+                } else {
+                    log.error("Could not get global consumer client-instance-id", exception);
+                }
+            } catch (final InterruptedException error) {
+                log.error("Could not get global consumer client-instance-id", error);
+            }
+        }
+
+        return clientInstanceIds;
     }
 
     /**
