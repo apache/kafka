@@ -25,7 +25,7 @@ import kafka.utils.CoreUtils._
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
 import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.server.DynamicConfig
+import org.apache.kafka.server.{DynamicConfig => JDynamicConfig}
 import org.apache.kafka.storage.internals.log.LogConfig
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, Test}
@@ -101,8 +101,8 @@ class ReplicationQuotasTest extends QuorumTestHarness {
     (100 to 107).foreach { brokerId =>
       adminZkClient.changeBrokerConfig(Seq(brokerId),
         propsWith(
-          (DynamicConfig.Broker.LEADER_REPLICATION_THROTTLED_RATE_PROP, throttle.toString),
-          (DynamicConfig.Broker.FOLLOWER_REPLICATION_THROTTLED_RATE_PROP, throttle.toString)
+          (JDynamicConfig.Broker.LEADER_REPLICATION_THROTTLED_RATE_PROP, throttle.toString),
+          (JDynamicConfig.Broker.FOLLOWER_REPLICATION_THROTTLED_RATE_PROP, throttle.toString)
         ))
     }
 
@@ -187,7 +187,7 @@ class ReplicationQuotasTest extends QuorumTestHarness {
     val throttle: Long = msg.length * msgCount / expectedDuration
 
     //Set the throttle to only limit leader
-    adminZkClient.changeBrokerConfig(Seq(100), propsWith(DynamicConfig.Broker.LEADER_REPLICATION_THROTTLED_RATE_PROP, throttle.toString))
+    adminZkClient.changeBrokerConfig(Seq(100), propsWith(JDynamicConfig.Broker.LEADER_REPLICATION_THROTTLED_RATE_PROP, throttle.toString))
     adminZkClient.changeTopicConfig(topic, propsWith(LogConfig.LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG, "0:100"))
 
     //Add data
