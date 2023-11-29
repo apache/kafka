@@ -45,6 +45,7 @@ import org.apache.kafka.raft.RaftConfig
 import org.apache.kafka.server.{AssignmentsManager, ClientMetricsManager, NodeToControllerChannelManager}
 import org.apache.kafka.server.authorizer.Authorizer
 import org.apache.kafka.server.common.{ApiMessageAndVersion, DirectoryEventHandler, TopicIdPartition}
+import org.apache.kafka.server.config.ConfigType
 import org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.apache.kafka.server.network.{EndpointReadyFutures, KafkaAuthorizerServerInfo}
@@ -349,9 +350,9 @@ class BrokerServer(
       clientMetricsManager = ClientMetricsManager.instance()
 
       dynamicConfigHandlers = Map[String, ConfigHandler](
-        ConfigType.Topic -> new TopicConfigHandler(replicaManager, config, quotaManagers, None),
-        ConfigType.Broker -> new BrokerConfigHandler(config, quotaManagers),
-        ConfigType.ClientMetrics -> new ClientMetricsConfigHandler(clientMetricsManager))
+        ConfigType.TOPIC -> new TopicConfigHandler(replicaManager, config, quotaManagers, None),
+        ConfigType.BROKER -> new BrokerConfigHandler(config, quotaManagers),
+        ConfigType.CLIENT_METRICS -> new ClientMetricsConfigHandler(clientMetricsManager))
 
       val featuresRemapped = brokerFeatures.supportedFeatures.features().asScala.map {
         case (k: String, v: SupportedVersionRange) =>
