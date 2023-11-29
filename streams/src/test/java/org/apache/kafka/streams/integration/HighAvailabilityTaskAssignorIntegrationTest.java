@@ -27,6 +27,7 @@ import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
@@ -137,8 +138,8 @@ public class HighAvailabilityTaskAssignorIntegrationTest {
             new TopicPartition(inputTopic, 1)
         );
 
-        final String storeName = "store" + testId;
-        final String storeChangelog = appId + "-store-changelog";
+        final String storeName = "store_" + Uuid.randomUuid().toString();
+        final String storeChangelog = appId + "-" + storeName + "-changelog";
         final Set<TopicPartition> changelogTopicPartitions = mkSet(
             new TopicPartition(storeChangelog, 0),
             new TopicPartition(storeChangelog, 1)
