@@ -60,6 +60,7 @@ import java.util.concurrent.LinkedBlockingQueue;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static java.util.Collections.singleton;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.AUTO_COMMIT_INTERVAL_MS_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.GROUP_ID_CONFIG;
@@ -234,11 +235,19 @@ public class CommitRequestManagerTest {
 
     @Test
     public void testAutocommit_EnsureOnlyOneInflightRequest() {
+        TopicPartition t1p = new TopicPartition("topic1", 0);
+        subscriptionState.assignFromUser(singleton(t1p));
+
         CommitRequestManager commitRequestManger = create(true, 100);
         time.sleep(100);
         commitRequestManger.updateAutoCommitTimer(time.milliseconds());
+        // Nothing consumed therefore no commit request is sent
+        assertPoll(0, commitRequestManger);
+        time.sleep(10);
+        subscriptionState.seekUnvalidated(t1p, new SubscriptionState.FetchPosition(100L));
         List<NetworkClientDelegate.FutureCompletionHandler> futures = assertPoll(1, commitRequestManger);
-        time.sleep(100);
+
+        time.sleep(90);
         commitRequestManger.updateAutoCommitTimer(time.milliseconds());
         // We want to make sure we don't resend autocommit if the previous request has not been completed
         assertPoll(0, commitRequestManger);
