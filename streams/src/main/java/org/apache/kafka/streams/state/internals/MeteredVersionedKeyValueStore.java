@@ -195,19 +195,17 @@ public class MeteredVersionedKeyValueStore<K, V>
             return result;
         }
 
-        @Override
-        protected <R> QueryResult<R> runRangeQuery(final Query<R> query,
-                                                   final PositionBound positionBound,
-                                                   final QueryConfig config) {
+        private <R> QueryResult<R> runRangeQuery(final Query<R> query,
+                                                 final PositionBound positionBound,
+                                                 final QueryConfig config) {
             // throw exception for now to reserve the ability to implement this in the future
             // without clashing with users' custom implementations in the meantime
             throw new UnsupportedOperationException("Versioned stores do not support RangeQuery queries at this time.");
         }
 
-        @Override
-        protected <R> QueryResult<R> runKeyQuery(final Query<R> query,
-                                                 final PositionBound positionBound,
-                                                 final QueryConfig config) {
+        private <R> QueryResult<R> runKeyQuery(final Query<R> query,
+                                               final PositionBound positionBound,
+                                               final QueryConfig config) {
             // throw exception for now to reserve the ability to implement this in the future
             // without clashing with users' custom implementations in the meantime
             throw new UnsupportedOperationException("Versioned stores do not support KeyQuery queries at this time.");
