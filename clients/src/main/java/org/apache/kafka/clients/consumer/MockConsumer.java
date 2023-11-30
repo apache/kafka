@@ -411,7 +411,7 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
             throw new IllegalStateException("clientInstanceId not set");
         }
 
-        if (timeout.toMillis() > clientInstanceIdBlockingTime.toMillis()) {
+        if (timeout.toMillis() < clientInstanceIdBlockingTime.toMillis()) {
             throw new TimeoutException();
         }
 

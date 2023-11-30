@@ -308,17 +308,16 @@ public class GlobalStreamThreadTest {
         startAndSwallowError();
 
         final Uuid instanceId = Uuid.randomUuid();
-        mockConsumer.setClientInstanceId(instanceId, Duration.ofMillis(1L));
+        mockConsumer.setClientInstanceId(instanceId, Duration.ZERO);
 
         try {
-            final KafkaFuture<Uuid> future = globalStreamThread.globalConsumerInstanceId(Duration.ofMillis(2L));
+            final KafkaFuture<Uuid> future = globalStreamThread.globalConsumerInstanceId(Duration.ofMillis(1L));
             final Uuid result = future.get();
 
             assertThat(result, equalTo(instanceId));
         } finally {
             globalStreamThread.shutdown();
             globalStreamThread.join();
-
         }
     }
 
@@ -328,7 +327,7 @@ public class GlobalStreamThreadTest {
         startAndSwallowError();
 
         try {
-            final KafkaFuture<Uuid> future = globalStreamThread.globalConsumerInstanceId(Duration.ofMillis(2L));
+            final KafkaFuture<Uuid> future = globalStreamThread.globalConsumerInstanceId(Duration.ofMillis(1L));
 
             final ExecutionException error = assertThrows(ExecutionException.class, future::get);
             assertThat(error.getCause(), instanceOf(IllegalStateException.class));
@@ -345,10 +344,10 @@ public class GlobalStreamThreadTest {
         startAndSwallowError();
 
         final Uuid instanceId = Uuid.randomUuid();
-        mockConsumer.setClientInstanceId(instanceId, Duration.ofMillis(-1L));
+        mockConsumer.setClientInstanceId(instanceId, Duration.ofMillis(1L));
 
         try {
-            final KafkaFuture<Uuid> future = globalStreamThread.globalConsumerInstanceId(Duration.ofMillis(1L));
+            final KafkaFuture<Uuid> future = globalStreamThread.globalConsumerInstanceId(Duration.ofMillis(2L));
             time.sleep(5L);
 
             final ExecutionException error = assertThrows(ExecutionException.class, future::get);

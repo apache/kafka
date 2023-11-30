@@ -101,6 +101,7 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BiConsumer;
+import java.util.function.BiFunction;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
@@ -1812,6 +1813,11 @@ public class KafkaStreams implements AutoCloseable {
 
         final ClientInstanceIdsImpl clientInstanceIds = new ClientInstanceIdsImpl();
 
+        final Map<String, KafkaFuture<Uuid>> streamThreadFutures = new HashMap<>();
+        for (final StreamThread streamThread : threads) {
+            streamThreadFutures.putAll(streamThread.clientInstanceIds(timeout));
+        }
+
         KafkaFuture<Uuid> globalThreadFuture = null;
         if (globalStreamThread != null) {
             globalThreadFuture = globalStreamThread.globalConsumerInstanceId(timeout);
@@ -1821,6 +1827,23 @@ public class KafkaStreams implements AutoCloseable {
             clientInstanceIds.setAdminInstanceId(adminClient.clientInstanceId(timeout));
         } catch (final TimeoutException timeoutException) {
             log.warn("Could not get admin client-instance-id due to timeout.");
+        }
+
+        for (final Map.Entry<String, KafkaFuture<Uuid>> streamThreadFuture : streamThreadFutures.entrySet()) {
+            try {
+                clientInstanceIds.addConsumerInstanceId(
+                    streamThreadFuture.getKey(),
+                    streamThreadFuture.getValue().get()
+                );
+            } catch (final ExecutionException exception) {
+                if (exception.getCause() instanceof TimeoutException) {
+                    log.warn("Could not get global consumer client-instance-id due to timeout.");
+                } else {
+                    log.error("Could not get global consumer client-instance-id", exception);
+                }
+            } catch (final InterruptedException error) {
+                log.error("Could not get global consumer client-instance-id", error);
+            }
         }
 
         if (globalThreadFuture != null) {

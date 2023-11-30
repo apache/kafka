@@ -26,6 +26,7 @@ import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.clients.producer.MockProducer;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.MetricsReporter;
@@ -180,9 +181,9 @@ public class KafkaStreamsTest {
     @Before
     public void before() throws Exception {
         time = new MockTime();
-        adminClient = new MockAdminClient();
         supplier = new MockClientSupplier();
         supplier.setCluster(Cluster.bootstrap(singletonList(new InetSocketAddress("localhost", 9999))));
+        adminClient = (MockAdminClient) supplier.getAdmin(null);
         streamsStateListener = new StateListenerStub();
         props = new Properties();
         props.put(StreamsConfig.APPLICATION_ID_CONFIG, APPLICATION_ID);
@@ -1255,6 +1256,29 @@ public class KafkaStreamsTest {
         }
     }
 
+    @Test
+    public void shouldThrowOnClientInstanceIdsWhenNotStarted() {
+        try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time)) {
+            final IllegalStateException error = assertThrows(
+                    IllegalStateException.class,
+                    () -> streams.clientInstanceIds(Duration.ZERO)
+            );
+            assertThat(error.getMessage(), equalTo("KafkaStreams has not been started, you can retry after calling start()."));
+        }
+    }
+
+    @Test
+    public void shouldThrowOnClientInstanceIdsWhenClosed() {
+        try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time)) {
+            streams.close();
+
+            final IllegalStateException error = assertThrows(
+                    IllegalStateException.class,
+                    () -> streams.clientInstanceIds(Duration.ZERO)
+            );
+            assertThat(error.getMessage(), equalTo("KafkaStreams has been stopped (NOT_RUNNING)."));
+        }
+    }
     @Deprecated // testing old PAPI
     private Topology getStatefulTopology(final String inputTopic,
                                          final String outputTopic,

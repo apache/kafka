@@ -36,6 +36,7 @@ import org.apache.kafka.common.acl.AclBinding;
 import org.apache.kafka.common.acl.AclBindingFilter;
 import org.apache.kafka.common.acl.AclOperation;
 import org.apache.kafka.common.config.ConfigResource;
+import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.errors.InvalidReplicationFactorException;
 import org.apache.kafka.common.errors.InvalidRequestException;
 import org.apache.kafka.common.errors.InvalidUpdateVersionException;
@@ -96,6 +97,8 @@ public class MockAdminClient extends AdminClient {
     private int timeoutNextRequests = 0;
     private final int defaultPartitions;
     private final int defaultReplicationFactor;
+    private Uuid clientInstanceId;
+    private Duration clientInstanceIdBlockingTime;
 
     private KafkaException listConsumerGroupOffsetsException;
 
@@ -1349,9 +1352,28 @@ public class MockAdminClient extends AdminClient {
         mockMetrics.put(name, metric);
     }
 
+    public void setClientInstanceId(final Uuid instanceId, final Duration blockingTime) {
+        clientInstanceId = instanceId;
+        clientInstanceIdBlockingTime = blockingTime;
+    }
+
     @Override
     public Uuid clientInstanceId(Duration timeout) {
-        throw new UnsupportedOperationException("Not implemented yet");
+        if (clientInstanceId == null) {
+            throw new IllegalStateException("clientInstanceId not set");
+        }
+
+        if (timeout.toMillis() < clientInstanceIdBlockingTime.toMillis()) {
+            throw new TimeoutException();
+        }
+
+        try {
+            Thread.sleep(clientInstanceIdBlockingTime.toMillis());
+        } catch (final InterruptedException error) {
+            throw new InterruptException(error);
+        }
+
+        return clientInstanceId;
     }
 
     @Override

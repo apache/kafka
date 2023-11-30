@@ -488,7 +488,7 @@ public class GlobalStreamThread extends Thread {
             return success;
         }
 
-        // need to set `clientInstancIdFuture` before `fetchDeadline`
+        // need to set `clientInstanceIdFuture` before `fetchDeadline`
         // to avoid a race condition potentially leading to a null-pointed-exception
         clientInstanceIdFuture = new KafkaFutureImpl<>();
         fetchDeadline = time.milliseconds() + timeout.toMillis();
