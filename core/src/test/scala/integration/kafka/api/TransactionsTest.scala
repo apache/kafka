@@ -70,8 +70,6 @@ class TransactionsTest extends IntegrationTestHarness {
     props.put(KafkaConfig.AutoLeaderRebalanceEnableProp, false.toString)
     props.put(KafkaConfig.GroupInitialRebalanceDelayMsProp, "0")
     props.put(KafkaConfig.TransactionsAbortTimedOutTransactionCleanupIntervalMsProp, "200")
-    props.put(KafkaConfig.NumNetworkThreadsProp, 2.toString)
-    props.put(KafkaConfig.NumIoThreadsProp, 2.toString)
     props
 
   }
@@ -834,11 +832,7 @@ class TransactionsTest extends IntegrationTestHarness {
     for (i <- 0 until numProducersWithCompression) {
       transactionalCompressionProducers += createTransactionalProducer("transactional-compression-producer-" + i.toString,  compressionType = "snappy")
     }
-
-    // KAFKA-15653 is triggered more easily with replication factor 1
-    val topicConfig = new Properties()
-    topicConfig.put(KafkaConfig.MinInSyncReplicasProp, 1.toString)
-    createTopic("topic", 100, 1, topicConfig)
+    createTopic("topic", 100, brokerCount, topicConfig())
     transactionalCompressionProducers.foreach(_.initTransactions())
 
     for (i <- 0 until numTransactions) {
