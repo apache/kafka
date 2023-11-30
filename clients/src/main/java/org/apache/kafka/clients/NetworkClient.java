@@ -370,8 +370,7 @@ public class NetworkClient implements KafkaClient {
                 }
             } else if (request.header.apiKey() == ApiKeys.METADATA) {
                 metadataUpdater.handleFailedRequest(now, Optional.empty());
-            } else if ((request.header.apiKey() == ApiKeys.GET_TELEMETRY_SUBSCRIPTIONS ||
-                request.header.apiKey() == ApiKeys.PUSH_TELEMETRY) && telemetrySender != null) {
+            } else if (isTelemetryApi(request.header.apiKey()) && telemetrySender != null) {
                 telemetrySender.handleFailedRequest(request.header.apiKey(), null);
             }
         }
@@ -534,8 +533,7 @@ public class NetworkClient implements KafkaClient {
                 abortedSends.add(clientResponse);
             else if (clientRequest.apiKey() == ApiKeys.METADATA)
                 metadataUpdater.handleFailedRequest(now, Optional.of(unsupportedVersionException));
-            else if ((clientRequest.apiKey() == ApiKeys.GET_TELEMETRY_SUBSCRIPTIONS ||
-                clientRequest.apiKey() == ApiKeys.PUSH_TELEMETRY) && telemetrySender != null)
+            else if (isTelemetryApi(clientRequest.apiKey()) && telemetrySender != null)
                 telemetrySender.handleFailedRequest(clientRequest.apiKey(), unsupportedVersionException);
         }
     }
@@ -1074,6 +1072,13 @@ public class NetworkClient implements KafkaClient {
             }
         }
         return false;
+    }
+
+    /**
+     * Return true if the ApiKey belongs to the Telemetry API.
+     */
+    private boolean isTelemetryApi(ApiKeys apiKey) {
+        return apiKey == ApiKeys.GET_TELEMETRY_SUBSCRIPTIONS || apiKey == ApiKeys.PUSH_TELEMETRY;
     }
 
     class DefaultMetadataUpdater implements MetadataUpdater {
