@@ -3754,22 +3754,18 @@ class KafkaApis(val requestChannel: RequestChannel,
       case Some(metricsManager) =>
         try {
           if (metricsManager.isTelemetryReceiverConfigured) {
-            requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
-              metricsManager.processGetTelemetrySubscriptionRequest(subscriptionRequest, request.context))
+            requestHelper.sendMaybeThrottle(request, metricsManager.processGetTelemetrySubscriptionRequest(subscriptionRequest, request.context))
           } else {
             info("Received get telemetry client request for metrics receiver, but no metrics receiver configured")
-            requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
-              subscriptionRequest.getErrorResponse(requestThrottleMs, Errors.UNSUPPORTED_VERSION.exception))
+            requestHelper.sendMaybeThrottle(request, subscriptionRequest.getErrorResponse(Errors.UNSUPPORTED_VERSION.exception))
           }
         } catch {
           case _: Exception =>
-            requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
-              subscriptionRequest.getErrorResponse(requestThrottleMs, Errors.INVALID_REQUEST.exception))
+            requestHelper.sendMaybeThrottle(request, subscriptionRequest.getErrorResponse(Errors.INVALID_REQUEST.exception))
         }
       case None =>
         info("Received get telemetry client request for zookeeper based cluster")
-        requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
-          subscriptionRequest.getErrorResponse(requestThrottleMs, Errors.UNSUPPORTED_VERSION.exception))
+        requestHelper.sendMaybeThrottle(request, subscriptionRequest.getErrorResponse(Errors.UNSUPPORTED_VERSION.exception))
     }
   }
 
@@ -3780,22 +3776,18 @@ class KafkaApis(val requestChannel: RequestChannel,
       case Some(metricsManager) =>
         try {
           if (metricsManager.isTelemetryReceiverConfigured) {
-            requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
-              metricsManager.processPushTelemetryRequest(pushTelemetryRequest, request.context))
+            requestHelper.sendMaybeThrottle(request, metricsManager.processPushTelemetryRequest(pushTelemetryRequest, request.context))
           } else {
             info("Received push telemetry client request, but no metrics receiver configured")
-            requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
-              pushTelemetryRequest.getErrorResponse(requestThrottleMs, Errors.UNSUPPORTED_VERSION.exception))
+            requestHelper.sendMaybeThrottle(request, pushTelemetryRequest.getErrorResponse(Errors.UNSUPPORTED_VERSION.exception))
           }
         } catch {
           case _: Exception =>
-            requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
-              pushTelemetryRequest.getErrorResponse(requestThrottleMs, Errors.INVALID_REQUEST.exception))
+            requestHelper.sendMaybeThrottle(request, pushTelemetryRequest.getErrorResponse(Errors.INVALID_REQUEST.exception))
         }
       case None =>
         info("Received push telemetry client request for zookeeper based cluster")
-        requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
-          pushTelemetryRequest.getErrorResponse(requestThrottleMs, Errors.UNSUPPORTED_VERSION.exception))
+        requestHelper.sendMaybeThrottle(request, pushTelemetryRequest.getErrorResponse(Errors.UNSUPPORTED_VERSION.exception))
     }
   }
 
