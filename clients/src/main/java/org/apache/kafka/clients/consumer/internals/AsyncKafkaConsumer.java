@@ -44,6 +44,7 @@ import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEventHandler;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEventProcessor;
 import org.apache.kafka.clients.consumer.internals.events.CommitApplicationEvent;
+import org.apache.kafka.clients.consumer.internals.events.CompletableApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.ListOffsetsApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.NewTopicsMetadataUpdateRequestEvent;
 import org.apache.kafka.clients.consumer.internals.events.OffsetFetchApplicationEvent;
@@ -1101,16 +1102,15 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         try {
             fetchBuffer.retainAll(Collections.emptySet());
             if (groupId.isPresent()) {
-                try {
-                    // The unsubscribe logic will issue the request to leave the group and then execute any callbacks
-                    // that the user provided. The existing implementation (LegacyKafkaConsumer) blocks the application
-                    // thread when it calls the user's callback. We will implement in kind to maintain compatibility.
-                    Timer timer = time.timer(Duration.ofMillis(Long.MAX_VALUE));
-                    applicationEventHandler.addAndGet(new UnsubscribeApplicationEvent(), timer);
+                log.info("Unsubscribing all topics or patterns and assigned partitions");
+                Timer timer = time.timer(Long.MAX_VALUE);
+                UnsubscribeApplicationEvent event = new UnsubscribeApplicationEvent();
+                applicationEventHandler.add(event);
+
+                if (processBackgroundEvents(event, timer))
                     log.info("Unsubscribed all topics or patterns and assigned partitions");
-                } catch (TimeoutException e) {
-                    log.error("Failed while waiting for the unsubscribe event to complete", e);
-                }
+                else
+                    log.info("Timeout expired while unsubscribing");
             }
             subscriptions.unsubscribe();
         } finally {
@@ -1302,32 +1302,9 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         maybeInvokeCommitCallbacks();
         maybeThrowFencedInstanceException();
 
-        WaitForJoinGroupApplicationEvent event = null;
-
-        do {
-            backgroundEventProcessor.process();
-
-            try {
-                log.debug("Waiting for consumer to join group and transition to {} state", MemberState.STABLE);
-
-                if (event == null) {
-                    // Create and enqueue the event once, but repeatedly wait on the same Future until complete
-                    // or the timer expires.
-                    event = new WaitForJoinGroupApplicationEvent();
-                    applicationEventHandler.add(event);
-                }
-
-                ConsumerUtils.getResult(event.future(), time.timer(100));
-
-                return true;
-            } catch (TimeoutException e) {
-                // Ignore this as we will retry the event until the timeout expires.
-            } finally {
-                timer.update(time.milliseconds());
-            }
-        } while (timer.notExpired());
-
-        return false;
+        WaitForJoinGroupApplicationEvent event = new WaitForJoinGroupApplicationEvent();
+        applicationEventHandler.add(event);
+        return processBackgroundEvents(event, timer);
     }
 
     @Override
@@ -1449,6 +1426,29 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         } finally {
             release();
         }
+    }
+
+    private boolean processBackgroundEvents(CompletableApplicationEvent<?> event, Timer timer) {
+        log.trace("Enqueuing event {} for processing; will wait up to {} ms to complete", event, timer.remainingMs());
+
+        do {
+            backgroundEventProcessor.process();
+
+            try {
+                Timer pollInterval = time.timer(100L);
+                log.trace("Waiting {} ms for event {} to complete", event, pollInterval.remainingMs());
+                ConsumerUtils.getResult(event.future(), pollInterval);
+                log.trace("Event {} completed successfully", event);
+                return true;
+            } catch (TimeoutException e) {
+                // Ignore this as we will retry the event until the timeout expires.
+            } finally {
+                timer.update(time.milliseconds());
+            }
+        } while (timer.notExpired());
+
+        log.trace("Event {} did not complete within timeout", event);
+        return false;
     }
 
     @Override
