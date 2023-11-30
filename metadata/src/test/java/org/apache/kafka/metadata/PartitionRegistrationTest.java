@@ -42,7 +42,6 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
-import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -50,15 +49,10 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.mockito.Mockito.spy;
-import static org.mockito.Mockito.when;
 
 
 @Timeout(40)
 public class PartitionRegistrationTest {
-    private static Stream<Arguments> partitionRecordVersions() {
-        return IntStream.range(PartitionRecord.LOWEST_SUPPORTED_VERSION, PartitionRecord.HIGHEST_SUPPORTED_VERSION + 1).mapToObj(version -> Arguments.of((short) version));
-    }
     @Test
     public void testElectionWasClean() {
         assertTrue(PartitionRegistration.electionWasClean(1, new int[]{1, 2}));
@@ -261,9 +255,17 @@ public class PartitionRegistrationTest {
         assertEquals(Replicas.toList(Replicas.NONE), Replicas.toList(partitionRegistration.addingReplicas));
     }
 
+    private static Stream<Arguments> metadataVersionsForTestPartitionRegistration() {
+        return Arrays.asList(
+            MetadataVersion.IBP_3_7_IV1,
+            MetadataVersion.IBP_3_7_IV2,
+            MetadataVersion.IBP_3_7_IV3
+        ).stream().map(mv -> Arguments.of(mv));
+    }
+
     @ParameterizedTest
-    @MethodSource("partitionRecordVersions")
-    public void testPartitionRegistrationToRecord(short version) {
+    @MethodSource("metadataVersionsForTestPartitionRegistration")
+    public void testPartitionRegistrationToRecord(MetadataVersion metadataVersion) {
         PartitionRegistration.Builder builder = new PartitionRegistration.Builder().
             setReplicas(new int[]{0, 1, 2, 3, 4}).
             setDirectories(new Uuid[]{
@@ -291,16 +293,12 @@ public class PartitionRegistrationTest {
             setLeaderRecoveryState(LeaderRecoveryState.RECOVERED.value()).
             setLeaderEpoch(0).
             setPartitionEpoch(0);
-        MetadataVersion metadataVersion = spy(MetadataVersion.latest());
-        when(metadataVersion.partitionRecordVersion()).thenReturn(version);
-        if (version > 0) {
+        if (metadataVersion.isElrSupported()) {
             expectRecord.
                 setEligibleLeaderReplicas(Arrays.asList(2, 3)).
                 setLastKnownELR(Arrays.asList(4));
-        } else {
-            when(metadataVersion.isElrSupported()).thenReturn(false);
         }
-        if (version > 1) {
+        if (metadataVersion.isDirectoryAssignmentSupported()) {
             expectRecord.setDirectories(Arrays.asList(
                     DirectoryId.UNASSIGNED,
                     Uuid.fromString("KBJBm9GVRAG9Ffe25odmmg"),
@@ -308,15 +306,15 @@ public class PartitionRegistrationTest {
                     Uuid.fromString("7DZNT5qBS7yFF7VMMHS7kw"),
                     Uuid.fromString("cJGPUZsMSEqbidOLYLOIXg")
             ));
-            when(metadataVersion.isDirectoryAssignmentSupported()).thenReturn(true);
         }
         List<UnwritableMetadataException> exceptions = new ArrayList<>();
         ImageWriterOptions options = new ImageWriterOptions.Builder().
                 setMetadataVersion(metadataVersion).
                 setLossHandler(exceptions::add).
                 build();
-        assertEquals(new ApiMessageAndVersion(expectRecord, version), partitionRegistration.toRecord(topicID, 0, options));
-        if (version < 2) {
+        assertEquals(new ApiMessageAndVersion(expectRecord, metadataVersion.partitionRecordVersion()),
+            partitionRegistration.toRecord(topicID, 0, options));
+        if (!metadataVersion.isDirectoryAssignmentSupported()) {
             assertTrue(exceptions.stream().
                     anyMatch(e -> e.getMessage().contains("the directory assignment state of one or more replicas")));
         }
@@ -342,13 +340,14 @@ public class PartitionRegistrationTest {
             setLeader(0).
             setLeaderRecoveryState(LeaderRecoveryState.RECOVERED.value()).
             setLeaderEpoch(0).
+            setDirectories(Arrays.asList(DirectoryId.unassignedArray(5))).
             setPartitionEpoch(0);
         List<UnwritableMetadataException> exceptions = new ArrayList<>();
         ImageWriterOptions options = new ImageWriterOptions.Builder().
-            setMetadataVersion(MetadataVersion.latest()).
+            setMetadataVersion(MetadataVersion.IBP_3_7_IV3).
             setLossHandler(exceptions::add).
             build();
-        assertEquals(new ApiMessageAndVersion(expectRecord, (short) 1), partitionRegistration.toRecord(topicID, 0, options));
+        assertEquals(new ApiMessageAndVersion(expectRecord, (short) 2), partitionRegistration.toRecord(topicID, 0, options));
         assertEquals(Replicas.toList(Replicas.NONE), Replicas.toList(partitionRegistration.addingReplicas));
         assertTrue(exceptions.isEmpty());
     }
