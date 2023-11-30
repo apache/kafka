@@ -148,8 +148,6 @@ class DefaultApiVersionManager(
       case None => false
     }
 
-    System.out.println("[APM] - Client metrics manager: " + clientMetricsManager + " - " + clientTelemetryEnabled)
-
     ApiVersionsResponse.createApiVersionsResponse(
       throttleTimeMs,
       finalizedFeatures.metadataVersion().highestSupportedRecordVersion,
