@@ -49,6 +49,8 @@ public class ClientTelemetryProvider implements Configurable {
     private volatile Resource resource = null;
     private Map<String, ?> config = null;
 
+    // Mapping of config keys to telemetry keys. Contains only keys which can be fetched from config.
+    // Config like group_member_id is not present here as it is not fetched from config.
     static {
         PRODUCER_CONFIG_MAPPING.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, ClientTelemetryProvider.TRANSACTIONAL_ID);
 
