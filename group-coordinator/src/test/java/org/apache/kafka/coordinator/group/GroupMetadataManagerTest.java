@@ -9669,13 +9669,28 @@ public class GroupMetadataManagerTest {
     @Test
     public void testConsumerGroupDescribeBeforeAndAfterCommittingOffset() {
         String consumerGroupId = "consumerGroupId";
+        int epoch = 10;
+        String memberId1 = "memberId1";
+        String memberId2 = "memberId2";
+        String topicName = "topicName";
 
         MockPartitionAssignor assignor = new MockPartitionAssignor("range");
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
             .withAssignors(Collections.singletonList(assignor))
             .build();
 
-        context.replay(RecordHelpers.newGroupEpochRecord(consumerGroupId, 0));
+        ConsumerGroupMember.Builder memberBuilder1 = new ConsumerGroupMember.Builder(memberId1)
+            .setSubscribedTopicNames(Collections.singletonList(topicName));
+        context.replay(RecordHelpers.newMemberSubscriptionRecord(consumerGroupId, memberBuilder1.build()));
+        context.replay(RecordHelpers.newGroupEpochRecord(consumerGroupId, epoch + 1));
+
+        Map<Uuid, Set<Integer>> assignmentMap = new HashMap<>();
+        assignmentMap.put(Uuid.randomUuid(), Collections.emptySet());
+        ConsumerGroupMember.Builder memberBuilder2 = new ConsumerGroupMember.Builder(memberId2);
+        context.replay(RecordHelpers.newMemberSubscriptionRecord(consumerGroupId, memberBuilder2.build()));
+        context.replay(RecordHelpers.newTargetAssignmentRecord(consumerGroupId, memberId2, assignmentMap));
+        context.replay(RecordHelpers.newCurrentAssignmentRecord(consumerGroupId, memberBuilder2.build()));
+        context.replay(RecordHelpers.newGroupEpochRecord(consumerGroupId, epoch + 2));
 
         List<ConsumerGroupDescribeResponseData.DescribedGroup> actual = context.groupMetadataManager.consumerGroupDescribe(Collections.singletonList(consumerGroupId), context.lastCommittedOffset);
         ConsumerGroupDescribeResponseData.DescribedGroup describedGroup = new ConsumerGroupDescribeResponseData.DescribedGroup()
@@ -9692,8 +9707,13 @@ public class GroupMetadataManagerTest {
         actual = context.groupMetadataManager.consumerGroupDescribe(Collections.singletonList(consumerGroupId), context.lastCommittedOffset);
         describedGroup = new ConsumerGroupDescribeResponseData.DescribedGroup()
             .setGroupId(consumerGroupId)
-            .setGroupState("empty")
-            .setAssignorName("range");
+            .setMembers(Arrays.asList(
+                memberBuilder1.build().asConsumerGroupDescribeMember(new Assignment(Collections.emptyMap())),
+                memberBuilder2.build().asConsumerGroupDescribeMember(new Assignment(assignmentMap))
+            ))
+            .setGroupState("assigning")
+            .setAssignorName("range")
+            .setGroupEpoch(epoch + 2);
         expected = Collections.singletonList(
             describedGroup
         );
