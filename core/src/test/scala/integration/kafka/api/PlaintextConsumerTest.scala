@@ -167,7 +167,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
       startingTimestamp = startingTimestamp)
   }
 
-  // ConsumerRebalanceListener temporarily not supported for the consumer group protocol
+  // TODO: enable this test for the consumer group protocol when max.poll.interval.ms is implemented.
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
   @MethodSource(Array("getTestQuorumAndGroupProtocolParametersGenericGroupProtocolOnly"))
   def testMaxPollIntervalMs(quorum: String, groupProtocol: String): Unit = {
@@ -194,7 +194,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     assertEquals(1, listener.callsToRevoked)
   }
 
-  // ConsumerRebalanceListener temporarily not supported for the consumer group protocol
+  // TODO: enable this test for the consumer group protocol when max.poll.interval.ms is implemented.
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
   @MethodSource(Array("getTestQuorumAndGroupProtocolParametersGenericGroupProtocolOnly"))
   def testMaxPollIntervalMsDelayInRevocation(quorum: String, groupProtocol: String): Unit = {
@@ -236,7 +236,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     assertTrue(commitCompleted)
   }
 
-  // ConsumerRebalanceListener temporarily not supported for consumer group protocol
+  // TODO: enable this test for the consumer group protocol when max.poll.interval.ms is implemented.
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
   @MethodSource(Array("getTestQuorumAndGroupProtocolParametersGenericGroupProtocolOnly"))
   def testMaxPollIntervalMsDelayInAssignment(quorum: String, groupProtocol: String): Unit = {
@@ -262,7 +262,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     ensureNoRebalance(consumer, listener)
   }
 
-  // Consumer group protocol temporarily does not commit offsets on consumer close
+  // TODO: enable this test for the consumer group protocol when support for committing offsets on close is implemented.
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
   @MethodSource(Array("getTestQuorumAndGroupProtocolParametersGenericGroupProtocolOnly"))
   def testAutoCommitOnClose(quorum: String, groupProtocol: String): Unit = {
@@ -287,7 +287,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     assertEquals(500, anotherConsumer.committed(Set(tp2).asJava).get(tp2).offset)
   }
 
-  // Consumer group protocol temporarily does not commit offsets on consumer close
+  // TODO: enable this test for the consumer group protocol when support for committing offsets on close is implemented.
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
   @MethodSource(Array("getTestQuorumAndGroupProtocolParametersGenericGroupProtocolOnly"))
   def testAutoCommitOnCloseAfterWakeup(quorum: String, groupProtocol: String): Unit = {
@@ -349,7 +349,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
    * metadata refresh the consumer becomes subscribed to this new topic and all partitions
    * of that topic are assigned to it.
    */
-  // Pattern subscriptions temporarily not supported for consumer group protocol
+  // TODO: enable this test for the consumer group protocol when support for pattern subscriptions is implemented.
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
   @MethodSource(Array("getTestQuorumAndGroupProtocolParametersGenericGroupProtocolOnly"))
   def testPatternSubscription(quorum: String, groupProtocol: String): Unit = {
@@ -408,7 +408,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
    * The metadata refresh interval is intentionally increased to a large enough value to guarantee
    * that it is the subscription call that triggers a metadata refresh, and not the timeout.
    */
-  // Pattern subscriptions temporarily not supported for consumer group protocol
+  // TODO: enable this test for the consumer group protocol when support for pattern subscriptions is implemented.
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
   @MethodSource(Array("getTestQuorumAndGroupProtocolParametersGenericGroupProtocolOnly"))
   def testSubsequentPatternSubscription(quorum: String, groupProtocol: String): Unit = {
@@ -461,7 +461,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
    * When consumer unsubscribes from all its subscriptions, it is expected that its
    * assignments are cleared right away.
    */
-  // Pattern subscriptions temporarily not supported for consumer group protocol
+  // TODO: enable this test for the consumer group protocol when support for pattern subscriptions is implemented.
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
   @MethodSource(Array("getTestQuorumAndGroupProtocolParametersGenericGroupProtocolOnly"))
   def testPatternUnsubscription(quorum: String, groupProtocol: String): Unit = {
@@ -546,7 +546,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     awaitAssignment(consumer, expandedAssignment)
   }
 
-  // Consumer group protocol temporarily does not properly handle assignment change
+  // TODO: enable this test for the consumer group protocol when proper support for assignment change is implemented.
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
   @MethodSource(Array("getTestQuorumAndGroupProtocolParametersGenericGroupProtocolOnly"))
   def testShrinkingTopicSubscriptions(quorum: String, groupProtocol: String): Unit = {
@@ -562,7 +562,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     awaitAssignment(consumer, shrunkenAssignment)
   }
 
-  // partitionsFor not implemented in consumer group protocol
+  // TODO: enable this test for the consumer group protocol when partitionsFor is implemented.
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
   @MethodSource(Array("getTestQuorumAndGroupProtocolParametersGenericGroupProtocolOnly"))
   def testPartitionsFor(quorum: String, groupProtocol: String): Unit = {
@@ -574,7 +574,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     assertEquals(2, parts.size)
   }
 
-  // partitionsFor not implemented in consumer group protocol
+  // TODO: enable this test for the consumer group protocol when partitionsFor is implemented.
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
   @MethodSource(Array("getTestQuorumAndGroupProtocolParametersGenericGroupProtocolOnly"))
   def testPartitionsForAutoCreate(quorum: String, groupProtocol: String): Unit = {
@@ -586,7 +586,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     }, s"Timed out while awaiting non empty partitions.")
   }
 
-  // partitionsFor not implemented in consumer group protocol
+  // TODO: enable this test for the consumer group protocol when partitionsFor is implemented.
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
   @MethodSource(Array("getTestQuorumAndGroupProtocolParametersGenericGroupProtocolOnly"))
   def testPartitionsForInvalidTopic(quorum: String, groupProtocol: String): Unit = {
@@ -1195,7 +1195,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     }
   }
 
-  // ConsumerRebalanceListener temporarily not supported for consumer group protocol
+  // TODO: enable this test for the consumer group protocol when fixes for hanging reconciliation is implemented.
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
   @MethodSource(Array("getTestQuorumAndGroupProtocolParametersGenericGroupProtocolOnly"))
   def testMultiConsumerSessionTimeoutOnStopPolling(quorum: String, groupProtocol: String): Unit = {
@@ -1396,7 +1396,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
       startingTimestamp = startTime, timestampType = TimestampType.LOG_APPEND_TIME)
   }
 
-  // listTopics temporarily not supported for consumer group protocol
+  // TODO: enable this test for the consumer group protocol when listTopics is implemented.
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
   @MethodSource(Array("getTestQuorumAndGroupProtocolParametersGenericGroupProtocolOnly"))
   def testListTopics(quorum: String, groupProtocol: String): Unit = {
@@ -1485,7 +1485,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     assertEquals(7, consumer.committed(Set(tp2).asJava).get(tp2).offset)
   }
 
-  // ConsumerRebalanceListener temporarily not supported for consumer group protocol
+  // TODO: enable this test for the consumer group protocol when auto-commit support is implemented.
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
   @MethodSource(Array("getTestQuorumAndGroupProtocolParametersGenericGroupProtocolOnly"))
   def testAutoCommitOnRebalance(quorum: String, groupProtocol: String): Unit = {
@@ -1526,7 +1526,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     assertEquals(500, consumer.committed(Set(tp2).asJava).get(tp2).offset)
   }
 
-  // ConsumerRebalanceListener temporarily not supported for consumer group protocol
+  // TODO: enable this test for the consumer group protocol when fixes for hanging reconciliation is implemented.
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
   @MethodSource(Array("getTestQuorumAndGroupProtocolParametersGenericGroupProtocolOnly"))
   def testPerPartitionLeadMetricsCleanUpWithSubscribe(quorum: String, groupProtocol: String): Unit = {
@@ -1567,7 +1567,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     assertNull(consumer.metrics.get(new MetricName("records-lead", "consumer-fetch-manager-metrics", "", tags2)))
   }
 
-  // ConsumerRebalanceListener temporarily not supported for consumer group protocol
+  // TODO: enable this test for the consumer group protocol when fixes for hanging reconciliation is implemented.
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
   @MethodSource(Array("getTestQuorumAndGroupProtocolParametersGenericGroupProtocolOnly"))
   def testPerPartitionLagMetricsCleanUpWithSubscribe(quorum: String, groupProtocol: String): Unit = {
@@ -2030,7 +2030,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     assertThrows(classOf[InvalidGroupIdException], () => consumer1.commitSync())
   }
 
-  // Static membership temporarily not supported in consumer group protocol
+  // TODO: enable this test for the consumer group protocol when static membership is implemented.
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
   @MethodSource(Array("getTestQuorumAndGroupProtocolParametersGenericGroupProtocolOnly"))
   def testStaticConsumerDetectsNewPartitionCreatedAfterRestart(quorum:String, groupProtocol: String): Unit = {

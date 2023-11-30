@@ -78,7 +78,7 @@ abstract class BaseConsumerTest extends AbstractConsumerTest {
     assertNotEquals(0, BaseConsumerTest.updateConsumerCount.get())
   }
 
-  // ConsumerRebalanceListener temporarily not supported for consumer group protocol
+  // TODO: enable this test for the consumer group protocol when partitionsFor is implemented.
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
   @MethodSource(Array("getTestQuorumAndGroupProtocolParametersGenericGroupProtocolOnly"))
   def testCoordinatorFailover(quorum: String, groupProtocol: String): Unit = {
