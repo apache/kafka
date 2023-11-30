@@ -735,7 +735,7 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
                         "\tCurrent owned partitions:                  {}\n" +
                         "\tAdded partitions (assigned - owned):       {}\n" +
                         "\tRevoked partitions (owned - assigned):     {}\n",
-                assignedTopicIdPartitions,
+                assignedTopicPartition,
                 ownedPartitions,
                 addedPartitions,
                 revokedPartitions
