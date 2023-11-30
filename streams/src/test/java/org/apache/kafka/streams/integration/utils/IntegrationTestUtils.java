@@ -241,7 +241,13 @@ public class IntegrationTestUtils {
      */
     public static String safeUniqueTestName(final Class<?> testClass, final TestInfo testInfo) {
         final String methodName = testInfo.getTestMethod().map(Method::getName).orElse("unknownMethodName");
-        return methodName + "_" + Uuid.randomUuid().toString();
+        // Generate a random uuid without an `-`. The `-` is used in Streams' thread name as
+        // a separator and some tests rely on this.
+        String randomUuid;
+        do {
+            randomUuid = Uuid.randomUuid().toString();
+        } while (randomUuid.contains("-"));
+        return methodName + randomUuid;
     }
 
     private static String safeUniqueTestName(final Class<?> testClass, final String testName) {
