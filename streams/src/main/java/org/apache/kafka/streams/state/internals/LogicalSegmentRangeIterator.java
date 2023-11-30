@@ -43,6 +43,7 @@ public class LogicalSegmentRangeIterator implements KeyValueIterator {
 
     // defined for creating/releasing the snapshot.
     private LogicalKeyValueSegment snapshotOwner;
+    private Snapshot snapshot;
 
 
 
@@ -60,11 +61,14 @@ public class LogicalSegmentRangeIterator implements KeyValueIterator {
         this.toTime = toTime;
         this.iterator = Collections.emptyListIterator();
         this.keyOrder = keyOrder;
+        this.snapshot = null;
         this.snapshotOwner = null;
     }
 
     @Override
     public void close() {
+        // user may refuse consuming all returned records, so release the snapshot when closing the iterator if it is not released yet!
+        releaseSnapshot();
     }
 
     @Override
@@ -90,7 +94,19 @@ public class LogicalSegmentRangeIterator implements KeyValueIterator {
         while (segmentIterator.hasNext()) {
             final LogicalKeyValueSegment segment = segmentIterator.next();
 
-            final KeyValueIterator<Bytes, byte[]> rawSegmentValueIterator = segment.range(fromKey, toKey);
+            if (snapshot == null) { // create the snapshot (this will happen only one time).
+                this.snapshotOwner = segment;
+                // take a RocksDB snapshot to return the segments content at the query time (in order to guarantee consistency)
+                final Lock lock = new ReentrantLock();
+                lock.lock();
+                try {
+                    this.snapshot = snapshotOwner.getSnapshot();
+                } finally {
+                    lock.unlock();
+                }
+            }
+
+            final KeyValueIterator<Bytes, byte[]> rawSegmentValueIterator = segment.range(fromKey, toKey, snapshot);
             if (rawSegmentValueIterator != null) {
                 if (segment.id() == -1) { // this is the latestValueStore
                     while (rawSegmentValueIterator.hasNext()) {
@@ -129,10 +145,20 @@ public class LogicalSegmentRangeIterator implements KeyValueIterator {
                     return 0;
                 });
             }
+
+            // if all segments have been processed, release the snapshot
             this.iterator = queryResults.listIterator();
             return true;
         }
+        releaseSnapshot();
         return false;
+    }
+
+    private void releaseSnapshot() {
+        if (snapshot != null) {
+            snapshotOwner.releaseSnapshot(snapshot);
+            snapshot = null;
+        }
     }
 
 }

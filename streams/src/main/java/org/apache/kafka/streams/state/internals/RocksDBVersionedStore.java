@@ -308,7 +308,8 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
 //            // still be returned (i.e., the latest record version per key never expires).
 //            return new LogicalSegmentIterator(Collections.singletonList(latestValueStore).listIterator(), key, fromTimestamp, toTimestamp, order);
 //        } else {
-        final List<LogicalKeyValueSegment> segments = new ArrayList<>();
+        final List<LogicalKeyValueSegment> segments = Collections.synchronizedList(new ArrayList<>());
+
         // add segment stores
         // consider the search lower bound as -INF (LONG.MIN_VALUE) to find the record that has been inserted before the {@code fromTimestamp}
         // but is still valid in query specified time interval.

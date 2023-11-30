@@ -455,7 +455,7 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
         if (!autoManagedIterators) {
             throw new IllegalStateException("Must specify openIterators in call to range()");
         }
-        return range(from, to, true, openIterators);
+        return range(from, to, true, openIterators, Optional.empty());
     }
 
     synchronized KeyValueIterator<Bytes, byte[]> range(final Bytes from,
@@ -464,7 +464,17 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
         if (autoManagedIterators) {
             throw new IllegalStateException("Cannot specify openIterators when using auto-managed iterators");
         }
-        return range(from, to, true, openIterators);
+        return range(from, to, true, openIterators, Optional.empty());
+    }
+
+    synchronized KeyValueIterator<Bytes, byte[]> range(final Bytes from,
+                                                       final Bytes to,
+                                                       final Set<KeyValueIterator<Bytes, byte[]>> openIterators,
+                                                       final ReadOptions readOptions) {
+        if (autoManagedIterators) {
+            throw new IllegalStateException("Cannot specify openIterators when using auto-managed iterators");
+        }
+        return range(from, to, true, openIterators, Optional.of(readOptions));
     }
 
     @Override
@@ -473,7 +483,7 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
         if (!autoManagedIterators) {
             throw new IllegalStateException("Must specify openIterators in call to reverseRange()");
         }
-        return range(from, to, false, openIterators);
+        return range(from, to, false, openIterators, Optional.empty());
     }
 
     synchronized KeyValueIterator<Bytes, byte[]> reverseRange(final Bytes from,
@@ -482,13 +492,15 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
         if (autoManagedIterators) {
             throw new IllegalStateException("Cannot specify openIterators when using auto-managed iterators");
         }
-        return range(from, to, false, openIterators);
+        return range(from, to, false, openIterators, Optional.empty());
     }
+
 
     private KeyValueIterator<Bytes, byte[]> range(final Bytes from,
                                                   final Bytes to,
                                                   final boolean forward,
-                                                  final Set<KeyValueIterator<Bytes, byte[]>> openIterators) {
+                                                  final Set<KeyValueIterator<Bytes, byte[]>> openIterators,
+                                                  final Optional<ReadOptions> readOptions) {
         if (Objects.nonNull(from) && Objects.nonNull(to) && from.compareTo(to) > 0) {
             log.warn("Returning empty iterator for fetch with invalid key range: from > to. "
                     + "This may be due to range arguments set in the wrong order, " +
@@ -499,7 +511,8 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
 
         validateStoreOpen();
 
-        final ManagedKeyValueIterator<Bytes, byte[]> rocksDBRangeIterator = dbAccessor.range(from, to, forward);
+        final ManagedKeyValueIterator<Bytes, byte[]> rocksDBRangeIterator =
+                readOptions.isPresent() ? dbAccessor.range(from, to, forward, readOptions.get()) : dbAccessor.range(from, to, forward);
         openIterators.add(rocksDBRangeIterator);
         rocksDBRangeIterator.onClose(() -> openIterators.remove(rocksDBRangeIterator));
 
@@ -675,6 +688,11 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
                                               final Bytes to,
                                               final boolean forward);
 
+        ManagedKeyValueIterator<Bytes, byte[]> range(final Bytes from,
+                                                     final Bytes to,
+                                                     final boolean forward,
+                                                     final ReadOptions readOptions);
+
         /**
          * Deletes keys entries in the range ['from', 'to'], including 'from' and excluding 'to'.
          */
@@ -754,6 +772,21 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
             return new RocksDBRangeIterator(
                     name,
                     db.newIterator(columnFamily),
+                    from,
+                    to,
+                    forward,
+                    true
+            );
+        }
+
+        @Override
+        public ManagedKeyValueIterator<Bytes, byte[]> range(final Bytes from,
+                                                            final Bytes to,
+                                                            final boolean forward,
+                                                            final ReadOptions readOptions) {
+            return new RocksDBRangeIterator(
+                    name,
+                    db.newIterator(columnFamily, readOptions),
                     from,
                     to,
                     forward,

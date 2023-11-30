@@ -28,6 +28,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
+
 import org.apache.kafka.common.serialization.BytesSerializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
@@ -200,6 +201,14 @@ class LogicalKeyValueSegment implements Comparable<LogicalKeyValueSegment>, Segm
     }
     @Override
     public synchronized KeyValueIterator<Bytes, byte[]> range(final Bytes from, final Bytes to) {
+        return range(from, to, Optional.empty());
+    }
+
+    public synchronized KeyValueIterator<Bytes, byte[]> range(final Bytes from, final Bytes to, final Snapshot snapshot) {
+        return range(from, to, Optional.of(snapshot));
+    }
+
+    private synchronized KeyValueIterator<Bytes, byte[]> range(final Bytes from, final Bytes to, final Optional<Snapshot> snapshot) {
         // from bound is inclusive. if the provided bound is null, replace with prefix
         final Bytes fromBound = from == null
             ? prefixKeyFormatter.getPrefix()
@@ -211,10 +220,9 @@ class LogicalKeyValueSegment implements Comparable<LogicalKeyValueSegment>, Segm
         final Bytes toBound = to == null
             ? incrementWithoutOverflow(prefixKeyFormatter.getPrefix())
             : prefixKeyFormatter.addPrefix(to);
-        final KeyValueIterator<Bytes, byte[]> iteratorWithKeyPrefixes = physicalStore.range(
-            fromBound,
-            toBound,
-            openIterators);
+
+        final KeyValueIterator<Bytes, byte[]> iteratorWithKeyPrefixes = snapshot.isPresent() ? physicalStore.range(fromBound, toBound, openIterators, new ReadOptions().setSnapshot(snapshot.get()))
+                                                                                             : physicalStore.range(fromBound, toBound, openIterators);
         return new StrippedPrefixKeyValueIteratorAdapter(
             iteratorWithKeyPrefixes,
             prefixKeyFormatter::removePrefix,
