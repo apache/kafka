@@ -222,6 +222,15 @@ class BrokerLifecycleManagerTest {
     manager.propagateDirectoryFailure(Uuid.fromString("h3sC4Yk-Q9-fd0ntJTocCA"))
     manager.propagateDirectoryFailure(Uuid.fromString("ej8Q9_d2Ri6FXNiTxKFiow"))
     manager.propagateDirectoryFailure(Uuid.fromString("1iF76HVNRPqC7Y4r6647eg"))
+
+    // To avoid slow unit tests, we `poll` to speed things up and not have to wait for each heartbeat interval.
+    // `poll` runs a busy loop advancing the clock, while also notifying two other threads to continue making
+    // progress in BrokerLifecycleManager and MockClient. But Object.notify() does not guarantee notified threads
+    // will immediately be scheduled onto CPU, so this method is particularly prone to race conditions.
+    // This means we must relax the assertion, checking only the 10th heartbeat, to minimize test flakiness.
+    // Without this fast-forwarding, delays in scheduling the BrokerLifecycleManager thread should always be insignificant
+    // compared to the heartbeat interval. So we shouldn't expect directory failures to be delayed for more than a
+    // heartbeat in normal operation.
     val latestHeartbeat = Seq.fill(10)(
       prepareResponse[BrokerHeartbeatRequest](ctx, new BrokerHeartbeatResponse(new BrokerHeartbeatResponseData()))
     ).map(poll(ctx, manager, _)).last
