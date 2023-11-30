@@ -2724,7 +2724,7 @@ class ReplicaManager(val config: KafkaConfig,
     if (partitionsToStopFetching.nonEmpty) {
       val partitionsToStop = partitionsToStopFetching.map { case (tp, deleteLocalLog) => StopPartition(tp, deleteLocalLog) }.toSet
       stopPartitions(partitionsToStop)
-      stateChangeLogger.info(s"Stopped fetchers as part of controlled shutdown for ${partitionsToStopFetching.size} partitions")
+      stateChangeLogger.info(s"Stopped fetchers as part of controlled shutdown for ${partitionsToStop.size} partitions")
     }
   }
 
