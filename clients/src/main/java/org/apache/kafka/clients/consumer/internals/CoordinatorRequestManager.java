@@ -105,7 +105,7 @@ public class CoordinatorRequestManager implements RequestManager {
         return new NetworkClientDelegate.PollResult(coordinatorRequestState.remainingBackoffMs(currentTimeMs));
     }
 
-    private NetworkClientDelegate.UnsentRequest makeFindCoordinatorRequest(final long currentTimeMs) {
+    NetworkClientDelegate.UnsentRequest makeFindCoordinatorRequest(final long currentTimeMs) {
         coordinatorRequestState.onSendAttempt(currentTimeMs);
         FindCoordinatorRequestData data = new FindCoordinatorRequestData()
                 .setKeyType(FindCoordinatorRequest.CoordinatorType.GROUP.id())
@@ -115,7 +115,7 @@ public class CoordinatorRequestManager implements RequestManager {
             Optional.empty()
         );
 
-        unsentRequest.future().whenComplete((clientResponse, throwable) -> {
+        return unsentRequest.whenComplete((clientResponse, throwable) -> {
             if (clientResponse != null) {
                 FindCoordinatorResponse response = (FindCoordinatorResponse) clientResponse.responseBody();
                 onResponse(clientResponse.receivedTimeMs(), response);
@@ -123,8 +123,6 @@ public class CoordinatorRequestManager implements RequestManager {
                 onFailedResponse(unsentRequest.handler().completionTimeMs(), throwable);
             }
         });
-
-        return unsentRequest;
     }
 
     /**

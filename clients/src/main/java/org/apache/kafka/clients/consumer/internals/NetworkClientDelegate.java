@@ -203,11 +203,6 @@ public class NetworkClientDelegate implements AutoCloseable {
         return this.client.leastLoadedNode(time.milliseconds());
     }
 
-    public void send(final UnsentRequest r) {
-        r.setTimer(this.time, this.requestTimeoutMs);
-        unsentRequests.add(r);
-    }
-
     public void wakeup() {
         client.wakeup();
     }
@@ -225,19 +220,25 @@ public class NetworkClientDelegate implements AutoCloseable {
     }
 
     public long addAll(PollResult pollResult) {
+        Objects.requireNonNull(pollResult);
         addAll(pollResult.unsentRequests);
         return pollResult.timeUntilNextPollMs;
     }
 
     public void addAll(final List<UnsentRequest> requests) {
+        Objects.requireNonNull(requests);
         if (!requests.isEmpty()) {
-            requests.forEach(ur -> ur.setTimer(time, requestTimeoutMs));
-            unsentRequests.addAll(requests);
+            requests.forEach(this::add);
         }
     }
 
-    public static class PollResult {
+    public void add(final UnsentRequest r) {
+        Objects.requireNonNull(r);
+        r.setTimer(this.time, this.requestTimeoutMs);
+        unsentRequests.add(r);
+    }
 
+    public static class PollResult {
         public static final long WAIT_FOREVER = Long.MAX_VALUE;
         public static final PollResult EMPTY = new PollResult(WAIT_FOREVER);
         public final long timeUntilNextPollMs;
@@ -265,6 +266,7 @@ public class NetworkClientDelegate implements AutoCloseable {
         private final AbstractRequest.Builder<?> requestBuilder;
         private final FutureCompletionHandler handler;
         private final Optional<Node> node; // empty if random node can be chosen
+
         private Timer timer;
 
         public UnsentRequest(final AbstractRequest.Builder<?> requestBuilder,
@@ -275,21 +277,12 @@ public class NetworkClientDelegate implements AutoCloseable {
             this.handler = new FutureCompletionHandler();
         }
 
-        public UnsentRequest(final AbstractRequest.Builder<?> requestBuilder,
-                             final Optional<Node> node,
-                             final BiConsumer<ClientResponse, Throwable> callback) {
-            this(requestBuilder, node);
-            this.handler.future().whenComplete(callback);
-        }
-
-        public UnsentRequest(final AbstractRequest.Builder<?> requestBuilder,
-                             final Node node,
-                             final BiConsumer<ClientResponse, Throwable> callback) {
-            this(requestBuilder, Optional.of(node), callback);
-        }
-
-        public void setTimer(final Time time, final long requestTimeoutMs) {
+        void setTimer(final Time time, final long requestTimeoutMs) {
             this.timer = time.timer(requestTimeoutMs);
+        }
+
+        Timer timer() {
+            return timer;
         }
 
         CompletableFuture<ClientResponse> future() {
@@ -298,6 +291,11 @@ public class NetworkClientDelegate implements AutoCloseable {
 
         FutureCompletionHandler handler() {
             return handler;
+        }
+
+        UnsentRequest whenComplete(BiConsumer<ClientResponse, Throwable> callback) {
+            handler.future().whenComplete(callback);
+            return this;
         }
 
         AbstractRequest.Builder<?> requestBuilder() {

@@ -115,7 +115,8 @@ public enum ApiKeys {
     CONSUMER_GROUP_DESCRIBE(ApiMessageType.CONSUMER_GROUP_DESCRIBE),
     CONTROLLER_REGISTRATION(ApiMessageType.CONTROLLER_REGISTRATION),
     GET_TELEMETRY_SUBSCRIPTIONS(ApiMessageType.GET_TELEMETRY_SUBSCRIPTIONS),
-    PUSH_TELEMETRY(ApiMessageType.PUSH_TELEMETRY);
+    PUSH_TELEMETRY(ApiMessageType.PUSH_TELEMETRY),
+    ASSIGN_REPLICAS_TO_DIRS(ApiMessageType.ASSIGN_REPLICAS_TO_DIRS);
 
     private static final Map<ApiMessageType.ListenerType, EnumSet<ApiKeys>> APIS_BY_LISTENER =
         new EnumMap<>(ApiMessageType.ListenerType.class);

@@ -18,6 +18,7 @@ import time
 
 from ducktape.utils.util import wait_until
 from ducktape.mark import parametrize
+from ducktape.mark.resource import cluster
 from ducktape.errors import TimeoutError
 
 from kafkatest.services.console_consumer import ConsoleConsumer
@@ -85,6 +86,7 @@ class TestMigration(ProduceConsumeValidateTest):
                 controller.stop_node(node)
                 controller.start_node(node)
 
+    @cluster(num_nodes=7)
     @parametrize(roll_controller = True)
     @parametrize(roll_controller = False)
     def test_online_migration(self, roll_controller):
@@ -131,6 +133,7 @@ class TestMigration(ProduceConsumeValidateTest):
         self.run_produce_consume_validate(core_test_action=partial(self.do_migration, roll_controller = roll_controller))
         self.kafka.stop()
 
+    @cluster(num_nodes=7)
     @parametrize(metadata_quorum=isolated_kraft)
     def test_pre_migration_mode_3_4(self, metadata_quorum):
         """
@@ -203,6 +206,7 @@ class TestMigration(ProduceConsumeValidateTest):
 
         assert saw_expected_error, "Did not see expected ERROR log in the controller logs"
 
+    @cluster(num_nodes=5)
     def test_upgrade_after_3_4_migration(self):
         """
         Perform a migration on version 3.4.0. Then do a rolling upgrade to 3.5+ and ensure we see
@@ -282,6 +286,7 @@ class TestMigration(ProduceConsumeValidateTest):
         assert saw_expected_log, "Did not see expected INFO log after upgrading from a 3.4 migration"
         self.kafka.stop()
 
+    @cluster(num_nodes=5)
     def test_reconcile_kraft_to_zk(self):
         """
         Perform a migration and delete a topic directly from ZK. Ensure that the topic is added back

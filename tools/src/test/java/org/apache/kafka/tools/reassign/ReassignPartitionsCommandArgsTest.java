@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.tools.reassign;
 
-import kafka.admin.ReassignPartitionsCommand;
 import org.apache.kafka.common.utils.Exit;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -88,9 +87,9 @@ public class ReassignPartitionsCommandArgsTest {
             "--bootstrap-server", "localhost:1234",
             "--execute",
             "--reassignment-json-file", "myfile.json"};
-        ReassignPartitionsCommand.ReassignPartitionsCommandOptions opts = ReassignPartitionsCommand.validateAndParseArgs(args);
-        assertEquals(10000L, opts.options.valueOf(opts.timeoutOpt()));
-        assertEquals(-1L, opts.options.valueOf(opts.interBrokerThrottleOpt()));
+        ReassignPartitionsCommandOptions opts = ReassignPartitionsCommand.validateAndParseArgs(args);
+        assertEquals(10000L, opts.options.valueOf(opts.timeoutOpt));
+        assertEquals(-1L, opts.options.valueOf(opts.interBrokerThrottleOpt));
     }
 
     @Test
@@ -115,7 +114,7 @@ public class ReassignPartitionsCommandArgsTest {
     @Test
     public void shouldFailIfNoArgs() {
         String[] args = new String[0];
-        shouldFailWith(ReassignPartitionsCommand.helpText(), args);
+        shouldFailWith(ReassignPartitionsCommand.HELP_TEXT, args);
     }
 
     @Test
@@ -225,7 +224,7 @@ public class ReassignPartitionsCommandArgsTest {
     public void shouldPrintHelpTextIfHelpArg() {
         String[] args = new String[] {"--help"};
         // note, this is not actually a failed case, it's just we share the same `printUsageAndExit` method when wrong arg received
-        shouldFailWith(ReassignPartitionsCommand.helpText(), args);
+        shouldFailWith(ReassignPartitionsCommand.HELP_TEXT, args);
     }
 
     ///// Test --verify

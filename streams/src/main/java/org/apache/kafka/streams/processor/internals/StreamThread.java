@@ -76,7 +76,7 @@ import static org.apache.kafka.streams.processor.internals.ClientUtils.getConsum
 import static org.apache.kafka.streams.processor.internals.ClientUtils.getRestoreConsumerClientId;
 import static org.apache.kafka.streams.processor.internals.ClientUtils.getSharedAdminClientId;
 
-public class StreamThread extends Thread {
+public class StreamThread extends Thread implements ProcessingThread {
 
     /**
      * Stream thread states are the possible states that a stream thread can be in.

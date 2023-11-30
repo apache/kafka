@@ -73,7 +73,7 @@ class ControllerApis(
   val controller: Controller,
   val raftManager: RaftManager[ApiMessageAndVersion],
   val config: KafkaConfig,
-  val metaProperties: MetaProperties,
+  val clusterId: String,
   val registrationsPublisher: ControllerRegistrationsPublisher,
   val apiVersionManager: ApiVersionManager,
   val metadataCache: KRaftMetadataCache
@@ -128,6 +128,7 @@ class ControllerApis(
         case ApiKeys.UPDATE_FEATURES => handleUpdateFeatures(request)
         case ApiKeys.DESCRIBE_CLUSTER => handleDescribeCluster(request)
         case ApiKeys.CONTROLLER_REGISTRATION => handleControllerRegistration(request)
+        case ApiKeys.ASSIGN_REPLICAS_TO_DIRS => handleAssignReplicasToDirs(request)
         case _ => throw new ApiException(s"Unsupported ApiKey ${request.context.header.apiKey}")
       }
 
@@ -204,16 +205,14 @@ class ControllerApis(
       names => authHelper.filterByAuthorized(request.context, DESCRIBE, TOPIC, names)(n => n),
       names => authHelper.filterByAuthorized(request.context, DELETE, TOPIC, names)(n => n))
     future.handle[Unit] { (results, exception) =>
-      requestHelper.sendResponseMaybeThrottleWithControllerQuota(controllerMutationQuota, request, throttleTimeMs => {
-        if (exception != null) {
-          deleteTopicsRequest.getErrorResponse(throttleTimeMs, exception)
-        } else {
-          val responseData = new DeleteTopicsResponseData().
-            setResponses(new DeletableTopicResultCollection(results.iterator)).
-            setThrottleTimeMs(throttleTimeMs)
-          new DeleteTopicsResponse(responseData)
-        }
-      })
+      val response = if (exception != null) {
+        deleteTopicsRequest.getErrorResponse(exception)
+      } else {
+        val responseData = new DeleteTopicsResponseData()
+          .setResponses(new DeletableTopicResultCollection(results.iterator))
+        new DeleteTopicsResponse(responseData)
+      }
+      requestHelper.sendResponseMaybeThrottleWithControllerQuota(controllerMutationQuota, request, response)
     }
   }
 
@@ -370,14 +369,12 @@ class ControllerApis(
         names => authHelper.filterByAuthorized(request.context, DESCRIBE_CONFIGS, TOPIC,
             names, logIfDenied = false)(identity))
     future.handle[Unit] { (result, exception) =>
-      requestHelper.sendResponseMaybeThrottleWithControllerQuota(controllerMutationQuota, request, throttleTimeMs => {
-        if (exception != null) {
-          createTopicsRequest.getErrorResponse(throttleTimeMs, exception)
-        } else {
-          result.setThrottleTimeMs(throttleTimeMs)
-          new CreateTopicsResponse(result)
-        }
-      })
+      val response = if (exception != null) {
+        createTopicsRequest.getErrorResponse(exception)
+      } else {
+        new CreateTopicsResponse(result)
+      }
+      requestHelper.sendResponseMaybeThrottleWithControllerQuota(controllerMutationQuota, request, response)
     }
   }
 
@@ -471,7 +468,7 @@ class ControllerApis(
   def authorizeAlterResource(requestContext: RequestContext,
                              resource: ConfigResource): ApiError = {
     resource.`type` match {
-      case ConfigResource.Type.BROKER =>
+      case ConfigResource.Type.BROKER | ConfigResource.Type.CLIENT_METRICS =>
         if (authHelper.authorize(requestContext, ALTER_CONFIGS, CLUSTER, CLUSTER_NAME)) {
           new ApiError(NONE)
         } else {
@@ -801,16 +798,13 @@ class ControllerApis(
       createPartitionsRequest.data(),
       filterAlterAuthorizedTopics)
     future.handle[Unit] { (responses, exception) =>
-      if (exception != null) {
-        requestHelper.handleError(request, exception)
+      val response = if (exception != null) {
+        createPartitionsRequest.getErrorResponse(exception)
       } else {
-        requestHelper.sendResponseMaybeThrottleWithControllerQuota(controllerMutationQuota, request, requestThrottleMs => {
-          val responseData = new CreatePartitionsResponseData().
-            setResults(responses).
-            setThrottleTimeMs(requestThrottleMs)
-          new CreatePartitionsResponse(responseData)
-        })
+        val responseData = new CreatePartitionsResponseData().setResults(responses)
+        new CreatePartitionsResponse(responseData)
       }
+      requestHelper.sendResponseMaybeThrottleWithControllerQuota(controllerMutationQuota, request, response)
     }
   }
 
@@ -1066,12 +1060,21 @@ class ControllerApis(
     val response = authHelper.computeDescribeClusterResponse(
       request,
       EndpointType.CONTROLLER,
-      metaProperties.clusterId,
+      clusterId,
       () => registrationsPublisher.describeClusterControllers(request.context.listenerName()),
       () => raftManager.leaderAndEpoch.leaderId().orElse(-1)
     )
     requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
       new DescribeClusterResponse(response.setThrottleTimeMs(requestThrottleMs)))
+    CompletableFuture.completedFuture[Unit](())
+  }
+
+  def handleAssignReplicasToDirs(request: RequestChannel.Request): CompletableFuture[Unit] = {
+    val assignReplicasToDirsRequest = request.body[AssignReplicasToDirsRequest]
+
+    // TODO KAFKA-15426
+    requestHelper.sendMaybeThrottle(request,
+      assignReplicasToDirsRequest.getErrorResponse(Errors.UNSUPPORTED_VERSION.exception))
     CompletableFuture.completedFuture[Unit](())
   }
 }

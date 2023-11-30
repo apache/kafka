@@ -2458,7 +2458,7 @@ public class TaskManagerTest {
     }
 
     @Test
-    public void shouldNotCommitNonCorruptedRestoringActiveTasksAndCommitStandbyTasks() {
+    public void shouldNotCommitNonCorruptedRestoringActiveTasksAndNotCommitRunningStandbyTasksWithStateUpdaterEnabled() {
         final StreamTask activeRestoringTask = statefulTask(taskId00, taskId00ChangelogPartitions)
             .withInputPartitions(taskId00Partitions)
             .inState(State.RESTORING).build();
@@ -2479,7 +2479,44 @@ public class TaskManagerTest {
         taskManager.handleCorruption(mkSet(taskId02));
 
         Mockito.verify(activeRestoringTask, never()).commitNeeded();
-        Mockito.verify(standbyTask, times(2)).commitNeeded();
+        Mockito.verify(activeRestoringTask, never()).prepareCommit();
+        Mockito.verify(activeRestoringTask, never()).postCommit(Mockito.anyBoolean());
+        Mockito.verify(standbyTask, never()).commitNeeded();
+        Mockito.verify(standbyTask, never()).prepareCommit();
+        Mockito.verify(standbyTask, never()).postCommit(Mockito.anyBoolean());
+        verify(consumer);
+    }
+
+    @Test
+    public void shouldNotCommitNonCorruptedRestoringActiveTasksAndCommitRunningStandbyTasksWithStateUpdaterDisabled() {
+        final StreamTask activeRestoringTask = statefulTask(taskId00, taskId00ChangelogPartitions)
+            .withInputPartitions(taskId00Partitions)
+            .inState(State.RESTORING).build();
+        final StandbyTask standbyTask = standbyTask(taskId01, taskId01ChangelogPartitions)
+            .withInputPartitions(taskId01Partitions)
+            .inState(State.RUNNING).build();
+        when(standbyTask.commitNeeded()).thenReturn(true);
+        final StreamTask corruptedTask = statefulTask(taskId02, taskId02ChangelogPartitions)
+            .withInputPartitions(taskId02Partitions)
+            .inState(State.RUNNING).build();
+        final TasksRegistry tasks = Mockito.mock(TasksRegistry.class);
+        when(tasks.allTasksPerId()).thenReturn(mkMap(
+            mkEntry(taskId00, activeRestoringTask),
+            mkEntry(taskId01, standbyTask),
+            mkEntry(taskId02, corruptedTask)
+        ));
+        when(tasks.task(taskId02)).thenReturn(corruptedTask);
+        final TaskManager taskManager = setUpTaskManager(ProcessingMode.AT_LEAST_ONCE, tasks, false);
+        expect(consumer.assignment()).andReturn(intersection(HashSet::new, taskId00Partitions, taskId01Partitions, taskId02Partitions));
+        replay(consumer);
+
+        taskManager.handleCorruption(mkSet(taskId02));
+
+        Mockito.verify(activeRestoringTask, never()).commitNeeded();
+        Mockito.verify(activeRestoringTask, never()).prepareCommit();
+        Mockito.verify(activeRestoringTask, never()).postCommit(Mockito.anyBoolean());
+        Mockito.verify(standbyTask).prepareCommit();
+        Mockito.verify(standbyTask).postCommit(Mockito.anyBoolean());
     }
 
     @Test

@@ -16,20 +16,26 @@
  */
 package org.apache.kafka.connect.cli;
 
+import com.fasterxml.jackson.core.exc.StreamReadException;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.DatabindException;
+import com.fasterxml.jackson.databind.DeserializationFeature;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.connector.policy.ConnectorClientConfigOverridePolicy;
+import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.json.JsonConverter;
 import org.apache.kafka.connect.json.JsonConverterConfig;
 import org.apache.kafka.connect.runtime.Connect;
-import org.apache.kafka.connect.runtime.ConnectorConfig;
 import org.apache.kafka.connect.runtime.Herder;
 import org.apache.kafka.connect.runtime.Worker;
 import org.apache.kafka.connect.runtime.isolation.Plugins;
 import org.apache.kafka.connect.runtime.rest.RestClient;
 import org.apache.kafka.connect.runtime.rest.RestServer;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorInfo;
+import org.apache.kafka.connect.runtime.rest.entities.CreateConnectorRequest;
 import org.apache.kafka.connect.runtime.standalone.StandaloneConfig;
 import org.apache.kafka.connect.runtime.standalone.StandaloneHerder;
 import org.apache.kafka.connect.storage.FileOffsetBackingStore;
@@ -38,8 +44,13 @@ import org.apache.kafka.connect.util.FutureCallback;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.File;
+import java.io.IOException;
+import java.nio.file.Paths;
 import java.util.Collections;
 import java.util.Map;
+
+import static org.apache.kafka.connect.runtime.ConnectorConfig.NAME_CONFIG;
 
 /**
  * <p>
@@ -61,23 +72,24 @@ public class ConnectStandalone extends AbstractConnectCli<StandaloneConfig> {
 
     @Override
     protected String usage() {
-        return "ConnectStandalone worker.properties [connector1.properties connector2.properties ...]";
+        return "ConnectStandalone worker.properties [connector1.properties connector2.json ...]";
     }
 
     @Override
     protected void processExtraArgs(Herder herder, Connect connect, String[] extraArgs) {
         try {
-            for (final String connectorPropsFile : extraArgs) {
-                Map<String, String> connectorProps = Utils.propsToStringMap(Utils.loadProps(connectorPropsFile));
+            for (final String connectorConfigFile : extraArgs) {
+                CreateConnectorRequest createConnectorRequest = parseConnectorConfigurationFile(connectorConfigFile);
                 FutureCallback<Herder.Created<ConnectorInfo>> cb = new FutureCallback<>((error, info) -> {
                     if (error != null)
-                        log.error("Failed to create connector for {}", connectorPropsFile);
+                        log.error("Failed to create connector for {}", connectorConfigFile);
                     else
                         log.info("Created connector {}", info.result().name());
                 });
                 herder.putConnectorConfig(
-                        connectorProps.get(ConnectorConfig.NAME_CONFIG),
-                        connectorProps, false, cb);
+                    createConnectorRequest.name(), createConnectorRequest.config(),
+                    createConnectorRequest.initialTargetState(),
+                    false, cb);
                 cb.get();
             }
         } catch (Throwable t) {
@@ -85,6 +97,64 @@ public class ConnectStandalone extends AbstractConnectCli<StandaloneConfig> {
             connect.stop();
             Exit.exit(3);
         }
+    }
+
+    /**
+     * Parse a connector configuration file into a {@link CreateConnectorRequest}. The file can have any one of the following formats (note that
+     * we attempt to parse the file in this order):
+     * <ol>
+     *     <li>A JSON file containing an Object with only String keys and values that represent the connector configuration.</li>
+     *     <li>A JSON file containing an Object that can be parsed directly into a {@link CreateConnectorRequest}</li>
+     *     <li>A valid Java Properties file (i.e. containing String key/value pairs representing the connector configuration)</li>
+     * </ol>
+     * <p>
+     * Visible for testing.
+     *
+     * @param filePath the path of the connector configuration file
+     * @return the parsed connector configuration in the form of a {@link CreateConnectorRequest}
+     */
+    CreateConnectorRequest parseConnectorConfigurationFile(String filePath) throws IOException {
+        ObjectMapper objectMapper = new ObjectMapper();
+
+        File connectorConfigurationFile = Paths.get(filePath).toFile();
+        try {
+            Map<String, String> connectorConfigs = objectMapper.readValue(
+                connectorConfigurationFile,
+                new TypeReference<Map<String, String>>() { });
+
+            if (!connectorConfigs.containsKey(NAME_CONFIG)) {
+                throw new ConnectException("Connector configuration at '" + filePath + "' is missing the mandatory '" + NAME_CONFIG + "' "
+                    + "configuration");
+            }
+            return new CreateConnectorRequest(connectorConfigs.get(NAME_CONFIG), connectorConfigs, null);
+        } catch (StreamReadException | DatabindException e) {
+            log.debug("Could not parse connector configuration file '{}' into a Map with String keys and values", filePath);
+        }
+
+        try {
+            objectMapper.configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
+            CreateConnectorRequest createConnectorRequest = objectMapper.readValue(connectorConfigurationFile,
+                new TypeReference<CreateConnectorRequest>() { });
+            if (createConnectorRequest.config().containsKey(NAME_CONFIG)) {
+                if (!createConnectorRequest.config().get(NAME_CONFIG).equals(createConnectorRequest.name())) {
+                    throw new ConnectException("Connector name configuration in 'config' doesn't match the one specified in 'name' at '" + filePath
+                        + "'");
+                }
+            } else {
+                createConnectorRequest.config().put(NAME_CONFIG, createConnectorRequest.name());
+            }
+            return createConnectorRequest;
+        } catch (StreamReadException | DatabindException e) {
+            log.debug("Could not parse connector configuration file '{}' into an object of type {}",
+                filePath, CreateConnectorRequest.class.getSimpleName());
+        }
+
+        Map<String, String> connectorConfigs = Utils.propsToStringMap(Utils.loadProps(filePath));
+        if (!connectorConfigs.containsKey(NAME_CONFIG)) {
+            throw new ConnectException("Connector configuration at '" + filePath + "' is missing the mandatory '" + NAME_CONFIG + "' "
+                + "configuration");
+        }
+        return new CreateConnectorRequest(connectorConfigs.get(NAME_CONFIG), connectorConfigs, null);
     }
 
     @Override

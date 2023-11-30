@@ -62,7 +62,8 @@ public interface GroupCoordinator {
      * @param context           The request context.
      * @param request           The ConsumerGroupHeartbeatResponse data.
      *
-     * @return A future yielding the response or an exception.
+     * @return  A future yielding the response.
+     *          The error code(s) of the response are set to indicate the error(s) occurred during the execution.
      */
     CompletableFuture<ConsumerGroupHeartbeatResponseData> consumerGroupHeartbeat(
         RequestContext context,
@@ -76,7 +77,8 @@ public interface GroupCoordinator {
      * @param request           The JoinGroupRequest data.
      * @param bufferSupplier    The buffer supplier tight to the request thread.
      *
-     * @return A future yielding the response or an exception.
+     * @return  A future yielding the response.
+     *          The error code(s) of the response are set to indicate the error(s) occurred during the execution.
      */
     CompletableFuture<JoinGroupResponseData> joinGroup(
         RequestContext context,
@@ -91,7 +93,8 @@ public interface GroupCoordinator {
      * @param request           The SyncGroupRequest data.
      * @param bufferSupplier    The buffer supplier tight to the request thread.
      *
-     * @return A future yielding the response or an exception.
+     * @return  A future yielding the response.
+     *          The error code(s) of the response are set to indicate the error(s) occurred during the execution.
      */
     CompletableFuture<SyncGroupResponseData> syncGroup(
         RequestContext context,
@@ -105,7 +108,8 @@ public interface GroupCoordinator {
      * @param context           The coordinator request context.
      * @param request           The HeartbeatRequest data.
      *
-     * @return A future yielding the response or an exception.
+     * @return  A future yielding the response.
+     *          The error code(s) of the response are set to indicate the error(s) occurred during the execution.
      */
     CompletableFuture<HeartbeatResponseData> heartbeat(
         RequestContext context,
@@ -118,7 +122,8 @@ public interface GroupCoordinator {
      * @param context           The coordinator request context.
      * @param request           The LeaveGroupRequest data.
      *
-     * @return A future yielding the response or an exception.
+     * @return  A future yielding the response.
+     *          The error code(s) of the response are set to indicate the error(s) occurred during the execution.
      */
     CompletableFuture<LeaveGroupResponseData> leaveGroup(
         RequestContext context,
@@ -131,7 +136,8 @@ public interface GroupCoordinator {
      * @param context           The coordinator request context.
      * @param request           The ListGroupRequest data.
      *
-     * @return A future yielding the response or an exception.
+     * @return  A future yielding the response.
+     *          The error code(s) of the response are set to indicate the error(s) occurred during the execution.
      */
     CompletableFuture<ListGroupsResponseData> listGroups(
         RequestContext context,
@@ -144,7 +150,8 @@ public interface GroupCoordinator {
      * @param context           The coordinator request context.
      * @param groupIds          The group ids.
      *
-     * @return A future yielding the results or an exception.
+     * @return  A future yielding the results.
+     *          The error codes of the results are set to indicate the errors occurred during the execution.
      */
     CompletableFuture<List<DescribeGroupsResponseData.DescribedGroup>> describeGroups(
         RequestContext context,
@@ -158,7 +165,8 @@ public interface GroupCoordinator {
      * @param groupIds          The group ids.
      * @param bufferSupplier    The buffer supplier tight to the request thread.
      *
-     * @return A future yielding the results or an exception.
+     * @return  A future yielding the results.
+     *          The error codes of the results are set to indicate the errors occurred during the execution.
      */
     CompletableFuture<DeleteGroupsResponseData.DeletableGroupResultCollection> deleteGroups(
         RequestContext context,
@@ -172,7 +180,8 @@ public interface GroupCoordinator {
      * @param context           The request context.
      * @param request           The OffsetFetchRequestGroup request.
      *
-     * @return A future yielding the results or an exception.
+     * @return  A future yielding the results.
+     *          The error codes of the results are set to indicate the errors occurred during the execution.
      */
     CompletableFuture<OffsetFetchResponseData.OffsetFetchResponseGroup> fetchOffsets(
         RequestContext context,
@@ -186,7 +195,8 @@ public interface GroupCoordinator {
      * @param context           The request context.
      * @param request           The OffsetFetchRequestGroup request.
      *
-     * @return A future yielding the results or an exception.
+     * @return  A future yielding the results.
+     *          The error codes of the results are set to indicate the errors occurred during the execution.
      */
     CompletableFuture<OffsetFetchResponseData.OffsetFetchResponseGroup> fetchAllOffsets(
         RequestContext context,
@@ -201,7 +211,8 @@ public interface GroupCoordinator {
      * @param request           The OffsetCommitRequest data.
      * @param bufferSupplier    The buffer supplier tight to the request thread.
      *
-     * @return A future yielding the response or an exception.
+     * @return  A future yielding the response.
+     *          The error code(s) of the response are set to indicate the error(s) occurred during the execution.
      */
     CompletableFuture<OffsetCommitResponseData> commitOffsets(
         RequestContext context,
@@ -216,7 +227,8 @@ public interface GroupCoordinator {
      * @param request           The TnxOffsetCommitRequest data.
      * @param bufferSupplier    The buffer supplier tight to the request thread.
      *
-     * @return A future yielding the response or an exception.
+     * @return  A future yielding the response.
+     *          The error code(s) of the response are set to indicate the error(s) occurred during the execution.
      */
     CompletableFuture<TxnOffsetCommitResponseData> commitTransactionalOffsets(
         RequestContext context,
@@ -231,7 +243,8 @@ public interface GroupCoordinator {
      * @param request           The OffsetDeleteRequest data.
      * @param bufferSupplier    The buffer supplier tight to the request thread.
      *
-     * @return A future yielding the response or an exception.
+     * @return  A future yielding the response.
+     *          The error code(s) of the response are set to indicate the error(s) occurred during the execution.
      */
     CompletableFuture<OffsetDeleteResponseData> deleteOffsets(
         RequestContext context,

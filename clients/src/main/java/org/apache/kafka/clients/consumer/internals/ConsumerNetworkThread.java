@@ -16,12 +16,12 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
+import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.KafkaClient;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEventProcessor;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
-import org.apache.kafka.common.KafkaException;
-import org.apache.kafka.common.errors.WakeupException;
+import org.apache.kafka.common.Node;
 import org.apache.kafka.common.internals.IdempotentCloser;
 import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.utils.KafkaThread;
@@ -33,9 +33,11 @@ import org.slf4j.Logger;
 import java.io.Closeable;
 import java.time.Duration;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Future;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
@@ -90,14 +92,11 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
             while (running) {
                 try {
                     runOnce();
-                } catch (final WakeupException e) {
-                    log.debug("WakeupException caught, consumer network thread won't be interrupted");
-                    // swallow the wakeup exception to prevent killing the thread.
+                } catch (final Throwable e) {
+                    // Swallow the exception and continue
+                    log.error("Unexpected error caught in consumer network thread", e);
                 }
             }
-        } catch (final Throwable t) {
-            log.error("The consumer network thread failed due to unexpected error", t);
-            throw new KafkaException(t);
         } finally {
             cleanup();
         }
@@ -181,9 +180,6 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
         long pollWaitTimeMs = pollResults.stream()
                 .map(networkClientDelegate::addAll)
                 .reduce(MAX_POLL_TIMEOUT_MS, Math::min);
-        pollWaitTimeMs = Math.min(pollWaitTimeMs, timer.remainingMs());
-        networkClientDelegate.poll(pollWaitTimeMs, timer.currentTimeMs());
-        timer.update();
 
         List<Future<?>> requestFutures = pollResults.stream()
                 .flatMap(fads -> fads.unsentRequests.stream())
@@ -192,10 +188,11 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
 
         // Poll to ensure that request has been written to the socket. Wait until either the timer has expired or until
         // all requests have received a response.
-        while (timer.notExpired() && !requestFutures.stream().allMatch(Future::isDone)) {
-            networkClientDelegate.poll(timer.remainingMs(), timer.currentTimeMs());
+        do {
+            pollWaitTimeMs = Math.min(pollWaitTimeMs, timer.remainingMs());
+            networkClientDelegate.poll(pollWaitTimeMs, timer.currentTimeMs());
             timer.update();
-        }
+        } while (timer.notExpired() && !requestFutures.stream().allMatch(Future::isDone));
     }
 
     public boolean isRunning() {
@@ -247,22 +244,87 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
         closeTimeout = timeout;
         wakeup();
 
-        if (timeoutMs > 0) {
-            try {
-                join(timeoutMs);
-            } catch (InterruptedException e) {
-                log.error("Interrupted while waiting for consumer network thread to complete", e);
-            }
+        try {
+            join();
+        } catch (InterruptedException e) {
+            log.error("Interrupted while waiting for consumer network thread to complete", e);
         }
     }
 
     void cleanup() {
-        log.trace("Closing the consumer network thread");
-        Timer timer = time.timer(closeTimeout);
-        runAtClose(requestManagers.entries(), networkClientDelegate, timer);
-        closeQuietly(requestManagers, "request managers");
-        closeQuietly(networkClientDelegate, "network client delegate");
-        closeQuietly(applicationEventProcessor, "application event processor");
-        log.debug("Closed the consumer network thread");
+        try {
+            log.trace("Closing the consumer network thread");
+            Timer timer = time.timer(closeTimeout);
+            maybeAutocommitOnClose(timer);
+            runAtClose(requestManagers.entries(), networkClientDelegate, timer);
+            maybeLeaveGroup(timer);
+        } catch (Exception e) {
+            log.error("Unexpected error during shutdown.  Proceed with closing.", e);
+        } finally {
+            closeQuietly(requestManagers, "request managers");
+            closeQuietly(networkClientDelegate, "network client delegate");
+            closeQuietly(applicationEventProcessor, "application event processor");
+            log.debug("Closed the consumer network thread");
+        }
+    }
+
+    /**
+     * We need to autocommit before shutting down the consumer. The method needs to first connect to the coordinator
+     * node to construct the closing requests.  Then wait for all closing requests to finish before returning.  The
+     * method is bounded by a closing timer.  We will continue closing down the consumer if the requests cannot be
+     * completed in time.
+     */
+    // Visible for testing
+    void maybeAutocommitOnClose(final Timer timer) {
+        if (!requestManagers.coordinatorRequestManager.isPresent())
+            return;
+
+        if (!requestManagers.commitRequestManager.isPresent()) {
+            log.error("Expecting a CommitRequestManager but the object was never initialized. Shutting down.");
+            return;
+        }
+
+        if (!requestManagers.commitRequestManager.get().canAutoCommit()) {
+            return;
+        }
+
+        ensureCoordinatorReady(timer);
+        NetworkClientDelegate.UnsentRequest autocommitRequest =
+            requestManagers.commitRequestManager.get().createCommitAllConsumedRequest();
+        networkClientDelegate.add(autocommitRequest);
+        do {
+            long currentTimeMs = timer.currentTimeMs();
+            ensureCoordinatorReady(timer);
+            networkClientDelegate.poll(timer.remainingMs(), currentTimeMs);
+        } while (timer.notExpired() && !autocommitRequest.future().isDone());
+    }
+
+    void maybeLeaveGroup(final Timer timer) {
+        // TODO: Leave group upon closing the consumer
+    }
+
+    private void ensureCoordinatorReady(final Timer timer) {
+        while (!coordinatorReady() && timer.notExpired()) {
+            findCoordinatorSync(timer);
+        }
+    }
+
+    private boolean coordinatorReady() {
+        CoordinatorRequestManager coordinatorRequestManager = requestManagers.coordinatorRequestManager.orElseThrow(
+                () -> new IllegalStateException("CoordinatorRequestManager uninitialized."));
+        Optional<Node> coordinator = coordinatorRequestManager.coordinator();
+        return coordinator.isPresent() && !networkClientDelegate.isUnavailable(coordinator.get());
+    }
+
+    private void findCoordinatorSync(final Timer timer) {
+        CoordinatorRequestManager coordinatorRequestManager = requestManagers.coordinatorRequestManager.orElseThrow(
+                () -> new IllegalStateException("CoordinatorRequestManager uninitialized."));
+        NetworkClientDelegate.UnsentRequest request = coordinatorRequestManager.makeFindCoordinatorRequest(timer.currentTimeMs());
+        networkClientDelegate.addAll(Collections.singletonList(request));
+        CompletableFuture<ClientResponse> findCoordinatorRequest = request.future();
+        while (timer.notExpired() && !findCoordinatorRequest.isDone()) {
+            networkClientDelegate.poll(timer.remainingMs(), timer.currentTimeMs());
+            timer.update();
+        }
     }
 }

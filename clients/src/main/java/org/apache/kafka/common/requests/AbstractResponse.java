@@ -257,6 +257,8 @@ public abstract class AbstractResponse implements AbstractRequestResponse {
                 return GetTelemetrySubscriptionsResponse.parse(responseBuffer, version);
             case PUSH_TELEMETRY:
                 return PushTelemetryResponse.parse(responseBuffer, version);
+            case ASSIGN_REPLICAS_TO_DIRS:
+                return AssignReplicasToDirsResponse.parse(responseBuffer, version);
             default:
                 throw new AssertionError(String.format("ApiKey %s is not currently handled in `parseResponse`, the " +
                         "code should be updated to do so.", apiKey));

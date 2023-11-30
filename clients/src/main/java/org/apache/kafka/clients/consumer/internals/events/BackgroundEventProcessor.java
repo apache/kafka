@@ -58,10 +58,14 @@ public class BackgroundEventProcessor extends EventProcessor<BackgroundEvent> {
 
     @Override
     public void process(final BackgroundEvent event) {
-        if (event.type() == BackgroundEvent.Type.ERROR)
-            process((ErrorBackgroundEvent) event);
-        else
-            throw new IllegalArgumentException("Background event type " + event.type() + " was not expected");
+        switch (event.type()) {
+            case ERROR:
+                process((ErrorBackgroundEvent) event);
+                break;
+            default:
+                throw new IllegalArgumentException("Background event type " + event.type() + " was not expected");
+
+        }
     }
 
     @Override
@@ -72,4 +76,5 @@ public class BackgroundEventProcessor extends EventProcessor<BackgroundEvent> {
     private void process(final ErrorBackgroundEvent event) {
         throw event.error();
     }
+
 }

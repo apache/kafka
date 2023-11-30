@@ -24,7 +24,6 @@ import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.MockClient;
 import org.apache.kafka.clients.NetworkClient;
 import org.apache.kafka.clients.NodeApiVersions;
-import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.OffsetOutOfRangeException;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
@@ -93,6 +92,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.mockito.ArgumentCaptor;
 
 import java.io.DataOutputStream;
@@ -147,7 +147,6 @@ import static org.mockito.Mockito.verify;
 public class FetcherTest {
     private static final double EPSILON = 0.0001;
 
-    private ConsumerRebalanceListener listener = new NoOpConsumerRebalanceListener();
     private String topicName = "test";
     private String groupId = "test-group";
     private Uuid topicId = Uuid.randomUuid();
@@ -190,6 +189,7 @@ public class FetcherTest {
 
     private MemoryRecords records;
     private MemoryRecords nextRecords;
+    private MemoryRecords moreRecords;
     private MemoryRecords emptyRecords;
     private MemoryRecords partialRecords;
     private ExecutorService executorService;
@@ -198,6 +198,7 @@ public class FetcherTest {
     public void setup() {
         records = buildRecords(1L, 3, 1);
         nextRecords = buildRecords(4L, 2, 4);
+        moreRecords = buildRecords(6L, 3, 6);
         emptyRecords = buildRecords(0L, 0, 0);
         partialRecords = buildRecords(4L, 1, 0);
         partialRecords.buffer().putInt(Records.SIZE_OFFSET, 10000);
@@ -1126,6 +1127,66 @@ public class FetcherTest {
     }
 
     /**
+     * KAFKA-15836:
+     * Test that max.poll.records is honoured when consuming from multiple topic-partitions and the
+     * fetched records are not aligned on max.poll.records boundaries.
+     *
+     * tp0 has records 1,2,3; tp1 has records 6,7,8
+     * max.poll.records is 2
+     * 
+     * poll 1 should return 1,2
+     * poll 2 should return 3,6
+     * poll 3 should return 7,8
+     * 
+     * Or it can be 6,7; then 8,1; then 2,3 because the order of topic-partitions returned is non-deterministic.
+     */
+    @Test
+    public void testFetchMaxPollRecordsUnaligned() {
+        final int maxPollRecords = 2;
+        buildFetcher(maxPollRecords);
+
+        Set<TopicPartition> tps = new HashSet<>();
+        tps.add(tp0);
+        tps.add(tp1);
+        assignFromUser(tps);
+        subscriptions.seek(tp0, 1);
+        subscriptions.seek(tp1, 6);
+
+        client.prepareResponse(fetchResponse2(tidp0, records, 100L, tidp1, moreRecords, 100L));
+        client.prepareResponse(fullFetchResponse(tidp0, emptyRecords, Errors.NONE, 100L, 0));
+
+        // Send fetch request because we do not have pending fetch responses to process.
+        // The first fetch response will return 3 records for tp0 and 3 more for tp1.
+        assertEquals(1, sendFetches());
+        // The poll returns 2 records from one of the topic-partitions (non-deterministic).
+        // This leaves 1 record pending from that topic-partition, and the remaining 3 from the other.
+        pollAndValidateMaxPollRecordsNotExceeded(maxPollRecords);
+
+        // See if we need to send another fetch, which we do not because we have records in hand.
+        assertEquals(0, sendFetches());
+        // The poll returns 2 more records, 1 from the topic-partition we've already been
+        // processing, and 1 more from the other topic-partition. This means we have processed
+        // all records from the former, and 2 remain from the latter.
+        pollAndValidateMaxPollRecordsNotExceeded(maxPollRecords);
+
+        // See if we need to send another fetch, which we do because we've processed all of the records
+        // from one of the topic-partitions. The fetch response does not contain any more records.
+        assertEquals(1, sendFetches());
+        // The poll returns the final 2 records.
+        pollAndValidateMaxPollRecordsNotExceeded(maxPollRecords);
+    }
+
+    private void pollAndValidateMaxPollRecordsNotExceeded(int maxPollRecords) {
+        consumerClient.poll(time.timer(0));
+        Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> recordsByPartition = fetchRecords();
+        int fetchedRecords = 0;
+        for (List<ConsumerRecord<byte[], byte[]>> recordsToTest : recordsByPartition.values()) {
+            fetchedRecords += recordsToTest.size();
+        }
+        assertEquals(maxPollRecords, fetchedRecords);
+    }
+
+    /**
      * Test the scenario where a partition with fetched but not consumed records (i.e. max.poll.records is
      * less than the number of fetched records) is unassigned and a different partition is assigned. This is a
      * pattern used by Streams state restoration and KAFKA-5097 would have been caught by this test.
@@ -1268,7 +1329,7 @@ public class FetcherTest {
     public void testFetchDuringEagerRebalance() {
         buildFetcher();
 
-        subscriptions.subscribe(singleton(topicName), listener);
+        subscriptions.subscribe(singleton(topicName), Optional.empty());
         subscriptions.assignFromSubscribed(singleton(tp0));
         subscriptions.seek(tp0, 0);
 
@@ -1292,7 +1353,7 @@ public class FetcherTest {
     public void testFetchDuringCooperativeRebalance() {
         buildFetcher();
 
-        subscriptions.subscribe(singleton(topicName), listener);
+        subscriptions.subscribe(singleton(topicName), Optional.empty());
         subscriptions.assignFromSubscribed(singleton(tp0));
         subscriptions.seek(tp0, 0);
 
@@ -2789,7 +2850,8 @@ public class FetcherTest {
                 fetchConfig,
                 deserializers,
                 metricsManager,
-                time) {
+                time,
+                apiVersions) {
             @Override
             protected FetchSessionHandler sessionHandler(int node) {
                 final FetchSessionHandler handler = super.sessionHandler(node);
@@ -3398,6 +3460,206 @@ public class FetcherTest {
         assertThrows(KafkaException.class, this::fetchRecords);
     }
 
+    /**
+     * Test the scenario that FetchResponse returns with an error indicating leadership change for the partition, but it
+     * does not contain new leader info(defined in KIP-951).
+     */
+    @ParameterizedTest
+    @EnumSource(value = Errors.class, names = {"FENCED_LEADER_EPOCH", "NOT_LEADER_OR_FOLLOWER"})
+    public void testWhenFetchResponseReturnsWithALeaderShipChangeErrorButNoNewLeaderInformation(Errors error) {
+        // The test runs with 2 partitions where 1 partition is fetched without errors, and 2nd partitions faces errors due to leadership changes.
+
+        buildFetcher(new MetricConfig(), OffsetResetStrategy.EARLIEST, new BytesDeserializer(),
+            new BytesDeserializer(),
+            Integer.MAX_VALUE, IsolationLevel.READ_UNCOMMITTED,
+            Duration.ofMinutes(5).toMillis());
+
+        // Setup so that fetcher is subscribed to tp0 & tp1, and metadata setup with tp0.
+        // assignFromUser(singleton(tp0));
+        subscriptions.assignFromUser(new HashSet<>(Arrays.asList(tp0, tp1)));
+        client.updateMetadata(
+            RequestTestUtils.metadataUpdateWithIds(2, singletonMap(topicName, 4),
+                tp -> validLeaderEpoch, topicIds, false));
+        Node tp0Leader = metadata.fetch().leaderFor(tp0);
+        Node tp1Leader = metadata.fetch().leaderFor(tp1);
+        Node nodeId0 = metadata.fetch().nodeById(0);
+        Cluster startingClusterMetadata = metadata.fetch();
+        subscriptions.seek(tp0, 0);
+        subscriptions.seek(tp1, 0);
+
+        // Setup preferred read replica to node=1 by doing a fetch for both partitions.
+        assertEquals(2, sendFetches());
+        assertFalse(fetcher.hasCompletedFetches());
+        client.prepareResponseFrom(fullFetchResponse(tidp0, this.records, Errors.NONE, 100L,
+            FetchResponse.INVALID_LAST_STABLE_OFFSET, 0, Optional.of(nodeId0.id())), tp0Leader);
+        client.prepareResponseFrom(fullFetchResponse(tidp1, this.records, Errors.NONE, 100L,
+            FetchResponse.INVALID_LAST_STABLE_OFFSET, 0, Optional.of(nodeId0.id())), tp1Leader);
+        consumerClient.poll(time.timer(0));
+        assertTrue(fetcher.hasCompletedFetches());
+
+        Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> partitionRecords = fetchRecords();
+        assertTrue(partitionRecords.containsKey(tp0));
+        assertTrue(partitionRecords.containsKey(tp1));
+
+        // Verify that preferred read replica is set for both tp0 & tp1.
+        Node selected = fetcher.selectReadReplica(tp0, Node.noNode(), time.milliseconds());
+        assertEquals(nodeId0.id(), selected.id());
+        selected = fetcher.selectReadReplica(tp1, Node.noNode(), time.milliseconds());
+        assertEquals(nodeId0.id(), selected.id());
+
+        // Next fetch returns an error(due to leadership change) but new leader info is missing, for tp0.
+        // For tp1 fetch returns with no error.
+        assertEquals(1, sendFetches());
+        assertFalse(fetcher.hasCompletedFetches());
+        // Verify that metadata-update isn't requested
+        assertFalse(metadata.updateRequested());
+
+        LinkedHashMap<TopicIdPartition, FetchResponseData.PartitionData> partitions = new LinkedHashMap<>();
+        partitions.put(tidp0,
+                new FetchResponseData.PartitionData()
+                    .setPartitionIndex(tidp0.topicPartition().partition())
+                    .setErrorCode(error.code()));
+        partitions.put(tidp1,
+                new FetchResponseData.PartitionData()
+                    .setPartitionIndex(tidp1.topicPartition().partition())
+                    .setErrorCode(Errors.NONE.code())
+                    .setHighWatermark(100L)
+                    .setLastStableOffset(FetchResponse.INVALID_LAST_STABLE_OFFSET)
+                    .setLogStartOffset(0)
+                    .setRecords(nextRecords));
+        client.prepareResponseFrom(FetchResponse.of(Errors.NONE, 0, INVALID_SESSION_ID, partitions), nodeId0);
+        consumerClient.poll(time.timer(0));
+        partitionRecords = fetchRecords();
+        assertFalse(partitionRecords.containsKey(tp0));
+        assertTrue(partitionRecords.containsKey(tp1));
+
+        // Validate metadata is unchanged, as response has missing new leader info.
+        assertEquals(startingClusterMetadata, metadata.fetch());
+
+        // Validate metadata-update is requested due to the error for tp0.
+        assertTrue(metadata.updateRequested());
+
+        // Validate preferred-read-replica is cleared for tp0 due to the error.
+        assertEquals(Optional.empty(),
+            subscriptions.preferredReadReplica(tp0, time.milliseconds()));
+        // Validate preferred-read-replica is still set for tp1
+        assertEquals(Optional.of(nodeId0.id()),
+            subscriptions.preferredReadReplica(tp1, time.milliseconds()));
+
+        // Validate subscription is still valid & fetch-able for both tp0 & tp1. And tp0 points to original leader.
+        assertTrue(subscriptions.isFetchable(tp0));
+        Metadata.LeaderAndEpoch currentLeader = subscriptions.position(tp0).currentLeader;
+        assertEquals(tp0Leader.id(), currentLeader.leader.get().id());
+        assertEquals(validLeaderEpoch, currentLeader.epoch.get());
+        assertTrue(subscriptions.isFetchable(tp1));
+    }
+
+    /**
+     * Test the scenario that FetchResponse returns with an error indicating leadership change for the partition, along with
+     * new leader info(defined in KIP-951).
+     */
+    @ParameterizedTest
+    @EnumSource(value = Errors.class, names = {"FENCED_LEADER_EPOCH", "NOT_LEADER_OR_FOLLOWER"})
+    public void testWhenFetchResponseReturnsWithALeaderShipChangeErrorAndNewLeaderInformation(Errors error) {
+        // The test runs with 2 partitions where 1 partition is fetched without errors, and 2nd partitions faces errors due to leadership changes.
+
+        buildFetcher(new MetricConfig(), OffsetResetStrategy.EARLIEST, new BytesDeserializer(),
+            new BytesDeserializer(),
+            Integer.MAX_VALUE, IsolationLevel.READ_UNCOMMITTED,
+            Duration.ofMinutes(5).toMillis());
+
+        // Setup so that fetcher is subscribed to tp0 & tp1, and metadata setup with tp0.
+        // assignFromUser(singleton(tp0));
+        subscriptions.assignFromUser(new HashSet<>(Arrays.asList(tp0, tp1)));
+        client.updateMetadata(
+            RequestTestUtils.metadataUpdateWithIds(2, singletonMap(topicName, 4),
+                tp -> validLeaderEpoch, topicIds, false));
+        Node tp0Leader = metadata.fetch().leaderFor(tp0);
+        Node tp1Leader = metadata.fetch().leaderFor(tp1);
+        Node nodeId0 = metadata.fetch().nodeById(0);
+        Cluster startingClusterMetadata = metadata.fetch();
+        subscriptions.seek(tp0, 0);
+        subscriptions.seek(tp1, 0);
+
+        // Setup preferred read replica to node=1 by doing a fetch for both partitions.
+        assertEquals(2, sendFetches());
+        assertFalse(fetcher.hasCompletedFetches());
+        client.prepareResponseFrom(fullFetchResponse(tidp0, this.records, Errors.NONE, 100L,
+            FetchResponse.INVALID_LAST_STABLE_OFFSET, 0, Optional.of(nodeId0.id())), tp0Leader);
+        client.prepareResponseFrom(fullFetchResponse(tidp1, this.records, Errors.NONE, 100L,
+            FetchResponse.INVALID_LAST_STABLE_OFFSET, 0, Optional.of(nodeId0.id())), tp1Leader);
+        consumerClient.poll(time.timer(0));
+        assertTrue(fetcher.hasCompletedFetches());
+
+        Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> partitionRecords = fetchRecords();
+        assertTrue(partitionRecords.containsKey(tp0));
+        assertTrue(partitionRecords.containsKey(tp1));
+
+        // Verify that preferred read replica is set for both tp0 & tp1.
+        Node selected = fetcher.selectReadReplica(tp0, Node.noNode(), time.milliseconds());
+        assertEquals(nodeId0.id(), selected.id());
+        selected = fetcher.selectReadReplica(tp1, Node.noNode(), time.milliseconds());
+        assertEquals(nodeId0.id(), selected.id());
+
+        // Next fetch returns an error(due to leadership change) and new leader info is returned. The new leader is a new node, id = 999.
+        // For tp1 fetch returns with no error.
+        assertEquals(1, sendFetches());
+        assertFalse(fetcher.hasCompletedFetches());
+        // Verify that metadata-update isn't requested
+        assertFalse(metadata.updateRequested());
+
+        LinkedHashMap<TopicIdPartition, FetchResponseData.PartitionData> partitions = new LinkedHashMap<>();
+        Node newNode = new Node(999, "newnode", 999, "newrack");
+        FetchResponseData.PartitionData tp0Data = new FetchResponseData.PartitionData()
+            .setPartitionIndex(tidp0.topicPartition().partition())
+            .setErrorCode(error.code());
+        tp0Data.currentLeader().setLeaderId(newNode.id());
+        int tp0NewLeaderEpoch = validLeaderEpoch + 100;
+        tp0Data.currentLeader().setLeaderEpoch(tp0NewLeaderEpoch);
+        partitions.put(tidp0, tp0Data);
+        partitions.put(tidp1,
+            new FetchResponseData.PartitionData()
+                .setPartitionIndex(tidp1.topicPartition().partition())
+                .setErrorCode(Errors.NONE.code())
+                .setHighWatermark(100L)
+                .setLastStableOffset(FetchResponse.INVALID_LAST_STABLE_OFFSET)
+                .setLogStartOffset(0)
+                .setRecords(nextRecords));
+        client.prepareResponseFrom(FetchResponse.of(Errors.NONE, 0, INVALID_SESSION_ID, partitions, singletonList(newNode)), nodeId0);
+        consumerClient.poll(time.timer(0));
+        partitionRecords = fetchRecords();
+        assertFalse(partitionRecords.containsKey(tp0));
+        assertTrue(partitionRecords.containsKey(tp1));
+
+        // Validate metadata is changed, as previous FetchResponse had new leader info for tp0.
+        assertNotEquals(startingClusterMetadata, metadata.fetch());
+        // Validate new-node(id=999) is part of the metadata
+        assertEquals(newNode, metadata.fetch().nodeById(999));
+        // Validate metadata returns the new leader info for tp0.
+        Metadata.LeaderAndEpoch currentLeaderTp0 = metadata.currentLeader(tp0);
+        assertEquals(Optional.of(newNode), currentLeaderTp0.leader);
+        assertEquals(Optional.of(tp0NewLeaderEpoch), currentLeaderTp0.epoch);
+
+        // Validate metadata-update is requested due to the error for tp0.
+        assertTrue(metadata.updateRequested());
+
+        // Validate preferred-read-replica is cleared for tp0.
+        assertEquals(Optional.empty(),
+            subscriptions.preferredReadReplica(tp0, time.milliseconds()));
+        // Validate preferred-read-replica is still set for tp1
+        assertEquals(Optional.of(nodeId0.id()),
+            subscriptions.preferredReadReplica(tp1, time.milliseconds()));
+
+        // Validate subscription is valid & fetch-able, and points to the new leader.
+        assertTrue(subscriptions.isFetchable(tp0));
+        Metadata.LeaderAndEpoch currentLeader = subscriptions.position(tp0).currentLeader;
+        assertEquals(newNode.id(), currentLeader.leader.get().id());
+        assertEquals(tp0NewLeaderEpoch, currentLeader.epoch.get());
+
+        // Validate subscription is still valid & fetch-able for tp1.
+        assertTrue(subscriptions.isFetchable(tp1));
+    }
+
     private OffsetsForLeaderEpochResponse prepareOffsetsForLeaderEpochResponse(
         TopicPartition topicPartition,
         Errors error,
@@ -3493,6 +3755,28 @@ public class FetcherTest {
                         .setLogStartOffset(logStartOffset)
                         .setRecords(records));
         return FetchResponse.of(Errors.NONE, throttleTime, INVALID_SESSION_ID, new LinkedHashMap<>(partitions));
+    }
+
+    private FetchResponse fetchResponse2(TopicIdPartition tp1, MemoryRecords records1, long hw1,
+                                         TopicIdPartition tp2, MemoryRecords records2, long hw2) {
+        Map<TopicIdPartition, FetchResponseData.PartitionData> partitions = new HashMap<>();
+        partitions.put(tp1,
+                new FetchResponseData.PartitionData()
+                        .setPartitionIndex(tp1.topicPartition().partition())
+                        .setErrorCode(Errors.NONE.code())
+                        .setHighWatermark(hw1)
+                        .setLastStableOffset(FetchResponse.INVALID_LAST_STABLE_OFFSET)
+                        .setLogStartOffset(0)
+                        .setRecords(records1));
+        partitions.put(tp2,
+                new FetchResponseData.PartitionData()
+                        .setPartitionIndex(tp2.topicPartition().partition())
+                        .setErrorCode(Errors.NONE.code())
+                        .setHighWatermark(hw2)
+                        .setLastStableOffset(FetchResponse.INVALID_LAST_STABLE_OFFSET)
+                        .setLogStartOffset(0)
+                        .setRecords(records2));
+        return FetchResponse.of(Errors.NONE, 0, INVALID_SESSION_ID, new LinkedHashMap<>(partitions));
     }
 
     /**
@@ -3591,7 +3875,8 @@ public class FetcherTest {
                 fetchConfig,
                 new Deserializers<>(keyDeserializer, valueDeserializer),
                 metricsManager,
-                time));
+                time,
+                apiVersions));
         offsetFetcher = new OffsetFetcher(logContext,
                 consumerClient,
                 metadata,
