@@ -68,6 +68,8 @@ services:
       KAFKA_SSL_TRUSTSTORE_FILENAME: "kafka.truststore.jks"
       KAFKA_SSL_TRUSTSTORE_CREDENTIALS: "kafka_truststore_creds"
       KAFKA_SSL_CLIENT_AUTH: "required"
+    depends_on:
+      - controller
 
   broker-ssl:
     image: {$IMAGE}
@@ -100,6 +102,8 @@ services:
       KAFKA_SSL_TRUSTSTORE_FILENAME: "kafka.truststore.jks"
       KAFKA_SSL_TRUSTSTORE_CREDENTIALS: "kafka_truststore_creds"
       KAFKA_SSL_CLIENT_AUTH: "required"
+    depends_on:
+      - controller
 
   broker-ssl-file-input:
     image: {$IMAGE}
@@ -119,3 +123,5 @@ services:
       KAFKA_PROCESS_ROLES: 'broker'
       KAFKA_LISTENERS: "PLAINTEXT://0.0.0.0:19093,SSL://0.0.0.0:9094"
       KAFKA_CONTROLLER_QUORUM_VOTERS: '1@controller:29093'
+    depends_on:
+      - controller
