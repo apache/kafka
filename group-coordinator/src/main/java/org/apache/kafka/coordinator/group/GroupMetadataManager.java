@@ -487,31 +487,12 @@ public class GroupMetadataManager {
             } catch (GroupIdNotFoundException exception) {
                 describedGroups.add(new ConsumerGroupDescribeResponseData.DescribedGroup()
                     .setGroupId(groupId)
-                    .setGroupState(DEAD.toString())
+                    .setErrorCode(Errors.GROUP_ID_NOT_FOUND.code())
                 );
             }
         });
 
         return describedGroups;
-//
-//        for (String groupId: groupIds) {
-//            Group group = groups.get(groupId, committedOffset);
-//
-//            ConsumerGroupDescribeResponseData.DescribedGroup describedGroup = new ConsumerGroupDescribeResponseData.DescribedGroup()
-//                .setGroupId(groupId);
-//
-//            if (group == null || !CONSUMER.equals(group.type())) {
-//                // We don't support upgrading/downgrading between protocols at the moment so
-//                // we set an error if a group exists with the wrong type.
-//                describedGroup.setErrorCode(Errors.GROUP_ID_NOT_FOUND.code());
-//            } else {
-//                describedGroup = ((ConsumerGroup) group).asDescribedGroup(committedOffset, defaultAssignor.name());
-//            }
-//
-//            response.add(describedGroup);
-//        }
-//
-//        return response;
     }
 
     /**

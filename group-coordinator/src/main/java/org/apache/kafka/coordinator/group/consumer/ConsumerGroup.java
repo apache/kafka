@@ -521,7 +521,14 @@ public class ConsumerGroup implements Group {
      * @return The preferred assignor for the group.
      */
     public Optional<String> preferredServerAssignor() {
-        return serverAssignors.entrySet().stream()
+        return preferredServerAssignor(Long.MAX_VALUE);
+    }
+
+    /**
+     * @return The preferred assignor for the group with given offset.
+     */
+    public Optional<String> preferredServerAssignor(long committedOffset) {
+        return serverAssignors.entrySet(committedOffset).stream()
             .max(Map.Entry.comparingByValue())
             .map(Map.Entry::getKey);
     }
@@ -948,7 +955,7 @@ public class ConsumerGroup implements Group {
     public ConsumerGroupDescribeResponseData.DescribedGroup asDescribedGroup(long committedOffset, String defaultAssignor) {
         ConsumerGroupDescribeResponseData.DescribedGroup describedGroup = new ConsumerGroupDescribeResponseData.DescribedGroup()
             .setGroupId(groupId)
-            .setAssignorName(preferredServerAssignor().orElse(defaultAssignor))
+            .setAssignorName(preferredServerAssignor(committedOffset).orElse(defaultAssignor))
             .setGroupEpoch(groupEpoch.get(committedOffset))
             .setGroupState(state.get(committedOffset).toString())
             .setAssignmentEpoch(targetAssignmentEpoch.get(committedOffset));

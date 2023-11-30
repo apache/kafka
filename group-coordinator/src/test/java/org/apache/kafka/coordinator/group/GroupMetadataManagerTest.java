@@ -9680,8 +9680,7 @@ public class GroupMetadataManagerTest {
         List<ConsumerGroupDescribeResponseData.DescribedGroup> actual = context.groupMetadataManager.consumerGroupDescribe(Collections.singletonList(consumerGroupId), context.lastCommittedOffset);
         ConsumerGroupDescribeResponseData.DescribedGroup describedGroup = new ConsumerGroupDescribeResponseData.DescribedGroup()
             .setGroupId(consumerGroupId)
-            .setErrorCode(Errors.GROUP_ID_NOT_FOUND.code())
-            .setAssignorName("range");
+            .setErrorCode(Errors.GROUP_ID_NOT_FOUND.code());
         List<ConsumerGroupDescribeResponseData.DescribedGroup> expected = Collections.singletonList(
             describedGroup
         );
@@ -9693,7 +9692,8 @@ public class GroupMetadataManagerTest {
         actual = context.groupMetadataManager.consumerGroupDescribe(Collections.singletonList(consumerGroupId), context.lastCommittedOffset);
         describedGroup = new ConsumerGroupDescribeResponseData.DescribedGroup()
             .setGroupId(consumerGroupId)
-            .setGroupState("empty");
+            .setGroupState("empty")
+            .setAssignorName("range");
         expected = Collections.singletonList(
             describedGroup
         );
