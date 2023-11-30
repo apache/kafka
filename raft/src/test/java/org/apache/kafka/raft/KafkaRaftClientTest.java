@@ -486,6 +486,60 @@ public class KafkaRaftClientTest {
     }
 
     @Test
+    public void testLeaderShouldResignLeadershipIfNotGetFetchRequestFromMajorityVoters() throws Exception {
+        int localId = 0;
+        int remoteId1 = 1;
+        int remoteId2 = 2;
+        int observerId3 = 3;
+        Set<Integer> voters = Utils.mkSet(localId, remoteId1, remoteId2);
+
+        RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters).build();
+        int resignLeadershipTimeout = context.checkQuorumTimeoutMs;
+
+        context.becomeLeader();
+        int epoch = context.currentEpoch();
+        assertEquals(OptionalInt.of(localId), context.currentLeader());
+
+        // fetch timeout is not expired, the leader should not get resigned
+        context.time.sleep(resignLeadershipTimeout / 2);
+        context.client.poll();
+
+        assertFalse(context.client.quorum().isResigned());
+
+        // Received fetch request from a voter, the fetch timer should be reset.
+        context.deliverRequest(context.fetchRequest(epoch, remoteId1, 0, 0, 0));
+        context.pollUntilRequest();
+
+        // Since the fetch timer is reset, the leader should not get resigned
+        context.time.sleep(resignLeadershipTimeout / 2);
+        context.client.poll();
+
+        assertFalse(context.client.quorum().isResigned());
+
+        // Received fetch request from another voter, the fetch timer should be reset.
+        context.deliverRequest(context.fetchRequest(epoch, remoteId2, 0, 0, 0));
+        context.pollUntilRequest();
+
+        // Since the fetch timer is reset, the leader should not get resigned
+        context.time.sleep(resignLeadershipTimeout / 2);
+        context.client.poll();
+
+        assertFalse(context.client.quorum().isResigned());
+
+        // Received fetch request from an observer, but the fetch timer should not be reset.
+        context.deliverRequest(context.fetchRequest(epoch, observerId3, 0, 0, 0));
+        context.pollUntilRequest();
+
+        // After this sleep, the fetch timeout should expire since we don't receive fetch request from the majority voters within fetchTimeoutMs
+        context.time.sleep(resignLeadershipTimeout / 2);
+        context.client.poll();
+
+        // The leadership should get resigned now
+        assertTrue(context.client.quorum().isResigned());
+        context.assertResignedLeader(epoch, localId);
+    }
+
+    @Test
     public void testElectionTimeoutAfterUserInitiatedResign() throws Exception {
         int localId = 0;
         int otherNodeId = 1;
