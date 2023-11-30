@@ -38,9 +38,8 @@ import java.util.Collections;
 import java.util.List;
 import java.util.function.Consumer;
 
+import static org.apache.kafka.metadata.util.MetadataFeatureUtil.withDirectoryAssignmentSupport;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.mockito.Mockito.spy;
-import static org.mockito.Mockito.when;
 
 
 @Timeout(value = 40)
@@ -103,7 +102,7 @@ public class ImageDowngradeTest {
      * Test downgrading to a MetadataVersion that doesn't support inControlledShutdown.
      */
     @Test
-    public void testPreControlledShutdownStateVersion() throws Throwable {
+    public void testPreControlledShutdownStateVersion() {
         writeWithExpectedLosses(MetadataVersion.IBP_3_3_IV2,
                 Arrays.asList(
                         "the inControlledShutdown state of one or more brokers"),
@@ -133,8 +132,7 @@ public class ImageDowngradeTest {
     @Test
     void testDirectoryAssignmentState() {
         MetadataVersion outputMetadataVersion = MetadataVersion.IBP_3_7_IV0;
-        MetadataVersion inputMetadataVersion = spy(outputMetadataVersion); // TODO replace with actual MV after bump for KIP-858
-        when(inputMetadataVersion.isDirectoryAssignmentSupported()).thenReturn(true);
+        MetadataVersion inputMetadataVersion = withDirectoryAssignmentSupport(outputMetadataVersion);
         PartitionRecord testPartitionRecord = (PartitionRecord) TEST_RECORDS.get(1).message();
         writeWithExpectedLosses(outputMetadataVersion,
                 Collections.singletonList("the directory assignment state of one or more replicas"),

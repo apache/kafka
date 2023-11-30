@@ -27,6 +27,7 @@ import org.junit.jupiter.api.Timeout;
 import java.util.List;
 import java.util.Optional;
 
+import static org.apache.kafka.metadata.util.MetadataFeatureUtil.withDirectoryAssignmentSupport;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 
@@ -114,12 +115,8 @@ public class MetadataImageTest {
 
     private static void testToImage(MetadataImage image) {
         testToImage(image, new ImageWriterOptions.Builder()
-            .setMetadataVersion(image.features().metadataVersion())
+            .setMetadataVersion(withDirectoryAssignmentSupport(image.features().metadataVersion()))
             .build(), Optional.empty());
-    }
-
-    private static void testToImage(MetadataImage image, ImageWriterOptions options) {
-        testToImage(image, options, Optional.empty());
     }
 
     static void testToImage(MetadataImage image, ImageWriterOptions options, Optional<List<ApiMessageAndVersion>> fromRecords) {

@@ -49,7 +49,7 @@ public class ProducerIdControlManagerTest {
         featureControl = new FeatureControlManager.Builder().
             setSnapshotRegistry(snapshotRegistry).
             setQuorumFeatures(new QuorumFeatures(0,
-                QuorumFeatures.defaultFeatureMap(),
+                QuorumFeatures.defaultFeatureMap(true),
                 Collections.singletonList(0))).
             setMetadataVersion(MetadataVersion.latest()).
             build();
@@ -122,8 +122,6 @@ public class ProducerIdControlManagerTest {
 
     @Test
     public void testUnknownBrokerOrEpoch() {
-        ControllerResult<ProducerIdsBlock> result;
-
         assertThrows(StaleBrokerEpochException.class, () ->
             producerIdControlManager.generateNextProducerId(99, 0));
 

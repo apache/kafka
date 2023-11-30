@@ -20,7 +20,6 @@ package org.apache.kafka.controller.metrics;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.Optional;
 
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.metadata.PartitionChangeRecord;
@@ -37,6 +36,7 @@ import static org.apache.kafka.controller.metrics.ControllerMetricsTestUtils.Fak
 import static org.apache.kafka.controller.metrics.ControllerMetricsTestUtils.FakePartitionRegistrationType.NON_PREFERRED_LEADER;
 import static org.apache.kafka.controller.metrics.ControllerMetricsTestUtils.FakePartitionRegistrationType.OFFLINE;
 import static org.apache.kafka.controller.metrics.ControllerMetricsTestUtils.fakePartitionRegistration;
+import static org.apache.kafka.metadata.util.MetadataFeatureUtil.withDirectoryAssignmentSupport;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class ControllerMetricsChangesTest {
@@ -52,28 +52,24 @@ public class ControllerMetricsChangesTest {
         int brokerId,
         boolean fenced
     ) {
-        return new BrokerRegistration(brokerId,
-            100L,
-            Uuid.fromString("Pxi6QwS2RFuN8VSKjqJZyQ"),
-            Collections.emptyList(),
-            Collections.emptyMap(),
-            Optional.empty(),
-            fenced,
-            false);
+        return new BrokerRegistration.Builder().
+            setId(brokerId).
+            setEpoch(100L).
+            setIncarnationId(Uuid.fromString("Pxi6QwS2RFuN8VSKjqJZyQ")).
+            setFenced(fenced).
+            setInControlledShutdown(false).build();
     }
 
     private static BrokerRegistration zkBrokerRegistration(
         int brokerId
     ) {
-        return new BrokerRegistration(brokerId,
-            100L,
-            Uuid.fromString("Pxi6QwS2RFuN8VSKjqJZyQ"),
-            Collections.emptyList(),
-            Collections.emptyMap(),
-            Optional.empty(),
-            false,
-            false,
-            true);
+        return new BrokerRegistration.Builder().
+            setId(brokerId).
+            setEpoch(100L).
+            setIncarnationId(Uuid.fromString("Pxi6QwS2RFuN8VSKjqJZyQ")).
+            setFenced(false).
+            setInControlledShutdown(false).
+            setIsMigratingZkBroker(true).build();
     }
 
     @Test
@@ -161,7 +157,7 @@ public class ControllerMetricsChangesTest {
 
     static {
         ImageWriterOptions options = new ImageWriterOptions.Builder().
-                setMetadataVersion(MetadataVersion.IBP_3_7_IV0).build(); // highest MV for PartitionRecord v0
+                setMetadataVersion(withDirectoryAssignmentSupport(MetadataVersion.IBP_3_7_IV0)).build(); // highest MV for PartitionRecord v0
         TOPIC_DELTA1 = new TopicDelta(new TopicImage("foo", FOO_ID, Collections.emptyMap()));
         TOPIC_DELTA1.replay((PartitionRecord) fakePartitionRegistration(NORMAL).
                 toRecord(FOO_ID, 0, options).message());

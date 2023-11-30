@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.connect.runtime;
 
-import org.apache.kafka.clients.consumer.KafkaConsumer;
+import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.connect.errors.IllegalWorkerStateException;
 import org.apache.kafka.connect.storage.ClusterConfigState;
@@ -36,14 +36,14 @@ public class WorkerSinkTaskContext implements SinkTaskContext {
 
     private final Logger log = LoggerFactory.getLogger(getClass());
     private final Map<TopicPartition, Long> offsets;
-    private final KafkaConsumer<byte[], byte[]> consumer;
+    private final Consumer<byte[], byte[]> consumer;
     private final WorkerSinkTask sinkTask;
     private final ClusterConfigState configState;
     private final Set<TopicPartition> pausedPartitions;
     private long timeoutMs;
     private boolean commitRequested;
 
-    public WorkerSinkTaskContext(KafkaConsumer<byte[], byte[]> consumer,
+    public WorkerSinkTaskContext(Consumer<byte[], byte[]> consumer,
                                  WorkerSinkTask sinkTask,
                                  ClusterConfigState configState) {
         this.offsets = new HashMap<>();

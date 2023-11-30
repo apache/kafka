@@ -21,6 +21,7 @@ import org.apache.kafka.clients.consumer.internals.CachedSupplier;
 import org.apache.kafka.clients.consumer.internals.CommitRequestManager;
 import org.apache.kafka.clients.consumer.internals.ConsumerMetadata;
 import org.apache.kafka.clients.consumer.internals.ConsumerNetworkThread;
+import org.apache.kafka.clients.consumer.internals.MembershipManager;
 import org.apache.kafka.clients.consumer.internals.RequestManagers;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.PartitionInfo;
@@ -104,6 +105,14 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
                 processValidatePositionsEvent();
                 return;
 
+            case SUBSCRIPTION_CHANGE:
+                processSubscriptionChangeEvent();
+                return;
+
+            case UNSUBSCRIBE:
+                processUnsubscribeEvent((UnsubscribeApplicationEvent) event);
+                return;
+
             default:
                 log.warn("Application event type " + event.type() + " was not expected");
         }
@@ -166,6 +175,38 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
         event.chain(future);
     }
 
+    /**
+     * Process event that indicates that the subscription changed. This will make the
+     * consumer join the group if it is not part of it yet, or send the updated subscription if
+     * it is already a member.
+     */
+    private void processSubscriptionChangeEvent() {
+        if (!requestManagers.membershipManager.isPresent()) {
+            throw new RuntimeException("Group membership manager not present when processing a " +
+                    "subscribe event");
+        }
+        MembershipManager membershipManager = requestManagers.membershipManager.get();
+        membershipManager.onSubscriptionUpdated();
+    }
+
+    /**
+     * Process event indicating that the consumer unsubscribed from all topics. This will make
+     * the consumer release its assignment and send a request to leave the group.
+     *
+     * @param event Unsubscribe event containing a future that will complete when the callback
+     *              execution for releasing the assignment completes, and the request to leave
+     *              the group is sent out.
+     */
+    private void processUnsubscribeEvent(UnsubscribeApplicationEvent event) {
+        if (!requestManagers.membershipManager.isPresent()) {
+            throw new RuntimeException("Group membership manager not present when processing an " +
+                    "unsubscribe event");
+        }
+        MembershipManager membershipManager = requestManagers.membershipManager.get();
+        CompletableFuture<Void> result = membershipManager.leaveGroup();
+        event.chain(result);
+    }
+
     private void processResetPositionsEvent() {
         requestManagers.offsetsRequestManager.resetPositionsIfNeeded();
     }
@@ -176,7 +217,7 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
 
     private void process(final TopicMetadataApplicationEvent event) {
         final CompletableFuture<Map<String, List<PartitionInfo>>> future =
-                this.requestManagers.topicMetadataRequestManager.requestTopicMetadata(Optional.of(event.topic()));
+                requestManagers.topicMetadataRequestManager.requestTopicMetadata(Optional.of(event.topic()));
         event.chain(future);
     }
 

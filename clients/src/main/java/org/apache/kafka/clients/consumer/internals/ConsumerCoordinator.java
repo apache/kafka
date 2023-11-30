@@ -1184,7 +1184,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         return commitOffsetsAsync(allConsumedOffsets, (offsets, exception) -> {
             if (exception != null) {
                 if (exception instanceof RetriableCommitFailedException) {
-                    log.debug("Asynchronous auto-commit of offsets {} failed due to retriable error: {}", offsets,
+                    log.debug("Asynchronous auto-commit of offsets {} failed due to retriable error.", offsets,
                         exception);
                     nextAutoCommitTimer.updateAndReset(rebalanceConfig.retryBackoffMs);
                 } else {

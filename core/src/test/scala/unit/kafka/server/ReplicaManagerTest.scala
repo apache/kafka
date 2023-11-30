@@ -564,7 +564,7 @@ class ReplicaManagerTest {
           Collections.singletonMap(topic, Uuid.randomUuid()),
           Set(new Node(0, "host1", 0), new Node(1, "host2", 1)).asJava,
           false,
-          LeaderAndIsrRequest.Type.UNKNOWN
+          AbstractControlRequest.Type.UNKNOWN
         ).build()
         replicaManager.becomeLeaderOrFollower(0, leaderAndIsrRequest, (_, _) => ())
         replicaManager.getPartitionOrException(new TopicPartition(topic, partition))
@@ -2434,7 +2434,7 @@ class ReplicaManagerTest {
       verify(addPartitionsToTxnManager, times(0)).verifyTransaction(any(), any(), any(), any(), any())
 
       // Dynamically enable verification.
-      config.dynamicConfig.initialize(None)
+      config.dynamicConfig.initialize(None, None)
       val props = new Properties()
       props.put(KafkaConfig.TransactionPartitionVerificationEnableProp, "true")
       config.dynamicConfig.updateBrokerConfig(config.brokerId, props)
@@ -2485,7 +2485,7 @@ class ReplicaManagerTest {
       assertEquals(verificationGuard, getVerificationGuard(replicaManager, tp0, producerId))
 
       // Disable verification
-      config.dynamicConfig.initialize(None)
+      config.dynamicConfig.initialize(None, None)
       val props = new Properties()
       props.put(KafkaConfig.TransactionPartitionVerificationEnableProp, "false")
       config.dynamicConfig.updateBrokerConfig(config.brokerId, props)
@@ -2605,7 +2605,7 @@ class ReplicaManagerTest {
       topicIds.asJava,
       Set(new Node(0, "host0", 0), new Node(1, "host1", 1)).asJava,
       true,
-      LeaderAndIsrRequest.Type.FULL
+      AbstractControlRequest.Type.FULL
     ).build()
 
     replicaManager.becomeLeaderOrFollower(0, lisr, (_, _) => ())
@@ -3882,6 +3882,7 @@ class ReplicaManagerTest {
     when(mockLog.logEndOffset).thenReturn(endOffset)
     when(mockLog.localLogStartOffset()).thenReturn(endOffset - 10)
     when(mockLog.remoteLogEnabled()).thenReturn(true)
+    when(mockLog.config).thenReturn(new LogConfig(Collections.emptyMap()))
 
     mockLog
   }

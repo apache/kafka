@@ -17,6 +17,7 @@
 
 package org.apache.kafka.controller;
 
+import org.apache.kafka.common.DirectoryId;
 import org.apache.kafka.common.Endpoint;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.InconsistentClusterIdException;
@@ -41,8 +42,10 @@ import org.apache.kafka.metadata.BrokerRegistrationInControlledShutdownChange;
 import org.apache.kafka.metadata.BrokerRegistrationReply;
 import org.apache.kafka.metadata.FinalizedControllerFeatures;
 import org.apache.kafka.metadata.VersionRange;
+import org.apache.kafka.metadata.placement.ClusterDescriber;
 import org.apache.kafka.metadata.placement.PartitionAssignment;
 import org.apache.kafka.metadata.placement.PlacementSpec;
+import org.apache.kafka.metadata.placement.UsableBroker;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.timeline.SnapshotRegistry;
@@ -55,6 +58,7 @@ import org.junit.jupiter.params.provider.ValueSource;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Optional;
 
@@ -76,7 +80,7 @@ public class ClusterControlManagerTest {
         FeatureControlManager featureControl = new FeatureControlManager.Builder().
             setSnapshotRegistry(snapshotRegistry).
             setQuorumFeatures(new QuorumFeatures(0,
-                QuorumFeatures.defaultFeatureMap(),
+                QuorumFeatures.defaultFeatureMap(true),
                 Collections.singletonList(0))).
             setMetadataVersion(MetadataVersion.latest()).
             build();
@@ -137,7 +141,7 @@ public class ClusterControlManagerTest {
         FeatureControlManager featureControl = new FeatureControlManager.Builder().
             setSnapshotRegistry(snapshotRegistry).
             setQuorumFeatures(new QuorumFeatures(0,
-                QuorumFeatures.defaultFeatureMap(),
+                QuorumFeatures.defaultFeatureMap(true),
                 Collections.singletonList(0))).
             setMetadataVersion(MetadataVersion.latest()).
             build();
@@ -190,7 +194,7 @@ public class ClusterControlManagerTest {
         FeatureControlManager featureControl = new FeatureControlManager.Builder().
             setSnapshotRegistry(snapshotRegistry).
             setQuorumFeatures(new QuorumFeatures(0,
-                QuorumFeatures.defaultFeatureMap(),
+                QuorumFeatures.defaultFeatureMap(true),
                 Collections.singletonList(0))).
             setMetadataVersion(MetadataVersion.latest()).
             build();
@@ -240,12 +244,12 @@ public class ClusterControlManagerTest {
     }
 
     @Test
-    public void testRegistrationWithIncorrectClusterId() throws Exception {
+    public void testRegistrationWithIncorrectClusterId() {
         SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
         FeatureControlManager featureControl = new FeatureControlManager.Builder().
             setSnapshotRegistry(snapshotRegistry).
             setQuorumFeatures(new QuorumFeatures(0,
-                QuorumFeatures.defaultFeatureMap(),
+                QuorumFeatures.defaultFeatureMap(true),
                 Collections.singletonList(0))).
             setMetadataVersion(MetadataVersion.latest()).
             build();
@@ -275,7 +279,7 @@ public class ClusterControlManagerTest {
         FeatureControlManager featureControl = new FeatureControlManager.Builder().
             setSnapshotRegistry(snapshotRegistry).
             setQuorumFeatures(new QuorumFeatures(0,
-                QuorumFeatures.defaultFeatureMap(),
+                QuorumFeatures.defaultFeatureMap(true),
                 Collections.singletonList(0))).
             setMetadataVersion(metadataVersion).
             build();
@@ -317,7 +321,7 @@ public class ClusterControlManagerTest {
     }
 
     @Test
-    public void testUnregister() throws Exception {
+    public void testUnregister() {
         RegisterBrokerRecord brokerRecord = new RegisterBrokerRecord().
             setBrokerId(1).
             setBrokerEpoch(100).
@@ -332,7 +336,7 @@ public class ClusterControlManagerTest {
         FeatureControlManager featureControl = new FeatureControlManager.Builder().
             setSnapshotRegistry(snapshotRegistry).
             setQuorumFeatures(new QuorumFeatures(0,
-                QuorumFeatures.defaultFeatureMap(),
+                QuorumFeatures.defaultFeatureMap(true),
                 Collections.singletonList(0))).
             setMetadataVersion(MetadataVersion.latest()).
             build();
@@ -344,10 +348,15 @@ public class ClusterControlManagerTest {
             build();
         clusterControl.activate();
         clusterControl.replay(brokerRecord, 100L);
-        assertEquals(new BrokerRegistration(1, 100,
-                Uuid.fromString("fPZv1VBsRFmnlRvmGcOW9w"), Collections.singletonMap("PLAINTEXT",
-                new Endpoint("PLAINTEXT", SecurityProtocol.PLAINTEXT, "example.com", 9092)),
-                Collections.emptyMap(), Optional.of("arack"), true, false),
+        assertEquals(new BrokerRegistration.Builder().
+            setId(1).
+            setEpoch(100).
+            setIncarnationId(Uuid.fromString("fPZv1VBsRFmnlRvmGcOW9w")).
+            setListeners(Collections.singletonMap("PLAINTEXT",
+                new Endpoint("PLAINTEXT", SecurityProtocol.PLAINTEXT, "example.com", 9092))).
+            setRack(Optional.of("arack")).
+            setFenced(true).
+            setInControlledShutdown(false).build(),
             clusterControl.brokerRegistrations().get(1));
         assertEquals(100L, clusterControl.registerBrokerRecordOffset(brokerRecord.brokerId()).getAsLong());
         UnregisterBrokerRecord unregisterRecord = new UnregisterBrokerRecord().
@@ -360,13 +369,13 @@ public class ClusterControlManagerTest {
 
     @ParameterizedTest
     @ValueSource(ints = {3, 10})
-    public void testPlaceReplicas(int numUsableBrokers) throws Exception {
+    public void testPlaceReplicas(int numUsableBrokers) {
         MockTime time = new MockTime(0, 0, 0);
         SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
         FeatureControlManager featureControl = new FeatureControlManager.Builder().
             setSnapshotRegistry(snapshotRegistry).
             setQuorumFeatures(new QuorumFeatures(0,
-                QuorumFeatures.defaultFeatureMap(),
+                QuorumFeatures.defaultFeatureMap(true),
                 Collections.singletonList(0))).
             setMetadataVersion(MetadataVersion.latest()).
             build();
@@ -397,10 +406,20 @@ public class ClusterControlManagerTest {
         }
         for (int i = 0; i < 100; i++) {
             List<PartitionAssignment> results = clusterControl.replicaPlacer().place(
-                new PlacementSpec(0,
-                    1,
-                    (short) 3),
-                    clusterControl::usableBrokers
+                    new PlacementSpec(0,
+                            1,
+                            (short) 3),
+                    new ClusterDescriber() {
+                        @Override
+                        public Iterator<UsableBroker> usableBrokers() {
+                            return clusterControl.usableBrokers();
+                        }
+
+                        @Override
+                        public Uuid defaultDir(int brokerId) {
+                            return DirectoryId.UNASSIGNED;
+                        }
+                    }
             ).assignments();
             HashSet<Integer> seen = new HashSet<>();
             for (Integer result : results.get(0).replicas()) {
@@ -413,13 +432,13 @@ public class ClusterControlManagerTest {
 
     @ParameterizedTest
     @EnumSource(value = MetadataVersion.class, names = {"IBP_3_3_IV2", "IBP_3_3_IV3"})
-    public void testRegistrationsToRecords(MetadataVersion metadataVersion) throws Exception {
+    public void testRegistrationsToRecords(MetadataVersion metadataVersion) {
         MockTime time = new MockTime(0, 0, 0);
         SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
         FeatureControlManager featureControl = new FeatureControlManager.Builder().
             setSnapshotRegistry(snapshotRegistry).
             setQuorumFeatures(new QuorumFeatures(0,
-                QuorumFeatures.defaultFeatureMap(),
+                QuorumFeatures.defaultFeatureMap(true),
                 Collections.singletonList(0))).
             setMetadataVersion(metadataVersion).
             build();
