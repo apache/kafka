@@ -206,12 +206,14 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
     }
 
     /**
-     * Returns the delay before the next network request for this request manager. Used to ensure that
-     * waiting in the application thread does not delay beyond the point that a result can be returned.
+     * Returns the delay for which the application thread can safely wait before it should be responsive
+     * to results from the request managers. For example, the subscription state can change when heartbeats
+     * are sent, so blocking for longer than the heartbeat interval might mean the application thread is not
+     * responsive to changes.
      *
-     * @return The delay in milliseconds before the next network request.
+     * @return The maximum delay in milliseconds
      */
-    public long timeUntilNextPoll() {
+    public long maximumTimeToWait() {
         final long currentTimeMs = time.milliseconds();
         if (requestManagers == null) {
             return MAX_POLL_TIMEOUT_MS;
@@ -219,7 +221,7 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
         return requestManagers.entries().stream()
                 .filter(Optional::isPresent)
                 .map(Optional::get)
-                .map(rm -> rm.timeUntilNextPoll(currentTimeMs))
+                .map(rm -> rm.maximumTimeToWait(currentTimeMs))
                 .reduce(Long.MAX_VALUE, Math::min);
     }
 

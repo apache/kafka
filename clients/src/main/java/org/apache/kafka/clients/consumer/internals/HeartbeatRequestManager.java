@@ -184,14 +184,16 @@ public class HeartbeatRequestManager implements RequestManager {
     }
 
     /**
-     * Returns the delay before the next network request for this request manager. Used to ensure that
-     * waiting in the application thread does not delay beyond the point that a result can be returned.
+     * Returns the delay for which the application thread can safely wait before it should be responsive
+     * to results from the request managers. For example, the subscription state can change when heartbeats
+     * are sent, so blocking for longer than the heartbeat interval might mean the application thread is not
+     * responsive to changes.
      *
      * <p>In the event that heartbeats are currently being skipped, this still returns the next heartbeat
      * delay rather than {@code Long.MAX_VALUE} so that the application thread remains responsive.
      */
     @Override
-    public long timeUntilNextPoll(long currentTimeMs) {
+    public long maximumTimeToWait(long currentTimeMs) {
         boolean heartbeatNow = membershipManager.shouldHeartbeatNow() && !heartbeatRequestState.requestInFlight();
         return heartbeatNow ? 0L : heartbeatRequestState.nextHeartbeatMs(currentTimeMs);
     }

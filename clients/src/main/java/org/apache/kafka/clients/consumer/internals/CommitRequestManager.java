@@ -159,19 +159,22 @@ public class CommitRequestManager implements RequestManager {
             return EMPTY;
 
         List<NetworkClientDelegate.UnsentRequest> requests = pendingRequests.drain(currentTimeMs);
-        return new NetworkClientDelegate.PollResult(timeUntilNextPoll(currentTimeMs), requests);
+        // min of the remainingBackoffMs of all the request that are still backing off
+        final long timeUntilNextPoll = Math.min(
+            findMinTime(unsentOffsetCommitRequests(), currentTimeMs),
+            findMinTime(unsentOffsetFetchRequests(), currentTimeMs));
+        return new NetworkClientDelegate.PollResult(timeUntilNextPoll, requests);
     }
 
     /**
-     * Returns the delay before the next network request for this request manager. Used to ensure that
-     * waiting in the application thread does not delay beyond the point that a result can be returned.
+     * Returns the delay for which the application thread can safely wait before it should be responsive
+     * to results from the request managers. For example, the subscription state can change when heartbeats
+     * are sent, so blocking for longer than the heartbeat interval might mean the application thread is not
+     * responsive to changes.
      */
     @Override
-    public long timeUntilNextPoll(long currentTimeMs) {
-        // min of the remainingBackoffMs of all the request that are still backing off
-        return Math.min(
-            findMinTime(unsentOffsetCommitRequests(), currentTimeMs),
-            findMinTime(unsentOffsetFetchRequests(), currentTimeMs));
+    public long maximumTimeToWait(long currentTimeMs) {
+        return autoCommitState.map(ac -> ac.remainingMs(currentTimeMs)).orElse(Long.MAX_VALUE);
     }
 
     private static long findMinTime(final Collection<? extends RequestState> requests, final long currentTimeMs) {
@@ -806,6 +809,11 @@ public class CommitRequestManager implements RequestManager {
 
         public void resetTimer() {
             this.timer.reset(autoCommitInterval);
+        }
+
+        public long remainingMs(final long currentTimeMs) {
+            this.timer.update(currentTimeMs);
+            return this.timer.remainingMs();
         }
 
         public void ack(final long currentTimeMs) {

@@ -90,7 +90,7 @@ public class ApplicationEventHandler implements Closeable {
      * @return The maximum delay in milliseconds
      */
     public long maximumTimeToWait() {
-        return networkThread.timeUntilNextPoll();
+        return networkThread.maximumTimeToWait();
     }
 
     /**

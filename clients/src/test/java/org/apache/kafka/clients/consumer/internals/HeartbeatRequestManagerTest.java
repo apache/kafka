@@ -120,7 +120,7 @@ public class HeartbeatRequestManagerTest {
 
         resetWithZeroHeartbeatInterval(Optional.empty());
         mockStableMember();
-        assertEquals(0, heartbeatRequestManager.timeUntilNextPoll(time.milliseconds()));
+        assertEquals(0, heartbeatRequestManager.maximumTimeToWait(time.milliseconds()));
         result = heartbeatRequestManager.poll(time.milliseconds());
         assertEquals(1, result.unsentRequests.size());
 
@@ -138,7 +138,7 @@ public class HeartbeatRequestManagerTest {
         membershipManager.onSubscriptionUpdated();
 
         // Create a ConsumerHeartbeatRequest and verify the payload
-        assertEquals(0, heartbeatRequestManager.timeUntilNextPoll(time.milliseconds()));
+        assertEquals(0, heartbeatRequestManager.maximumTimeToWait(time.milliseconds()));
         NetworkClientDelegate.PollResult pollResult = heartbeatRequestManager.poll(time.milliseconds());
         assertEquals(1, pollResult.unsentRequests.size());
         NetworkClientDelegate.UnsentRequest request = pollResult.unsentRequests.get(0);
@@ -187,7 +187,7 @@ public class HeartbeatRequestManagerTest {
         NetworkClientDelegate.PollResult result = heartbeatRequestManager.poll(time.milliseconds());
         assertEquals(0, result.unsentRequests.size());
         assertEquals(DEFAULT_HEARTBEAT_INTERVAL_MS - 100, result.timeUntilNextPollMs);
-        assertEquals(DEFAULT_HEARTBEAT_INTERVAL_MS - 100, heartbeatRequestManager.timeUntilNextPoll(time.milliseconds()));
+        assertEquals(DEFAULT_HEARTBEAT_INTERVAL_MS - 100, heartbeatRequestManager.maximumTimeToWait(time.milliseconds()));
 
         // Member in state where it should not send Heartbeat anymore
         when(subscriptions.hasAutoAssignedPartitions()).thenReturn(true);
@@ -206,7 +206,7 @@ public class HeartbeatRequestManagerTest {
         assertEquals(1, result.unsentRequests.size());
         // Interval timer reset
         assertEquals(DEFAULT_HEARTBEAT_INTERVAL_MS, result.timeUntilNextPollMs);
-        assertEquals(DEFAULT_HEARTBEAT_INTERVAL_MS, heartbeatRequestManager.timeUntilNextPoll(time.milliseconds()));
+        assertEquals(DEFAULT_HEARTBEAT_INTERVAL_MS, heartbeatRequestManager.maximumTimeToWait(time.milliseconds()));
         // Membership manager updated (to transition out of the heartbeating state)
         verify(membershipManager).onHeartbeatRequestSent();
     }
@@ -252,7 +252,7 @@ public class HeartbeatRequestManagerTest {
         NetworkClientDelegate.PollResult result = heartbeatRequestManager.poll(time.milliseconds());
 
         assertEquals(Long.MAX_VALUE, result.timeUntilNextPollMs);
-        assertEquals(DEFAULT_HEARTBEAT_INTERVAL_MS, heartbeatRequestManager.timeUntilNextPoll(time.milliseconds()));
+        assertEquals(DEFAULT_HEARTBEAT_INTERVAL_MS, heartbeatRequestManager.maximumTimeToWait(time.milliseconds()));
         assertEquals(0, result.unsentRequests.size());
     }
 
