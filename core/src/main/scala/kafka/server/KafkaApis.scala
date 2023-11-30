@@ -3753,12 +3753,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     clientMetricsManager match {
       case Some(metricsManager) =>
         try {
-          if (metricsManager.isTelemetryReceiverConfigured) {
-            requestHelper.sendMaybeThrottle(request, metricsManager.processGetTelemetrySubscriptionRequest(subscriptionRequest, request.context))
-          } else {
-            info("Received get telemetry client request for metrics receiver, but no metrics receiver configured")
-            requestHelper.sendMaybeThrottle(request, subscriptionRequest.getErrorResponse(Errors.UNSUPPORTED_VERSION.exception))
-          }
+          requestHelper.sendMaybeThrottle(request, metricsManager.processGetTelemetrySubscriptionRequest(subscriptionRequest, request.context))
         } catch {
           case _: Exception =>
             requestHelper.sendMaybeThrottle(request, subscriptionRequest.getErrorResponse(Errors.INVALID_REQUEST.exception))
@@ -3775,12 +3770,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     clientMetricsManager match {
       case Some(metricsManager) =>
         try {
-          if (metricsManager.isTelemetryReceiverConfigured) {
-            requestHelper.sendMaybeThrottle(request, metricsManager.processPushTelemetryRequest(pushTelemetryRequest, request.context))
-          } else {
-            info("Received push telemetry client request, but no metrics receiver configured")
-            requestHelper.sendMaybeThrottle(request, pushTelemetryRequest.getErrorResponse(Errors.UNSUPPORTED_VERSION.exception))
-          }
+          requestHelper.sendMaybeThrottle(request, metricsManager.processPushTelemetryRequest(pushTelemetryRequest, request.context))
         } catch {
           case _: Exception =>
             requestHelper.sendMaybeThrottle(request, pushTelemetryRequest.getErrorResponse(Errors.INVALID_REQUEST.exception))

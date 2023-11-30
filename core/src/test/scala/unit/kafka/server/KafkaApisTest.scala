@@ -6783,21 +6783,6 @@ class KafkaApisTest {
   }
 
   @Test
-  def testGetTelemetrySubscriptionsNoMetricsPlugin(): Unit = {
-    val request = buildRequest(new GetTelemetrySubscriptionsRequest.Builder(
-      new GetTelemetrySubscriptionsRequestData(), true).build())
-
-    when(clientMetricsManager.isTelemetryReceiverConfigured).thenReturn(false)
-    metadataCache = MetadataCache.kRaftMetadataCache(brokerId)
-    createKafkaApis(raftSupport = true).handle(request, RequestLocal.NoCaching)
-
-    val response = verifyNoThrottling[GetTelemetrySubscriptionsResponse](request)
-
-    val expectedResponse = new GetTelemetrySubscriptionsResponseData().setErrorCode(Errors.UNSUPPORTED_VERSION.code)
-    assertEquals(expectedResponse, response.data)
-  }
-
-  @Test
   def testGetTelemetrySubscriptionsWithException(): Unit = {
     val request = buildRequest(new GetTelemetrySubscriptionsRequest.Builder(
       new GetTelemetrySubscriptionsRequestData(), true).build())
@@ -6839,19 +6824,6 @@ class KafkaApisTest {
     val response = verifyNoThrottling[PushTelemetryResponse](request)
 
     val expectedResponse = new PushTelemetryResponseData().setErrorCode(Errors.NONE.code)
-    assertEquals(expectedResponse, response.data)
-  }
-
-  @Test
-  def testPushTelemetryNoMetricsPlugin(): Unit = {
-    val request = buildRequest(new PushTelemetryRequest.Builder(new PushTelemetryRequestData(), true).build())
-
-    when(clientMetricsManager.isTelemetryReceiverConfigured).thenReturn(false)
-    metadataCache = MetadataCache.kRaftMetadataCache(brokerId)
-    createKafkaApis(raftSupport = true).handle(request, RequestLocal.NoCaching)
-    val response = verifyNoThrottling[PushTelemetryResponse](request)
-
-    val expectedResponse = new PushTelemetryResponseData().setErrorCode(Errors.UNSUPPORTED_VERSION.code)
     assertEquals(expectedResponse, response.data)
   }
 

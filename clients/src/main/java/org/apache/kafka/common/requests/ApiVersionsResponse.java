@@ -114,7 +114,8 @@ public class ApiVersionsResponse extends AbstractResponse {
         NodeApiVersions controllerApiVersions,
         ListenerType listenerType,
         boolean enableUnstableLastVersion,
-        boolean zkMigrationEnabled
+        boolean zkMigrationEnabled,
+        boolean clientTelemetryEnabled
     ) {
         ApiVersionCollection apiKeys;
         if (controllerApiVersions != null) {
@@ -128,7 +129,8 @@ public class ApiVersionsResponse extends AbstractResponse {
             apiKeys = filterApis(
                 minRecordVersion,
                 listenerType,
-                enableUnstableLastVersion
+                enableUnstableLastVersion,
+                clientTelemetryEnabled
             );
         }
 
@@ -167,16 +169,21 @@ public class ApiVersionsResponse extends AbstractResponse {
         RecordVersion minRecordVersion,
         ApiMessageType.ListenerType listenerType
     ) {
-        return filterApis(minRecordVersion, listenerType, false);
+        return filterApis(minRecordVersion, listenerType, false, false);
     }
 
     public static ApiVersionCollection filterApis(
         RecordVersion minRecordVersion,
         ApiMessageType.ListenerType listenerType,
-        boolean enableUnstableLastVersion
+        boolean enableUnstableLastVersion,
+        boolean clientTelemetryEnabled
     ) {
         ApiVersionCollection apiKeys = new ApiVersionCollection();
         for (ApiKeys apiKey : ApiKeys.apisForListener(listenerType)) {
+            // Skip telemetry APIs if client telemetry is disabled.
+            if ((apiKey == ApiKeys.GET_TELEMETRY_SUBSCRIPTIONS || apiKey == ApiKeys.PUSH_TELEMETRY) && !clientTelemetryEnabled)
+                continue;
+
             if (apiKey.minRequiredInterBrokerMagic <= minRecordVersion.value) {
                 apiKey.toApiVersion(enableUnstableLastVersion).ifPresent(apiKeys::add);
             }
