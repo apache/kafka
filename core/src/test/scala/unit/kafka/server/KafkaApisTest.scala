@@ -30,6 +30,7 @@ import kafka.coordinator.transaction.{InitProducerIdResult, TransactionCoordinat
 import kafka.log.UnifiedLog
 import kafka.network.{RequestChannel, RequestMetrics}
 import kafka.server.QuotaFactory.QuotaManagers
+import kafka.server.ReplicaManager.TransactionVerificationEntries
 import kafka.server.metadata.{ConfigRepository, KRaftMetadataCache, MockConfigRepository, ZkMetadataCache}
 import kafka.utils.{Log4jController, TestUtils}
 import kafka.zk.KafkaZkClient
@@ -99,7 +100,7 @@ import org.apache.kafka.server.common.{Features, MetadataVersion}
 import org.apache.kafka.server.common.MetadataVersion.{IBP_0_10_2_IV0, IBP_2_2_IV1}
 import org.apache.kafka.server.metrics.ClientMetricsTestUtils
 import org.apache.kafka.server.util.MockTime
-import org.apache.kafka.storage.internals.log.{AppendOrigin, FetchParams, FetchPartitionData, LogConfig}
+import org.apache.kafka.storage.internals.log.{AppendOrigin, FetchParams, FetchPartitionData, LogAppendInfo, LogConfig}
 
 class KafkaApisTest {
   private val requestChannel: RequestChannel = mock(classOf[RequestChannel])
@@ -2692,6 +2693,7 @@ class KafkaApisTest {
       val responseCallback: ArgumentCaptor[Map[TopicPartition, PartitionResponse] => Unit] = ArgumentCaptor.forClass(classOf[Map[TopicPartition, PartitionResponse] => Unit])
       val postVerificationCallback: ArgumentCaptor[RequestLocal => Map[TopicPartition, LogAppendResult] => Unit] = ArgumentCaptor.forClass(
         classOf[RequestLocal => Map[TopicPartition, LogAppendResult] => Unit])
+      val transactionVerificationEntries: ArgumentCaptor[TransactionVerificationEntries] = ArgumentCaptor.forClass(classOf[TransactionVerificationEntries])
 
       val tp = new TopicPartition("topic", 0)
 
@@ -2712,31 +2714,27 @@ class KafkaApisTest {
       val kafkaApis = createKafkaApis()
       val requestLocal = RequestLocal.withThreadConfinedCaching
       val newRequestLocal = RequestLocal.NoCaching
+      val preAppendErrors = Map(tp -> LogAppendResult(
+        LogAppendInfo.UNKNOWN_LOG_APPEND_INFO,
+        Some(Errors.INVALID_TXN_STATE.exception()),
+        hasCustomErrorMessage = false))
 
-      when(replicaManager.appendRecordsWithVerification(any(), any(), any(), any(), postVerificationCallback.capture())).thenAnswer(
-        arg => replicaManager.appendRecordsAfterVerification(arg.getArgument(1), postVerificationCallback.getValue())(newRequestLocal, Map.empty)
-      )
-
-      when(replicaManager.appendRecordsAfterVerification(any(), postVerificationCallback.capture())(any(), any())).thenAnswer(
+      when(replicaManager.appendRecordsWithTransactionVerification(any(), transactionVerificationEntries.capture(), any(), any(), postVerificationCallback.capture())).thenAnswer(
         _ => {
           val callback = postVerificationCallback.getValue()
-          callback(RequestLocal.NoCaching)(Map.empty)
+          callback(newRequestLocal)(preAppendErrors)
         }
       )
       
       kafkaApis.handleProduceRequest(request, requestLocal)
 
-      verify(replicaManager).appendRecordsWithVerification(
+      verify(replicaManager).appendRecordsWithTransactionVerification(
         any(),
         any(),
         ArgumentMatchers.eq(transactionalId),
         ArgumentMatchers.eq(requestLocal),
         ArgumentMatchers.eq(postVerificationCallback.getValue())
       )
-
-      verify(replicaManager).appendRecordsAfterVerification(
-        any(),
-        ArgumentMatchers.eq(postVerificationCallback.getValue()))(ArgumentMatchers.eq(newRequestLocal), any())
       
       verify(replicaManager).appendRecords(anyLong,
         anyShort,
@@ -2748,8 +2746,8 @@ class KafkaApisTest {
         any(),
         ArgumentMatchers.eq(newRequestLocal),
         any(),
-        any(),
-        any())
+        ArgumentMatchers.eq(transactionVerificationEntries.getValue().verificationGuards),
+        ArgumentMatchers.eq(preAppendErrors))
     }
   }
 

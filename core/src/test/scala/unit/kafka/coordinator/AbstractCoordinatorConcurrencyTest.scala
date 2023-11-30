@@ -211,11 +211,11 @@ object AbstractCoordinatorConcurrencyTest {
       producePurgatory.tryCompleteElseWatch(delayedProduce, producerRequestKeys)
     }
 
-    override def appendRecordsWithVerification(entriesPerPartition: Map[TopicPartition, MemoryRecords],
-      transactionVerificationEntries: TransactionVerificationEntries,
-      transactionalId: String,
-      requestLocal: RequestLocal,
-      postVerificationCallback: RequestLocal => Map[TopicPartition, LogAppendResult] => Unit): Unit = {
+    override def appendRecordsWithTransactionVerification(entriesPerPartition: Map[TopicPartition, MemoryRecords],
+                                                          transactionVerificationEntries: TransactionVerificationEntries,
+                                                          transactionalId: String,
+                                                          requestLocal: RequestLocal,
+                                                          postVerificationCallback: RequestLocal => Map[TopicPartition, LogAppendResult] => Unit): Unit = {
 
       postVerificationCallback(requestLocal)(Map.empty)
     }

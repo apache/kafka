@@ -2963,7 +2963,7 @@ class ReplicaManagerTest {
       )
     }
 
-    replicaManager.appendRecordsWithVerification(
+    replicaManager.appendRecordsWithTransactionVerification(
       entriesToAppend,
       transactionVerificationEntries,
       transactionalId,
@@ -3004,7 +3004,7 @@ class ReplicaManagerTest {
       )
     }
 
-    replicaManager.appendRecordsWithVerification(
+    replicaManager.appendRecordsWithTransactionVerification(
       entriesPerPartition,
       transactionVerificationEntries,
       transactionalId,

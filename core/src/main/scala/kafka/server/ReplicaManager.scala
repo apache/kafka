@@ -769,9 +769,11 @@ class ReplicaManager(val config: KafkaConfig,
    * @param responseCallback              callback for sending the response
    * @param delayedProduceLock            lock for the delayed actions
    * @param recordValidationStatsCallback callback for updating stats on record conversions
-   * @param requestLocal                  container for the stateful instances scoped to this request
-   * @param transactionalId               transactional ID if the request is from a producer and the producer is transactional
+   * @param requestLocal                  container for the stateful instances scoped to this request -- this must correspond to the
+   *                                      thread calling this method
    * @param actionQueue                   the action queue to use. ReplicaManager#defaultActionQueue is used by default.
+   * @param verificationGuards            the mapping from topic partition to verification guards if transaction verification is used
+   * @param preAppendErrors               the mapping from topic partition to LogAppendResult for errors that occurred before appending
    */
   def appendRecords(timeout: Long,
                     requiredAcks: Short,
@@ -870,16 +872,32 @@ class ReplicaManager(val config: KafkaConfig,
     responseCallback(responseStatus)
   }
 
-  def appendRecordsWithVerification(entriesPerPartition: Map[TopicPartition, MemoryRecords],
-                                    transactionVerificationEntries: TransactionVerificationEntries,
-                                    transactionalId: String,
-                                    requestLocal: RequestLocal,
-                                    postVerificationCallback: RequestLocal => Map[TopicPartition, LogAppendResult] => Unit): Unit = {
+  /**
+   * Apply the postVerificationCallback asynchronously only after verifying the partitions have been added to the transaction.
+   * The postVerificationCallback takes the arguments of the requestLocal for the thread that will be doing the append as
+   * well as a mapping of topic partitions to LogAppendResult for the partitions that saw errors when verifying.
+   *
+   * This method will start the verification process for all the topicPartitions in entriesPerPartition and supply the
+   * postVerificationCallback to be run on a request handler thread when the response is received.
+   *
+   * @param entriesPerPartition            the records per partition to be appended and therefore need verification
+   * @param transactionVerificationEntries the object that will store the entries to verify, the errors, and the verification guards
+   * @param transactionalId                the id for the transaction
+   * @param requestLocal                   container for the stateful instances scoped to this request -- this must correspond to the
+   *                                       thread calling this method
+   * @param postVerificationCallback       the method to be called when verification completes and the verification errors
+   *                                       and the thread's RequestLocal are supplied
+   */
+  def appendRecordsWithTransactionVerification(entriesPerPartition: Map[TopicPartition, MemoryRecords],
+                                               transactionVerificationEntries: TransactionVerificationEntries,
+                                               transactionalId: String,
+                                               requestLocal: RequestLocal,
+                                               postVerificationCallback: RequestLocal => Map[TopicPartition, LogAppendResult] => Unit): Unit = {
     if (transactionalId != null && config.transactionPartitionVerificationEnable && addPartitionsToTxnManager.isDefined)
       partitionEntriesForVerification(transactionVerificationEntries, entriesPerPartition)
 
     val onVerificationComplete: (RequestLocal, Map[TopicPartition, Errors]) => Unit =
-      appendRecordsAfterVerification(
+      executePostVerificationCallback(
         transactionVerificationEntries,
         postVerificationCallback,
       )
@@ -901,30 +919,18 @@ class ReplicaManager(val config: KafkaConfig,
   }
 
   /**
-   * Append messages to leader replicas of the partition, and wait for them to be replicated to other replicas;
-   * the callback function will be triggered either when timeout or the required acks are satisfied;
-   * if the callback function itself is already synchronized on some object then pass this object to avoid deadlock.
+   * A helper method to compile the results from the transaction verification and call the postVerificationCallback.
    *
-   * Noted that all pending delayed check operations are stored in a queue. All callers to ReplicaManager.appendRecords()
-   * are expected to call ActionQueue.tryCompleteActions for all affected partitions, without holding any conflicting
-   * locks.
+   * @param transactionVerificationEntries the object that will store the entries to verify, the errors, and the verification guards
+   * @param postVerificationCallback       the method to be called when verification completes and the verification errors
+   *                                       and the thread's RequestLocal are supplied
+   * @param requestLocal                   container for the stateful instances scoped to this request -- this must correspond to the
+   *                                       thread calling this method
    *
-   * @param allEntries                    the records per partition for all partitions in the request
-   * @param internalTopicsAllowed         boolean indicating whether internal topics can be appended to
-   * @param origin                        source of the append request (ie, client, replication, coordinator)
-   * @param requiredAcks                  number of replicas who must acknowledge the append before sending the response
-   * @param verificationGuards            verificationGuards for ensuring a partition has been added to the transaction
-   * @param errorsPerPartition            the mapping from partition to errors we have already seen
-   * @param timeout                       maximum time we will wait to append before returning
-   * @param responseCallback              callback for sending the response
-   * @param delayedProduceLock            lock for the delayed actions
-   * @param actionQueue                   the action queue to use. ReplicaManager#defaultActionQueue is used by default.
-   * @param requestLocal                  container for the stateful instances scoped to this request
-   * @param unverifiedEntries             the records per partition for topic partitions that were not verified by the transaction coordinator
    */
-  def appendRecordsAfterVerification(transactionVerificationEntries: TransactionVerificationEntries,
-                                     postVerificationCallback: RequestLocal => Map[TopicPartition, LogAppendResult] => Unit)
-                                    (requestLocal: RequestLocal, unverifiedEntries: Map[TopicPartition, Errors] = Map.empty): Unit = {
+  private def executePostVerificationCallback(transactionVerificationEntries: TransactionVerificationEntries,
+                                                      postVerificationCallback: RequestLocal => Map[TopicPartition, LogAppendResult] => Unit)
+                                                     (requestLocal: RequestLocal, unverifiedEntries: Map[TopicPartition, Errors]): Unit = {
     val errorResults = (unverifiedEntries ++ transactionVerificationEntries.errors).map {
       case (topicPartition, error) =>
         // translate transaction coordinator errors to known producer response errors

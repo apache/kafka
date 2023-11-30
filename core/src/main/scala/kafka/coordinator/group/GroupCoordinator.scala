@@ -965,7 +965,7 @@ private[group] class GroupCoordinator(
           }
         }
 
-        groupManager.replicaManager.appendRecordsWithVerification(
+        groupManager.replicaManager.appendRecordsWithTransactionVerification(
           entriesPerPartition = records,
           transactionVerificationEntries = transactionVerificationEntries,
           transactionalId = transactionalId,

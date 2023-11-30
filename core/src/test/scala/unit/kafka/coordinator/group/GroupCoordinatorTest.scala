@@ -4127,7 +4127,7 @@ class GroupCoordinatorTest {
 
     val postVerificationCallback: ArgumentCaptor[RequestLocal => SMap[TopicPartition, LogAppendResult] => Unit] = ArgumentCaptor.forClass(
       classOf[RequestLocal => SMap[TopicPartition, LogAppendResult] => Unit])
-    when(replicaManager.appendRecordsWithVerification(any(), any(), ArgumentMatchers.eq(transactionalId), any(), postVerificationCallback.capture())).thenAnswer(
+    when(replicaManager.appendRecordsWithTransactionVerification(any(), any(), ArgumentMatchers.eq(transactionalId), any(), postVerificationCallback.capture())).thenAnswer(
       _ => postVerificationCallback.getValue()(RequestLocal.NoCaching)(preAppendErrors)
     )
     when(replicaManager.appendRecords(anyLong,

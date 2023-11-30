@@ -734,7 +734,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       if (produceRequest.transactionalId == null){
         postVerificationCallback(requestLocal)(Map.empty)
       } else {
-        replicaManager.appendRecordsWithVerification(
+        replicaManager.appendRecordsWithTransactionVerification(
           entriesPerPartition = authorizedRequestInfo,
           transactionVerificationEntries = transactionVerificationEntries,
           transactionalId = produceRequest.transactionalId,
