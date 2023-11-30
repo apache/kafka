@@ -162,8 +162,7 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
              on the compiler to fail if the code is changed to call a method that throws Exception.
              Given that, this bug pattern doesn't make sense for Scala code. -->
         <Or>
-            <Class name="kafka.log.Log"/>
-            <Class name="kafka.log.LocalLog$"/>
+            <Class name="org.apache.kafka.storage.internals.log.LocalLog"/>
         </Or>
         <Bug pattern="REC_CATCH_EXCEPTION"/>
     </Match>

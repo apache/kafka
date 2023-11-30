@@ -3953,14 +3953,14 @@ class UnifiedLogTest {
 
     {
       val deletable = log.deletableSegments(
-        (segment: LogSegment, _: Option[LogSegment]) => segment.baseOffset <= 5)
+        (segment: LogSegment, _: Optional[LogSegment]) => segment.baseOffset <= 5)
       val expected = log.nonActiveLogSegmentsFrom(0L).asScala.filter(segment => segment.baseOffset <= 5).toList
       assertEquals(6, expected.length)
       assertEquals(expected, deletable.toList)
     }
 
     {
-      val deletable = log.deletableSegments((_: LogSegment, _: Option[LogSegment]) => true)
+      val deletable = log.deletableSegments((_: LogSegment, _: Optional[LogSegment]) => true)
       val expected = log.nonActiveLogSegmentsFrom(0L).asScala.toList
       assertEquals(9, expected.length)
       assertEquals(expected, deletable.toList)
@@ -3972,7 +3972,7 @@ class UnifiedLogTest {
       ))
       log.appendAsLeader(records, leaderEpoch = 0)
       log.maybeIncrementHighWatermark(log.logEndOffsetMetadata)
-      val deletable = log.deletableSegments((_: LogSegment, _: Option[LogSegment]) => true)
+      val deletable = log.deletableSegments((_: LogSegment, _: Optional[LogSegment]) => true)
       val expected = log.logSegments.asScala.toList
       assertEquals(10, expected.length)
       assertEquals(expected, deletable.toList)
@@ -3996,7 +3996,7 @@ class UnifiedLogTest {
 
     var offset = 0
     val deletableSegments = log.deletableSegments(
-      (segment: LogSegment, nextSegmentOpt: Option[LogSegment]) => {
+      (segment: LogSegment, nextSegmentOpt: Optional[LogSegment]) => {
         assertEquals(offset, segment.baseOffset)
         val logSegments = new LogSegments(log.topicPartition)
         log.logSegments.forEach(segment => logSegments.add(segment))
@@ -4004,9 +4004,9 @@ class UnifiedLogTest {
         assertTrue(floorSegmentOpt.isPresent)
         assertEquals(floorSegmentOpt.get, segment)
         if (offset == log.logEndOffset) {
-          assertFalse(nextSegmentOpt.isDefined)
+          assertFalse(nextSegmentOpt.isPresent)
         } else {
-          assertTrue(nextSegmentOpt.isDefined)
+          assertTrue(nextSegmentOpt.isPresent)
           val higherSegmentOpt = logSegments.higherSegment(segment.baseOffset)
           assertTrue(higherSegmentOpt.isPresent)
           assertEquals(segment.baseOffset + 1, higherSegmentOpt.get.baseOffset)

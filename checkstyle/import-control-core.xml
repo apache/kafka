@@ -37,6 +37,8 @@
   <allow pkg="kafka.serializer" />
   <allow pkg="org.apache.kafka.common" />
   <allow pkg="org.mockito" class="AssignmentsManagerTest"/>
+  <allow pkg="org.apache.kafka.server.util"/>
+  <allow pkg="org.apache.kafka.storage.internals.log"/>
 
   <!-- see KIP-544 for why KafkaYammerMetrics should be used instead of the global default yammer metrics registry
        https://cwiki.apache.org/confluence/display/KAFKA/KIP-544%3A+Make+metrics+exposed+via+JMX+configurable -->
