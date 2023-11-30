@@ -291,9 +291,9 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
     /**
      * Open RocksDB while automatically creating any requested column families that don't yet exist.
      */
-    List<ColumnFamilyHandle> openRocksDB(final DBOptions dbOptions,
-                                         final ColumnFamilyDescriptor defaultColumnFamilyDescriptor,
-                                         final ColumnFamilyDescriptor... columnFamilyDescriptors) {
+    protected List<ColumnFamilyHandle> openRocksDB(final DBOptions dbOptions,
+                                                   final ColumnFamilyDescriptor defaultColumnFamilyDescriptor,
+                                                   final ColumnFamilyDescriptor... columnFamilyDescriptors) {
         final String absolutePath = dbDir.getAbsolutePath();
         final List<ColumnFamilyDescriptor> extraDescriptors = Arrays.asList(columnFamilyDescriptors);
         final List<ColumnFamilyDescriptor> allDescriptors = new ArrayList<>(1 + columnFamilyDescriptors.length);
