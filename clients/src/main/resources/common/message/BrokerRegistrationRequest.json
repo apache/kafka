@@ -60,7 +60,7 @@
       "about": "If the required configurations for ZK migration are present, this value is set to true" },
     { "name": "LogDirs", "type":  "[]uuid", "versions":  "2+",
       "about": "Log directories configured in this broker which are available." },
-    { "name": "PreviousBrokerEpoch", "type": "int64", "versions": "3+", "default": "-1",
+    { "name": "PreviousBrokerEpoch", "type": "int64", "versions": "3+", "default": "-1", "ignorable": true,
       "about": "The epoch before a clean shutdown." }
   ]
 }
