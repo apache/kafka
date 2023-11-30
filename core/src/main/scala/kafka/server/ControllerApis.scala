@@ -205,16 +205,14 @@ class ControllerApis(
       names => authHelper.filterByAuthorized(request.context, DESCRIBE, TOPIC, names)(n => n),
       names => authHelper.filterByAuthorized(request.context, DELETE, TOPIC, names)(n => n))
     future.handle[Unit] { (results, exception) =>
-      requestHelper.sendResponseMaybeThrottleWithControllerQuota(controllerMutationQuota, request, throttleTimeMs => {
-        if (exception != null) {
-          deleteTopicsRequest.getErrorResponse(throttleTimeMs, exception)
-        } else {
-          val responseData = new DeleteTopicsResponseData().
-            setResponses(new DeletableTopicResultCollection(results.iterator)).
-            setThrottleTimeMs(throttleTimeMs)
-          new DeleteTopicsResponse(responseData)
-        }
-      })
+      val response = if (exception != null) {
+        deleteTopicsRequest.getErrorResponse(exception)
+      } else {
+        val responseData = new DeleteTopicsResponseData()
+          .setResponses(new DeletableTopicResultCollection(results.iterator))
+        new DeleteTopicsResponse(responseData)
+      }
+      requestHelper.sendResponseMaybeThrottleWithControllerQuota(controllerMutationQuota, request, response)
     }
   }
 
@@ -371,14 +369,12 @@ class ControllerApis(
         names => authHelper.filterByAuthorized(request.context, DESCRIBE_CONFIGS, TOPIC,
             names, logIfDenied = false)(identity))
     future.handle[Unit] { (result, exception) =>
-      requestHelper.sendResponseMaybeThrottleWithControllerQuota(controllerMutationQuota, request, throttleTimeMs => {
-        if (exception != null) {
-          createTopicsRequest.getErrorResponse(throttleTimeMs, exception)
-        } else {
-          result.setThrottleTimeMs(throttleTimeMs)
-          new CreateTopicsResponse(result)
-        }
-      })
+      val response = if (exception != null) {
+        createTopicsRequest.getErrorResponse(exception)
+      } else {
+        new CreateTopicsResponse(result)
+      }
+      requestHelper.sendResponseMaybeThrottleWithControllerQuota(controllerMutationQuota, request, response)
     }
   }
 
@@ -802,16 +798,13 @@ class ControllerApis(
       createPartitionsRequest.data(),
       filterAlterAuthorizedTopics)
     future.handle[Unit] { (responses, exception) =>
-      if (exception != null) {
-        requestHelper.handleError(request, exception)
+      val response = if (exception != null) {
+        createPartitionsRequest.getErrorResponse(exception)
       } else {
-        requestHelper.sendResponseMaybeThrottleWithControllerQuota(controllerMutationQuota, request, requestThrottleMs => {
-          val responseData = new CreatePartitionsResponseData().
-            setResults(responses).
-            setThrottleTimeMs(requestThrottleMs)
-          new CreatePartitionsResponse(responseData)
-        })
+        val responseData = new CreatePartitionsResponseData().setResults(responses)
+        new CreatePartitionsResponse(responseData)
       }
+      requestHelper.sendResponseMaybeThrottleWithControllerQuota(controllerMutationQuota, request, response)
     }
   }
 
