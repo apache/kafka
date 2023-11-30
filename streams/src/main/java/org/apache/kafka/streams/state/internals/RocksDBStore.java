@@ -314,26 +314,38 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
             db = RocksDB.open(dbOptions, absolutePath, existingDescriptors, existingColumnFamilies);
             final List<ColumnFamilyHandle> createdColumnFamilies = db.createColumnFamilies(toCreate);
 
-            // match up the existing and created ColumnFamilyHandles with the existing/created ColumnFamilyDescriptors
-            // so that the order of the resultant List matches the order of the openRocksDB arguments
-            final List<ColumnFamilyHandle> columnFamilies = new ArrayList<>(allDescriptors.size());
-            int existing = 0;
-            int created = 0;
-            while (existing + created < allDescriptors.size()) {
-                if (existing < existingDescriptors.size() && (existingDescriptors.get(existing) == allDescriptors.get(existing + created))) {
-                    columnFamilies.add(existingColumnFamilies.get(existing));
-                    existing++;
-                } else if (created < toCreate.size() && (toCreate.get(created) == allDescriptors.get(existing + created))) {
-                    columnFamilies.add(createdColumnFamilies.get(created));
-                    created++;
-                } else {
-                    throw new IllegalStateException("Unable to match up column family handles with descriptors.");
-                }
-            }
-            return columnFamilies;
+            return mergeColumnFamilyHandleLists(existingColumnFamilies, createdColumnFamilies, allDescriptors);
+
         } catch (final RocksDBException e) {
             throw new ProcessorStateException("Error opening store " + name + " at location " + dbDir.toString(), e);
         }
+    }
+
+    /**
+     * match up the existing and created ColumnFamilyHandles with the existing/created ColumnFamilyDescriptors
+     * so that the order of the resultant List matches the order of the allDescriptors argument
+     */
+    private List<ColumnFamilyHandle> mergeColumnFamilyHandleLists(final List<ColumnFamilyHandle> existingColumnFamilyHandles,
+                                                                  final List<ColumnFamilyHandle> createdColumnFamilyHandles,
+                                                                  final List<ColumnFamilyDescriptor> allDescriptors) throws RocksDBException {
+        final List<ColumnFamilyHandle> columnFamilies = new ArrayList<>(allDescriptors.size());
+        int existing = 0;
+        int created = 0;
+
+        while (existing + created < allDescriptors.size()) {
+            final ColumnFamilyHandle existingHandle = existing < existingColumnFamilyHandles.size() ? existingColumnFamilyHandles.get(existing) : null;
+            final ColumnFamilyHandle createdHandle = created < createdColumnFamilyHandles.size() ? createdColumnFamilyHandles.get(created) : null;
+            if (existingHandle != null && Arrays.equals(existingHandle.getDescriptor().getName(), allDescriptors.get(existing + created).getName())) {
+                columnFamilies.add(existingHandle);
+                existing++;
+            } else if (createdHandle != null && Arrays.equals(createdHandle.getDescriptor().getName(), allDescriptors.get(existing + created).getName())) {
+                columnFamilies.add(createdHandle);
+                created++;
+            } else {
+                throw new IllegalStateException("Unable to match up column family handles with descriptors.");
+            }
+        }
+        return columnFamilies;
     }
 
     @Override
