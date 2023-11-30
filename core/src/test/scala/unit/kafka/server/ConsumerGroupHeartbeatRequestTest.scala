@@ -24,7 +24,7 @@ import kafka.utils.TestUtils
 import org.apache.kafka.common.message.{ConsumerGroupHeartbeatRequestData, ConsumerGroupHeartbeatResponseData}
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{ConsumerGroupHeartbeatRequest, ConsumerGroupHeartbeatResponse}
-import org.junit.jupiter.api.Assertions.{assertEquals, assertNotNull}
+import org.junit.jupiter.api.Assertions.{assertEquals, assertNotEquals, assertNotNull}
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Timeout
 import org.junit.jupiter.api.extension.ExtendWith
@@ -135,6 +135,98 @@ class ConsumerGroupHeartbeatRequestTest(cluster: ClusterInstance) {
 
     // Verify the response.
     assertEquals(-1, consumerGroupHeartbeatResponse.data.memberEpoch)
+  }
+
+  @ClusterTest(clusterType = Type.KRAFT, serverProperties = Array(
+    new ClusterConfigProperty(key = "group.coordinator.new.enable", value = "true"),
+    new ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "1"),
+    new ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1")
+  ))
+  def testRejoiningStaticMemberGetsAssignmentsBackWhenNewGroupCoordinatorIsEnabled(): Unit = {
+    val raftCluster = cluster.asInstanceOf[RaftClusterInstance]
+    val admin = cluster.createAdminClient()
+    val instanceId = "instanceId"
+
+    // Creates the __consumer_offsets topics because it won't be created automatically
+    // in this test because it does not use FindCoordinator API.
+    TestUtils.createOffsetsTopicWithAdmin(
+      admin = admin,
+      brokers = raftCluster.brokers.collect(Collectors.toList[BrokerServer]).asScala,
+      controllers = raftCluster.controllerServers().asScala.toSeq
+    )
+
+    // Create the topic.
+    val topicId = TestUtils.createTopicWithAdminRaw(
+      admin = admin,
+      topic = "foo",
+      numPartitions = 3
+    )
+
+    // Heartbeat request so that a static member joins the group
+    var consumerGroupHeartbeatRequest = new ConsumerGroupHeartbeatRequest.Builder(
+      new ConsumerGroupHeartbeatRequestData()
+        .setGroupId("grp")
+        .setInstanceId(instanceId)
+        .setMemberEpoch(0)
+        .setRebalanceTimeoutMs(5 * 60 * 1000)
+        .setSubscribedTopicNames(List("foo").asJava)
+        .setTopicPartitions(List.empty.asJava)
+    ).build()
+
+    // This is the expected assignment.
+    val expectedAssignment = new ConsumerGroupHeartbeatResponseData.Assignment()
+      .setTopicPartitions(List(new ConsumerGroupHeartbeatResponseData.TopicPartitions()
+        .setTopicId(topicId)
+        .setPartitions(List[Integer](0, 1, 2).asJava)).asJava)
+
+    // Send the request until receiving a successful response. There is a delay
+    // here because the group coordinator is loaded in the background.
+    var consumerGroupHeartbeatResponse: ConsumerGroupHeartbeatResponse = null
+    TestUtils.waitUntilTrue(() => {
+      consumerGroupHeartbeatResponse = connectAndReceive(consumerGroupHeartbeatRequest)
+      consumerGroupHeartbeatResponse.data.errorCode == Errors.NONE.code
+    }, msg = s"Could not join the group successfully and get partitions assigned. Last response $consumerGroupHeartbeatResponse.")
+
+    // Verify the response.
+    assertNotNull(consumerGroupHeartbeatResponse.data.memberId)
+    assertEquals(1, consumerGroupHeartbeatResponse.data.memberEpoch)
+    assertEquals(expectedAssignment, consumerGroupHeartbeatResponse.data.assignment)
+
+    val oldMemberId = consumerGroupHeartbeatResponse.data.memberId
+
+    // Leave the group temporarily
+    consumerGroupHeartbeatRequest = new ConsumerGroupHeartbeatRequest.Builder(
+      new ConsumerGroupHeartbeatRequestData()
+        .setGroupId("grp")
+        .setInstanceId(instanceId)
+        .setMemberId(consumerGroupHeartbeatResponse.data.memberId)
+        .setMemberEpoch(-2)
+    ).build()
+
+    consumerGroupHeartbeatResponse = connectAndReceive(consumerGroupHeartbeatRequest)
+
+    // Verify the response.
+    assertEquals(-2, consumerGroupHeartbeatResponse.data.memberEpoch)
+
+    // Another static member replaces the above member. It gets the same assignments back
+    consumerGroupHeartbeatRequest = new ConsumerGroupHeartbeatRequest.Builder(
+      new ConsumerGroupHeartbeatRequestData()
+        .setGroupId("grp")
+        .setInstanceId(instanceId)
+        .setMemberEpoch(0)
+        .setRebalanceTimeoutMs(5 * 60 * 1000)
+        .setSubscribedTopicNames(List("foo").asJava)
+        .setTopicPartitions(List.empty.asJava)
+    ).build()
+
+    consumerGroupHeartbeatResponse = connectAndReceive(consumerGroupHeartbeatRequest)
+
+    // Verify the response.
+    assertNotNull(consumerGroupHeartbeatResponse.data.memberId)
+    assertEquals(1, consumerGroupHeartbeatResponse.data.memberEpoch)
+    assertEquals(expectedAssignment, consumerGroupHeartbeatResponse.data.assignment)
+    // The 2 member IDs should be different
+    assertNotEquals(oldMemberId, consumerGroupHeartbeatResponse.data.memberId)
   }
 
   private def connectAndReceive(request: ConsumerGroupHeartbeatRequest): ConsumerGroupHeartbeatResponse = {
