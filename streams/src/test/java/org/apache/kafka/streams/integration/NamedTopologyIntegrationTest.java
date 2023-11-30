@@ -719,6 +719,7 @@ public class NamedTopologyIntegrationTest {
 
     @Test
     public void shouldContinueProcessingOtherTopologiesWhenNewTopologyHasMissingInputTopics() throws Exception {
+        // This test leaks sockets due to KAFKA-15834
         try {
             CLUSTER.createTopic(EXISTING_STREAM, 2, 1);
             produceToInputTopics(EXISTING_STREAM, STANDARD_INPUT_DATA);
@@ -843,6 +844,8 @@ public class NamedTopologyIntegrationTest {
             props.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.IntegerSerde.class);
             props.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.StringSerde.class);
 
+            // Discard the pre-created streams and replace with test-specific topology
+            streams.close();
             streams = new KafkaStreamsNamedTopologyWrapper(props);
             streams.setUncaughtExceptionHandler(exception -> StreamThreadExceptionResponse.REPLACE_THREAD);
 
