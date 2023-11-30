@@ -14,16 +14,16 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.clients;
+package org.apache.kafka.common.telemetry.internals;
 
 import io.opentelemetry.proto.metrics.v1.MetricsData;
 
+import org.apache.kafka.clients.ClientTelemetryReporter;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.metrics.MetricsContext;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.CompressionType;
-import org.apache.kafka.common.telemetry.internals.MetricKeyable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -35,8 +35,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.function.Predicate;
-
-import static org.apache.kafka.clients.ClientTelemetryReporter.DEFAULT_PUSH_INTERVAL_MS;
 
 public class ClientTelemetryUtils {
 
@@ -86,7 +84,7 @@ public class ClientTelemetryUtils {
             case TELEMETRY_TOO_LARGE:
             case THROTTLING_QUOTA_EXCEEDED:
                 reason = error.message();
-                pushIntervalMs = (intervalMs != -1) ? intervalMs : DEFAULT_PUSH_INTERVAL_MS;
+                pushIntervalMs = (intervalMs != -1) ? intervalMs : ClientTelemetryReporter.DEFAULT_PUSH_INTERVAL_MS;
                 break;
             default:
                 reason = "Unwrapped error code";
@@ -140,8 +138,8 @@ public class ClientTelemetryUtils {
     public static int validateIntervalMs(int intervalMs) {
         if (intervalMs <= 0) {
             log.warn("Telemetry subscription push interval value from broker was invalid ({}),"
-                + " substituting with default value of {}", intervalMs, DEFAULT_PUSH_INTERVAL_MS);
-            return DEFAULT_PUSH_INTERVAL_MS;
+                + " substituting with default value of {}", intervalMs, ClientTelemetryReporter.DEFAULT_PUSH_INTERVAL_MS);
+            return ClientTelemetryReporter.DEFAULT_PUSH_INTERVAL_MS;
         }
 
         log.debug("Telemetry subscription push interval value from broker: {}", intervalMs);

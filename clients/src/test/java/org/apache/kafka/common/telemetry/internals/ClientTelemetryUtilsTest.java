@@ -14,13 +14,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.clients;
+package org.apache.kafka.common.telemetry.internals;
 
+import org.apache.kafka.clients.ClientTelemetryReporter;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.CompressionType;
-import org.apache.kafka.common.telemetry.internals.MetricKey;
-import org.apache.kafka.common.telemetry.internals.MetricKeyable;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;

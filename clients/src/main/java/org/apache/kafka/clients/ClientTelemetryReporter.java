@@ -41,6 +41,7 @@ import org.apache.kafka.common.requests.PushTelemetryRequest;
 import org.apache.kafka.common.requests.PushTelemetryResponse;
 import org.apache.kafka.common.telemetry.ClientTelemetryState;
 import org.apache.kafka.common.telemetry.internals.ClientTelemetrySender;
+import org.apache.kafka.common.telemetry.internals.ClientTelemetryUtils;
 import org.apache.kafka.common.telemetry.internals.KafkaMetricsCollector;
 import org.apache.kafka.common.telemetry.internals.MetricKeyable;
 import org.apache.kafka.common.telemetry.internals.MetricsCollector;

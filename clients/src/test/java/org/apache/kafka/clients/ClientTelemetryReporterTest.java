@@ -37,6 +37,7 @@ import org.apache.kafka.common.requests.GetTelemetrySubscriptionsResponse;
 import org.apache.kafka.common.requests.PushTelemetryRequest;
 import org.apache.kafka.common.requests.PushTelemetryResponse;
 import org.apache.kafka.common.telemetry.ClientTelemetryState;
+import org.apache.kafka.common.telemetry.internals.ClientTelemetryUtils;
 import org.apache.kafka.common.utils.MockTime;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;

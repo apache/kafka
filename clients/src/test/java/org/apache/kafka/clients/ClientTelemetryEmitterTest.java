@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.clients;
 
+import org.apache.kafka.common.telemetry.internals.ClientTelemetryUtils;
 import org.apache.kafka.common.telemetry.internals.MetricKey;
 import org.apache.kafka.common.telemetry.internals.MetricKeyable;
 import org.apache.kafka.common.telemetry.internals.SinglePointMetric;

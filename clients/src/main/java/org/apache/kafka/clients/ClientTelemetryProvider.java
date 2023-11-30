@@ -28,6 +28,7 @@ import org.apache.kafka.common.metrics.MetricsContext;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import org.apache.kafka.common.telemetry.internals.ClientTelemetryUtils;
 
 public class ClientTelemetryProvider implements Configurable {
 
