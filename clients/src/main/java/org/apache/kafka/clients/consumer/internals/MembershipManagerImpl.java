@@ -38,7 +38,6 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 
-import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
@@ -253,13 +252,6 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
     private Optional<CompletableFuture<Void>> leaveGroupInProgress;
 
     /**
-     * The Consumer may wish to wait until it's officially part of a {@link MemberState#STABLE stable}
-     * consumer group. Code that runs within the {@link ConsumerNetworkThread background thread} can elect
-     * to be notified when this occurs via the {@link #notifyOnStable(CompletableFuture)} method.
-     */
-    private final List<CompletableFuture<Void>> notifyOnStableFutures = new ArrayList<>();
-
-    /**
      * True if the member has registered to be notified when the cluster metadata is updated.
      * This is initially false, as the member that is not part of a consumer group does not
      * require metadata updated. This becomes true the first time the member joins on the
@@ -386,28 +378,7 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
             resolveMetadataForUnresolvedAssignment();
             reconcile();
         } else if (allPendingAssignmentsReconciled()) {
-            transitionToStable();
-        }
-    }
-
-    @Override
-    public void notifyOnStable(CompletableFuture<Void> future) {
-        if (state == MemberState.STABLE) {
-            future.complete(null);
-            log.trace(
-                "Completed future {} since member {} is already in the {} state",
-                future,
-                memberIdForLogging(),
-                MemberState.STABLE
-            );
-        } else {
-            notifyOnStableFutures.add(future);
-            log.trace(
-                "Registered future {} for notification when member {} transitions to the {} state",
-                future,
-                memberIdForLogging(),
-                MemberState.STABLE
-            );
+            transitionTo(MemberState.STABLE);
         }
     }
 
@@ -511,20 +482,6 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
         transitionTo(MemberState.JOINING);
         clearPendingAssignmentsAndLocalNamesCache();
         registerForMetadataUpdates();
-    }
-
-    private void transitionToStable() {
-        transitionTo(MemberState.STABLE);
-        notifyOnStableFutures.forEach(future -> {
-            future.complete(null);
-            log.trace(
-                "Completed future {} as member {} has transitioned to the {} state",
-                future,
-                memberIdForLogging(),
-                MemberState.STABLE
-            );
-        });
-        notifyOnStableFutures.clear();
     }
 
     /**
@@ -638,7 +595,7 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
         MemberState state = state();
         if (state == MemberState.ACKNOWLEDGING) {
             if (allPendingAssignmentsReconciled()) {
-                transitionToStable();
+                transitionTo(MemberState.STABLE);
             } else {
                 log.debug("Member {} with epoch {} transitioned to {} after a heartbeat was sent " +
                         "to ack a previous reconciliation. New assignments are ready to " +

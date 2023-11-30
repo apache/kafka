@@ -22,7 +22,6 @@ import org.apache.kafka.clients.consumer.internals.events.ApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEventProcessor;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
 import org.apache.kafka.common.Node;
-import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.internals.IdempotentCloser;
 import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.utils.KafkaThread;
@@ -40,10 +39,6 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Future;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.locks.Condition;
-import java.util.concurrent.locks.Lock;
-import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
@@ -68,9 +63,6 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
     private RequestManagers requestManagers;
     private volatile boolean running;
     private final IdempotentCloser closer = new IdempotentCloser();
-    private final Lock lock = new ReentrantLock();
-    private final Condition wakeupCondition = lock.newCondition();
-
     private volatile Duration closeTimeout = Duration.ofMillis(DEFAULT_CLOSE_TIMEOUT_MS);
 
     public ConsumerNetworkThread(LogContext logContext,
@@ -139,8 +131,6 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
      * </ol>
      */
     void runOnce() {
-        waitForNewEvents(MAX_POLL_TIMEOUT_MS);
-
         // Process the events—if any—that were produced by the application thread. It is possible that when processing
         // an event generates an error. In such cases, the processor will log an exception, but we do not want those
         // errors to be propagated to the caller.
@@ -214,8 +204,6 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
         // The network client can be null if the initializeResources method has not yet been called.
         if (networkClientDelegate != null)
             networkClientDelegate.wakeup();
-
-        notifyOfNewEvents();
     }
 
     @Override
@@ -338,35 +326,6 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
         while (timer.notExpired() && !findCoordinatorRequest.isDone()) {
             networkClientDelegate.poll(timer.remainingMs(), timer.currentTimeMs());
             timer.update();
-        }
-    }
-
-    /**
-     * Used by the main {@link #runOnce()} method to wait for the arrival of new events to process <em>OR</em> for the
-     * timeout to expire. This prevents our thread from busy spinning when there aren't events process.
-     */
-    private void waitForNewEvents(long timeoutMs) {
-        try {
-            lock.lock();
-
-            if (wakeupCondition.await(timeoutMs, TimeUnit.MILLISECONDS))
-                log.trace("Consumer network I/O thread awoken prematurely");
-        } catch (InterruptedException e) {
-            throw new InterruptException("Interrupted while waiting for new events", e);
-        } finally {
-            lock.unlock();
-        }
-    }
-
-    /**
-     * This is called from {@link #wakeup()} to notify our thread that there are new events to process.
-     */
-    private void notifyOfNewEvents() {
-        try {
-            lock.lock();
-            wakeupCondition.signalAll();
-        } finally {
-            lock.unlock();
         }
     }
 }

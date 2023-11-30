@@ -120,10 +120,6 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
                 process((ConsumerRebalanceListenerCallbackCompletedEvent) event);
                 return;
 
-            case WAIT_FOR_JOIN_GROUP:
-                process((WaitForJoinGroupApplicationEvent) event);
-                return;
-
             default:
                 log.warn("Application event type " + event.type() + " was not expected");
         }
@@ -242,17 +238,6 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
                 event.methodName()
             );
         }
-    }
-
-    private void process(final WaitForJoinGroupApplicationEvent event) {
-        if (!requestManagers.heartbeatRequestManager.isPresent()) {
-            KafkaException error = new KafkaException("Group membership manager not present when waiting to join a group");
-            backgroundEventHandler.add(new ErrorBackgroundEvent(error));
-            return;
-        }
-
-        MembershipManager membershipManager = requestManagers.heartbeatRequestManager.get().membershipManager();
-        membershipManager.notifyOnStable(event.future());
     }
 
     /**

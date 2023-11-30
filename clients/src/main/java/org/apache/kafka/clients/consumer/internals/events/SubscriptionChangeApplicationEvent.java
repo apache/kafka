@@ -22,7 +22,7 @@ package org.apache.kafka.clients.consumer.internals.events;
  * calls the subscribe API. This will make the consumer join a consumer group if not part of it
  * yet, or just send the updated subscription to the broker if it's already a member of the group.
  */
-public class SubscriptionChangeApplicationEvent extends CompletableApplicationEvent<Void> {
+public class SubscriptionChangeApplicationEvent extends ApplicationEvent {
 
     public SubscriptionChangeApplicationEvent() {
         super(Type.SUBSCRIPTION_CHANGE);

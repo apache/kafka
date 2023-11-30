@@ -54,7 +54,6 @@ import org.apache.kafka.clients.consumer.internals.events.ResetPositionsApplicat
 import org.apache.kafka.clients.consumer.internals.events.SubscriptionChangeApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.UnsubscribeApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.ValidatePositionsApplicationEvent;
-import org.apache.kafka.clients.consumer.internals.events.WaitForJoinGroupApplicationEvent;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.KafkaException;
@@ -1104,15 +1103,15 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         try {
             fetchBuffer.retainAll(Collections.emptySet());
             if (groupId.isPresent()) {
+                UnsubscribeApplicationEvent unsubscribeApplicationEvent = new UnsubscribeApplicationEvent();
+                applicationEventHandler.add(unsubscribeApplicationEvent);
                 log.info("Unsubscribing all topics or patterns and assigned partitions");
                 Timer timer = time.timer(Long.MAX_VALUE);
-                UnsubscribeApplicationEvent event = new UnsubscribeApplicationEvent();
-                applicationEventHandler.add(event);
 
-                if (processBackgroundEvents(event, timer))
+                if (processBackgroundEvents(unsubscribeApplicationEvent, timer))
                     log.info("Unsubscribed all topics or patterns and assigned partitions");
                 else
-                    log.info("Timeout expired while unsubscribing");
+                    log.error("Failed while waiting for the unsubscribe event to complete");
             }
             subscriptions.unsubscribe();
         } finally {
@@ -1273,40 +1272,14 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
 
     @Override
     public boolean updateAssignmentMetadataIfNeeded(Timer timer) {
-        if (isCommittedOffsetsManagementEnabled() && !coordinatorPoll(timer)) {
-            return false;
-        }
-
-        return updateFetchPositions(timer);
-    }
-
-    /**
-     * This method is an approximation of the logic that the {@link ConsumerCoordinator#poll(Timer, boolean)} method
-     * performs when it is called by the {@link LegacyKafkaConsumer#poll(Duration)} code.
-     *
-     * <p/>
-     *
-     * To mimic the behavior of the {@link ConsumerCoordinator#ensureActiveGroup(Timer)}, we want to block the
-     * application thread until the consumer fully joins the group. However, we can't block the application thread
-     * for the full length of the given {@link Timer timer} because we need the application thread to perform
-     * any {@link ConsumerRebalanceListener} callbacks that are invoked as part of the initial assignment. So we
-     * have a loop that executes the following until the timer expires:
-     *
-     * <ul>
-     *     <li>Block for a 100 ms.</li>
-     *     <li>Execute any callbacks</li>
-     * </ul>
-     *
-     * @param timer Timer that limits the time the method will wait to join the group
-     * @return {@code true} if the join was successful, {@code false} otherwise
-     */
-    private boolean coordinatorPoll(Timer timer) {
         maybeInvokeCommitCallbacks();
         maybeThrowFencedInstanceException();
+        backgroundEventProcessor.process();
 
-        WaitForJoinGroupApplicationEvent event = new WaitForJoinGroupApplicationEvent();
-        applicationEventHandler.add(event);
-        return processBackgroundEvents(event, timer);
+        // Keeping this updateAssignmentMetadataIfNeeded wrapping up the updateFetchPositions as
+        // in the previous implementation, because it will eventually involve group coordination
+        // logic
+        return updateFetchPositions(timer);
     }
 
     @Override
