@@ -23,7 +23,6 @@ import java.nio.file.StandardOpenOption
 import java.util.Properties
 import java.util.concurrent.CompletableFuture
 import kafka.log.LogManager
-import kafka.raft.KafkaRaftManager.RaftIoThread
 import kafka.server.KafkaConfig
 import kafka.server.KafkaRaftServer.BrokerRole
 import kafka.server.KafkaRaftServer.ControllerRole
@@ -33,9 +32,8 @@ import kafka.tools.TestRaftServer.ByteArraySerde
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.Uuid
 import org.apache.kafka.common.metrics.Metrics
-import org.apache.kafka.common.utils.Time
-import org.apache.kafka.raft.KafkaRaftClient
-import org.apache.kafka.raft.RaftConfig
+import org.apache.kafka.common.utils.{LogContext, Time}
+import org.apache.kafka.raft.{KafkaRaftClient, KafkaRaftClientDriver, RaftConfig}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.ParameterizedTest
@@ -196,7 +194,7 @@ class RaftManagerTest {
   def testShutdownIoThread(): Unit = {
     val raftClient = mock(classOf[KafkaRaftClient[String]])
     val faultHandler = new MockFaultHandler("RaftManagerTestFaultHandler")
-    val ioThread = new RaftIoThread(raftClient, threadNamePrefix = "test-raft", faultHandler)
+    val ioThread = new KafkaRaftClientDriver(raftClient, "test-raft", faultHandler, new LogContext)
 
     when(raftClient.isRunning).thenReturn(true)
     assertTrue(ioThread.isRunning)
@@ -221,7 +219,7 @@ class RaftManagerTest {
   def testUncaughtExceptionInIoThread(): Unit = {
     val raftClient = mock(classOf[KafkaRaftClient[String]])
     val faultHandler = new MockFaultHandler("RaftManagerTestFaultHandler")
-    val ioThread = new RaftIoThread(raftClient, threadNamePrefix = "test-raft", faultHandler)
+    val ioThread = new KafkaRaftClientDriver(raftClient, "test-raft", faultHandler, new LogContext)
 
     when(raftClient.isRunning).thenReturn(true)
     assertTrue(ioThread.isRunning)

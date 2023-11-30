@@ -1,0 +1,71 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements. See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License. You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+package org.apache.kafka.raft;
+
+import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.server.fault.FaultHandler;
+import org.apache.kafka.server.util.ShutdownableThread;
+import org.slf4j.Logger;
+
+public class KafkaRaftClientDriver<T> extends ShutdownableThread {
+    private final Logger log;
+    private final KafkaRaftClient<T> client;
+    private final FaultHandler fatalFaultHandler;
+
+    public KafkaRaftClientDriver(
+        KafkaRaftClient<T> client,
+        String threadNamePrefix,
+        FaultHandler fatalFaultHandler,
+        LogContext logContext
+    ) {
+        super(threadNamePrefix + "-io-thread", false);
+        this.client = client;
+        this.fatalFaultHandler = fatalFaultHandler;
+        this.log = logContext.logger(KafkaRaftClientDriver.class);
+    }
+
+    @Override
+    public void doWork() {
+        try {
+            client.poll();
+        } catch (Throwable t) {
+            throw fatalFaultHandler.handleFault("Unexpected error in raft IO thread", t);
+        }
+    }
+
+    @Override
+    public boolean initiateShutdown() {
+        if (super.initiateShutdown()) {
+            client.shutdown(5000).whenComplete((na, exception) -> {
+                if (exception != null) {
+                    log.error("Graceful shutdown of RaftClient failed", exception);
+                } else {
+                    log.info("Completed graceful shutdown of RaftClient");
+                }
+            });
+            return true;
+        } else {
+            return false;
+        }
+    }
+
+    @Override
+    public boolean isRunning() {
+        return client.isRunning() && !isThreadFailed();
+    }
+
+}
