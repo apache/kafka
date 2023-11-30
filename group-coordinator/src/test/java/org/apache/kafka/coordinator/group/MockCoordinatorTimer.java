@@ -127,7 +127,7 @@ public class MockCoordinatorTimer<T, U> implements CoordinatorTimer<T, U> {
         boolean retry,
         TimeoutOperation<T, U> operation
     ) {
-        schedule(key, delay, unit, retry, operation);
+        schedule(key, delay, unit, retry, 500L, operation);
     }
 
     /**
