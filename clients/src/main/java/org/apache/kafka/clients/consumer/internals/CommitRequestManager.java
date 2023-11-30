@@ -137,7 +137,7 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
         this.pendingRequests = new PendingRequests();
         if (config.getBoolean(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG)) {
             final long autoCommitInterval =
-                    Integer.toUnsignedLong(config.getInt(ConsumerConfig.AUTO_COMMIT_INTERVAL_MS_CONFIG));
+                Integer.toUnsignedLong(config.getInt(ConsumerConfig.AUTO_COMMIT_INTERVAL_MS_CONFIG));
             this.autoCommitState = Optional.of(new AutoCommitState(time, autoCommitInterval));
         } else {
             this.autoCommitState = Optional.empty();
@@ -172,16 +172,16 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
         List<NetworkClientDelegate.UnsentRequest> requests = pendingRequests.drain(currentTimeMs);
         // min of the remainingBackoffMs of all the request that are still backing off
         final long timeUntilNextPoll = Math.min(
-                findMinTime(unsentOffsetCommitRequests(), currentTimeMs),
-                findMinTime(unsentOffsetFetchRequests(), currentTimeMs));
+            findMinTime(unsentOffsetCommitRequests(), currentTimeMs),
+            findMinTime(unsentOffsetFetchRequests(), currentTimeMs));
         return new NetworkClientDelegate.PollResult(timeUntilNextPoll, requests);
     }
 
     private static long findMinTime(final Collection<? extends RequestState> requests, final long currentTimeMs) {
         return requests.stream()
-                .mapToLong(request -> request.remainingBackoffMs(currentTimeMs))
-                .min()
-                .orElse(Long.MAX_VALUE);
+            .mapToLong(request -> request.remainingBackoffMs(currentTimeMs))
+            .min()
+            .orElse(Long.MAX_VALUE);
     }
 
     /**
@@ -602,8 +602,7 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
                     handleStaleMemberEpochError(this);
                     break;
                 default:
-                    future.completeExceptionally(new KafkaException("Unexpected error in commit:" +
-                            " " + error.message()));
+                    future.completeExceptionally(new KafkaException("Unexpected error in commit: " + error.message()));
                     break;
             }
         }
