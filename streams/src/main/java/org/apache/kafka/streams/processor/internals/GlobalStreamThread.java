@@ -321,8 +321,8 @@ public class GlobalStreamThread extends Thread {
                 if (fetchDeadline != -1) {
                     if (fetchDeadline > time.milliseconds()) {
                         try {
-                            // pass in a timeout of zero, to just trigger the background RPC,
-                            // we don't want to block the global thread that can to useful work in the meantime
+                            // we pass in a timeout of zero, to just trigger the "get instance id" background RPC,
+                            // we don't want to block the global thread that can do useful work in the meantime
                             globalConsumerClientInstanceId = globalConsumer.clientInstanceId(Duration.ZERO);
                             clientInstanceIdFuture.complete(globalConsumerClientInstanceId);
                             fetchDeadline = -1;
