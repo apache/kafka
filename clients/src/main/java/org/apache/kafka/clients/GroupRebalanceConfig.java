@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.clients;
 
+import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.requests.JoinGroupRequest;
 
@@ -45,6 +46,7 @@ public class GroupRebalanceConfig {
     public final long retryBackoffMs;
     public final long retryBackoffMaxMs;
     public final boolean leaveGroupOnClose;
+    public final Optional<String> serverAssignor;
 
     public GroupRebalanceConfig(AbstractConfig config, ProtocolType protocolType) {
         this.sessionTimeoutMs = config.getInt(CommonClientConfigs.SESSION_TIMEOUT_MS_CONFIG);
@@ -58,6 +60,7 @@ public class GroupRebalanceConfig {
 
         this.heartbeatIntervalMs = config.getInt(CommonClientConfigs.HEARTBEAT_INTERVAL_MS_CONFIG);
         this.groupId = config.getString(CommonClientConfigs.GROUP_ID_CONFIG);
+        this.serverAssignor = Optional.ofNullable(config.getString(ConsumerConfig.GROUP_REMOTE_ASSIGNOR_CONFIG));
 
         // Static membership is only introduced in consumer API.
         if (protocolType == ProtocolType.CONSUMER) {
@@ -100,5 +103,28 @@ public class GroupRebalanceConfig {
         this.retryBackoffMs = retryBackoffMs;
         this.retryBackoffMaxMs = retryBackoffMaxMs;
         this.leaveGroupOnClose = leaveGroupOnClose;
+        this.serverAssignor = Optional.empty();
+    }
+
+
+    // For testing purpose.
+    public GroupRebalanceConfig(final int sessionTimeoutMs,
+                                final int rebalanceTimeoutMs,
+                                final int heartbeatIntervalMs,
+                                String groupId,
+                                Optional<String> groupInstanceId,
+                                long retryBackoffMs,
+                                long retryBackoffMaxMs,
+                                boolean leaveGroupOnClose,
+                                String serverAssignor) {
+        this.sessionTimeoutMs = sessionTimeoutMs;
+        this.rebalanceTimeoutMs = rebalanceTimeoutMs;
+        this.heartbeatIntervalMs = heartbeatIntervalMs;
+        this.groupId = groupId;
+        this.groupInstanceId = groupInstanceId;
+        this.retryBackoffMs = retryBackoffMs;
+        this.retryBackoffMaxMs = retryBackoffMaxMs;
+        this.leaveGroupOnClose = leaveGroupOnClose;
+        this.serverAssignor = Optional.ofNullable(serverAssignor);
     }
 }

@@ -440,6 +440,8 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
      * @throws org.apache.kafka.common.errors.TopicAuthorizationException if the consumer is not authorized to read
      *             from a partition
      * @throws org.apache.kafka.common.errors.SerializationException if the fetched records cannot be deserialized
+     * @throws org.apache.kafka.common.errors.UnsupportedAssignorException if the `group.remote.assignor` configuration
+     *             is set to an assignor that is not available on the broker.
      */
     @Override
     public ConsumerRecords<K, V> poll(final Duration timeout) {

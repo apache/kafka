@@ -238,15 +238,6 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
     private boolean isRegisteredForMetadataUpdates;
 
     public MembershipManagerImpl(String groupId,
-                                 SubscriptionState subscriptions,
-                                 CommitRequestManager commitRequestManager,
-                                 ConsumerMetadata metadata,
-                                 LogContext logContext) {
-        this(groupId, Optional.empty(), Optional.empty(), subscriptions, commitRequestManager, metadata,
-                logContext);
-    }
-
-    public MembershipManagerImpl(String groupId,
                                  Optional<String> groupInstanceId,
                                  Optional<String> serverAssignor,
                                  SubscriptionState subscriptions,

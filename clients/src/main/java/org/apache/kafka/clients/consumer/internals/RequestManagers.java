@@ -173,6 +173,8 @@ public class RequestManagers implements Closeable {
                             groupState);
                     membershipManager = new MembershipManagerImpl(
                             groupState.groupId,
+                            groupState.groupInstanceId,
+                            groupRebalanceConfig.serverAssignor,
                             subscriptions,
                             commit,
                             metadata,
