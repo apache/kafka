@@ -326,6 +326,8 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
                 } else if (created < toCreate.size() && (toCreate.get(created) == allDescriptors.get(existing + created))) {
                     columnFamilies.add(createdColumnFamilies.get(created));
                     created++;
+                } else {
+                    throw new IllegalStateException("Unable to match up column family handles with descriptors.");
                 }
             }
             return columnFamilies;
