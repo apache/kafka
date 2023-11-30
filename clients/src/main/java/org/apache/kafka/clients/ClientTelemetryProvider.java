@@ -24,11 +24,11 @@ import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.Configurable;
 import org.apache.kafka.common.metrics.MetricsContext;
+import org.apache.kafka.common.telemetry.internals.ClientTelemetryUtils;
 
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import org.apache.kafka.common.telemetry.internals.ClientTelemetryUtils;
 
 public class ClientTelemetryProvider implements Configurable {
 
