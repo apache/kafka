@@ -3453,13 +3453,17 @@ public class StreamThreadTest {
     }
 
     @Test
-    public void shouldGetMainAndRestoreConsumerInstanceIdWithStateUpdaterDisabled() throws Exception {
+    public void shouldGetMainAndRestoreConsumerAndProducerInstanceIdWithStateUpdaterDisabled() throws Exception {
         Assume.assumeFalse(stateUpdaterEnabled);
 
         final Uuid consumerInstanceId = Uuid.randomUuid();
-        ((MockConsumer<?, ?>) clientSupplier.getConsumer(null)).setClientInstanceId(consumerInstanceId, Duration.ZERO);
+        clientSupplier.consumer.setClientInstanceId(consumerInstanceId, Duration.ZERO);
         final Uuid restoreInstanceId = Uuid.randomUuid();
-        ((MockConsumer<?, ?>) clientSupplier.getRestoreConsumer(null)).setClientInstanceId(restoreInstanceId, Duration.ZERO);
+        clientSupplier.restoreConsumer.setClientInstanceId(restoreInstanceId, Duration.ZERO);
+        final Uuid producerInstanceId = Uuid.randomUuid();
+        final MockProducer<byte[], byte[]> producer = new MockProducer<>();
+        producer.setClientInstanceId(producerInstanceId, Duration.ZERO);
+        clientSupplier.prepareProducer(producer);
 
         thread = createStreamThread("clientId");
         thread.setState(State.STARTING);
@@ -3475,16 +3479,24 @@ public class StreamThreadTest {
         final KafkaFuture<Uuid> restoreConsumerFuture = clientInstanceIdFutures.get("clientId-StreamThread-1-restore-consumer");
         final Uuid restoreConsumerUuid = restoreConsumerFuture.get();
         assertThat(restoreConsumerUuid, equalTo(restoreInstanceId));
+
+        final KafkaFuture<Uuid> producerFuture = clientInstanceIdFutures.get("clientId-StreamThread-1-producer");
+        final Uuid producerUuid = producerFuture.get();
+        assertThat(producerUuid, equalTo(producerInstanceId));
     }
 
     @Test
-    public void shouldGetMainInstanceIdWhileRestoreTimesOutWithStateUpdaterDisabled() throws Exception {
+    public void shouldGetMainConsumerAndProducerInstanceIdWhileRestoreConsumerTimesOutWithStateUpdaterDisabled() throws Exception {
         Assume.assumeFalse(stateUpdaterEnabled);
 
         final Uuid consumerInstanceId = Uuid.randomUuid();
-        ((MockConsumer<?, ?>) clientSupplier.getConsumer(null)).setClientInstanceId(consumerInstanceId, Duration.ZERO);
+        clientSupplier.consumer.setClientInstanceId(consumerInstanceId, Duration.ZERO);
         final Uuid restoreInstanceId = Uuid.randomUuid();
-        ((MockConsumer<?, ?>) clientSupplier.getRestoreConsumer(null)).setClientInstanceId(restoreInstanceId, Duration.ofMillis(1L));
+        clientSupplier.restoreConsumer.setClientInstanceId(restoreInstanceId, Duration.ofMillis(1L));
+        final Uuid producerInstanceId = Uuid.randomUuid();
+        final MockProducer<byte[], byte[]> producer = new MockProducer<>();
+        producer.setClientInstanceId(producerInstanceId, Duration.ZERO);
+        clientSupplier.prepareProducer(producer);
 
         thread = createStreamThread("clientId");
         thread.setState(State.STARTING);
@@ -3502,33 +3514,46 @@ public class StreamThreadTest {
         final ExecutionException error = assertThrows(ExecutionException.class, restoreConsumerFuture::get);
         assertThat(error.getCause(), instanceOf(TimeoutException.class));
         assertThat(error.getCause().getMessage(), equalTo("Could not retrieve restore-consumer client-instance-id"));
+
+        final KafkaFuture<Uuid> producerFuture = clientInstanceIdFutures.get("clientId-StreamThread-1-producer");
+        final Uuid producerUuid = producerFuture.get();
+        assertThat(producerUuid, equalTo(producerInstanceId));
     }
 
     @Test
-    public void shouldGetRestoreInstanceIdWhileMainTimesOutWithStateUpdaterDisabled() throws Exception {
+    public void shouldGetRestoreConsumerInstanceIdWhileMainConsumerAndProducerTimeOutWithStateUpdaterDisabled() throws Exception {
         Assume.assumeFalse(stateUpdaterEnabled);
 
         final Uuid consumerInstanceId = Uuid.randomUuid();
-        ((MockConsumer<?, ?>) clientSupplier.getConsumer(null)).setClientInstanceId(consumerInstanceId, Duration.ofMillis(1L));
+        clientSupplier.consumer.setClientInstanceId(consumerInstanceId, Duration.ofMillis(1L));
         final Uuid restoreInstanceId = Uuid.randomUuid();
-        ((MockConsumer<?, ?>) clientSupplier.getRestoreConsumer(null)).setClientInstanceId(restoreInstanceId, Duration.ZERO);
+        clientSupplier.restoreConsumer.setClientInstanceId(restoreInstanceId, Duration.ZERO);
+        final Uuid producerInstanceId = Uuid.randomUuid();
+        final MockProducer<byte[], byte[]> producer = new MockProducer<>();
+        producer.setClientInstanceId(producerInstanceId, Duration.ofMillis(1L));
+        clientSupplier.prepareProducer(producer);
 
         thread = createStreamThread("clientId");
         thread.setState(State.STARTING);
 
         final Map<String, KafkaFuture<Uuid>> clientInstanceIdFutures = thread.clientInstanceIds(Duration.ofMillis(1L));
-        thread.maybeGetClientInstanceIds(); // gets restore consumer instance id (main is blocked)
+        thread.maybeGetClientInstanceIds(); // gets restore consumer instance id (main and producer are blocked)
         mockTime.sleep(5L);
-        thread.maybeGetClientInstanceIds(); // timeout for main instance id (restore already retrieved)
+        thread.maybeGetClientInstanceIds(); // timeout for main consumer and producer instance id (restore already retrieved)
 
         final KafkaFuture<Uuid> mainConsumerFuture = clientInstanceIdFutures.get("clientId-StreamThread-1-consumer");
-        final ExecutionException error = assertThrows(ExecutionException.class, mainConsumerFuture::get);
-        assertThat(error.getCause(), instanceOf(TimeoutException.class));
-        assertThat(error.getCause().getMessage(), equalTo("Could not retrieve main consumer client-instance-id"));
+        final ExecutionException consumerError = assertThrows(ExecutionException.class, mainConsumerFuture::get);
+        assertThat(consumerError.getCause(), instanceOf(TimeoutException.class));
+        assertThat(consumerError.getCause().getMessage(), equalTo("Could not retrieve main consumer client-instance-id"));
 
         final KafkaFuture<Uuid> restoreConsumerFuture = clientInstanceIdFutures.get("clientId-StreamThread-1-restore-consumer");
         final Uuid resotreConsumerUuid = restoreConsumerFuture.get();
         assertThat(resotreConsumerUuid, equalTo(restoreInstanceId));
+
+        final KafkaFuture<Uuid> producerFuture = clientInstanceIdFutures.get("clientId-StreamThread-1-producer");
+        final ExecutionException producerError = assertThrows(ExecutionException.class, producerFuture::get);
+        assertThat(producerError.getCause(), instanceOf(TimeoutException.class));
+        assertThat(producerError.getCause().getMessage(), equalTo("Could not retrieve thread producer client-instance-id"));
     }
 
     @Test
@@ -3562,9 +3587,23 @@ public class StreamThreadTest {
     }
 
     @Test
+    public void shouldReturnErrorIfProducerInstanceIdNotInitialized() {
+        thread = createStreamThread("clientId");
+        thread.setState(State.STARTING);
+
+        final KafkaFuture<Uuid> future = thread.clientInstanceIds(Duration.ofMillis(1L))
+                .get("clientId-StreamThread-1-producer");
+        thread.maybeGetClientInstanceIds();
+
+        final ExecutionException error = assertThrows(ExecutionException.class, future::get);
+        assertThat(error.getCause(), instanceOf(IllegalStateException.class));
+        assertThat(error.getCause().getMessage(), equalTo("clientInstanceId not set"));
+    }
+
+    @Test
     public void shouldTimeOutOnMainConsumerInstanceId() {
         final Uuid instanceId = Uuid.randomUuid();
-        ((MockConsumer<?, ?>) clientSupplier.getConsumer(null)).setClientInstanceId(instanceId, Duration.ofMillis(1L));
+        clientSupplier.consumer.setClientInstanceId(instanceId, Duration.ofMillis(1L));
         thread = createStreamThread("clientId");
         thread.setState(State.STARTING);
 
@@ -3583,7 +3622,7 @@ public class StreamThreadTest {
         Assume.assumeFalse(stateUpdaterEnabled);
 
         final Uuid instanceId = Uuid.randomUuid();
-        ((MockConsumer<?, ?>) clientSupplier.getConsumer(null)).setClientInstanceId(instanceId, Duration.ofMillis(1L));
+        clientSupplier.restoreConsumer.setClientInstanceId(instanceId, Duration.ofMillis(1L));
         thread = createStreamThread("clientId");
         thread.setState(State.STARTING);
 
@@ -3596,6 +3635,24 @@ public class StreamThreadTest {
         assertThat(error.getCause(), instanceOf(TimeoutException.class));
         assertThat(error.getCause().getMessage(), equalTo("Could not retrieve restore-consumer client-instance-id"));
     }
+
+    @Test
+    public void shouldTimeOutOnProducerInstanceId() {
+        final Uuid instanceId = Uuid.randomUuid();
+        ((MockProducer<?, ?>) clientSupplier.getProducer(Collections.emptyMap())).setClientInstanceId(instanceId, Duration.ofMillis(1L));
+        thread = createStreamThread("clientId");
+        thread.setState(State.STARTING);
+
+        final KafkaFuture<Uuid> future = thread.clientInstanceIds(Duration.ofMillis(2L))
+                .get("clientId-StreamThread-1-producer");
+        mockTime.sleep(5L);
+        thread.maybeGetClientInstanceIds();
+
+        final ExecutionException error = assertThrows(ExecutionException.class, future::get);
+        assertThat(error.getCause(), instanceOf(TimeoutException.class));
+        assertThat(error.getCause().getMessage(), equalTo("Could not retrieve thread producer client-instance-id"));
+    }
+
 
     private StreamThread setUpThread(final Properties streamsConfigProps) {
         final StreamsConfig config = new StreamsConfig(streamsConfigProps);

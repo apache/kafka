@@ -27,7 +27,9 @@ import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.errors.ProducerFencedException;
+import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Time;
@@ -80,6 +82,8 @@ public class MockProducer<K, V> implements Producer<K, V> {
     public RuntimeException flushException = null;
     public RuntimeException partitionsForException = null;
     public RuntimeException closeException = null;
+    private Uuid clientInstanceId;
+    private Duration clientInstanceIdBlockingTime;
 
     /**
      * Create a mock producer
@@ -388,9 +392,28 @@ public class MockProducer<K, V> implements Producer<K, V> {
         return this.cluster.partitionsForTopic(topic);
     }
 
+    public void setClientInstanceId(final Uuid instanceId, final Duration blockingTime) {
+        clientInstanceId = instanceId;
+        clientInstanceIdBlockingTime = blockingTime;
+    }
+
     @Override
     public Uuid clientInstanceId(Duration timeout) {
-        throw new UnsupportedOperationException();
+        if (clientInstanceId == null) {
+            throw new IllegalStateException("clientInstanceId not set");
+        }
+
+        if (timeout.toMillis() < clientInstanceIdBlockingTime.toMillis()) {
+            throw new TimeoutException();
+        }
+
+        try {
+            Thread.sleep(clientInstanceIdBlockingTime.toMillis());
+        } catch (final InterruptedException error) {
+            throw new InterruptException(error);
+        }
+
+        return clientInstanceId;
     }
 
     public Map<MetricName, Metric> metrics() {

@@ -1582,38 +1582,35 @@ public class StreamThread extends Thread {
 
         final Map<String, KafkaFuture<Uuid>> result = new HashMap<>();
 
+        KafkaFutureImpl<Uuid> future = new KafkaFutureImpl<>();
         if (mainConsumerClientInstanceId != null) {
-            final KafkaFutureImpl<Uuid> success = new KafkaFutureImpl<>();
-            success.complete(mainConsumerClientInstanceId);
-            result.put(getName() + "-consumer", success);
+            future.complete(mainConsumerClientInstanceId);
         } else {
-            mainConsumerInstanceIdFuture = new KafkaFutureImpl<>();
+            mainConsumerInstanceIdFuture = future;
             setDeadline = true;
-            result.put(getName() + "-consumer", mainConsumerInstanceIdFuture);
         }
+        result.put(getName() + "-consumer", future);
 
+        future = new KafkaFutureImpl<>();
         if (restoreConsumerClientInstanceId != null) {
-            final KafkaFutureImpl<Uuid> success = new KafkaFutureImpl<>();
-            success.complete(restoreConsumerClientInstanceId);
-            result.put(getName() + "-restore-consumer", success);
+            future.complete(restoreConsumerClientInstanceId);
         } else {
-            restoreConsumerInstanceIdFuture = new KafkaFutureImpl<>();
+            restoreConsumerInstanceIdFuture = future;
             setDeadline = true;
-            result.put(getName() + "-restore-consumer", restoreConsumerInstanceIdFuture);
         }
+        result.put(getName() + "-restore-consumer", future);
 
         if (processingMode.equals(StreamsConfigUtils.ProcessingMode.EXACTLY_ONCE_ALPHA)) {
             throw new UnsupportedOperationException("not implemented yet");
         } else {
+            future = new KafkaFutureImpl<>();
             if (threadProducerClientInstanceId != null) {
-                final KafkaFutureImpl<Uuid> success = new KafkaFutureImpl<>();
-                success.complete(threadProducerClientInstanceId);
-                result.put(getName() +"-producer", success);
+                future.complete(threadProducerClientInstanceId);
             } else {
-                threadProducerInstanceIdFuture = new KafkaFutureImpl<>();
+                threadProducerInstanceIdFuture = future;
                 setDeadline = true;
-                result.put(getName() +"-producer", threadProducerInstanceIdFuture);
             }
+            result.put(getName() + "-producer", future);
         }
 
         if (setDeadline) {
