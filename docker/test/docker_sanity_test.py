@@ -54,26 +54,26 @@ class DockerSanityTest(unittest.TestCase):
         subprocess.run(command)
         check_command = [f"{self.FIXTURES_DIR}/{constants.KAFKA_TOPICS}", "--list"]
         check_command.extend(topic_config)
-        output = subprocess.check_output(check_command, timeout=constants.CLIENT_TIMEOUT)
+        output = subprocess.check_output(check_command)
         if topic in output.decode("utf-8"):
             return True
         return False
         
     def produce_message(self, topic, producer_config, key, value):
-        command = ["echo", f'"{key}:{value}"', "|", f"{self.FIXTURES_DIR}/{constants.KAFKA_CONSOLE_PRODUCER}", "--topic", topic, "--property", "'parse.key=true'", "--property", "'key.separator=:'"]
+        command = ["echo", f'"{key}:{value}"', "|", f"{self.FIXTURES_DIR}/{constants.KAFKA_CONSOLE_PRODUCER}", "--topic", topic, "--property", "'parse.key=true'", "--property", "'key.separator=:'", "--timeout", f"{constants.CLIENT_TIMEOUT}"]
         command.extend(producer_config)
-        subprocess.run(["bash", "-c", " ".join(command)], timeout=constants.CLIENT_TIMEOUT)
+        subprocess.run(["bash", "-c", " ".join(command)])
     
     def consume_message(self, topic, consumer_config):
-        command = [f"{self.FIXTURES_DIR}/{constants.KAFKA_CONSOLE_CONSUMER}", "--topic", topic, "--property", "'print.key=true'", "--property", "'key.separator=:'", "--from-beginning", "--max-messages", "1"]
+        command = [f"{self.FIXTURES_DIR}/{constants.KAFKA_CONSOLE_CONSUMER}", "--topic", topic, "--property", "'print.key=true'", "--property", "'key.separator=:'", "--from-beginning", "--max-messages", "1", "--timeout-ms", f"{constants.CLIENT_TIMEOUT}"]
         command.extend(consumer_config)
-        message = subprocess.check_output(["bash", "-c", " ".join(command)], timeout=constants.CLIENT_TIMEOUT)
+        message = subprocess.check_output(["bash", "-c", " ".join(command)])
         return message.decode("utf-8").strip()
     
     def get_metrics(self, jmx_tool_config):
         command = [f"{self.FIXTURES_DIR}/{constants.KAFKA_RUN_CLASS}", constants.JMX_TOOL]
         command.extend(jmx_tool_config)
-        message = subprocess.check_output(["bash", "-c", " ".join(command)], timeout=constants.CLIENT_TIMEOUT)
+        message = subprocess.check_output(["bash", "-c", " ".join(command)])
         return message.decode("utf-8").strip().split()
     
     def broker_metrics_flow(self):
@@ -197,11 +197,19 @@ class DockerSanityTest(unittest.TestCase):
         
         self.assertEqual(total_errors, [])
 
-class DockerSanityTestJVM(DockerSanityTest):
+class DockerSanityTestJVMCombinedMode(DockerSanityTest):
     def setUp(self) -> None:
-        self.start_compose(f"{self.FIXTURES_DIR}/{constants.JVM_COMPOSE}")
+        self.start_compose(f"{self.FIXTURES_DIR}/{constants.JVM_COMBINED_MODE_COMPOSE}")
     def tearDown(self) -> None:
-        self.destroy_compose(f"{self.FIXTURES_DIR}/{constants.JVM_COMPOSE}")
+        self.destroy_compose(f"{self.FIXTURES_DIR}/{constants.JVM_COMBINED_MODE_COMPOSE}")
+    def test_bed(self):
+        self.execute()
+
+class DockerSanityTestJVMIsolatedMode(DockerSanityTest):
+    def setUp(self) -> None:
+        self.start_compose(f"{self.FIXTURES_DIR}/{constants.JVM_ISOLATED_COMPOSE}")
+    def tearDown(self) -> None:
+        self.destroy_compose(f"{self.FIXTURES_DIR}/{constants.JVM_ISOLATED_COMPOSE}")
     def test_bed(self):
         self.execute()
 
@@ -211,14 +219,14 @@ def run_tests(image, mode, fixtures_dir):
 
     test_classes_to_run = []
     if mode == "jvm":
-        test_classes_to_run = [DockerSanityTestJVM]
+        test_classes_to_run = [DockerSanityTestJVMCombinedMode, DockerSanityTestJVMIsolatedMode]
     
     loader = unittest.TestLoader()
     suites_list = []
     for test_class in test_classes_to_run:
         suite = loader.loadTestsFromTestCase(test_class)
         suites_list.append(suite)
-    big_suite = unittest.TestSuite(suites_list)
+    combined_suite = unittest.TestSuite(suites_list)
     cur_directory = os.path.dirname(os.path.realpath(__file__))
     outfile = open(f"{cur_directory}/report_{mode}.html", "w")
     runner = HTMLTestRunner.HTMLTestRunner(
@@ -226,5 +234,5 @@ def run_tests(image, mode, fixtures_dir):
                 title='Test Report',
                 description='This demonstrates the report output.'
                 )
-    result = runner.run(big_suite)
+    result = runner.run(combined_suite)
     return result.failure_count
