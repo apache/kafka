@@ -30,7 +30,7 @@ import kafka.server.metadata.{KRaftMetadataCache, ZkMetadataCache}
 import kafka.utils.CoreUtils.{inReadLock, inWriteLock}
 import kafka.utils._
 import kafka.zookeeper.ZooKeeperClientException
-import org.apache.kafka.common.TopicIdPartition
+import org.apache.kafka.common.{DirectoryId, IsolationLevel, TopicIdPartition, TopicPartition, Uuid}
 import org.apache.kafka.common.errors._
 import org.apache.kafka.common.message.AlterPartitionRequestData.BrokerState
 import org.apache.kafka.common.message.{DescribeProducersResponseData, FetchResponseData}
@@ -42,7 +42,6 @@ import org.apache.kafka.common.record.{MemoryRecords, RecordBatch}
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.{UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET}
 import org.apache.kafka.common.utils.Time
-import org.apache.kafka.common.{IsolationLevel, TopicPartition, Uuid}
 import org.apache.kafka.metadata.LeaderRecoveryState
 import org.apache.kafka.server.common.MetadataVersion
 import org.apache.kafka.storage.internals.log.{AppendOrigin, FetchDataInfo, FetchIsolation, FetchParams, LeaderHwChange, LogAppendInfo, LogOffsetMetadata, LogOffsetSnapshot, LogOffsetsListener, LogReadInfo, LogStartOffsetIncrementReason, VerificationGuard}
@@ -447,7 +446,8 @@ class Partition(val topicPartition: TopicPartition,
     }
   }
 
-  def createLogIfNotExists(isNew: Boolean, isFutureReplica: Boolean, offsetCheckpoints: OffsetCheckpoints, topicId: Option[Uuid]): Unit = {
+  def createLogIfNotExists(isNew: Boolean, isFutureReplica: Boolean, offsetCheckpoints: OffsetCheckpoints, topicId: Option[Uuid],
+                           targetLogDirectoryId: Option[Uuid] = None): Unit = {
     def maybeCreate(logOpt: Option[UnifiedLog]): UnifiedLog = {
       logOpt match {
         case Some(log) =>
@@ -456,7 +456,7 @@ class Partition(val topicPartition: TopicPartition,
             topicId.foreach(log.assignTopicId)
           log
         case None =>
-          createLog(isNew, isFutureReplica, offsetCheckpoints, topicId)
+          createLog(isNew, isFutureReplica, offsetCheckpoints, topicId, targetLogDirectoryId)
       }
     }
 
@@ -468,7 +468,8 @@ class Partition(val topicPartition: TopicPartition,
   }
 
   // Visible for testing
-  private[cluster] def createLog(isNew: Boolean, isFutureReplica: Boolean, offsetCheckpoints: OffsetCheckpoints, topicId: Option[Uuid]): UnifiedLog = {
+  private[cluster] def createLog(isNew: Boolean, isFutureReplica: Boolean, offsetCheckpoints: OffsetCheckpoints,
+                                 topicId: Option[Uuid], targetLogDirectoryId: Option[Uuid]): UnifiedLog = {
     def updateHighWatermark(log: UnifiedLog): Unit = {
       val checkpointHighWatermark = offsetCheckpoints.fetch(log.parentDir, topicPartition).getOrElse {
         info(s"No checkpointed highwatermark is found for partition $topicPartition")
@@ -481,7 +482,7 @@ class Partition(val topicPartition: TopicPartition,
     logManager.initializingLog(topicPartition)
     var maybeLog: Option[UnifiedLog] = None
     try {
-      val log = logManager.getOrCreateLog(topicPartition, isNew, isFutureReplica, topicId)
+      val log = logManager.getOrCreateLog(topicPartition, isNew, isFutureReplica, topicId, targetLogDirectoryId)
       if (!isFutureReplica) log.setLogOffsetsListener(logOffsetsListener)
       maybeLog = Some(log)
       updateHighWatermark(log)
@@ -650,7 +651,6 @@ class Partition(val topicPartition: TopicPartition,
     // need to hold the lock to prevent appendMessagesToLeader() from hitting I/O exceptions due to log being deleted
     inWriteLock(leaderIsrUpdateLock) {
       clear()
-
       listeners.forEach { listener =>
         listener.onDeleted(topicPartition)
       }
@@ -695,7 +695,8 @@ class Partition(val topicPartition: TopicPartition,
    */
   def makeLeader(partitionState: LeaderAndIsrPartitionState,
                  highWatermarkCheckpoints: OffsetCheckpoints,
-                 topicId: Option[Uuid]): Boolean = {
+                 topicId: Option[Uuid],
+                 targetDirectoryId: Option[Uuid] = None): Boolean = {
     val (leaderHWIncremented, isNewLeader) = inWriteLock(leaderIsrUpdateLock) {
       // Partition state changes are expected to have an partition epoch larger or equal
       // to the current partition epoch. The latter is allowed because the partition epoch
@@ -737,7 +738,7 @@ class Partition(val topicPartition: TopicPartition,
       )
 
       try {
-        createLogIfNotExists(partitionState.isNew, isFutureReplica = false, highWatermarkCheckpoints, topicId)
+        createLogInAssignedDirectoryId(partitionState, highWatermarkCheckpoints, topicId, targetDirectoryId)
       } catch {
         case e: ZooKeeperClientException =>
           stateChangeLogger.error(s"A ZooKeeper client exception has occurred and makeLeader will be skipping the " +
@@ -811,7 +812,8 @@ class Partition(val topicPartition: TopicPartition,
    */
   def makeFollower(partitionState: LeaderAndIsrPartitionState,
                    highWatermarkCheckpoints: OffsetCheckpoints,
-                   topicId: Option[Uuid]): Boolean = {
+                   topicId: Option[Uuid],
+                   targetLogDirectoryId: Option[Uuid] = None): Boolean = {
     inWriteLock(leaderIsrUpdateLock) {
       if (partitionState.partitionEpoch < partitionEpoch) {
         stateChangeLogger.info(s"Skipped the become-follower state change for $topicPartition with topic id $topicId " +
@@ -841,7 +843,7 @@ class Partition(val topicPartition: TopicPartition,
       )
 
       try {
-        createLogIfNotExists(partitionState.isNew, isFutureReplica = false, highWatermarkCheckpoints, topicId)
+        createLogInAssignedDirectoryId(partitionState, highWatermarkCheckpoints, topicId, targetLogDirectoryId)
       } catch {
         case e: ZooKeeperClientException =>
           stateChangeLogger.error(s"A ZooKeeper client exception has occurred. makeFollower will be skipping the " +
@@ -864,6 +866,25 @@ class Partition(val topicPartition: TopicPartition,
       // We must restart the fetchers when the leader epoch changed regardless of
       // whether the leader changed as well.
       isNewLeaderEpoch
+    }
+  }
+
+  private def createLogInAssignedDirectoryId(partitionState: LeaderAndIsrPartitionState, highWatermarkCheckpoints: OffsetCheckpoints, topicId: Option[Uuid], targetLogDirectoryId: Option[Uuid]): Unit = {
+    targetLogDirectoryId match {
+      case Some(directoryId) =>
+        if (logManager.onlineLogDirId(directoryId)) {
+          if (logManager.getLog(topicPartition).isEmpty) {
+            createLogIfNotExists(partitionState.isNew, isFutureReplica = false, highWatermarkCheckpoints, topicId, targetLogDirectoryId)
+          }
+        } else if ((!logManager.onlineLogDirId(directoryId) && !logManager.hasOfflineLogDirs()) || directoryId == DirectoryId.UNASSIGNED) {
+          // select random directory if the directory Id is LOST or unknown and no offline directories or unassigned
+          createLogIfNotExists(partitionState.isNew, isFutureReplica = false, highWatermarkCheckpoints, topicId, None)
+        } else {
+         logger.warn(s"can't create $topicPartition on directory id ${directoryId}")
+        }
+      case None =>
+        // original flow of creating in random log directory.
+        createLogIfNotExists(partitionState.isNew, isFutureReplica = false, highWatermarkCheckpoints, topicId)
     }
   }
 

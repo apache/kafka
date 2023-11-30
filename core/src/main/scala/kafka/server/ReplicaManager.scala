@@ -272,7 +272,7 @@ class ReplicaManager(val config: KafkaConfig,
                      threadNamePrefix: Option[String] = None,
                      val brokerEpochSupplier: () => Long = () => -1,
                      addPartitionsToTxnManager: Option[AddPartitionsToTxnManager] = None,
-                     directoryEventHandler: DirectoryEventHandler = DirectoryEventHandler.NOOP
+                     val directoryEventHandler: DirectoryEventHandler = DirectoryEventHandler.NOOP
                      ) extends Logging {
   private val metricsGroup = new KafkaMetricsGroup(this.getClass)
 
@@ -2626,8 +2626,10 @@ class ReplicaManager(val config: KafkaConfig,
     localLeaders.forKeyValue { (tp, info) =>
       getOrCreatePartition(tp, delta, info.topicId).foreach { case (partition, isNew) =>
         try {
+          val partitionDirectoryId: Option[Uuid] = getAssignedDirectoryId(delta, partition)
           val state = info.partition.toLeaderAndIsrPartitionState(tp, isNew)
-          partition.makeLeader(state, offsetCheckpoints, Some(info.topicId))
+          partition.makeLeader(state, offsetCheckpoints, Some(info.topicId), partitionDirectoryId)
+          mayUpdateTopicAssignment(partition, partitionDirectoryId)
           changedPartitions.add(partition)
         } catch {
           case e: KafkaStorageException =>
@@ -2641,6 +2643,17 @@ class ReplicaManager(val config: KafkaConfig,
         }
       }
     }
+  }
+
+  private def getAssignedDirectoryId(delta: TopicsDelta, partition: Partition): Option[Uuid] = {
+    for {
+      (topicId, topicDelta) <- delta.changedTopics().asScala.find(_._2.name() == partition.topic)
+      if topicDelta != null
+      partitionRegistration = topicDelta.partitionChanges().get(partition.partitionId)
+      if partitionRegistration != null
+      localBrokerIndexInReplicas = partitionRegistration.replicas.indexOf(localBrokerId)
+      directory = partitionRegistration.directories(localBrokerIndexInReplicas)
+    } yield directory
   }
 
   private def applyLocalFollowersDelta(
@@ -2658,6 +2671,7 @@ class ReplicaManager(val config: KafkaConfig,
     localFollowers.forKeyValue { (tp, info) =>
       getOrCreatePartition(tp, delta, info.topicId).foreach { case (partition, isNew) =>
         try {
+          val partitionDirectoryId: Option[Uuid] = getAssignedDirectoryId(delta, partition)
           followerTopicSet.add(tp.topic)
 
           // We always update the follower state.
@@ -2666,8 +2680,8 @@ class ReplicaManager(val config: KafkaConfig,
           //   is unavailable. This is required to ensure that we include the partition's
           //   high watermark in the checkpoint file (see KAFKA-1647).
           val state = info.partition.toLeaderAndIsrPartitionState(tp, isNew)
-          val isNewLeaderEpoch = partition.makeFollower(state, offsetCheckpoints, Some(info.topicId))
-
+          val isNewLeaderEpoch = partition.makeFollower(state, offsetCheckpoints, Some(info.topicId), partitionDirectoryId)
+          mayUpdateTopicAssignment(partition, partitionDirectoryId)
           if (isInControlledShutdown && (info.partition.leader == NO_LEADER ||
               !info.partition.isr.contains(config.brokerId))) {
             // During controlled shutdown, replica with no leaders and replica
@@ -2738,6 +2752,18 @@ class ReplicaManager(val config: KafkaConfig,
     if (partitionsToStopFetching.nonEmpty) {
       stopPartitions(partitionsToStopFetching)
       stateChangeLogger.info(s"Stopped fetchers as part of controlled shutdown for ${partitionsToStopFetching.size} partitions")
+    }
+  }
+
+  private def mayUpdateTopicAssignment(partition: Partition, partitionDirectoryId: Option[Uuid]) = {
+    if (partitionDirectoryId.isDefined) {
+      val topicPartitionActualDirectory = partition.log.flatMap(log => logManager.directoryId(log.dir.getParent))
+      if (!topicPartitionActualDirectory.exists(partitionDirectoryId.contains)) {
+        topicPartitionActualDirectory
+          .flatMap(uuid => partition.topicId.map(topicId =>
+            directoryEventHandler.handleAssignment(new common.TopicIdPartition(topicId, partition.partitionId), uuid)
+          ))
+      }
     }
   }
 

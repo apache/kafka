@@ -1470,7 +1470,7 @@ object TestUtils extends Logging {
 
     if (log.isDefined) {
       val spyLogManager = Mockito.spy(logManager)
-      Mockito.doReturn(log.get, Nil: _*).when(spyLogManager).getOrCreateLog(any(classOf[TopicPartition]), anyBoolean(), anyBoolean(), any(classOf[Option[Uuid]]))
+      Mockito.doReturn(log.get, Nil: _*).when(spyLogManager).getOrCreateLog(any(classOf[TopicPartition]), anyBoolean(), anyBoolean(), any(classOf[Option[Uuid]]), any(classOf[Option[Uuid]]))
       spyLogManager
     } else
       logManager

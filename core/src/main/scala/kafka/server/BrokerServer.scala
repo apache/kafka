@@ -210,7 +210,7 @@ class BrokerServer(
         time,
         s"broker-${config.nodeId}-",
         isZkBroker = false,
-        logDirs = logManager.directoryIds.values.toSet)
+        logDirs = logManager.directoryIdsSet)
 
       // Enable delegation token cache for all SCRAM mechanisms to simplify dynamic update.
       // This keeps the cache up-to-date if new SCRAM mechanisms are enabled dynamically.
