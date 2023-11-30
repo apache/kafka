@@ -758,7 +758,7 @@ public class AsyncKafkaConsumerTest {
     }
 
     @Test
-    public void testGroupIdIsNull() {
+    public void testGroupIdNull() {
         final Properties props = requiredConsumerProperties();
         props.put(ConsumerConfig.AUTO_COMMIT_INTERVAL_MS_CONFIG, 10000);
         props.put(THROW_ON_FETCH_STABLE_OFFSET_UNSUPPORTED, true);
@@ -774,7 +774,7 @@ public class AsyncKafkaConsumerTest {
     }
 
     @Test
-    public void testGroupIdIsNotNullAndValid() {
+    public void testGroupIdNotNullAndValid() {
         final Properties props = requiredConsumerProperties();
         props.put(ConsumerConfig.GROUP_ID_CONFIG, "consumerGroupA");
         props.put(ConsumerConfig.AUTO_COMMIT_INTERVAL_MS_CONFIG, 10000);
@@ -792,15 +792,15 @@ public class AsyncKafkaConsumerTest {
 
     @Test
     public void testGroupIdEmpty() {
-        testGroupId("");
+        testInvalidGroupId("");
     }
 
     @Test
     public void testGroupIdOnlyWhitespaces() {
-        testGroupId("       ");
+        testInvalidGroupId("       ");
     }
 
-    private void testGroupId(final String groupId) {
+    private void testInvalidGroupId(final String groupId) {
         final Properties props = requiredConsumerProperties();
         props.put(ConsumerConfig.GROUP_ID_CONFIG, groupId);
         final ConsumerConfig config = new ConsumerConfig(props);

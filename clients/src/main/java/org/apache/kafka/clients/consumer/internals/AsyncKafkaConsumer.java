@@ -404,8 +404,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                                                                     final Optional<String> groupInstanceId) {
         if (groupId != null) {
             if (groupId.isEmpty()) {
-                throwInInvalidGroupIdException();
-                return Optional.empty();
+                throw new InvalidGroupIdException("The configured group.id should not be an empty string or whitespace.");
             } else {
                 return Optional.of(new ConsumerGroupMetadata(
                     groupId,
@@ -414,9 +413,8 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                     groupInstanceId
                 ));
             }
-        } else {
-            return Optional.empty();
         }
+        return Optional.empty();
     }
 
     /**
@@ -694,13 +692,9 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
 
     private void maybeThrowInvalidGroupIdException() {
         if (!groupMetadata.isPresent()) {
-            throwInInvalidGroupIdException();
+            throw new InvalidGroupIdException("To use the group management or offset commit APIs, you must " +
+                "provide a valid " + ConsumerConfig.GROUP_ID_CONFIG + " in the consumer configuration.");
         }
-    }
-
-    private void throwInInvalidGroupIdException() {
-        throw new InvalidGroupIdException("To use the group management or offset commit APIs, you must " +
-            "provide a valid " + ConsumerConfig.GROUP_ID_CONFIG + " in the consumer configuration.");
     }
 
     @Override
@@ -1394,12 +1388,15 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
 
     private void maybeThrowFencedInstanceException() {
         if (isFenced) {
-            throw new FencedInstanceIdException("Get fenced exception for group.instance.id " +
-                groupMetadata.orElseThrow(
-                    () -> new IllegalStateException("No group metadata found although a group ID was provided. This is a bug!")
-                ).groupInstanceId().orElseThrow(
-                    () -> new IllegalStateException("No group instance ID found although the consumer is fenced. This is a bug!")
-                ));
+            String groupInstanceId = "unknown";
+            if (!groupMetadata.isPresent()) {
+                log.error("No group metadata found although a group ID was provided. This is a bug!");
+            } else if (!groupMetadata.get().groupInstanceId().isPresent()) {
+                log.error("No group instance ID found although the consumer is fenced. This is a bug!");
+            } else {
+                groupInstanceId = groupMetadata.get().groupInstanceId().get();
+            }
+            throw new FencedInstanceIdException("Get fenced exception for group.instance.id " + groupInstanceId);
         }
     }
 
