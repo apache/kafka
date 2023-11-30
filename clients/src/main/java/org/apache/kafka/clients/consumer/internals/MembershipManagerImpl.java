@@ -394,7 +394,7 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
     public void notifyOnStable(CompletableFuture<Void> future) {
         if (state == MemberState.STABLE) {
             future.complete(null);
-            log.debug(
+            log.trace(
                 "Completed future {} since member {} is already in the {} state",
                 future,
                 memberIdForLogging(),
@@ -402,7 +402,7 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
             );
         } else {
             notifyOnStableFutures.add(future);
-            log.debug(
+            log.trace(
                 "Registered future {} for notification when member {} transitions to the {} state",
                 future,
                 memberIdForLogging(),
@@ -517,7 +517,7 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
         transitionTo(MemberState.STABLE);
         notifyOnStableFutures.forEach(future -> {
             future.complete(null);
-            log.debug(
+            log.trace(
                 "Completed future {} as member {} has transitioned to the {} state",
                 future,
                 memberIdForLogging(),
