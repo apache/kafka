@@ -17,21 +17,23 @@
 package org.apache.kafka.streams.query;
 
 import org.apache.kafka.common.annotation.InterfaceStability.Evolving;
+import org.apache.kafka.streams.state.TimestampedKeyValueStore;
+import org.apache.kafka.streams.state.ValueAndTimestamp;
 
 import java.util.Objects;
 
 /**
- * Interactive query for retrieving a single record based on its key.
+ * Interactive query for retrieving a single record based on its key from {@link TimestampedKeyValueStore}
  * @param <K> Type of keys
  * @param <V> Type of values
  */
 @Evolving
-public final class KeyQuery<K, V> implements Query<V> {
+public final class TimestampedKeyQuery<K, V> implements Query<ValueAndTimestamp<V>> {
 
     private final K key;
     private final boolean skipCache;
 
-    private KeyQuery(final K key, final boolean skipCache) {
+    private TimestampedKeyQuery(final K key, final boolean skipCache) {
         this.key = key;
         this.skipCache = skipCache;
     }
@@ -43,17 +45,17 @@ public final class KeyQuery<K, V> implements Query<V> {
      * @param <K> The type of the key
      * @param <V> The type of the value that will be retrieved
      */
-    public static <K, V> KeyQuery<K, V> withKey(final K key) {
+    public static <K, V> TimestampedKeyQuery<K, V> withKey(final K key) {
         Objects.requireNonNull(key, "the key should not be null");
-        return new KeyQuery<>(key, false);
+        return new TimestampedKeyQuery<>(key, false);
     }
 
     /**
      * Specifies that the cache should be skipped during query evaluation. This means, that the query will always
      * get forwarded to the underlying store.
      */
-    public KeyQuery<K, V> skipCache() {
-        return new KeyQuery<>(key, true);
+    public TimestampedKeyQuery<K, V> skipCache() {
+        return new TimestampedKeyQuery<>(key, true);
     }
 
     /**
@@ -61,7 +63,7 @@ public final class KeyQuery<K, V> implements Query<V> {
      *
      * @return The key that was specified for this query.
      */
-    public K getKey() {
+    public K key() {
         return key;
     }
 
