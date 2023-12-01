@@ -87,6 +87,7 @@ public class ConsumerTestBuilder implements Closeable {
     final Optional<CommitRequestManager> commitRequestManager;
     final Optional<HeartbeatRequestManager> heartbeatRequestManager;
     final Optional<MembershipManager> membershipManager;
+    final Optional<HeartbeatRequestManager.HeartbeatState> heartbeatState;
     final Optional<HeartbeatRequestManager.HeartbeatRequestState> heartbeatRequestState;
     final TopicMetadataRequestManager topicMetadataRequestManager;
     final FetchRequestManager fetchRequestManager;
@@ -204,7 +205,12 @@ public class ConsumerTestBuilder implements Closeable {
                         logContext
                 )
             );
-            HeartbeatRequestManager.HeartbeatRequestState state = spy(new HeartbeatRequestManager.HeartbeatRequestState(logContext,
+            HeartbeatRequestManager.HeartbeatState heartbeatState = spy(new HeartbeatRequestManager.HeartbeatState(
+                    subscriptions,
+                    mm,
+                    DEFAULT_MAX_POLL_INTERVAL_MS));
+            HeartbeatRequestManager.HeartbeatRequestState heartbeatRequestState = spy(new HeartbeatRequestManager.HeartbeatRequestState(
+                    logContext,
                     time,
                     gi.heartbeatIntervalMs,
                     retryBackoffMs,
@@ -214,20 +220,22 @@ public class ConsumerTestBuilder implements Closeable {
                     logContext,
                     config,
                     coordinator,
-                    subscriptions,
                     mm,
-                    state,
+                    heartbeatState,
+                    heartbeatRequestState,
                     backgroundEventHandler));
 
             this.coordinatorRequestManager = Optional.of(coordinator);
             this.commitRequestManager = Optional.of(commit);
             this.heartbeatRequestManager = Optional.of(heartbeat);
-            this.heartbeatRequestState = Optional.of(state);
+            this.heartbeatState = Optional.of(heartbeatState);
+            this.heartbeatRequestState = Optional.of(heartbeatRequestState);
             this.membershipManager = Optional.of(mm);
         } else {
             this.coordinatorRequestManager = Optional.empty();
             this.commitRequestManager = Optional.empty();
             this.heartbeatRequestManager = Optional.empty();
+            this.heartbeatState = Optional.empty();
             this.heartbeatRequestState = Optional.empty();
             this.membershipManager = Optional.empty();
         }
