@@ -458,7 +458,9 @@ public class ClusterControlManager {
                 setRack(Optional.ofNullable(record.rack())).
                 setFenced(record.fenced()).
                 setInControlledShutdown(record.inControlledShutdown()).
-                setIsMigratingZkBroker(record.isMigratingZkBroker()).build());
+                setIsMigratingZkBroker(record.isMigratingZkBroker()).
+                setDirectories(record.logDirs()).
+                    build());
         if (heartbeatManager != null) {
             if (prevRegistration != null) heartbeatManager.remove(brokerId);
             heartbeatManager.register(brokerId, record.fenced());

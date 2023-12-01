@@ -38,6 +38,7 @@ import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 
 import java.io.Closeable;
+import java.time.Duration;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -101,6 +102,10 @@ public class ConsumerTestBuilder implements Closeable {
     }
 
     public ConsumerTestBuilder(Optional<GroupInformation> groupInfo) {
+        this(groupInfo, true);
+    }
+
+    public ConsumerTestBuilder(Optional<GroupInformation> groupInfo, boolean enableAutoCommit) {
         this.groupInfo = groupInfo;
         this.applicationEventQueue = new LinkedBlockingQueue<>();
         this.backgroundEventQueue = new LinkedBlockingQueue<>();
@@ -123,6 +128,9 @@ public class ConsumerTestBuilder implements Closeable {
         properties.put(CommonClientConfigs.RETRY_BACKOFF_MS_CONFIG, DEFAULT_RETRY_BACKOFF_MS);
         properties.put(CommonClientConfigs.REQUEST_TIMEOUT_MS_CONFIG, DEFAULT_REQUEST_TIMEOUT_MS);
         properties.put(CommonClientConfigs.MAX_POLL_INTERVAL_MS_CONFIG, DEFAULT_MAX_POLL_INTERVAL_MS);
+
+        if (!enableAutoCommit)
+            properties.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false");
 
         groupInfo.ifPresent(gi -> {
             properties.put(GROUP_ID_CONFIG, gi.groupState.groupId);
@@ -166,6 +174,8 @@ public class ConsumerTestBuilder implements Closeable {
                 backgroundEventHandler,
                 logContext));
 
+        this.topicMetadataRequestManager = spy(new TopicMetadataRequestManager(logContext, config));
+
         if (groupInfo.isPresent()) {
             GroupInformation gi = groupInfo.get();
             CoordinatorRequestManager coordinator = spy(new CoordinatorRequestManager(
@@ -181,12 +191,16 @@ public class ConsumerTestBuilder implements Closeable {
                     subscriptions,
                     config,
                     coordinator,
+                    backgroundEventHandler,
                     groupState));
             MembershipManager mm = spy(
                     new MembershipManagerImpl(
                         gi.groupState.groupId,
-                        gi.groupState.groupInstanceId.orElse(null),
-                        null,
+                        gi.groupState.groupInstanceId,
+                        Optional.empty(),
+                        subscriptions,
+                        commit,
+                        metadata,
                         logContext
                 )
             );
@@ -198,7 +212,6 @@ public class ConsumerTestBuilder implements Closeable {
                     gi.heartbeatJitterMs));
             HeartbeatRequestManager heartbeat = spy(new HeartbeatRequestManager(
                     logContext,
-                    time,
                     config,
                     coordinator,
                     subscriptions,
@@ -229,15 +242,14 @@ public class ConsumerTestBuilder implements Closeable {
                 metricsManager,
                 networkClientDelegate,
                 apiVersions));
-        this.topicMetadataRequestManager = spy(new TopicMetadataRequestManager(logContext,
-                config));
         this.requestManagers = new RequestManagers(logContext,
                 offsetsRequestManager,
                 topicMetadataRequestManager,
                 fetchRequestManager,
                 coordinatorRequestManager,
                 commitRequestManager,
-                heartbeatRequestManager);
+                heartbeatRequestManager,
+                membershipManager);
         this.applicationEventProcessor = spy(new ApplicationEventProcessor(
                 logContext,
                 applicationEventQueue,
@@ -275,7 +287,7 @@ public class ConsumerTestBuilder implements Closeable {
 
         @Override
         public void close() {
-            closeQuietly(consumerNetworkThread, ConsumerNetworkThread.class.getSimpleName());
+            consumerNetworkThread.close();
         }
     }
 
@@ -284,11 +296,11 @@ public class ConsumerTestBuilder implements Closeable {
         public final ApplicationEventHandler applicationEventHandler;
 
         public ApplicationEventHandlerTestBuilder() {
-            this(createDefaultGroupInformation());
+            this(createDefaultGroupInformation(), true);
         }
 
-        public ApplicationEventHandlerTestBuilder(Optional<GroupInformation> groupInfo) {
-            super(groupInfo);
+        public ApplicationEventHandlerTestBuilder(Optional<GroupInformation> groupInfo, boolean enableAutoCommit) {
+            super(groupInfo, enableAutoCommit);
             this.applicationEventHandler = spy(new ApplicationEventHandler(
                     logContext,
                     time,
@@ -304,26 +316,28 @@ public class ConsumerTestBuilder implements Closeable {
         }
     }
 
-    public static class PrototypeAsyncConsumerTestBuilder extends ApplicationEventHandlerTestBuilder {
+    public static class AsyncKafkaConsumerTestBuilder extends ApplicationEventHandlerTestBuilder {
 
-        final PrototypeAsyncConsumer<String, String> consumer;
+        final AsyncKafkaConsumer<String, String> consumer;
 
-        public PrototypeAsyncConsumerTestBuilder(Optional<GroupInformation> groupInfo) {
-            super(groupInfo);
+        final FetchCollector<String, String> fetchCollector;
+
+        public AsyncKafkaConsumerTestBuilder(Optional<GroupInformation> groupInfo, boolean enableAutoCommit) {
+            super(groupInfo, enableAutoCommit);
             String clientId = config.getString(CommonClientConfigs.CLIENT_ID_CONFIG);
             List<ConsumerPartitionAssignor> assignors = ConsumerPartitionAssignor.getAssignorInstances(
                     config.getList(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG),
                     config.originals(Collections.singletonMap(ConsumerConfig.CLIENT_ID_CONFIG, clientId))
             );
             Deserializers<String, String> deserializers = new Deserializers<>(new StringDeserializer(), new StringDeserializer());
-            FetchCollector<String, String> fetchCollector = new FetchCollector<>(logContext,
+            this.fetchCollector = spy(new FetchCollector<>(logContext,
                     metadata,
                     subscriptions,
                     fetchConfig,
                     deserializers,
                     metricsManager,
-                    time);
-            this.consumer = spy(new PrototypeAsyncConsumer<>(
+                    time));
+            this.consumer = spy(new AsyncKafkaConsumer<>(
                     logContext,
                     clientId,
                     deserializers,
@@ -345,6 +359,10 @@ public class ConsumerTestBuilder implements Closeable {
         @Override
         public void close() {
             consumer.close();
+        }
+
+        public void close(final Duration timeout) {
+            consumer.close(timeout);
         }
     }
 
