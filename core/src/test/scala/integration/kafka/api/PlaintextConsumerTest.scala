@@ -26,7 +26,7 @@ import org.apache.kafka.clients.consumer._
 import org.apache.kafka.clients.producer.{ProducerConfig, ProducerRecord}
 import org.apache.kafka.common.{KafkaException, MetricName, PartitionInfo, TopicPartition}
 import org.apache.kafka.common.config.TopicConfig
-import org.apache.kafka.common.errors.{InvalidGroupIdException, InvalidTopicException}
+import org.apache.kafka.common.errors.{InvalidGroupIdException, InvalidTopicException, UnsupportedAssignorException}
 import org.apache.kafka.common.header.Headers
 import org.apache.kafka.common.record.{CompressionType, TimestampType}
 import org.apache.kafka.common.serialization._
@@ -905,6 +905,75 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     }.toSet
 
     assertEquals(expected, actual)
+  }
+
+
+  // Remote assignors only supported with consumer group protocol
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @CsvSource(Array(
+    "kraft+kip848, consumer"
+  ))
+  def testRemoteAssignorInvalid(quorum: String, groupProtocol: String): Unit = {
+    // 1 consumer using invalid remote assignor
+    this.consumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, "invalid-assignor-group")
+    this.consumerConfig.setProperty(ConsumerConfig.GROUP_REMOTE_ASSIGNOR_CONFIG, "invalid")
+    val consumer = createConsumer()
+
+    // create two new topics, each having 2 partitions
+    val topic1 = "topic1"
+    val producer = createProducer()
+    val expectedAssignment = createTopicAndSendRecords(producer, topic1, 2, 100)
+
+    assertEquals(0, consumer.assignment().size)
+
+    // subscribe to two topics
+    consumer.subscribe(List(topic1).asJava)
+
+    assertThrows(
+      classOf[UnsupportedAssignorException],
+      () => awaitAssignment(consumer, expectedAssignment),
+      () => "Message"
+    )
+  }
+
+  // Remote assignors only supported with consumer group protocol
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @CsvSource(Array(
+    "kraft+kip848, consumer"
+  ))
+  def testRemoteAssignorRange(quorum: String, groupProtocol: String): Unit = {
+    // 1 consumer using round-robin assignment
+    this.consumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, "roundrobin-group")
+    this.consumerConfig.setProperty(ConsumerConfig.GROUP_REMOTE_ASSIGNOR_CONFIG, "range")
+    val consumer = createConsumer()
+
+    // create two new topics, each having 2 partitions
+    val topic1 = "topic1"
+    val topic2 = "topic2"
+    val producer = createProducer()
+    val expectedAssignment = createTopicAndSendRecords(producer, topic1, 2, 100) ++
+      createTopicAndSendRecords(producer, topic2, 2, 100)
+
+    assertEquals(0, consumer.assignment().size)
+
+    // subscribe to two topics
+    consumer.subscribe(List(topic1, topic2).asJava)
+    awaitAssignment(consumer, expectedAssignment)
+
+    // add one more topic with 2 partitions
+    val topic3 = "topic3"
+    createTopicAndSendRecords(producer, topic3, 2, 100)
+
+    val newExpectedAssignment = expectedAssignment ++ Set(new TopicPartition(topic3, 0), new TopicPartition(topic3, 1))
+    consumer.subscribe(List(topic1, topic2, topic3).asJava)
+    awaitAssignment(consumer, newExpectedAssignment)
+
+    // remove the topic we just added
+    consumer.subscribe(List(topic1, topic2).asJava)
+    awaitAssignment(consumer, expectedAssignment)
+
+    consumer.unsubscribe()
+    assertEquals(0, consumer.assignment().size)
   }
 
   // Only the generic group protocol supports client-side assignors
