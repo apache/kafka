@@ -1011,7 +1011,7 @@ public class StoreChangelogReader implements ChangelogReader {
                 try {
                     stateRestoreListener.onRestoreStart(partition, storeName, startOffset, changelogMetadata.restoreEndOffset);
                 } catch (final Exception e) {
-                    throw new StreamsException("State restore listener failed on batch restored", e);
+                    throw new StreamsException("State restore listener failed on restore start", e);
                 }
 
                 final TaskId taskId = changelogMetadata.stateManager.taskId();
@@ -1022,7 +1022,11 @@ public class StoreChangelogReader implements ChangelogReader {
                 final long recordsToRestore = Math.max(changelogMetadata.restoreEndOffset - startOffset, 0L);
                 task.recordRestoration(time, recordsToRestore, true);
             }  else if (changelogMetadata.stateManager.taskType() == TaskType.STANDBY) {
-                standbyUpdateListener.onUpdateStart(partition, storeName, startOffset);
+                try {
+                    standbyUpdateListener.onUpdateStart(partition, storeName, startOffset);
+                } catch (final Exception e) {
+                    throw new StreamsException("Standby updater listener failed on update start");
+                }
             }
         }
     }
