@@ -1060,11 +1060,11 @@ public class StoreChangelogReader implements ChangelogReader {
                             // endOffset and storeOffset may be unknown at this point
                             final long storeOffset = storeMetadata.offset() != null ? storeMetadata.offset() : -1;
                             final long endOffset = storeMetadata.endOffset() != null ? storeMetadata.endOffset() : -1;
-                            StandbyUpdateListener.SuspendReason suspendReason = StandbyUpdateListener.SuspendReason.MIGRATED;
                             // Unregistering running standby tasks means the task has been promoted to active.
-                            if (changelogMetadata.stateManager.taskState() == Task.State.RUNNING) {
-                                suspendReason = StandbyUpdateListener.SuspendReason.PROMOTED;
-                            }
+                            final StandbyUpdateListener.SuspendReason suspendReason = 
+                                changelogMetadata.stateManager.taskState() == Task.State.RUNNING 
+                                    ? StandbyUpdateListener.SuspendReason.PROMOTED
+                                    : StandbyUpdateListener.SuspendReason.MIGRATED;                        
                             standbyUpdateListener.onUpdateSuspended(partition, storeName, storeOffset, endOffset, suspendReason);
                         }
                     }
