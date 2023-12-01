@@ -19,16 +19,41 @@ package org.apache.kafka.connect.errors;
 /**
  * Indicates that an operation attempted to modify or delete a connector or task that is not present on the worker.
  */
+// public class NotFoundException extends ConnectException {
+//     public NotFoundException(String s) {
+//         super(s);
+//     }
+
+//     public NotFoundException(String s, Throwable throwable) {
+//         super(s, throwable);
+//     }
+
+//     public NotFoundException(Throwable throwable) {
+//         super(throwable);
+//     }
+// }
+
+package org.apache.kafka.connect.errors;
+
+/**
+ * Indicates that an operation attempted to modify or delete a connector or task that is not present on the worker.
+ */
 public class NotFoundException extends ConnectException {
-    public NotFoundException(String s) {
-        super(s);
+
+    private String entityType;
+    private String entityName;
+    
+    public NotFoundException(String entityType, String entityName) {
+        super("Could not find " + entityType + ": " + entityName);
+        this.entityType = entityType;
+        this.entityName = entityName;
     }
 
-    public NotFoundException(String s, Throwable throwable) {
-        super(s, throwable);
+    public String getEntityType() {
+        return entityType; 
     }
-
-    public NotFoundException(Throwable throwable) {
-        super(throwable);
+    
+    public String getEntityName() {
+        return entityName;
     }
 }
