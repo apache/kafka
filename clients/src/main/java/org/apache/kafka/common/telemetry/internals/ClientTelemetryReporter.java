@@ -70,7 +70,8 @@ import java.util.function.Predicate;
  * The client telemetry reporter is configured with a {@link ClientTelemetrySender} which is
  * responsible for sending the client telemetry data to the broker. The client telemetry reporter
  * will attempt to fetch the telemetry subscription information from the broker and send the
- * telemetry data to the broker based on the subscription information.
+ * telemetry data to the broker based on the subscription information i.e. push interval, temporality,
+ * compression type, etc.
  * <p>
  *
  * The full life-cycle of the metric collection process is defined by a state machine in
@@ -126,9 +127,9 @@ public class ClientTelemetryReporter implements MetricsReporter {
     @Override
     public synchronized void contextChange(MetricsContext metricsContext) {
         /*
-          If validation succeeds: initialize the provider, start the metric collection task,
-          set metrics labels for services/libraries that expose metrics.
-         */
+         If validation succeeds: initialize the provider, start the metric collection task,
+         set metrics labels for services/libraries that expose metrics.
+        */
         Objects.requireNonNull(rawOriginalConfig, "configure() was not called before contextChange()");
         if (kafkaMetricsCollector != null) {
             kafkaMetricsCollector.stop();
@@ -141,9 +142,11 @@ public class ClientTelemetryReporter implements MetricsReporter {
         }
 
         if (kafkaMetricsCollector == null) {
-            // Initialize the provider only once. contextChange(..) can be called more than once,
-            // but once it's been initialized and all necessary labels are present then we don't
-            // re-initialize.
+            /*
+             Initialize the provider only once. contextChange(..) can be called more than once,
+             but once it's been initialized and all necessary labels are present then we don't
+             re-initialize.
+            */
             telemetryProvider.configure(rawOriginalConfig);
         }
 
@@ -156,8 +159,10 @@ public class ClientTelemetryReporter implements MetricsReporter {
 
     @Override
     public void init(List<KafkaMetric> metrics) {
-        // metrics collector may not have been initialized (e.g. invalid context labels)
-        // in which case metrics collection is disabled
+        /*
+         metrics collector may not have been initialized (e.g. invalid context labels)
+         in which case metrics collection is disabled
+        */
         if (kafkaMetricsCollector != null) {
             kafkaMetricsCollector.init(metrics);
         }
@@ -168,8 +173,10 @@ public class ClientTelemetryReporter implements MetricsReporter {
      */
     @Override
     public void metricChange(KafkaMetric metric) {
-        // metrics collector may not have been initialized (e.g. invalid context labels)
-        // in which case metrics collection is disabled
+        /*
+         metrics collector may not have been initialized (e.g. invalid context labels)
+         in which case metrics collection is disabled
+        */
         if (kafkaMetricsCollector != null) {
             kafkaMetricsCollector.metricChange(metric);
         }
@@ -180,8 +187,10 @@ public class ClientTelemetryReporter implements MetricsReporter {
      */
     @Override
     public void metricRemoval(KafkaMetric metric) {
-        // metrics collector may not have been initialized (e.g. invalid context labels)
-        // in which case metrics collection is disabled
+        /*
+         metrics collector may not have been initialized (e.g. invalid context labels)
+         in which case metrics collection is disabled
+        */
         if (kafkaMetricsCollector != null) {
             kafkaMetricsCollector.metricRemoval(metric);
         }
@@ -385,13 +394,17 @@ public class ClientTelemetryReporter implements MetricsReporter {
 
             Optional<Integer> errorIntervalMsOpt = ClientTelemetryUtils.maybeFetchErrorIntervalMs(data.errorCode(),
                 oldSubscription != null ? oldSubscription.pushIntervalMs() : -1);
-            // If the error code indicates that the interval ms needs to be updated as per the error
-            // code then update the interval ms and state so that the subscription can be retried.
+            /*
+             If the error code indicates that the interval ms needs to be updated as per the error
+             code then update the interval ms and state so that the subscription can be retried.
+            */
             if (errorIntervalMsOpt.isPresent()) {
-                // Update the state from SUBSCRIPTION_INR_PROGRESS to SUBSCRIPTION_NEEDED as the error
-                // response indicates that the subscription is not valid.
+                /*
+                 Update the state from SUBSCRIPTION_INR_PROGRESS to SUBSCRIPTION_NEEDED as the error
+                 response indicates that the subscription is not valid.
+                */
                 if (!maybeSetState(ClientTelemetryState.SUBSCRIPTION_NEEDED)) {
-                    log.error("Unable to transition state after failed get telemetry subscriptions from state {}", oldState);
+                    log.warn("Unable to transition state after failed get telemetry subscriptions from state {}", oldState);
                 }
                 updateErrorResult(errorIntervalMsOpt.get(), now);
                 return;
@@ -404,8 +417,10 @@ public class ClientTelemetryReporter implements MetricsReporter {
             List<CompressionType> acceptedCompressionTypes = ClientTelemetryUtils.getCompressionTypesFromAcceptedList(
                 data.acceptedCompressionTypes());
 
-            // Check if the delta temporality has changed, if so, we need to reset the ledger tracking
-            // the last value sent for each metric.
+            /*
+             Check if the delta temporality has changed, if so, we need to reset the ledger tracking
+             the last value sent for each metric.
+            */
             if (oldSubscription != null && oldSubscription.deltaTemporality() != data.deltaTemporality()) {
                 log.info("Delta temporality has changed from {} to {}, resetting metric values",
                     oldSubscription.deltaTemporality(), data.deltaTemporality());
@@ -424,16 +439,20 @@ public class ClientTelemetryReporter implements MetricsReporter {
 
             lock.writeLock().lock();
             try {
-                // This is the case if we began termination sometime after the subscription request
-                // was issued. We're just now getting our callback, but we need to ignore it.
+                /*
+                 This is the case if we began termination sometime after the subscription request
+                 was issued. We're just now getting our callback, but we need to ignore it.
+                */
                 if (isTerminatingState()) {
                     return;
                 }
 
                 ClientTelemetryState newState;
                 if (selector == ClientTelemetryUtils.SELECTOR_NO_METRICS) {
-                    // This is the case where no metrics are requested and/or match the filters. We need
-                    // to wait intervalMs then retry.
+                    /*
+                     This is the case where no metrics are requested and/or match the filters. We need
+                     to wait intervalMs then retry.
+                    */
                     newState = ClientTelemetryState.SUBSCRIPTION_NEEDED;
                 } else {
                     newState = ClientTelemetryState.PUSH_NEEDED;
@@ -460,18 +479,22 @@ public class ClientTelemetryReporter implements MetricsReporter {
             try {
                 Optional<Integer> errorIntervalMsOpt = ClientTelemetryUtils.maybeFetchErrorIntervalMs(data.errorCode(),
                     subscription.pushIntervalMs());
-                // If the error code indicates that the interval ms needs to be updated as per the error
-                // code then update the interval ms and state so that the subscription can be re-fetched,
-                // and the push retried.
+                /*
+                 If the error code indicates that the interval ms needs to be updated as per the error
+                 code then update the interval ms and state so that the subscription can be re-fetched,
+                 and the push retried.
+                */
                 if (errorIntervalMsOpt.isPresent()) {
-                    // This is the case when client began termination sometime after the last push request
-                    // was issued. Just getting the callback, hence need to ignore it.
+                    /*
+                     This is the case when client began termination sometime after the last push request
+                     was issued. Just getting the callback, hence need to ignore it.
+                    */
                     if (isTerminatingState()) {
                         return;
                     }
 
                     if (!maybeSetState(ClientTelemetryState.SUBSCRIPTION_NEEDED)) {
-                        log.error("Unable to transition state after failed push telemetry from state {}", state);
+                        log.warn("Unable to transition state after failed push telemetry from state {}", state);
                     }
                     updateErrorResult(errorIntervalMsOpt.get(), now);
                     return;
@@ -480,7 +503,7 @@ public class ClientTelemetryReporter implements MetricsReporter {
                 lastRequestMs = now;
                 intervalMs = subscription.pushIntervalMs();
                 if (!maybeSetState(ClientTelemetryState.PUSH_NEEDED)) {
-                    log.error("Unable to transition state after successful push telemetry from state {}", state);
+                    log.warn("Unable to transition state after successful push telemetry from state {}", state);
                 }
             } finally {
                 lock.writeLock().unlock();
@@ -598,9 +621,11 @@ public class ClientTelemetryReporter implements MetricsReporter {
         }
 
         private Optional<Builder<?>> createSubscriptionRequest(ClientTelemetrySubscription localSubscription) {
-            // If we've previously retrieved a subscription, it will contain the client instance ID
-            // that the broker assigned. Otherwise, per KIP-714, we send a special "null" UUID to
-            // signal to the broker that we need to have a client instance ID assigned.
+            /*
+             If we've previously retrieved a subscription, it will contain the client instance ID
+             that the broker assigned. Otherwise, per KIP-714, we send a special "null" UUID to
+             signal to the broker that we need to have a client instance ID assigned.
+            */
             Uuid clientInstanceId = (localSubscription != null) ? localSubscription.clientInstanceId() : Uuid.ZERO_UUID;
 
             lock.writeLock().lock();
@@ -625,13 +650,15 @@ public class ClientTelemetryReporter implements MetricsReporter {
             if (localSubscription == null) {
                 log.warn("Telemetry state is {} but subscription is null; not sending telemetry", state);
                 if (!maybeSetState(ClientTelemetryState.SUBSCRIPTION_NEEDED)) {
-                    log.error("Unable to transition state after failed create push telemetry from state {}", state);
+                    log.warn("Unable to transition state after failed create push telemetry from state {}", state);
                 }
                 return Optional.empty();
             }
 
-            // Don't send a push request if we don't have the collector initialized. Re-attempt
-            // the push on the next interval.
+            /*
+             Don't send a push request if we don't have the collector initialized. Re-attempt
+             the push on the next interval.
+            */
             if (kafkaMetricsCollector == null) {
                 log.warn("Cannot make telemetry request as collector is not initialized");
                 // Update last accessed time for push request to be retried on next interval.
@@ -642,14 +669,18 @@ public class ClientTelemetryReporter implements MetricsReporter {
             boolean terminating;
             lock.writeLock().lock();
             try {
-                // We've already been terminated, or we've already issued our last push, so we
-                // should just exit now.
+                /*
+                 We've already been terminated, or we've already issued our last push, so we
+                 should just exit now.
+                */
                 if (state == ClientTelemetryState.TERMINATED || state == ClientTelemetryState.TERMINATING_PUSH_IN_PROGRESS) {
                     return Optional.empty();
                 }
 
-                // Check the *actual* state (while locked) to make sure we're still in the state
-                // we expect to be in.
+                /*
+                 Check the *actual* state (while locked) to make sure we're still in the state
+                 we expect to be in.
+                */
                 terminating = state == ClientTelemetryState.TERMINATING_PUSH_NEEDED;
                 if (!maybeSetState(terminating ? ClientTelemetryState.TERMINATING_PUSH_IN_PROGRESS : ClientTelemetryState.PUSH_IN_PROGRESS)) {
                     return Optional.empty();
@@ -663,6 +694,11 @@ public class ClientTelemetryReporter implements MetricsReporter {
                 emitter.init();
                 kafkaMetricsCollector.collect(emitter);
                 payload = createPayload(emitter.emittedMetrics());
+            } catch (Exception e) {
+                log.warn("Error constructing client telemetry payload: ", e);
+                // Update last accessed time for push request to be retried on next interval.
+                updateErrorResult(localSubscription.pushIntervalMs, time.milliseconds());
+                return Optional.empty();
             }
 
             CompressionType compressionType = ClientTelemetryUtils.preferredCompressionType(localSubscription.acceptedCompressionTypes());
@@ -682,8 +718,6 @@ public class ClientTelemetryReporter implements MetricsReporter {
         /**
          * Updates the {@link ClientTelemetrySubscription}, {@link #intervalMs}, and
          * {@link #lastRequestMs}.
-         * <p>
-         * The entire contents of the method are guarded by the {@link #lock}.
          * <p>
          * After the update, the {@link #subscriptionLoaded} condition is signaled so any threads
          * waiting on the subscription can be unblocked.
@@ -769,7 +803,8 @@ public class ClientTelemetryReporter implements MetricsReporter {
                 }
                 return true;
             } catch (IllegalStateException e) {
-                log.warn("Error updating client telemetry state", e);
+                log.warn("Error updating client telemetry state, disabled telemetry", e);
+                enabled = false;
                 return false;
             } finally {
                 lock.writeLock().unlock();
@@ -800,7 +835,7 @@ public class ClientTelemetryReporter implements MetricsReporter {
                 }
 
                 if (!maybeSetState(ClientTelemetryState.SUBSCRIPTION_NEEDED)) {
-                    log.error("Could not transition state after failed telemetry from state {}", state);
+                    log.warn("Could not transition state after failed telemetry from state {}", state);
                 }
             } finally {
                 lock.writeLock().unlock();
@@ -809,15 +844,11 @@ public class ClientTelemetryReporter implements MetricsReporter {
 
         private byte[] createPayload(List<SinglePointMetric> emittedMetrics) {
             MetricsData.Builder builder = MetricsData.newBuilder();
-            try {
-                emittedMetrics.forEach(metric -> {
-                    Metric m = metric.builder().build();
-                    ResourceMetrics rm = buildMetric(m);
-                    builder.addResourceMetrics(rm);
-                });
-            } catch (Exception e) {
-                log.error("Error constructing payload: ", e);
-            }
+            emittedMetrics.forEach(metric -> {
+                Metric m = metric.builder().build();
+                ResourceMetrics rm = buildMetric(m);
+                builder.addResourceMetrics(rm);
+            });
             return builder.build().toByteArray();
         }
 

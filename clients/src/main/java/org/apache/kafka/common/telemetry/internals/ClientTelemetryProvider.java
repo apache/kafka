@@ -70,7 +70,7 @@ public class ClientTelemetryProvider implements Configurable {
      * @return false if all the data required for generating correct metrics is missing, true
      * otherwise.
      */
-    public boolean validate(MetricsContext metricsContext) {
+    boolean validate(MetricsContext metricsContext) {
         return ClientTelemetryUtils.validateRequiredResourceLabels(metricsContext.contextLabels());
     }
 
@@ -81,7 +81,7 @@ public class ClientTelemetryProvider implements Configurable {
      *
      * @param metricsContext {@link MetricsContext}
      */
-    public synchronized void contextChange(MetricsContext metricsContext) {
+    synchronized void contextChange(MetricsContext metricsContext) {
         final Resource.Builder resourceBuilder = Resource.newBuilder();
 
         final String namespace = metricsContext.contextLabels().get(MetricsContext.NAMESPACE);
@@ -109,7 +109,12 @@ public class ClientTelemetryProvider implements Configurable {
         resource = resourceBuilder.build();
     }
 
-    public synchronized void updateLabels(Map<String, String> labels) {
+    /**
+     * Updates the resource labels/tags for the service or library exposing metrics.
+     *
+     * @param labels Map of labels to be updated.
+     */
+    synchronized void updateLabels(Map<String, String> labels) {
         final Resource.Builder resourceBuilder = resource.toBuilder();
         labels.forEach((key, value) -> {
             addAttribute(resourceBuilder, key, value);
@@ -122,7 +127,7 @@ public class ClientTelemetryProvider implements Configurable {
      *
      * @return A fully formed {@link Resource} with all the tags.
      */
-    public Resource resource() {
+    Resource resource() {
         return resource;
     }
 
@@ -131,7 +136,7 @@ public class ClientTelemetryProvider implements Configurable {
      *
      * @return Domain in string format.
      */
-    public String domain() {
+    String domain() {
         return DOMAIN;
     }
 
