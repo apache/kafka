@@ -929,11 +929,13 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     // subscribe to two topics
     consumer.subscribe(List(topic1).asJava)
 
-    assertThrows(
+    val e:UnsupportedAssignorException = assertThrows(
       classOf[UnsupportedAssignorException],
-      () => awaitAssignment(consumer, expectedAssignment),
-      () => "Message"
+      () => awaitAssignment(consumer, expectedAssignment)
     )
+
+    assertTrue(e.getMessage.startsWith("ServerAssignor invalid is not supported. " +
+      "Supported assignors: "))
   }
 
   // Remote assignors only supported with consumer group protocol
@@ -942,8 +944,8 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     "kraft+kip848, consumer"
   ))
   def testRemoteAssignorRange(quorum: String, groupProtocol: String): Unit = {
-    // 1 consumer using round-robin assignment
-    this.consumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, "roundrobin-group")
+    // 1 consumer using range assignment
+    this.consumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, "range-group")
     this.consumerConfig.setProperty(ConsumerConfig.GROUP_REMOTE_ASSIGNOR_CONFIG, "range")
     val consumer = createConsumer()
 
@@ -962,9 +964,9 @@ class PlaintextConsumerTest extends BaseConsumerTest {
 
     // add one more topic with 2 partitions
     val topic3 = "topic3"
-    createTopicAndSendRecords(producer, topic3, 2, 100)
+    val additionalAssignment = createTopicAndSendRecords(producer, topic3, 2, 100)
 
-    val newExpectedAssignment = expectedAssignment ++ Set(new TopicPartition(topic3, 0), new TopicPartition(topic3, 1))
+    val newExpectedAssignment = expectedAssignment ++ additionalAssignment
     consumer.subscribe(List(topic1, topic2, topic3).asJava)
     awaitAssignment(consumer, newExpectedAssignment)
 
