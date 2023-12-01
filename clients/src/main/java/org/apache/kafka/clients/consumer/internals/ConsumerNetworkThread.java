@@ -205,6 +205,26 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
             networkClientDelegate.wakeup();
     }
 
+    /**
+     * Returns the delay for which the application thread can safely wait before it should be responsive
+     * to results from the request managers. For example, the subscription state can change when heartbeats
+     * are sent, so blocking for longer than the heartbeat interval might mean the application thread is not
+     * responsive to changes.
+     *
+     * @return The maximum delay in milliseconds
+     */
+    public long maximumTimeToWait() {
+        final long currentTimeMs = time.milliseconds();
+        if (requestManagers == null) {
+            return MAX_POLL_TIMEOUT_MS;
+        }
+        return requestManagers.entries().stream()
+                .filter(Optional::isPresent)
+                .map(Optional::get)
+                .map(rm -> rm.maximumTimeToWait(currentTimeMs))
+                .reduce(Long.MAX_VALUE, Math::min);
+    }
+
     @Override
     public void close() {
         close(closeTimeout);

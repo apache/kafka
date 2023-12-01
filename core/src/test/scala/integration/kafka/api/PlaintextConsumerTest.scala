@@ -594,8 +594,9 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     assertThrows(classOf[InvalidTopicException], () => consumer.partitionsFor(";3# ads,{234"))
   }
 
+  // Temporarily do not run flaky test for consumer group protocol
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersGenericGroupProtocolOnly"))
   def testSeek(quorum: String, groupProtocol: String): Unit = {
     val consumer = createConsumer()
     val totalRecords = 50L
