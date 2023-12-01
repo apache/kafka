@@ -20,15 +20,25 @@ package org.apache.kafka.connect.errors;
  * Indicates that a method has been invoked illegally or at an invalid time by a connector or task.
  */
 public class IllegalWorkerStateException extends ConnectException {
-    public IllegalWorkerStateException(String s) {
-        super(s);
+    
+    private String workerId;
+    private String methodName;
+    
+    public IllegalWorkerStateException(String workerId, String methodName) {
+        super("Invalid call to " + methodName + " on worker " + workerId);
+        this.workerId = workerId;
+        this.methodName = methodName;
     }
-
-    public IllegalWorkerStateException(String s, Throwable throwable) {
-        super(s, throwable);
+    
+    public String getWorkerId() {
+        return workerId;
     }
-
-    public IllegalWorkerStateException(Throwable throwable) {
-        super(throwable);
+    
+    public String getMethodName() {
+       return methodName; 
+    }
+    
+    public static IllegalWorkerStateException onShutdown(String workerId) {
+        return new IllegalWorkerStateException(workerId, "start"); 
     }
 }
