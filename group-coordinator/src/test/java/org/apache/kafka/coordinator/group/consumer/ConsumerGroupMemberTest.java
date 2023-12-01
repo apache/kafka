@@ -319,10 +319,11 @@ public class ConsumerGroupMemberTest {
         Uuid topicId2 = Uuid.randomUuid();
         Uuid topicId3 = Uuid.randomUuid();
         List<Integer> assignedPartitions = Arrays.asList(0, 1, 2);
+        int epoch = 10;
         ConsumerGroupCurrentMemberAssignmentValue record = new ConsumerGroupCurrentMemberAssignmentValue()
-            .setMemberEpoch(10)
-            .setPreviousMemberEpoch(9)
-            .setTargetMemberEpoch(11)
+            .setMemberEpoch(epoch)
+            .setPreviousMemberEpoch(epoch - 1)
+            .setTargetMemberEpoch(epoch + 1)
             .setAssignedPartitions(Collections.singletonList(new ConsumerGroupCurrentMemberAssignmentValue.TopicPartitions()
                 .setTopicId(topicId1)
                 .setPartitions(assignedPartitions)))
@@ -352,26 +353,30 @@ public class ConsumerGroupMemberTest {
             .setSubscribedTopicRegex(subscribedTopicRegex)
             .build();
 
-        ConsumerGroupDescribeResponseData.Member consumerGroupDescribeMember = member.asConsumerGroupDescribeMember(targetAssignment);
+        ConsumerGroupDescribeResponseData.Member actual = member.asConsumerGroupDescribeMember(targetAssignment);
+        ConsumerGroupDescribeResponseData.Member expected = new ConsumerGroupDescribeResponseData.Member()
+            .setMemberId(memberId)
+            .setMemberEpoch(epoch)
+            .setClientId(clientId)
+            .setInstanceId(instanceId)
+            .setRackId(rackId)
+            .setClientHost(clientHost)
+            .setSubscribedTopicNames(subscribedTopicNames)
+            .setSubscribedTopicRegex(subscribedTopicRegex)
+            .setAssignment(
+                new ConsumerGroupDescribeResponseData.Assignment()
+                    .setTopicPartitions(Collections.singletonList(new ConsumerGroupDescribeResponseData.TopicPartitions().setTopicId(topicId1).setPartitions(assignedPartitions)))
+            )
+            .setTargetAssignment(
+                new ConsumerGroupDescribeResponseData.Assignment()
+                    .setTopicPartitions(targetAssignment.partitions().entrySet().stream().map(
+                        item -> new ConsumerGroupDescribeResponseData.TopicPartitions()
+                            .setTopicId(item.getKey())
+                            .setPartitions(new ArrayList<>(item.getValue()))
+                    ).collect(Collectors.toList()))
+            );
 
-        assertEquals(memberId, consumerGroupDescribeMember.memberId().toString());
-        assertEquals(clientId, consumerGroupDescribeMember.clientId());
-        assertEquals(instanceId, consumerGroupDescribeMember.instanceId());
-        assertEquals(rackId, consumerGroupDescribeMember.rackId());
-        assertEquals(clientHost, consumerGroupDescribeMember.clientHost());
-        assertEquals(subscribedTopicNames, consumerGroupDescribeMember.subscribedTopicNames());
-        assertEquals(subscribedTopicRegex, consumerGroupDescribeMember.subscribedTopicRegex());
-        assertEquals(
-            new ConsumerGroupDescribeResponseData.Assignment()
-                .setTopicPartitions(targetAssignment.partitions().entrySet().stream().map(
-                    item -> new ConsumerGroupDescribeResponseData.TopicPartitions()
-                        .setTopicId(item.getKey())
-                        .setPartitions(new ArrayList<>(item.getValue()))
-                ).collect(Collectors.toList())),
-            consumerGroupDescribeMember.targetAssignment()
-        );
-
-        assertEquals(assignedPartitions, consumerGroupDescribeMember.assignment().topicPartitions().get(0).partitions());
+        assertEquals(expected, actual);
     }
 
     @Test

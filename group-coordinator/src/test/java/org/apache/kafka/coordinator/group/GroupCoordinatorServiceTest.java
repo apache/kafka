@@ -1372,12 +1372,12 @@ public class GroupCoordinatorServiceTest {
         service.startup(() -> partitionCount);
 
         ConsumerGroupDescribeResponseData.DescribedGroup describedGroup = new ConsumerGroupDescribeResponseData.DescribedGroup()
-            .setGroupId("");
+            .setGroupId(null)
+            .setErrorCode(Errors.INVALID_GROUP_ID.code());
         List<ConsumerGroupDescribeResponseData.DescribedGroup> expectedDescribedGroups = Arrays.asList(
             new ConsumerGroupDescribeResponseData.DescribedGroup()
                 .setGroupId(null)
-                .setErrorCode(Errors.INVALID_GROUP_ID.code())
-                .setErrorMessage(Errors.INVALID_GROUP_ID.message()),
+                .setErrorCode(Errors.INVALID_GROUP_ID.code()),
             describedGroup
         );
 
@@ -1420,7 +1420,6 @@ public class GroupCoordinatorServiceTest {
             Collections.singletonList(new ConsumerGroupDescribeResponseData.DescribedGroup()
                 .setGroupId("group-id")
                 .setErrorCode(Errors.COORDINATOR_LOAD_IN_PROGRESS.code())
-                .setErrorMessage(Errors.COORDINATOR_LOAD_IN_PROGRESS.message())
             ),
             future.get()
         );
@@ -1450,7 +1449,6 @@ public class GroupCoordinatorServiceTest {
             Collections.singletonList(new ConsumerGroupDescribeResponseData.DescribedGroup()
                 .setGroupId("group-id")
                 .setErrorCode(Errors.COORDINATOR_NOT_AVAILABLE.code())
-                .setErrorMessage(Errors.COORDINATOR_NOT_AVAILABLE.message())
             ),
             future.get()
         );

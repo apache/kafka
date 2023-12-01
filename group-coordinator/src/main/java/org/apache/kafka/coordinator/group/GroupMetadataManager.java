@@ -471,6 +471,7 @@ public class GroupMetadataManager {
 
     /**
      * Handles a ConsumerGroupDescribe request.
+     *
      * @param groupIds          The IDs of the groups to describe.
      * @param committedOffset   A specified committed offset corresponding to this shard.
      *
@@ -650,6 +651,15 @@ public class GroupMetadataManager {
         }
     }
 
+    /**
+     * Gets a consumer group by committed offset.
+     *
+     * @param groupId           The group id.
+     * @param committedOffset   A specified committed offset corresponding to this shard.
+     *
+     * @return A ConsumerGroup.
+     * @throws GroupIdNotFoundException if the group does not exist or is not a consumer group.
+     */
     public ConsumerGroup consumerGroup(
         String groupId,
         long committedOffset

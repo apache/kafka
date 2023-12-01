@@ -547,6 +547,11 @@ public class ConsumerGroupMember {
             ')';
     }
 
+    /**
+     * @param targetAssignment The target assignment of this member in the corresponding group.
+     *
+     * @return The ConsumerGroupMember mapped as ConsumerGroupDescribeResponseData.Member.
+     */
     public ConsumerGroupDescribeResponseData.Member asConsumerGroupDescribeMember(Assignment targetAssignment) {
         return new ConsumerGroupDescribeResponseData.Member()
             .setMemberEpoch(memberEpoch)
