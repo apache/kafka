@@ -677,6 +677,7 @@ object KafkaConfig {
 
   /** Internal Configurations **/
   val UnstableApiVersionsEnableProp = "unstable.api.versions.enable"
+  val UnstableMetadataVersionsEnableProp = "unstable.metadata.versions.enable"
 
   /* Documentation */
   /** ********* Zookeeper Configuration ***********/
@@ -1532,8 +1533,10 @@ object KafkaConfig {
       .define(RaftConfig.QUORUM_RETRY_BACKOFF_MS_CONFIG, INT, Defaults.QuorumRetryBackoffMs, null, LOW, RaftConfig.QUORUM_RETRY_BACKOFF_MS_DOC)
 
       /** Internal Configurations **/
-      // This indicates whether unreleased APIs should be advertised by this broker.
-      .defineInternal(UnstableApiVersionsEnableProp, BOOLEAN, false, LOW)
+      // This indicates whether unreleased APIs should be advertised by this node.
+      .defineInternal(UnstableApiVersionsEnableProp, BOOLEAN, false, HIGH)
+      // This indicates whether unreleased MetadataVersions should be enabled on this node.
+      .defineInternal(UnstableMetadataVersionsEnableProp, BOOLEAN, false, HIGH)
   }
 
   /** ********* Remote Log Management Configuration *********/
@@ -2113,6 +2116,7 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
 
   /** Internal Configurations **/
   val unstableApiVersionsEnabled = getBoolean(KafkaConfig.UnstableApiVersionsEnableProp)
+  val unstableMetadataVersionsEnabled = getBoolean(KafkaConfig.UnstableMetadataVersionsEnableProp)
 
   def addReconfigurable(reconfigurable: Reconfigurable): Unit = {
     dynamicConfig.addReconfigurable(reconfigurable)

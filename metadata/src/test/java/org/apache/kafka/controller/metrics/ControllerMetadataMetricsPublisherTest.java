@@ -47,6 +47,7 @@ import static org.apache.kafka.controller.metrics.ControllerMetricsTestUtils.Fak
 import static org.apache.kafka.controller.metrics.ControllerMetricsTestUtils.fakePartitionRegistration;
 import static org.apache.kafka.controller.metrics.ControllerMetricsTestUtils.fakeTopicImage;
 import static org.apache.kafka.controller.metrics.ControllerMetricsTestUtils.fakeTopicsImage;
+import static org.apache.kafka.metadata.util.MetadataFeatureUtil.withDirectoryAssignmentSupport;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class ControllerMetadataMetricsPublisherTest {
@@ -145,7 +146,7 @@ public class ControllerMetadataMetricsPublisherTest {
             MetadataDelta delta = new MetadataDelta(MetadataImage.EMPTY);
             ImageReWriter writer = new ImageReWriter(delta);
             IMAGE1.write(writer, new ImageWriterOptions.Builder().
-                    setMetadataVersion(delta.image().features().metadataVersion()).
+                    setMetadataVersion(withDirectoryAssignmentSupport(delta.image().features().metadataVersion())).
                     build());
             env.publisher.onMetadataUpdate(delta, IMAGE1, fakeManifest(true));
             assertEquals(0, env.metrics.activeBrokerCount());

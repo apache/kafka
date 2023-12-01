@@ -112,7 +112,9 @@ public class PartitionRegistration {
         public PartitionRegistration build() {
             if (replicas == null) {
                 throw new IllegalStateException("You must set replicas.");
-            } else if (directories != null && directories.length != replicas.length) {
+            } else if (directories == null) {
+                throw new IllegalStateException("You must set directories.");
+            } else if (directories.length != replicas.length) {
                 throw new IllegalStateException("The lengths for replicas and directories do not match.");
             } else if (isr == null) {
                 throw new IllegalStateException("You must set isr.");
@@ -180,9 +182,16 @@ public class PartitionRegistration {
         return record.directories();
     }
 
+    private static Uuid[] defaultToMigrating(Uuid[] directories, int numReplicas) {
+        if (directories == null || directories.length == 0) {
+            return DirectoryId.migratingArray(numReplicas);
+        }
+        return directories;
+    }
+
     public PartitionRegistration(PartitionRecord record) {
         this(Replicas.toArray(record.replicas()),
-            Uuid.toArray(checkDirectories(record)),
+            defaultToMigrating(Uuid.toArray(checkDirectories(record)), record.replicas().size()),
             Replicas.toArray(record.isr()),
             Replicas.toArray(record.removingReplicas()),
             Replicas.toArray(record.addingReplicas()),
@@ -201,7 +210,7 @@ public class PartitionRegistration {
             throw new IllegalArgumentException("The lengths for replicas and directories do not match.");
         }
         this.replicas = replicas;
-        this.directories = directories != null && directories.length > 0 ? directories : DirectoryId.unassignedArray(replicas.length);
+        this.directories = Objects.requireNonNull(directories);
         this.isr = isr;
         this.removingReplicas = removingReplicas;
         this.addingReplicas = addingReplicas;
@@ -247,7 +256,7 @@ public class PartitionRegistration {
         int[] newElr = (record.eligibleLeaderReplicas() == null) ? elr : Replicas.toArray(record.eligibleLeaderReplicas());
         int[] newLastKnownElr = (record.lastKnownELR() == null) ? lastKnownElr : Replicas.toArray(record.lastKnownELR());
         return new PartitionRegistration(newReplicas,
-            newDirectories,
+            defaultToMigrating(newDirectories, replicas.length),
             newIsr,
             newRemovingReplicas,
             newAddingReplicas,
@@ -377,7 +386,7 @@ public class PartitionRegistration {
             record.setDirectories(Uuid.toList(directories));
         } else {
             for (Uuid directory : directories) {
-                if (!DirectoryId.UNASSIGNED.equals(directory)) {
+                if (!DirectoryId.MIGRATING.equals(directory)) {
                     options.handleLoss("the directory assignment state of one or more replicas");
                     break;
                 }

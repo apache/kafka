@@ -17,7 +17,11 @@
 
 package org.apache.kafka.metadata.placement;
 
+import org.apache.kafka.common.DirectoryId;
+import org.apache.kafka.common.Uuid;
+
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
@@ -25,14 +29,28 @@ import java.util.Objects;
 /**
  * The partition assignment.
  *
- * The assignment is represented as a list of integers where each integer is the replica ID. This class is immutable.
- * It's internal state does not change.
+ * The assignment is represented as a list of integers and {@link Uuid}s
+ * where each integer is the replica ID, and each Uuid is the ID of the
+ * directory hosting the replica in the broker.
+ * This class is immutable. It's internal state does not change.
  */
 public class PartitionAssignment {
-    private final List<Integer> replicas;
 
+    private final List<Integer> replicas;
+    private final List<Uuid> directories;
+
+    // TODO remove -- just here for testing
     public PartitionAssignment(List<Integer> replicas) {
+        this(replicas, brokerId -> DirectoryId.UNASSIGNED);
+    }
+
+    public PartitionAssignment(List<Integer> replicas, DefaultDirProvider defaultDirProvider) {
         this.replicas = Collections.unmodifiableList(new ArrayList<>(replicas));
+        Uuid[] directories = new Uuid[replicas.size()];
+        for (int i = 0; i < directories.length; i++) {
+            directories[i] = defaultDirProvider.defaultDir(replicas.get(i));
+        }
+        this.directories = Collections.unmodifiableList(Arrays.asList(directories));
     }
 
     /**
@@ -42,22 +60,28 @@ public class PartitionAssignment {
         return replicas;
     }
 
+    public List<Uuid> directories() {
+        return directories;
+    }
+
     @Override
     public boolean equals(Object o) {
-        if (!(o instanceof PartitionAssignment)) return false;
-        PartitionAssignment other = (PartitionAssignment) o;
-        return replicas.equals(other.replicas);
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        PartitionAssignment that = (PartitionAssignment) o;
+        return Objects.equals(replicas, that.replicas) && Objects.equals(directories, that.directories);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(replicas);
+        return Objects.hash(replicas, directories);
     }
 
     @Override
     public String toString() {
         return "PartitionAssignment" +
-            "(replicas=" + replicas +
-            ")";
+                "(replicas=" + replicas +
+                ", directories=" + directories +
+                ")";
     }
 }
