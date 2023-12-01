@@ -126,6 +126,7 @@ class SimpleApiVersionManager(
  * @param metadataCache the metadata cache, used to get the finalized features and the metadata version
  * @param enableUnstableLastVersion whether to enable unstable last version, see [[KafkaConfig.unstableApiVersionsEnabled]]
  * @param zkMigrationEnabled whether to enable zk migration, see [[KafkaConfig.migrationEnabled]]
+ * @param clientMetricsManager the client metrics manager, helps to determine whether client telemetry is enabled
  */
 class DefaultApiVersionManager(
   val listenerType: ListenerType,
