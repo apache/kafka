@@ -120,9 +120,7 @@ public class ConsumerTestBuilder implements Closeable {
                 groupInfo.flatMap(gi -> gi.groupState.groupInstanceId),
                 DEFAULT_RETRY_BACKOFF_MS,
                 DEFAULT_RETRY_BACKOFF_MAX_MS,
-                true,
-                groupInfo.map(gi -> gi.serverAssignor).orElse(null)
-            );
+                true);
         GroupState groupState = new GroupState(groupRebalanceConfig);
         ApiVersions apiVersions = new ApiVersions();
 
@@ -201,7 +199,7 @@ public class ConsumerTestBuilder implements Closeable {
                     new MembershipManagerImpl(
                         gi.groupState.groupId,
                         gi.groupState.groupInstanceId,
-                        groupRebalanceConfig.serverAssignor,
+                        gi.serverAssignor,
                         subscriptions,
                         commit,
                         metadata,
@@ -382,13 +380,13 @@ public class ConsumerTestBuilder implements Closeable {
         final GroupState groupState;
         final int heartbeatIntervalMs;
         final double heartbeatJitterMs;
-        final String serverAssignor;
+        final Optional<String> serverAssignor;
 
         public GroupInformation(GroupState groupState) {
-            this(groupState, DEFAULT_HEARTBEAT_INTERVAL_MS, DEFAULT_HEARTBEAT_JITTER_MS, DEFAULT_SERVER_ASSIGNOR);
+            this(groupState, DEFAULT_HEARTBEAT_INTERVAL_MS, DEFAULT_HEARTBEAT_JITTER_MS, Optional.of(DEFAULT_SERVER_ASSIGNOR));
         }
 
-        public GroupInformation(GroupState groupState, int heartbeatIntervalMs, double heartbeatJitterMs, String serverAssignor) {
+        public GroupInformation(GroupState groupState, int heartbeatIntervalMs, double heartbeatJitterMs, Optional<String> serverAssignor) {
             this.groupState = groupState;
             this.heartbeatIntervalMs = heartbeatIntervalMs;
             this.heartbeatJitterMs = heartbeatJitterMs;

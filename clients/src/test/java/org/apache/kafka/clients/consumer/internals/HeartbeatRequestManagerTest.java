@@ -102,7 +102,7 @@ public class HeartbeatRequestManagerTest {
                 new GroupState(DEFAULT_GROUP_ID, groupInstanceId),
                 0,
                 0.0,
-                DEFAULT_SERVER_ASSIGNOR
+                Optional.of(DEFAULT_SERVER_ASSIGNOR)
         );
 
         setUp(Optional.of(gi));
