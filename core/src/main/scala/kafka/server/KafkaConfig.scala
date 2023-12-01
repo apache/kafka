@@ -232,6 +232,9 @@ object Defaults {
   val KafkaMetricReporterClasses = ""
   val KafkaMetricsPollingIntervalSeconds = 10
 
+  /** ********* Kafka Client Telemetry Metrics Configuration ***********/
+  val ClientTelemetryMaxBytes = 1024 * 1024
+
   /** ********* SSL configuration ***********/
   val SslProtocol = SslConfigs.DEFAULT_SSL_PROTOCOL
   val SslEnabledProtocols = SslConfigs.DEFAULT_SSL_ENABLED_PROTOCOLS
@@ -589,6 +592,9 @@ object KafkaConfig {
   val KafkaMetricsReporterClassesProp = "kafka.metrics.reporters"
   val KafkaMetricsPollingIntervalSecondsProp = "kafka.metrics.polling.interval.secs"
 
+  /** ********* Kafka Client Telemetry Metrics Configuration ***********/
+  val ClientTelemetryMaxBytesProp = "telemetry.max.bytes"
+
   /** ******** Common Security Configuration *************/
   val PrincipalBuilderClassProp = BrokerSecurityConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG
   val ConnectionsMaxReauthMsProp = BrokerSecurityConfigs.CONNECTIONS_MAX_REAUTH_MS
@@ -671,6 +677,7 @@ object KafkaConfig {
 
   /** Internal Configurations **/
   val UnstableApiVersionsEnableProp = "unstable.api.versions.enable"
+  val UnstableMetadataVersionsEnableProp = "unstable.metadata.versions.enable"
 
   /* Documentation */
   /** ********* Zookeeper Configuration ***********/
@@ -1092,6 +1099,10 @@ object KafkaConfig {
   val KafkaMetricsPollingIntervalSecondsDoc = s"The metrics polling interval (in seconds) which can be used" +
     s" in $KafkaMetricsReporterClassesProp implementations."
 
+  /** ********* Kafka Client Telemetry Metrics Configuration ***********/
+  val ClientTelemetryMaxBytesDoc = "The maximum size (after compression if compression is used) of" +
+    " telemetry metrics pushed from a client to the broker. The default value is 1048576 (1 MB)."
+
   /** ******** Common Security Configuration *************/
   val PrincipalBuilderClassDoc = BrokerSecurityConfigs.PRINCIPAL_BUILDER_CLASS_DOC
   val ConnectionsMaxReauthMsDoc = BrokerSecurityConfigs.CONNECTIONS_MAX_REAUTH_MS_DOC
@@ -1419,6 +1430,9 @@ object KafkaConfig {
       .define(KafkaMetricsReporterClassesProp, LIST, Defaults.KafkaMetricReporterClasses, LOW, KafkaMetricsReporterClassesDoc)
       .define(KafkaMetricsPollingIntervalSecondsProp, INT, Defaults.KafkaMetricsPollingIntervalSeconds, atLeast(1), LOW, KafkaMetricsPollingIntervalSecondsDoc)
 
+      /** ********* Kafka Client Telemetry Metrics Configuration ***********/
+      .define(ClientTelemetryMaxBytesProp, INT, Defaults.ClientTelemetryMaxBytes, atLeast(1), LOW, ClientTelemetryMaxBytesDoc)
+
       /** ********* Quota configuration ***********/
       .define(NumQuotaSamplesProp, INT, Defaults.NumQuotaSamples, atLeast(1), LOW, NumQuotaSamplesDoc)
       .define(NumReplicationQuotaSamplesProp, INT, Defaults.NumReplicationQuotaSamples, atLeast(1), LOW, NumReplicationQuotaSamplesDoc)
@@ -1519,8 +1533,10 @@ object KafkaConfig {
       .define(RaftConfig.QUORUM_RETRY_BACKOFF_MS_CONFIG, INT, Defaults.QuorumRetryBackoffMs, null, LOW, RaftConfig.QUORUM_RETRY_BACKOFF_MS_DOC)
 
       /** Internal Configurations **/
-      // This indicates whether unreleased APIs should be advertised by this broker.
-      .defineInternal(UnstableApiVersionsEnableProp, BOOLEAN, false, LOW)
+      // This indicates whether unreleased APIs should be advertised by this node.
+      .defineInternal(UnstableApiVersionsEnableProp, BOOLEAN, false, HIGH)
+      // This indicates whether unreleased MetadataVersions should be enabled on this node.
+      .defineInternal(UnstableMetadataVersionsEnableProp, BOOLEAN, false, HIGH)
   }
 
   /** ********* Remote Log Management Configuration *********/
@@ -1586,6 +1602,7 @@ object KafkaConfig {
       case ConfigResource.Type.BROKER => KafkaConfig.maybeSensitive(KafkaConfig.configType(name))
       case ConfigResource.Type.TOPIC => KafkaConfig.maybeSensitive(LogConfig.configType(name).asScala)
       case ConfigResource.Type.BROKER_LOGGER => false
+      case ConfigResource.Type.CLIENT_METRICS => false
       case _ => true
     }
     if (maybeSensitive) Password.HIDDEN else value
@@ -2033,6 +2050,9 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
   val metricSampleWindowMs = getLong(KafkaConfig.MetricSampleWindowMsProp)
   val metricRecordingLevel = getString(KafkaConfig.MetricRecordingLevelProp)
 
+  /** ********* Kafka Client Telemetry Metrics Configuration ***********/
+  val clientTelemetryMaxBytes: Int = getInt(KafkaConfig.ClientTelemetryMaxBytesProp)
+
   /** ********* SSL/SASL Configuration **************/
   // Security configs may be overridden for listeners, so it is not safe to use the base values
   // Hence the base SSL/SASL configs are not fields of KafkaConfig, listener configs should be
@@ -2096,6 +2116,7 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
 
   /** Internal Configurations **/
   val unstableApiVersionsEnabled = getBoolean(KafkaConfig.UnstableApiVersionsEnableProp)
+  val unstableMetadataVersionsEnabled = getBoolean(KafkaConfig.UnstableMetadataVersionsEnableProp)
 
   def addReconfigurable(reconfigurable: Reconfigurable): Unit = {
     dynamicConfig.addReconfigurable(reconfigurable)

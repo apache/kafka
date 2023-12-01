@@ -21,7 +21,7 @@ import kafka.server.{ActionQueue, ReplicaManager}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.RecordTooLargeException
 import org.apache.kafka.common.protocol.Errors
-import org.apache.kafka.common.record.{CompressionType, MemoryRecords, TimestampType}
+import org.apache.kafka.common.record.{CompressionType, MemoryRecords, RecordBatch, TimestampType}
 import org.apache.kafka.common.record.Record.EMPTY_HEADERS
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.utils.Time
@@ -106,13 +106,17 @@ class CoordinatorPartitionWriter[T](
    * Write records to the partitions. Records are written in one batch so
    * atomicity is guaranteed.
    *
-   * @param tp      The partition to write records to.
-   * @param records The list of records. The records are written in a single batch.
+   * @param tp            The partition to write records to.
+   * @param producerId    The producer id.
+   * @param producerEpoch The producer epoch.
+   * @param records       The list of records. The records are written in a single batch.
    * @return The log end offset right after the written records.
    * @throws KafkaException Any KafkaException caught during the write operation.
    */
   override def append(
     tp: TopicPartition,
+    producerId: Long,
+    producerEpoch: Short,
     records: util.List[T]
   ): Long = {
     if (records.isEmpty) throw new IllegalStateException("records must be non-empty.")
@@ -129,7 +133,12 @@ class CoordinatorPartitionWriter[T](
           compressionType,
           TimestampType.CREATE_TIME,
           0L,
-          maxBatchSize
+          time.milliseconds(),
+          producerId,
+          producerEpoch,
+          0,
+          producerId != RecordBatch.NO_PRODUCER_ID,
+          RecordBatch.NO_PARTITION_LEADER_EPOCH
         )
 
         records.forEach { record =>

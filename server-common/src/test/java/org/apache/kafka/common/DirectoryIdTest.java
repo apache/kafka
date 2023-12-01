@@ -20,8 +20,10 @@ import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -42,49 +44,9 @@ public class DirectoryIdTest {
     }
 
     @Test
-    void testCreateDirectoriesFrom() {
-        assertThrows(IllegalArgumentException.class, () -> DirectoryId.createDirectoriesFrom(
-                new int[] {1},
-                new Uuid[] {DirectoryId.UNASSIGNED, DirectoryId.LOST},
-                Arrays.asList(2, 3)
-        ));
-        assertEquals(
-            Arrays.asList(
-                Uuid.fromString("YXY0bQYEQmmyOQ6ZDfGgSQ"),
-                Uuid.fromString("5SZij3DRQgaFbvzR9KooLg"),
-                DirectoryId.UNASSIGNED
-            ),
-            DirectoryId.createDirectoriesFrom(
-                new int[] {1, 2, 3},
-                new Uuid[] {
-                        Uuid.fromString("MgVK5KSwTxe65eYATaoQrg"),
-                        Uuid.fromString("YXY0bQYEQmmyOQ6ZDfGgSQ"),
-                        Uuid.fromString("5SZij3DRQgaFbvzR9KooLg")
-                },
-                Arrays.asList(2, 3, 4)
-            )
-        );
-        assertEquals(
-                Arrays.asList(
-                        DirectoryId.UNASSIGNED,
-                        DirectoryId.UNASSIGNED,
-                        DirectoryId.UNASSIGNED
-                ),
-                DirectoryId.createDirectoriesFrom(
-                        new int[] {1, 2},
-                        new Uuid[] {
-                            DirectoryId.UNASSIGNED,
-                            DirectoryId.UNASSIGNED
-                        },
-                        Arrays.asList(1, 2, 3)
-                )
-        );
-    }
-
-    @Test
     void testCreateAssignmentMap() {
-        assertThrows(IllegalArgumentException.class,
-                () -> DirectoryId.createAssignmentMap(new int[]{1, 2}, DirectoryId.unassignedArray(3)));
+        assertThrows(IllegalArgumentException.class, () ->
+                DirectoryId.createAssignmentMap(new int[]{1, 2}, DirectoryId.unassignedArray(3)));
         assertEquals(
             new HashMap<Integer, Uuid>() {{
                     put(1, Uuid.fromString("upjfkCrUR9GNn1i94ip1wg"));
@@ -101,5 +63,22 @@ public class DirectoryIdTest {
                             Uuid.fromString("bv9TEYi4TqOm52hLmrxT5w")
                     })
         );
+    }
+
+    @Test
+    void testIsOnline() {
+        List<Uuid> sortedDirs = Arrays.asList(
+                Uuid.fromString("imQKg2cXTVe8OUFNa3R9bg"),
+                Uuid.fromString("Mwy5wxTDQxmsZwGzjsaX7w"),
+                Uuid.fromString("s8rHMluuSDCnxt3FmKwiyw")
+        );
+        sortedDirs.sort(Uuid::compareTo);
+        assertTrue(DirectoryId.isOnline(Uuid.fromString("imQKg2cXTVe8OUFNa3R9bg"), sortedDirs));
+        assertTrue(DirectoryId.isOnline(Uuid.fromString("Mwy5wxTDQxmsZwGzjsaX7w"), sortedDirs));
+        assertTrue(DirectoryId.isOnline(Uuid.fromString("s8rHMluuSDCnxt3FmKwiyw"), sortedDirs));
+        assertTrue(DirectoryId.isOnline(DirectoryId.MIGRATING, sortedDirs));
+        assertTrue(DirectoryId.isOnline(DirectoryId.UNASSIGNED, sortedDirs));
+        assertFalse(DirectoryId.isOnline(DirectoryId.LOST, sortedDirs));
+        assertFalse(DirectoryId.isOnline(Uuid.fromString("AMYchbMtS6yhtsXbca7DQg"), sortedDirs));
     }
 }

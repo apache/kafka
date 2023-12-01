@@ -19,6 +19,7 @@ package org.apache.kafka.controller;
 
 import org.apache.kafka.clients.admin.AlterConfigOp.OpType;
 import org.apache.kafka.clients.admin.ConfigEntry;
+import org.apache.kafka.common.DirectoryId;
 import org.apache.kafka.common.ElectionType;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.config.ConfigResource;
@@ -46,7 +47,6 @@ import org.apache.kafka.common.message.AlterPartitionReassignmentsResponseData;
 import org.apache.kafka.common.message.AlterPartitionReassignmentsResponseData.ReassignablePartitionResponse;
 import org.apache.kafka.common.message.AlterPartitionReassignmentsResponseData.ReassignableTopicResponse;
 import org.apache.kafka.common.message.BrokerHeartbeatRequestData;
-import org.apache.kafka.common.message.CreatePartitionsRequestData.CreatePartitionsAssignment;
 import org.apache.kafka.common.message.CreatePartitionsRequestData.CreatePartitionsTopic;
 import org.apache.kafka.common.message.CreatePartitionsResponseData.CreatePartitionsTopicResult;
 import org.apache.kafka.common.message.CreateTopicsRequestData;
@@ -245,6 +245,12 @@ public class ReplicationControlManager {
         @Override
         public Iterator<UsableBroker> usableBrokers() {
             return clusterControl.usableBrokers();
+        }
+
+        @Override
+        public Uuid defaultDir(int brokerId) {
+            // TODO KAFKA-15361 & KAFKA-15364 determine default dir based on broker registration and heartbeat
+            return DirectoryId.MIGRATING;
         }
     }
 
@@ -675,9 +681,8 @@ public class ReplicationControlManager {
                         "Found multiple manual partition assignments for partition " +
                             assignment.partitionIndex());
                 }
-                validateManualPartitionAssignment(
-                    new PartitionAssignment(assignment.brokerIds()),
-                    replicationFactor);
+                PartitionAssignment partitionAssignment = new PartitionAssignment(assignment.brokerIds(), clusterDescriber);
+                validateManualPartitionAssignment(partitionAssignment, replicationFactor);
                 replicationFactor = OptionalInt.of(assignment.brokerIds().size());
                 List<Integer> isr = assignment.brokerIds().stream().
                     filter(clusterControl::isActive).collect(Collectors.toList());
@@ -688,7 +693,7 @@ public class ReplicationControlManager {
                 }
                 newParts.put(
                     assignment.partitionIndex(),
-                    buildPartitionRegistration(assignment.brokerIds(), isr)
+                    buildPartitionRegistration(partitionAssignment, isr)
                 );
             }
             for (int i = 0; i < newParts.size(); i++) {
@@ -724,8 +729,7 @@ public class ReplicationControlManager {
                 ), clusterDescriber);
                 for (int partitionId = 0; partitionId < topicAssignment.assignments().size(); partitionId++) {
                     PartitionAssignment partitionAssignment = topicAssignment.assignments().get(partitionId);
-                    List<Integer> replicas = partitionAssignment.replicas();
-                    List<Integer> isr = replicas.stream().
+                    List<Integer> isr = partitionAssignment.replicas().stream().
                         filter(clusterControl::isActive).collect(Collectors.toList());
                     // If the ISR is empty, it means that all brokers are fenced or
                     // in controlled shutdown. To be consistent with the replica placer,
@@ -737,7 +741,7 @@ public class ReplicationControlManager {
                     }
                     newParts.put(
                         partitionId,
-                        buildPartitionRegistration(replicas, isr)
+                        buildPartitionRegistration(partitionAssignment, isr)
                     );
                 }
             } catch (InvalidReplicationFactorException e) {
@@ -800,11 +804,12 @@ public class ReplicationControlManager {
     }
 
     private static PartitionRegistration buildPartitionRegistration(
-        List<Integer> replicas,
+        PartitionAssignment partitionAssignment,
         List<Integer> isr
     ) {
         return new PartitionRegistration.Builder().
-            setReplicas(Replicas.toArray(replicas)).
+            setReplicas(Replicas.toArray(partitionAssignment.replicas())).
+            setDirectories(Uuid.toArray(partitionAssignment.directories())).
             setIsr(Replicas.toArray(isr)).
             setLeader(isr.get(0)).
             setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).
@@ -1045,19 +1050,20 @@ public class ReplicationControlManager {
                     partition,
                     topic.id,
                     partitionId,
-                    clusterControl::isActive,
+                    new LeaderAcceptor(clusterControl, partition),
                     featureControl.metadataVersion(),
                     getTopicEffectiveMinIsr(topic.name)
-                );
-                builder.setZkMigrationEnabled(clusterControl.zkRegistrationAllowed());
-                builder.setEligibleLeaderReplicasEnabled(isElrEnabled());
+                )
+                    .setZkMigrationEnabled(clusterControl.zkRegistrationAllowed())
+                    .setEligibleLeaderReplicasEnabled(isElrEnabled());
                 if (configurationControl.uncleanLeaderElectionEnabledForTopic(topic.name())) {
                     builder.setElection(PartitionChangeBuilder.Election.UNCLEAN);
                 }
-                builder.setTargetIsrWithBrokerStates(partitionData.newIsrWithEpochs());
-                builder.setTargetLeaderRecoveryState(
-                    LeaderRecoveryState.of(partitionData.leaderRecoveryState()));
-                Optional<ApiMessageAndVersion> record = builder.build();
+                Optional<ApiMessageAndVersion> record = builder
+                    .setTargetIsrWithBrokerStates(partitionData.newIsrWithEpochs())
+                    .setTargetLeaderRecoveryState(LeaderRecoveryState.of(partitionData.leaderRecoveryState()))
+                    .setDefaultDirProvider(clusterDescriber)
+                    .build();
                 if (record.isPresent()) {
                     records.add(record.get());
                     PartitionChangeRecord change = (PartitionChangeRecord) record.get().message();
@@ -1431,18 +1437,19 @@ public class ReplicationControlManager {
         if (electionType == ElectionType.UNCLEAN) {
             election = PartitionChangeBuilder.Election.UNCLEAN;
         }
-        PartitionChangeBuilder builder = new PartitionChangeBuilder(
+        Optional<ApiMessageAndVersion> record = new PartitionChangeBuilder(
             partition,
             topicId,
             partitionId,
-            clusterControl::isActive,
+            new LeaderAcceptor(clusterControl, partition),
             featureControl.metadataVersion(),
             getTopicEffectiveMinIsr(topic)
-        );
-        builder.setElection(election)
-            .setZkMigrationEnabled(clusterControl.zkRegistrationAllowed());
-        builder.setEligibleLeaderReplicasEnabled(isElrEnabled());
-        Optional<ApiMessageAndVersion> record = builder.build();
+        )
+            .setElection(election)
+            .setZkMigrationEnabled(clusterControl.zkRegistrationAllowed())
+            .setEligibleLeaderReplicasEnabled(isElrEnabled())
+            .setDefaultDirProvider(clusterDescriber)
+            .build();
         if (!record.isPresent()) {
             if (electionType == ElectionType.PREFERRED) {
                 return new ApiError(Errors.PREFERRED_LEADER_NOT_AVAILABLE);
@@ -1569,18 +1576,19 @@ public class ReplicationControlManager {
             }
 
             // Attempt to perform a preferred leader election
-            PartitionChangeBuilder builder = new PartitionChangeBuilder(
+            new PartitionChangeBuilder(
                 partition,
                 topicPartition.topicId(),
                 topicPartition.partitionId(),
-                clusterControl::isActive,
+                new LeaderAcceptor(clusterControl, partition),
                 featureControl.metadataVersion(),
                 getTopicEffectiveMinIsr(topic.name)
-            );
-            builder.setElection(PartitionChangeBuilder.Election.PREFERRED)
-                .setZkMigrationEnabled(clusterControl.zkRegistrationAllowed());
-            builder.setEligibleLeaderReplicasEnabled(isElrEnabled());
-            builder.build().ifPresent(records::add);
+            )
+                .setElection(PartitionChangeBuilder.Election.PREFERRED)
+                .setZkMigrationEnabled(clusterControl.zkRegistrationAllowed())
+                .setEligibleLeaderReplicasEnabled(isElrEnabled())
+                .setDefaultDirProvider(clusterDescriber)
+                .build().ifPresent(records::add);
         }
 
         return ControllerResult.of(records, rescheduleImmediately);
@@ -1665,11 +1673,11 @@ public class ReplicationControlManager {
             partitionAssignments = new ArrayList<>();
             isrs = new ArrayList<>();
             for (int i = 0; i < topic.assignments().size(); i++) {
-                CreatePartitionsAssignment assignment = topic.assignments().get(i);
-                validateManualPartitionAssignment(new PartitionAssignment(assignment.brokerIds()),
-                    OptionalInt.of(replicationFactor));
-                partitionAssignments.add(new PartitionAssignment(assignment.brokerIds()));
-                List<Integer> isr = assignment.brokerIds().stream().
+                List<Integer> replicas = topic.assignments().get(i).brokerIds();
+                PartitionAssignment partitionAssignment = new PartitionAssignment(replicas, clusterDescriber);
+                validateManualPartitionAssignment(partitionAssignment, OptionalInt.of(replicationFactor));
+                partitionAssignments.add(partitionAssignment);
+                List<Integer> isr = partitionAssignment.replicas().stream().
                     filter(clusterControl::isActive).collect(Collectors.toList());
                 if (isr.isEmpty()) {
                     throw new InvalidReplicaAssignmentException(
@@ -1688,7 +1696,6 @@ public class ReplicationControlManager {
         int partitionId = startPartitionId;
         for (int i = 0; i < partitionAssignments.size(); i++) {
             PartitionAssignment partitionAssignment = partitionAssignments.get(i);
-            List<Integer> replicas = partitionAssignment.replicas();
             List<Integer> isr = isrs.get(i).stream().
                 filter(clusterControl::isActive).collect(Collectors.toList());
             // If the ISR is empty, it means that all brokers are fenced or
@@ -1699,7 +1706,7 @@ public class ReplicationControlManager {
                     "Unable to replicate the partition " + replicationFactor +
                         " time(s): All brokers are currently fenced or in controlled shutdown.");
             }
-            records.add(buildPartitionRegistration(replicas, isr)
+            records.add(buildPartitionRegistration(partitionAssignment, isr)
                 .toRecord(topicId, partitionId, new ImageWriterOptions.Builder().
                         setMetadataVersion(featureControl.metadataVersion()).
                         build()));
@@ -1790,7 +1797,7 @@ public class ReplicationControlManager {
                 partition,
                 topicIdPart.topicId(),
                 topicIdPart.partitionId(),
-                isAcceptableLeader,
+                new LeaderAcceptor(clusterControl, partition, isAcceptableLeader),
                 featureControl.metadataVersion(),
                 getTopicEffectiveMinIsr(topic.name)
             );
@@ -1805,7 +1812,8 @@ public class ReplicationControlManager {
             builder.setTargetIsr(Replicas.toList(
                 Replicas.copyWithout(partition.isr, brokerToRemove)));
 
-            builder.build().ifPresent(records::add);
+            builder.setDefaultDirProvider(clusterDescriber)
+                    .build().ifPresent(records::add);
         }
         if (records.size() != oldSize) {
             if (log.isDebugEnabled()) {
@@ -1905,7 +1913,7 @@ public class ReplicationControlManager {
             part,
             tp.topicId(),
             tp.partitionId(),
-            clusterControl::isActive,
+            new LeaderAcceptor(clusterControl, part),
             featureControl.metadataVersion(),
             getTopicEffectiveMinIsr(topicName)
         );
@@ -1914,11 +1922,13 @@ public class ReplicationControlManager {
         if (configurationControl.uncleanLeaderElectionEnabledForTopic(topicName)) {
             builder.setElection(PartitionChangeBuilder.Election.UNCLEAN);
         }
-        builder.setTargetIsr(revert.isr()).
+        return builder
+            .setTargetIsr(revert.isr()).
             setTargetReplicas(revert.replicas()).
             setTargetRemoving(Collections.emptyList()).
-            setTargetAdding(Collections.emptyList());
-        return builder.build();
+            setTargetAdding(Collections.emptyList()).
+            setDefaultDirProvider(clusterDescriber).
+            build();
     }
 
     /**
@@ -1953,8 +1963,8 @@ public class ReplicationControlManager {
                                                                PartitionRegistration part,
                                                                ReassignablePartition target) {
         // Check that the requested partition assignment is valid.
-        PartitionAssignment currentAssignment = new PartitionAssignment(Replicas.toList(part.replicas));
-        PartitionAssignment targetAssignment = new PartitionAssignment(target.replicas());
+        PartitionAssignment currentAssignment = new PartitionAssignment(Replicas.toList(part.replicas), part::directory);
+        PartitionAssignment targetAssignment = new PartitionAssignment(target.replicas(), clusterDescriber);
 
         validateManualPartitionAssignment(targetAssignment, OptionalInt.empty());
 
@@ -1965,7 +1975,7 @@ public class ReplicationControlManager {
             part,
             tp.topicId(),
             tp.partitionId(),
-            clusterControl::isActive,
+            new LeaderAcceptor(clusterControl, part),
             featureControl.metadataVersion(),
             getTopicEffectiveMinIsr(topics.get(tp.topicId()).name.toString())
         );
@@ -1980,7 +1990,7 @@ public class ReplicationControlManager {
         if (!reassignment.adding().isEmpty()) {
             builder.setTargetAdding(reassignment.adding());
         }
-        return builder.build();
+        return builder.setDefaultDirProvider(clusterDescriber).build();
     }
 
     ListPartitionReassignmentsResponseData listPartitionReassignments(
@@ -2070,6 +2080,32 @@ public class ReplicationControlManager {
         @Override
         public String toString() {
             return replicaId + " (" + reason + ")";
+        }
+    }
+
+    private static final class LeaderAcceptor implements IntPredicate {
+        private final ClusterControlManager clusterControl;
+        private final PartitionRegistration partition;
+        private final IntPredicate isAcceptableLeader;
+
+        private LeaderAcceptor(ClusterControlManager clusterControl, PartitionRegistration partition) {
+            this(clusterControl, partition, clusterControl::isActive);
+        }
+
+        private LeaderAcceptor(ClusterControlManager clusterControl, PartitionRegistration partition, IntPredicate isAcceptableLeader) {
+            this.clusterControl = clusterControl;
+            this.partition = partition;
+            this.isAcceptableLeader = isAcceptableLeader;
+        }
+
+        @Override
+        public boolean test(int brokerId) {
+            if (!isAcceptableLeader.test(brokerId)) {
+                return false;
+            }
+            Uuid replicaDirectory = partition.directory(brokerId);
+            BrokerRegistration brokerRegistration = clusterControl.brokerRegistrations().get(brokerId);
+            return brokerRegistration.hasOnlineDir(replicaDirectory);
         }
     }
 }

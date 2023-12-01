@@ -2434,7 +2434,7 @@ class ReplicaManagerTest {
       verify(addPartitionsToTxnManager, times(0)).verifyTransaction(any(), any(), any(), any(), any())
 
       // Dynamically enable verification.
-      config.dynamicConfig.initialize(None)
+      config.dynamicConfig.initialize(None, None)
       val props = new Properties()
       props.put(KafkaConfig.TransactionPartitionVerificationEnableProp, "true")
       config.dynamicConfig.updateBrokerConfig(config.brokerId, props)
@@ -2485,7 +2485,7 @@ class ReplicaManagerTest {
       assertEquals(verificationGuard, getVerificationGuard(replicaManager, tp0, producerId))
 
       // Disable verification
-      config.dynamicConfig.initialize(None)
+      config.dynamicConfig.initialize(None, None)
       val props = new Properties()
       props.put(KafkaConfig.TransactionPartitionVerificationEnableProp, "false")
       config.dynamicConfig.updateBrokerConfig(config.brokerId, props)

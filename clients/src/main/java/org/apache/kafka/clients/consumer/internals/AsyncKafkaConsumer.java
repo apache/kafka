@@ -79,7 +79,6 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.ConcurrentModificationException;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -653,7 +652,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         try {
             maybeThrowInvalidGroupIdException();
             if (partitions.isEmpty()) {
-                return new HashMap<>();
+                return Collections.emptyMap();
             }
 
             final OffsetFetchApplicationEvent event = new OffsetFetchApplicationEvent(partitions);
@@ -663,6 +662,10 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                     time.timer(timeout));
                 committedOffsets.forEach(this::updateLastSeenEpochIfNewer);
                 return committedOffsets;
+            } catch (TimeoutException e) {
+                throw new TimeoutException("Timeout of " + timeout.toMillis() + "ms expired before the last " +
+                    "committed offset for partitions " + partitions + " could be determined. Try tuning default.api.timeout.ms " +
+                    "larger to relax the threshold.");
             } finally {
                 wakeupTrigger.clearTask();
             }
@@ -1081,7 +1084,9 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
     }
 
     private Fetch<K, V> pollForFetches(Timer timer) {
-        long pollTimeout = timer.remainingMs();
+        long pollTimeout = isCommittedOffsetsManagementEnabled()
+                ? Math.min(applicationEventHandler.maximumTimeToWait(), timer.remainingMs())
+                : timer.remainingMs();
 
         // if data is available already, return it immediately
         final Fetch<K, V> fetch = collectFetch();

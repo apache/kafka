@@ -3318,6 +3318,32 @@ public void testClosingConsumerUnregistersConsumerMetrics(GroupProtocol groupPro
         return consumer;
     }
 
+    @ParameterizedTest
+    @EnumSource(GroupProtocol.class)
+    public void testCommittedThrowsTimeoutExceptionForNoResponse(GroupProtocol groupProtocol) {
+        Time time = new MockTime(Duration.ofSeconds(1).toMillis());
+        
+        ConsumerMetadata metadata = createMetadata(subscription);
+        MockClient client = new MockClient(time, metadata);
+        
+        initMetadata(client, Collections.singletonMap(topic, 2));
+        Node node = metadata.fetch().nodes().get(0);
+        
+        consumer = newConsumer(groupProtocol, time, client, subscription, metadata, assignor, true, groupInstanceId);
+        consumer.assign(singletonList(tp0));
+        
+        // lookup coordinator
+        client.prepareResponseFrom(FindCoordinatorResponse.prepareResponse(Errors.NONE, groupId, node), node);
+        Node coordinator = new Node(Integer.MAX_VALUE - node.id(), node.host(), node.port());
+        
+        // try to get committed offsets for one topic-partition - but it is disconnected so there's no response and it will time out
+        client.prepareResponseFrom(offsetResponse(Collections.singletonMap(tp0, 0L), Errors.NONE), coordinator, true);
+        org.apache.kafka.common.errors.TimeoutException timeoutException = assertThrows(org.apache.kafka.common.errors.TimeoutException.class,
+            () -> consumer.committed(Collections.singleton(tp0), Duration.ofMillis(1000L)));
+        assertEquals("Timeout of 1000ms expired before the last committed offset for partitions [test-0] could be determined. " +
+            "Try tuning default.api.timeout.ms larger to relax the threshold.", timeoutException.getMessage());
+    }
+    
     private static final List<String> CLIENT_IDS = new ArrayList<>();
     public static class DeserializerForClientId implements Deserializer<byte[]> {
         @Override
