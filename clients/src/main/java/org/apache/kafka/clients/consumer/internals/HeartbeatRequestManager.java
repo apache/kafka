@@ -314,15 +314,15 @@ public class HeartbeatRequestManager implements RequestManager {
                 break;
 
             case FENCED_MEMBER_EPOCH:
-                message = String.format("GroupHeartbeatRequest failed because member ID %s with epoch %s is invalid.",
+                message = String.format("GroupHeartbeatRequest failed for member %s because epoch %s is fenced.",
                         membershipManager.memberId(), membershipManager.memberEpoch());
                 logInfo(message, response, currentTimeMs);
                 membershipManager.transitionToFenced();
                 break;
 
             case UNKNOWN_MEMBER_ID:
-                message = String.format("GroupHeartbeatRequest failed because member of unknown ID %s with epoch %s is invalid.",
-                        membershipManager.memberId(), membershipManager.memberEpoch());
+                message = String.format("GroupHeartbeatRequest failed because member %s is unknown.",
+                        membershipManager.memberId());
                 logInfo(message, response, currentTimeMs);
                 membershipManager.transitionToFenced();
                 break;
