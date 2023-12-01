@@ -1064,8 +1064,12 @@ public class StoreChangelogReader implements ChangelogReader {
                             final StandbyUpdateListener.SuspendReason suspendReason = 
                                 changelogMetadata.stateManager.taskState() == Task.State.RUNNING 
                                     ? StandbyUpdateListener.SuspendReason.PROMOTED
-                                    : StandbyUpdateListener.SuspendReason.MIGRATED;                        
-                            standbyUpdateListener.onUpdateSuspended(partition, storeName, storeOffset, endOffset, suspendReason);
+                                    : StandbyUpdateListener.SuspendReason.MIGRATED;
+                            try {
+                                standbyUpdateListener.onUpdateSuspended(partition, storeName, storeOffset, endOffset, suspendReason);
+                            } catch (final Exception e) {
+                                throw new StreamsException("Standby updater listener failed on update suspended", e);
+                            }
                         }
                     }
                 }
