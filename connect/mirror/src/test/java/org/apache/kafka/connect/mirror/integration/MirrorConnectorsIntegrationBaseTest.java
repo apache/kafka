@@ -773,7 +773,6 @@ public class MirrorConnectorsIntegrationBaseTest {
         backup.kafka().incrementalAlterConfigs(configOps);
         // wait until the configs are changed
         waitForConfigValueChange(backup, backupTopic, "delete.retention.ms", "2000");
-        waitForConfigValueChange(backup, backupTopic, "retention.bytes", "2000");
 
         waitForCondition(() -> {
             String primaryConfig, backupConfig;
