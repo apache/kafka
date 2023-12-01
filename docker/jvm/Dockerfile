@@ -16,13 +16,13 @@
 # limitations under the License.
 ###############################################################################
 
-FROM golang:latest AS build-ub
+FROM golang:latest AS build-utility
 WORKDIR /build
 RUN useradd --no-log-init --create-home --shell /bin/bash appuser
-COPY --chown=appuser:appuser resources/ub/ ./
+COPY --chown=appuser:appuser resources/utility/ ./
 
-# Generate utility belt (ub executable) for dealing with env variables
-RUN go build -ldflags="-w -s" ./ub.go
+# Generate utility executable for dealing with env variables
+RUN go build -ldflags="-w -s" ./utility.go
 USER appuser
 RUN go test ./...
 
@@ -89,7 +89,7 @@ RUN set -eux ; \
 
 COPY --from=build-jsa kafka.jsa /opt/kafka/kafka.jsa
 COPY --from=build-jsa storage.jsa /opt/kafka/storage.jsa
-COPY --chown=appuser:appuser --from=build-ub /build/ub /usr/bin
+COPY --chown=appuser:appuser --from=build-utility /build/utility /usr/bin
 COPY --chown=appuser:appuser resources/common-scripts /etc/kafka/docker
 COPY --chown=appuser:appuser launch /etc/kafka/docker/launch
 

@@ -31,7 +31,7 @@ FILE_INPUT_FLOW_TESTS="File Input Flow Tests"
 FILE_INPUT_TOPIC="test-topic-file-input"
 
 BROKER_RESTART_TESTS="Broker Restart Tests"
-BROKER_CONTAINER="broker"
+BROKER_CONTAINER="broker1"
 BROKER_RESTART_TEST_TOPIC="test-topic-broker-restart"
 
 BROKER_METRICS_TESTS="Broker Metrics Tests"

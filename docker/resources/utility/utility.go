@@ -304,8 +304,8 @@ func runRenderPropertiesCmd(_ *cobra.Command, args []string) error {
 
 func main() {
 	rootCmd := &cobra.Command{
-		Use:   "ub",
-		Short: "utility commands for cp docker images",
+		Use:   "utility",
+		Short: "utility commands for kafka docker images",
 		Run:   func(cmd *cobra.Command, args []string) {},
 	}
 
