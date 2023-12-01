@@ -62,14 +62,14 @@ public class RefreshingHttpsJwksTest extends OAuthBearerTest {
     @Test
     public void testBasicScheduleRefresh() throws Exception {
         String keyId = "abc123";
-        Time time = new MockTime();
+        MockTime time = new MockTime();
         HttpsJwks httpsJwks = spyHttpsJwks();
 
-        try (RefreshingHttpsJwks refreshingHttpsJwks = getRefreshingHttpsJwks(time, httpsJwks)) {
+        try (RefreshingHttpsJwks refreshingHttpsJwks = getRefreshingHttpsJwks(time, httpsJwks, mockExecutorService(time))) {
             refreshingHttpsJwks.init();
             verify(httpsJwks, times(1)).refresh();
             assertTrue(refreshingHttpsJwks.maybeExpediteRefresh(keyId));
-            verify(httpsJwks, times(1)).refresh();
+            verify(httpsJwks, times(2)).refresh();
         }
     }
 
@@ -134,6 +134,20 @@ public class RefreshingHttpsJwksTest extends OAuthBearerTest {
         String keyId = "abc123";
         MockTime time = new MockTime();
         HttpsJwks httpsJwks = spyHttpsJwks();
+
+        try (RefreshingHttpsJwks refreshingHttpsJwks = getRefreshingHttpsJwks(time, httpsJwks, mockExecutorService(time))) {
+            refreshingHttpsJwks.init();
+            // We refresh once at the initialization time from getJsonWebKeys.
+            verify(httpsJwks, times(1)).refresh();
+            assertTrue(refreshingHttpsJwks.maybeExpediteRefresh(keyId));
+            verify(httpsJwks, times(2)).refresh();
+            time.sleep(REFRESH_MS + 1);
+            verify(httpsJwks, times(3)).refresh();
+            assertFalse(refreshingHttpsJwks.maybeExpediteRefresh(keyId));
+        }
+    }
+
+    private ScheduledExecutorService mockExecutorService(MockTime time) {
         MockExecutorService mockExecutorService = new MockExecutorService(time);
         ScheduledExecutorService executorService = Mockito.mock(ScheduledExecutorService.class);
         Mockito.doAnswer(invocation -> {
@@ -155,17 +169,7 @@ public class RefreshingHttpsJwksTest extends OAuthBearerTest {
                 return null;
             }, unit.toMillis(initialDelay), period);
         }).when(executorService).scheduleAtFixedRate(Mockito.any(Runnable.class), Mockito.anyLong(), Mockito.anyLong(), Mockito.any(TimeUnit.class));
-
-        try (RefreshingHttpsJwks refreshingHttpsJwks = getRefreshingHttpsJwks(time, httpsJwks, executorService)) {
-            refreshingHttpsJwks.init();
-            // We refresh once at the initialization time from getJsonWebKeys.
-            verify(httpsJwks, times(1)).refresh();
-            assertTrue(refreshingHttpsJwks.maybeExpediteRefresh(keyId));
-            verify(httpsJwks, times(2)).refresh();
-            time.sleep(REFRESH_MS + 1);
-            verify(httpsJwks, times(3)).refresh();
-            assertFalse(refreshingHttpsJwks.maybeExpediteRefresh(keyId));
-        }
+        return executorService;
     }
 
     private void assertMaybeExpediteRefreshWithDelay(long sleepDelay, boolean shouldBeScheduled) throws Exception {
