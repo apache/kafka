@@ -973,7 +973,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
     @Override
     public Uuid clientInstanceId(Duration timeout) {
         if (!clientTelemetryReporter.isPresent()) {
-            throw new IllegalStateException("Telemetry is not enabled. Set config `enable.metrics.push` to `true`.");
+            throw new IllegalStateException("Telemetry is not enabled. Set config `" + ConsumerConfig.ENABLE_METRICS_PUSH_CONFIG + "` to `true`.");
         }
 
         return ClientTelemetryUtils.fetchClientInstanceId(clientTelemetryReporter.get(), timeout);

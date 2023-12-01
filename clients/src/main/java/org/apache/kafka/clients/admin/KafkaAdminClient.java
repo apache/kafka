@@ -4403,7 +4403,7 @@ public class KafkaAdminClient extends AdminClient {
         }
 
         if (!clientTelemetryEnabled) {
-            throw new IllegalStateException("Telemetry is not enabled. Set config `enable.metrics.push` to `true`.");
+            throw new IllegalStateException("Telemetry is not enabled. Set config `" + AdminClientConfig.ENABLE_METRICS_PUSH_CONFIG + "` to `true`.");
         }
 
         if (clientInstanceId != null) {

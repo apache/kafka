@@ -1291,7 +1291,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     @Override
     public Uuid clientInstanceId(Duration timeout) {
         if (!clientTelemetryReporter.isPresent()) {
-            throw new IllegalStateException("Telemetry is not enabled. Set config `enable.metrics.push` to `true`.");
+            throw new IllegalStateException("Telemetry is not enabled. Set config `" + ProducerConfig.ENABLE_METRICS_PUSH_CONFIG + "` to `true`.");
         }
 
         return ClientTelemetryUtils.fetchClientInstanceId(clientTelemetryReporter.get(), timeout);
