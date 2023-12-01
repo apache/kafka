@@ -319,12 +319,15 @@ public class GlobalStreamThread extends Thread {
                 stateConsumer.pollAndUpdate();
 
                 if (fetchDeadline != -1) {
-                    if (fetchDeadline > time.milliseconds()) {
+                    if (fetchDeadline >= time.milliseconds()) {
                         try {
                             // we pass in a timeout of zero, to just trigger the "get instance id" background RPC,
                             // we don't want to block the global thread that can do useful work in the meantime
                             globalConsumerClientInstanceId = globalConsumer.clientInstanceId(Duration.ZERO);
                             clientInstanceIdFuture.complete(globalConsumerClientInstanceId);
+                            fetchDeadline = -1;
+                        } catch (final IllegalStateException disabledError) {
+                            clientInstanceIdFuture.complete(null);
                             fetchDeadline = -1;
                         } catch (final TimeoutException swallow) {
                             // swallow
@@ -334,7 +337,7 @@ public class GlobalStreamThread extends Thread {
                         }
                     } else {
                         clientInstanceIdFuture.completeExceptionally(
-                            new TimeoutException("Could not retrieve global consumer client-instance-id")
+                            new TimeoutException("Could not retrieve global consumer client instance id.")
                         );
                     }
                 }

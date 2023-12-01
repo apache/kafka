@@ -737,12 +737,19 @@ public class StreamThread extends Thread {
 
     // visible for testing
     void maybeGetClientInstanceIds() {
+        // we pass in a timeout of zero into each `clientInstanceId()` call
+        // to just trigger the "get instance id" background RPC;
+        // we don't want to block the stream thread that can do useful work in the meantime
+
         if (fetchDeadline != -1) {
-            if (mainConsumerClientInstanceId == null) {
-                if (fetchDeadline > time.milliseconds()) {
+            if (!mainConsumerInstanceIdFuture.isDone()) {
+                if (fetchDeadline >= time.milliseconds()) {
                     try {
                         mainConsumerClientInstanceId = mainConsumer.clientInstanceId(Duration.ZERO);
                         mainConsumerInstanceIdFuture.complete(mainConsumerClientInstanceId);
+                        maybeResetFetchDeadline();
+                    } catch (final IllegalStateException disabledError) {
+                        mainConsumerInstanceIdFuture.complete(null);
                         maybeResetFetchDeadline();
                     } catch (final TimeoutException swallow) {
                         // swallow
@@ -752,16 +759,19 @@ public class StreamThread extends Thread {
                     }
                 } else {
                     mainConsumerInstanceIdFuture.completeExceptionally(
-                            new TimeoutException("Could not retrieve main consumer client-instance-id")
+                        new TimeoutException("Could not retrieve main consumer client instance id.")
                     );
                 }
             }
 
-            if (restoreConsumerClientInstanceId == null && !stateUpdaterEnabled) {
-                if (fetchDeadline > time.milliseconds()) {
+            if (!stateUpdaterEnabled && !restoreConsumerInstanceIdFuture.isDone()) {
+                if (fetchDeadline >= time.milliseconds()) {
                     try {
                         restoreConsumerClientInstanceId = restoreConsumer.clientInstanceId(Duration.ZERO);
                         restoreConsumerInstanceIdFuture.complete(restoreConsumerClientInstanceId);
+                        maybeResetFetchDeadline();
+                    } catch (final IllegalStateException disabledError) {
+                        restoreConsumerInstanceIdFuture.complete(null);
                         maybeResetFetchDeadline();
                     } catch (final TimeoutException swallow) {
                         // swallow
@@ -771,18 +781,21 @@ public class StreamThread extends Thread {
                     }
                 } else {
                     restoreConsumerInstanceIdFuture.completeExceptionally(
-                            new TimeoutException("Could not retrieve restore-consumer client-instance-id")
+                        new TimeoutException("Could not retrieve restore consumer client instance id.")
                     );
                 }
             }
 
             if (!processingMode.equals(StreamsConfigUtils.ProcessingMode.EXACTLY_ONCE_ALPHA) &&
-                    threadProducerClientInstanceId == null) {
+                    !threadProducerInstanceIdFuture.isDone()) {
 
-                if (fetchDeadline > time.milliseconds()) {
+                if (fetchDeadline >= time.milliseconds()) {
                     try {
                         threadProducerClientInstanceId = taskManager.threadProducer().kafkaProducer().clientInstanceId(Duration.ZERO);
                         threadProducerInstanceIdFuture.complete(threadProducerClientInstanceId);
+                        maybeResetFetchDeadline();
+                    } catch (final IllegalStateException disabledError) {
+                        threadProducerInstanceIdFuture.complete(null);
                         maybeResetFetchDeadline();
                     } catch (final TimeoutException swallow) {
                         // swallow
@@ -792,7 +805,7 @@ public class StreamThread extends Thread {
                     }
                 } else {
                     threadProducerInstanceIdFuture.completeExceptionally(
-                            new TimeoutException("Could not retrieve thread producer client-instance-id")
+                        new TimeoutException("Could not retrieve thread producer client instance id.")
                     );
                 }
             }
@@ -800,11 +813,11 @@ public class StreamThread extends Thread {
     }
 
     private void maybeResetFetchDeadline() {
-        boolean reset = mainConsumerClientInstanceId != null && restoreConsumerClientInstanceId != null;
+        boolean reset = mainConsumerInstanceIdFuture.isDone() && restoreConsumerInstanceIdFuture.isDone();
 
         if (processingMode.equals(StreamsConfigUtils.ProcessingMode.EXACTLY_ONCE_ALPHA)) {
-            throw new UnsupportedOperationException("not implemente yet");
-        } else if (threadProducerClientInstanceId == null) {
+            throw new UnsupportedOperationException("not implemented yet");
+        } else if (!threadProducerInstanceIdFuture.isDone()) {
             reset = false;
         }
 
@@ -1577,7 +1590,7 @@ public class StreamThread extends Thread {
         return stateLock;
     }
 
-    public Map<String, KafkaFuture<Uuid>> clientInstanceIds(final Duration timeout) {
+    public Map<String, KafkaFuture<Uuid>> consumerClientInstanceIds(final Duration timeout) {
         boolean setDeadline = false;
 
         final Map<String, KafkaFuture<Uuid>> result = new HashMap<>();
@@ -1600,21 +1613,39 @@ public class StreamThread extends Thread {
         }
         result.put(getName() + "-restore-consumer", future);
 
-        if (processingMode.equals(StreamsConfigUtils.ProcessingMode.EXACTLY_ONCE_ALPHA)) {
-            throw new UnsupportedOperationException("not implemented yet");
-        } else {
-            future = new KafkaFutureImpl<>();
-            if (threadProducerClientInstanceId != null) {
-                future.complete(threadProducerClientInstanceId);
-            } else {
-                threadProducerInstanceIdFuture = future;
-                setDeadline = true;
-            }
-            result.put(getName() + "-producer", future);
-        }
-
         if (setDeadline) {
             fetchDeadline = time.milliseconds() + timeout.toMillis();
+        }
+
+        return result;
+    }
+
+    public KafkaFuture<Map<String, KafkaFuture<Uuid>>> producersClientInstanceIds(final Duration timeout) {
+        final KafkaFutureImpl<Map<String, KafkaFuture<Uuid>>> result = new KafkaFutureImpl<>();
+
+        if (processingMode.equals(StreamsConfigUtils.ProcessingMode.EXACTLY_ONCE_ALPHA)) {
+//            for (final TaskId taskId : taskManager.activeTaskIds()) {
+//                future = new KafkaFutureImpl<>();
+//                if (taskProducersClientInstanceIds.get(taskId) != null) {
+//                    future.complete(taskProducersClientInstanceIds.get(taskId));
+//                } else {
+//                    taskProducersInstanceIdsFuture.put(taskId, future);
+//                    setDeadline = true;
+//                }
+//                result.put(getName() + "-" + taskId + "-producer", future);
+//            };
+        } else {
+            final KafkaFutureImpl<Uuid> producerFuture = new KafkaFutureImpl<>();
+            if (threadProducerClientInstanceId != null) {
+                producerFuture.complete(threadProducerClientInstanceId);
+            } else {
+                threadProducerInstanceIdFuture = producerFuture;
+                if (fetchDeadline == -1) {
+                    fetchDeadline = time.milliseconds() + timeout.toMillis();
+                }
+            }
+
+            result.complete(Collections.singletonMap(getName() + "-producer", producerFuture));
         }
 
         return result;

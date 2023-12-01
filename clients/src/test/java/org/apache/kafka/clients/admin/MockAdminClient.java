@@ -97,8 +97,9 @@ public class MockAdminClient extends AdminClient {
     private int timeoutNextRequests = 0;
     private final int defaultPartitions;
     private final int defaultReplicationFactor;
+    private boolean telemetryDisabled = false;
     private Uuid clientInstanceId;
-    private Duration clientInstanceIdBlockingTime;
+    private int injectTimeoutExceptionCounter;
 
     private KafkaException listConsumerGroupOffsetsException;
 
@@ -1352,25 +1353,35 @@ public class MockAdminClient extends AdminClient {
         mockMetrics.put(name, metric);
     }
 
-    public void setClientInstanceId(final Uuid instanceId, final Duration blockingTime) {
+    public void disableTelemetry() {
+        telemetryDisabled = true;
+    }
+
+    /**
+     * @param injectTimeoutExceptionCounter use -1 for infinite
+     */
+    public void injectTimeoutException(final int injectTimeoutExceptionCounter) {
+        this.injectTimeoutExceptionCounter = injectTimeoutExceptionCounter;
+    }
+
+    public void setClientInstanceId(final Uuid instanceId) {
         clientInstanceId = instanceId;
-        clientInstanceIdBlockingTime = blockingTime;
     }
 
     @Override
     public Uuid clientInstanceId(Duration timeout) {
+        if (telemetryDisabled) {
+            throw new IllegalStateException();
+        }
         if (clientInstanceId == null) {
-            throw new IllegalStateException("clientInstanceId not set");
+            throw new UnsupportedOperationException("clientInstanceId not set");
         }
-
-        if (timeout.toMillis() < clientInstanceIdBlockingTime.toMillis()) {
+        if (injectTimeoutExceptionCounter != 0) {
+            // -1 is used as "infinite"
+            if (injectTimeoutExceptionCounter > 0) {
+                --injectTimeoutExceptionCounter;
+            }
             throw new TimeoutException();
-        }
-
-        try {
-            Thread.sleep(clientInstanceIdBlockingTime.toMillis());
-        } catch (final InterruptedException error) {
-            throw new InterruptException(error);
         }
 
         return clientInstanceId;

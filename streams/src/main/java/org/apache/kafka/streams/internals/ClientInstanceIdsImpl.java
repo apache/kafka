@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.internals;
 
+import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.streams.ClientInstanceIds;
 
@@ -41,6 +42,11 @@ public class ClientInstanceIdsImpl implements ClientInstanceIds {
 
     @Override
     public Uuid adminInstanceId() {
+        if (adminInstanceId == null) {
+            throw new IllegalStateException(
+                "Telemetry is not enabled on the admin client." +
+                    " Set config `" + AdminClientConfig.ENABLE_METRICS_PUSH_CONFIG + "` to `true`.");
+        }
         return adminInstanceId;
     }
 

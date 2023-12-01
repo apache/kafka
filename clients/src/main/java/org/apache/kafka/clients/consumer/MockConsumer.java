@@ -28,6 +28,7 @@ import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.Time;
 
 import java.time.Duration;
 import java.util.ArrayList;
@@ -73,8 +74,9 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
     private Duration lastPollTimeout;
     private boolean closed;
     private boolean shouldRebalance;
+    private boolean telemetryDisabled = false;
     private Uuid clientInstanceId;
-    private Duration clientInstanceIdBlockingTime;
+    private int injectTimeoutExceptionCounter;
 
     public MockConsumer(OffsetResetStrategy offsetResetStrategy) {
         this.subscriptions = new SubscriptionState(new LogContext(), offsetResetStrategy);
@@ -400,25 +402,35 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
         endOffsets.putAll(newOffsets);
     }
 
-    public void setClientInstanceId(final Uuid instanceId, final Duration blockingTime) {
+    public void disableTelemetry() {
+        telemetryDisabled = true;
+    }
+
+    /**
+     * @param injectTimeoutExceptionCounter use -1 for infinite
+     */
+    public void injectTimeoutException(final int injectTimeoutExceptionCounter) {
+        this.injectTimeoutExceptionCounter = injectTimeoutExceptionCounter;
+    }
+
+    public void setClientInstanceId(final Uuid instanceId) {
         clientInstanceId = instanceId;
-        clientInstanceIdBlockingTime = blockingTime;
     }
 
     @Override
     public Uuid clientInstanceId(Duration timeout) {
+        if (telemetryDisabled) {
+            throw new IllegalStateException();
+        }
         if (clientInstanceId == null) {
-            throw new IllegalStateException("clientInstanceId not set");
+            throw new UnsupportedOperationException("clientInstanceId not set");
         }
-
-        if (timeout.toMillis() < clientInstanceIdBlockingTime.toMillis()) {
+        if (injectTimeoutExceptionCounter != 0) {
+            // -1 is used as "infinite"
+            if (injectTimeoutExceptionCounter > 0) {
+                --injectTimeoutExceptionCounter;
+            }
             throw new TimeoutException();
-        }
-
-        try {
-            Thread.sleep(clientInstanceIdBlockingTime.toMillis());
-        } catch (final InterruptedException error) {
-            throw new InterruptException(error);
         }
 
         return clientInstanceId;

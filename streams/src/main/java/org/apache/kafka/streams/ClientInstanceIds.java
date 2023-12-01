@@ -29,6 +29,8 @@ public interface ClientInstanceIds {
      * Returns the {@code client instance id} of the admin client.
      *
      * @return the {@code client instance id} of the admin client
+     *
+     * @throws IllegalStateException If telemetry is disabled on the admin client.
      */
     Uuid adminInstanceId();
 

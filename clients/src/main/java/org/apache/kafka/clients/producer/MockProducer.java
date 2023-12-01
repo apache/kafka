@@ -82,8 +82,9 @@ public class MockProducer<K, V> implements Producer<K, V> {
     public RuntimeException flushException = null;
     public RuntimeException partitionsForException = null;
     public RuntimeException closeException = null;
+    private boolean telemetryDisabled = false;
     private Uuid clientInstanceId;
-    private Duration clientInstanceIdBlockingTime;
+    private int injectTimeoutExceptionCounter;
 
     /**
      * Create a mock producer
@@ -392,25 +393,35 @@ public class MockProducer<K, V> implements Producer<K, V> {
         return this.cluster.partitionsForTopic(topic);
     }
 
-    public void setClientInstanceId(final Uuid instanceId, final Duration blockingTime) {
+    public void disableTelemetry() {
+        telemetryDisabled = true;
+    }
+
+    /**
+     * @param injectTimeoutExceptionCounter use -1 for infinite
+     */
+    public void injectTimeoutException(final int injectTimeoutExceptionCounter) {
+        this.injectTimeoutExceptionCounter = injectTimeoutExceptionCounter;
+    }
+
+    public void setClientInstanceId(final Uuid instanceId) {
         clientInstanceId = instanceId;
-        clientInstanceIdBlockingTime = blockingTime;
     }
 
     @Override
     public Uuid clientInstanceId(Duration timeout) {
+        if (telemetryDisabled) {
+            throw new IllegalStateException();
+        }
         if (clientInstanceId == null) {
-            throw new IllegalStateException("clientInstanceId not set");
+            throw new UnsupportedOperationException("clientInstanceId not set");
         }
-
-        if (timeout.toMillis() < clientInstanceIdBlockingTime.toMillis()) {
+        if (injectTimeoutExceptionCounter != 0) {
+            // -1 is used as "infinite"
+            if (injectTimeoutExceptionCounter > 0) {
+                --injectTimeoutExceptionCounter;
+            }
             throw new TimeoutException();
-        }
-
-        try {
-            Thread.sleep(clientInstanceIdBlockingTime.toMillis());
-        } catch (final InterruptedException error) {
-            throw new InterruptException(error);
         }
 
         return clientInstanceId;
