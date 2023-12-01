@@ -176,7 +176,7 @@ public class KafkaStreams implements AutoCloseable {
     private final KafkaClientSupplier clientSupplier;
     protected final TopologyMetadata topologyMetadata;
     private final QueryableStoreProvider queryableStoreProvider;
-    private final StandbyUpdateListener delegatingStandbyUpdateListener;
+    private final DelegatingStandbyUpdateListener delegatingStandbyUpdateListener;
 
     GlobalStreamThread globalStreamThread;
     private KafkaStreams.StateListener stateListener;
@@ -184,7 +184,6 @@ public class KafkaStreams implements AutoCloseable {
     private boolean oldHandler;
     private BiConsumer<Throwable, Boolean> streamsUncaughtExceptionHandler;
     private final Object changeThreadCount = new Object();
-    private StandbyUpdateListener globalStandbyListener;
 
     // container states
     /**
@@ -586,15 +585,15 @@ public class KafkaStreams implements AutoCloseable {
     /**
      * Set the listener which is triggered whenever a standby task is updated
      *
-     * @param globalStandbyListener The listener triggered when a standby task is updated.
+     * @param standbyListener The listener triggered when a standby task is updated.
      * @throws IllegalStateException if this {@code KafkaStreams} instance has already been started.
      */
-    public void setStandbyUpdateListener(final StandbyUpdateListener globalStandbyListener) {
+    public void setStandbyUpdateListener(final StandbyUpdateListener standbyListener) {
         synchronized (stateLock) {
             if (state.hasNotStarted()) {
-                this.globalStandbyListener = globalStandbyListener;
+                this.delegatingStandbyUpdateListener.setUserStandbyListener(standbyListener);
             } else {
-                throw new IllegalStateException("Can only set GlobalStandbyListener before calling start(). " +
+                throw new IllegalStateException("Can only set StandbyUpdateListener before calling start(). " +
                         "Current state is: " + state);
             }
         }
@@ -762,7 +761,8 @@ public class KafkaStreams implements AutoCloseable {
         }
     }
 
-    final class DelegatingStandbyUpdateListener implements StandbyUpdateListener {
+    final static class DelegatingStandbyUpdateListener implements StandbyUpdateListener {
+        private StandbyUpdateListener userStandbyListener;
 
         private void throwOnFatalException(final Exception fatalUserException,
                                            final TopicPartition topicPartition,
@@ -778,9 +778,9 @@ public class KafkaStreams implements AutoCloseable {
         public void onUpdateStart(final TopicPartition topicPartition,
                           final String storeName, 
                           final long startingOffset) {
-            if (globalStandbyListener != null) {
+            if (userStandbyListener != null) {
                 try {
-                    globalStandbyListener.onUpdateStart(topicPartition, storeName, startingOffset);
+                    userStandbyListener.onUpdateStart(topicPartition, storeName, startingOffset);
                 } catch (final Exception fatalUserException) {
                     throwOnFatalException(fatalUserException, topicPartition, storeName);
                 }
@@ -789,9 +789,9 @@ public class KafkaStreams implements AutoCloseable {
 
         @Override
         public void onBatchLoaded(final TopicPartition topicPartition, final String storeName, final TaskId taskId, final long batchEndOffset, final long numRestored, final long currentEndOffset) {
-            if (globalStandbyListener != null) {
+            if (userStandbyListener != null) {
                 try {
-                    globalStandbyListener.onBatchLoaded(topicPartition, storeName, taskId, batchEndOffset, numRestored, currentEndOffset);
+                    userStandbyListener.onBatchLoaded(topicPartition, storeName, taskId, batchEndOffset, numRestored, currentEndOffset);
                 } catch (final Exception fatalUserException) {
                     throwOnFatalException(fatalUserException, topicPartition, storeName);
                 }
@@ -800,13 +800,17 @@ public class KafkaStreams implements AutoCloseable {
 
         @Override
         public void onUpdateSuspended(final TopicPartition topicPartition, final String storeName, final long storeOffset, final long currentEndOffset, final SuspendReason reason) {
-            if (globalStandbyListener != null) {
+            if (userStandbyListener != null) {
                 try {
-                    globalStandbyListener.onUpdateSuspended(topicPartition, storeName, storeOffset, currentEndOffset, reason);
+                    userStandbyListener.onUpdateSuspended(topicPartition, storeName, storeOffset, currentEndOffset, reason);
                 } catch (final Exception fatalUserException) {
                     throwOnFatalException(fatalUserException, topicPartition, storeName);
                 }
             }
+        }
+
+        void setUserStandbyListener(final StandbyUpdateListener userStandbyListener) {
+            this.userStandbyListener = userStandbyListener;
         }
     }
 
