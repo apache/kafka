@@ -14,11 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.clients;
-
-import org.apache.kafka.common.telemetry.internals.MetricKeyable;
-import org.apache.kafka.common.telemetry.internals.MetricsEmitter;
-import org.apache.kafka.common.telemetry.internals.SinglePointMetric;
+package org.apache.kafka.common.telemetry.internals;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -31,7 +27,7 @@ public class ClientTelemetryEmitter implements MetricsEmitter {
     private final List<SinglePointMetric> emitted;
     private final boolean deltaMetrics;
 
-    public ClientTelemetryEmitter(Predicate<? super MetricKeyable> selector, boolean deltaMetrics) {
+    ClientTelemetryEmitter(Predicate<? super MetricKeyable> selector, boolean deltaMetrics) {
         this.selector = selector;
         this.emitted = new ArrayList<>();
         this.deltaMetrics = deltaMetrics;

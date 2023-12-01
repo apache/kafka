@@ -14,12 +14,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.clients;
+package org.apache.kafka.common.telemetry.internals;
 
 import io.opentelemetry.proto.common.v1.KeyValue;
 
-import org.apache.kafka.clients.ClientTelemetryReporter.ClientTelemetrySubscription;
-import org.apache.kafka.clients.ClientTelemetryReporter.DefaultClientTelemetrySender;
+import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.Uuid;
@@ -37,7 +36,6 @@ import org.apache.kafka.common.requests.GetTelemetrySubscriptionsResponse;
 import org.apache.kafka.common.requests.PushTelemetryRequest;
 import org.apache.kafka.common.requests.PushTelemetryResponse;
 import org.apache.kafka.common.telemetry.ClientTelemetryState;
-import org.apache.kafka.common.telemetry.internals.ClientTelemetryUtils;
 import org.apache.kafka.common.utils.MockTime;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -67,7 +65,7 @@ public class ClientTelemetryReporterTest {
     private Map<String, Object> configs;
     private MetricsContext metricsContext;
     private Uuid uuid;
-    private ClientTelemetrySubscription subscription;
+    private ClientTelemetryReporter.ClientTelemetrySubscription subscription;
 
     @BeforeEach
     public void setUp() {
@@ -76,7 +74,7 @@ public class ClientTelemetryReporterTest {
         configs = new HashMap<>();
         metricsContext = new KafkaMetricsContext("test");
         uuid = Uuid.randomUuid();
-        subscription = new ClientTelemetrySubscription(uuid, 1234, 20000,
+        subscription = new ClientTelemetryReporter.ClientTelemetrySubscription(uuid, 1234, 20000,
             Collections.emptyList(), true, null);
     }
 
@@ -90,7 +88,8 @@ public class ClientTelemetryReporterTest {
         assertNotNull(clientTelemetryReporter.metricsCollector());
         assertNotNull(clientTelemetryReporter.telemetryProvider().resource());
         assertEquals(1, clientTelemetryReporter.telemetryProvider().resource().getAttributesCount());
-        assertEquals(ClientTelemetryProvider.CLIENT_RACK, clientTelemetryReporter.telemetryProvider().resource().getAttributes(0).getKey());
+        assertEquals(
+            ClientTelemetryProvider.CLIENT_RACK, clientTelemetryReporter.telemetryProvider().resource().getAttributes(0).getKey());
         assertEquals("rack", clientTelemetryReporter.telemetryProvider().resource().getAttributes(0).getValue().getStringValue());
     }
 
@@ -157,7 +156,7 @@ public class ClientTelemetryReporterTest {
     @Test
     public void testTelemetryReporterClose() {
         clientTelemetryReporter.close();
-        assertEquals(ClientTelemetryState.TERMINATED, ((DefaultClientTelemetrySender) clientTelemetryReporter
+        assertEquals(ClientTelemetryState.TERMINATED, ((ClientTelemetryReporter.DefaultClientTelemetrySender) clientTelemetryReporter
             .telemetrySender()).state());
     }
 
@@ -165,13 +164,13 @@ public class ClientTelemetryReporterTest {
     public void testTelemetryReporterCloseMultipleTimesNoException() {
         clientTelemetryReporter.close();
         clientTelemetryReporter.close();
-        assertEquals(ClientTelemetryState.TERMINATED, ((DefaultClientTelemetrySender) clientTelemetryReporter
+        assertEquals(ClientTelemetryState.TERMINATED, ((ClientTelemetryReporter.DefaultClientTelemetrySender) clientTelemetryReporter
             .telemetrySender()).state());
     }
 
     @Test
     public void testTelemetrySenderTimeToNextUpdate() {
-        DefaultClientTelemetrySender telemetrySender = (DefaultClientTelemetrySender) clientTelemetryReporter.telemetrySender();
+        ClientTelemetryReporter.DefaultClientTelemetrySender telemetrySender = (ClientTelemetryReporter.DefaultClientTelemetrySender) clientTelemetryReporter.telemetrySender();
 
         assertEquals(ClientTelemetryState.SUBSCRIPTION_NEEDED, telemetrySender.state());
         assertEquals(0, telemetrySender.timeToNextUpdate(100));
@@ -201,7 +200,7 @@ public class ClientTelemetryReporterTest {
 
     @Test
     public void testCreateRequestSubscriptionNeeded() {
-        DefaultClientTelemetrySender telemetrySender = (DefaultClientTelemetrySender) clientTelemetryReporter.telemetrySender();
+        ClientTelemetryReporter.DefaultClientTelemetrySender telemetrySender = (ClientTelemetryReporter.DefaultClientTelemetrySender) clientTelemetryReporter.telemetrySender();
         assertEquals(ClientTelemetryState.SUBSCRIPTION_NEEDED, telemetrySender.state());
 
         Optional<AbstractRequest.Builder<?>> requestOptional = telemetrySender.createRequest();
@@ -219,7 +218,7 @@ public class ClientTelemetryReporterTest {
 
     @Test
     public void testCreateRequestSubscriptionNeededAfterExistingSubscription() {
-        DefaultClientTelemetrySender telemetrySender = (DefaultClientTelemetrySender) clientTelemetryReporter.telemetrySender();
+        ClientTelemetryReporter.DefaultClientTelemetrySender telemetrySender = (ClientTelemetryReporter.DefaultClientTelemetrySender) clientTelemetryReporter.telemetrySender();
         telemetrySender.updateSubscriptionResult(subscription, time.milliseconds());
         assertEquals(ClientTelemetryState.SUBSCRIPTION_NEEDED, telemetrySender.state());
 
@@ -241,7 +240,7 @@ public class ClientTelemetryReporterTest {
         clientTelemetryReporter.configure(configs);
         clientTelemetryReporter.contextChange(metricsContext);
 
-        DefaultClientTelemetrySender telemetrySender = (DefaultClientTelemetrySender) clientTelemetryReporter.telemetrySender();
+        ClientTelemetryReporter.DefaultClientTelemetrySender telemetrySender = (ClientTelemetryReporter.DefaultClientTelemetrySender) clientTelemetryReporter.telemetrySender();
         // create request to move state to SUBSCRIPTION_IN_PROGRESS
         telemetrySender.updateSubscriptionResult(subscription, time.milliseconds());
         telemetrySender.createRequest();
@@ -263,7 +262,7 @@ public class ClientTelemetryReporterTest {
 
     @Test
     public void testCreateRequestPushNeededWithoutSubscription() {
-        DefaultClientTelemetrySender telemetrySender = (DefaultClientTelemetrySender) clientTelemetryReporter.telemetrySender();
+        ClientTelemetryReporter.DefaultClientTelemetrySender telemetrySender = (ClientTelemetryReporter.DefaultClientTelemetrySender) clientTelemetryReporter.telemetrySender();
         // create request to move state to SUBSCRIPTION_IN_PROGRESS
         telemetrySender.createRequest();
         assertTrue(telemetrySender.maybeSetState(ClientTelemetryState.PUSH_NEEDED));
@@ -276,7 +275,7 @@ public class ClientTelemetryReporterTest {
 
     @Test
     public void testCreateRequestInvalidState() {
-        DefaultClientTelemetrySender telemetrySender = (DefaultClientTelemetrySender) clientTelemetryReporter.telemetrySender();
+        ClientTelemetryReporter.DefaultClientTelemetrySender telemetrySender = (ClientTelemetryReporter.DefaultClientTelemetrySender) clientTelemetryReporter.telemetrySender();
         telemetrySender.updateSubscriptionResult(subscription, time.milliseconds());
 
         assertTrue(telemetrySender.maybeSetState(ClientTelemetryState.SUBSCRIPTION_IN_PROGRESS));
@@ -299,7 +298,7 @@ public class ClientTelemetryReporterTest {
     @Test
     public void testCreateRequestPushNoCollector() {
         final long now = time.milliseconds();
-        DefaultClientTelemetrySender telemetrySender = (DefaultClientTelemetrySender) clientTelemetryReporter.telemetrySender();
+        ClientTelemetryReporter.DefaultClientTelemetrySender telemetrySender = (ClientTelemetryReporter.DefaultClientTelemetrySender) clientTelemetryReporter.telemetrySender();
         // create request to move state to SUBSCRIPTION_IN_PROGRESS
         telemetrySender.createRequest();
         assertTrue(telemetrySender.maybeSetState(ClientTelemetryState.PUSH_NEEDED));
@@ -318,7 +317,7 @@ public class ClientTelemetryReporterTest {
 
     @Test
     public void testHandleResponseGetSubscriptions() {
-        DefaultClientTelemetrySender telemetrySender = (DefaultClientTelemetrySender) clientTelemetryReporter.telemetrySender();
+        ClientTelemetryReporter.DefaultClientTelemetrySender telemetrySender = (ClientTelemetryReporter.DefaultClientTelemetrySender) clientTelemetryReporter.telemetrySender();
         assertTrue(telemetrySender.maybeSetState(ClientTelemetryState.SUBSCRIPTION_IN_PROGRESS));
 
         Uuid clientInstanceId = Uuid.randomUuid();
@@ -333,7 +332,7 @@ public class ClientTelemetryReporterTest {
         telemetrySender.handleResponse(response);
         assertEquals(ClientTelemetryState.PUSH_NEEDED, telemetrySender.state());
 
-        ClientTelemetrySubscription subscription = telemetrySender.subscription();
+        ClientTelemetryReporter.ClientTelemetrySubscription subscription = telemetrySender.subscription();
         assertNotNull(subscription);
         assertEquals(clientInstanceId, subscription.clientInstanceId());
         assertEquals(5678, subscription.subscriptionId());
@@ -344,7 +343,7 @@ public class ClientTelemetryReporterTest {
 
     @Test
     public void testHandleResponseGetSubscriptionsWithoutMetrics() {
-        DefaultClientTelemetrySender telemetrySender = (DefaultClientTelemetrySender) clientTelemetryReporter.telemetrySender();
+        ClientTelemetryReporter.DefaultClientTelemetrySender telemetrySender = (ClientTelemetryReporter.DefaultClientTelemetrySender) clientTelemetryReporter.telemetrySender();
         assertTrue(telemetrySender.maybeSetState(ClientTelemetryState.SUBSCRIPTION_IN_PROGRESS));
 
         Uuid clientInstanceId = Uuid.randomUuid();
@@ -359,7 +358,7 @@ public class ClientTelemetryReporterTest {
         // Again subscription should be required.
         assertEquals(ClientTelemetryState.SUBSCRIPTION_NEEDED, telemetrySender.state());
 
-        ClientTelemetrySubscription subscription = telemetrySender.subscription();
+        ClientTelemetryReporter.ClientTelemetrySubscription subscription = telemetrySender.subscription();
         assertNotNull(subscription);
         assertEquals(clientInstanceId, subscription.clientInstanceId());
         assertEquals(5678, subscription.subscriptionId());
@@ -370,7 +369,7 @@ public class ClientTelemetryReporterTest {
 
     @Test
     public void testHandleResponseGetTelemetryErrorResponse() {
-        DefaultClientTelemetrySender telemetrySender = (DefaultClientTelemetrySender) clientTelemetryReporter.telemetrySender();
+        ClientTelemetryReporter.DefaultClientTelemetrySender telemetrySender = (ClientTelemetryReporter.DefaultClientTelemetrySender) clientTelemetryReporter.telemetrySender();
         assertTrue(telemetrySender.maybeSetState(ClientTelemetryState.SUBSCRIPTION_IN_PROGRESS));
 
         // throttling quota exceeded
@@ -418,7 +417,7 @@ public class ClientTelemetryReporterTest {
 
     @Test
     public void testHandleResponsePushTelemetry() {
-        DefaultClientTelemetrySender telemetrySender = (DefaultClientTelemetrySender) clientTelemetryReporter.telemetrySender();
+        ClientTelemetryReporter.DefaultClientTelemetrySender telemetrySender = (ClientTelemetryReporter.DefaultClientTelemetrySender) clientTelemetryReporter.telemetrySender();
         telemetrySender.updateSubscriptionResult(subscription, time.milliseconds());
         assertTrue(telemetrySender.maybeSetState(ClientTelemetryState.SUBSCRIPTION_IN_PROGRESS));
         assertTrue(telemetrySender.maybeSetState(ClientTelemetryState.PUSH_NEEDED));
@@ -434,7 +433,7 @@ public class ClientTelemetryReporterTest {
 
     @Test
     public void testHandleResponsePushTelemetryErrorResponse() {
-        DefaultClientTelemetrySender telemetrySender = (DefaultClientTelemetrySender) clientTelemetryReporter.telemetrySender();
+        ClientTelemetryReporter.DefaultClientTelemetrySender telemetrySender = (ClientTelemetryReporter.DefaultClientTelemetrySender) clientTelemetryReporter.telemetrySender();
         telemetrySender.updateSubscriptionResult(subscription, time.milliseconds());
         assertTrue(telemetrySender.maybeSetState(ClientTelemetryState.SUBSCRIPTION_IN_PROGRESS));
         assertTrue(telemetrySender.maybeSetState(ClientTelemetryState.PUSH_NEEDED));
@@ -539,7 +538,7 @@ public class ClientTelemetryReporterTest {
 
     @Test
     public void testClientInstanceId() throws InterruptedException {
-        DefaultClientTelemetrySender telemetrySender = (DefaultClientTelemetrySender) clientTelemetryReporter.telemetrySender();
+        ClientTelemetryReporter.DefaultClientTelemetrySender telemetrySender = (ClientTelemetryReporter.DefaultClientTelemetrySender) clientTelemetryReporter.telemetrySender();
         assertTrue(telemetrySender.maybeSetState(ClientTelemetryState.SUBSCRIPTION_IN_PROGRESS));
 
         CountDownLatch lock = new CountDownLatch(2);

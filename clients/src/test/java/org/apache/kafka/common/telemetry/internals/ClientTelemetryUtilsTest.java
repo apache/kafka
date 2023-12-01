@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.common.telemetry.internals;
 
-import org.apache.kafka.clients.ClientTelemetryReporter;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.CompressionType;

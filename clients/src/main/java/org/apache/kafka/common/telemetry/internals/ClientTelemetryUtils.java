@@ -18,7 +18,6 @@ package org.apache.kafka.common.telemetry.internals;
 
 import io.opentelemetry.proto.metrics.v1.MetricsData;
 
-import org.apache.kafka.clients.ClientTelemetryReporter;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.metrics.MetricsContext;
