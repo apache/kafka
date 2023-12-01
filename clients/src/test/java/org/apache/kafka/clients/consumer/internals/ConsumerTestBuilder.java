@@ -68,7 +68,7 @@ public class ConsumerTestBuilder implements Closeable {
     static final String DEFAULT_GROUP_ID = "group-id";
     static final int DEFAULT_HEARTBEAT_INTERVAL_MS = 1000;
     static final double DEFAULT_HEARTBEAT_JITTER_MS = 0.0;
-    static final String DEFAULT_SERVER_ASSIGNOR = "Uniform";
+    static final String DEFAULT_SERVER_ASSIGNOR = "uniform";
 
     final LogContext logContext = new LogContext();
     final Time time = new MockTime(0);
