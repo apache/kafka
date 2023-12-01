@@ -155,13 +155,6 @@ class ConsumerGroupHeartbeatRequestTest(cluster: ClusterInstance) {
       controllers = raftCluster.controllerServers().asScala.toSeq
     )
 
-    // Create the topic.
-    val topicId = TestUtils.createTopicWithAdminRaw(
-      admin = admin,
-      topic = "foo",
-      numPartitions = 3
-    )
-
     // Heartbeat request so that a static member joins the group
     var consumerGroupHeartbeatRequest = new ConsumerGroupHeartbeatRequest.Builder(
       new ConsumerGroupHeartbeatRequestData()
@@ -173,23 +166,52 @@ class ConsumerGroupHeartbeatRequestTest(cluster: ClusterInstance) {
         .setTopicPartitions(List.empty.asJava)
     ).build()
 
-    // This is the expected assignment.
-    val expectedAssignment = new ConsumerGroupHeartbeatResponseData.Assignment()
-      .setTopicPartitions(List(new ConsumerGroupHeartbeatResponseData.TopicPartitions()
-        .setTopicId(topicId)
-        .setPartitions(List[Integer](0, 1, 2).asJava)).asJava)
-
     // Send the request until receiving a successful response. There is a delay
     // here because the group coordinator is loaded in the background.
     var consumerGroupHeartbeatResponse: ConsumerGroupHeartbeatResponse = null
     TestUtils.waitUntilTrue(() => {
       consumerGroupHeartbeatResponse = connectAndReceive(consumerGroupHeartbeatRequest)
       consumerGroupHeartbeatResponse.data.errorCode == Errors.NONE.code
-    }, msg = s"Could not join the group successfully and get partitions assigned. Last response $consumerGroupHeartbeatResponse.")
+    }, msg = s"Static member could not join the group successfully. Last response $consumerGroupHeartbeatResponse.")
 
     // Verify the response.
     assertNotNull(consumerGroupHeartbeatResponse.data.memberId)
     assertEquals(1, consumerGroupHeartbeatResponse.data.memberEpoch)
+    assertEquals(new ConsumerGroupHeartbeatResponseData.Assignment(), consumerGroupHeartbeatResponse.data.assignment)
+
+    // Create the topic.
+    val topicId = TestUtils.createTopicWithAdminRaw(
+      admin = admin,
+      topic = "foo",
+      numPartitions = 3
+    )
+
+    // Prepare the next heartbeat.
+    consumerGroupHeartbeatRequest = new ConsumerGroupHeartbeatRequest.Builder(
+      new ConsumerGroupHeartbeatRequestData()
+        .setGroupId("grp")
+        .setInstanceId(instanceId)
+        .setMemberId(consumerGroupHeartbeatResponse.data.memberId)
+        .setMemberEpoch(consumerGroupHeartbeatResponse.data.memberEpoch)
+    ).build()
+
+    // This is the expected assignment.
+    val expectedAssignment = new ConsumerGroupHeartbeatResponseData.Assignment()
+      .setTopicPartitions(List(new ConsumerGroupHeartbeatResponseData.TopicPartitions()
+        .setTopicId(topicId)
+        .setPartitions(List[Integer](0, 1, 2).asJava)).asJava)
+
+    // Heartbeats until the partitions are assigned.
+    consumerGroupHeartbeatResponse = null
+    TestUtils.waitUntilTrue(() => {
+      consumerGroupHeartbeatResponse = connectAndReceive(consumerGroupHeartbeatRequest)
+      consumerGroupHeartbeatResponse.data.errorCode == Errors.NONE.code &&
+        consumerGroupHeartbeatResponse.data.assignment == expectedAssignment
+    }, msg = s"Static member could not get partitions assigned. Last response $consumerGroupHeartbeatResponse.")
+
+    // Verify the response.
+    assertNotNull(consumerGroupHeartbeatResponse.data.memberId)
+    assertEquals(2, consumerGroupHeartbeatResponse.data.memberEpoch)
     assertEquals(expectedAssignment, consumerGroupHeartbeatResponse.data.assignment)
 
     val oldMemberId = consumerGroupHeartbeatResponse.data.memberId
@@ -223,7 +245,7 @@ class ConsumerGroupHeartbeatRequestTest(cluster: ClusterInstance) {
 
     // Verify the response.
     assertNotNull(consumerGroupHeartbeatResponse.data.memberId)
-    assertEquals(1, consumerGroupHeartbeatResponse.data.memberEpoch)
+    assertEquals(2, consumerGroupHeartbeatResponse.data.memberEpoch)
     assertEquals(expectedAssignment, consumerGroupHeartbeatResponse.data.assignment)
     // The 2 member IDs should be different
     assertNotEquals(oldMemberId, consumerGroupHeartbeatResponse.data.memberId)
