@@ -26,9 +26,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.ListIterator;
-import java.util.Optional;
-import java.util.concurrent.locks.Lock;
-import java.util.concurrent.locks.ReentrantLock;
+import java.util.NoSuchElementException;
 
 public class LogicalSegmentIterator implements VersionedRecordIterator {
     protected final ListIterator<LogicalKeyValueSegment> segmentIterator;
@@ -36,11 +34,12 @@ public class LogicalSegmentIterator implements VersionedRecordIterator {
     private final Long fromTime;
     private final Long toTime;
     private final ResultOrder order;
-    protected ListIterator<VersionedRecord<byte[]>> iterator;
+    private ListIterator<VersionedRecord<byte[]>> iterator;
+    private volatile boolean open = true;
 
     // defined for creating/releasing the snapshot. 
-    private LogicalKeyValueSegment snapshotOwner;
-    private Snapshot snapshot;
+    private LogicalKeyValueSegment snapshotOwner = null;
+    private Snapshot snapshot = null;
 
 
 
@@ -56,28 +55,32 @@ public class LogicalSegmentIterator implements VersionedRecordIterator {
         this.toTime = toTime;
         this.iterator = Collections.emptyListIterator();
         this.order = order;
-        this.snapshot = null;
-        this.snapshotOwner = null;
     }
 
     @Override
     public void close() {
+        open = false;
         // user may refuse consuming all returned records, so release the snapshot when closing the iterator if it is not released yet!
         releaseSnapshot();
     }
 
     @Override
     public boolean hasNext() {
-        return iterator.hasNext() || maybeFillIterator();
+        if (!open) {
+            throw new IllegalStateException("The iterator is out of scope.");
+        }
+        final boolean hasStillLoad = order.equals(ResultOrder.ASCENDING) ? iterator.hasPrevious() : iterator.hasNext();
+        return hasStillLoad || maybeFillIterator();
     }
 
     @Override
     public Object next() {
         if (hasNext()) {
-            return iterator.next();
+            return order.equals(ResultOrder.ASCENDING) ? iterator.previous() : iterator.next();
         }
-        return null;
+        throw new NoSuchElementException();
     }
+
     private boolean maybeFillIterator() {
 
         final List<VersionedRecord<byte[]>> queryResults = new ArrayList<>();
@@ -87,13 +90,7 @@ public class LogicalSegmentIterator implements VersionedRecordIterator {
             if (snapshot == null) { // create the snapshot (this will happen only one time).
                 this.snapshotOwner = segment;
                 // take a RocksDB snapshot to return the segments content at the query time (in order to guarantee consistency)
-                final Lock lock = new ReentrantLock();
-                lock.lock();
-                try {
-                    this.snapshot = snapshotOwner.getSnapshot();
-                } finally {
-                    lock.unlock();
-                }
+                this.snapshot = snapshotOwner.getSnapshot();
             }
 
             final byte[] rawSegmentValue = segment.get(key, snapshot);
@@ -109,7 +106,7 @@ public class LogicalSegmentIterator implements VersionedRecordIterator {
                     final List<RocksDBVersionedStoreSegmentValueFormatter.SegmentValue.SegmentSearchResult> searchResults =
                             RocksDBVersionedStoreSegmentValueFormatter.deserialize(rawSegmentValue).findAll(fromTime, toTime);
                     for (final RocksDBVersionedStoreSegmentValueFormatter.SegmentValue.SegmentSearchResult searchResult : searchResults) {
-                        queryResults.add(new VersionedRecord<>(searchResult.value(), searchResult.validFrom(), Optional.of(searchResult.validTo())));
+                        queryResults.add(new VersionedRecord<>(searchResult.value(), searchResult.validFrom(), searchResult.validTo()));
                     }
                 }
             }
@@ -118,10 +115,7 @@ public class LogicalSegmentIterator implements VersionedRecordIterator {
             }
         }
         if (!queryResults.isEmpty()) {
-            if (order.equals(ResultOrder.ASCENDING)) {
-                queryResults.sort((r1, r2) -> (int) (r1.timestamp() - r2.timestamp()));
-            }
-            this.iterator = queryResults.listIterator();
+            this.iterator = order.equals(ResultOrder.ASCENDING) ? queryResults.listIterator(queryResults.size()) : queryResults.listIterator();
             return true;
         }
         // if all segments have been processed, release the snapshot

@@ -23,7 +23,6 @@ import static org.apache.kafka.streams.kstream.internals.WrappingNullableUtils.p
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.maybeMeasureLatency;
 
 
-import java.security.InvalidParameterException;
 import java.time.Instant;
 import java.util.Map;
 import java.util.Objects;
@@ -251,10 +250,10 @@ public class MeteredVersionedKeyValueStore<K, V>
             final QueryResult<R> result;
             final MultiVersionedKeyQuery<K, V> typedKeyQuery = (MultiVersionedKeyQuery<K, V>) query;
 
-            final Instant fromTime = typedKeyQuery.fromTime().isPresent() ? typedKeyQuery.fromTime().get() : Instant.ofEpochMilli(Long.MIN_VALUE);
-            final Instant toTime = typedKeyQuery.toTime().isPresent() ? typedKeyQuery.toTime().get() : Instant.ofEpochMilli(Long.MAX_VALUE);
+            final Instant fromTime = typedKeyQuery.fromTime().orElse(Instant.ofEpochMilli(Long.MIN_VALUE));
+            final Instant toTime = typedKeyQuery.toTime().orElse(Instant.ofEpochMilli(Long.MAX_VALUE));
             if (fromTime.compareTo(toTime) > 0) {
-                throw new InvalidParameterException("The `fromTime` timestamp must be smaller than the `toTime` timestamp.");
+                throw new IllegalArgumentException("The `fromTime` timestamp must be smaller than the `toTime` timestamp.");
             }
             MultiVersionedKeyQuery<Bytes, byte[]> rawKeyQuery = MultiVersionedKeyQuery.withKey(keyBytes(typedKeyQuery.key()));
             rawKeyQuery = rawKeyQuery.fromTime(fromTime).toTime(toTime);

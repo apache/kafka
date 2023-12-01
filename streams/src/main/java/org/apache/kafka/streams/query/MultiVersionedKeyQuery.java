@@ -129,7 +129,7 @@ public final class MultiVersionedKeyQuery<K, V> implements Query<VersionedRecord
 
     /**
      * The order of the returned records by timestamp.
-     * @return UNORDERED, ASCENDING, or DESCENDING if the query returns records in an unordered, ascending, or descending order of timestamps.
+     * @return the order of returned records based on timestamp (can be unordered, or in ascending, or in descending order of timestamps).
      */
     public ResultOrder resultOrder() {
         return order;

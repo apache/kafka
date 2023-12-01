@@ -425,16 +425,19 @@ public final class StoreQueryUtils {
     public static <V> Function<VersionedRecord<byte[]>, VersionedRecord<V>> getDeserializeValue(final StateSerdes<?, V> serdes) {
         final Serde<V> valueSerde = serdes.valueSerde();
         final Deserializer<V> deserializer = valueSerde.deserializer();
-        return rawVersionedRecord -> new VersionedRecord<>(deserializer.deserialize(serdes.topic(), rawVersionedRecord.value()),
-                                                                                    rawVersionedRecord.timestamp(),
-                                                                                    rawVersionedRecord.validTo());
+        return rawVersionedRecord -> rawVersionedRecord.validTo().isPresent() ? new VersionedRecord<>(deserializer.deserialize(serdes.topic(), rawVersionedRecord.value()),
+                                                                                                      rawVersionedRecord.timestamp(),
+                                                                                                      rawVersionedRecord.validTo().get())
+                                                                              : new VersionedRecord<>(deserializer.deserialize(serdes.topic(), rawVersionedRecord.value()),
+                                                                                                      rawVersionedRecord.timestamp());
     }
 
     public static <V> VersionedRecord<V> deserializeVersionedRecord(final StateSerdes<?, V> serdes,
         final VersionedRecord<byte[]> rawVersionedRecord) {
         final Deserializer<V> valueDeserializer = serdes.valueDeserializer();
         final V value = valueDeserializer.deserialize(serdes.topic(), rawVersionedRecord.value());
-        return new VersionedRecord<>(value, rawVersionedRecord.timestamp(), rawVersionedRecord.validTo());
+        return rawVersionedRecord.validTo().isPresent() ? new VersionedRecord<>(value, rawVersionedRecord.timestamp(), rawVersionedRecord.validTo().get())
+                                                        : new VersionedRecord<>(value, rawVersionedRecord.timestamp());
     }
 
     public static void checkpointPosition(final OffsetCheckpoint checkpointFile,

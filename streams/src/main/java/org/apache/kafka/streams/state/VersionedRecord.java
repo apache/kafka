@@ -49,10 +49,10 @@ public final class VersionedRecord<V> {
      * @param timestamp  The timestamp
      * @param validTo    The exclusive upper bound of the validity interval
      */
-    public VersionedRecord(final V value, final long timestamp, final Optional<Long> validTo) {
+    public VersionedRecord(final V value, final long timestamp, final Long validTo) {
         this.value = Objects.requireNonNull(value);
         this.timestamp = timestamp;
-        this.validTo = validTo;
+        this.validTo = Optional.of(validTo);
     }
 
 

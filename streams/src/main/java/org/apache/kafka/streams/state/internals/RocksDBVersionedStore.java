@@ -26,7 +26,6 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
-import java.util.Optional;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.metrics.Sensor;
@@ -139,11 +138,11 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
         observedStreamTime = Math.max(observedStreamTime, timestamp);
 
         final long foundTs = doPut(
-                versionedStoreClient,
-                observedStreamTime,
-                key,
-                value,
-                timestamp
+            versionedStoreClient,
+            observedStreamTime,
+            key,
+            value,
+            timestamp
         );
 
         StoreQueryUtils.updatePosition(position, stateStoreContext);
@@ -166,11 +165,11 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
 
         observedStreamTime = Math.max(observedStreamTime, timestamp);
         doPut(
-                versionedStoreClient,
-                observedStreamTime,
-                key,
-                null,
-                timestamp
+            versionedStoreClient,
+            observedStreamTime,
+            key,
+            null,
+            timestamp
         );
 
         StoreQueryUtils.updatePosition(position, stateStoreContext);
@@ -258,7 +257,7 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
                                 .deserialize(rawSegmentValue)
                                 .find(asOfTimestamp, true);
                 if (searchResult.value() != null) {
-                    return new VersionedRecord<>(searchResult.value(), searchResult.validFrom(), Optional.of(searchResult.validTo()));
+                    return new VersionedRecord<>(searchResult.value(), searchResult.validFrom(), searchResult.validTo());
                 } else {
                     return null;
                 }
@@ -270,7 +269,7 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
     }
 
     @SuppressWarnings("unchecked")
-    protected VersionedRecordIterator<byte[]> get(final Bytes key, final long fromTimestamp, final long toTimestamp, final ResultOrder order) {
+    VersionedRecordIterator<byte[]> get(final Bytes key, final long fromTimestamp, final long toTimestamp, final ResultOrder order) {
         validateStoreOpen();
 
         if (toTimestamp < observedStreamTime - historyRetention) {
@@ -972,7 +971,7 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
      * Bytes layout for the value portion of rows stored in the latest value store. The layout is
      * a fixed-size timestamp concatenated with the actual record value.
      */
-    protected static final class LatestValueFormatter {
+    static final class LatestValueFormatter {
 
         private static final int TIMESTAMP_SIZE = 8;
 

@@ -936,10 +936,12 @@ public class RocksDBVersionedStoreTest {
     private static VersionedRecord<String> deserializedRecord(final VersionedRecord<byte[]> versionedRecord) {
         return versionedRecord == null
             ? null
-            : new VersionedRecord<>(
-            STRING_DESERIALIZER.deserialize(null, versionedRecord.value()),
-            versionedRecord.timestamp(),
-            versionedRecord.validTo());
+            : versionedRecord.validTo().isPresent()
+            ? new VersionedRecord<>(STRING_DESERIALIZER.deserialize(null, versionedRecord.value()),
+                                    versionedRecord.timestamp(),
+                                    versionedRecord.validTo().get())
+            : new VersionedRecord<>(STRING_DESERIALIZER.deserialize(null, versionedRecord.value()),
+                                    versionedRecord.timestamp());
     }
 
     private static List<ConsumerRecord<byte[], byte[]>> getChangelogRecords(final List<DataRecord> data) {
