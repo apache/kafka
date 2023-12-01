@@ -21,12 +21,14 @@ package org.apache.kafka.streams.query;
 
 import org.apache.kafka.common.annotation.InterfaceStability.Evolving;
 import org.apache.kafka.streams.state.KeyValueIterator;
+import org.apache.kafka.streams.state.TimestampedKeyValueStore;
+import org.apache.kafka.streams.state.ValueAndTimestamp;
 
 
 import java.util.Optional;
 
 /**
- * Interactive query for issuing range queries and scans over KeyValue stores.
+ * Interactive query for issuing range queries and scans over {@link TimestampedKeyValueStore}
  * <p>
  *  A range query retrieves a set of records, specified using an upper and/or lower bound on the keys.
  * <p>
@@ -37,7 +39,7 @@ import java.util.Optional;
  * @param <V> Type of values
  */
 @Evolving
-public final class RangeQuery<K, V> implements Query<KeyValueIterator<K, V>> {
+public final class TimestampedRangeQuery<K, V> implements Query<KeyValueIterator<K, ValueAndTimestamp<V>>> {
 
 
     private final Optional<K> lower;
@@ -45,7 +47,7 @@ public final class RangeQuery<K, V> implements Query<KeyValueIterator<K, V>> {
 
     private final boolean isKeyAscending;
 
-    private RangeQuery(final Optional<K> lower, final Optional<K> upper, final boolean isKeyAscending) {
+    private TimestampedRangeQuery(final Optional<K> lower, final Optional<K> upper, final boolean isKeyAscending) {
         this.lower = lower;
         this.upper = upper;
         this.isKeyAscending = isKeyAscending;
@@ -58,8 +60,29 @@ public final class RangeQuery<K, V> implements Query<KeyValueIterator<K, V>> {
      * @param <K> The key type
      * @param <V> The value type
      */
-    public static <K, V> RangeQuery<K, V> withRange(final K lower, final K upper) {
-        return new RangeQuery<>(Optional.ofNullable(lower), Optional.ofNullable(upper), true);
+    public static <K, V> TimestampedRangeQuery<K, V> withRange(final K lower, final K upper) {
+        return new TimestampedRangeQuery<>(Optional.ofNullable(lower), Optional.ofNullable(upper), true);
+    }
+
+    /**
+     * Interactive range query using an upper bound to filter the keys returned.
+     * If both <K,V> are null, RangQuery returns a full range scan.
+     * @param upper The key that specifies the upper bound of the range
+     * @param <K> The key type
+     * @param <V> The value type
+     */
+    public static <K, V> TimestampedRangeQuery<K, V> withUpperBound(final K upper) {
+        return new TimestampedRangeQuery<>(Optional.empty(), Optional.of(upper), true);
+    }
+
+    /**
+     * Interactive range query using a lower bound to filter the keys returned.
+     * @param lower The key that specifies the lower bound of the range
+     * @param <K> The key type
+     * @param <V> The value type
+     */
+    public static <K, V> TimestampedRangeQuery<K, V> withLowerBound(final K lower) {
+        return new TimestampedRangeQuery<>(Optional.of(lower), Optional.empty(), true);
     }
 
     /**
@@ -76,51 +99,32 @@ public final class RangeQuery<K, V> implements Query<KeyValueIterator<K, V>> {
      * Order is based on the serialized byte[] of the keys, not the 'logical' key order.
      * @return a new RangeQuery instance with descending flag set.
      */
-    public RangeQuery<K, V> withDescendingKeys() {
-        return new RangeQuery<>(this.lower, this.upper, false);
+    public TimestampedRangeQuery<K, V> withDescendingKeys() {
+        return new TimestampedRangeQuery<>(this.lower, this.upper, false);
     }
 
-    /**
-     * Interactive range query using an upper bound to filter the keys returned.
-     * If both <K,V> are null, RangQuery returns a full range scan.
-     * @param upper The key that specifies the upper bound of the range
-     * @param <K> The key type
-     * @param <V> The value type
-     */
-    public static <K, V> RangeQuery<K, V> withUpperBound(final K upper) {
-        return new RangeQuery<>(Optional.empty(), Optional.of(upper), true);
-    }
-
-    /**
-     * Interactive range query using a lower bound to filter the keys returned.
-     * @param lower The key that specifies the lower bound of the range
-     * @param <K> The key type
-     * @param <V> The value type
-     */
-    public static <K, V> RangeQuery<K, V> withLowerBound(final K lower) {
-        return new RangeQuery<>(Optional.of(lower), Optional.empty(), true);
-    }
 
     /**
      * Interactive scan query that returns all records in the store.
      * @param <K> The key type
      * @param <V> The value type
      */
-    public static <K, V> RangeQuery<K, V> withNoBounds() {
-        return new RangeQuery<>(Optional.empty(), Optional.empty(), true);
+    public static <K, V> TimestampedRangeQuery<K, V> withNoBounds() {
+        return new TimestampedRangeQuery<>(Optional.empty(), Optional.empty(), true);
     }
+
 
     /**
      * The lower bound of the query, if specified.
      */
-    public Optional<K> getLowerBound() {
+    public Optional<K> lowerBound() {
         return lower;
     }
 
     /**
      * The upper bound of the query, if specified
      */
-    public Optional<K> getUpperBound() {
+    public Optional<K> upperBound() {
         return upper;
     }
 }
