@@ -135,7 +135,7 @@ public class MetadataBatchLoader {
                 replay(record);
             } catch (Throwable e) {
                 faultHandler.handleFault("Error loading metadata log record from offset " +
-                    batch.baseOffset() + indexWithinBatch, e);
+                    (batch.baseOffset() + indexWithinBatch), e);
             }
 
             // Emit the accumulated delta if a new transaction has been started and one of the following is true
