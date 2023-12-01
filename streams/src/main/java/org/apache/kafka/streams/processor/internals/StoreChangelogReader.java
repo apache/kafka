@@ -679,7 +679,11 @@ public class StoreChangelogReader implements ChangelogReader {
                     throw new StreamsException("State restore listener failed on batch restored", e);
                 }
             } else if (changelogMetadata.stateManager.taskType() == TaskType.STANDBY) {
-                standbyUpdateListener.onBatchLoaded(partition, storeName, stateManager.taskId(), currentOffset, numRecords, storeMetadata.endOffset());
+                try {
+                    standbyUpdateListener.onBatchLoaded(partition, storeName, stateManager.taskId(), currentOffset, numRecords, storeMetadata.endOffset());
+                } catch (final Exception e) {
+                    throw new StreamsException("Standby updater listener failed on batch loaded", e);
+                }
             }
         }
 
