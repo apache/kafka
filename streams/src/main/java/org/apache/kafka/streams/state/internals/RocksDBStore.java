@@ -70,6 +70,7 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -307,9 +308,8 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
             final List<ColumnFamilyDescriptor> existingDescriptors = new LinkedList<>();
             existingDescriptors.add(defaultColumnFamilyDescriptor);
             existingDescriptors.addAll(allDescriptors.stream()
-                .filter(descriptor -> allExisting.stream().anyMatch(existing -> Arrays.equals(existing, descriptor.getName())))
-                    .collect(Collectors.toList()
-                );
+                    .filter(descriptor -> allExisting.stream().anyMatch(existing -> Arrays.equals(existing, descriptor.getName())))
+                    .collect(Collectors.toList()));
             final List<ColumnFamilyDescriptor> toCreate = extraDescriptors.stream()
                     .filter(descriptor -> allExisting.stream().noneMatch(existing -> Arrays.equals(existing, descriptor.getName())))
                     .collect(Collectors.toList());

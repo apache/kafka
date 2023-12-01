@@ -67,18 +67,18 @@ public class RocksDBTimestampedStore extends RocksDBStore implements Timestamped
                 new ColumnFamilyDescriptor(RocksDB.DEFAULT_COLUMN_FAMILY, columnFamilyOptions),
                 new ColumnFamilyDescriptor("keyValueWithTimestamp".getBytes(StandardCharsets.UTF_8), columnFamilyOptions)
         );
-        final ColumnFamilyHandle noTimestampCF = columnFamilies.get(0);
-        final ColumnFamilyHandle withTimestampCF = columnFamilies.get(1);
+        final ColumnFamilyHandle noTimestampColumnFamily = columnFamilies.get(0);
+        final ColumnFamilyHandle withTimestampColumnFamily = columnFamilies.get(1);
 
-        final RocksIterator noTimestampsIter = db.newIterator(noTimestampCF);
+        final RocksIterator noTimestampsIter = db.newIterator(noTimestampColumnFamily);
         noTimestampsIter.seekToFirst();
         if (noTimestampsIter.isValid()) {
             log.info("Opening store {} in upgrade mode", name);
-            dbAccessor = new DualColumnFamilyAccessor(noTimestampCF, withTimestampCF);
+            dbAccessor = new DualColumnFamilyAccessor(noTimestampColumnFamily, withTimestampColumnFamily);
         } else {
             log.info("Opening store {} in regular mode", name);
-            dbAccessor = new SingleColumnFamilyAccessor(withTimestampCF);
-            noTimestampCF.close();
+            dbAccessor = new SingleColumnFamilyAccessor(withTimestampColumnFamily);
+            noTimestampColumnFamily.close();
         }
         noTimestampsIter.close();
     }
