@@ -116,7 +116,6 @@ public class ConsumerNetworkThreadTest {
         // The consumer is closed in ConsumerTestBuilder.ConsumerNetworkThreadTestBuilder.close()
         // which is called from tearDown().
         consumerNetworkThread.start();
-
         TestCondition isStarted = () -> consumerNetworkThread.isRunning();
         TestCondition isClosed = () -> !(consumerNetworkThread.isRunning() || consumerNetworkThread.isAlive());
 
@@ -277,11 +276,14 @@ public class ConsumerNetworkThreadTest {
 
     @Test
     void testCoordinatorConnectionOnClose() {
+        TopicPartition tp = new TopicPartition("topic", 0);
+        subscriptions.assignFromUser(singleton(new TopicPartition("topic", 0)));
+        subscriptions.seekUnvalidated(tp, new SubscriptionState.FetchPosition(100));
         Node node = metadata.fetch().nodes().get(0);
         coordinatorRequestManager.markCoordinatorUnknown("test", time.milliseconds());
         client.prepareResponse(FindCoordinatorResponse.prepareResponse(Errors.NONE, "group-id", node));
-        prepareOffsetCommitRequest(new HashMap<>(), Errors.NONE, false);
-        consumerNetworkThread.maybeAutoCommitAndLeaveGroup(time.timer(1000));
+        prepareOffsetCommitRequest(singletonMap(tp, 100L), Errors.NONE, false);
+        consumerNetworkThread.cleanup();
         assertTrue(coordinatorRequestManager.coordinator().isPresent());
         assertFalse(client.hasPendingResponses());
         assertFalse(client.hasInFlightRequests());
@@ -296,9 +298,9 @@ public class ConsumerNetworkThreadTest {
         coordinatorRequestManager.markCoordinatorUnknown("test", time.milliseconds());
         client.prepareResponse(FindCoordinatorResponse.prepareResponse(Errors.NONE, "group-id", node));
         prepareOffsetCommitRequest(singletonMap(tp, 100L), Errors.NONE, false);
-        consumerNetworkThread.maybeAutoCommitAndLeaveGroup(time.timer(1000));
+        consumerNetworkThread.maybeAutocommitOnClose(time.timer(1000));
         assertTrue(coordinatorRequestManager.coordinator().isPresent());
-        verify(commitRequestManager).maybeCreateAutoCommitRequest();
+        verify(commitRequestManager).createCommitAllConsumedRequest();
 
         assertFalse(client.hasPendingResponses());
         assertFalse(client.hasInFlightRequests());
@@ -308,7 +310,6 @@ public class ConsumerNetworkThreadTest {
         Node node = metadata.fetch().nodes().get(0);
         client.prepareResponse(FindCoordinatorResponse.prepareResponse(Errors.NONE, "group-id", node));
         prepareOffsetCommitRequest(new HashMap<>(), Errors.NONE, false);
-
     }
 
     private void prepareOffsetCommitRequest(final Map<TopicPartition, Long> expectedOffsets,
