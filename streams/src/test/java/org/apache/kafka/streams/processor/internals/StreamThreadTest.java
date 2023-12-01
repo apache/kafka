@@ -163,6 +163,7 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.atMostOnce;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -552,8 +553,7 @@ public class StreamThreadTest {
         final ConsumerGroupMetadata consumerGroupMetadata = mock(ConsumerGroupMetadata.class);
         when(consumer.groupMetadata()).thenReturn(consumerGroupMetadata);
         when(consumerGroupMetadata.groupInstanceId()).thenReturn(Optional.empty());
-        final TaskManager taskManager = mockTaskManagerPurge(1);
-        taskManager.maybePurgeCommittedRecords();
+        final TaskManager taskManager = mockTaskManagerPurge();
 
         final TopologyMetadata topologyMetadata = new TopologyMetadata(internalTopologyBuilder, config);
         topologyMetadata.buildAndRewriteTopology();
@@ -563,6 +563,8 @@ public class StreamThreadTest {
         mockTime.sleep(purgeInterval - 10L);
         thread.setNow(mockTime.milliseconds());
         thread.maybeCommit();
+
+        verify(taskManager).maybePurgeCommittedRecords();
     }
 
     @Test
@@ -703,7 +705,7 @@ public class StreamThreadTest {
         );
 
         final ConsumerGroupMetadata consumerGroupMetadata = mock(ConsumerGroupMetadata.class);
-        when(consumer.poll(any())).thenReturn(ConsumerRecords.empty());
+        lenient().when(consumer.poll(any())).thenReturn(ConsumerRecords.empty());
         when(consumer.groupMetadata()).thenReturn(consumerGroupMetadata);
         when(consumerGroupMetadata.groupInstanceId()).thenReturn(Optional.empty());
         final MockConsumerClientSupplier mockClientSupplier = new MockConsumerClientSupplier(consumer);
@@ -1078,7 +1080,7 @@ public class StreamThreadTest {
         when(consumer.groupMetadata()).thenReturn(consumerGroupMetadata);
         when(consumerGroupMetadata.groupInstanceId()).thenReturn(Optional.empty());
 
-        final TaskManager taskManager = mockTaskManagerPurge(2);
+        final TaskManager taskManager = mockTaskManagerPurge();
 
         final TopologyMetadata topologyMetadata = new TopologyMetadata(internalTopologyBuilder, config);
         topologyMetadata.buildAndRewriteTopology();
@@ -1091,6 +1093,8 @@ public class StreamThreadTest {
 
         thread.setNow(mockTime.milliseconds());
         thread.maybeCommit();
+
+        verify(taskManager, times(2)).maybePurgeCommittedRecords();
     }
 
     @Test
@@ -3336,12 +3340,9 @@ public class StreamThreadTest {
         return taskManager;
     }
 
-    private TaskManager mockTaskManagerPurge(final int numberOfPurges) {
+    private TaskManager mockTaskManagerPurge() {
         final Task runningTask = mock(Task.class);
-        final TaskManager taskManager = mockTaskManager(runningTask);
-
-        doNothing().when(taskManager).maybePurgeCommittedRecords();
-        return taskManager;
+        return mockTaskManager(runningTask);
     }
 
     private TaskManager mockTaskManagerCommit(final Task runningTask, final int commits) {
