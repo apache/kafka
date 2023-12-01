@@ -587,7 +587,6 @@ public class OffsetMetadataManager {
      * @return True if no offsets exist or if all offsets expired, false otherwise.
      */
     public boolean cleanupExpiredOffsets(String groupId, List<Record> records) {
-        Long startMs = time.milliseconds();
         TimelineHashMap<String, TimelineHashMap<Integer, OffsetAndMetadata>> offsetsByTopic = offsetsByGroup.get(groupId);
         if (offsetsByTopic == null) {
             return true;
@@ -611,6 +610,7 @@ public class OffsetMetadataManager {
                 partitions.forEach((partition, offsetAndMetadata) -> {
                     if (condition.isOffsetExpired(offsetAndMetadata, currentTimestampMs, config.offsetsRetentionMs)) {
                         expiredPartitions.add(appendOffsetCommitTombstone(groupId, topic, partition, records).toString());
+                        log.debug("[GroupId {}] Expired offset for tp={}-{}", groupId, topic, partition);
                     } else {
                         allOffsetsExpired.set(false);
                     }
@@ -619,12 +619,6 @@ public class OffsetMetadataManager {
                 allOffsetsExpired.set(false);
             }
         });
-
-        if (!expiredPartitions.isEmpty()) {
-            log.info("[GroupId {}] Expiring {} offsets (allOffsetsExpired={}) in {} milliseconds.",
-                groupId, expiredPartitions.size(), allOffsetsExpired, time.milliseconds() - startMs);
-            log.debug("[GroupId {}] Expired partitions: {}", groupId, String.join(", ", expiredPartitions));
-        }
         metrics.record(OFFSET_EXPIRED_SENSOR_NAME, expiredPartitions.size());
 
         return allOffsetsExpired.get();

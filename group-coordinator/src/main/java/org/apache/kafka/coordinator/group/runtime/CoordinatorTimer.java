@@ -61,7 +61,7 @@ public interface CoordinatorTimer<T, U> {
      * @param unit          The delay unit.
      * @param retry         A boolean indicating whether the operation should
      *                      be retried on failure.
-     * @param retryBackoff  The delay when rescheduled on retry.
+     * @param retryBackoff  The delay when rescheduled on retry. The same unit is used.
      * @param operation     The operation to perform upon expiration.
      */
     void schedule(String key, long delay, TimeUnit unit, boolean retry, long retryBackoff, TimeoutOperation<T, U> operation);
