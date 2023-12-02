@@ -21,19 +21,20 @@ import org.apache.kafka.common.utils.LogContext;
 import org.slf4j.Logger;
 
 import java.util.Objects;
-import java.util.concurrent.BlockingQueue;
+import java.util.Queue;
 
 /**
  * An event handler that receives {@link BackgroundEvent background events} from the
  * {@link ConsumerNetworkThread network thread} which are then made available to the application thread
  * via the {@link BackgroundEventProcessor}.
  */
+
 public class BackgroundEventHandler {
 
     private final Logger log;
-    private final BlockingQueue<BackgroundEvent> backgroundEventQueue;
+    private final Queue<BackgroundEvent> backgroundEventQueue;
 
-    public BackgroundEventHandler(final LogContext logContext, final BlockingQueue<BackgroundEvent> backgroundEventQueue) {
+    public BackgroundEventHandler(final LogContext logContext, final Queue<BackgroundEvent> backgroundEventQueue) {
         this.log = logContext.logger(BackgroundEventHandler.class);
         this.backgroundEventQueue = backgroundEventQueue;
     }
