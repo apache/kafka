@@ -188,7 +188,6 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
             backgroundEventHandler.add(new ErrorBackgroundEvent(error));
             return;
         }
-
         MembershipManager membershipManager = requestManagers.heartbeatRequestManager.get().membershipManager();
         membershipManager.onSubscriptionUpdated();
     }
@@ -207,7 +206,6 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
             backgroundEventHandler.add(new ErrorBackgroundEvent(error));
             return;
         }
-
         MembershipManager membershipManager = requestManagers.heartbeatRequestManager.get().membershipManager();
         CompletableFuture<Void> result = membershipManager.leaveGroup();
         event.chain(result);
@@ -233,8 +231,7 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
             manager.consumerRebalanceListenerCallbackCompleted(event.methodName(), event.error());
         } else {
             log.warn(
-                "An internal error occurred; the group membership manager was not present, so the notification of the {}.{} callback's execution could not be sent",
-                ConsumerRebalanceListener.class.getSimpleName(),
+                "An internal error occurred; the group membership manager was not present, so the notification of the {} callback execution could not be sent",
                 event.methodName()
             );
         }
