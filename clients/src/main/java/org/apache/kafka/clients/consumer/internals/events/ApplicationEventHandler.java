@@ -26,6 +26,7 @@ import org.apache.kafka.common.utils.Timer;
 import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 
+import java.io.Closeable;
 import java.time.Duration;
 import java.util.Objects;
 import java.util.concurrent.BlockingQueue;
@@ -37,9 +38,10 @@ import java.util.function.Supplier;
  * An event handler that receives {@link ApplicationEvent application events} from the application thread which
  * are then readable from the {@link ApplicationEventProcessor} in the {@link ConsumerNetworkThread network thread}.
  */
-public class ApplicationEventHandler extends EventHandler<ApplicationEvent> {
+public class ApplicationEventHandler implements Closeable {
 
     private final Logger log;
+    private final BlockingQueue<ApplicationEvent> applicationEventQueue;
     private final ConsumerNetworkThread networkThread;
     private final IdempotentCloser closer = new IdempotentCloser();
 
@@ -49,8 +51,8 @@ public class ApplicationEventHandler extends EventHandler<ApplicationEvent> {
                                    final Supplier<ApplicationEventProcessor> applicationEventProcessorSupplier,
                                    final Supplier<NetworkClientDelegate> networkClientDelegateSupplier,
                                    final Supplier<RequestManagers> requestManagersSupplier) {
-        super(logContext, applicationEventQueue);
         this.log = logContext.logger(ApplicationEventHandler.class);
+        this.applicationEventQueue = applicationEventQueue;
         this.networkThread = new ConsumerNetworkThread(logContext,
                 time,
                 applicationEventProcessorSupplier,
@@ -60,14 +62,15 @@ public class ApplicationEventHandler extends EventHandler<ApplicationEvent> {
     }
 
     /**
-     * Add an event to the underlying queue and internally invoke {@link #wakeupNetworkThread()} to alert it that
-     * it has an event to process.
+     * Add an {@link ApplicationEvent} to the underlying queue and internally invoke {@link #wakeupNetworkThread()}
+     * to alert the network I/O thread that it has one or more events to process.
      *
-     * @param event An event to enqueue for later processing
+     * @param event An {@link ApplicationEvent} created by the application thread
      */
-    @Override
     public void add(final ApplicationEvent event) {
-        super.add(event);
+        Objects.requireNonNull(event, "ApplicationEvent provided to add must be non-null");
+        applicationEventQueue.add(event);
+        log.trace("Enqueued event: {}", event);
         wakeupNetworkThread();
     }
 
@@ -115,13 +118,9 @@ public class ApplicationEventHandler extends EventHandler<ApplicationEvent> {
         close(Duration.ZERO);
     }
 
-    @Override
     public void close(final Duration timeout) {
         closer.close(
-                () -> {
-                    Utils.closeQuietly(() -> networkThread.close(timeout), "consumer network thread");
-                    super.close(timeout);
-                },
+                () -> Utils.closeQuietly(() -> networkThread.close(timeout), "consumer network thread"),
                 () -> log.warn("The application event handler was already closed")
         );
     }
