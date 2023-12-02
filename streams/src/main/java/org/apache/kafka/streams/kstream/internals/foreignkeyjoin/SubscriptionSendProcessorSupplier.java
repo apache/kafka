@@ -87,6 +87,7 @@ public class SubscriptionSendProcessorSupplier<K, KO, V> implements ProcessorSup
         private Sensor droppedRecordsSensor;
         private String foreignKeySerdeTopic;
         private String valueSerdeTopic;
+        private long[] recordHash;
 
         @SuppressWarnings("unchecked")
         @Override
@@ -110,6 +111,8 @@ public class SubscriptionSendProcessorSupplier<K, KO, V> implements ProcessorSup
 
         @Override
         public void process(final Record<K, Change<V>> record) {
+            // clear cashed hash from previous record
+            recordHash = null;
             // drop out-of-order records from versioned tables (cf. KIP-914)
             if (useVersionedSemantics && !record.value().isLatest) {
                 LOG.info("Skipping out-of-order record from versioned table while performing table-table join.");
@@ -132,7 +135,7 @@ public class SubscriptionSendProcessorSupplier<K, KO, V> implements ProcessorSup
                 }
                 forward(record, newForeignKey, PROPAGATE_NULL_IF_NO_FK_VAL_AVAILABLE);
             } else if (record.value().newValue != null) {
-                final KO newForeignKey =  foreignKeyExtractor.apply(record.value().newValue);
+                final KO newForeignKey = foreignKeyExtractor.apply(record.value().newValue);
                 forward(record, newForeignKey, PROPAGATE_NULL_IF_NO_FK_VAL_AVAILABLE);
             }
         }
@@ -187,11 +190,12 @@ public class SubscriptionSendProcessorSupplier<K, KO, V> implements ProcessorSup
         }
 
         private long[] hash(final Record<K, Change<V>> record) {
-            if (record.value().newValue == null) {
-                return null;
-            } else {
-                return Murmur3.hash128(valueSerializer.serialize(valueSerdeTopic, record.value().newValue));
+            if (recordHash == null) {
+                recordHash = record.value().newValue == null
+                    ? null
+                    : Murmur3.hash128(valueSerializer.serialize(valueSerdeTopic, record.value().newValue));
             }
+            return recordHash;
         }
 
         private void logSkippedRecordDueToNullForeignKey() {
