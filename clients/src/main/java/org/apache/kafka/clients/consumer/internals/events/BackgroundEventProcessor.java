@@ -50,7 +50,7 @@ public class BackgroundEventProcessor extends EventProcessor<BackgroundEvent> {
                                     final BlockingQueue<BackgroundEvent> backgroundEventQueue,
                                     final ApplicationEventHandler applicationEventHandler,
                                     final ConsumerRebalanceListenerInvoker rebalanceListenerInvoker) {
-        super(new LogContext("[Background event processor]" + (logContext.logPrefix() != null ? " " + logContext.logPrefix() : "")), backgroundEventQueue);
+        super(logContext, backgroundEventQueue);
         this.log = logContext.logger(BackgroundEventProcessor.class);
         this.applicationEventHandler = applicationEventHandler;
         this.rebalanceListenerInvoker = rebalanceListenerInvoker;

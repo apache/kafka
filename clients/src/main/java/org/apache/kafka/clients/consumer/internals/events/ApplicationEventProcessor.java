@@ -50,7 +50,7 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
                                      final BlockingQueue<ApplicationEvent> applicationEventQueue,
                                      final RequestManagers requestManagers,
                                      final ConsumerMetadata metadata) {
-        super(new LogContext("[Application event processor]" + (logContext.logPrefix() != null ? " " + logContext.logPrefix() : "")), applicationEventQueue);
+        super(logContext, applicationEventQueue);
         this.log = logContext.logger(ApplicationEventProcessor.class);
         this.requestManagers = requestManagers;
         this.metadata = metadata;

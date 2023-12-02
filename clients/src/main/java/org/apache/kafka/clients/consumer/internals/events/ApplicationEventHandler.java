@@ -62,8 +62,8 @@ public class ApplicationEventHandler implements Closeable {
     }
 
     /**
-     * Add an {@link ApplicationEvent} to the underlying queue and internally invoke {@link #wakeupNetworkThread()}
-     * to alert the network I/O thread that it has one or more events to process.
+     * Add an {@link ApplicationEvent} to the handler and then internally invoke {@link #wakeupNetworkThread()}
+     * to alert the network I/O thread that it has something to process.
      *
      * @param event An {@link ApplicationEvent} created by the application thread
      */
