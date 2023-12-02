@@ -325,7 +325,7 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
             throw new IllegalStateException(String.format("Invalid state transition from %s to %s",
                     state, nextState));
         }
-        log.trace("Member {} transitioned from {} to {}.", memberIdForLogging(), state, nextState);
+        log.trace("Member {} transitioned from {} to {}.", memberId, state, nextState);
         this.state = nextState;
     }
 
@@ -351,10 +351,6 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
     @Override
     public String memberId() {
         return memberId;
-    }
-
-    private String memberIdForLogging() {
-        return memberId != null && !memberId.trim().isEmpty() ? memberId : "<unknown ID>";
     }
 
     /**
@@ -419,7 +415,7 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
         transitionTo(MemberState.FENCED);
         resetEpoch();
         log.debug("Member {} with epoch {} transitioned to {} state. It will release its " +
-                "assignment and rejoin the group.", memberIdForLogging(), memberEpoch, MemberState.FENCED);
+                "assignment and rejoin the group.", memberId, memberEpoch, MemberState.FENCED);
 
         // Release assignment
         CompletableFuture<Void> callbackResult = invokeOnPartitionsLostCallback(subscriptions.assignedPartitions());
@@ -439,7 +435,7 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
     @Override
     public void transitionToFatal() {
         transitionTo(MemberState.FATAL);
-        log.error("Member {} with epoch {} transitioned to {} state", memberIdForLogging(), memberEpoch, MemberState.FATAL);
+        log.error("Member {} with epoch {} transitioned to {} state", memberId, memberEpoch, MemberState.FATAL);
 
         // Release assignment
         CompletableFuture<Void> callbackResult = invokeOnPartitionsLostCallback(subscriptions.assignedPartitions());
@@ -608,7 +604,7 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
             } else {
                 log.debug("Member {} with epoch {} transitioned to {} after a heartbeat was sent " +
                         "to ack a previous reconciliation. New assignments are ready to " +
-                        "be reconciled.", memberIdForLogging(), memberEpoch, MemberState.RECONCILING);
+                        "be reconciled.", memberId, memberEpoch, MemberState.RECONCILING);
                 transitionTo(MemberState.RECONCILING);
             }
         } else if (state == MemberState.LEAVING) {
@@ -623,7 +619,7 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
     public void onHeartbeatRequestSkipped() {
         if (state == MemberState.LEAVING) {
             log.debug("Heartbeat for leaving group could not be sent. Member {} with epoch {} will transition to {}.",
-                    memberIdForLogging(), memberEpoch, MemberState.UNSUBSCRIBED);
+                    memberId, memberEpoch, MemberState.UNSUBSCRIBED);
             transitionToUnsubscribed();
         }
     }
