@@ -62,6 +62,8 @@ public final class ClientRequest {
         this.callback = callback;
     }
 
+    log.debug("Created new ClientRequest: {}", this);
+
     @Override
     public String toString() {
         return "ClientRequest(expectResponse=" + expectResponse +

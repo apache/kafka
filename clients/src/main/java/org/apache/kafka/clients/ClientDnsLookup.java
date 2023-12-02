@@ -34,6 +34,9 @@ public enum ClientDnsLookup {
     }
 
     public static ClientDnsLookup forConfig(String config) {
-        return ClientDnsLookup.valueOf(config.toUpperCase(Locale.ROOT));
+       // return ClientDnsLookup.valueOf(config.toUpperCase(Locale.ROOT));
+       ClientDnsLookup lookup = ClientDnsLookup.valueOf(config.toUpperCase(Locale.ROOT));  
+    log.debug("Configured client DNS lookup: {}", lookup);
+    return lookup;
     }
 }

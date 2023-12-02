@@ -38,11 +38,18 @@ public class ApiVersions {
     public synchronized void update(String nodeId, NodeApiVersions nodeApiVersions) {
         this.nodeApiVersions.put(nodeId, nodeApiVersions);
         this.maxUsableProduceMagic = computeMaxUsableProduceMagic();
+
+         log.debug("Updated API versions for node {}: {}", nodeId, nodeApiVersions);
+         log.debug("Recomputed max usable produce magic: {}", maxUsableProduceMagic);
+
     }
 
     public synchronized void remove(String nodeId) {
         this.nodeApiVersions.remove(nodeId);
         this.maxUsableProduceMagic = computeMaxUsableProduceMagic();
+
+        log.debug("Removed API versions for node {}", nodeId);
+    log.debug("Recomputed max usable produce magic: {}", maxUsableProduceMagic);
     }
 
     public synchronized NodeApiVersions get(String nodeId) {

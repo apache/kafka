@@ -70,6 +70,8 @@ public class ClientResponse {
              responseBody);
     }
 
+    log.debug("Created new ClientResponse: {}", this);
+
     /**
      * @param requestHeader The header of the corresponding request
      * @param callback The callback to be invoked
