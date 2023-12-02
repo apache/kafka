@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.clients.consumer.internals.events;
 
-import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.OffsetAndTimestamp;
 import org.apache.kafka.clients.consumer.internals.CachedSupplier;
 import org.apache.kafka.clients.consumer.internals.CommitRequestManager;
@@ -46,16 +45,13 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
     private final Logger log;
     private final ConsumerMetadata metadata;
     private final RequestManagers requestManagers;
-    private final BackgroundEventHandler backgroundEventHandler;
 
     public ApplicationEventProcessor(final LogContext logContext,
                                      final BlockingQueue<ApplicationEvent> applicationEventQueue,
-                                     final BackgroundEventHandler backgroundEventHandler,
                                      final RequestManagers requestManagers,
                                      final ConsumerMetadata metadata) {
         super(new LogContext("[Application event processor]" + (logContext.logPrefix() != null ? " " + logContext.logPrefix() : "")), applicationEventQueue);
         this.log = logContext.logger(ApplicationEventProcessor.class);
-        this.backgroundEventHandler = backgroundEventHandler;
         this.requestManagers = requestManagers;
         this.metadata = metadata;
     }
@@ -109,7 +105,7 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
                 return;
 
             case SUBSCRIPTION_CHANGE:
-                processSubscriptionChangeEvent();
+                processSubscriptionChangeEvent((SubscriptionChangeApplicationEvent) event);
                 return;
 
             case UNSUBSCRIBE:
@@ -182,10 +178,9 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
      * consumer join the group if it is not part of it yet, or send the updated subscription if
      * it is already a member.
      */
-    private void processSubscriptionChangeEvent() {
+    private void processSubscriptionChangeEvent(SubscriptionChangeApplicationEvent __) {
         if (!requestManagers.heartbeatRequestManager.isPresent()) {
-            KafkaException error = new KafkaException("Group membership manager not present when processing a subscribe event");
-            backgroundEventHandler.add(new ErrorBackgroundEvent(error));
+            log.warn("Group membership manager not present when processing a subscribe event");
             return;
         }
         MembershipManager membershipManager = requestManagers.heartbeatRequestManager.get().membershipManager();
@@ -203,7 +198,7 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
     private void processUnsubscribeEvent(UnsubscribeApplicationEvent event) {
         if (!requestManagers.heartbeatRequestManager.isPresent()) {
             KafkaException error = new KafkaException("Group membership manager not present when processing an unsubscribe event");
-            backgroundEventHandler.add(new ErrorBackgroundEvent(error));
+            event.future().completeExceptionally(error);
             return;
         }
         MembershipManager membershipManager = requestManagers.heartbeatRequestManager.get().membershipManager();
@@ -226,15 +221,15 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
     }
 
     private void process(final ConsumerRebalanceListenerCallbackCompletedEvent event) {
-        if (requestManagers.heartbeatRequestManager.isPresent()) {
-            MembershipManager manager = requestManagers.heartbeatRequestManager.get().membershipManager();
-            manager.consumerRebalanceListenerCallbackCompleted(event.methodName(), event.error());
-        } else {
+        if (!requestManagers.heartbeatRequestManager.isPresent()) {
             log.warn(
                 "An internal error occurred; the group membership manager was not present, so the notification of the {} callback execution could not be sent",
                 event.methodName()
             );
+            return;
         }
+        MembershipManager manager = requestManagers.heartbeatRequestManager.get().membershipManager();
+        manager.consumerRebalanceListenerCallbackCompleted(event.methodName(), event.error());
     }
 
     /**
@@ -244,7 +239,6 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
     public static Supplier<ApplicationEventProcessor> supplier(final LogContext logContext,
                                                                final ConsumerMetadata metadata,
                                                                final BlockingQueue<ApplicationEvent> applicationEventQueue,
-                                                               final BackgroundEventHandler backgroundEventHandler,
                                                                final Supplier<RequestManagers> requestManagersSupplier) {
         return new CachedSupplier<ApplicationEventProcessor>() {
             @Override
@@ -253,7 +247,6 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
                 return new ApplicationEventProcessor(
                         logContext,
                         applicationEventQueue,
-                        backgroundEventHandler,
                         requestManagers,
                         metadata
                 );
