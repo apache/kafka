@@ -105,7 +105,7 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
                 return;
 
             case SUBSCRIPTION_CHANGE:
-                processSubscriptionChangeEvent((SubscriptionChangeApplicationEvent) event);
+                processSubscriptionChangeEvent();
                 return;
 
             case UNSUBSCRIBE:
@@ -178,7 +178,7 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
      * consumer join the group if it is not part of it yet, or send the updated subscription if
      * it is already a member.
      */
-    private void processSubscriptionChangeEvent(SubscriptionChangeApplicationEvent __) {
+    private void processSubscriptionChangeEvent() {
         if (!requestManagers.heartbeatRequestManager.isPresent()) {
             log.warn("Group membership manager not present when processing a subscribe event");
             return;

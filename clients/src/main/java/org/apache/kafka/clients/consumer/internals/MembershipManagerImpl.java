@@ -52,6 +52,7 @@ import java.util.Set;
 import java.util.SortedSet;
 import java.util.TreeSet;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.apache.kafka.clients.consumer.internals.ConsumerRebalanceListenerMethodName.onPartitionsAssigned;
 import static org.apache.kafka.clients.consumer.internals.ConsumerRebalanceListenerMethodName.onPartitionsLost;
@@ -121,8 +122,8 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
         private final ConsumerRebalanceListenerMethodName methodName;
         private final CompletableFuture<Void> future;
 
-        public ConsumerRebalanceListenerCallbackBreadcrumb(ConsumerRebalanceListenerMethodName methodName,
-                                                           CompletableFuture<Void> future) {
+        private ConsumerRebalanceListenerCallbackBreadcrumb(ConsumerRebalanceListenerMethodName methodName,
+                                                            CompletableFuture<Void> future) {
             this.methodName = Objects.requireNonNull(methodName);
             this.future = Objects.requireNonNull(future);
         }
@@ -273,9 +274,11 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
 
     /**
      * Breadcrumb that we can return to as we wait for the completion of the
-     * {@link ConsumerRebalanceListenerCallbackNeededEvent} that was enqueued during rebalancing.
+     * {@link ConsumerRebalanceListenerCallbackNeededEvent} that was enqueued during rebalancing. This
+     * is an {@link AtomicReference} as it is updated by both the {@link ConsumerNetworkThread background thread}
+     * and the application thread.
      */
-    private ConsumerRebalanceListenerCallbackBreadcrumb breadcrumb;
+    private final AtomicReference<ConsumerRebalanceListenerCallbackBreadcrumb> breadcrumbRef;
 
     public MembershipManagerImpl(String groupId,
                                  SubscriptionState subscriptions,
@@ -308,6 +311,7 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
         this.currentAssignment = new HashSet<>();
         this.log = logContext.logger(MembershipManagerImpl.class);
         this.backgroundEventHandler = backgroundEventHandler;
+        this.breadcrumbRef = new AtomicReference<>();
     }
 
     /**
@@ -1055,25 +1059,35 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
      */
     private CompletableFuture<Void> enqueueConsumerRebalanceListenerCallback(ConsumerRebalanceListenerMethodName methodName,
                                                                              Set<TopicPartition> partitions) {
-        if (breadcrumb != null) {
-            // In this case, there was already an existing breadcrumb, so we need to report the matter back to the user.
-            String s = "An internal error occurred; an attempt to schedule the " +
-                    methodName + " method for execution during rebalancing failed because " +
-                    breadcrumb.methodName + " was already scheduled";
-            CompletableFuture<Void> future = new CompletableFuture<>();
-            future.completeExceptionally(new KafkaException(s));
-            return future;
-        }
-
-        // This is the happy path—there isn't an existing breadcrumb, so we can schedule our new event
-        // without hesitation.
         CompletableFuture<Void> future = new CompletableFuture<>();
-        breadcrumb = new ConsumerRebalanceListenerCallbackBreadcrumb(methodName, future);
-        SortedSet<TopicPartition> sortedPartitions = new TreeSet<>(TOPIC_PARTITION_COMPARATOR);
-        sortedPartitions.addAll(partitions);
-        BackgroundEvent event = new ConsumerRebalanceListenerCallbackNeededEvent(methodName, sortedPartitions);
-        backgroundEventHandler.add(event);
-        log.debug("The event to trigger the {} method execution was enqueued successfully", methodName);
+        ConsumerRebalanceListenerCallbackBreadcrumb newBreadcrumb = new ConsumerRebalanceListenerCallbackBreadcrumb(
+            methodName,
+            future
+        );
+
+        if (breadcrumbRef.compareAndSet(null, newBreadcrumb)) {
+            // This is the happy path—there isn't an existing breadcrumb, so we can schedule our new event
+            // without hesitation.
+            SortedSet<TopicPartition> sortedPartitions = new TreeSet<>(TOPIC_PARTITION_COMPARATOR);
+            sortedPartitions.addAll(partitions);
+            BackgroundEvent event = new ConsumerRebalanceListenerCallbackNeededEvent(methodName, sortedPartitions);
+            backgroundEventHandler.add(event);
+            log.debug("The event to trigger the {} method execution was enqueued successfully", methodName);
+        } else {
+            ConsumerRebalanceListenerCallbackBreadcrumb unexpected = breadcrumbRef.get();
+
+            // If our CAS above failed it's because the breadcrumb wasn't null, that is, there was already a
+            // breadcrumb set. For our error, we try to get some info from that existing breadcrumb for better
+            // debugging. But there's technically a race condition, which means existingBreadcrumb could be null
+            // by the time we try to access it. In that case, we just use a generic name.
+            String unexpectedMethodName = unexpected != null ? unexpected.methodName.toString() : "another invocation";
+
+            // In this case, there was already an existing breadcrumb, so we need to report the matter back to the user.
+            String s = "An internal error occurred: an attempt to schedule the " +
+                    methodName + " method for execution during rebalancing failed because " +
+                    unexpectedMethodName + " was already scheduled";
+            future.completeExceptionally(new KafkaException(s));
+        }
 
         return future;
     }
@@ -1097,51 +1111,41 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
     @Override
     public void consumerRebalanceListenerCallbackCompleted(ConsumerRebalanceListenerMethodName methodName,
                                                            Optional<KafkaException> error) {
+        // Get any existing breadcrumb out and clear the state for the next reconciliation.
+        ConsumerRebalanceListenerCallbackBreadcrumb breadcrumb = breadcrumbRef.getAndSet(null);
+
         if (breadcrumb == null) {
-            // In this case, we're somehow completing a callback for which we don't have a recorded breadcrumb.
+            // Case 1: we're somehow completing a callback for which we don't have a recorded breadcrumb.
             // Because of that, we don't have a Future that can be completed, so we're left having to report it
             // back to the user asynchronously.
-            String s = "An internal error occurred; the " + methodName + " method was executed " +
+            String s = "An internal error occurred: the " + methodName + " method was executed " +
                     "during rebalancing, but there was no record of it being scheduled";
             backgroundEventHandler.add(new ErrorBackgroundEvent(new KafkaException(s)));
-            return;
-        }
-
-        if (breadcrumb.methodName != methodName) {
-            // We have a breadcrumb that implicitly does NOT match the one we expect. We need to abort the
+        } else if (breadcrumb.methodName != methodName) {
+            // Case 2: we have a breadcrumb, but it does NOT match the one we expect. We need to abort the
             // rebalance process, because we're in an inconsistent state. We do that by completing the Future
             // with an error.
-            String s = "An internal error occurred; an attempt to continue rebalance after the execution of the " +
+            String s = "An internal error occurred: an attempt to continue rebalance after the execution of the " +
                     methodName + " method failed because the expected method was " + breadcrumb.methodName;
-            CompletableFuture<Void> future = breadcrumb.future;
-
-            // Set the breadcrumb to null to clear our state.
-            breadcrumb = null;
-            future.completeExceptionally(new KafkaException(s));
-            return;
-        }
-
-        // We have a breadcrumb that matches the callback we expect, so we can proceed to the next step of
-        // the rebalance process.
-        CompletableFuture<Void> future = breadcrumb.future;
-
-        // We need to clear out our breadcrumb to signal that we've completed this step of the rebalance.
-        breadcrumb = null;
-
-        if (error.isPresent()) {
-            log.warn(
-                "The {} method completed with an error; signaling to continue to the next phase of rebalance",
-                methodName,
-                error.get()
-            );
+            breadcrumb.future.completeExceptionally(new KafkaException(s));
         } else {
-            log.debug(
-                "The {} method completed successfully; signaling to continue to the next phase of rebalance",
-                methodName
-            );
-        }
+            // Case 3: the happy path. We have a breadcrumb that matches what we expect, so we can proceed to
+            // the next step of the rebalance process.
+            if (error.isPresent()) {
+                log.warn(
+                        "The {} method completed with an error ({}). signaling to continue to the next phase of rebalance",
+                        methodName,
+                        error.get().getMessage()
+                );
+            } else {
+                log.debug(
+                        "The {} method completed successfully; signaling to continue to the next phase of rebalance",
+                        methodName
+                );
+            }
 
-        future.complete(null);
+            breadcrumb.future.complete(null);
+        }
     }
 
     /**
