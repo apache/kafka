@@ -16,6 +16,24 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
+import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
+
+/**
+ * This class just provides a static name for the methods in the {@link ConsumerRebalanceListener} interface
+ * for a bit more compile time assurance.
+ */
 public enum ConsumerRebalanceListenerMethodName {
+
     onPartitionsRevoked, onPartitionsAssigned, onPartitionsLost;
+
+    /**
+     * Provides the fully-qualified method name, e.g. {@code ConsumerRebalanceListener.onPartitionsRevoked}. This
+     * is used for log messages.
+     *
+     * @return Full-qualified method name
+     */
+    @Override
+    public String toString() {
+        return String.format("%s.%s", ConsumerRebalanceListener.class.getSimpleName(), name());
+    }
 }
