@@ -45,9 +45,9 @@ public interface TasksRegistry {
 
     void addPendingTaskToUpdateInputPartitions(final TaskId taskId, final Set<TopicPartition> inputPartitions);
 
-    boolean removePendingTaskToCloseDirty(final TaskId taskId);
+    boolean removePendingTaskToAddBack(final TaskId taskId);
 
-    void addPendingTaskToCloseDirty(final TaskId taskId);
+    void addPendingTaskToAddBack(final TaskId taskId);
 
     boolean removePendingTaskToCloseClean(final TaskId taskId);
 

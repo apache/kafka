@@ -2191,7 +2191,7 @@ class PartitionTest extends AbstractPartitionTest {
     val partition = new Partition(
       topicPartition,
       replicaLagTimeMaxMs = Defaults.ReplicaLagTimeMaxMs,
-      interBrokerProtocolVersion = MetadataVersion.IBP_3_7_IV1,
+      interBrokerProtocolVersion = MetadataVersion.IBP_3_7_IV2,
       localBrokerId = brokerId,
       () => defaultBrokerEpoch(brokerId),
       time,

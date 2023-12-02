@@ -84,7 +84,7 @@ case class ControllerMigrationSupport(
 class ControllerServer(
   val sharedServer: SharedServer,
   val configSchema: KafkaConfigSchema,
-  val bootstrapMetadata: BootstrapMetadata,
+  val bootstrapMetadata: BootstrapMetadata
 ) extends Logging {
 
   import kafka.server.Server._
@@ -216,7 +216,7 @@ class ControllerServer(
         startupDeadline, time)
       val controllerNodes = RaftConfig.voterConnectionsToNodes(voterConnections)
       val quorumFeatures = new QuorumFeatures(config.nodeId,
-        QuorumFeatures.defaultFeatureMap(),
+        QuorumFeatures.defaultFeatureMap(config.unstableMetadataVersionsEnabled),
         controllerNodes.asScala.map(node => Integer.valueOf(node.id())).asJava)
 
       val delegationTokenKeyString = {
@@ -347,7 +347,7 @@ class ControllerServer(
         clusterId,
         time,
         s"controller-${config.nodeId}-",
-        QuorumFeatures.defaultFeatureMap(),
+        QuorumFeatures.defaultFeatureMap(config.unstableMetadataVersionsEnabled),
         config.migrationEnabled,
         incarnationId,
         listenerInfo)

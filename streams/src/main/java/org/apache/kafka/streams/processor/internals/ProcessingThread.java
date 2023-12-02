@@ -14,27 +14,15 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+package org.apache.kafka.streams.processor.internals;
 
-package org.apache.kafka.metadata.placement;
-
-import org.apache.kafka.common.Uuid;
-import org.apache.kafka.common.annotation.InterfaceStability;
-
-import java.util.Iterator;
-
+import org.apache.kafka.streams.processor.internals.tasks.DefaultTaskExecutor;
 
 /**
- * Can describe a cluster to a ReplicaPlacer.
+ * Common interface for {@link StreamThread} and {@link DefaultTaskExecutor} threads.
+ *
+ * This interface defines no behaviour, but tags processing threads so they can be differentiated from interactive query
+ * threads.
  */
-@InterfaceStability.Unstable
-public interface ClusterDescriber extends DefaultDirProvider {
-    /**
-     * Get an iterator through the usable brokers.
-     */
-    Iterator<UsableBroker> usableBrokers();
-
-    /**
-     * Get the default directory for new partitions placed in a given broker.
-     */
-    Uuid defaultDir(int brokerId);
+public interface ProcessingThread {
 }

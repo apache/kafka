@@ -72,6 +72,25 @@ public class ApplicationEventHandler extends EventHandler<ApplicationEvent> {
     }
 
     /**
+     * Wakeup the {@link ConsumerNetworkThread network I/O thread} to pull the next event(s) from the queue.
+     */
+    public void wakeupNetworkThread() {
+        networkThread.wakeup();
+    }
+
+    /**
+     * Returns the delay for which the application thread can safely wait before it should be responsive
+     * to results from the request managers. For example, the subscription state can change when heartbeats
+     * are sent, so blocking for longer than the heartbeat interval might mean the application thread is not
+     * responsive to changes.
+     *
+     * @return The maximum delay in milliseconds
+     */
+    public long maximumTimeToWait() {
+        return networkThread.maximumTimeToWait();
+    }
+
+    /**
      * Add a {@link CompletableApplicationEvent} to the underlying queue. The method blocks waiting for the result,
      * and will return the result value upon successful completion; otherwise throws an error.
      *
@@ -89,10 +108,6 @@ public class ApplicationEventHandler extends EventHandler<ApplicationEvent> {
         Objects.requireNonNull(timer, "Timer provided to addAndGet must be non-null");
         add(event);
         return event.get(timer);
-    }
-
-    public void wakeupNetworkThread() {
-        networkThread.wakeup();
     }
 
     @Override

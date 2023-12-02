@@ -36,6 +36,7 @@ import java.util.Set;
 import static java.util.Collections.emptySet;
 import static java.util.Collections.singleton;
 import static org.apache.kafka.common.utils.Utils.mkSet;
+import static org.apache.kafka.raft.LeaderState.CHECK_QUORUM_TIMEOUT_FACTOR;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -45,20 +46,24 @@ public class LeaderStateTest {
     private final int localId = 0;
     private final int epoch = 5;
     private final LogContext logContext = new LogContext();
-
     private final BatchAccumulator<?> accumulator = Mockito.mock(BatchAccumulator.class);
+    private final MockTime time = new MockTime();
+    private final int fetchTimeoutMs = 2000;
+    private final int checkQuorumTimeoutMs = (int) (fetchTimeoutMs * CHECK_QUORUM_TIMEOUT_FACTOR);
 
     private LeaderState<?> newLeaderState(
         Set<Integer> voters,
         long epochStartOffset
     ) {
         return new LeaderState<>(
+            time,
             localId,
             epoch,
             epochStartOffset,
             voters,
             voters,
             accumulator,
+            fetchTimeoutMs,
             logContext
         );
     }
@@ -66,12 +71,14 @@ public class LeaderStateTest {
     @Test
     public void testRequireNonNullAccumulator() {
         assertThrows(NullPointerException.class, () -> new LeaderState<>(
+            new MockTime(),
             localId,
             epoch,
             0,
             Collections.emptySet(),
             Collections.emptySet(),
             null,
+            fetchTimeoutMs,
             logContext
         ));
     }
@@ -445,6 +452,41 @@ public class LeaderStateTest {
                 .setLastFetchTimestamp(observerFetchTimeMs)
                 .setLastCaughtUpTimestamp(observerFetchTimeMs),
             observerState);
+    }
+
+    @Test
+    public void testCheckQuorum() {
+        int node1 = 1;
+        int node2 = 2;
+        int node3 = 3;
+        int node4 = 4;
+        int observer5 = 5;
+        LeaderState<?> state = newLeaderState(mkSet(localId, node1, node2, node3, node4), 0L);
+        assertEquals(checkQuorumTimeoutMs, state.timeUntilCheckQuorumExpires(time.milliseconds()));
+        int resignLeadershipTimeout = checkQuorumTimeoutMs;
+
+        // checkQuorum timeout not exceeded, should not expire the timer
+        time.sleep(resignLeadershipTimeout / 2);
+        assertTrue(state.timeUntilCheckQuorumExpires(time.milliseconds()) > 0);
+
+        // received fetch requests from 2 voter nodes, the timer should be reset
+        state.updateCheckQuorumForFollowingVoter(node1, time.milliseconds());
+        state.updateCheckQuorumForFollowingVoter(node2, time.milliseconds());
+        assertEquals(checkQuorumTimeoutMs, state.timeUntilCheckQuorumExpires(time.milliseconds()));
+
+        // Since the timer was reset, it won't expire this time.
+        time.sleep(resignLeadershipTimeout / 2);
+        long remainingMs = state.timeUntilCheckQuorumExpires(time.milliseconds());
+        assertTrue(remainingMs > 0);
+
+        // received fetch requests from 1 voter and 1 observer nodes, the timer should not be reset.
+        state.updateCheckQuorumForFollowingVoter(node3, time.milliseconds());
+        state.updateCheckQuorumForFollowingVoter(observer5, time.milliseconds());
+        assertEquals(remainingMs, state.timeUntilCheckQuorumExpires(time.milliseconds()));
+
+        // This time, the checkQuorum timer will be expired
+        time.sleep(resignLeadershipTimeout / 2);
+        assertEquals(0, state.timeUntilCheckQuorumExpires(time.milliseconds()));
     }
 
     @Test
