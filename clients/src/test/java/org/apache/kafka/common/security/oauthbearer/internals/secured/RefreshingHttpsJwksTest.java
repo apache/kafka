@@ -41,7 +41,6 @@ import java.util.concurrent.TimeUnit;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.common.utils.MockTime;
-import org.apache.kafka.common.utils.Time;
 import org.jose4j.http.SimpleResponse;
 import org.jose4j.jwk.HttpsJwks;
 import org.junit.jupiter.api.Test;
