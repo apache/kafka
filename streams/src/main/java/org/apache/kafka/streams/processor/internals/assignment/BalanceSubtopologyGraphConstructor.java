@@ -1,3 +1,19 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one or more
+ * contributor license agreements. See the NOTICE file distributed with
+ * this work for additional information regarding copyright ownership.
+ * The ASF licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License. You may obtain a copy of the License at
+ *
+ *    http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package org.apache.kafka.streams.processor.internals.assignment;
 
 import java.util.List;
@@ -60,8 +76,8 @@ public class BalanceSubtopologyGraphConstructor implements RackAwareGraphConstru
         final int trafficCost,
         final int nonOverlapCost,
         final boolean hasReplica,
-        final boolean isStandby)
-    {
+        final boolean isStandby
+    ) {
         final Graph<Integer> graph = new Graph<>();
 
         for (final TaskId taskId : taskIdList) {
@@ -88,10 +104,17 @@ public class BalanceSubtopologyGraphConstructor implements RackAwareGraphConstru
                     final boolean inCurrentAssignment = hasAssignedTask.test(clientStates.get(processId), taskId);
                     graph.addEdge(startingTaskNodeId, clientNodeId, 1, costFunction.getCost(taskId, processId, inCurrentAssignment, trafficCost, nonOverlapCost, isStandby), 0);
                     startingTaskNodeId++;
+                    if (inCurrentAssignment) {
+                        if (!hasReplica && taskClientMap.containsKey(taskId)) {
+                            throw new IllegalArgumentException("Task " + taskId + " assigned to multiple clients "
+                                + processId + ", " + taskClientMap.get(taskId));
+                        }
+                        taskClientMap.put(taskId, processId);
+                    }
                 }
 
                 final int secondStageClientNodeId = getSecondStageClientNodeId(taskIdList, clientList, tasksForTopicGroup, clientIndex);
-                final int capacity = (int) Math.ceil(originalAssignedTaskNumber.get(processId) * 1.0 / taskIdList.size() * taskIds.size());
+                final int capacity = originalAssignedTaskNumber.containsKey(processId) ? (int) Math.ceil(originalAssignedTaskNumber.get(processId) * 1.0 / taskIdList.size() * taskIds.size()) : 0;
                 graph.addEdge(clientNodeId, secondStageClientNodeId, capacity, 0, 0);
             }
 
@@ -107,7 +130,7 @@ public class BalanceSubtopologyGraphConstructor implements RackAwareGraphConstru
         // Add sink
         for (int clientIndex = 0; clientIndex < clientList.size(); clientIndex++) {
             final UUID processId = clientList.get(clientIndex);
-            final int capacity = originalAssignedTaskNumber.get(processId);
+            final int capacity = originalAssignedTaskNumber.getOrDefault(processId, 0);
             final int secondStageClientNodeId = getSecondStageClientNodeId(taskIdList, clientList, tasksForTopicGroup, clientIndex);
             graph.addEdge(secondStageClientNodeId, sinkId, capacity, 0, 0);
         }
@@ -134,8 +157,8 @@ public class BalanceSubtopologyGraphConstructor implements RackAwareGraphConstru
         final Map<TaskId, UUID> taskClientMap,
         final BiConsumer<ClientState, TaskId> assignTask,
         final BiConsumer<ClientState, TaskId> unAssignTask,
-        final BiPredicate<ClientState, TaskId> hasAssignedTask)
-    {
+        final BiPredicate<ClientState, TaskId> hasAssignedTask
+    ) {
         final SortedMap<Subtopology, Set<TaskId>> sortedTasksForTopicGroup = new TreeMap<>(tasksForTopicGroup);
 
         int taskNodeId = 0;

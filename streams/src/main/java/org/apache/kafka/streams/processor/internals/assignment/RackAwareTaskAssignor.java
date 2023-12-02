@@ -325,8 +325,7 @@ public class RackAwareTaskAssignor {
         }
         final List<UUID> clientList = new ArrayList<>(clientStates.keySet());
         final List<TaskId> taskIdList = new ArrayList<>(tasks);
-        final Graph<Integer> graph = RackAwareGraphConstructorFactory
-            .create(assignmentConfigs, tasksForTopicGroup)
+        final Graph<Integer> graph = new MinTrafficGraphConstructor()
             .constructTaskGraph(
                 clientList,
                 taskIdList,

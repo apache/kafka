@@ -203,6 +203,8 @@ public class Graph<V extends Comparable<V>> {
                 residualGraph.addEdge(edge.destination, backwardEdge);
             }
         }
+        residualGraph.setSourceNode(sourceNode);
+        residualGraph.setSinkNode(sinkNode);
         return residualGraph;
     }
 
@@ -253,6 +255,17 @@ public class Graph<V extends Comparable<V>> {
         }
     }
 
+    public long flow() {
+        long flow = 0;
+        final SortedMap<V, Edge> edges = adjList.get(sourceNode);
+        if (edges != null) {
+            for (final Edge edge : edges.values()) {
+                flow += edge.flow;
+            }
+        }
+        return flow;
+    }
+
     public long calculateMaxFlow() {
         final Graph<V> residualGraph = residualGraph();
         residualGraph.fordFulkson();
@@ -283,16 +296,24 @@ public class Graph<V extends Comparable<V>> {
 
         Map<V, V> parents = new HashMap<>();
         while (breadthFirstSearch(sourceNode, sinkNode, parents)) {
-            int flow = Integer.MAX_VALUE;
+            int possibleFlow = Integer.MAX_VALUE;
             for (V node = sinkNode; node != sourceNode; node = parents.get(node)) {
                 final V parent = parents.get(node);
-                flow = Math.min(flow, adjList.get(parent).get(node).residualFlow);
+                possibleFlow = Math.min(possibleFlow, adjList.get(parent).get(node).residualFlow);
             }
 
             for (V node = sinkNode; node != sourceNode; node = parents.get(node)) {
                 final V parent = parents.get(node);
-                adjList.get(parent).get(node).residualFlow -= flow;
-                adjList.get(node).get(parent).residualFlow += flow;
+                final Edge parentEdge = adjList.get(parent).get(node);
+                final Edge counterEdge = parentEdge.counterEdge;
+                parentEdge.residualFlow -= possibleFlow;
+                if (parentEdge.forwardEdge) {
+                    parentEdge.flow += possibleFlow;
+                }
+                counterEdge.residualFlow += possibleFlow;
+                if (counterEdge.forwardEdge && counterEdge.flow >= possibleFlow) {
+                    counterEdge.flow -= possibleFlow;
+                }
             }
 
             parents = new HashMap<>();
