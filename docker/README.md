@@ -38,7 +38,7 @@ Using the image in a docker container
 -------------------------------------
 - The image uses the kafka downloaded from provided kafka url
 - The image can be run in a container in default mode by running
-`docker run <image-name:tag> -p 9092:9092`
+`docker run -p 9092:9092 <image-name:tag>`
 - Default configs run kafka in kraft mode with plaintext listners on 9092 port.
 - Default configs can be overriden by user using 2 ways:-
     - By mounting folder containing property files
@@ -54,7 +54,7 @@ Using the image in a docker container
             - For abc.def, use KAFKA_ABC_DEF
             - For abc-def, use KAFKA_ABC___DEF
             - For abc_def, use KAFKA_ABC__DEF
-- Hence order of precedence of properties is the follwing:-
+- Hence order of precedence of properties is the following:-
     - Env variable (highest)
     - File input
     - Default (lowest)
