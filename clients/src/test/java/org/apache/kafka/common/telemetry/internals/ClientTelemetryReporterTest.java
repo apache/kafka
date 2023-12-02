@@ -40,6 +40,7 @@ import org.apache.kafka.common.utils.MockTime;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.Mockito;
 
 import java.time.Duration;
 import java.util.Collections;
@@ -416,6 +417,42 @@ public class ClientTelemetryReporterTest {
     }
 
     @Test
+    public void testHandleResponseSubscriptionChange() {
+        ClientTelemetryReporter.DefaultClientTelemetrySender telemetrySender = (ClientTelemetryReporter.DefaultClientTelemetrySender) clientTelemetryReporter.telemetrySender();
+        telemetrySender.updateSubscriptionResult(subscription, time.milliseconds());
+        KafkaMetricsCollector kafkaMetricsCollector = Mockito.mock(KafkaMetricsCollector.class);
+        clientTelemetryReporter.metricsCollector(kafkaMetricsCollector);
+        assertTrue(telemetrySender.maybeSetState(ClientTelemetryState.SUBSCRIPTION_IN_PROGRESS));
+
+        Uuid clientInstanceId = Uuid.randomUuid();
+        GetTelemetrySubscriptionsResponse response = new GetTelemetrySubscriptionsResponse(
+            new GetTelemetrySubscriptionsResponseData()
+                .setClientInstanceId(clientInstanceId)
+                .setSubscriptionId(15678)
+                .setAcceptedCompressionTypes(Collections.singletonList(CompressionType.ZSTD.id))
+                .setPushIntervalMs(10000)
+                .setDeltaTemporality(false) // Change delta temporality as well
+                .setRequestedMetrics(Collections.singletonList("org.apache.kafka.producer")));
+
+        telemetrySender.handleResponse(response);
+        assertEquals(ClientTelemetryState.PUSH_NEEDED, telemetrySender.state());
+
+        ClientTelemetryReporter.ClientTelemetrySubscription responseSubscription = telemetrySender.subscription();
+        assertNotNull(responseSubscription);
+        assertEquals(clientInstanceId, responseSubscription.clientInstanceId());
+        assertEquals(15678, responseSubscription.subscriptionId());
+        assertEquals(Collections.singletonList(CompressionType.ZSTD), responseSubscription.acceptedCompressionTypes());
+        assertEquals(10000, responseSubscription.pushIntervalMs());
+        assertFalse(responseSubscription.deltaTemporality());
+        assertTrue(responseSubscription.selector().test(new MetricKey("org.apache.kafka.producer")));
+        assertTrue(responseSubscription.selector().test(new MetricKey("org.apache.kafka.producerabc")));
+        assertTrue(responseSubscription.selector().test(new MetricKey("org.apache.kafka.producer.abc")));
+        assertFalse(responseSubscription.selector().test(new MetricKey("org.apache.kafka.produce")));
+
+        Mockito.verify(kafkaMetricsCollector, Mockito.times(1)).metricsReset();
+    }
+
+    @Test
     public void testHandleResponsePushTelemetry() {
         ClientTelemetryReporter.DefaultClientTelemetrySender telemetrySender = (ClientTelemetryReporter.DefaultClientTelemetrySender) clientTelemetryReporter.telemetrySender();
         telemetrySender.updateSubscriptionResult(subscription, time.milliseconds());
@@ -564,6 +601,15 @@ public class ClientTelemetryReporterTest {
         assertNotNull(clientInstanceId.get());
         assertTrue(clientInstanceId.get().isPresent());
         assertEquals(uuid, clientInstanceId.get().get());
+    }
+
+    @Test
+    public void testComputeStaggeredIntervalMs() {
+        ClientTelemetryReporter.DefaultClientTelemetrySender telemetrySender = (ClientTelemetryReporter.DefaultClientTelemetrySender) clientTelemetryReporter.telemetrySender();
+        assertEquals(0, telemetrySender.computeStaggeredIntervalMs(0, 0.5, 1.5));
+        assertEquals(1, telemetrySender.computeStaggeredIntervalMs(1, 0.99, 1));
+        long timeMs = telemetrySender.computeStaggeredIntervalMs(1000, 0.5, 1.5);
+        assertTrue(timeMs >= 500 && timeMs <= 1500);
     }
 
     @AfterEach

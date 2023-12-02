@@ -238,6 +238,11 @@ public class ClientTelemetryReporter implements MetricsReporter {
     }
 
     // Visible for testing, only for unit tests
+    void metricsCollector(KafkaMetricsCollector metricsCollector) {
+        kafkaMetricsCollector = metricsCollector;
+    }
+
+    // Visible for testing, only for unit tests
     MetricsCollector metricsCollector() {
         return kafkaMetricsCollector;
     }
@@ -292,7 +297,7 @@ public class ClientTelemetryReporter implements MetricsReporter {
 
         @Override
         public long timeToNextUpdate(long requestTimeoutMs) {
-            final long now = time.milliseconds();
+            final long nowMs = time.milliseconds();
             final ClientTelemetryState localState;
             final long localLastRequestMs;
             final int localIntervalMs;
@@ -337,7 +342,7 @@ public class ClientTelemetryReporter implements MetricsReporter {
                 case SUBSCRIPTION_NEEDED:
                 case PUSH_NEEDED:
                     apiName = (localState == ClientTelemetryState.SUBSCRIPTION_NEEDED) ? ApiKeys.GET_TELEMETRY_SUBSCRIPTIONS.name : ApiKeys.PUSH_TELEMETRY.name;
-                    long timeRemainingBeforeRequest = localLastRequestMs + localIntervalMs - now;
+                    long timeRemainingBeforeRequest = localLastRequestMs + localIntervalMs - nowMs;
                     if (timeRemainingBeforeRequest <= 0) {
                         timeMs = 0;
                         msg = String.format("the wait time before submitting the next %s network API request has elapsed", apiName);
@@ -379,7 +384,7 @@ public class ClientTelemetryReporter implements MetricsReporter {
 
         @Override
         public void handleResponse(GetTelemetrySubscriptionsResponse response) {
-            final long now = time.milliseconds();
+            final long nowMs = time.milliseconds();
             final GetTelemetrySubscriptionsResponseData data = response.data();
 
             final ClientTelemetryState oldState;
@@ -406,7 +411,7 @@ public class ClientTelemetryReporter implements MetricsReporter {
                 if (!maybeSetState(ClientTelemetryState.SUBSCRIPTION_NEEDED)) {
                     log.warn("Unable to transition state after failed get telemetry subscriptions from state {}", oldState);
                 }
-                updateErrorResult(errorIntervalMsOpt.get(), now);
+                updateErrorResult(errorIntervalMsOpt.get(), nowMs);
                 return;
             }
 
@@ -463,7 +468,7 @@ public class ClientTelemetryReporter implements MetricsReporter {
                     return;
                 }
 
-                updateSubscriptionResult(clientTelemetrySubscription, now);
+                updateSubscriptionResult(clientTelemetrySubscription, nowMs);
                 log.info("Client telemetry registered with client instance id: {}", subscription.clientInstanceId());
             } finally {
                 lock.writeLock().unlock();
@@ -472,7 +477,7 @@ public class ClientTelemetryReporter implements MetricsReporter {
 
         @Override
         public void handleResponse(PushTelemetryResponse response) {
-            final long now = time.milliseconds();
+            final long nowMs = time.milliseconds();
             final PushTelemetryResponseData data = response.data();
 
             lock.writeLock().lock();
@@ -496,11 +501,11 @@ public class ClientTelemetryReporter implements MetricsReporter {
                     if (!maybeSetState(ClientTelemetryState.SUBSCRIPTION_NEEDED)) {
                         log.warn("Unable to transition state after failed push telemetry from state {}", state);
                     }
-                    updateErrorResult(errorIntervalMsOpt.get(), now);
+                    updateErrorResult(errorIntervalMsOpt.get(), nowMs);
                     return;
                 }
 
-                lastRequestMs = now;
+                lastRequestMs = nowMs;
                 intervalMs = subscription.pushIntervalMs();
                 if (!maybeSetState(ClientTelemetryState.PUSH_NEEDED)) {
                     log.warn("Unable to transition state after successful push telemetry from state {}", state);
@@ -737,7 +742,7 @@ public class ClientTelemetryReporter implements MetricsReporter {
                  all their data at the same time.
                 */
                 if (state == ClientTelemetryState.PUSH_NEEDED) {
-                    intervalMs = computeStaggeredIntervalMs(subscription.pushIntervalMs());
+                    intervalMs = computeStaggeredIntervalMs(subscription.pushIntervalMs(), INITIAL_PUSH_JITTER_LOWER, INITIAL_PUSH_JITTER_UPPER);
                 } else {
                     intervalMs = subscription.pushIntervalMs();
                 }
@@ -776,8 +781,9 @@ public class ClientTelemetryReporter implements MetricsReporter {
             }
         }
 
-        private int computeStaggeredIntervalMs(int intervalMs) {
-            double rand = ThreadLocalRandom.current().nextDouble(INITIAL_PUSH_JITTER_LOWER, INITIAL_PUSH_JITTER_UPPER);
+        // Visible for testing
+        int computeStaggeredIntervalMs(int intervalMs, double lowerBound, double upperBound) {
+            double rand = ThreadLocalRandom.current().nextDouble(lowerBound, upperBound);
             int firstPushIntervalMs = (int) Math.round(rand * intervalMs);
 
             log.debug("Telemetry subscription push interval value from broker was {}; to stagger requests the first push"
@@ -812,7 +818,7 @@ public class ClientTelemetryReporter implements MetricsReporter {
         }
 
         private void handleFailedRequest(boolean shouldWait) {
-            final long now = time.milliseconds();
+            final long nowMs = time.milliseconds();
             lock.writeLock().lock();
             try {
                 if (isTerminatingState()) {
@@ -829,9 +835,9 @@ public class ClientTelemetryReporter implements MetricsReporter {
                  telemetry.
                 */
                 if (shouldWait) {
-                    updateErrorResult(DEFAULT_PUSH_INTERVAL_MS, now);
+                    updateErrorResult(DEFAULT_PUSH_INTERVAL_MS, nowMs);
                 } else {
-                    updateErrorResult(Integer.MAX_VALUE, now);
+                    updateErrorResult(Integer.MAX_VALUE, nowMs);
                 }
 
                 if (!maybeSetState(ClientTelemetryState.SUBSCRIPTION_NEEDED)) {
