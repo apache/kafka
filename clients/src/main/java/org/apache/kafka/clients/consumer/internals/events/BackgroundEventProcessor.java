@@ -62,6 +62,7 @@ public class BackgroundEventProcessor extends EventProcessor<BackgroundEvent> {
      * In such cases, the processor will take a reference to the first error, continue to process the
      * remaining events, and then throw the first error that occurred.
      */
+    @Override
     public void process() {
         AtomicReference<KafkaException> firstError = new AtomicReference<>();
 
@@ -120,7 +121,7 @@ public class BackgroundEventProcessor extends EventProcessor<BackgroundEvent> {
                 break;
 
             default:
-                throw new IllegalArgumentException("Could not determine the " + ConsumerRebalanceListener.class.getSimpleName() + " to invoke from the callback method " + methodName);
+                throw new IllegalArgumentException("The method " + methodName + " to invoke was not expected");
         }
 
         final Optional<KafkaException> error;
