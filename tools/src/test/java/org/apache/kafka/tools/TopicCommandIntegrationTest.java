@@ -838,7 +838,17 @@ public class TopicCommandIntegrationTest extends kafka.integration.KafkaServerTe
             String.format("--under-replicated-partitions shouldn't return anything: '%s'", underReplicatedOutput));
 
         // Verify reassignment is still ongoing.
-        PartitionReassignment reassignments = adminClient.listPartitionReassignments(Collections.singleton(tp)).reassignments().get().get(tp);
+        PartitionReassignment reassignments = null;
+        int retryCount = 0;
+        int maxRetries = 20;
+        while (reassignments == null && retryCount < maxRetries) {
+            reassignments = adminClient.listPartitionReassignments(Collections.singleton(tp)).reassignments().get().get(tp);
+            if (reassignments != null) {
+                break;
+            }
+            retryCount++;
+            Thread.sleep(100L);
+        }
         assertFalse(reassignments.addingReplicas().isEmpty());
 
         ToolsTestUtils.removeReplicationThrottleForPartitions(adminClient, brokerIds, Collections.singleton(tp));
