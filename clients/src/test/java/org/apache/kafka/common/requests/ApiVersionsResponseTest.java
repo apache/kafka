@@ -103,7 +103,8 @@ public class ApiVersionsResponseTest {
             ApiMessageType.ListenerType.ZK_BROKER,
             RecordVersion.current(),
             activeControllerApiVersions,
-            true
+            true,
+            false
         );
 
         verifyVersions(forwardableAPIKey.id, minVersion, maxVersion, commonResponse);
