@@ -29,6 +29,7 @@ import org.apache.kafka.streams.query.Query;
 import org.apache.kafka.streams.query.QueryConfig;
 import org.apache.kafka.streams.query.QueryResult;
 import org.apache.kafka.streams.query.RangeQuery;
+import org.apache.kafka.streams.query.ResultOrder;
 import org.apache.kafka.streams.query.TimestampedKeyQuery;
 import org.apache.kafka.streams.query.TimestampedRangeQuery;
 import org.apache.kafka.streams.query.internals.InternalQueryResultUtil;
@@ -268,13 +269,16 @@ public class MeteredTimestampedKeyValueStore<K, V>
         final QueryResult<R> result;
         final RangeQuery<K, V> typedQuery = (RangeQuery<K, V>) query;
         RangeQuery<Bytes, byte[]> rawRangeQuery;
-        final boolean isKeyAscending = typedQuery.isKeyAscending();
+        final ResultOrder order = typedQuery.resultOrder();
         rawRangeQuery = RangeQuery.withRange(
                 keyBytes(typedQuery.getLowerBound().orElse(null)),
                 keyBytes(typedQuery.getUpperBound().orElse(null))
         );
-        if (!isKeyAscending) {
+        if (order.equals(ResultOrder.DESCENDING)) {
             rawRangeQuery = rawRangeQuery.withDescendingKeys();
+        }
+        if (order.equals(ResultOrder.ASCENDING)) {
+            rawRangeQuery = rawRangeQuery.withAscendingKeys();
         }
         final QueryResult<KeyValueIterator<Bytes, byte[]>> rawResult =
                 wrapped().query(rawRangeQuery, positionBound, config);
