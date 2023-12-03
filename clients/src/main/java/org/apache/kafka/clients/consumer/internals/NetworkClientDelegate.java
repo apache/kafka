@@ -328,7 +328,11 @@ public class NetworkClientDelegate implements AutoCloseable {
 
         public void onFailure(final long currentTimeMs, final RuntimeException e) {
             this.responseCompletionTimeMs = currentTimeMs;
-            this.future.completeExceptionally(e);
+            if (e != null) {
+                this.future.completeExceptionally(e);
+            } else {
+                this.future.completeExceptionally(DisconnectException.INSTANCE);
+            }
         }
 
         public long completionTimeMs() {
