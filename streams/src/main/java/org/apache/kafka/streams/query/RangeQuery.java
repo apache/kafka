@@ -73,7 +73,7 @@ public final class RangeQuery<K, V> implements Query<KeyValueIterator<K, V>> {
     /**
      * Set the query to return the serialized byte[] of the keys in descending order.
      * Order is based on the serialized byte[] of the keys, not the 'logical' key order.
-     * @return a new RangeQuery instance with descending flag set.
+     * @return a new RangeQuery instance with DESCENDING set.
      */
     public RangeQuery<K, V> withDescendingKeys() {
         return new RangeQuery<>(this.lower, this.upper, ResultOrder.DESCENDING);
