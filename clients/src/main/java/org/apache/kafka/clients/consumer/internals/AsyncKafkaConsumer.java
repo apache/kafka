@@ -664,8 +664,8 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                 return committedOffsets;
             } catch (TimeoutException e) {
                 throw new TimeoutException("Timeout of " + timeout.toMillis() + "ms expired before the last " +
-                    "committed offset for partitions " + partitions + " could be determined. Try tuning default.api.timeout.ms " +
-                    "larger to relax the threshold.");
+                    "committed offset for partitions " + partitions + " could be determined. Try tuning " +
+                    ConsumerConfig.DEFAULT_API_TIMEOUT_MS_CONFIG + " larger to relax the threshold.");
             } finally {
                 wakeupTrigger.clearTask();
             }
