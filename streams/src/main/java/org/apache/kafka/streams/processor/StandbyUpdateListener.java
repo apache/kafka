@@ -30,7 +30,7 @@ public interface StandbyUpdateListener {
      *
      * @param topicPartition the changelog TopicPartition for this standby task
      * @param storeName        the name of the store being watched by this Standby Task.
-     * @param startingOffset   the offset from which the Standby Task starts watching.
+     * @param startingOffset   the offset from which the standby task begins consuming from the changelog
      */
     void onUpdateStart(final TopicPartition topicPartition,
                        final String storeName,
