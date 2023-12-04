@@ -21,11 +21,13 @@ import org.apache.kafka.common.errors.NotControllerException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.TopicExistsException;
 import org.apache.kafka.common.errors.UnknownServerException;
+import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.raft.errors.NotLeaderException;
 import org.apache.kafka.raft.errors.UnexpectedBaseOffsetException;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
+import java.util.EnumSet;
 import java.util.OptionalInt;
 import java.util.OptionalLong;
 import java.util.concurrent.RejectedExecutionException;
@@ -191,5 +193,23 @@ public class EventHandlerExceptionInfoTest {
     @Test
     public void testIsTimeoutException() {
         assertTrue(TIMEOUT.isTimeoutException());
+    }
+
+    @Test
+    public void testApiExceptions() {
+        for (Errors error : Errors.values()) {
+            if (error.equals(Errors.NONE)) {
+                continue;
+            }
+            EventHandlerExceptionInfo info = EventHandlerExceptionInfo.fromInternal(error.exception(), OptionalInt::empty);
+
+            if (EnumSet.of(Errors.CORRUPT_MESSAGE, Errors.INVALID_RECORD).contains(error)) {
+                assertTrue(info.causesFailover());
+                assertTrue(info.isFault());
+            } else {
+                assertFalse(info.causesFailover(), "Expected " + error.name() + " to not cause failover");
+                assertFalse(info.isFault(), "Expected " + error.name() + " to not be a fault");
+            }
+        }
     }
 }
