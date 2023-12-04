@@ -20,7 +20,6 @@ import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.internals.ConsumerNetworkThread;
 
 import java.util.Objects;
-import java.util.Optional;
 
 /**
  * This event is sent by the {@link ConsumerNetworkThread consumer's network thread} to the application thread
@@ -30,24 +29,14 @@ import java.util.Optional;
  */
 public class GroupMetadataUpdateEvent extends BackgroundEvent {
 
-    final private String groupId;
     final private int memberEpoch;
     final private String memberId;
-    final private Optional<String> groupInstanceId;
 
-    public GroupMetadataUpdateEvent(final String groupId,
-                                    final int memberEpoch,
-                                    final String memberId,
-                                    final Optional<String> groupInstanceId) {
+    public GroupMetadataUpdateEvent(final int memberEpoch,
+                                    final String memberId) {
         super(Type.GROUP_METADATA_UPDATE);
-        this.groupId = groupId;
         this.memberEpoch = memberEpoch;
         this.memberId = memberId;
-        this.groupInstanceId = groupInstanceId;
-    }
-
-    public String groupId() {
-        return groupId;
     }
 
     public int memberEpoch() {
@@ -58,10 +47,6 @@ public class GroupMetadataUpdateEvent extends BackgroundEvent {
         return memberId;
     }
 
-    public Optional<String> groupInstanceId() {
-        return groupInstanceId;
-    }
-
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
@@ -69,23 +54,19 @@ public class GroupMetadataUpdateEvent extends BackgroundEvent {
         if (!super.equals(o)) return false;
         GroupMetadataUpdateEvent that = (GroupMetadataUpdateEvent) o;
         return memberEpoch == that.memberEpoch &&
-            Objects.equals(groupId, that.groupId) &&
-            Objects.equals(memberId, that.memberId) &&
-            Objects.equals(groupInstanceId, that.groupInstanceId);
+            Objects.equals(memberId, that.memberId);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(super.hashCode(), groupId, memberEpoch, memberId, groupInstanceId);
+        return Objects.hash(super.hashCode(), memberEpoch, memberId);
     }
 
     @Override
     public String toStringBase() {
         return super.toStringBase() +
-            "groupId='" + groupId + '\'' +
             ", memberEpoch=" + memberEpoch +
-            ", memberId='" + memberId + '\'' +
-            ", groupInstanceId=" + groupInstanceId;
+            ", memberId='" + memberId + '\'';
     }
 
     @Override

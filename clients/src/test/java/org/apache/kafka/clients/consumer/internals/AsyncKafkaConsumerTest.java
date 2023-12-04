@@ -820,7 +820,7 @@ public class AsyncKafkaConsumerTest {
     }
 
     @Test
-    public void testGroupMetadataUpdate() {
+    public void testGroupMetadataUpdateSingleCall() {
         final String groupId = "consumerGroupA";
         final ConsumerConfig config = new ConsumerConfig(requiredConsumerPropertiesAndGroupId(groupId));
         final LinkedBlockingQueue<BackgroundEvent> backgroundEventQueue = new LinkedBlockingQueue<>();
@@ -835,10 +835,8 @@ public class AsyncKafkaConsumerTest {
                 Optional.empty()
             );
             final GroupMetadataUpdateEvent groupMetadataUpdateEvent = new GroupMetadataUpdateEvent(
-                groupId,
                 generation,
-                memberId,
-                Optional.empty()
+                memberId
             );
             backgroundEventQueue.add(groupMetadataUpdateEvent);
             consumer.assign(singletonList(new TopicPartition("topic", 0)));
@@ -847,37 +845,10 @@ public class AsyncKafkaConsumerTest {
             final ConsumerGroupMetadata actualGroupMetadata = consumer.groupMetadata();
 
             assertEquals(expectedGroupMetadata, actualGroupMetadata);
-        }
-    }
 
-    @Test
-    public void testGroupMetadataUpdatedWithoutNewMemberID() {
-        final String groupId = "consumerGroupA";
-        final ConsumerConfig config = new ConsumerConfig(requiredConsumerPropertiesAndGroupId(groupId));
-        final LinkedBlockingQueue<BackgroundEvent> backgroundEventQueue = new LinkedBlockingQueue<>();
-        try (final AsyncKafkaConsumer<String, String> consumer =
-            new AsyncKafkaConsumer<>(config, new StringDeserializer(), new StringDeserializer(), backgroundEventQueue)) {
-            final int generation = 1;
-            final String memberId = JoinGroupRequest.UNKNOWN_MEMBER_ID;
-            final ConsumerGroupMetadata expectedGroupMetadata = new ConsumerGroupMetadata(
-                groupId,
-                generation,
-                memberId,
-                Optional.empty()
-            );
-            final GroupMetadataUpdateEvent groupMetadataUpdateEventWithoutMemberId = new GroupMetadataUpdateEvent(
-                groupId,
-                generation,
-                null,
-                Optional.empty()
-            );
-            backgroundEventQueue.add(groupMetadataUpdateEventWithoutMemberId);
-            consumer.assign(singletonList(new TopicPartition("topic", 0)));
-            consumer.poll(Duration.ZERO);
+            final ConsumerGroupMetadata secondActualGroupMetadataWithoutUpdate = consumer.groupMetadata();
 
-            final ConsumerGroupMetadata actualGroupMetadata = consumer.groupMetadata();
-
-            assertEquals(expectedGroupMetadata, actualGroupMetadata);
+            assertEquals(expectedGroupMetadata, secondActualGroupMetadataWithoutUpdate);
         }
     }
 

@@ -195,10 +195,10 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             if (AsyncKafkaConsumer.this.groupMetadata.isPresent()) {
                 final ConsumerGroupMetadata currentGroupMetadata = AsyncKafkaConsumer.this.groupMetadata.get();
                 AsyncKafkaConsumer.this.groupMetadata = Optional.of(new ConsumerGroupMetadata(
-                    event.groupId(),
+                    currentGroupMetadata.groupId(),
                     event.memberEpoch(),
-                    event.memberId() != null ? event.memberId() : currentGroupMetadata.memberId(),
-                    event.groupInstanceId()
+                    event.memberId(),
+                    currentGroupMetadata.groupInstanceId()
                 ));
             }
         }
