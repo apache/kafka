@@ -59,9 +59,15 @@ public interface StandbyUpdateListener {
                        final long currentEndOffset);
 
     /**
-     * Method called after a Standby Task is closed, either because the Standby Task was promoted to an Active Task
-     * or because the Standby Task was migrated to another instance (in which case the data will be cleaned up
-     * after state.cleanup.delay.ms).
+     * This method is called when the corresponding standby task stops updating, for the provided reason.
+     * <p>
+     * If the task was {@code MIGRATED} to another instance, this callback will be invoked after this
+     * state store (and the task itself) are closed (in which case the data will be cleaned up after 
+     * state.cleanup.delay.ms).
+     * If the task was {@code PROMOTED} to an active task, the state store will not be closed, and the 
+     * callback will be invoked after unregistering it as a standby task but before re-registering it as an active task 
+     * and beginning restoration. In other words, this will always called before the corresponding 
+     * {@link StateRestoreListener#onRestoreStart} call is made.
      *
      * @param topicPartition the TopicPartition containing the values to restore
      * @param storeName the name of the store undergoing restoration
