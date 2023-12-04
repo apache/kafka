@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.coordinator.group;
 
+import org.apache.kafka.common.message.ConsumerGroupDescribeResponseData;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatRequestData;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatResponseData;
@@ -458,6 +459,21 @@ public class GroupCoordinatorShard implements CoordinatorShard<Record> {
         long committedOffset
     ) throws ApiException {
         return groupMetadataManager.listGroups(statesFilter, committedOffset);
+    }
+
+    /**
+     * Handles a ConsumerGroupDescribe request.
+     *
+     * @param groupIds      The IDs of the groups to describe.
+     *
+     * @return A list containing the ConsumerGroupDescribeResponseData.DescribedGroup.
+     *
+     */
+    public List<ConsumerGroupDescribeResponseData.DescribedGroup> consumerGroupDescribe(
+        List<String> groupIds,
+        long committedOffset
+    ) {
+        return groupMetadataManager.consumerGroupDescribe(groupIds, committedOffset);
     }
 
     /**

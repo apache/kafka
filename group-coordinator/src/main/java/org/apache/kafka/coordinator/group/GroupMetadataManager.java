@@ -30,6 +30,7 @@ import org.apache.kafka.common.errors.UnknownServerException;
 import org.apache.kafka.common.errors.UnsupportedAssignorException;
 import org.apache.kafka.common.errors.FencedInstanceIdException;
 import org.apache.kafka.common.errors.UnreleasedInstanceIdException;
+import org.apache.kafka.common.message.ConsumerGroupDescribeResponseData;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatRequestData;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatResponseData;
 import org.apache.kafka.common.message.DescribeGroupsResponseData;
@@ -270,7 +271,6 @@ public class GroupMetadataManager {
             );
         }
     }
-
     /**
      * The log context.
      */
@@ -468,6 +468,34 @@ public class GroupMetadataManager {
         return groupStream.map(group -> group.asListedGroup(committedOffset)).collect(Collectors.toList());
     }
 
+
+    /**
+     * Handles a ConsumerGroupDescribe request.
+     *
+     * @param groupIds          The IDs of the groups to describe.
+     * @param committedOffset   A specified committed offset corresponding to this shard.
+     *
+     * @return A list containing the ConsumerGroupDescribeResponseData.DescribedGroup.
+     */
+    public List<ConsumerGroupDescribeResponseData.DescribedGroup> consumerGroupDescribe(
+        List<String> groupIds,
+        long committedOffset
+    ) {
+        final List<ConsumerGroupDescribeResponseData.DescribedGroup> describedGroups = new ArrayList<>();
+        groupIds.forEach(groupId -> {
+            try {
+                describedGroups.add(consumerGroup(groupId, committedOffset).asDescribedGroup(committedOffset, defaultAssignor.name()));
+            } catch (GroupIdNotFoundException exception) {
+                describedGroups.add(new ConsumerGroupDescribeResponseData.DescribedGroup()
+                    .setGroupId(groupId)
+                    .setErrorCode(Errors.GROUP_ID_NOT_FOUND.code())
+                );
+            }
+        });
+
+        return describedGroups;
+    }
+
     /**
      * Handles a DescribeGroup request.
      *
@@ -619,6 +647,31 @@ public class GroupMetadataManager {
             // We don't support upgrading/downgrading between protocols at the moment so
             // we throw an exception if a group exists with the wrong type.
             throw new GroupIdNotFoundException(String.format("Group %s is not a generic group.",
+                groupId));
+        }
+    }
+
+    /**
+     * Gets a consumer group by committed offset.
+     *
+     * @param groupId           The group id.
+     * @param committedOffset   A specified committed offset corresponding to this shard.
+     *
+     * @return A ConsumerGroup.
+     * @throws GroupIdNotFoundException if the group does not exist or is not a consumer group.
+     */
+    public ConsumerGroup consumerGroup(
+        String groupId,
+        long committedOffset
+    ) throws GroupIdNotFoundException {
+        Group group = group(groupId, committedOffset);
+
+        if (group.type() == CONSUMER) {
+            return (ConsumerGroup) group;
+        } else {
+            // We don't support upgrading/downgrading between protocols at the moment so
+            // we throw an exception if a group exists with the wrong type.
+            throw new GroupIdNotFoundException(String.format("Group %s is not a consumer group.",
                 groupId));
         }
     }
@@ -2505,7 +2558,7 @@ public class GroupMetadataManager {
         if (group.isInState(PREPARING_REBALANCE) && group.previousState() == EMPTY) {
             group.setNewMemberAdded(true);
         }
-        
+
         group.add(member, responseFuture);
 
         // The session timeout does not affect new members since they do not have their memberId and
@@ -2648,7 +2701,7 @@ public class GroupMetadataManager {
 
     /**
      * Reset assignment for all members and propagate the error to all members in the group.
-     * 
+     *
      * @param group  The group.
      * @param error  The error to propagate.
      */
