@@ -184,7 +184,7 @@ public class RemoteLogManagerTest {
         List<EpochEntry> epochs = Collections.emptyList();
 
         @Override
-        public void write(Collection<EpochEntry> epochs) {
+        public void write(Collection<EpochEntry> epochs, boolean ignored) {
             this.epochs = new ArrayList<>(epochs);
         }
 

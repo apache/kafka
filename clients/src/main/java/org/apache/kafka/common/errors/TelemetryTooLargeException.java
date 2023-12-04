@@ -14,10 +14,15 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.clients.consumer.internals.events;
+package org.apache.kafka.common.errors;
 
-public class AutoCommitCompletionBackgroundEvent extends BackgroundEvent {
-    public AutoCommitCompletionBackgroundEvent() {
-        super(Type.AUTO_COMMIT_COMPLETION);
+/**
+ * This exception indicates that the size of the telemetry metrics data is too large.
+ */
+public class TelemetryTooLargeException extends ApiException {
+
+    public TelemetryTooLargeException(String message) {
+        super(message);
     }
 }
+

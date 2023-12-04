@@ -62,4 +62,19 @@ public interface RequestManager {
     default PollResult pollOnClose() {
         return EMPTY;
     }
+
+    /**
+     * Returns the delay for which the application thread can safely wait before it should be responsive
+     * to results from the request managers. For example, the subscription state can change when heartbeats
+     * are sent, so blocking for longer than the heartbeat interval might mean the application thread is not
+     * responsive to changes.
+     *
+     * @param currentTimeMs The current system time at which the method was called; useful for determining if
+     *                      time-sensitive operations should be performed
+     *
+     * @return The maximum delay in milliseconds
+     */
+    default long maximumTimeToWait(long currentTimeMs) {
+        return Long.MAX_VALUE;
+    }
 }

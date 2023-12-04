@@ -51,6 +51,13 @@ public interface MetricsEmitter extends Closeable {
     boolean shouldEmitMetric(MetricKeyable metricKeyable);
 
     /**
+     * Determines if the delta aggregation temporality metrics are to be emitted.
+     *
+     * @return {@code true} if the delta metric should be emitted, {@code false} otherwise
+     */
+    boolean shouldEmitDeltaMetrics();
+
+    /**
      * Emits the metric in an implementation-specific fashion. Depending on the implementation,
      * calls made to this after {@link #close()} has been invoked will fail.
      *

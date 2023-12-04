@@ -25,6 +25,7 @@ import org.apache.kafka.common.config.ConfigDef.Range._
 import org.apache.kafka.common.config.ConfigDef.Type._
 import org.apache.kafka.storage.internals.log.LogConfig
 
+import java.util
 import scala.jdk.CollectionConverters._
 
 /**
@@ -109,6 +110,12 @@ object DynamicConfig {
       }
       true
     }
+  }
+
+  object ClientMetrics {
+    private val clientConfigs = org.apache.kafka.server.metrics.ClientMetricsConfigs.configDef()
+
+    def names: util.Set[String] = clientConfigs.names
   }
 
   private def validate(configDef: ConfigDef, props: Properties, customPropsAllowed: Boolean) = {
