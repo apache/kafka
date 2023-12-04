@@ -307,7 +307,7 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
 
             final List<ColumnFamilyDescriptor> existingDescriptors = new LinkedList<>();
             existingDescriptors.add(defaultColumnFamilyDescriptor);
-            existingDescriptors.addAll(allDescriptors.stream()
+            existingDescriptors.addAll(extraDescriptors.stream()
                     .filter(descriptor -> allExisting.stream().anyMatch(existing -> Arrays.equals(existing, descriptor.getName())))
                     .collect(Collectors.toList()));
             final List<ColumnFamilyDescriptor> toCreate = extraDescriptors.stream()
