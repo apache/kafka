@@ -319,7 +319,7 @@ public class ConsumerTestBuilder implements Closeable {
 
     public static class AsyncKafkaConsumerTestBuilder extends ApplicationEventHandlerTestBuilder {
 
-        public final AsyncKafkaConsumer<String, String> consumer;
+        final AsyncKafkaConsumer<String, String> consumer;
 
         final FetchCollector<String, String> fetchCollector;
 
@@ -384,7 +384,7 @@ public class ConsumerTestBuilder implements Closeable {
         }
     }
 
-    public static Optional<GroupInformation> createDefaultGroupInformation() {
+    static Optional<GroupInformation> createDefaultGroupInformation() {
         return Optional.of(new GroupInformation(new GroupState(DEFAULT_GROUP_ID, Optional.empty())));
     }
 }
