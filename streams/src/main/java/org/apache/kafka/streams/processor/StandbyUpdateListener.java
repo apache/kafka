@@ -28,7 +28,7 @@ public interface StandbyUpdateListener {
     /**
      * Method called upon the creation of the Standby Task.
      *
-     * @param topicPartition   the TopicPartition of the Standby Task.
+     * @param topicPartition the changelog TopicPartition for this standby task
      * @param storeName        the name of the store being watched by this Standby Task.
      * @param startingOffset   the offset from which the Standby Task starts watching.
      */
