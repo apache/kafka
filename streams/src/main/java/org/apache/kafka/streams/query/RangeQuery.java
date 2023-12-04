@@ -33,7 +33,8 @@ import java.util.Optional;
  *  A scan query retrieves all records contained in the store.
  * <p>
  *  Keys' order is based on the serialized byte[] of the keys, not the 'logical' key order.
- * <p>
+ * @param <K> Type of keys
+ * @param <V> Type of values
  */
 @Evolving
 public final class RangeQuery<K, V> implements Query<KeyValueIterator<K, V>> {

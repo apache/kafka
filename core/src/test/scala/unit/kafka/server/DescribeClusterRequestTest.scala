@@ -83,6 +83,8 @@ class DescribeClusterRequestTest extends BaseRequestTest {
       Int.MinValue
     }
 
+    ensureConsistentKRaftMetadata()
+
     for (version <- ApiKeys.DESCRIBE_CLUSTER.oldestVersion to ApiKeys.DESCRIBE_CLUSTER.latestVersion) {
       val describeClusterRequest = new DescribeClusterRequest.Builder(new DescribeClusterRequestData()
         .setIncludeClusterAuthorizedOperations(includeClusterAuthorizedOperations))

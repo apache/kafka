@@ -543,8 +543,19 @@ public class TaskManager {
             final TaskId taskId = task.id();
             if (activeTasksToCreate.containsKey(taskId)) {
                 final Set<TopicPartition> inputPartitions = activeTasksToCreate.get(taskId);
-                if (task.isActive()) {
-                    updateInputPartitionsOrRemoveTaskFromTasksToSuspend(task, inputPartitions);
+                if (task.isActive() && !task.inputPartitions().equals(inputPartitions)) {
+                    stateUpdater.remove(taskId);
+                    tasks.addPendingTaskToUpdateInputPartitions(taskId, inputPartitions);
+                } else if (task.isActive()) {
+                    tasks.removePendingActiveTaskToSuspend(taskId);
+                    if (tasks.removePendingTaskToCloseClean(taskId)) {
+                        log.info(
+                            "We were planning on closing task {} because we lost one of its partitions." +
+                            "The task got reassigned to this thread, so cancel closing  of the task, but add it back to the " +
+                            "state updater, since we may have to catch up on the changelog.",
+                            taskId);
+                        tasks.addPendingTaskToAddBack(taskId);
+                    }
                 } else {
                     removeTaskToRecycleFromStateUpdater(taskId, inputPartitions);
                 }
@@ -557,17 +568,6 @@ public class TaskManager {
             } else {
                 removeUnusedTaskFromStateUpdater(taskId);
             }
-        }
-    }
-
-    private void updateInputPartitionsOrRemoveTaskFromTasksToSuspend(final Task task,
-                                                                     final Set<TopicPartition> inputPartitions) {
-        final TaskId taskId = task.id();
-        if (!task.inputPartitions().equals(inputPartitions)) {
-            stateUpdater.remove(taskId);
-            tasks.addPendingTaskToUpdateInputPartitions(taskId, inputPartitions);
-        } else {
-            tasks.removePendingActiveTaskToSuspend(taskId);
         }
     }
 
@@ -913,10 +913,10 @@ public class TaskManager {
             Set<TopicPartition> inputPartitions;
             if ((inputPartitions = tasks.removePendingTaskToRecycle(task.id())) != null) {
                 recycleTaskFromStateUpdater(task, inputPartitions, tasksToCloseDirty, taskExceptions);
+            } else if (tasks.removePendingTaskToAddBack(task.id())) {
+                stateUpdater.add(task);
             } else if (tasks.removePendingTaskToCloseClean(task.id())) {
                 closeTaskClean(task, tasksToCloseDirty, taskExceptions);
-            } else if (tasks.removePendingTaskToCloseDirty(task.id())) {
-                tasksToCloseDirty.add(task);
             } else if ((inputPartitions = tasks.removePendingTaskToUpdateInputPartitions(task.id())) != null) {
                 task.updateInputPartitions(inputPartitions, topologyMetadata.nodeToSourceTopics(task.id()));
                 stateUpdater.add(task);
@@ -949,8 +949,8 @@ public class TaskManager {
                 recycleTaskFromStateUpdater(task, inputPartitions, tasksToCloseDirty, taskExceptions);
             } else if (tasks.removePendingTaskToCloseClean(task.id())) {
                 closeTaskClean(task, tasksToCloseDirty, taskExceptions);
-            } else if (tasks.removePendingTaskToCloseDirty(task.id())) {
-                tasksToCloseDirty.add(task);
+            } else if (tasks.removePendingTaskToAddBack(task.id())) {
+                stateUpdater.add(task);
             } else if ((inputPartitions = tasks.removePendingTaskToUpdateInputPartitions(task.id())) != null) {
                 task.updateInputPartitions(inputPartitions, topologyMetadata.nodeToSourceTopics(task.id()));
                 transitRestoredTaskToRunning(task, now, offsetResetter);
@@ -1156,7 +1156,7 @@ public class TaskManager {
         if (stateUpdater != null) {
             for (final Task restoringTask : stateUpdater.getTasks()) {
                 if (restoringTask.isActive()) {
-                    tasks.addPendingTaskToCloseDirty(restoringTask.id());
+                    tasks.addPendingTaskToCloseClean(restoringTask.id());
                     stateUpdater.remove(restoringTask.id());
                 }
             }

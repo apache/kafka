@@ -201,7 +201,7 @@ class BrokerLifecycleManagerTest {
     while (!future.isDone || context.mockClient.hasInFlightRequests) {
       context.poll()
       manager.eventQueue.wakeup()
-      context.time.sleep(100)
+      context.time.sleep(5)
     }
     future.get
   }
@@ -214,28 +214,20 @@ class BrokerLifecycleManagerTest {
     ctx.controllerNodeProvider.node.set(controllerNode)
 
     val registration = prepareResponse(ctx, new BrokerRegistrationResponse(new BrokerRegistrationResponseData().setBrokerEpoch(1000)))
-    val heartbeats = Seq.fill(6)(prepareResponse[BrokerHeartbeatRequest](ctx, new BrokerHeartbeatResponse(new BrokerHeartbeatResponseData())))
-
     manager.start(() => ctx.highestMetadataOffset.get(),
       ctx.mockChannelManager, ctx.clusterId, ctx.advertisedListeners,
       Collections.emptyMap(), OptionalLong.empty())
     poll(ctx, manager, registration)
 
     manager.propagateDirectoryFailure(Uuid.fromString("h3sC4Yk-Q9-fd0ntJTocCA"))
-    poll(ctx, manager, heartbeats(0)).data()
-    val dirs1 = poll(ctx, manager, heartbeats(1)).data().offlineLogDirs()
-
     manager.propagateDirectoryFailure(Uuid.fromString("ej8Q9_d2Ri6FXNiTxKFiow"))
-    poll(ctx, manager, heartbeats(2)).data()
-    val dirs2 = poll(ctx, manager, heartbeats(3)).data().offlineLogDirs()
-
     manager.propagateDirectoryFailure(Uuid.fromString("1iF76HVNRPqC7Y4r6647eg"))
-    poll(ctx, manager, heartbeats(4)).data()
-    val dirs3 = poll(ctx, manager, heartbeats(5)).data().offlineLogDirs()
-
-    assertEquals(Set("h3sC4Yk-Q9-fd0ntJTocCA").map(Uuid.fromString), dirs1.asScala.toSet)
-    assertEquals(Set("h3sC4Yk-Q9-fd0ntJTocCA", "ej8Q9_d2Ri6FXNiTxKFiow").map(Uuid.fromString), dirs2.asScala.toSet)
-    assertEquals(Set("h3sC4Yk-Q9-fd0ntJTocCA", "ej8Q9_d2Ri6FXNiTxKFiow", "1iF76HVNRPqC7Y4r6647eg").map(Uuid.fromString), dirs3.asScala.toSet)
+    val latestHeartbeat = Seq.fill(10)(
+      prepareResponse[BrokerHeartbeatRequest](ctx, new BrokerHeartbeatResponse(new BrokerHeartbeatResponseData()))
+    ).map(poll(ctx, manager, _)).last
+    assertEquals(
+      Set("h3sC4Yk-Q9-fd0ntJTocCA", "ej8Q9_d2Ri6FXNiTxKFiow", "1iF76HVNRPqC7Y4r6647eg").map(Uuid.fromString),
+      latestHeartbeat.data().offlineLogDirs().asScala.toSet)
     manager.close()
   }
 

@@ -48,6 +48,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.mockito.Mockito.mock;
 
 public class ConsumerGroupTest {
@@ -95,6 +96,34 @@ public class ConsumerGroupTest {
     }
 
     @Test
+    public void testNoStaticMember() {
+        ConsumerGroup consumerGroup = createConsumerGroup("foo");
+
+        // Create a new member which is not static
+        consumerGroup.getOrMaybeCreateMember("member", true);
+        assertNull(consumerGroup.staticMember("instance-id"));
+    }
+
+    @Test
+    public void testGetStaticMemberByInstanceId() {
+        ConsumerGroup consumerGroup = createConsumerGroup("foo");
+        ConsumerGroupMember member;
+
+        member = consumerGroup.getOrMaybeCreateMember("member", true);
+
+        member = new ConsumerGroupMember.Builder(member)
+            .setSubscribedTopicNames(Arrays.asList("foo", "bar"))
+            .setInstanceId("instance")
+            .build();
+
+        consumerGroup.updateMember(member);
+
+        assertEquals(member, consumerGroup.staticMember("instance"));
+        assertEquals(member, consumerGroup.getOrMaybeCreateMember("member", false));
+        assertEquals(member.memberId(), consumerGroup.staticMemberId("instance"));
+    }
+
+    @Test
     public void testRemoveMember() {
         ConsumerGroup consumerGroup = createConsumerGroup("foo");
 
@@ -104,6 +133,27 @@ public class ConsumerGroupTest {
         consumerGroup.removeMember("member");
         assertFalse(consumerGroup.hasMember("member"));
 
+    }
+
+    @Test
+    public void testRemoveStaticMember() {
+        ConsumerGroup consumerGroup = createConsumerGroup("foo");
+
+        ConsumerGroupMember member;
+        member = consumerGroup.getOrMaybeCreateMember("member", true);
+        assertTrue(consumerGroup.hasMember("member"));
+
+        member = new ConsumerGroupMember.Builder(member)
+            .setSubscribedTopicNames(Arrays.asList("foo", "bar"))
+            .setInstanceId("instance")
+            .build();
+
+        consumerGroup.updateMember(member);
+
+        consumerGroup.removeMember("member");
+        assertFalse(consumerGroup.hasMember("member"));
+        assertNull(consumerGroup.staticMember("instance"));
+        assertNull(consumerGroup.staticMemberId("instance"));
     }
 
     @Test
