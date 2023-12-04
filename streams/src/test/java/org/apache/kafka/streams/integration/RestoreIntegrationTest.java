@@ -141,7 +141,7 @@ public class RestoreIntegrationTest {
     public void createTopics(final TestInfo testInfo) throws InterruptedException {
         appId = safeUniqueTestName(RestoreIntegrationTest.class, testInfo);
         inputStream = appId + "-input-stream";
-        CLUSTER.createTopic(inputStream, 3, 1);
+        CLUSTER.createTopic(inputStream, 2, 1);
     }
 
     private Properties props(final boolean stateUpdaterEnabled) {
@@ -519,7 +519,7 @@ public class RestoreIntegrationTest {
         }
         waitForTransitionTo(transitionedStates1, State.NOT_RUNNING, Duration.ofSeconds(60));
         if (stateUpdaterEnabled) {
-            assertThat(standbyUpdateListener.promotedPartitions.size(), CoreMatchers.equalTo(2));
+            assertThat(standbyUpdateListener.promotedPartitions.size(), CoreMatchers.equalTo(1));
         }
         assertThat(CloseCountingInMemoryStore.numStoresClosed(), CoreMatchers.equalTo(initialStoreCloseCount + 4));
     }
