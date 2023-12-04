@@ -136,7 +136,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
 
     private final ApplicationEventHandler applicationEventHandler;
     private final Time time;
-    private final Optional<ConsumerGroupMetadata> groupMetadata;
+    private Optional<ConsumerGroupMetadata> groupMetadata;
     private final KafkaConsumerMetrics kafkaConsumerMetrics;
     private Logger log;
     private final String clientId;
@@ -1477,7 +1477,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             } catch (TimeoutException e) {
                 // Ignore this as we will retry the event until the timeout expires.
             } finally {
-                timer.update(time.milliseconds());
+                timer.update();
             }
         } while (timer.notExpired());
 

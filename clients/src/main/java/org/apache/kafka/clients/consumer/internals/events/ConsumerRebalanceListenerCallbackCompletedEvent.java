@@ -75,7 +75,7 @@ public class ConsumerRebalanceListenerCallbackCompletedEvent extends Application
 
         return methodName == that.methodName &&
                 partitions.equals(that.partitions) &&
-                future.equals(this.future) &&
+                future.equals(that.future) &&
                 error.equals(that.error);
     }
 
