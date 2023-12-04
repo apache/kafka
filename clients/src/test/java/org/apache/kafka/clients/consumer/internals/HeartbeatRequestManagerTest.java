@@ -311,7 +311,7 @@ public class HeartbeatRequestManagerTest {
         result.unsentRequests.get(0).handler().onComplete(response);
         assertEquals(1, backgroundEventQueue.size());
         final BackgroundEvent event = backgroundEventQueue.poll();
-        assertEquals(BackgroundEvent.Type.GROUP_METADATA_UPDATED, event.type());
+        assertEquals(BackgroundEvent.Type.GROUP_METADATA_UPDATE, event.type());
         final GroupMetadataUpdateEvent groupMetadataUpdateEvent = (GroupMetadataUpdateEvent) event;
         final GroupMetadataUpdateEvent expectedGroupMetadataUpdateEvent = new GroupMetadataUpdateEvent(
             DEFAULT_GROUP_ID,
@@ -336,7 +336,7 @@ public class HeartbeatRequestManagerTest {
         result.unsentRequests.get(0).handler().onComplete(response);
         assertEquals(1, backgroundEventQueue.size());
         final BackgroundEvent event = backgroundEventQueue.poll();
-        assertEquals(BackgroundEvent.Type.GROUP_METADATA_UPDATED, event.type());
+        assertEquals(BackgroundEvent.Type.GROUP_METADATA_UPDATE, event.type());
         final GroupMetadataUpdateEvent groupMetadataUpdateEvent = (GroupMetadataUpdateEvent) event;
         final GroupMetadataUpdateEvent expectedGroupMetadataUpdateEvent = new GroupMetadataUpdateEvent(
             DEFAULT_GROUP_ID,

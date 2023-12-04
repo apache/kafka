@@ -173,7 +173,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                 case ERROR:
                     process((ErrorBackgroundEvent) event);
                     break;
-                case GROUP_METADATA_UPDATED:
+                case GROUP_METADATA_UPDATE:
                     process((GroupMetadataUpdateEvent) event);
                     break;
                 default:

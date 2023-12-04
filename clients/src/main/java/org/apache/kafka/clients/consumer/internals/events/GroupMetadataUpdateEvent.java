@@ -39,7 +39,7 @@ public class GroupMetadataUpdateEvent extends BackgroundEvent {
                                     final int memberEpoch,
                                     final String memberId,
                                     final Optional<String> groupInstanceId) {
-        super(Type.GROUP_METADATA_UPDATED);
+        super(Type.GROUP_METADATA_UPDATE);
         this.groupId = groupId;
         this.memberEpoch = memberEpoch;
         this.memberId = memberId;

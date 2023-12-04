@@ -27,7 +27,7 @@ public abstract class BackgroundEvent {
 
     public enum Type {
         ERROR,
-        GROUP_METADATA_UPDATED
+        GROUP_METADATA_UPDATE
     }
 
     protected final Type type;
