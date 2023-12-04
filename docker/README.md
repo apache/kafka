@@ -7,9 +7,11 @@ There are interactive python scripts to release the docker image and promote a r
 
 Local Setup
 -----------
-Make sure you have python (>= 3.7.x) and java (>= 17) installed before running the tests and scripts.
+Make sure you have python (>= 3.7.x) and java (>= 17) (java needed only for running tests) installed before running the tests and scripts.
 
 Run `pip install -r requirements.txt` to get all the requirements for running the scripts.
+
+Make sure you have docker installed with support for buildx enabled. (For pushing multi-architecture image to docker registry)
 
 Bulding image and running tests locally
 ---------------------------------------
@@ -18,6 +20,12 @@ Bulding image and running tests locally
 - Sanity tests for the docker image are present in test/docker_sanity_test.py.
 - By default image will be built and tested, but if you only want to build the image, pass `-b` flag and if you only want to test the given image pass `-t` flag.
 - An html test report will be generated after the tests are executed containing the results.
+
+Example command:-
+To build and test an image named test under kafka namespace with 3.6.0 tag and jvm image type ensuring kafka to be containerised should be https://downloads.apache.org/kafka/3.6.0/kafka_2.13-3.6.0.tgz (it is recommended to use scala 2.13 binary tarball), following command can be used
+```
+python docker_build_test.py kafka/test --image-tag=3.6.0 --image-type=jvm --kafka-url=https://archive.apache.org/dist/kafka/3.6.0/kafka_2.13-3.6.0.tgz
+```
 
 Bulding image and running tests using github actions
 ----------------------------------------------------
@@ -28,12 +36,28 @@ kafka-url - This is the url to download kafka tarball from. For example kafka ta
 
 image-type - This is the type of image that we intend to build. This will be dropdown menu type selection in the workflow. `jvm` image type is for official docker image (to be hosted on apache/kafka) as described in [KIP-975](https://cwiki.apache.org/confluence/display/KAFKA/KIP-975%3A+Docker+Image+for+Apache+Kafka)
 
+Example command:-
+To build and test a jvm image type ensuring kafka to be containerised should be https://archive.apache.org/dist/kafka/3.6.0/kafka_2.13-3.6.0.tgz (it is recommended to use scala 2.13 binary tarball), following inputs in github actions workflow are recommended.
+```
+image_type: jvm
+kafka_url: https://archive.apache.org/dist/kafka/3.6.0/kafka_2.13-3.6.0.tgz
+```
 
 Creating a release
 ------------------
-- `docker_release.py` script builds a multi architecture image and pushes it to provided docker registry.
+- `docker_release.py` script builds a multi-architecture image and pushes it to provided docker registry.
 - Ensure you are logged in to the docker registry before triggering the script.
 - kafka binary tarball url along with image name (in the format `<registry>/<namespace>/<image_name>:<image_tag>`) and type is needed to build the image. For detailed usage description check `python docker_release.py --help`.
+
+Example command:-
+To push an image named test under kafka dockerhub namespace with 3.6.0 tag and jvm image type ensuring kafka to be containerised should be https://archive.apache.org/dist/kafka/3.6.0/kafka_2.13-3.6.0.tgz (it is recommended to use scala 2.13 binary tarball), following command can be used. (Make sure you have push access to the docker repo)
+```
+# kafka/test is an example repo. Please replace with the docker hub repo you have push access to.
+
+python docker_release.py kafka/test:3.6.0 --kafka-url https://archive.apache.org/dist/kafka/3.6.0/kafka_2.13-3.6.0.tgz
+```
+
+Please note that we used docker buildx for preparing the multi-architecture image and pushing it to docker registry. It's possible to encounter build failures because of buildx. Please retry the command in case some buildx related error occurs.
 
 Promoting a release
 -------------------
@@ -68,7 +92,7 @@ Using the image in a docker container
 Steps to release docker image
 -----------------------------
 - Make sure you have executed release.py script to prepare RC tarball in apache sftp server.
-- Use the RC tarball url as input kafka url to build docker image and run sanity tests.
+- Use the RC tarball url (make sure you choose scala 2.13 version) as input kafka url to build docker image and run sanity tests.
 - Trigger github actions workflow using the RC branch, provide RC tarball url as kafka url.
 - This will generate test report and CVE report for docker images.
 - If the reports look fine, RC docker image can be built and published.

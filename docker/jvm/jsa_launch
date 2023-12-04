@@ -15,6 +15,7 @@
 # limitations under the License.
 
 KAFKA_CLUSTER_ID="5L6g3nShT-eMCtK--X86sw"
+TOPIC="$(uuidgen)"
 
 KAFKA_JVM_PERFORMANCE_OPTS="-XX:ArchiveClassesAtExit=storage.jsa" opt/kafka/bin/kafka-storage.sh format -t $KAFKA_CLUSTER_ID -c opt/kafka/config/kraft/server.properties
 
@@ -29,13 +30,13 @@ check_timeout() {
     sleep 1
 }
 
-opt/kafka/bin/kafka-topics.sh --create --topic test-topic --bootstrap-server localhost:9092
+opt/kafka/bin/kafka-topics.sh --create --topic $TOPIC --bootstrap-server localhost:9092
 [ $? -eq 0 ] || exit 1
 
-echo "test" | opt/kafka/bin/kafka-console-producer.sh --topic test-topic --bootstrap-server localhost:9092
+echo "test" | opt/kafka/bin/kafka-console-producer.sh --topic $TOPIC --bootstrap-server localhost:9092
 [ $? -eq 0 ] || exit 1
 
-opt/kafka/bin/kafka-console-consumer.sh --topic test-topic --from-beginning --bootstrap-server localhost:9092 --max-messages 1 --timeout-ms 20000
+opt/kafka/bin/kafka-console-consumer.sh --topic $TOPIC --from-beginning --bootstrap-server localhost:9092 --max-messages 1 --timeout-ms 20000
 [ $? -eq 0 ] || exit 1
 
 opt/kafka/bin/kafka-server-stop.sh

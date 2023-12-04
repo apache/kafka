@@ -39,7 +39,7 @@ COPY jsa_launch /etc/kafka/docker/jsa_launch
 RUN set -eux ; \
     apk update ; \
     apk upgrade ; \
-    apk add --no-cache wget gcompat gpg gpg-agent procps netcat-openbsd; \
+    apk add --no-cache wget gcompat gpg gpg-agent procps netcat-openbsd uuidgen; \
     mkdir opt/kafka; \
     wget -nv -O kafka.tgz "$kafka_url"; \
     wget -nv -O kafka.tgz.asc "$kafka_url.asc"; \

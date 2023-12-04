@@ -13,7 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-name: Docker build test
+name: Docker Build Test
 
 on:
   workflow_dispatch:
@@ -50,8 +50,6 @@ jobs:
       with:
         image-ref: 'kafka/test:test'
         format: 'table'
-        ignore-unfixed: true
-        vuln-type: 'os,library'
         severity: 'CRITICAL,HIGH'
         output: scan_report_${{ github.event.inputs.image_type }}.txt
         exit-code: '1'
