@@ -1557,7 +1557,7 @@ public class IntegrationTestUtils {
         }
 
         @Override
-        public void onBatchLoaded(final TopicPartition topicPartition, final String storeName, final TaskId taskId, final long batchEndOffset, final long numRestored, final long currentEndOffset) {
+        public void onBatchLoaded(final TopicPartition topicPartition, final String storeName, final TaskId taskId, final long batchEndOffset, final long batchSize, final long currentEndOffset) {
 
         }
 

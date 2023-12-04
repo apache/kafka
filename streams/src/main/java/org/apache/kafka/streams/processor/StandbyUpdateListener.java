@@ -26,11 +26,12 @@ public interface StandbyUpdateListener {
     }
 
     /**
-     * Method called upon the creation of the Standby Task.
+     * A callback that will be invoked after registering the changelogs for each state store in a standby
+     * task. It is guaranteed to always be invoked before any records are loaded into the standby store.
      *
      * @param topicPartition the changelog TopicPartition for this standby task
-     * @param storeName        the name of the store being watched by this Standby Task.
-     * @param startingOffset   the offset from which the standby task begins consuming from the changelog
+     * @param storeName the name of the store being loaded
+     * @param startingOffset the offset from which the standby task begins consuming from the changelog
      */
     void onUpdateStart(final TopicPartition topicPartition,
                        final String storeName,
@@ -47,15 +48,15 @@ public interface StandbyUpdateListener {
      *
      * @param topicPartition the TopicPartition containing the values to restore
      * @param storeName the name of the store undergoing restoration
-     * @param batchEndOffset the inclusive ending offset for the current restored batch for this TopicPartition
-     * @param numRestored the total number of records restored in this batch for this TopicPartition
+     * @param batchEndOffset batchEndOffset the changelog end offset (inclusive) of the batch that was just loaded
+     * @param batchSize the total number of records in the batch that was just loaded
      * @param currentEndOffset the current end offset of the changelog topic partition.
      */
     void onBatchLoaded(final TopicPartition topicPartition,
                        final String storeName,
                        final TaskId taskId,
                        final long batchEndOffset,
-                       final long numRestored,
+                       final long batchSize,
                        final long currentEndOffset);
 
     /**
