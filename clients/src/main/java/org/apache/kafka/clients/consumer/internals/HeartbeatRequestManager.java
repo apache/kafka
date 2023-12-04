@@ -104,7 +104,7 @@ public class HeartbeatRequestManager implements RequestManager {
      */
     private final BackgroundEventHandler backgroundEventHandler;
 
-    private GroupMetadataUpdateEvent lastGroupMetadataUdateEvent = null;
+    private GroupMetadataUpdateEvent previousGroupMetadataUdateEvent = null;
 
     public HeartbeatRequestManager(
         final LogContext logContext,
@@ -235,15 +235,15 @@ public class HeartbeatRequestManager implements RequestManager {
             this.heartbeatRequestState.onSuccessfulAttempt(currentTimeMs);
             this.heartbeatRequestState.resetTimer();
             this.membershipManager.onHeartbeatResponseReceived(response.data());
-            if (lastGroupMetadataUdateEvent == null ||
-                lastGroupMetadataUdateEvent.memberEpoch() != membershipManager.memberEpoch()) {
+            if (previousGroupMetadataUdateEvent == null ||
+                previousGroupMetadataUdateEvent.memberEpoch() != membershipManager.memberEpoch()) {
 
                 final GroupMetadataUpdateEvent currentGroupMetadataUpdateEvent = new GroupMetadataUpdateEvent(
                     membershipManager.memberEpoch(),
-                    lastGroupMetadataUdateEvent == null ? membershipManager.memberId() : lastGroupMetadataUdateEvent.memberId()
+                    previousGroupMetadataUdateEvent == null ? membershipManager.memberId() : previousGroupMetadataUdateEvent.memberId()
                 );
                 this.backgroundEventHandler.add(currentGroupMetadataUpdateEvent);
-                lastGroupMetadataUdateEvent = currentGroupMetadataUpdateEvent;
+                previousGroupMetadataUdateEvent = currentGroupMetadataUpdateEvent;
             }
             return;
         }
