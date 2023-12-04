@@ -237,10 +237,8 @@ public class KafkaBasedLog<K, V> {
             public void stop() {
                 super.stop();
                 // Close the clients here, if the thread that was responsible for closing them was never started.
-                if (thread == null) {
-                    Utils.closeQuietly(producer, "producer");
-                    Utils.closeQuietly(consumer, "consumer");
-                }
+                Utils.closeQuietly(producer, "producer");
+                Utils.closeQuietly(consumer, "consumer");
             }
         };
     }

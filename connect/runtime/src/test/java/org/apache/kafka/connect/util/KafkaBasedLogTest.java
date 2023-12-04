@@ -70,6 +70,7 @@ import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.Mockito.any;
 import static org.mockito.Mockito.anyLong;
+import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
@@ -506,7 +507,7 @@ public class KafkaBasedLogTest {
     }
 
     private void verifyStop() {
-        verify(producer).close();
+        verify(producer, atLeastOnce()).close();
         assertTrue(consumer.closed());
     }
 }
