@@ -144,6 +144,11 @@ import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
+/**
+ * If you are adding a test here, do evaluate if a similar test needs to be added in
+ * FetchRequestManagerTest.java, which captures the tests for the new consumer as part of the
+ * https://cwiki.apache.org/confluence/display/KAFKA/Consumer+threading+refactor+project+overview
+ */
 public class FetcherTest {
     private static final double EPSILON = 0.0001;
 
