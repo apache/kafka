@@ -82,7 +82,6 @@ import static org.apache.kafka.streams.processor.internals.assignment.Assignment
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.getRandomSubset;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.getTaskTopicPartitionMap;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.getTasksForTopicGroup;
-import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.getTopologyGroupTaskMap;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.hasActiveTasks;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.hasAssignedTasks;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.hasStandbyTasks;
@@ -131,7 +130,7 @@ public class HighAvailabilityTaskAssignorTest {
 
     private final Time time = new MockTime();
 
-    public boolean enableRackAwareTaskAssignor;
+    private boolean enableRackAwareTaskAssignor;
 
     @Parameter
     public String rackAwareStrategy;
@@ -283,7 +282,7 @@ public class HighAvailabilityTaskAssignorTest {
         assertBalancedActiveAssignment(clientStates, new StringBuilder());
         assertBalancedStatefulAssignment(allTaskIds, clientStates, new StringBuilder());
 
-        if (!enableRackAwareTaskAssignor) {
+        if (!rackAwareStrategy.equals(StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_MIN_TRAFFIC)) {
             // Subtopology is not balanced with min_traffic rack aware assignment
             assertBalancedTasks(clientStates);
         }
@@ -330,7 +329,7 @@ public class HighAvailabilityTaskAssignorTest {
         assertBalancedActiveAssignment(clientStates, new StringBuilder());
         assertBalancedStatefulAssignment(allTaskIds, clientStates, new StringBuilder());
 
-        if (!enableRackAwareTaskAssignor) {
+        if (!rackAwareStrategy.equals(StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_MIN_TRAFFIC)) {
             // Subtopology is not balanced with min_traffic rack aware assignment
             assertBalancedTasks(clientStates);
         }
@@ -421,7 +420,7 @@ public class HighAvailabilityTaskAssignorTest {
         assertThat(clientState1, hasActiveTasks(1));
         assertThat(clientState2, hasActiveTasks(2));
         assertThat(clientState3, hasActiveTasks(3));
-        final AssignmentTestUtils.TaskSkewReport taskSkewReport = analyzeTaskAssignmentBalance(clientStates);
+        final AssignmentTestUtils.TaskSkewReport taskSkewReport = analyzeTaskAssignmentBalance(clientStates, 1);
         if (taskSkewReport.totalSkewedTasks() == 0) {
             fail("Expected a skewed task assignment, but was: " + taskSkewReport);
         }
@@ -509,7 +508,7 @@ public class HighAvailabilityTaskAssignorTest {
         assertBalancedActiveAssignment(clientStates, new StringBuilder());
         assertBalancedStatefulAssignment(allTaskIds, clientStates, new StringBuilder());
 
-        if (!enableRackAwareTaskAssignor) {
+        if (!rackAwareStrategy.equals(StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_MIN_TRAFFIC)) {
             // Subtopology is not balanced with min_traffic rack aware assignment
             assertBalancedTasks(clientStates);
         }
@@ -669,7 +668,7 @@ public class HighAvailabilityTaskAssignorTest {
 
         final AssignmentConfigs configs = getConfigWithoutStandbys();
         final Map<Subtopology, Set<TaskId>> tasksForTopicGroup = mkMap(
-            mkEntry(new Subtopology(0, null), mkSet(TASK_0_0))
+            mkEntry(new Subtopology(0, null), mkSet(TASK_0_0, TASK_0_1))
         );
         final RackAwareTaskAssignor rackAwareTaskAssignor = getRackAwareTaskAssignor(configs, tasksForTopicGroup);
 
@@ -734,7 +733,7 @@ public class HighAvailabilityTaskAssignorTest {
 
         final AssignmentConfigs configs = getConfigWithoutStandbys();
         final Map<Subtopology, Set<TaskId>> tasksForTopicGroup = mkMap(
-            mkEntry(new Subtopology(0, null), mkSet(TASK_0_0))
+            mkEntry(new Subtopology(0, null), mkSet(TASK_0_0, TASK_0_1))
         );
         final RackAwareTaskAssignor rackAwareTaskAssignor = getRackAwareTaskAssignor(configs, tasksForTopicGroup);
 
@@ -1053,7 +1052,8 @@ public class HighAvailabilityTaskAssignorTest {
 
         final AssignmentConfigs configs = getConfigWithStandbys();
         final Map<Subtopology, Set<TaskId>> tasksForTopicGroup = mkMap(
-            mkEntry(new Subtopology(0, null), mkSet(TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3))
+            mkEntry(new Subtopology(0, null), mkSet(TASK_0_0, TASK_0_1, TASK_0_2, TASK_0_3)),
+            mkEntry(new Subtopology(1, null), mkSet(TASK_1_0, TASK_1_1, TASK_1_2))
         );
         final RackAwareTaskAssignor rackAwareTaskAssignor = getRackAwareTaskAssignor(configs, tasksForTopicGroup);
 
@@ -1072,7 +1072,7 @@ public class HighAvailabilityTaskAssignorTest {
 
         // since only client1 is caught up on the stateful tasks, we expect it to get _all_ the active tasks,
         // which means that client2 should have gotten all of the stateless tasks, so the tasks should be skewed
-        final AssignmentTestUtils.TaskSkewReport taskSkewReport = analyzeTaskAssignmentBalance(clientStates);
+        final AssignmentTestUtils.TaskSkewReport taskSkewReport = analyzeTaskAssignmentBalance(clientStates, 1);
         assertThat(taskSkewReport.toString(), taskSkewReport.skewedSubtopologies(), not(empty()));
 
         assertThat(probingRebalanceNeeded, is(true));

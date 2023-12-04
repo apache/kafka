@@ -495,13 +495,17 @@ public final class AssignmentTestUtils {
     }
 
     static void assertBalancedTasks(final Map<UUID, ClientState> clientStates) {
-        final TaskSkewReport taskSkewReport = analyzeTaskAssignmentBalance(clientStates);
+        assertBalancedTasks(clientStates, 1);
+    }
+
+    static void assertBalancedTasks(final Map<UUID, ClientState> clientStates, final int skewThreshold) {
+        final TaskSkewReport taskSkewReport = analyzeTaskAssignmentBalance(clientStates, skewThreshold);
         if (taskSkewReport.totalSkewedTasks() > 0) {
             fail("Expected a balanced task assignment, but was: " + taskSkewReport);
         }
     }
 
-    static TaskSkewReport analyzeTaskAssignmentBalance(final Map<UUID, ClientState> clientStates) {
+    static TaskSkewReport analyzeTaskAssignmentBalance(final Map<UUID, ClientState> clientStates, final int skewThreshold) {
         final Function<Integer, Map<UUID, AtomicInteger>> initialClientCounts =
             i -> clientStates.keySet().stream().collect(Collectors.toMap(c -> c, c -> new AtomicInteger(0)));
 
@@ -531,7 +535,7 @@ public final class AssignmentTestUtils {
             }
             final int taskSkew = max - min;
             maxTaskSkew = Math.max(maxTaskSkew, taskSkew);
-            if (taskSkew > 1) {
+            if (taskSkew > skewThreshold) {
                 skewedSubtopologies.add(entry.getKey());
             }
         }
