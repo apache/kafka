@@ -61,7 +61,7 @@ public class AbstractIteratorTest {
             this.list = l;
         }
 
-        public T makeNext() {
+        protected T makeNext() {
             if (position < list.size())
                 return list.get(position++);
             else
