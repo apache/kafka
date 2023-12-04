@@ -324,7 +324,7 @@ public class RocksDBTimestampedStore extends RocksDBStore implements Timestamped
         }
 
         @Override
-        public KeyValue<Bytes, byte[]> makeNext() {
+        protected KeyValue<Bytes, byte[]> makeNext() {
             if (nextNoTimestamp == null && iterNoTimestamp.isValid()) {
                 nextNoTimestamp = iterNoTimestamp.key();
             }
@@ -448,7 +448,7 @@ public class RocksDBTimestampedStore extends RocksDBStore implements Timestamped
         }
 
         @Override
-        public KeyValue<Bytes, byte[]> makeNext() {
+        protected KeyValue<Bytes, byte[]> makeNext() {
             final KeyValue<Bytes, byte[]> next = super.makeNext();
 
             if (next == null) {

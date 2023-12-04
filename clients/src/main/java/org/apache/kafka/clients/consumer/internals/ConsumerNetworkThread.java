@@ -51,7 +51,8 @@ import static org.apache.kafka.common.utils.Utils.closeQuietly;
  */
 public class ConsumerNetworkThread extends KafkaThread implements Closeable {
 
-    private static final long MAX_POLL_TIMEOUT_MS = 5000;
+    // visible for testing
+    static final long MAX_POLL_TIMEOUT_MS = 5000;
     private static final String BACKGROUND_THREAD_NAME = "consumer_background_thread";
     private final Time time;
     private final Logger log;
@@ -64,6 +65,7 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
     private volatile boolean running;
     private final IdempotentCloser closer = new IdempotentCloser();
     private volatile Duration closeTimeout = Duration.ofMillis(DEFAULT_CLOSE_TIMEOUT_MS);
+    private volatile long cachedMaximumTimeToWait = MAX_POLL_TIMEOUT_MS;
 
     public ConsumerNetworkThread(LogContext logContext,
                                  Time time,
@@ -143,6 +145,12 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
                 .map(networkClientDelegate::addAll)
                 .reduce(MAX_POLL_TIMEOUT_MS, Math::min);
         networkClientDelegate.poll(pollWaitTimeMs, currentTimeMs);
+
+        cachedMaximumTimeToWait = requestManagers.entries().stream()
+                .filter(Optional::isPresent)
+                .map(Optional::get)
+                .map(rm -> rm.maximumTimeToWait(currentTimeMs))
+                .reduce(Long.MAX_VALUE, Math::min);
     }
 
     /**
@@ -211,18 +219,14 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
      * are sent, so blocking for longer than the heartbeat interval might mean the application thread is not
      * responsive to changes.
      *
+     * Because this method is called by the application thread, it's not allowed to access the request managers
+     * that actually provide the information. As a result, the consumer network thread periodically caches the
+     * information from the request managers and this can then be read safely using this method.
+     *
      * @return The maximum delay in milliseconds
      */
     public long maximumTimeToWait() {
-        final long currentTimeMs = time.milliseconds();
-        if (requestManagers == null) {
-            return MAX_POLL_TIMEOUT_MS;
-        }
-        return requestManagers.entries().stream()
-                .filter(Optional::isPresent)
-                .map(Optional::get)
-                .map(rm -> rm.maximumTimeToWait(currentTimeMs))
-                .reduce(Long.MAX_VALUE, Math::min);
+        return cachedMaximumTimeToWait;
     }
 
     @Override
