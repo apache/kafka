@@ -1013,12 +1013,16 @@ public final class AssignmentTestUtils {
     }
 
     static RackAwareTaskAssignor getRackAwareTaskAssignor(final AssignmentConfigs configs) {
+        return getRackAwareTaskAssignor(configs, mkMap());
+    }
+
+    static RackAwareTaskAssignor getRackAwareTaskAssignor(final AssignmentConfigs configs, final Map<Subtopology, Set<TaskId>> taskForTopicGroup) {
         return spy(
             new RackAwareTaskAssignor(
                 getClusterForAllTopics(),
                 getTaskTopicPartitionMapForAllTasks(),
                 getTaskChangelogMapForAllTasks(),
-                new HashMap<>(),
+                taskForTopicGroup,
                 getProcessRacksForAllProcess(),
                 mockInternalTopicManagerForChangelog(),
                 configs,
