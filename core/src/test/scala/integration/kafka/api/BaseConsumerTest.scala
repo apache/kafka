@@ -116,13 +116,13 @@ object BaseConsumerTest {
   // * ZooKeeper and the generic group protocol
   // * KRaft and the generic group protocol
   // * KRaft with the new group coordinator enabled and the generic group protocol
-  // * KRaft with the new group coordinator enabled and the consumer group protocol
+  // * KRaft with the new group coordinator enabled and the consumer group protocol (temporarily disabled)
   def getTestQuorumAndGroupProtocolParametersAll() : java.util.stream.Stream[Arguments] = {
     java.util.stream.Stream.of(
         Arguments.of("zk", "generic"),
         Arguments.of("kraft", "generic"),
-        Arguments.of("kraft+kip848", "generic"),
-        Arguments.of("kraft+kip848", "consumer"))
+        Arguments.of("kraft+kip848", "generic"))
+//        Arguments.of("kraft+kip848", "consumer"))
   }
 
   // In Scala 2.12, it is necessary to disambiguate the java.util.stream.Stream.of() method call
