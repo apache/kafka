@@ -108,15 +108,15 @@ public class BackgroundEventProcessor extends EventProcessor<BackgroundEvent> {
         final Exception e;
 
         switch (methodName) {
-            case onPartitionsRevoked:
+            case ON_PARTITIONS_REVOKED:
                 e = rebalanceListenerInvoker.invokePartitionsRevoked(partitions);
                 break;
 
-            case onPartitionsAssigned:
+            case ON_PARTITIONS_ASSIGNED:
                 e = rebalanceListenerInvoker.invokePartitionsAssigned(partitions);
                 break;
 
-            case onPartitionsLost:
+            case ON_PARTITIONS_LOST:
                 e = rebalanceListenerInvoker.invokePartitionsLost(partitions);
                 break;
 
@@ -135,7 +135,11 @@ public class BackgroundEventProcessor extends EventProcessor<BackgroundEvent> {
             error = Optional.empty();
         }
 
-        ApplicationEvent invokedEvent = new ConsumerRebalanceListenerCallbackCompletedEvent(methodName, partitions, error);
+        ApplicationEvent invokedEvent = new ConsumerRebalanceListenerCallbackCompletedEvent(
+            methodName,
+            partitions,
+            event.future(),
+            error);
         applicationEventHandler.add(invokedEvent);
     }
 }

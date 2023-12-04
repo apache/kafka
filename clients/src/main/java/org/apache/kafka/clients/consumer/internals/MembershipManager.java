@@ -148,9 +148,7 @@ public interface MembershipManager {
      * notify the state machine that it's complete so that it can move to the next appropriate step of the
      * rebalance process.
      *
-     * @param methodName Method name of the callback that was executed
-     * @param error Optional error that was thrown by the callback, captured, and forwarded here
+     * @param event Event with details about the callback that was executed
      */
-    void consumerRebalanceListenerCallbackCompleted(ConsumerRebalanceListenerMethodName methodName,
-                                                    Optional<KafkaException> error);
+    void consumerRebalanceListenerCallbackCompleted(ConsumerRebalanceListenerCallbackCompletedEvent event);
 }

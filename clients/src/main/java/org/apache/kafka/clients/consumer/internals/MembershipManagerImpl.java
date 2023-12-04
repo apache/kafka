@@ -21,8 +21,8 @@ import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.internals.Utils.TopicIdPartitionComparator;
 import org.apache.kafka.clients.consumer.internals.Utils.TopicPartitionComparator;
-import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEventHandler;
+import org.apache.kafka.clients.consumer.internals.events.CompletableBackgroundEvent;
 import org.apache.kafka.clients.consumer.internals.events.ConsumerRebalanceListenerCallbackCompletedEvent;
 import org.apache.kafka.clients.consumer.internals.events.ConsumerRebalanceListenerCallbackNeededEvent;
 import org.apache.kafka.clients.consumer.internals.events.ErrorBackgroundEvent;
@@ -46,17 +46,15 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.SortedSet;
 import java.util.TreeSet;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.atomic.AtomicReference;
 
-import static org.apache.kafka.clients.consumer.internals.ConsumerRebalanceListenerMethodName.onPartitionsAssigned;
-import static org.apache.kafka.clients.consumer.internals.ConsumerRebalanceListenerMethodName.onPartitionsLost;
-import static org.apache.kafka.clients.consumer.internals.ConsumerRebalanceListenerMethodName.onPartitionsRevoked;
+import static org.apache.kafka.clients.consumer.internals.ConsumerRebalanceListenerMethodName.ON_PARTITIONS_ASSIGNED;
+import static org.apache.kafka.clients.consumer.internals.ConsumerRebalanceListenerMethodName.ON_PARTITIONS_LOST;
+import static org.apache.kafka.clients.consumer.internals.ConsumerRebalanceListenerMethodName.ON_PARTITIONS_REVOKED;
 
 /**
  * Group manager for a single consumer that has a group id defined in the config
@@ -111,23 +109,6 @@ import static org.apache.kafka.clients.consumer.internals.ConsumerRebalanceListe
  * know that it can proceed with the reconciliation.
  */
 public class MembershipManagerImpl implements MembershipManager, ClusterResourceListener {
-
-    /**
-     * Used during the rebalancing process to keep track of the {@link ConsumerRebalanceListener} callback
-     * that is invoked on the application thread. The callback process is "complicated" because it requires
-     * jumping between the application and the network I/O threads.
-     */
-    private static class ConsumerRebalanceListenerCallbackBreadcrumb {
-
-        private final ConsumerRebalanceListenerMethodName methodName;
-        private final CompletableFuture<Void> future;
-
-        private ConsumerRebalanceListenerCallbackBreadcrumb(ConsumerRebalanceListenerMethodName methodName,
-                                                            CompletableFuture<Void> future) {
-            this.methodName = Objects.requireNonNull(methodName);
-            this.future = Objects.requireNonNull(future);
-        }
-    }
 
     /**
      * TopicPartition comparator based on topic name and partition id.
@@ -272,14 +253,6 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
      */
     private final BackgroundEventHandler backgroundEventHandler;
 
-    /**
-     * Breadcrumb that we can return to as we wait for the completion of the
-     * {@link ConsumerRebalanceListenerCallbackNeededEvent} that was enqueued during rebalancing. This
-     * is an {@link AtomicReference} as it is updated by both the {@link ConsumerNetworkThread background thread}
-     * and the application thread.
-     */
-    private final AtomicReference<ConsumerRebalanceListenerCallbackBreadcrumb> breadcrumbRef;
-
     public MembershipManagerImpl(String groupId,
                                  SubscriptionState subscriptions,
                                  CommitRequestManager commitRequestManager,
@@ -311,7 +284,6 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
         this.currentAssignment = new HashSet<>();
         this.log = logContext.logger(MembershipManagerImpl.class);
         this.backgroundEventHandler = backgroundEventHandler;
-        this.breadcrumbRef = new AtomicReference<>();
     }
 
     /**
@@ -697,7 +669,7 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
                         "\tCurrent owned partitions:                  {}\n" +
                         "\tAdded partitions (assigned - owned):       {}\n" +
                         "\tRevoked partitions (owned - assigned):     {}\n",
-                assignedTopicPartitions,
+                assignedTopicIdPartitions,
                 ownedPartitions,
                 addedPartitions,
                 revokedPartitions
@@ -1004,7 +976,7 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
         // current behaviour.
         Optional<ConsumerRebalanceListener> listener = subscriptions.rebalanceListener();
         if (!partitionsRevoked.isEmpty() && listener.isPresent()) {
-            return enqueueConsumerRebalanceListenerCallback(onPartitionsRevoked, partitionsRevoked);
+            return enqueueConsumerRebalanceListenerCallback(ON_PARTITIONS_REVOKED, partitionsRevoked);
         } else {
             return CompletableFuture.completedFuture(null);
         }
@@ -1015,7 +987,7 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
         // the current behaviour.
         Optional<ConsumerRebalanceListener> listener = subscriptions.rebalanceListener();
         if (listener.isPresent()) {
-            return enqueueConsumerRebalanceListenerCallback(onPartitionsAssigned, partitionsAssigned);
+            return enqueueConsumerRebalanceListenerCallback(ON_PARTITIONS_ASSIGNED, partitionsAssigned);
         } else {
             return CompletableFuture.completedFuture(null);
         }
@@ -1026,7 +998,7 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
         // behaviour.
         Optional<ConsumerRebalanceListener> listener = subscriptions.rebalanceListener();
         if (!partitionsLost.isEmpty() && listener.isPresent()) {
-            return enqueueConsumerRebalanceListenerCallback(onPartitionsLost, partitionsLost);
+            return enqueueConsumerRebalanceListenerCallback(ON_PARTITIONS_LOST, partitionsLost);
         } else {
             return CompletableFuture.completedFuture(null);
         }
@@ -1039,15 +1011,8 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
      *
      * <p/>
      *
-     * This method is essentially "giving" the baton from the background thread to the application thread for
-     * processing of the reconciliation logic. It will "receive" the "baton" back via the
-     * {@link #consumerRebalanceListenerCallbackCompleted(ConsumerRebalanceListenerMethodName, Optional)} method.
-     *
-     * <p/>
-     *
      * Because the reconciliation process (run in the background thread) will be blocked by the application thread
-     * until it completes this, we need to leave a {@link ConsumerRebalanceListenerCallbackBreadcrumb breadcrumb}
-     * by which to remember where we left off.
+     * until it completes this, we need to provide a {@link CompletableFuture} by which to remember where we left off.
      *
      * @param methodName Callback method that needs to be executed on the application thread
      * @param partitions Partitions to supply to the callback method
@@ -1055,93 +1020,34 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
      */
     private CompletableFuture<Void> enqueueConsumerRebalanceListenerCallback(ConsumerRebalanceListenerMethodName methodName,
                                                                              Set<TopicPartition> partitions) {
-        CompletableFuture<Void> future = new CompletableFuture<>();
-        ConsumerRebalanceListenerCallbackBreadcrumb newBreadcrumb = new ConsumerRebalanceListenerCallbackBreadcrumb(
-            methodName,
-            future
-        );
-
-        if (breadcrumbRef.compareAndSet(null, newBreadcrumb)) {
-            // This is the happy path—there isn't an existing breadcrumb, so we can schedule our new event
-            // without hesitation.
-            SortedSet<TopicPartition> sortedPartitions = new TreeSet<>(TOPIC_PARTITION_COMPARATOR);
-            sortedPartitions.addAll(partitions);
-            BackgroundEvent event = new ConsumerRebalanceListenerCallbackNeededEvent(methodName, sortedPartitions);
-            backgroundEventHandler.add(event);
-            log.debug("The event to trigger the {} method execution was enqueued successfully", methodName);
-        } else {
-            ConsumerRebalanceListenerCallbackBreadcrumb unexpected = breadcrumbRef.get();
-
-            // If our CAS above failed it's because the breadcrumb wasn't null, that is, there was already a
-            // breadcrumb set. For our error, we try to get some info from that existing breadcrumb for better
-            // debugging. But there's technically a race condition, which means existingBreadcrumb could be null
-            // by the time we try to access it. In that case, we just use a generic name.
-            String unexpectedMethodName = unexpected != null ? unexpected.methodName.toString() : "another invocation";
-
-            // In this case, there was already an existing breadcrumb, so we need to report the matter back to the user.
-            String s = "An internal error occurred: an attempt to schedule the " +
-                    methodName + " method for execution during rebalancing failed because " +
-                    unexpectedMethodName + " was already scheduled";
-            future.completeExceptionally(new KafkaException(s));
-        }
-
-        return future;
+        SortedSet<TopicPartition> sortedPartitions = new TreeSet<>(TOPIC_PARTITION_COMPARATOR);
+        sortedPartitions.addAll(partitions);
+        CompletableBackgroundEvent<Void> event = new ConsumerRebalanceListenerCallbackNeededEvent(methodName, sortedPartitions);
+        backgroundEventHandler.add(event);
+        log.debug("The event to trigger the {} method execution was enqueued successfully", methodName);
+        return event.future();
     }
 
-    /**
-     * Signals that a {@link ConsumerRebalanceListener} callback has completed. This is invoked when the
-     * application thread has completed the callback and has submitted a
-     * {@link ConsumerRebalanceListenerCallbackCompletedEvent} to the network I/O thread. At this point, we
-     * notify the state machine that it's complete so that it can move to the next appropriate step of the
-     * rebalance process.
-     *
-     * <p/>
-     *
-     * This method is "receiving" the baton back from the application thread after having "given" it to the
-     * application thread via the
-     * {@link #enqueueConsumerRebalanceListenerCallback(ConsumerRebalanceListenerMethodName, Set)} method.
-     *
-     * @param methodName Method name of the callback that was executed
-     * @param error Optional error that was thrown by the callback, captured, and forwarded here
-     */
     @Override
-    public void consumerRebalanceListenerCallbackCompleted(ConsumerRebalanceListenerMethodName methodName,
-                                                           Optional<KafkaException> error) {
-        // Get any existing breadcrumb out and clear the state for the next reconciliation.
-        ConsumerRebalanceListenerCallbackBreadcrumb breadcrumb = breadcrumbRef.getAndSet(null);
+    public void consumerRebalanceListenerCallbackCompleted(ConsumerRebalanceListenerCallbackCompletedEvent event) {
+        ConsumerRebalanceListenerMethodName methodName = event.methodName();
+        Optional<KafkaException> error = event.error();
+        CompletableFuture<Void> future = event.future();
 
-        if (breadcrumb == null) {
-            // Case 1: we're somehow completing a callback for which we don't have a recorded breadcrumb.
-            // Because of that, we don't have a Future that can be completed, so we're left having to report it
-            // back to the user asynchronously.
-            String s = "An internal error occurred: the " + methodName + " method was executed " +
-                    "during rebalancing, but there was no record of it being scheduled";
-            backgroundEventHandler.add(new ErrorBackgroundEvent(new KafkaException(s)));
-        } else if (breadcrumb.methodName != methodName) {
-            // Case 2: we have a breadcrumb, but it does NOT match the one we expect. We need to abort the
-            // rebalance process, because we're in an inconsistent state. We do that by completing the Future
-            // with an error.
-            String s = "An internal error occurred: an attempt to continue rebalance after the execution of the " +
-                    methodName + " method failed because the expected method was " + breadcrumb.methodName;
-            breadcrumb.future.completeExceptionally(new KafkaException(s));
+        if (error.isPresent()) {
+            log.warn(
+                    "The {} method completed with an error ({}). signaling to continue to the next phase of rebalance",
+                    methodName,
+                    error.get().getMessage()
+            );
         } else {
-            // Case 3: the happy path. We have a breadcrumb that matches what we expect, so we can proceed to
-            // the next step of the rebalance process.
-            if (error.isPresent()) {
-                log.warn(
-                        "The {} method completed with an error ({}). signaling to continue to the next phase of rebalance",
-                        methodName,
-                        error.get().getMessage()
-                );
-            } else {
-                log.debug(
-                        "The {} method completed successfully; signaling to continue to the next phase of rebalance",
-                        methodName
-                );
-            }
-
-            breadcrumb.future.complete(null);
+            log.debug(
+                    "The {} method completed successfully; signaling to continue to the next phase of rebalance",
+                    methodName
+            );
         }
+
+        future.complete(null);
     }
 
     /**

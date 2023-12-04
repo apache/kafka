@@ -230,7 +230,7 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
             return;
         }
         MembershipManager manager = requestManagers.heartbeatRequestManager.get().membershipManager();
-        manager.consumerRebalanceListenerCallbackCompleted(event.methodName(), event.error());
+        manager.consumerRebalanceListenerCallbackCompleted(event);
     }
 
     /**

@@ -24,16 +24,36 @@ import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
  */
 public enum ConsumerRebalanceListenerMethodName {
 
-    onPartitionsRevoked, onPartitionsAssigned, onPartitionsLost;
+    ON_PARTITIONS_REVOKED("onPartitionsRevoked"),
+    ON_PARTITIONS_ASSIGNED("onPartitionsAssigned"),
+    ON_PARTITIONS_LOST("onPartitionsLost");
+
+    private final String methodName;
+
+    private final String fullyQualifiedMethodName;
+
+    ConsumerRebalanceListenerMethodName(String methodName) {
+        this.methodName = methodName;
+        this.fullyQualifiedMethodName = String.format("%s.%s", ConsumerRebalanceListener.class.getSimpleName(), methodName);
+    }
+
+    /**
+     * Provides the method name, e.g. {@code onPartitionsRevoked}.
+     *
+     * @return Method name
+     */
+
+    public String methodName() {
+        return methodName;
+    }
 
     /**
      * Provides the fully-qualified method name, e.g. {@code ConsumerRebalanceListener.onPartitionsRevoked}. This
      * is used for log messages.
      *
-     * @return Full-qualified method name
+     * @return Fully-qualified method name
      */
-    @Override
-    public String toString() {
-        return String.format("%s.%s", ConsumerRebalanceListener.class.getSimpleName(), name());
+    public String fullyQualifiedMethodName() {
+        return fullyQualifiedMethodName;
     }
 }

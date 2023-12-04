@@ -25,6 +25,7 @@ import java.util.Collections;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.SortedSet;
+import java.util.concurrent.CompletableFuture;
 
 /**
  * Event that signifies that the application thread has executed the {@link ConsumerRebalanceListener} callback. If
@@ -34,14 +35,17 @@ public class ConsumerRebalanceListenerCallbackCompletedEvent extends Application
 
     private final ConsumerRebalanceListenerMethodName methodName;
     private final SortedSet<TopicPartition> partitions;
+    private final CompletableFuture<Void> future;
     private final Optional<KafkaException> error;
 
     public ConsumerRebalanceListenerCallbackCompletedEvent(ConsumerRebalanceListenerMethodName methodName,
                                                            SortedSet<TopicPartition> partitions,
+                                                           CompletableFuture<Void> future,
                                                            Optional<KafkaException> error) {
         super(Type.CONSUMER_REBALANCE_LISTENER_CALLBACK_COMPLETED);
         this.methodName = Objects.requireNonNull(methodName);
         this.partitions = Collections.unmodifiableSortedSet(partitions);
+        this.future = Objects.requireNonNull(future);
         this.error = Objects.requireNonNull(error);
     }
 
@@ -51,6 +55,10 @@ public class ConsumerRebalanceListenerCallbackCompletedEvent extends Application
 
     public SortedSet<TopicPartition> partitions() {
         return partitions;
+    }
+
+    public CompletableFuture<Void> future() {
+        return future;
     }
 
     public Optional<KafkaException> error() {
@@ -65,12 +73,15 @@ public class ConsumerRebalanceListenerCallbackCompletedEvent extends Application
 
         ConsumerRebalanceListenerCallbackCompletedEvent that = (ConsumerRebalanceListenerCallbackCompletedEvent) o;
 
-        return methodName == that.methodName && partitions.equals(that.partitions) && error.equals(that.error);
+        return methodName == that.methodName &&
+                partitions.equals(that.partitions) &&
+                future.equals(this.future) &&
+                error.equals(that.error);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(methodName, partitions, error);
+        return Objects.hash(methodName, partitions, future, error);
     }
 
     @Override
@@ -78,6 +89,7 @@ public class ConsumerRebalanceListenerCallbackCompletedEvent extends Application
         return super.toStringBase() +
                 ", methodName=" + methodName +
                 ", partitions=" + partitions +
+                ", future=" + future +
                 ", error=" + error;
     }
 

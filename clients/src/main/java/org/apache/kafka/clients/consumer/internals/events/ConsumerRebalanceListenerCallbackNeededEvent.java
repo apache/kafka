@@ -32,7 +32,7 @@ import java.util.SortedSet;
  * {@link Consumer#poll(Duration)} call is performed by the user. When processed, the application thread should
  * invoke the appropriate callback method (based on {@link #methodName()}) with the given partitions.
  */
-public class ConsumerRebalanceListenerCallbackNeededEvent extends BackgroundEvent {
+public class ConsumerRebalanceListenerCallbackNeededEvent extends CompletableBackgroundEvent<Void> {
 
     private final ConsumerRebalanceListenerMethodName methodName;
     private final SortedSet<TopicPartition> partitions;
@@ -65,7 +65,10 @@ public class ConsumerRebalanceListenerCallbackNeededEvent extends BackgroundEven
 
     @Override
     public int hashCode() {
-        return Objects.hash(methodName, partitions);
+        int result = super.hashCode();
+        result = 31 * result + methodName.hashCode();
+        result = 31 * result + partitions.hashCode();
+        return result;
     }
 
     @Override
