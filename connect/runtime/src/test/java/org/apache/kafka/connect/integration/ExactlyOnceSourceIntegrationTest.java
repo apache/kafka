@@ -809,13 +809,7 @@ public class ExactlyOnceSourceIntegrationTest {
             );
 
             // also consume from the cluster's global offsets topic
-            offsetRecords = connect.kafka()
-                    .consumeAll(
-                            TimeUnit.MINUTES.toMillis(1),
-                            null,
-                            null,
-                            globalOffsetsTopic
-                    );
+            offsetRecords = connect.kafka().consumeAll(TimeUnit.MINUTES.toMillis(1), globalOffsetsTopic);
             seqnos = parseAndAssertOffsetsForSingleTask(offsetRecords);
             seqnos.forEach(seqno ->
                 assertEquals("Offset commits should occur on connector-defined poll boundaries, which happen every " + MINIMUM_MESSAGES + " records",
