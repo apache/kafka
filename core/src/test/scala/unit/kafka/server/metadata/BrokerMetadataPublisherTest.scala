@@ -31,7 +31,7 @@ import org.apache.kafka.clients.admin.{Admin, AlterConfigOp, ConfigEntry, NewTop
 import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.config.ConfigResource.Type.BROKER
 import org.apache.kafka.common.utils.Exit
-import org.apache.kafka.common.{TopicPartition, Uuid}
+import org.apache.kafka.common.{DirectoryId, TopicPartition, Uuid}
 import org.apache.kafka.coordinator.group.GroupCoordinator
 import org.apache.kafka.image.{MetadataDelta, MetadataImage, MetadataImageTest, MetadataProvenance, TopicImage, TopicsImage}
 import org.apache.kafka.image.loader.LogDeltaManifest
@@ -162,6 +162,7 @@ class BrokerMetadataPublisherTest {
     val partitionRegistrations = partitions.map { case (partitionId, replicas) =>
       Int.box(partitionId) -> new PartitionRegistration.Builder().
         setReplicas(replicas.toArray).
+        setDirectories(DirectoryId.unassignedArray(replicas.size)).
         setIsr(replicas.toArray).
         setLeader(replicas.head).
         setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).

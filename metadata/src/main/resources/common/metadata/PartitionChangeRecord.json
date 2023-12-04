@@ -17,8 +17,8 @@
   "apiKey": 5,
   "type": "metadata",
   "name": "PartitionChangeRecord",
-  // Version 1 implements Eligible Leader Replicas and LastKnownELR as described in KIP-966.
-  // Version 2 adds Directories for KIP-858
+  // Version 1 adds Directories for KIP-858.
+  // Version 2 implements Eligible Leader Replicas and LastKnownELR as described in KIP-966.
   "validVersions": "0-2",
   "flexibleVersions": "0+",
   "fields": [
@@ -43,14 +43,14 @@
       "about": "null if the adding replicas didn't change; the new adding replicas otherwise." },
     { "name": "LeaderRecoveryState", "type": "int8", "default": "-1", "versions": "0+", "taggedVersions": "0+", "tag": 5,
       "about": "-1 if it didn't change; 0 if the leader was elected from the ISR or recovered from an unclean election; 1 if the leader that was elected using unclean leader election and it is still recovering." },
+    { "name": "Directories", "type": "[]uuid", "default": "null",
+      "versions": "1+", "nullableVersions": "1+", "taggedVersions": "1+", "tag": 8,
+      "about": "null if the log dirs didn't change; the new log directory for each replica otherwise."},
     { "name": "EligibleLeaderReplicas", "type": "[]int32", "default": "null", "entityType": "brokerId",
-      "versions": "1+", "nullableVersions": "1+", "taggedVersions": "1+", "tag": 6,
+      "versions": "2+", "nullableVersions": "2+", "taggedVersions": "2+", "tag": 6,
       "about": "null if the ELR didn't change; the new eligible leader replicas otherwise." },
     { "name": "LastKnownELR", "type": "[]int32", "default": "null", "entityType": "brokerId",
-      "versions": "1+", "nullableVersions": "1+", "taggedVersions": "1+", "tag": 7,
-      "about": "null if the LastKnownELR didn't change; the last known eligible leader replicas otherwise." },
-    { "name": "Directories", "type": "[]uuid", "default": "null",
-      "versions": "2+", "nullableVersions": "2+", "taggedVersions": "2+", "tag": 8,
-      "about": "null if the log dirs didn't change; the new log directory for each replica otherwise."}
+      "versions": "2+", "nullableVersions": "2+", "taggedVersions": "2+", "tag": 7,
+      "about": "null if the LastKnownELR didn't change; the last known eligible leader replicas otherwise." }
   ]
 }

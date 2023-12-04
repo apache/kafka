@@ -331,6 +331,7 @@ object TestUtils extends Logging {
     }.mkString(",")
 
     val props = new Properties
+    props.put(KafkaConfig.UnstableMetadataVersionsEnableProp, "true")
     if (zkConnect == null) {
       props.setProperty(KafkaConfig.ServerMaxStartupTimeMsProp, TimeUnit.MINUTES.toMillis(10).toString)
       props.put(KafkaConfig.NodeIdProp, nodeId.toString)
