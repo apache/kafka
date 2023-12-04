@@ -17,6 +17,7 @@
 package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.ClientResponse;
+import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEventHandler;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
@@ -67,6 +68,7 @@ public class HeartbeatRequestManagerTest {
     private Time time;
     private CoordinatorRequestManager coordinatorRequestManager;
     private SubscriptionState subscriptions;
+    private Metadata metadata;
     private HeartbeatRequestManager heartbeatRequestManager;
     private MembershipManager membershipManager;
     private HeartbeatRequestManager.HeartbeatRequestState heartbeatRequestState;
@@ -90,6 +92,7 @@ public class HeartbeatRequestManagerTest {
         backgroundEventHandler = testBuilder.backgroundEventHandler;
         subscriptions = testBuilder.subscriptions;
         membershipManager = testBuilder.membershipManager.orElseThrow(IllegalStateException::new);
+        metadata = testBuilder.metadata;
 
         when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(new Node(1, "localhost", 9999)));
     }
@@ -393,7 +396,8 @@ public class HeartbeatRequestManagerTest {
         // Mock the response from the group coordinator which returns an assignment
         ConsumerGroupHeartbeatResponseData.TopicPartitions tpTopic1 =
             new ConsumerGroupHeartbeatResponseData.TopicPartitions();
-        tpTopic1.setTopicId(Uuid.randomUuid());
+        Uuid topicId = Uuid.randomUuid();
+        tpTopic1.setTopicId(topicId);
         tpTopic1.setPartitions(Collections.singletonList(0));
         ConsumerGroupHeartbeatResponseData.Assignment assignmentTopic1 =
             new ConsumerGroupHeartbeatResponseData.Assignment();
@@ -403,8 +407,9 @@ public class HeartbeatRequestManagerTest {
                 .setMemberId(memberId)
                 .setMemberEpoch(1)
                 .setAssignment(assignmentTopic1));
+        when(metadata.topicNames()).thenReturn(Collections.singletonMap(topicId, "topic1"));
         membershipManager.onHeartbeatResponseReceived(rs1.data());
-        assertEquals(MemberState.RECONCILING, membershipManager.state());
+        assertEquals(MemberState.ACKNOWLEDGING, membershipManager.state());
     }
 
     private void mockStableMember() {
