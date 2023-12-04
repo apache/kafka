@@ -665,7 +665,10 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
         } else if (batch instanceof WriteBatchWithIndex) {
             db.write(wOptions, (WriteBatchWithIndex) batch);
         } else {
-            throw new ProcessorStateException("Unknown type of batch " + batch.getClass().getCanonicalName());
+            log.error("Unknown type of batch {}. This is a bug in Kafka Streams. " +
+                    "Please file a bug report at https://issues.apache.org/jira/projects/KAFKA.",
+                    batch.getClass().getCanonicalName());
+            throw new IllegalStateException("Unknown type of batch " + batch.getClass().getCanonicalName());
         }
     }
 
