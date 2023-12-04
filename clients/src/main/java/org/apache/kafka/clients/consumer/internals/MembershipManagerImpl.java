@@ -774,6 +774,7 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
      * </ol>
      */
     private void resolveMetadataForUnresolvedAssignment() {
+        assignmentReadyToReconcile.clear();
         // Try to resolve topic names from metadata cache or subscription cache, and move
         // assignments from the "unresolved" collection, to the "readyToReconcile" one.
         Iterator<Map.Entry<Uuid, List<Integer>>> it = assignmentUnresolved.entrySet().iterator();
