@@ -24,6 +24,7 @@ import static org.apache.kafka.streams.processor.internals.assignment.Assignment
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.getTaskTopicPartitionMap;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.getTasksForTopicGroup;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import java.util.ArrayList;
 import java.util.Collection;
@@ -95,6 +96,17 @@ public class RackAwareGraphConstructorTest {
 
     private int getCost(final TaskId taskId, final UUID processId, final boolean inCurrentAssignment, final int trafficCost, final int nonOverlapCost, final boolean isStandby) {
         return 1;
+    }
+
+    @Test
+    public void testSubtopicShouldContainAllTasks() {
+        if (constructorType.equals(MIN_COST)) {
+            return;
+        }
+        taskIdList.add(new TaskId(41, 0)); // Extra task not in subtopology map
+        assertThrows(IllegalStateException.class, () -> graph = constructor.constructTaskGraph(
+            clientList, taskIdList, clientStateMap, taskClientMap, originalAssignedTaskNumber,
+            ClientState::hasAssignedTask, this::getCost, 10, 1, false, false));
     }
 
     @Test

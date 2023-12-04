@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.streams.processor.internals.assignment;
 
+import java.util.Collection;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
@@ -27,6 +29,7 @@ import java.util.TreeSet;
 import java.util.UUID;
 import java.util.function.BiConsumer;
 import java.util.function.BiPredicate;
+import java.util.stream.Collectors;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.TopologyMetadata.Subtopology;
@@ -78,6 +81,8 @@ public class BalanceSubtopologyGraphConstructor implements RackAwareGraphConstru
         final boolean hasReplica,
         final boolean isStandby
     ) {
+        validateTasks(taskIdList);
+
         final Graph<Integer> graph = new Graph<>();
 
         for (final TaskId taskId : taskIdList) {
@@ -88,55 +93,20 @@ public class BalanceSubtopologyGraphConstructor implements RackAwareGraphConstru
             }
         }
 
-        // TODO: validate tasks in tasksForTopicGroup and taskIdList
-        final SortedMap<Subtopology, Set<TaskId>> sortedTasksForTopicGroup = new TreeMap<>(tasksForTopicGroup);
-        final int sinkId = getSinkNodeID(taskIdList, clientList, tasksForTopicGroup);
-
-        int taskNodeId = 0;
-        int topicGroupIndex = 0;
-        for (final Entry<Subtopology, Set<TaskId>> kv : sortedTasksForTopicGroup.entrySet()) {
-            final SortedSet<TaskId> taskIds = new TreeSet<>(kv.getValue());
-            for (int clientIndex = 0; clientIndex < clientList.size(); clientIndex++) {
-                final UUID processId = clientList.get(clientIndex);
-                final int clientNodeId = getClientNodeId(clientIndex, taskIdList, clientList, topicGroupIndex);
-                int startingTaskNodeId = taskNodeId;
-                for (final TaskId taskId : taskIds) {
-                    final boolean inCurrentAssignment = hasAssignedTask.test(clientStates.get(processId), taskId);
-                    graph.addEdge(startingTaskNodeId, clientNodeId, 1, costFunction.getCost(taskId, processId, inCurrentAssignment, trafficCost, nonOverlapCost, isStandby), 0);
-                    startingTaskNodeId++;
-                    if (inCurrentAssignment) {
-                        if (!hasReplica && taskClientMap.containsKey(taskId)) {
-                            throw new IllegalArgumentException("Task " + taskId + " assigned to multiple clients "
-                                + processId + ", " + taskClientMap.get(taskId));
-                        }
-                        taskClientMap.put(taskId, processId);
-                    }
-                }
-
-                final int secondStageClientNodeId = getSecondStageClientNodeId(taskIdList, clientList, tasksForTopicGroup, clientIndex);
-                final int capacity = originalAssignedTaskNumber.containsKey(processId) ? (int) Math.ceil(originalAssignedTaskNumber.get(processId) * 1.0 / taskIdList.size() * taskIds.size()) : 0;
-                graph.addEdge(clientNodeId, secondStageClientNodeId, capacity, 0, 0);
-            }
-
-            taskNodeId += taskIds.size();
-            topicGroupIndex++;
-        }
-
-        // Add edges from source to all tasks. Since they have same capacity, cost and flow, we can use their ids directly
-        for (int i = 0; i < taskIdList.size(); i++) {
-            graph.addEdge(SOURCE_ID, i, 1, 0, 0);
-        }
-
-        // Add sink
-        for (int clientIndex = 0; clientIndex < clientList.size(); clientIndex++) {
-            final UUID processId = clientList.get(clientIndex);
-            final int capacity = originalAssignedTaskNumber.getOrDefault(processId, 0);
-            final int secondStageClientNodeId = getSecondStageClientNodeId(taskIdList, clientList, tasksForTopicGroup, clientIndex);
-            graph.addEdge(secondStageClientNodeId, sinkId, capacity, 0, 0);
-        }
-
-        graph.setSourceNode(SOURCE_ID);
-        graph.setSinkNode(sinkId);
+        constructEdges(
+            graph,
+            taskIdList,
+            clientList,
+            clientStates,
+            taskClientMap,
+            originalAssignedTaskNumber,
+            hasAssignedTask,
+            costFunction,
+            trafficCost,
+            nonOverlapCost,
+            hasReplica,
+            isStandby
+        );
 
         // Run max flow algorithm to get a solution first
         final long maxFlow = graph.calculateMaxFlow();
@@ -160,6 +130,7 @@ public class BalanceSubtopologyGraphConstructor implements RackAwareGraphConstru
         final BiPredicate<ClientState, TaskId> hasAssignedTask
     ) {
         final SortedMap<Subtopology, Set<TaskId>> sortedTasksForTopicGroup = new TreeMap<>(tasksForTopicGroup);
+        final Set<TaskId> taskIdSet = new HashSet<>(taskIdList);
 
         int taskNodeId = 0;
         int topicGroupIndex = 0;
@@ -168,6 +139,9 @@ public class BalanceSubtopologyGraphConstructor implements RackAwareGraphConstru
         for (final Entry<Subtopology, Set<TaskId>> kv : sortedTasksForTopicGroup.entrySet()) {
             final SortedSet<TaskId> taskIds = new TreeSet<>(kv.getValue());
             for (final TaskId taskId : taskIds) {
+                if (!taskIdSet.contains(taskId)) {
+                    continue;
+                }
                 final KeyValue<Boolean, Integer> movedAndAssigned = assignTaskToClient(graph, taskId, taskNodeId, topicGroupIndex,
                     clientStates, clientList, taskIdList, taskClientMap, assignTask, unAssignTask);
                 taskMoved |= movedAndAssigned.key;
@@ -180,5 +154,101 @@ public class BalanceSubtopologyGraphConstructor implements RackAwareGraphConstru
         validateAssignedTask(taskIdList, tasksAssigned, clientStates, originalAssignedTaskNumber, hasAssignedTask);
 
         return taskMoved;
+    }
+
+    private void validateTasks(final List<TaskId> taskIdList) {
+        final Set<TaskId> tasksInSubtopology = tasksForTopicGroup.values().stream().flatMap(
+            Collection::stream).collect(Collectors.toSet());
+        for (final TaskId taskId : taskIdList) {
+            if (!tasksInSubtopology.contains(taskId)) {
+                throw new IllegalStateException("Task " + taskId + " not in tasksForTopicGroup");
+            }
+        }
+    }
+
+    private void constructEdges(
+        final Graph<Integer> graph,
+        final List<TaskId> taskIdList,
+        final List<UUID> clientList,
+        final Map<UUID, ClientState> clientStates,
+        final Map<TaskId, UUID> taskClientMap,
+        final Map<UUID, Integer> originalAssignedTaskNumber,
+        final BiPredicate<ClientState, TaskId> hasAssignedTask,
+        final CostFunction costFunction,
+        final int trafficCost,
+        final int nonOverlapCost,
+        final boolean hasReplica,
+        final boolean isStandby
+    ) {
+        final Set<TaskId> taskIdSet = new HashSet<>(taskIdList);
+        final SortedMap<Subtopology, Set<TaskId>> sortedTasksForTopicGroup = new TreeMap<>(tasksForTopicGroup);
+        final int sinkId = getSinkNodeID(taskIdList, clientList, tasksForTopicGroup);
+
+        int taskNodeId = 0;
+        int topicGroupIndex = 0;
+        for (final Entry<Subtopology, Set<TaskId>> kv : sortedTasksForTopicGroup.entrySet()) {
+            final SortedSet<TaskId> taskIds = new TreeSet<>(kv.getValue());
+            for (int clientIndex = 0; clientIndex < clientList.size(); clientIndex++) {
+                final UUID processId = clientList.get(clientIndex);
+                final int clientNodeId = getClientNodeId(clientIndex, taskIdList, clientList, topicGroupIndex);
+                int startingTaskNodeId = taskNodeId;
+                boolean hasTask = false;
+                for (final TaskId taskId : taskIds) {
+                    // It's possible some taskId is not in the tasks we want to assign. For example, taskIdSet is only stateless tasks,
+                    // but the tasks in subtopology map contains all tasks including stateful ones.
+                    if (!taskIdSet.contains(taskId)) {
+                        continue;
+                    }
+                    hasTask = true;
+                    final boolean inCurrentAssignment = hasAssignedTask.test(clientStates.get(processId), taskId);
+                    graph.addEdge(startingTaskNodeId, clientNodeId, 1, costFunction.getCost(taskId, processId, inCurrentAssignment, trafficCost, nonOverlapCost, isStandby), 0);
+                    startingTaskNodeId++;
+                    if (inCurrentAssignment) {
+                        if (!hasReplica && taskClientMap.containsKey(taskId)) {
+                            throw new IllegalArgumentException("Task " + taskId + " assigned to multiple clients "
+                                + processId + ", " + taskClientMap.get(taskId));
+                        }
+                        taskClientMap.put(taskId, processId);
+                    }
+                }
+
+                if (hasTask) {
+                    final int secondStageClientNodeId = getSecondStageClientNodeId(taskIdList,
+                        clientList, tasksForTopicGroup, clientIndex);
+                    final int capacity =
+                        originalAssignedTaskNumber.containsKey(processId) ? (int) Math.ceil(
+                            originalAssignedTaskNumber.get(processId) * 1.0 / taskIdList.size()
+                                * taskIds.size()) : 0;
+                    graph.addEdge(clientNodeId, secondStageClientNodeId, capacity, 0, 0);
+                }
+            }
+
+            taskNodeId += taskIds.stream().filter(taskIdSet::contains).count();
+            topicGroupIndex++;
+        }
+
+        // Add edges from source to all tasks
+        taskNodeId = 0;
+        for (final Entry<Subtopology, Set<TaskId>> kv : sortedTasksForTopicGroup.entrySet()) {
+            final SortedSet<TaskId> taskIds = new TreeSet<>(kv.getValue());
+            for (final TaskId taskId : taskIds) {
+                if (!taskIdSet.contains(taskId)) {
+                    continue;
+                }
+                graph.addEdge(SOURCE_ID, taskNodeId, 1, 0, 0);
+                taskNodeId++;
+            }
+        }
+
+        // Add sink
+        for (int clientIndex = 0; clientIndex < clientList.size(); clientIndex++) {
+            final UUID processId = clientList.get(clientIndex);
+            final int capacity = originalAssignedTaskNumber.getOrDefault(processId, 0);
+            final int secondStageClientNodeId = getSecondStageClientNodeId(taskIdList, clientList, tasksForTopicGroup, clientIndex);
+            graph.addEdge(secondStageClientNodeId, sinkId, capacity, 0, 0);
+        }
+
+        graph.setSourceNode(SOURCE_ID);
+        graph.setSinkNode(sinkId);
     }
 }
