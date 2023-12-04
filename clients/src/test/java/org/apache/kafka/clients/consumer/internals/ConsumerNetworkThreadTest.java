@@ -56,7 +56,7 @@ import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CompletableFuture;
 
 import static java.util.Collections.singleton;
-import static java.util.Collections.singletonMap;
+import static org.apache.kafka.clients.consumer.internals.ConsumerTestBuilder.DEFAULT_GROUP_ID;
 import static org.apache.kafka.clients.consumer.internals.ConsumerTestBuilder.DEFAULT_HEARTBEAT_INTERVAL_MS;
 import static org.apache.kafka.clients.consumer.internals.ConsumerTestBuilder.DEFAULT_REQUEST_TIMEOUT_MS;
 import static org.apache.kafka.test.TestUtils.DEFAULT_MAX_WAIT_MS;
@@ -67,6 +67,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
@@ -85,6 +86,8 @@ public class ConsumerNetworkThreadTest {
     private OffsetsRequestManager offsetsRequestManager;
     private CommitRequestManager commitRequestManager;
     private CoordinatorRequestManager coordinatorRequestManager;
+    private HeartbeatRequestManager heartbeatRequestManager;
+    private MembershipManager memberhipsManager;
     private ConsumerNetworkThread consumerNetworkThread;
     private MockClient client;
     private SubscriptionState subscriptions;
@@ -101,6 +104,8 @@ public class ConsumerNetworkThreadTest {
         commitRequestManager = testBuilder.commitRequestManager.orElseThrow(IllegalStateException::new);
         offsetsRequestManager = testBuilder.offsetsRequestManager;
         coordinatorRequestManager = testBuilder.coordinatorRequestManager.orElseThrow(IllegalStateException::new);
+        heartbeatRequestManager = testBuilder.heartbeatRequestManager.orElseThrow(IllegalStateException::new);
+        memberhipsManager = testBuilder.membershipManager.orElseThrow(IllegalStateException::new);
         consumerNetworkThread = testBuilder.consumerNetworkThread;
         subscriptions = testBuilder.subscriptions;
         consumerNetworkThread.initializeResources();
@@ -293,11 +298,25 @@ public class ConsumerNetworkThreadTest {
         Node node = metadata.fetch().nodes().get(0);
         coordinatorRequestManager.markCoordinatorUnknown("test", time.milliseconds());
         client.prepareResponse(FindCoordinatorResponse.prepareResponse(Errors.NONE, "group-id", node));
-        prepareOffsetCommitRequest(singletonMap(tp, 100L), Errors.NONE, false);
         consumerNetworkThread.cleanup();
         assertTrue(coordinatorRequestManager.coordinator().isPresent());
-        assertFalse(client.hasPendingResponses(), "There should be no pending responses but found " + client.futureResponses());
-        assertFalse(client.hasInFlightRequests(), "There should be no pending requests, but found " + client.requests());
+        assertFalse(client.hasPendingResponses(),
+            "There should be 0 pending response but found " + client.futureResponses().size());
+        assertFalse(client.hasInFlightRequests(),
+            "There should be 0 pending request, but found " + client.requests().size());
+    }
+
+    @Test
+    void testEnsurePollHeartbeatOnClose() {
+        when(memberhipsManager.shouldSkipHeartbeat()).thenReturn(false);
+        Node node = metadata.fetch().nodes().get(0);
+        client.prepareResponse(FindCoordinatorResponse.prepareResponse(Errors.NONE, DEFAULT_GROUP_ID, node));
+        consumerNetworkThread.cleanup();
+        doAnswer(invocation -> {
+            System.out.println("leave group on close");
+            return null;
+        }).when(memberhipsManager).leaveGroupOnClose();
+        verify(heartbeatRequestManager).poll(anyLong());
     }
 
     private void prepareTearDown() {

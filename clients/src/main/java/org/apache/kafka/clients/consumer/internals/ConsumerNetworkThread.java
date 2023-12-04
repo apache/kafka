@@ -38,10 +38,7 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
-import java.util.concurrent.TimeUnit;
-import java.util.concurrent.TimeoutException;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
@@ -148,7 +145,6 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
                 .map(networkClientDelegate::addAll)
                 .reduce(MAX_POLL_TIMEOUT_MS, Math::min);
         networkClientDelegate.poll(pollWaitTimeMs, currentTimeMs);
-
         cachedMaximumTimeToWait = requestManagers.entries().stream()
                 .filter(Optional::isPresent)
                 .map(Optional::get)
@@ -199,11 +195,11 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
 
         // Poll to ensure that request has been written to the socket. Wait until either the timer has expired or until
         // all requests have received a response.
-        do {
+        while (timer.notExpired() && !requestFutures.stream().allMatch(Future::isDone)) {
             pollWaitTimeMs = Math.min(pollWaitTimeMs, timer.remainingMs());
             networkClientDelegate.poll(pollWaitTimeMs, timer.currentTimeMs());
             timer.update();
-        } while (timer.notExpired() && !requestFutures.stream().allMatch(Future::isDone));
+        }
     }
 
     public boolean isRunning() {
@@ -282,8 +278,10 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
         log.trace("Closing the consumer network thread");
         Timer timer = time.timer(closeTimeout);
         try {
+            prepareForShutdown(timer);
+            // Send out the unsent commits and try to complete them before timer runs out
             runAtClose(requestManagers.entries(), networkClientDelegate, timer);
-            maybeLeaveGroup(timer);
+            maybeLeaveGroup();
         } catch (Exception e) {
             log.error("Unexpected error during shutdown.  Proceed with closing.", e);
         } finally {
@@ -295,50 +293,40 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
         }
     }
 
+    private void prepareForShutdown(final Timer timer) {
+        if (!requestManagers.coordinatorRequestManager.isPresent())
+            return;
+        if (!requestManagers.commitRequestManager.isPresent()) {
+            log.error("Expecting a CommitRequestManager but the object was never initialized. Shutting down.");
+            return;
+        }
+
+        // We need a coordinator node for the commit request manager to send the remaining commit requests
+        ensureCoordinatorReady(timer);
+    }
+
     /**
      * Leave the group when the consumer is shutting down.
      */
-    void maybeLeaveGroup(final Timer timer) throws ExecutionException, InterruptedException, TimeoutException {
-        if (!membershipManager.isPresent()) {
+    void maybeLeaveGroup() {
+        if (!membershipManager.isPresent())
             return;
-        }
-        // The partition should already been revoked at this point, so we invoke leaveGroup to complete the state
-        // transition and poll the heartbeatRequestManager one last time.
-        membershipManager.get().leaveGroup().get(timer.remainingMs(), TimeUnit.MILLISECONDS);
-        sendLeaveGroupOnClose(timer);
-    }
 
-    private void sendLeaveGroupOnClose(final Timer timer) {
-        ensureCoordinatorReady(timer);
+        // We do not need to send leave group when the member is unsubscribed or fatal
+        if (membershipManager.get().shouldSkipHeartbeat())
+            return;
+
+        membershipManager.get().leaveGroupOnClose();
         HeartbeatRequestManager hrm = requestManagers.heartbeatRequestManager.orElseThrow(() ->
-            new IllegalStateException(
-                "Expecting a HeartbeatRequestManager but the object was never initialized."));
+                new IllegalStateException(
+                        "Expecting a GroupHeartbeatRequest but the object was never initialized."));
+        log.debug("Sending GroupHeartbeatRequest with epoch {} to coordinator {} to leave the group before close",
+            membershipManager.get().memberEpoch(),
+            requestManagers.coordinatorRequestManager.get().coordinator());
         long nowMs = time.milliseconds();
         // Ensure the request gets sent out
         networkClientDelegate.addAll(hrm.poll(nowMs));
         networkClientDelegate.poll(0, nowMs);
-    }
-
-    private void completePartitionRevocationOnClose(final Timer timer) throws ExecutionException, InterruptedException, TimeoutException {
-        CompletableFuture<Void> leaveGroupFuture = membershipManager.get().leaveGroup();
-        while (timer.notExpired() && !leaveGroupFuture.isDone()) {
-            networkClientDelegate.poll(timer.remainingMs(), timer.currentTimeMs());
-            if (pollAssignmentChangeEvents(timer)) {
-                // Expecting a partitionRevocation completion event from the application thread
-                // Once completed. We are done with partition revocation and
-                break;
-            }
-            timer.update();
-        }
-    }
-
-    /**
-     * We need to continue to poll the ApplicationEventQueue during closing so that we can process the callback
-     * completion events and finish the leave group.
-     */
-    private boolean pollAssignmentChangeEvents(final Timer timer) {
-        // TODO: To be implemented with KAFKA-15276
-        return true;
     }
 
     private void ensureCoordinatorReady(final Timer timer) {
@@ -347,7 +335,7 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
         }
     }
 
-    private boolean coordinatorReady() {
+    boolean coordinatorReady() {
         CoordinatorRequestManager coordinatorRequestManager = requestManagers.coordinatorRequestManager.orElseThrow(
                 () -> new IllegalStateException("CoordinatorRequestManager uninitialized."));
         Optional<Node> coordinator = coordinatorRequestManager.coordinator();

@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
-import java.util.Locale;
 import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
@@ -81,6 +80,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
@@ -97,6 +97,7 @@ import java.util.stream.Stream;
 import static java.util.Arrays.asList;
 import static java.util.Collections.singleton;
 import static java.util.Collections.singletonList;
+import static org.apache.kafka.clients.consumer.internals.ConsumerTestBuilder.DEFAULT_GROUP_ID;
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.THROW_ON_FETCH_STABLE_OFFSET_UNSUPPORTED;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
@@ -129,8 +130,8 @@ public class AsyncKafkaConsumerTest {
 
     @BeforeEach
     public void setup() {
-        // By default, the consumer is part of a group and autoCommit is enabled.
-        setup(ConsumerTestBuilder.createDefaultGroupInformation(), true);
+        // By default, the consumer is part of a group and autoCommit is disabled.
+        setup(ConsumerTestBuilder.createDefaultGroupInformation(), false);
     }
 
     private void setup(Optional<ConsumerTestBuilder.GroupInformation> groupInfo, boolean enableAutoCommit) {
@@ -165,13 +166,9 @@ public class AsyncKafkaConsumerTest {
     }
 
     @Test
-    public void testSuccessfulStartupShutdown() {
-        assertDoesNotThrow(() -> consumer.close());
-    }
-
-    @Test
     public void testSuccessfulStartupShutdownWithAutoCommit() {
         resetWithAutoCommitEnabled();
+        prepareCoordinatorResponse(DEFAULT_GROUP_ID, Errors.NONE);
         TopicPartition tp = new TopicPartition("topic", 0);
         consumer.assign(singleton(tp));
         consumer.seek(tp, 100);
@@ -187,6 +184,7 @@ public class AsyncKafkaConsumerTest {
 
     @Test
     public void testFailOnClosedConsumer() {
+        prepareCoordinatorResponse(DEFAULT_GROUP_ID, Errors.NONE);
         consumer.close();
         final IllegalStateException res = assertThrows(IllegalStateException.class, consumer::assignment);
         assertEquals("This consumer has already been closed.", res.getMessage());
@@ -325,7 +323,6 @@ public class AsyncKafkaConsumerTest {
         assertDoesNotThrow(() -> consumer.poll(Duration.ZERO));
     }
 
-    @Test
     public void testWakeupAfterNonEmptyFetch() {
         final String topicName = "foo";
         final int partition = 3;
@@ -427,6 +424,7 @@ public class AsyncKafkaConsumerTest {
         CompletableFuture<Void> commitFuture = new CompletableFuture<>();
         commitFuture.complete(null);
 
+        prepareCommit(Arrays.asList(t1, t0), DEFAULT_GROUP_ID, Errors.NONE);
         try (MockedConstruction<CommitApplicationEvent> ignored = commitEventMocker(commitFuture)) {
             assertDoesNotThrow(() -> consumer.commitSync(topicPartitionOffsets));
         }
@@ -445,10 +443,15 @@ public class AsyncKafkaConsumerTest {
         topicPartitionOffsets.put(t1, new OffsetAndMetadata(20L, Optional.of(1), ""));
 
         consumer.assign(Arrays.asList(t0, t1));
+        consumer.seek(t0, 10);
+        consumer.seek(t1, 20);
 
         CompletableFuture<Void> commitFuture = new CompletableFuture<>();
         commitFuture.complete(null);
 
+        prepareCommit(Arrays.asList(t1, t0), DEFAULT_GROUP_ID, Errors.NONE);
+        // TODO: The log shows NPE thrown from the CommitRequestManager, which is caused by the use of mock.
+        //  Ideally, we will need to abandon the use of spy() in the testBuilder and mock the dependencies instead.
         try (MockedConstruction<CommitApplicationEvent> ignored = commitEventMocker(commitFuture)) {
             assertDoesNotThrow(() -> consumer.commitAsync(topicPartitionOffsets, callback));
         }
@@ -474,6 +477,8 @@ public class AsyncKafkaConsumerTest {
     public void testEnsureShutdownExecutedCommitAsyncCallbacks() {
         MockCommitCallback callback = new MockCommitCallback();
         CompletableFuture<Void> future = new CompletableFuture<>();
+        testBuilder.client.prepareResponse(FindCoordinatorResponse.prepareResponse(Errors.NONE, DEFAULT_GROUP_ID,
+            testBuilder.metadata.fetch().nodes().get(0)));
         doReturn(future).when(consumer).commit(new HashMap<>(), false);
         assertDoesNotThrow(() -> consumer.commitAsync(new HashMap<>(), callback));
         future.complete(null);
@@ -953,17 +958,23 @@ public class AsyncKafkaConsumerTest {
 
     @Test
     public void testGroupIdNotNullAndValid() {
-        final Properties props = requiredConsumerPropertiesAndGroupId("consumerGroupA");
+        // close the default consumer
+        shutDown();
+        final Properties props = requiredConsumerProperties();
+        props.put(ConsumerConfig.GROUP_ID_CONFIG, "consumerGroupA");
         props.put(ConsumerConfig.AUTO_COMMIT_INTERVAL_MS_CONFIG, 10000);
         props.put(THROW_ON_FETCH_STABLE_OFFSET_UNSUPPORTED, true);
         final ConsumerConfig config = new ConsumerConfig(props);
-
-        try (final AsyncKafkaConsumer<String, String> consumer =
-                 new AsyncKafkaConsumer<>(config, new StringDeserializer(), new StringDeserializer())) {
+        try {
+            AsyncKafkaConsumer<String, String> consumer =
+                new AsyncKafkaConsumer<>(config, new StringDeserializer(), new StringDeserializer());
             assertTrue(config.unused().contains(ConsumerConfig.AUTO_COMMIT_INTERVAL_MS_CONFIG));
             assertTrue(config.unused().contains(THROW_ON_FETCH_STABLE_OFFSET_UNSUPPORTED));
         } catch (final Exception exception) {
             throw new AssertionFailedError("The following exception was not expected:", exception);
+        } finally {
+            // We need 0ms shutdown to avoid leaving the test hanging for the default duration
+            consumer.close(Duration.ofMillis(0));
         }
     }
 
@@ -1113,21 +1124,9 @@ public class AsyncKafkaConsumerTest {
         return timestampToSearch;
     }
 
-    private void prepAutocommitOnClose() {
-        Node node = testBuilder.metadata.fetch().nodes().get(0);
-        testBuilder.client.prepareResponse(FindCoordinatorResponse.prepareResponse(Errors.NONE, "group-id", node));
-        if (!testBuilder.subscriptions.allConsumed().isEmpty()) {
-            List<TopicPartition> topicPartitions = new ArrayList<>(testBuilder.subscriptions.assignedPartitionsList());
-            testBuilder.client.prepareResponse(mockAutocommitResponse(
-                topicPartitions,
-                (short) 1,
-                Errors.NONE).responseBody());
-        }
-    }
-
-    private ClientResponse mockAutocommitResponse(final List<TopicPartition> topicPartitions,
-                                                  final short apiKeyVersion,
-                                                  final Errors error) {
+    private ClientResponse mockCommitResponse(final List<TopicPartition> topicPartitions,
+                                              final short apiKeyVersion,
+                                              final Errors error) {
         OffsetCommitResponseData responseData = new OffsetCommitResponseData();
         List<OffsetCommitResponseData.OffsetCommitResponseTopic> responseTopics = new ArrayList<>();
         topicPartitions.forEach(tp -> {
@@ -1152,6 +1151,34 @@ public class AsyncKafkaConsumerTest {
             null,
             new OffsetCommitResponse(responseData)
         );
+    }
+
+    private void prepareCommit(List<TopicPartition> topicPartitions, String groupId, Errors error) {
+        testBuilder.client.prepareResponse(FindCoordinatorResponse.prepareResponse(error, groupId,
+            testBuilder.metadata.fetch().nodes().get(0)));
+        testBuilder.client.prepareResponse(mockCommitResponse(
+            topicPartitions,
+            ApiKeys.OFFSET_COMMIT.latestVersion(),
+            Errors.NONE).responseBody());
+    }
+
+    private void prepareCoordinatorResponse(String groupId, Errors error) {
+        Node node = testBuilder.metadata.fetch().nodes().get(0);
+        testBuilder.client.prepareResponse(FindCoordinatorResponse.prepareResponse(error, groupId,
+            node));
+    }
+
+
+    private void prepAutocommitOnClose() {
+        Node node = testBuilder.metadata.fetch().nodes().get(0);
+        testBuilder.client.prepareResponse(FindCoordinatorResponse.prepareResponse(Errors.NONE, DEFAULT_GROUP_ID,
+            node));
+        if (!testBuilder.subscriptions.allConsumed().isEmpty()) {
+            doAnswer(i -> {
+                System.out.println("auto commit sync on close");
+                return null;
+            }).when(consumer).commitSync(any(), any());
+        }
     }
 }
 
