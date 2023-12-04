@@ -26,9 +26,6 @@ then
       echo "KAFKA_ADVERTISED_LISTENERS is not supported on a KRaft controller."
       exit 1
     else
-      # Remove advertised.listeners from default configs
-      sed '/advertised.listeners=/d' /etc/kafka/docker/server.properties > /etc/kafka/docker/server.properties.temp
-      mv /etc/kafka/docker/server.properties.temp /etc/kafka/docker/server.properties
       # Unset in case env variable is set with empty value
       unset KAFKA_ADVERTISED_LISTENERS
     fi
