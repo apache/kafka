@@ -524,17 +524,16 @@ public class GroupCoordinatorShard implements CoordinatorShard<Record> {
      * @return The list of tombstones (offset commit and group metadata) to append.
      */
     public CoordinatorResult<Void, Record> cleanupGroupMetadata() {
+        long startMs = time.milliseconds();
         List<Record> records = new ArrayList<>();
         groupMetadataManager.groupIds().forEach(groupId -> {
-            long startMs = time.milliseconds();
             boolean allOffsetsExpired = offsetMetadataManager.cleanupExpiredOffsets(groupId, records);
             if (allOffsetsExpired) {
                 groupMetadataManager.maybeDeleteGroup(groupId, records);
             }
-            log.info("[GroupId {}] Generated {} tombstone records (allOffsetsExpired={}) in {} milliseconds.",
-                groupId, records.size(), allOffsetsExpired, time.milliseconds() - startMs);
         });
 
+        log.info("Generated {} tombstone records in {} milliseconds.", records.size(), time.milliseconds() - startMs);
         // Reschedule the next cycle.
         scheduleGroupMetadataExpiration();
         return new CoordinatorResult<>(records);
