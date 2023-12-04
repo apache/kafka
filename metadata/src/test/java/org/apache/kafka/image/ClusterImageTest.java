@@ -35,6 +35,7 @@ import org.apache.kafka.metadata.ControllerRegistration;
 import org.apache.kafka.metadata.RecordTestUtils;
 import org.apache.kafka.metadata.VersionRange;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
+import org.apache.kafka.server.common.MetadataVersion;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
@@ -45,6 +46,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.apache.kafka.common.metadata.MetadataRecordType.FENCE_BROKER_RECORD;
 import static org.apache.kafka.common.metadata.MetadataRecordType.UNFENCE_BROKER_RECORD;
@@ -115,11 +117,11 @@ public class ClusterImageTest {
             (short) 0));
 
         ControllerEndpointCollection endpointsFor1001 = new ControllerEndpointCollection();
-        new ControllerEndpointCollection().add(new ControllerEndpoint().
-                setHost("localhost").
-                setName("PLAINTEXT").
-                setPort(19093).
-                setSecurityProtocol(SecurityProtocol.PLAINTEXT.id));
+        endpointsFor1001.add(new ControllerEndpoint().
+            setHost("localhost").
+            setName("PLAINTEXT").
+            setPort(19093).
+            setSecurityProtocol(SecurityProtocol.PLAINTEXT.id));
         DELTA1_RECORDS.add(new ApiMessageAndVersion(new RegisterControllerRecord().
             setControllerId(1001).
             setIncarnationId(Uuid.fromString("FdEHF-IqScKfYyjZ1CjfNQ")).
@@ -204,5 +206,23 @@ public class ClusterImageTest {
         RecordListWriter writer = new RecordListWriter();
         image.write(writer, new ImageWriterOptions.Builder().build());
         return writer.records();
+    }
+
+    @Test
+    public void testHandleLossOfControllerRegistrations() {
+        ClusterImage testImage = new ClusterImage(Collections.emptyMap(),
+            Collections.singletonMap(1000, new ControllerRegistration.Builder().
+                setId(1000).
+                setIncarnationId(Uuid.fromString("9ABu6HEgRuS-hjHLgC4cHw")).
+                setListeners(Collections.singletonMap("PLAINTEXT",
+                    new Endpoint("PLAINTEXT", SecurityProtocol.PLAINTEXT, "localhost", 19092))).
+                setSupportedFeatures(Collections.emptyMap()).build()));
+        RecordListWriter writer = new RecordListWriter();
+        final AtomicReference<String> lossString = new AtomicReference<>("");
+        testImage.write(writer, new ImageWriterOptions.Builder().
+            setMetadataVersion(MetadataVersion.IBP_3_6_IV2).
+            setLossHandler(loss -> lossString.compareAndSet("", loss.loss())).
+                build());
+        assertEquals("controller registration data", lossString.get());
     }
 }

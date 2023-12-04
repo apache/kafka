@@ -139,7 +139,11 @@ class CoordinatorLoaderImpl[T](
                 batch.asScala.foreach { record =>
                   numRecords = numRecords + 1
                   try {
-                    coordinator.replay(deserializer.deserialize(record.key, record.value))
+                    coordinator.replay(
+                      batch.producerId,
+                      batch.producerEpoch,
+                      deserializer.deserialize(record.key, record.value)
+                    )
                   } catch {
                     case ex: UnknownRecordTypeException =>
                       warn(s"Unknown record type ${ex.unknownType} while loading offsets and group metadata " +

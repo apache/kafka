@@ -1421,6 +1421,12 @@ public class StreamsConfigTest {
     }
 
     @Test
+    public void shouldtSetBalanceSubtopologyRackAwareAssignmentConfig() {
+        props.put(StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_CONFIG, StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_BALANCE_SUBTOPOLOGY);
+        assertEquals("balance_subtopology", new StreamsConfig(props).getString(StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_CONFIG));
+    }
+
+    @Test
     public void shouldThrowIfNotSetCorrectRackAwareAssignmentConfig() {
         props.put(StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_CONFIG, "invalid");
         assertThrows(ConfigException.class, () -> new StreamsConfig(props));

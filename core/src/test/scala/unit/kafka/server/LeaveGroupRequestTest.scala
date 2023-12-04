@@ -116,10 +116,7 @@ class LeaveGroupRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBa
       // grp-1 is empty.
       assertEquals(
         GenericGroupState.EMPTY.toString,
-        describeGroups(
-          groupIds = List("grp-1"),
-          version = ApiKeys.DESCRIBE_GROUPS.latestVersion(isUnstableApiEnabled)
-        ).head.groupState
+        describeGroups(List("grp-1")).head.groupState
       )
 
       if (version >= 3) {
@@ -146,10 +143,7 @@ class LeaveGroupRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBa
         // grp-2 is empty.
         assertEquals(
           GenericGroupState.EMPTY.toString,
-          describeGroups(
-            groupIds = List("grp-2"),
-            version = ApiKeys.DESCRIBE_GROUPS.latestVersion(isUnstableApiEnabled)
-          ).head.groupState
+          describeGroups(List("grp-2")).head.groupState
         )
       }
     }

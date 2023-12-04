@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.server.metrics;
 
+import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigDef.Importance;
 import org.apache.kafka.common.config.ConfigDef.Type;
@@ -23,6 +24,7 @@ import org.apache.kafka.common.errors.InvalidConfigurationException;
 import org.apache.kafka.common.errors.InvalidRequestException;
 
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -67,7 +69,7 @@ import java.util.regex.PatternSyntaxException;
  * For more information please look at kip-714:
  * https://cwiki.apache.org/confluence/display/KAFKA/KIP-714%3A+Client+metrics+and+observability#KIP714:Clientmetricsandobservability-Clientmetricsconfiguration
  */
-public class ClientMetricsConfigs {
+public class ClientMetricsConfigs extends AbstractConfig {
 
     public static final String SUBSCRIPTION_METRICS = "metrics";
     public static final String PUSH_INTERVAL_MS = "interval.ms";
@@ -79,6 +81,9 @@ public class ClientMetricsConfigs {
     public static final String CLIENT_SOFTWARE_VERSION = "client_software_version";
     public static final String CLIENT_SOURCE_ADDRESS = "client_source_address";
     public static final String CLIENT_SOURCE_PORT = "client_source_port";
+
+    // '*' in client-metrics resource configs indicates that all the metrics are subscribed.
+    public static final String ALL_SUBSCRIBED_METRICS_CONFIG = "*";
 
     public static final int DEFAULT_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes
     private static final int MIN_INTERVAL_MS = 100; // 100ms
@@ -94,9 +99,13 @@ public class ClientMetricsConfigs {
     ));
 
     private static final ConfigDef CONFIG = new ConfigDef()
-        .define(SUBSCRIPTION_METRICS, Type.LIST, Importance.MEDIUM, "Subscription metrics list")
-        .define(PUSH_INTERVAL_MS, Type.INT, Importance.MEDIUM, "Push interval in milliseconds")
-        .define(CLIENT_MATCH_PATTERN, Type.LIST, Importance.MEDIUM, "Client match pattern list");
+        .define(SUBSCRIPTION_METRICS, Type.LIST, Collections.emptyList(), Importance.MEDIUM, "Subscription metrics list")
+        .define(PUSH_INTERVAL_MS, Type.INT, DEFAULT_INTERVAL_MS, Importance.MEDIUM, "Push interval in milliseconds")
+        .define(CLIENT_MATCH_PATTERN, Type.LIST, Collections.emptyList(), Importance.MEDIUM, "Client match pattern list");
+
+    public ClientMetricsConfigs(Properties props) {
+        super(CONFIG, props);
+    }
 
     public static ConfigDef configDef() {
         return CONFIG;
@@ -143,46 +152,43 @@ public class ClientMetricsConfigs {
     /**
      * Parses the client matching patterns and builds a map with entries that has
      * (PatternName, PatternValue) as the entries.
-     *  Ex: "VERSION=1.2.3" would be converted to a map entry of (Version, 1.2.3)
+     * Ex: "VERSION=1.2.3" would be converted to a map entry of (Version, 1.2.3)
      * <p>
-     *  NOTES:
-     *  Client match pattern splits the input into two parts separated by first occurrence of the character '='
+     * NOTES:
+     * Client match pattern splits the input into two parts separated by first occurrence of the character '='
      *
-     *  @param patterns List of client matching pattern strings
+     * @param patterns List of client matching pattern strings
      * @return map of client matching pattern entries
      */
-    public static Map<String, String> parseMatchingPatterns(List<String> patterns) {
-        Map<String, String> patternsMap = new HashMap<>();
-        if (patterns != null) {
-            patterns.forEach(pattern -> {
-                String[] nameValuePair = pattern.split("=");
-                if (nameValuePair.length != 2) {
-                    throw new InvalidConfigurationException("Illegal client matching pattern: " + pattern);
-                }
-
-                String param = nameValuePair[0].trim();
-                String patternValue = nameValuePair[1].trim();
-                if (isValidParam(param) && isValidRegExPattern(patternValue)) {
-                    patternsMap.put(param, patternValue);
-                } else {
-                    throw new InvalidConfigurationException("Illegal client matching pattern: " + pattern);
-                }
-            });
+    public static Map<String, Pattern> parseMatchingPatterns(List<String> patterns) {
+        if (patterns == null || patterns.isEmpty()) {
+            return Collections.emptyMap();
         }
+
+        Map<String, Pattern> patternsMap = new HashMap<>();
+        patterns.forEach(pattern -> {
+            String[] nameValuePair = pattern.split("=");
+            if (nameValuePair.length != 2) {
+                throw new InvalidConfigurationException("Illegal client matching pattern: " + pattern);
+            }
+
+            String param = nameValuePair[0].trim();
+            if (!isValidParam(param)) {
+                throw new InvalidConfigurationException("Illegal client matching pattern: " + pattern);
+            }
+
+            try {
+                Pattern patternValue = Pattern.compile(nameValuePair[1].trim());
+                patternsMap.put(param, patternValue);
+            } catch (PatternSyntaxException e) {
+                throw new InvalidConfigurationException("Illegal client matching pattern: " + pattern);
+            }
+        });
 
         return patternsMap;
     }
 
     private static boolean isValidParam(String paramName) {
         return ALLOWED_MATCH_PARAMS.contains(paramName);
-    }
-
-    private static boolean isValidRegExPattern(String inputPattern) {
-        try {
-            Pattern.compile(inputPattern);
-        } catch (PatternSyntaxException e) {
-            return false;
-        }
-        return true;
     }
 }

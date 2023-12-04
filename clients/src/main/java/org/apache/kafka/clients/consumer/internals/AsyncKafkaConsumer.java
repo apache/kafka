@@ -65,6 +65,7 @@ import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.requests.JoinGroupRequest;
 import org.apache.kafka.common.requests.ListOffsetsRequest;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.utils.AppInfoParser;
@@ -79,7 +80,6 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.ConcurrentModificationException;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -133,7 +133,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
 
     private final ApplicationEventHandler applicationEventHandler;
     private final Time time;
-    private final Optional<String> groupId;
+    private Optional<ConsumerGroupMetadata> groupMetadata;
     private final KafkaConsumerMetrics kafkaConsumerMetrics;
     private Logger log;
     private final String clientId;
@@ -163,8 +163,6 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
     private boolean cachedSubscriptionHasAllFetchPositions;
     private final WakeupTrigger wakeupTrigger = new WakeupTrigger();
     private boolean isFenced = false;
-    private final Optional<String> groupInstanceId;
-
     private final OffsetCommitCallbackInvoker invoker = new OffsetCommitCallbackInvoker();
 
     // currentThread holds the threadId of the current thread accessing the AsyncKafkaConsumer
@@ -176,18 +174,13 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                        final Deserializer<K> keyDeserializer,
                        final Deserializer<V> valueDeserializer) {
         try {
-            GroupRebalanceConfig groupRebalanceConfig = new GroupRebalanceConfig(config,
-                    GroupRebalanceConfig.ProtocolType.CONSUMER);
-            this.groupInstanceId = groupRebalanceConfig.groupInstanceId;
-            this.groupId = Optional.ofNullable(groupRebalanceConfig.groupId);
+            GroupRebalanceConfig groupRebalanceConfig = new GroupRebalanceConfig(
+                config,
+                GroupRebalanceConfig.ProtocolType.CONSUMER
+            );
             this.clientId = config.getString(CommonClientConfigs.CLIENT_ID_CONFIG);
             LogContext logContext = createLogContext(config, groupRebalanceConfig);
             this.log = logContext.logger(getClass());
-            groupId.ifPresent(groupIdStr -> {
-                if (groupIdStr.isEmpty()) {
-                    log.warn("Support for using the empty group id by consumers is deprecated and will be removed in the next major release.");
-                }
-            });
 
             log.debug("Initializing the Kafka consumer");
             this.defaultApiTimeoutMs = config.getInt(ConsumerConfig.DEFAULT_API_TIMEOUT_MS_CONFIG);
@@ -250,11 +243,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                     config.originals(Collections.singletonMap(ConsumerConfig.CLIENT_ID_CONFIG, clientId))
             );
 
-            // no coordinator will be constructed for the default (null) group id
-            if (!groupId.isPresent()) {
-                config.ignore(ConsumerConfig.AUTO_COMMIT_INTERVAL_MS_CONFIG);
-                config.ignore(THROW_ON_FETCH_STABLE_OFFSET_UNSUPPORTED);
-            }
+            this.groupMetadata = initializeGroupMetadata(config, groupRebalanceConfig);
 
             // The FetchCollector is only used on the application thread.
             this.fetchCollector = new FetchCollector<>(logContext,
@@ -308,7 +297,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         this.time = time;
         this.backgroundEventProcessor = new BackgroundEventProcessor(logContext, backgroundEventQueue);
         this.metrics = metrics;
-        this.groupId = Optional.ofNullable(groupId);
+        this.groupMetadata = initializeGroupMetadata(groupId, Optional.empty());
         this.metadata = metadata;
         this.retryBackoffMs = retryBackoffMs;
         this.defaultApiTimeoutMs = defaultApiTimeoutMs;
@@ -316,7 +305,6 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         this.applicationEventHandler = applicationEventHandler;
         this.assignors = assignors;
         this.kafkaConsumerMetrics = new KafkaConsumerMetrics(metrics, "consumer");
-        this.groupInstanceId = Optional.empty();
     }
 
     // Visible for testing
@@ -337,13 +325,11 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         this.interceptors = new ConsumerInterceptors<>(Collections.emptyList());
         this.time = time;
         this.metrics = new Metrics(time);
-        this.groupId = Optional.ofNullable(config.getString(ConsumerConfig.GROUP_ID_CONFIG));
         this.metadata = metadata;
         this.retryBackoffMs = config.getLong(ConsumerConfig.RETRY_BACKOFF_MS_CONFIG);
         this.defaultApiTimeoutMs = config.getInt(ConsumerConfig.DEFAULT_API_TIMEOUT_MS_CONFIG);
         this.deserializers = new Deserializers<>(keyDeserializer, valueDeserializer);
         this.assignors = assignors;
-        this.groupInstanceId = Optional.ofNullable(config.getString(ConsumerConfig.GROUP_INSTANCE_ID_CONFIG));
 
         ConsumerMetrics metricsRegistry = new ConsumerMetrics(CONSUMER_METRIC_GROUP_PREFIX);
         FetchMetricsManager fetchMetricsManager = new FetchMetricsManager(metrics, metricsRegistry.fetcherMetrics);
@@ -360,6 +346,8 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             config,
             GroupRebalanceConfig.ProtocolType.CONSUMER
         );
+
+        this.groupMetadata = initializeGroupMetadata(config, groupRebalanceConfig);
 
         BlockingQueue<ApplicationEvent> applicationEventQueue = new LinkedBlockingQueue<>();
         BlockingQueue<BackgroundEvent> backgroundEventQueue = new LinkedBlockingQueue<>();
@@ -398,6 +386,36 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                 requestManagersSupplier);
     }
 
+    private Optional<ConsumerGroupMetadata> initializeGroupMetadata(final ConsumerConfig config,
+                                                                    final GroupRebalanceConfig groupRebalanceConfig) {
+        final Optional<ConsumerGroupMetadata> groupMetadata = initializeGroupMetadata(
+            groupRebalanceConfig.groupId,
+            groupRebalanceConfig.groupInstanceId
+        );
+        if (!groupMetadata.isPresent()) {
+            config.ignore(ConsumerConfig.AUTO_COMMIT_INTERVAL_MS_CONFIG);
+            config.ignore(THROW_ON_FETCH_STABLE_OFFSET_UNSUPPORTED);
+        }
+        return groupMetadata;
+    }
+
+    private Optional<ConsumerGroupMetadata> initializeGroupMetadata(final String groupId,
+                                                                    final Optional<String> groupInstanceId) {
+        if (groupId != null) {
+            if (groupId.isEmpty()) {
+                throw new InvalidGroupIdException("The configured group.id should not be an empty string or whitespace.");
+            } else {
+                return Optional.of(new ConsumerGroupMetadata(
+                    groupId,
+                    JoinGroupRequest.UNKNOWN_GENERATION_ID,
+                    JoinGroupRequest.UNKNOWN_MEMBER_ID,
+                    groupInstanceId
+                ));
+            }
+        }
+        return Optional.empty();
+    }
+
     /**
      * poll implementation using {@link ApplicationEventHandler}.
      *  1. Poll for background events. If there's a fetch response event, process the record and return it. If it is
@@ -407,6 +425,21 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
      *
      * @param timeout timeout of the poll loop
      * @return ConsumerRecord.  It can be empty if time timeout expires.
+     *
+     * @throws org.apache.kafka.common.errors.WakeupException if {@link #wakeup()} is called before or while this
+     *             function is called
+     * @throws org.apache.kafka.common.errors.InterruptException if the calling thread is interrupted before or while
+     *             this function is called
+     * @throws org.apache.kafka.common.errors.RecordTooLargeException if the fetched record is larger than the maximum
+     *             allowable size
+     * @throws org.apache.kafka.common.KafkaException for any other unrecoverable errors
+     * @throws java.lang.IllegalStateException if the consumer is not subscribed to any topics or manually assigned any
+     *             partitions to consume from or an unexpected error occurred
+     * @throws org.apache.kafka.clients.consumer.OffsetOutOfRangeException if the fetch position of the consumer is
+     *             out of range and no offset reset policy is configured.
+     * @throws org.apache.kafka.common.errors.TopicAuthorizationException if the consumer is not authorized to read
+     *             from a partition
+     * @throws org.apache.kafka.common.errors.SerializationException if the fetched records cannot be deserialized
      */
     @Override
     public ConsumerRecords<K, V> poll(final Duration timeout) {
@@ -414,6 +447,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
 
         acquireAndEnsureOpen();
         try {
+            wakeupTrigger.setFetchAction(fetchBuffer);
             kafkaConsumerMetrics.recordPollStart(timer.currentTimeMs());
 
             if (subscriptions.hasNoSubscriptionOrUserAssignment()) {
@@ -421,9 +455,14 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             }
 
             do {
+                // We must not allow wake-ups between polling for fetches and returning the records.
+                // If the polled fetches are not empty the consumed position has already been updated in the polling
+                // of the fetches. A wakeup between returned fetches and returning records would lead to never
+                // returning the records in the fetches. Thus, we trigger a possible wake-up before we poll fetches.
+                wakeupTrigger.maybeTriggerWakeup();
+
                 updateAssignmentMetadataIfNeeded(timer);
                 final Fetch<K, V> fetch = pollForFetches(timer);
-
                 if (!fetch.isEmpty()) {
                     if (fetch.records().isEmpty()) {
                         log.trace("Returning empty records from `poll()` "
@@ -438,6 +477,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             return ConsumerRecords.empty();
         } finally {
             kafkaConsumerMetrics.recordPollEnd(timer.currentTimeMs());
+            wakeupTrigger.clearTask();
             release();
         }
     }
@@ -489,6 +529,9 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         maybeInvokeCommitCallbacks();
         maybeThrowFencedInstanceException();
         maybeThrowInvalidGroupIdException();
+
+        log.debug("Committing offsets: {}", offsets);
+        offsets.forEach(this::updateLastSeenEpochIfNewer);
 
         if (offsets.isEmpty()) {
             return CompletableFuture.completedFuture(null);
@@ -628,15 +671,22 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         try {
             maybeThrowInvalidGroupIdException();
             if (partitions.isEmpty()) {
-                return new HashMap<>();
+                return Collections.emptyMap();
             }
 
             final OffsetFetchApplicationEvent event = new OffsetFetchApplicationEvent(partitions);
             wakeupTrigger.setActiveTask(event.future());
             try {
-                return applicationEventHandler.addAndGet(event, time.timer(timeout));
+                final Map<TopicPartition, OffsetAndMetadata> committedOffsets = applicationEventHandler.addAndGet(event,
+                    time.timer(timeout));
+                committedOffsets.forEach(this::updateLastSeenEpochIfNewer);
+                return committedOffsets;
+            } catch (TimeoutException e) {
+                throw new TimeoutException("Timeout of " + timeout.toMillis() + "ms expired before the last " +
+                    "committed offset for partitions " + partitions + " could be determined. Try tuning " +
+                    ConsumerConfig.DEFAULT_API_TIMEOUT_MS_CONFIG + " larger to relax the threshold.");
             } finally {
-                wakeupTrigger.clearActiveTask();
+                wakeupTrigger.clearTask();
             }
         } finally {
             release();
@@ -644,9 +694,9 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
     }
 
     private void maybeThrowInvalidGroupIdException() {
-        if (!groupId.isPresent() || groupId.get().isEmpty()) {
+        if (!groupMetadata.isPresent()) {
             throw new InvalidGroupIdException("To use the group management or offset commit APIs, you must " +
-                    "provide a valid " + ConsumerConfig.GROUP_ID_CONFIG + " in the consumer configuration.");
+                "provide a valid " + ConsumerConfig.GROUP_ID_CONFIG + " in the consumer configuration.");
         }
     }
 
@@ -919,10 +969,9 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         long commitStart = time.nanoseconds();
         try {
             CompletableFuture<Void> commitFuture = commit(offsets, true);
-            offsets.forEach(this::updateLastSeenEpochIfNewer);
             ConsumerUtils.getResult(commitFuture, time.timer(timeout));
         } finally {
-            wakeupTrigger.clearActiveTask();
+            wakeupTrigger.clearTask();
             kafkaConsumerMetrics.recordCommitSync(time.nanoseconds() - commitStart);
             release();
         }
@@ -1025,7 +1074,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         acquireAndEnsureOpen();
         try {
             fetchBuffer.retainAll(Collections.emptySet());
-            if (groupId.isPresent()) {
+            if (groupMetadata.isPresent()) {
                 UnsubscribeApplicationEvent unsubscribeApplicationEvent = new UnsubscribeApplicationEvent();
                 applicationEventHandler.add(unsubscribeApplicationEvent);
                 try {
@@ -1054,7 +1103,9 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
     }
 
     private Fetch<K, V> pollForFetches(Timer timer) {
-        long pollTimeout = timer.remainingMs();
+        long pollTimeout = isCommittedOffsetsManagementEnabled()
+                ? Math.min(applicationEventHandler.maximumTimeToWait(), timer.remainingMs())
+                : timer.remainingMs();
 
         // if data is available already, return it immediately
         final Fetch<K, V> fetch = collectFetch();
@@ -1154,7 +1205,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
      * according to config {@link CommonClientConfigs#GROUP_ID_CONFIG}
      */
     private boolean isCommittedOffsetsManagementEnabled() {
-        return groupId.isPresent();
+        return groupMetadata.isPresent();
     }
 
     /**
@@ -1342,8 +1393,15 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
 
     private void maybeThrowFencedInstanceException() {
         if (isFenced) {
-            throw new FencedInstanceIdException("Get fenced exception for group.instance.id " +
-                groupInstanceId.orElse("null"));
+            String groupInstanceId = "unknown";
+            if (!groupMetadata.isPresent()) {
+                log.error("No group metadata found although a group ID was provided. This is a bug!");
+            } else if (!groupMetadata.get().groupInstanceId().isPresent()) {
+                log.error("No group instance ID found although the consumer is fenced. This is a bug!");
+            } else {
+                groupInstanceId = groupMetadata.get().groupInstanceId().get();
+            }
+            throw new FencedInstanceIdException("Get fenced exception for group.instance.id " + groupInstanceId);
         }
     }
 
