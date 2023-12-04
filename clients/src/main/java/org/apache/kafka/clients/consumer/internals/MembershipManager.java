@@ -141,12 +141,13 @@ public interface MembershipManager {
     void onSubscriptionUpdated();
 
     /**
-     * @return Completable future of the current leave group operation.
-     */
-    Optional<CompletableFuture<Void>> leaveGroupFuture();
-
-    /**
      * Transition to the {@link MemberState#JOINING} state to attempt joining a group.
      */
     void transitionToJoining();
+
+    /**
+     * When the user stops polling the consumer, the member will be transitioned to LEAVING without revoking the
+     * partitions.
+     */
+    void onStaledMember();
 }

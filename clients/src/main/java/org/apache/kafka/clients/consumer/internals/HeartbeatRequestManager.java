@@ -101,6 +101,11 @@ public class HeartbeatRequestManager implements RequestManager {
      * ErrorEventHandler allows the background thread to propagate errors back to the user
      */
     private final BackgroundEventHandler backgroundEventHandler;
+
+    /**
+     * Timer for tracking the time since the last consumer poll.  If the timer expires, the consumer will stop
+     * sending heartbeat until the next poll.
+     */
     private final Timer pollTimer;
 
     private GroupMetadataUpdateEvent previousGroupMetadataUpdateEvent = null;
@@ -185,7 +190,8 @@ public class HeartbeatRequestManager implements RequestManager {
                 "the poll loop is spending too much time processing messages. You can address this " +
                 "either by increasing max.poll.interval.ms or by reducing the maximum size of batches " +
                 "returned in poll() with max.poll.records.");
-            return PollResult.EMPTY;
+            // This should trigger a heartbeat with leave group epoch
+            membershipManager.onStaledMember();
         }
 
         boolean heartbeatNow = membershipManager.shouldHeartbeatNow() && !heartbeatRequestState.requestInFlight();
@@ -216,12 +222,20 @@ public class HeartbeatRequestManager implements RequestManager {
     }
 
     /**
-     * When consumer polls, we need to reset the pollTimer.  If member is already leaving the group
+     * When consumer polls, we need to reset the pollTimer.  If the poll timer has expired, we rejoin only when the
+     * member is in the {@link MemberState#UNSUBSCRIBED} state.
      */
     public void ack() {
-        pollTimer.reset(rebalanceTimeoutMs);
+        if (pollTimer.notExpired()) {
+            pollTimer.reset(rebalanceTimeoutMs);
+        }
+        if (membershipManager.state() == MemberState.UNSUBSCRIBED) {
+            membershipManager.transitionToJoining();
+            pollTimer.reset(rebalanceTimeoutMs);
+        }
     }
 
+    // Visible for testing
     Timer pollTimer() {
         return pollTimer;
     }
@@ -549,6 +563,17 @@ public class HeartbeatRequestManager implements RequestManager {
                 subscribedTopicNames = null;
                 serverAssignor = null;
                 topicPartitions = null;
+            }
+
+            @Override
+            public String toString() {
+                return "SentFields(" +
+                        "instanceId='" + instanceId + '\'' +
+                        ", rebalanceTimeoutMs=" + rebalanceTimeoutMs +
+                        ", subscribedTopicNames=" + subscribedTopicNames +
+                        ", serverAssignor='" + serverAssignor + '\'' +
+                        ", topicPartitions=" + topicPartitions +
+                        ')';
             }
         }
     }

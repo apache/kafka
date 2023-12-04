@@ -509,18 +509,19 @@ public class HeartbeatRequestManagerTest {
         membershipManager.onHeartbeatResponseReceived(rs1.data());
         assertEquals(MemberState.ACKNOWLEDGING, membershipManager.state());
     }
-    
+
+    @Test
     public void testEnsureLeaveGroupWhenPollTimerExpires() {
         membershipManager.transitionToJoining();
-        time.sleep(DEFAULT_HEARTBEAT_INTERVAL_MS);
+        time.sleep(1);
         // Sending first heartbeat and transitioning to stable
         assertHeartbeat(heartbeatRequestManager);
         assertFalse(heartbeatRequestManager.pollTimer().isExpired());
-        // Expires the poll timer, and ensure heartbeat is not sent
+        // Expires the poll timer, ensure sending a leave group
         time.sleep(DEFAULT_MAX_POLL_INTERVAL_MS);
-        assertNoHeartbeat(heartbeatRequestManager);
+        assertLeaveGroup(heartbeatRequestManager);
         assertTrue(heartbeatRequestManager.pollTimer().isExpired());
-        // Poll again, ensure we heartbeat again
+        // Poll again, ensure we heartbeat again.
         time.sleep(1);
         heartbeatRequestManager.ack();
         assertHeartbeat(heartbeatRequestManager);
@@ -528,6 +529,7 @@ public class HeartbeatRequestManagerTest {
     }
 
     private void assertHeartbeat(HeartbeatRequestManager hrm) {
+        System.out.println("assertHeartbeat");
         NetworkClientDelegate.PollResult pollResult = hrm.poll(time.milliseconds());
         assertEquals(1, pollResult.unsentRequests.size());
         assertEquals(DEFAULT_HEARTBEAT_INTERVAL_MS, pollResult.timeUntilNextPollMs);
@@ -535,9 +537,14 @@ public class HeartbeatRequestManagerTest {
             Errors.NONE));
     }
 
-    private void assertNoHeartbeat(HeartbeatRequestManager hrm) {
+    private void assertLeaveGroup(HeartbeatRequestManager hrm) {
         NetworkClientDelegate.PollResult pollResult = hrm.poll(time.milliseconds());
-        assertEquals(0, pollResult.unsentRequests.size());
+        assertEquals(1, pollResult.unsentRequests.size());
+        ConsumerGroupHeartbeatRequestData data = (ConsumerGroupHeartbeatRequestData) pollResult.unsentRequests.get(0).requestBuilder().build().data();
+        assertEquals(ConsumerGroupHeartbeatRequest.LEAVE_GROUP_MEMBER_EPOCH, data.memberEpoch());
+        assertEquals(MemberState.UNSUBSCRIBED, membershipManager.state());
+        pollResult.unsentRequests.get(0).handler().onComplete(createHeartbeatResponse(pollResult.unsentRequests.get(0),
+            Errors.NONE));
     }
 
     private void mockStableMember() {

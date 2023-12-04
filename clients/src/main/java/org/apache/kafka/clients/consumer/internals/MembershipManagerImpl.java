@@ -479,7 +479,6 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
      * Transition to the {@link MemberState#JOINING} state, indicating that the member will
      * try to join the group on the next heartbeat request. This is expected to be invoked when
      * the user calls the subscribe API, or when the member wants to rejoin after getting fenced.
-     * Visible for testing.
      */
     @Override
     public void transitionToJoining() {
@@ -542,11 +541,6 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
         return leaveResult;
     }
 
-    @Override
-    public Optional<CompletableFuture<Void>> leaveGroupFuture() {
-        return leaveGroupInProgress;
-    }
-
     /**
      * Release member assignment by calling the user defined callbacks for onPartitionsRevoked or
      * onPartitionsLost.
@@ -607,7 +601,7 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
     @Override
     public boolean shouldHeartbeatNow() {
         MemberState state = state();
-        return state == MemberState.ACKNOWLEDGING || state == MemberState.LEAVING;
+        return state == MemberState.ACKNOWLEDGING || state == MemberState.LEAVING || state == MemberState.JOINING;
     }
 
     /**
@@ -659,6 +653,17 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
     public boolean shouldSkipHeartbeat() {
         MemberState state = state();
         return state == MemberState.UNSUBSCRIBED || state == MemberState.FATAL;
+    }
+
+    /**
+     * {@inheritDoc}
+     */
+    @Override
+    public void onStaledMember() {
+        transitionTo(MemberState.PREPARE_LEAVING);
+        memberEpoch = ConsumerGroupHeartbeatRequest.LEAVE_GROUP_MEMBER_EPOCH;
+        transitionTo(MemberState.LEAVING);
+        leaveGroupInProgress = Optional.of(CompletableFuture.completedFuture(null));
     }
 
     /**
