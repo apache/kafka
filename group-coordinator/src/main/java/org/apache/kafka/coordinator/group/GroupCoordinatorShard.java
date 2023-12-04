@@ -533,7 +533,8 @@ public class GroupCoordinatorShard implements CoordinatorShard<Record> {
             }
         });
 
-        log.info("Generated {} tombstone records in {} milliseconds.", records.size(), time.milliseconds() - startMs);
+        log.info("Generated {} tombstone records while cleaning up group metadata in {} milliseconds.",
+            records.size(), time.milliseconds() - startMs);
         // Reschedule the next cycle.
         scheduleGroupMetadataExpiration();
         return new CoordinatorResult<>(records);
