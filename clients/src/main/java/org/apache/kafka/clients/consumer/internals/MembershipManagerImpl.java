@@ -332,8 +332,8 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
         ConsumerGroupHeartbeatResponseData.Assignment assignment = response.assignment();
 
         if (assignment != null) {
-            transitionTo(MemberState.RECONCILING);
             replaceUnresolvedAssignmentWithNewAssignment(assignment);
+            assignmentReadyToReconcile.clear();
             resolveMetadataForUnresolvedAssignment();
             reconcile();
         } else if (allPendingAssignmentsReconciled()) {
@@ -658,6 +658,7 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
             return false;
         }
 
+        transitionTo(MemberState.RECONCILING);
         markReconciliationInProgress();
 
         // Partitions to assign (not previously owned)
@@ -1103,7 +1104,6 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
     public void onUpdate(ClusterResource clusterResource) {
         resolveMetadataForUnresolvedAssignment();
         if (!assignmentReadyToReconcile.isEmpty()) {
-            transitionTo(MemberState.RECONCILING);
             reconcile();
         }
     }
