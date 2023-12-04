@@ -960,7 +960,7 @@ private[group] class GroupCoordinator(
               responseCallback(offsetMetadata.map { case (k, _) => k -> errorResults(k.topicPartition).error })
             } else {
               val putCacheCallback = groupManager.createPutCacheCallback(true, group, memberId, offsetMetadata, verifiedOffsets, responseCallback, producerId, verifiedRecords, errorResults)
-              groupManager.storeOffsetsAfterVerification(group, verifiedOffsets, records, putCacheCallback, producerId, errorResults, newRequestLocal)
+              groupManager.storeOffsetsAfterVerification(group, verifiedOffsets, records, putCacheCallback, producerId, transactionVerificationEntries, errorResults, newRequestLocal)
             }
           }
         }

@@ -26,6 +26,7 @@ import java.util.concurrent.locks.ReentrantLock
 import java.util.concurrent.ConcurrentHashMap
 import com.yammer.metrics.core.Gauge
 import kafka.common.OffsetAndMetadata
+import kafka.server.ReplicaManager.TransactionVerificationEntries
 import kafka.server.{LogAppendResult, ReplicaManager, RequestLocal}
 import kafka.utils.CoreUtils.inLock
 import kafka.utils.Implicits._
@@ -512,6 +513,7 @@ class GroupMetadataManager(brokerId: Int,
                                     records: Map[TopicPartition, MemoryRecords],
                                     putCacheCallback:  Map[TopicPartition, PartitionResponse] => Unit,
                                     producerId: Long,
+                                    transactionVerificationEntries: TransactionVerificationEntries,
                                     errorResults: Map[TopicPartition, LogAppendResult],
                                     requestLocal: RequestLocal = RequestLocal.NoCaching): Unit = {
     group.inLock {
@@ -521,7 +523,6 @@ class GroupMetadataManager(brokerId: Int,
           s"should be avoided.")
     }
 
-    val transactionVerificationEntries = new ReplicaManager.TransactionVerificationEntries
     group.inLock {
       addProducerGroup(producerId, group.groupId)
       group.prepareTxnOffsetCommit(producerId, verifiedOffsetMetadata)
@@ -1017,7 +1018,7 @@ class GroupMetadataManager(brokerId: Int,
   /*
    * Check if the offset metadata length is valid
    */
-  protected[coordinator] def validateOffsetMetadataLength(metadata: String) : Boolean = {
+  private[coordinator] def validateOffsetMetadataLength(metadata: String) : Boolean = {
     metadata == null || metadata.length() <= config.maxMetadataSize
   }
 
@@ -1038,7 +1039,7 @@ class GroupMetadataManager(brokerId: Int,
    * @param   partition  Partition of GroupMetadataTopic
    * @return  Some(MessageFormatVersion) if replica is local, None otherwise
    */
-  protected[coordinator] def getMagic(partition: Int): Option[Byte] =
+  private[coordinator] def getMagic(partition: Int): Option[Byte] =
     replicaManager.getMagic(new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, partition))
 
   /**

@@ -216,10 +216,8 @@ object AbstractCoordinatorConcurrencyTest {
                                                           transactionalId: String,
                                                           requestLocal: RequestLocal,
                                                           postVerificationCallback: RequestLocal => Map[TopicPartition, LogAppendResult] => Unit): Unit = {
-
       postVerificationCallback(requestLocal)(Map.empty)
     }
-
 
     override def getMagic(topicPartition: TopicPartition): Option[Byte] = {
       Some(RecordBatch.MAGIC_VALUE_V2)

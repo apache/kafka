@@ -27,6 +27,7 @@ import javax.management.ObjectName
 import kafka.cluster.Partition
 import kafka.common.OffsetAndMetadata
 import kafka.log.UnifiedLog
+import kafka.server.ReplicaManager.TransactionVerificationEntries
 import kafka.server.{HostedPartition, KafkaConfig, LogAppendResult, ReplicaManager, RequestLocal}
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor
@@ -3116,6 +3117,7 @@ class GroupMetadataManagerTest {
                                    producerId: Long,
                                    producerEpoch: Short,
                                    errors: immutable.Map[TopicIdPartition, Errors] = immutable.Map.empty[TopicIdPartition, Errors]): Unit = {
+    // Consider any non-error topic partition as verified.
     val verifiedOffsets = offsets.filter { case (tp, _) =>
       !errors.contains(tp)
     }
@@ -3129,7 +3131,7 @@ class GroupMetadataManagerTest {
     val records = groupMetadataManager.generateOffsetRecords(RecordBatch.CURRENT_MAGIC_VALUE, true, group.groupId, verifiedOffsets, producerId, producerEpoch)
     val putCacheCallback = groupMetadataManager.createPutCacheCallback(true, group, memberId, offsets, verifiedOffsets, callback, producerId, records, preAppendErrors)
 
-
-    groupMetadataManager.storeOffsetsAfterVerification(group, verifiedOffsets, records, putCacheCallback, producerId, preAppendErrors)
+    // Pass in new verification guard since the Log/ReplicaManager code is mocked.
+    groupMetadataManager.storeOffsetsAfterVerification(group, verifiedOffsets, records, putCacheCallback, producerId, new TransactionVerificationEntries, preAppendErrors)
   }
 }
