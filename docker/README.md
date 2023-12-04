@@ -24,6 +24,11 @@ Bulding image and running tests using github actions
 This is the recommended way to build, test and get a CVE report for the docker image.
 Just choose the image type and provide kafka url to `Docker build test` workflow. It will generate a test report and CVE report that can be shared to the community.
 
+kafka-url - This is the url to download kafka tarball from. For example kafka tarball url from (https://archive.apache.org/dist/kafka). For building RC image this will be an RC tarball url.
+
+image-type - This is the type of image that we intend to build. This will be dropdown menu type selection in the workflow. `jvm` image type is for official docker image (to be hosted on apache/kafka) as described in [KIP-975](https://cwiki.apache.org/confluence/display/KAFKA/KIP-975%3A+Docker+Image+for+Apache+Kafka)
+
+
 Creating a release
 ------------------
 - `docker_release.py` script builds a multi architecture image and pushes it to provided docker registry.
