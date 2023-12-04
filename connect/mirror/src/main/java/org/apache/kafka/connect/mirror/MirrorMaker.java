@@ -28,12 +28,15 @@ import org.apache.kafka.connect.runtime.Worker;
 import org.apache.kafka.connect.runtime.WorkerConfigTransformer;
 import org.apache.kafka.connect.runtime.distributed.DistributedConfig;
 import org.apache.kafka.connect.runtime.rest.RestClient;
+import org.apache.kafka.connect.runtime.rest.entities.ConnectorStateInfo;
+import org.apache.kafka.connect.runtime.rest.entities.TaskInfo;
 import org.apache.kafka.connect.storage.KafkaOffsetBackingStore;
 import org.apache.kafka.connect.storage.StatusBackingStore;
 import org.apache.kafka.connect.storage.KafkaStatusBackingStore;
 import org.apache.kafka.connect.storage.ConfigBackingStore;
 import org.apache.kafka.connect.storage.KafkaConfigBackingStore;
 import org.apache.kafka.connect.storage.Converter;
+import org.apache.kafka.connect.util.Callback;
 import org.apache.kafka.connect.util.ConnectUtils;
 import org.apache.kafka.connect.connector.policy.AllConnectorClientConfigOverridePolicy;
 import org.apache.kafka.connect.connector.policy.ConnectorClientConfigOverridePolicy;
@@ -105,8 +108,7 @@ public class MirrorMaker {
             MirrorHeartbeatConnector.class,
             MirrorCheckpointConnector.class));
 
-    // visible for testing
-    public final Map<SourceAndTarget, Herder> herders = new HashMap<>();
+    private final Map<SourceAndTarget, Herder> herders = new HashMap<>();
     private CountDownLatch startLatch;
     private CountDownLatch stopLatch;
     private final AtomicBoolean shutdown = new AtomicBoolean(false);
@@ -226,6 +228,12 @@ public class MirrorMaker {
         }
     }
 
+    private void checkHerder(SourceAndTarget sourceAndTarget) {
+        if (!herders.containsKey(sourceAndTarget)) {
+            throw new IllegalArgumentException("No herder for " + sourceAndTarget.toString());
+        }
+    }
+
     private void addHerder(SourceAndTarget sourceAndTarget) {
         log.info("creating herder for " + sourceAndTarget.toString());
         Map<String, String> workerProps = config.workerConfig(sourceAndTarget);
@@ -301,6 +309,16 @@ public class MirrorMaker {
                 MirrorMaker.this.stop();
             }
         }
+    }
+
+    public ConnectorStateInfo connectorStatus(SourceAndTarget sourceAndTarget, String connector) {
+        checkHerder(sourceAndTarget);
+        return herders.get(sourceAndTarget).connectorStatus(connector);
+    }
+
+    public void taskConfigs(SourceAndTarget sourceAndTarget, String connector, Callback<List<TaskInfo>> cb) {
+        checkHerder(sourceAndTarget);
+        herders.get(sourceAndTarget).taskConfigs(connector, cb);
     }
 
     public static void main(String[] args) {

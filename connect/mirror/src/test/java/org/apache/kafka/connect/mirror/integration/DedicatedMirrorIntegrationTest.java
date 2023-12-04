@@ -27,11 +27,10 @@ import org.apache.kafka.connect.mirror.MirrorSourceConfig;
 import org.apache.kafka.connect.mirror.MirrorSourceConnector;
 import org.apache.kafka.connect.mirror.SourceAndTarget;
 import org.apache.kafka.connect.runtime.AbstractStatus;
-import org.apache.kafka.connect.runtime.Herder;
 import org.apache.kafka.connect.runtime.distributed.DistributedConfig;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorStateInfo;
+import org.apache.kafka.connect.runtime.rest.entities.TaskInfo;
 import org.apache.kafka.connect.source.SourceConnector;
-import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.apache.kafka.connect.util.FutureCallback;
 import org.apache.kafka.connect.util.clusters.EmbeddedKafkaCluster;
 import org.apache.kafka.test.NoRetryException;
@@ -45,6 +44,7 @@ import org.slf4j.LoggerFactory;
 import java.time.Duration;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
@@ -117,14 +117,6 @@ public class DedicatedMirrorIntegrationTest {
             throw new IllegalStateException("No MirrorMaker named " + name + " has been started");
         }
         mirror.stop();
-    }
-
-
-    public static Herder herder(MirrorMaker mm, SourceAndTarget sourceAndTarget) {
-        if (!mm.herders.containsKey(sourceAndTarget)) {
-            throw new IllegalArgumentException("No herder for " + sourceAndTarget.toString());
-        }
-        return mm.herders.get(sourceAndTarget);
     }
 
     /**
@@ -306,7 +298,7 @@ public class DedicatedMirrorIntegrationTest {
                 startMirrorMaker("node " + i, newMmProps);
             }
             // Assert that the new configuration is propagated
-            awaitConnectorConfiguration(mirrorMakers.get("node 0"), MirrorSourceConnector.class, sourceAndTarget,
+            awaitTaskConfigurations(mirrorMakers.get("node 0"), MirrorSourceConnector.class, sourceAndTarget,
                     config -> newConfigValue.equals(config.get(MirrorSourceConfig.REFRESH_TOPICS_INTERVAL_SECONDS)));
         }
     }
@@ -356,15 +348,15 @@ public class DedicatedMirrorIntegrationTest {
         }, MM_START_UP_TIMEOUT_MS, "Tasks for connector " + clazz.getSimpleName() + " for MirrorMaker instances did not transition to running in time");
     }
 
-    private <T extends SourceConnector> void awaitConnectorConfiguration(MirrorMaker mm, Class<T> clazz, SourceAndTarget sourceAndTarget, Predicate<Map<String, String>> predicate) throws InterruptedException {
+    private <T extends SourceConnector> void awaitTaskConfigurations(MirrorMaker mm, Class<T> clazz, SourceAndTarget sourceAndTarget, Predicate<Map<String, String>> predicate) throws InterruptedException {
         String connName = clazz.getSimpleName();
         waitForCondition(() -> {
             try {
-                FutureCallback<Map<ConnectorTaskId, Map<String, String>>> cb = new FutureCallback<>();
-                herder(mm, sourceAndTarget).tasksConfig(connName, cb);
+                FutureCallback<List<TaskInfo>> cb = new FutureCallback<>();
+                mm.taskConfigs(sourceAndTarget, connName, cb);
                 return cb.get(MM_START_UP_TIMEOUT_MS, TimeUnit.MILLISECONDS)
-                        .values()
                         .stream()
+                        .map(TaskInfo::config)
                         .allMatch(predicate);
             } catch (Exception ex) {
                 log.error("Something unexpected occurred. Unable to get configuration of connector {} for mirror maker with source->target={}", connName, sourceAndTarget, ex);
@@ -394,7 +386,7 @@ public class DedicatedMirrorIntegrationTest {
     private boolean isConnectorRunningForMirrorMaker(final Class<?> connectorClazz, final MirrorMaker mm, final SourceAndTarget sourceAndTarget) {
         final String connName = connectorClazz.getSimpleName();
         try {
-            final ConnectorStateInfo connectorStatus = herder(mm, sourceAndTarget).connectorStatus(connName);
+            final ConnectorStateInfo connectorStatus = mm.connectorStatus(sourceAndTarget, connName);
             if (connectorStatus.connector().state().equals(AbstractStatus.State.FAILED.toString())) {
                 throw new NoRetryException(new AssertionError(
                     String.format("Connector %s is in FAILED state for MirrorMaker %s and source->target=%s",
@@ -413,7 +405,7 @@ public class DedicatedMirrorIntegrationTest {
      */
     private <T extends SourceConnector> boolean isTaskRunningForMirrorMakerConnector(final Class<T> connectorClazz, final MirrorMaker mm, final SourceAndTarget sourceAndTarget) {
         final String connName = connectorClazz.getSimpleName();
-        final ConnectorStateInfo connectorStatus = herder(mm, sourceAndTarget).connectorStatus(connName);
+        final ConnectorStateInfo connectorStatus = mm.connectorStatus(sourceAndTarget, connName);
         return isConnectorRunningForMirrorMaker(connectorClazz, mm, sourceAndTarget)
             // verify that at least one task exists
             && !connectorStatus.tasks().isEmpty()

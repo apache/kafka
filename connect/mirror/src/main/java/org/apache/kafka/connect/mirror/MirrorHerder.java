@@ -48,10 +48,7 @@ public class MirrorHerder extends DistributedHerder {
     }
 
     @Override
-    protected boolean handleRebalanceCompleted() {
-        if (!super.handleRebalanceCompleted()) {
-            return false;
-        }
+    protected void rebalanceSuccess() {
         if (isLeader()) {
             if (!wasLeader) {
                 log.info("This node {} is now a leader for {}. Configuring connectors...", this, sourceAndTarget);
@@ -61,7 +58,6 @@ public class MirrorHerder extends DistributedHerder {
         } else {
             wasLeader = false;
         }
-        return true;
     }
 
     private void configureConnectors() {
@@ -69,15 +65,15 @@ public class MirrorHerder extends DistributedHerder {
     }
 
     private void maybeConfigureConnector(Class<?> connectorClass) {
-        Map<String, String> connectorProps = config.connectorBaseConfig(sourceAndTarget, connectorClass);
-        connectorConfig(connectorClass.getSimpleName(), (e, existingConfig) -> {
-            if (existingConfig == null || !existingConfig.equals(connectorProps)) {
-                configureConnector(connectorClass.getSimpleName(), connectorProps);
-            } else {
-                log.info("This node is a leader for {} and configuration for {} is already up to date.", sourceAndTarget, connectorClass.getSimpleName());
-            }
-        });
+        Map<String, String> desiredConfig = config.connectorBaseConfig(sourceAndTarget, connectorClass);
+        Map<String, String> actualConfig = configState.connectorConfig(connectorClass.getSimpleName());
+        if (actualConfig == null || !actualConfig.equals(desiredConfig)) {
+            configureConnector(connectorClass.getSimpleName(), desiredConfig);
+        } else {
+            log.info("This node is a leader for {} and configuration for {} is already up to date.", sourceAndTarget, connectorClass.getSimpleName());
+        }
     }
+
     private void configureConnector(String connectorName, Map<String, String> connectorProps) {
         putConnectorConfig(connectorName, connectorProps, true, (e, x) -> {
             if (e == null) {

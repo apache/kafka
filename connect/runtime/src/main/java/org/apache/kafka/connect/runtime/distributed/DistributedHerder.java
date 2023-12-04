@@ -1636,7 +1636,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
      *
      * @return false if we couldn't finish
      */
-    protected boolean handleRebalanceCompleted() {
+    private boolean handleRebalanceCompleted() {
         if (rebalanceResolved) {
             log.trace("Returning early because rebalance is marked as resolved (rebalanceResolved: true)");
             return true;
@@ -1723,7 +1723,15 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
             member.requestRejoin();
             return false;
         }
+        rebalanceSuccess();
         return true;
+    }
+
+    /**
+     * Hook for performing operations after a successful rebalance
+     */
+    protected void rebalanceSuccess() {
+        // This space intentionally left blank.
     }
 
     /**
