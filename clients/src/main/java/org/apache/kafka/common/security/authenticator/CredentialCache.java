@@ -16,53 +16,59 @@
  */
 package org.apache.kafka.common.security.authenticator;
 
+import org.apache.kafka.common.security.scram.ScramCache;
+
 import java.util.concurrent.ConcurrentHashMap;
 
 public class CredentialCache {
 
-    private final ConcurrentHashMap<String, Cache<?>> cacheMap = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<String, Cache> cacheMap = new ConcurrentHashMap<>();
 
-    public <C> Cache<C> createCache(String mechanism, Class<C> credentialClass) {
-        Cache<C> cache = new Cache<>(credentialClass);
-        @SuppressWarnings("unchecked")
-        Cache<C> oldCache = (Cache<C>) cacheMap.putIfAbsent(mechanism, cache);
-        return oldCache == null ? cache : oldCache;
+    public Cache createCache(String mechanism) {
+        Cache credentials = new Cache();
+        Cache oldCredentials = cacheMap.putIfAbsent(mechanism, credentials);
+        return oldCredentials == null ? credentials : oldCredentials;
     }
 
-    @SuppressWarnings("unchecked")
-    public <C> Cache<C> cache(String mechanism, Class<C> credentialClass) {
-        Cache<?> cache = cacheMap.get(mechanism);
-        if (cache != null) {
-            if (cache.credentialClass() != credentialClass)
-                throw new IllegalArgumentException("Invalid credential class " + credentialClass + ", expected " + cache.credentialClass());
-            return (Cache<C>) cache;
-        } else
+    public ScramCache createScramCache(String mechanism) {
+        if (scramCache(mechanism) != null)
+            return scramCache(mechanism);
+        ScramCache credentials = new ScramCache();
+        cacheMap.putIfAbsent(mechanism, credentials);
+        return credentials;
+    }
+
+    public Cache cache(String mechanism) {
+        return cacheMap.get(mechanism);
+    }
+
+    public ScramCache scramCache(String mechanism) {
+        Cache cache = cacheMap.get(mechanism);
+        if (cache == null)
             return null;
+        if (cache instanceof ScramCache)
+            return (ScramCache) cache;
+        else
+            throw new IllegalArgumentException("Expected cache of ScramCredential, found " + cache.getClass());
     }
 
-    public static class Cache<C> {
-        private final Class<C> credentialClass;
-        private final ConcurrentHashMap<String, C> credentials;
+    public static class Cache {
+        private final ConcurrentHashMap<String, Object> credentials;
 
-        public Cache(Class<C> credentialClass) {
-            this.credentialClass = credentialClass;
+        public Cache() {
             this.credentials = new ConcurrentHashMap<>();
         }
 
-        public C get(String username) {
+        public Object get(String username) {
             return credentials.get(username);
         }
 
-        public C put(String username, C credential) {
+        public Object put(String username, Object credential) {
             return credentials.put(username, credential);
         }
 
-        public C remove(String username) {
+        public Object remove(String username) {
             return credentials.remove(username);
-        }
-
-        public Class<C> credentialClass() {
-            return credentialClass;
         }
     }
 }

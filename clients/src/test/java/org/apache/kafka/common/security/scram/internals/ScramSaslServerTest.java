@@ -22,7 +22,7 @@ import java.util.HashMap;
 
 import org.apache.kafka.common.errors.SaslAuthenticationException;
 import org.apache.kafka.common.security.authenticator.CredentialCache;
-import org.apache.kafka.common.security.scram.ScramCredential;
+import org.apache.kafka.common.security.scram.ScramCache;
 import org.apache.kafka.common.security.token.delegation.internals.DelegationTokenCache;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -44,7 +44,7 @@ public class ScramSaslServerTest {
     public void setUp() throws Exception {
         mechanism = ScramMechanism.SCRAM_SHA_256;
         formatter  = new ScramFormatter(mechanism);
-        CredentialCache.Cache<ScramCredential> credentialCache = new CredentialCache().createCache(mechanism.mechanismName(), ScramCredential.class);
+        ScramCache credentialCache = new CredentialCache().createScramCache(mechanism.mechanismName());
         credentialCache.put(USER_A, formatter.generateCredential("passwordA", 4096));
         credentialCache.put(USER_B, formatter.generateCredential("passwordB", 4096));
         ScramServerCallbackHandler callbackHandler = new ScramServerCallbackHandler(credentialCache, new DelegationTokenCache(ScramMechanism.mechanismNames()));

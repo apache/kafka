@@ -25,20 +25,19 @@ import javax.security.auth.callback.UnsupportedCallbackException;
 import javax.security.auth.login.AppConfigurationEntry;
 
 import org.apache.kafka.common.security.auth.AuthenticateCallbackHandler;
-import org.apache.kafka.common.security.authenticator.CredentialCache;
-import org.apache.kafka.common.security.scram.ScramCredential;
 import org.apache.kafka.common.security.scram.ScramCredentialCallback;
+import org.apache.kafka.common.security.scram.ScramCache;
 import org.apache.kafka.common.security.token.delegation.TokenInformation;
 import org.apache.kafka.common.security.token.delegation.internals.DelegationTokenCache;
 import org.apache.kafka.common.security.token.delegation.internals.DelegationTokenCredentialCallback;
 
 public class ScramServerCallbackHandler implements AuthenticateCallbackHandler {
 
-    private final CredentialCache.Cache<ScramCredential> credentialCache;
+    private final ScramCache credentialCache;
     private final DelegationTokenCache tokenCache;
     private String saslMechanism;
 
-    public ScramServerCallbackHandler(CredentialCache.Cache<ScramCredential> credentialCache,
+    public ScramServerCallbackHandler(ScramCache credentialCache,
                                       DelegationTokenCache tokenCache) {
         this.credentialCache = credentialCache;
         this.tokenCache = tokenCache;

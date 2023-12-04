@@ -19,6 +19,7 @@ package org.apache.kafka.common.security.token.delegation.internals;
 
 import org.apache.kafka.common.security.authenticator.CredentialCache;
 import org.apache.kafka.common.security.scram.ScramCredential;
+import org.apache.kafka.common.security.scram.ScramCache;
 import org.apache.kafka.common.security.scram.internals.ScramCredentialUtils;
 import org.apache.kafka.common.security.scram.internals.ScramMechanism;
 import org.apache.kafka.common.security.token.delegation.DelegationToken;
@@ -48,7 +49,7 @@ public class DelegationTokenCache {
     }
 
     public ScramCredential credential(String mechanism, String tokenId) {
-        CredentialCache.Cache<ScramCredential> cache = credentialCache.cache(mechanism, ScramCredential.class);
+        ScramCache cache = credentialCache.scramCache(mechanism);
         return cache == null ? null : cache.get(tokenId);
     }
 
@@ -105,13 +106,13 @@ public class DelegationTokenCache {
         return tokenCache.get(tokenId);
     }
 
-    public CredentialCache.Cache<ScramCredential> credentialCache(String mechanism) {
-        return credentialCache.cache(mechanism, ScramCredential.class);
+    public ScramCache credentialCache(String mechanism) {
+        return credentialCache.scramCache(mechanism);
     }
 
     private void updateCredentials(String tokenId, Map<String, ScramCredential> scramCredentialMap) {
         for (String mechanism : ScramMechanism.mechanismNames()) {
-            CredentialCache.Cache<ScramCredential> cache = credentialCache.cache(mechanism, ScramCredential.class);
+            ScramCache cache = credentialCache.scramCache(mechanism);
             if (cache != null) {
                 ScramCredential credential = scramCredentialMap.get(mechanism);
                 if (credential == null) {

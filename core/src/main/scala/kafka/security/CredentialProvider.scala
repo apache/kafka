@@ -33,7 +33,7 @@ class CredentialProvider(scramMechanisms: Collection[String], val tokenCache: De
 
   def updateCredentials(username: String, config: Properties): Unit = {
     for (mechanism <- ScramMechanism.values()) {
-      val cache = credentialCache.cache(mechanism.mechanismName, classOf[ScramCredential])
+      val cache = credentialCache.scramCache(mechanism.mechanismName)
       if (cache != null) {
         config.getProperty(mechanism.mechanismName) match {
           case null => cache.remove(username)
@@ -48,7 +48,7 @@ class CredentialProvider(scramMechanisms: Collection[String], val tokenCache: De
     name: String,
     credential: ScramCredential
   ): Unit = {
-    val cache = credentialCache.cache(mechanism.mechanismName(), classOf[ScramCredential])
+    val cache = credentialCache.scramCache(mechanism.mechanismName())
     cache.put(name, credential)
   }
 
@@ -56,7 +56,7 @@ class CredentialProvider(scramMechanisms: Collection[String], val tokenCache: De
     mechanism: AdminScramMechanism,
     name: String
   ): Unit = {
-    val cache = credentialCache.cache(mechanism.mechanismName(), classOf[ScramCredential])
+    val cache = credentialCache.scramCache(mechanism.mechanismName())
     if (cache != null) {
       cache.remove(name)
     }

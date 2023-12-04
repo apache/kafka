@@ -43,7 +43,6 @@ import org.apache.kafka.common.security.oauthbearer.internals.OAuthBearerSaslCli
 import org.apache.kafka.common.security.oauthbearer.internals.unsecured.OAuthBearerUnsecuredValidatorCallbackHandler;
 import org.apache.kafka.common.security.plain.internals.PlainSaslServer;
 import org.apache.kafka.common.security.plain.internals.PlainServerCallbackHandler;
-import org.apache.kafka.common.security.scram.ScramCredential;
 import org.apache.kafka.common.security.scram.internals.ScramMechanism;
 import org.apache.kafka.common.security.scram.internals.ScramServerCallbackHandler;
 import org.apache.kafka.common.security.ssl.SslFactory;
@@ -317,7 +316,7 @@ public class SaslChannelBuilder implements ChannelBuilder, ListenerReconfigurabl
             else if (mechanism.equals(PlainSaslServer.PLAIN_MECHANISM))
                 callbackHandler = new PlainServerCallbackHandler();
             else if (ScramMechanism.isScram(mechanism))
-                callbackHandler = new ScramServerCallbackHandler(credentialCache.cache(mechanism, ScramCredential.class), tokenCache);
+                callbackHandler = new ScramServerCallbackHandler(credentialCache.scramCache(mechanism), tokenCache);
             else if (mechanism.equals(OAuthBearerLoginModule.OAUTHBEARER_MECHANISM))
                 callbackHandler = new OAuthBearerUnsecuredValidatorCallbackHandler();
             else

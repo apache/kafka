@@ -22,6 +22,7 @@ import java.util.Arrays;
 import org.apache.kafka.common.security.authenticator.CredentialCache;
 import org.apache.kafka.common.security.scram.ScramCredential;
 
+import org.apache.kafka.common.security.scram.ScramCache;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -85,10 +86,10 @@ public class ScramCredentialUtilsTest {
     public void scramCredentialCache() throws Exception {
         CredentialCache cache = new CredentialCache();
         ScramCredentialUtils.createCache(cache, Arrays.asList("SCRAM-SHA-512", "PLAIN"));
-        assertNotNull(cache.cache(ScramMechanism.SCRAM_SHA_512.mechanismName(), ScramCredential.class), "Cache not created for enabled mechanism");
-        assertNull(cache.cache(ScramMechanism.SCRAM_SHA_256.mechanismName(), ScramCredential.class), "Cache created for disabled mechanism");
+        assertNotNull(cache.scramCache(ScramMechanism.SCRAM_SHA_512.mechanismName()), "Cache not created for enabled mechanism");
+        assertNull(cache.scramCache(ScramMechanism.SCRAM_SHA_256.mechanismName()), "Cache created for disabled mechanism");
 
-        CredentialCache.Cache<ScramCredential> sha512Cache = cache.cache(ScramMechanism.SCRAM_SHA_512.mechanismName(), ScramCredential.class);
+        ScramCache sha512Cache = cache.scramCache(ScramMechanism.SCRAM_SHA_512.mechanismName());
         ScramFormatter formatter = new ScramFormatter(ScramMechanism.SCRAM_SHA_512);
         ScramCredential credentialA = formatter.generateCredential("password", 4096);
         sha512Cache.put("userA", credentialA);

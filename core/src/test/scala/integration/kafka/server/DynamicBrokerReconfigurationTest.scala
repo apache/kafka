@@ -57,7 +57,6 @@ import org.apache.kafka.common.network.CertStores.{KEYSTORE_PROPS, TRUSTSTORE_PR
 import org.apache.kafka.common.record.TimestampType
 import org.apache.kafka.common.requests.MetadataRequest
 import org.apache.kafka.common.security.auth.SecurityProtocol
-import org.apache.kafka.common.security.scram.ScramCredential
 import org.apache.kafka.common.serialization.{StringDeserializer, StringSerializer}
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.apache.kafka.server.record.BrokerCompressionType
@@ -74,7 +73,6 @@ import scala.annotation.nowarn
 import scala.collection._
 import scala.collection.mutable.ArrayBuffer
 import scala.jdk.CollectionConverters._
-import scala.collection.Seq
 
 object DynamicBrokerReconfigurationTest {
   val Plain = "PLAIN"
@@ -1151,8 +1149,8 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
     List(JaasTestUtils.KafkaScramUser, JaasTestUtils.KafkaScramAdmin).foreach { scramUser =>
       servers.foreach { server =>
         ScramMechanism.values().filter(_ != ScramMechanism.UNKNOWN).foreach(mechanism =>
-          TestUtils.waitUntilTrue(() => server.credentialProvider.credentialCache.cache(
-            mechanism.mechanismName(), classOf[ScramCredential]).get(scramUser) != null,
+          TestUtils.waitUntilTrue(() => server.credentialProvider.credentialCache.scramCache(
+            mechanism.mechanismName()).get(scramUser) != null,
             s"$mechanism credentials not created for $scramUser"))
       }}
 
