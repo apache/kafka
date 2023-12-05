@@ -151,8 +151,6 @@ final class RocksDBVersionedStoreSegmentValueFormatter {
         SegmentSearchResult find(long timestamp, boolean includeValue);
 
         List<SegmentSearchResult> findAll(long fromTime, long toTime);
-        SegmentSearchResult myFind(final long fromTime, final long toTime, long currNextTimestamp, int currIndex, long currTimestamp, int cumValueSize);
-
 
         /**
          * Inserts the provided record into the segment as the latest record in the segment row.
@@ -368,34 +366,6 @@ final class RocksDBVersionedStoreSegmentValueFormatter {
                 currIndex++;
             }
             return segmentSearchResults;
-        }
-
-        @Override
-        public SegmentSearchResult myFind(final long fromTime, final long toTime, long currNextTimestamp, int currIndex, long currTimestamp, int cumValueSize) {
-            if (currNextTimestamp == -1) {
-                currNextTimestamp = nextTimestamp;
-            }
-            int currValueSize;
-//            int cumValueSize = 0;
-            while (currTimestamp != minTimestamp) {
-                final int timestampSegmentIndex = 2 * TIMESTAMP_SIZE + currIndex * (TIMESTAMP_SIZE + VALUE_SIZE);
-                currTimestamp = ByteBuffer.wrap(segmentValue).getLong(timestampSegmentIndex);
-                currValueSize = ByteBuffer.wrap(segmentValue).getInt(timestampSegmentIndex + TIMESTAMP_SIZE);
-                cumValueSize += Math.max(currValueSize, 0);
-                if (currValueSize >= 0) {
-                    final byte[] value = new byte[currValueSize];
-                    final int valueSegmentIndex = segmentValue.length - cumValueSize;
-                    System.arraycopy(segmentValue, valueSegmentIndex, value, 0, currValueSize);
-                    if (currTimestamp <= toTime && currNextTimestamp >= fromTime) {
-                        return new SegmentSearchResult(currIndex, currTimestamp, currNextTimestamp, value);
-                    }
-                }
-
-                // prep for next iteration
-                currNextTimestamp = currTimestamp;
-                currIndex++;
-            }
-            return null;
         }
 
         @Override
