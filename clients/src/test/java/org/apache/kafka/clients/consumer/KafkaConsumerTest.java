@@ -56,6 +56,7 @@ import org.apache.kafka.common.message.ListOffsetsResponseData;
 import org.apache.kafka.common.message.ListOffsetsResponseData.ListOffsetsPartitionResponse;
 import org.apache.kafka.common.message.ListOffsetsResponseData.ListOffsetsTopicResponse;
 import org.apache.kafka.common.message.SyncGroupResponseData;
+import org.apache.kafka.common.metrics.JmxReporter;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.Avg;
@@ -86,6 +87,8 @@ import org.apache.kafka.common.requests.SyncGroupResponse;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
+import org.apache.kafka.common.telemetry.internals.ClientTelemetryReporter;
+import org.apache.kafka.common.telemetry.internals.ClientTelemetrySender;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
@@ -96,9 +99,9 @@ import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
+import org.mockito.MockedStatic;
+import org.mockito.internal.stubbing.answers.CallsRealMethods;
 
-import javax.management.MBeanServer;
-import javax.management.ObjectName;
 import java.lang.management.ManagementFactory;
 import java.nio.ByteBuffer;
 import java.time.Duration;
@@ -132,6 +135,8 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
+import javax.management.MBeanServer;
+import javax.management.ObjectName;
 
 import static java.util.Collections.singleton;
 import static java.util.Collections.singletonList;
@@ -148,8 +153,13 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.mockStatic;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 /**
  * Note to future authors in this class. If you close the consumer, close with DURATION.ZERO to reduce the duration of
@@ -220,33 +230,50 @@ public class KafkaConsumerTest {
         props.setProperty(ConsumerConfig.METRIC_REPORTER_CLASSES_CONFIG, MockMetricsReporter.class.getName());
         consumer = newConsumer(props, new StringDeserializer(), new StringDeserializer());
 
-        MockMetricsReporter mockMetricsReporter = (MockMetricsReporter) consumer.metricsRegistry().reporters().get(0);
+        assertEquals(3, consumer.metricsRegistry().reporters().size());
 
+        MockMetricsReporter mockMetricsReporter = (MockMetricsReporter) consumer.metricsRegistry().reporters().stream()
+            .filter(reporter -> reporter instanceof MockMetricsReporter).findFirst().get();
         assertEquals(consumer.clientId(), mockMetricsReporter.clientId);
-        assertEquals(2, consumer.metricsRegistry().reporters().size());
     }
 
     @ParameterizedTest
     @EnumSource(GroupProtocol.class)
     @SuppressWarnings("deprecation")
-    public void testDisableJmxReporter(GroupProtocol groupProtocol) {
+    public void testDisableJmxAndClientTelemetryReporter(GroupProtocol groupProtocol) {
         Properties props = new Properties();
         props.setProperty(ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol.name());
         props.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
         props.setProperty(ConsumerConfig.AUTO_INCLUDE_JMX_REPORTER_CONFIG, "false");
+        props.setProperty(ConsumerConfig.ENABLE_METRICS_PUSH_CONFIG, "false");
         consumer = newConsumer(props, new StringDeserializer(), new StringDeserializer());
         assertTrue(consumer.metricsRegistry().reporters().isEmpty());
     }
 
     @ParameterizedTest
     @EnumSource(GroupProtocol.class)
-    public void testExplicitlyEnableJmxReporter(GroupProtocol groupProtocol) {
+    public void testExplicitlyOnlyEnableJmxReporter(GroupProtocol groupProtocol) {
         Properties props = new Properties();
         props.setProperty(ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol.name());
         props.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
         props.setProperty(ConsumerConfig.METRIC_REPORTER_CLASSES_CONFIG, "org.apache.kafka.common.metrics.JmxReporter");
+        props.setProperty(ConsumerConfig.ENABLE_METRICS_PUSH_CONFIG, "false");
         consumer = newConsumer(props, new StringDeserializer(), new StringDeserializer());
         assertEquals(1, consumer.metricsRegistry().reporters().size());
+        assertTrue(consumer.metricsRegistry().reporters().get(0) instanceof JmxReporter);
+    }
+
+    @ParameterizedTest
+    @EnumSource(GroupProtocol.class)
+    @SuppressWarnings("deprecation")
+    public void testExplicitlyOnlyEnableClientTelemetryReporter(GroupProtocol groupProtocol) {
+        Properties props = new Properties();
+        props.setProperty(ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol.name());
+        props.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
+        props.setProperty(ConsumerConfig.AUTO_INCLUDE_JMX_REPORTER_CONFIG, "false");
+        consumer = newConsumer(props, new StringDeserializer(), new StringDeserializer());
+        assertEquals(1, consumer.metricsRegistry().reporters().size());
+        assertTrue(consumer.metricsRegistry().reporters().get(0) instanceof ClientTelemetryReporter);
     }
 
     // TODO: this test requires rebalance logic which is not yet implemented in the CONSUMER group protocol.
@@ -3291,6 +3318,53 @@ public void testClosingConsumerUnregistersConsumerMetrics(GroupProtocol groupPro
             "Failed to get offsets by times in 60000ms",
             assertThrows(org.apache.kafka.common.errors.TimeoutException.class, () -> consumer.endOffsets(singletonList(tp0))).getMessage()
         );
+    }
+
+    @ParameterizedTest
+    @EnumSource(GroupProtocol.class)
+    public void testClientInstanceId() {
+        Properties props = new Properties();
+        props.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
+
+        ClientTelemetryReporter clientTelemetryReporter = mock(ClientTelemetryReporter.class);
+        clientTelemetryReporter.configure(any());
+
+        MockedStatic<CommonClientConfigs> mockedCommonClientConfigs = mockStatic(CommonClientConfigs.class, new CallsRealMethods());
+        mockedCommonClientConfigs.when(() -> CommonClientConfigs.telemetryReporter(anyString(), any())).thenReturn(Optional.of(clientTelemetryReporter));
+
+        ClientTelemetrySender clientTelemetrySender = mock(ClientTelemetrySender.class);
+        Uuid expectedUuid = Uuid.randomUuid();
+        when(clientTelemetryReporter.telemetrySender()).thenReturn(clientTelemetrySender);
+        when(clientTelemetrySender.clientInstanceId(any())).thenReturn(Optional.of(expectedUuid));
+
+        consumer = newConsumer(props, new StringDeserializer(), new StringDeserializer());
+        Uuid uuid = consumer.clientInstanceId(Duration.ofMillis(0));
+        assertEquals(expectedUuid, uuid);
+
+        mockedCommonClientConfigs.close();
+    }
+
+    @ParameterizedTest
+    @EnumSource(GroupProtocol.class)
+    public void testClientInstanceIdInvalidTimeout() {
+        Properties props = new Properties();
+        props.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
+
+        consumer = newConsumer(props, new StringDeserializer(), new StringDeserializer());
+        Exception exception = assertThrows(IllegalArgumentException.class, () -> consumer.clientInstanceId(Duration.ofMillis(-1)));
+        assertEquals("The timeout cannot be negative.", exception.getMessage());
+    }
+
+    @ParameterizedTest
+    @EnumSource(GroupProtocol.class)
+    public void testClientInstanceIdNoTelemetryReporterRegistered() {
+        Properties props = new Properties();
+        props.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
+        props.setProperty(ConsumerConfig.ENABLE_METRICS_PUSH_CONFIG, "false");
+
+        consumer = newConsumer(props, new StringDeserializer(), new StringDeserializer());
+        Exception exception = assertThrows(IllegalStateException.class, () -> consumer.clientInstanceId(Duration.ofMillis(0)));
+        assertEquals("Telemetry is not enabled. Set config `enable.metrics.push` to `true`.", exception.getMessage());
     }
 
     private KafkaConsumer<String, String> consumerForCheckingTimeoutException(GroupProtocol groupProtocol) {

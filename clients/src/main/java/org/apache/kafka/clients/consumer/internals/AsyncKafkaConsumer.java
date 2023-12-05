@@ -65,9 +65,12 @@ import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.metrics.MetricsReporter;
 import org.apache.kafka.common.requests.JoinGroupRequest;
 import org.apache.kafka.common.requests.ListOffsetsRequest;
 import org.apache.kafka.common.serialization.Deserializer;
+import org.apache.kafka.common.telemetry.internals.ClientTelemetryReporter;
+import org.apache.kafka.common.telemetry.internals.ClientTelemetryUtils;
 import org.apache.kafka.common.utils.AppInfoParser;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
@@ -158,6 +161,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
     private final int defaultApiTimeoutMs;
     private volatile boolean closed = false;
     private final List<ConsumerPartitionAssignor> assignors;
+    private final Optional<ClientTelemetryReporter> clientTelemetryReporter;
 
     // to keep from repeatedly scanning subscriptions in poll(), cache the result during metadata updates
     private boolean cachedSubscriptionHasAllFetchPositions;
@@ -185,7 +189,10 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             log.debug("Initializing the Kafka consumer");
             this.defaultApiTimeoutMs = config.getInt(ConsumerConfig.DEFAULT_API_TIMEOUT_MS_CONFIG);
             this.time = Time.SYSTEM;
-            this.metrics = createMetrics(config, time);
+            List<MetricsReporter> reporters = CommonClientConfigs.metricsReporters(clientId, config);
+            this.clientTelemetryReporter = CommonClientConfigs.telemetryReporter(clientId, config);
+            this.clientTelemetryReporter.ifPresent(reporters::add);
+            this.metrics = createMetrics(config, time, reporters);
             this.retryBackoffMs = config.getLong(ConsumerConfig.RETRY_BACKOFF_MS_CONFIG);
 
             List<ConsumerInterceptor<K, V>> interceptorList = configuredConsumerInterceptors(config);
@@ -215,7 +222,8 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                     config,
                     apiVersions,
                     metrics,
-                    fetchMetricsManager);
+                    fetchMetricsManager,
+                    clientTelemetryReporter.map(ClientTelemetryReporter::telemetrySender).orElse(null));
             final Supplier<RequestManagers> requestManagersSupplier = RequestManagers.supplier(time,
                     logContext,
                     backgroundEventQueue,
@@ -305,6 +313,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         this.applicationEventHandler = applicationEventHandler;
         this.assignors = assignors;
         this.kafkaConsumerMetrics = new KafkaConsumerMetrics(metrics, "consumer");
+        this.clientTelemetryReporter = Optional.empty();
     }
 
     // Visible for testing
@@ -330,6 +339,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         this.defaultApiTimeoutMs = config.getInt(ConsumerConfig.DEFAULT_API_TIMEOUT_MS_CONFIG);
         this.deserializers = new Deserializers<>(keyDeserializer, valueDeserializer);
         this.assignors = assignors;
+        this.clientTelemetryReporter = Optional.empty();
 
         ConsumerMetrics metricsRegistry = new ConsumerMetrics(CONSUMER_METRIC_GROUP_PREFIX);
         FetchMetricsManager fetchMetricsManager = new FetchMetricsManager(metrics, metricsRegistry.fetcherMetrics);
@@ -918,8 +928,12 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         log.trace("Closing the Kafka consumer");
         AtomicReference<Throwable> firstException = new AtomicReference<>();
 
+        final Timer closeTimer = time.timer(timeout);
+        clientTelemetryReporter.ifPresent(reporter -> reporter.initiateClose(timeout.toMillis()));
+        closeTimer.update();
+
         if (applicationEventHandler != null)
-            closeQuietly(() -> applicationEventHandler.close(timeout), "Failed to close application event handler with a timeout(ms)=" + timeout, firstException);
+            closeQuietly(() -> applicationEventHandler.close(Duration.ofMillis(closeTimer.remainingMs())), "Failed to close application event handler with a timeout(ms)=" + closeTimer.remainingMs(), firstException);
 
         // Invoke all callbacks after the background thread exists in case if there are unsent async
         // commits
@@ -930,6 +944,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         closeQuietly(kafkaConsumerMetrics, "kafka consumer metrics", firstException);
         closeQuietly(metrics, "consumer metrics", firstException);
         closeQuietly(deserializers, "consumer deserializers", firstException);
+        clientTelemetryReporter.ifPresent(reporter -> closeQuietly(reporter, "async consumer telemetry reporter", firstException));
 
         AppInfoParser.unregisterAppInfo(CONSUMER_JMX_PREFIX, clientId, metrics);
         log.debug("Kafka consumer has been closed");
@@ -979,7 +994,11 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
 
     @Override
     public Uuid clientInstanceId(Duration timeout) {
-        throw new KafkaException("method not implemented");
+        if (!clientTelemetryReporter.isPresent()) {
+            throw new IllegalStateException("Telemetry is not enabled. Set config `" + ConsumerConfig.ENABLE_METRICS_PUSH_CONFIG + "` to `true`.");
+        }
+
+        return ClientTelemetryUtils.fetchClientInstanceId(clientTelemetryReporter.get(), timeout);
     }
 
     @Override

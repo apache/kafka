@@ -125,7 +125,7 @@ public class AsyncKafkaConsumerTest {
     }
 
     private void setup(Optional<ConsumerTestBuilder.GroupInformation> groupInfo, boolean enableAutoCommit) {
-        testBuilder = new ConsumerTestBuilder.AsyncKafkaConsumerTestBuilder(groupInfo, enableAutoCommit);
+        testBuilder = new ConsumerTestBuilder.AsyncKafkaConsumerTestBuilder(groupInfo, enableAutoCommit, true);
         applicationEventHandler = testBuilder.applicationEventHandler;
         consumer = testBuilder.consumer;
         fetchCollector = testBuilder.fetchCollector;
