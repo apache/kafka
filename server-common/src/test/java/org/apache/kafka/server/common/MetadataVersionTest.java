@@ -165,8 +165,13 @@ class MetadataVersionTest {
         assertEquals(IBP_3_6_IV1, MetadataVersion.fromVersionString("3.6-IV1"));
         assertEquals(IBP_3_6_IV2, MetadataVersion.fromVersionString("3.6-IV2"));
 
+        // 3.7-IV0 is the latest production version in the 3.7 line
+        assertEquals(IBP_3_7_IV0, MetadataVersion.fromVersionString("3.7"));
+
         assertEquals(IBP_3_7_IV0, MetadataVersion.fromVersionString("3.7-IV0"));
         assertEquals(IBP_3_7_IV1, MetadataVersion.fromVersionString("3.7-IV1"));
+        assertEquals(IBP_3_7_IV2, MetadataVersion.fromVersionString("3.7-IV2"));
+        assertEquals(IBP_3_7_IV3, MetadataVersion.fromVersionString("3.7-IV3"));
     }
 
     @Test
@@ -268,6 +273,8 @@ class MetadataVersionTest {
         assertEquals("3.6-IV2", IBP_3_6_IV2.version());
         assertEquals("3.7-IV0", IBP_3_7_IV0.version());
         assertEquals("3.7-IV1", IBP_3_7_IV1.version());
+        assertEquals("3.7-IV2", IBP_3_7_IV2.version());
+        assertEquals("3.7-IV3", IBP_3_7_IV3.version());
     }
 
     @Test
@@ -328,20 +335,51 @@ class MetadataVersionTest {
 
     @ParameterizedTest
     @EnumSource(value = MetadataVersion.class)
+    public void testDirectoryAssignmentSupported(MetadataVersion metadataVersion) {
+        assertEquals(metadataVersion.isAtLeast(IBP_3_7_IV2), metadataVersion.isDirectoryAssignmentSupported());
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = MetadataVersion.class)
     public void testIsElrSupported(MetadataVersion metadataVersion) {
-        assertEquals(metadataVersion.equals(IBP_3_7_IV1),
-                metadataVersion.isElrSupported());
-        short expectPartitionRecordVersion = metadataVersion.equals(IBP_3_7_IV1) ? (short) 1 : (short) 0;
-        assertEquals(expectPartitionRecordVersion, metadataVersion.partitionRecordVersion());
-        short expectPartitionChangeRecordVersion = metadataVersion.equals(IBP_3_7_IV1) ? (short) 1 : (short) 0;
-        assertEquals(expectPartitionChangeRecordVersion, metadataVersion.partitionChangeRecordVersion());
+        assertEquals(metadataVersion.isAtLeast(IBP_3_7_IV3), metadataVersion.isElrSupported());
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = MetadataVersion.class)
+    public void testPartitionRecordVersion(MetadataVersion metadataVersion) {
+        final short expectedVersion;
+        if (metadataVersion.isElrSupported()) {
+            expectedVersion = (short) 2;
+        } else if (metadataVersion.isDirectoryAssignmentSupported()) {
+            expectedVersion = (short) 1;
+        } else {
+            expectedVersion = (short) 0;
+        }
+        assertEquals(expectedVersion, metadataVersion.partitionRecordVersion());
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = MetadataVersion.class)
+    public void testPartitionChangeRecordVersion(MetadataVersion metadataVersion) {
+        final short expectedVersion;
+        if (metadataVersion.isElrSupported()) {
+            expectedVersion = (short) 2;
+        } else if (metadataVersion.isDirectoryAssignmentSupported()) {
+            expectedVersion = (short) 1;
+        } else {
+            expectedVersion = (short) 0;
+        }
+        assertEquals(expectedVersion, metadataVersion.partitionChangeRecordVersion());
     }
 
     @ParameterizedTest
     @EnumSource(value = MetadataVersion.class)
     public void testRegisterBrokerRecordVersion(MetadataVersion metadataVersion) {
         final short expectedVersion;
-        if (metadataVersion.isAtLeast(MetadataVersion.IBP_3_4_IV0)) {
+        if (metadataVersion.isAtLeast(MetadataVersion.IBP_3_7_IV2)) {
+            expectedVersion = 3;
+        } else if (metadataVersion.isAtLeast(MetadataVersion.IBP_3_4_IV0)) {
             expectedVersion = 2;
         } else if (metadataVersion.isAtLeast(IBP_3_3_IV3)) {
             expectedVersion = 1;
@@ -385,5 +423,22 @@ class MetadataVersionTest {
     @EnumSource(value = MetadataVersion.class)
     public void testOffsetCommitValueVersionWithExpiredTimestamp(MetadataVersion metadataVersion) {
         assertEquals((short) 1, metadataVersion.offsetCommitValueVersion(true));
+    }
+
+    @Test
+    public void assertLatestProductionIsLessThanLatest() {
+        assertTrue(LATEST_PRODUCTION.ordinal() < MetadataVersion.latest().ordinal(),
+            "Expected LATEST_PRODUCTION " + LATEST_PRODUCTION +
+            " to be less than the latest of " + MetadataVersion.latest());
+    }
+
+    @Test
+    public void assertLatestProductionIsProduction() {
+        assertTrue(LATEST_PRODUCTION.isProduction());
+    }
+
+    @Test
+    public void assertLatestIsNotProduction() {
+        assertFalse(MetadataVersion.latest().isProduction());
     }
 }

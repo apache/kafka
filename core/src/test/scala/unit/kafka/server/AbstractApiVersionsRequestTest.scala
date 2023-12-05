@@ -74,6 +74,7 @@ abstract class AbstractApiVersionsRequestTest(cluster: ClusterInstance) {
     apiVersionsResponse: ApiVersionsResponse,
     listenerName: ListenerName = cluster.clientListener(),
     enableUnstableLastVersion: Boolean = false,
+    clientTelemetryEnabled: Boolean = false,
     apiVersion: Short = ApiKeys.API_VERSIONS.latestVersion
   ): Unit = {
     if (cluster.isKRaftTest && apiVersion >= 3) {
@@ -100,7 +101,8 @@ abstract class AbstractApiVersionsRequestTest(cluster: ClusterInstance) {
         ApiMessageType.ListenerType.BROKER,
         RecordVersion.current,
         NodeApiVersions.create(ApiKeys.controllerApis().asScala.map(ApiVersionsResponse.toApiVersion).asJava).allSupportedApiVersions(),
-        enableUnstableLastVersion
+        enableUnstableLastVersion,
+        clientTelemetryEnabled
       )
     }
 

@@ -21,6 +21,7 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.ApiException;
 import org.apache.kafka.common.errors.StaleMemberEpochException;
 import org.apache.kafka.common.errors.UnknownMemberIdException;
+import org.apache.kafka.common.message.ConsumerGroupDescribeResponseData;
 import org.apache.kafka.common.message.ListGroupsResponseData;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.coordinator.group.Group;
@@ -520,7 +521,14 @@ public class ConsumerGroup implements Group {
      * @return The preferred assignor for the group.
      */
     public Optional<String> preferredServerAssignor() {
-        return serverAssignors.entrySet().stream()
+        return preferredServerAssignor(Long.MAX_VALUE);
+    }
+
+    /**
+     * @return The preferred assignor for the group with given offset.
+     */
+    public Optional<String> preferredServerAssignor(long committedOffset) {
+        return serverAssignors.entrySet(committedOffset).stream()
             .max(Map.Entry.comparingByValue())
             .map(Map.Entry::getKey);
     }
@@ -942,5 +950,20 @@ public class ConsumerGroup implements Group {
      */
     private static Integer incValue(String key, Integer value) {
         return value == null ? 1 : value + 1;
+    }
+
+    public ConsumerGroupDescribeResponseData.DescribedGroup asDescribedGroup(long committedOffset, String defaultAssignor) {
+        ConsumerGroupDescribeResponseData.DescribedGroup describedGroup = new ConsumerGroupDescribeResponseData.DescribedGroup()
+            .setGroupId(groupId)
+            .setAssignorName(preferredServerAssignor(committedOffset).orElse(defaultAssignor))
+            .setGroupEpoch(groupEpoch.get(committedOffset))
+            .setGroupState(state.get(committedOffset).toString())
+            .setAssignmentEpoch(targetAssignmentEpoch.get(committedOffset));
+        members.entrySet(committedOffset).forEach(
+            entry -> describedGroup.members().add(
+                entry.getValue().asConsumerGroupDescribeMember(targetAssignment.get(entry.getValue().memberId(), committedOffset))
+            )
+        );
+        return describedGroup;
     }
 }

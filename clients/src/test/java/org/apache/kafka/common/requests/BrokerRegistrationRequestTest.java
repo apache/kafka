@@ -19,10 +19,13 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.BrokerRegistrationRequestData;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
+import org.apache.kafka.common.protocol.ObjectSerializationCache;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
+import java.nio.ByteBuffer;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
@@ -49,14 +52,25 @@ class BrokerRegistrationRequestTest {
             .setPreviousBrokerEpoch(1L);
         BrokerRegistrationRequest.Builder builder = new BrokerRegistrationRequest.Builder(data);
         BrokerRegistrationRequest request = builder.build(version);
-        assertEquals(0, request.data().brokerId(), request.toString());
-        assertEquals("test", request.data().clusterId(), request.toString());
-        assertEquals(incarnationId, request.data().incarnationId(), request.toString());
-        assertEquals("a", request.data().rack(), request.toString());
-        if (version < 2) {
-            assertEquals(-1, request.data().previousBrokerEpoch(), request.toString());
+
+        ObjectSerializationCache cache = new ObjectSerializationCache();
+        int size = request.data().size(cache, version);
+        ByteBuffer buf = ByteBuffer.allocate(size);
+        ByteBufferAccessor byteBufferAccessor = new ByteBufferAccessor(buf);
+        request.data().write(byteBufferAccessor, cache, version);
+
+        BrokerRegistrationRequestData data2 = new BrokerRegistrationRequestData();
+        buf.flip();
+        data2.read(byteBufferAccessor, version);
+
+        assertEquals(0, data2.brokerId(), "Unepxected broker ID in " + data2);
+        assertEquals("test", data2.clusterId(), "Unexpected cluster ID in " + data2);
+        assertEquals(incarnationId, data2.incarnationId(), "Unepxected incarnation ID in " + data2);
+        assertEquals("a", data2.rack(), "Unepxected rack in " + data2);
+        if (version >= 3) {
+            assertEquals(1, data2.previousBrokerEpoch(), "Unexpected previousBrokerEpoch in " + data2);
         } else {
-            assertEquals(1, request.data().previousBrokerEpoch(), request.toString());
+            assertEquals(-1, data2.previousBrokerEpoch(), "Unexpected previousBrokerEpoch in " + data2);
         }
     }
 }
