@@ -343,7 +343,7 @@ class ConsumerGroupHeartbeatRequestTest(cluster: ClusterInstance) {
 
     // Validating that trying to join with an in-use instanceId would throw an UnreleasedInstanceIdException.
     consumerGroupHeartbeatResponse = connectAndReceive(consumerGroupHeartbeatRequest)
-    assertEquals(Errors.UNRELEASED_INSTANCE_ID.code(), consumerGroupHeartbeatResponse.data.errorCode)
+    assertEquals(Errors.UNRELEASED_INSTANCE_ID.code, consumerGroupHeartbeatResponse.data.errorCode)
 
     // The new static member join group will keep failing with an UnreleasedInstanceIdException
     // until eventually it gets through because the existing member will be kicked out
