@@ -330,7 +330,7 @@ class ConsumerGroupHeartbeatRequestTest(cluster: ClusterInstance) {
     assertEquals(2, consumerGroupHeartbeatResponse.data.memberEpoch)
     assertEquals(expectedAssignment, consumerGroupHeartbeatResponse.data.assignment)
 
-    // A new static member tries to join the group with an inuse instanceid
+    // A new static member tries to join the group with an inuse instanceid.
     consumerGroupHeartbeatRequest = new ConsumerGroupHeartbeatRequest.Builder(
       new ConsumerGroupHeartbeatRequestData()
         .setGroupId("grp")
@@ -341,20 +341,22 @@ class ConsumerGroupHeartbeatRequestTest(cluster: ClusterInstance) {
         .setTopicPartitions(List.empty.asJava)
     ).build()
 
+    // Validating that trying to join with an in-use instanceId would throw an UnreleasedInstanceIdException.
+    consumerGroupHeartbeatResponse = connectAndReceive(consumerGroupHeartbeatRequest)
+    assertEquals(111, consumerGroupHeartbeatResponse.data.errorCode)
+
     // The new static member join group will keep failing with an UnreleasedInstanceIdException
-    // exception until eventually it gets through because the existing member will be kicked out
+    // until eventually it gets through because the existing member will be kicked out
     // because of not sending a heartbeat till session timeout expiry.
     TestUtils.waitUntilTrue(() => {
       consumerGroupHeartbeatResponse = connectAndReceive(consumerGroupHeartbeatRequest)
       consumerGroupHeartbeatResponse.data.errorCode == Errors.NONE.code &&
         consumerGroupHeartbeatResponse.data.assignment == expectedAssignment
-    }, msg = s"Could not get partitions assigned. Last response $consumerGroupHeartbeatResponse.")
+    }, msg = s"Could not re-join the group successfully. Last response $consumerGroupHeartbeatResponse.")
 
-    print(consumerGroupHeartbeatRequest)
-    // Verify the response. The group epoch bumps upto 4 which eventually reflects in the new member epoch
+    // Verify the response. The group epoch bumps upto 4 which eventually reflects in the new member epoch.
     assertEquals(4, consumerGroupHeartbeatResponse.data.memberEpoch)
     assertEquals(expectedAssignment, consumerGroupHeartbeatResponse.data.assignment)
-
   }
 
   private def connectAndReceive(request: ConsumerGroupHeartbeatRequest): ConsumerGroupHeartbeatResponse = {
