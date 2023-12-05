@@ -821,12 +821,8 @@ public class ConnectWorkerIntegrationTest {
                 ConnectRestException.class,
                 () -> connect.configureConnector(CONNECTOR_NAME, connectorConfig2)
         );
-        assertEquals(INTERNAL_SERVER_ERROR.getStatusCode(), e.statusCode());
-        assertNotNull(e.getMessage());
-        assertTrue(
-                "Message '" + e.getMessage() + "' does not match expected format",
-                e.getMessage().contains("Request timed out. The worker is currently flushing updates to the status topic")
-        );
+        String expectedStageDescription = "flushing updates to the status topic";
+        assertTimeoutException(e, expectedStageDescription);
         log.info("Restarting Kafka cluster");
         connect.kafka().startOnlyKafkaOnSamePorts();
         connect.assertions().assertExactlyNumBrokersAreUp(1, "Broker did not complete startup in time");
@@ -851,14 +847,8 @@ public class ConnectWorkerIntegrationTest {
                 ConnectRestException.class,
                 () -> connect.deleteConnector(CONNECTOR_NAME)
         );
-        assertEquals(INTERNAL_SERVER_ERROR.getStatusCode(), e.statusCode());
-        assertTrue(
-                "Message '" + e.getMessage() + "' does not match the expected format",
-                e.getMessage().contains(
-                        "Request timed out. The worker is currently removing the config for connector " +
-                                CONNECTOR_NAME + " from the config topic"
-                )
-        );
+        expectedStageDescription = "removing the config for connector " + CONNECTOR_NAME + " from the config topic";
+        assertTimeoutException(e, expectedStageDescription);
 
         // The worker should still be blocked on the same operation
         log.info("Trying again to reconfigure connector after config topic has been deleted");
@@ -866,13 +856,16 @@ public class ConnectWorkerIntegrationTest {
                 ConnectRestException.class,
                 () -> connect.configureConnector(CONNECTOR_NAME, connectorConfig1)
         );
-        assertEquals(INTERNAL_SERVER_ERROR.getStatusCode(), e.statusCode());
+        expectedStageDescription = "removing the config for connector " + CONNECTOR_NAME + " from the config topic";
+        assertTimeoutException(e, expectedStageDescription);
+    }
+
+    private static void assertTimeoutException(ConnectRestException exception, String expectedStageDescription) {
+        assertEquals(INTERNAL_SERVER_ERROR.getStatusCode(), exception.statusCode());
+        assertNotNull(exception.getMessage());
         assertTrue(
-                "Message '" + e.getMessage() + "' does not match the expected format",
-                e.getMessage().contains(
-                        "Request timed out. The worker is currently removing the config for connector " +
-                                CONNECTOR_NAME + " from the config topic"
-                )
+                "Message '" + exception.getMessage() + "' does not match expected format",
+                exception.getMessage().contains("Request timed out. The worker is currently " + expectedStageDescription)
         );
     }
 

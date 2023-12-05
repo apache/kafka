@@ -399,12 +399,13 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
 
     @Override
     public void validateConnectorConfig(Map<String, String> connectorProps, Callback<ConfigInfos> callback, boolean doLog) {
-        callback.recordStage(new Stage(
+        Stage waitingForThread = new Stage(
                 "waiting for a new thread to become available for connector validation",
                 time.milliseconds()
-        ));
+        );
+        callback.recordStage(waitingForThread);
         connectorExecutor.submit(() -> {
-            callback.recordStage(null);
+            waitingForThread.complete(time.milliseconds());
             try {
                 Function<String, TemporaryStage> reportStage = description ->
                         new TemporaryStage(description, callback, time);

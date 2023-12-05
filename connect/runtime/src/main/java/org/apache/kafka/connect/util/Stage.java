@@ -16,20 +16,21 @@
  */
 package org.apache.kafka.connect.util;
 
-import java.util.concurrent.atomic.AtomicLong;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 public class Stage {
+
+    private static final Logger log = LoggerFactory.getLogger(Stage.class);
+
     private final String description;
     private final long started;
-    private final AtomicLong completed;
+    private volatile Long completed;
 
     public Stage(String description, long started) {
-        if (started < 0)
-            throw new IllegalArgumentException("Invalid start timestamp " + started + "; cannot be negative");
-
         this.description = description;
         this.started = started;
-        this.completed = new AtomicLong(-1);
+        this.completed = null;
     }
 
     public String description() {
@@ -41,22 +42,21 @@ public class Stage {
     }
 
     public Long completed() {
-        long result = completed.get();
-        return result >= 0 ? result : null;
+        return completed;
     }
 
     public synchronized void complete(long time) {
-        if (time < 0)
-            throw new IllegalArgumentException("Cannot complete stage with negative timestamp " + time);
-        if (time < started)
-            throw new IllegalArgumentException("Cannot complete stage with timestamp " + time + " before its start time " + started);
+        if (time < started) {
+            log.warn("Ignoring invalid completion time {} since it is before this stage's start time of {}", time, started);
+            return;
+        }
 
-        this.completed.updateAndGet(l -> {
-            if (l >= 0)
-                throw new IllegalStateException("Stage is already completed");
+        if (completed != null) {
+            log.warn("Ignoring completion time of {} since this stage was already completed at {}", time, completed);
+            return;
+        }
 
-            return time;
-        });
+        this.completed = time;
     }
 
     @Override

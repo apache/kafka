@@ -733,7 +733,7 @@ public class DistributedHerderTest {
         expectConfigRefreshAndSnapshot(SNAPSHOT);
 
         when(statusBackingStore.connectors()).thenReturn(Collections.emptySet());
-        doNothing().when(member).poll(anyLong());
+        expectMemberPoll();
 
         // Initial rebalance where this member becomes the leader
         herder.tick();
@@ -750,7 +750,7 @@ public class DistributedHerderTest {
         doNothing().when(configBackingStore).putConnectorConfig(eq(CONN2), eq(CONN2_CONFIG), eq(TargetState.STOPPED));
 
         // This will occur just before/during the second tick
-        doNothing().when(member).ensureActive();
+        expectMemberEnsureActive();
 
         // No immediate action besides this -- change will be picked up via the config log
         List<String> stages = expectRecordStages(putConnectorCallback);
