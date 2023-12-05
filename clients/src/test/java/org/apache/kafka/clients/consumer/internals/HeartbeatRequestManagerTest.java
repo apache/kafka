@@ -523,7 +523,7 @@ public class HeartbeatRequestManagerTest {
         assertTrue(heartbeatRequestManager.pollTimer().isExpired());
         // Poll again, ensure we heartbeat again.
         time.sleep(1);
-        heartbeatRequestManager.ack();
+        heartbeatRequestManager.resetPollTimer();
         assertHeartbeat(heartbeatRequestManager);
         assertFalse(heartbeatRequestManager.pollTimer().isExpired());
     }

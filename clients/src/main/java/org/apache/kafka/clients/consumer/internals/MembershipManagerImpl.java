@@ -479,6 +479,7 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
      * Transition to the {@link MemberState#JOINING} state, indicating that the member will
      * try to join the group on the next heartbeat request. This is expected to be invoked when
      * the user calls the subscribe API, or when the member wants to rejoin after getting fenced.
+     * Visible for testing.
      */
     @Override
     public void transitionToJoining() {

@@ -130,7 +130,7 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
         }
 
         requestManagers.commitRequestManager.ifPresent(m -> m.updateAutoCommitTimer(event.pollTimeMs()));
-        requestManagers.heartbeatRequestManager.ifPresent(HeartbeatRequestManager::ack);
+        requestManagers.heartbeatRequestManager.ifPresent(HeartbeatRequestManager::resetPollTimer);
     }
 
     private void process(final CommitApplicationEvent event) {

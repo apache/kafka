@@ -219,7 +219,7 @@ public class ConsumerTestBuilder implements Closeable {
                     gi.heartbeatJitterMs));
             HeartbeatRequestManager heartbeat = spy(new HeartbeatRequestManager(
                     logContext,
-                    time,
+                    time.timer(groupRebalanceConfig.rebalanceTimeoutMs),
                     config,
                     coordinator,
                     mm,

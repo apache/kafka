@@ -75,7 +75,7 @@ public class HeartbeatRequestManager implements RequestManager {
      * Time that the group coordinator will wait on member to revoke its partitions. This is provided by the group
      * coordinator in the heartbeat
      */
-    private final int rebalanceTimeoutMs;
+    private final int maxPollIntervalMs;
 
     /**
      * CoordinatorRequestManager manages the connection to the group coordinator
@@ -122,19 +122,19 @@ public class HeartbeatRequestManager implements RequestManager {
         this.logger = logContext.logger(getClass());
         this.membershipManager = membershipManager;
         this.backgroundEventHandler = backgroundEventHandler;
-        this.rebalanceTimeoutMs = config.getInt(CommonClientConfigs.MAX_POLL_INTERVAL_MS_CONFIG);
+        this.maxPollIntervalMs = config.getInt(CommonClientConfigs.MAX_POLL_INTERVAL_MS_CONFIG);
         long retryBackoffMs = config.getLong(ConsumerConfig.RETRY_BACKOFF_MS_CONFIG);
         long retryBackoffMaxMs = config.getLong(ConsumerConfig.RETRY_BACKOFF_MAX_MS_CONFIG);
-        this.heartbeatState = new HeartbeatState(subscriptions, membershipManager, rebalanceTimeoutMs);
+        this.heartbeatState = new HeartbeatState(subscriptions, membershipManager, maxPollIntervalMs);
         this.heartbeatRequestState = new HeartbeatRequestState(logContext, time, 0, retryBackoffMs,
-            retryBackoffMaxMs, rebalanceTimeoutMs);
-        this.pollTimer = time.timer(rebalanceTimeoutMs);
+            retryBackoffMaxMs, maxPollIntervalMs);
+        this.pollTimer = time.timer(maxPollIntervalMs);
     }
 
     // Visible for testing
     HeartbeatRequestManager(
         final LogContext logContext,
-        final Time time,
+        final Timer timer,
         final ConsumerConfig config,
         final CoordinatorRequestManager coordinatorRequestManager,
         final MembershipManager membershipManager,
@@ -142,13 +142,13 @@ public class HeartbeatRequestManager implements RequestManager {
         final HeartbeatRequestState heartbeatRequestState,
         final BackgroundEventHandler backgroundEventHandler) {
         this.logger = logContext.logger(this.getClass());
-        this.rebalanceTimeoutMs = config.getInt(CommonClientConfigs.MAX_POLL_INTERVAL_MS_CONFIG);
+        this.maxPollIntervalMs = config.getInt(CommonClientConfigs.MAX_POLL_INTERVAL_MS_CONFIG);
         this.coordinatorRequestManager = coordinatorRequestManager;
         this.heartbeatRequestState = heartbeatRequestState;
         this.heartbeatState = heartbeatState;
         this.membershipManager = membershipManager;
         this.backgroundEventHandler = backgroundEventHandler;
-        this.pollTimer = time.timer(rebalanceTimeoutMs);
+        this.pollTimer = timer;
     }
 
     /**
@@ -225,13 +225,10 @@ public class HeartbeatRequestManager implements RequestManager {
      * When consumer polls, we need to reset the pollTimer.  If the poll timer has expired, we rejoin only when the
      * member is in the {@link MemberState#UNSUBSCRIBED} state.
      */
-    public void ack() {
-        if (pollTimer.notExpired()) {
-            pollTimer.reset(rebalanceTimeoutMs);
-        }
+    public void resetPollTimer() {
+        pollTimer.reset(maxPollIntervalMs);
         if (membershipManager.state() == MemberState.UNSUBSCRIBED) {
             membershipManager.transitionToJoining();
-            pollTimer.reset(rebalanceTimeoutMs);
         }
     }
 
