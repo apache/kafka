@@ -108,6 +108,8 @@ services:
       KAFKA_SSL_CLIENT_AUTH: "required"
     depends_on:
       - controller1
+      - controller2
+      - controller3
 
   broker2:
     image: {$IMAGE}
@@ -141,6 +143,8 @@ services:
       KAFKA_SSL_CLIENT_AUTH: "required"
     depends_on:
       - controller1
+      - controller2
+      - controller3
 
   broker3:
     image: {$IMAGE}
@@ -162,3 +166,5 @@ services:
       KAFKA_CONTROLLER_QUORUM_VOTERS: '1@controller1:29093,2@controller2:39093,3@controller3:49093'
     depends_on:
       - controller1
+      - controller2
+      - controller3
