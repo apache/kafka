@@ -1036,7 +1036,7 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
 
         if (error.isPresent()) {
             log.warn(
-                    "The {} method completed with an error ({}). signaling to continue to the next phase of rebalance",
+                    "The {} method completed with an error ({}); signaling to continue to the next phase of rebalance",
                     methodName,
                     error.get().getMessage()
             );
