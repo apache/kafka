@@ -198,6 +198,8 @@
     </subpackage>
 
     <subpackage name="telemetry">
+      <allow pkg="io.opentelemetry.proto"/>
+      <allow pkg="org.apache.kafka.clients"/>
       <allow pkg="org.apache.kafka.common" />
     </subpackage>
 
@@ -327,6 +329,14 @@
       <allow pkg="kafka.security"/>
       <allow pkg="org.apache.kafka.metadata.authorizer"/>
       <allow pkg="org.apache.kafka.tools"/>
+    </subpackage>
+
+    <subpackage name="other">
+      <allow pkg="org.apache.kafka.tools.reassign"/>
+      <allow pkg="kafka.log" />
+      <allow pkg="org.jfree"/>
+      <allow pkg="javax.imageio" />
+      <allow pkg="scala" />
     </subpackage>
   </subpackage>
 

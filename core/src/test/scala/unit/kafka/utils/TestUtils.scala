@@ -331,6 +331,7 @@ object TestUtils extends Logging {
     }.mkString(",")
 
     val props = new Properties
+    props.put(KafkaConfig.UnstableMetadataVersionsEnableProp, "true")
     if (zkConnect == null) {
       props.setProperty(KafkaConfig.ServerMaxStartupTimeMsProp, TimeUnit.MINUTES.toMillis(10).toString)
       props.put(KafkaConfig.NodeIdProp, nodeId.toString)
@@ -596,10 +597,10 @@ object TestUtils extends Logging {
    * Wait until the leader is elected and the metadata is propagated to all brokers.
    * Return the leader for each partition.
    */
-  def createTopic(zkClient: KafkaZkClient,
+  def createTopic[B <: KafkaBroker](zkClient: KafkaZkClient,
                   topic: String,
                   partitionReplicaAssignment: collection.Map[Int, Seq[Int]],
-                  servers: Seq[KafkaBroker]): scala.collection.immutable.Map[Int, Int] = {
+                  servers: Seq[B]): scala.collection.immutable.Map[Int, Int] = {
     createTopic(zkClient, topic, partitionReplicaAssignment, servers, new Properties())
   }
 
