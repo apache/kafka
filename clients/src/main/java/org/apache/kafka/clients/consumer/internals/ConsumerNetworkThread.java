@@ -78,13 +78,11 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
         this.applicationEventProcessorSupplier = applicationEventProcessorSupplier;
         this.networkClientDelegateSupplier = networkClientDelegateSupplier;
         this.requestManagersSupplier = requestManagersSupplier;
+        this.running = true;
     }
 
     @Override
     public void run() {
-        closer.assertOpen("Consumer network thread is already closed");
-        running = true;
-
         try {
             log.debug("Consumer network thread started");
 

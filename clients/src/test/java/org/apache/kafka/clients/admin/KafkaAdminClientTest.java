@@ -117,6 +117,7 @@ import org.apache.kafka.common.message.InitProducerIdResponseData;
 import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity;
 import org.apache.kafka.common.message.LeaveGroupResponseData;
 import org.apache.kafka.common.message.LeaveGroupResponseData.MemberResponse;
+import org.apache.kafka.common.message.ListClientMetricsResourcesResponseData;
 import org.apache.kafka.common.message.ListGroupsResponseData;
 import org.apache.kafka.common.message.ListOffsetsResponseData;
 import org.apache.kafka.common.message.ListOffsetsResponseData.ListOffsetsTopicResponse;
@@ -182,6 +183,8 @@ import org.apache.kafka.common.requests.InitProducerIdResponse;
 import org.apache.kafka.common.requests.JoinGroupRequest;
 import org.apache.kafka.common.requests.LeaveGroupRequest;
 import org.apache.kafka.common.requests.LeaveGroupResponse;
+import org.apache.kafka.common.requests.ListClientMetricsResourcesRequest;
+import org.apache.kafka.common.requests.ListClientMetricsResourcesResponse;
 import org.apache.kafka.common.requests.ListGroupsRequest;
 import org.apache.kafka.common.requests.ListGroupsResponse;
 import org.apache.kafka.common.requests.ListOffsetsRequest;
@@ -7088,6 +7091,68 @@ public class KafkaAdminClientTest {
                                      member.clientId(),
                                      member.clientHost(),
                                      assignment);
+    }
+
+    @Test
+    public void testListClientMetricsResources() throws Exception {
+        try (AdminClientUnitTestEnv env = mockClientEnv()) {
+            List<ClientMetricsResourceListing> expected = Arrays.asList(
+                new ClientMetricsResourceListing("one"),
+                new ClientMetricsResourceListing("two")
+            );
+
+            ListClientMetricsResourcesResponseData responseData =
+                new ListClientMetricsResourcesResponseData().setErrorCode(Errors.NONE.code());
+
+            responseData.clientMetricsResources()
+                .add(new ListClientMetricsResourcesResponseData.ClientMetricsResource().setName("one"));
+            responseData.clientMetricsResources()
+                .add((new ListClientMetricsResourcesResponseData.ClientMetricsResource()).setName("two"));
+
+            env.kafkaClient().prepareResponse(
+                request -> request instanceof ListClientMetricsResourcesRequest,
+                new ListClientMetricsResourcesResponse(responseData));
+
+            ListClientMetricsResourcesResult result = env.adminClient().listClientMetricsResources();
+            assertEquals(new HashSet<>(expected), new HashSet<>(result.all().get()));
+        }
+    }
+
+    @Test
+    public void testListClientMetricsResourcesEmpty() throws Exception {
+        try (AdminClientUnitTestEnv env = mockClientEnv()) {
+            List<ClientMetricsResourceListing> expected = Collections.emptyList();
+
+            ListClientMetricsResourcesResponseData responseData =
+                new ListClientMetricsResourcesResponseData().setErrorCode(Errors.NONE.code());
+
+            env.kafkaClient().prepareResponse(
+                request -> request instanceof ListClientMetricsResourcesRequest,
+                new ListClientMetricsResourcesResponse(responseData));
+
+            ListClientMetricsResourcesResult result = env.adminClient().listClientMetricsResources();
+            assertEquals(new HashSet<>(expected), new HashSet<>(result.all().get()));
+        }
+    }
+
+    @Test
+    public void testListClientMetricsResourcesNotSupported() throws Exception {
+        try (AdminClientUnitTestEnv env = mockClientEnv()) {
+            env.kafkaClient().prepareResponse(
+                request -> request instanceof ListClientMetricsResourcesRequest,
+                prepareListClientMetricsResourcesResponse(Errors.UNSUPPORTED_VERSION));
+
+            ListClientMetricsResourcesResult result = env.adminClient().listClientMetricsResources();
+
+            // Validate response
+            assertNotNull(result.all());
+            TestUtils.assertFutureThrows(result.all(), Errors.UNSUPPORTED_VERSION.exception().getClass());
+        }
+    }
+
+    private static ListClientMetricsResourcesResponse prepareListClientMetricsResourcesResponse(Errors error) {
+        return new ListClientMetricsResourcesResponse(new ListClientMetricsResourcesResponseData()
+                .setErrorCode(error.code()));
     }
 
     @SafeVarargs

@@ -71,7 +71,7 @@ public class ConsumerTestBuilder implements Closeable {
     static final double DEFAULT_HEARTBEAT_JITTER_MS = 0.0;
 
     final LogContext logContext = new LogContext();
-    final Time time = new MockTime(0);
+    final Time time;
     public final BlockingQueue<ApplicationEvent> applicationEventQueue;
     public final BlockingQueue<BackgroundEvent> backgroundEventQueue;
     final ConsumerConfig config;
@@ -104,11 +104,12 @@ public class ConsumerTestBuilder implements Closeable {
     }
 
     public ConsumerTestBuilder(Optional<GroupInformation> groupInfo) {
-        this(groupInfo, true);
+        this(groupInfo, true, true);
     }
 
-    public ConsumerTestBuilder(Optional<GroupInformation> groupInfo, boolean enableAutoCommit) {
+    public ConsumerTestBuilder(Optional<GroupInformation> groupInfo, boolean enableAutoCommit, boolean enableAutoTick) {
         this.groupInfo = groupInfo;
+        this.time = enableAutoTick ? new MockTime(1) : new MockTime();
         this.applicationEventQueue = new LinkedBlockingQueue<>();
         this.backgroundEventQueue = new LinkedBlockingQueue<>();
         this.backgroundEventHandler = spy(new BackgroundEventHandler(logContext, backgroundEventQueue));
@@ -314,12 +315,8 @@ public class ConsumerTestBuilder implements Closeable {
         public final ApplicationEventHandler applicationEventHandler;
         public final BackgroundEventProcessor backgroundEventProcessor;
 
-        public ApplicationEventHandlerTestBuilder() {
-            this(createDefaultGroupInformation(), true);
-        }
-
-        public ApplicationEventHandlerTestBuilder(Optional<GroupInformation> groupInfo, boolean enableAutoCommit) {
-            super(groupInfo, enableAutoCommit);
+        public ApplicationEventHandlerTestBuilder(Optional<GroupInformation> groupInfo, boolean enableAutoCommit, boolean enableAutoTick) {
+            super(groupInfo, enableAutoCommit, enableAutoTick);
             this.applicationEventHandler = spy(new ApplicationEventHandler(
                     logContext,
                     time,
@@ -350,8 +347,8 @@ public class ConsumerTestBuilder implements Closeable {
 
         final FetchCollector<String, String> fetchCollector;
 
-        public AsyncKafkaConsumerTestBuilder(Optional<GroupInformation> groupInfo, boolean enableAutoCommit) {
-            super(groupInfo, enableAutoCommit);
+        public AsyncKafkaConsumerTestBuilder(Optional<GroupInformation> groupInfo, boolean enableAutoCommit, boolean enableAutoTick) {
+            super(groupInfo, enableAutoCommit, enableAutoTick);
             String clientId = config.getString(CommonClientConfigs.CLIENT_ID_CONFIG);
             List<ConsumerPartitionAssignor> assignors = ConsumerPartitionAssignor.getAssignorInstances(
                     config.getList(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG),

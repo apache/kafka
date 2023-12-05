@@ -247,6 +247,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         case ApiKeys.CONSUMER_GROUP_DESCRIBE => handleConsumerGroupDescribe(request).exceptionally(handleError)
         case ApiKeys.GET_TELEMETRY_SUBSCRIPTIONS => handleGetTelemetrySubscriptionsRequest(request)
         case ApiKeys.PUSH_TELEMETRY => handlePushTelemetryRequest(request)
+        case ApiKeys.LIST_CLIENT_METRICS_RESOURCES => handleListClientMetricsResources(request)
         case _ => throw new IllegalStateException(s"No handler for request api key ${request.header.apiKey}")
       }
     } catch {
@@ -3775,16 +3776,51 @@ class KafkaApis(val requestChannel: RequestChannel,
 
   }
 
-  // Just a place holder for now.
   def handleGetTelemetrySubscriptionsRequest(request: RequestChannel.Request): Unit = {
-    requestHelper.sendMaybeThrottle(request, request.body[GetTelemetrySubscriptionsRequest].getErrorResponse(Errors.UNSUPPORTED_VERSION.exception))
-    CompletableFuture.completedFuture[Unit](())
+    val subscriptionRequest = request.body[GetTelemetrySubscriptionsRequest]
+
+    clientMetricsManager match {
+      case Some(metricsManager) =>
+        try {
+          requestHelper.sendMaybeThrottle(request, metricsManager.processGetTelemetrySubscriptionRequest(subscriptionRequest, request.context))
+        } catch {
+          case _: Exception =>
+            requestHelper.sendMaybeThrottle(request, subscriptionRequest.getErrorResponse(Errors.INVALID_REQUEST.exception))
+        }
+      case None =>
+        info("Received get telemetry client request for zookeeper based cluster")
+        requestHelper.sendMaybeThrottle(request, subscriptionRequest.getErrorResponse(Errors.UNSUPPORTED_VERSION.exception))
+    }
   }
 
-  // Just a place holder for now.
   def handlePushTelemetryRequest(request: RequestChannel.Request): Unit = {
-    requestHelper.sendMaybeThrottle(request, request.body[PushTelemetryRequest].getErrorResponse(Errors.UNSUPPORTED_VERSION.exception))
-    CompletableFuture.completedFuture[Unit](())
+    val pushTelemetryRequest = request.body[PushTelemetryRequest]
+
+    clientMetricsManager match {
+      case Some(metricsManager) =>
+        try {
+          requestHelper.sendMaybeThrottle(request, metricsManager.processPushTelemetryRequest(pushTelemetryRequest, request.context))
+        } catch {
+          case _: Exception =>
+            requestHelper.sendMaybeThrottle(request, pushTelemetryRequest.getErrorResponse(Errors.INVALID_REQUEST.exception))
+        }
+      case None =>
+        info("Received push telemetry client request for zookeeper based cluster")
+        requestHelper.sendMaybeThrottle(request, pushTelemetryRequest.getErrorResponse(Errors.UNSUPPORTED_VERSION.exception))
+    }
+  }
+
+  // Just a placeholder for now.
+  def handleListClientMetricsResources(request: RequestChannel.Request): Unit = {
+    val listClientMetricsResourcesRequest = request.body[ListClientMetricsResourcesRequest]
+
+    if (!authHelper.authorize(request.context, DESCRIBE_CONFIGS, CLUSTER, CLUSTER_NAME)) {
+      requestHelper.sendMaybeThrottle(request, listClientMetricsResourcesRequest.getErrorResponse(Errors.CLUSTER_AUTHORIZATION_FAILED.exception))
+    } else {
+      // Just return an empty list in the placeholder
+      val data = new ListClientMetricsResourcesResponseData()
+      requestHelper.sendMaybeThrottle(request, new ListClientMetricsResourcesResponse(data))
+    }
   }
 
   private def updateRecordConversionStats(request: RequestChannel.Request,

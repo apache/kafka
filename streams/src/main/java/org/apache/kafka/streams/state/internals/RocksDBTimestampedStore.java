@@ -35,13 +35,11 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.nio.charset.StandardCharsets;
-import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.Objects;
 
-import static java.util.Arrays.asList;
 import static org.apache.kafka.streams.state.TimestampedBytesStore.convertToTimestampedFormat;
 
 /**
@@ -49,6 +47,8 @@ import static org.apache.kafka.streams.state.TimestampedBytesStore.convertToTime
  */
 public class RocksDBTimestampedStore extends RocksDBStore implements TimestampedBytesStore {
     private static final Logger log = LoggerFactory.getLogger(RocksDBTimestampedStore.class);
+
+    private static final byte[] TIMESTAMPED_VALUES_COLUMN_FAMILY_NAME = "keyValueWithTimestamp".getBytes(StandardCharsets.UTF_8);
 
     public RocksDBTimestampedStore(final String name,
                             final String metricsScope) {
@@ -64,31 +64,14 @@ public class RocksDBTimestampedStore extends RocksDBStore implements Timestamped
     @Override
     void openRocksDB(final DBOptions dbOptions,
                      final ColumnFamilyOptions columnFamilyOptions) {
-        final List<ColumnFamilyDescriptor> columnFamilyDescriptors = asList(
-            new ColumnFamilyDescriptor(RocksDB.DEFAULT_COLUMN_FAMILY, columnFamilyOptions),
-            new ColumnFamilyDescriptor("keyValueWithTimestamp".getBytes(StandardCharsets.UTF_8), columnFamilyOptions));
-        final List<ColumnFamilyHandle> columnFamilies = new ArrayList<>(columnFamilyDescriptors.size());
+        final List<ColumnFamilyHandle> columnFamilies = openRocksDB(
+                dbOptions,
+                new ColumnFamilyDescriptor(RocksDB.DEFAULT_COLUMN_FAMILY, columnFamilyOptions),
+                new ColumnFamilyDescriptor(TIMESTAMPED_VALUES_COLUMN_FAMILY_NAME, columnFamilyOptions)
+        );
+        final ColumnFamilyHandle noTimestampColumnFamily = columnFamilies.get(0);
+        final ColumnFamilyHandle withTimestampColumnFamily = columnFamilies.get(1);
 
-        try {
-            db = RocksDB.open(dbOptions, dbDir.getAbsolutePath(), columnFamilyDescriptors, columnFamilies);
-            setDbAccessor(columnFamilies.get(0), columnFamilies.get(1));
-        } catch (final RocksDBException e) {
-            if ("Column family not found: keyValueWithTimestamp".equals(e.getMessage())) {
-                try {
-                    db = RocksDB.open(dbOptions, dbDir.getAbsolutePath(), columnFamilyDescriptors.subList(0, 1), columnFamilies);
-                    columnFamilies.add(db.createColumnFamily(columnFamilyDescriptors.get(1)));
-                } catch (final RocksDBException fatal) {
-                    throw new ProcessorStateException("Error opening store " + name + " at location " + dbDir.toString(), fatal);
-                }
-                setDbAccessor(columnFamilies.get(0), columnFamilies.get(1));
-            } else {
-                throw new ProcessorStateException("Error opening store " + name + " at location " + dbDir.toString(), e);
-            }
-        }
-    }
-
-    private void setDbAccessor(final ColumnFamilyHandle noTimestampColumnFamily,
-                               final ColumnFamilyHandle withTimestampColumnFamily) {
         final RocksIterator noTimestampsIter = db.newIterator(noTimestampColumnFamily);
         noTimestampsIter.seekToFirst();
         if (noTimestampsIter.isValid()) {
@@ -101,7 +84,6 @@ public class RocksDBTimestampedStore extends RocksDBStore implements Timestamped
         }
         noTimestampsIter.close();
     }
-
 
     private class DualColumnFamilyAccessor implements RocksDBAccessor {
         private final ColumnFamilyHandle oldColumnFamily;
