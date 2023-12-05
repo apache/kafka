@@ -24,7 +24,7 @@ import kafka.utils.TestUtils
 import org.apache.kafka.common.message.{ConsumerGroupHeartbeatRequestData, ConsumerGroupHeartbeatResponseData}
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{ConsumerGroupHeartbeatRequest, ConsumerGroupHeartbeatResponse}
-import org.junit.jupiter.api.Assertions.{assertEquals, assertNotEquals, assertNotNull, assertNull}
+import org.junit.jupiter.api.Assertions.{assertEquals, assertNotEquals, assertNotNull}
 import org.junit.jupiter.api.Tag
 import org.junit.jupiter.api.Timeout
 import org.junit.jupiter.api.extension.ExtendWith
@@ -330,17 +330,30 @@ class ConsumerGroupHeartbeatRequestTest(cluster: ClusterInstance) {
     assertEquals(2, consumerGroupHeartbeatResponse.data.memberEpoch)
     assertEquals(expectedAssignment, consumerGroupHeartbeatResponse.data.assignment)
 
-    // No heartbeats sent till session timeout expires
-    Thread.sleep(6000L)
+    // A new static member tries to join the group with an inuse instanceid
+    consumerGroupHeartbeatRequest = new ConsumerGroupHeartbeatRequest.Builder(
+      new ConsumerGroupHeartbeatRequestData()
+        .setGroupId("grp")
+        .setInstanceId(instanceId)
+        .setMemberEpoch(0)
+        .setRebalanceTimeoutMs(5 * 60 * 1000)
+        .setSubscribedTopicNames(List("foo").asJava)
+        .setTopicPartitions(List.empty.asJava)
+    ).build()
 
-    // The static member heartbeats after session timeout expires. It should be fenced out of the group
-    consumerGroupHeartbeatResponse = connectAndReceive(consumerGroupHeartbeatRequest)
+    // The new static member join group will keep failing with an UnreleasedInstanceIdException
+    // exception until eventually it gets through because the existing member will be kicked out
+    // because of not sending a heartbeat till session timeout expiry.
+    TestUtils.waitUntilTrue(() => {
+      consumerGroupHeartbeatResponse = connectAndReceive(consumerGroupHeartbeatRequest)
+      consumerGroupHeartbeatResponse.data.errorCode == Errors.NONE.code &&
+        consumerGroupHeartbeatResponse.data.assignment == expectedAssignment
+    }, msg = s"Could not get partitions assigned. Last response $consumerGroupHeartbeatResponse.")
 
-    // The static member has already been removed from the group.
-    assertEquals(0, consumerGroupHeartbeatResponse.data.memberEpoch)
-    assertNull(consumerGroupHeartbeatResponse.data.memberId)
-    // Error code 25 signifies that the instance id is no longer found
-    assertEquals(25, consumerGroupHeartbeatResponse.data.errorCode)
+    print(consumerGroupHeartbeatRequest)
+    // Verify the response. The group epoch bumps upto 4 which eventually reflects in the new member epoch
+    assertEquals(4, consumerGroupHeartbeatResponse.data.memberEpoch)
+    assertEquals(expectedAssignment, consumerGroupHeartbeatResponse.data.assignment)
 
   }
 
