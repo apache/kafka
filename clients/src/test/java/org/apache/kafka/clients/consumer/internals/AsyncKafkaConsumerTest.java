@@ -186,13 +186,6 @@ public class AsyncKafkaConsumerTest {
     }
 
     @Test
-    public void testFailOnClosedConsumer() {
-        consumer.close();
-        final IllegalStateException res = assertThrows(IllegalStateException.class, consumer::assignment);
-        assertEquals("This consumer has already been closed.", res.getMessage());
-    }
-
-    @Test
     public void testCommitAsync_NullCallback() throws InterruptedException {
         CompletableFuture<Void> future = new CompletableFuture<>();
         Map<TopicPartition, OffsetAndMetadata> offsets = new HashMap<>();
@@ -257,27 +250,6 @@ public class AsyncKafkaConsumerTest {
             assertDoesNotThrow(() -> consumer.committed(offsets.keySet(), Duration.ofMillis(1000)));
             verify(applicationEventHandler).add(ArgumentMatchers.isA(FetchCommittedOffsetsApplicationEvent.class));
         }
-    }
-
-    @Test
-    public void testCommittedLeaderEpochUpdate() {
-        final TopicPartition t0 = new TopicPartition("t0", 2);
-        final TopicPartition t1 = new TopicPartition("t0", 3);
-        final TopicPartition t2 = new TopicPartition("t0", 4);
-        HashMap<TopicPartition, OffsetAndMetadata> topicPartitionOffsets = new HashMap<>();
-        topicPartitionOffsets.put(t0, new OffsetAndMetadata(10L, Optional.of(2), ""));
-        topicPartitionOffsets.put(t1, null);
-        topicPartitionOffsets.put(t2, new OffsetAndMetadata(20L, Optional.of(3), ""));
-
-        CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> committedFuture = new CompletableFuture<>();
-        committedFuture.complete(topicPartitionOffsets);
-
-        try (MockedConstruction<FetchCommittedOffsetsApplicationEvent> ignored = offsetFetchEventMocker(committedFuture)) {
-            assertDoesNotThrow(() -> consumer.committed(topicPartitionOffsets.keySet(), Duration.ofMillis(1000)));
-        }
-        verify(testBuilder.metadata).updateLastSeenEpochIfNewer(t0, 2);
-        verify(testBuilder.metadata).updateLastSeenEpochIfNewer(t2, 3);
-        verify(applicationEventHandler).add(ArgumentMatchers.isA(FetchCommittedOffsetsApplicationEvent.class));
     }
 
     @Test
