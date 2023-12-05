@@ -283,6 +283,18 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
             boolean retry,
             TimeoutOperation<Void, U> operation
         ) {
+            schedule(key, delay, unit, retry, 500, operation);
+        }
+
+        @Override
+        public void schedule(
+            String key,
+            long delay,
+            TimeUnit unit,
+            boolean retry,
+            long retryBackoff,
+            TimeoutOperation<Void, U> operation
+        ) {
             // The TimerTask wraps the TimeoutOperation into a CoordinatorWriteEvent. When the TimerTask
             // expires, the event is pushed to the queue of the coordinator runtime to be executed. This
             // ensures that the threading model of the runtime is respected.
@@ -321,7 +333,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
                         if (retry) {
                             log.info("The write event {} for the timer {} failed due to {}. Rescheduling it. ",
                                 event.name, key, ex.getMessage());
-                            schedule(key, 500, TimeUnit.MILLISECONDS, retry, operation);
+                            schedule(key, retryBackoff, TimeUnit.MILLISECONDS, retry, operation);
                         } else {
                             log.error("The write event {} for the timer {} failed due to {}. Ignoring it. ",
                                 event.name, key, ex.getMessage());
