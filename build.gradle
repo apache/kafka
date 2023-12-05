@@ -987,9 +987,6 @@ project(':core') {
     testImplementation libs.apachedsJdbmPartition
     testImplementation libs.junitJupiter
     testImplementation libs.slf4jlog4j
-    testImplementation(libs.jfreechart) {
-      exclude group: 'junit', module: 'junit'
-    }
     testImplementation libs.caffeine
     
     generator project(':generator')
@@ -1996,6 +1993,9 @@ project(':tools') {
     testImplementation libs.mockitoCore
     testImplementation libs.mockitoJunitJupiter // supports MockitoExtension
     testImplementation libs.bcpkix // required by the clients test module, but we have to specify it explicitly as gradle does not include the transitive test dependency automatically
+    testImplementation(libs.jfreechart) {
+      exclude group: 'junit', module: 'junit'
+    }
     testRuntimeOnly libs.slf4jlog4j
   }
 

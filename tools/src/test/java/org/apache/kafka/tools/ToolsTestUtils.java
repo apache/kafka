@@ -42,7 +42,7 @@ import java.util.stream.Collectors;
 
 public class ToolsTestUtils {
     /** @see TestInfoUtils#TestWithParameterizedQuorumName()  */
-    public static final String TEST_WITH_PARAMETERIZED_QUORUM_NAME = "{displayName}.quorum={0}";
+    public static final String TEST_WITH_PARAMETERIZED_QUORUM_NAME = "{displayName}.{argumentsWithNames}";
 
     private static int randomPort = 0;
 

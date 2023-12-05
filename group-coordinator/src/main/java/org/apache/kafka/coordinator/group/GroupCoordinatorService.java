@@ -30,6 +30,7 @@ import org.apache.kafka.common.errors.RecordTooLargeException;
 import org.apache.kafka.common.errors.UnknownMemberIdException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.internals.Topic;
+import org.apache.kafka.common.message.ConsumerGroupDescribeResponseData;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatRequestData;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatResponseData;
 import org.apache.kafka.common.message.DeleteGroupsResponseData;
@@ -55,6 +56,7 @@ import org.apache.kafka.common.message.TxnOffsetCommitResponseData;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.DescribeGroupsRequest;
 import org.apache.kafka.common.requests.DeleteGroupsRequest;
+import org.apache.kafka.common.requests.ConsumerGroupDescribeRequest;
 import org.apache.kafka.common.requests.OffsetCommitRequest;
 import org.apache.kafka.common.requests.RequestContext;
 import org.apache.kafka.common.requests.TransactionResult;
@@ -545,6 +547,67 @@ public class GroupCoordinatorService implements GroupCoordinator {
             });
         }
         return future;
+    }
+
+    /**
+     * See {@link GroupCoordinator#consumerGroupDescribe(RequestContext, List)}.
+     */
+    @Override
+    public CompletableFuture<List<ConsumerGroupDescribeResponseData.DescribedGroup>> consumerGroupDescribe(
+        RequestContext context,
+        List<String> groupIds
+    ) {
+        if (!isActive.get()) {
+            return CompletableFuture.completedFuture(ConsumerGroupDescribeRequest.getErrorDescribedGroupList(
+                groupIds,
+                Errors.COORDINATOR_NOT_AVAILABLE
+            ));
+        }
+
+        final List<CompletableFuture<List<ConsumerGroupDescribeResponseData.DescribedGroup>>> futures =
+            new ArrayList<>(groupIds.size());
+        final Map<TopicPartition, List<String>> groupsByTopicPartition = new HashMap<>();
+        groupIds.forEach(groupId -> {
+            if (isGroupIdNotEmpty(groupId)) {
+                groupsByTopicPartition
+                    .computeIfAbsent(topicPartitionFor(groupId), __ -> new ArrayList<>())
+                    .add(groupId);
+            } else {
+                futures.add(CompletableFuture.completedFuture(Collections.singletonList(
+                    new ConsumerGroupDescribeResponseData.DescribedGroup()
+                        .setGroupId(null)
+                        .setErrorCode(Errors.INVALID_GROUP_ID.code())
+                )));
+            }
+        });
+
+        groupsByTopicPartition.forEach((topicPartition, groupList) -> {
+            CompletableFuture<List<ConsumerGroupDescribeResponseData.DescribedGroup>> future =
+                runtime.scheduleReadOperation(
+                    "consumer-group-describe",
+                    topicPartition,
+                    (coordinator, lastCommittedOffset) -> coordinator.consumerGroupDescribe(groupIds, lastCommittedOffset)
+                ).exceptionally(exception -> {
+                    if (!(exception instanceof KafkaException)) {
+                        log.error("ConsumerGroupDescribe request {} hit an unexpected exception: {}.",
+                            groupList, exception.getMessage());
+                    }
+
+                    return ConsumerGroupDescribeRequest.getErrorDescribedGroupList(
+                        groupList,
+                        Errors.forException(exception)
+                    );
+                });
+
+            futures.add(future);
+        });
+
+        final CompletableFuture<Void> allFutures = CompletableFuture.allOf(futures.toArray(new CompletableFuture[0]));
+        return allFutures.thenApply(v -> {
+            final List<ConsumerGroupDescribeResponseData.DescribedGroup> res = new ArrayList<>();
+            futures.forEach(future -> res.addAll(future.join()));
+            return res;
+        });
     }
 
     /**
