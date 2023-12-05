@@ -52,10 +52,12 @@ import org.apache.kafka.clients.consumer.OffsetCommitCallback;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.clients.consumer.RangeAssignor;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEventHandler;
+import org.apache.kafka.clients.consumer.internals.events.AssignmentChangeApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
 import org.apache.kafka.clients.consumer.internals.events.CommitApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.CompletableApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.ListOffsetsApplicationEvent;
+import org.apache.kafka.clients.consumer.internals.events.NewTopicsMetadataUpdateRequestEvent;
 import org.apache.kafka.clients.consumer.internals.events.FetchCommittedOffsetsApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.SubscriptionChangeApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.UnsubscribeApplicationEvent;
@@ -136,6 +138,51 @@ public class AsyncKafkaConsumerUnitTest {
     @Test
     public void testInvalidGroupId() {
         assertThrows(InvalidGroupIdException.class, this::setupWithEmptyGroupId);
+    }
+
+    @Test
+    public void testAssign() {
+        consumer = setup();
+        final TopicPartition tp = new TopicPartition("foo", 3);
+        consumer.assign(singleton(tp));
+        assertTrue(consumer.subscription().isEmpty());
+        assertTrue(consumer.assignment().contains(tp));
+        verify(applicationEventHandler).add(any(AssignmentChangeApplicationEvent.class));
+        verify(applicationEventHandler).add(any(NewTopicsMetadataUpdateRequestEvent.class));
+    }
+
+    @Test
+    public void testAssignOnNullTopicPartition() {
+        consumer = setup();
+        assertThrows(IllegalArgumentException.class, () -> consumer.assign(null));
+    }
+
+    @Test
+    public void testAssignOnEmptyTopicPartition() {
+        consumer = setup();
+
+        Mockito.doAnswer(invocation -> {
+            CompletableApplicationEvent<?> event = invocation.getArgument(0);
+            assertTrue(event instanceof UnsubscribeApplicationEvent);
+            event.future().complete(null);
+            return null;
+        }).when(applicationEventHandler).add(any());
+
+        consumer.assign(Collections.emptyList());
+        assertTrue(consumer.subscription().isEmpty());
+        assertTrue(consumer.assignment().isEmpty());
+    }
+
+    @Test
+    public void testAssignOnNullTopicInPartition() {
+        consumer = setup();
+        assertThrows(IllegalArgumentException.class, () -> consumer.assign(singleton(new TopicPartition(null, 0))));
+    }
+
+    @Test
+    public void testAssignOnEmptyTopicInPartition() {
+        consumer = setup();
+        assertThrows(IllegalArgumentException.class, () -> consumer.assign(singleton(new TopicPartition("  ", 0))));
     }
 
     @Test
@@ -416,6 +463,7 @@ public class AsyncKafkaConsumerUnitTest {
         String emptyTopic = "  ";
         assertThrows(IllegalArgumentException.class, () -> consumer.subscribe(singletonList(emptyTopic)));
     }
+
 
     @Test
     public void testWakeupBeforeCallingPoll() {

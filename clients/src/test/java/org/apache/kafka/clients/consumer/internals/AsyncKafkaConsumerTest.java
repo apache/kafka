@@ -20,8 +20,6 @@ import static java.util.Arrays.asList;
 import static java.util.Collections.singleton;
 import static java.util.Collections.singletonList;
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.THROW_ON_FETCH_STABLE_OFFSET_UNSUPPORTED;
-import static org.apache.kafka.common.utils.Utils.mkEntry;
-import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -103,7 +101,6 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.mockito.ArgumentMatchers;
 import org.mockito.MockedConstruction;
-import org.mockito.Mockito;
 import org.mockito.stubbing.Answer;
 import org.opentest4j.AssertionFailedError;
 
@@ -333,38 +330,6 @@ public class AsyncKafkaConsumerTest {
         };
 
         return mockConstruction(FetchCommittedOffsetsApplicationEvent.class, mockInitializer);
-    }
-
-    @Test
-    public void testAssign() {
-        final TopicPartition tp = new TopicPartition("foo", 3);
-        consumer.assign(singleton(tp));
-        assertTrue(consumer.subscription().isEmpty());
-        assertTrue(consumer.assignment().contains(tp));
-        verify(applicationEventHandler).add(any(AssignmentChangeApplicationEvent.class));
-        verify(applicationEventHandler).add(any(NewTopicsMetadataUpdateRequestEvent.class));
-    }
-
-    @Test
-    public void testAssignOnNullTopicPartition() {
-        assertThrows(IllegalArgumentException.class, () -> consumer.assign(null));
-    }
-
-    @Test
-    public void testAssignOnEmptyTopicPartition() {
-        consumer.assign(Collections.emptyList());
-        assertTrue(consumer.subscription().isEmpty());
-        assertTrue(consumer.assignment().isEmpty());
-    }
-
-    @Test
-    public void testAssignOnNullTopicInPartition() {
-        assertThrows(IllegalArgumentException.class, () -> consumer.assign(singleton(new TopicPartition(null, 0))));
-    }
-
-    @Test
-    public void testAssignOnEmptyTopicInPartition() {
-        assertThrows(IllegalArgumentException.class, () -> consumer.assign(singleton(new TopicPartition("  ", 0))));
     }
 
     @Test
