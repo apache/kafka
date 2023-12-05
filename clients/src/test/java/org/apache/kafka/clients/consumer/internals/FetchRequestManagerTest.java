@@ -3134,16 +3134,16 @@ public class FetchRequestManagerTest {
      */
     @ParameterizedTest
     @EnumSource(value = Errors.class, names = {"FENCED_LEADER_EPOCH", "NOT_LEADER_OR_FOLLOWER"})
-    public void testWhenFetchResponseReturnsWithALeaderShipChangeErrorButNoNewLeaderInformation(Errors error) {
-        // The test runs with 2 partitions where 1 partition is fetched without errors, and 2nd partitions faces errors due to leadership changes.
-
+    public void testWhenFetchResponseReturnsALeaderShipChangeErrorButNoNewLeaderInformation(Errors error) {
+        // The test runs with 2 partitions where 1 partition is fetched without errors, and
+        // 2nd partition faces errors due to leadership changes.
         buildFetcher(new MetricConfig(), OffsetResetStrategy.EARLIEST, new BytesDeserializer(),
             new BytesDeserializer(),
             Integer.MAX_VALUE, IsolationLevel.READ_UNCOMMITTED,
             Duration.ofMinutes(5).toMillis());
 
-        // Setup so that fetcher is subscribed to tp0 & tp1, and metadata setup with tp0.
-        // assignFromUser(singleton(tp0));
+        // Setup so that tp0 & tp1 are subscribed and will be fetched from.
+        // Also, setup client's metadata for tp0 & tp1.
         subscriptions.assignFromUser(new HashSet<>(Arrays.asList(tp0, tp1)));
         client.updateMetadata(
             RequestTestUtils.metadataUpdateWithIds(2, singletonMap(topicName, 4),
@@ -3164,22 +3164,20 @@ public class FetchRequestManagerTest {
             FetchResponse.INVALID_LAST_STABLE_OFFSET, 0, Optional.of(nodeId0.id())), tp1Leader);
         networkClientDelegate.poll(time.timer(0));
         assertTrue(fetcher.hasCompletedFetches());
-
         Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> partitionRecords = fetchRecords();
         assertTrue(partitionRecords.containsKey(tp0));
         assertTrue(partitionRecords.containsKey(tp1));
-
-        // Verify that preferred read replica is set for both tp0 & tp1.
+        // Validate setup of preferred read replica for tp0 & tp1 is done correctly.
         Node selected = fetcher.selectReadReplica(tp0, Node.noNode(), time.milliseconds());
         assertEquals(nodeId0.id(), selected.id());
         selected = fetcher.selectReadReplica(tp1, Node.noNode(), time.milliseconds());
         assertEquals(nodeId0.id(), selected.id());
 
-        // Next fetch returns an error(due to leadership change) but new leader info is missing, for tp0.
-        // For tp1 fetch returns with no error.
+        // TEST that next fetch returns an error(due to leadership change) but new leader info is not returned
+        // in the FetchResponse. This is the behaviour prior to KIP-951, should keep on working.
         assertEquals(1, sendFetches());
         assertFalse(fetcher.hasCompletedFetches());
-        // Verify that metadata-update isn't requested
+        // Verify that metadata-update isn't requested as metadata is considered upto-date.
         assertFalse(metadata.updateRequested());
 
         LinkedHashMap<TopicIdPartition, FetchResponseData.PartitionData> partitions = new LinkedHashMap<>();
@@ -3201,16 +3199,16 @@ public class FetchRequestManagerTest {
         assertFalse(partitionRecords.containsKey(tp0));
         assertTrue(partitionRecords.containsKey(tp1));
 
-        // Validate metadata is unchanged, as response has missing new leader info.
+        // Validate metadata is unchanged, as FetchResponse didn't have new leader information.
         assertEquals(startingClusterMetadata, metadata.fetch());
 
-        // Validate metadata-update is requested due to the error for tp0.
+        // Validate metadata-update is requested due to the leadership-error on tp0.
         assertTrue(metadata.updateRequested());
 
         // Validate preferred-read-replica is cleared for tp0 due to the error.
         assertEquals(Optional.empty(),
             subscriptions.preferredReadReplica(tp0, time.milliseconds()));
-        // Validate preferred-read-replica is still set for tp1
+        // Validate preferred-read-replica is still set for tp1 as previous fetch for it was ok.
         assertEquals(Optional.of(nodeId0.id()),
             subscriptions.preferredReadReplica(tp1, time.milliseconds()));
 
@@ -3228,9 +3226,9 @@ public class FetchRequestManagerTest {
      */
     @ParameterizedTest
     @EnumSource(value = Errors.class, names = {"FENCED_LEADER_EPOCH", "NOT_LEADER_OR_FOLLOWER"})
-    public void testWhenFetchResponseReturnsWithALeaderShipChangeErrorAndNewLeaderInformation(Errors error) {
-        // The test runs with 2 partitions where 1 partition is fetched without errors, and 2nd partitions faces errors due to leadership changes.
-
+    public void testWhenFetchResponseReturnsALeaderShipChangeErrorAndNewLeaderInformation(Errors error) {
+        // The test runs with 2 partitions where 1 partition is fetched without errors, and
+        // 2nd partition faces errors due to leadership changes.
         buildFetcher(new MetricConfig(), OffsetResetStrategy.EARLIEST, new BytesDeserializer(),
             new BytesDeserializer(),
             Integer.MAX_VALUE, IsolationLevel.READ_UNCOMMITTED,
