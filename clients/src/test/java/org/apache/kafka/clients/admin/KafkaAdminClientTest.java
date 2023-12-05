@@ -33,8 +33,8 @@ import org.apache.kafka.common.ElectionType;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.Node;
-import org.apache.kafka.common.TopicCollection;
 import org.apache.kafka.common.PartitionInfo;
+import org.apache.kafka.common.TopicCollection;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.TopicPartitionReplica;
 import org.apache.kafka.common.Uuid;
@@ -110,10 +110,11 @@ import org.apache.kafka.common.message.ElectLeadersResponseData.PartitionResult;
 import org.apache.kafka.common.message.ElectLeadersResponseData.ReplicaElectionResult;
 import org.apache.kafka.common.message.FindCoordinatorRequestData;
 import org.apache.kafka.common.message.FindCoordinatorResponseData;
+import org.apache.kafka.common.message.GetTelemetrySubscriptionsResponseData;
 import org.apache.kafka.common.message.IncrementalAlterConfigsResponseData;
 import org.apache.kafka.common.message.IncrementalAlterConfigsResponseData.AlterConfigsResourceResponse;
-import org.apache.kafka.common.message.LeaveGroupRequestData;
 import org.apache.kafka.common.message.InitProducerIdResponseData;
+import org.apache.kafka.common.message.LeaveGroupRequestData;
 import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity;
 import org.apache.kafka.common.message.LeaveGroupResponseData;
 import org.apache.kafka.common.message.LeaveGroupResponseData.MemberResponse;
@@ -177,6 +178,8 @@ import org.apache.kafka.common.requests.DescribeUserScramCredentialsResponse;
 import org.apache.kafka.common.requests.ElectLeadersResponse;
 import org.apache.kafka.common.requests.FindCoordinatorRequest;
 import org.apache.kafka.common.requests.FindCoordinatorResponse;
+import org.apache.kafka.common.requests.GetTelemetrySubscriptionsRequest;
+import org.apache.kafka.common.requests.GetTelemetrySubscriptionsResponse;
 import org.apache.kafka.common.requests.IncrementalAlterConfigsResponse;
 import org.apache.kafka.common.requests.InitProducerIdRequest;
 import org.apache.kafka.common.requests.InitProducerIdResponse;
@@ -225,6 +228,7 @@ import org.slf4j.LoggerFactory;
 
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -7061,6 +7065,48 @@ public class KafkaAdminClientTest {
             assertEquals(4761, result.producerId(transactionalId).get());
             assertEquals((short) 489, result.epochId(transactionalId).get());
         }
+    }
+
+    @Test
+    public void testClientInstanceId() {
+        try (AdminClientUnitTestEnv env = mockClientEnv()) {
+            Uuid expected = Uuid.randomUuid();
+
+            GetTelemetrySubscriptionsResponseData responseData =
+                new GetTelemetrySubscriptionsResponseData().setClientInstanceId(expected).setErrorCode(Errors.NONE.code());
+
+            env.kafkaClient().prepareResponse(
+                request -> request instanceof GetTelemetrySubscriptionsRequest,
+                new GetTelemetrySubscriptionsResponse(responseData));
+
+            Uuid result = env.adminClient().clientInstanceId(Duration.ofMillis(10));
+            assertEquals(expected, result);
+        }
+    }
+
+    @Test
+    public void testClientInstanceIdInvalidTimeout() {
+        Properties props = new Properties();
+        props.setProperty(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
+
+        KafkaAdminClient admin = (KafkaAdminClient) AdminClient.create(props);
+        Exception exception = assertThrows(IllegalArgumentException.class, () -> admin.clientInstanceId(Duration.ofMillis(-1)));
+        assertEquals("The timeout cannot be negative.", exception.getMessage());
+
+        admin.close();
+    }
+
+    @Test
+    public void testClientInstanceIdNoTelemetryReporterRegistered() {
+        Properties props = new Properties();
+        props.setProperty(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
+        props.setProperty(AdminClientConfig.ENABLE_METRICS_PUSH_CONFIG, "false");
+
+        KafkaAdminClient admin = (KafkaAdminClient) AdminClient.create(props);
+        Exception exception = assertThrows(IllegalStateException.class, () -> admin.clientInstanceId(Duration.ofMillis(0)));
+        assertEquals("Telemetry is not enabled. Set config `enable.metrics.push` to `true`.", exception.getMessage());
+
+        admin.close();
     }
 
     private UnregisterBrokerResponse prepareUnregisterBrokerResponse(Errors error, int throttleTimeMs) {

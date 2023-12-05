@@ -37,6 +37,7 @@ import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.SslConfigs;
 import org.apache.kafka.common.errors.ClusterAuthorizationException;
@@ -50,6 +51,7 @@ import org.apache.kafka.common.message.AddOffsetsToTxnResponseData;
 import org.apache.kafka.common.message.EndTxnResponseData;
 import org.apache.kafka.common.message.InitProducerIdResponseData;
 import org.apache.kafka.common.message.TxnOffsetCommitRequestData;
+import org.apache.kafka.common.metrics.JmxReporter;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.Avg;
@@ -72,6 +74,8 @@ import org.apache.kafka.common.requests.TxnOffsetCommitResponse;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.serialization.StringSerializer;
+import org.apache.kafka.common.telemetry.internals.ClientTelemetryReporter;
+import org.apache.kafka.common.telemetry.internals.ClientTelemetrySender;
 import org.apache.kafka.common.utils.KafkaThread;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
@@ -86,9 +90,9 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
+import org.mockito.MockedStatic;
+import org.mockito.internal.stubbing.answers.CallsRealMethods;
 
-import javax.management.MBeanServer;
-import javax.management.ObjectName;
 import java.lang.management.ManagementFactory;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
@@ -114,6 +118,8 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
+import javax.management.MBeanServer;
+import javax.management.ObjectName;
 
 import static java.util.Collections.emptyMap;
 import static java.util.Collections.singletonMap;
@@ -130,9 +136,11 @@ import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.notNull;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.mockStatic;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -454,31 +462,48 @@ public class KafkaProducerTest {
         KafkaProducer<String, String> producer = new KafkaProducer<>(
                 props, new StringSerializer(), new StringSerializer());
 
-        MockMetricsReporter mockMetricsReporter = (MockMetricsReporter) producer.metrics.reporters().get(0);
+        assertEquals(3, producer.metrics.reporters().size());
 
+        MockMetricsReporter mockMetricsReporter = (MockMetricsReporter) producer.metrics.reporters().stream()
+            .filter(reporter -> reporter instanceof MockMetricsReporter).findFirst().get();
         assertEquals(producer.getClientId(), mockMetricsReporter.clientId);
-        assertEquals(2, producer.metrics.reporters().size());
+
         producer.close();
     }
 
     @Test
     @SuppressWarnings("deprecation")
-    public void testDisableJmxReporter() {
+    public void testDisableJmxAndClientTelemetryReporter() {
         Properties props = new Properties();
         props.setProperty(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
         props.setProperty(ProducerConfig.AUTO_INCLUDE_JMX_REPORTER_CONFIG, "false");
+        props.setProperty(ProducerConfig.ENABLE_METRICS_PUSH_CONFIG, "false");
         KafkaProducer<String, String> producer = new KafkaProducer<>(props, new StringSerializer(), new StringSerializer());
         assertTrue(producer.metrics.reporters().isEmpty());
         producer.close();
     }
 
     @Test
-    public void testExplicitlyEnableJmxReporter() {
+    public void testExplicitlyOnlyEnableJmxReporter() {
         Properties props = new Properties();
         props.setProperty(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
         props.setProperty(ProducerConfig.METRIC_REPORTER_CLASSES_CONFIG, "org.apache.kafka.common.metrics.JmxReporter");
+        props.setProperty(ProducerConfig.ENABLE_METRICS_PUSH_CONFIG, "false");
         KafkaProducer<String, String> producer = new KafkaProducer<>(props, new StringSerializer(), new StringSerializer());
         assertEquals(1, producer.metrics.reporters().size());
+        assertTrue(producer.metrics.reporters().get(0) instanceof JmxReporter);
+        producer.close();
+    }
+
+    @Test
+    @SuppressWarnings("deprecation")
+    public void testExplicitlyOnlyEnableClientTelemetryReporter() {
+        Properties props = new Properties();
+        props.setProperty(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
+        props.setProperty(ProducerConfig.AUTO_INCLUDE_JMX_REPORTER_CONFIG, "false");
+        KafkaProducer<String, String> producer = new KafkaProducer<>(props, new StringSerializer(), new StringSerializer());
+        assertEquals(1, producer.metrics.reporters().size());
+        assertTrue(producer.metrics.reporters().get(0) instanceof ClientTelemetryReporter);
         producer.close();
     }
 
@@ -1656,6 +1681,55 @@ public class KafkaProducerTest {
         verifyInvalidGroupMetadata(new ConsumerGroupMetadata("group", 2, JoinGroupRequest.UNKNOWN_MEMBER_ID, Optional.empty()));
     }
 
+    @Test
+    public void testClientInstanceId() {
+        Properties props = new Properties();
+        props.setProperty(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
+
+        ClientTelemetryReporter clientTelemetryReporter = mock(ClientTelemetryReporter.class);
+        clientTelemetryReporter.configure(any());
+
+        MockedStatic<CommonClientConfigs> mockedCommonClientConfigs = mockStatic(CommonClientConfigs.class, new CallsRealMethods());
+        mockedCommonClientConfigs.when(() -> CommonClientConfigs.telemetryReporter(anyString(), any())).thenReturn(Optional.of(clientTelemetryReporter));
+
+        ClientTelemetrySender clientTelemetrySender = mock(ClientTelemetrySender.class);
+        Uuid expectedUuid = Uuid.randomUuid();
+        when(clientTelemetryReporter.telemetrySender()).thenReturn(clientTelemetrySender);
+        when(clientTelemetrySender.clientInstanceId(any())).thenReturn(Optional.of(expectedUuid));
+
+        KafkaProducer<String, String> producer = new KafkaProducer<>(props, new StringSerializer(), new StringSerializer());
+        Uuid uuid = producer.clientInstanceId(Duration.ofMillis(0));
+        assertEquals(expectedUuid, uuid);
+
+        mockedCommonClientConfigs.close();
+        producer.close();
+    }
+
+    @Test
+    public void testClientInstanceIdInvalidTimeout() {
+        Properties props = new Properties();
+        props.setProperty(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
+
+        KafkaProducer<String, String> producer = new KafkaProducer<>(props, new StringSerializer(), new StringSerializer());
+        Exception exception = assertThrows(IllegalArgumentException.class, () -> producer.clientInstanceId(Duration.ofMillis(-1)));
+        assertEquals("The timeout cannot be negative.", exception.getMessage());
+
+        producer.close();
+    }
+
+    @Test
+    public void testClientInstanceIdNoTelemetryReporterRegistered() {
+        Properties props = new Properties();
+        props.setProperty(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
+        props.setProperty(ProducerConfig.ENABLE_METRICS_PUSH_CONFIG, "false");
+
+        KafkaProducer<String, String> producer = new KafkaProducer<>(props, new StringSerializer(), new StringSerializer());
+        Exception exception = assertThrows(IllegalStateException.class, () -> producer.clientInstanceId(Duration.ofMillis(0)));
+        assertEquals("Telemetry is not enabled. Set config `enable.metrics.push` to `true`.", exception.getMessage());
+
+        producer.close();
+    }
+
     private void verifyInvalidGroupMetadata(ConsumerGroupMetadata groupMetadata) {
         Map<String, Object> configs = new HashMap<>();
         configs.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, "some.id");
@@ -2403,7 +2477,8 @@ public class KafkaProducerTest {
                 interceptors,
                 partitioner,
                 time,
-                ioThread
+                ioThread,
+                Optional.empty()
             );
         }
     }
