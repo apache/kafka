@@ -53,6 +53,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.StringJoiner;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
@@ -103,6 +104,13 @@ import java.util.function.Predicate;
 public class ClientTelemetryReporter implements MetricsReporter {
 
     private static final Logger log = LoggerFactory.getLogger(ClientTelemetryReporter.class);
+    /*
+     Exclude client_id from the labels as the broker already knows the client_id from the request
+     context. These additional labels from the request context should be added by broker prior
+     exporting the metrics to the telemetry backend.
+    */
+    private static final Set<String> EXCLUDE_LABELS = Collections.singleton("client_id");
+
     public static final int DEFAULT_PUSH_INTERVAL_MS = 5 * 60 * 1000;
 
     private final ClientTelemetryProvider telemetryProvider;
@@ -226,7 +234,7 @@ public class ClientTelemetryReporter implements MetricsReporter {
     private void initCollectors() {
         kafkaMetricsCollector = new KafkaMetricsCollector(
             TelemetryMetricNamingConvention.getClientTelemetryMetricNamingStrategy(
-                telemetryProvider.domain()));
+                telemetryProvider.domain()), EXCLUDE_LABELS);
     }
 
     private ResourceMetrics buildMetric(Metric metric) {
