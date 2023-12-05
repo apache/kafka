@@ -104,7 +104,7 @@ public class HeartbeatRequestManager implements RequestManager {
      */
     private final BackgroundEventHandler backgroundEventHandler;
 
-    private GroupMetadataUpdateEvent previousGroupMetadataUdateEvent = null;
+    private GroupMetadataUpdateEvent previousGroupMetadataUpdateEvent = null;
 
     public HeartbeatRequestManager(
         final LogContext logContext,
@@ -235,19 +235,25 @@ public class HeartbeatRequestManager implements RequestManager {
             this.heartbeatRequestState.onSuccessfulAttempt(currentTimeMs);
             this.heartbeatRequestState.resetTimer();
             this.membershipManager.onHeartbeatResponseReceived(response.data());
-            if (previousGroupMetadataUdateEvent == null ||
-                previousGroupMetadataUdateEvent.memberEpoch() != membershipManager.memberEpoch()) {
-
-                final GroupMetadataUpdateEvent currentGroupMetadataUpdateEvent = new GroupMetadataUpdateEvent(
-                    membershipManager.memberEpoch(),
-                    previousGroupMetadataUdateEvent == null ? membershipManager.memberId() : previousGroupMetadataUdateEvent.memberId()
-                );
-                this.backgroundEventHandler.add(currentGroupMetadataUpdateEvent);
-                previousGroupMetadataUdateEvent = currentGroupMetadataUpdateEvent;
-            }
+            maybeSendGroupMetadataUpdateEvent();
             return;
         }
         onErrorResponse(response, currentTimeMs);
+    }
+
+    private void maybeSendGroupMetadataUpdateEvent() {
+        if (previousGroupMetadataUpdateEvent == null ||
+            !previousGroupMetadataUpdateEvent.memberId().equals(membershipManager.memberId()) ||
+            previousGroupMetadataUpdateEvent.memberEpoch() != membershipManager.memberEpoch()) {
+
+            final GroupMetadataUpdateEvent currentGroupMetadataUpdateEvent = new GroupMetadataUpdateEvent(
+                membershipManager.memberEpoch(),
+                previousGroupMetadataUpdateEvent != null && membershipManager.memberId() == null ?
+                    previousGroupMetadataUpdateEvent.memberId() : membershipManager.memberId()
+            );
+            this.backgroundEventHandler.add(currentGroupMetadataUpdateEvent);
+            previousGroupMetadataUpdateEvent = currentGroupMetadataUpdateEvent;
+        }
     }
 
     private void onErrorResponse(final ConsumerGroupHeartbeatResponse response,

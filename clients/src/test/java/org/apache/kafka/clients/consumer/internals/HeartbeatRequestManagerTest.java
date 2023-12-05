@@ -299,20 +299,8 @@ public class HeartbeatRequestManagerTest {
 
     @Test
     public void testConsumerGroupMetadataFirstUpdate() {
-        resetWithZeroHeartbeatInterval(Optional.empty());
-        mockStableMember();
-        when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(new Node(1, "localhost", 9999)));
+        final GroupMetadataUpdateEvent groupMetadataUpdateEvent = makeFirstGroupMetadataUpdate(memberId, memberEpoch);
 
-        NetworkClientDelegate.PollResult result = heartbeatRequestManager.poll(time.milliseconds());
-
-        assertEquals(1, result.unsentRequests.size());
-        NetworkClientDelegate.UnsentRequest request = result.unsentRequests.get(0);
-        ClientResponse response = createHeartbeatResponse(request, Errors.NONE);
-        result.unsentRequests.get(0).handler().onComplete(response);
-        assertEquals(1, backgroundEventQueue.size());
-        final BackgroundEvent event = backgroundEventQueue.poll();
-        assertEquals(BackgroundEvent.Type.GROUP_METADATA_UPDATE, event.type());
-        final GroupMetadataUpdateEvent groupMetadataUpdateEvent = (GroupMetadataUpdateEvent) event;
         final GroupMetadataUpdateEvent expectedGroupMetadataUpdateEvent = new GroupMetadataUpdateEvent(
             memberEpoch,
             memberId
@@ -322,23 +310,13 @@ public class HeartbeatRequestManagerTest {
 
     @Test
     public void testConsumerGroupMetadataUpdateWithSameUpdate() {
-        resetWithZeroHeartbeatInterval(Optional.empty());
-        mockStableMember();
-        when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(new Node(1, "localhost", 9999)));
-        NetworkClientDelegate.PollResult result = heartbeatRequestManager.poll(time.milliseconds());
-        assertEquals(1, result.unsentRequests.size());
-        NetworkClientDelegate.UnsentRequest request = result.unsentRequests.get(0);
-        ClientResponse firstResponse = createHeartbeatResponse(request, Errors.NONE);
-        request.handler().onComplete(firstResponse);
-        assertEquals(1, backgroundEventQueue.size());
-        final BackgroundEvent firstEvent = backgroundEventQueue.poll();
-        assertEquals(BackgroundEvent.Type.GROUP_METADATA_UPDATE, firstEvent.type());
+        makeFirstGroupMetadataUpdate(memberId, memberEpoch);
 
         time.sleep(2000);
-        result = heartbeatRequestManager.poll(time.milliseconds());
+        NetworkClientDelegate.PollResult result = heartbeatRequestManager.poll(time.milliseconds());
 
         assertEquals(1, result.unsentRequests.size());
-        request = result.unsentRequests.get(0);
+        NetworkClientDelegate.UnsentRequest request = result.unsentRequests.get(0);
         ClientResponse responseWithSameUpdate = createHeartbeatResponse(request, Errors.NONE);
         request.handler().onComplete(responseWithSameUpdate);
         assertEquals(0, backgroundEventQueue.size());
@@ -346,23 +324,13 @@ public class HeartbeatRequestManagerTest {
 
     @Test
     public void testConsumerGroupMetadataUpdateWithMemberIdNullButMemberEpochUpdated() {
-        resetWithZeroHeartbeatInterval(Optional.empty());
-        mockStableMember();
-        when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(new Node(1, "localhost", 9999)));
-        NetworkClientDelegate.PollResult result = heartbeatRequestManager.poll(time.milliseconds());
-        assertEquals(1, result.unsentRequests.size());
-        NetworkClientDelegate.UnsentRequest request = result.unsentRequests.get(0);
-        ClientResponse firstResponse = createHeartbeatResponse(request, Errors.NONE);
-        request.handler().onComplete(firstResponse);
-        assertEquals(1, backgroundEventQueue.size());
-        final BackgroundEvent firstEvent = backgroundEventQueue.poll();
-        assertEquals(BackgroundEvent.Type.GROUP_METADATA_UPDATE, firstEvent.type());
+        makeFirstGroupMetadataUpdate(memberId, memberEpoch);
 
         time.sleep(2000);
-        result = heartbeatRequestManager.poll(time.milliseconds());
+        NetworkClientDelegate.PollResult result = heartbeatRequestManager.poll(time.milliseconds());
 
         assertEquals(1, result.unsentRequests.size());
-        request = result.unsentRequests.get(0);
+        NetworkClientDelegate.UnsentRequest request = result.unsentRequests.get(0);
         final int updatedMemberEpoch = 2;
         ClientResponse responseWithMemberEpochUpdate = createHeartbeatResponseWithMemberIdNull(
             request,
@@ -379,6 +347,49 @@ public class HeartbeatRequestManagerTest {
             memberId
         );
         assertEquals(expectedGroupMetadataUpdateEvent, groupMetadataUpdateEvent);
+    }
+
+    @Test
+    public void testConsumerGroupMetadataUpdateWithMemberIdUpdatedAndMemberEpochSame() {
+        makeFirstGroupMetadataUpdate(memberId, memberEpoch);
+
+        time.sleep(2000);
+        NetworkClientDelegate.PollResult result = heartbeatRequestManager.poll(time.milliseconds());
+
+        assertEquals(1, result.unsentRequests.size());
+        NetworkClientDelegate.UnsentRequest request = result.unsentRequests.get(0);
+        final String updatedMemberId = "updatedMemberId";
+        ClientResponse responseWithMemberIdUpdate = createHeartbeatResponse(
+            request,
+            Errors.NONE,
+            updatedMemberId,
+            memberEpoch
+        );
+        request.handler().onComplete(responseWithMemberIdUpdate);
+        assertEquals(1, backgroundEventQueue.size());
+        final BackgroundEvent eventWithUpdatedMemberEpoch = backgroundEventQueue.poll();
+        assertEquals(BackgroundEvent.Type.GROUP_METADATA_UPDATE, eventWithUpdatedMemberEpoch.type());
+        final GroupMetadataUpdateEvent groupMetadataUpdateEvent = (GroupMetadataUpdateEvent) eventWithUpdatedMemberEpoch;
+        final GroupMetadataUpdateEvent expectedGroupMetadataUpdateEvent = new GroupMetadataUpdateEvent(
+            memberEpoch,
+            updatedMemberId
+        );
+        assertEquals(expectedGroupMetadataUpdateEvent, groupMetadataUpdateEvent);
+    }
+
+    private GroupMetadataUpdateEvent makeFirstGroupMetadataUpdate(final String memberId, final int memberEpoch) {
+        resetWithZeroHeartbeatInterval(Optional.empty());
+        mockStableMember();
+        when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(new Node(1, "localhost", 9999)));
+        NetworkClientDelegate.PollResult result = heartbeatRequestManager.poll(time.milliseconds());
+        assertEquals(1, result.unsentRequests.size());
+        NetworkClientDelegate.UnsentRequest request = result.unsentRequests.get(0);
+        ClientResponse firstResponse = createHeartbeatResponse(request, Errors.NONE, memberId, memberEpoch);
+        request.handler().onComplete(firstResponse);
+        assertEquals(1, backgroundEventQueue.size());
+        final BackgroundEvent event = backgroundEventQueue.poll();
+        assertEquals(BackgroundEvent.Type.GROUP_METADATA_UPDATE, event.type());
+        return (GroupMetadataUpdateEvent) event;
     }
 
     @ParameterizedTest
