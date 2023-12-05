@@ -120,7 +120,7 @@ public class ClientMetricsCommand {
 
             Map<String, String> configsToBeSet = new HashMap<>();
             opts.interval().map(intervalVal -> configsToBeSet.put("interval.ms", intervalVal.toString()));
-            opts.metrics().map(metricslist -> metricslist.stream().collect(Collectors.joining(",")));
+            opts.metrics().map(metricslist -> configsToBeSet.put("metrics", metricslist.stream().collect(Collectors.joining(","))));
             opts.match().map(matchlist -> configsToBeSet.put("match", matchlist.stream().collect(Collectors.joining(","))));
 
             ConfigResource configResource = new ConfigResource(ConfigResource.Type.CLIENT_METRICS, entityName);
