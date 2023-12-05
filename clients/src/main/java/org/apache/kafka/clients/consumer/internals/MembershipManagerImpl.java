@@ -1035,15 +1035,16 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
         CompletableFuture<Void> future = event.future();
 
         if (error.isPresent()) {
+            String message = error.get().getMessage();
             log.warn(
-                    "The {} method completed with an error ({}); signaling to continue to the next phase of rebalance",
-                    methodName,
-                    error.get().getMessage()
+                "The {} method completed with an error ({}); signaling to continue to the next phase of rebalance",
+                methodName,
+                message
             );
         } else {
             log.debug(
-                    "The {} method completed successfully; signaling to continue to the next phase of rebalance",
-                    methodName
+                "The {} method completed successfully; signaling to continue to the next phase of rebalance",
+                methodName
             );
         }
 
