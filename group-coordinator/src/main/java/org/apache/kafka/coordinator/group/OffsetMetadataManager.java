@@ -796,6 +796,7 @@ public class OffsetMetadataManager {
                 partitions.forEach((partition, offsetAndMetadata) -> {
                     if (condition.isOffsetExpired(offsetAndMetadata, currentTimestampMs, config.offsetsRetentionMs)) {
                         expiredPartitions.add(appendOffsetCommitTombstone(groupId, topic, partition, records).toString());
+                        log.debug("[GroupId {}] Expired offset for partition={}-{}", groupId, topic, partition);
                     } else {
                         allOffsetsExpired.set(false);
                     }
@@ -804,11 +805,6 @@ public class OffsetMetadataManager {
                 allOffsetsExpired.set(false);
             }
         });
-
-        if (!expiredPartitions.isEmpty()) {
-            log.info("[GroupId {}] Expiring offsets of partitions (allOffsetsExpired={}): {}",
-                groupId, allOffsetsExpired, String.join(", ", expiredPartitions));
-        }
         metrics.record(OFFSET_EXPIRED_SENSOR_NAME, expiredPartitions.size());
 
         return allOffsetsExpired.get();

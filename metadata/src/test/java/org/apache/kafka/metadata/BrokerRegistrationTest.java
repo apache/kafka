@@ -36,12 +36,11 @@ import java.util.Optional;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static org.apache.kafka.metadata.util.MetadataFeatureUtil.withDirectoryAssignmentSupport;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.mockito.Mockito.spy;
-import static org.mockito.Mockito.when;
 
 @Timeout(value = 40)
 public class BrokerRegistrationTest {
@@ -144,10 +143,8 @@ public class BrokerRegistrationTest {
     }
 
     private void testRoundTrip(BrokerRegistration registration) {
-        MetadataVersion metdataVersion = spy(MetadataVersion.latest()); // TODO replace with actual MV after bump for KIP-858
-        when(metdataVersion.isDirectoryAssignmentSupported()).thenReturn(true);
         ImageWriterOptions options = new ImageWriterOptions.Builder().
-                setMetadataVersion(metdataVersion).
+                setMetadataVersion(withDirectoryAssignmentSupport(MetadataVersion.latest())).
                 build();
         ApiMessageAndVersion messageAndVersion = registration.
             toRecord(options);

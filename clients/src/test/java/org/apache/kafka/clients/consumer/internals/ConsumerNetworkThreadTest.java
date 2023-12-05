@@ -57,6 +57,7 @@ import java.util.concurrent.CompletableFuture;
 
 import static java.util.Collections.singleton;
 import static java.util.Collections.singletonMap;
+import static org.apache.kafka.clients.consumer.internals.ConsumerTestBuilder.DEFAULT_HEARTBEAT_INTERVAL_MS;
 import static org.apache.kafka.clients.consumer.internals.ConsumerTestBuilder.DEFAULT_REQUEST_TIMEOUT_MS;
 import static org.apache.kafka.test.TestUtils.DEFAULT_MAX_WAIT_MS;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
@@ -239,9 +240,19 @@ public class ConsumerNetworkThreadTest {
     }
 
     @Test
+    void testMaximumTimeToWait() {
+        // Initial value before runOnce has been called
+        assertEquals(ConsumerNetworkThread.MAX_POLL_TIMEOUT_MS, consumerNetworkThread.maximumTimeToWait());
+        consumerNetworkThread.runOnce();
+        // After runOnce has been called, it takes the default heartbeat interval from the heartbeat request manager
+        assertEquals(DEFAULT_HEARTBEAT_INTERVAL_MS, consumerNetworkThread.maximumTimeToWait());
+    }
+
+    @Test
     void testRequestManagersArePolledOnce() {
         consumerNetworkThread.runOnce();
         testBuilder.requestManagers.entries().forEach(rmo -> rmo.ifPresent(rm -> verify(rm, times(1)).poll(anyLong())));
+        testBuilder.requestManagers.entries().forEach(rmo -> rmo.ifPresent(rm -> verify(rm, times(1)).maximumTimeToWait(anyLong())));
         verify(networkClient, times(1)).poll(anyLong(), anyLong());
     }
 

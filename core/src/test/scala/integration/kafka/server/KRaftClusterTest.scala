@@ -984,6 +984,11 @@ class KRaftClusterTest {
       val countAfterTenIntervals = snapshotCounter(metaLog)
       assertTrue(countAfterTenIntervals > 1, s"Expected to see at least one more snapshot, saw $countAfterTenIntervals")
       assertTrue(countAfterTenIntervals < 20, s"Did not expect to see more than twice as many snapshots as snapshot intervals, saw $countAfterTenIntervals")
+      TestUtils.waitUntilTrue(() => {
+        val emitterMetrics = cluster.controllers().values().iterator().next().
+          sharedServer.snapshotEmitter.metrics()
+        emitterMetrics.latestSnapshotGeneratedBytes() > 0
+      }, "Failed to see latestSnapshotGeneratedBytes > 0")
     } finally {
       cluster.close()
     }

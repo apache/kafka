@@ -17,6 +17,7 @@
 
 package org.apache.kafka.metadata;
 
+import org.apache.kafka.common.DirectoryId;
 import org.apache.kafka.common.Endpoint;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.Uuid;
@@ -264,7 +265,7 @@ public class BrokerRegistration {
     }
 
     public boolean hasOnlineDir(Uuid dir) {
-        return Collections.binarySearch(directories, dir) >= 0;
+        return DirectoryId.isOnline(dir, directories);
     }
 
     public ApiMessageAndVersion toRecord(ImageWriterOptions options) {

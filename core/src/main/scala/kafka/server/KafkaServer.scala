@@ -255,7 +255,7 @@ class KafkaServer(
 
         // initialize dynamic broker configs from ZooKeeper. Any updates made after this will be
         // applied after ZkConfigManager starts.
-        config.dynamicConfig.initialize(Some(zkClient))
+        config.dynamicConfig.initialize(Some(zkClient), clientMetricsReceiverPluginOpt = None)
 
         /* start scheduler */
         kafkaScheduler = new KafkaScheduler(config.backgroundThreads)
@@ -365,7 +365,8 @@ class KafkaServer(
           config,
           forwardingManager,
           brokerFeatures,
-          metadataCache
+          metadataCache,
+          None
         )
 
         // Create and start the socket server acceptor threads so that the bound port is known.

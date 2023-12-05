@@ -82,7 +82,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class KRaftMigrationDriverTest {
     private final static QuorumFeatures QUORUM_FEATURES = new QuorumFeatures(4,
-        QuorumFeatures.defaultFeatureMap(),
+        QuorumFeatures.defaultFeatureMap(true),
         Arrays.asList(4, 5, 6));
 
     static class MockControllerMetrics extends QuorumControllerMetrics {
