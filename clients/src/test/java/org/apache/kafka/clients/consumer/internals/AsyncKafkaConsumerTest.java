@@ -16,82 +16,6 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
-import java.util.Locale;
-import org.apache.kafka.clients.ClientResponse;
-import org.apache.kafka.clients.consumer.ConsumerConfig;
-import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
-import org.apache.kafka.clients.consumer.ConsumerRecord;
-import org.apache.kafka.clients.consumer.ConsumerRecords;
-import org.apache.kafka.clients.consumer.GroupProtocol;
-import org.apache.kafka.clients.consumer.OffsetAndMetadata;
-import org.apache.kafka.clients.consumer.OffsetAndTimestamp;
-import org.apache.kafka.clients.consumer.OffsetCommitCallback;
-import org.apache.kafka.clients.consumer.RetriableCommitFailedException;
-import org.apache.kafka.clients.consumer.internals.events.ApplicationEvent;
-import org.apache.kafka.clients.consumer.internals.events.ApplicationEventHandler;
-import org.apache.kafka.clients.consumer.internals.events.AssignmentChangeApplicationEvent;
-import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
-import org.apache.kafka.clients.consumer.internals.events.CommitApplicationEvent;
-import org.apache.kafka.clients.consumer.internals.events.ErrorBackgroundEvent;
-import org.apache.kafka.clients.consumer.internals.events.FetchCommittedOffsetsApplicationEvent;
-import org.apache.kafka.clients.consumer.internals.events.GroupMetadataUpdateEvent;
-import org.apache.kafka.clients.consumer.internals.events.ListOffsetsApplicationEvent;
-import org.apache.kafka.clients.consumer.internals.events.NewTopicsMetadataUpdateRequestEvent;
-import org.apache.kafka.clients.consumer.internals.events.ResetPositionsApplicationEvent;
-import org.apache.kafka.clients.consumer.internals.events.SubscriptionChangeApplicationEvent;
-import org.apache.kafka.clients.consumer.internals.events.UnsubscribeApplicationEvent;
-import org.apache.kafka.clients.consumer.internals.events.ValidatePositionsApplicationEvent;
-import org.apache.kafka.common.KafkaException;
-import org.apache.kafka.common.Node;
-import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.errors.GroupAuthorizationException;
-import org.apache.kafka.common.errors.NetworkException;
-import org.apache.kafka.common.errors.RetriableException;
-import org.apache.kafka.common.errors.TimeoutException;
-import org.apache.kafka.common.errors.WakeupException;
-import org.apache.kafka.common.message.OffsetCommitResponseData;
-import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.requests.FindCoordinatorResponse;
-import org.apache.kafka.common.requests.JoinGroupRequest;
-import org.apache.kafka.common.requests.ListOffsetsRequest;
-import org.apache.kafka.common.requests.OffsetCommitResponse;
-import org.apache.kafka.common.requests.RequestHeader;
-import org.apache.kafka.common.serialization.StringDeserializer;
-import org.apache.kafka.common.utils.Timer;
-import org.apache.kafka.test.TestUtils;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.function.Executable;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.MethodSource;
-import org.mockito.ArgumentCaptor;
-import org.mockito.ArgumentMatchers;
-import org.mockito.MockedConstruction;
-import org.mockito.Mockito;
-import org.mockito.stubbing.Answer;
-import org.opentest4j.AssertionFailedError;
-
-import java.time.Duration;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Optional;
-import java.util.Properties;
-import java.util.Set;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
-import java.util.concurrent.LinkedBlockingQueue;
-import java.util.stream.Collectors;
-import java.util.stream.Stream;
-
 import static java.util.Arrays.asList;
 import static java.util.Collections.singleton;
 import static java.util.Collections.singletonList;
@@ -110,12 +34,78 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.atLeast;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doReturn;
-import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.mockConstruction;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+
+import java.time.Duration;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Optional;
+import java.util.Properties;
+import java.util.Set;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.LinkedBlockingQueue;
+import java.util.stream.Stream;
+import org.apache.kafka.clients.ClientResponse;
+import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
+import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.clients.consumer.ConsumerRecords;
+import org.apache.kafka.clients.consumer.GroupProtocol;
+import org.apache.kafka.clients.consumer.OffsetAndMetadata;
+import org.apache.kafka.clients.consumer.OffsetCommitCallback;
+import org.apache.kafka.clients.consumer.RetriableCommitFailedException;
+import org.apache.kafka.clients.consumer.internals.events.ApplicationEvent;
+import org.apache.kafka.clients.consumer.internals.events.ApplicationEventHandler;
+import org.apache.kafka.clients.consumer.internals.events.AssignmentChangeApplicationEvent;
+import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
+import org.apache.kafka.clients.consumer.internals.events.CommitApplicationEvent;
+import org.apache.kafka.clients.consumer.internals.events.ErrorBackgroundEvent;
+import org.apache.kafka.clients.consumer.internals.events.FetchCommittedOffsetsApplicationEvent;
+import org.apache.kafka.clients.consumer.internals.events.GroupMetadataUpdateEvent;
+import org.apache.kafka.clients.consumer.internals.events.NewTopicsMetadataUpdateRequestEvent;
+import org.apache.kafka.clients.consumer.internals.events.ResetPositionsApplicationEvent;
+import org.apache.kafka.clients.consumer.internals.events.ValidatePositionsApplicationEvent;
+import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.Node;
+import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.GroupAuthorizationException;
+import org.apache.kafka.common.errors.InvalidGroupIdException;
+import org.apache.kafka.common.errors.NetworkException;
+import org.apache.kafka.common.errors.RetriableException;
+import org.apache.kafka.common.errors.WakeupException;
+import org.apache.kafka.common.message.OffsetCommitResponseData;
+import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.requests.FindCoordinatorResponse;
+import org.apache.kafka.common.requests.JoinGroupRequest;
+import org.apache.kafka.common.requests.OffsetCommitResponse;
+import org.apache.kafka.common.requests.RequestHeader;
+import org.apache.kafka.common.serialization.StringDeserializer;
+import org.apache.kafka.common.utils.Timer;
+import org.apache.kafka.test.TestUtils;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.function.Executable;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.MethodSource;
+import org.mockito.ArgumentMatchers;
+import org.mockito.MockedConstruction;
+import org.mockito.Mockito;
+import org.mockito.stubbing.Answer;
+import org.opentest4j.AssertionFailedError;
 
 public class AsyncKafkaConsumerTest {
 
@@ -338,56 +328,6 @@ public class AsyncKafkaConsumerTest {
             Errors.NETWORK_EXCEPTION);
     }
 
-    @Test
-    @SuppressWarnings("deprecation")
-    public void testPollLongThrowsException() {
-        Exception e = assertThrows(UnsupportedOperationException.class, () -> consumer.poll(0L));
-        assertEquals("Consumer.poll(long) is not supported when \"group.protocol\" is \"consumer\". " +
-            "This method is deprecated and will be removed in the next major release.", e.getMessage());
-    }
-
-    @Test
-    public void testCommitSyncLeaderEpochUpdate() {
-        final TopicPartition t0 = new TopicPartition("t0", 2);
-        final TopicPartition t1 = new TopicPartition("t0", 3);
-        HashMap<TopicPartition, OffsetAndMetadata> topicPartitionOffsets = new HashMap<>();
-        topicPartitionOffsets.put(t0, new OffsetAndMetadata(10L, Optional.of(2), ""));
-        topicPartitionOffsets.put(t1, new OffsetAndMetadata(20L, Optional.of(1), ""));
-
-        consumer.assign(Arrays.asList(t0, t1));
-
-        CompletableFuture<Void> commitFuture = new CompletableFuture<>();
-        commitFuture.complete(null);
-
-        try (MockedConstruction<CommitApplicationEvent> ignored = commitEventMocker(commitFuture)) {
-            assertDoesNotThrow(() -> consumer.commitSync(topicPartitionOffsets));
-        }
-        verify(testBuilder.metadata).updateLastSeenEpochIfNewer(t0, 2);
-        verify(testBuilder.metadata).updateLastSeenEpochIfNewer(t1, 1);
-        verify(applicationEventHandler).add(ArgumentMatchers.isA(CommitApplicationEvent.class));
-    }
-
-    @Test
-    public void testCommitAsyncLeaderEpochUpdate() {
-        MockCommitCallback callback = new MockCommitCallback();
-        final TopicPartition t0 = new TopicPartition("t0", 2);
-        final TopicPartition t1 = new TopicPartition("t0", 3);
-        HashMap<TopicPartition, OffsetAndMetadata> topicPartitionOffsets = new HashMap<>();
-        topicPartitionOffsets.put(t0, new OffsetAndMetadata(10L, Optional.of(2), ""));
-        topicPartitionOffsets.put(t1, new OffsetAndMetadata(20L, Optional.of(1), ""));
-
-        consumer.assign(Arrays.asList(t0, t1));
-
-        CompletableFuture<Void> commitFuture = new CompletableFuture<>();
-        commitFuture.complete(null);
-
-        try (MockedConstruction<CommitApplicationEvent> ignored = commitEventMocker(commitFuture)) {
-            assertDoesNotThrow(() -> consumer.commitAsync(topicPartitionOffsets, callback));
-        }
-        verify(testBuilder.metadata).updateLastSeenEpochIfNewer(t0, 2);
-        verify(testBuilder.metadata).updateLastSeenEpochIfNewer(t1, 1);
-        verify(applicationEventHandler).add(ArgumentMatchers.isA(CommitApplicationEvent.class));
-    }
 
     @Test
     public void testEnsurePollExecutedCommitAsyncCallbacks() {
@@ -471,21 +411,6 @@ public class AsyncKafkaConsumerTest {
         return mockConstruction(FetchCommittedOffsetsApplicationEvent.class, mockInitializer);
     }
 
-    private static MockedConstruction<CommitApplicationEvent> commitEventMocker(CompletableFuture<Void> future) {
-        Answer<Void> getInvocationAnswer = invocation -> {
-            Timer timer = invocation.getArgument(0);
-            return ConsumerUtils.getResult(future, timer);
-        };
-
-        MockedConstruction.MockInitializer<CommitApplicationEvent> mockInitializer = (mock, ctx) -> {
-            when(mock.get(any())).thenAnswer(getInvocationAnswer);
-            when(mock.type()).thenReturn(ApplicationEvent.Type.COMMIT);
-            when(mock.future()).thenReturn(future);
-        };
-
-        return mockConstruction(CommitApplicationEvent.class, mockInitializer);
-    }
-
     @Test
     public void testAssign() {
         final TopicPartition tp = new TopicPartition("foo", 3);
@@ -516,107 +441,6 @@ public class AsyncKafkaConsumerTest {
     @Test
     public void testAssignOnEmptyTopicInPartition() {
         assertThrows(IllegalArgumentException.class, () -> consumer.assign(singleton(new TopicPartition("  ", 0))));
-    }
-
-    @Test
-    public void testBeginningOffsetsFailsIfNullPartitions() {
-        assertThrows(NullPointerException.class, () -> consumer.beginningOffsets(null,
-                Duration.ofMillis(1)));
-    }
-
-    @Test
-    public void testBeginningOffsets() {
-        Map<TopicPartition, OffsetAndTimestamp> expectedOffsetsAndTimestamp =
-                mockOffsetAndTimestamp();
-        Set<TopicPartition> partitions = expectedOffsetsAndTimestamp.keySet();
-        doReturn(expectedOffsetsAndTimestamp).when(applicationEventHandler).addAndGet(any(), any());
-        Map<TopicPartition, Long> result =
-                assertDoesNotThrow(() -> consumer.beginningOffsets(partitions,
-                        Duration.ofMillis(1)));
-        Map<TopicPartition, Long> expectedOffsets = expectedOffsetsAndTimestamp.entrySet().stream()
-                .collect(Collectors.toMap(Map.Entry::getKey, e -> e.getValue().offset()));
-        assertEquals(expectedOffsets, result);
-        verify(applicationEventHandler).addAndGet(ArgumentMatchers.isA(ListOffsetsApplicationEvent.class),
-                ArgumentMatchers.isA(Timer.class));
-    }
-
-    @Test
-    public void testBeginningOffsetsThrowsKafkaExceptionForUnderlyingExecutionFailure() {
-        Set<TopicPartition> partitions = mockTopicPartitionOffset().keySet();
-        Throwable eventProcessingFailure = new KafkaException("Unexpected failure " +
-                "processing List Offsets event");
-        doThrow(eventProcessingFailure).when(applicationEventHandler).addAndGet(any(), any());
-        Throwable consumerError = assertThrows(KafkaException.class,
-                () -> consumer.beginningOffsets(partitions,
-                        Duration.ofMillis(1)));
-        assertEquals(eventProcessingFailure, consumerError);
-        verify(applicationEventHandler).addAndGet(ArgumentMatchers.isA(ListOffsetsApplicationEvent.class), ArgumentMatchers.isA(Timer.class));
-    }
-
-    @Test
-    public void testBeginningOffsetsTimeoutOnEventProcessingTimeout() {
-        doThrow(new TimeoutException()).when(applicationEventHandler).addAndGet(any(), any());
-        assertThrows(TimeoutException.class,
-                () -> consumer.beginningOffsets(
-                        Collections.singletonList(new TopicPartition("t1", 0)),
-                        Duration.ofMillis(1)));
-        verify(applicationEventHandler).addAndGet(ArgumentMatchers.isA(ListOffsetsApplicationEvent.class),
-                ArgumentMatchers.isA(Timer.class));
-    }
-
-    @Test
-    public void testOffsetsForTimesOnNullPartitions() {
-        assertThrows(NullPointerException.class, () -> consumer.offsetsForTimes(null,
-                Duration.ofMillis(1)));
-    }
-
-    @Test
-    public void testOffsetsForTimesFailsOnNegativeTargetTimes() {
-        assertThrows(IllegalArgumentException.class,
-                () -> consumer.offsetsForTimes(Collections.singletonMap(new TopicPartition(
-                                "topic1", 1), ListOffsetsRequest.EARLIEST_TIMESTAMP),
-                        Duration.ofMillis(1)));
-
-        assertThrows(IllegalArgumentException.class,
-                () -> consumer.offsetsForTimes(Collections.singletonMap(new TopicPartition(
-                                "topic1", 1), ListOffsetsRequest.LATEST_TIMESTAMP),
-                        Duration.ofMillis(1)));
-
-        assertThrows(IllegalArgumentException.class,
-                () -> consumer.offsetsForTimes(Collections.singletonMap(new TopicPartition(
-                                "topic1", 1), ListOffsetsRequest.MAX_TIMESTAMP),
-                        Duration.ofMillis(1)));
-    }
-
-    @Test
-    public void testOffsetsForTimes() {
-        Map<TopicPartition, OffsetAndTimestamp> expectedResult = mockOffsetAndTimestamp();
-        Map<TopicPartition, Long> timestampToSearch = mockTimestampToSearch();
-
-        doReturn(expectedResult).when(applicationEventHandler).addAndGet(any(), any());
-        Map<TopicPartition, OffsetAndTimestamp> result =
-                assertDoesNotThrow(() -> consumer.offsetsForTimes(timestampToSearch, Duration.ofMillis(1)));
-        assertEquals(expectedResult, result);
-        verify(applicationEventHandler).addAndGet(ArgumentMatchers.isA(ListOffsetsApplicationEvent.class),
-                ArgumentMatchers.isA(Timer.class));
-    }
-
-    // This test ensures same behaviour as the current consumer when offsetsForTimes is called
-    // with 0 timeout. It should return map with all requested partitions as keys, with null
-    // OffsetAndTimestamp as value.
-    @Test
-    public void testOffsetsForTimesWithZeroTimeout() {
-        TopicPartition tp = new TopicPartition("topic1", 0);
-        Map<TopicPartition, OffsetAndTimestamp> expectedResult =
-                Collections.singletonMap(tp, null);
-        Map<TopicPartition, Long> timestampToSearch = Collections.singletonMap(tp, 5L);
-
-        Map<TopicPartition, OffsetAndTimestamp> result =
-                assertDoesNotThrow(() -> consumer.offsetsForTimes(timestampToSearch,
-                        Duration.ofMillis(0)));
-        assertEquals(expectedResult, result);
-        verify(applicationEventHandler, never()).addAndGet(ArgumentMatchers.isA(ListOffsetsApplicationEvent.class),
-                ArgumentMatchers.isA(Timer.class));
     }
 
     @Test
@@ -654,8 +478,6 @@ public class AsyncKafkaConsumerTest {
         testUpdateFetchPositionsWithFetchCommittedOffsetsTimeout(false);
     }
 
-    @Test
-    
     @Test
     public void testGroupMetadataAfterCreationWithGroupIdIsNull() {
         final Properties props = requiredConsumerProperties();
@@ -980,24 +802,6 @@ public class AsyncKafkaConsumerTest {
         topicPartitionOffsets.put(t0, new OffsetAndMetadata(10L));
         topicPartitionOffsets.put(t1, new OffsetAndMetadata(20L));
         return topicPartitionOffsets;
-    }
-
-    private HashMap<TopicPartition, OffsetAndTimestamp> mockOffsetAndTimestamp() {
-        final TopicPartition t0 = new TopicPartition("t0", 2);
-        final TopicPartition t1 = new TopicPartition("t0", 3);
-        HashMap<TopicPartition, OffsetAndTimestamp> offsetAndTimestamp = new HashMap<>();
-        offsetAndTimestamp.put(t0, new OffsetAndTimestamp(5L, 1L));
-        offsetAndTimestamp.put(t1, new OffsetAndTimestamp(6L, 3L));
-        return offsetAndTimestamp;
-    }
-
-    private HashMap<TopicPartition, Long> mockTimestampToSearch() {
-        final TopicPartition t0 = new TopicPartition("t0", 2);
-        final TopicPartition t1 = new TopicPartition("t0", 3);
-        HashMap<TopicPartition, Long> timestampToSearch = new HashMap<>();
-        timestampToSearch.put(t0, 1L);
-        timestampToSearch.put(t1, 2L);
-        return timestampToSearch;
     }
 
     private void prepAutocommitOnClose() {

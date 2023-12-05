@@ -23,7 +23,10 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doReturn;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -31,31 +34,38 @@ import java.time.Duration;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.BlockingQueue;
+import java.util.stream.Collectors;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
+import org.apache.kafka.clients.consumer.OffsetAndTimestamp;
 import org.apache.kafka.clients.consumer.OffsetCommitCallback;
+import org.apache.kafka.clients.consumer.OffsetResetStrategy;
+import org.apache.kafka.clients.consumer.RangeAssignor;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEventHandler;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
 import org.apache.kafka.clients.consumer.internals.events.CommitApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.CompletableApplicationEvent;
+import org.apache.kafka.clients.consumer.internals.events.ListOffsetsApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.FetchCommittedOffsetsApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.SubscriptionChangeApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.UnsubscribeApplicationEvent;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.InvalidGroupIdException;
+import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.requests.ListOffsetsRequest;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.Timer;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
-import org.mockito.ArgumentCaptor;
 import org.mockito.ArgumentMatchers;
 import org.mockito.Mockito;
 
@@ -71,11 +81,10 @@ public class AsyncKafkaConsumerUnitTest {
     private final ConsumerInterceptors<String, String> interceptors = mock(ConsumerInterceptors.class);
     private final ApplicationEventHandler applicationEventHandler = mock(ApplicationEventHandler.class);
     private final  BlockingQueue<BackgroundEvent> backgroundEventQueue = mock(BlockingQueue.class);
-    private final SubscriptionState subscriptions = mock(SubscriptionState.class);
     private final ConsumerMetadata metadata = mock(ConsumerMetadata.class);
 
     @AfterEach
-    private void resetAll() {
+    public void resetAll() {
         if (consumer != null) {
             consumer.close();
         }
@@ -95,8 +104,10 @@ public class AsyncKafkaConsumerUnitTest {
         String clientId = "";
         long retryBackoffMs = 100;
         int defaultApiTimeoutMs = 100;
+        LogContext logContext = new LogContext();
+        SubscriptionState subscriptionState = new SubscriptionState(logContext, OffsetResetStrategy.LATEST);
         return new AsyncKafkaConsumer<>(
-            new LogContext(),
+            logContext,
             clientId,
             deserializers,
             fetchBuffer,
@@ -106,11 +117,11 @@ public class AsyncKafkaConsumerUnitTest {
             applicationEventHandler,
             backgroundEventQueue,
             new Metrics(),
-            subscriptions,
+            subscriptionState,
             metadata,
             retryBackoffMs,
             defaultApiTimeoutMs,
-            new LinkedList<>(),
+            Collections.singletonList(new RangeAssignor()),
             groupId
         );
     }
@@ -221,6 +232,124 @@ public class AsyncKafkaConsumerUnitTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
+    public void testPollLongThrowsException() {
+        consumer = setup();
+        Exception e = assertThrows(UnsupportedOperationException.class, () -> consumer.poll(0L));
+        assertEquals("Consumer.poll(long) is not supported when \"group.protocol\" is \"consumer\". " +
+            "This method is deprecated and will be removed in the next major release.", e.getMessage());
+    }
+
+    @Test
+    public void testBeginningOffsetsFailsIfNullPartitions() {
+        consumer = setup();
+        assertThrows(NullPointerException.class, () -> consumer.beginningOffsets(null,
+            Duration.ofMillis(1)));
+    }
+
+    @Test
+    public void testBeginningOffsets() {
+        consumer = setup();
+        Map<TopicPartition, OffsetAndTimestamp> expectedOffsetsAndTimestamp =
+            mockOffsetAndTimestamp();
+        Set<TopicPartition> partitions = expectedOffsetsAndTimestamp.keySet();
+        doReturn(expectedOffsetsAndTimestamp).when(applicationEventHandler).addAndGet(any(), any());
+        Map<TopicPartition, Long> result =
+            assertDoesNotThrow(() -> consumer.beginningOffsets(partitions,
+                Duration.ofMillis(1)));
+        Map<TopicPartition, Long> expectedOffsets = expectedOffsetsAndTimestamp.entrySet().stream()
+            .collect(Collectors.toMap(Map.Entry::getKey, e -> e.getValue().offset()));
+        assertEquals(expectedOffsets, result);
+        verify(applicationEventHandler).addAndGet(ArgumentMatchers.isA(ListOffsetsApplicationEvent.class),
+            ArgumentMatchers.isA(Timer.class));
+    }
+
+    @Test
+    public void testBeginningOffsetsThrowsKafkaExceptionForUnderlyingExecutionFailure() {
+        consumer = setup();
+        Set<TopicPartition> partitions = mockTopicPartitionOffset().keySet();
+        Throwable eventProcessingFailure = new KafkaException("Unexpected failure " +
+            "processing List Offsets event");
+        doThrow(eventProcessingFailure).when(applicationEventHandler).addAndGet(any(), any());
+        Throwable consumerError = assertThrows(KafkaException.class,
+            () -> consumer.beginningOffsets(partitions,
+                Duration.ofMillis(1)));
+        assertEquals(eventProcessingFailure, consumerError);
+        verify(applicationEventHandler).addAndGet(ArgumentMatchers.isA(ListOffsetsApplicationEvent.class), ArgumentMatchers.isA(Timer.class));
+    }
+
+    @Test
+    public void testBeginningOffsetsTimeoutOnEventProcessingTimeout() {
+        consumer = setup();
+        doThrow(new TimeoutException()).when(applicationEventHandler).addAndGet(any(), any());
+        assertThrows(TimeoutException.class,
+            () -> consumer.beginningOffsets(
+                Collections.singletonList(new TopicPartition("t1", 0)),
+                Duration.ofMillis(1)));
+        verify(applicationEventHandler).addAndGet(ArgumentMatchers.isA(ListOffsetsApplicationEvent.class),
+            ArgumentMatchers.isA(Timer.class));
+    }
+
+    @Test
+    public void testOffsetsForTimesOnNullPartitions() {
+        consumer = setup();
+        assertThrows(NullPointerException.class, () -> consumer.offsetsForTimes(null,
+            Duration.ofMillis(1)));
+    }
+
+    @Test
+    public void testOffsetsForTimesFailsOnNegativeTargetTimes() {
+        consumer = setup();
+        assertThrows(IllegalArgumentException.class,
+            () -> consumer.offsetsForTimes(Collections.singletonMap(new TopicPartition(
+                    "topic1", 1), ListOffsetsRequest.EARLIEST_TIMESTAMP),
+                Duration.ofMillis(1)));
+
+        assertThrows(IllegalArgumentException.class,
+            () -> consumer.offsetsForTimes(Collections.singletonMap(new TopicPartition(
+                    "topic1", 1), ListOffsetsRequest.LATEST_TIMESTAMP),
+                Duration.ofMillis(1)));
+
+        assertThrows(IllegalArgumentException.class,
+            () -> consumer.offsetsForTimes(Collections.singletonMap(new TopicPartition(
+                    "topic1", 1), ListOffsetsRequest.MAX_TIMESTAMP),
+                Duration.ofMillis(1)));
+    }
+
+    @Test
+    public void testOffsetsForTimes() {
+        consumer = setup();
+        Map<TopicPartition, OffsetAndTimestamp> expectedResult = mockOffsetAndTimestamp();
+        Map<TopicPartition, Long> timestampToSearch = mockTimestampToSearch();
+
+        doReturn(expectedResult).when(applicationEventHandler).addAndGet(any(), any());
+        Map<TopicPartition, OffsetAndTimestamp> result =
+            assertDoesNotThrow(() -> consumer.offsetsForTimes(timestampToSearch, Duration.ofMillis(1)));
+        assertEquals(expectedResult, result);
+        verify(applicationEventHandler).addAndGet(ArgumentMatchers.isA(ListOffsetsApplicationEvent.class),
+            ArgumentMatchers.isA(Timer.class));
+    }
+
+    // This test ensures same behaviour as the current consumer when offsetsForTimes is called
+    // with 0 timeout. It should return map with all requested partitions as keys, with null
+    // OffsetAndTimestamp as value.
+    @Test
+    public void testOffsetsForTimesWithZeroTimeout() {
+        consumer = setup();
+        TopicPartition tp = new TopicPartition("topic1", 0);
+        Map<TopicPartition, OffsetAndTimestamp> expectedResult =
+            Collections.singletonMap(tp, null);
+        Map<TopicPartition, Long> timestampToSearch = Collections.singletonMap(tp, 5L);
+
+        Map<TopicPartition, OffsetAndTimestamp> result =
+            assertDoesNotThrow(() -> consumer.offsetsForTimes(timestampToSearch,
+                Duration.ofMillis(0)));
+        assertEquals(expectedResult, result);
+        verify(applicationEventHandler, never()).addAndGet(ArgumentMatchers.isA(ListOffsetsApplicationEvent.class),
+            ArgumentMatchers.isA(Timer.class));
+    }
+
+    @Test
     public void testSubscribeGeneratesEvent() {
         consumer = setup();
         String topic = "topic1";
@@ -233,13 +362,14 @@ public class AsyncKafkaConsumerUnitTest {
     @Test
     public void testUnsubscribeGeneratesUnsubscribeEvent() {
         consumer = setup();
-        consumer.unsubscribe();
+        Mockito.doAnswer(invocation -> {
+            CompletableApplicationEvent<?> event = invocation.getArgument(0);
+            assertTrue(event instanceof UnsubscribeApplicationEvent);
+            event.future().complete(null);
+            return null;
+        }).when(applicationEventHandler).add(any());
 
-        // Verify the unsubscribe event was generated and mock its completion.
-        final ArgumentCaptor<UnsubscribeApplicationEvent> captor = ArgumentCaptor.forClass(UnsubscribeApplicationEvent.class);
-        verify(applicationEventHandler).add(captor.capture());
-        UnsubscribeApplicationEvent unsubscribeApplicationEvent = captor.getValue();
-        unsubscribeApplicationEvent.future().complete(null);
+        consumer.unsubscribe();
 
         assertTrue(consumer.subscription().isEmpty());
         assertTrue(consumer.assignment().isEmpty());
@@ -255,7 +385,6 @@ public class AsyncKafkaConsumerUnitTest {
             event.future().complete(null);
             return null;
         }).when(applicationEventHandler).add(any());
-
 
         consumer.subscribe(Collections.emptyList());
         assertTrue(consumer.subscription().isEmpty());
@@ -289,5 +418,24 @@ public class AsyncKafkaConsumerUnitTest {
         topicPartitionOffsets.put(t1, new OffsetAndMetadata(20L));
         return topicPartitionOffsets;
     }
+
+    private HashMap<TopicPartition, OffsetAndTimestamp> mockOffsetAndTimestamp() {
+        final TopicPartition t0 = new TopicPartition("t0", 2);
+        final TopicPartition t1 = new TopicPartition("t0", 3);
+        HashMap<TopicPartition, OffsetAndTimestamp> offsetAndTimestamp = new HashMap<>();
+        offsetAndTimestamp.put(t0, new OffsetAndTimestamp(5L, 1L));
+        offsetAndTimestamp.put(t1, new OffsetAndTimestamp(6L, 3L));
+        return offsetAndTimestamp;
+    }
+
+    private HashMap<TopicPartition, Long> mockTimestampToSearch() {
+        final TopicPartition t0 = new TopicPartition("t0", 2);
+        final TopicPartition t1 = new TopicPartition("t0", 3);
+        HashMap<TopicPartition, Long> timestampToSearch = new HashMap<>();
+        timestampToSearch.put(t0, 1L);
+        timestampToSearch.put(t1, 2L);
+        return timestampToSearch;
+    }
+
 }
 
