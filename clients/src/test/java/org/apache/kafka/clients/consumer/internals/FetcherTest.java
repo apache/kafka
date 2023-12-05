@@ -3510,13 +3510,14 @@ public class FetcherTest {
         selected = fetcher.selectReadReplica(tp1, Node.noNode(), time.milliseconds());
         assertEquals(nodeId0.id(), selected.id());
 
-        // TEST that next fetch returns an error(due to leadership change) but new leader info is not returned
-        // in the FetchResponse. This is the behaviour prior to KIP-951, should keep on working.
+        // Send next fetch request.
         assertEquals(1, sendFetches());
         assertFalse(fetcher.hasCompletedFetches());
         // Verify that metadata-update isn't requested as metadata is considered upto-date.
         assertFalse(metadata.updateRequested());
 
+        // TEST that next fetch returns an error(due to leadership change) but new leader info is not returned
+        // in the FetchResponse. This is the behaviour prior to KIP-951, should keep on working.
         LinkedHashMap<TopicIdPartition, FetchResponseData.PartitionData> partitions = new LinkedHashMap<>();
         partitions.put(tidp0,
             new FetchResponseData.PartitionData()
@@ -3571,8 +3572,8 @@ public class FetcherTest {
             Integer.MAX_VALUE, IsolationLevel.READ_UNCOMMITTED,
             Duration.ofMinutes(5).toMillis());
 
-        // Setup so that fetcher is subscribed to tp0 & tp1, and metadata setup with tp0.
-        // assignFromUser(singleton(tp0));
+        // Setup so that tp0 & tp1 are subscribed and will be fetched from.
+        // Also, setup client's metadata for tp0 & tp1.
         subscriptions.assignFromUser(new HashSet<>(Arrays.asList(tp0, tp1)));
         client.updateMetadata(
             RequestTestUtils.metadataUpdateWithIds(2, singletonMap(topicName, 4),
@@ -3593,24 +3594,23 @@ public class FetcherTest {
             FetchResponse.INVALID_LAST_STABLE_OFFSET, 0, Optional.of(nodeId0.id())), tp1Leader);
         consumerClient.poll(time.timer(0));
         assertTrue(fetcher.hasCompletedFetches());
-
         Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> partitionRecords = fetchRecords();
         assertTrue(partitionRecords.containsKey(tp0));
         assertTrue(partitionRecords.containsKey(tp1));
-
-        // Verify that preferred read replica is set for both tp0 & tp1.
+        // Validate setup of preferred read replica for tp0 & tp1 is done correctly.
         Node selected = fetcher.selectReadReplica(tp0, Node.noNode(), time.milliseconds());
         assertEquals(nodeId0.id(), selected.id());
         selected = fetcher.selectReadReplica(tp1, Node.noNode(), time.milliseconds());
         assertEquals(nodeId0.id(), selected.id());
 
-        // Next fetch returns an error(due to leadership change) and new leader info is returned. The new leader is a new node, id = 999.
-        // For tp1 fetch returns with no error.
+        // Send next fetch request.
         assertEquals(1, sendFetches());
         assertFalse(fetcher.hasCompletedFetches());
-        // Verify that metadata-update isn't requested
+        // Validate metadata-update isn't requested as no errors seen yet.
         assertFalse(metadata.updateRequested());
 
+        // Test that next fetch returns an error(due to leadership change) and new leader info is returned, as introduced
+        // in KIP-951. The new leader is a new node, id = 999. For tp1 fetch returns with no error.
         LinkedHashMap<TopicIdPartition, FetchResponseData.PartitionData> partitions = new LinkedHashMap<>();
         Node newNode = new Node(999, "newnode", 999, "newrack");
         FetchResponseData.PartitionData tp0Data = new FetchResponseData.PartitionData()
@@ -3643,13 +3643,13 @@ public class FetcherTest {
         assertEquals(Optional.of(newNode), currentLeaderTp0.leader);
         assertEquals(Optional.of(tp0NewLeaderEpoch), currentLeaderTp0.epoch);
 
-        // Validate metadata-update is requested due to the error for tp0.
+        // Validate metadata-update is requested due to the leadership-error for tp0.
         assertTrue(metadata.updateRequested());
 
-        // Validate preferred-read-replica is cleared for tp0.
+        // Validate preferred-read-replica is cleared for tp0 due to the error.
         assertEquals(Optional.empty(),
             subscriptions.preferredReadReplica(tp0, time.milliseconds()));
-        // Validate preferred-read-replica is still set for tp1
+        // Validate preferred-read-replica is still set for tp1 as previous fetch is ok.
         assertEquals(Optional.of(nodeId0.id()),
             subscriptions.preferredReadReplica(tp1, time.milliseconds()));
 
