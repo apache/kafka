@@ -16,39 +16,39 @@
  */
 package org.apache.kafka.clients.consumer.internals.events;
 
-import org.apache.kafka.clients.consumer.internals.ConsumerTestBuilder;
+import org.apache.kafka.clients.consumer.internals.ConsumerRebalanceListenerInvoker;
 import org.apache.kafka.common.KafkaException;
-import org.junit.jupiter.api.AfterEach;
+import org.apache.kafka.common.utils.LogContext;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.LinkedBlockingQueue;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
+import static org.mockito.Mockito.mock;
 
 public class BackgroundEventHandlerTest {
 
-    private ConsumerTestBuilder.ApplicationEventHandlerTestBuilder testBuilder;
     private BlockingQueue<BackgroundEvent> backgroundEventQueue;
     private BackgroundEventHandler backgroundEventHandler;
     private BackgroundEventProcessor backgroundEventProcessor;
 
     @BeforeEach
     public void setup() {
-        testBuilder = new ConsumerTestBuilder.ApplicationEventHandlerTestBuilder();
-        backgroundEventQueue = testBuilder.backgroundEventQueue;
-        backgroundEventHandler = testBuilder.backgroundEventHandler;
-        backgroundEventProcessor = testBuilder.backgroundEventProcessor;
-    }
-
-    @AfterEach
-    public void tearDown() {
-        if (testBuilder != null)
-            testBuilder.close();
+        LogContext logContext = new LogContext();
+        backgroundEventQueue = new LinkedBlockingQueue<>();
+        backgroundEventHandler = new BackgroundEventHandler(logContext, backgroundEventQueue);
+        backgroundEventProcessor = new BackgroundEventProcessor(
+            logContext,
+            backgroundEventQueue,
+            mock(ApplicationEventHandler.class),
+            mock(ConsumerRebalanceListenerInvoker.class)
+        );
     }
 
     @Test
