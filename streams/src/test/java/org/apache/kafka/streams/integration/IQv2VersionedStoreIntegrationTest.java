@@ -87,7 +87,7 @@ public class IQv2VersionedStoreIntegrationTest {
 
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(NUM_BROKERS, Utils.mkProperties(Collections.singletonMap("auto.create.topics.enable", "true")));
 
-    private static KafkaStreams kafkaStreams;
+    private KafkaStreams kafkaStreams;
 
     @BeforeClass
     public static void before() throws Exception {
@@ -167,11 +167,9 @@ public class IQv2VersionedStoreIntegrationTest {
                                                final Long expectedTimestamp,
                                                final Optional<Long> expectedValidToTime) {
 
-        // define query
         final VersionedKeyQuery<Integer, Integer> query = defineQuery(RECORD_KEY, queryTimestamp);
 
-        // send request and receive results
-        final QueryResult<VersionedRecord<Integer>> queryResult = sendRequestAndReceiveResults(query);
+        final QueryResult<VersionedRecord<Integer>> queryResult = sendRequestAndReceiveResults(query, kafkaStreams);
 
         // verify results
         if (queryResult == null) {
@@ -194,16 +192,15 @@ public class IQv2VersionedStoreIntegrationTest {
 
     private void shouldVerifyGetNullForVersionedKeyQuery(final Integer key, final Instant queryTimestamp) {
         final VersionedKeyQuery<Integer, Integer> query = defineQuery(key, Optional.of(queryTimestamp));
-        assertThat(sendRequestAndReceiveResults(query), nullValue());
+        assertThat(sendRequestAndReceiveResults(query, kafkaStreams), nullValue());
     }
 
     private void shouldHandleMultiVersionedKeyQuery(final Optional<Instant> fromTime, final Optional<Instant> toTime,
                                                     final ResultOrder order, final int expectedArrayLowerBound, final int expectedArrayUpperBound) {
-        // define query
+
         final MultiVersionedKeyQuery<Integer, Integer> query = defineQuery(RECORD_KEY, fromTime, toTime, order);
 
-        // send request and receive results
-        final Map<Integer, QueryResult<VersionedRecordIterator<Integer>>> partitionResults = sendRequestAndReceiveResults(query);
+        final Map<Integer, QueryResult<VersionedRecordIterator<Integer>>> partitionResults = sendRequestAndReceiveResults(query, kafkaStreams);
 
         // verify results
         for (final Entry<Integer, QueryResult<VersionedRecordIterator<Integer>>> partitionResultsEntry : partitionResults.entrySet()) {
@@ -231,11 +228,9 @@ public class IQv2VersionedStoreIntegrationTest {
     }
 
     private void shouldVerifyGetNullForMultiVersionedKeyQuery(final Integer key, final Optional<Instant> fromTime, final Optional<Instant> toTime) {
-        // define query
         final MultiVersionedKeyQuery<Integer, Integer> query = defineQuery(key, fromTime, toTime, ResultOrder.ANY);
 
-        // send request and receive results
-        final Map<Integer, QueryResult<VersionedRecordIterator<Integer>>> partitionResults = sendRequestAndReceiveResults(query);
+        final Map<Integer, QueryResult<VersionedRecordIterator<Integer>>> partitionResults = sendRequestAndReceiveResults(query, kafkaStreams);
 
         // verify results
         for (final Entry<Integer, QueryResult<VersionedRecordIterator<Integer>>> partitionResultsEntry : partitionResults.entrySet()) {
@@ -250,11 +245,9 @@ public class IQv2VersionedStoreIntegrationTest {
      * Since IQv2 guarantees snapshot semantics, we expect that the old value is retrieved.
      */
     private void shouldHandleRaceCondition() {
-        // define query
         final MultiVersionedKeyQuery<Integer, Integer> query = defineQuery(RECORD_KEY, Optional.empty(), Optional.empty(), ResultOrder.ANY);
 
-        // send request and verify results
-        final Map<Integer, QueryResult<VersionedRecordIterator<Integer>>> partitionResults = sendRequestAndReceiveResults(query);
+        final Map<Integer, QueryResult<VersionedRecordIterator<Integer>>> partitionResults = sendRequestAndReceiveResults(query, kafkaStreams);
 
         // verify results in two steps
         for (final Entry<Integer, QueryResult<VersionedRecordIterator<Integer>>> partitionResultsEntry : partitionResults.entrySet()) {
@@ -326,14 +319,13 @@ public class IQv2VersionedStoreIntegrationTest {
         return query;
     }
 
-    private static Map<Integer, QueryResult<VersionedRecordIterator<Integer>>> sendRequestAndReceiveResults(final MultiVersionedKeyQuery<Integer, Integer> query) {
-        // send request and get the results
+    private static Map<Integer, QueryResult<VersionedRecordIterator<Integer>>> sendRequestAndReceiveResults(final MultiVersionedKeyQuery<Integer, Integer> query, final KafkaStreams kafkaStreams) {
         final StateQueryRequest<VersionedRecordIterator<Integer>> request = StateQueryRequest.inStore(STORE_NAME).withQuery(query).withPositionBound(PositionBound.at(INPUT_POSITION));
         final StateQueryResult<VersionedRecordIterator<Integer>> result = IntegrationTestUtils.iqv2WaitForResult(kafkaStreams, request);
         return result.getPartitionResults();
     }
 
-    private static QueryResult<VersionedRecord<Integer>> sendRequestAndReceiveResults(final VersionedKeyQuery<Integer, Integer> query) {
+    private static QueryResult<VersionedRecord<Integer>> sendRequestAndReceiveResults(final VersionedKeyQuery<Integer, Integer> query, final KafkaStreams kafkaStreams) {
         final StateQueryRequest<VersionedRecord<Integer>> request = StateQueryRequest.inStore(STORE_NAME).withQuery(query).withPositionBound(PositionBound.at(INPUT_POSITION));
         final StateQueryResult<VersionedRecord<Integer>> result = IntegrationTestUtils.iqv2WaitForResult(kafkaStreams, request);
         return result.getOnlyPartitionResult();

@@ -57,7 +57,7 @@ public final class MultiVersionedKeyQuery<K, V> implements Query<VersionedRecord
    * @param key The specified key by the query
    * @param <K> The type of the key
    * @param <V> The type of the value that will be retrieved
-   * @throws NullPointerException if @code key is null
+   * @throws NullPointerException if {@code key} is null
    */
     public static <K, V> MultiVersionedKeyQuery<K, V> withKey(final K key) {
         Objects.requireNonNull(key, "key cannot be null.");
