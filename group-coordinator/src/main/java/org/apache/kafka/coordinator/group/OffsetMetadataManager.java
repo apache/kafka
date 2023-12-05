@@ -183,19 +183,22 @@ public class OffsetMetadataManager {
     private final GroupCoordinatorConfig config;
 
     /**
-     * The offsets keyed by group id, topic name and partition id.
+     * The committed offsets.
      */
     private final Offsets offsets;
 
     /**
-     * The offsets keyed by producer id, group id, topic name and partition id. This
-     * structure holds all the transactional offsets that are part of ongoing transactions.
-     * When the transaction is committed, they are transferred to the offsetsByGroup; when
-     * the transaction is aborted, they are removed.
+     * The pending transactional offsets keyed by producer id. This structure holds all the
+     * transactional offsets that are part of ongoing transactions. When the transaction is
+     * committed, they are transferred to `offsets`; when the transaction is aborted, they
+     * are removed.
      */
     private final TimelineHashMap<Long, Offsets> pendingTransactionalOffsets;
 
     private class Offsets {
+        /**
+         * The offsets keyed by group id, topic name and partition id.
+         */
         private final TimelineHashMap<String, TimelineHashMap<String, TimelineHashMap<Integer, OffsetAndMetadata>>> offsetsByGroup;
 
         private Offsets() {

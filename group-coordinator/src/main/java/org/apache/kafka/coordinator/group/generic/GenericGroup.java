@@ -830,7 +830,7 @@ public class GenericGroup implements Group {
         }
 
         if (generationId >= 0 || !memberId.isEmpty() || groupInstanceId != null) {
-            validateMember(memberId, groupInstanceId, "offset-commit");
+            validateMember(memberId, groupInstanceId, isTransactional ? "offset-commit" : "txn-offset-commit");
 
             if (generationId != this.generationId) {
                 throw Errors.ILLEGAL_GENERATION.exception();
@@ -848,6 +848,8 @@ public class GenericGroup implements Group {
             // but since the consumer's member.id and generation is valid, it means it has received
             // the latest group generation information from the JoinResponse.
             // So let's return a REBALANCE_IN_PROGRESS to let consumer handle it gracefully.
+            // This does not apply to transactional offset commits, since the group state
+            // is not enforced for those.
             throw Errors.REBALANCE_IN_PROGRESS.exception();
         }
     }

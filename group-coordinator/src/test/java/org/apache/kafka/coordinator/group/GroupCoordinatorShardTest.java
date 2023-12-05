@@ -334,6 +334,48 @@ public class GroupCoordinatorShardTest {
     }
 
     @Test
+    public void testReplayTransactionalOffsetCommit() {
+        GroupMetadataManager groupMetadataManager = mock(GroupMetadataManager.class);
+        OffsetMetadataManager offsetMetadataManager = mock(OffsetMetadataManager.class);
+        CoordinatorMetrics coordinatorMetrics = mock(CoordinatorMetrics.class);
+        CoordinatorMetricsShard metricsShard = mock(CoordinatorMetricsShard.class);
+        GroupCoordinatorShard coordinator = new GroupCoordinatorShard(
+            new LogContext(),
+            groupMetadataManager,
+            offsetMetadataManager,
+            new MockCoordinatorTimer<>(new MockTime()),
+            mock(GroupCoordinatorConfig.class),
+            coordinatorMetrics,
+            metricsShard
+        );
+
+        OffsetCommitKey key = new OffsetCommitKey();
+        OffsetCommitValue value = new OffsetCommitValue();
+
+        coordinator.replay(100L, (short) 0, new Record(
+            new ApiMessageAndVersion(key, (short) 0),
+            new ApiMessageAndVersion(value, (short) 0)
+        ));
+
+        coordinator.replay(101L, (short) 1, new Record(
+            new ApiMessageAndVersion(key, (short) 1),
+            new ApiMessageAndVersion(value, (short) 0)
+        ));
+
+        verify(offsetMetadataManager, times(1)).replay(
+            100L,
+            key,
+            value
+        );
+
+        verify(offsetMetadataManager, times(1)).replay(
+            101L,
+            key,
+            value
+        );
+    }
+
+    @Test
     public void testReplayOffsetCommitWithNullValue() {
         GroupMetadataManager groupMetadataManager = mock(GroupMetadataManager.class);
         OffsetMetadataManager offsetMetadataManager = mock(OffsetMetadataManager.class);
