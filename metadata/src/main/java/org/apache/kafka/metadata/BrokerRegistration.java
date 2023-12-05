@@ -159,7 +159,7 @@ public class BrokerRegistration {
     private final boolean fenced;
     private final boolean inControlledShutdown;
     private final boolean isMigratingZkBroker;
-    private final List<Uuid> directories;
+    private final List<Uuid> sortedDirectories;
 
     private BrokerRegistration(
         int id,
@@ -192,7 +192,7 @@ public class BrokerRegistration {
         this.isMigratingZkBroker = isMigratingZkBroker;
         directories = new ArrayList<>(directories);
         directories.sort(Uuid::compareTo);
-        this.directories = Collections.unmodifiableList(directories);
+        this.sortedDirectories = Collections.unmodifiableList(directories);
     }
 
     public static BrokerRegistration fromRecord(RegisterBrokerRecord record) {
@@ -264,8 +264,12 @@ public class BrokerRegistration {
         return isMigratingZkBroker;
     }
 
+    public List<Uuid> directories() {
+        return sortedDirectories;
+    }
+
     public boolean hasOnlineDir(Uuid dir) {
-        return DirectoryId.isOnline(dir, directories);
+        return DirectoryId.isOnline(dir, sortedDirectories);
     }
 
     public ApiMessageAndVersion toRecord(ImageWriterOptions options) {
@@ -292,8 +296,8 @@ public class BrokerRegistration {
             }
         }
 
-        if (directories.isEmpty() || options.metadataVersion().isDirectoryAssignmentSupported()) {
-            registrationRecord.setLogDirs(directories);
+        if (sortedDirectories.isEmpty() || options.metadataVersion().isDirectoryAssignmentSupported()) {
+            registrationRecord.setLogDirs(sortedDirectories);
         } else {
             options.handleLoss("the online log directories of one or more brokers");
         }
@@ -321,7 +325,7 @@ public class BrokerRegistration {
     @Override
     public int hashCode() {
         return Objects.hash(id, epoch, incarnationId, listeners, supportedFeatures,
-            rack, fenced, inControlledShutdown, isMigratingZkBroker, directories);
+            rack, fenced, inControlledShutdown, isMigratingZkBroker, sortedDirectories);
     }
 
     @Override
@@ -337,7 +341,7 @@ public class BrokerRegistration {
             other.fenced == fenced &&
             other.inControlledShutdown == inControlledShutdown &&
             other.isMigratingZkBroker == isMigratingZkBroker &&
-            other.directories.equals(directories);
+            other.sortedDirectories.equals(sortedDirectories);
     }
 
     @Override
@@ -359,7 +363,7 @@ public class BrokerRegistration {
         bld.append(", fenced=").append(fenced);
         bld.append(", inControlledShutdown=").append(inControlledShutdown);
         bld.append(", isMigratingZkBroker=").append(isMigratingZkBroker);
-        bld.append(", directories=").append(directories);
+        bld.append(", directories=").append(sortedDirectories);
         bld.append(")");
         return bld.toString();
     }
@@ -384,7 +388,7 @@ public class BrokerRegistration {
             newFenced,
             newInControlledShutdownChange,
             isMigratingZkBroker,
-            directories
+            sortedDirectories
         );
     }
 }

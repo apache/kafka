@@ -14,19 +14,16 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+package org.apache.kafka.common.errors;
 
-package org.apache.kafka.metadata.util;
+/**
+ * Thrown when a broker registration request is considered invalid by the controller.
+ */
+public class InvalidRegistrationException extends ApiException {
 
-import org.apache.kafka.server.common.MetadataVersion;
-import org.mockito.internal.util.MockUtil;
+    private static final long serialVersionUID = 1L;
 
-import static org.mockito.Mockito.spy;
-import static org.mockito.Mockito.when;
-
-public class MetadataFeatureUtil {
-    public static MetadataVersion withDirectoryAssignmentSupport(MetadataVersion metadataVersion) {
-        MetadataVersion spy = MockUtil.isMock(metadataVersion) ? metadataVersion : spy(metadataVersion);
-        when(spy.isDirectoryAssignmentSupported()).thenReturn(true);
-        return spy;
+    public InvalidRegistrationException(String message) {
+        super(message);
     }
 }
