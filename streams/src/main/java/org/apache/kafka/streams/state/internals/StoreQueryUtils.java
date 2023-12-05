@@ -432,16 +432,14 @@ public final class StoreQueryUtils {
                                                                                                       rawVersionedRecord.timestamp());
     }
 
-    public static <V> VersionedRecord<V> deserializeVersionedRecord(final StateSerdes<?, V> serdes,
-        final VersionedRecord<byte[]> rawVersionedRecord) {
+    public static <V> VersionedRecord<V> deserializeVersionedRecord(final StateSerdes<?, V> serdes, final VersionedRecord<byte[]> rawVersionedRecord) {
         final Deserializer<V> valueDeserializer = serdes.valueDeserializer();
         final V value = valueDeserializer.deserialize(serdes.topic(), rawVersionedRecord.value());
         return rawVersionedRecord.validTo().isPresent() ? new VersionedRecord<>(value, rawVersionedRecord.timestamp(), rawVersionedRecord.validTo().get())
                                                         : new VersionedRecord<>(value, rawVersionedRecord.timestamp());
     }
 
-    public static void checkpointPosition(final OffsetCheckpoint checkpointFile,
-        final Position position) {
+    public static void checkpointPosition(final OffsetCheckpoint checkpointFile, final Position position) {
         try {
             checkpointFile.write(positionToTopicPartitionMap(position));
         } catch (final IOException e) {
