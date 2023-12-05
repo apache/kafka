@@ -223,7 +223,7 @@ public class BalanceSubtopologyGraphConstructor implements RackAwareGraphConstru
                 }
             }
 
-            taskNodeId += taskIds.stream().filter(taskIdSet::contains).count();
+            taskNodeId += (int) taskIds.stream().filter(taskIdSet::contains).count();
             topicGroupIndex++;
         }
 

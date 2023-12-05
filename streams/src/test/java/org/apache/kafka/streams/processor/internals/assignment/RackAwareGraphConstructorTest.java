@@ -99,7 +99,7 @@ public class RackAwareGraphConstructorTest {
     }
 
     @Test
-    public void testSubtopicShouldContainAllTasks() {
+    public void testSubtopologyShouldContainAllTasks() {
         if (constructorType.equals(MIN_COST)) {
             return;
         }
@@ -294,8 +294,6 @@ public class RackAwareGraphConstructorTest {
                     if (totalAssigned >= taskIdList.size()) {
                         break;
                     }
-                } else {
-                    System.out.println();
                 }
             }
         }

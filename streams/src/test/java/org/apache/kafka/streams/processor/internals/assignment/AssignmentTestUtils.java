@@ -696,7 +696,6 @@ public final class AssignmentTestUtils {
         configurationMap.put(StreamsConfig.APPLICATION_ID_CONFIG, APPLICATION_ID);
         configurationMap.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, USER_END_POINT);
         configurationMap.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, replicaNum);
-        // configurationMap.put(StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_CONFIG, StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_MIN_TRAFFIC);
         configurationMap.put(StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_CONFIG, rackAwareConfig);
 
         final ReferenceContainer referenceContainer = new ReferenceContainer();
