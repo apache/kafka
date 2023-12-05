@@ -81,7 +81,7 @@ public class HeartbeatRequestManagerTest {
     }
 
     private void setUp(Optional<ConsumerTestBuilder.GroupInformation> groupInfo) {
-        testBuilder = new ConsumerTestBuilder(groupInfo);
+        testBuilder = new ConsumerTestBuilder(groupInfo, true, false);
         time = testBuilder.time;
         coordinatorRequestManager = testBuilder.coordinatorRequestManager.orElseThrow(IllegalStateException::new);
         heartbeatRequestManager = testBuilder.heartbeatRequestManager.orElseThrow(IllegalStateException::new);
