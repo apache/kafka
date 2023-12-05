@@ -17,18 +17,28 @@
 
 package org.apache.kafka.clients.consumer.internals;
 
+import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
+import org.apache.kafka.clients.consumer.internals.events.ApplicationEventHandler;
+import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
+import org.apache.kafka.clients.consumer.internals.events.BackgroundEventProcessor;
+import org.apache.kafka.clients.consumer.internals.events.ConsumerRebalanceListenerCallbackCompletedEvent;
+import org.apache.kafka.clients.consumer.internals.events.ConsumerRebalanceListenerCallbackNeededEvent;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatResponseData;
+import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.ConsumerGroupHeartbeatResponse;
+import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.MockTime;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -36,19 +46,28 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.SortedSet;
+import java.util.TreeSet;
+import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.ArgumentMatchers.anySet;
 import static org.mockito.Mockito.clearInvocations;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doNothing;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
@@ -67,6 +86,7 @@ public class MembershipManagerImplTest {
     private CommitRequestManager commitRequestManager;
 
     private ConsumerTestBuilder testBuilder;
+    private BlockingQueue<BackgroundEvent> backgroundEventQueue;
 
     @BeforeEach
     public void setup() {
@@ -74,6 +94,7 @@ public class MembershipManagerImplTest {
         metadata = testBuilder.metadata;
         subscriptionState = testBuilder.subscriptions;
         commitRequestManager = testBuilder.commitRequestManager.get();
+        backgroundEventQueue = testBuilder.backgroundEventQueue;
     }
 
     @AfterEach
@@ -791,6 +812,169 @@ public class MembershipManagerImplTest {
         verify(membershipManager, never()).transitionToJoining();
     }
 
+    @Test
+    public void testListenerCallbacksBasic() {
+        // Step 1: set up mocks
+        MembershipManagerImpl membershipManager = createMemberInStableState();
+        mockOwnedPartition("topic1", 0);
+        CounterConsumerRebalanceListener listener = new CounterConsumerRebalanceListener();
+        ConsumerRebalanceListenerInvoker invoker = consumerRebalanceListenerInvoker();
+
+        when(subscriptionState.rebalanceListener()).thenReturn(Optional.of(listener));
+        doNothing().when(subscriptionState).markPendingRevocation(anySet());
+
+        // Step 2: put the state machine into the appropriate... state
+        receiveEmptyAssignment(membershipManager);
+        assertEquals(MemberState.RECONCILING, membershipManager.state());
+        assertEquals(Collections.emptySet(), membershipManager.currentAssignment());
+        assertTrue(membershipManager.reconciliationInProgress());
+        listener.assertCounts(0, 0, 0);
+
+        // Step 2: revoke partitions
+        performCallback(
+                membershipManager,
+                invoker,
+                ConsumerRebalanceListenerMethodName.ON_PARTITIONS_REVOKED,
+                topicPartitions(new TopicPartition("topic1", 0))
+        );
+
+        // Step 3: assign partitions
+        performCallback(
+                membershipManager,
+                invoker,
+                ConsumerRebalanceListenerMethodName.ON_PARTITIONS_ASSIGNED,
+                Collections.emptySortedSet()
+        );
+
+        // Step 4: Receive ack and make sure we're done and our listener was called appropriately
+        membershipManager.onHeartbeatRequestSent();
+        assertEquals(MemberState.STABLE, membershipManager.state());
+
+        listener.assertCounts(1, 1, 0);
+    }
+
+    @Test
+    public void testListenerCallbacksNoListeners() {
+        // Step 1: set up mocks
+        MembershipManagerImpl membershipManager = createMemberInStableState();
+        mockOwnedPartition("topic1", 0);
+        CounterConsumerRebalanceListener listener = new CounterConsumerRebalanceListener();
+
+        when(subscriptionState.rebalanceListener()).thenReturn(Optional.empty());
+        doNothing().when(subscriptionState).markPendingRevocation(anySet());
+
+        // Step 2: put the state machine into the appropriate... state
+        receiveEmptyAssignment(membershipManager);
+        assertEquals(MemberState.ACKNOWLEDGING, membershipManager.state());
+        assertEquals(Collections.emptySet(), membershipManager.currentAssignment());
+        assertFalse(membershipManager.reconciliationInProgress());
+        assertEquals(0, backgroundEventQueue.size());
+        listener.assertCounts(0, 0, 0);
+
+        // Step 3: Receive ack and make sure we're done and our listener was called appropriately
+        membershipManager.onHeartbeatRequestSent();
+        assertEquals(MemberState.STABLE, membershipManager.state());
+
+        listener.assertCounts(0, 0, 0);
+    }
+
+    @Test
+    public void testOnPartitionsLostNoError() {
+        mockOwnedPartition("topic1", 0);
+        testOnPartitionsLost(Optional.empty());
+    }
+
+    @Test
+    public void testOnPartitionsLostError() {
+        mockOwnedPartition("topic1", 0);
+        testOnPartitionsLost(Optional.of(new KafkaException("Intentional error for test")));
+    }
+
+    private void testOnPartitionsLost(Optional<RuntimeException> lostError) {
+        // Step 1: set up mocks
+        MembershipManagerImpl membershipManager = createMemberInStableState();
+        CounterConsumerRebalanceListener listener = new CounterConsumerRebalanceListener(
+                Optional.empty(),
+                Optional.empty(),
+                lostError
+        );
+        ConsumerRebalanceListenerInvoker invoker = consumerRebalanceListenerInvoker();
+
+        when(subscriptionState.rebalanceListener()).thenReturn(Optional.of(listener));
+        doNothing().when(subscriptionState).markPendingRevocation(anySet());
+
+        // Step 2: put the state machine into the appropriate... state
+        membershipManager.transitionToFenced();
+        assertEquals(MemberState.FENCED, membershipManager.state());
+        assertEquals(Collections.emptySet(), membershipManager.currentAssignment());
+        listener.assertCounts(0, 0, 0);
+
+        // Step 3: invoke the callback
+        performCallback(
+                membershipManager,
+                invoker,
+                ConsumerRebalanceListenerMethodName.ON_PARTITIONS_LOST,
+                topicPartitions(new TopicPartition("topic1", 0))
+        );
+
+        // Step 4: Receive ack and make sure we're done and our listener was called appropriately
+        membershipManager.onHeartbeatRequestSent();
+        assertEquals(MemberState.JOINING, membershipManager.state());
+
+        listener.assertCounts(0, 0, 1);
+    }
+
+    private ConsumerRebalanceListenerInvoker consumerRebalanceListenerInvoker() {
+        ConsumerCoordinatorMetrics coordinatorMetrics = new ConsumerCoordinatorMetrics(
+                subscriptionState,
+                new Metrics(),
+                "test-");
+        return new ConsumerRebalanceListenerInvoker(
+                new LogContext(),
+                subscriptionState,
+                new MockTime(1),
+                coordinatorMetrics
+        );
+    }
+
+    private SortedSet<TopicPartition> topicPartitions(TopicPartition... topicPartitions) {
+        SortedSet<TopicPartition> revokedPartitions = new TreeSet<>(new Utils.TopicPartitionComparator());
+        revokedPartitions.addAll(Arrays.asList(topicPartitions));
+        return revokedPartitions;
+    }
+
+    private void performCallback(MembershipManagerImpl membershipManager,
+                                 ConsumerRebalanceListenerInvoker invoker,
+                                 ConsumerRebalanceListenerMethodName methodName,
+                                 SortedSet<TopicPartition> partitions) {
+        // Set up our mock application event handler & background event processor.
+        ApplicationEventHandler applicationEventHandler = mock(ApplicationEventHandler.class);
+
+        doAnswer(a -> {
+            ConsumerRebalanceListenerCallbackCompletedEvent completedEvent = a.getArgument(0);
+            membershipManager.consumerRebalanceListenerCallbackCompleted(completedEvent);
+            return null;
+        }).when(applicationEventHandler).add(any(ConsumerRebalanceListenerCallbackCompletedEvent.class));
+
+        BackgroundEventProcessor backgroundEventProcessor = new BackgroundEventProcessor(
+                new LogContext(),
+                backgroundEventQueue,
+                applicationEventHandler,
+                invoker
+        );
+
+        // We expect only our enqueued event in the background queue.
+        assertEquals(1, backgroundEventQueue.size());
+        assertNotNull(backgroundEventQueue.peek());
+        assertInstanceOf(ConsumerRebalanceListenerCallbackNeededEvent.class, backgroundEventQueue.peek());
+        ConsumerRebalanceListenerCallbackNeededEvent neededEvent = (ConsumerRebalanceListenerCallbackNeededEvent) backgroundEventQueue.poll();
+        assertNotNull(neededEvent);
+        assertEquals(methodName, neededEvent.methodName());
+        assertEquals(partitions, neededEvent.partitions());
+
+        backgroundEventProcessor.process(neededEvent);
+    }
+
     private MembershipManagerImpl mockMemberSuccessfullyReceivesAndAcksAssignment(
             Uuid topicId, String topicName, List<Integer> partitions) {
         mockOwnedPartitionAndAssignmentReceived(topicId, topicName, Collections.emptySet(), true);
@@ -1091,5 +1275,64 @@ public class MembershipManagerImplTest {
                                 .setTopicId(topic2)
                                 .setPartitions(Arrays.asList(3, 4, 5))
                 ));
+    }
+
+    private static class CounterConsumerRebalanceListener implements ConsumerRebalanceListener {
+
+        private final AtomicInteger revokedCounter = new AtomicInteger();
+        private final AtomicInteger assignedCounter = new AtomicInteger();
+        private final AtomicInteger lostCounter = new AtomicInteger();
+
+        private final Optional<RuntimeException> revokedError;
+        private final Optional<RuntimeException> assignedError;
+        private final Optional<RuntimeException> lostError;
+
+        public CounterConsumerRebalanceListener() {
+            this(Optional.empty(), Optional.empty(), Optional.empty());
+        }
+
+        public CounterConsumerRebalanceListener(Optional<RuntimeException> revokedError,
+                                                Optional<RuntimeException> assignedError,
+                                                Optional<RuntimeException> lostError) {
+            this.revokedError = revokedError;
+            this.assignedError = assignedError;
+            this.lostError = lostError;
+        }
+
+        @Override
+        public void onPartitionsRevoked(Collection<TopicPartition> partitions) {
+            try {
+                if (revokedError.isPresent())
+                    throw revokedError.get();
+            } finally {
+                revokedCounter.incrementAndGet();
+            }
+        }
+
+        @Override
+        public void onPartitionsAssigned(Collection<TopicPartition> partitions) {
+            try {
+                if (assignedError.isPresent())
+                    throw assignedError.get();
+            } finally {
+                assignedCounter.incrementAndGet();
+            }
+        }
+
+        @Override
+        public void onPartitionsLost(Collection<TopicPartition> partitions) {
+            try {
+                if (lostError.isPresent())
+                    throw lostError.get();
+            } finally {
+                lostCounter.incrementAndGet();
+            }
+        }
+
+        public void assertCounts(int revokedCount, int assignedCount, int lostCount) {
+            assertEquals(revokedCount, revokedCounter.get());
+            assertEquals(assignedCount, assignedCounter.get());
+            assertEquals(lostCount, lostCounter.get());
+        }
     }
 }
