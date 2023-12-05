@@ -37,9 +37,7 @@ import org.slf4j.Logger;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.Iterator;
-import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -155,7 +153,7 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
     /**
      * Assignment that the member received from the server and successfully processed.
      */
-    private Set<TopicIdPartition> currentAssignment;
+    private Map<Uuid, SortedSet<Integer>> currentAssignment;
 
     /**
      * Subscription state object holding the current assignment the member has for the topics it
@@ -197,7 +195,7 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
      * received from the broker, even though they may not be ready to reconcile due to missing
      * metadata.
      */
-    private final Map<Uuid, List<Integer>> assignmentUnresolved;
+    private final Map<Uuid, SortedSet<Integer>> assignmentUnresolved;
 
     /**
      * Assignment received for which topic names have been resolved, so it's ready to be
@@ -264,7 +262,7 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
         this.assignedTopicNamesCache = new HashMap<>();
         this.assignmentUnresolved = new HashMap<>();
         this.assignmentReadyToReconcile = new TreeSet<>(TOPIC_ID_PARTITION_COMPARATOR);
-        this.currentAssignment = new HashSet<>();
+        this.currentAssignment = new HashMap<>();
         this.log = logContext.logger(MembershipManagerImpl.class);
     }
 
@@ -333,9 +331,19 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
 
         if (assignment != null) {
             replaceUnresolvedAssignmentWithNewAssignment(assignment);
-            assignmentReadyToReconcile.clear();
-            resolveMetadataForUnresolvedAssignment();
-            reconcile();
+            if (!assignmentUnresolved.equals(currentAssignment)) {
+                // Transition the member to RECONCILING when receiving a new target
+                // assignment from the broker, different from the current assignment. Note that the
+                // reconciliation might not be triggered just yet because of missing metadata.
+                transitionTo(MemberState.RECONCILING);
+                assignmentReadyToReconcile.clear();
+                resolveMetadataForUnresolvedAssignment();
+                reconcile();
+            } else {
+                log.debug("Target assignment {} received from the broker is equals to the member " +
+                        "current assignment {}. No reconciliation will be triggered.",
+                    assignmentUnresolved, currentAssignment);
+            }
         } else if (allPendingAssignmentsReconciled()) {
             transitionTo(MemberState.STABLE);
         }
@@ -358,7 +366,7 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
             ConsumerGroupHeartbeatResponseData.Assignment assignment) {
         assignmentUnresolved.clear();
         assignment.topicPartitions().forEach(topicPartitions ->
-                assignmentUnresolved.put(topicPartitions.topicId(), topicPartitions.partitions()));
+            assignmentUnresolved.put(topicPartitions.topicId(), new TreeSet<>(topicPartitions.partitions())));
     }
 
     /**
@@ -388,7 +396,7 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
                 log.error("onPartitionsLost callback invocation failed while releasing assignment" +
                         " after member got fenced. Member will rejoin the group anyways.", error);
             }
-            updateSubscription(Collections.emptySet(), true);
+            updateSubscription(new TreeSet<>(TOPIC_ID_PARTITION_COMPARATOR), true);
             transitionToJoining();
         });
     }
@@ -415,7 +423,7 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
                 log.error("onPartitionsLost callback invocation failed while releasing assignment" +
                         "after member failed with fatal error.", error);
             }
-            updateSubscription(Collections.emptySet(), true);
+            updateSubscription(new TreeSet<>(TOPIC_ID_PARTITION_COMPARATOR), true);
         });
     }
 
@@ -434,9 +442,12 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
      * @param assignedPartitions Topic partitions to take as the new subscription assignment
      * @param clearAssignments True if the pending assignments and metadata cache should be cleared
      */
-    private void updateSubscription(Collection<TopicPartition> assignedPartitions,
+    private void updateSubscription(SortedSet<TopicIdPartition> assignedPartitions,
                                     boolean clearAssignments) {
-        subscriptions.assignFromSubscribed(assignedPartitions);
+        Collection<TopicPartition> assignedTopicPartitions = toTopicPartitionSet(assignedPartitions);
+        subscriptions.assignFromSubscribed(assignedTopicPartitions);
+        // Make assignment effective on the member group manager.
+        updateCurrentAssignment(assignedPartitions);
         if (clearAssignments) {
             clearPendingAssignmentsAndLocalNamesCache();
         }
@@ -495,7 +506,7 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
         CompletableFuture<Void> callbackResult = invokeOnPartitionsRevokedOrLostToReleaseAssignment();
         callbackResult.whenComplete((result, error) -> {
             // Clear the subscription, no matter if the callback execution failed or succeeded.
-            updateSubscription(Collections.emptySet(), true);
+            updateSubscription(new TreeSet<>(TOPIC_ID_PARTITION_COMPARATOR), true);
 
             // Transition to ensure that a heartbeat request is sent out to effectively leave the
             // group (even in the case where the member had no assignment to release or when the
@@ -557,7 +568,7 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
         memberEpoch = groupInstanceId.isPresent() ?
                 ConsumerGroupHeartbeatRequest.LEAVE_GROUP_STATIC_MEMBER_EPOCH :
                 ConsumerGroupHeartbeatRequest.LEAVE_GROUP_MEMBER_EPOCH;
-        currentAssignment = new HashSet<>();
+        currentAssignment = new HashMap<>();
         transitionTo(MemberState.LEAVING);
     }
 
@@ -649,7 +660,10 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
         SortedSet<TopicPartition> assignedTopicPartitions = toTopicPartitionSet(assignedTopicIdPartitions);
 
         // Check same assignment. Based on topic names for now, until topic IDs are properly
-        // supported in the centralized subscription state object.
+        // supported in the centralized subscription state object. Note that this check is
+        // required to make sure that reconciliation is not triggered if the assignment ready to
+        // be reconciled is the same as the current one (even though the member may remain
+        // in RECONCILING state if it has some unresolved assignments).
         boolean sameAssignmentReceived = assignedTopicPartitions.equals(ownedPartitions);
 
         if (sameAssignmentReceived) {
@@ -699,7 +713,7 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
                     boolean memberHasRejoined = memberEpochOnReconciliationStart != memberEpoch;
                     if (state == MemberState.RECONCILING && !memberHasRejoined) {
                         // Apply assignment
-                        return assignPartitions(assignedTopicPartitions, addedPartitions);
+                        return assignPartitions(assignedTopicIdPartitions, addedPartitions);
                     } else {
                         log.debug("Revocation callback completed but the member already " +
                                 "transitioned out of the reconciling state for epoch {} into " +
@@ -727,9 +741,6 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
                     // Make assignment effective on the broker by transitioning to send acknowledge.
                     transitionTo(MemberState.ACKNOWLEDGING);
 
-                    // Make assignment effective on the member group manager.
-                    currentAssignment = assignedTopicIdPartitions;
-
                     // Indicate that we completed reconciling a subset of the assignment ready to
                     // reconcile (new assignments might have been received or discovered in
                     // metadata).
@@ -743,6 +754,15 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
         });
 
         return true;
+    }
+
+    // Visible for testing.
+    void updateCurrentAssignment(Set<TopicIdPartition> assignedTopicIdPartitions) {
+        currentAssignment.clear();
+        assignedTopicIdPartitions.forEach(topicIdPartition -> {
+            Uuid topicId = topicIdPartition.topicId();
+            currentAssignment.computeIfAbsent(topicId, k -> new TreeSet<>()).add(topicIdPartition.partition());
+        });
     }
 
     /**
@@ -802,11 +822,11 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
     private void resolveMetadataForUnresolvedAssignment() {
         // Try to resolve topic names from metadata cache or subscription cache, and move
         // assignments from the "unresolved" collection, to the "readyToReconcile" one.
-        Iterator<Map.Entry<Uuid, List<Integer>>> it = assignmentUnresolved.entrySet().iterator();
+        Iterator<Map.Entry<Uuid, SortedSet<Integer>>> it = assignmentUnresolved.entrySet().iterator();
         while (it.hasNext()) {
-            Map.Entry<Uuid, List<Integer>> e = it.next();
+            Map.Entry<Uuid, SortedSet<Integer>> e = it.next();
             Uuid topicId = e.getKey();
-            List<Integer> topicPartitions = e.getValue();
+            SortedSet<Integer> topicPartitions = e.getValue();
 
             Optional<String> nameFromMetadata = findTopicNameInGlobalOrLocalCache(topicId);
             nameFromMetadata.ifPresent(resolvedTopicName -> {
@@ -851,7 +871,7 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
      * and using the given topic name. Add the created TopicPartition to the
      * {@link #assignmentReadyToReconcile}.
      */
-    private void addToAssignmentReadyToReconcile(Uuid topicId, String topicName, List<Integer> topicPartitions) {
+    private void addToAssignmentReadyToReconcile(Uuid topicId, String topicName, SortedSet<Integer> topicPartitions) {
         topicPartitions.forEach(tp -> {
             TopicIdPartition topicIdPartition = new TopicIdPartition(
                     topicId,
@@ -946,7 +966,7 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
      * @return Future that will complete when the callback execution completes.
      */
     private CompletableFuture<Void> assignPartitions(
-            SortedSet<TopicPartition> assignedPartitions,
+            SortedSet<TopicIdPartition> assignedPartitions,
             SortedSet<TopicPartition> addedPartitions) {
 
         // Make assignment effective on the client by updating the subscription state.
@@ -956,7 +976,7 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
         CompletableFuture<Void> result = invokeOnPartitionsAssignedCallback(addedPartitions);
 
         // Clear topic names cache, removing topics that are not assigned to the member anymore.
-        Set<String> assignedTopics = assignedPartitions.stream().map(TopicPartition::topic).collect(Collectors.toSet());
+        Set<String> assignedTopics = assignedPartitions.stream().map(TopicIdPartition::topic).collect(Collectors.toSet());
         assignedTopicNamesCache.values().retainAll(assignedTopics);
 
         return result;
@@ -1061,7 +1081,7 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
      * {@inheritDoc}
      */
     @Override
-    public Set<TopicIdPartition> currentAssignment() {
+    public Map<Uuid, SortedSet<Integer>> currentAssignment() {
         return this.currentAssignment;
     }
 
