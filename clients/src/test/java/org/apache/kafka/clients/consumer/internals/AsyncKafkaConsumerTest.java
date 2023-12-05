@@ -225,30 +225,6 @@ public class AsyncKafkaConsumerTest {
     }
 
     @Test
-    public void testCommitted() {
-        Map<TopicPartition, OffsetAndMetadata> offsets = mockTopicPartitionOffset();
-        CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> committedFuture = new CompletableFuture<>();
-        committedFuture.complete(offsets);
-
-        try (MockedConstruction<FetchCommittedOffsetsApplicationEvent> ignored = offsetFetchEventMocker(committedFuture)) {
-            assertDoesNotThrow(() -> consumer.committed(offsets.keySet(), Duration.ofMillis(1000)));
-            verify(applicationEventHandler).add(ArgumentMatchers.isA(FetchCommittedOffsetsApplicationEvent.class));
-        }
-    }
-
-    @Test
-    public void testCommitted_ExceptionThrown() {
-        Map<TopicPartition, OffsetAndMetadata> offsets = mockTopicPartitionOffset();
-        CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> committedFuture = new CompletableFuture<>();
-        committedFuture.completeExceptionally(new KafkaException("Test exception"));
-
-        try (MockedConstruction<FetchCommittedOffsetsApplicationEvent> ignored = offsetFetchEventMocker(committedFuture)) {
-            assertThrows(KafkaException.class, () -> consumer.committed(offsets.keySet(), Duration.ofMillis(1000)));
-            verify(applicationEventHandler).add(ArgumentMatchers.isA(FetchCommittedOffsetsApplicationEvent.class));
-        }
-    }
-
-    @Test
     public void testWakeupBeforeCallingPoll() {
         final String topicName = "foo";
         final int partition = 3;
