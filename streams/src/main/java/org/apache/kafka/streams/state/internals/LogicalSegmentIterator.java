@@ -29,7 +29,7 @@ import java.util.ListIterator;
 import java.util.NoSuchElementException;
 
 public class LogicalSegmentIterator implements VersionedRecordIterator {
-    protected final ListIterator<LogicalKeyValueSegment> segmentIterator;
+    private final ListIterator<LogicalKeyValueSegment> segmentIterator;
     private final Bytes key;
     private final Long fromTime;
     private final Long toTime;
@@ -69,6 +69,7 @@ public class LogicalSegmentIterator implements VersionedRecordIterator {
         if (!open) {
             throw new IllegalStateException("The iterator is out of scope.");
         }
+        // since data is stored in descending order in the segments, check whether there is any previous record, if the order is Ascending.
         final boolean hasStillLoad = order.equals(ResultOrder.ASCENDING) ? iterator.hasPrevious() : iterator.hasNext();
         return hasStillLoad || maybeFillIterator();
     }
@@ -76,6 +77,7 @@ public class LogicalSegmentIterator implements VersionedRecordIterator {
     @Override
     public Object next() {
         if (hasNext()) {
+            // since data is stored in descending order in the segments, retrieve previous record, if the order is Ascending.
             return order.equals(ResultOrder.ASCENDING) ? iterator.previous() : iterator.next();
         }
         throw new NoSuchElementException();
@@ -88,6 +90,8 @@ public class LogicalSegmentIterator implements VersionedRecordIterator {
             final LogicalKeyValueSegment segment = segmentIterator.next();
 
             if (snapshot == null) { // create the snapshot (this will happen only one time).
+                // any (random) segment, the latestValueStore or any of the older ones, can be the snapshotOwner, because in
+                // fact all use the same physical RocksDB under-the-hood.
                 this.snapshotOwner = segment;
                 // take a RocksDB snapshot to return the segments content at the query time (in order to guarantee consistency)
                 this.snapshot = snapshotOwner.getSnapshot();
@@ -115,6 +119,7 @@ public class LogicalSegmentIterator implements VersionedRecordIterator {
             }
         }
         if (!queryResults.isEmpty()) {
+            // since data is stored in descending order in the segments, create the list in reverse order, if the order is Ascending.
             this.iterator = order.equals(ResultOrder.ASCENDING) ? queryResults.listIterator(queryResults.size()) : queryResults.listIterator();
             return true;
         }

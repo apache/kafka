@@ -186,8 +186,8 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
         final byte[] rawLatestValueAndTimestamp = latestValueStore.get(key);
         if (rawLatestValueAndTimestamp != null) {
             return new VersionedRecord<>(
-                    LatestValueFormatter.getValue(rawLatestValueAndTimestamp),
-                    LatestValueFormatter.getTimestamp(rawLatestValueAndTimestamp)
+                LatestValueFormatter.getValue(rawLatestValueAndTimestamp),
+                LatestValueFormatter.getTimestamp(rawLatestValueAndTimestamp)
             );
         } else {
             return null;
@@ -320,12 +320,12 @@ public class RocksDBVersionedStore implements VersionedKeyValueStore<Bytes, byte
             final PositionBound positionBound,
             final QueryConfig config) {
         return StoreQueryUtils.handleBasicQueries(
-                query,
-                positionBound,
-                config,
-                this,
-                position,
-                stateStoreContext
+            query,
+            positionBound,
+            config,
+            this,
+            position,
+            stateStoreContext
         );
     }
 

@@ -249,9 +249,9 @@ public final class StoreQueryUtils {
 
     @SuppressWarnings("unchecked")
     private static <R> QueryResult<R> runWindowKeyQuery(final Query<R> query,
-        final PositionBound positionBound,
-        final QueryConfig config,
-        final StateStore store) {
+                                                        final PositionBound positionBound,
+                                                        final QueryConfig config,
+                                                        final StateStore store) {
         if (store instanceof WindowStore) {
             final WindowKeyQuery<Bytes, byte[]> windowKeyQuery =
                 (WindowKeyQuery<Bytes, byte[]>) query;
@@ -285,9 +285,9 @@ public final class StoreQueryUtils {
 
     @SuppressWarnings("unchecked")
     private static <R> QueryResult<R> runWindowRangeQuery(final Query<R> query,
-        final PositionBound positionBound,
-        final QueryConfig config,
-        final StateStore store) {
+                                                          final PositionBound positionBound,
+                                                          final QueryConfig config,
+                                                          final StateStore store) {
         if (store instanceof WindowStore) {
             final WindowRangeQuery<Bytes, byte[]> windowRangeQuery =
                 (WindowRangeQuery<Bytes, byte[]>) query;
@@ -351,9 +351,9 @@ public final class StoreQueryUtils {
 
     @SuppressWarnings("unchecked")
     private static <R> QueryResult<R> runVersionedKeyQuery(final Query<R> query,
-        final PositionBound positionBound,
-        final QueryConfig config,
-        final StateStore store) {
+                                                           final PositionBound positionBound,
+                                                           final QueryConfig config,
+                                                           final StateStore store) {
         if (store instanceof VersionedKeyValueStore) {
             final VersionedKeyValueStore<Bytes, byte[]> versionedKeyValueStore =
                 (VersionedKeyValueStore<Bytes, byte[]>) store;

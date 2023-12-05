@@ -32,7 +32,6 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-import java.security.InvalidParameterException;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
@@ -300,15 +299,14 @@ public class MeteredVersionedKeyValueStoreTest {
         assertThrows(UnsupportedOperationException.class, () -> store.query(mock(KeyQuery.class), null, null));
     }
 
-    @SuppressWarnings("unchecked")
     @Test
     public void shouldThrowOnMultiVersionedKeyQueryInvalidTimeRange() {
-        MultiVersionedKeyQuery query = MultiVersionedKeyQuery.withKey("key");
+        MultiVersionedKeyQuery<String, Object> query = MultiVersionedKeyQuery.withKey("key");
         final Instant fromTime = Instant.now();
         final Instant toTime = Instant.ofEpochMilli(fromTime.toEpochMilli() - 100);
         query = query.fromTime(fromTime).toTime(toTime);
-        final MultiVersionedKeyQuery finalQuery = query;
-        final Exception exception = assertThrows(InvalidParameterException.class, () -> store.query(finalQuery, null, null));
+        final MultiVersionedKeyQuery<String, Object> finalQuery = query;
+        final Exception exception = assertThrows(IllegalArgumentException.class, () -> store.query(finalQuery, null, null));
         assertEquals("The `fromTime` timestamp must be smaller than the `toTime` timestamp.", exception.getMessage());
     }
 

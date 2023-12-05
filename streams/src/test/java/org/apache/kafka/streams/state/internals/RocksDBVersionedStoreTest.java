@@ -524,11 +524,11 @@ public class RocksDBVersionedStoreTest {
                                             Collections.singletonList(SEGMENT_INTERVAL - 5),
                                             Collections.singletonList(PUT_RETURN_CODE_VALID_TO_UNDEFINED));
 
-        // return two values for the query with time fromTimeStamp = toTimestamp
+        // return one value for the query with time fromTimeStamp = toTimestamp
         verifyTimestampedGetValueFromStore("k", SEGMENT_INTERVAL - 5, SEGMENT_INTERVAL - 5, ResultOrder.ANY,
-                                            Arrays.asList("v4", "v3"),
-                                            Arrays.asList(SEGMENT_INTERVAL - 5, SEGMENT_INTERVAL - 10),
-                                            Arrays.asList(PUT_RETURN_CODE_VALID_TO_UNDEFINED, SEGMENT_INTERVAL - 5));
+                                            Collections.singletonList("v4"),
+                                            Collections.singletonList(SEGMENT_INTERVAL - 5),
+                                            Collections.singletonList(PUT_RETURN_CODE_VALID_TO_UNDEFINED));
 
         // return one values for the query with time fromTimeStamp = toTimestamp
         verifyTimestampedGetValueFromStore("k", SEGMENT_INTERVAL - 4, SEGMENT_INTERVAL - 4, ResultOrder.ANY,
@@ -559,12 +559,6 @@ public class RocksDBVersionedStoreTest {
                                             Arrays.asList("v4", "v3", "v2", "v1"),
                                             Arrays.asList(SEGMENT_INTERVAL - 5, SEGMENT_INTERVAL - 10, SEGMENT_INTERVAL - 25, SEGMENT_INTERVAL - 30),
                                             Arrays.asList(PUT_RETURN_CODE_VALID_TO_UNDEFINED, SEGMENT_INTERVAL - 5, SEGMENT_INTERVAL - 20, SEGMENT_INTERVAL - 25));
-
-        // return the valid record that is still valid till the beginning of query time range (validTo = query lower time bound)
-        verifyTimestampedGetValueFromStore("k", SEGMENT_INTERVAL - 20, SEGMENT_INTERVAL - 15, ResultOrder.ANY,
-                                            Collections.singletonList("v2"),
-                                            Collections.singletonList(SEGMENT_INTERVAL - 25),
-                                            Collections.singletonList(SEGMENT_INTERVAL - 20));
 
         // return the valid record that has been inserted at the end of query time range (validFrom = query upper time bound)
         verifyTimestampedGetValueFromStore("k", SEGMENT_INTERVAL - 15, SEGMENT_INTERVAL - 10, ResultOrder.ANY,
