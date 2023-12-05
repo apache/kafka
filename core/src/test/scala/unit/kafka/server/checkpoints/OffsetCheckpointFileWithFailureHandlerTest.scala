@@ -97,7 +97,7 @@ class OffsetCheckpointFileWithFailureHandlerTest extends Logging {
     val logDirFailureChannel = new LogDirFailureChannel(10)
     val checkpointFile = new CheckpointFileWithFailureHandler(file, OffsetCheckpointFile.CurrentVersion + 1,
       OffsetCheckpointFile.Formatter, logDirFailureChannel, file.getParent)
-    checkpointFile.write(Collections.singletonList(new TopicPartition("foo", 5) -> 10L))
+    checkpointFile.write(Collections.singletonList(new TopicPartition("foo", 5) -> 10L), true)
     assertThrows(classOf[KafkaStorageException], () => new OffsetCheckpointFile(checkpointFile.file, logDirFailureChannel).read())
   }
 

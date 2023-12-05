@@ -38,17 +38,20 @@
 
   <!-- anyone can use public classes -->
   <allow pkg="org.apache.kafka.common" exact-match="true" />
+  <allow pkg="org.apache.kafka.common.cache" />
   <allow pkg="org.apache.kafka.common.config" />
   <allow pkg="org.apache.kafka.common.security" />
   <allow pkg="org.apache.kafka.common.serialization" />
   <allow pkg="org.apache.kafka.common.utils" />
   <allow pkg="org.apache.kafka.common.errors" exact-match="true" />
   <allow pkg="org.apache.kafka.common.memory" />
+  <allow pkg="org.apache.kafka.common.network" />
 
   <!-- protocol, records and request/response utilities -->
   <allow pkg="org.apache.kafka.clients" />
   <allow pkg="org.apache.kafka.common.message" />
   <allow pkg="org.apache.kafka.common.protocol" />
+  <allow pkg="org.apache.kafka.common.record" />
   <allow pkg="org.apache.kafka.common.requests" />
 
   <!-- utilities and reusable classes from server-common -->
@@ -57,5 +60,13 @@
 
   <!-- persistent collection factories/non-library-specific wrappers -->
   <allow pkg="org.apache.kafka.server.immutable" exact-match="true" />
+
+  <!-- server-metrics specific classes -->
+  <allow pkg="org.apache.kafka.server.metrics" />
+
+  <subpackage name="metrics">
+    <allow class="org.apache.kafka.server.authorizer.AuthorizableRequestContext" />
+    <allow pkg="org.apache.kafka.server.telemetry" />
+  </subpackage>
 
 </import-control>

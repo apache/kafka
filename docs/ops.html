@@ -15,7 +15,9 @@
  limitations under the License.
 -->
 
-  Here is some information on actually running Kafka as a production system based on usage and experience at LinkedIn. Please send us any additional tips you know of.
+<script id="ops-template" type="text/x-handlebars-template">
+
+  <p>Here is some information on actually running Kafka as a production system. Please send us any additional tips you know of.</p>
 
   <h3 class="anchor-heading"><a id="basic_ops" class="anchor-link"></a><a href="#basic_ops">6.1 Basic Kafka Operations</a></h3>
 
@@ -368,13 +370,13 @@
   There are two interfaces that can be used to engage a throttle. The simplest, and safest, is to apply a throttle when invoking the kafka-reassign-partitions.sh, but kafka-configs.sh can also be used to view and alter the throttle values directly.
   <p></p>
   So for example, if you were to execute a rebalance, with the below command, it would move partitions at no more than 50MB/s.
-  <pre class="language-bash">$ bin/kafka-reassign-partitions.sh --bootstrap-server localhost:9092 --execute --reassignment-json-file bigger-cluster.json --throttle 50000000</code></pre>
+  <pre class="language-bash">$ bin/kafka-reassign-partitions.sh --bootstrap-server localhost:9092 --execute --reassignment-json-file bigger-cluster.json --throttle 50000000</pre>
   When you execute this script you will see the throttle engage:
   <pre class="line-numbers"><code class="language-bash">  The inter-broker throttle limit was set to 50000000 B/s
   Successfully started partition reassignment for foo1-0</code></pre>
   <p>Should you wish to alter the throttle, during a rebalance, say to increase the throughput so it completes quicker, you can do this by re-running the execute command with the --additional option passing the same reassignment-json-file:</p>
   <pre class="language-bash">$ bin/kafka-reassign-partitions.sh --bootstrap-server localhost:9092  --additional --execute --reassignment-json-file bigger-cluster.json --throttle 700000000
-  The inter-broker throttle limit was set to 700000000 B/s</code></pre>
+  The inter-broker throttle limit was set to 700000000 B/s</pre>
 
   <p>Once the rebalance completes the administrator can check the status of the rebalance using the --verify option.
       If the rebalance has completed, the throttle will be removed via the --verify command. It is important that
@@ -446,12 +448,12 @@
   <p><i>(2) Ensuring Progress:</i></p>
   <p>If the throttle is set too low, in comparison to the incoming write rate, it is possible for replication to not
       make progress. This occurs when:</p>
-  <pre>max(BytesInPerSec) > throttle</code></pre>
+  <pre>max(BytesInPerSec) > throttle</pre>
   <p>
       Where BytesInPerSec is the metric that monitors the write throughput of producers into each broker. </p>
   <p>The administrator can monitor whether replication is making progress, during the rebalance, using the metric:</p>
 
-  <pre>kafka.server:type=FetcherLagMetrics,name=ConsumerLag,clientId=([-.\w]+),topic=([-.\w]+),partition=([0-9]+)</code></pre>
+  <pre>kafka.server:type=FetcherLagMetrics,name=ConsumerLag,clientId=([-.\w]+),topic=([-.\w]+),partition=([0-9]+)</pre>
 
   <p>The lag should constantly decrease during replication. If the metric does not decrease the administrator should
       increase the
@@ -518,7 +520,7 @@
   <p>
   This is not the only possible deployment pattern. It is possible to read from or write to a remote Kafka cluster over the WAN, though obviously this will add whatever latency is required to get the cluster.
   <p>
-  Kafka naturally batches data in both the producer and consumer so it can achieve high-throughput even over a high-latency connection. To allow this though it may be necessary to increase the TCP socket buffer sizes for the producer, consumer, and broker using the <code>socket.send.buffer.bytes</code> and <code>socket.receive.buffer.bytes</code> configurations. The appropriate way to set this is documented <a href="http://en.wikipedia.org/wiki/Bandwidth-delay_product">here</a>.
+  Kafka naturally batches data in both the producer and consumer so it can achieve high-throughput even over a high-latency connection. To allow this though it may be necessary to increase the TCP socket buffer sizes for the producer, consumer, and broker using the <code>socket.send.buffer.bytes</code> and <code>socket.receive.buffer.bytes</code> configurations. The appropriate way to set this is documented <a href="https://en.wikipedia.org/wiki/Bandwidth-delay_product">here</a>.
   <p>
   It is generally <i>not</i> advisable to run a <i>single</i> Kafka cluster that spans multiple datacenters over a high-latency link. This will incur very high replication latency both for Kafka writes and ZooKeeper writes, and neither Kafka nor ZooKeeper will remain available in all locations if the network between locations is unavailable.
 
@@ -700,14 +702,14 @@ us-east.admin.bootstrap.servers = broker8-secondary:9092
     Exactly-once semantics are supported for dedicated MirrorMaker clusters as of version 3.5.0.</p>
   
   <p>
-    For new MirrorMaker clusters, set the <code>exactly.once.source.support</code> property to enabled for all targeted Kafka clusters that should be written to with exactly-once semantics. For example, to enable exactly-once for writes to cluster </code>us-east</code>, the following configuration can be used:
+    For new MirrorMaker clusters, set the <code>exactly.once.source.support</code> property to enabled for all targeted Kafka clusters that should be written to with exactly-once semantics. For example, to enable exactly-once for writes to cluster <code>us-east</code>, the following configuration can be used:
   </p>
 
 <pre class="line-numbers"><code class="language-text">us-east.exactly.once.source.support = enabled
 </code></pre>
   
   <p>
-    For existing MirrorMaker clusters, a two-step upgrade is necessary. Instead of immediately setting the <code>exactly.once.source.support</code> property to enabled, first set it to <code>preparing</code> on all nodes in the cluster. Once this is complete, it can be set to </code>enabled</code> on all nodes in the cluster, in a second round of restarts.
+    For existing MirrorMaker clusters, a two-step upgrade is necessary. Instead of immediately setting the <code>exactly.once.source.support</code> property to enabled, first set it to <code>preparing</code> on all nodes in the cluster. Once this is complete, it can be set to <code>enabled</code> on all nodes in the cluster, in a second round of restarts.
   </p>
   
   <p>
@@ -1324,8 +1326,8 @@ $ bin/kafka-acls.sh \
   It is unlikely to require much OS-level tuning, but there are three potentially important OS-level configurations:
   <ul>
       <li>File descriptor limits: Kafka uses file descriptors for log segments and open connections. If a broker hosts many partitions, consider that the broker needs at least (number_of_partitions)*(partition_size/segment_size) to track all log segments in addition to the number of connections the broker makes. We recommend at least 100000 allowed file descriptors for the broker processes as a starting point. Note: The mmap() function adds an extra reference to the file associated with the file descriptor fildes which is not removed by a subsequent close() on that file descriptor. This reference is removed when there are no more mappings to the file.
-      <li>Max socket buffer size: can be increased to enable high-performance data transfer between data centers as <a href="http://www.psc.edu/index.php/networking/641-tcp-tune">described here</a>.
-      <li>Maximum number of memory map areas a process may have (aka vm.max_map_count). <a href="http://kernel.org/doc/Documentation/sysctl/vm.txt">See the Linux kernel documentation</a>. You should keep an eye at this OS-level property when considering the maximum number of partitions a broker may have. By default, on a number of Linux systems, the value of vm.max_map_count is somewhere around 65535. Each log segment, allocated per partition, requires a pair of index/timeindex files, and each of these files consumes 1 map area. In other words, each log segment uses 2 map areas. Thus, each partition requires minimum 2 map areas, as long as it hosts a single log segment. That is to say, creating 50000 partitions on a broker will result allocation of 100000 map areas and likely cause broker crash with OutOfMemoryError (Map failed) on a system with default vm.max_map_count. Keep in mind that the number of log segments per partition varies depending on the segment size, load intensity, retention policy and, generally, tends to be more than one.
+      <li>Max socket buffer size: can be increased to enable high-performance data transfer between data centers as <a href="https://www.psc.edu/index.php/networking/641-tcp-tune">described here</a>.
+      <li>Maximum number of memory map areas a process may have (aka vm.max_map_count). <a href="https://kernel.org/doc/Documentation/sysctl/vm.txt">See the Linux kernel documentation</a>. You should keep an eye at this OS-level property when considering the maximum number of partitions a broker may have. By default, on a number of Linux systems, the value of vm.max_map_count is somewhere around 65535. Each log segment, allocated per partition, requires a pair of index/timeindex files, and each of these files consumes 1 map area. In other words, each log segment uses 2 map areas. Thus, each partition requires minimum 2 map areas, as long as it hosts a single log segment. That is to say, creating 50000 partitions on a broker will result allocation of 100000 map areas and likely cause broker crash with OutOfMemoryError (Map failed) on a system with default vm.max_map_count. Keep in mind that the number of log segments per partition varies depending on the segment size, load intensity, retention policy and, generally, tends to be more than one.
   </ul>
   <p>
 
@@ -1353,14 +1355,14 @@ $ bin/kafka-acls.sh \
 
   <h4 class="anchor-heading"><a id="linuxflush" class="anchor-link"></a><a href="#linuxflush">Understanding Linux OS Flush Behavior</a></h4>
 
-  In Linux, data written to the filesystem is maintained in <a href="http://en.wikipedia.org/wiki/Page_cache">pagecache</a> until it must be written out to disk (due to an application-level fsync or the OS's own flush policy). The flushing of data is done by a set of background threads called pdflush (or in post 2.6.32 kernels "flusher threads").
+  In Linux, data written to the filesystem is maintained in <a href="https://en.wikipedia.org/wiki/Page_cache">pagecache</a> until it must be written out to disk (due to an application-level fsync or the OS's own flush policy). The flushing of data is done by a set of background threads called pdflush (or in post 2.6.32 kernels "flusher threads").
   <p>
   Pdflush has a configurable policy that controls how much dirty data can be maintained in cache and for how long before it must be written back to disk.
-  This policy is described <a href="http://web.archive.org/web/20160518040713/http://www.westnet.com/~gsmith/content/linux-pdflush.htm">here</a>.
+  This policy is described <a href="https://web.archive.org/web/20160518040713/http://www.westnet.com/~gsmith/content/linux-pdflush.htm">here</a>.
   When Pdflush cannot keep up with the rate of data being written it will eventually cause the writing process to block incurring latency in the writes to slow down the accumulation of data.
   <p>
   You can see the current state of OS memory usage by doing
-  <pre class="language-bash"> &gt; cat /proc/meminfo </code></pre>
+  <pre class="language-bash"> &gt; cat /proc/meminfo</pre>
   The meaning of these values are described in the link above.
   <p>
   Using pagecache has several advantages over an in-process cache for storing data that will be written out to disk:
@@ -3570,7 +3572,7 @@ for built-in state stores, currently we have:
   <h3 class="anchor-heading"><a id="zk" class="anchor-link"></a><a href="#zk">6.9 ZooKeeper</a></h3>
 
   <h4 class="anchor-heading"><a id="zkversion" class="anchor-link"></a><a href="#zkversion">Stable version</a></h4>
-  The current stable branch is 3.5. Kafka is regularly updated to include the latest release in the 3.5 series.
+  The current stable branch is 3.8. Kafka is regularly updated to include the latest release in the 3.8 series.
   
   <h4 class="anchor-heading"><a id="zk_depr" class="anchor-link"></a><a href="#zk_depr">ZooKeeper Deprecation</a></h4>
   <p>With the release of Apache Kafka 3.5, Zookeeper is now marked deprecated. Removal of ZooKeeper is planned in the next major release of Apache Kafka (version 4.0),
@@ -3579,7 +3581,7 @@ for built-in state stores, currently we have:
      see <a href="#kraft_missing">current missing features</a> for more information.</p>
 
     <h5 class="anchor-heading"><a id="zk_depr_migration" class="anchor-link"></a><a href="#zk_drep_migration">Migration</a></h5>
-    <p>Migration of an existing ZooKeeper based Kafka cluster to KRaft is currently Preview and we expect it to be ready for production usage in version 3.6. Users are recommended to begin planning for migration to KRaft and also begin testing to provide any feedback. Refer to <a href="#kraft_zk_migration">ZooKeeper to KRaft Migration</a> for details on how to perform a live migration from ZooKeeper to KRaft and current limitations.</p>
+    <p>Users are recommended to begin planning for migration to KRaft and also begin testing to provide any feedback. Refer to <a href="#kraft_zk_migration">ZooKeeper to KRaft Migration</a> for details on how to perform a live migration from ZooKeeper to KRaft and current limitations.</p>
 	
     <h5 class="anchor-heading"><a id="zk_depr_3xsupport" class="anchor-link"></a><a href="#zk_depr_3xsupport">3.x and ZooKeeper Support</a></h5>
     <p>The final 3.x minor release, that supports ZooKeeper mode, will receive critical bug fixes and security fixes for 12 months after its release.</p>
@@ -3750,9 +3752,8 @@ foo
 
   <h3>Preparing for migration</h3>
   <p>
-    Before beginning the migration, the Kafka brokers must be upgraded to software version 3.5.0 and have the
-    "inter.broker.protocol.version" configuration set to "3.5". See <a href="#upgrade_3_5_0">Upgrading to 3.5.0</a> for
-    upgrade instructions.
+    Before beginning the migration, the Kafka brokers must be upgraded to software version {{fullDotVersion}} and have the
+    "inter.broker.protocol.version" configuration set to "{{dotVersion}}".
   </p>
 
   <p>
@@ -3833,7 +3834,7 @@ advertised.listeners=PLAINTEXT://localhost:9092
 listener.security.protocol.map=PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT
 
 # Set the IBP
-inter.broker.protocol.version=3.5
+inter.broker.protocol.version={{dotVersion}}
 
 # Enable the migration
 zookeeper.metadata.migration.enable=true
@@ -3875,7 +3876,7 @@ advertised.listeners=PLAINTEXT://localhost:9092
 listener.security.protocol.map=PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT
 
 # Don't set the IBP, KRaft uses "metadata.version" feature flag
-# inter.broker.protocol.version=3.5
+# inter.broker.protocol.version={{dotVersion}}
 
 # Remove the migration enabled flag
 # zookeeper.metadata.migration.enable=true
@@ -3973,9 +3974,8 @@ listeners=CONTROLLER://:9093
   <li><code>retention.bytes</code></li>
 </ul>
 
-  The configuration prefixed with <code>local</code> are to specify the time/size the "local" log file can accept before moving to remote storage, and then get deleted.
-  If unset, The value in <code>retention.ms</code> and <code>retention.bytes</code> will be used.
-</p>
+  <p>The configuration prefixed with <code>local</code> are to specify the time/size the "local" log file can accept before moving to remote storage, and then get deleted.
+  If unset, The value in <code>retention.ms</code> and <code>retention.bytes</code> will be used.</p>
 
 <h4 class="anchor-heading"><a id="tiered_storage_config_ex" class="anchor-link"></a><a href="#tiered_storage_config_ex">Quick Start Example</a></h4>
 
@@ -3986,7 +3986,7 @@ listeners=CONTROLLER://:9093
 
 <p>To adopt the `LocalTieredStorage`, the test library needs to be built locally</p>
 <pre># please checkout to the specific version tag you're using before building it
-# ex: `git checkout 3.6.0`
+# ex: `git checkout {{fullDotVersion}}`
 ./gradlew clean :storage:testJar</pre>
 <p>After build successfully, there should be a `kafka-storage-x.x.x-test.jar` file under `storage/build/libs`.
 Next, setting configurations in the broker side to enable tiered storage feature.</p>
@@ -4002,7 +4002,7 @@ remote.log.metadata.manager.listener.name=PLAINTEXT
 # This is the mandatory configuration for tiered storage.
 # Here, we use the `LocalTieredStorage` built above.
 remote.log.storage.manager.class.name=org.apache.kafka.server.log.remote.storage.LocalTieredStorage
-remote.log.storage.manager.class.path=/PATH/TO/kafka-storage-x.x.x-test.jar
+remote.log.storage.manager.class.path=/PATH/TO/kafka-storage-{{fullDotVersion}}-test.jar
 
 # These 2 prefix are default values, but customizable
 remote.log.storage.manager.impl.prefix=rsm.config.
@@ -4018,7 +4018,6 @@ rlmm.config.remote.log.metadata.topic.replication.factor=1
 # Try to speed up the log retention check interval for testing
 log.retention.check.interval.ms=1000
 </pre>
-</p>
 
 <p>Following <a href="#quickstart_startserver">quick start guide</a> to start up the kafka environment.
   Then, create a topic with tiered storage enabled with configs:
@@ -4035,7 +4034,6 @@ bin/kafka-topics.sh --create --topic tieredTopic --bootstrap-server localhost:90
 --config remote.storage.enable=true --config local.retention.ms=1000 --config retention.ms=3600000 \
 --config segment.bytes=1048576 --config file.delete.delay.ms=1000
 </pre>
-</p>
 
 <p>Try to send messages to the `tieredTopic` topic to roll the log segment:</p>
 
@@ -4076,7 +4074,6 @@ bin/kafka-producer-perf-test.sh --topic tieredTopic --num-records 1200 --record-
   <li>Deleting tiered storage enabled topics is required before disabling tiered storage at the broker level</li>
   <li>Admin actions related to tiered storage feature are only supported on clients from version 3.0 onwards</li>
 </ul>
-</p>
 
 <p>For more information, please check <a href="https://cwiki.apache.org/confluence/display/KAFKA/Kafka+Tiered+Storage+Early+Access+Release+Notes">Tiered Storage Early Access Release Note</a>.
 </p>

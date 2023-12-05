@@ -866,8 +866,8 @@ public class LegacyKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             offsets = coordinator.fetchCommittedOffsets(partitions, time.timer(timeout));
             if (offsets == null) {
                 throw new TimeoutException("Timeout of " + timeout.toMillis() + "ms expired before the last " +
-                        "committed offset for partitions " + partitions + " could be determined. Try tuning default.api.timeout.ms " +
-                        "larger to relax the threshold.");
+                        "committed offset for partitions " + partitions + " could be determined. Try tuning " +
+                        ConsumerConfig.DEFAULT_API_TIMEOUT_MS_CONFIG + " larger to relax the threshold.");
             } else {
                 offsets.forEach(this::updateLastSeenEpochIfNewer);
                 return offsets;
