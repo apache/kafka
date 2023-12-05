@@ -110,20 +110,18 @@ public class ClientMetricsCommand {
             this.adminClient = Admin.create(config);
         }
 
-        public ClientMetricsService(Admin adminClient) {
+        // Visible for testing
+        ClientMetricsService(Admin adminClient) {
             this.adminClient = adminClient;
         }
 
         public void alterClientMetrics(ClientMetricsCommandOptions opts) throws Exception {
             String entityName = opts.hasGenerateNameOption() ? Uuid.randomUuid().toString() : opts.name().get();
 
-            HashMap<String, String> configsToBeSet = new HashMap<>();
-            opts.metrics().ifPresent(
-                    metricslist -> configsToBeSet.put("metrics", metricslist.stream().collect(Collectors.joining(","))));
+            Map<String, String> configsToBeSet = new HashMap<>();
             opts.interval().map(intervalVal -> configsToBeSet.put("interval.ms", intervalVal.toString()));
             opts.metrics().map(metricslist -> metricslist.stream().collect(Collectors.joining(",")));
-            opts.match().ifPresent(
-                    matchlist -> configsToBeSet.put("match", matchlist.stream().collect(Collectors.joining(","))));
+            opts.match().map(matchlist -> configsToBeSet.put("match", matchlist.stream().collect(Collectors.joining(","))));
 
             ConfigResource configResource = new ConfigResource(ConfigResource.Type.CLIENT_METRICS, entityName);
             AlterConfigsOptions alterOptions = new AlterConfigsOptions().timeoutMs(30000).validateOnly(false);
