@@ -46,8 +46,8 @@ public interface StandbyUpdateListener {
      * loading. Therefore, if you need to do any extended processing or connect to an external service,
      * consider doing so asynchronously.
      *
-     * @param topicPartition the TopicPartition containing the values to restore
-     * @param storeName the name of the store undergoing restoration
+     * @param topicPartition the changelog TopicPartition for this standby task
+     * @param storeName the name of the store being loaded
      * @param batchEndOffset batchEndOffset the changelog end offset (inclusive) of the batch that was just loaded
      * @param batchSize the total number of records in the batch that was just loaded
      * @param currentEndOffset the current end offset of the changelog topic partition.
@@ -70,8 +70,8 @@ public interface StandbyUpdateListener {
      * and beginning restoration. In other words, this will always called before the corresponding 
      * {@link StateRestoreListener#onRestoreStart} call is made.
      *
-     * @param topicPartition the TopicPartition containing the values to restore
-     * @param storeName the name of the store undergoing restoration
+     * @param topicPartition the changelog TopicPartition for this standby task
+     * @param storeName the name of the store being loaded
      * @param storeOffset is the offset of the last changelog record that was read and put into the store at the time
      * of suspension.
      * @param currentEndOffset the current end offset of the changelog topic partition.
