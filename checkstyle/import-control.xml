@@ -324,6 +324,14 @@
       <allow pkg="kafka.server" />
       <allow pkg="scala" />
     </subpackage>
+
+    <subpackage name="other">
+      <allow pkg="org.apache.kafka.tools.reassign"/>
+      <allow pkg="kafka.log" />
+      <allow pkg="org.jfree"/>
+      <allow pkg="javax.imageio" />
+      <allow pkg="scala" />
+    </subpackage>
   </subpackage>
 
   <subpackage name="trogdor">
