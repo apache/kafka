@@ -1275,15 +1275,14 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
      */
     private boolean updateFetchPositions(final Timer timer) {
         try {
+            cachedSubscriptionHasAllFetchPositions = subscriptions.hasAllFetchPositions();
+            if (cachedSubscriptionHasAllFetchPositions) return true;
+
             // Validate positions using the partition leader end offsets, to detect if any partition
             // has been truncated due to a leader change. This will trigger an OffsetForLeaderEpoch
             // request, retrieve the partition end offsets, and validate the current position against it.
             // If the timer is not expired, wait for the validation, otherwise, just request it.
-            if (timer.notExpired()) {
-                applicationEventHandler.addAndGet(new ValidatePositionsApplicationEvent(), timer);
-            } else {
-                applicationEventHandler.add(new ValidatePositionsApplicationEvent());
-            }
+            applicationEventHandler.addAndGet(new ValidatePositionsApplicationEvent(), timer);
 
             cachedSubscriptionHasAllFetchPositions = subscriptions.hasAllFetchPositions();
             if (cachedSubscriptionHasAllFetchPositions) return true;
@@ -1307,11 +1306,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             // partition offsets according to the strategy (ex. earliest, latest), and update the
             // positions.
             // If the timer is not expired, wait for the reset, otherwise, just request it.
-            if (timer.notExpired()) {
-                applicationEventHandler.addAndGet(new ResetPositionsApplicationEvent(), timer);
-            } else {
-                applicationEventHandler.add(new ResetPositionsApplicationEvent());
-            }
+            applicationEventHandler.addAndGet(new ResetPositionsApplicationEvent(), timer);
             return true;
         } catch (TimeoutException e) {
             return false;

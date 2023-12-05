@@ -107,6 +107,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.atLeast;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doThrow;
@@ -967,21 +968,24 @@ public class AsyncKafkaConsumerTest {
         consumer.assign(singleton(new TopicPartition("t1", 1)));
 
         try (MockedConstruction<FetchCommittedOffsetsApplicationEvent> ignored = offsetFetchEventMocker(committedFuture)) {
-            // Poll with 0 timeout to run a single iteration of the poll loop
-            consumer.poll(Duration.ofMillis(0));
+            // Poll with 250ms timeout to run at least a single iteration of the poll loop
+            consumer.poll(Duration.ofMillis(250));
 
-            verify(applicationEventHandler).add(ArgumentMatchers.isA(ValidatePositionsApplicationEvent.class));
+            verify(applicationEventHandler, atLeast(1))
+                .addAndGet(ArgumentMatchers.isA(ValidatePositionsApplicationEvent.class), ArgumentMatchers.isA(Timer.class));
 
             if (committedOffsetsEnabled) {
                 // Verify there was an FetchCommittedOffsets event and no ResetPositions event
-                verify(applicationEventHandler).add(ArgumentMatchers.isA(FetchCommittedOffsetsApplicationEvent.class));
-                verify(applicationEventHandler,
-                        never()).add(ArgumentMatchers.isA(ResetPositionsApplicationEvent.class));
+                verify(applicationEventHandler, atLeast(1))
+                    .addAndGet(ArgumentMatchers.isA(FetchCommittedOffsetsApplicationEvent.class), ArgumentMatchers.isA(Timer.class));
+                verify(applicationEventHandler, never())
+                    .addAndGet(ArgumentMatchers.isA(ResetPositionsApplicationEvent.class), ArgumentMatchers.isA(Timer.class));
             } else {
                 // Verify there was not any FetchCommittedOffsets event but there should be a ResetPositions
-                verify(applicationEventHandler,
-                        never()).add(ArgumentMatchers.isA(FetchCommittedOffsetsApplicationEvent.class));
-                verify(applicationEventHandler).add(ArgumentMatchers.isA(ResetPositionsApplicationEvent.class));
+                verify(applicationEventHandler, never())
+                    .addAndGet(ArgumentMatchers.isA(FetchCommittedOffsetsApplicationEvent.class), ArgumentMatchers.isA(Timer.class));
+                verify(applicationEventHandler, atLeast(1))
+                    .addAndGet(ArgumentMatchers.isA(ResetPositionsApplicationEvent.class), ArgumentMatchers.isA(Timer.class));
             }
         }
     }
@@ -992,12 +996,15 @@ public class AsyncKafkaConsumerTest {
         committedFuture.complete(committedOffsets);
         consumer.assign(partitions);
         try (MockedConstruction<FetchCommittedOffsetsApplicationEvent> ignored = offsetFetchEventMocker(committedFuture)) {
-            // Poll with 0 timeout to run a single iteration of the poll loop
-            consumer.poll(Duration.ofMillis(0));
+            // Poll with 250ms timeout to run at least a single iteration of the poll loop
+            consumer.poll(Duration.ofMillis(250));
 
-            verify(applicationEventHandler).add(ArgumentMatchers.isA(ValidatePositionsApplicationEvent.class));
-            verify(applicationEventHandler).add(ArgumentMatchers.isA(FetchCommittedOffsetsApplicationEvent.class));
-            verify(applicationEventHandler).add(ArgumentMatchers.isA(ResetPositionsApplicationEvent.class));
+            verify(applicationEventHandler, atLeast(1))
+                .addAndGet(ArgumentMatchers.isA(ValidatePositionsApplicationEvent.class), ArgumentMatchers.isA(Timer.class));
+            verify(applicationEventHandler, atLeast(1))
+                .addAndGet(ArgumentMatchers.isA(FetchCommittedOffsetsApplicationEvent.class), ArgumentMatchers.isA(Timer.class));
+            verify(applicationEventHandler, atLeast(1))
+                .addAndGet(ArgumentMatchers.isA(ResetPositionsApplicationEvent.class), ArgumentMatchers.isA(Timer.class));
         }
     }
 
