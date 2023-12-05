@@ -1074,9 +1074,9 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             return;
 
         try {
-            timer.update();
             // If the consumer is in a group, we will pause and revoke all assigned partitions
             onLeavePrepare().get(timer.remainingMs(), TimeUnit.MILLISECONDS);
+            timer.update();
         } catch (Exception e) {
             Exception exception = e;
             if (e instanceof ExecutionException)
