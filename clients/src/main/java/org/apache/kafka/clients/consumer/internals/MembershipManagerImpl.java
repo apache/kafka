@@ -340,9 +340,18 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
                 resolveMetadataForUnresolvedAssignment();
                 reconcile();
             } else {
+                // Same assignment received, nothing to reconcile.
                 log.debug("Target assignment {} received from the broker is equals to the member " +
-                        "current assignment {}. No reconciliation will be triggered.",
+                        "current assignment {}. Nothing to reconcile.",
                     assignmentUnresolved, currentAssignment);
+                // Make sure we transition the member back to STABLE if it was RECONCILING (ex.
+                // member was RECONCILING unresolved assignments that were just removed by the
+                // broker).
+                if (state == MemberState.RECONCILING) {
+                    // This is the case where a member was RECONCILING an unresolved
+                    // assignment that was removed by the broker in a following assignment.
+                    transitionTo(MemberState.STABLE);
+                }
             }
         } else if (allPendingAssignmentsReconciled()) {
             transitionTo(MemberState.STABLE);

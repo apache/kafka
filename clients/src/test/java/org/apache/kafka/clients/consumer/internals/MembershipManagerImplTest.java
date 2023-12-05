@@ -47,6 +47,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.ArgumentMatchers.anySet;
@@ -658,6 +659,36 @@ public class MembershipManagerImplTest {
         membershipManager.onHeartbeatRequestSent();
         assertEquals(MemberState.STABLE, membershipManager.state());
         assertTrue(membershipManager.topicsWaitingForMetadata().isEmpty());
+    }
+
+    /**
+     * This test ensures that member goes back to STABLE when the broker sends assignment that
+     * removes the unresolved target the client has, without triggering a reconciliation. In this
+     * case the member should discard the assignment that was unresolved and go back to STABLE with
+     * nothing to reconcile.
+     */
+    @Test
+    public void testNewEmptyAssignmentReplacesPreviousOneWaitingOnMetadata() {
+        MembershipManagerImpl membershipManager = mockJoinAndReceiveAssignment(false);
+        assertEquals(MemberState.RECONCILING, membershipManager.state());
+        assertTrue(membershipManager.topicsWaitingForMetadata().size() > 0);
+
+        // When the ack is sent nothing should change. Member still has nothing to reconcile,
+        // only topics waiting for metadata.
+        membershipManager.onHeartbeatRequestSent();
+        assertEquals(MemberState.RECONCILING, membershipManager.state());
+        assertTrue(membershipManager.topicsWaitingForMetadata().size() > 0);
+
+        // New target assignment received while there is another one waiting to be resolved
+        // and reconciled. This assignment does not include the previous one that is waiting
+        // for metadata, so the member will discard the topics that were waiting for metadata, and
+        // reconcile the new assignment.
+        Uuid topicId = Uuid.randomUuid();
+        String topicName = "topic1";
+        when(metadata.topicNames()).thenReturn(Collections.singletonMap(topicId, topicName));
+        receiveEmptyAssignment(membershipManager);
+        assertEquals(MemberState.STABLE, membershipManager.state());
+        verify(subscriptionState, never()).assignFromSubscribed(any());
     }
 
     @Test
