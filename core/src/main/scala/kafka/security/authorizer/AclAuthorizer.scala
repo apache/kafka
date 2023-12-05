@@ -548,17 +548,17 @@ class AclAuthorizer extends Authorizer with Logging {
     val prefixed = mutable.ArrayBuilder.make[AclEntry]
     aclCacheSnapshot
       .get(new ResourcePattern(resourceType, ResourcePattern.WILDCARD_RESOURCE, PatternType.LITERAL))
-      .foreach(x => prefixed.addAll(x.aclsArray))
+      .foreach(x => prefixed ++= x.aclsArray)
 
     aclCacheSnapshot
       .get(new ResourcePattern(resourceType, resourceName, PatternType.LITERAL))
-      .foreach(x => prefixed.addAll(x.aclsArray))
+      .foreach(x => prefixed ++= x.aclsArray)
 
     aclCacheSnapshot
       .from(new ResourcePattern(resourceType, resourceName, PatternType.PREFIXED))
       .to(new ResourcePattern(resourceType, resourceName.take(1), PatternType.PREFIXED))
       .forKeyValue { (resource, acls) =>
-        if (resourceName.startsWith(resource.name)) prefixed.addAll(acls.acls)
+        if (resourceName.startsWith(resource.name)) prefixed ++= acls.acls
       }
 
     new AclSeqs(prefixed.result())
