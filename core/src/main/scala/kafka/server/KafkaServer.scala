@@ -365,7 +365,8 @@ class KafkaServer(
           config,
           forwardingManager,
           brokerFeatures,
-          metadataCache
+          metadataCache,
+          None
         )
 
         // Create and start the socket server acceptor threads so that the bound port is known.
