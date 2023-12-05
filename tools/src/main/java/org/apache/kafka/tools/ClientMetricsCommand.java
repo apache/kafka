@@ -57,7 +57,7 @@ public class ClientMetricsCommand {
         Exit.exit(mainNoExit(args));
     }
 
-     static int mainNoExit(String... args) {
+    static int mainNoExit(String... args) {
         try {
             execute(args);
             return 0;
