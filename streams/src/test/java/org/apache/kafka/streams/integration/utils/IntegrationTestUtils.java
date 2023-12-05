@@ -241,23 +241,23 @@ public class IntegrationTestUtils {
      */
     public static String safeUniqueTestName(final Class<?> testClass, final TestInfo testInfo) {
         final String methodName = testInfo.getTestMethod().map(Method::getName).orElse("unknownMethodName");
-        // Generate a random uuid without an `-`. The `-` is used in Streams' thread name as
-        // a separator and some tests rely on this.
-        String randomUuid;
-        do {
-            randomUuid = Uuid.randomUuid().toString();
-        } while (randomUuid.contains("-"));
-        return methodName + randomUuid;
+        return sanitize(methodName + Uuid.randomUuid().toString());
     }
 
     private static String safeUniqueTestName(final Class<?> testClass, final String testName) {
-        return (testClass.getSimpleName() + testName)
-                .replace(':', '_')
-                .replace('.', '_')
-                .replace('[', '_')
-                .replace(']', '_')
-                .replace(' ', '_')
-                .replace('=', '_');
+        return sanitize(testClass.getSimpleName() + testName);
+    }
+
+    private static String sanitize(final String str) {
+        return str
+            // The `-` is used in Streams' thread name as a separator and some tests rely on this.
+            .replace('-', '_')
+            .replace(':', '_')
+            .replace('.', '_')
+            .replace('[', '_')
+            .replace(']', '_')
+            .replace(' ', '_')
+            .replace('=', '_');
     }
 
     /**
