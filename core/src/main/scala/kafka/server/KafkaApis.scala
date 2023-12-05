@@ -107,6 +107,7 @@ class KafkaApis(val requestChannel: RequestChannel,
                 val metrics: Metrics,
                 val authorizer: Option[Authorizer],
                 val observer: Observer,
+                val quotaV2Handler: QuotaV2Handler,
                 val quotas: QuotaManagers,
                 val fetchManager: FetchManager,
                 brokerTopicStats: BrokerTopicStats,
@@ -612,6 +613,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     val unauthorizedTopicResponses = mutable.Map[TopicPartition, PartitionResponse]()
     val nonExistingTopicResponses = mutable.Map[TopicPartition, PartitionResponse]()
     val invalidRequestResponses = mutable.Map[TopicPartition, PartitionResponse]()
+    val throttledTopicResponses = mutable.Map[TopicPartition, PartitionResponse]()
     val authorizedRequestInfo = mutable.Map[TopicPartition, MemoryRecords]()
     // cache the result to avoid redundant authorization calls
     val authorizedTopics = authHelper.filterByAuthorized(request.context, WRITE, TOPIC,
@@ -629,6 +631,8 @@ class KafkaApis(val requestChannel: RequestChannel,
         unauthorizedTopicResponses += topicPartition -> new PartitionResponse(Errors.TOPIC_AUTHORIZATION_FAILED)
       else if (!metadataCache.contains(topicPartition))
         nonExistingTopicResponses += topicPartition -> new PartitionResponse(Errors.UNKNOWN_TOPIC_OR_PARTITION)
+      else if (quotaV2Handler.checkLimit(topicPartition, produceRequest) == QuotaV2Decision.DENY)
+        throttledTopicResponses += topicPartition -> new PartitionResponse(Errors.THROTTLING_QUOTA_EXCEEDED)
       else
         try {
           ProduceRequest.validateRecords(request.header.apiVersion, memoryRecords)
@@ -645,7 +649,8 @@ class KafkaApis(val requestChannel: RequestChannel,
     // https://issues.apache.org/jira/browse/KAFKA-10730
     @nowarn("cat=deprecation")
     def sendResponseCallback(responseStatus: Map[TopicPartition, PartitionResponse]): Unit = {
-      val mergedResponseStatus = responseStatus ++ unauthorizedTopicResponses ++ nonExistingTopicResponses ++ invalidRequestResponses
+      val mergedResponseStatus = responseStatus ++ unauthorizedTopicResponses ++ nonExistingTopicResponses ++
+        invalidRequestResponses ++ throttledTopicResponses
       var errorInResponse = false
       instrumentation.markStage(Stage.BeginResponseCallback)
       instrumentation.appliedTopicPartitions = responseStatus.keys  // logging relies on the info
@@ -658,6 +663,9 @@ class KafkaApis(val requestChannel: RequestChannel,
             request.header.clientId,
             topicPartition,
             status.error.exceptionName))
+        } else {
+          // Record the charge for the QuotaV2Handler
+          quotaV2Handler.recordCharge(topicPartition, produceRequest, status)
         }
       }
 
@@ -686,6 +694,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       instrumentation.markStage(Stage.ResponseThrottling)
       requestHelper.throttle(quotas.produce, request, effectiveBandWidthThrottleTime)
       requestHelper.throttle(quotas.request, request, effectiveRequestThrottleTime)
+
 
       // Send the response immediately. In case of throttling, the channel has already been muted.
       if (produceRequest.acks == 0) {

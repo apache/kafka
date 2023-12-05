@@ -103,6 +103,8 @@ object Defaults {
   /** ********* Broker-side configuration ***********/
   val ObserverClassName = "kafka.server.NoOpObserver"
   val ObserverShutdownTimeoutMs = 2000
+  val QuotaV2HandlerClassName = "kafka.server.NoOpQuotaV2Handler"
+  val QuotaV2HandlerShutdownTimeoutMs = 2000
 
   /** ********* Socket Server Configuration ***********/
   val Listeners = "PLAINTEXT://:9092"
@@ -478,6 +480,10 @@ object KafkaConfig {
   /** ********* Broker-side observer Configuration ****************/
   val ObserverClassNameProp = "observer.class.name"
   val ObserverShutdownTimeoutMsProp = "observer.shutdown.timeout"
+
+  /** ********* Broker-side quotav2handler Configuration *************** */
+  val QuotaV2HandlerClassNameProp = "quotav2handler.class.name"
+  val QuotaV2HandlerShutdownTimeoutMsProp = "quotav2handler.shutdown.timeout"
 
   /** ********* Socket Server Configuration ***********/
   val ListenersProp = "listeners"
@@ -1189,6 +1195,11 @@ object KafkaConfig {
     "zero. When closing/shutting down an observer, most time is spent on flushing the observed stats. The reasonable timeout should be close to " +
     "the time it takes to flush the stats."
 
+  /** *********  Broker-side Observer Configuration ******** */
+  val QuotaV2HandlerClassNameDoc = "The name of the QuotaV2Handler class that is used to approve/deny produce requests."
+  val QuotaV2HandlerShutdownTimeoutMsDoc = "The maximum time of closing/shutting down a QuotaV2Handler. " +
+    "This property can not be less than or equal to zero."
+
   private[server] val configDef = {
     import ConfigDef.Importance._
     import ConfigDef.Range._
@@ -1287,6 +1298,10 @@ object KafkaConfig {
       /************* Broker-side Observer Configuration ***********/
       .define(ObserverClassNameProp, STRING, Defaults.ObserverClassName, MEDIUM, ObserverClassNameDoc)
       .define(ObserverShutdownTimeoutMsProp, LONG, Defaults.ObserverShutdownTimeoutMs, atLeast(1), MEDIUM, ObserverShutdownTimeoutMsDoc)
+
+      /************* Broker-side Observer Configuration ***********/
+      .define(QuotaV2HandlerClassNameProp, STRING, Defaults.QuotaV2HandlerClassName, MEDIUM, QuotaV2HandlerClassNameDoc)
+      .define(QuotaV2HandlerShutdownTimeoutMsProp, LONG, Defaults.QuotaV2HandlerShutdownTimeoutMs, atLeast(1), MEDIUM, QuotaV2HandlerShutdownTimeoutMsDoc)
 
       /** ********* Socket Server Configuration ***********/
       .define(ListenersProp, STRING, Defaults.Listeners, HIGH, ListenersDoc)
@@ -1854,6 +1869,10 @@ class KafkaConfig(val props: java.util.Map[_, _], doLog: Boolean, dynamicConfigO
   /************* Broker-side Observer Configuration ********/
   val ObserverClassName: String = getString(KafkaConfig.ObserverClassNameProp)
   val ObserverShutdownTimeoutMs: Long = getLong(KafkaConfig.ObserverShutdownTimeoutMsProp)
+
+  /** *********** Broker-side QuotaV2Handler Configuration ******* */
+  val QuotaV2HandlerClassName: String = getString(KafkaConfig.QuotaV2HandlerClassNameProp)
+  val QuotaV2HandlerShutdownTimeoutMs: Long = getLong(KafkaConfig.QuotaV2HandlerShutdownTimeoutMsProp)
 
   /** ********* Socket Server Configuration ***********/
   val socketSendBufferBytes = getInt(KafkaConfig.SocketSendBufferBytesProp)

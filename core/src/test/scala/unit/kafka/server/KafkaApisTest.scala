@@ -103,6 +103,7 @@ class KafkaApisTest {
   private val brokerId = 1
   private var metadataCache: MetadataCache = MetadataCache.zkMetadataCache(brokerId)
   private val observer: Observer = EasyMock.createNiceMock(classOf[Observer])
+  private val quotaV2Handler: QuotaV2Handler = EasyMock.createNiceMock(classOf[QuotaV2Handler])
   private val clientQuotaManager: ClientQuotaManager = EasyMock.createNiceMock(classOf[ClientQuotaManager])
   private val clientRequestQuotaManager: ClientRequestQuotaManager = EasyMock.createNiceMock(classOf[ClientRequestQuotaManager])
   private val clientControllerQuotaManager: ControllerMutationQuotaManager = EasyMock.createNiceMock(classOf[ControllerMutationQuotaManager])
@@ -184,6 +185,7 @@ class KafkaApisTest {
       metrics,
       authorizer,
       observer,
+      quotaV2Handler,
       quotas,
       fetchManager,
       brokerTopicStats,
@@ -1549,7 +1551,9 @@ class KafkaApisTest {
 
     for (version <- ApiKeys.PRODUCE.oldestVersion to ApiKeys.PRODUCE.latestVersion) {
 
-      EasyMock.reset(replicaManager, clientQuotaManager, clientRequestQuotaManager, requestChannel, txnCoordinator)
+      EasyMock.reset(
+        replicaManager, clientQuotaManager, clientRequestQuotaManager, requestChannel, txnCoordinator, quotaV2Handler
+      )
 
       val responseCallback: Capture[Map[TopicPartition, PartitionResponse] => Unit] = EasyMock.newCapture()
 
@@ -1584,7 +1588,9 @@ class KafkaApisTest {
       EasyMock.expect(clientQuotaManager.maybeRecordAndGetThrottleTimeMs(
         anyObject[RequestChannel.Request](), anyDouble, anyLong)).andReturn(0)
 
-      EasyMock.replay(replicaManager, clientQuotaManager, clientRequestQuotaManager, requestChannel, txnCoordinator)
+      EasyMock.replay(
+        replicaManager, clientQuotaManager, clientRequestQuotaManager, requestChannel, txnCoordinator, quotaV2Handler
+      )
 
       createKafkaApis().handleProduceRequest(request, RequestLocal.withThreadConfinedCaching)
 
@@ -3281,10 +3287,15 @@ class KafkaApisTest {
     EasyMock.expect(clientRequestQuotaManager.maybeRecordAndGetThrottleTimeMs(EasyMock.anyObject[RequestChannel.Request](),
       EasyMock.anyObject[Long])).andReturn(0)
 
+
     EasyMock.expect(clientRequestQuotaManager.throttle(
       EasyMock.eq(request),
       EasyMock.anyObject[ThrottleCallback](),
       EasyMock.eq(0)))
+
+    EasyMock.expect(quotaV2Handler.checkLimit(
+      EasyMock.anyObject(), EasyMock.anyObject()
+    )).andReturn(QuotaV2Decision.APPROVE)
 
     val capturedResponse = EasyMock.newCapture[AbstractResponse]()
     EasyMock.expect(requestChannel.sendResponse(
@@ -3994,5 +4005,75 @@ class KafkaApisTest {
   def testRaftShouldAlwaysForwardUpdateFeatures(): Unit = {
     metadataCache = MetadataCache.kRaftMetadataCache(brokerId)
     verifyShouldAlwaysForward(createKafkaApis(raftSupport = true).handleUpdateFeatures)
+  }
+
+  def setupQuotaV2Test(): (RequestChannel.Request, Capture[AbstractResponse]) = {
+    val topic = "topic"
+    addTopicToMetadataCache(topic, numPartitions = 2)
+    val tp = new TopicPartition("topic", 0)
+    val responseCallback: Capture[Map[TopicPartition, PartitionResponse] => Unit] = EasyMock.newCapture()
+
+    val produceRequest = ProduceRequest.forCurrentMagic(new ProduceRequestData()
+        .setTopicData(new ProduceRequestData.TopicProduceDataCollection(
+          Collections.singletonList(new ProduceRequestData.TopicProduceData()
+              .setName(tp.topic).setPartitionData(Collections.singletonList(
+                new ProduceRequestData.PartitionProduceData()
+                  .setIndex(tp.partition)
+                  .setRecords(MemoryRecords.withRecords(CompressionType.NONE, new SimpleRecord("test".getBytes))))))
+            .iterator))
+        .setAcks(1.toShort)
+        .setTimeoutMs(5000))
+      .build(ApiKeys.PRODUCE.latestVersion)
+
+    EasyMock.expect(replicaManager.appendRecords(EasyMock.anyLong(),
+      EasyMock.anyShort(),
+      EasyMock.eq(false),
+      EasyMock.eq(AppendOrigin.Client),
+      EasyMock.anyObject(),
+      EasyMock.capture(responseCallback),
+      EasyMock.anyObject(),
+      EasyMock.anyObject(),
+      EasyMock.anyObject(),
+      EasyMock.anyObject())
+    ).andAnswer(() => responseCallback.getValue.apply(Map(tp -> new PartitionResponse(Errors.NONE))))
+
+    val request = buildRequest(produceRequest)
+    val capturedResponse = expectNoThrottling(request)
+    EasyMock.reset(quotaV2Handler)
+
+    EasyMock.expect(requestChannel.sendResponse(
+      EasyMock.eq(request),
+      EasyMock.capture(capturedResponse),
+      EasyMock.eq(None)
+    ))
+
+    (request, capturedResponse)
+  }
+
+  @Test
+  def testQuotaV2IsCalled(): Unit = {
+    val (request, capturedResponse) = setupQuotaV2Test()
+
+    EasyMock.expect(quotaV2Handler.checkLimit(EasyMock.anyObject(), EasyMock.anyObject())).andReturn(QuotaV2Decision.APPROVE)
+
+    EasyMock.replay(replicaManager, clientRequestQuotaManager, clientQuotaManager, quotaV2Handler, requestChannel)
+    createKafkaApis().handleProduceRequest(request, RequestLocal.withThreadConfinedCaching)
+
+    EasyMock.verify(quotaV2Handler)
+    assertEquals(1, capturedResponse.getValue.errorCounts().get(Errors.NONE))
+  }
+
+  @Test
+  def testQuotaV2DenyGivesError(): Unit = {
+    val (request, capturedResponse) = setupQuotaV2Test()
+
+    EasyMock.expect(quotaV2Handler.checkLimit(EasyMock.anyObject(), EasyMock.anyObject())).andReturn(QuotaV2Decision.DENY)
+
+    EasyMock.replay(replicaManager, clientRequestQuotaManager, clientQuotaManager, quotaV2Handler, requestChannel)
+    createKafkaApis().handleProduceRequest(request, RequestLocal.withThreadConfinedCaching)
+
+    EasyMock.verify(quotaV2Handler)
+    assertEquals(1, capturedResponse.getValue.errorCounts().get(Errors.THROTTLING_QUOTA_EXCEEDED))
+    assertEquals(0, capturedResponse.getValue.errorCounts().getOrDefault(Errors.NONE, 0))
   }
 }
