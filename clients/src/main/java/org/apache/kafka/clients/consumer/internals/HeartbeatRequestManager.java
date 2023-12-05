@@ -21,7 +21,7 @@ import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.internals.NetworkClientDelegate.PollResult;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEventHandler;
 import org.apache.kafka.clients.consumer.internals.events.ErrorBackgroundEvent;
-import org.apache.kafka.common.TopicIdPartition;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
 import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatRequestData;
@@ -35,10 +35,9 @@ import org.slf4j.Logger;
 
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
+import java.util.SortedSet;
 import java.util.TreeSet;
 import java.util.stream.Collectors;
 
@@ -464,15 +463,15 @@ public class HeartbeatRequestManager implements RequestManager {
             // ClientAssignors - not supported yet
 
             // TopicPartitions - only sent if it has changed since the last heartbeat. Note that
-            // TopicIdPartition.toString is being avoided here so that the string consists of
-            // just the topic ID and the partition. When an assignment is received, we might not
-            // yet know the topic name, and then it is learnt subsequently by a metadata update.
-            TreeSet<String> assignedPartitions = membershipManager.currentAssignment().stream()
-                    .map(tp -> tp.topicId() + "-" + tp.partition())
-                    .collect(Collectors.toCollection(TreeSet::new));
+            // the string consists of just the topic ID and the partitions. When an assignment is
+            // received, we might not yet know the topic name, and then it is learnt subsequently
+            // by a metadata update.
+            TreeSet<String> assignedPartitions = membershipManager.currentAssignment().entrySet().stream()
+                .map(entry -> entry.getKey() + "-" + entry.getValue())
+                .collect(Collectors.toCollection(TreeSet::new));
             if (!assignedPartitions.equals(sentFields.topicPartitions)) {
                 List<ConsumerGroupHeartbeatRequestData.TopicPartitions> topicPartitions =
-                        buildTopicPartitionsList(membershipManager.currentAssignment());
+                    buildTopicPartitionsList(membershipManager.currentAssignment());
                 data.setTopicPartitions(topicPartitions);
                 sentFields.topicPartitions = assignedPartitions;
             }
@@ -480,18 +479,12 @@ public class HeartbeatRequestManager implements RequestManager {
             return data;
         }
 
-        private List<ConsumerGroupHeartbeatRequestData.TopicPartitions> buildTopicPartitionsList(Set<TopicIdPartition> topicIdPartitions) {
-            Map<ConsumerGroupHeartbeatRequestData.TopicPartitions, List<Integer>> topicPartitions =
-                new HashMap<>();
-            for (TopicIdPartition topicIdPartition : topicIdPartitions) {
-                ConsumerGroupHeartbeatRequestData.TopicPartitions emptyTopicPartitions =
-                    new ConsumerGroupHeartbeatRequestData.TopicPartitions()
-                        .setTopicId(topicIdPartition.topicId());
-                topicPartitions.computeIfAbsent(emptyTopicPartitions, k -> new ArrayList<>())
-                    .add(topicIdPartition.partition());
-            }
-            topicPartitions.keySet().forEach(tp -> tp.setPartitions(topicPartitions.get(tp)));
-            return new ArrayList<>(topicPartitions.keySet());
+        private List<ConsumerGroupHeartbeatRequestData.TopicPartitions> buildTopicPartitionsList(Map<Uuid, SortedSet<Integer>> topicIdPartitions) {
+            return topicIdPartitions.entrySet().stream().map(
+                    entry -> new ConsumerGroupHeartbeatRequestData.TopicPartitions()
+                        .setTopicId(entry.getKey())
+                        .setPartitions(new ArrayList<>(entry.getValue())))
+                .collect(Collectors.toList());
         }
 
         // Fields of ConsumerHeartbeatRequest sent in the most recent request
