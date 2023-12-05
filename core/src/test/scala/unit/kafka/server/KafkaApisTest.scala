@@ -6955,7 +6955,8 @@ class KafkaApisTest {
     val request = buildRequest(new ListClientMetricsResourcesRequest.Builder(new ListClientMetricsResourcesRequestData()).build())
     metadataCache = MetadataCache.kRaftMetadataCache(brokerId)
 
-    when(clientMetricsManager.listClientMetricsResources).thenReturn(util.Collections.emptySet())
+    val resources = new mutable.HashSet[String]
+    when(clientMetricsManager.listClientMetricsResources).thenReturn(resources.asJava)
 
     createKafkaApis(raftSupport = true).handle(request, RequestLocal.NoCaching)
     val response = verifyNoThrottling[ListClientMetricsResourcesResponse](request)
