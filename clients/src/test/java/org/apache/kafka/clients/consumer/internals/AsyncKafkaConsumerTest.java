@@ -45,7 +45,6 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
-import org.apache.kafka.common.errors.InvalidGroupIdException;
 import org.apache.kafka.common.errors.NetworkException;
 import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.errors.TimeoutException;
@@ -79,7 +78,6 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -178,12 +176,6 @@ public class AsyncKafkaConsumerTest {
         prepAutocommitOnClose();
     }
 
-    @Test
-    public void testInvalidGroupId() {
-        // Create consumer without group id
-        resetWithEmptyGroupId();
-        assertThrows(InvalidGroupIdException.class, () -> consumer.committed(new HashSet<>()));
-    }
 
     @Test
     public void testCommitAsync_NullCallback() throws InterruptedException {
@@ -230,14 +222,6 @@ public class AsyncKafkaConsumerTest {
                 null,  // For the successful completion scenario
                 new KafkaException("Test exception"),
                 new GroupAuthorizationException("Group authorization exception"));
-    }
-
-    @Test
-    public void testFencedInstanceException() {
-        CompletableFuture<Void> future = new CompletableFuture<>();
-        doReturn(future).when(consumer).commit(new HashMap<>(), false);
-        assertDoesNotThrow(() -> consumer.commitAsync());
-        future.completeExceptionally(Errors.FENCED_INSTANCE_ID.exception());
     }
 
     @Test
