@@ -45,11 +45,11 @@ public class ClientMetricsCommandTest {
     private String bootstrapServer = "localhost:9092";
     private String clientMetricsName = "cm";
 
-     @Test
-     public void testOptionsNoActionFails() {
-         assertInitializeInvalidOptionsExitCode(1,
-             new String[] {"--bootstrap-server", bootstrapServer});
-     }
+    @Test
+    public void testOptionsNoActionFails() {
+        assertInitializeInvalidOptionsExitCode(1,
+            new String[] {"--bootstrap-server", bootstrapServer});
+    }
 
     @Test
     public void testOptionsListSucceeds() {
@@ -147,8 +147,8 @@ public class ClientMetricsCommandTest {
             try {
                 service.alterClientMetrics(new ClientMetricsCommand.ClientMetricsCommandOptions(
                         new String[]{"--bootstrap-server", bootstrapServer, "--alter",
-                                "--generate-name", "--metrics", "org.apache.kafka.producer.",
-                                "--interval", "5000", "--match", "client_id=CLIENT1"}));
+                                     "--generate-name", "--metrics", "org.apache.kafka.producer.",
+                                     "--interval", "5000", "--match", "client_id=CLIENT1"}));
             } catch (Throwable t) {
                 fail(t);
             }
@@ -172,7 +172,7 @@ public class ClientMetricsCommandTest {
             try {
                 service.deleteClientMetrics(new ClientMetricsCommand.ClientMetricsCommandOptions(
                         new String[]{"--bootstrap-server", bootstrapServer, "--delete",
-                                "--name", clientMetricsName}));
+                                     "--name", clientMetricsName}));
             } catch (Throwable t) {
                 fail(t);
             }
@@ -194,7 +194,7 @@ public class ClientMetricsCommandTest {
             try {
                 service.describeClientMetrics(new ClientMetricsCommand.ClientMetricsCommandOptions(
                         new String[]{"--bootstrap-server", bootstrapServer, "--describe",
-                                "--name", clientMetricsName}));
+                                     "--name", clientMetricsName}));
             } catch (Throwable t) {
                 fail(t);
             }
@@ -236,13 +236,13 @@ public class ClientMetricsCommandTest {
         when(adminClient.listClientMetricsResources()).thenReturn(result);
 
         String capturedOutput = ToolsTestUtils.captureStandardOut(() -> {
-                    try {
-                        service.listClientMetrics(new ClientMetricsCommand.ClientMetricsCommandOptions(
-                                new String[]{"--bootstrap-server", bootstrapServer, "--list"}));
-                    } catch (Throwable t) {
-                        fail(t);
-                    }
-                });
+            try {
+                service.listClientMetrics(new ClientMetricsCommand.ClientMetricsCommandOptions(
+                        new String[]{"--bootstrap-server", bootstrapServer, "--list"}));
+            } catch (Throwable t) {
+                fail(t);
+            }
+        });
         assertEquals("one,two", Arrays.stream(capturedOutput.split("\n")).collect(Collectors.joining(",")));
     }
 
@@ -259,15 +259,15 @@ public class ClientMetricsCommandTest {
                             new String[] {"--bootstrap-server", bootstrapServer, "--list"})));
     }
 
-     public void assertInitializeInvalidOptionsExitCode(int expected, String[] options) {
-         Exit.setExitProcedure((exitCode, message) -> {
-             assertEquals(expected, exitCode);
-             throw new RuntimeException();
-         });
-         try {
-             assertThrows(RuntimeException.class, () -> new ClientMetricsCommand.ClientMetricsCommandOptions(options));
-         } finally {
-             Exit.resetExitProcedure();
-         }
-     }
+    public void assertInitializeInvalidOptionsExitCode(int expected, String[] options) {
+        Exit.setExitProcedure((exitCode, message) -> {
+            assertEquals(expected, exitCode);
+            throw new RuntimeException();
+        });
+        try {
+            assertThrows(RuntimeException.class, () -> new ClientMetricsCommand.ClientMetricsCommandOptions(options));
+        } finally {
+            Exit.resetExitProcedure();
+        }
+    }
 }
