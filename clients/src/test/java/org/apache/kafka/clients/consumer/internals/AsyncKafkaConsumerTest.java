@@ -655,52 +655,7 @@ public class AsyncKafkaConsumerTest {
     }
 
     @Test
-    public void testSubscribeGeneratesEvent() {
-        String topic = "topic1";
-        consumer.subscribe(singletonList(topic));
-        assertEquals(singleton(topic), consumer.subscription());
-        assertTrue(consumer.assignment().isEmpty());
-        verify(applicationEventHandler).add(ArgumentMatchers.isA(SubscriptionChangeApplicationEvent.class));
-    }
-
-    @Test
-    public void testUnsubscribeGeneratesUnsubscribeEvent() {
-        consumer.unsubscribe();
-
-        // Verify the unsubscribe event was generated and mock its completion.
-        final ArgumentCaptor<UnsubscribeApplicationEvent> captor = ArgumentCaptor.forClass(UnsubscribeApplicationEvent.class);
-        verify(applicationEventHandler).add(captor.capture());
-        UnsubscribeApplicationEvent unsubscribeApplicationEvent = captor.getValue();
-        unsubscribeApplicationEvent.future().complete(null);
-
-        assertTrue(consumer.subscription().isEmpty());
-        assertTrue(consumer.assignment().isEmpty());
-    }
-
-    @Test
-    public void testSubscribeToEmptyListActsAsUnsubscribe() {
-        consumer.subscribe(Collections.emptyList());
-        assertTrue(consumer.subscription().isEmpty());
-        assertTrue(consumer.assignment().isEmpty());
-        verify(applicationEventHandler).add(ArgumentMatchers.isA(UnsubscribeApplicationEvent.class));
-    }
-
-    @Test
-    public void testSubscribeToNullTopicCollection() {
-        assertThrows(IllegalArgumentException.class, () -> consumer.subscribe((List<String>) null));
-    }
-
-    @Test
-    public void testSubscriptionOnNullTopic() {
-        assertThrows(IllegalArgumentException.class, () -> consumer.subscribe(singletonList(null)));
-    }
-
-    @Test
-    public void testSubscriptionOnEmptyTopic() {
-        String emptyTopic = "  ";
-        assertThrows(IllegalArgumentException.class, () -> consumer.subscribe(singletonList(emptyTopic)));
-    }
-
+    
     @Test
     public void testGroupMetadataAfterCreationWithGroupIdIsNull() {
         final Properties props = requiredConsumerProperties();

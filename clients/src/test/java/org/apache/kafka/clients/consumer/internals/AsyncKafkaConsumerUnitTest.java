@@ -16,7 +16,10 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
+import static java.util.Collections.singleton;
+import static java.util.Collections.singletonList;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -26,13 +29,13 @@ import static org.mockito.Mockito.when;
 
 import java.time.Duration;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.LinkedList;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.BlockingQueue;
-import java.util.concurrent.CompletableFuture;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetCommitCallback;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEventHandler;
@@ -40,6 +43,8 @@ import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
 import org.apache.kafka.clients.consumer.internals.events.CommitApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.CompletableApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.FetchCommittedOffsetsApplicationEvent;
+import org.apache.kafka.clients.consumer.internals.events.SubscriptionChangeApplicationEvent;
+import org.apache.kafka.clients.consumer.internals.events.UnsubscribeApplicationEvent;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.InvalidGroupIdException;
@@ -50,6 +55,8 @@ import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
+import org.mockito.ArgumentMatchers;
 import org.mockito.Mockito;
 
 @SuppressWarnings("unchecked")
@@ -211,6 +218,67 @@ public class AsyncKafkaConsumerUnitTest {
 
         verify(metadata).updateLastSeenEpochIfNewer(t0, 2);
         verify(metadata).updateLastSeenEpochIfNewer(t2, 3);
+    }
+
+    @Test
+    public void testSubscribeGeneratesEvent() {
+        consumer = setup();
+        String topic = "topic1";
+        consumer.subscribe(singletonList(topic));
+        assertEquals(singleton(topic), consumer.subscription());
+        assertTrue(consumer.assignment().isEmpty());
+        verify(applicationEventHandler).add(ArgumentMatchers.isA(SubscriptionChangeApplicationEvent.class));
+    }
+
+    @Test
+    public void testUnsubscribeGeneratesUnsubscribeEvent() {
+        consumer = setup();
+        consumer.unsubscribe();
+
+        // Verify the unsubscribe event was generated and mock its completion.
+        final ArgumentCaptor<UnsubscribeApplicationEvent> captor = ArgumentCaptor.forClass(UnsubscribeApplicationEvent.class);
+        verify(applicationEventHandler).add(captor.capture());
+        UnsubscribeApplicationEvent unsubscribeApplicationEvent = captor.getValue();
+        unsubscribeApplicationEvent.future().complete(null);
+
+        assertTrue(consumer.subscription().isEmpty());
+        assertTrue(consumer.assignment().isEmpty());
+    }
+
+    @Test
+    public void testSubscribeToEmptyListActsAsUnsubscribe() {
+        consumer = setup();
+
+        Mockito.doAnswer(invocation -> {
+            CompletableApplicationEvent<?> event = invocation.getArgument(0);
+            assertTrue(event instanceof UnsubscribeApplicationEvent);
+            event.future().complete(null);
+            return null;
+        }).when(applicationEventHandler).add(any());
+
+
+        consumer.subscribe(Collections.emptyList());
+        assertTrue(consumer.subscription().isEmpty());
+        assertTrue(consumer.assignment().isEmpty());
+    }
+
+    @Test
+    public void testSubscribeToNullTopicCollection() {
+        consumer = setup();
+        assertThrows(IllegalArgumentException.class, () -> consumer.subscribe((List<String>) null));
+    }
+
+    @Test
+    public void testSubscriptionOnNullTopic() {
+        consumer = setup();
+        assertThrows(IllegalArgumentException.class, () -> consumer.subscribe(singletonList(null)));
+    }
+
+    @Test
+    public void testSubscriptionOnEmptyTopic() {
+        consumer = setup();
+        String emptyTopic = "  ";
+        assertThrows(IllegalArgumentException.class, () -> consumer.subscribe(singletonList(emptyTopic)));
     }
 
     private HashMap<TopicPartition, OffsetAndMetadata> mockTopicPartitionOffset() {
