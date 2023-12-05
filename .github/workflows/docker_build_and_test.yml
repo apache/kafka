@@ -45,7 +45,6 @@ jobs:
       run: |
         python docker_build_test.py kafka/test -tag=test -type=${{ github.event.inputs.image_type }} -u=${{ github.event.inputs.kafka_url }}
     - name: Run CVE scan
-      if: always()
       uses: aquasecurity/trivy-action@master
       with:
         image-ref: 'kafka/test:test'

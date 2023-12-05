@@ -1,9 +1,7 @@
 Docker Images
 =============
 
-This directory contains docker image for Kafka.
-The scripts take a url containing kafka as input and generate the respective docker image.
-There are interactive python scripts to release the docker image and promote a release candidate.
+This directory contains scripts to build, test, push and promote docker image for kafka.
 
 Local Setup
 -----------
@@ -18,7 +16,7 @@ Bulding image and running tests locally
 - `docker_build_test.py` script builds and tests the docker image.
 - kafka binary tarball url along with image name, tag and type is needed to build the image. For detailed usage description check `python docker_build_test.py --help`.
 - Sanity tests for the docker image are present in test/docker_sanity_test.py.
-- By default image will be built and tested, but if you only want to build the image, pass `-b` flag and if you only want to test the given image pass `-t` flag.
+- By default image will be built and tested, but if you only want to build the image, pass `--build` (or `-b`) flag and if you only want to test the given image pass `--test` (or `-t`) flag.
 - An html test report will be generated after the tests are executed containing the results.
 
 Example command:-
@@ -30,7 +28,7 @@ python docker_build_test.py kafka/test --image-tag=3.6.0 --image-type=jvm --kafk
 Bulding image and running tests using github actions
 ----------------------------------------------------
 This is the recommended way to build, test and get a CVE report for the docker image.
-Just choose the image type and provide kafka url to `Docker build test` workflow. It will generate a test report and CVE report that can be shared to the community.
+Just choose the image type and provide kafka url to `Docker Build Test` workflow. It will generate a test report and CVE report that can be shared with the community.
 
 kafka-url - This is the url to download kafka tarball from. For example kafka tarball url from (https://archive.apache.org/dist/kafka). For building RC image this will be an RC tarball url.
 
@@ -57,7 +55,7 @@ To push an image named test under kafka dockerhub namespace with 3.6.0 tag and j
 python docker_release.py kafka/test:3.6.0 --kafka-url https://archive.apache.org/dist/kafka/3.6.0/kafka_2.13-3.6.0.tgz
 ```
 
-Please note that we used docker buildx for preparing the multi-architecture image and pushing it to docker registry. It's possible to encounter build failures because of buildx. Please retry the command in case some buildx related error occurs.
+Please note that we use docker buildx for preparing the multi-architecture image and pushing it to docker registry. It's possible to encounter build failures because of buildx. Please retry the command in case some buildx related error occurs.
 
 Promoting a release
 -------------------
@@ -69,33 +67,36 @@ Using the image in a docker container
 - The image can be run in a container in default mode by running
 `docker run -p 9092:9092 <image-name:tag>`
 - Default configs run kafka in kraft mode with plaintext listners on 9092 port.
-- Default configs can be overriden by user using 2 ways:-
+- Once user provided config properties are provided default configs will get replaced.
+- User can provide kafka configs following two ways:-
     - By mounting folder containing property files
         - Mount the folder containing kafka property files to `/mnt/shared/config`
-        - These files will override the default config files
+        - These files will replace the default config files
     - Using environment variables
         - Kafka properties defined via env variables will override properties defined in file input
-        - Replace . with _
-        - Replace _ with __(double underscore)
-        - Replace - with ___(triple underscore)
-        - Prefix the result with KAFKA_
-        - Examples:
-            - For abc.def, use KAFKA_ABC_DEF
-            - For abc-def, use KAFKA_ABC___DEF
-            - For abc_def, use KAFKA_ABC__DEF
+        - If properties are provided via environment variables only, default configs will be replaced by user provided properties
+        - Input format for env variables:-
+            - Replace . with _
+            - Replace _ with __(double underscore)
+            - Replace - with ___(triple underscore)
+            - Prefix the result with KAFKA_
+            - Examples:
+                - For abc.def, use KAFKA_ABC_DEF
+                - For abc-def, use KAFKA_ABC___DEF
+                - For abc_def, use KAFKA_ABC__DEF
 - Hence order of precedence of properties is the following:-
     - Env variable (highest)
     - File input
-    - Default (lowest)
+    - Default configs (only when there is no user provided config)
 - Any env variable that is commonly used in starting kafka(for example, CLUSTER_ID) can be supplied to docker container and it will be available when kafka starts
 
 Steps to release docker image
 -----------------------------
-- Make sure you have executed release.py script to prepare RC tarball in apache sftp server.
+- Make sure you have executed `release.py` script to prepare RC tarball in apache sftp server.
 - Use the RC tarball url (make sure you choose scala 2.13 version) as input kafka url to build docker image and run sanity tests.
 - Trigger github actions workflow using the RC branch, provide RC tarball url as kafka url.
 - This will generate test report and CVE report for docker images.
 - If the reports look fine, RC docker image can be built and published.
-- Execute `docker_release.py` script to build and publish RC docker image in your own dockerhub account.
+- Execute `docker_release.py` script to build and publish RC docker image in your dockerhub account.
 - Share the RC docker image, test report and CVE report with the community in RC vote email.
 - Once approved and ready, take help from someone in PMC to trigger `docker_promote.py` script and promote the RC docker image to apache/kafka dockerhub repo

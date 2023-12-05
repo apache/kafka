@@ -63,8 +63,8 @@ if __name__ == "__main__":
           Please ensure you are logged in the docker registry that you are trying to push to.")
     parser = argparse.ArgumentParser()
     parser.add_argument("image", help="Dockerhub image that you want to push to (in the format <registry>/<namespace>/<image_name>:<image_tag>)")
-    parser.add_argument("-type", "--image-type", choices=["jvm"], default="jvm", dest="image_type", help="Image type you want to build")
-    parser.add_argument("-u", "--kafka-url", dest="kafka_url", help="Kafka url to be used to download kafka binary tarball in the docker image")
+    parser.add_argument("--image-type", "-type", choices=["jvm"], default="jvm", dest="image_type", help="Image type you want to build")
+    parser.add_argument("--kafka-url", "-u", dest="kafka_url", help="Kafka url to be used to download kafka binary tarball in the docker image")
     args = parser.parse_args()
 
     print(f"Docker image of type {args.image_type} containing kafka downloaded from {args.kafka_url} will be pushed to {args.image}")
