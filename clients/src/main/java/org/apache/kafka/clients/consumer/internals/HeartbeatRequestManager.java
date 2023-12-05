@@ -561,17 +561,6 @@ public class HeartbeatRequestManager implements RequestManager {
                 serverAssignor = null;
                 topicPartitions = null;
             }
-
-            @Override
-            public String toString() {
-                return "SentFields(" +
-                        "instanceId='" + instanceId + '\'' +
-                        ", rebalanceTimeoutMs=" + rebalanceTimeoutMs +
-                        ", subscribedTopicNames=" + subscribedTopicNames +
-                        ", serverAssignor='" + serverAssignor + '\'' +
-                        ", topicPartitions=" + topicPartitions +
-                        ')';
-            }
         }
     }
 }
