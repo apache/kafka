@@ -599,8 +599,7 @@ public final class Utils {
      * @return The string representation.
      */
     public static <T> String join(Collection<T> collection) {
-        Objects.requireNonNull(collection);
-        return mkString(collection.stream(), "", "", ", ");
+        return join(collection, ", ");
     }
 
     /**
