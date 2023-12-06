@@ -75,6 +75,7 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.mockito.ArgumentMatchers;
 import org.mockito.Mockito;
 
@@ -217,6 +218,25 @@ public class AsyncKafkaConsumerUnitTest {
 
         verify(metadata).updateLastSeenEpochIfNewer(t0, 2);
         verify(metadata).updateLastSeenEpochIfNewer(t1, 1);
+    }
+
+    @Test
+    public void testCommitAsyncWithNullCallback() {
+        consumer = setup();
+        final TopicPartition t0 = new TopicPartition("t0", 2);
+        final TopicPartition t1 = new TopicPartition("t0", 3);
+        HashMap<TopicPartition, OffsetAndMetadata> offsets = new HashMap<>();
+        offsets.put(t0, new OffsetAndMetadata(10L));
+        offsets.put(t1, new OffsetAndMetadata(20L));
+
+        consumer.commitAsync(offsets, null);
+
+        final ArgumentCaptor<CommitApplicationEvent> commitEventCaptor = ArgumentCaptor.forClass(CommitApplicationEvent.class);
+        verify(applicationEventHandler).add(commitEventCaptor.capture());
+        final CommitApplicationEvent commitEvent = commitEventCaptor.getValue();
+        assertEquals(offsets, commitEvent.offsets());
+        assertDoesNotThrow(() -> commitEvent.future().complete(null));
+        assertDoesNotThrow(() -> consumer.commitAsync(offsets, null));
     }
 
     @Test
