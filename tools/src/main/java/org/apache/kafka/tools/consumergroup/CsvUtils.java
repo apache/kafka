@@ -48,61 +48,26 @@ public class CsvUtils {
     public interface CsvRecord {
     }
 
-    public static class CsvRecordWithGroup implements CsvRecord {
+    public static class CsvRecordWithGroup extends CsvRecordNoGroup {
         public static final String[] FIELDS = new String[] {"group", "topic", "partition", "offset"};
 
         @JsonProperty
         private String group;
 
-        @JsonProperty
-        private String topic;
-
-        @JsonProperty
-        private int partition;
-
-        @JsonProperty
-        private long offset;
-
         public CsvRecordWithGroup() {
         }
 
         public CsvRecordWithGroup(String group, String topic, int partition, long offset) {
+            super(topic, partition, offset);
             this.group = group;
-            this.topic = topic;
-            this.partition = partition;
-            this.offset = offset;
         }
 
         public void setGroup(String group) {
             this.group = group;
         }
 
-        public void setTopic(String topic) {
-            this.topic = topic;
-        }
-
-        public void setPartition(int partition) {
-            this.partition = partition;
-        }
-
-        public void setOffset(long offset) {
-            this.offset = offset;
-        }
-
         public String getGroup() {
             return group;
-        }
-
-        public String getTopic() {
-            return topic;
-        }
-
-        public int getPartition() {
-            return partition;
-        }
-
-        public long getOffset() {
-            return offset;
         }
     }
 
