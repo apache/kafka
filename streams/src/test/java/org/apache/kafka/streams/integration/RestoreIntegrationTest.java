@@ -40,6 +40,7 @@ import org.apache.kafka.streams.StreamsConfig.InternalConfig;
 import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
+import org.apache.kafka.streams.integration.utils.IntegrationTestUtils.TrackingStandbyUpdateListener;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils.TrackingStateRestoreListener;
 import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.KStream;
@@ -473,6 +474,9 @@ public class RestoreIntegrationTest {
         final Set<KafkaStreams.State> transitionedStates1 = Collections.newSetFromMap(new ConcurrentHashMap<>());
         final Set<KafkaStreams.State> transitionedStates2 = Collections.newSetFromMap(new ConcurrentHashMap<>());
         final TrackingStateRestoreListener restoreListener = new TrackingStateRestoreListener();
+        final TrackingStandbyUpdateListener standbyUpdateListener = new TrackingStandbyUpdateListener();
+        streams1.setStandbyUpdateListener(standbyUpdateListener);
+        streams2.setStandbyUpdateListener(standbyUpdateListener);
         streams1.setGlobalStateRestoreListener(restoreListener);
         streams1.setStateListener((newState, oldState) -> transitionedStates1.add(newState));
         streams2.setStateListener((newState, oldState) -> transitionedStates2.add(newState));
@@ -514,7 +518,9 @@ public class RestoreIntegrationTest {
             streams1.close();
         }
         waitForTransitionTo(transitionedStates1, State.NOT_RUNNING, Duration.ofSeconds(60));
-
+        if (stateUpdaterEnabled) {
+            assertThat(standbyUpdateListener.promotedPartitions.size(), CoreMatchers.equalTo(1));
+        }
         assertThat(CloseCountingInMemoryStore.numStoresClosed(), CoreMatchers.equalTo(initialStoreCloseCount + 4));
     }
 

@@ -17,10 +17,12 @@
 
 package org.apache.kafka.controller;
 
+import org.apache.kafka.common.DirectoryId;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.BrokerIdNotRegisteredException;
 import org.apache.kafka.common.errors.DuplicateBrokerRegistrationException;
 import org.apache.kafka.common.errors.InconsistentClusterIdException;
+import org.apache.kafka.common.errors.InvalidRegistrationException;
 import org.apache.kafka.common.errors.StaleBrokerEpochException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.BrokerRegistrationRequestData;
@@ -56,6 +58,7 @@ import org.slf4j.Logger;
 import java.util.AbstractMap;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -249,6 +252,11 @@ public class ClusterControlManager {
      */
     private final TimelineHashMap<Integer, ControllerRegistration> controllerRegistrations;
 
+    /**
+     * Maps directories to their respective brokers.
+     */
+    private final TimelineHashMap<Uuid, Integer> directoryToBroker;
+
     private ClusterControlManager(
         LogContext logContext,
         String clusterId,
@@ -272,6 +280,7 @@ public class ClusterControlManager {
         this.featureControl = featureControl;
         this.zkMigrationEnabled = zkMigrationEnabled;
         this.controllerRegistrations = new TimelineHashMap<>(snapshotRegistry, 0);
+        this.directoryToBroker = new TimelineHashMap<>(snapshotRegistry, 0);
     }
 
     ReplicaPlacer replicaPlacer() {
@@ -354,6 +363,27 @@ public class ClusterControlManager {
             throw new BrokerIdNotRegisteredException("Controller is in pre-migration mode and cannot register KRaft " +
                 "brokers until the metadata migration is complete.");
         }
+
+        if (featureControl.metadataVersion().isDirectoryAssignmentSupported()) {
+            if (request.logDirs().isEmpty()) {
+                throw new InvalidRegistrationException("No directories specified in request");
+            }
+            if (request.logDirs().stream().anyMatch(DirectoryId::reserved)) {
+                throw new InvalidRegistrationException("Reserved directory ID in request");
+            }
+            Set<Uuid> set = new HashSet<>(request.logDirs());
+            if (set.size() != request.logDirs().size()) {
+                throw new InvalidRegistrationException("Duplicate directory ID in request");
+            }
+            for (Uuid directory : request.logDirs()) {
+                Integer dirBrokerId = directoryToBroker.get(directory);
+                if (dirBrokerId != null && dirBrokerId != brokerId) {
+                    throw new InvalidRegistrationException("Broker " + dirBrokerId +
+                            " is already registered with directory " + directory);
+                }
+            }
+        }
+
         ListenerInfo listenerInfo = ListenerInfo.fromBrokerRegistrationRequest(request.listeners());
         RegisterBrokerRecord record = new RegisterBrokerRecord().
             setBrokerId(brokerId).
@@ -373,6 +403,9 @@ public class ClusterControlManager {
                             setName(MetadataVersion.FEATURE_NAME).
                             setMinSupportedVersion(MetadataVersion.MINIMUM_KRAFT_VERSION.featureLevel()).
                             setMaxSupportedVersion(MetadataVersion.MINIMUM_KRAFT_VERSION.featureLevel())));
+        }
+        if (featureControl.metadataVersion().isDirectoryAssignmentSupported()) {
+            record.setLogDirs(request.logDirs());
         }
 
         heartbeatManager.register(brokerId, record.fenced());
@@ -461,6 +494,7 @@ public class ClusterControlManager {
                 setIsMigratingZkBroker(record.isMigratingZkBroker()).
                 setDirectories(record.logDirs()).
                     build());
+        updateDirectories(brokerId, prevRegistration == null ? null : prevRegistration.directories(), record.logDirs());
         if (heartbeatManager != null) {
             if (prevRegistration != null) heartbeatManager.remove(brokerId);
             heartbeatManager.register(brokerId, record.fenced());
@@ -488,6 +522,7 @@ public class ClusterControlManager {
                 "registration with that epoch found", record));
         } else {
             if (heartbeatManager != null) heartbeatManager.remove(brokerId);
+            updateDirectories(brokerId, registration.directories(), null);
             brokerRegistrations.remove(brokerId);
             log.info("Replayed {}", record);
         }
@@ -557,6 +592,7 @@ public class ClusterControlManager {
             } else {
                 log.info("Ignoring no-op registration change for {}", curRegistration);
             }
+            updateDirectories(brokerId, curRegistration.directories(), nextRegistration.directories());
             if (heartbeatManager != null) heartbeatManager.register(brokerId, nextRegistration.fenced());
             if (readyBrokersFuture.isPresent()) {
                 if (readyBrokersFuture.get().check()) {
@@ -648,6 +684,54 @@ public class ClusterControlManager {
         if (readyBrokersFuture.get().check()) {
             readyBrokersFuture.get().future.complete(null);
             readyBrokersFuture = Optional.empty();
+        }
+    }
+
+    /**
+     * Determines whether the specified directory is online in the specified broker.
+     * Returns false whether the directory is not online or the broker is not registered.
+     */
+    public boolean hasOnlineDir(int brokerId, Uuid directoryId) {
+        BrokerRegistration registration = registration(brokerId);
+        return registration != null && registration.hasOnlineDir(directoryId);
+    }
+
+    /**
+     * Determines the default directory for new partitions placed on a given broker.
+     */
+    public Uuid defaultDir(int brokerId) {
+        BrokerRegistration registration = registration(brokerId);
+        if (registration == null) {
+            // throwing an exception here can break the expected error from an
+            // Admin call, so instead, we return UNASSIGNED, and let the fact
+            // that the broker is not registered be handled elsewhere.
+            return DirectoryId.UNASSIGNED;
+        }
+        List<Uuid> directories = registration.directories();
+        if (directories.isEmpty()) {
+            return DirectoryId.MIGRATING;
+        }
+        if (directories.size() == 1) {
+            return directories.get(0);
+        }
+        return DirectoryId.UNASSIGNED;
+    }
+
+    void updateDirectories(int brokerId, List<Uuid> dirsToRemove, List<Uuid> dirsToAdd) {
+        if (dirsToRemove != null) {
+            for (Uuid directory : dirsToRemove) {
+                if (!directoryToBroker.remove(directory, brokerId)) {
+                    throw new IllegalStateException("BUG: directory " + directory + " not assigned to broker " + brokerId);
+                }
+            }
+        }
+        if (dirsToAdd != null) {
+            for (Uuid directory : dirsToAdd) {
+                Integer existingId = directoryToBroker.putIfAbsent(directory, brokerId);
+                if (existingId != null && existingId != brokerId) {
+                    throw new IllegalStateException("BUG: directory " + directory + " already assigned to broker " + existingId);
+                }
+            }
         }
     }
 

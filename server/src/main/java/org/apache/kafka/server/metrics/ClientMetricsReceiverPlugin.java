@@ -21,6 +21,7 @@ import org.apache.kafka.common.requests.RequestContext;
 import org.apache.kafka.server.telemetry.ClientTelemetryReceiver;
 
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 
 /**
@@ -32,7 +33,7 @@ public class ClientMetricsReceiverPlugin {
     private final List<ClientTelemetryReceiver> receivers;
 
     public ClientMetricsReceiverPlugin() {
-        this.receivers = new ArrayList<>();
+        this.receivers = Collections.synchronizedList(new ArrayList<>());
     }
 
     public boolean isEmpty() {
