@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import java.util.Optional;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.metrics.Sensor.RecordingLevel;
 import org.apache.kafka.common.serialization.Serializer;
@@ -52,9 +53,11 @@ import org.rocksdb.FlushOptions;
 import org.rocksdb.InfoLogLevel;
 import org.rocksdb.LRUCache;
 import org.rocksdb.Options;
+import org.rocksdb.ReadOptions;
 import org.rocksdb.RocksDB;
 import org.rocksdb.RocksDBException;
 import org.rocksdb.RocksIterator;
+import org.rocksdb.Snapshot;
 import org.rocksdb.Statistics;
 import org.rocksdb.TableFormatConfig;
 import org.rocksdb.WriteBatch;
@@ -372,6 +375,14 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
         }
     }
 
+    public Snapshot getSnapshot() {
+        return db.getSnapshot();
+    }
+
+    public void releaseSnapshot(final Snapshot snapshot) {
+        db.releaseSnapshot(snapshot);
+    }
+
     @Override
     public synchronized void put(final Bytes key,
                                  final byte[] value) {
@@ -455,9 +466,17 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
 
     @Override
     public synchronized byte[] get(final Bytes key) {
+        return get(key, Optional.empty());
+    }
+
+    public synchronized byte[] get(final Bytes key, final ReadOptions readOptions) {
+        return get(key, Optional.of(readOptions));
+    }
+
+    private synchronized byte[] get(final Bytes key, final Optional<ReadOptions> readOptions) {
         validateStoreOpen();
         try {
-            return dbAccessor.get(key.get());
+            return readOptions.isPresent() ? dbAccessor.get(key.get(), readOptions.get()) : dbAccessor.get(key.get());
         } catch (final RocksDBException e) {
             // String format is happening in wrapping stores. So formatted message is thrown from wrapping stores.
             throw new ProcessorStateException("Error while getting value for key from store " + name, e);
@@ -497,7 +516,7 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
         if (!autoManagedIterators) {
             throw new IllegalStateException("Must specify openIterators in call to range()");
         }
-        return range(from, to, true, openIterators);
+        return range(from, to, true, openIterators, Optional.empty());
     }
 
     synchronized KeyValueIterator<Bytes, byte[]> range(final Bytes from,
@@ -506,7 +525,17 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
         if (autoManagedIterators) {
             throw new IllegalStateException("Cannot specify openIterators when using auto-managed iterators");
         }
-        return range(from, to, true, openIterators);
+        return range(from, to, true, openIterators, Optional.empty());
+    }
+
+    synchronized KeyValueIterator<Bytes, byte[]> range(final Bytes from,
+                                                       final Bytes to,
+                                                       final Set<KeyValueIterator<Bytes, byte[]>> openIterators,
+                                                       final ReadOptions readOptions) {
+        if (autoManagedIterators) {
+            throw new IllegalStateException("Cannot specify openIterators when using auto-managed iterators");
+        }
+        return range(from, to, true, openIterators, Optional.of(readOptions));
     }
 
     @Override
@@ -515,7 +544,7 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
         if (!autoManagedIterators) {
             throw new IllegalStateException("Must specify openIterators in call to reverseRange()");
         }
-        return range(from, to, false, openIterators);
+        return range(from, to, false, openIterators, Optional.empty());
     }
 
     synchronized KeyValueIterator<Bytes, byte[]> reverseRange(final Bytes from,
@@ -524,13 +553,15 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
         if (autoManagedIterators) {
             throw new IllegalStateException("Cannot specify openIterators when using auto-managed iterators");
         }
-        return range(from, to, false, openIterators);
+        return range(from, to, false, openIterators, Optional.empty());
     }
+
 
     private KeyValueIterator<Bytes, byte[]> range(final Bytes from,
                                                   final Bytes to,
                                                   final boolean forward,
-                                                  final Set<KeyValueIterator<Bytes, byte[]>> openIterators) {
+                                                  final Set<KeyValueIterator<Bytes, byte[]>> openIterators,
+                                                  final Optional<ReadOptions> readOptions) {
         if (Objects.nonNull(from) && Objects.nonNull(to) && from.compareTo(to) > 0) {
             log.warn("Returning empty iterator for fetch with invalid key range: from > to. "
                     + "This may be due to range arguments set in the wrong order, " +
@@ -541,7 +572,8 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
 
         validateStoreOpen();
 
-        final ManagedKeyValueIterator<Bytes, byte[]> rocksDBRangeIterator = dbAccessor.range(from, to, forward);
+        final ManagedKeyValueIterator<Bytes, byte[]> rocksDBRangeIterator =
+                readOptions.isPresent() ? dbAccessor.range(from, to, forward, readOptions.get()) : dbAccessor.range(from, to, forward);
         openIterators.add(rocksDBRangeIterator);
         rocksDBRangeIterator.onClose(() -> openIterators.remove(rocksDBRangeIterator));
 
@@ -704,6 +736,8 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
 
         byte[] get(final byte[] key) throws RocksDBException;
 
+        byte[] get(final byte[] key, ReadOptions readOptions) throws RocksDBException;
+
         /**
          * In contrast to get(), we don't migrate the key to new CF.
          * <p>
@@ -714,6 +748,11 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
         ManagedKeyValueIterator<Bytes, byte[]> range(final Bytes from,
                                               final Bytes to,
                                               final boolean forward);
+
+        ManagedKeyValueIterator<Bytes, byte[]> range(final Bytes from,
+                                                     final Bytes to,
+                                                     final boolean forward,
+                                                     final ReadOptions readOptions);
 
         /**
          * Deletes keys entries in the range ['from', 'to'], including 'from' and excluding 'to'.
@@ -778,6 +817,11 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
         }
 
         @Override
+        public byte[] get(final byte[] key, final ReadOptions readOptions) throws RocksDBException {
+            return db.get(columnFamily, readOptions, key);
+        }
+
+        @Override
         public byte[] getOnly(final byte[] key) throws RocksDBException {
             return db.get(columnFamily, key);
         }
@@ -789,6 +833,21 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
             return new RocksDBRangeIterator(
                     name,
                     db.newIterator(columnFamily),
+                    from,
+                    to,
+                    forward,
+                    true
+            );
+        }
+
+        @Override
+        public ManagedKeyValueIterator<Bytes, byte[]> range(final Bytes from,
+                                                            final Bytes to,
+                                                            final boolean forward,
+                                                            final ReadOptions readOptions) {
+            return new RocksDBRangeIterator(
+                    name,
+                    db.newIterator(columnFamily, readOptions),
                     from,
                     to,
                     forward,

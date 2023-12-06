@@ -24,9 +24,11 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
+
 import org.apache.kafka.common.serialization.BytesSerializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
@@ -34,7 +36,9 @@ import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.internals.RocksDBVersionedStore.VersionedStoreSegment;
+import org.rocksdb.ReadOptions;
 import org.rocksdb.RocksDBException;
+import org.rocksdb.Snapshot;
 import org.rocksdb.WriteBatch;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -170,11 +174,41 @@ class LogicalKeyValueSegment implements Comparable<LogicalKeyValueSegment>, Segm
 
     @Override
     public synchronized byte[] get(final Bytes key) {
-        return physicalStore.get(prefixKeyFormatter.addPrefix(key));
+        return get(key, Optional.empty());
     }
 
+    public synchronized byte[] get(final Bytes key, final Snapshot snapshot) {
+        return get(key, Optional.of(snapshot));
+    }
+
+    private synchronized byte[] get(final Bytes key, final Optional<Snapshot> snapshot) {
+        if (snapshot.isPresent()) {
+            try (ReadOptions readOptions = new ReadOptions()) {
+                readOptions.setSnapshot(snapshot.get());
+                return physicalStore.get(prefixKeyFormatter.addPrefix(key), readOptions);
+            }
+        } else {
+            return physicalStore.get(prefixKeyFormatter.addPrefix(key));
+        }
+    }
+
+    public Snapshot getSnapshot() {
+        return physicalStore.getSnapshot();
+    }
+
+    public void releaseSnapshot(final Snapshot snapshot) {
+        physicalStore.releaseSnapshot(snapshot);
+    }
     @Override
     public synchronized KeyValueIterator<Bytes, byte[]> range(final Bytes from, final Bytes to) {
+        return range(from, to, Optional.empty());
+    }
+
+    public synchronized KeyValueIterator<Bytes, byte[]> range(final Bytes from, final Bytes to, final Snapshot snapshot) {
+        return range(from, to, Optional.of(snapshot));
+    }
+
+    private synchronized KeyValueIterator<Bytes, byte[]> range(final Bytes from, final Bytes to, final Optional<Snapshot> snapshot) {
         // from bound is inclusive. if the provided bound is null, replace with prefix
         final Bytes fromBound = from == null
             ? prefixKeyFormatter.getPrefix()
@@ -186,10 +220,9 @@ class LogicalKeyValueSegment implements Comparable<LogicalKeyValueSegment>, Segm
         final Bytes toBound = to == null
             ? incrementWithoutOverflow(prefixKeyFormatter.getPrefix())
             : prefixKeyFormatter.addPrefix(to);
-        final KeyValueIterator<Bytes, byte[]> iteratorWithKeyPrefixes = physicalStore.range(
-            fromBound,
-            toBound,
-            openIterators);
+
+        final KeyValueIterator<Bytes, byte[]> iteratorWithKeyPrefixes = snapshot.isPresent() ? physicalStore.range(fromBound, toBound, openIterators, new ReadOptions().setSnapshot(snapshot.get()))
+                                                                                             : physicalStore.range(fromBound, toBound, openIterators);
         return new StrippedPrefixKeyValueIteratorAdapter(
             iteratorWithKeyPrefixes,
             prefixKeyFormatter::removePrefix,
