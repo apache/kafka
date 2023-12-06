@@ -315,6 +315,11 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
         return memberEpoch;
     }
 
+    @Override
+    public boolean isStaled() {
+        return state == MemberState.STALED;
+    }
+
     /**
      * {@inheritDoc}
      */
@@ -611,6 +616,12 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
     @Override
     public void onHeartbeatRequestSent() {
         MemberState state = state();
+        if (isStaled()) {
+            log.debug("Member {} is staled and is therefore leaving the group.  It will rejoin upon the next poll.", memberEpoch);
+            transitionToJoining();
+            return;
+        }
+
         if (state == MemberState.ACKNOWLEDGING) {
             if (allPendingAssignmentsReconciled()) {
                 transitionTo(MemberState.STABLE);
@@ -660,11 +671,12 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
      * {@inheritDoc}
      */
     @Override
-    public void onStaledMember() {
+    public void transitionToStaled() {
         transitionTo(MemberState.PREPARE_LEAVING);
         memberEpoch = ConsumerGroupHeartbeatRequest.LEAVE_GROUP_MEMBER_EPOCH;
         transitionTo(MemberState.LEAVING);
         leaveGroupInProgress = Optional.of(CompletableFuture.completedFuture(null));
+        transitionTo(MemberState.STALED);
     }
 
     /**

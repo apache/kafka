@@ -62,6 +62,11 @@ public interface MembershipManager {
     MemberState state();
 
     /**
+     * @return True if the member is staled due to expired poll timer.
+     */
+    boolean isStaled();
+
+    /**
      * Update member info and transition member state based on a successful heartbeat response.
      *
      * @param response Heartbeat response to extract member info and errors from.
@@ -149,5 +154,5 @@ public interface MembershipManager {
      * When the user stops polling the consumer, the member will be transitioned to LEAVING without revoking the
      * partitions.
      */
-    void onStaledMember();
+    void transitionToStaled();
 }

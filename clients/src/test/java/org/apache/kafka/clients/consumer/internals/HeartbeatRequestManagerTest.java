@@ -516,20 +516,31 @@ public class HeartbeatRequestManagerTest {
         time.sleep(1);
         // Sending first heartbeat and transitioning to stable
         assertHeartbeat(heartbeatRequestManager);
+        assertInState(MemberState.STABLE);
         assertFalse(heartbeatRequestManager.pollTimer().isExpired());
         // Expires the poll timer, ensure sending a leave group
         time.sleep(DEFAULT_MAX_POLL_INTERVAL_MS);
-        assertLeaveGroup(heartbeatRequestManager);
+        NetworkClientDelegate.PollResult leaveGroupRequest = assertLeaveGroup(heartbeatRequestManager);
+        assertInState(MemberState.JOINING);
         assertTrue(heartbeatRequestManager.pollTimer().isExpired());
-        // Poll again, ensure we heartbeat again.
+        time.sleep(100);
+        assertNoHeartbeat(heartbeatRequestManager);
+        assertInState(MemberState.JOINING);
         time.sleep(1);
         heartbeatRequestManager.resetPollTimer();
+        // Server respond to leave group. The manager heartbeats BAU.
+        completingLeaveGroupRequest(leaveGroupRequest);
+        // Join back to the group.
         assertHeartbeat(heartbeatRequestManager);
         assertFalse(heartbeatRequestManager.pollTimer().isExpired());
+        assertInState(MemberState.STABLE);
+    }
+
+    private void assertInState(MemberState state) {
+        assertEquals(state, membershipManager.state());
     }
 
     private void assertHeartbeat(HeartbeatRequestManager hrm) {
-        System.out.println("assertHeartbeat");
         NetworkClientDelegate.PollResult pollResult = hrm.poll(time.milliseconds());
         assertEquals(1, pollResult.unsentRequests.size());
         assertEquals(DEFAULT_HEARTBEAT_INTERVAL_MS, pollResult.timeUntilNextPollMs);
@@ -537,14 +548,22 @@ public class HeartbeatRequestManagerTest {
             Errors.NONE));
     }
 
-    private void assertLeaveGroup(HeartbeatRequestManager hrm) {
+    private void assertNoHeartbeat(HeartbeatRequestManager hrm) {
+        NetworkClientDelegate.PollResult pollResult = hrm.poll(time.milliseconds());
+        assertEquals(0, pollResult.unsentRequests.size());
+    }
+
+    private NetworkClientDelegate.PollResult assertLeaveGroup(HeartbeatRequestManager hrm) {
         NetworkClientDelegate.PollResult pollResult = hrm.poll(time.milliseconds());
         assertEquals(1, pollResult.unsentRequests.size());
         ConsumerGroupHeartbeatRequestData data = (ConsumerGroupHeartbeatRequestData) pollResult.unsentRequests.get(0).requestBuilder().build().data();
         assertEquals(ConsumerGroupHeartbeatRequest.LEAVE_GROUP_MEMBER_EPOCH, data.memberEpoch());
-        assertEquals(MemberState.UNSUBSCRIBED, membershipManager.state());
-        pollResult.unsentRequests.get(0).handler().onComplete(createHeartbeatResponse(pollResult.unsentRequests.get(0),
-            Errors.NONE));
+        assertEquals(MemberState.JOINING, membershipManager.state());
+        return pollResult;
+    }
+
+    private void completingLeaveGroupRequest(NetworkClientDelegate.PollResult leaveGroupRequest) {
+        leaveGroupRequest.unsentRequests.get(0).handler().onComplete(createHeartbeatResponse(leaveGroupRequest.unsentRequests.get(0), Errors.NONE));
     }
 
     private void mockStableMember() {

@@ -191,18 +191,19 @@ public class HeartbeatRequestManager implements RequestManager {
                 "either by increasing max.poll.interval.ms or by reducing the maximum size of batches " +
                 "returned in poll() with max.poll.records.");
             // This should trigger a heartbeat with leave group epoch
-            membershipManager.onStaledMember();
+            membershipManager.transitionToStaled();
+            NetworkClientDelegate.UnsentRequest request = makeHeartbeatRequest(currentTimeMs, true);
+            // We can ignore the leave response because we can join before or after receiving the response.
+            heartbeatRequestState.reset();
+            return new NetworkClientDelegate.PollResult(heartbeatRequestState.heartbeatIntervalMs, Collections.singletonList(request));
         }
 
         boolean heartbeatNow = membershipManager.shouldHeartbeatNow() && !heartbeatRequestState.requestInFlight();
-
         if (!heartbeatRequestState.canSendRequest(currentTimeMs) && !heartbeatNow) {
             return new NetworkClientDelegate.PollResult(heartbeatRequestState.nextHeartbeatMs(currentTimeMs));
         }
 
-        heartbeatRequestState.onSendAttempt(currentTimeMs);
-        membershipManager.onHeartbeatRequestSent();
-        NetworkClientDelegate.UnsentRequest request = makeHeartbeatRequest();
+        NetworkClientDelegate.UnsentRequest request = makeHeartbeatRequest(currentTimeMs, false);
         return new NetworkClientDelegate.PollResult(heartbeatRequestState.heartbeatIntervalMs, Collections.singletonList(request));
     }
 
@@ -227,9 +228,6 @@ public class HeartbeatRequestManager implements RequestManager {
      */
     public void resetPollTimer() {
         pollTimer.reset(maxPollIntervalMs);
-        if (membershipManager.state() == MemberState.UNSUBSCRIBED) {
-            membershipManager.transitionToJoining();
-        }
     }
 
     // Visible for testing
@@ -237,13 +235,25 @@ public class HeartbeatRequestManager implements RequestManager {
         return pollTimer;
     }
 
-    private NetworkClientDelegate.UnsentRequest makeHeartbeatRequest() {
+    private NetworkClientDelegate.UnsentRequest makeHeartbeatRequest(final long currentTimeMs,
+                                                                     final boolean ignoreResponse) {
+        NetworkClientDelegate.UnsentRequest request = makeHeartbeatRequest(ignoreResponse);
+        heartbeatRequestState.onSendAttempt(currentTimeMs);
+        membershipManager.onHeartbeatRequestSent();
+        return request;
+    }
+
+    private NetworkClientDelegate.UnsentRequest makeHeartbeatRequest(final boolean ignoreResponse) {
         NetworkClientDelegate.UnsentRequest request = new NetworkClientDelegate.UnsentRequest(
-            new ConsumerGroupHeartbeatRequest.Builder(this.heartbeatState.buildRequestData()),
-            coordinatorRequestManager.coordinator());
+                new ConsumerGroupHeartbeatRequest.Builder(this.heartbeatState.buildRequestData()),
+                coordinatorRequestManager.coordinator());
         return request.whenComplete((response, exception) -> {
             if (response != null) {
                 onResponse((ConsumerGroupHeartbeatResponse) response.responseBody(), request.handler().completionTimeMs());
+                // The response is only ignore when the member becomes staled. This is because the member needs to
+                // rejoin on the next poll regardless the server has responded to the heartbeat.
+                if (!ignoreResponse)
+                    this.membershipManager.onHeartbeatResponseReceived(((ConsumerGroupHeartbeatResponse) response.responseBody()).data());
             } else {
                 onFailure(exception, request.handler().completionTimeMs());
             }
@@ -270,7 +280,6 @@ public class HeartbeatRequestManager implements RequestManager {
             this.heartbeatRequestState.updateHeartbeatIntervalMs(response.data().heartbeatIntervalMs());
             this.heartbeatRequestState.onSuccessfulAttempt(currentTimeMs);
             this.heartbeatRequestState.resetTimer();
-            this.membershipManager.onHeartbeatResponseReceived(response.data());
             maybeSendGroupMetadataUpdateEvent();
             return;
         }
