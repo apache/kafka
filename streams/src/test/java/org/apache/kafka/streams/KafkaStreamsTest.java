@@ -45,6 +45,7 @@ import org.apache.kafka.streams.errors.UnknownStateStoreException;
 import org.apache.kafka.streams.internals.StreamsConfigUtils;
 import org.apache.kafka.streams.internals.metrics.ClientMetrics;
 import org.apache.kafka.streams.kstream.Materialized;
+import org.apache.kafka.streams.processor.StandbyUpdateListener;
 import org.apache.kafka.streams.processor.StateRestoreListener;
 import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.ProcessorContext;
@@ -258,6 +259,7 @@ public class KafkaStreamsTest {
                 anyLong(),
                 any(StateDirectory.class),
                 any(StateRestoreListener.class),
+                any(StandbyUpdateListener.class),
                 anyInt(),
                 any(Runnable.class),
                 any()
