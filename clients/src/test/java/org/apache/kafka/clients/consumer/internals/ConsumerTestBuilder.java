@@ -267,8 +267,8 @@ public class ConsumerTestBuilder implements Closeable {
                 logContext,
                 applicationEventQueue,
                 requestManagers,
-                metadata,
-                networkClientDelegate)
+                metadata
+            )
         );
     }
 

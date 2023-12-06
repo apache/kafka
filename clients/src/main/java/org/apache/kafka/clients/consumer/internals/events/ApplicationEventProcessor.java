@@ -23,7 +23,6 @@ import org.apache.kafka.clients.consumer.internals.ConsumerMetadata;
 import org.apache.kafka.clients.consumer.internals.ConsumerNetworkThread;
 import org.apache.kafka.clients.consumer.internals.HeartbeatRequestManager;
 import org.apache.kafka.clients.consumer.internals.MembershipManager;
-import org.apache.kafka.clients.consumer.internals.NetworkClientDelegate;
 import org.apache.kafka.clients.consumer.internals.RequestManagers;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.PartitionInfo;
@@ -46,19 +45,15 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
     private final Logger log;
     private final ConsumerMetadata metadata;
     private final RequestManagers requestManagers;
-    private final NetworkClientDelegate networkClientDelegate;
 
     public ApplicationEventProcessor(final LogContext logContext,
                                      final BlockingQueue<ApplicationEvent> applicationEventQueue,
                                      final RequestManagers requestManagers,
-                                     final ConsumerMetadata metadata,
-                                     final NetworkClientDelegate ncd) {
+                                     final ConsumerMetadata metadata) {
         super(logContext, applicationEventQueue);
         this.log = logContext.logger(ApplicationEventProcessor.class);
         this.requestManagers = requestManagers;
         this.metadata = metadata;
-        this.networkClientDelegate = ncd;
-
     }
 
     /**
@@ -118,8 +113,12 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
                 process((UnsubscribeApplicationEvent) event);
                 return;
 
-            case PREP_CLOSING:
-                processPrepClosingEvent((ConsumerCloseApplicationEvent) event);
+            case COMMIT_ON_CLOSE:
+                process((CommitOnCloseApplicationEvent) event);
+                return;
+
+            case LEAVE_ON_CLOSE:
+                process((LeaveOnCloseApplicationEvent) event);
                 return;
 
             default:
@@ -240,32 +239,21 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
         event.chain(future);
     }
 
-    private void processPrepClosingEvent(ConsumerCloseApplicationEvent event) {
-        switch (event.task()) {
-            case COMMIT:
-                log.debug("Sending unsent commit before closing.");
-                sendUnsentCommit();
-                event.future().complete(null);
-                break;
-            case LEAVE_GROUP:
-                log.debug("Leaving group before closing");
-                requestManagers.membershipManager.ifPresent(MembershipManager::leaveGroupOnClose);
-                event.future().complete(null);
-                break;
-            default:
-                log.warn("Invalid ConsumerCloseApplicationEvent task {}", event.task());
-                event.future().completeExceptionally(new KafkaException("Invalid closing task."));
-        }
-    }
-
-    private void sendUnsentCommit() {
+    private void process(final CommitOnCloseApplicationEvent event) {
         if (!requestManagers.commitRequestManager.isPresent())
             return;
-        NetworkClientDelegate.PollResult res = requestManagers.commitRequestManager.get().pollOnClose();
-        if (res.unsentRequests.isEmpty())
+        log.debug("Signal CommitRequestManager closing");
+        requestManagers.commitRequestManager.get().signalClose();    }
+
+    private void process(final LeaveOnCloseApplicationEvent event) {
+        if (!requestManagers.membershipManager.isPresent()) {
+            event.future().complete(null);
             return;
-        // NetworkThread will continue to poll the networkClientDelegate
-        networkClientDelegate.addAll(res);
+        }
+        log.debug("Leaving group before closing");
+        CompletableFuture<Void> future = requestManagers.membershipManager.get().leaveGroup();
+        // The future will be completed on heartbeat sent
+        event.chain(future);
     }
 
     /**
@@ -274,20 +262,17 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
      */
     public static Supplier<ApplicationEventProcessor> supplier(final LogContext logContext,
                                                                final ConsumerMetadata metadata,
-                                                               final Supplier<NetworkClientDelegate> ncdSupplier,
                                                                final BlockingQueue<ApplicationEvent> applicationEventQueue,
                                                                final Supplier<RequestManagers> requestManagersSupplier) {
         return new CachedSupplier<ApplicationEventProcessor>() {
             @Override
             protected ApplicationEventProcessor create() {
                 RequestManagers requestManagers = requestManagersSupplier.get();
-                NetworkClientDelegate ncd = ncdSupplier.get();
                 return new ApplicationEventProcessor(
                         logContext,
                         applicationEventQueue,
                         requestManagers,
-                        metadata,
-                        ncd
+                        metadata
                 );
             }
         };

@@ -43,11 +43,12 @@ import org.apache.kafka.clients.consumer.internals.events.ApplicationEventProces
 import org.apache.kafka.clients.consumer.internals.events.AssignmentChangeApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
 import org.apache.kafka.clients.consumer.internals.events.CommitApplicationEvent;
-import org.apache.kafka.clients.consumer.internals.events.ConsumerCloseApplicationEvent;
+import org.apache.kafka.clients.consumer.internals.events.CommitOnCloseApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.ErrorBackgroundEvent;
 import org.apache.kafka.clients.consumer.internals.events.EventProcessor;
 import org.apache.kafka.clients.consumer.internals.events.FetchCommittedOffsetsApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.GroupMetadataUpdateEvent;
+import org.apache.kafka.clients.consumer.internals.events.LeaveOnCloseApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.ListOffsetsApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.NewTopicsMetadataUpdateRequestEvent;
 import org.apache.kafka.clients.consumer.internals.events.ResetPositionsApplicationEvent;
@@ -80,6 +81,7 @@ import org.apache.kafka.common.utils.AppInfoParser;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
+import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 import org.slf4j.event.Level;
 
@@ -102,7 +104,6 @@ import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.LinkedBlockingQueue;
-import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
@@ -327,8 +328,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                     clientTelemetryReporter);
             final Supplier<ApplicationEventProcessor> applicationEventProcessorSupplier = ApplicationEventProcessor.supplier(logContext,
                     metadata,
-                    networkClientDelegateSupplier,
-                    applicationEventQueue,
+                applicationEventQueue,
                     requestManagersSupplier);
             this.applicationEventHandler = new ApplicationEventHandler(logContext,
                     time,
@@ -484,8 +484,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         Supplier<ApplicationEventProcessor> applicationEventProcessorSupplier = ApplicationEventProcessor.supplier(
                 logContext,
                 metadata,
-                networkClientDelegateSupplier,
-                applicationEventQueue,
+            applicationEventQueue,
                 requestManagersSupplier
         );
         this.applicationEventHandler = new ApplicationEventHandler(logContext,
@@ -1087,7 +1086,6 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             closeQuietly(() -> applicationEventHandler.close(Duration.ofMillis(closeTimer.remainingMs())), "Failed shutting down network thread", firstException);
         closeTimer.update();
         // Ensure all async commit callbacks are invoked
-        swallow(log, Level.ERROR, "Failed invoking asynchronous commit callback", this::maybeInvokeCommitCallbacks, firstException);
         closeQuietly(interceptors, "consumer interceptors", firstException);
         closeQuietly(kafkaConsumerMetrics, "kafka consumer metrics", firstException);
         closeQuietly(metrics, "consumer metrics", firstException);
@@ -1110,68 +1108,62 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
      * 1. autocommit offsets
      * 2. revoke all partitions
      */
-    private void prepareShutdown(final Timer timer, final AtomicReference<Throwable> firstException) {
+    void prepareShutdown(final Timer timer, final AtomicReference<Throwable> firstException) {
         if (!groupMetadata.isPresent())
             return;
-        maybeAutoCommitSync(timer, firstException);
+        maybeAutoCommitSync(autoCommitEnabled, timer, firstException);
         timer.update();
-        waitOnEventCompletion(new ConsumerCloseApplicationEvent(ConsumerCloseApplicationEvent.Task.COMMIT, timer.remainingMs()), timer, firstException);
-        maybeInvokeCommitCallbacks();
-        maybeRevokePartitions(timer, firstException);
-        waitOnEventCompletion(new ConsumerCloseApplicationEvent(ConsumerCloseApplicationEvent.Task.LEAVE_GROUP, timer.remainingMs()), timer, firstException);
+        applicationEventHandler.add(new CommitOnCloseApplicationEvent());
+        maybeRevokePartitions(firstException);
+        completeSilently(
+            () -> {
+                applicationEventHandler.addAndGet(new LeaveOnCloseApplicationEvent(), timer);
+                timer.update();
+            },
+            "Failed to send leaveGroup heartbeat with a timeout(ms)=" + timer.timeoutMs(), firstException);
+        swallow(log, Level.ERROR, "Failed invoking asynchronous commit callback.", this::maybeInvokeCommitCallbacks,
+            firstException);
     }
 
-    private void waitOnEventCompletion(final ConsumerCloseApplicationEvent event,
-                                       final Timer timer,
-                                       final AtomicReference<Throwable> firstException) {
-        try {
-            applicationEventHandler.addAndGet(event, timer);
-        } catch (TimeoutException e) {
-            log.debug("Timeout of {}ms expired before the {} operation could complete.",
-                timer.remainingMs(),
-                event.task());
-        } catch (Exception e) {
-            firstException.compareAndSet(null, e);
-        } finally {
+    // Visible for testing
+    void maybeAutoCommitSync(final boolean shouldAutoCommit,
+                             final Timer timer,
+                             final AtomicReference<Throwable> firstException) {
+        if (!shouldAutoCommit)
+            return;
+        completeSilently(() -> {
+            Map<TopicPartition, OffsetAndMetadata> allConsumed = subscriptions.allConsumed();
+            log.debug("Sending synchronous auto-commit of offsets {} on closing", allConsumed);
+            commitSync(allConsumed, Duration.ofMillis(timer.remainingMs()));
             timer.update();
-        }
+        }, "Failed autoCommitSync with a timeout(ms)=" + timer.timeoutMs(), firstException);
     }
 
-    private void maybeRevokePartitions(final Timer timer, final AtomicReference<Throwable> firstException) {
+    // Visible for testing
+    void maybeRevokePartitions(final AtomicReference<Throwable> firstException) {
         if (!subscriptions.hasAutoAssignedPartitions() || subscriptions.assignedPartitions().isEmpty())
             return;
+        CompletableFuture<Void> revocationFuture = invokePartitionRevocationListener();
+        completeSilently(revocationFuture::get,
+            "Failed revoking partitions of " + subscriptions.assignedPartitions(),
+            firstException);
+        subscriptions.assignFromSubscribed(Collections.emptySet());
+    }
+
+    // Visible for testing
+    void completeSilently(final Utils.ThrowingRunnable function,
+                          final String msg,
+                          final AtomicReference<Throwable> firstException) {
         try {
-            // If the consumer is in a group, we will pause and revoke all assigned partitions
-            onLeavePrepare().get(timer.remainingMs(), TimeUnit.MILLISECONDS);
+            function.run();
+        } catch (TimeoutException e) {
+            log.debug("Timeout expired before the {} operation could complete.", msg);
         } catch (Exception e) {
-            Exception exception = e;
-            if (e instanceof ExecutionException)
-                exception = (Exception) e.getCause();
-            firstException.compareAndSet(null, exception);
-        } finally {
-            subscriptions.assignFromSubscribed(Collections.emptySet());
-            timer.update();
+            firstException.compareAndSet(null, e);
         }
     }
 
-    private void maybeAutoCommitSync(final Timer timer, final AtomicReference<Throwable> firstException) {
-        if (autoCommitEnabled) {
-            Map<TopicPartition, OffsetAndMetadata> allConsumed = subscriptions.allConsumed();
-            try {
-                log.debug("Sending synchronous auto-commit of offsets {} on closing", allConsumed);
-                commitSync(allConsumed, Duration.ofMillis(timer.remainingMs()));
-            } catch (TimeoutException e) {
-                log.debug("Timeout of {}ms expired before the auto commit could complete.",
-                    timer.remainingMs());
-            } catch (Exception e) {
-                // consistent with async auto-commit failures, we do not propagate the exception
-                log.warn("Synchronous auto-commit of offsets {} failed: {}", allConsumed, e.getMessage());
-                firstException.compareAndSet(null, e);
-            }
-        }
-    }
-
-    private CompletableFuture<Void> onLeavePrepare() {
+    private CompletableFuture<Void> invokePartitionRevocationListener() {
         SortedSet<TopicPartition> droppedPartitions = new TreeSet<>(MembershipManagerImpl.TOPIC_PARTITION_COMPARATOR);
         droppedPartitions.addAll(subscriptions.assignedPartitions());
         if (!subscriptions.hasAutoAssignedPartitions() || droppedPartitions.isEmpty())
