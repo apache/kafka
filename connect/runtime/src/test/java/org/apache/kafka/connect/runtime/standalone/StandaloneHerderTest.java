@@ -795,7 +795,7 @@ public class StandaloneHerderTest {
     }
 
     @Test
-    public void testCorruptConfig() throws Throwable {
+    public void testCorruptConfig() {
         Map<String, String> config = new HashMap<>();
         config.put(ConnectorConfig.NAME_CONFIG, CONNECTOR_NAME);
         config.put(ConnectorConfig.CONNECTOR_CLASS_CONFIG, BogusSinkConnector.class.getName());
