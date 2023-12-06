@@ -504,12 +504,12 @@ public class Graph<V extends Comparable<V>> {
                     final Long distanceEnd = distance.get(end);
                     // There's a path to u and either we haven't computed V or distance to V is shorter
                     if (distanceStart != null && (distanceEnd == null || distanceEnd > distanceStart + edge.cost)) {
-                        if (i == nodeCount - 1) {
-                            return end;
-                        }
                         distance.put(end, distanceStart + edge.cost);
                         parentNodes.put(end, start);
                         parentEdges.put(end, edge);
+                        if (i == nodeCount - 1) {
+                            return end;
+                        }
                     }
                 }
             }
