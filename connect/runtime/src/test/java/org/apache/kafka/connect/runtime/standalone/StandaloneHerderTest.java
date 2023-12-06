@@ -783,6 +783,7 @@ public class StandaloneHerderTest {
 
         assertEquals("bar", capturedConfig.getValue().get("foo"));
         herder.connectorConfig(CONNECTOR_NAME, connectorConfigCb);
+        verifyNoMoreInteractions(connectorConfigCb);
     }
 
     @Test
