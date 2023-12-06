@@ -3824,6 +3824,8 @@ class KafkaApis(val requestChannel: RequestChannel,
               name => new ClientMetricsResource().setName(name)).toList.asJava)
           requestHelper.sendMaybeThrottle(request, new ListClientMetricsResourcesResponse(data))
         case None =>
+          // This should never happen as ZK based cluster calls should get rejected earlier itself,
+          // but we should handle it gracefully.
           info("Received list client metrics resources request for zookeeper based cluster")
           requestHelper.sendMaybeThrottle(request, listClientMetricsResourcesRequest.getErrorResponse(Errors.UNSUPPORTED_VERSION.exception))
       }
