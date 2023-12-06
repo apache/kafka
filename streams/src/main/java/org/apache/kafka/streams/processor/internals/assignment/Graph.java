@@ -19,9 +19,11 @@ package org.apache.kafka.streams.processor.internals.assignment;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedList;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Objects;
+import java.util.Queue;
 import java.util.Set;
 import java.util.SortedMap;
 import java.util.SortedSet;
@@ -201,6 +203,8 @@ public class Graph<V extends Comparable<V>> {
                 residualGraph.addEdge(edge.destination, backwardEdge);
             }
         }
+        residualGraph.setSourceNode(sourceNode);
+        residualGraph.setSinkNode(sinkNode);
         return residualGraph;
     }
 
@@ -249,6 +253,97 @@ public class Graph<V extends Comparable<V>> {
                 edge.residualFlow = residualEdge.residualFlow;
             }
         }
+    }
+
+    public long flow() {
+        long flow = 0;
+        final SortedMap<V, Edge> edges = adjList.get(sourceNode);
+        if (edges != null) {
+            for (final Edge edge : edges.values()) {
+                flow += edge.flow;
+            }
+        }
+        return flow;
+    }
+
+    public long calculateMaxFlow() {
+        final Graph<V> residualGraph = residualGraph();
+        residualGraph.fordFulkson();
+
+        long maxFlow = 0;
+        for (final Entry<V, SortedMap<V, Edge>> nodeEdges : adjList.entrySet()) {
+            final V node = nodeEdges.getKey();
+            for (final Entry<V, Edge> nodeEdge : nodeEdges.getValue().entrySet()) {
+                final V destination = nodeEdge.getKey();
+                final Edge edge = nodeEdge.getValue();
+                final Edge residualEdge = residualGraph.adjList.get(node).get(destination);
+                edge.flow = residualEdge.flow;
+                edge.residualFlow = residualEdge.residualFlow;
+
+                if (node == sourceNode) {
+                    maxFlow += edge.flow;
+                }
+            }
+        }
+
+        return maxFlow;
+    }
+
+    private void fordFulkson() {
+        if (!isResidualGraph) {
+            throw new IllegalStateException("Should be residual graph to cancel negative cycles");
+        }
+
+        Map<V, V> parents = new HashMap<>();
+        while (breadthFirstSearch(sourceNode, sinkNode, parents)) {
+            int possibleFlow = Integer.MAX_VALUE;
+            for (V node = sinkNode; node != sourceNode; node = parents.get(node)) {
+                final V parent = parents.get(node);
+                possibleFlow = Math.min(possibleFlow, adjList.get(parent).get(node).residualFlow);
+            }
+
+            for (V node = sinkNode; node != sourceNode; node = parents.get(node)) {
+                final V parent = parents.get(node);
+                final Edge parentEdge = adjList.get(parent).get(node);
+                final Edge counterEdge = parentEdge.counterEdge;
+                parentEdge.residualFlow -= possibleFlow;
+                if (parentEdge.forwardEdge) {
+                    parentEdge.flow += possibleFlow;
+                }
+                counterEdge.residualFlow += possibleFlow;
+                if (counterEdge.forwardEdge && counterEdge.flow >= possibleFlow) {
+                    counterEdge.flow -= possibleFlow;
+                }
+            }
+
+            parents = new HashMap<>();
+        }
+    }
+
+    private boolean breadthFirstSearch(final V source, final V target, final Map<V, V> parents) {
+        final Set<V> visited = new HashSet<>();
+        final Queue<V> queue = new LinkedList<>();
+        queue.add(source);
+        visited.add(source);
+        while (!queue.isEmpty()) {
+            final V node = queue.poll();
+            final SortedMap<V, Edge> nodeEdges = adjList.get(node);
+            for (final Entry<V, Edge> nodeEdge : nodeEdges.entrySet()) {
+                final V nextNode = nodeEdge.getKey();
+                if (visited.contains(nextNode) || nodeEdge.getValue().residualFlow <= 0) {
+                    continue;
+                }
+                if (nodeEdge.getKey().equals(target)) {
+                    parents.put(target, node);
+                    return true;
+                }
+                queue.add(nodeEdge.getKey());
+                parents.put(nodeEdge.getKey(), node);
+                visited.add(nodeEdge.getKey());
+            }
+        }
+
+        return false;
     }
 
     private void populateInOutFlow(final Map<V, Long> inFlow, final Map<V, Long> outFlow) {
