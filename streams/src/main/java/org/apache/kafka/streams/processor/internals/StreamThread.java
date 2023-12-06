@@ -58,8 +58,6 @@ import org.apache.kafka.streams.processor.internals.tasks.DefaultTaskManager.Def
 import org.apache.kafka.streams.state.internals.ThreadCache;
 
 import java.util.HashMap;
-import java.util.LinkedList;
-import java.util.List;
 import java.util.Queue;
 import java.util.function.BiConsumer;
 import org.slf4j.Logger;
@@ -344,8 +342,8 @@ public class StreamThread extends Thread implements ProcessingThread {
 
     private volatile Uuid mainConsumerClientInstanceId = null;
 
-    private final List<Long> fetchDeadlines = new LinkedList<>();
-    private final List<KafkaFutureImpl<Uuid>> mainConsumerInstanceIdFutures = new LinkedList<>();
+    private volatile long fetchDeadline = -1;
+    private volatile KafkaFutureImpl<Uuid> mainConsumerInstanceIdFuture;
 
     public static StreamThread create(final TopologyMetadata topologyMetadata,
                                       final StreamsConfig config,
@@ -729,43 +727,40 @@ public class StreamThread extends Thread implements ProcessingThread {
 
     // visible for testing
     void maybeGetClientInstanceIds() {
-        synchronized (fetchDeadlines) {
-            // we pass in a timeout of zero into each `clientInstanceId()` call
-            // to just trigger the "get instance id" background RPC;
-            // we don't want to block the stream thread that can do useful work in the meantime
+        // we pass in a timeout of zero into each `clientInstanceId()` call
+        // to just trigger the "get instance id" background RPC;
+        // we don't want to block the stream thread that can do useful work in the meantime
 
-            if (!fetchDeadlines.isEmpty()) {
-                if (fetchDeadlines.get(0) >= time.milliseconds()) {
+        if (fetchDeadline != -1) {
+            if (!mainConsumerInstanceIdFuture.isDone()) {
+                if (fetchDeadline >= time.milliseconds()) {
                     try {
                         mainConsumerClientInstanceId = mainConsumer.clientInstanceId(Duration.ZERO);
-                        mainConsumerInstanceIdFutures.forEach(f -> f.complete(mainConsumerClientInstanceId));
-
-                        maybeCleanupFetchDeadline();
+                        mainConsumerInstanceIdFuture.complete(mainConsumerClientInstanceId);
+                        maybeResetFetchDeadline();
                     } catch (final IllegalStateException disabledError) {
-                        mainConsumerInstanceIdFutures.get(0).complete(null);
-                        maybeCleanupFetchDeadline();
+                        mainConsumerInstanceIdFuture.complete(null);
+                        maybeResetFetchDeadline();
                     } catch (final TimeoutException swallow) {
                         // swallow
                     } catch (final Exception error) {
-                        mainConsumerInstanceIdFutures.get(0).completeExceptionally(error);
-                        maybeCleanupFetchDeadline();
+                        mainConsumerInstanceIdFuture.completeExceptionally(error);
+                        maybeResetFetchDeadline();
                     }
                 } else {
-                    mainConsumerInstanceIdFutures.get(0).completeExceptionally(
+                    mainConsumerInstanceIdFuture.completeExceptionally(
                         new TimeoutException("Could not retrieve main consumer client instance id.")
                     );
-                    maybeCleanupFetchDeadline();
                 }
             }
         }
     }
 
-    private void maybeCleanupFetchDeadline() {
-        final boolean remove = mainConsumerInstanceIdFutures.get(0).isDone();
+    private void maybeResetFetchDeadline() {
+        final boolean reset = mainConsumerInstanceIdFuture.isDone();
 
-        if (remove) {
-            fetchDeadlines.remove(0);
-            mainConsumerInstanceIdFutures.remove(0);
+        if (reset) {
+            fetchDeadline = -1L;
         }
     }
 
@@ -1534,23 +1529,21 @@ public class StreamThread extends Thread implements ProcessingThread {
     }
 
     public Map<String, KafkaFuture<Uuid>> consumerClientInstanceIds(final Duration timeout) {
+        boolean setDeadline = false;
+
         final Map<String, KafkaFuture<Uuid>> result = new HashMap<>();
 
-        synchronized (fetchDeadlines) {
-            boolean addDeadline = false;
+        final KafkaFutureImpl<Uuid> future = new KafkaFutureImpl<>();
+        if (mainConsumerClientInstanceId != null) {
+            future.complete(mainConsumerClientInstanceId);
+        } else {
+            mainConsumerInstanceIdFuture = future;
+            setDeadline = true;
+        }
+        result.put(getName() + "-consumer", future);
 
-            final KafkaFutureImpl<Uuid> future = new KafkaFutureImpl<>();
-            if (mainConsumerClientInstanceId != null) {
-                future.complete(mainConsumerClientInstanceId);
-            } else {
-                mainConsumerInstanceIdFutures.add(future);
-                addDeadline = true;
-            }
-            result.put(getName() + "-consumer", future);
-
-            if (addDeadline) {
-                fetchDeadlines.add(time.milliseconds() + timeout.toMillis());
-            }
+        if (setDeadline) {
+            fetchDeadline = time.milliseconds() + timeout.toMillis();
         }
 
         return result;

@@ -3385,67 +3385,6 @@ public class StreamThreadTest {
         );
     }
 
-    @Test
-    public void shouldSetupMultipleDeadlinesAndCompleteAllAtOnce() throws Exception {
-        final Uuid consumerInstanceId = Uuid.randomUuid();
-        clientSupplier.consumer.setClientInstanceId(consumerInstanceId);
-        thread = createStreamThread("clientId");
-        thread.setState(State.STARTING);
-
-        final Map<String, KafkaFuture<Uuid>> consumerFutures = thread.consumerClientInstanceIds(Duration.ofMillis(30L));
-        mockTime.sleep(10L);
-        final Map<String, KafkaFuture<Uuid>> consumerFuturesSecondCall = thread.consumerClientInstanceIds(Duration.ofMillis(30L));
-
-        thread.maybeGetClientInstanceIds();
-
-        {
-            final KafkaFuture<Uuid> future = consumerFutures.get("clientId-StreamThread-1-consumer");
-            final Uuid clientInstanceId = future.get();
-            assertThat(clientInstanceId, equalTo(consumerInstanceId));
-        }
-
-        {
-            final KafkaFuture<Uuid> future = consumerFuturesSecondCall.get("clientId-StreamThread-1-consumer");
-            final Uuid clientInstanceId = future.get();
-            assertThat(clientInstanceId, equalTo(consumerInstanceId));
-        }
-    }
-
-    @Test
-    public void shouldSetupMultipleDeadlinesAndOnlyTimeoutFirst() throws Exception {
-        final Uuid consumerInstanceId = Uuid.randomUuid();
-        clientSupplier.consumer.setClientInstanceId(consumerInstanceId);
-        thread = createStreamThread("clientId");
-        thread.setState(State.STARTING);
-
-        final Map<String, KafkaFuture<Uuid>> consumerFutures = thread.consumerClientInstanceIds(Duration.ofMillis(30L));
-        mockTime.sleep(10L);
-        final Map<String, KafkaFuture<Uuid>> consumerFuturesSecondCall = thread.consumerClientInstanceIds(Duration.ofMillis(30L));
-        mockTime.sleep(25L);
-
-        thread.maybeGetClientInstanceIds();
-
-        {
-            final KafkaFuture<Uuid> future = consumerFutures.get("clientId-StreamThread-1-consumer");
-            final ExecutionException error = assertThrows(ExecutionException.class, future::get);
-            assertThat(error.getCause(), instanceOf(TimeoutException.class));
-            assertThat(
-                error.getCause().getMessage(),
-                equalTo("Could not retrieve main consumer client instance id.")
-            );
-
-            assertThat(consumerFuturesSecondCall.get("clientId-StreamThread-1-consumer").isDone(), equalTo(false));
-        }
-
-        thread.maybeGetClientInstanceIds();
-
-        {
-            final KafkaFuture<Uuid> future = consumerFuturesSecondCall.get("clientId-StreamThread-1-consumer");
-            final Uuid clientInstanceId = future.get();
-            assertThat(clientInstanceId, equalTo(consumerInstanceId));
-        }
-    }
-
     private StreamThread setUpThread(final Properties streamsConfigProps) {
         final StreamsConfig config = new StreamsConfig(streamsConfigProps);
         final ConsumerGroupMetadata consumerGroupMetadata = Mockito.mock(ConsumerGroupMetadata.class);
