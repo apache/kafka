@@ -89,13 +89,13 @@ public class ClientTelemetryEmitterTest {
             Collections.singletonList("name"));
         ClientTelemetryEmitter emitter = new ClientTelemetryEmitter(selector, true);
 
-        SinglePointMetric gauge = SinglePointMetric.gauge(metricKey, Long.valueOf(1), now);
-        SinglePointMetric sum = SinglePointMetric.sum(metricKey, 1.0, true, now);
+        SinglePointMetric gauge = SinglePointMetric.gauge(metricKey, Long.valueOf(1), now, Collections.emptySet());
+        SinglePointMetric sum = SinglePointMetric.sum(metricKey, 1.0, true, now, Collections.emptySet());
         assertTrue(emitter.emitMetric(gauge));
         assertTrue(emitter.emitMetric(sum));
 
         MetricKey anotherKey = new MetricKey("io.name", Collections.emptyMap());
-        assertFalse(emitter.emitMetric(SinglePointMetric.gauge(anotherKey, Long.valueOf(1), now)));
+        assertFalse(emitter.emitMetric(SinglePointMetric.gauge(anotherKey, Long.valueOf(1), now, Collections.emptySet())));
 
         assertEquals(2, emitter.emittedMetrics().size());
         assertEquals(Arrays.asList(gauge, sum), emitter.emittedMetrics());

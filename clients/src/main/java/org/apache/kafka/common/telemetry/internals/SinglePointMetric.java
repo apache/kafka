@@ -24,6 +24,7 @@ import io.opentelemetry.proto.metrics.v1.NumberDataPoint;
 
 import java.time.Instant;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -52,48 +53,48 @@ public class SinglePointMetric implements MetricKeyable {
     /*
         Methods to construct gauge metric type.
      */
-    public static SinglePointMetric gauge(MetricKey metricKey, Number value, Instant timestamp) {
+    public static SinglePointMetric gauge(MetricKey metricKey, Number value, Instant timestamp, Set<String> excludeLabels) {
         NumberDataPoint.Builder point = point(timestamp, value);
-        return gauge(metricKey, point);
+        return gauge(metricKey, point, excludeLabels);
     }
 
-    public static SinglePointMetric gauge(MetricKey metricKey, double value, Instant timestamp) {
+    public static SinglePointMetric gauge(MetricKey metricKey, double value, Instant timestamp, Set<String> excludeLabels) {
         NumberDataPoint.Builder point = point(timestamp, value);
-        return gauge(metricKey, point);
+        return gauge(metricKey, point, excludeLabels);
     }
 
     /*
         Methods to construct sum metric type.
      */
 
-    public static SinglePointMetric sum(MetricKey metricKey, double value, boolean monotonic, Instant timestamp) {
-        return sum(metricKey, value, monotonic, timestamp, null);
+    public static SinglePointMetric sum(MetricKey metricKey, double value, boolean monotonic, Instant timestamp, Set<String> excludeLabels) {
+        return sum(metricKey, value, monotonic, timestamp, null, excludeLabels);
     }
 
     public static SinglePointMetric sum(MetricKey metricKey, double value, boolean monotonic, Instant timestamp,
-        Instant startTimestamp) {
+        Instant startTimestamp, Set<String> excludeLabels) {
         NumberDataPoint.Builder point = point(timestamp, value);
         if (startTimestamp != null) {
             point.setStartTimeUnixNano(toTimeUnixNanos(startTimestamp));
         }
 
-        return sum(metricKey, AggregationTemporality.AGGREGATION_TEMPORALITY_CUMULATIVE, monotonic, point);
+        return sum(metricKey, AggregationTemporality.AGGREGATION_TEMPORALITY_CUMULATIVE, monotonic, point, excludeLabels);
     }
 
     public static SinglePointMetric deltaSum(MetricKey metricKey, double value, boolean monotonic,
-        Instant timestamp, Instant startTimestamp) {
+        Instant timestamp, Instant startTimestamp, Set<String> excludeLabels) {
         NumberDataPoint.Builder point = point(timestamp, value)
             .setStartTimeUnixNano(toTimeUnixNanos(startTimestamp));
 
-        return sum(metricKey, AggregationTemporality.AGGREGATION_TEMPORALITY_DELTA, monotonic, point);
+        return sum(metricKey, AggregationTemporality.AGGREGATION_TEMPORALITY_DELTA, monotonic, point, excludeLabels);
     }
 
     /*
         Helper methods to support metric construction.
      */
     private static SinglePointMetric sum(MetricKey metricKey, AggregationTemporality aggregationTemporality,
-        boolean monotonic, NumberDataPoint.Builder point) {
-        point.addAllAttributes(asAttributes(metricKey.tags()));
+        boolean monotonic, NumberDataPoint.Builder point, Set<String> excludeLabels) {
+        point.addAllAttributes(asAttributes(metricKey.tags(), excludeLabels));
 
         Metric.Builder metric = Metric.newBuilder().setName(metricKey.name());
         metric
@@ -104,8 +105,8 @@ public class SinglePointMetric implements MetricKeyable {
         return new SinglePointMetric(metricKey, metric);
     }
 
-    private static SinglePointMetric gauge(MetricKey metricKey, NumberDataPoint.Builder point) {
-        point.addAllAttributes(asAttributes(metricKey.tags()));
+    private static SinglePointMetric gauge(MetricKey metricKey, NumberDataPoint.Builder point, Set<String> excludeLabels) {
+        point.addAllAttributes(asAttributes(metricKey.tags(), excludeLabels));
 
         Metric.Builder metric = Metric.newBuilder().setName(metricKey.name());
         metric.getGaugeBuilder().addDataPoints(point);
@@ -132,8 +133,8 @@ public class SinglePointMetric implements MetricKeyable {
             .setAsDouble(value);
     }
 
-    private static Iterable<KeyValue> asAttributes(Map<String, String> labels) {
-        return labels.entrySet().stream().map(
+    private static Iterable<KeyValue> asAttributes(Map<String, String> labels, Set<String> excludeLabels) {
+        return labels.entrySet().stream().filter(entry -> !excludeLabels.contains(entry.getKey())).map(
             entry -> KeyValue.newBuilder()
                 .setKey(entry.getKey())
                 .setValue(AnyValue.newBuilder().setStringValue(entry.getValue())).build()

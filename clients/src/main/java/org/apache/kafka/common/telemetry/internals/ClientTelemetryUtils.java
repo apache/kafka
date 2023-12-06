@@ -28,6 +28,7 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -193,5 +194,14 @@ public class ClientTelemetryUtils {
         } catch (IOException e) {
             throw new KafkaException("Unable to parse MetricsData payload", e);
         }
+    }
+
+    public static Uuid fetchClientInstanceId(ClientTelemetryReporter clientTelemetryReporter, Duration timeout) {
+        if (timeout.isNegative()) {
+            throw new IllegalArgumentException("The timeout cannot be negative.");
+        }
+
+        Optional<Uuid> optionalUuid = clientTelemetryReporter.telemetrySender().clientInstanceId(timeout);
+        return optionalUuid.orElse(null);
     }
 }
