@@ -1005,7 +1005,7 @@ class GroupMetadataManager(brokerId: Int,
   /*
    * Check if the offset metadata length is valid
    */
-  private[coordinator] def validateOffsetMetadataLength(metadata: String) : Boolean = {
+  private def validateOffsetMetadataLength(metadata: String) : Boolean = {
     metadata == null || metadata.length() <= config.maxMetadataSize
   }
 
@@ -1026,7 +1026,7 @@ class GroupMetadataManager(brokerId: Int,
    * @param   partition  Partition of GroupMetadataTopic
    * @return  Some(MessageFormatVersion) if replica is local, None otherwise
    */
-  private[coordinator] def getMagic(partition: Int): Option[Byte] =
+  private def getMagic(partition: Int): Option[Byte] =
     replicaManager.getMagic(new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, partition))
 
   /**
