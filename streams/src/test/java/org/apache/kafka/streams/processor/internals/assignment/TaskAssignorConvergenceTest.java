@@ -164,7 +164,7 @@ public class TaskAssignorConvergenceTest {
             }
 
             final MockTime time = new MockTime();
-            final StreamsConfig streamsConfig = new StreamsConfig(configProps(true));
+            final StreamsConfig streamsConfig = new StreamsConfig(configProps(StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_MIN_TRAFFIC));
             final MockClientSupplier mockClientSupplier = new MockClientSupplier();
             final MockInternalTopicManager mockInternalTopicManager = new MockInternalTopicManager(
                 time,
