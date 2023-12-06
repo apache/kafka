@@ -21,6 +21,8 @@ import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.internals.NetworkClientDelegate.PollResult;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEventHandler;
 import org.apache.kafka.clients.consumer.internals.events.ErrorBackgroundEvent;
+import org.apache.kafka.clients.consumer.internals.events.GroupMetadataUpdateEvent;
+import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
 import org.apache.kafka.common.errors.RetriableException;
@@ -100,6 +102,8 @@ public class HeartbeatRequestManager implements RequestManager {
      * ErrorEventHandler allows the background thread to propagate errors back to the user
      */
     private final BackgroundEventHandler backgroundEventHandler;
+
+    private GroupMetadataUpdateEvent previousGroupMetadataUpdateEvent = null;
 
     public HeartbeatRequestManager(
         final LogContext logContext,
@@ -230,9 +234,25 @@ public class HeartbeatRequestManager implements RequestManager {
             this.heartbeatRequestState.onSuccessfulAttempt(currentTimeMs);
             this.heartbeatRequestState.resetTimer();
             this.membershipManager.onHeartbeatResponseReceived(response.data());
+            maybeSendGroupMetadataUpdateEvent();
             return;
         }
         onErrorResponse(response, currentTimeMs);
+    }
+
+    private void maybeSendGroupMetadataUpdateEvent() {
+        if (previousGroupMetadataUpdateEvent == null ||
+            !previousGroupMetadataUpdateEvent.memberId().equals(membershipManager.memberId()) ||
+            previousGroupMetadataUpdateEvent.memberEpoch() != membershipManager.memberEpoch()) {
+
+            final GroupMetadataUpdateEvent currentGroupMetadataUpdateEvent = new GroupMetadataUpdateEvent(
+                membershipManager.memberEpoch(),
+                previousGroupMetadataUpdateEvent != null && membershipManager.memberId() == null ?
+                    previousGroupMetadataUpdateEvent.memberId() : membershipManager.memberId()
+            );
+            this.backgroundEventHandler.add(currentGroupMetadataUpdateEvent);
+            previousGroupMetadataUpdateEvent = currentGroupMetadataUpdateEvent;
+        }
     }
 
     private void onErrorResponse(final ConsumerGroupHeartbeatResponse response,

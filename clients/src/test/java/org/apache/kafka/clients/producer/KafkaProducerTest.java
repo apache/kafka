@@ -2499,7 +2499,7 @@ public class KafkaProducerTest {
         configs.put(ProducerConfig.LINGER_MS_CONFIG, 999);
         configs.put(ProducerConfig.REQUEST_TIMEOUT_MS_CONFIG, 1);
 
-        assertDoesNotThrow(() -> new KafkaProducer<>(configs, new StringSerializer(), new StringSerializer()));
+        assertDoesNotThrow(() -> new KafkaProducer<>(configs, new StringSerializer(), new StringSerializer()).close());
     }
 
 }

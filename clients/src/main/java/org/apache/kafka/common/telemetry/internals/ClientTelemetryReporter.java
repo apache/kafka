@@ -517,13 +517,13 @@ public class ClientTelemetryReporter implements MetricsReporter {
 
         @Override
         public void handleFailedGetTelemetrySubscriptionsRequest(KafkaException maybeFatalException) {
-            log.warn("The broker generated an error for the get telemetry network API request", maybeFatalException);
+            log.debug("The broker generated an error for the get telemetry network API request", maybeFatalException);
             handleFailedRequest(maybeFatalException != null);
         }
 
         @Override
         public void handleFailedPushTelemetryRequest(KafkaException maybeFatalException) {
-            log.warn("The broker generated an error for the push telemetry network API request", maybeFatalException);
+            log.debug("The broker generated an error for the push telemetry network API request", maybeFatalException);
             handleFailedRequest(maybeFatalException != null);
         }
 
@@ -825,7 +825,8 @@ public class ClientTelemetryReporter implements MetricsReporter {
                     return;
                 }
                 if (state != ClientTelemetryState.SUBSCRIPTION_IN_PROGRESS && state != ClientTelemetryState.PUSH_IN_PROGRESS) {
-                    log.warn("Could not transition state after failed telemetry from state {}", state);
+                    log.warn("Could not transition state after failed telemetry from state {}, disabling telemetry", state);
+                    updateErrorResult(Integer.MAX_VALUE, nowMs);
                     return;
                 }
 
@@ -837,6 +838,7 @@ public class ClientTelemetryReporter implements MetricsReporter {
                 if (shouldWait) {
                     updateErrorResult(DEFAULT_PUSH_INTERVAL_MS, nowMs);
                 } else {
+                    log.warn("Received unrecoverable error from broker, disabling telemetry");
                     updateErrorResult(Integer.MAX_VALUE, nowMs);
                 }
 

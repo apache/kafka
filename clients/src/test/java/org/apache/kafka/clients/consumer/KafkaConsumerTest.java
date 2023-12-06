@@ -1834,36 +1834,35 @@ public class KafkaConsumerTest {
     @ParameterizedTest
     @EnumSource(GroupProtocol.class)
     public void testOperationsBySubscribingConsumerWithDefaultGroupId(GroupProtocol groupProtocol) {
-        try {
-            newConsumer(groupProtocol, null, Optional.of(Boolean.TRUE));
+        try (KafkaConsumer<byte[], byte[]> consumer = newConsumer(groupProtocol, null, Optional.of(Boolean.TRUE))) {
             fail("Expected an InvalidConfigurationException");
         } catch (InvalidConfigurationException e) {
             // OK, expected
         }
 
-        try {
-            newConsumer(groupProtocol, null).subscribe(Collections.singleton(topic));
+        try (KafkaConsumer<byte[], byte[]> consumer = newConsumer(groupProtocol, (String) null)) {
+            consumer.subscribe(Collections.singleton(topic));
             fail("Expected an InvalidGroupIdException");
         } catch (InvalidGroupIdException e) {
             // OK, expected
         }
 
-        try {
-            newConsumer(groupProtocol, null).committed(Collections.singleton(tp0)).get(tp0);
+        try (KafkaConsumer<byte[], byte[]> consumer = newConsumer(groupProtocol, (String) null)) {
+            consumer.committed(Collections.singleton(tp0)).get(tp0);
             fail("Expected an InvalidGroupIdException");
         } catch (InvalidGroupIdException e) {
             // OK, expected
         }
 
-        try {
-            newConsumer(groupProtocol, null).commitAsync();
+        try (KafkaConsumer<byte[], byte[]> consumer = newConsumer(groupProtocol, (String) null)) {
+            consumer.commitAsync();
             fail("Expected an InvalidGroupIdException");
         } catch (InvalidGroupIdException e) {
             // OK, expected
         }
 
-        try {
-            newConsumer(groupProtocol, null).commitSync();
+        try (KafkaConsumer<byte[], byte[]> consumer = newConsumer(groupProtocol, (String) null)) {
+            consumer.commitSync();
             fail("Expected an InvalidGroupIdException");
         } catch (InvalidGroupIdException e) {
             // OK, expected
@@ -1896,6 +1895,8 @@ public class KafkaConsumerTest {
         } catch (InvalidGroupIdException e) {
             // OK, expected
         }
+
+        consumer.close();
     }
 
     @ParameterizedTest
