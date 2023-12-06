@@ -27,7 +27,6 @@ import org.apache.kafka.clients.consumer.internals.events.ApplicationEventHandle
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEventProcessor;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEventHandler;
-import org.apache.kafka.clients.consumer.internals.events.BackgroundEventProcessor;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.requests.MetadataResponse;
@@ -71,7 +70,7 @@ public class ConsumerTestBuilder implements Closeable {
     static final String DEFAULT_SERVER_ASSIGNOR = "uniform";
 
     final LogContext logContext = new LogContext();
-    final Time time = new MockTime(0);
+    final Time time;
     public final BlockingQueue<ApplicationEvent> applicationEventQueue;
     public final BlockingQueue<BackgroundEvent> backgroundEventQueue;
     final ConsumerConfig config;
@@ -94,7 +93,6 @@ public class ConsumerTestBuilder implements Closeable {
     final FetchRequestManager fetchRequestManager;
     final RequestManagers requestManagers;
     public final ApplicationEventProcessor applicationEventProcessor;
-    public final BackgroundEventProcessor backgroundEventProcessor;
     public final BackgroundEventHandler backgroundEventHandler;
     final MockClient client;
     final Optional<GroupInformation> groupInfo;
@@ -104,11 +102,12 @@ public class ConsumerTestBuilder implements Closeable {
     }
 
     public ConsumerTestBuilder(Optional<GroupInformation> groupInfo) {
-        this(groupInfo, true);
+        this(groupInfo, true, true);
     }
 
-    public ConsumerTestBuilder(Optional<GroupInformation> groupInfo, boolean enableAutoCommit) {
+    public ConsumerTestBuilder(Optional<GroupInformation> groupInfo, boolean enableAutoCommit, boolean enableAutoTick) {
         this.groupInfo = groupInfo;
+        this.time = enableAutoTick ? new MockTime(1) : new MockTime();
         this.applicationEventQueue = new LinkedBlockingQueue<>();
         this.backgroundEventQueue = new LinkedBlockingQueue<>();
         this.backgroundEventHandler = spy(new BackgroundEventHandler(logContext, backgroundEventQueue));
@@ -265,14 +264,12 @@ public class ConsumerTestBuilder implements Closeable {
                 requestManagers,
                 metadata)
         );
-        this.backgroundEventProcessor = spy(new BackgroundEventProcessor(logContext, backgroundEventQueue));
     }
 
     @Override
     public void close() {
         closeQuietly(requestManagers, RequestManagers.class.getSimpleName());
         closeQuietly(applicationEventProcessor, ApplicationEventProcessor.class.getSimpleName());
-        closeQuietly(backgroundEventProcessor, BackgroundEventProcessor.class.getSimpleName());
     }
 
     public static class ConsumerNetworkThreadTestBuilder extends ConsumerTestBuilder {
@@ -304,12 +301,8 @@ public class ConsumerTestBuilder implements Closeable {
 
         public final ApplicationEventHandler applicationEventHandler;
 
-        public ApplicationEventHandlerTestBuilder() {
-            this(createDefaultGroupInformation(), true);
-        }
-
-        public ApplicationEventHandlerTestBuilder(Optional<GroupInformation> groupInfo, boolean enableAutoCommit) {
-            super(groupInfo, enableAutoCommit);
+        public ApplicationEventHandlerTestBuilder(Optional<GroupInformation> groupInfo, boolean enableAutoCommit, boolean enableAutoTick) {
+            super(groupInfo, enableAutoCommit, enableAutoTick);
             this.applicationEventHandler = spy(new ApplicationEventHandler(
                     logContext,
                     time,
@@ -331,8 +324,8 @@ public class ConsumerTestBuilder implements Closeable {
 
         final FetchCollector<String, String> fetchCollector;
 
-        public AsyncKafkaConsumerTestBuilder(Optional<GroupInformation> groupInfo, boolean enableAutoCommit) {
-            super(groupInfo, enableAutoCommit);
+        public AsyncKafkaConsumerTestBuilder(Optional<GroupInformation> groupInfo, boolean enableAutoCommit, boolean enableAutoTick) {
+            super(groupInfo, enableAutoCommit, enableAutoTick);
             String clientId = config.getString(CommonClientConfigs.CLIENT_ID_CONFIG);
             List<ConsumerPartitionAssignor> assignors = ConsumerPartitionAssignor.getAssignorInstances(
                     config.getList(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG),

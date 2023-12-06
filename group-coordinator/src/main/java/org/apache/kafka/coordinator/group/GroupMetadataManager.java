@@ -1109,8 +1109,9 @@ public class GroupMetadataManager {
                     assignmentResult = assignmentResultBuilder
                         .build();
                 }
-                log.info("[GroupId {}] Computed a new target assignment for epoch {}: {}.",
-                    groupId, groupEpoch, assignmentResult.targetAssignment());
+
+                log.info("[GroupId {}] Computed a new target assignment for epoch {} with '{}' assignor: {}.",
+                    groupId, groupEpoch, preferredServerAssignor, assignmentResult.targetAssignment());
 
                 records.addAll(assignmentResult.records());
                 targetAssignment = assignmentResult.targetAssignment().get(memberId);

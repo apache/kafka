@@ -66,7 +66,7 @@
               files="(KerberosLogin|RequestResponseTest|ConnectMetricsRegistry|KafkaConsumer|AbstractStickyAssignor|AbstractRequest|AbstractResponse).java"/>
 
     <suppress checks="ParameterNumber"
-              files="(NetworkClient|FieldSpec|KafkaRaftClient).java"/>
+              files="(NetworkClient|FieldSpec|KafkaRaftClient|KafkaProducer).java"/>
     <suppress checks="ParameterNumber"
               files="(KafkaConsumer|ConsumerCoordinator).java"/>
     <suppress checks="ParameterNumber"
@@ -77,11 +77,13 @@
               files="DefaultRecordBatch.java"/>
     <suppress checks="ParameterNumber"
               files="MemoryRecordsBuilder.java"/>
+    <suppress checks="ParameterNumber"
+              files="ClientUtils.java"/>
 
     <suppress checks="ClassDataAbstractionCoupling"
               files="(KafkaConsumer|ConsumerCoordinator|AbstractFetch|KafkaProducer|AbstractRequest|AbstractResponse|TransactionManager|Admin|KafkaAdminClient|MockAdminClient|KafkaRaftClient|KafkaRaftClientTest).java"/>
     <suppress checks="ClassDataAbstractionCoupling"
-              files="(Errors|SaslAuthenticatorTest|AgentTest|CoordinatorTest).java"/>
+              files="(Errors|SaslAuthenticatorTest|AgentTest|CoordinatorTest|NetworkClientTest).java"/>
 
     <suppress checks="BooleanExpressionComplexity"
               files="(Utils|Topic|KafkaLZ4BlockOutputStream|AclData|JoinGroupRequest).java"/>

@@ -51,6 +51,8 @@ import static org.apache.kafka.streams.processor.internals.assignment.Assignment
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.UUID_5;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.UUID_6;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.UUID_7;
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.assertBalancedTasks;
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.assertValidAssignment;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.clientTaskCount;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.configProps;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.getClusterForAllTopics;
@@ -61,6 +63,7 @@ import static org.apache.kafka.streams.processor.internals.assignment.Assignment
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.getTaskChangelogMapForAllTasks;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.getTaskTopicPartitionMap;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.getTaskTopicPartitionMapForAllTasks;
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.getTasksForTopicGroup;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.getTopologyGroupTaskMap;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.mockInternalTopicManagerForChangelog;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.mockInternalTopicManagerForRandomChangelog;
@@ -105,6 +108,7 @@ import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.internals.TopologyMetadata.Subtopology;
 import org.apache.kafka.streams.processor.internals.assignment.AssignorConfiguration.AssignmentConfigs;
 import org.apache.kafka.test.MockClientSupplier;
 import org.apache.kafka.test.MockInternalTopicManager;
@@ -120,7 +124,7 @@ import org.mockito.Mockito;
 public class RackAwareTaskAssignorTest {
 
     private final MockTime time = new MockTime();
-    private final StreamsConfig streamsConfig = new StreamsConfig(configProps(true));
+    private final StreamsConfig streamsConfig = new StreamsConfig(configProps(StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_MIN_TRAFFIC));
     private final MockClientSupplier mockClientSupplier = new MockClientSupplier();
 
     private int trafficCost;
@@ -129,11 +133,16 @@ public class RackAwareTaskAssignorTest {
     @Parameter
     public boolean stateful;
 
-    @Parameterized.Parameters(name = "stateful={0}")
+    @Parameter(1)
+    public String assignmentStrategy;
+
+    @Parameterized.Parameters(name = "stateful={0}, Strategy={1}")
     public static Collection<Object[]> getParamStoreType() {
         return asList(new Object[][] {
-            {true},
-            {false}
+            {true, StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_BALANCE_SUBTOPOLOGY},
+            {false, StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_MIN_TRAFFIC},
+            {true, StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_MIN_TRAFFIC},
+            {false, StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_BALANCE_SUBTOPOLOGY},
         });
     }
 
@@ -157,17 +166,17 @@ public class RackAwareTaskAssignorTest {
 
     private AssignmentConfigs getRackAwareEnabledConfig() {
         return new AssignorConfiguration(
-            new StreamsConfig(configProps(true)).originals()).assignmentConfigs();
+            new StreamsConfig(configProps(assignmentStrategy)).originals()).assignmentConfigs();
     }
 
     private AssignmentConfigs getRackAwareEnabledConfigWithStandby(final int replicaNum) {
         return new AssignorConfiguration(
-            new StreamsConfig(configProps(true, replicaNum)).originals()).assignmentConfigs();
+            new StreamsConfig(configProps(assignmentStrategy, replicaNum)).originals()).assignmentConfigs();
     }
 
     private AssignmentConfigs getRackAwareDisabledConfig() {
         return new AssignorConfiguration(
-            new StreamsConfig(configProps(false)).originals()).assignmentConfigs();
+            new StreamsConfig(configProps(StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_NONE)).originals()).assignmentConfigs();
     }
 
     @Test
@@ -499,11 +508,15 @@ public class RackAwareTaskAssignorTest {
 
     @Test
     public void shouldOptimizeActiveTasks() {
+        final Map<Subtopology, Set<TaskId>> tasksForTopicGroup = mkMap(
+            mkEntry(new Subtopology(0, null), mkSet(TASK_0_0, TASK_0_1)),
+            mkEntry(new Subtopology(1, null), mkSet(TASK_1_0, TASK_1_1))
+        );
         final RackAwareTaskAssignor assignor = new RackAwareTaskAssignor(
             getClusterForAllTopics(),
             getTaskTopicPartitionMapForAllTasks(),
             mkMap(),
-            getTopologyGroupTaskMap(),
+            tasksForTopicGroup,
             getProcessRacksForAllProcess(),
             mockInternalTopicManager,
             getRackAwareEnabledConfig(),
@@ -555,7 +568,7 @@ public class RackAwareTaskAssignorTest {
             getRandomCluster(nodeSize, tpSize, partitionSize),
             taskTopicPartitionMap,
             mkMap(),
-            getTopologyGroupTaskMap(),
+            getTasksForTopicGroup(tpSize, partitionSize),
             getRandomProcessRacks(clientSize, nodeSize),
             mockInternalTopicManager,
             getRackAwareEnabledConfig(),
@@ -575,6 +588,10 @@ public class RackAwareTaskAssignorTest {
         for (final Entry<UUID, ClientState> entry : clientStateMap.entrySet()) {
             assertEquals((int) clientTaskCount.get(entry.getKey()), entry.getValue().activeTasks().size());
         }
+
+        if (assignmentStrategy.equals(StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_BALANCE_SUBTOPOLOGY)) {
+            assertBalancedTasks(clientStateMap);
+        }
     }
 
     @Test
@@ -583,12 +600,13 @@ public class RackAwareTaskAssignorTest {
         final int tpSize = 40;
         final int partitionSize = 3;
         final int clientSize = 30;
+        final int topicGroupSize = 20;
         final SortedMap<TaskId, Set<TopicPartition>> taskTopicPartitionMap = getTaskTopicPartitionMap(tpSize, partitionSize, false);
         final RackAwareTaskAssignor assignor = new RackAwareTaskAssignor(
             getRandomCluster(nodeSize, tpSize, partitionSize),
             taskTopicPartitionMap,
             mkMap(),
-            getTopologyGroupTaskMap(),
+            getTasksForTopicGroup(tpSize, partitionSize),
             getRandomProcessRacks(clientSize, nodeSize),
             mockInternalTopicManager,
             getRackAwareEnabledConfig(),
@@ -610,22 +628,32 @@ public class RackAwareTaskAssignorTest {
         assertEquals(0, originalCost);
 
         final long cost = assignor.optimizeActiveTasks(taskIds, clientStateMap, 0, 1);
-        assertEquals(0, cost);
 
-        // Make sure assignment doesn't change
-        for (final Entry<TaskId, UUID> entry : taskClientMap.entrySet()) {
-            final ClientState clientState = clientStateMap.get(entry.getValue());
-            assertTrue(clientState.hasAssignedTask(entry.getKey()));
+        if (assignmentStrategy.equals(StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_MIN_TRAFFIC)) {
+            assertEquals(0, cost);
+
+            // Make sure assignment doesn't change
+            for (final Entry<TaskId, UUID> entry : taskClientMap.entrySet()) {
+                final ClientState clientState = clientStateMap.get(entry.getValue());
+                assertTrue(clientState.hasAssignedTask(entry.getKey()));
+            }
+        } else {
+            assertValidAssignment(0, taskIds, emptySet(), clientStateMap, new StringBuilder());
+            assertBalancedTasks(clientStateMap);
         }
     }
 
     @Test
     public void shouldOptimizeActiveTasksWithMoreClients() {
+        final Map<Subtopology, Set<TaskId>> tasksForTopicGroup = mkMap(
+            mkEntry(new Subtopology(0, null), mkSet(TASK_0_0)),
+            mkEntry(new Subtopology(1, null), mkSet(TASK_1_0))
+        );
         final RackAwareTaskAssignor assignor = new RackAwareTaskAssignor(
             getClusterForAllTopics(),
             getTaskTopicPartitionMapForAllTasks(),
             mkMap(),
-            getTopologyGroupTaskMap(),
+            tasksForTopicGroup,
             getProcessRacksForAllProcess(),
             mockInternalTopicManager,
             getRackAwareEnabledConfig(),
@@ -667,11 +695,15 @@ public class RackAwareTaskAssignorTest {
 
     @Test
     public void shouldOptimizeActiveTasksWithMoreClientsWithMoreThanOneTask() {
+        final Map<Subtopology, Set<TaskId>> tasksForTopicGroup = mkMap(
+            mkEntry(new Subtopology(0, null), mkSet(TASK_0_0, TASK_0_1)),
+            mkEntry(new Subtopology(1, null), mkSet(TASK_1_0))
+        );
         final RackAwareTaskAssignor assignor = new RackAwareTaskAssignor(
             getClusterForAllTopics(),
             getTaskTopicPartitionMapForAllTasks(),
             mkMap(),
-            getTopologyGroupTaskMap(),
+            tasksForTopicGroup,
             getProcessRacksForAllProcess(),
             mockInternalTopicManager,
             getRackAwareEnabledConfig(),
@@ -713,11 +745,15 @@ public class RackAwareTaskAssignorTest {
 
     @Test
     public void shouldBalanceAssignmentWithMoreCost() {
+        final Map<Subtopology, Set<TaskId>> tasksForTopicGroup = mkMap(
+            mkEntry(new Subtopology(0, null), mkSet(TASK_0_0, TASK_0_1)),
+            mkEntry(new Subtopology(1, null), mkSet(TASK_1_1))
+        );
         final RackAwareTaskAssignor assignor = new RackAwareTaskAssignor(
             getClusterForAllTopics(),
             getTaskTopicPartitionMapForAllTasks(),
             mkMap(),
-            getTopologyGroupTaskMap(),
+            tasksForTopicGroup,
             getProcessRacksForAllProcess(),
             mockInternalTopicManager,
             getRackAwareEnabledConfig(),
@@ -748,10 +784,15 @@ public class RackAwareTaskAssignorTest {
         final long cost = assignor.optimizeActiveTasks(taskIds, clientStateMap, trafficCost, nonOverlapCost);
         assertEquals(expectedCost, cost);
 
-        // Even though assigning all tasks to UUID_2 will result in min cost, but it's not balanced
-        // assignment. That's why TASK_0_1 is still assigned to UUID_5
-        assertEquals(mkSet(TASK_0_0, TASK_1_1), clientState1.activeTasks());
-        assertEquals(mkSet(TASK_0_1), clientState2.activeTasks());
+        if (stateful || assignmentStrategy.equals(StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_MIN_TRAFFIC)) {
+            // Even though assigning all tasks to UUID_2 will result in min cost, but it's not balanced
+            // assignment. That's why TASK_0_1 is still assigned to UUID_5
+            assertEquals(mkSet(TASK_0_0, TASK_1_1), clientState1.activeTasks());
+            assertEquals(mkSet(TASK_0_1), clientState2.activeTasks());
+        } else {
+            assertEquals(mkSet(TASK_0_0, TASK_0_1), clientState1.activeTasks());
+            assertEquals(mkSet(TASK_1_1), clientState2.activeTasks());
+        }
     }
 
     @Test

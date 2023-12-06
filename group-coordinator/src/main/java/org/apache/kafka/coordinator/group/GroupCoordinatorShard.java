@@ -200,6 +200,7 @@ public class GroupCoordinatorShard implements CoordinatorShard<Record> {
                 logContext,
                 groupMetadataManager,
                 offsetMetadataManager,
+                time,
                 timer,
                 config,
                 coordinatorMetrics,
@@ -229,6 +230,11 @@ public class GroupCoordinatorShard implements CoordinatorShard<Record> {
      * The offset metadata manager.
      */
     private final OffsetMetadataManager offsetMetadataManager;
+
+    /**
+     * The time.
+     */
+    private final Time time;
 
     /**
      * The coordinator timer.
@@ -263,6 +269,7 @@ public class GroupCoordinatorShard implements CoordinatorShard<Record> {
         LogContext logContext,
         GroupMetadataManager groupMetadataManager,
         OffsetMetadataManager offsetMetadataManager,
+        Time time,
         CoordinatorTimer<Void, Record> timer,
         GroupCoordinatorConfig config,
         CoordinatorMetrics coordinatorMetrics,
@@ -271,6 +278,7 @@ public class GroupCoordinatorShard implements CoordinatorShard<Record> {
         this.log = logContext.logger(GroupCoordinatorShard.class);
         this.groupMetadataManager = groupMetadataManager;
         this.offsetMetadataManager = offsetMetadataManager;
+        this.time = time;
         this.timer = timer;
         this.config = config;
         this.coordinatorMetrics = coordinatorMetrics;
@@ -532,13 +540,17 @@ public class GroupCoordinatorShard implements CoordinatorShard<Record> {
      * @return The list of tombstones (offset commit and group metadata) to append.
      */
     public CoordinatorResult<Void, Record> cleanupGroupMetadata() {
+        long startMs = time.milliseconds();
         List<Record> records = new ArrayList<>();
         groupMetadataManager.groupIds().forEach(groupId -> {
-            if (offsetMetadataManager.cleanupExpiredOffsets(groupId, records)) {
+            boolean allOffsetsExpired = offsetMetadataManager.cleanupExpiredOffsets(groupId, records);
+            if (allOffsetsExpired) {
                 groupMetadataManager.maybeDeleteGroup(groupId, records);
             }
         });
 
+        log.info("Generated {} tombstone records while cleaning up group metadata in {} milliseconds.",
+            records.size(), time.milliseconds() - startMs);
         // Reschedule the next cycle.
         scheduleGroupMetadataExpiration();
         return new CoordinatorResult<>(records);
@@ -553,6 +565,7 @@ public class GroupCoordinatorShard implements CoordinatorShard<Record> {
             config.offsetsRetentionCheckIntervalMs,
             TimeUnit.MILLISECONDS,
             true,
+            config.offsetsRetentionCheckIntervalMs,
             this::cleanupGroupMetadata
         );
     }
