@@ -1805,7 +1805,7 @@ public class KafkaStreams implements AutoCloseable {
      * @throws TimeoutException Indicates that a request timed out.
      * @throws StreamsException For any other error that might occur.
      */
-    public ClientInstanceIds clientInstanceIds(final Duration timeout) {
+    public synchronized ClientInstanceIds clientInstanceIds(final Duration timeout) {
         if (timeout.isNegative()) {
             throw new IllegalArgumentException("The timeout cannot be negative.");
         }
