@@ -22,7 +22,6 @@ import org.apache.kafka.clients.consumer.internals.NetworkClientDelegate.PollRes
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEventHandler;
 import org.apache.kafka.clients.consumer.internals.events.ErrorBackgroundEvent;
 import org.apache.kafka.clients.consumer.internals.events.GroupMetadataUpdateEvent;
-import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
 import org.apache.kafka.common.errors.RetriableException;
