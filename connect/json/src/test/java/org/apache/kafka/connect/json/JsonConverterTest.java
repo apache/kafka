@@ -788,7 +788,7 @@ public class JsonConverterTest {
 
     @Test
     public void nullSchemaAndMapNonStringKeysToJson() {
-        // This still needs to do conversion of data null schema means "anything goes". Make sure we mix and match
+        // This still needs to do conversion of data, null schema means "anything goes". Make sure we mix and match
         // types to verify conversion still works.
         Map<Object, Object> input = new HashMap<>();
         input.put("string", 12);
