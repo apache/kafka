@@ -1050,7 +1050,6 @@ public class MembershipManagerImplTest {
         MembershipManagerImpl membershipManager = createMemberInStableState();
         membershipManager.transitionToStaled();
         assertEquals(LEAVE_GROUP_MEMBER_EPOCH, membershipManager.memberEpoch());
-
     }
 
     @Test
