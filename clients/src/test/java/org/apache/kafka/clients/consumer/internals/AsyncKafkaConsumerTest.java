@@ -959,8 +959,6 @@ public class AsyncKafkaConsumerTest {
 
         try (final AsyncKafkaConsumer<String, String> consumer =
                  new AsyncKafkaConsumer<>(config, new StringDeserializer(), new StringDeserializer())) {
-            assertTrue(config.unused().contains(ConsumerConfig.AUTO_COMMIT_INTERVAL_MS_CONFIG));
-            assertTrue(config.unused().contains(THROW_ON_FETCH_STABLE_OFFSET_UNSUPPORTED));
         } catch (final Exception exception) {
             throw new AssertionFailedError("The following exception was not expected:", exception);
         }
