@@ -179,7 +179,7 @@ public class ConsumerConfigTest {
 
     @Test
     public void testRemoteAssignorConfig() {
-        String remoteAssignorName = "org.apache.kafka.clients.group.someAssignor";
+        String remoteAssignorName = "SomeAssignor";
         String protocol = "consumer";
         final Map<String, Object> configs = new HashMap<>();
         configs.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, keyDeserializerClass);

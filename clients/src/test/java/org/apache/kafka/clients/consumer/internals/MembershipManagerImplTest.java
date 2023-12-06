@@ -18,9 +18,9 @@
 package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
+import org.apache.kafka.clients.consumer.internals.events.ApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEventHandler;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
-import org.apache.kafka.clients.consumer.internals.events.BackgroundEventProcessor;
 import org.apache.kafka.clients.consumer.internals.events.ConsumerRebalanceListenerCallbackCompletedEvent;
 import org.apache.kafka.clients.consumer.internals.events.ConsumerRebalanceListenerCallbackNeededEvent;
 import org.apache.kafka.common.KafkaException;
@@ -106,7 +106,7 @@ public class MembershipManagerImplTest {
 
     private MembershipManagerImpl createMembershipManagerJoiningGroup() {
         MembershipManagerImpl manager = spy(new MembershipManagerImpl(
-                GROUP_ID, subscriptionState, commitRequestManager,
+                GROUP_ID, Optional.empty(), Optional.empty(), subscriptionState, commitRequestManager,
                 metadata, testBuilder.logContext, testBuilder.backgroundEventHandler));
         manager.transitionToJoining();
         return manager;
@@ -141,7 +141,7 @@ public class MembershipManagerImplTest {
     public void testMembershipManagerRegistersForClusterMetadataUpdatesOnFirstJoin() {
         // First join should register to get metadata updates
         MembershipManagerImpl manager = new MembershipManagerImpl(
-                GROUP_ID, subscriptionState, commitRequestManager,
+                GROUP_ID, Optional.empty(), Optional.empty(), subscriptionState, commitRequestManager,
                 metadata, testBuilder.logContext, testBuilder.backgroundEventHandler);
         manager.transitionToJoining();
         verify(metadata).addClusterUpdateListener(manager);
@@ -219,8 +219,8 @@ public class MembershipManagerImplTest {
     @Test
     public void testTransitionToFailedWhenTryingToJoin() {
         MembershipManagerImpl membershipManager = new MembershipManagerImpl(
-                GROUP_ID, subscriptionState, commitRequestManager, metadata,
-                testBuilder.logContext, testBuilder.backgroundEventHandler);
+                GROUP_ID, Optional.empty(), Optional.empty(), subscriptionState, commitRequestManager, metadata,
+                        testBuilder.logContext, testBuilder.backgroundEventHandler);
         assertEquals(MemberState.UNSUBSCRIBED, membershipManager.state());
         membershipManager.transitionToJoining();
 
@@ -956,13 +956,6 @@ public class MembershipManagerImplTest {
             return null;
         }).when(applicationEventHandler).add(any(ConsumerRebalanceListenerCallbackCompletedEvent.class));
 
-        BackgroundEventProcessor backgroundEventProcessor = new BackgroundEventProcessor(
-                new LogContext(),
-                backgroundEventQueue,
-                applicationEventHandler,
-                invoker
-        );
-
         // We expect only our enqueued event in the background queue.
         assertEquals(1, backgroundEventQueue.size());
         assertNotNull(backgroundEventQueue.peek());
@@ -972,7 +965,42 @@ public class MembershipManagerImplTest {
         assertEquals(methodName, neededEvent.methodName());
         assertEquals(partitions, neededEvent.partitions());
 
-        backgroundEventProcessor.process(neededEvent);
+        final Exception e;
+
+        switch (methodName) {
+            case ON_PARTITIONS_REVOKED:
+                e = invoker.invokePartitionsRevoked(partitions);
+                break;
+
+            case ON_PARTITIONS_ASSIGNED:
+                e = invoker.invokePartitionsAssigned(partitions);
+                break;
+
+            case ON_PARTITIONS_LOST:
+                e = invoker.invokePartitionsLost(partitions);
+                break;
+
+            default:
+                throw new IllegalArgumentException("The method " + methodName + " to invoke was not expected");
+        }
+
+        final Optional<KafkaException> error;
+
+        if (e != null) {
+            if (e instanceof KafkaException)
+                error = Optional.of((KafkaException) e);
+            else
+                error = Optional.of(new KafkaException("User rebalance callback throws an error", e));
+        } else {
+            error = Optional.empty();
+        }
+
+        ApplicationEvent invokedEvent = new ConsumerRebalanceListenerCallbackCompletedEvent(
+                methodName,
+                partitions,
+                neededEvent.future(),
+                error);
+        applicationEventHandler.add(invokedEvent);
     }
 
     private MembershipManagerImpl mockMemberSuccessfullyReceivesAndAcksAssignment(

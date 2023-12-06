@@ -254,16 +254,6 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
     private final BackgroundEventHandler backgroundEventHandler;
 
     public MembershipManagerImpl(String groupId,
-                                 SubscriptionState subscriptions,
-                                 CommitRequestManager commitRequestManager,
-                                 ConsumerMetadata metadata,
-                                 LogContext logContext,
-                                 BackgroundEventHandler backgroundEventHandler) {
-        this(groupId, Optional.empty(), Optional.empty(), subscriptions, commitRequestManager, metadata,
-                logContext, backgroundEventHandler);
-    }
-
-    public MembershipManagerImpl(String groupId,
                                  Optional<String> groupInstanceId,
                                  Optional<String> serverAssignor,
                                  SubscriptionState subscriptions,
@@ -802,6 +792,7 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
      * </ol>
      */
     private void resolveMetadataForUnresolvedAssignment() {
+        assignmentReadyToReconcile.clear();
         // Try to resolve topic names from metadata cache or subscription cache, and move
         // assignments from the "unresolved" collection, to the "readyToReconcile" one.
         Iterator<Map.Entry<Uuid, List<Integer>>> it = assignmentUnresolved.entrySet().iterator();

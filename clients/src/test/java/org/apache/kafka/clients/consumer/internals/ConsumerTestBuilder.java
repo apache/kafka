@@ -27,7 +27,6 @@ import org.apache.kafka.clients.consumer.internals.events.ApplicationEventHandle
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEventProcessor;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEventHandler;
-import org.apache.kafka.clients.consumer.internals.events.BackgroundEventProcessor;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.requests.MetadataResponse;
@@ -69,6 +68,7 @@ public class ConsumerTestBuilder implements Closeable {
     static final String DEFAULT_GROUP_ID = "group-id";
     static final int DEFAULT_HEARTBEAT_INTERVAL_MS = 1000;
     static final double DEFAULT_HEARTBEAT_JITTER_MS = 0.0;
+    static final String DEFAULT_REMOTE_ASSIGNOR = "uniform";
 
     final LogContext logContext = new LogContext();
     final Time time;
@@ -200,7 +200,7 @@ public class ConsumerTestBuilder implements Closeable {
                     new MembershipManagerImpl(
                         gi.groupState.groupId,
                         gi.groupState.groupInstanceId,
-                        Optional.empty(),
+                        gi.serverAssignor,
                         subscriptions,
                         commit,
                         metadata,
@@ -313,7 +313,6 @@ public class ConsumerTestBuilder implements Closeable {
     public static class ApplicationEventHandlerTestBuilder extends ConsumerTestBuilder {
 
         public final ApplicationEventHandler applicationEventHandler;
-        public final BackgroundEventProcessor backgroundEventProcessor;
 
         public ApplicationEventHandlerTestBuilder(Optional<GroupInformation> groupInfo, boolean enableAutoCommit, boolean enableAutoTick) {
             super(groupInfo, enableAutoCommit, enableAutoTick);
@@ -324,19 +323,10 @@ public class ConsumerTestBuilder implements Closeable {
                     () -> applicationEventProcessor,
                     () -> networkClientDelegate,
                     () -> requestManagers));
-            this.backgroundEventProcessor = spy(
-                    new BackgroundEventProcessor(
-                            logContext,
-                            backgroundEventQueue,
-                            applicationEventHandler,
-                            rebalanceListenerInvoker
-                    )
-            );
         }
 
         @Override
         public void close() {
-            closeQuietly(backgroundEventProcessor, BackgroundEventProcessor.class.getSimpleName());
             closeQuietly(applicationEventHandler, ApplicationEventHandler.class.getSimpleName());
         }
     }
@@ -397,15 +387,17 @@ public class ConsumerTestBuilder implements Closeable {
         final GroupState groupState;
         final int heartbeatIntervalMs;
         final double heartbeatJitterMs;
+        final Optional<String> serverAssignor;
 
         public GroupInformation(GroupState groupState) {
-            this(groupState, DEFAULT_HEARTBEAT_INTERVAL_MS, DEFAULT_HEARTBEAT_JITTER_MS);
+            this(groupState, DEFAULT_HEARTBEAT_INTERVAL_MS, DEFAULT_HEARTBEAT_JITTER_MS, Optional.of(DEFAULT_REMOTE_ASSIGNOR));
         }
 
-        public GroupInformation(GroupState groupState, int heartbeatIntervalMs, double heartbeatJitterMs) {
+        public GroupInformation(GroupState groupState, int heartbeatIntervalMs, double heartbeatJitterMs, Optional<String> serverAssignor) {
             this.groupState = groupState;
             this.heartbeatIntervalMs = heartbeatIntervalMs;
             this.heartbeatJitterMs = heartbeatJitterMs;
+            this.serverAssignor = serverAssignor;
         }
     }
 

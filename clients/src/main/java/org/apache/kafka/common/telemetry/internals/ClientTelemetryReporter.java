@@ -53,6 +53,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.StringJoiner;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
@@ -103,6 +104,13 @@ import java.util.function.Predicate;
 public class ClientTelemetryReporter implements MetricsReporter {
 
     private static final Logger log = LoggerFactory.getLogger(ClientTelemetryReporter.class);
+    /*
+     Exclude client_id from the labels as the broker already knows the client_id from the request
+     context. These additional labels from the request context should be added by broker prior
+     exporting the metrics to the telemetry backend.
+    */
+    private static final Set<String> EXCLUDE_LABELS = Collections.singleton("client_id");
+
     public static final int DEFAULT_PUSH_INTERVAL_MS = 5 * 60 * 1000;
 
     private final ClientTelemetryProvider telemetryProvider;
@@ -226,7 +234,7 @@ public class ClientTelemetryReporter implements MetricsReporter {
     private void initCollectors() {
         kafkaMetricsCollector = new KafkaMetricsCollector(
             TelemetryMetricNamingConvention.getClientTelemetryMetricNamingStrategy(
-                telemetryProvider.domain()));
+                telemetryProvider.domain()), EXCLUDE_LABELS);
     }
 
     private ResourceMetrics buildMetric(Metric metric) {
@@ -517,13 +525,13 @@ public class ClientTelemetryReporter implements MetricsReporter {
 
         @Override
         public void handleFailedGetTelemetrySubscriptionsRequest(KafkaException maybeFatalException) {
-            log.warn("The broker generated an error for the get telemetry network API request", maybeFatalException);
+            log.debug("The broker generated an error for the get telemetry network API request", maybeFatalException);
             handleFailedRequest(maybeFatalException != null);
         }
 
         @Override
         public void handleFailedPushTelemetryRequest(KafkaException maybeFatalException) {
-            log.warn("The broker generated an error for the push telemetry network API request", maybeFatalException);
+            log.debug("The broker generated an error for the push telemetry network API request", maybeFatalException);
             handleFailedRequest(maybeFatalException != null);
         }
 
@@ -825,7 +833,8 @@ public class ClientTelemetryReporter implements MetricsReporter {
                     return;
                 }
                 if (state != ClientTelemetryState.SUBSCRIPTION_IN_PROGRESS && state != ClientTelemetryState.PUSH_IN_PROGRESS) {
-                    log.warn("Could not transition state after failed telemetry from state {}", state);
+                    log.warn("Could not transition state after failed telemetry from state {}, disabling telemetry", state);
+                    updateErrorResult(Integer.MAX_VALUE, nowMs);
                     return;
                 }
 
@@ -837,6 +846,7 @@ public class ClientTelemetryReporter implements MetricsReporter {
                 if (shouldWait) {
                     updateErrorResult(DEFAULT_PUSH_INTERVAL_MS, nowMs);
                 } else {
+                    log.warn("Received unrecoverable error from broker, disabling telemetry");
                     updateErrorResult(Integer.MAX_VALUE, nowMs);
                 }
 

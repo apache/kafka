@@ -263,7 +263,7 @@ public class CommitRequestManager implements RequestManager {
     }
 
     /**
-     * Handles {@link org.apache.kafka.clients.consumer.internals.events.OffsetFetchApplicationEvent}. It creates an
+     * Handles {@link org.apache.kafka.clients.consumer.internals.events.FetchCommittedOffsetsApplicationEvent}. It creates an
      * {@link OffsetFetchRequestState} and enqueue it to send later.
      */
     public CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> addOffsetFetchRequest(final Set<TopicPartition> partitions) {

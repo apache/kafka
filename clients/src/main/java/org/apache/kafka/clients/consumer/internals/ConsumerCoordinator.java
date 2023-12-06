@@ -56,6 +56,7 @@ import org.apache.kafka.common.requests.OffsetCommitRequest;
 import org.apache.kafka.common.requests.OffsetCommitResponse;
 import org.apache.kafka.common.requests.OffsetFetchRequest;
 import org.apache.kafka.common.requests.OffsetFetchResponse;
+import org.apache.kafka.common.telemetry.internals.ClientTelemetryReporter;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
@@ -168,13 +169,15 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                                int autoCommitIntervalMs,
                                ConsumerInterceptors<?, ?> interceptors,
                                boolean throwOnFetchStableOffsetsUnsupported,
-                               String rackId) {
+                               String rackId,
+                               Optional<ClientTelemetryReporter> clientTelemetryReporter) {
         super(rebalanceConfig,
               logContext,
               client,
               metrics,
               metricGrpPrefix,
-              time);
+              time,
+              clientTelemetryReporter);
         this.rebalanceConfig = rebalanceConfig;
         this.log = logContext.logger(ConsumerCoordinator.class);
         this.metadata = metadata;

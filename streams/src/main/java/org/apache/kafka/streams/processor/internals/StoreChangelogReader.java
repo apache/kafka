@@ -36,6 +36,7 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.StreamsConfig.InternalConfig;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskCorruptedException;
+import org.apache.kafka.streams.processor.StandbyUpdateListener;
 import org.apache.kafka.streams.processor.StateRestoreListener;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.ProcessorStateManager.StateStoreMetadata;
@@ -51,6 +52,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.OptionalLong;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.function.Function;
@@ -216,19 +218,22 @@ public class StoreChangelogReader implements ChangelogReader {
     private final Admin adminClient;
 
     private long lastUpdateOffsetTime;
+    private final StandbyUpdateListener standbyUpdateListener;
 
     public StoreChangelogReader(final Time time,
                                 final StreamsConfig config,
                                 final LogContext logContext,
                                 final Admin adminClient,
                                 final Consumer<byte[], byte[]> restoreConsumer,
-                                final StateRestoreListener stateRestoreListener) {
+                                final StateRestoreListener stateRestoreListener,
+                                final StandbyUpdateListener standbyUpdateListener) {
         this.time = time;
         this.log = logContext.logger(StoreChangelogReader.class);
         this.state = ChangelogReaderState.ACTIVE_RESTORING;
         this.adminClient = adminClient;
         this.restoreConsumer = restoreConsumer;
         this.stateRestoreListener = stateRestoreListener;
+        this.standbyUpdateListener = standbyUpdateListener;
 
         this.stateUpdaterEnabled = InternalConfig.getStateUpdaterEnabled(config.originals());
 
@@ -645,7 +650,8 @@ public class StoreChangelogReader implements ChangelogReader {
 
         if (numRecords != 0) {
             final List<ConsumerRecord<byte[], byte[]>> records = changelogMetadata.bufferedRecords.subList(0, numRecords);
-            stateManager.restore(storeMetadata, records);
+            final OptionalLong optionalLag = restoreConsumer.currentLag(partition);
+            stateManager.restore(storeMetadata, records, optionalLag);
 
             // NOTE here we use removeRange of ArrayList in order to achieve efficiency with range shifting,
             // otherwise one-at-a-time removal or addition would be very costly; if all records are restored
@@ -671,6 +677,12 @@ public class StoreChangelogReader implements ChangelogReader {
                     stateRestoreListener.onBatchRestored(partition, storeName, currentOffset, numRecords);
                 } catch (final Exception e) {
                     throw new StreamsException("State restore listener failed on batch restored", e);
+                }
+            } else if (changelogMetadata.stateManager.taskType() == TaskType.STANDBY) {
+                try {
+                    standbyUpdateListener.onBatchLoaded(partition, storeName, stateManager.taskId(), currentOffset, numRecords, storeMetadata.endOffset());
+                } catch (final Exception e) {
+                    throw new StreamsException("Standby updater listener failed on batch loaded", e);
                 }
             }
         }
@@ -980,29 +992,26 @@ public class StoreChangelogReader implements ChangelogReader {
             restoreConsumer.seekToBeginning(newPartitionsWithoutStartOffset);
         }
 
-        // do not trigger restore listener if we are processing standby tasks
         for (final ChangelogMetadata changelogMetadata : newPartitionsToRestore) {
-            if (changelogMetadata.stateManager.taskType() == Task.TaskType.ACTIVE) {
-                final StateStoreMetadata storeMetadata = changelogMetadata.storeMetadata;
-                final TopicPartition partition = storeMetadata.changelogPartition();
-                final String storeName = storeMetadata.store().name();
-
-                long startOffset = 0L;
-                try {
-                    startOffset = restoreConsumer.position(partition);
-                } catch (final TimeoutException swallow) {
-                    // if we cannot find the starting position at the beginning, just use the default 0L
-                } catch (final KafkaException e) {
-                    // this also includes InvalidOffsetException, which should not happen under normal
-                    // execution, hence it is also okay to wrap it as fatal StreamsException
-                    throw new StreamsException("Restore consumer get unexpected error trying to get the position " +
+            final StateStoreMetadata storeMetadata = changelogMetadata.storeMetadata;
+            final TopicPartition partition = storeMetadata.changelogPartition();
+            final String storeName = storeMetadata.store().name();
+            long startOffset = 0L;
+            try {
+                startOffset = restoreConsumer.position(partition);
+            } catch (final TimeoutException swallow) {
+                // if we cannot find the starting position at the beginning, just use the default 0L
+            } catch (final KafkaException e) {
+                // this also includes InvalidOffsetException, which should not happen under normal
+                // execution, hence it is also okay to wrap it as fatal StreamsException
+                throw new StreamsException("Restore consumer get unexpected error trying to get the position " +
                         " of " + partition, e);
-                }
-
+            }
+            if (changelogMetadata.stateManager.taskType() == Task.TaskType.ACTIVE) {
                 try {
                     stateRestoreListener.onRestoreStart(partition, storeName, startOffset, changelogMetadata.restoreEndOffset);
                 } catch (final Exception e) {
-                    throw new StreamsException("State restore listener failed on batch restored", e);
+                    throw new StreamsException("State restore listener failed on restore start", e);
                 }
 
                 final TaskId taskId = changelogMetadata.stateManager.taskId();
@@ -1012,6 +1021,12 @@ public class StoreChangelogReader implements ChangelogReader {
                 // no records to restore; in this case we just initialize the sensor to zero
                 final long recordsToRestore = Math.max(changelogMetadata.restoreEndOffset - startOffset, 0L);
                 task.recordRestoration(time, recordsToRestore, true);
+            }  else if (changelogMetadata.stateManager.taskType() == TaskType.STANDBY) {
+                try {
+                    standbyUpdateListener.onUpdateStart(partition, storeName, startOffset);
+                } catch (final Exception e) {
+                    throw new StreamsException("Standby updater listener failed on update start");
+                }
             }
         }
     }
@@ -1032,13 +1047,29 @@ public class StoreChangelogReader implements ChangelogReader {
                     // if the changelog is not in RESTORING, it means
                     // the corresponding onRestoreStart was not called; in this case
                     // we should not call onRestoreSuspended either
-                    if (changelogMetadata.stateManager.taskType() == Task.TaskType.ACTIVE &&
-                        changelogMetadata.state().equals(ChangelogState.RESTORING)) {
-                        try {
-                            final String storeName = changelogMetadata.storeMetadata.store().name();
-                            stateRestoreListener.onRestoreSuspended(partition, storeName, changelogMetadata.totalRestored);
-                        } catch (final Exception e) {
-                            throw new StreamsException("State restore listener failed on restore paused", e);
+                    if (changelogMetadata.state().equals(ChangelogState.RESTORING)) {
+                        final String storeName = changelogMetadata.storeMetadata.store().name();
+                        if (changelogMetadata.stateManager.taskType() == Task.TaskType.ACTIVE) {
+                            try {
+                                stateRestoreListener.onRestoreSuspended(partition, storeName, changelogMetadata.totalRestored);
+                            } catch (final Exception e) {
+                                throw new StreamsException("State restore listener failed on restore paused", e);
+                            }
+                        } else if (changelogMetadata.stateManager.taskType() == TaskType.STANDBY) {
+                            final StateStoreMetadata storeMetadata = changelogMetadata.stateManager.storeMetadata(partition);
+                            // endOffset and storeOffset may be unknown at this point
+                            final long storeOffset = storeMetadata.offset() != null ? storeMetadata.offset() : -1;
+                            final long endOffset = storeMetadata.endOffset() != null ? storeMetadata.endOffset() : -1;
+                            // Unregistering running standby tasks means the task has been promoted to active.
+                            final StandbyUpdateListener.SuspendReason suspendReason = 
+                                changelogMetadata.stateManager.taskState() == Task.State.RUNNING 
+                                    ? StandbyUpdateListener.SuspendReason.PROMOTED
+                                    : StandbyUpdateListener.SuspendReason.MIGRATED;
+                            try {
+                                standbyUpdateListener.onUpdateSuspended(partition, storeName, storeOffset, endOffset, suspendReason);
+                            } catch (final Exception e) {
+                                throw new StreamsException("Standby updater listener failed on update suspended", e);
+                            }
                         }
                     }
                 }

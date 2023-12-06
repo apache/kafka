@@ -421,25 +421,10 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
         int epoch;
 
         /**
-         * The snapshot registry backing the coordinator.
+         * The state machine and the metadata that can be accessed by
+         * other threads.
          */
-        SnapshotRegistry snapshotRegistry;
-
-        /**
-         * The actual state machine.
-         */
-        S coordinator;
-
-        /**
-         * The last offset written to the partition.
-         */
-        long lastWrittenOffset;
-
-        /**
-         * The last offset committed. This represents the high
-         * watermark of the partition.
-         */
-        long lastCommittedOffset;
+        SnapshottableCoordinator<S, U> coordinator;
 
         /**
          * Constructor.
@@ -463,67 +448,6 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
         }
 
         /**
-         * Updates the last written offset. This also create a new snapshot
-         * in the snapshot registry.
-         *
-         * @param offset The new last written offset.
-         */
-        private void updateLastWrittenOffset(
-            long offset
-        ) {
-            if (offset <= lastWrittenOffset) {
-                throw new IllegalStateException("New last written offset " + offset + " of " + tp +
-                    " must be larger than " + lastWrittenOffset + ".");
-            }
-
-            log.debug("Update last written offset of {} to {}.", tp, offset);
-            lastWrittenOffset = offset;
-            snapshotRegistry.getOrCreateSnapshot(offset);
-        }
-
-        /**
-         * Reverts the last written offset. This also reverts the snapshot
-         * registry to this offset. All the changes applied after the offset
-         * are lost.
-         *
-         * @param offset The offset to revert to.
-         */
-        private void revertLastWrittenOffset(
-            long offset
-        ) {
-            if (offset > lastWrittenOffset) {
-                throw new IllegalStateException("New offset " + offset + " of " + tp +
-                    " must be smaller than " + lastWrittenOffset + ".");
-            }
-
-            log.debug("Revert last written offset of {} to {}.", tp, offset);
-            lastWrittenOffset = offset;
-            snapshotRegistry.revertToSnapshot(offset);
-        }
-
-        /**
-         * Updates the last committed offset. This completes all the deferred
-         * events waiting on this offset. This also cleanups all the snapshots
-         * prior to this offset.
-         *
-         * @param offset The new last committed offset.
-         */
-        private void updateLastCommittedOffset(
-            long offset
-        ) {
-            if (offset <= lastCommittedOffset) {
-                throw new IllegalStateException("New committed offset " + offset + " of " + tp +
-                    " must be larger than " + lastCommittedOffset + ".");
-            }
-
-            log.debug("Update committed offset of {} to {}.", tp, offset);
-            lastCommittedOffset = offset;
-            deferredEventQueue.completeUpTo(offset);
-            snapshotRegistry.deleteSnapshotsUpTo(offset);
-            coordinatorMetrics.onUpdateLastCommittedOffset(tp, offset);
-        }
-
-        /**
          * Transitions to the new state.
          *
          * @param newState The new state.
@@ -540,23 +464,25 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
             switch (newState) {
                 case LOADING:
                     state = CoordinatorState.LOADING;
-                    snapshotRegistry = new SnapshotRegistry(logContext);
-                    lastWrittenOffset = 0L;
-                    lastCommittedOffset = 0L;
-                    coordinator = coordinatorShardBuilderSupplier
-                        .get()
-                        .withLogContext(logContext)
-                        .withSnapshotRegistry(snapshotRegistry)
-                        .withTime(time)
-                        .withTimer(timer)
-                        .withCoordinatorMetrics(coordinatorMetrics)
-                        .withTopicPartition(tp)
-                        .build();
+                    SnapshotRegistry snapshotRegistry = new SnapshotRegistry(logContext);
+                    coordinator = new SnapshottableCoordinator<>(
+                        logContext,
+                        snapshotRegistry,
+                        coordinatorShardBuilderSupplier
+                            .get()
+                            .withLogContext(logContext)
+                            .withSnapshotRegistry(snapshotRegistry)
+                            .withTime(time)
+                            .withTimer(timer)
+                            .withCoordinatorMetrics(coordinatorMetrics)
+                            .withTopicPartition(tp)
+                            .build(),
+                        tp
+                    );
                     break;
 
                 case ACTIVE:
                     state = CoordinatorState.ACTIVE;
-                    snapshotRegistry.getOrCreateSnapshot(0);
                     partitionWriter.registerListener(tp, highWatermarklistener);
                     coordinator.onLoaded(metadataImage);
                     break;
@@ -589,7 +515,6 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
                 coordinator.onUnloaded();
             }
             coordinator = null;
-            snapshotRegistry = null;
         }
     }
 
@@ -734,10 +659,10 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
             try {
                 // Get the context of the coordinator or fail if the coordinator is not in active state.
                 withActiveContextOrThrow(tp, context -> {
-                    long prevLastWrittenOffset = context.lastWrittenOffset;
+                    long prevLastWrittenOffset = context.coordinator.lastWrittenOffset();
 
                     // Execute the operation.
-                    result = op.generateRecordsAndResult(context.coordinator);
+                    result = op.generateRecordsAndResult(context.coordinator.coordinator());
 
                     if (result.records().isEmpty()) {
                         // If the records are empty, it was a read operation after all. In this case,
@@ -773,7 +698,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
                                 producerEpoch,
                                 result.records()
                             );
-                            context.updateLastWrittenOffset(offset);
+                            context.coordinator.updateLastWrittenOffset(offset);
 
                             // Add the response to the deferred queue.
                             if (!future.isDone()) {
@@ -782,7 +707,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
                                 complete(null);
                             }
                         } catch (Throwable t) {
-                            context.revertLastWrittenOffset(prevLastWrittenOffset);
+                            context.coordinator.revertLastWrittenOffset(prevLastWrittenOffset);
                             complete(t);
                         }
                     }
@@ -918,8 +843,8 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
                 withActiveContextOrThrow(tp, context -> {
                     // Execute the read operation.
                     response = op.generateResponse(
-                        context.coordinator,
-                        context.lastCommittedOffset
+                        context.coordinator.coordinator(),
+                        context.coordinator.lastCommittedOffset()
                     );
 
                     // The response can be completed immediately.
@@ -1061,7 +986,9 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
             log.debug("High watermark of {} incremented to {}.", tp, offset);
             scheduleInternalOperation("HighWatermarkUpdated(tp=" + tp + ", offset=" + offset + ")", tp, () -> {
                 withActiveContextOrThrow(tp, context -> {
-                    context.updateLastCommittedOffset(offset);
+                    context.coordinator.updateLastCommittedOffset(offset);
+                    context.deferredEventQueue.completeUpTo(offset);
+                    coordinatorMetrics.onUpdateLastCommittedOffset(tp, offset);
                 });
             });
         }
@@ -1211,8 +1138,10 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
      * Creates the context if it does not exist.
      *
      * @param tp    The topic partition.
+     *
+     * Visible for testing.
      */
-    private void maybeCreateContext(TopicPartition tp) {
+    void maybeCreateContext(TopicPartition tp) {
         coordinators.computeIfAbsent(tp, CoordinatorContext::new);
     }
 
@@ -1422,7 +1351,10 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
                         case FAILED:
                         case INITIAL:
                             context.transitionTo(CoordinatorState.LOADING);
-                            loader.load(tp, context.coordinator).whenComplete((summary, exception) -> {
+                            loader.load(
+                                tp,
+                                context.coordinator
+                            ).whenComplete((summary, exception) -> {
                                 scheduleInternalOperation("CompleteLoad(tp=" + tp + ", epoch=" + partitionEpoch + ")", tp, () -> {
                                     withContextOrThrow(tp, ctx -> {
                                         if (ctx.state != CoordinatorState.LOADING) {
