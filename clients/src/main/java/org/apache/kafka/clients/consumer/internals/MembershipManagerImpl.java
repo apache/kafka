@@ -328,12 +328,19 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
             );
             throw new IllegalArgumentException(errorMessage);
         }
+
+        // Update the group member id label in the client telemetry reporter if the member id has
+        // changed. Initially the member id is empty, and it is updated when the member joins the
+        // group. This is done here to avoid updating the label on every heartbeat response. Also
+        // check if the member id is null, as the schema defines it as nullable.
+        if (response.memberId() != null && !response.memberId().equals(memberId)) {
+            clientTelemetryReporter.ifPresent(reporter -> reporter.updateMetricsLabels(
+                Collections.singletonMap(ClientTelemetryProvider.GROUP_MEMBER_ID, response.memberId())));
+        }
+
         this.memberId = response.memberId();
         this.memberEpoch = response.memberEpoch();
         ConsumerGroupHeartbeatResponseData.Assignment assignment = response.assignment();
-
-        clientTelemetryReporter.ifPresent(reporter -> reporter.updateMetricsLabels(
-            Collections.singletonMap(ClientTelemetryProvider.GROUP_MEMBER_ID, memberId)));
 
         if (assignment != null) {
             transitionTo(MemberState.RECONCILING);
