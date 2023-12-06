@@ -377,13 +377,12 @@ public class OffsetsRequestManager implements RequestManager, ClusterResourceLis
 
     /**
      * Make asynchronous ListOffsets request to fetch offsets by target times for the specified
-     * partitions.
-     * Use the retrieved offsets to reset positions in the subscription state.
+     * partitions. Use the retrieved offsets to reset positions in the subscription state.
+     * This also adds the request to the list of unsentRequests.
      *
      * @param timestampsToSearch the mapping between partitions and target time
-     * @return A list of
-     * {@link org.apache.kafka.clients.consumer.internals.NetworkClientDelegate.UnsentRequest}
-     * that can be polled to obtain the corresponding timestamps and offsets.
+     * @return A {@link CompletableFuture} which completes when the requests are
+     * complete.
      */
     private CompletableFuture<Void> sendListOffsetsRequestsAndResetPositions(
             final Map<TopicPartition, Long> timestampsToSearch) {
@@ -439,6 +438,12 @@ public class OffsetsRequestManager implements RequestManager, ClusterResourceLis
      * for the partition with the epoch less than or equal to the epoch the partition last saw.
      * <p/>
      * Requests are grouped by Node for efficiency.
+     * This also adds the request to the list of unsentRequests.
+     *
+     * @param partitionsToValidate a map of topic-partition positions to validate
+     * @return A {@link CompletableFuture} which completes when the requests are
+     * complete.
+
      */
     private CompletableFuture<Void> sendOffsetsForLeaderEpochRequestsAndValidatePositions(
             Map<TopicPartition, SubscriptionState.FetchPosition> partitionsToValidate) {
