@@ -2338,4 +2338,24 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     assertEquals(numRecords, consumer.committed(Set(tp).asJava).get(tp).offset)
     assertEquals(numRecords, consumer.committed(Set(tp).asJava).get(tp).offset)
   }
+
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
+  def testConsumerAndCommitSync(quorum: String, groupProtocol: String): Unit = {
+    val numRecords = 1
+    val record = new ProducerRecord(tp.topic, tp.partition, null, "key".getBytes, "value".getBytes)
+
+    val producer = createProducer()
+    producer.send(record)
+
+    val consumer = createConsumer()
+    assertEquals(0, consumer.assignment.size)
+    consumer.subscribe(List(topic).asJava)
+    awaitAssignment(consumer, Set(tp, tp2))
+
+    val records = consumeRecords(consumer = consumer, numRecords = numRecords)
+    assertEquals(numRecords, records.size)
+
+    consumer.commitSync()
+  }
 }

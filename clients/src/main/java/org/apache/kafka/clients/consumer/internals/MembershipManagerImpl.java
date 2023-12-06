@@ -319,6 +319,7 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
         }
         this.memberId = response.memberId();
         this.memberEpoch = response.memberEpoch();
+        commitRequestManager.updateMemberInformation(this.memberId, this.memberEpoch);
         ConsumerGroupHeartbeatResponseData.Assignment assignment = response.assignment();
 
         if (assignment != null) {
