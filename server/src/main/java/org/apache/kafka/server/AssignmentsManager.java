@@ -19,6 +19,10 @@ package org.apache.kafka.server;
 
 import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.message.AssignReplicasToDirsRequestData;
+import org.apache.kafka.common.message.AssignReplicasToDirsRequestData.DirectoryData;
+import org.apache.kafka.common.message.AssignReplicasToDirsRequestData.PartitionData;
+import org.apache.kafka.common.message.AssignReplicasToDirsRequestData.TopicData;
 import org.apache.kafka.common.message.AssignReplicasToDirsResponseData;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.AssignReplicasToDirsRequest;
@@ -33,6 +37,7 @@ import org.apache.kafka.server.common.TopicIdPartition;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -84,12 +89,13 @@ public class AssignmentsManager {
         this.brokerEpochSupplier = brokerEpochSupplier;
         this.eventQueue = new KafkaEventQueue(time,
                 new LogContext("[AssignmentsManager id=" + brokerId + "]"),
-                "broker-" + brokerId + "-directory-assignments-manager-");
+                "broker-" + brokerId + "-directory-assignments-manager-",
+                new ShutdownEvent());
+        channelManager.start();
     }
 
     public void close() throws InterruptedException {
         eventQueue.close();
-        channelManager.shutdown();
     }
 
     public void onAssignment(TopicIdPartition topicPartition, Uuid dirId, Runnable callback) {
@@ -120,6 +126,16 @@ public class AssignmentsManager {
     }
 
     /**
+     * Handles shutdown of the {@link AssignmentsManager}.
+     */
+    private class ShutdownEvent extends Event {
+        @Override
+        public void run() throws Exception {
+            channelManager.shutdown();
+        }
+    }
+
+    /**
      * Handles new generated assignments, to be propagated to the controller.
      * Assignment events may be handled out of order, so for any two assignment
      * events for the same topic partition, the one with the oldest timestamp is
@@ -139,11 +155,18 @@ public class AssignmentsManager {
         @Override
         public void run() throws Exception {
             AssignmentEvent existing = pending.getOrDefault(partition, null);
-            if (existing != null && existing.timestampNs > timestampNs) {
-                if (log.isDebugEnabled()) {
-                    log.debug("Dropping assignment {} because it's older than {}", this, existing);
+            if (existing == null && inflight != null) {
+                existing = inflight.getOrDefault(partition, null);
+            }
+            if (existing != null) {
+                if (existing.dirId.equals(dirId)) {
+                    if (log.isDebugEnabled()) log.debug("Ignoring duplicate assignment {}", this);
+                    return;
                 }
-                return;
+                if (existing.timestampNs > timestampNs) {
+                    if (log.isDebugEnabled()) log.debug("Dropping assignment {} because it's older than {}", this, existing);
+                    return;
+                }
             }
             if (log.isDebugEnabled()) {
                 log.debug("Received new assignment {}", this);
@@ -240,8 +263,8 @@ public class AssignmentsManager {
                 Set<AssignmentEvent> completed = Utils.diff(HashSet::new, inflight.values().stream().collect(Collectors.toSet()), failed);
                 completed.forEach(assignmentEvent -> assignmentEvent.callback.run());
 
-                log.warn("Re-queueing assignments: {}", failed);
                 if (!failed.isEmpty()) {
+                    log.warn("Re-queueing assignments: {}", failed);
                     for (AssignmentEvent event : failed) {
                         pending.put(event.partition, event);
                     }
@@ -375,5 +398,28 @@ public class AssignmentsManager {
             }
         }
         return failures;
+    }
+
+    // visible for testing
+    static AssignReplicasToDirsRequestData buildRequestData(int brokerId, long brokerEpoch, Map<TopicIdPartition, Uuid> assignment) {
+        Map<Uuid, DirectoryData> directoryMap = new HashMap<>();
+        Map<Uuid, Map<Uuid, TopicData>> topicMap = new HashMap<>();
+        for (Map.Entry<TopicIdPartition, Uuid> entry : assignment.entrySet()) {
+            TopicIdPartition topicPartition = entry.getKey();
+            Uuid directoryId = entry.getValue();
+            DirectoryData directory = directoryMap.computeIfAbsent(directoryId, d -> new DirectoryData().setId(directoryId));
+            TopicData topic = topicMap.computeIfAbsent(directoryId, d -> new HashMap<>())
+                    .computeIfAbsent(topicPartition.topicId(), topicId -> {
+                        TopicData data = new TopicData().setTopicId(topicId);
+                        directory.topics().add(data);
+                        return data;
+                    });
+            PartitionData partition = new PartitionData().setPartitionIndex(topicPartition.partitionId());
+            topic.partitions().add(partition);
+        }
+        return new AssignReplicasToDirsRequestData()
+                .setBrokerId(brokerId)
+                .setBrokerEpoch(brokerEpoch)
+                .setDirectories(new ArrayList<>(directoryMap.values()));
     }
 }
