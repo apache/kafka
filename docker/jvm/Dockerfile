@@ -16,11 +16,13 @@
 # limitations under the License.
 ###############################################################################
 
-FROM golang:latest AS build-ub
+FROM golang:latest AS build-utility
 WORKDIR /build
 RUN useradd --no-log-init --create-home --shell /bin/bash appuser
-COPY --chown=appuser:appuser resources/ub/ ./
-RUN go build -ldflags="-w -s" ./ub.go
+COPY --chown=appuser:appuser resources/utility/ ./
+
+# Generate utility executable for dealing with env variables
+RUN go build -ldflags="-w -s" ./utility.go
 USER appuser
 RUN go test ./...
 
@@ -37,11 +39,16 @@ COPY jsa_launch /etc/kafka/docker/jsa_launch
 RUN set -eux ; \
     apk update ; \
     apk upgrade ; \
-    apk add --no-cache wget gcompat procps netcat-openbsd; \
+    apk add --no-cache wget gcompat gpg gpg-agent procps netcat-openbsd uuidgen; \
     mkdir opt/kafka; \
     wget -nv -O kafka.tgz "$kafka_url"; \
-    tar xfz kafka.tgz -C /opt/kafka --strip-components 1;
+    wget -nv -O kafka.tgz.asc "$kafka_url.asc"; \
+    tar xfz kafka.tgz -C /opt/kafka --strip-components 1; \
+    wget -nv -O KEYS https://downloads.apache.org/kafka/KEYS; \
+    gpg --import KEYS; \
+    gpg --batch --verify kafka.tgz.asc kafka.tgz
 
+# Generate jsa files using dynamic CDS for kafka server start command and kafka storage format command
 RUN /etc/kafka/docker/jsa_launch
 
 
@@ -61,13 +68,12 @@ LABEL org.label-schema.name="kafka" \
       org.label-schema.description="Apache Kafka" \
       org.label-schema.build-date="${build_date}" \
       org.label-schema.vcs-url="https://github.com/apache/kafka" \
-      org.label-schema.schema-version="1.0" \
-      maintainer="apache"
+      maintainer="Apache Kafka"
 
 RUN set -eux ; \
     apk update ; \
     apk upgrade ; \
-    apk add --no-cache curl wget gpg dirmngr gpg-agent gcompat; \
+    apk add --no-cache wget gpg gpg-agent gcompat; \
     mkdir opt/kafka; \
     wget -nv -O kafka.tgz "$kafka_url"; \
     wget -nv -O kafka.tgz.asc "$kafka_url.asc"; \
@@ -81,13 +87,15 @@ RUN set -eux ; \
     chown appuser:appuser -R /usr/logs /opt/kafka /mnt/shared/config; \
     chown appuser:root -R /var/lib/kafka /etc/kafka/secrets /etc/kafka; \
     chmod -R ug+w /etc/kafka /var/lib/kafka /etc/kafka/secrets; \
+    cp /opt/kafka/config/log4j.properties /etc/kafka/docker/log4j.properties; \
+    cp /opt/kafka/config/tools-log4j.properties /etc/kafka/docker/tools-log4j.properties; \
     rm kafka.tgz kafka.tgz.asc KEYS; \
-    apk del curl wget gpg dirmngr gpg-agent; \
+    apk del wget gpg gpg-agent; \
     apk cache clean;
 
 COPY --from=build-jsa kafka.jsa /opt/kafka/kafka.jsa
 COPY --from=build-jsa storage.jsa /opt/kafka/storage.jsa
-COPY --chown=appuser:appuser --from=build-ub /build/ub /usr/bin
+COPY --chown=appuser:appuser --from=build-utility /build/utility /usr/bin
 COPY --chown=appuser:appuser resources/common-scripts /etc/kafka/docker
 COPY --chown=appuser:appuser launch /etc/kafka/docker/launch
 

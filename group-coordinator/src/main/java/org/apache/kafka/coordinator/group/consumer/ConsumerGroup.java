@@ -21,6 +21,7 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.ApiException;
 import org.apache.kafka.common.errors.StaleMemberEpochException;
 import org.apache.kafka.common.errors.UnknownMemberIdException;
+import org.apache.kafka.common.message.ConsumerGroupDescribeResponseData;
 import org.apache.kafka.common.message.ListGroupsResponseData;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.coordinator.group.Group;
@@ -28,6 +29,7 @@ import org.apache.kafka.coordinator.group.OffsetExpirationCondition;
 import org.apache.kafka.coordinator.group.OffsetExpirationConditionImpl;
 import org.apache.kafka.coordinator.group.Record;
 import org.apache.kafka.coordinator.group.RecordHelpers;
+import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetricsShard;
 import org.apache.kafka.image.ClusterImage;
 import org.apache.kafka.image.TopicImage;
 import org.apache.kafka.image.TopicsImage;
@@ -44,6 +46,11 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+
+import static org.apache.kafka.coordinator.group.consumer.ConsumerGroup.ConsumerGroupState.ASSIGNING;
+import static org.apache.kafka.coordinator.group.consumer.ConsumerGroup.ConsumerGroupState.EMPTY;
+import static org.apache.kafka.coordinator.group.consumer.ConsumerGroup.ConsumerGroupState.RECONCILING;
+import static org.apache.kafka.coordinator.group.consumer.ConsumerGroup.ConsumerGroupState.STABLE;
 
 /**
  * A Consumer Group. All the metadata in this class are backed by
@@ -110,6 +117,11 @@ public class ConsumerGroup implements Group {
     private final TimelineHashMap<String, ConsumerGroupMember> members;
 
     /**
+     * The static group members.
+     */
+    private final TimelineHashMap<String, String> staticMembers;
+
+    /**
      * The number of members supporting each server assignor name.
      */
     private final TimelineHashMap<String, Integer> serverAssignors;
@@ -144,6 +156,11 @@ public class ConsumerGroup implements Group {
     private final TimelineHashMap<Uuid, TimelineHashMap<Integer, Integer>> currentPartitionEpoch;
 
     /**
+     * The coordinator metrics.
+     */
+    private final GroupCoordinatorMetricsShard metrics;
+
+    /**
      * The metadata refresh deadline. It consists of a timestamp in milliseconds together with
      * the group epoch at the time of setting it. The metadata refresh time is considered as a
      * soft state (read that it is not stored in a timeline data structure). It is like this
@@ -157,19 +174,24 @@ public class ConsumerGroup implements Group {
 
     public ConsumerGroup(
         SnapshotRegistry snapshotRegistry,
-        String groupId
+        String groupId,
+        GroupCoordinatorMetricsShard metrics
     ) {
         this.snapshotRegistry = Objects.requireNonNull(snapshotRegistry);
         this.groupId = Objects.requireNonNull(groupId);
-        this.state = new TimelineObject<>(snapshotRegistry, ConsumerGroupState.EMPTY);
+        this.state = new TimelineObject<>(snapshotRegistry, EMPTY);
         this.groupEpoch = new TimelineInteger(snapshotRegistry);
         this.members = new TimelineHashMap<>(snapshotRegistry, 0);
+        this.staticMembers = new TimelineHashMap<>(snapshotRegistry, 0);
         this.serverAssignors = new TimelineHashMap<>(snapshotRegistry, 0);
         this.subscribedTopicNames = new TimelineHashMap<>(snapshotRegistry, 0);
         this.subscribedTopicMetadata = new TimelineHashMap<>(snapshotRegistry, 0);
         this.targetAssignmentEpoch = new TimelineInteger(snapshotRegistry);
         this.targetAssignment = new TimelineHashMap<>(snapshotRegistry, 0);
         this.currentPartitionEpoch = new TimelineHashMap<>(snapshotRegistry, 0);
+        this.metrics = Objects.requireNonNull(metrics);
+
+        metrics.onConsumerGroupStateTransition(null, this.state.get());
     }
 
     /**
@@ -262,6 +284,18 @@ public class ConsumerGroup implements Group {
     }
 
     /**
+     * Get member id of a static member that matches the given group
+     * instance id.
+     *
+     * @param groupInstanceId The group instance id.
+     *
+     * @return The member id corresponding to the given instance id or null if it does not exist
+     */
+    public String staticMemberId(String groupInstanceId) {
+        return staticMembers.get(groupInstanceId);
+    }
+
+    /**
      * Gets or creates a member.
      *
      * @param memberId          The member id.
@@ -288,6 +322,18 @@ public class ConsumerGroup implements Group {
     }
 
     /**
+     * Gets a static member.
+     *
+     * @param instanceId The group instance id.
+     *
+     * @return The member corresponding to the given instance id or null if it does not exist
+     */
+    public ConsumerGroupMember staticMember(String instanceId) {
+        String existingMemberId = staticMemberId(instanceId);
+        return existingMemberId == null ? null : getOrMaybeCreateMember(existingMemberId, false);
+    }
+
+    /**
      * Updates the member.
      *
      * @param newMember The new member state.
@@ -300,7 +346,19 @@ public class ConsumerGroup implements Group {
         maybeUpdateSubscribedTopicNames(oldMember, newMember);
         maybeUpdateServerAssignors(oldMember, newMember);
         maybeUpdatePartitionEpoch(oldMember, newMember);
+        updateStaticMember(newMember);
         maybeUpdateGroupState();
+    }
+
+    /**
+     * Updates the member id stored against the instance id if the member is a static member.
+     *
+     * @param newMember The new member state.
+     */
+    private void updateStaticMember(ConsumerGroupMember newMember) {
+        if (newMember.instanceId() != null) {
+            staticMembers.put(newMember.instanceId(), newMember.memberId());
+        }
     }
 
     /**
@@ -313,7 +371,19 @@ public class ConsumerGroup implements Group {
         maybeUpdateSubscribedTopicNames(oldMember, null);
         maybeUpdateServerAssignors(oldMember, null);
         maybeRemovePartitionEpoch(oldMember);
+        removeStaticMember(oldMember);
         maybeUpdateGroupState();
+    }
+
+    /**
+     * Remove the static member mapping if the removed member is static.
+     *
+     * @param oldMember The member to remove.
+     */
+    private void removeStaticMember(ConsumerGroupMember oldMember) {
+        if (oldMember.instanceId() != null) {
+            staticMembers.remove(oldMember.instanceId());
+        }
     }
 
     /**
@@ -339,6 +409,13 @@ public class ConsumerGroup implements Group {
      */
     public Map<String, ConsumerGroupMember> members() {
         return Collections.unmodifiableMap(members);
+    }
+
+    /**
+     * @return An immutable Map containing all the static members keyed by instance id.
+     */
+    public Map<String, String> staticMembers() {
+        return Collections.unmodifiableMap(staticMembers);
     }
 
     /**
@@ -444,7 +521,14 @@ public class ConsumerGroup implements Group {
      * @return The preferred assignor for the group.
      */
     public Optional<String> preferredServerAssignor() {
-        return serverAssignors.entrySet().stream()
+        return preferredServerAssignor(Long.MAX_VALUE);
+    }
+
+    /**
+     * @return The preferred assignor for the group with given offset.
+     */
+    public Optional<String> preferredServerAssignor(long committedOffset) {
+        return serverAssignors.entrySet(committedOffset).stream()
             .max(Map.Entry.comparingByValue())
             .map(Map.Entry::getKey);
     }
@@ -672,20 +756,23 @@ public class ConsumerGroup implements Group {
      * Updates the current state of the group.
      */
     private void maybeUpdateGroupState() {
+        ConsumerGroupState previousState = state.get();
+        ConsumerGroupState newState = STABLE;
         if (members.isEmpty()) {
-            state.set(ConsumerGroupState.EMPTY);
+            newState = EMPTY;
         } else if (groupEpoch.get() > targetAssignmentEpoch.get()) {
-            state.set(ConsumerGroupState.ASSIGNING);
+            newState = ASSIGNING;
         } else {
             for (ConsumerGroupMember member : members.values()) {
                 if (member.targetMemberEpoch() != targetAssignmentEpoch.get() || member.state() != ConsumerGroupMember.MemberState.STABLE) {
-                    state.set(ConsumerGroupState.RECONCILING);
-                    return;
+                    newState = RECONCILING;
+                    break;
                 }
             }
-
-            state.set(ConsumerGroupState.STABLE);
         }
+
+        state.set(newState);
+        metrics.onConsumerGroupStateTransition(previousState, newState);
     }
 
     /**
@@ -863,5 +950,20 @@ public class ConsumerGroup implements Group {
      */
     private static Integer incValue(String key, Integer value) {
         return value == null ? 1 : value + 1;
+    }
+
+    public ConsumerGroupDescribeResponseData.DescribedGroup asDescribedGroup(long committedOffset, String defaultAssignor) {
+        ConsumerGroupDescribeResponseData.DescribedGroup describedGroup = new ConsumerGroupDescribeResponseData.DescribedGroup()
+            .setGroupId(groupId)
+            .setAssignorName(preferredServerAssignor(committedOffset).orElse(defaultAssignor))
+            .setGroupEpoch(groupEpoch.get(committedOffset))
+            .setGroupState(state.get(committedOffset).toString())
+            .setAssignmentEpoch(targetAssignmentEpoch.get(committedOffset));
+        members.entrySet(committedOffset).forEach(
+            entry -> describedGroup.members().add(
+                entry.getValue().asConsumerGroupDescribeMember(targetAssignment.get(entry.getValue().memberId(), committedOffset))
+            )
+        );
+        return describedGroup;
     }
 }

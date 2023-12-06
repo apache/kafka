@@ -420,6 +420,25 @@ public class ClusterConnectionStatesTest {
         assertEquals(0, connectionStates.nodesWithConnectionSetupTimeout(time.milliseconds()).size());
     }
 
+    @Test
+    public void testSkipLastAttemptedIp() throws UnknownHostException {
+        setupMultipleIPs();
+
+        assertTrue(ClientUtils.resolve(hostTwoIps, multipleIPHostResolver).size() > 1);
+
+        // Connect to the first IP
+        connectionStates.connecting(nodeId1, time.milliseconds(), hostTwoIps);
+        InetAddress addr1 = connectionStates.currentAddress(nodeId1);
+
+        // Disconnect, which will trigger re-resolution with the first IP still first
+        connectionStates.disconnected(nodeId1, time.milliseconds());
+
+        // Connect again, the first IP should get skipped
+        connectionStates.connecting(nodeId1, time.milliseconds(), hostTwoIps);
+        InetAddress addr2 = connectionStates.currentAddress(nodeId1);
+        assertNotSame(addr1, addr2);
+    }
+    
     private void setupMultipleIPs() {
         this.connectionStates = new ClusterConnectionStates(reconnectBackoffMs, reconnectBackoffMax,
                 connectionSetupTimeoutMs, connectionSetupTimeoutMaxMs, new LogContext(), this.multipleIPHostResolver);

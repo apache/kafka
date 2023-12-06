@@ -189,7 +189,7 @@ public class ControllerRegistration {
                 setMaxSupportedVersion(entry.getValue().max()));
         }
         return new ApiMessageAndVersion(registrationRecord,
-            options.metadataVersion().registerBrokerRecordVersion());
+            options.metadataVersion().registerControllerRecordVersion());
     }
 
     @Override

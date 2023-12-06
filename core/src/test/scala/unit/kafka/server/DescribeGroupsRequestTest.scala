@@ -63,13 +63,13 @@ class DescribeGroupsRequestTest(cluster: ClusterInstance) extends GroupCoordinat
     )
 
     // Join the consumer group. Complete the rebalance so that grp-1 is in STABLE state.
-    val (memberId1, _) = joinConsumerGroupWithOldProtocol(
+    val (memberId1, _) = joinDynamicConsumerGroupWithOldProtocol(
       groupId = "grp-1",
       metadata = Array(1, 2, 3),
       assignment = Array(4, 5, 6)
     )
     // Join the consumer group. Not complete the rebalance so that grp-2 is in COMPLETING_REBALANCE state.
-    val (memberId2, _) = joinConsumerGroupWithOldProtocol(
+    val (memberId2, _) = joinDynamicConsumerGroupWithOldProtocol(
       groupId = "grp-2",
       metadata = Array(1, 2, 3),
       completeRebalance = false

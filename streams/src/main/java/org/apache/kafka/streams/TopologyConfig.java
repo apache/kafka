@@ -20,15 +20,18 @@ import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigDef.Importance;
 import org.apache.kafka.common.config.ConfigDef.Type;
+import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.errors.DeserializationExceptionHandler;
-import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.internals.StreamsConfigUtils;
+import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.internals.MaterializedInternal;
 import org.apache.kafka.streams.processor.TimestampExtractor;
 
 import org.apache.kafka.streams.processor.internals.namedtopology.KafkaStreamsNamedTopologyWrapper;
+import org.apache.kafka.streams.state.DslStoreSuppliers;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import java.util.Optional;
 import java.util.Properties;
 import java.util.function.Supplier;
 
@@ -37,6 +40,9 @@ import static org.apache.kafka.streams.StreamsConfig.BUFFERED_RECORDS_PER_PARTIT
 import static org.apache.kafka.streams.StreamsConfig.BUFFERED_RECORDS_PER_PARTITION_DOC;
 import static org.apache.kafka.streams.StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.CACHE_MAX_BYTES_BUFFERING_DOC;
+import static org.apache.kafka.streams.StreamsConfig.DSL_STORE_SUPPLIERS_CLASS_CONFIG;
+import static org.apache.kafka.streams.StreamsConfig.DSL_STORE_SUPPLIERS_CLASS_DEFAULT;
+import static org.apache.kafka.streams.StreamsConfig.DSL_STORE_SUPPLIERS_CLASS_DOC;
 import static org.apache.kafka.streams.StreamsConfig.STATESTORE_CACHE_MAX_BYTES_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.STATESTORE_CACHE_MAX_BYTES_DOC;
 import static org.apache.kafka.streams.StreamsConfig.DEFAULT_DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG;
@@ -104,9 +110,16 @@ public class TopologyConfig extends AbstractConfig {
                 ROCKS_DB,
                 in(ROCKS_DB, IN_MEMORY),
                 Importance.LOW,
-                DEFAULT_DSL_STORE_DOC);
+                DEFAULT_DSL_STORE_DOC)
+            .define(DSL_STORE_SUPPLIERS_CLASS_CONFIG,
+                Type.CLASS,
+                DSL_STORE_SUPPLIERS_CLASS_DEFAULT,
+                Importance.LOW,
+                DSL_STORE_SUPPLIERS_CLASS_DOC);
     }
     private final static Logger log = LoggerFactory.getLogger(TopologyConfig.class);
+
+    private final StreamsConfig globalAppConfigs;
 
     public final String topologyName;
     public final boolean eosEnabled;
@@ -119,6 +132,7 @@ public class TopologyConfig extends AbstractConfig {
     public final long maxTaskIdleMs;
     public final long taskTimeoutMs;
     public final String storeType;
+    public final Class<?> dslStoreSuppliers;
     public final Supplier<TimestampExtractor> timestampExtractorSupplier;
     public final Supplier<DeserializationExceptionHandler> deserializationExceptionHandlerSupplier;
 
@@ -130,6 +144,7 @@ public class TopologyConfig extends AbstractConfig {
     public TopologyConfig(final String topologyName, final StreamsConfig globalAppConfigs, final Properties topologyOverrides) {
         super(CONFIG, topologyOverrides, false);
 
+        this.globalAppConfigs = globalAppConfigs;
         this.topologyName = topologyName;
         this.eosEnabled = StreamsConfigUtils.eosEnabled(globalAppConfigs);
 
@@ -216,10 +231,32 @@ public class TopologyConfig extends AbstractConfig {
         } else {
             storeType = globalAppConfigs.getString(DEFAULT_DSL_STORE_CONFIG);
         }
+
+        if (isTopologyOverride(DSL_STORE_SUPPLIERS_CLASS_CONFIG, topologyOverrides)) {
+            dslStoreSuppliers = getClass(DSL_STORE_SUPPLIERS_CLASS_CONFIG);
+            log.info("Topology {} is overriding {} to {}", topologyName, DSL_STORE_SUPPLIERS_CLASS_CONFIG, dslStoreSuppliers);
+        } else {
+            dslStoreSuppliers = globalAppConfigs.getClass(DSL_STORE_SUPPLIERS_CLASS_CONFIG);
+        }
     }
 
+    @Deprecated
     public Materialized.StoreType parseStoreType() {
         return MaterializedInternal.parse(storeType);
+    }
+
+    /**
+     * @return the DslStoreSuppliers if the value was explicitly configured (either by
+     *         {@link StreamsConfig#DEFAULT_DSL_STORE} or {@link StreamsConfig#DSL_STORE_SUPPLIERS_CLASS_CONFIG})
+     */
+    public Optional<DslStoreSuppliers> resolveDslStoreSuppliers() {
+        if (isTopologyOverride(DSL_STORE_SUPPLIERS_CLASS_CONFIG, topologyOverrides) || globalAppConfigs.originals().containsKey(DSL_STORE_SUPPLIERS_CLASS_CONFIG)) {
+            return Optional.of(Utils.newInstance(dslStoreSuppliers, DslStoreSuppliers.class));
+        } else if (isTopologyOverride(DEFAULT_DSL_STORE_CONFIG, topologyOverrides) || globalAppConfigs.originals().containsKey(DEFAULT_DSL_STORE_CONFIG)) {
+            return Optional.of(MaterializedInternal.parse(storeType));
+        } else {
+            return Optional.empty();
+        }
     }
 
     public boolean isNamedTopology() {

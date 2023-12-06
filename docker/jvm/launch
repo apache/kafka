@@ -24,7 +24,7 @@ fi
 # The default for bridged n/w is the bridged IP so you will only be able to connect from another docker container.
 # For host n/w, this is the IP that the hostname on the host resolves to.
 
-# If you have more that one n/w configured, hostname -i gives you all the IPs,
+# If you have more than one n/w configured, hostname -i gives you all the IPs,
 # the default is to pick the first IP (or network).
 export KAFKA_JMX_HOSTNAME=${KAFKA_JMX_HOSTNAME:-$(hostname -i | cut -d" " -f1)}
 
@@ -34,22 +34,26 @@ if [ "$KAFKA_JMX_PORT" ]; then
     export KAFKA_JMX_OPTS="$KAFKA_JMX_OPTS -Djava.rmi.server.hostname=$KAFKA_JMX_HOSTNAME -Dcom.sun.management.jmxremote.local.only=false -Dcom.sun.management.jmxremote.rmi.port=$JMX_PORT -Dcom.sun.management.jmxremote.port=$JMX_PORT"
 fi
 
+# Make a temp env variable to store user provided performance otps
 if [ -z "$KAFKA_JVM_PERFORMANCE_OPTS" ]; then
     export TEMP_KAFKA_JVM_PERFORMANCE_OPTS=""
 else
     export TEMP_KAFKA_JVM_PERFORMANCE_OPTS="$KAFKA_JVM_PERFORMANCE_OPTS"
 fi
 
+# We will first use CDS for storage to format storage
 export KAFKA_JVM_PERFORMANCE_OPTS="$KAFKA_JVM_PERFORMANCE_OPTS -XX:SharedArchiveFile=/opt/kafka/storage.jsa"
 
 echo "===> Using provided cluster id $CLUSTER_ID ..."
-# A bit of a hack to not error out if the storage is already formatted.  Need storage-tool to support this
+# A bit of a hack to not error out if the storage is already formatted. Need storage-tool to support this
 result=$(/opt/kafka/bin/kafka-storage.sh format --cluster-id=$CLUSTER_ID -c /opt/kafka/config/server.properties 2>&1) || \
     echo $result | grep -i "already formatted" || \
     { echo $result && (exit 1) }
 
+# Using temp env variable to get rid of storage CDS command
 export KAFKA_JVM_PERFORMANCE_OPTS="$TEMP_KAFKA_JVM_PERFORMANCE_OPTS"
 
+# Now we will use CDS for kafka to start kafka server
 export KAFKA_JVM_PERFORMANCE_OPTS="$KAFKA_JVM_PERFORMANCE_OPTS -XX:SharedArchiveFile=/opt/kafka/kafka.jsa"
 
 # Start kafka broker

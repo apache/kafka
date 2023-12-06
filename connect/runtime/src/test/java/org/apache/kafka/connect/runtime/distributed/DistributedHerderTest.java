@@ -690,7 +690,7 @@ public class DistributedHerderTest {
         }).when(herder).validateConnectorConfig(eq(CONN2_CONFIG), validateCallback.capture());
 
         // CONN2 is new, should succeed
-        doNothing().when(configBackingStore).putConnectorConfig(CONN2, CONN2_CONFIG);
+        doNothing().when(configBackingStore).putConnectorConfig(eq(CONN2), eq(CONN2_CONFIG), isNull());
 
         // This will occur just before/during the second tick
         doNothing().when(member).ensureActive();
@@ -698,6 +698,51 @@ public class DistributedHerderTest {
         // No immediate action besides this -- change will be picked up via the config log
 
         herder.putConnectorConfig(CONN2, CONN2_CONFIG, false, putConnectorCallback);
+        // This tick runs the initial herder request, which issues an asynchronous request for
+        // connector validation
+        herder.tick();
+
+        // Once that validation is complete, another request is added to the herder request queue
+        // for actually performing the config write; this tick is for that request
+        herder.tick();
+        time.sleep(1000L);
+        assertStatistics(3, 1, 100, 1000L);
+
+        ConnectorInfo info = new ConnectorInfo(CONN2, CONN2_CONFIG, Collections.emptyList(), ConnectorType.SOURCE);
+        verify(putConnectorCallback).onCompletion(isNull(), eq(new Herder.Created<>(true, info)));
+        verifyNoMoreInteractions(worker, member, configBackingStore, statusBackingStore, putConnectorCallback);
+    }
+
+    @Test
+    public void testCreateConnectorWithInitialState() throws Exception {
+        when(member.memberId()).thenReturn("leader");
+        when(member.currentProtocolVersion()).thenReturn(CONNECT_PROTOCOL_V0);
+        expectRebalance(1, Collections.emptyList(), Collections.emptyList(), true);
+        expectConfigRefreshAndSnapshot(SNAPSHOT);
+
+        when(statusBackingStore.connectors()).thenReturn(Collections.emptySet());
+        doNothing().when(member).poll(anyLong());
+
+        // Initial rebalance where this member becomes the leader
+        herder.tick();
+
+        // mock the actual validation since its asynchronous nature is difficult to test and should
+        // be covered sufficiently by the unit tests for the AbstractHerder class
+        ArgumentCaptor<Callback<ConfigInfos>> validateCallback = ArgumentCaptor.forClass(Callback.class);
+        doAnswer(invocation -> {
+            validateCallback.getValue().onCompletion(null, CONN2_CONFIG_INFOS);
+            return null;
+        }).when(herder).validateConnectorConfig(eq(CONN2_CONFIG), validateCallback.capture());
+
+        // CONN2 is new, should succeed
+        doNothing().when(configBackingStore).putConnectorConfig(eq(CONN2), eq(CONN2_CONFIG), eq(TargetState.STOPPED));
+
+        // This will occur just before/during the second tick
+        doNothing().when(member).ensureActive();
+
+        // No immediate action besides this -- change will be picked up via the config log
+
+        herder.putConnectorConfig(CONN2, CONN2_CONFIG, TargetState.STOPPED, false, putConnectorCallback);
         // This tick runs the initial herder request, which issues an asynchronous request for
         // connector validation
         herder.tick();
@@ -735,7 +780,7 @@ public class DistributedHerderTest {
         }).when(herder).validateConnectorConfig(eq(CONN2_CONFIG), validateCallback.capture());
 
         doThrow(new ConnectException("Error writing connector configuration to Kafka"))
-                .when(configBackingStore).putConnectorConfig(CONN2, CONN2_CONFIG);
+                .when(configBackingStore).putConnectorConfig(eq(CONN2), eq(CONN2_CONFIG), isNull());
 
         // This will occur just before/during the second tick
         doNothing().when(member).ensureActive();
@@ -2184,7 +2229,7 @@ public class DistributedHerderTest {
             // Simulate response to writing config + waiting until end of log to be read
             configUpdateListener.onConnectorConfigUpdate(CONN1);
             return null;
-        }).when(configBackingStore).putConnectorConfig(eq(CONN1), eq(CONN1_CONFIG_UPDATED));
+        }).when(configBackingStore).putConnectorConfig(eq(CONN1), eq(CONN1_CONFIG_UPDATED), isNull());
 
         // As a result of reconfig, should need to update snapshot. With only connector updates, we'll just restart
         // connector without rebalance

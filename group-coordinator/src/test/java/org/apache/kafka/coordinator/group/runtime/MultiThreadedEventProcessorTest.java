@@ -488,8 +488,6 @@ public class MultiThreadedEventProcessorTest {
             verify(mockRuntimeMetrics, times(1)).recordThreadIdleRatio(500.0 / (500.0 + 7000.0 + 500.0));
             // event queue time = e2 enqueue time + e2 poll time
             verify(mockRuntimeMetrics, times(1)).recordEventQueueTime(3500L);
-            // e2 processing time
-            verify(mockRuntimeMetrics, times(1)).recordEventQueueProcessingTime(5000L);
         }
     }
 
