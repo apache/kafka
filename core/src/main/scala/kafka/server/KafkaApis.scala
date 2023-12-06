@@ -709,39 +709,20 @@ class KafkaApis(val requestChannel: RequestChannel,
     }
 
     val internalTopicsAllowed = request.header.clientId == AdminUtils.ADMIN_CLIENT_ID
-    val transactionVerificationEntries = new ReplicaManager.TransactionVerificationEntries
-
-    def postVerificationCallback(newRequestLocal: RequestLocal)
-                                (errorResults: Map[TopicPartition, LogAppendResult]): Unit = {
-      replicaManager.appendRecords(
-        timeout = produceRequest.timeout.toLong,
-        requiredAcks = produceRequest.acks,
-        internalTopicsAllowed = internalTopicsAllowed,
-        origin = AppendOrigin.CLIENT,
-        entriesPerPartition = authorizedRequestInfo,
-        responseCallback = sendResponseCallback,
-        recordValidationStatsCallback = processingStatsCallback,
-        requestLocal = newRequestLocal,
-        verificationGuards = transactionVerificationEntries.verificationGuards.toMap,
-        preAppendErrors = errorResults
-      )
-    }
 
     if (authorizedRequestInfo.isEmpty)
       sendResponseCallback(Map.empty)
     else {
-      // call the replica manager to append messages to the replicas
-      if (produceRequest.transactionalId == null){
-        postVerificationCallback(requestLocal)(Map.empty)
-      } else {
-        replicaManager.appendRecordsWithTransactionVerification(
-          entriesPerPartition = authorizedRequestInfo,
-          transactionVerificationEntries = transactionVerificationEntries,
-          transactionalId = produceRequest.transactionalId,
-          requestLocal = requestLocal,
-          postVerificationCallback = postVerificationCallback
-        )
-      }
+      replicaManager.handleProduceAppend(
+        timeout = produceRequest.timeout.toLong,
+        requiredAcks = produceRequest.acks,
+        internalTopicsAllowed = internalTopicsAllowed,
+        origin = AppendOrigin.CLIENT,
+        transactionalId = produceRequest.transactionalId,
+        entriesPerPartition = authorizedRequestInfo,
+        responseCallback = sendResponseCallback,
+        recordValidationStatsCallback = processingStatsCallback,
+        requestLocal = requestLocal)
 
       // if the request is put into the purgatory, it will have a held reference and hence cannot be garbage collected;
       // hence we clear its data here in order to let GC reclaim its memory since it is already appended to log

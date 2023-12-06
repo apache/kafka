@@ -23,7 +23,6 @@ import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.locks.Lock
 import kafka.coordinator.AbstractCoordinatorConcurrencyTest._
 import kafka.log.UnifiedLog
-import kafka.server.ReplicaManager.TransactionVerificationEntries
 import kafka.server._
 import kafka.utils._
 import kafka.zk.KafkaZkClient
@@ -169,6 +168,19 @@ object AbstractCoordinatorConcurrencyTest {
       watchKeys = Collections.newSetFromMap(new ConcurrentHashMap[TopicPartitionOperationKey, java.lang.Boolean]()).asScala
     }
 
+    override def maybeStartTransactionVerificationForPartition(
+      topicPartition: TopicPartition,
+      transactionalId: String,
+      producerId: Long,
+      producerEpoch: Short,
+      baseSequence: Int,
+      requestLocal: RequestLocal,
+      callback: (Errors, RequestLocal, VerificationGuard) => Unit
+    ): Unit = {
+      // Skip verification
+      callback(Errors.NONE, requestLocal, VerificationGuard.SENTINEL)
+    }
+
     override def tryCompleteActions(): Unit = watchKeys.map(producePurgatory.checkAndComplete)
 
     override def appendRecords(timeout: Long,
@@ -209,14 +221,6 @@ object AbstractCoordinatorConcurrencyTest {
       val producerRequestKeys = entriesPerPartition.keys.map(TopicPartitionOperationKey(_)).toSeq
       watchKeys ++= producerRequestKeys
       producePurgatory.tryCompleteElseWatch(delayedProduce, producerRequestKeys)
-    }
-
-    override def appendRecordsWithTransactionVerification(entriesPerPartition: Map[TopicPartition, MemoryRecords],
-                                                          transactionVerificationEntries: TransactionVerificationEntries,
-                                                          transactionalId: String,
-                                                          requestLocal: RequestLocal,
-                                                          postVerificationCallback: RequestLocal => Map[TopicPartition, LogAppendResult] => Unit): Unit = {
-      postVerificationCallback(requestLocal)(Map.empty)
     }
 
     override def getMagic(topicPartition: TopicPartition): Option[Byte] = {

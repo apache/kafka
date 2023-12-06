@@ -26,7 +26,6 @@ import java.util.concurrent.locks.ReentrantLock
 import java.util.concurrent.ConcurrentHashMap
 import com.yammer.metrics.core.Gauge
 import kafka.common.OffsetAndMetadata
-import kafka.server.ReplicaManager.TransactionVerificationEntries
 import kafka.server.{LogAppendResult, ReplicaManager, RequestLocal}
 import kafka.utils.CoreUtils.inLock
 import kafka.utils.Implicits._
@@ -348,6 +347,7 @@ class GroupMetadataManager(brokerId: Int,
   def generateOffsetRecords(magicValue: Byte,
                             isTxnOffsetCommit: Boolean,
                             groupId: String,
+                            offsetTopicPartition: TopicPartition,
                             filteredOffsetMetadata: Map[TopicIdPartition, OffsetAndMetadata],
                             producerId: Long,
                             producerEpoch: Short): Map[TopicPartition, MemoryRecords] = {
@@ -360,7 +360,6 @@ class GroupMetadataManager(brokerId: Int,
         val value = GroupMetadataManager.offsetCommitValue(offsetAndMetadata, interBrokerProtocolVersion)
         new SimpleRecord(timestamp, key, value)
       }
-      val offsetTopicPartition = new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, partitionFor(groupId))
       val buffer = ByteBuffer.allocate(AbstractRecords.estimateSizeInBytes(magicValue, compressionType, records.asJava))
 
       if (isTxnOffsetCommit && magicValue < RecordBatch.MAGIC_VALUE_V2)
@@ -466,11 +465,13 @@ class GroupMetadataManager(brokerId: Int,
    */
   def storeOffsets(group: GroupMetadata,
                    consumerId: String,
+                   offsetTopicPartition: TopicPartition,
                    offsetMetadata: immutable.Map[TopicIdPartition, OffsetAndMetadata],
                    responseCallback: immutable.Map[TopicIdPartition, Errors] => Unit,
                    producerId: Long = RecordBatch.NO_PRODUCER_ID,
                    producerEpoch: Short = RecordBatch.NO_PRODUCER_EPOCH,
-                   requestLocal: RequestLocal = RequestLocal.NoCaching): Unit = {
+                   requestLocal: RequestLocal = RequestLocal.NoCaching,
+                   verificationGuard: Option[VerificationGuard]): Unit = {
     group.inLock {
       if (!group.hasReceivedConsistentOffsetCommits)
         warn(s"group: ${group.groupId} with leader: ${group.leaderOrNull} has received offset commits from consumers as well " +
@@ -498,38 +499,24 @@ class GroupMetadataManager(brokerId: Int,
     }
 
     val isTxnOffsetCommit = producerId != RecordBatch.NO_PRODUCER_ID
-    val records = generateOffsetRecords(magicOpt.get, isTxnOffsetCommit, group.groupId, filteredOffsetMetadata, producerId, producerEpoch)
+    val records = generateOffsetRecords(magicOpt.get, isTxnOffsetCommit, group.groupId, offsetTopicPartition, filteredOffsetMetadata, producerId, producerEpoch)
     val putCacheCallback = createPutCacheCallback(isTxnOffsetCommit, group, consumerId, offsetMetadata, filteredOffsetMetadata, responseCallback, producerId, records)
 
+    val verificationGuards = verificationGuard match {
+      case Some(guard) => Map(offsetTopicPartition -> guard)
+      case None => Map.empty[TopicPartition, VerificationGuard]
+    }
+
     group.inLock {
+      if (isTxnOffsetCommit) {
+        addProducerGroup(producerId, group.groupId)
+        group.prepareTxnOffsetCommit(producerId, offsetMetadata)
+      } else {
         group.prepareOffsetCommit(offsetMetadata)
+      }
     }
 
-    appendForGroup(group, records, requestLocal, putCacheCallback)
-  }
-
-  def storeOffsetsAfterVerification(group: GroupMetadata,
-                                    verifiedOffsetMetadata: immutable.Map[TopicIdPartition, OffsetAndMetadata],
-                                    records: Map[TopicPartition, MemoryRecords],
-                                    putCacheCallback:  Map[TopicPartition, PartitionResponse] => Unit,
-                                    producerId: Long,
-                                    transactionVerificationEntries: TransactionVerificationEntries,
-                                    errorResults: Map[TopicPartition, LogAppendResult],
-                                    requestLocal: RequestLocal = RequestLocal.NoCaching): Unit = {
-    group.inLock {
-      if (!group.hasReceivedConsistentOffsetCommits)
-        warn(s"group: ${group.groupId} with leader: ${group.leaderOrNull} has received offset commits from consumers as well " +
-          s"as transactional producers. Mixing both types of offset commits will generally result in surprises and " +
-          s"should be avoided.")
-    }
-
-    group.inLock {
-      addProducerGroup(producerId, group.groupId)
-      group.prepareTxnOffsetCommit(producerId, verifiedOffsetMetadata)
-    }
-
-    appendForGroup(group, records, requestLocal,
-      putCacheCallback, transactionVerificationEntries.verificationGuards.toMap, errorResults)
+    appendForGroup(group, records, requestLocal, putCacheCallback, verificationGuards)
   }
 
   /**
