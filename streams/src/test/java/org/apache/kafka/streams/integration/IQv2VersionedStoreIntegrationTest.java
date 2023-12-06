@@ -155,9 +155,17 @@ public class IQv2VersionedStoreIntegrationTest {
         shouldHandleMultiVersionedKeyQuery(Optional.of(Instant.ofEpochMilli(RECORD_TIMESTAMPS[1] + 5)), Optional.of(Instant.now()),
                                            ResultOrder.ANY, 1, LAST_INDEX);
         // there is no record in the query specified time range
-        shouldVerifyGetNullForMultiVersionedKeyQuery(RECORD_KEY, Optional.of(Instant.ofEpochMilli(RECORD_TIMESTAMPS[0] - 100)), Optional.of(Instant.ofEpochMilli(RECORD_TIMESTAMPS[0] - 50)));
+        shouldVerifyGetNullForMultiVersionedKeyQuery(RECORD_KEY,
+                                                     Optional.of(Instant.ofEpochMilli(RECORD_TIMESTAMPS[0] - 100)), Optional.of(Instant.ofEpochMilli(RECORD_TIMESTAMPS[0] - 50)),
+                                                     ResultOrder.ANY);
+        // there is no record in the query specified time range even retrieving results in ascending order
+        shouldVerifyGetNullForMultiVersionedKeyQuery(RECORD_KEY,
+                                                     Optional.of(Instant.ofEpochMilli(RECORD_TIMESTAMPS[0] - 100)), Optional.of(Instant.ofEpochMilli(RECORD_TIMESTAMPS[0] - 50)),
+                                                     ResultOrder.ASCENDING);
         // there is no record with this key
-        shouldVerifyGetNullForMultiVersionedKeyQuery(NON_EXISTING_KEY, Optional.empty(), Optional.empty());
+        shouldVerifyGetNullForMultiVersionedKeyQuery(NON_EXISTING_KEY, Optional.empty(), Optional.empty(), ResultOrder.ANY);
+        // there is no record with this key even retrieving results in ascending order
+        shouldVerifyGetNullForMultiVersionedKeyQuery(NON_EXISTING_KEY, Optional.empty(), Optional.empty(), ResultOrder.ASCENDING);
         // test concurrent write while retrieving records
         shouldHandleRaceCondition();
     }
@@ -227,8 +235,8 @@ public class IQv2VersionedStoreIntegrationTest {
         }
     }
 
-    private void shouldVerifyGetNullForMultiVersionedKeyQuery(final Integer key, final Optional<Instant> fromTime, final Optional<Instant> toTime) {
-        final MultiVersionedKeyQuery<Integer, Integer> query = defineQuery(key, fromTime, toTime, ResultOrder.ANY);
+    private void shouldVerifyGetNullForMultiVersionedKeyQuery(final Integer key, final Optional<Instant> fromTime, final Optional<Instant> toTime, final ResultOrder order) {
+        final MultiVersionedKeyQuery<Integer, Integer> query = defineQuery(key, fromTime, toTime, order);
 
         final Map<Integer, QueryResult<VersionedRecordIterator<Integer>>> partitionResults = sendRequestAndReceiveResults(query, kafkaStreams);
 
