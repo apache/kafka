@@ -35,6 +35,7 @@ import org.junit.jupiter.api.Test;
 
 import java.time.Instant;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
@@ -72,7 +73,8 @@ public class KafkaMetricsCollectorTest {
         // Define collector to test.
         collector = new KafkaMetricsCollector(
             metricNamingStrategy,
-            time
+            time,
+            Collections.emptySet()
         );
 
         // Add reporter to metrics.
@@ -562,6 +564,70 @@ public class KafkaMetricsCollectorTest {
             Instant.ofEpochSecond(301L).getNano(), point.getTimeUnixNano());
         assertEquals(TimeUnit.SECONDS.toNanos(Instant.ofEpochSecond(301L).getEpochSecond()) +
             Instant.ofEpochSecond(301L).getNano(), point.getStartTimeUnixNano());
+    }
+
+    @Test
+    public void testCollectMetricsWithExcludeLabels() {
+        collector = new KafkaMetricsCollector(
+            metricNamingStrategy,
+            time,
+            Collections.singleton("tag2")
+        );
+
+        tags = new HashMap<>();
+        tags.put("tag1", "value1");
+        tags.put("tag2", "value2");
+
+        // Gauge metric.
+        MetricName name1 = metrics.metricName("nonMeasurable", "group1", tags);
+        metrics.addMetric(name1, (Gauge<Double>) (config, now) -> 99d);
+        // Sum metric.
+        MetricName name2 = metrics.metricName("counter", "group1", tags);
+        Sensor sensor = metrics.sensor("counter");
+        sensor.add(name2, new WindowedCount());
+        sensor.record();
+        testEmitter.reconfigurePredicate(k -> !k.key().name().endsWith(".count"));
+
+        // Collect sum metrics
+        collector.collect(testEmitter);
+        List<SinglePointMetric> result = testEmitter.emittedMetrics();
+        Metric metric = result.stream()
+            .flatMap(metrics -> Stream.of(metrics.builder().build()))
+            .filter(m -> m.getName().equals("test.domain.group1.nonmeasurable")).findFirst().get();
+
+        assertEquals(1, metric.getGauge().getDataPointsCount());
+        NumberDataPoint point = metric.getGauge().getDataPoints(0);
+        assertEquals(1, point.getAttributesCount());
+        assertEquals("tag1", point.getAttributes(0).getKey());
+        assertEquals("value1", point.getAttributes(0).getValue().getStringValue());
+
+        metric = result.stream()
+            .flatMap(metrics -> Stream.of(metrics.builder().build()))
+            .filter(m -> m.getName().equals("test.domain.group1.counter")).findFirst().get();
+
+        assertEquals(AggregationTemporality.AGGREGATION_TEMPORALITY_CUMULATIVE, metric.getSum().getAggregationTemporality());
+        assertEquals(1, metric.getSum().getDataPointsCount());
+        point = metric.getSum().getDataPoints(0);
+        assertEquals(1, point.getAttributesCount());
+        assertEquals("tag1", point.getAttributes(0).getKey());
+        assertEquals("value1", point.getAttributes(0).getValue().getStringValue());
+
+        testEmitter.reset();
+        testEmitter.onlyDeltaMetrics(true);
+        collector.collect(testEmitter);
+        result = testEmitter.emittedMetrics();
+
+        // Delta metrics.
+        metric = result.stream()
+            .flatMap(metrics -> Stream.of(metrics.builder().build()))
+            .filter(m -> m.getName().equals("test.domain.group1.counter")).findFirst().get();
+
+        assertEquals(AggregationTemporality.AGGREGATION_TEMPORALITY_DELTA, metric.getSum().getAggregationTemporality());
+        assertEquals(1, metric.getSum().getDataPointsCount());
+        point = metric.getSum().getDataPoints(0);
+        assertEquals(1, point.getAttributesCount());
+        assertEquals("tag1", point.getAttributes(0).getKey());
+        assertEquals("value1", point.getAttributes(0).getValue().getStringValue());
     }
 
     private MetricsReporter getTestMetricsReporter() {
