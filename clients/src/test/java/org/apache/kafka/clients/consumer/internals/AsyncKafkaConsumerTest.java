@@ -968,7 +968,7 @@ public class AsyncKafkaConsumerTest {
         consumer.assign(singleton(new TopicPartition("t1", 1)));
 
         try (MockedConstruction<FetchCommittedOffsetsApplicationEvent> ignored = offsetFetchEventMocker(committedFuture)) {
-            // Poll with 250ms timeout to run at least a single iteration of the poll loop
+            // Poll with 250ms timeout to give the background thread time to process the events without timing out
             consumer.poll(Duration.ofMillis(250));
 
             verify(applicationEventHandler, atLeast(1))
@@ -996,7 +996,7 @@ public class AsyncKafkaConsumerTest {
         committedFuture.complete(committedOffsets);
         consumer.assign(partitions);
         try (MockedConstruction<FetchCommittedOffsetsApplicationEvent> ignored = offsetFetchEventMocker(committedFuture)) {
-            // Poll with 250ms timeout to run at least a single iteration of the poll loop
+            // Poll with 250ms timeout to give the background thread time to process the events without timing out
             consumer.poll(Duration.ofMillis(250));
 
             verify(applicationEventHandler, atLeast(1))
