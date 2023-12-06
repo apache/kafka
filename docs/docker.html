@@ -29,9 +29,8 @@
 
     <h4 class="anchor-heading">Passing configs to kafka in docker container</h4>
     <p>
-        When no user provided input is provided, default configs will be used to start the kafka server, as mentioned in <a href="../quickstart">quickstart</a>.
+        When no user provided input is present, default configs will be used to start the kafka server, as seen in <a href="../quickstart">quickstart</a>.
         Configs can be provided to kafka running inside the container either by environment variables or by providing property files through file input.
-        Property files provided through file input will replace default property files. Configs provided through environment variables will have the highest priority.
     </p>
 
     <h5>File input</h5>
@@ -62,6 +61,7 @@
         </ul>
         <li>To provide configs to log4j property files, following points should be considered:-</li>
         <ul>
+            <li>log4j properties provided via environment variables will be appended to the default properties file (log4j properties files bundled with kafka)</li>
             <li>KAFKA_LOG4J_ROOT_LOGLEVEL can be provided to set the value of log4j.rootLogger in log4j.properties and tools-log4j.properties</li>
             <li>log4j loggers can be added to log4j.properties by setting them in KAFKA_LOG4J_LOGGERS environment variable in a single comma separated string</li>
             <li>Example:</li>
@@ -86,7 +86,7 @@
             Alternatively property file input can be used to provide ssl properties, but note that advertised.listeners property needs to be provided along with SSL properties in file input and cannot be provided through environment variable separately.
         </li>
         <li>
-            In conclusion, ssl properties with advertised.listeners should be treated as a group and provided in file input or/and environment variables in it's entirety.
+            In conclusion, ssl properties with advertised.listeners should be treated as a group and provided in file input or environment variables in it's entirety.
         </li>
         <li>
             In case ssl properties are provided both through file input and environment variables, environment variable properties will override the file input properties, just as mentioned in the beginning of this section
