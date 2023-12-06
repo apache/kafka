@@ -2542,10 +2542,6 @@ Function&lt;Long, Long&gt; foreignKeyExtractor = (x) -&gt; x;
                                   <blockquote>
                                     <div>
                                       <ul class="simple">
-                                      <li>
-                                            Records for which the <code class="docutils literal"><span class="pre">foreignKeyExtractor</span></code> produces <code class="docutils literal"><span class="pre">null</span></code> are ignored and do not trigger a join.
-                                            If you want to join with <code class="docutils literal"><span class="pre">null</span></code> foreign keys, use a suitable sentinel value to do so (i.e. <code class="docutils literal"><span class="pre">"NULL"</span></code> for a String field, or <code class="docutils literal"><span class="pre">-1</span></code> for an auto-incrementing integer field).
-                                        </li>
                                         <li>Input records with a <code class="docutils
                                             literal"><span class="pre">null</span></code>
                                           value are interpreted as <em>tombstones</em>

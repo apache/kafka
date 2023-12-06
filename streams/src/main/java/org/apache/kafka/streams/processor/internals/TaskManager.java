@@ -100,7 +100,6 @@ public class TaskManager {
     private final StandbyTaskCreator standbyTaskCreator;
     private final StateUpdater stateUpdater;
     private final DefaultTaskManager schedulingTaskManager;
-
     TaskManager(final Time time,
                 final ChangelogReader changelogReader,
                 final UUID processId,

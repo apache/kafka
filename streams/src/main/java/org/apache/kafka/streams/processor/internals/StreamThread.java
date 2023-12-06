@@ -43,6 +43,7 @@ import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskCorruptedException;
 import org.apache.kafka.streams.errors.TaskMigratedException;
 import org.apache.kafka.streams.internals.metrics.ClientMetrics;
+import org.apache.kafka.streams.processor.StandbyUpdateListener;
 import org.apache.kafka.streams.processor.StateRestoreListener;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.assignment.AssignorError;
@@ -347,6 +348,7 @@ public class StreamThread extends Thread implements ProcessingThread {
                                       final long cacheSizeBytes,
                                       final StateDirectory stateDirectory,
                                       final StateRestoreListener userStateRestoreListener,
+                                      final StandbyUpdateListener userStandbyUpdateListener,
                                       final int threadIdx,
                                       final Runnable shutdownErrorHook,
                                       final BiConsumer<Throwable, Boolean> streamsUncaughtExceptionHandler) {
@@ -372,7 +374,8 @@ public class StreamThread extends Thread implements ProcessingThread {
             logContext,
             adminClient,
             restoreConsumer,
-            userStateRestoreListener
+            userStateRestoreListener,
+            userStandbyUpdateListener
         );
 
         final ThreadCache cache = new ThreadCache(logContext, cacheSizeBytes, streamsMetrics);
