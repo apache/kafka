@@ -86,12 +86,13 @@ public class AssignmentsManager {
         this.brokerEpochSupplier = brokerEpochSupplier;
         this.eventQueue = new KafkaEventQueue(time,
                 new LogContext("[AssignmentsManager id=" + brokerId + "]"),
-                "broker-" + brokerId + "-directory-assignments-manager-");
+                "broker-" + brokerId + "-directory-assignments-manager-",
+                new ShutdownEvent());
+        channelManager.start();
     }
 
     public void close() throws InterruptedException {
         eventQueue.close();
-        channelManager.shutdown();
     }
 
     public void onAssignment(TopicIdPartition topicPartition, Uuid dirId) {
@@ -115,6 +116,16 @@ public class AssignmentsManager {
         @Override
         public void handleException(Throwable e) {
             log.error("Unexpected error handling {}", this, e);
+        }
+    }
+
+    /**
+     * Handles shutdown of the {@link AssignmentsManager}.
+     */
+    private class ShutdownEvent extends Event {
+        @Override
+        public void run() throws Exception {
+            channelManager.shutdown();
         }
     }
 
@@ -232,8 +243,8 @@ public class AssignmentsManager {
                 failedAttempts = 0;
                 AssignReplicasToDirsResponseData data = ((AssignReplicasToDirsResponse) response.responseBody()).data();
                 Set<AssignmentEvent> failed = filterFailures(data, inflight);
-                log.warn("Re-queueing assignments: {}", failed);
                 if (!failed.isEmpty()) {
+                    log.warn("Re-queueing assignments: {}", failed);
                     for (AssignmentEvent event : failed) {
                         pending.put(event.partition, event);
                     }

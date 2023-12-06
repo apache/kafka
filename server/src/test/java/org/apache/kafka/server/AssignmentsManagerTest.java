@@ -43,6 +43,7 @@ import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.atMostOnce;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
@@ -166,7 +167,9 @@ public class AssignmentsManagerTest {
         }
 
         ArgumentCaptor<AssignReplicasToDirsRequest.Builder> captor = ArgumentCaptor.forClass(AssignReplicasToDirsRequest.Builder.class);
+        verify(channelManager, times(1)).start();
         verify(channelManager).sendRequest(captor.capture(), any(ControllerRequestCompletionHandler.class));
+        verify(channelManager, atMostOnce()).shutdown();
         verifyNoMoreInteractions(channelManager);
         assertEquals(1, captor.getAllValues().size());
         AssignReplicasToDirsRequestData actual = captor.getValue().build().data();
@@ -225,7 +228,9 @@ public class AssignmentsManagerTest {
         }
 
         ArgumentCaptor<AssignReplicasToDirsRequest.Builder> captor = ArgumentCaptor.forClass(AssignReplicasToDirsRequest.Builder.class);
+        verify(channelManager, times(1)).start();
         verify(channelManager, times(5)).sendRequest(captor.capture(), any(ControllerRequestCompletionHandler.class));
+        verify(channelManager, atMostOnce()).shutdown();
         verifyNoMoreInteractions(channelManager);
         assertEquals(5, captor.getAllValues().size());
         assertRequestEquals(AssignmentsManager.buildRequestData(
