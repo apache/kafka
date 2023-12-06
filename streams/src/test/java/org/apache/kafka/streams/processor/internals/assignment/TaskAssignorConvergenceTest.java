@@ -370,7 +370,13 @@ public class TaskAssignorConvergenceTest {
     @Before
     public void setUp() {
         if (rackAwareStrategy.equals(StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_BALANCE_SUBTOPOLOGY)) {
-            skewThreshold = 2;
+            // We take ceiling of [task_in_subtopology / total_task * original_task_assigned_to_client] as the capacity from
+            // stage 1 client to stage 2 client which can result in the skew to be at most 2
+            // For example, suppose there are 2 subtopologies s1 and s2. s1 has 2 tasks [t1, t2], s2 has 1 task t3. There are 2 clients c1 and c2 with
+            // originally 2 tasks and 1 task. Then the capacity from stage 1 c1 to stage 2 c1 is ceil(2 * 2.0 / 3 * 2) = 2 which can result in both
+            // t1 and t2 assigned to c1. So the max skew for stateful or stateless assignment could be 2 + 2 = 4.
+            // Details in https://cwiki.apache.org/confluence/display/KAFKA/KIP-925%3A+Rack+aware+task+assignment+in+Kafka+Streams
+            skewThreshold = 4;
         }
     }
 

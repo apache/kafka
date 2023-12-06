@@ -111,17 +111,12 @@ public class StickyTaskAssignorTest {
 
     private boolean enableRackAwareTaskAssignor;
 
-    private int skewThreshold = 1;
-
     @Parameter
     public String rackAwareStrategy;
 
     @Before
     public void setUp() {
         enableRackAwareTaskAssignor = !rackAwareStrategy.equals(StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_NONE);
-        if (rackAwareStrategy.equals(StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_BALANCE_SUBTOPOLOGY)) {
-            skewThreshold = 2;
-        }
     }
 
     @Parameterized.Parameters(name = "rackAwareStrategy={0}")
@@ -683,8 +678,8 @@ public class StickyTaskAssignorTest {
         if (rackAwareStrategy.equals(StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_BALANCE_SUBTOPOLOGY)) {
             assertThat(c1.activeTasks(), equalTo(mkSet(TASK_0_1, TASK_1_2, TASK_2_3)));
             assertThat(c2.activeTasks(), equalTo(mkSet(TASK_0_0, TASK_1_1, TASK_2_2)));
-            assertThat(c3.activeTasks(), equalTo(mkSet(TASK_0_3, TASK_1_3, TASK_2_0)));
-            assertThat(newClient.activeTasks(), equalTo(mkSet(TASK_0_2, TASK_1_0, TASK_2_1)));
+            assertThat(c3.activeTasks(), equalTo(mkSet(TASK_0_2, TASK_1_3, TASK_2_1)));
+            assertThat(newClient.activeTasks(), equalTo(mkSet(TASK_0_3, TASK_1_0, TASK_2_0)));
         } else {
             assertThat(c1.activeTasks(), equalTo(mkSet(TASK_0_1, TASK_1_2, TASK_1_3)));
             assertThat(c2.activeTasks(), equalTo(mkSet(TASK_0_0, TASK_1_1, TASK_2_2)));
@@ -712,8 +707,8 @@ public class StickyTaskAssignorTest {
         if (rackAwareStrategy.equals(StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_BALANCE_SUBTOPOLOGY)) {
             assertThat(c1.activeTasks(), equalTo(mkSet(TASK_0_1, TASK_1_2, TASK_2_3)));
             assertThat(c2.activeTasks(), equalTo(mkSet(TASK_0_0, TASK_1_1, TASK_2_2)));
-            assertThat(bounce1.activeTasks(), equalTo(mkSet(TASK_0_3, TASK_1_3, TASK_2_0)));
-            assertThat(bounce2.activeTasks(), equalTo(mkSet(TASK_0_2, TASK_1_0, TASK_2_1)));
+            assertThat(bounce1.activeTasks(), equalTo(mkSet(TASK_0_2, TASK_1_3, TASK_2_1)));
+            assertThat(bounce2.activeTasks(), equalTo(mkSet(TASK_0_3, TASK_1_0, TASK_2_0)));
         } else {
             assertThat(c1.activeTasks(), equalTo(mkSet(TASK_0_1, TASK_1_2, TASK_1_3)));
             assertThat(c2.activeTasks(), equalTo(mkSet(TASK_0_0, TASK_1_1, TASK_2_2)));
