@@ -342,7 +342,7 @@ public class StreamThread extends Thread implements ProcessingThread {
 
     private volatile Uuid mainConsumerClientInstanceId = null;
 
-    private volatile long fetchDeadline = -1;
+    private volatile long fetchDeadlineClientInstanceId = -1;
     private volatile KafkaFutureImpl<Uuid> mainConsumerInstanceIdFuture;
 
     public static StreamThread create(final TopologyMetadata topologyMetadata,
@@ -731,9 +731,9 @@ public class StreamThread extends Thread implements ProcessingThread {
         // to just trigger the "get instance id" background RPC;
         // we don't want to block the stream thread that can do useful work in the meantime
 
-        if (fetchDeadline != -1) {
+        if (fetchDeadlineClientInstanceId != -1) {
             if (!mainConsumerInstanceIdFuture.isDone()) {
-                if (fetchDeadline >= time.milliseconds()) {
+                if (fetchDeadlineClientInstanceId >= time.milliseconds()) {
                     try {
                         mainConsumerClientInstanceId = mainConsumer.clientInstanceId(Duration.ZERO);
                         mainConsumerInstanceIdFuture.complete(mainConsumerClientInstanceId);
@@ -760,7 +760,7 @@ public class StreamThread extends Thread implements ProcessingThread {
         final boolean reset = mainConsumerInstanceIdFuture.isDone();
 
         if (reset) {
-            fetchDeadline = -1L;
+            fetchDeadlineClientInstanceId = -1L;
         }
     }
 
@@ -1543,7 +1543,7 @@ public class StreamThread extends Thread implements ProcessingThread {
         result.put(getName() + "-consumer", future);
 
         if (setDeadline) {
-            fetchDeadline = time.milliseconds() + timeout.toMillis();
+            fetchDeadlineClientInstanceId = time.milliseconds() + timeout.toMillis();
         }
 
         return result;

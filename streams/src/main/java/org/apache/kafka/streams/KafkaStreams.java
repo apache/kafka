@@ -1805,7 +1805,7 @@ public class KafkaStreams implements AutoCloseable {
      * @throws TimeoutException Indicates that a request timed out.
      * @throws StreamsException For any other error that might occur.
      */
-    public ClientInstanceIds clientInstanceIds(final Duration timeout) {
+    public synchronized ClientInstanceIds clientInstanceIds(final Duration timeout) {
         if (timeout.isNegative()) {
             throw new IllegalArgumentException("The timeout cannot be negative.");
         }
@@ -1815,6 +1815,9 @@ public class KafkaStreams implements AutoCloseable {
         if (state().isShuttingDown() || state.hasCompletedShutdown()) {
             throw new IllegalStateException("KafkaStreams has been stopped (" + state + ").");
         }
+
+        long remainingTimeMs = timeout.toMillis();
+        long startTimestampMs = time.milliseconds();
 
         final ClientInstanceIdsImpl clientInstanceIds = new ClientInstanceIdsImpl();
 
@@ -1831,6 +1834,9 @@ public class KafkaStreams implements AutoCloseable {
         // (2) get admin client instance id in a blocking fashion, while Stream/GlobalThreads work in parallel
         try {
             clientInstanceIds.setAdminInstanceId(adminClient.clientInstanceId(timeout));
+            final long nowMs = time.milliseconds();
+            remainingTimeMs -= nowMs - startTimestampMs;
+            startTimestampMs = nowMs;
         } catch (final IllegalStateException telemetryDisabledError) {
             // swallow
             log.debug("Telemetry is disabled on the admin client.");
@@ -1846,11 +1852,15 @@ public class KafkaStreams implements AutoCloseable {
         for (final Map.Entry<String, KafkaFuture<Uuid>> consumerFuture : consumerFutures.entrySet()) {
             final Uuid instanceId = getOrThrowException(
                 consumerFuture.getValue(),
+                remainingTimeMs,
                 () -> String.format(
                     "Could not retrieve consumer instance id for %s.",
                     consumerFuture.getKey()
                 )
             );
+            final long nowMs = time.milliseconds();
+            remainingTimeMs -= nowMs - startTimestampMs;
+            startTimestampMs = nowMs;
 
             // could be `null` if telemetry is disabled on the consumer itself
             if (instanceId != null) {
@@ -1870,11 +1880,16 @@ public class KafkaStreams implements AutoCloseable {
         return clientInstanceIds;
     }
 
-    private <T> T getOrThrowException(final KafkaFuture<T> future, final Supplier<String> errorMessage) {
+    private <T> T getOrThrowException(
+        final KafkaFuture<T> future,
+        final long timeoutMs,
+        final Supplier<String> errorMessage) {
         final Throwable cause;
 
         try {
-            return future.get();
+            return future.get(timeoutMs, TimeUnit.MILLISECONDS);
+        } catch (final java.util.concurrent.TimeoutException timeout) {
+            throw new TimeoutException(timeout);
         } catch (final ExecutionException exception) {
             cause = exception.getCause();
             if (cause instanceof TimeoutException) {
