@@ -46,7 +46,9 @@ import org.apache.kafka.streams.StoreQueryParameters;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
+import org.apache.kafka.streams.processor.StandbyUpdateListener;
 import org.apache.kafka.streams.processor.StateRestoreListener;
+import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.StreamThread;
 import org.apache.kafka.streams.processor.internals.ThreadStateTransitionValidator;
 import org.apache.kafka.streams.processor.internals.assignment.AssignorConfiguration.AssignmentListener;
@@ -1542,6 +1544,28 @@ public class IntegrationTestUtils {
                 totalNumRestored += numRestored.get();
             }
             return totalNumRestored;
+        }
+    }
+
+    public static class TrackingStandbyUpdateListener implements StandbyUpdateListener {
+        public final List<TopicPartition> promotedPartitions = new ArrayList<>();
+
+
+        @Override
+        public void onUpdateStart(final TopicPartition topicPartition, final String storeName, final long startingOffset) {
+
+        }
+
+        @Override
+        public void onBatchLoaded(final TopicPartition topicPartition, final String storeName, final TaskId taskId, final long batchEndOffset, final long batchSize, final long currentEndOffset) {
+
+        }
+
+        @Override
+        public void onUpdateSuspended(final TopicPartition topicPartition, final String storeName, final long storeOffset, final long currentEndOffset, final SuspendReason reason) {
+            if (reason.equals(SuspendReason.PROMOTED)) {
+                promotedPartitions.add(topicPartition);
+            }
         }
     }
 
