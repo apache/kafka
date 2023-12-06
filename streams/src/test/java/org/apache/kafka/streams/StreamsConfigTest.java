@@ -82,6 +82,7 @@ import static org.hamcrest.CoreMatchers.nullValue;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.core.IsEqual.equalTo;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
@@ -1478,6 +1479,104 @@ public class StreamsConfigTest {
                 throw new AssertionError("StreamsConfig did not accept `upgrade.from` config value `" + upgradeFrom + "`");
             }
         }
+    }
+
+    @Test
+    public void shouldNotSetEnableMetricCollectionByDefault() {
+        assertNull(
+            streamsConfig.getMainConsumerConfigs("groupId", "clientId", 0)
+                .get(ConsumerConfig.ENABLE_METRICS_PUSH_CONFIG)
+        );
+        assertNull(
+            streamsConfig.getRestoreConsumerConfigs("clientId")
+                .get(ConsumerConfig.ENABLE_METRICS_PUSH_CONFIG)
+        );
+        assertNull(
+            streamsConfig.getGlobalConsumerConfigs("clientId")
+                .get(ConsumerConfig.ENABLE_METRICS_PUSH_CONFIG)
+        );
+        assertNull(
+            streamsConfig.getProducerConfigs("clientId")
+                .get(ConsumerConfig.ENABLE_METRICS_PUSH_CONFIG)
+        );
+        assertNull(
+            streamsConfig.getAdminConfigs("clientId")
+                .get(ConsumerConfig.ENABLE_METRICS_PUSH_CONFIG)
+        );
+    }
+
+    @Test
+    public void shouldEnableMetricCollectionForAllInternalClients() {
+        props.put(StreamsConfig.ENABLE_METRICS_PUSH_CONFIG, true);
+        final StreamsConfig streamsConfig = new StreamsConfig(props);
+
+        assertTrue(
+            (Boolean) streamsConfig.getMainConsumerConfigs("groupId", "clientId", 0)
+                .get(ConsumerConfig.ENABLE_METRICS_PUSH_CONFIG)
+        );
+        assertTrue(
+            (Boolean) streamsConfig.getRestoreConsumerConfigs("clientId")
+                .get(ConsumerConfig.ENABLE_METRICS_PUSH_CONFIG)
+        );
+        assertTrue(
+            (Boolean) streamsConfig.getGlobalConsumerConfigs("clientId")
+                .get(ConsumerConfig.ENABLE_METRICS_PUSH_CONFIG)
+        );
+        assertTrue(
+            (Boolean) streamsConfig.getProducerConfigs("clientId")
+                .get(ConsumerConfig.ENABLE_METRICS_PUSH_CONFIG)
+        );
+        assertTrue(
+            (Boolean) streamsConfig.getAdminConfigs("clientId")
+                .get(ConsumerConfig.ENABLE_METRICS_PUSH_CONFIG)
+        );
+    }
+
+    @Test
+    public void shouldDisableMetricCollectionForAllInternalClients() {
+        props.put(StreamsConfig.ENABLE_METRICS_PUSH_CONFIG, false);
+        final StreamsConfig streamsConfig = new StreamsConfig(props);
+
+        assertFalse(
+            (Boolean) streamsConfig.getMainConsumerConfigs("groupId", "clientId", 0)
+                .get(ConsumerConfig.ENABLE_METRICS_PUSH_CONFIG)
+        );
+        assertFalse(
+            (Boolean) streamsConfig.getRestoreConsumerConfigs("clientId")
+                .get(ConsumerConfig.ENABLE_METRICS_PUSH_CONFIG)
+        );
+        assertFalse(
+            (Boolean) streamsConfig.getGlobalConsumerConfigs("clientId")
+                .get(ConsumerConfig.ENABLE_METRICS_PUSH_CONFIG)
+        );
+        assertFalse(
+            (Boolean) streamsConfig.getProducerConfigs("clientId")
+                .get(ConsumerConfig.ENABLE_METRICS_PUSH_CONFIG)
+        );
+        assertFalse(
+            (Boolean) streamsConfig.getAdminConfigs("clientId")
+                .get(ConsumerConfig.ENABLE_METRICS_PUSH_CONFIG)
+        );
+    }
+
+    @Test
+    public void shouldDisableMetricCollectionOnMainConsumerOnly() {
+        props.put(StreamsConfig.mainConsumerPrefix(ConsumerConfig.ENABLE_METRICS_PUSH_CONFIG), false);
+
+        final StreamsConfig streamsConfig = new StreamsConfig(props);
+
+        assertFalse(
+            (Boolean) streamsConfig.getMainConsumerConfigs("groupId", "clientId", 0)
+                .get(ConsumerConfig.ENABLE_METRICS_PUSH_CONFIG)
+        );
+        assertNull(
+            streamsConfig.getRestoreConsumerConfigs("clientId")
+                .get(ConsumerConfig.ENABLE_METRICS_PUSH_CONFIG)
+        );
+        assertNull(
+            streamsConfig.getGlobalConsumerConfigs("clientId")
+                .get(ConsumerConfig.ENABLE_METRICS_PUSH_CONFIG)
+        );
     }
 
     static class MisconfiguredSerde implements Serde<Object> {

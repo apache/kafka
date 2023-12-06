@@ -318,7 +318,7 @@ listeners=http://localhost:8080,https://localhost:8443</pre>
             <ul>
                 <li><code>GET /connectors/{name}/offsets</code> - get the current offsets for a connector</li>
                 <li><code>DELETE /connectors/{name}/offsets</code> - reset the offsets for a connector. The connector must exist and must be in the stopped state (see <a href="#connect_stopconnector"><code>PUT /connectors/{name}/stop</code></a>)</li>
-                <li><code>PATCH /connectors/{name}/offsets</code> - alter the offsets for a connector. The connector must exist and must be in the stopped state (see <a href="#connect_stopconnector"><code>PUT /connectors/{name}/stop</code></a>). The request body should be a JSON object containing a JSON array <code>offsets</code> field, similar to the response body of the <code>GET /connectors/{name}/offsets</code> endpoint</li>
+                <li><code>PATCH /connectors/{name}/offsets</code> - alter the offsets for a connector. The connector must exist and must be in the stopped state (see <a href="#connect_stopconnector"><code>PUT /connectors/{name}/stop</code></a>). The request body should be a JSON object containing a JSON array <code>offsets</code> field, similar to the response body of the <code>GET /connectors/{name}/offsets</code> endpoint.
                 An example request body for the <code>FileStreamSourceConnector</code>:
                 <pre class="line-numbers"><code class="json">
 {
@@ -357,7 +357,7 @@ listeners=http://localhost:8080,https://localhost:8443</pre>
   ]
 }
                 </code></pre>
-                The "offset" field may be null to reset the offset for a specific partition (applicable to both source and sink connectors). Note that the request body format depends on the connector implementation in the case of source connectors, whereas there is a common format across all sink connectors.
+                The "offset" field may be null to reset the offset for a specific partition (applicable to both source and sink connectors). Note that the request body format depends on the connector implementation in the case of source connectors, whereas there is a common format across all sink connectors.</li>
             </ul>
         </li>
     </ul>

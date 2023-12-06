@@ -157,6 +157,7 @@ public class RequestManagers implements Closeable {
                 CommitRequestManager commit = null;
 
                 if (groupRebalanceConfig != null && groupRebalanceConfig.groupId != null) {
+                    Optional<String> serverAssignor = Optional.ofNullable(config.getString(ConsumerConfig.GROUP_REMOTE_ASSIGNOR_CONFIG));
                     coordinator = new CoordinatorRequestManager(time,
                             logContext,
                             retryBackoffMs,
@@ -174,6 +175,8 @@ public class RequestManagers implements Closeable {
                             groupRebalanceConfig.groupInstanceId);
                     membershipManager = new MembershipManagerImpl(
                             groupRebalanceConfig.groupId,
+                            groupRebalanceConfig.groupInstanceId,
+                            serverAssignor,
                             subscriptions,
                             commit,
                             metadata,
