@@ -681,7 +681,6 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
             return false;
         }
 
-        transitionTo(MemberState.RECONCILING);
         markReconciliationInProgress();
 
         // Partitions to assign (not previously owned)
