@@ -259,7 +259,7 @@ public class ClientMetricsCommandTest {
                             new String[] {"--bootstrap-server", bootstrapServer, "--list"})));
     }
 
-    public void assertInitializeInvalidOptionsExitCode(int expected, String[] options) {
+    private void assertInitializeInvalidOptionsExitCode(int expected, String[] options) {
         Exit.setExitProcedure((exitCode, message) -> {
             assertEquals(expected, exitCode);
             throw new RuntimeException();
