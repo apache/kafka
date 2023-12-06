@@ -2341,20 +2341,15 @@ class PlaintextConsumerTest extends BaseConsumerTest {
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
   @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
-  def testConsumerAndCommitSync(quorum: String, groupProtocol: String): Unit = {
-    val numRecords = 1
-    val record = new ProducerRecord(tp.topic, tp.partition, null, "key".getBytes, "value".getBytes)
-
-    val producer = createProducer()
-    producer.send(record)
-
+  def testSubscribeAndCommitSync(quorum: String, groupProtocol: String): Unit = {
+    // This test ensure that the member ID is propagated from the group coordinator when the
+    // assignment is received into a subsequent offset commit
     val consumer = createConsumer()
     assertEquals(0, consumer.assignment.size)
     consumer.subscribe(List(topic).asJava)
     awaitAssignment(consumer, Set(tp, tp2))
 
-    val records = consumeRecords(consumer = consumer, numRecords = numRecords)
-    assertEquals(numRecords, records.size)
+    consumer.seek(tp, 0)
 
     consumer.commitSync()
   }
