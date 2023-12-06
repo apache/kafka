@@ -248,7 +248,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                     break;
 
                 default:
-                    throw new IllegalArgumentException("The method " + methodName + " to invoke was not expected");
+                    throw new IllegalArgumentException("The method " + methodName.fullyQualifiedMethodName() + " to invoke was not expected");
             }
 
             final Optional<KafkaException> error;

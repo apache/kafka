@@ -1015,7 +1015,7 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
         sortedPartitions.addAll(partitions);
         CompletableBackgroundEvent<Void> event = new ConsumerRebalanceListenerCallbackNeededEvent(methodName, sortedPartitions);
         backgroundEventHandler.add(event);
-        log.debug("The event to trigger the {} method execution was enqueued successfully", methodName);
+        log.debug("The event to trigger the {} method execution was enqueued successfully", methodName.fullyQualifiedMethodName());
         return event.future();
     }
 
@@ -1029,13 +1029,13 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
             String message = error.get().getMessage();
             log.warn(
                 "The {} method completed with an error ({}); signaling to continue to the next phase of rebalance",
-                methodName,
+                methodName.fullyQualifiedMethodName(),
                 message
             );
         } else {
             log.debug(
                 "The {} method completed successfully; signaling to continue to the next phase of rebalance",
-                methodName
+                methodName.fullyQualifiedMethodName()
             );
         }
 

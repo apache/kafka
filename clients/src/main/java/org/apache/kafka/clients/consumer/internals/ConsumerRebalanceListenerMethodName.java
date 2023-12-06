@@ -28,23 +28,10 @@ public enum ConsumerRebalanceListenerMethodName {
     ON_PARTITIONS_ASSIGNED("onPartitionsAssigned"),
     ON_PARTITIONS_LOST("onPartitionsLost");
 
-    private final String methodName;
-
     private final String fullyQualifiedMethodName;
 
     ConsumerRebalanceListenerMethodName(String methodName) {
-        this.methodName = methodName;
         this.fullyQualifiedMethodName = String.format("%s.%s", ConsumerRebalanceListener.class.getSimpleName(), methodName);
-    }
-
-    /**
-     * Provides the method name, e.g. {@code onPartitionsRevoked}.
-     *
-     * @return Method name
-     */
-
-    public String methodName() {
-        return methodName;
     }
 
     /**
