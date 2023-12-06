@@ -182,7 +182,6 @@ public class HeartbeatRequestManager implements RequestManager {
             membershipManager.onHeartbeatRequestSkipped();
             return NetworkClientDelegate.PollResult.EMPTY;
         }
-
         pollTimer.update(currentTimeMs);
         if (pollTimer.isExpired()) {
             logger.warn("consumer poll timeout has expired. This means the time between subsequent calls to poll() " +

@@ -42,6 +42,7 @@ import java.util.TreeSet;
 import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 
+import static org.apache.kafka.common.requests.ConsumerGroupHeartbeatRequest.LEAVE_GROUP_MEMBER_EPOCH;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
@@ -1042,6 +1043,22 @@ public class MembershipManagerImplTest {
         assertNotEquals(0, membershipManager.memberEpoch());
         assertEquals(0, rebalanceListener.lostCount);
         assertEquals(0, rebalanceListener.revokedCount);
+    }
+
+    @Test
+    public void testTransitionToStaled() {
+        MembershipManagerImpl membershipManager = createMemberInStableState();
+        membershipManager.transitionToStaled();
+        assertEquals(LEAVE_GROUP_MEMBER_EPOCH, membershipManager.memberEpoch());
+
+    }
+
+    @Test
+    public void testHeartbeatSentOnStaledMember() {
+        MembershipManagerImpl membershipManager = createMemberInStableState();
+        membershipManager.transitionToStaled();
+        membershipManager.onHeartbeatRequestSent();
+        assertEquals(MemberState.JOINING, membershipManager.state());
     }
 
     private MembershipManagerImpl mockMemberSuccessfullyReceivesAndAcksAssignment(
