@@ -835,6 +835,7 @@ public class StandaloneHerderTest {
                         error + "\n" +
                         "You can also find the above list of errors at the endpoint `/connector-plugins/{connectorType}/config/validate`"
         );
+        verify(loaderSwap).close();
     }
 
     @Test
