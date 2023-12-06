@@ -236,7 +236,7 @@ public class RocksDBVersionedStoreSegmentValueFormatterTest {
                     index++;
                     continue;
                 }
-                final long expectedValidTo = index== 0 ? testCase.nextTimestamp : testCase.records.get(index - 1).timestamp;
+                final long expectedValidTo = index == 0 ? testCase.nextTimestamp : testCase.records.get(index - 1).timestamp;
                 assertThat(results.get(i).index(), equalTo(index));
                 assertThat(results.get(i).value(), equalTo(expectedRecord.value));
                 assertThat(results.get(i).validFrom(), equalTo(expectedRecord.timestamp));
