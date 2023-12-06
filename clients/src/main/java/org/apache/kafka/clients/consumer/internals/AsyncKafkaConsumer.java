@@ -45,10 +45,10 @@ import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
 import org.apache.kafka.clients.consumer.internals.events.CommitApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.ErrorBackgroundEvent;
 import org.apache.kafka.clients.consumer.internals.events.EventProcessor;
+import org.apache.kafka.clients.consumer.internals.events.FetchCommittedOffsetsApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.GroupMetadataUpdateEvent;
 import org.apache.kafka.clients.consumer.internals.events.ListOffsetsApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.NewTopicsMetadataUpdateRequestEvent;
-import org.apache.kafka.clients.consumer.internals.events.OffsetFetchApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.ResetPositionsApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.SubscriptionChangeApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.UnsubscribeApplicationEvent;
@@ -771,7 +771,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                 return Collections.emptyMap();
             }
 
-            final OffsetFetchApplicationEvent event = new OffsetFetchApplicationEvent(partitions);
+            final FetchCommittedOffsetsApplicationEvent event = new FetchCommittedOffsetsApplicationEvent(partitions);
             wakeupTrigger.setActiveTask(event.future());
             try {
                 final Map<TopicPartition, OffsetAndMetadata> committedOffsets = applicationEventHandler.addAndGet(event,
@@ -1281,34 +1281,43 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
      * @return true iff the operation completed without timing out
      */
     private boolean updateFetchPositions(final Timer timer) {
-        // Validate positions using the partition leader end offsets, to detect if any partition
-        // has been truncated due to a leader change. This will trigger an OffsetForLeaderEpoch
-        // request, retrieve the partition end offsets, and validate the current position against it.
-        applicationEventHandler.add(new ValidatePositionsApplicationEvent());
+        try {
+            cachedSubscriptionHasAllFetchPositions = subscriptions.hasAllFetchPositions();
+            if (cachedSubscriptionHasAllFetchPositions) return true;
 
-        cachedSubscriptionHasAllFetchPositions = subscriptions.hasAllFetchPositions();
-        if (cachedSubscriptionHasAllFetchPositions) return true;
+            // Validate positions using the partition leader end offsets, to detect if any partition
+            // has been truncated due to a leader change. This will trigger an OffsetForLeaderEpoch
+            // request, retrieve the partition end offsets, and validate the current position against it.
+            // If the timer is not expired, wait for the validation, otherwise, just request it.
+            applicationEventHandler.addAndGet(new ValidatePositionsApplicationEvent(), timer);
 
-        // Reset positions using committed offsets retrieved from the group coordinator, for any
-        // partitions which do not have a valid position and are not awaiting reset. This will
-        // trigger an OffsetFetch request and update positions with the offsets retrieved. This
-        // will only do a coordinator lookup if there are partitions which have missing
-        // positions, so a consumer with manually assigned partitions can avoid a coordinator
-        // dependence by always ensuring that assigned partitions have an initial position.
-        if (isCommittedOffsetsManagementEnabled() && !initWithCommittedOffsetsIfNeeded(timer))
+            cachedSubscriptionHasAllFetchPositions = subscriptions.hasAllFetchPositions();
+            if (cachedSubscriptionHasAllFetchPositions) return true;
+
+            // Reset positions using committed offsets retrieved from the group coordinator, for any
+            // partitions which do not have a valid position and are not awaiting reset. This will
+            // trigger an OffsetFetch request and update positions with the offsets retrieved. This
+            // will only do a coordinator lookup if there are partitions which have missing
+            // positions, so a consumer with manually assigned partitions can avoid a coordinator
+            // dependence by always ensuring that assigned partitions have an initial position.
+            if (isCommittedOffsetsManagementEnabled() && !initWithCommittedOffsetsIfNeeded(timer))
+                return false;
+
+            // If there are partitions still needing a position and a reset policy is defined,
+            // request reset using the default policy. If no reset strategy is defined and there
+            // are partitions with a missing position, then we will raise a NoOffsetForPartitionException exception.
+            subscriptions.resetInitializingPositions();
+
+            // Reset positions using partition offsets retrieved from the leader, for any partitions
+            // which are awaiting reset. This will trigger a ListOffset request, retrieve the
+            // partition offsets according to the strategy (ex. earliest, latest), and update the
+            // positions.
+            // If the timer is not expired, wait for the reset, otherwise, just request it.
+            applicationEventHandler.addAndGet(new ResetPositionsApplicationEvent(), timer);
+            return true;
+        } catch (TimeoutException e) {
             return false;
-
-        // If there are partitions still needing a position and a reset policy is defined,
-        // request reset using the default policy. If no reset strategy is defined and there
-        // are partitions with a missing position, then we will raise a NoOffsetForPartitionException exception.
-        subscriptions.resetInitializingPositions();
-
-        // Reset positions using partition offsets retrieved from the leader, for any partitions
-        // which are awaiting reset. This will trigger a ListOffset request, retrieve the
-        // partition offsets according to the strategy (ex. earliest, latest), and update the
-        // positions.
-        applicationEventHandler.add(new ResetPositionsApplicationEvent());
-        return true;
+        }
     }
 
     /**
@@ -1334,7 +1343,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
 
         log.debug("Refreshing committed offsets for partitions {}", initializingPartitions);
         try {
-            final OffsetFetchApplicationEvent event = new OffsetFetchApplicationEvent(initializingPartitions);
+            final FetchCommittedOffsetsApplicationEvent event = new FetchCommittedOffsetsApplicationEvent(initializingPartitions);
             final Map<TopicPartition, OffsetAndMetadata> offsets = applicationEventHandler.addAndGet(event, timer);
             refreshCommittedOffsets(offsets, metadata, subscriptions);
             return true;
