@@ -24,7 +24,7 @@ import kafka.utils.{TestInfoUtils, TestUtils}
 import org.apache.kafka.clients.admin.{NewPartitions, NewTopic}
 import org.apache.kafka.clients.consumer._
 import org.apache.kafka.clients.producer.{ProducerConfig, ProducerRecord}
-import org.apache.kafka.common.{MetricName, PartitionInfo, TopicPartition}
+import org.apache.kafka.common.{KafkaException, MetricName, PartitionInfo, TopicPartition}
 import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.errors.{InvalidGroupIdException, InvalidTopicException}
 import org.apache.kafka.common.header.Headers
@@ -33,6 +33,7 @@ import org.apache.kafka.common.serialization._
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.test.{MockConsumerInterceptor, MockProducerInterceptor}
 import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.Timeout
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{CsvSource, MethodSource}
 
@@ -40,6 +41,7 @@ import scala.collection.mutable
 import scala.collection.mutable.Buffer
 import scala.jdk.CollectionConverters._
 
+@Timeout(600)
 class PlaintextConsumerTest extends BaseConsumerTest {
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
@@ -2027,10 +2029,8 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     consumer1Config.put(ConsumerConfig.GROUP_ID_CONFIG, "")
     consumer1Config.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest")
     consumer1Config.put(ConsumerConfig.CLIENT_ID_CONFIG, "consumer1")
-    val consumer1 = createConsumer(configOverrides = consumer1Config)
 
-    consumer1.assign(List(tp).asJava)
-    assertThrows(classOf[InvalidGroupIdException], () => consumer1.commitSync())
+    assertThrows(classOf[KafkaException], () => createConsumer(configOverrides = consumer1Config))
   }
 
   // Static membership temporarily not supported in consumer group protocol
