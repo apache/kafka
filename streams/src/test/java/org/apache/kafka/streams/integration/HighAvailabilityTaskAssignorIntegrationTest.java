@@ -97,7 +97,11 @@ public class HighAvailabilityTaskAssignorIntegrationTest {
     );
 
     public static Stream<Arguments> data() {
-        return Stream.of(Arguments.of(true), Arguments.of(false));
+        return Stream.of(
+            Arguments.of(StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_NONE),
+            Arguments.of(StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_MIN_TRAFFIC),
+            Arguments.of(StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_BALANCE_SUBTOPOLOGY)
+        );
     }
 
     @BeforeAll
@@ -112,24 +116,25 @@ public class HighAvailabilityTaskAssignorIntegrationTest {
 
     @ParameterizedTest
     @MethodSource("data")
-    public void shouldScaleOutWithWarmupTasksAndInMemoryStores(final boolean enableRackAwareAssignor, final TestInfo testInfo) throws InterruptedException {
+    public void shouldScaleOutWithWarmupTasksAndInMemoryStores(final String rackAwareStrategy, final TestInfo testInfo) throws InterruptedException {
         // NB: this test takes at least a minute to run, because it needs a probing rebalance, and the minimum
         // value is one minute
-        shouldScaleOutWithWarmupTasks(storeName -> Materialized.as(Stores.inMemoryKeyValueStore(storeName)), testInfo, enableRackAwareAssignor);
+        shouldScaleOutWithWarmupTasks(storeName -> Materialized.as(Stores.inMemoryKeyValueStore(storeName)), testInfo, rackAwareStrategy);
     }
 
     @ParameterizedTest
     @MethodSource("data")
-    public void shouldScaleOutWithWarmupTasksAndPersistentStores(final boolean enableRackAwareAssignor, final TestInfo testInfo) throws InterruptedException {
+    public void shouldScaleOutWithWarmupTasksAndPersistentStores(final String rackAwareStrategy, final TestInfo testInfo) throws InterruptedException {
         // NB: this test takes at least a minute to run, because it needs a probing rebalance, and the minimum
         // value is one minute
-        shouldScaleOutWithWarmupTasks(storeName -> Materialized.as(Stores.persistentKeyValueStore(storeName)), testInfo, enableRackAwareAssignor);
+        shouldScaleOutWithWarmupTasks(storeName -> Materialized.as(Stores.persistentKeyValueStore(storeName)), testInfo, rackAwareStrategy);
     }
 
     private void shouldScaleOutWithWarmupTasks(final Function<String, Materialized<Object, Object, KeyValueStore<Bytes, byte[]>>> materializedFunction,
                                                final TestInfo testInfo,
-                                               final boolean enableRackAwareAssignor) throws InterruptedException {
-        final String testId = safeUniqueTestName(getClass(), testInfo);
+                                               final String rackAwareStrategy) throws InterruptedException {
+        // Replace "balance_subtopology" with shorter name since max name length is 249
+        final String testId = safeUniqueTestName(getClass(), testInfo).replaceAll("balance_subtopology", "balance");
         final String appId = "appId_" + System.currentTimeMillis() + "_" + testId;
         final String inputTopic = "input" + testId;
         final Set<TopicPartition> inputTopicPartitions = mkSet(
@@ -170,8 +175,8 @@ public class HighAvailabilityTaskAssignorIntegrationTest {
 
         produceTestData(inputTopic, numberOfRecords);
 
-        try (final KafkaStreams kafkaStreams0 = new KafkaStreams(topology, streamsProperties(appId, assignmentListener, enableRackAwareAssignor, AssignmentTestUtils.RACK_0));
-             final KafkaStreams kafkaStreams1 = new KafkaStreams(topology, streamsProperties(appId, assignmentListener, enableRackAwareAssignor, AssignmentTestUtils.RACK_1));
+        try (final KafkaStreams kafkaStreams0 = new KafkaStreams(topology, streamsProperties(appId, assignmentListener, rackAwareStrategy, AssignmentTestUtils.RACK_0));
+             final KafkaStreams kafkaStreams1 = new KafkaStreams(topology, streamsProperties(appId, assignmentListener, rackAwareStrategy, AssignmentTestUtils.RACK_1));
              final Consumer<String, String> consumer = new KafkaConsumer<>(getConsumerProperties())) {
             kafkaStreams0.start();
 
@@ -312,9 +317,8 @@ public class HighAvailabilityTaskAssignorIntegrationTest {
 
     private static Properties streamsProperties(final String appId,
                                                 final AssignmentListener configuredAssignmentListener,
-                                                final boolean enableRackAwareAssignor,
+                                                final String rackAwareStrategy,
                                                 final String rack) {
-        final String rackAwareStrategy = enableRackAwareAssignor ? StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_MIN_TRAFFIC : StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_NONE;
         return mkObjectProperties(
             mkMap(
                 mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers()),
