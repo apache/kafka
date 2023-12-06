@@ -16,11 +16,13 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
+import java.util.Locale;
 import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
+import org.apache.kafka.clients.consumer.GroupProtocol;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetAndTimestamp;
 import org.apache.kafka.clients.consumer.OffsetCommitCallback;
@@ -892,6 +894,46 @@ public class AsyncKafkaConsumerTest {
         }
     }
 
+    @Test
+    public void testGroupRemoteAssignorUnusedIfGroupIdUndefined() {
+        final Properties props = requiredConsumerProperties();
+        props.put(ConsumerConfig.GROUP_REMOTE_ASSIGNOR_CONFIG, "someAssignor");
+        final ConsumerConfig config = new ConsumerConfig(props);
+
+        try (AsyncKafkaConsumer<String, String> ignored =
+            new AsyncKafkaConsumer<>(config, new StringDeserializer(), new StringDeserializer())) {
+            assertTrue(config.unused().contains(ConsumerConfig.GROUP_REMOTE_ASSIGNOR_CONFIG));
+        }
+    }
+
+    @Test
+    public void testGroupRemoteAssignorUnusedInGenericProtocol() {
+        final Properties props = requiredConsumerProperties();
+        props.put(ConsumerConfig.GROUP_ID_CONFIG, "consumerGroupA");
+        props.put(ConsumerConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.GENERIC.name().toLowerCase(Locale.ROOT));
+        props.put(ConsumerConfig.GROUP_REMOTE_ASSIGNOR_CONFIG, "someAssignor");
+        final ConsumerConfig config = new ConsumerConfig(props);
+
+        try (AsyncKafkaConsumer<String, String> ignored =
+            new AsyncKafkaConsumer<>(config, new StringDeserializer(), new StringDeserializer())) {
+            assertTrue(config.unused().contains(ConsumerConfig.GROUP_REMOTE_ASSIGNOR_CONFIG));
+        }
+    }
+
+    @Test
+    public void testGroupRemoteAssignorUsedInConsumerProtocol() {
+        final Properties props = requiredConsumerProperties();
+        props.put(ConsumerConfig.GROUP_ID_CONFIG, "consumerGroupA");
+        props.put(ConsumerConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.CONSUMER.name().toLowerCase(Locale.ROOT));
+        props.put(ConsumerConfig.GROUP_REMOTE_ASSIGNOR_CONFIG, "someAssignor");
+        final ConsumerConfig config = new ConsumerConfig(props);
+
+        try (AsyncKafkaConsumer<String, String> ignored =
+            new AsyncKafkaConsumer<>(config, new StringDeserializer(), new StringDeserializer())) {
+            assertFalse(config.unused().contains(ConsumerConfig.GROUP_REMOTE_ASSIGNOR_CONFIG));
+        }
+    }
+    
     @Test
     public void testGroupIdNull() {
         final Properties props = requiredConsumerProperties();

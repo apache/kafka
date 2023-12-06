@@ -29,6 +29,7 @@ import org.apache.kafka.clients.consumer.ConsumerInterceptor;
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
+import org.apache.kafka.clients.consumer.GroupProtocol;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.consumer.NoOffsetForPartitionException;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
@@ -343,6 +344,10 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
 
             this.kafkaConsumerMetrics = new KafkaConsumerMetrics(metrics, CONSUMER_METRIC_GROUP_PREFIX);
 
+            if (groupMetadata.isPresent() &&
+                GroupProtocol.of(config.getString(ConsumerConfig.GROUP_PROTOCOL_CONFIG)) == GroupProtocol.CONSUMER) {
+                config.ignore(ConsumerConfig.GROUP_REMOTE_ASSIGNOR_CONFIG); // Used by background thread
+            }
             config.logUnused();
             AppInfoParser.registerAppInfo(CONSUMER_JMX_PREFIX, clientId, metrics, time.milliseconds());
             log.debug("Kafka consumer initialized");
@@ -530,6 +535,8 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
      * @throws org.apache.kafka.common.errors.TopicAuthorizationException if the consumer is not authorized to read
      *             from a partition
      * @throws org.apache.kafka.common.errors.SerializationException if the fetched records cannot be deserialized
+     * @throws org.apache.kafka.common.errors.UnsupportedAssignorException if the `group.remote.assignor` configuration
+     *             is set to an assignor that is not available on the broker.
      */
     @Override
     public ConsumerRecords<K, V> poll(final Duration timeout) {
