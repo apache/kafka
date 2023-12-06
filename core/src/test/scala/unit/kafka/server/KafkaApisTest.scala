@@ -6974,7 +6974,7 @@ class KafkaApisTest {
     createKafkaApis(raftSupport = true).handle(request, RequestLocal.NoCaching)
     val response = verifyNoThrottling[ListClientMetricsResourcesResponse](request)
 
-    val expectedResponse = new ListClientMetricsResourcesResponseData().setErrorCode(Errors.INVALID_REQUEST.code)
+    val expectedResponse = new ListClientMetricsResourcesResponseData().setErrorCode(Errors.UNKNOWN_SERVER_ERROR.code)
     assertEquals(expectedResponse, response.data)
   }
 }

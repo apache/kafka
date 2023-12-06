@@ -3819,15 +3819,10 @@ class KafkaApis(val requestChannel: RequestChannel,
     } else {
       clientMetricsManager match {
         case Some(metricsManager) =>
-          try {
-            val data = new ListClientMetricsResourcesResponseData().setClientMetricsResources(
-              metricsManager.listClientMetricsResources.asScala.map(
-                name => new ClientMetricsResource().setName(name)).toList.asJava)
-            requestHelper.sendMaybeThrottle(request, new ListClientMetricsResourcesResponse(data))
-          } catch {
-            case _: Exception =>
-              requestHelper.sendMaybeThrottle(request, listClientMetricsResourcesRequest.getErrorResponse(Errors.INVALID_REQUEST.exception))
-          }
+          val data = new ListClientMetricsResourcesResponseData().setClientMetricsResources(
+            metricsManager.listClientMetricsResources.asScala.map(
+              name => new ClientMetricsResource().setName(name)).toList.asJava)
+          requestHelper.sendMaybeThrottle(request, new ListClientMetricsResourcesResponse(data))
         case None =>
           info("Received list client metrics resources request for zookeeper based cluster")
           requestHelper.sendMaybeThrottle(request, listClientMetricsResourcesRequest.getErrorResponse(Errors.UNSUPPORTED_VERSION.exception))
