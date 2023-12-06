@@ -21,7 +21,7 @@ import kafka.network._
 import kafka.utils._
 import kafka.server.KafkaRequestHandler.{threadCurrentRequest, threadRequestChannel}
 
-import java.util.concurrent.{CountDownLatch, TimeUnit}
+import java.util.concurrent.{ConcurrentHashMap, CountDownLatch, TimeUnit}
 import java.util.concurrent.atomic.AtomicInteger
 import com.yammer.metrics.core.{Gauge, Meter}
 import org.apache.kafka.common.internals.FatalExitError
@@ -309,7 +309,7 @@ class BrokerTopicMetrics(name: Option[String], configOpt: java.util.Optional[Kaf
       }
     }
 
-    gauge() // greedily initialize the general topic metrics
+    gauge()
   }
 
   // an internal map for "lazy initialization" of certain metrics
@@ -329,7 +329,7 @@ class BrokerTopicMetrics(name: Option[String], configOpt: java.util.Optional[Kaf
     BrokerTopicStats.NoKeyCompactedTopicRecordsPerSec -> MeterWrapper(BrokerTopicStats.NoKeyCompactedTopicRecordsPerSec, "requests"),
     BrokerTopicStats.InvalidMagicNumberRecordsPerSec -> MeterWrapper(BrokerTopicStats.InvalidMagicNumberRecordsPerSec, "requests"),
     BrokerTopicStats.InvalidMessageCrcRecordsPerSec -> MeterWrapper(BrokerTopicStats.InvalidMessageCrcRecordsPerSec, "requests"),
-    BrokerTopicStats.InvalidOffsetOrSequenceRecordsPerSec -> MeterWrapper(BrokerTopicStats.InvalidOffsetOrSequenceRecordsPerSec, "requests"),
+    BrokerTopicStats.InvalidOffsetOrSequenceRecordsPerSec -> MeterWrapper(BrokerTopicStats.InvalidOffsetOrSequenceRecordsPerSec, "requests")
   ).asJava)
 
   if (name.isEmpty) {
@@ -438,7 +438,7 @@ class BrokerTopicMetrics(name: Option[String], configOpt: java.util.Optional[Kaf
 }
 
 class BrokerTopicAggregatedMetric() {
-  private val partitionMetricValues = collection.concurrent.TrieMap[Int, Long]()
+  private val partitionMetricValues = new ConcurrentHashMap[Int, Long]().asScala
 
   def setPartitionMetricValue(partition: Int, partitionValue: Long): Option[Long] = {
     partitionMetricValues.put(partition, partitionValue)
