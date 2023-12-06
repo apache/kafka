@@ -230,11 +230,6 @@ public class HeartbeatRequestManager implements RequestManager {
         pollTimer.reset(maxPollIntervalMs);
     }
 
-    // Visible for testing
-    Timer pollTimer() {
-        return pollTimer;
-    }
-
     private NetworkClientDelegate.UnsentRequest makeHeartbeatRequest(final long currentTimeMs,
                                                                      final boolean ignoreResponse) {
         NetworkClientDelegate.UnsentRequest request = makeHeartbeatRequest(ignoreResponse);
@@ -252,8 +247,10 @@ public class HeartbeatRequestManager implements RequestManager {
                 onResponse((ConsumerGroupHeartbeatResponse) response.responseBody(), request.handler().completionTimeMs());
                 // The response is only ignore when the member becomes staled. This is because the member needs to
                 // rejoin on the next poll regardless the server has responded to the heartbeat.
-                if (!ignoreResponse)
-                    this.membershipManager.onHeartbeatResponseReceived(((ConsumerGroupHeartbeatResponse) response.responseBody()).data());
+                if (!ignoreResponse) {
+                    membershipManager.onHeartbeatResponseReceived(((ConsumerGroupHeartbeatResponse) response.responseBody()).data());
+                    maybeSendGroupMetadataUpdateEvent();
+                }
             } else {
                 onFailure(exception, request.handler().completionTimeMs());
             }
@@ -280,7 +277,6 @@ public class HeartbeatRequestManager implements RequestManager {
             this.heartbeatRequestState.updateHeartbeatIntervalMs(response.data().heartbeatIntervalMs());
             this.heartbeatRequestState.onSuccessfulAttempt(currentTimeMs);
             this.heartbeatRequestState.resetTimer();
-            maybeSendGroupMetadataUpdateEvent();
             return;
         }
         onErrorResponse(response, currentTimeMs);

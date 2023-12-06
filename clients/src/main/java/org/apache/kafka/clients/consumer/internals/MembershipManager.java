@@ -151,8 +151,8 @@ public interface MembershipManager {
     void transitionToJoining();
 
     /**
-     * When the user stops polling the consumer, the member will be transitioned to LEAVING without revoking the
-     * partitions.
+     * When the user stops polling the consumer and the <code>max.poll.interval.ms</code> timer expires, we transition
+     * the member to STALE.
      */
     void transitionToStaled();
 }
