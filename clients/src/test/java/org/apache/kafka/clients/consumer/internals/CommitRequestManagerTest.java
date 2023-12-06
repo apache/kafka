@@ -460,7 +460,7 @@ public class CommitRequestManagerTest {
     }
 
     @Test
-    public void testPollOnClose() {
+    public void testSignalClose() {
         CommitRequestManager commitRequestManger = create(true, 100);
         when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(mockedNode));
 
@@ -468,7 +468,8 @@ public class CommitRequestManagerTest {
             new OffsetAndMetadata(0));
 
         commitRequestManger.addOffsetCommitRequest(offsets);
-        NetworkClientDelegate.PollResult res = commitRequestManger.pollOnClose();
+        commitRequestManger.signalClose();
+        NetworkClientDelegate.PollResult res = commitRequestManger.poll(time.milliseconds());
         assertEquals(1, res.unsentRequests.size());
         OffsetCommitRequestData data = (OffsetCommitRequestData) res.unsentRequests.get(0).requestBuilder().build().data();
         assertEquals("topic", data.topics().get(0).name());

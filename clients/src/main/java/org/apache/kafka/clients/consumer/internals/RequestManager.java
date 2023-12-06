@@ -77,4 +77,11 @@ public interface RequestManager {
     default long maximumTimeToWait(long currentTimeMs) {
         return Long.MAX_VALUE;
     }
+
+    /**
+     * Signals the request manager that the consumer is closing to prepare for the proper actions to be taken.
+     */
+    default void signalClose() {
+        return;
+    }
 }

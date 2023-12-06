@@ -131,21 +131,6 @@ public class NetworkClientDelegate implements AutoCloseable {
     }
 
     /**
-     * Block until all pending requests from the given node have finished.
-     */
-    public void awaitPendingRequests(Timer timer) {
-        while (!unsentRequests().isEmpty() && timer.notExpired()) {
-            poll(timer.remainingMs(), timer.currentTimeMs());
-            timer.update();
-        }
-
-        if (!unsentRequests.isEmpty()) {
-            log.warn("Close timed out with {} pending requests to coordinator, terminating client connections",
-                unsentRequests.size());
-        }
-    }
-
-    /**
      * Tries to send the requests in the unsentRequest queue. If the request doesn't have an assigned node, it will
      * find the leastLoadedOne, and will be retried in the next {@code poll()}. If the request is expired, a
      * {@link TimeoutException} will be thrown.
@@ -325,11 +310,11 @@ public class NetworkClientDelegate implements AutoCloseable {
         @Override
         public String toString() {
             return "UnsentRequest{" +
-                "requestBuilder=" + requestBuilder +
-                ", handler=" + handler +
-                ", node=" + node +
-                ", timer=" + timer +
-                '}';
+                   "requestBuilder=" + requestBuilder +
+                   ", handler=" + handler +
+                   ", node=" + node +
+                   ", timer=" + timer +
+                   '}';
         }
     }
 

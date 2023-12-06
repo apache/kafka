@@ -80,6 +80,7 @@ public class CommitRequestManager implements RequestManager {
     private final OptionalDouble jitter;
     private final boolean throwOnFetchStableOffsetUnsupported;
     final PendingRequests pendingRequests;
+    private boolean closing = false;
 
     public CommitRequestManager(
             final Time time,
@@ -153,6 +154,10 @@ public class CommitRequestManager implements RequestManager {
         if (!coordinatorRequestManager.coordinator().isPresent())
             return EMPTY;
 
+        if (closing) {
+            return drainPendingOffsetCommitRequests();
+        }
+
         maybeAutoCommitAllConsumed();
         if (!pendingRequests.hasUnsentRequests())
             return EMPTY;
@@ -163,6 +168,11 @@ public class CommitRequestManager implements RequestManager {
             findMinTime(unsentOffsetCommitRequests(), currentTimeMs),
             findMinTime(unsentOffsetFetchRequests(), currentTimeMs));
         return new NetworkClientDelegate.PollResult(timeUntilNextPoll, requests);
+    }
+
+    @Override
+    public void signalClose() {
+        closing = true;
     }
 
     /**
@@ -315,13 +325,10 @@ public class CommitRequestManager implements RequestManager {
      * Drains the inflight offsetCommits during shutdown because we want to make sure all pending commits are sent
      * before closing.
      */
-    @Override
-    public NetworkClientDelegate.PollResult pollOnClose() {
-        if (!pendingRequests.hasUnsentRequests())
+    public NetworkClientDelegate.PollResult drainPendingOffsetCommitRequests() {
+        if (pendingRequests.unsentOffsetCommits.isEmpty())
             return EMPTY;
-
-        List<NetworkClientDelegate.UnsentRequest> requests = pendingRequests.drainOnClose();
-        System.out.print("ddraining + " + requests);
+        List<NetworkClientDelegate.UnsentRequest> requests = pendingRequests.drainPendingCommits();
         return new NetworkClientDelegate.PollResult(Long.MAX_VALUE, requests);
     }
 
@@ -786,7 +793,7 @@ public class CommitRequestManager implements RequestManager {
             unsentOffsetFetches.clear();
         }
 
-        public List<NetworkClientDelegate.UnsentRequest> drainOnClose() {
+        private List<NetworkClientDelegate.UnsentRequest> drainPendingCommits() {
             ArrayList<NetworkClientDelegate.UnsentRequest> res = new ArrayList<>();
             res.addAll(unsentOffsetCommits.stream().map(OffsetCommitRequestState::toUnsentRequest).collect(Collectors.toList()));
             clearAll();

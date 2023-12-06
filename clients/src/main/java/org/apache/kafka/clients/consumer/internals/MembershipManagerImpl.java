@@ -597,28 +597,6 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
     }
 
     /**
-     * When closing down the consumer.  The partitions are already revoked by the application thread therefore we just
-     * need to transition the state to LEAVING and set the epoch to -1/-2.
-     */
-    @Override
-    public void leaveGroupOnClose() {
-        if (state == MemberState.UNSUBSCRIBED ||
-                state == MemberState.FATAL ||
-                state == MemberState.LEAVING) {
-            return;
-        }
-
-        if (state == MemberState.PREPARE_LEAVING) {
-            transitionToSendingLeaveGroup();
-            return;
-        }
-
-        transitionTo(MemberState.PREPARE_LEAVING);
-        transitionToSendingLeaveGroup();
-        leaveGroupInProgress = Optional.of(CompletableFuture.completedFuture(null));
-    }
-
-    /**
      * Release member assignment by calling the user defined callbacks for onPartitionsRevoked or
      * onPartitionsLost.
      * <ul>
@@ -657,8 +635,9 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
      * Reset member epoch to the value required for the leave the group heartbeat request, and
      * transition to the {@link MemberState#LEAVING} state so that a heartbeat
      * request is sent out with it.
+     * Visible for testing.
      */
-    private void transitionToSendingLeaveGroup() {
+    void transitionToSendingLeaveGroup() {
         if (state == MemberState.FATAL) {
             log.warn("Member {} with epoch {} won't send leave group request because it is in " +
                     "FATAL state", memberId, memberEpoch);
@@ -1015,8 +994,9 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
      *
      * @param revokedPartitions Partitions to revoke.
      * @return Future that will complete when the commit request and user callback completes.
+     * Visible for testing
      */
-    private CompletableFuture<Void> revokePartitions(Set<TopicPartition> revokedPartitions) {
+    CompletableFuture<Void> revokePartitions(Set<TopicPartition> revokedPartitions) {
         log.info("Revoking previously assigned partitions {}", Utils.join(revokedPartitions, ", "));
 
         logPausedPartitionsBeingRevoked(revokedPartitions);
@@ -1043,7 +1023,7 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
                 // retriable errors, so at this point we assume this is non-retriable, but
                 // proceed with the revocation anyway).
                 log.error("Commit request before revocation failed with non-retriable error. Will" +
-                        " proceed with the revocation anyway.", error);
+                    " proceed with the revocation anyway.", error);
             }
 
             // At this point we expect to be in a middle of a revocation triggered from RECONCILING
@@ -1063,7 +1043,7 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
             userCallbackResult.whenComplete((callbackResult, callbackError) -> {
                 if (callbackError != null) {
                     log.error("onPartitionsRevoked callback invocation failed for partitions {}",
-                            revokedPartitions, callbackError);
+                        revokedPartitions, callbackError);
                     revocationResult.completeExceptionally(callbackError);
                 } else {
                     revocationResult.complete(null);
@@ -1146,7 +1126,8 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
         }
     }
 
-    private CompletableFuture<Void> invokeOnPartitionsLostCallback(Set<TopicPartition> partitionsLost) {
+    // Visible for testing
+    CompletableFuture<Void> invokeOnPartitionsLostCallback(Set<TopicPartition> partitionsLost) {
         // This should not trigger the callback if partitionsLost is empty, to keep the current
         // behaviour.
         Optional<ConsumerRebalanceListener> listener = subscriptions.rebalanceListener();
