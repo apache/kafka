@@ -31,8 +31,8 @@ import org.apache.kafka.clients.consumer.internals.events.ApplicationEventHandle
 import org.apache.kafka.clients.consumer.internals.events.AssignmentChangeApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
 import org.apache.kafka.clients.consumer.internals.events.CommitApplicationEvent;
+import org.apache.kafka.clients.consumer.internals.events.CommitOnCloseApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.CompletableBackgroundEvent;
-import org.apache.kafka.clients.consumer.internals.events.ConsumerCloseApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.ConsumerRebalanceListenerCallbackNeededEvent;
 import org.apache.kafka.clients.consumer.internals.events.ErrorBackgroundEvent;
 import org.apache.kafka.clients.consumer.internals.events.EventProcessor;
@@ -96,6 +96,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -124,7 +125,6 @@ import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mockConstruction;
 import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -502,8 +502,45 @@ public class AsyncKafkaConsumerTest {
         subscriptions.seekUnvalidated(tp, new SubscriptionState.FetchPosition(100L));
         doReturn(null).when(applicationEventHandler).addAndGet(any(), any());
         shutDown();
-        verify(applicationEventHandler, times(2)).addAndGet(any(ConsumerCloseApplicationEvent.class), any());
+        verify(applicationEventHandler).add(any(CommitOnCloseApplicationEvent.class));
         verify(applicationEventHandler).add(any(CommitApplicationEvent.class));
+    }
+
+    @Test
+    public void testEnsureSubscribedPartitionsRevokedOnClosed() {
+        subscriptions.subscribe(singleton("topic"), Optional.empty());
+        TopicPartition tp = new TopicPartition("topic", 0);
+        subscriptions.assignFromSubscribed(singleton(tp));
+        consumer.close(Duration.ZERO);
+        assertTrue(subscriptions.assignedPartitions().isEmpty());
+        verify(consumer).maybeRevokePartitions(any());
+    }
+
+    @Test
+    public void testWaitOnCompletionDoesNotThrow() {
+        AtomicReference<Throwable> exception = new AtomicReference<>();
+        CompletableFuture<Object> future = CompletableFuture.completedFuture(null);
+        assertDoesNotThrow(() -> consumer.completeSilently(() -> {
+            future.get(0, TimeUnit.MILLISECONDS);
+        }, "test", exception));
+        assertNull(exception.get());
+
+        assertDoesNotThrow(() -> consumer.completeSilently(() -> {
+            throw new KafkaException("Test exception");
+        }, "test", exception));
+        assertTrue(exception.get() instanceof KafkaException);
+    }
+
+    @Test
+    public void testEnsureAutocommitSent() {
+        consumer.maybeAutoCommitSync(true, testBuilder.time.timer(100), null);
+        verify(consumer).completeSilently(any(), any(), any());
+    }
+
+    @Test
+    public void testEnsureautocommitNotSent() {
+        consumer.maybeAutoCommitSync(false, testBuilder.time.timer(100), null);
+        verify(consumer, never()).completeSilently(any(), any(), any());
     }
 
     private void assertMockCommitCallbackInvoked(final Executable task,

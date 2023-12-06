@@ -34,9 +34,7 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
-import java.util.concurrent.Future;
 import java.util.function.Supplier;
-import java.util.stream.Collectors;
 
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.DEFAULT_CLOSE_TIMEOUT_MS;
 import static org.apache.kafka.common.utils.Utils.closeQuietly;
@@ -174,27 +172,11 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
                            final NetworkClientDelegate networkClientDelegate,
                            final Timer timer) {
         // These are the optional outgoing requests at the
-        List<NetworkClientDelegate.PollResult> pollResults = requestManagers.stream()
+        requestManagers.stream()
                 .filter(Optional::isPresent)
                 .map(Optional::get)
                 .map(RequestManager::pollOnClose)
-                .collect(Collectors.toList());
-        long pollWaitTimeMs = pollResults.stream()
-                .map(networkClientDelegate::addAll)
-                .reduce(MAX_POLL_TIMEOUT_MS, Math::min);
-
-        List<Future<?>> requestFutures = pollResults.stream()
-                .flatMap(fads -> fads.unsentRequests.stream())
-                .map(NetworkClientDelegate.UnsentRequest::future)
-                .collect(Collectors.toList());
-
-        // Poll to ensure that request has been written to the socket. Wait until either the timer has expired or until
-        // all requests have received a response.
-        while (timer.notExpired() && !requestFutures.stream().allMatch(Future::isDone)) {
-            pollWaitTimeMs = Math.min(pollWaitTimeMs, timer.remainingMs());
-            networkClientDelegate.poll(pollWaitTimeMs, timer.currentTimeMs());
-            timer.update();
-        }
+                .forEach(networkClientDelegate::addAll);
     }
 
     public boolean isRunning() {
@@ -269,6 +251,15 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
         }
     }
 
+    private void sendUnsentRequests(final Timer timer) {
+        // Poll to ensure that request has been written to the socket. Wait until either the timer has expired or until
+        // all requests have received a response.
+        while (!networkClientDelegate.unsentRequests().isEmpty() && timer.notExpired()) {
+            networkClientDelegate.poll(timer.remainingMs(), timer.currentTimeMs());
+            timer.update();
+        }
+    }
+
     void cleanup() {
         log.trace("Closing the consumer network thread");
         Timer timer = time.timer(closeTimeout);
@@ -277,7 +268,7 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
         } catch (Exception e) {
             log.error("Unexpected error during shutdown.  Proceed with closing.", e);
         } finally {
-            networkClientDelegate.awaitPendingRequests(timer);
+            sendUnsentRequests(timer);
             closeQuietly(requestManagers, "request managers");
             closeQuietly(networkClientDelegate, "network client delegate");
             closeQuietly(applicationEventProcessor, "application event processor");
