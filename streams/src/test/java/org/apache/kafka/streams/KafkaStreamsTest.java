@@ -1401,14 +1401,36 @@ public class KafkaStreamsTest {
     }
 
     @Test
+    public void shouldThrowTimeoutExceptionWhenGlobalConsumerFutureDoesNotComplete() {
+        adminClient.setClientInstanceId(Uuid.randomUuid());
+
+        final StreamsBuilder builder = getBuilderWithSource();
+        builder.globalTable("anyTopic");
+        try (final KafkaStreams streams = new KafkaStreams(builder.build(), props, supplier, time)) {
+            streams.start();
+
+            when(globalStreamThreadMockedConstruction.constructed().get(0).globalConsumerInstanceId(any()))
+                .thenReturn(new KafkaFutureImpl<>());
+
+            final TimeoutException timeoutException = assertThrows(
+                TimeoutException.class,
+                () -> streams.clientInstanceIds(Duration.ZERO)
+            );
+            assertThat(timeoutException.getCause(), instanceOf(java.util.concurrent.TimeoutException.class));
+        }
+    }
+
+    @Test
     public void shouldCountDownTimeoutAcrossClient() {
         adminClient.setClientInstanceId(Uuid.randomUuid());
         adminClient.advanceTimeOnClientInstanceId(time, Duration.ofMillis(10L).toMillis());
 
         final Time mockTime = time;
-        final AtomicLong expectedTimeout = new AtomicLong(20L);
+        final AtomicLong expectedTimeout = new AtomicLong(50L);
         final AtomicBoolean didAssertThreadOne = new AtomicBoolean(false);
         final AtomicBoolean didAssertThreadTwo = new AtomicBoolean(false);
+        final AtomicBoolean didAssertGlobalThread = new AtomicBoolean(false);
+
         when(streamThreadOne.consumerClientInstanceIds(any()))
             .thenReturn(Collections.singletonMap("consumer1", new KafkaFutureImpl<Uuid>() {
                 @Override
@@ -1430,14 +1452,29 @@ public class KafkaStreamsTest {
                 }
             }));
 
+        final StreamsBuilder builder = getBuilderWithSource();
+        builder.globalTable("anyTopic");
 
-        try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time)) {
+        try (final KafkaStreams streams = new KafkaStreams(builder.build(), props, supplier, time)) {
             streams.start();
-            streams.clientInstanceIds(Duration.ofMillis(30L));
+
+            when(globalStreamThreadMockedConstruction.constructed().get(0).globalConsumerInstanceId(any()))
+                .thenReturn(new KafkaFutureImpl<Uuid>() {
+                    @Override
+                    public Uuid get(final long timeout, final TimeUnit timeUnit) {
+                        didAssertGlobalThread.set(true);
+                        assertThat(timeout, equalTo(expectedTimeout.getAndAdd(-8L)));
+                        mockTime.sleep(8L);
+                        return null;
+                    }
+                });
+
+            streams.clientInstanceIds(Duration.ofMillis(60L));
         }
 
         assertThat(didAssertThreadOne.get(), equalTo(true));
         assertThat(didAssertThreadTwo.get(), equalTo(true));
+        assertThat(didAssertGlobalThread.get(), equalTo(true));
     }
 
     @Deprecated // testing old PAPI

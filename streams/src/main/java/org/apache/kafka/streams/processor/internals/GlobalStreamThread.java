@@ -69,9 +69,8 @@ public class GlobalStreamThread extends Thread {
     private final AtomicLong cacheSize;
     private volatile StreamsException startupException;
     private java.util.function.Consumer<Throwable> streamsUncaughtExceptionHandler;
-    private volatile Uuid globalConsumerClientInstanceId = null;
-    private volatile long fetchDeadline = -1;
-    private volatile KafkaFutureImpl<Uuid> clientInstanceIdFuture;
+    private volatile long fetchDeadlineClientInstanceId = -1;
+    private volatile KafkaFutureImpl<Uuid> clientInstanceIdFuture = new KafkaFutureImpl<>();
 
     /**
      * The states that the global stream thread can be in
@@ -318,27 +317,29 @@ public class GlobalStreamThread extends Thread {
                 }
                 stateConsumer.pollAndUpdate();
 
-                if (fetchDeadline != -1) {
-                    if (fetchDeadline >= time.milliseconds()) {
+                if (fetchDeadlineClientInstanceId != -1) {
+                    if (fetchDeadlineClientInstanceId >= time.milliseconds()) {
                         try {
                             // we pass in a timeout of zero, to just trigger the "get instance id" background RPC,
                             // we don't want to block the global thread that can do useful work in the meantime
-                            globalConsumerClientInstanceId = globalConsumer.clientInstanceId(Duration.ZERO);
-                            clientInstanceIdFuture.complete(globalConsumerClientInstanceId);
-                            fetchDeadline = -1;
+                            clientInstanceIdFuture.complete(globalConsumer.clientInstanceId(Duration.ZERO));
+                            fetchDeadlineClientInstanceId = -1;
                         } catch (final IllegalStateException disabledError) {
+                            // if telemetry is disabled on a client, we swallow the error,
+                            // to allow returning a partial result for all other clients
                             clientInstanceIdFuture.complete(null);
-                            fetchDeadline = -1;
+                            fetchDeadlineClientInstanceId = -1;
                         } catch (final TimeoutException swallow) {
                             // swallow
                         } catch (final Exception error) {
                             clientInstanceIdFuture.completeExceptionally(error);
-                            fetchDeadline = -1;
+                            fetchDeadlineClientInstanceId = -1;
                         }
                     } else {
                         clientInstanceIdFuture.completeExceptionally(
                             new TimeoutException("Could not retrieve global consumer client instance id.")
                         );
+                        fetchDeadlineClientInstanceId = -1;
                     }
                 }
             }
@@ -486,17 +487,22 @@ public class GlobalStreamThread extends Thread {
         return Collections.unmodifiableMap(globalConsumer.metrics());
     }
 
+    // this method is NOT thread-safe (we rely on the callee to be `synchronized`)
     public KafkaFuture<Uuid> globalConsumerInstanceId(final Duration timeout) {
-        if (globalConsumerClientInstanceId != null) {
-            final KafkaFutureImpl<Uuid> success = new KafkaFutureImpl<>();
-            success.complete(globalConsumerClientInstanceId);
-            return success;
+        boolean setDeadline = false;
+
+        if (clientInstanceIdFuture.isDone()) {
+            if (clientInstanceIdFuture.isCompletedExceptionally()) {
+                clientInstanceIdFuture = new KafkaFutureImpl<>();
+                setDeadline = true;
+            }
+        } else {
+            setDeadline = true;
         }
 
-        // need to set `clientInstanceIdFuture` before `fetchDeadline`
-        // to avoid a race condition potentially leading to a null-pointed-exception
-        clientInstanceIdFuture = new KafkaFutureImpl<>();
-        fetchDeadline = time.milliseconds() + timeout.toMillis();
+        if (setDeadline) {
+            fetchDeadlineClientInstanceId = time.milliseconds() + timeout.toMillis();
+        }
 
         return clientInstanceIdFuture;
     }
