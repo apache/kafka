@@ -419,7 +419,6 @@ subprojects {
     testsToExclude.addAll([
       // connect tests
       "**/KafkaConfigBackingStoreTest.*",
-      "**/StandaloneHerderTest.*",
       "**/WorkerSinkTaskTest.*"
     ])
   }
