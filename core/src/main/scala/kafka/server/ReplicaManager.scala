@@ -914,7 +914,7 @@ class ReplicaManager(val config: KafkaConfig,
             // probably unblock some follower fetch requests since log end offset has been updated
             delayedFetchPurgatory.checkAndComplete(requestKey)
           case LeaderHwChange.NONE =>
-          // nothing
+            // nothing
         }
       }
     }
@@ -1053,7 +1053,7 @@ class ReplicaManager(val config: KafkaConfig,
             // probably unblock some follower fetch requests since log end offset has been updated
             delayedFetchPurgatory.checkAndComplete(requestKey)
           case LeaderHwChange.NONE =>
-          // nothing
+            // nothing
         }
       }
     }
