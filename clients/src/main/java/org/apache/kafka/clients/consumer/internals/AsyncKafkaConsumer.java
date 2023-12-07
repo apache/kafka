@@ -1189,10 +1189,10 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         if (!groupMetadata.isPresent())
             return;
         maybeAutoCommitSync(autoCommitEnabled, timer, firstException);
-        timer.update();
         applicationEventHandler.add(new CommitOnCloseApplicationEvent());
         maybeRevokePartitions(firstException);
-        completeSilently(
+        timer.update();
+        completeQuietly(
             () -> {
                 applicationEventHandler.addAndGet(new LeaveOnCloseApplicationEvent(), timer);
                 timer.update();
@@ -1208,7 +1208,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                              final AtomicReference<Throwable> firstException) {
         if (!shouldAutoCommit)
             return;
-        completeSilently(() -> {
+        completeQuietly(() -> {
             Map<TopicPartition, OffsetAndMetadata> allConsumed = subscriptions.allConsumed();
             log.debug("Sending synchronous auto-commit of offsets {} on closing", allConsumed);
             commitSync(allConsumed, Duration.ofMillis(timer.remainingMs()));
@@ -1221,16 +1221,16 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         if (!subscriptions.hasAutoAssignedPartitions() || subscriptions.assignedPartitions().isEmpty())
             return;
         CompletableFuture<Void> revocationFuture = invokePartitionRevocationListener();
-        completeSilently(revocationFuture::get,
+        completeQuietly(revocationFuture::get,
             "Failed revoking partitions of " + subscriptions.assignedPartitions(),
             firstException);
         subscriptions.assignFromSubscribed(Collections.emptySet());
     }
 
     // Visible for testing
-    void completeSilently(final Utils.ThrowingRunnable function,
-                          final String msg,
-                          final AtomicReference<Throwable> firstException) {
+    void completeQuietly(final Utils.ThrowingRunnable function,
+                         final String msg,
+                         final AtomicReference<Throwable> firstException) {
         try {
             function.run();
         } catch (TimeoutException e) {
