@@ -1106,7 +1106,10 @@ class ReplicaManager(val config: KafkaConfig,
     def generalizedCallback(preAppendErrors: Map[TopicPartition, Errors],
                             newRequestLocal: RequestLocal,
                             verificationGuards: Map[TopicPartition, VerificationGuard]): Unit = {
-      callback(preAppendErrors.getOrElse(topicPartition, Errors.NONE), newRequestLocal, verificationGuards.getOrElse(topicPartition, VerificationGuard.SENTINEL))
+      callback(
+        preAppendErrors.getOrElse(topicPartition, Errors.NONE),
+        newRequestLocal,
+        verificationGuards.getOrElse(topicPartition, VerificationGuard.SENTINEL))
     }
 
     maybeStartTransactionVerificationForPartitions(

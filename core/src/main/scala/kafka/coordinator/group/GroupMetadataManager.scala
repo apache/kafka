@@ -344,7 +344,7 @@ class GroupMetadataManager(brokerId: Int,
       preAppendErrors = preAppendErrors)
   }
 
-  def generateOffsetRecords(magicValue: Byte,
+  private def generateOffsetRecords(magicValue: Byte,
                             isTxnOffsetCommit: Boolean,
                             groupId: String,
                             offsetTopicPartition: TopicPartition,
@@ -372,13 +372,13 @@ class GroupMetadataManager(brokerId: Int,
       Map(offsetTopicPartition -> builder.build())
   }
 
-  def createPutCacheCallback(isTxnOffsetCommit: Boolean,
+  private def createPutCacheCallback(isTxnOffsetCommit: Boolean,
                              group: GroupMetadata,
                              consumerId: String,
                              offsetMetadata: immutable.Map[TopicIdPartition, OffsetAndMetadata],
                              filteredOffsetMetadata: Map[TopicIdPartition, OffsetAndMetadata],
                              responseCallback: immutable.Map[TopicIdPartition, Errors] => Unit,
-                             producerId: Long = RecordBatch.NO_PRODUCER_ID,
+                             producerId: Long,
                              records: Map[TopicPartition, MemoryRecords],
                              preAppendErrors: Map[TopicPartition, LogAppendResult] = Map.empty): Map[TopicPartition, PartitionResponse] => Unit = {
     val offsetTopicPartition = new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, partitionFor(group.groupId))
@@ -502,10 +502,7 @@ class GroupMetadataManager(brokerId: Int,
     val records = generateOffsetRecords(magicOpt.get, isTxnOffsetCommit, group.groupId, offsetTopicPartition, filteredOffsetMetadata, producerId, producerEpoch)
     val putCacheCallback = createPutCacheCallback(isTxnOffsetCommit, group, consumerId, offsetMetadata, filteredOffsetMetadata, responseCallback, producerId, records)
 
-    val verificationGuards = verificationGuard match {
-      case Some(guard) => Map(offsetTopicPartition -> guard)
-      case None => Map.empty[TopicPartition, VerificationGuard]
-    }
+    val verificationGuards = verificationGuard.map(guard => offsetTopicPartition -> guard).toMap
 
     group.inLock {
       if (isTxnOffsetCommit) {
