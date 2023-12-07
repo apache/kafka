@@ -128,7 +128,7 @@ object BaseConsumerTest {
   // In Scala 2.12, it is necessary to disambiguate the java.util.stream.Stream.of() method call
   // in the case where there's only a single Arguments in the list. The following commented-out
   // method works in Scala 2.13, but not 2.12. For this reason, tests which run against just a
-  // single combination are written using @CsvSource rather than the more elegant @MethodSource.
+  // single combination are written using @CsvSource rather than the more elegant @MethodSource. 
   // def getTestQuorumAndGroupProtocolParametersZkOnly() : java.util.stream.Stream[Arguments] = {
   //   java.util.stream.Stream.of(
   //       Arguments.of("zk", "generic"))
