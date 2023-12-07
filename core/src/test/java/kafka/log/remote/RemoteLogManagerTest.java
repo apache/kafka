@@ -797,9 +797,8 @@ public class RemoteLogManagerTest {
         assertThrows(NoSuchElementException.class, () -> yammerMetricValue("RemoteCopyLogBytes"));
         remoteLogManager.onLeadershipChange(Collections.singleton(mockLeaderPartition), Collections.singleton(mockFollowerPartition), topicIds);
         TestUtils.waitForCondition(
-                () -> 75 == safeYammerMetricValue("RemoteCopyLagBytes"),
-                1000,
-                String.format("Expected to find 75, but found %d", safeYammerMetricValue("RemoteCopyLagBytes")));
+                () -> 75 == safeLongYammerMetricValue("RemoteCopyLagBytes"),
+                String.format("Expected to find 75 for RemoteCopyLagBytes metric value, but found", safeLongYammerMetricValue("RemoteCopyLagBytes")));
         // unlock copyLogSegmentData
         latch.countDown();
     }
@@ -813,7 +812,7 @@ public class RemoteLogManagerTest {
         return gauge.value();
     }
 
-    private long safeYammerMetricValue(String name) {
+    private long safeLongYammerMetricValue(String name) {
         try {
             return (long) yammerMetricValue(name);
         } catch (NoSuchElementException ex) {
