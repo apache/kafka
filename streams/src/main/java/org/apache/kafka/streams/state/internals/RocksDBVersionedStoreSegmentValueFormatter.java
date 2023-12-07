@@ -19,6 +19,8 @@ package org.apache.kafka.streams.state.internals;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.List;
+
+import org.apache.kafka.streams.query.ResultOrder;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -150,7 +152,15 @@ final class RocksDBVersionedStoreSegmentValueFormatter {
          */
         SegmentSearchResult find(long timestamp, boolean includeValue);
 
-        List<SegmentSearchResult> findAll(long fromTime, long toTime);
+        /**
+         * Finds the next/previous record in this segment row that is valid within the query specified time range
+         *
+         * @param fromTime the query starting time point
+         * @param toTime the query ending time point
+         * @param order specifies the order (based on timestamp) in which records are returned
+         * @return the record that is found, null if no record is found
+         */
+        SegmentSearchResult find(long fromTime, long toTime, ResultOrder order);
 
         /**
          * Inserts the provided record into the segment as the latest record in the segment row.
@@ -266,6 +276,11 @@ final class RocksDBVersionedStoreSegmentValueFormatter {
         private int deserIndex = -1; // index up through which this segment has been deserialized (inclusive)
         private List<TimestampAndValueSize> unpackedReversedTimestampAndValueSizes;
         private List<Integer> cumulativeValueSizes; // ordered same as timestamp and value sizes (reverse time-sorted)
+        private int valuesStartingIndex = -1; // the index of first value in the segment
+        private int currentCumValueSize = 0; // this is for deserializing a segment records in a lazy manner
+        private int currentDeserIndex = 0; // this is for deserializing a segment records in a lazy manner
+
+
 
         private PartiallyDeserializedSegmentValue(final byte[] segmentValue) {
             this.segmentValue = segmentValue;
@@ -340,32 +355,69 @@ final class RocksDBVersionedStoreSegmentValueFormatter {
         }
 
         @Override
-        public List<SegmentSearchResult> findAll(final long fromTime, final long toTime) {
-            long currNextTimestamp = nextTimestamp;
-            final List<SegmentSearchResult> segmentSearchResults = new ArrayList<>();
-            long currTimestamp = -1L; // choose an invalid timestamp. if this is valid, this needs to be re-worked
-            int currValueSize;
-            int currIndex = 0;
-            int cumValueSize = 0;
-            while (currTimestamp != minTimestamp) {
-                final int timestampSegmentIndex = 2 * TIMESTAMP_SIZE + currIndex * (TIMESTAMP_SIZE + VALUE_SIZE);
+        public SegmentSearchResult find(final long fromTime, final long toTime, final ResultOrder order) {
+            // this segment does not have any record in query specified time range
+            if (toTime < minTimestamp || fromTime > nextTimestamp) {
+                return null;
+            }
+            long currTimestamp = -1;
+            long currNextTimestamp = -1;
+
+//            int currentCumValueSize = cumulativeValueSize;
+//            int currIndex = deserIndex;
+
+            if (order.equals(ResultOrder.ASCENDING) && valuesStartingIndex == -1) {
+                findValuesStartingIndex();
+            }
+
+            while (hasStillRecord(currTimestamp, currNextTimestamp, order)) {
+                final int timestampSegmentIndex = getTimestampIndex(order, currentDeserIndex);
                 currTimestamp = ByteBuffer.wrap(segmentValue).getLong(timestampSegmentIndex);
-                currValueSize = ByteBuffer.wrap(segmentValue).getInt(timestampSegmentIndex + TIMESTAMP_SIZE);
-                cumValueSize += Math.max(currValueSize, 0);
+                currNextTimestamp = timestampSegmentIndex == 2 * TIMESTAMP_SIZE ? nextTimestamp // if this is the first record metadata (timestamp + value size)
+                                                                                : ByteBuffer.wrap(segmentValue).getLong(timestampSegmentIndex - (TIMESTAMP_SIZE + VALUE_SIZE));
+                final int currValueSize = ByteBuffer.wrap(segmentValue).getInt(timestampSegmentIndex + TIMESTAMP_SIZE);
                 if (currValueSize >= 0) {
                     final byte[] value = new byte[currValueSize];
-                    final int valueSegmentIndex = segmentValue.length - cumValueSize;
+                    final int valueSegmentIndex = getValueSegmentIndex(order, currentCumValueSize, currValueSize);
                     System.arraycopy(segmentValue, valueSegmentIndex, value, 0, currValueSize);
                     if (currTimestamp <= toTime && currNextTimestamp > fromTime) {
-                        segmentSearchResults.add(new SegmentSearchResult(currIndex, currTimestamp, currNextTimestamp, value));
+                        currentCumValueSize += currValueSize;
+                        currentDeserIndex++;
+                        return new SegmentSearchResult(currentDeserIndex - 1, currTimestamp, currNextTimestamp, value);
                     }
                 }
-
                 // prep for next iteration
-                currNextTimestamp = currTimestamp;
+                currentCumValueSize += Math.max(currValueSize, 0);
+                currentDeserIndex++;
+            }
+            // search in segment expected to find result but did not
+            return null;
+        }
+
+        private boolean hasStillRecord(final long currTimestamp, final long currNextTimestamp, final ResultOrder order) {
+            return order.equals(ResultOrder.ASCENDING) ? currNextTimestamp != nextTimestamp : currTimestamp != minTimestamp;
+        }
+
+        private int getValueSegmentIndex(final ResultOrder order, final int currentCumValueSize, final int currValueSize) {
+            return order.equals(ResultOrder.ASCENDING) ? valuesStartingIndex + currentCumValueSize
+                                                       : segmentValue.length - (currentCumValueSize + currValueSize);
+        }
+
+        private int getTimestampIndex(final ResultOrder order, final int currIndex) {
+            return order.equals(ResultOrder.ASCENDING) ? valuesStartingIndex - ((currIndex + 1) * (TIMESTAMP_SIZE + VALUE_SIZE))
+                                                       : 2 * TIMESTAMP_SIZE + currIndex * (TIMESTAMP_SIZE + VALUE_SIZE);
+        }
+
+        private void findValuesStartingIndex() {
+            long currTimestamp = -1;
+            int currIndex = 0;
+            int timestampSegmentIndex = 0;
+            while (currTimestamp != minTimestamp) {
+                timestampSegmentIndex = 2 * TIMESTAMP_SIZE + currIndex * (TIMESTAMP_SIZE + VALUE_SIZE);
+                currTimestamp = ByteBuffer.wrap(segmentValue).getLong(timestampSegmentIndex);
                 currIndex++;
             }
-            return segmentSearchResults;
+            valuesStartingIndex = timestampSegmentIndex + TIMESTAMP_SIZE + VALUE_SIZE;
         }
 
         @Override
