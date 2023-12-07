@@ -230,13 +230,19 @@ public class RocksDBVersionedStoreSegmentValueFormatterTest {
                 segmentValue.findAll(testCase.records.get(testCase.records.size() - 1).timestamp, testCase.records.get(0).timestamp);
 
             int i = 0;
+            int index = 0;
             for (final TestRecord expectedRecord : testCase.records) {
-                final long expectedValidTo = i == 0 ? testCase.nextTimestamp : testCase.records.get(i - 1).timestamp;
-                assertThat(results.get(i).index(), equalTo(i));
+                if (expectedRecord.value == null) { // should not return tombstones
+                    index++;
+                    continue;
+                }
+                final long expectedValidTo = index == 0 ? testCase.nextTimestamp : testCase.records.get(index - 1).timestamp;
+                assertThat(results.get(i).index(), equalTo(index));
                 assertThat(results.get(i).value(), equalTo(expectedRecord.value));
                 assertThat(results.get(i).validFrom(), equalTo(expectedRecord.timestamp));
                 assertThat(results.get(i).validTo(), equalTo(expectedValidTo));
                 i++;
+                index++;
             }
 
             // verify exception when timestamp is out of range

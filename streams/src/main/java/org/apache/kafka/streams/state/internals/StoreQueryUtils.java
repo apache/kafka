@@ -34,6 +34,7 @@ import org.apache.kafka.streams.query.Query;
 import org.apache.kafka.streams.query.QueryConfig;
 import org.apache.kafka.streams.query.QueryResult;
 import org.apache.kafka.streams.query.RangeQuery;
+import org.apache.kafka.streams.query.ResultOrder;
 import org.apache.kafka.streams.query.VersionedKeyQuery;
 import org.apache.kafka.streams.query.WindowKeyQuery;
 import org.apache.kafka.streams.query.WindowRangeQuery;
@@ -199,12 +200,12 @@ public final class StoreQueryUtils {
         final RangeQuery<Bytes, byte[]> rangeQuery = (RangeQuery<Bytes, byte[]>) query;
         final Optional<Bytes> lowerRange = rangeQuery.getLowerBound();
         final Optional<Bytes> upperRange = rangeQuery.getUpperBound();
-        final boolean isKeyAscending = rangeQuery.isKeyAscending();
+        final ResultOrder order = rangeQuery.resultOrder();
         final KeyValueIterator<Bytes, byte[]> iterator;
         try {
-            if (!lowerRange.isPresent() && !upperRange.isPresent() && isKeyAscending) {
+            if (!lowerRange.isPresent() && !upperRange.isPresent() && !order.equals(ResultOrder.DESCENDING)) {
                 iterator = kvStore.all();
-            } else if (isKeyAscending) {
+            } else if (!order.equals(ResultOrder.DESCENDING)) {
                 iterator = kvStore.range(lowerRange.orElse(null), upperRange.orElse(null));
             } else if (!lowerRange.isPresent() && !upperRange.isPresent()) {
                 iterator = kvStore.reverseAll();

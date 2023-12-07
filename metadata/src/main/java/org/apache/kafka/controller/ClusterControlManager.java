@@ -293,7 +293,7 @@ public class ClusterControlManager {
     public void activate() {
         heartbeatManager = new BrokerHeartbeatManager(logContext, time, sessionTimeoutNs);
         for (BrokerRegistration registration : brokerRegistrations.values()) {
-            heartbeatManager.touch(registration.id(), registration.fenced(), -1);
+            heartbeatManager.register(registration.id(), registration.fenced());
         }
     }
 
