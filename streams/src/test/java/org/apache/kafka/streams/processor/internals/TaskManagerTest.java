@@ -2265,8 +2265,12 @@ public class TaskManagerTest {
     }
 
     @Test
-    public void shouldReInitializeThreadProducerOnHandleLostAllIfEosV2Enabled() {
+    public void shouldReInitializeThreadProducerOnHandleLostAllIfEosV2Enabled() throws Exception {
         final TaskManager taskManager = setUpTaskManager(ProcessingMode.EXACTLY_ONCE_V2, false);
+
+        final StreamThread mockThread = mock(StreamThread.class);
+        mockThread.threadProducerInstanceIdFuture = new KafkaFutureImpl<>();
+        taskManager.setStreamThread(mockThread);
 
         taskManager.handleLostAll();
 
