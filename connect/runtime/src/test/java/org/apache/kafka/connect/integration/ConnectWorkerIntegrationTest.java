@@ -45,6 +45,7 @@ import java.util.Objects;
 import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static javax.ws.rs.core.Response.Status.INTERNAL_SERVER_ERROR;
 import static org.apache.kafka.clients.CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG;
@@ -64,13 +65,13 @@ import static org.apache.kafka.connect.runtime.distributed.DistributedConfig.CON
 import static org.apache.kafka.connect.runtime.distributed.DistributedConfig.SCHEDULED_REBALANCE_MAX_DELAY_MS_CONFIG;
 import static org.apache.kafka.connect.runtime.rest.resources.ConnectResource.DEFAULT_REST_REQUEST_TIMEOUT_MS;
 import static org.apache.kafka.connect.util.clusters.ConnectAssertions.CONNECTOR_SETUP_DURATION_MS;
+import static org.apache.kafka.test.TestUtils.waitForCondition;
 import static org.hamcrest.CoreMatchers.containsString;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 
 /**
  * Test simple operations on the workers of a Connect cluster.
@@ -810,25 +811,18 @@ public class ConnectWorkerIntegrationTest {
         // Bring down Kafka, which should cause some REST requests to fail
         log.info("Stopping Kafka cluster");
         connect.kafka().stopOnlyKafka();
-        // Allow for the workers to discover that the coordinator is unavailable, wait is
-        // heartbeat timeout * 2 + 4sec
-        Thread.sleep(TimeUnit.SECONDS.toMillis(10));
 
-        connect.requestTimeout(5_000);
         // Try to reconfigure the connector, which should fail with a timeout error
         log.info("Trying to reconfigure connector while Kafka cluster is down");
-        ConnectRestException e = assertThrows(
-                ConnectRestException.class,
-                () -> connect.configureConnector(CONNECTOR_NAME, connectorConfig2)
+        assertTimeoutException(
+                () -> connect.configureConnector(CONNECTOR_NAME, connectorConfig2),
+                "flushing updates to the status topic"
         );
-        String expectedStageDescription = "flushing updates to the status topic";
-        assertTimeoutException(e, expectedStageDescription);
         log.info("Restarting Kafka cluster");
         connect.kafka().startOnlyKafkaOnSamePorts();
         connect.assertions().assertExactlyNumBrokersAreUp(1, "Broker did not complete startup in time");
         log.info("Kafka cluster is restarted");
 
-        connect.requestTimeout(DEFAULT_REST_REQUEST_TIMEOUT_MS);
         // Reconfigure the connector to ensure that the broker has completed startup
         log.info("Reconfiguring connector with one more task");
         connect.configureConnector(CONNECTOR_NAME, connectorConfig2);
@@ -840,33 +834,57 @@ public class ConnectWorkerIntegrationTest {
         log.info("Deleting Kafka Connect config topic");
         connect.kafka().deleteTopic(configTopic);
 
-        connect.requestTimeout(5_000);
         // Try to delete the connector, which should fail with a slightly-different timeout error
         log.info("Trying to reconfigure connector after config topic has been deleted");
-        e = assertThrows(
-                ConnectRestException.class,
-                () -> connect.deleteConnector(CONNECTOR_NAME)
+        assertTimeoutException(
+                () -> connect.deleteConnector(CONNECTOR_NAME),
+                "removing the config for connector " + CONNECTOR_NAME + " from the config topic"
         );
-        expectedStageDescription = "removing the config for connector " + CONNECTOR_NAME + " from the config topic";
-        assertTimeoutException(e, expectedStageDescription);
 
         // The worker should still be blocked on the same operation
         log.info("Trying again to reconfigure connector after config topic has been deleted");
-        e = assertThrows(
-                ConnectRestException.class,
-                () -> connect.configureConnector(CONNECTOR_NAME, connectorConfig1)
+        assertTimeoutException(
+                () -> connect.configureConnector(CONNECTOR_NAME, connectorConfig1),
+                "removing the config for connector " + CONNECTOR_NAME + " from the config topic"
         );
-        expectedStageDescription = "removing the config for connector " + CONNECTOR_NAME + " from the config topic";
-        assertTimeoutException(e, expectedStageDescription);
     }
 
-    private static void assertTimeoutException(ConnectRestException exception, String expectedStageDescription) {
-        assertEquals(INTERNAL_SERVER_ERROR.getStatusCode(), exception.statusCode());
-        assertNotNull(exception.getMessage());
-        assertTrue(
-                "Message '" + exception.getMessage() + "' does not match expected format",
-                exception.getMessage().contains("Request timed out. The worker is currently " + expectedStageDescription)
+    private void assertTimeoutException(Runnable operation, String expectedStageDescription) throws InterruptedException {
+        connect.requestTimeout(1_000);
+        AtomicReference<Throwable> latestError = new AtomicReference<>();
+        waitForCondition(
+                () -> {
+                    try {
+                        operation.run();
+                        latestError.set(null);
+                        return false;
+                    } catch (Throwable t) {
+                        latestError.set(t);
+                        assertTrue(t instanceof ConnectRestException);
+                        ConnectRestException restException = (ConnectRestException) t;
+
+                        assertEquals(INTERNAL_SERVER_ERROR.getStatusCode(), restException.statusCode());
+                        assertNotNull(restException.getMessage());
+                        assertTrue(
+                                "Message '" + restException.getMessage() + "' does not match expected format",
+                                restException.getMessage().contains("Request timed out. The worker is currently " + expectedStageDescription)
+                        );
+
+                        return true;
+                    }
+                },
+                30_000,
+                () -> {
+                    String baseMessage = "REST request did not time out with expected error message in time. ";
+                    Throwable t = latestError.get();
+                    if (t == null) {
+                        return baseMessage + "The most recent request did not fail.";
+                    } else {
+                        return baseMessage + "Most recent error: " + t;
+                    }
+                }
         );
+        connect.requestTimeout(DEFAULT_REST_REQUEST_TIMEOUT_MS);
     }
 
     private Map<String, String> defaultSourceConnectorProps(String topic) {
