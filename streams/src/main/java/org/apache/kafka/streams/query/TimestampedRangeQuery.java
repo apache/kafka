@@ -103,7 +103,7 @@ public final class TimestampedRangeQuery<K, V> implements Query<KeyValueIterator
     }
 
     /**
-     * Set the query to return the serialized byte[] of the keys in Ascending order.
+     * Set the query to return the serialized byte[] of the keys in ascending order.
      * Order is based on the serialized byte[] of the keys, not the 'logical' key order.
      * @return a new RangeQuery instance with ascending flag set.
      */
