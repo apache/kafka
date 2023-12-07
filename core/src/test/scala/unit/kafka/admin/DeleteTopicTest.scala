@@ -456,19 +456,26 @@ class DeleteTopicTest extends QuorumTestHarness {
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testDisableDeleteTopic(quorum: String): Unit = {
-    val topicPartition = new TopicPartition("test", 0)
-    val topic = topicPartition.topic
+    val topicPartition = new TopicPartition(topic, 0)
+
+    if (isKRaftTest()) {
+      // Restart KRaft quorum with the updated config
+      val overridingProps = new Properties()
+      overridingProps.put(KafkaConfig.DeleteTopicEnableProp, false)
+      implementation = newKRaftQuorum(overridingProps)
+    }
+
     brokers = createTestTopicAndCluster(topic, deleteTopicEnabled = false)
     // in ZK mode, exception is returned when delete topic not enabled
     TestUtils.waitUntilTrue(() => {
       try {
         admin.deleteTopics(Collections.singletonList(topic)).all().get()
-        true
+        false
       } catch {
         case e: ExecutionException =>
           classOf[TopicDeletionDisabledException].equals(e.getCause.getClass)
       }
-    }, s"Topic ${topic} should be marked for deletion or already deleted.")
+    }, s"TopicDeletionDisabledException should be returned when deleting ${topic}.")
 
     if (!isKRaftTest()) {
       TestUtils.waitUntilTrue(() => !zkClient.isTopicMarkedForDeletion(topic),
@@ -478,6 +485,7 @@ class DeleteTopicTest extends QuorumTestHarness {
     }
     // verify that topic test is untouched
     assertTrue(brokers.forall(_.logManager.getLog(topicPartition).isDefined))
+    assertDoesNotThrow(() => TestUtils.describeTopic(admin, topic))
     // topic test should have a leader
     TestUtils.waitUntilLeaderIsKnown(brokers, topicPartition)
   }
