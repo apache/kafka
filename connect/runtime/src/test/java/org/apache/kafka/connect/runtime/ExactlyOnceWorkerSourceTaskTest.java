@@ -1157,7 +1157,7 @@ public class ExactlyOnceWorkerSourceTaskTest {
         verify(headerConverter).close();
 
         if (taskStarted) {
-            verify(sourceTask).stop();
+            verify(sourceTask).stop(false);
         }
 
         if (taskFailed) {

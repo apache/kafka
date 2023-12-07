@@ -348,7 +348,7 @@ public class WorkerSinkTaskTest {
         // WorkerSinkTask::stop
         consumer.wakeup();
         PowerMock.expectLastCall();
-        sinkTask.stop();
+        sinkTask.stop(false);
         PowerMock.expectLastCall();
 
         EasyMock.expect(consumer.assignment()).andReturn(INITIAL_ASSIGNMENT);

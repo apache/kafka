@@ -809,7 +809,7 @@ public class WorkerTest {
 
         // Called when we stop the worker
         verify(instantiatedTask).loader();
-        verify(instantiatedTask).stop();
+        verify(instantiatedTask).stop(false);
         verifyTaskConverter(WorkerConfig.KEY_CONVERTER_CLASS_CONFIG);
         verifyTaskConverter(WorkerConfig.VALUE_CONVERTER_CLASS_CONFIG);
         verifyTaskHeaderConverter();
@@ -908,7 +908,7 @@ public class WorkerTest {
         WorkerSourceTask constructedMockTask = sourceTaskMockedConstruction.constructed().get(0);
         verify(constructedMockTask).initialize(taskConfig);
         verify(constructedMockTask).loader();
-        verify(constructedMockTask).stop();
+        verify(constructedMockTask).stop(false);
         verify(constructedMockTask).awaitStop(anyLong());
         verify(constructedMockTask).removeMetrics();
         verifyKafkaClusterId();
@@ -961,7 +961,7 @@ public class WorkerTest {
         verify(instantiatedTask).initialize(taskConfig);
 
         // Remove
-        verify(instantiatedTask).stop();
+        verify(instantiatedTask).stop(false);
         verify(instantiatedTask).awaitStop(anyLong());
         verify(instantiatedTask).removeMetrics();
 

@@ -65,6 +65,7 @@ abstract class WorkerTask implements Runnable {
     private volatile boolean failed;
     private volatile boolean stopping;   // indicates whether the Worker has asked the task to stop
     private volatile boolean cancelled;  // indicates whether the Worker has cancelled the task (e.g. because of slow shutdown)
+    private volatile boolean deletedConnector; // indicates whether the task has been stopped due to a deleted connector
     private final ErrorHandlingMetrics errorMetrics;
 
     protected final RetryWithToleranceOperator retryWithToleranceOperator;
@@ -87,6 +88,7 @@ abstract class WorkerTask implements Runnable {
         this.failed = false;
         this.stopping = false;
         this.cancelled = false;
+        this.deletedConnector = false;
         this.taskMetricsGroup.recordState(this.targetState);
         this.retryWithToleranceOperator = retryWithToleranceOperator;
         this.time = time;
@@ -109,9 +111,10 @@ abstract class WorkerTask implements Runnable {
     public abstract void initialize(TaskConfig taskConfig);
 
 
-    private void triggerStop() {
+    private void triggerStop(boolean deletedConnector) {
         synchronized (this) {
-            stopping = true;
+            this.stopping = true;
+            this.deletedConnector = deletedConnector;
 
             // wakeup any threads that are waiting for unpause
             this.notifyAll();
@@ -123,7 +126,17 @@ abstract class WorkerTask implements Runnable {
      * shutdown. Use {@link #awaitStop} to block until completion.
      */
     public void stop() {
-        triggerStop();
+        triggerStop(false);
+    }
+
+    /**
+     * Stop this task from processing messages. This method does not block, it only triggers
+     * shutdown. Use #{@link #awaitStop} to block until completion.
+     *
+     * @param deletedConnector indicates if the connector has been deleted.
+     */
+    public void stop(boolean deletedConnector) {
+        triggerStop(deletedConnector);
     }
 
     /**
@@ -178,6 +191,10 @@ abstract class WorkerTask implements Runnable {
         return cancelled;
     }
 
+    protected boolean isDeletedConnector() {
+        return deletedConnector;
+    }
+
     private void doClose() {
         try {
             close();
@@ -219,7 +236,7 @@ abstract class WorkerTask implements Runnable {
 
     private void onShutdown() {
         synchronized (this) {
-            triggerStop();
+            triggerStop(false);
 
             // if we were cancelled, skip the status update since the task may have already been
             // started somewhere else
@@ -230,7 +247,7 @@ abstract class WorkerTask implements Runnable {
 
     protected void onFailure(Throwable t) {
         synchronized (this) {
-            triggerStop();
+            triggerStop(false);
 
             // if we were cancelled, skip the status update since the task may have already been
             // started somewhere else

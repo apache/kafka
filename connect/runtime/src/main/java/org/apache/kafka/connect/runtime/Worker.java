@@ -998,7 +998,7 @@ public class Worker {
         return null;
     }
 
-    private void stopTask(ConnectorTaskId taskId) {
+    private void stopTask(ConnectorTaskId taskId, boolean deletedConnector) {
         try (LoggingContext loggingContext = LoggingContext.forTask(taskId)) {
             WorkerTask task = tasks.get(taskId);
             if (task == null) {
@@ -1011,16 +1011,20 @@ public class Worker {
                 sourceTaskOffsetCommitter.ifPresent(committer -> committer.remove(task.id()));
 
             try (LoaderSwap loaderSwap = plugins.withClassLoader(task.loader())) {
-                task.stop();
+                task.stop(deletedConnector);
             }
         }
     }
 
     private void stopTasks(Collection<ConnectorTaskId> ids) {
+        stopTasks(ids, false);
+    }
+
+    private void stopTasks(Collection<ConnectorTaskId> ids, boolean deletedConnector) {
         // Herder is responsible for stopping tasks. This is an internal method to sequentially
         // stop the tasks that have not explicitly been stopped.
         for (ConnectorTaskId taskId : ids) {
-            stopTask(taskId);
+            stopTask(taskId, deletedConnector);
         }
     }
 
@@ -1074,12 +1078,33 @@ public class Worker {
     }
 
     /**
+     * Stop asynchronously a collection of tasks that belong to this worker and await their termination.
+     *
+     * @param ids the collection of tasks to be stopped.
+     * @param deletedConnector indicates if the connector has been deleted.
+     */
+    public void stopAndAwaitTasks(Collection<ConnectorTaskId> ids, boolean deletedConnector) {
+        stopTasks(ids, deletedConnector);
+        awaitStopTasks(ids);
+    }
+
+    /**
      * Stop a task that belongs to this worker and await its termination.
      *
      * @param taskId the ID of the task to be stopped.
      */
     public void stopAndAwaitTask(ConnectorTaskId taskId) {
-        stopTask(taskId);
+        stopAndAwaitTask(taskId, false);
+    }
+
+    /**
+     * Stop a task that belongs to this worker and await its termination.
+     *
+     * @param taskId the ID of the task to be stopped.
+     * @param deletedConnector indicates if the connector has been deleted.
+     */
+    public void stopAndAwaitTask(ConnectorTaskId taskId, boolean deletedConnector) {
+        stopTask(taskId, deletedConnector);
         awaitStopTasks(Collections.singletonList(taskId));
     }
 

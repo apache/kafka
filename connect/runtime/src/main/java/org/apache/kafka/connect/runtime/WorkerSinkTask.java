@@ -175,7 +175,7 @@ class WorkerSinkTask extends WorkerTask {
         // FIXME Kafka needs to add a timeout parameter here for us to properly obey the timeout
         // passed in
         try {
-            task.stop();
+            task.stop(isDeletedConnector());
         } catch (Throwable t) {
             log.warn("Could not stop task", t);
         }
