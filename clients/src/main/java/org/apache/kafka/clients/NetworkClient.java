@@ -38,10 +38,13 @@ import org.apache.kafka.common.requests.AbstractResponse;
 import org.apache.kafka.common.requests.ApiVersionsRequest;
 import org.apache.kafka.common.requests.ApiVersionsResponse;
 import org.apache.kafka.common.requests.CorrelationIdMismatchException;
+import org.apache.kafka.common.requests.GetTelemetrySubscriptionsResponse;
 import org.apache.kafka.common.requests.MetadataRequest;
 import org.apache.kafka.common.requests.MetadataResponse;
+import org.apache.kafka.common.requests.PushTelemetryResponse;
 import org.apache.kafka.common.requests.RequestHeader;
 import org.apache.kafka.common.security.authenticator.SaslClientAuthenticator;
+import org.apache.kafka.common.telemetry.internals.ClientTelemetrySender;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
@@ -128,6 +131,8 @@ public class NetworkClient implements KafkaClient {
 
     private final AtomicReference<State> state;
 
+    private final TelemetrySender telemetrySender;
+
     public NetworkClient(Selectable selector,
                          Metadata metadata,
                          String clientId,
@@ -194,7 +199,8 @@ public class NetworkClient implements KafkaClient {
              apiVersions,
              throttleTimeSensor,
              logContext,
-             new DefaultHostResolver());
+             new DefaultHostResolver(),
+             null);
     }
 
     public NetworkClient(Selectable selector,
@@ -229,7 +235,8 @@ public class NetworkClient implements KafkaClient {
              apiVersions,
              null,
              logContext,
-             new DefaultHostResolver());
+             new DefaultHostResolver(),
+             null);
     }
 
     public NetworkClient(MetadataUpdater metadataUpdater,
@@ -249,7 +256,8 @@ public class NetworkClient implements KafkaClient {
                          ApiVersions apiVersions,
                          Sensor throttleTimeSensor,
                          LogContext logContext,
-                         HostResolver hostResolver) {
+                         HostResolver hostResolver,
+                         ClientTelemetrySender clientTelemetrySender) {
         /* It would be better if we could pass `DefaultMetadataUpdater` from the public constructor, but it's not
          * possible because `DefaultMetadataUpdater` is an inner class and it can only be instantiated after the
          * super constructor is invoked.
@@ -279,6 +287,7 @@ public class NetworkClient implements KafkaClient {
         this.throttleTimeSensor = throttleTimeSensor;
         this.log = logContext.logger(NetworkClient.class);
         this.state = new AtomicReference<>(State.ACTIVE);
+        this.telemetrySender = (clientTelemetrySender != null) ? new TelemetrySender(clientTelemetrySender) : null;
     }
 
     /**
@@ -361,6 +370,8 @@ public class NetworkClient implements KafkaClient {
                 }
             } else if (request.header.apiKey() == ApiKeys.METADATA) {
                 metadataUpdater.handleFailedRequest(now, Optional.empty());
+            } else if (isTelemetryApi(request.header.apiKey()) && telemetrySender != null) {
+                telemetrySender.handleFailedRequest(request.header.apiKey(), null);
             }
         }
     }
@@ -522,6 +533,8 @@ public class NetworkClient implements KafkaClient {
                 abortedSends.add(clientResponse);
             else if (clientRequest.apiKey() == ApiKeys.METADATA)
                 metadataUpdater.handleFailedRequest(now, Optional.of(unsupportedVersionException));
+            else if (isTelemetryApi(clientRequest.apiKey()) && telemetrySender != null)
+                telemetrySender.handleFailedRequest(clientRequest.apiKey(), unsupportedVersionException);
         }
     }
 
@@ -567,8 +580,9 @@ public class NetworkClient implements KafkaClient {
         }
 
         long metadataTimeout = metadataUpdater.maybeUpdate(now);
+        long telemetryTimeout = telemetrySender != null ? telemetrySender.maybeUpdate(now) : Integer.MAX_VALUE;
         try {
-            this.selector.poll(Utils.min(timeout, metadataTimeout, defaultRequestTimeoutMs));
+            this.selector.poll(Utils.min(timeout, metadataTimeout, telemetryTimeout, defaultRequestTimeoutMs));
         } catch (IOException e) {
             log.error("Unexpected error during I/O", e);
         }
@@ -663,6 +677,8 @@ public class NetworkClient implements KafkaClient {
         if (state.compareAndSet(State.CLOSING, State.CLOSED)) {
             this.selector.close();
             this.metadataUpdater.close();
+            if (telemetrySender != null)
+                telemetrySender.close();
         } else {
             log.warn("Attempting to close NetworkClient that has already been closed.");
         }
@@ -925,6 +941,10 @@ public class NetworkClient implements KafkaClient {
                 metadataUpdater.handleSuccessfulResponse(req.header, now, (MetadataResponse) response);
             else if (req.isInternalRequest && response instanceof ApiVersionsResponse)
                 handleApiVersionsResponse(responses, req, now, (ApiVersionsResponse) response);
+            else if (req.isInternalRequest && response instanceof GetTelemetrySubscriptionsResponse)
+                telemetrySender.handleResponse((GetTelemetrySubscriptionsResponse) response);
+            else if (req.isInternalRequest && response instanceof PushTelemetryResponse)
+                telemetrySender.handleResponse((PushTelemetryResponse) response);
             else
                 responses.add(req.completed(response, now));
         }
@@ -1040,6 +1060,25 @@ public class NetworkClient implements KafkaClient {
             // Notify metadata updater of the connection failure
             metadataUpdater.handleServerDisconnect(now, nodeConnectionId, Optional.empty());
         }
+    }
+
+    /**
+     * Return true if there's at least one connection establishment is currently underway
+     */
+    private boolean isAnyNodeConnecting() {
+        for (Node node : metadataUpdater.fetchNodes()) {
+            if (connectionStates.isConnecting(node.idString())) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Return true if the ApiKey belongs to the Telemetry API.
+     */
+    private boolean isTelemetryApi(ApiKeys apiKey) {
+        return apiKey == ApiKeys.GET_TELEMETRY_SUBSCRIPTIONS || apiKey == ApiKeys.PUSH_TELEMETRY;
     }
 
     class DefaultMetadataUpdater implements MetadataUpdater {
@@ -1162,18 +1201,6 @@ public class NetworkClient implements KafkaClient {
         }
 
         /**
-         * Return true if there's at least one connection establishment is currently underway
-         */
-        private boolean isAnyNodeConnecting() {
-            for (Node node : fetchNodes()) {
-                if (connectionStates.isConnecting(node.idString())) {
-                    return true;
-                }
-            }
-            return false;
-        }
-
-        /**
          * Add a metadata request to the list of sends if we can make one
          */
         private long maybeUpdate(long now, Node node) {
@@ -1222,6 +1249,95 @@ public class NetworkClient implements KafkaClient {
 
     }
 
+    class TelemetrySender {
+
+        private final ClientTelemetrySender clientTelemetrySender;
+        private Node stickyNode;
+
+        public TelemetrySender(ClientTelemetrySender clientTelemetrySender) {
+            this.clientTelemetrySender = clientTelemetrySender;
+        }
+
+        public long maybeUpdate(long now) {
+            long timeToNextUpdate = clientTelemetrySender.timeToNextUpdate(defaultRequestTimeoutMs);
+            if (timeToNextUpdate > 0)
+                return timeToNextUpdate;
+
+            // Per KIP-714, let's continue to re-use the same broker for as long as possible.
+            if (stickyNode == null) {
+                stickyNode = leastLoadedNode(now);
+                if (stickyNode == null) {
+                    log.debug("Give up sending telemetry request since no node is available");
+                    return reconnectBackoffMs;
+                }
+            }
+
+            return maybeUpdate(now, stickyNode);
+        }
+
+        private long maybeUpdate(long now, Node node) {
+            String nodeConnectionId = node.idString();
+
+            if (canSendRequest(nodeConnectionId, now)) {
+                Optional<AbstractRequest.Builder<?>> requestOpt = clientTelemetrySender.createRequest();
+
+                if (!requestOpt.isPresent())
+                    return Long.MAX_VALUE;
+
+                AbstractRequest.Builder<?> request = requestOpt.get();
+                ClientRequest clientRequest = newClientRequest(nodeConnectionId, request, now, true);
+                doSend(clientRequest, true, now);
+                return defaultRequestTimeoutMs;
+            } else {
+                // Per KIP-714, if we can't issue a request to this broker node, let's clear it out
+                // and try another broker on the next loop.
+                stickyNode = null;
+            }
+
+            // If there's any connection establishment underway, wait until it completes. This prevents
+            // the client from unnecessarily connecting to additional nodes while a previous connection
+            // attempt has not been completed.
+            if (isAnyNodeConnecting())
+                return reconnectBackoffMs;
+
+            if (connectionStates.canConnect(nodeConnectionId, now)) {
+                // We don't have a connection to this node right now, make one
+                log.debug("Initialize connection to node {} for sending telemetry request", node);
+                initiateConnect(node, now);
+                return reconnectBackoffMs;
+            }
+
+            // In either case, we just need to wait for a network event to let us know the selected
+            // connection might be usable again.
+            return Long.MAX_VALUE;
+        }
+
+        public void handleResponse(GetTelemetrySubscriptionsResponse response) {
+            clientTelemetrySender.handleResponse(response);
+        }
+
+        public void handleResponse(PushTelemetryResponse response) {
+            clientTelemetrySender.handleResponse(response);
+        }
+
+        public void handleFailedRequest(ApiKeys apiKey, KafkaException maybeFatalException) {
+            if (apiKey == ApiKeys.GET_TELEMETRY_SUBSCRIPTIONS)
+                clientTelemetrySender.handleFailedGetTelemetrySubscriptionsRequest(maybeFatalException);
+            else if (apiKey == ApiKeys.PUSH_TELEMETRY)
+                clientTelemetrySender.handleFailedPushTelemetryRequest(maybeFatalException);
+            else
+                throw new IllegalStateException("Invalid api key for failed telemetry request");
+        }
+
+        public void close() {
+            try {
+                clientTelemetrySender.close();
+            } catch (Exception exception) {
+                log.error("Failed to close client telemetry sender", exception);
+            }
+        }
+    }
+
     @Override
     public ClientRequest newClientRequest(String nodeId,
                                           AbstractRequest.Builder<?> requestBuilder,
@@ -1237,6 +1353,11 @@ public class NetworkClient implements KafkaClient {
             correlation = SaslClientAuthenticator.MAX_RESERVED_CORRELATION_ID + 1;
         }
         return correlation++;
+    }
+
+    // visible for testing
+    Node telemetryConnectedNode() {
+        return telemetrySender.stickyNode;
     }
 
     @Override

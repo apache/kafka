@@ -37,8 +37,15 @@ class ReplicationReplicaFailureTest(EndToEndTest):
         super(ReplicationReplicaFailureTest, self).__init__(test_context=test_context, topic=None)
 
     @cluster(num_nodes=7)
-    @matrix(metadata_quorum=quorum.all_non_upgrade)
-    def test_replication_with_replica_failure(self, metadata_quorum=quorum.zk):
+    @matrix(
+        metadata_quorum=[quorum.zk],
+        use_new_coordinator=[False]
+    )
+    @matrix(
+        metadata_quorum=[quorum.isolated_kraft],
+        use_new_coordinator=[True, False]
+    )
+    def test_replication_with_replica_failure(self, metadata_quorum=quorum.zk, use_new_coordinator=False):
         """
         This test verifies that replication shrinks the ISR when a replica is not fetching anymore.
         It also verifies that replication provides simple durability guarantees by checking that data acked by

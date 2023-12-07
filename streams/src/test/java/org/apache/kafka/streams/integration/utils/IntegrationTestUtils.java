@@ -31,6 +31,7 @@ import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.message.UpdateMetadataRequestData.UpdateMetadataPartitionState;
@@ -46,7 +47,9 @@ import org.apache.kafka.streams.StoreQueryParameters;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
+import org.apache.kafka.streams.processor.StandbyUpdateListener;
 import org.apache.kafka.streams.processor.StateRestoreListener;
+import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.StreamThread;
 import org.apache.kafka.streams.processor.internals.ThreadStateTransitionValidator;
 import org.apache.kafka.streams.processor.internals.assignment.AssignorConfiguration.AssignmentListener;
@@ -239,20 +242,24 @@ public class IntegrationTestUtils {
      * Used by tests migrated to JUnit 5.
      */
     public static String safeUniqueTestName(final Class<?> testClass, final TestInfo testInfo) {
-        final String displayName = testInfo.getDisplayName();
         final String methodName = testInfo.getTestMethod().map(Method::getName).orElse("unknownMethodName");
-        final String testName = displayName.contains(methodName) ? methodName : methodName + displayName;
-        return safeUniqueTestName(testClass, testName);
+        return sanitize(methodName + Uuid.randomUuid().toString());
     }
 
     private static String safeUniqueTestName(final Class<?> testClass, final String testName) {
-        return (testClass.getSimpleName() + testName)
-                .replace(':', '_')
-                .replace('.', '_')
-                .replace('[', '_')
-                .replace(']', '_')
-                .replace(' ', '_')
-                .replace('=', '_');
+        return sanitize(testClass.getSimpleName() + testName);
+    }
+
+    private static String sanitize(final String str) {
+        return str
+            // The `-` is used in Streams' thread name as a separator and some tests rely on this.
+            .replace('-', '_')
+            .replace(':', '_')
+            .replace('.', '_')
+            .replace('[', '_')
+            .replace(']', '_')
+            .replace(' ', '_')
+            .replace('=', '_');
     }
 
     /**
@@ -1542,6 +1549,28 @@ public class IntegrationTestUtils {
                 totalNumRestored += numRestored.get();
             }
             return totalNumRestored;
+        }
+    }
+
+    public static class TrackingStandbyUpdateListener implements StandbyUpdateListener {
+        public final List<TopicPartition> promotedPartitions = new ArrayList<>();
+
+
+        @Override
+        public void onUpdateStart(final TopicPartition topicPartition, final String storeName, final long startingOffset) {
+
+        }
+
+        @Override
+        public void onBatchLoaded(final TopicPartition topicPartition, final String storeName, final TaskId taskId, final long batchEndOffset, final long batchSize, final long currentEndOffset) {
+
+        }
+
+        @Override
+        public void onUpdateSuspended(final TopicPartition topicPartition, final String storeName, final long storeOffset, final long currentEndOffset, final SuspendReason reason) {
+            if (reason.equals(SuspendReason.PROMOTED)) {
+                promotedPartitions.add(topicPartition);
+            }
         }
     }
 

@@ -25,12 +25,31 @@ package org.apache.kafka.coordinator.group.runtime;
  * @param <U> The type of the record.
  */
 public interface CoordinatorPlayback<U> {
-
     /**
      * Applies the given record to this object.
      *
-     * @param record A record.
+     * @param producerId    The producer id.
+     * @param producerEpoch The producer epoch.
+     * @param record        A record.
      * @throws RuntimeException if the record can not be applied.
      */
-    void replay(U record) throws RuntimeException;
+    void replay(
+        long producerId,
+        short producerEpoch,
+        U record
+    ) throws RuntimeException;
+
+    /**
+     * Invoke operations when a batch has been successfully loaded.
+     *
+     * @param offset the offset of the last record in the batch plus one.
+     */
+    void updateLastWrittenOffset(Long offset);
+
+    /**
+     * Called when the high watermark advances.
+     *
+     * @param offset The offset of the new high watermark.
+     */
+    void updateLastCommittedOffset(Long offset);
 }

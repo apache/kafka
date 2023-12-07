@@ -193,6 +193,10 @@ abstract class QuorumTestHarness extends Logging {
     TestInfoUtils.isNewGroupCoordinatorEnabled(testInfo)
   }
 
+  def maybeGroupProtocolSpecified(testInfo: TestInfo): Option[GroupProtocol] = {
+    TestInfoUtils.maybeGroupProtocolSpecified(testInfo)
+  }
+
   def checkIsZKTest(): Unit = {
     if (isKRaftTest()) {
       throw new RuntimeException("This function can't be accessed when running the test " +

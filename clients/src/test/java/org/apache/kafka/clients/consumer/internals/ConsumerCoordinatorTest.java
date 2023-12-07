@@ -3568,8 +3568,6 @@ public abstract class ConsumerCoordinatorTest {
             assertFalse(client.hasPendingResponses());
             assertEquals(1, client.inFlightRequestCount());
 
-            System.out.println(client.requests());
-
             // Retry join should then succeed
             client.respond(joinGroupFollowerResponse(generationId, memberId, "leader", Errors.NONE));
             client.prepareResponse(syncGroupResponse(partitions, Errors.NONE));
@@ -3702,7 +3700,8 @@ public abstract class ConsumerCoordinatorTest {
             autoCommitIntervalMs,
             null,
             true,
-            null);
+            null,
+            Optional.empty());
 
         client.prepareResponse(groupCoordinatorResponse(node, Errors.NONE));
         client.setNodeApiVersions(NodeApiVersions.create(ApiKeys.OFFSET_FETCH.id, (short) 0, upperVersion));
@@ -3865,7 +3864,8 @@ public abstract class ConsumerCoordinatorTest {
                 autoCommitIntervalMs,
                 null,
                 false,
-                null);
+                null,
+                Optional.empty());
     }
 
     private Collection<TopicPartition> getRevoked(final List<TopicPartition> owned,
@@ -4091,7 +4091,7 @@ public abstract class ConsumerCoordinatorTest {
 
         coordinator = new ConsumerCoordinator(rebalanceConfig, new LogContext(), consumerClient,
                 Collections.singletonList(assignor), metadata, subscriptions,
-                metrics, consumerId + groupId, time, false, autoCommitIntervalMs, null, false, rackId);
+                metrics, consumerId + groupId, time, false, autoCommitIntervalMs, null, false, rackId, Optional.empty());
     }
 
     private static MetadataResponse rackAwareMetadata(int numNodes,

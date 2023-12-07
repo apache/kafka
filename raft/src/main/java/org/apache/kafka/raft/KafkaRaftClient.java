@@ -1257,7 +1257,8 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
      * - {@link Errors#POSITION_OUT_OF_RANGE} if the request snapshot offset out of range
      */
     private FetchSnapshotResponseData handleFetchSnapshotRequest(
-        RaftRequest.Inbound requestMetadata
+        RaftRequest.Inbound requestMetadata,
+        long currentTimeMs
     ) {
         FetchSnapshotRequestData data = (FetchSnapshotRequestData) requestMetadata.data;
 
@@ -1339,6 +1340,9 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
         }
 
         UnalignedRecords records = snapshot.slice(partitionSnapshot.position(), Math.min(data.maxBytes(), maxSnapshotSize));
+
+        LeaderState<T> state = quorum.leaderStateOrThrow();
+        state.updateCheckQuorumForFollowingVoter(data.replicaId(), currentTimeMs);
 
         return FetchSnapshotResponse.singleton(
             log.topicPartition(),
@@ -1701,7 +1705,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
                 break;
 
             case FETCH_SNAPSHOT:
-                responseFuture = completedFuture(handleFetchSnapshotRequest(request));
+                responseFuture = completedFuture(handleFetchSnapshotRequest(request, currentTimeMs));
                 break;
 
             default:
@@ -1875,6 +1879,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
 
         FetchSnapshotRequestData request = FetchSnapshotRequest.singleton(
             clusterId,
+            quorum().localIdOrSentinel(),
             log.topicPartition(),
             snapshotPartition -> {
                 return snapshotPartition
@@ -1990,7 +1995,8 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
         LeaderState<T> state = quorum.leaderStateOrThrow();
         maybeFireLeaderChange(state);
 
-        if (shutdown.get() != null || state.isResignRequested()) {
+        long timeUntilCheckQuorumExpires = state.timeUntilCheckQuorumExpires(currentTimeMs);
+        if (shutdown.get() != null || state.isResignRequested() || timeUntilCheckQuorumExpires == 0) {
             transitionToResigned(state.nonLeaderVotersByDescendingFetchOffset());
             return 0L;
         }
@@ -2006,7 +2012,7 @@ public class KafkaRaftClient<T> implements RaftClient<T> {
             this::buildBeginQuorumEpochRequest
         );
 
-        return Math.min(timeUntilFlush, timeUntilSend);
+        return Math.min(timeUntilFlush, Math.min(timeUntilSend, timeUntilCheckQuorumExpires));
     }
 
     private long maybeSendVoteRequests(
