@@ -112,6 +112,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 
 import static org.apache.kafka.clients.consumer.ConsumerConfig.GROUP_ID_CONFIG;
+import static org.apache.kafka.common.utils.Utils.UncheckedCloseable;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.CONNECTOR_CLIENT_CONSUMER_OVERRIDES_PREFIX;
 import static org.apache.kafka.connect.runtime.WorkerConfig.TOPIC_TRACKING_ENABLE_CONFIG;
 import static org.apache.kafka.connect.runtime.distributed.ConnectProtocol.CONNECT_PROTOCOL_V0;
@@ -412,7 +413,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
 
             log.debug("Ensuring group membership is still active");
             String stageDescription = "ensuring membership in the cluster";
-            member.ensureActive(() -> recordTickThreadStage(stageDescription));
+            member.ensureActive(() -> new TickThreadStage(stageDescription));
             completeTickThreadStage();
             // Ensure we're in a good state in our group. If not restart and everything should be setup to rejoin
             if (!handleRebalanceCompleted()) return;
@@ -552,7 +553,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
                     nextRequestTimeoutMs);
             String pollDurationDescription = scheduledTick != null ? "for up to " + nextRequestTimeoutMs + "ms or " : "";
             String stageDescription = "polling the group coordinator " + pollDurationDescription + "until interrupted";
-            member.poll(nextRequestTimeoutMs, () -> recordTickThreadStage(stageDescription));
+            member.poll(nextRequestTimeoutMs, () -> new TickThreadStage(stageDescription));
             completeTickThreadStage();
             // Ensure we're in a good state in our group. If not restart and everything should be setup to rejoin
             handleRebalanceCompleted();
@@ -2776,7 +2777,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
         tickThreadStage = null;
     }
 
-    private class TickThreadStage implements AutoCloseable {
+    private class TickThreadStage implements UncheckedCloseable {
         public TickThreadStage(String description) {
             if (description != null)
                 recordTickThreadStage(description);

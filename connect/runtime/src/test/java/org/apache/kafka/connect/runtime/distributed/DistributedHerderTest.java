@@ -103,12 +103,14 @@ import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.function.Function;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 import static java.util.Collections.singletonList;
 import static javax.ws.rs.core.Response.Status.FORBIDDEN;
 import static javax.ws.rs.core.Response.Status.SERVICE_UNAVAILABLE;
+import static org.apache.kafka.common.utils.Utils.UncheckedCloseable;
 import static org.apache.kafka.connect.runtime.AbstractStatus.State.FAILED;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.CONNECTOR_CLIENT_CONSUMER_OVERRIDES_PREFIX;
 import static org.apache.kafka.connect.runtime.SourceConnectorConfig.ExactlyOnceSupportLevel.REQUIRED;
@@ -3821,17 +3823,17 @@ public class DistributedHerderTest {
     }
 
     private void expectMemberPoll() {
-        ArgumentCaptor<Runnable> onPoll = ArgumentCaptor.forClass(Runnable.class);
+        ArgumentCaptor<Supplier<UncheckedCloseable>> onPoll = ArgumentCaptor.forClass(Supplier.class);
         doAnswer(invocation -> {
-            onPoll.getValue().run();
+            onPoll.getValue().get().close();
             return null;
         }).when(member).poll(anyLong(), onPoll.capture());
     }
 
     private void expectMemberEnsureActive() {
-        ArgumentCaptor<Runnable> onPoll = ArgumentCaptor.forClass(Runnable.class);
+        ArgumentCaptor<Supplier<UncheckedCloseable>> onPoll = ArgumentCaptor.forClass(Supplier.class);
         doAnswer(invocation -> {
-            onPoll.getValue().run();
+            onPoll.getValue().get().close();
             return null;
         }).when(member).ensureActive(onPoll.capture());
     }
@@ -3889,9 +3891,9 @@ public class DistributedHerderTest {
                                  final List<ConnectorTaskId> assignedTasks,
                                  int delay,
                                  boolean isLeader) {
-        ArgumentCaptor<Runnable> onPoll = ArgumentCaptor.forClass(Runnable.class);
+        ArgumentCaptor<Supplier<UncheckedCloseable>> onPoll = ArgumentCaptor.forClass(Supplier.class);
         doAnswer(invocation -> {
-            onPoll.getValue().run();
+            onPoll.getValue().get().close();
             ExtendedAssignment assignment;
             if (!revokedConnectors.isEmpty() || !revokedTasks.isEmpty()) {
                 rebalanceListener.onRevoked(leader, revokedConnectors, revokedTasks);
