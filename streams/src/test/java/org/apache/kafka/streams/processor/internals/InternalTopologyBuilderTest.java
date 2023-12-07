@@ -1005,6 +1005,19 @@ public class InternalTopologyBuilderTest {
 
     @SuppressWarnings("deprecation")
     @Test
+    @SuppressWarnings("deprecation")
+    public void shouldSetBufferedPartitionsToNegativeValueWhenBothBufferedRecordsPerPartitionAndInputBufferMaxBytesConfigAreSet() {
+        final Properties globalProps = StreamsTestUtils.getStreamsConfig();
+        globalProps.put(StreamsConfig.INPUT_BUFFER_MAX_BYTES_CONFIG, 200L);
+        globalProps.put(StreamsConfig.BUFFERED_RECORDS_PER_PARTITION_CONFIG, 100);
+        final StreamsConfig globalStreamsConfig = new StreamsConfig(globalProps);
+        final InternalTopologyBuilder topologyBuilder = builder.rewriteTopology(globalStreamsConfig);
+        assertThat(topologyBuilder.topologyConfigs(), equalTo(new TopologyConfig(null, globalStreamsConfig, new Properties())));
+        assertThat(topologyBuilder.topologyConfigs().maxBufferedSize, equalTo(-1));
+    }
+
+    @Test
+    @SuppressWarnings("deprecation")
     public void shouldOverrideGlobalStreamsConfigWhenGivenNamedTopologyProps() {
         final Properties topologyOverrides = new Properties();
         topologyOverrides.put(StreamsConfig.STATESTORE_CACHE_MAX_BYTES_CONFIG, 12345L);
@@ -1033,6 +1046,7 @@ public class InternalTopologyBuilderTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void shouldNotOverrideGlobalStreamsConfigWhenGivenUnnamedTopologyProps() {
         final Properties streamsProps = StreamsTestUtils.getStreamsConfig();
         streamsProps.put(StreamsConfig.STATESTORE_CACHE_MAX_BYTES_CONFIG, 12345L);

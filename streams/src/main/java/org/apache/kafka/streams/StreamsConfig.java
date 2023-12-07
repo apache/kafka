@@ -475,8 +475,14 @@ public class StreamsConfig extends AbstractConfig {
 
     /** {@code buffered.records.per.partition} */
     @SuppressWarnings("WeakerAccess")
+    @Deprecated
     public static final String BUFFERED_RECORDS_PER_PARTITION_CONFIG = "buffered.records.per.partition";
     public static final String BUFFERED_RECORDS_PER_PARTITION_DOC = "Maximum number of records to buffer per partition.";
+
+    /** {@code input.buffer.max.bytes} */
+    @SuppressWarnings("WeakerAccess")
+    public static final String INPUT_BUFFER_MAX_BYTES_CONFIG = "input.buffer.max.bytes";
+    public static final String INPUT_BUFFER_MAX_BYTES_DOC = "Maximum bytes of records to buffer across all threads";
 
     /** {@code built.in.metrics.version} */
     public static final String BUILT_IN_METRICS_VERSION_CONFIG = "built.in.metrics.version";
@@ -978,6 +984,11 @@ public class StreamsConfig extends AbstractConfig {
                     (name, value) -> verifyTopologyOptimizationConfigs((String) value),
                     Importance.MEDIUM,
                     TOPOLOGY_OPTIMIZATION_DOC)
+            .define(INPUT_BUFFER_MAX_BYTES_CONFIG,
+                    Type.LONG,
+                    512 * 1024 * 1024,
+                    Importance.MEDIUM,
+                    INPUT_BUFFER_MAX_BYTES_DOC)
 
             // LOW
 
