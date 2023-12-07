@@ -205,7 +205,8 @@ public class ConsumerTestBuilder implements Closeable {
                         commit,
                         metadata,
                         logContext,
-                        backgroundEventHandler
+                        backgroundEventHandler,
+                        Optional.empty()
                 )
             );
             HeartbeatRequestManager.HeartbeatState heartbeatState = spy(new HeartbeatRequestManager.HeartbeatState(

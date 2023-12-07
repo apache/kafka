@@ -381,7 +381,8 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                     groupRebalanceConfig,
                     apiVersions,
                     fetchMetricsManager,
-                    networkClientDelegateSupplier);
+                    networkClientDelegateSupplier,
+                    clientTelemetryReporter);
             final Supplier<ApplicationEventProcessor> applicationEventProcessorSupplier = ApplicationEventProcessor.supplier(logContext,
                     metadata,
                     applicationEventQueue,
@@ -566,7 +567,8 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             groupRebalanceConfig,
             apiVersions,
             fetchMetricsManager,
-            networkClientDelegateSupplier
+            networkClientDelegateSupplier,
+            clientTelemetryReporter
         );
         Supplier<ApplicationEventProcessor> applicationEventProcessorSupplier = ApplicationEventProcessor.supplier(
                 logContext,

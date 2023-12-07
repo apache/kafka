@@ -35,6 +35,8 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatResponseData;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.ConsumerGroupHeartbeatRequest;
+import org.apache.kafka.common.telemetry.internals.ClientTelemetryProvider;
+import org.apache.kafka.common.telemetry.internals.ClientTelemetryReporter;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
@@ -253,6 +255,13 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
      */
     private final BackgroundEventHandler backgroundEventHandler;
 
+    /**
+     * Optional client telemetry reporter which sends client telemetry data to the broker. This
+     * will be empty if the client telemetry feature is not enabled. This is provided to update
+     * the group member id label when the member joins the group.
+     */
+    private final Optional<ClientTelemetryReporter> clientTelemetryReporter;
+
     public MembershipManagerImpl(String groupId,
                                  Optional<String> groupInstanceId,
                                  Optional<String> serverAssignor,
@@ -260,7 +269,8 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
                                  CommitRequestManager commitRequestManager,
                                  ConsumerMetadata metadata,
                                  LogContext logContext,
-                                 BackgroundEventHandler backgroundEventHandler) {
+                                 BackgroundEventHandler backgroundEventHandler,
+                                 Optional<ClientTelemetryReporter> clientTelemetryReporter) {
         this.groupId = groupId;
         this.state = MemberState.UNSUBSCRIBED;
         this.serverAssignor = serverAssignor;
@@ -274,6 +284,7 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
         this.currentAssignment = new HashSet<>();
         this.log = logContext.logger(MembershipManagerImpl.class);
         this.backgroundEventHandler = backgroundEventHandler;
+        this.clientTelemetryReporter = clientTelemetryReporter;
     }
 
     /**
@@ -335,6 +346,16 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
             );
             throw new IllegalArgumentException(errorMessage);
         }
+
+        // Update the group member id label in the client telemetry reporter if the member id has
+        // changed. Initially the member id is empty, and it is updated when the member joins the
+        // group. This is done here to avoid updating the label on every heartbeat response. Also
+        // check if the member id is null, as the schema defines it as nullable.
+        if (response.memberId() != null && !response.memberId().equals(memberId)) {
+            clientTelemetryReporter.ifPresent(reporter -> reporter.updateMetricsLabels(
+                Collections.singletonMap(ClientTelemetryProvider.GROUP_MEMBER_ID, response.memberId())));
+        }
+
         this.memberId = response.memberId();
         this.memberEpoch = response.memberEpoch();
         ConsumerGroupHeartbeatResponseData.Assignment assignment = response.assignment();
