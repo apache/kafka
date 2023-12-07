@@ -40,7 +40,7 @@ public class ConsumerGroupCommandOptions extends CommandDefaultOptions {
     public static final String LIST_DOC = "List all consumer groups.";
     public static final String DESCRIBE_DOC = "Describe consumer group and list offset lag (number of messages not yet processed) related to given group.";
     public static final String ALL_GROUPS_DOC = "Apply to all consumer groups.";
-    public static final String NL = System.getProperty("line.separator");
+    public static final String NL = System.lineSeparator();
     public static final String DELETE_DOC = "Pass in groups to delete topic partition offsets and ownership information " +
         "over the entire consumer group. For instance --group g1 --group g2";
     public static final String TIMEOUT_MS_DOC = "The timeout that can be set for some use cases. For example, it can be used when describing the group " +
