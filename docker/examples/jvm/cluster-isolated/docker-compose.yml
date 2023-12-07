@@ -14,7 +14,7 @@
 # limitations under the License.
 
 ---
-version: '1'
+version: '2'
 services:
   controller-1:
     image: apache/kafka:latest
@@ -28,6 +28,11 @@ services:
       KAFKA_CONTROLLER_LISTENER_NAMES: 'CONTROLLER'
       KAFKA_LISTENERS: 'CONTROLLER://controller-1:9093'
       CLUSTER_ID: '4L6g3nShT-eMCtK--X86sw'
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_LOG_DIRS: '/tmp/kraft-combined-logs'
   
   controller-2:
     image: apache/kafka:latest
@@ -41,6 +46,11 @@ services:
       KAFKA_CONTROLLER_LISTENER_NAMES: 'CONTROLLER'
       KAFKA_LISTENERS: 'CONTROLLER://controller-2:9093'
       CLUSTER_ID: '4L6g3nShT-eMCtK--X86sw'
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_LOG_DIRS: '/tmp/kraft-combined-logs'
     
   controller-3:
     image: apache/kafka:latest
@@ -54,6 +64,11 @@ services:
       KAFKA_CONTROLLER_LISTENER_NAMES: 'CONTROLLER'
       KAFKA_LISTENERS: 'CONTROLLER://controller-3:9093'
       CLUSTER_ID: '4L6g3nShT-eMCtK--X86sw'
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_LOG_DIRS: '/tmp/kraft-combined-logs'
 
   kafka-1:
     image: apache/kafka:latest
@@ -68,6 +83,11 @@ services:
       KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:29092
       KAFKA_CONTROLLER_LISTENER_NAMES: 'CONTROLLER'
       CLUSTER_ID: '4L6g3nShT-eMCtK--X86sw'
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_LOG_DIRS: '/tmp/kraft-combined-logs'
     depends_on:
       - controller-1
       - controller-2
@@ -86,6 +106,11 @@ services:
       KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:39092
       KAFKA_CONTROLLER_LISTENER_NAMES: 'CONTROLLER'
       CLUSTER_ID: '4L6g3nShT-eMCtK--X86sw'
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_LOG_DIRS: '/tmp/kraft-combined-logs'
     depends_on:
       - controller-1
       - controller-2
@@ -104,6 +129,11 @@ services:
       KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:49092
       KAFKA_CONTROLLER_LISTENER_NAMES: 'CONTROLLER'
       CLUSTER_ID: '4L6g3nShT-eMCtK--X86sw'
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_LOG_DIRS: '/tmp/kraft-combined-logs'
     depends_on:
       - controller-1
       - controller-2

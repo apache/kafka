@@ -32,6 +32,6 @@ services:
       # Set properties not provided in the file input
       KAFKA_NODE_ID: 1
       KAFKA_CONTROLLER_QUORUM_VOTERS: '1@broker:29093'
-      KAFKA_LISTENERS: 'PLAINTEXT://0.0.0.0:19093,SSL://0.0.0.0:9094,CONTROLLER://broker:29093'
+      KAFKA_LISTENERS: 'PLAINTEXT://0.0.0.0:9092,SSL://0.0.0.0:9093,CONTROLLER://broker:29093'
       # Override an existing property
       KAFKA_PROCESS_ROLES: 'broker,controller'
