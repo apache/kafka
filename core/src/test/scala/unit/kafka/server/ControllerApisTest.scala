@@ -1154,7 +1154,7 @@ class ControllerApisTest {
     )))))
       .thenReturn(Collections.singletonList(AuthorizationResult.ALLOWED))
     when(controller.assignReplicasToDirs(any[ControllerRequestContext], ArgumentMatchers.eq(request.data)))
-      .thenReturn(FutureUtils.failedFuture(Errors.UNKNOWN_TOPIC_OR_PARTITION.exception()))
+      .thenReturn(FutureUtils.failedFuture[AssignReplicasToDirsResponseData](Errors.UNKNOWN_TOPIC_OR_PARTITION.exception()))
 
     val response = handleRequest[AssignReplicasToDirsResponse](request, controllerApis)
     assertEquals(new AssignReplicasToDirsResponseData().setErrorCode(Errors.UNKNOWN_TOPIC_OR_PARTITION.code()), response.data)
