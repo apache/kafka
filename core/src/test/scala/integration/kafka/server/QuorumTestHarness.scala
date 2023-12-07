@@ -26,6 +26,7 @@ import javax.security.auth.login.Configuration
 import kafka.tools.StorageTool
 import kafka.utils.{CoreUtils, Logging, TestInfoUtils, TestUtils}
 import kafka.zk.{AdminZkClient, EmbeddedZookeeper, KafkaZkClient}
+import org.apache.kafka.clients.consumer.GroupProtocol
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.Uuid
 import org.apache.kafka.common.security.JaasUtils
