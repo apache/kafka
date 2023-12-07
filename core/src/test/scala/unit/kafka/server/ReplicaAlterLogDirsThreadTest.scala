@@ -17,27 +17,29 @@
 package kafka.server
 
 import kafka.cluster.{BrokerEndPoint, Partition}
-import kafka.log.{LogManager, UnifiedLog}
+import kafka.log.{LogCleaner, LogManager, UnifiedLog}
 import kafka.server.AbstractFetcherThread.ResultWithPartitions
 import kafka.server.QuotaFactory.UnboundedQuota
 import kafka.server.metadata.ZkMetadataCache
-import kafka.utils.{DelayedItem, TestUtils}
+import kafka.utils.{DelayedItem, Pool, TestUtils}
 import org.apache.kafka.common.errors.KafkaStorageException
 import org.apache.kafka.common.message.OffsetForLeaderEpochRequestData.OffsetForLeaderPartition
 import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.EpochEndOffset
 import org.apache.kafka.common.message.UpdateMetadataRequestData
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
-import org.apache.kafka.common.record.MemoryRecords
+import org.apache.kafka.common.record.{CompressionType, MemoryRecords, SimpleRecord}
 import org.apache.kafka.common.requests.{FetchRequest, UpdateMetadataRequest}
+import org.apache.kafka.common.utils.MockTime
 import org.apache.kafka.common.{TopicIdPartition, TopicPartition, Uuid}
-import org.apache.kafka.server.common.{OffsetAndEpoch, MetadataVersion}
-import org.apache.kafka.storage.internals.log.{FetchIsolation, FetchParams, FetchPartitionData}
+import org.apache.kafka.server.common.{MetadataVersion, OffsetAndEpoch}
+import org.apache.kafka.storage.internals.log.{CleanerConfig, FetchIsolation, FetchParams, FetchPartitionData, LogDirFailureChannel}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
 import org.mockito.ArgumentMatchers.{any, anyBoolean}
-import org.mockito.Mockito.{doNothing, mock, never, times, verify, when}
+import org.mockito.Mockito.{doAnswer, doNothing, mock, never, times, verify, when}
 import org.mockito.{ArgumentCaptor, ArgumentMatchers, Mockito}
 
+import java.nio.charset.StandardCharsets
 import java.util.{Collections, Optional, OptionalInt, OptionalLong}
 import scala.collection.{Map, Seq}
 import scala.jdk.CollectionConverters._
@@ -107,6 +109,7 @@ class ReplicaAlterLogDirsThreadTest {
     val replicaManager = Mockito.mock(classOf[ReplicaManager])
     val quotaManager = Mockito.mock(classOf[ReplicationQuotaManager])
     val futureLog = Mockito.mock(classOf[UnifiedLog])
+    val logManager = Mockito.mock(classOf[LogManager])
 
     val leaderEpoch = 5
     val logEndOffset = 0
@@ -117,6 +120,7 @@ class ReplicaAlterLogDirsThreadTest {
     when(replicaManager.futureLogExists(t1p0)).thenReturn(true)
     when(replicaManager.onlinePartition(t1p0)).thenReturn(Some(partition))
     when(replicaManager.getPartitionOrException(t1p0)).thenReturn(partition)
+    when(replicaManager.logManager).thenReturn(logManager)
 
     when(quotaManager.isQuotaExceeded).thenReturn(false)
 
@@ -128,6 +132,7 @@ class ReplicaAlterLogDirsThreadTest {
         .setEndOffset(logEndOffset))
     when(partition.futureLocalLogOrException).thenReturn(futureLog)
     doNothing().when(partition).truncateTo(offset = 0, isFuture = true)
+    doNothing().when(logManager).resumeCleaning(t1p0)
     when(partition.maybeReplaceCurrentWithFutureReplica()).thenReturn(true)
 
     when(futureLog.logStartOffset).thenReturn(0L)
@@ -194,6 +199,110 @@ class ReplicaAlterLogDirsThreadTest {
     assertFalse(failedPartitions.contains(t1p0))
     assertEquals(None, thread.fetchState(t1p0))
     assertEquals(0, thread.partitionCount)
+  }
+
+  @Test
+  def shouldResumeCleanLogDirAfterMarkPartitionFailed(): Unit = {
+    val brokerId = 1
+    val partitionId = 0
+    val config = KafkaConfig.fromProps(TestUtils.createBrokerConfig(brokerId, "localhost:1234"))
+
+    val partition = Mockito.mock(classOf[Partition])
+    val replicaManager = Mockito.mock(classOf[ReplicaManager])
+    val quotaManager = Mockito.mock(classOf[ReplicationQuotaManager])
+    val futureLog = Mockito.mock(classOf[UnifiedLog])
+    val logManager = Mockito.mock(classOf[LogManager])
+
+    val logs = new Pool[TopicPartition, UnifiedLog]()
+    logs.put(t1p0, futureLog)
+    val logCleaner = new LogCleaner(new CleanerConfig(true),
+      logDirs = Array(TestUtils.tempDir()),
+      logs = logs,
+      logDirFailureChannel = new LogDirFailureChannel(1),
+      time = new MockTime)
+
+    val leaderEpoch = 5
+    val logEndOffset = 0
+
+    when(partition.partitionId).thenReturn(partitionId)
+    when(replicaManager.metadataCache).thenReturn(metadataCache)
+    when(replicaManager.futureLocalLogOrException(t1p0)).thenReturn(futureLog)
+    when(replicaManager.futureLogExists(t1p0)).thenReturn(true)
+    when(replicaManager.onlinePartition(t1p0)).thenReturn(Some(partition))
+    when(replicaManager.getPartitionOrException(t1p0)).thenReturn(partition)
+    when(replicaManager.logManager).thenReturn(logManager)
+    doAnswer(_ => {
+      logCleaner.abortAndPauseCleaning(t1p0)
+    }).when(logManager).abortAndPauseCleaning(t1p0)
+    doAnswer(_ => {
+      logCleaner.resumeCleaning(Seq(t1p0))
+    }).when(logManager).resumeCleaning(t1p0)
+
+    when(quotaManager.isQuotaExceeded).thenReturn(false)
+
+    when(partition.lastOffsetForLeaderEpoch(Optional.empty(), leaderEpoch, fetchOnlyFromLeader = false))
+      .thenReturn(new EpochEndOffset()
+        .setPartition(partitionId)
+        .setErrorCode(Errors.NONE.code)
+        .setLeaderEpoch(leaderEpoch)
+        .setEndOffset(logEndOffset))
+    when(partition.futureLocalLogOrException).thenReturn(futureLog)
+    doNothing().when(partition).truncateTo(offset = 0, isFuture = true)
+    when(partition.maybeReplaceCurrentWithFutureReplica()).thenReturn(false)
+
+    when(futureLog.logStartOffset).thenReturn(0L)
+    when(futureLog.logEndOffset).thenReturn(0L)
+    when(futureLog.latestEpoch).thenReturn(None)
+
+    val requestData = new FetchRequest.PartitionData(topicId, 0L, 0L,
+      config.replicaFetchMaxBytes, Optional.of(leaderEpoch))
+    val responseData = new FetchPartitionData(
+      Errors.NONE,
+      0L,
+      0L,
+      MemoryRecords.withRecords(CompressionType.NONE, new SimpleRecord(1000, "foo".getBytes(StandardCharsets.UTF_8))),
+      Optional.empty(),
+      OptionalLong.empty(),
+      Optional.empty(),
+      OptionalInt.empty(),
+      false)
+    mockFetchFromCurrentLog(tid1p0, requestData, config, replicaManager, responseData)
+
+    val endPoint = new BrokerEndPoint(0, "localhost", 1000)
+    val leader = new LocalLeaderEndPoint(endPoint, config, replicaManager, quotaManager)
+    val thread = new ReplicaAlterLogDirsThread(
+      "alter-logs-dirs-thread",
+      leader,
+      failedPartitions,
+      replicaManager,
+      quotaManager,
+      new BrokerTopicStats,
+      config.replicaFetchBackoffMs)
+
+    // before starting the fetch, pause the clean of the partition.
+    logManager.abortAndPauseCleaning(t1p0)
+    thread.addPartitions(Map(t1p0 -> initialFetchState(fetchOffset = 0L, leaderEpoch)))
+    assertTrue(thread.fetchState(t1p0).isDefined)
+    assertEquals(1, thread.partitionCount)
+
+    // first test: get handle without exception
+    when(partition.appendRecordsToFollowerOrFutureReplica(any(), ArgumentMatchers.eq(true))).thenReturn(None)
+
+    thread.doWork()
+
+    assertTrue(thread.fetchState(t1p0).isDefined)
+    assertEquals(1, thread.partitionCount)
+    assertTrue(logCleaner.isCleaningInStatePaused(t1p0))
+
+    // second test: process partition data with throwing a KafkaStorageException.
+    when(partition.appendRecordsToFollowerOrFutureReplica(any(), ArgumentMatchers.eq(true))).thenThrow(new KafkaStorageException("disk error"))
+
+    thread.doWork()
+
+    assertTrue(failedPartitions.contains(t1p0))
+    assertEquals(None, thread.fetchState(t1p0))
+    assertEquals(0, thread.partitionCount)
+    assertFalse(logCleaner.isCleaningInStatePaused(t1p0))
   }
 
   @Test

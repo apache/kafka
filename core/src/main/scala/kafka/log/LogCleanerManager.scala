@@ -358,6 +358,12 @@ private[log] class LogCleanerManager(val logDirs: Seq[File],
     }
   }
 
+  def checkIsCleaningInStatePaused(topicPartition: TopicPartition): Boolean = {
+    inLock(lock) {
+      isCleaningInStatePaused(topicPartition)
+    }
+  }
+
   /**
    *  Check if the cleaning for a partition is aborted. If so, throw an exception.
    */
