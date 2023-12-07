@@ -17,6 +17,7 @@
 
 package org.apache.kafka.clients.consumer.internals;
 
+import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
@@ -24,7 +25,7 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatResponseData;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.ConsumerGroupHeartbeatResponse;
-import org.junit.jupiter.api.AfterEach;
+import org.apache.kafka.common.utils.LogContext;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -49,6 +50,7 @@ import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.ArgumentMatchers.anySet;
 import static org.mockito.Mockito.clearInvocations;
 import static org.mockito.Mockito.doNothing;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
@@ -61,32 +63,23 @@ public class MembershipManagerImplTest {
     private static final String MEMBER_ID = "test-member-1";
     private static final int MEMBER_EPOCH = 1;
 
+    private final LogContext logContext = new LogContext();
     private SubscriptionState subscriptionState;
     private ConsumerMetadata metadata;
-
     private CommitRequestManager commitRequestManager;
-
-    private ConsumerTestBuilder testBuilder;
 
     @BeforeEach
     public void setup() {
-        testBuilder = new ConsumerTestBuilder(ConsumerTestBuilder.createDefaultGroupInformation());
-        metadata = testBuilder.metadata;
-        subscriptionState = testBuilder.subscriptions;
-        commitRequestManager = testBuilder.commitRequestManager.get();
-    }
-
-    @AfterEach
-    public void tearDown() {
-        if (testBuilder != null) {
-            testBuilder.close();
-        }
+        // The SubscriptionState cannot be mocked, but needs to stay as a spy as the test relies on its logic.
+        subscriptionState = spy(new SubscriptionState(logContext, OffsetResetStrategy.EARLIEST));
+        metadata = mock(ConsumerMetadata.class);
+        commitRequestManager = mock(CommitRequestManager.class);
     }
 
     private MembershipManagerImpl createMembershipManagerJoiningGroup() {
         MembershipManagerImpl manager = spy(new MembershipManagerImpl(
                 GROUP_ID, Optional.empty(), Optional.empty(), subscriptionState, commitRequestManager,
-                metadata, testBuilder.logContext));
+                metadata, logContext));
         manager.transitionToJoining();
         return manager;
     }
@@ -95,7 +88,7 @@ public class MembershipManagerImplTest {
                                                                       String serverAssignor) {
         MembershipManagerImpl manager = new MembershipManagerImpl(
                 GROUP_ID, Optional.ofNullable(groupInstanceId), Optional.ofNullable(serverAssignor),
-                subscriptionState, commitRequestManager, metadata, testBuilder.logContext);
+                subscriptionState, commitRequestManager, metadata, logContext);
         manager.transitionToJoining();
         return manager;
     }
@@ -120,7 +113,7 @@ public class MembershipManagerImplTest {
         // First join should register to get metadata updates
         MembershipManagerImpl manager = new MembershipManagerImpl(
                 GROUP_ID, Optional.empty(), Optional.empty(), subscriptionState, commitRequestManager,
-                metadata, testBuilder.logContext);
+                metadata, logContext);
         manager.transitionToJoining();
         verify(metadata).addClusterUpdateListener(manager);
         clearInvocations(metadata);
@@ -198,7 +191,7 @@ public class MembershipManagerImplTest {
     public void testTransitionToFailedWhenTryingToJoin() {
         MembershipManagerImpl membershipManager = new MembershipManagerImpl(
                 GROUP_ID, Optional.empty(), Optional.empty(), subscriptionState, commitRequestManager, metadata,
-                testBuilder.logContext);
+                logContext);
         assertEquals(MemberState.UNSUBSCRIBED, membershipManager.state());
         membershipManager.transitionToJoining();
 
