@@ -76,6 +76,7 @@ import org.apache.kafka.common.metrics.MetricsReporter;
 import org.apache.kafka.common.requests.JoinGroupRequest;
 import org.apache.kafka.common.requests.ListOffsetsRequest;
 import org.apache.kafka.common.serialization.Deserializer;
+import org.apache.kafka.common.telemetry.internals.ClientTelemetryProvider;
 import org.apache.kafka.common.telemetry.internals.ClientTelemetryReporter;
 import org.apache.kafka.common.telemetry.internals.ClientTelemetryUtils;
 import org.apache.kafka.common.utils.AppInfoParser;
@@ -220,12 +221,26 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         private void process(final GroupMetadataUpdateEvent event) {
             if (AsyncKafkaConsumer.this.groupMetadata.isPresent()) {
                 final ConsumerGroupMetadata currentGroupMetadata = AsyncKafkaConsumer.this.groupMetadata.get();
+                final String currentMemberId = currentGroupMetadata.memberId();
                 AsyncKafkaConsumer.this.groupMetadata = Optional.of(new ConsumerGroupMetadata(
                     currentGroupMetadata.groupId(),
                     event.memberEpoch(),
                     event.memberId(),
                     currentGroupMetadata.groupInstanceId()
                 ));
+
+                // Update the group member id label in the client telemetry reporter if the member id has
+                // changed. Initially the member id is empty, and it is updated when the member joins the
+                // group. This is done here to avoid updating the label on every heartbeat response. Also
+                // check if the member id is null, as the schema defines it as nullable.
+                if (!currentMemberId.equals(event.memberId()) && clientTelemetryReporter.isPresent()) {
+                    Map<String, String> labels = Collections.singletonMap(
+                        ClientTelemetryProvider.GROUP_MEMBER_ID,
+                        event.memberId()
+                    );
+                    ClientTelemetryReporter reporter = clientTelemetryReporter.get();
+                    reporter.updateMetricsLabels(labels);
+                }
             }
         }
 
