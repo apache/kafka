@@ -45,8 +45,8 @@ image_type: jvm
 kafka_url: https://archive.apache.org/dist/kafka/3.6.0/kafka_2.13-3.6.0.tgz
 ```
 
-Creating a release
-------------------
+Creating a Release Candidate
+----------------------------
 - `docker_release.py` script builds a multi-architecture image and pushes it to provided docker registry.
 - Ensure you are logged in to the docker registry before triggering the script.
 - kafka binary tarball url along with image name (in the format `<registry>/<namespace>/<image_name>:<image_tag>`) and type is needed to build the image. For detailed usage description check `python docker_release.py --help`.
@@ -61,8 +61,8 @@ python docker_release.py kafka/test:3.6.0 --kafka-url https://archive.apache.org
 
 Please note that we use docker buildx for preparing the multi-architecture image and pushing it to docker registry. It's possible to encounter build failures because of buildx. Please retry the command in case some buildx related error occurs.
 
-Creating a release using github actions
----------------------------------------
+Creating a Release Candidate using github actions
+-------------------------------------------------
 This is the recommended way to push an RC docker image.
 Go to `Build and Push Release Candidate Docker Image` Github Actions Workflow.
 Choose the `image_type` and and provide `kafka_url` that needs to be containerised in the `rc_docker_image` that will be pushed to github.
@@ -75,12 +75,12 @@ kafka_url: https://archive.apache.org/dist/kafka/3.6.0/kafka_2.13-3.6.0.tgz
 rc_docker_image: apache/kafka:3.6.0-rc0
 ```
 
-Promoting a release
--------------------
+Promoting a Release Candidate
+-----------------------------
 `docker_promote.py` provides an interactive way to pull an RC Docker image and promote it to required dockerhub repo.
 
-Promoting a release using github actions
-----------------------------------------
+Promoting a Release Candidate using github actions
+--------------------------------------------------
 This is the recommended way to promote an RC docker image.
 Go to `Promote Release Candidate Docker Image` Github Actions Workflow.
 Choose the RC docker image (`rc_docker_image`) that you want to promote and where it needs to be pushed to (`promoted_docker_image`), i.e. the final docker image release. 
