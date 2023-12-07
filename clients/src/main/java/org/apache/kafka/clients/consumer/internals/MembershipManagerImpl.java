@@ -524,6 +524,7 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
      */
     private void transitionToSendingLeaveGroup() {
         memberEpoch = ConsumerGroupHeartbeatRequest.LEAVE_GROUP_MEMBER_EPOCH;
+        commitRequestManager.updateMemberInformation(this.memberId, this.memberEpoch);
         currentAssignment = new HashSet<>();
         transitionTo(MemberState.LEAVING);
     }
@@ -1002,6 +1003,7 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
 
     private void resetEpoch() {
         this.memberEpoch = ConsumerGroupHeartbeatRequest.JOIN_GROUP_MEMBER_EPOCH;
+        commitRequestManager.updateMemberInformation(this.memberId, this.memberEpoch);
     }
 
     /**
