@@ -1059,8 +1059,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             public void onSuccess(Void value) {
                 inFlightAsyncCommits.decrementAndGet();
 
-                if (interceptors != null)
-                    interceptors.onCommit(offsets);
+                interceptors.onCommit(offsets);
                 completedOffsetCommits.add(new OffsetCommitCompletion(cb, offsets, null));
             }
 
@@ -1117,8 +1116,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             invokeCompletedOffsetCommitCallbacks();
 
             if (future.succeeded()) {
-                if (interceptors != null)
-                    interceptors.onCommit(offsets);
+                interceptors.onCommit(offsets);
                 return true;
             }
 
