@@ -18,3 +18,5 @@ org.apache.kafka.connect.runtime.ErrorHandlingTaskTest$FaultyConverter
 org.apache.kafka.connect.runtime.isolation.PluginsTest$TestConverter
 org.apache.kafka.connect.runtime.isolation.PluginsTest$TestInternalConverter
 org.apache.kafka.connect.runtime.isolation.PluginUtilsTest$CollidingConverter
+org.apache.kafka.connect.integration.ConnectorValidationIntegrationTest$TestConverterWithSinglePropertyConfigDef
+org.apache.kafka.connect.integration.ConnectorValidationIntegrationTest$TestConverterWithNoConfigDef
