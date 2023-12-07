@@ -340,10 +340,8 @@ public class StreamThread extends Thread implements ProcessingThread {
     private final boolean stateUpdaterEnabled;
     private final boolean processingThreadsEnabled;
 
-    private volatile Uuid mainConsumerClientInstanceId = null;
-
     private volatile long fetchDeadlineClientInstanceId = -1;
-    private volatile KafkaFutureImpl<Uuid> mainConsumerInstanceIdFuture;
+    private volatile KafkaFutureImpl<Uuid> mainConsumerInstanceIdFuture = new KafkaFutureImpl<>();
 
     public static StreamThread create(final TopologyMetadata topologyMetadata,
                                       final StreamsConfig config,
@@ -735,8 +733,7 @@ public class StreamThread extends Thread implements ProcessingThread {
             if (!mainConsumerInstanceIdFuture.isDone()) {
                 if (fetchDeadlineClientInstanceId >= time.milliseconds()) {
                     try {
-                        mainConsumerClientInstanceId = mainConsumer.clientInstanceId(Duration.ZERO);
-                        mainConsumerInstanceIdFuture.complete(mainConsumerClientInstanceId);
+                        mainConsumerInstanceIdFuture.complete(mainConsumer.clientInstanceId(Duration.ZERO));
                         maybeResetFetchDeadline();
                     } catch (final IllegalStateException disabledError) {
                         mainConsumerInstanceIdFuture.complete(null);
@@ -1363,6 +1360,8 @@ public class StreamThread extends Thread implements ProcessingThread {
 
         log.info("Shutting down {}", cleanRun ? "clean" : "unclean");
 
+        mainConsumerInstanceIdFuture.complete(null);
+
         try {
             taskManager.shutdown(cleanRun);
         } catch (final Throwable e) {
@@ -1528,19 +1527,21 @@ public class StreamThread extends Thread implements ProcessingThread {
         return stateLock;
     }
 
+    // this method is NOT thread-safe (we rely on the callee to be `synchronized`)
     public Map<String, KafkaFuture<Uuid>> consumerClientInstanceIds(final Duration timeout) {
         boolean setDeadline = false;
 
         final Map<String, KafkaFuture<Uuid>> result = new HashMap<>();
 
-        final KafkaFutureImpl<Uuid> future = new KafkaFutureImpl<>();
-        if (mainConsumerClientInstanceId != null) {
-            future.complete(mainConsumerClientInstanceId);
+        if (mainConsumerInstanceIdFuture.isDone()) {
+            if (mainConsumerInstanceIdFuture.isCompletedExceptionally()) {
+                mainConsumerInstanceIdFuture = new KafkaFutureImpl<>();
+                setDeadline = true;
+            }
         } else {
-            mainConsumerInstanceIdFuture = future;
             setDeadline = true;
         }
-        result.put(getName() + "-consumer", future);
+        result.put(getName() + "-consumer", mainConsumerInstanceIdFuture);
 
         if (setDeadline) {
             fetchDeadlineClientInstanceId = time.milliseconds() + timeout.toMillis();

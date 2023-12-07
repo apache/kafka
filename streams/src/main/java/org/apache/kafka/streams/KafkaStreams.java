@@ -1825,8 +1825,10 @@ public class KafkaStreams implements AutoCloseable {
 
         // StreamThread for main/restore consumers and producer(s)
         final Map<String, KafkaFuture<Uuid>> consumerFutures = new HashMap<>();
-        for (final StreamThread streamThread : threads) {
-            consumerFutures.putAll(streamThread.consumerClientInstanceIds(timeout));
+        synchronized (changeThreadCount) {
+            for (final StreamThread streamThread : threads) {
+                consumerFutures.putAll(streamThread.consumerClientInstanceIds(timeout));
+            }
         }
 
         // GlobalThread
@@ -1885,6 +1887,10 @@ public class KafkaStreams implements AutoCloseable {
         final long timeoutMs,
         final Supplier<String> errorMessage) {
         final Throwable cause;
+
+        if (future.isCancelled()) {
+            return null;
+        }
 
         try {
             return future.get(timeoutMs, TimeUnit.MILLISECONDS);

@@ -94,6 +94,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -1404,19 +1405,23 @@ public class KafkaStreamsTest {
 
         final Time mockTime = time;
         final AtomicLong expectedTimeout = new AtomicLong(20L);
+        final AtomicBoolean didAssertThreadOne = new AtomicBoolean(false);
+        final AtomicBoolean didAssertThreadTwo = new AtomicBoolean(false);
         when(streamThreadOne.consumerClientInstanceIds(any()))
-            .thenReturn(Collections.singletonMap("consumer", new KafkaFutureImpl<Uuid>() {
+            .thenReturn(Collections.singletonMap("consumer1", new KafkaFutureImpl<Uuid>() {
                 @Override
                 public Uuid get(final long timeout, final TimeUnit timeUnit) {
+                    didAssertThreadOne.set(true);
                     assertThat(timeout, equalTo(expectedTimeout.getAndAdd(-10L)));
                     mockTime.sleep(10L);
                     return null;
                 }
             }));
         when(streamThreadTwo.consumerClientInstanceIds(any()))
-            .thenReturn(Collections.singletonMap("consumer", new KafkaFutureImpl<Uuid>() {
+            .thenReturn(Collections.singletonMap("consumer2", new KafkaFutureImpl<Uuid>() {
                 @Override
                 public Uuid get(final long timeout, final TimeUnit timeUnit) {
+                    didAssertThreadTwo.set(true);
                     assertThat(timeout, equalTo(expectedTimeout.getAndAdd(-5L)));
                     mockTime.sleep(5L);
                     return null;
@@ -1428,6 +1433,9 @@ public class KafkaStreamsTest {
             streams.start();
             streams.clientInstanceIds(Duration.ofMillis(30L));
         }
+
+        assertThat(didAssertThreadOne.get(), equalTo(true));
+        assertThat(didAssertThreadTwo.get(), equalTo(true));
     }
 
     @Deprecated // testing old PAPI
