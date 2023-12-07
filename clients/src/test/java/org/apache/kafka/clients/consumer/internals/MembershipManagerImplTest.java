@@ -85,7 +85,7 @@ public class MembershipManagerImplTest {
 
     private MembershipManagerImpl createMembershipManagerJoiningGroup() {
         MembershipManagerImpl manager = spy(new MembershipManagerImpl(
-                GROUP_ID, subscriptionState, commitRequestManager,
+                GROUP_ID, Optional.empty(), Optional.empty(), subscriptionState, commitRequestManager,
                 metadata, testBuilder.logContext));
         manager.transitionToJoining();
         return manager;
@@ -119,7 +119,7 @@ public class MembershipManagerImplTest {
     public void testMembershipManagerRegistersForClusterMetadataUpdatesOnFirstJoin() {
         // First join should register to get metadata updates
         MembershipManagerImpl manager = new MembershipManagerImpl(
-                GROUP_ID, subscriptionState, commitRequestManager,
+                GROUP_ID, Optional.empty(), Optional.empty(), subscriptionState, commitRequestManager,
                 metadata, testBuilder.logContext);
         manager.transitionToJoining();
         verify(metadata).addClusterUpdateListener(manager);
@@ -197,7 +197,7 @@ public class MembershipManagerImplTest {
     @Test
     public void testTransitionToFailedWhenTryingToJoin() {
         MembershipManagerImpl membershipManager = new MembershipManagerImpl(
-                GROUP_ID, subscriptionState, commitRequestManager, metadata,
+                GROUP_ID, Optional.empty(), Optional.empty(), subscriptionState, commitRequestManager, metadata,
                 testBuilder.logContext);
         assertEquals(MemberState.UNSUBSCRIBED, membershipManager.state());
         membershipManager.transitionToJoining();

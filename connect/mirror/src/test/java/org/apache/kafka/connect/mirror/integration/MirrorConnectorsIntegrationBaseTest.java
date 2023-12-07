@@ -562,27 +562,30 @@ public class MirrorConnectorsIntegrationBaseTest {
         String remoteTopic = remoteTopicName("test-topic-1", PRIMARY_CLUSTER_ALIAS);
 
         // Check offsets are pushed to the checkpoint topic
-        Consumer<byte[], byte[]> backupConsumer = backup.kafka().createConsumerAndSubscribeTo(Collections.singletonMap(
-                "auto.offset.reset", "earliest"), PRIMARY_CLUSTER_ALIAS + ".checkpoints.internal");
-        waitForCondition(() -> {
-            ConsumerRecords<byte[], byte[]> records = backupConsumer.poll(Duration.ofSeconds(1L));
-            for (ConsumerRecord<byte[], byte[]> record : records) {
-                Checkpoint checkpoint = Checkpoint.deserializeRecord(record);
-                if (remoteTopic.equals(checkpoint.topicPartition().topic())) {
-                    return true;
+        try (Consumer<byte[], byte[]> backupConsumer = backup.kafka().createConsumerAndSubscribeTo(Collections.singletonMap(
+                "auto.offset.reset", "earliest"), PRIMARY_CLUSTER_ALIAS + ".checkpoints.internal")) {
+            waitForCondition(() -> {
+                ConsumerRecords<byte[], byte[]> records = backupConsumer.poll(Duration.ofSeconds(1L));
+                for (ConsumerRecord<byte[], byte[]> record : records) {
+                    Checkpoint checkpoint = Checkpoint.deserializeRecord(record);
+                    if (remoteTopic.equals(checkpoint.topicPartition().topic())) {
+                        return true;
+                    }
                 }
-            }
-            return false;
-        }, 30_000,
-            "Unable to find checkpoints for " + PRIMARY_CLUSTER_ALIAS + ".test-topic-1"
-        );
+                return false;
+            }, 30_000,
+                "Unable to find checkpoints for " + PRIMARY_CLUSTER_ALIAS + ".test-topic-1"
+            );
+        }
 
         assertMonotonicCheckpoints(backup, PRIMARY_CLUSTER_ALIAS + ".checkpoints.internal");
 
         // Ensure no offset-syncs topics have been created on the primary cluster
-        Set<String> primaryTopics = primary.kafka().createAdminClient().listTopics().names().get();
-        assertFalse(primaryTopics.contains("mm2-offset-syncs." + PRIMARY_CLUSTER_ALIAS + ".internal"));
-        assertFalse(primaryTopics.contains("mm2-offset-syncs." + BACKUP_CLUSTER_ALIAS + ".internal"));
+        try (Admin adminClient = primary.kafka().createAdminClient()) {
+            Set<String> primaryTopics = adminClient.listTopics().names().get();
+            assertFalse(primaryTopics.contains("mm2-offset-syncs." + PRIMARY_CLUSTER_ALIAS + ".internal"));
+            assertFalse(primaryTopics.contains("mm2-offset-syncs." + BACKUP_CLUSTER_ALIAS + ".internal"));
+        }
     }
 
     @Test
@@ -648,6 +651,8 @@ public class MirrorConnectorsIntegrationBaseTest {
             return translatedOffsets.containsKey(remoteTopicPartition(tp1, PRIMARY_CLUSTER_ALIAS)) &&
                    translatedOffsets.containsKey(remoteTopicPartition(tp2, PRIMARY_CLUSTER_ALIAS));
         }, OFFSET_SYNC_DURATION_MS, "Checkpoints were not emitted correctly to backup cluster");
+
+        backupClient.close();
     }
 
     @Test
@@ -729,6 +734,8 @@ public class MirrorConnectorsIntegrationBaseTest {
                     backupClient, consumerGroupName, PRIMARY_CLUSTER_ALIAS, remoteTopic, partialCheckpoints);
             log.info("Final checkpoints: {}", finalCheckpoints);
         }
+
+        backupClient.close();
 
         for (TopicPartition tp : partialCheckpoints.keySet()) {
             assertTrue(finalCheckpoints.get(tp).offset() < partialCheckpoints.get(tp).offset(),
