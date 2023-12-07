@@ -506,12 +506,12 @@ public class AsyncKafkaConsumerTest {
     public void testWaitOnCompletionDoesNotThrow() {
         AtomicReference<Throwable> exception = new AtomicReference<>();
         CompletableFuture<Object> future = CompletableFuture.completedFuture(null);
-        assertDoesNotThrow(() -> consumer.completeSilently(() -> {
+        assertDoesNotThrow(() -> consumer.completeQuietly(() -> {
             future.get(0, TimeUnit.MILLISECONDS);
         }, "test", exception));
         assertNull(exception.get());
 
-        assertDoesNotThrow(() -> consumer.completeSilently(() -> {
+        assertDoesNotThrow(() -> consumer.completeQuietly(() -> {
             throw new KafkaException("Test exception");
         }, "test", exception));
         assertTrue(exception.get() instanceof KafkaException);
@@ -520,13 +520,13 @@ public class AsyncKafkaConsumerTest {
     @Test
     public void testEnsureAutocommitSent() {
         consumer.maybeAutoCommitSync(true, testBuilder.time.timer(100), null);
-        verify(consumer).completeSilently(any(), any(), any());
+        verify(consumer).completeQuietly(any(), any(), any());
     }
 
     @Test
     public void testEnsureautocommitNotSent() {
         consumer.maybeAutoCommitSync(false, testBuilder.time.timer(100), null);
-        verify(consumer, never()).completeSilently(any(), any(), any());
+        verify(consumer, never()).completeQuietly(any(), any(), any());
     }
 
     private void assertMockCommitCallbackInvoked(final Executable task,
