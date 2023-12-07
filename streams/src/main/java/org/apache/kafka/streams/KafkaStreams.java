@@ -1888,10 +1888,6 @@ public class KafkaStreams implements AutoCloseable {
         final Supplier<String> errorMessage) {
         final Throwable cause;
 
-        if (future.isCancelled()) {
-            return null;
-        }
-
         try {
             return future.get(timeoutMs, TimeUnit.MILLISECONDS);
         } catch (final java.util.concurrent.TimeoutException timeout) {
