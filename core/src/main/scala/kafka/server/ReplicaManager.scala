@@ -763,11 +763,9 @@ class ReplicaManager(val config: KafkaConfig,
    * @param responseCallback              callback for sending the response
    * @param delayedProduceLock            lock for the delayed actions
    * @param recordValidationStatsCallback callback for updating stats on record conversions
-   * @param requestLocal                  container for the stateful instances scoped to this request -- this must correspond to the
-   *                                      thread calling this method
+   * @param requestLocal                  container for the stateful instances scoped to this request
+   * @param transactionalId               transactional ID if the request is from a producer and the producer is transactional
    * @param actionQueue                   the action queue to use. ReplicaManager#defaultActionQueue is used by default.
-   * @param verificationGuards            the mapping from topic partition to verification guards if transaction verification is used
-   * @param preAppendErrors               the mapping from topic partition to LogAppendResult for errors that occurred before appending
    */
   def appendRecords(timeout: Long,
                     requiredAcks: Short,
@@ -778,9 +776,241 @@ class ReplicaManager(val config: KafkaConfig,
                     delayedProduceLock: Option[Lock] = None,
                     recordValidationStatsCallback: Map[TopicPartition, RecordValidationStats] => Unit = _ => (),
                     requestLocal: RequestLocal = RequestLocal.NoCaching,
-                    actionQueue: ActionQueue = this.defaultActionQueue,
-                    verificationGuards: Map[TopicPartition, VerificationGuard] = Map.empty,
-                    preAppendErrors: Map[TopicPartition, LogAppendResult] = Map.empty): Unit = {
+                    transactionalId: String = null,
+                    actionQueue: ActionQueue = this.defaultActionQueue): Unit = {
+    if (isValidRequiredAcks(requiredAcks)) {
+
+      val verificationGuards: mutable.Map[TopicPartition, VerificationGuard] = mutable.Map[TopicPartition, VerificationGuard]()
+      val (verifiedEntriesPerPartition, notYetVerifiedEntriesPerPartition, errorsPerPartition) =
+        if (transactionalId == null || !config.transactionPartitionVerificationEnable)
+          (entriesPerPartition, Map.empty[TopicPartition, MemoryRecords], Map.empty[TopicPartition, Errors])
+        else {
+          val verifiedEntries = mutable.Map[TopicPartition, MemoryRecords]()
+          val unverifiedEntries = mutable.Map[TopicPartition, MemoryRecords]()
+          val errorEntries = mutable.Map[TopicPartition, Errors]()
+          partitionEntriesForVerification(verificationGuards, entriesPerPartition, verifiedEntries, unverifiedEntries, errorEntries)
+          (verifiedEntries.toMap, unverifiedEntries.toMap, errorEntries.toMap)
+        }
+
+      if (notYetVerifiedEntriesPerPartition.isEmpty || addPartitionsToTxnManager.isEmpty) {
+        appendEntries(verifiedEntriesPerPartition, internalTopicsAllowed, origin, requiredAcks, verificationGuards.toMap,
+          errorsPerPartition, recordValidationStatsCallback, timeout, responseCallback, delayedProduceLock, actionQueue)(requestLocal, Map.empty)
+      } else {
+        // For unverified entries, send a request to verify. When verified, the append process will proceed via the callback.
+        // We verify above that all partitions use the same producer ID.
+        val batchInfo = notYetVerifiedEntriesPerPartition.head._2.firstBatch()
+        addPartitionsToTxnManager.foreach(_.verifyTransaction(
+          transactionalId = transactionalId,
+          producerId = batchInfo.producerId,
+          producerEpoch = batchInfo.producerEpoch,
+          topicPartitions = notYetVerifiedEntriesPerPartition.keySet.toSeq,
+          callback = KafkaRequestHandler.wrapAsyncCallback(
+            appendEntries(
+              entriesPerPartition,
+              internalTopicsAllowed,
+              origin,
+              requiredAcks,
+              verificationGuards.toMap,
+              errorsPerPartition,
+              recordValidationStatsCallback,
+              timeout,
+              responseCallback,
+              delayedProduceLock,
+              actionQueue
+            ),
+            requestLocal)
+        ))
+      }
+    } else {
+      // If required.acks is outside accepted range, something is wrong with the client
+      // Just return an error and don't handle the request at all
+      val responseStatus = entriesPerPartition.map { case (topicPartition, _) =>
+        topicPartition -> new PartitionResponse(
+          Errors.INVALID_REQUIRED_ACKS,
+          LogAppendInfo.UNKNOWN_LOG_APPEND_INFO.firstOffset,
+          RecordBatch.NO_TIMESTAMP,
+          LogAppendInfo.UNKNOWN_LOG_APPEND_INFO.logStartOffset
+        )
+      }
+      responseCallback(responseStatus)
+    }
+  }
+
+  /*
+   * Note: This method can be used as a callback in a different request thread. Ensure that correct RequestLocal
+   * is passed when executing this method. Accessing non-thread-safe data structures should be avoided if possible.
+   */
+  private def appendEntries(allEntries: Map[TopicPartition, MemoryRecords],
+                            internalTopicsAllowed: Boolean,
+                            origin: AppendOrigin,
+                            requiredAcks: Short,
+                            verificationGuards: Map[TopicPartition, VerificationGuard],
+                            errorsPerPartition: Map[TopicPartition, Errors],
+                            recordConversionStatsCallback: Map[TopicPartition, RecordValidationStats] => Unit,
+                            timeout: Long,
+                            responseCallback: Map[TopicPartition, PartitionResponse] => Unit,
+                            delayedProduceLock: Option[Lock],
+                            actionQueue: ActionQueue)
+                           (requestLocal: RequestLocal, unverifiedEntries: Map[TopicPartition, Errors]): Unit = {
+    val sTime = time.milliseconds
+    val verifiedEntries =
+      if (unverifiedEntries.isEmpty)
+        allEntries
+      else
+        allEntries.filter { case (tp, _) =>
+          !unverifiedEntries.contains(tp)
+        }
+
+    val localProduceResults = appendToLocalLog(internalTopicsAllowed = internalTopicsAllowed,
+      origin, verifiedEntries, requiredAcks, requestLocal, verificationGuards.toMap)
+    debug("Produce to local log in %d ms".format(time.milliseconds - sTime))
+
+    val errorResults = (unverifiedEntries ++ errorsPerPartition).map {
+      case (topicPartition, error) =>
+        // translate transaction coordinator errors to known producer response errors
+        val customException =
+          error match {
+            case Errors.INVALID_TXN_STATE => Some(error.exception("Partition was not added to the transaction"))
+            case Errors.CONCURRENT_TRANSACTIONS |
+                 Errors.COORDINATOR_LOAD_IN_PROGRESS |
+                 Errors.COORDINATOR_NOT_AVAILABLE |
+                 Errors.NOT_COORDINATOR => Some(new NotEnoughReplicasException(
+              s"Unable to verify the partition has been added to the transaction. Underlying error: ${error.toString}"))
+            case _ => None
+          }
+        topicPartition -> LogAppendResult(
+          LogAppendInfo.UNKNOWN_LOG_APPEND_INFO,
+          Some(customException.getOrElse(error.exception)),
+          hasCustomErrorMessage = customException.isDefined
+        )
+    }
+
+    val allResults = localProduceResults ++ errorResults
+    val produceStatus = allResults.map { case (topicPartition, result) =>
+      topicPartition -> ProducePartitionStatus(
+        result.info.lastOffset + 1, // required offset
+        new PartitionResponse(
+          result.error,
+          result.info.firstOffset,
+          result.info.lastOffset,
+          result.info.logAppendTime,
+          result.info.logStartOffset,
+          result.info.recordErrors,
+          result.errorMessage
+        )
+      ) // response status
+    }
+
+    actionQueue.add {
+      () =>
+        allResults.foreach { case (topicPartition, result) =>
+          val requestKey = TopicPartitionOperationKey(topicPartition)
+          result.info.leaderHwChange match {
+            case LeaderHwChange.INCREASED =>
+              // some delayed operations may be unblocked after HW changed
+              delayedProducePurgatory.checkAndComplete(requestKey)
+              delayedFetchPurgatory.checkAndComplete(requestKey)
+              delayedDeleteRecordsPurgatory.checkAndComplete(requestKey)
+            case LeaderHwChange.SAME =>
+              // probably unblock some follower fetch requests since log end offset has been updated
+              delayedFetchPurgatory.checkAndComplete(requestKey)
+            case LeaderHwChange.NONE =>
+            // nothing
+          }
+        }
+    }
+
+    recordConversionStatsCallback(localProduceResults.map { case (k, v) => k -> v.info.recordValidationStats })
+
+    if (delayedProduceRequestRequired(requiredAcks, allEntries, allResults)) {
+      // create delayed produce operation
+      val produceMetadata = ProduceMetadata(requiredAcks, produceStatus)
+      val delayedProduce = new DelayedProduce(timeout, produceMetadata, this, responseCallback, delayedProduceLock)
+
+      // create a list of (topic, partition) pairs to use as keys for this delayed produce operation
+      val producerRequestKeys = allEntries.keys.map(TopicPartitionOperationKey(_)).toSeq
+
+      // try to complete the request immediately, otherwise put it into the purgatory
+      // this is because while the delayed produce operation is being created, new
+      // requests may arrive and hence make this operation completable.
+      delayedProducePurgatory.tryCompleteElseWatch(delayedProduce, producerRequestKeys)
+    } else {
+      // we can respond immediately
+      val produceResponseStatus = produceStatus.map { case (k, status) => k -> status.responseStatus }
+      responseCallback(produceResponseStatus)
+    }
+  }
+
+  private def partitionEntriesForVerification(verificationGuards: mutable.Map[TopicPartition, VerificationGuard],
+                                              entriesPerPartition: Map[TopicPartition, MemoryRecords],
+                                              verifiedEntries: mutable.Map[TopicPartition, MemoryRecords],
+                                              unverifiedEntries: mutable.Map[TopicPartition, MemoryRecords],
+                                              errorEntries: mutable.Map[TopicPartition, Errors]): Unit = {
+    val transactionalProducerIds = mutable.HashSet[Long]()
+    entriesPerPartition.foreach { case (topicPartition, records) =>
+      try {
+        // Produce requests (only requests that require verification) should only have one batch per partition in "batches" but check all just to be safe.
+        val transactionalBatches = records.batches.asScala.filter(batch => batch.hasProducerId && batch.isTransactional)
+        transactionalBatches.foreach(batch => transactionalProducerIds.add(batch.producerId))
+
+        if (transactionalBatches.nonEmpty) {
+          // We return VerificationGuard if the partition needs to be verified. If no state is present, no need to verify.
+          val firstBatch = records.firstBatch
+          val verificationGuard = getPartitionOrException(topicPartition).maybeStartTransactionVerification(firstBatch.producerId, firstBatch.baseSequence, firstBatch.producerEpoch)
+          if (verificationGuard != VerificationGuard.SENTINEL) {
+            verificationGuards.put(topicPartition, verificationGuard)
+            unverifiedEntries.put(topicPartition, records)
+          } else
+            verifiedEntries.put(topicPartition, records)
+        } else {
+          // If there is no producer ID or transactional records in the batches, no need to verify.
+          verifiedEntries.put(topicPartition, records)
+        }
+      } catch {
+        case e: Exception => errorEntries.put(topicPartition, Errors.forException(e))
+      }
+    }
+    // We should have exactly one producer ID for transactional records
+    if (transactionalProducerIds.size > 1) {
+      throw new InvalidPidMappingException("Transactional records contained more than one producer ID")
+    }
+  }
+
+  /**
+   * Append messages to offsets topic, and wait for them to be replicated to other replicas;
+   * the callback function will be triggered either when timeout or the required acks are satisfied;
+   * if the callback function itself is already synchronized on some object then pass this object to avoid deadlock.
+   *
+   * Noted that all pending delayed check operations are stored in a queue. All callers to ReplicaManager.appendRecords()
+   * are expected to call ActionQueue.tryCompleteActions for all affected partitions, without holding any conflicting
+   * locks.
+   *
+   * @param timeout                       maximum time we will wait to append before returning
+   * @param requiredAcks                  number of replicas who must acknowledge the append before sending the response
+   * @param internalTopicsAllowed         boolean indicating whether internal topics can be appended to
+   * @param origin                        source of the append request (ie, client, replication, coordinator)
+   * @param entriesPerPartition           the records per partition to be appended
+   * @param responseCallback              callback for sending the response
+   * @param delayedProduceLock            lock for the delayed actions
+   * @param recordValidationStatsCallback callback for updating stats on record conversions
+   * @param requestLocal                  container for the stateful instances scoped to this request -- this must correspond to the
+   *                                      thread calling this method
+   * @param actionQueue                   the action queue to use. ReplicaManager#defaultActionQueue is used by default.
+   * @param verificationGuards            the mapping from topic partition to verification guards if transaction verification is used
+   * @param preAppendErrors               the mapping from topic partition to LogAppendResult for errors that occurred before appending
+   */
+  def appendForGroup(timeout: Long,
+                     requiredAcks: Short,
+                     internalTopicsAllowed: Boolean,
+                     origin: AppendOrigin,
+                     entriesPerPartition: Map[TopicPartition, MemoryRecords],
+                     responseCallback: Map[TopicPartition, PartitionResponse] => Unit,
+                     delayedProduceLock: Option[Lock] = None,
+                     recordValidationStatsCallback: Map[TopicPartition, RecordValidationStats] => Unit = _ => (),
+                     requestLocal: RequestLocal = RequestLocal.NoCaching,
+                     actionQueue: ActionQueue = this.defaultActionQueue,
+                     verificationGuards: Map[TopicPartition, VerificationGuard] = Map.empty,
+                     preAppendErrors: Map[TopicPartition, LogAppendResult] = Map.empty): Unit = {
     if (!isValidRequiredAcks(requiredAcks)) {
       sendInvalidRequiredAcksResponse(entriesPerPartition, responseCallback)
       return
@@ -849,90 +1079,6 @@ class ReplicaManager(val config: KafkaConfig,
       val produceResponseStatus = produceStatus.map { case (k, status) => k -> status.responseStatus }
       responseCallback(produceResponseStatus)
     }
-  }
-
-  /**
-   * Handles the produce request by starting any transactional verification before appending.
-   *
-   * @param timeout                       maximum time we will wait to append before returning
-   * @param requiredAcks                  number of replicas who must acknowledge the append before sending the response
-   * @param internalTopicsAllowed         boolean indicating whether internal topics can be appended to
-   * @param origin                        source of the append request (ie, client, replication, coordinator)
-   * @param entriesPerPartition           the records per partition to be appended
-   * @param responseCallback              callback for sending the response
-   * @param delayedProduceLock            lock for the delayed actions
-   * @param recordValidationStatsCallback callback for updating stats on record conversions
-   * @param requestLocal                  container for the stateful instances scoped to this request -- this must correspond to the
-   *                                      thread calling this method
-   * @param actionQueue                   the action queue to use. ReplicaManager#defaultActionQueue is used by default.
-   * @param verificationGuards            the mapping from topic partition to verification guards if transaction verification is used
-   */
-  def handleProduceAppend(timeout: Long,
-                          requiredAcks: Short,
-                          internalTopicsAllowed: Boolean,
-                          origin: AppendOrigin,
-                          transactionalId: String,
-                          entriesPerPartition: Map[TopicPartition, MemoryRecords],
-                          responseCallback: Map[TopicPartition, PartitionResponse] => Unit,
-                          recordValidationStatsCallback: Map[TopicPartition, RecordValidationStats] => Unit = _ => (),
-                          requestLocal: RequestLocal = RequestLocal.NoCaching,
-                          actionQueue: ActionQueue = this.defaultActionQueue): Unit = {
-
-    val transactionalProducerInfo = mutable.HashSet[(Long, Short)]()
-    val topicPartitionBatchInfo = mutable.Map[TopicPartition, Int]()
-    entriesPerPartition.foreach { case (topicPartition, records) =>
-      // Produce requests (only requests that require verification) should only have one batch per partition in "batches" but check all just to be safe.
-      val transactionalBatches = records.batches.asScala.filter(batch => batch.hasProducerId && batch.isTransactional)
-      transactionalBatches.foreach(batch => transactionalProducerInfo.add(batch.producerId, batch.producerEpoch))
-      if (!transactionalBatches.isEmpty) topicPartitionBatchInfo.put(topicPartition, records.firstBatch.baseSequence)
-    }
-    if (transactionalProducerInfo.size > 1) {
-      throw new InvalidPidMappingException("Transactional records contained more than one producer ID")
-    }
-
-    def postVerificationCallback(preAppendErrors: Map[TopicPartition, Errors],
-                                 newRequestLocal: RequestLocal,
-                                 verificationGuards: Map[TopicPartition, VerificationGuard]): Unit = {
-      val errorResults = preAppendErrors.map {
-        case (topicPartition, error) =>
-          // translate transaction coordinator errors to known producer response errors
-          val customException =
-            error match {
-              case Errors.INVALID_TXN_STATE => Some(error.exception("Partition was not added to the transaction"))
-              case Errors.CONCURRENT_TRANSACTIONS |
-                   Errors.COORDINATOR_LOAD_IN_PROGRESS |
-                   Errors.COORDINATOR_NOT_AVAILABLE |
-                   Errors.NOT_COORDINATOR => Some(new NotEnoughReplicasException(
-                s"Unable to verify the partition has been added to the transaction. Underlying error: ${error.toString}"))
-              case _ => None
-            }
-          topicPartition -> LogAppendResult(
-            LogAppendInfo.UNKNOWN_LOG_APPEND_INFO,
-            Some(customException.getOrElse(error.exception)),
-            hasCustomErrorMessage = customException.isDefined
-          )
-      }
-
-      appendRecords(
-        timeout = timeout,
-        requiredAcks = requiredAcks,
-        internalTopicsAllowed = internalTopicsAllowed,
-        origin = origin,
-        entriesPerPartition = entriesPerPartition,
-        responseCallback = responseCallback,
-        recordValidationStatsCallback = recordValidationStatsCallback,
-        requestLocal = newRequestLocal,
-        verificationGuards = verificationGuards,
-        preAppendErrors = errorResults
-      )
-    }
-
-    if (transactionalProducerInfo.size < 1) {
-      postVerificationCallback(Map.empty[TopicPartition, Errors], requestLocal, Map.empty[TopicPartition, VerificationGuard])
-      return
-    }
-    maybeStartTransactionVerificationForPartitions(topicPartitionBatchInfo, transactionalId,
-      transactionalProducerInfo.head._1, transactionalProducerInfo.head._2, requestLocal, postVerificationCallback)
   }
 
   private def sendInvalidRequiredAcksResponse(entries: Map[TopicPartition, MemoryRecords],

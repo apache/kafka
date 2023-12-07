@@ -331,7 +331,7 @@ class GroupMetadataManager(brokerId: Int,
                              verificationGuards: Map[TopicPartition, VerificationGuard] = Map.empty,
                              preAppendErrors: Map[TopicPartition, LogAppendResult] = Map.empty): Unit = {
     // call replica manager to append the group message
-    replicaManager.appendRecords(
+    replicaManager.appendForGroup(
       timeout = config.offsetCommitTimeoutMs.toLong,
       requiredAcks = config.offsetCommitRequiredAcks,
       internalTopicsAllowed = true,

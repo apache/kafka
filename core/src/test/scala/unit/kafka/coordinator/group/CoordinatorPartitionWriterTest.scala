@@ -112,7 +112,6 @@ class CoordinatorPartitionWriterTest {
       ArgumentMatchers.any(),
       ArgumentMatchers.any(),
       ArgumentMatchers.any(),
-      ArgumentMatchers.any(),
       ArgumentMatchers.any()
     )).thenAnswer( _ => {
       callbackCapture.getValue.apply(Map(
@@ -184,7 +183,6 @@ class CoordinatorPartitionWriterTest {
       ArgumentMatchers.eq(AppendOrigin.COORDINATOR),
       recordsCapture.capture(),
       callbackCapture.capture(),
-      ArgumentMatchers.any(),
       ArgumentMatchers.any(),
       ArgumentMatchers.any(),
       ArgumentMatchers.any(),
@@ -265,7 +263,6 @@ class CoordinatorPartitionWriterTest {
       ArgumentMatchers.eq(AppendOrigin.COORDINATOR),
       recordsCapture.capture(),
       callbackCapture.capture(),
-      ArgumentMatchers.any(),
       ArgumentMatchers.any(),
       ArgumentMatchers.any(),
       ArgumentMatchers.any(),

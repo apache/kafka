@@ -183,6 +183,22 @@ object AbstractCoordinatorConcurrencyTest {
 
     override def tryCompleteActions(): Unit = watchKeys.map(producePurgatory.checkAndComplete)
 
+    override def appendForGroup(timeout: Long,
+                                requiredAcks: Short,
+                                internalTopicsAllowed: Boolean,
+                                origin: AppendOrigin,
+                                entriesPerPartition: Map[TopicPartition, MemoryRecords],
+                                responseCallback: Map[TopicPartition, PartitionResponse] => Unit,
+                                delayedProduceLock: Option[Lock] = None,
+                                recordValidationStatsCallback: Map[TopicPartition, RecordValidationStats] => Unit = _ => (),
+                                requestLocal: RequestLocal = RequestLocal.NoCaching,
+                                actionQueue: ActionQueue = null,
+                                verificationGuards: Map[TopicPartition, VerificationGuard] = Map.empty,
+                                preAppendErrors: Map[TopicPartition, LogAppendResult] = Map.empty): Unit = {
+      appendRecords(timeout, requiredAcks, internalTopicsAllowed, origin, entriesPerPartition, responseCallback,
+        delayedProduceLock, recordValidationStatsCallback, requestLocal, null, actionQueue)
+    }
+
     override def appendRecords(timeout: Long,
                                requiredAcks: Short,
                                internalTopicsAllowed: Boolean,
@@ -192,9 +208,8 @@ object AbstractCoordinatorConcurrencyTest {
                                delayedProduceLock: Option[Lock] = None,
                                processingStatsCallback: Map[TopicPartition, RecordValidationStats] => Unit = _ => (),
                                requestLocal: RequestLocal = RequestLocal.NoCaching,
-                               actionQueue: ActionQueue = null,
-                               verificationGuards: Map[TopicPartition, VerificationGuard] = Map.empty,
-                               preAppendErrors: Map[TopicPartition, LogAppendResult] = Map.empty): Unit = {
+                               transactionalId: String = null,
+                               actionQueue: ActionQueue = null): Unit = {
 
       if (entriesPerPartition.isEmpty)
         return

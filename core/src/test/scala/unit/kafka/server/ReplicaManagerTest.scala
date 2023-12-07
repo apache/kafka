@@ -657,7 +657,7 @@ class ReplicaManagerTest {
       val sequence = 9
       val records = MemoryRecords.withTransactionalRecords(CompressionType.NONE, producerId, epoch, sequence,
         new SimpleRecord(time.milliseconds(), s"message $sequence".getBytes))
-      appendRecordsWithTransactionVerification(replicaManager, new TopicPartition(topic, 0), records, transactionalId = transactionalId).onFire { response =>
+      appendRecords(replicaManager, new TopicPartition(topic, 0), records, transactionalId = transactionalId).onFire { response =>
         assertEquals(Errors.NONE, response.error)
       }
       assertLateTransactionCount(Some(0))
@@ -721,7 +721,7 @@ class ReplicaManagerTest {
       for (sequence <- 0 until numRecords) {
         val records = MemoryRecords.withTransactionalRecords(CompressionType.NONE, producerId, epoch, sequence,
           new SimpleRecord(s"message $sequence".getBytes))
-        appendRecordsWithTransactionVerification(replicaManager, new TopicPartition(topic, 0), records, transactionalId = transactionalId).onFire { response =>
+        appendRecords(replicaManager, new TopicPartition(topic, 0), records, transactionalId = transactionalId).onFire { response =>
           assertEquals(Errors.NONE, response.error)
         }
       }
@@ -842,7 +842,7 @@ class ReplicaManagerTest {
       for (sequence <- 0 until numRecords) {
         val records = MemoryRecords.withTransactionalRecords(CompressionType.NONE, producerId, epoch, sequence,
           new SimpleRecord(s"message $sequence".getBytes))
-        appendRecordsWithTransactionVerification(replicaManager, new TopicPartition(topic, 0), records, transactionalId = transactionalId).onFire { response =>
+        appendRecords(replicaManager, new TopicPartition(topic, 0), records, transactionalId = transactionalId).onFire { response =>
           assertEquals(Errors.NONE, response.error)
         }
       }
@@ -2165,7 +2165,7 @@ class ReplicaManagerTest {
       // If we supply no transactional ID and idempotent records, we do not verify.
       val idempotentRecords = MemoryRecords.withIdempotentRecords(CompressionType.NONE, producerId, producerEpoch, sequence,
         new SimpleRecord("message".getBytes))
-      appendRecordsWithTransactionVerification(replicaManager, tp0, idempotentRecords, transactionalId = null)
+      appendRecords(replicaManager, tp0, idempotentRecords)
       verify(addPartitionsToTxnManager, times(0)).verifyTransaction(any(), any(), any(), any(), any[AddPartitionsToTxnManager.AppendCallback]())
       assertEquals(VerificationGuard.SENTINEL, getVerificationGuard(replicaManager, tp0, producerId))
 
@@ -2175,7 +2175,7 @@ class ReplicaManagerTest {
 
       val idempotentRecords2 = MemoryRecords.withIdempotentRecords(CompressionType.NONE, producerId, producerEpoch, sequence,
         new SimpleRecord("message".getBytes))
-      appendRecordsToMultipleTopicsWithTransactionVerification(replicaManager, Map(tp0 -> transactionalRecords, tp1 -> idempotentRecords2), transactionalId)
+      appendRecordsToMultipleTopics(replicaManager, Map(tp0 -> transactionalRecords, tp1 -> idempotentRecords2), transactionalId)
       verify(addPartitionsToTxnManager, times(1)).verifyTransaction(
         ArgumentMatchers.eq(transactionalId),
         ArgumentMatchers.eq(producerId),
@@ -2210,7 +2210,7 @@ class ReplicaManagerTest {
         new SimpleRecord("message".getBytes))
 
       // We should add these partitions to the manager to verify.
-      val result = appendRecordsWithTransactionVerification(replicaManager, tp0, transactionalRecords, origin = appendOrigin, transactionalId = transactionalId)
+      val result = appendRecords(replicaManager, tp0, transactionalRecords, origin = appendOrigin, transactionalId = transactionalId)
       val appendCallback = ArgumentCaptor.forClass(classOf[AddPartitionsToTxnManager.AppendCallback])
       verify(addPartitionsToTxnManager, times(1)).verifyTransaction(
         ArgumentMatchers.eq(transactionalId),
@@ -2229,7 +2229,7 @@ class ReplicaManagerTest {
       assertEquals(verificationGuard, getVerificationGuard(replicaManager, tp0, producerId))
 
       // This time verification is successful.
-      appendRecordsWithTransactionVerification(replicaManager, tp0, transactionalRecords, origin = appendOrigin, transactionalId = transactionalId)
+      appendRecords(replicaManager, tp0, transactionalRecords, origin = appendOrigin, transactionalId = transactionalId)
       val appendCallback2 = ArgumentCaptor.forClass(classOf[AddPartitionsToTxnManager.AppendCallback])
       verify(addPartitionsToTxnManager, times(2)).verifyTransaction(
         ArgumentMatchers.eq(transactionalId),
@@ -2268,7 +2268,7 @@ class ReplicaManagerTest {
         new SimpleRecord("message".getBytes))
 
       // We should add these partitions to the manager to verify.
-      val result = appendRecordsWithTransactionVerification(replicaManager, tp0, transactionalRecords, transactionalId = transactionalId)
+      val result = appendRecords(replicaManager, tp0, transactionalRecords, transactionalId = transactionalId)
       val appendCallback = ArgumentCaptor.forClass(classOf[AddPartitionsToTxnManager.AppendCallback])
       verify(addPartitionsToTxnManager, times(1)).verifyTransaction(
         ArgumentMatchers.eq(transactionalId),
@@ -2290,7 +2290,7 @@ class ReplicaManagerTest {
       val transactionalRecords2 = MemoryRecords.withTransactionalRecords(CompressionType.NONE, producerId, producerEpoch, sequence + 1,
         new SimpleRecord("message".getBytes))
 
-      val result2 = appendRecordsWithTransactionVerification(replicaManager, tp0, transactionalRecords2, transactionalId = transactionalId)
+      val result2 = appendRecords(replicaManager, tp0, transactionalRecords2, transactionalId = transactionalId)
       val appendCallback2 = ArgumentCaptor.forClass(classOf[AddPartitionsToTxnManager.AppendCallback])
       verify(addPartitionsToTxnManager, times(2)).verifyTransaction(
         ArgumentMatchers.eq(transactionalId),
@@ -2333,7 +2333,7 @@ class ReplicaManagerTest {
       val transactionalRecords = MemoryRecords.withTransactionalRecords(CompressionType.NONE, producerId, producerEpoch, sequence,
         new SimpleRecord(s"message $sequence".getBytes))
 
-      appendRecordsToMultipleTopicsWithTransactionVerification(replicaManager, Map(tp0 -> transactionalRecords, tp1 -> transactionalRecords), transactionalId).onFire { responses =>
+      appendRecordsToMultipleTopics(replicaManager, Map(tp0 -> transactionalRecords, tp1 -> transactionalRecords), transactionalId).onFire { responses =>
         responses.foreach {
           entry => assertEquals(Errors.NONE, entry._2.error)
         }
@@ -2373,7 +2373,7 @@ class ReplicaManagerTest {
         new SimpleRecord(s"message $sequence".getBytes)))
 
       assertThrows(classOf[InvalidPidMappingException],
-        () => appendRecordsToMultipleTopicsWithTransactionVerification(replicaManager, transactionalRecords, transactionalId = transactionalId))
+        () => appendRecordsToMultipleTopics(replicaManager, transactionalRecords, transactionalId = transactionalId))
       // We should not add these partitions to the manager to verify.
       verify(addPartitionsToTxnManager, times(0)).verifyTransaction(any(), any(), any(), any(), any())
     } finally {
@@ -2396,7 +2396,7 @@ class ReplicaManagerTest {
         new SimpleRecord("message".getBytes))
 
       // We should not add these partitions to the manager to verify, but instead throw an error.
-      appendRecordsWithTransactionVerification(replicaManager, tp0, transactionalRecords, transactionalId = transactionalId).onFire { response =>
+      appendRecords(replicaManager, tp0, transactionalRecords, transactionalId = transactionalId).onFire { response =>
         assertEquals(Errors.NOT_LEADER_OR_FOLLOWER, response.error)
       }
       verify(addPartitionsToTxnManager, times(0)).verifyTransaction(any(), any(), any(), any(), any())
@@ -2427,9 +2427,8 @@ class ReplicaManagerTest {
 
       val transactionalRecords = MemoryRecords.withTransactionalRecords(CompressionType.NONE, producerId, producerEpoch, sequence,
         new SimpleRecord(s"message $sequence".getBytes))
-      val result = appendRecordsWithTransactionVerification(replicaManager, tp, transactionalRecords, transactionalId = transactionalId)
+      appendRecords(replicaManager, tp, transactionalRecords, transactionalId = transactionalId)
       assertEquals(VerificationGuard.SENTINEL, getVerificationGuard(replicaManager, tp, producerId))
-      assertEquals(Errors.NONE, result.assertFired.error)
 
       // We should not add these partitions to the manager to verify.
       verify(addPartitionsToTxnManager, times(0)).verifyTransaction(any(), any(), any(), any(), any())
@@ -2445,7 +2444,7 @@ class ReplicaManagerTest {
       val moreTransactionalRecords = MemoryRecords.withTransactionalRecords(CompressionType.NONE, producerId, producerEpoch, sequence + 1,
         new SimpleRecord("message".getBytes))
 
-      appendRecordsWithTransactionVerification(replicaManager, tp, moreTransactionalRecords, transactionalId = transactionalId)
+      appendRecords(replicaManager, tp, moreTransactionalRecords, transactionalId = transactionalId)
       verify(addPartitionsToTxnManager, times(0)).verifyTransaction(any(), any(), any(), any(), any())
       assertEquals(VerificationGuard.SENTINEL, getVerificationGuard(replicaManager, tp, producerId))
       assertTrue(replicaManager.localLog(tp).get.hasOngoingTransaction(producerId))
@@ -2473,7 +2472,7 @@ class ReplicaManagerTest {
         new SimpleRecord("message".getBytes))
 
       // We should add these partitions to the manager to verify.
-      val result = appendRecordsWithTransactionVerification(replicaManager, tp0, transactionalRecords, transactionalId = transactionalId)
+      val result = appendRecords(replicaManager, tp0, transactionalRecords, transactionalId = transactionalId)
       val appendCallback = ArgumentCaptor.forClass(classOf[AddPartitionsToTxnManager.AppendCallback])
       verify(addPartitionsToTxnManager, times(1)).verifyTransaction(
         ArgumentMatchers.eq(transactionalId),
@@ -2499,7 +2498,7 @@ class ReplicaManagerTest {
       assertEquals(verificationGuard, getVerificationGuard(replicaManager, tp0, producerId))
 
       // This time we do not verify
-      appendRecordsWithTransactionVerification(replicaManager, tp0, transactionalRecords, transactionalId = transactionalId)
+      appendRecords(replicaManager, tp0, transactionalRecords, transactionalId = transactionalId)
       verify(addPartitionsToTxnManager, times(1)).verifyTransaction(any(), any(), any(), any(), any())
       assertEquals(VerificationGuard.SENTINEL, getVerificationGuard(replicaManager, tp0, producerId))
       assertTrue(replicaManager.localLog(tp0).get.hasOngoingTransaction(producerId))
@@ -2528,7 +2527,7 @@ class ReplicaManagerTest {
 
       // Start verification and return the coordinator related errors.
       val expectedMessage = s"Unable to verify the partition has been added to the transaction. Underlying error: ${error.toString}"
-      val result = appendRecordsWithTransactionVerification(replicaManager, tp0, transactionalRecords, transactionalId = transactionalId)
+      val result = appendRecords(replicaManager, tp0, transactionalRecords, transactionalId = transactionalId)
       val appendCallback = ArgumentCaptor.forClass(classOf[AddPartitionsToTxnManager.AppendCallback])
       verify(addPartitionsToTxnManager, times(1)).verifyTransaction(
         ArgumentMatchers.eq(transactionalId),
@@ -2916,7 +2915,8 @@ class ReplicaManagerTest {
                             partition: TopicPartition,
                             records: MemoryRecords,
                             origin: AppendOrigin = AppendOrigin.CLIENT,
-                            requiredAcks: Short = -1): CallbackResult[PartitionResponse] = {
+                            requiredAcks: Short = -1,
+                            transactionalId: String = null): CallbackResult[PartitionResponse] = {
     val result = new CallbackResult[PartitionResponse]()
     def appendCallback(responses: Map[TopicPartition, PartitionResponse]): Unit = {
       val response = responses.get(partition)
@@ -2931,57 +2931,31 @@ class ReplicaManagerTest {
       origin = origin,
       entriesPerPartition = Map(partition -> records),
       responseCallback = appendCallback,
+      transactionalId = transactionalId,
     )
 
     result
   }
 
-  private def appendRecordsToMultipleTopicsWithTransactionVerification(replicaManager: ReplicaManager,
-                                                                       entriesToAppend: Map[TopicPartition, MemoryRecords],
-                                                                       transactionalId: String,
-                                                                       origin: AppendOrigin = AppendOrigin.CLIENT,
-                                                                       requiredAcks: Short = -1): CallbackResult[Map[TopicPartition, PartitionResponse]] = {
+  private def appendRecordsToMultipleTopics(replicaManager: ReplicaManager,
+                                            entriesToAppend: Map[TopicPartition, MemoryRecords],
+                                            transactionalId: String,
+                                            origin: AppendOrigin = AppendOrigin.CLIENT,
+                                            requiredAcks: Short = -1): CallbackResult[Map[TopicPartition, PartitionResponse]] = {
     val result = new CallbackResult[Map[TopicPartition, PartitionResponse]]()
     def appendCallback(responses: Map[TopicPartition, PartitionResponse]): Unit = {
       responses.foreach( response => assertTrue(responses.get(response._1).isDefined))
       result.fire(responses)
     }
-      replicaManager.handleProduceAppend(
-        timeout = 1000,
-        requiredAcks = requiredAcks,
-        internalTopicsAllowed = false,
-        origin = origin,
-        transactionalId = transactionalId,
-        entriesPerPartition = entriesToAppend,
-        responseCallback = appendCallback,
-      )
 
-    result
-  }
-
-  private def appendRecordsWithTransactionVerification(replicaManager: ReplicaManager,
-                                                       partition: TopicPartition,
-                                                       records: MemoryRecords,
-                                                       origin: AppendOrigin = AppendOrigin.CLIENT,
-                                                       requiredAcks: Short = -1,
-                                                       transactionalId: String): CallbackResult[PartitionResponse] = {
-    val result = new CallbackResult[PartitionResponse]()
-
-    def appendCallback(responses: Map[TopicPartition, PartitionResponse]): Unit = {
-      val response = responses.get(partition)
-      assertTrue(response.isDefined)
-      result.fire(response.get)
-    }
-
-    val entriesPerPartition = Map(partition -> records)
-    replicaManager.handleProduceAppend(
+    replicaManager.appendRecords(
       timeout = 1000,
       requiredAcks = requiredAcks,
       internalTopicsAllowed = false,
       origin = origin,
-      transactionalId = transactionalId,
-      entriesPerPartition = entriesPerPartition,
+      entriesPerPartition = entriesToAppend,
       responseCallback = appendCallback,
+      transactionalId = transactionalId,
     )
 
     result
