@@ -78,7 +78,6 @@ kafka_url: https://archive.apache.org/dist/kafka/3.6.0/kafka_2.13-3.6.0.tgz
 rc_docker_image: kafka/test:3.6.0-rc0
 ```
 
-
 Promoting a release
 -------------------
 `docker_promote.py` provides an interactive way to pull an RC Docker image and promote it to required dockerhub repo.
@@ -92,12 +91,10 @@ Make sure the `DOCKERHUB_USERNAME` account has push access to dockerhub repo tha
 
 Example:-
 If you want to promote kafka/test:3.6.0-rc0 RC docker image to apache/kafka:3.6.0 then following parameters can be provided to the workflow.
-
 ```
 rc_docker_image: kafka/test:3.6.0-rc0
 promoted_docker_image: apache/kafka:3.6.0
 ```
-
 
 Using the image in a docker container
 -------------------------------------
