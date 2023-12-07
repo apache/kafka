@@ -67,17 +67,17 @@ object KafkaRequestHandler {
     if (requestChannel == null || currentRequest == null) {
       if (!bypassThreadCheck)
         throw new IllegalStateException("Attempted to reschedule to request handler thread from non-request handler thread.")
-      t => asyncCompletionCallback(requestLocal, t)
+      T => asyncCompletionCallback(requestLocal, T)
     } else {
-      t => {
+      T => {
         if (threadCurrentRequest.get() == currentRequest) {
           // If the callback is actually executed on the same request thread, we can directly execute
           // it without re-scheduling it.
-          asyncCompletionCallback(requestLocal, t)
+          asyncCompletionCallback(requestLocal, T)
         } else {
           // The requestChannel and request are captured in this lambda, so when it's executed on the callback thread
           // we can re-schedule the original callback on a request thread and update the metrics accordingly.
-          requestChannel.sendCallbackRequest(RequestChannel.CallbackRequest(newRequestLocal => asyncCompletionCallback(newRequestLocal, t), currentRequest))
+          requestChannel.sendCallbackRequest(RequestChannel.CallbackRequest(newRequestLocal => asyncCompletionCallback(newRequestLocal, T), currentRequest))
         }
       }
     }
