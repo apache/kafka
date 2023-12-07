@@ -249,8 +249,11 @@ public class ReplicationControlManager {
 
         @Override
         public Uuid defaultDir(int brokerId) {
-            // TODO KAFKA-15361 & KAFKA-15364 determine default dir based on broker registration and heartbeat
-            return DirectoryId.MIGRATING;
+            if (featureControl.metadataVersion().isDirectoryAssignmentSupported()) {
+                return clusterControl.defaultDir(brokerId);
+            } else {
+                return DirectoryId.MIGRATING;
+            }
         }
     }
 
@@ -2104,8 +2107,7 @@ public class ReplicationControlManager {
                 return false;
             }
             Uuid replicaDirectory = partition.directory(brokerId);
-            BrokerRegistration brokerRegistration = clusterControl.brokerRegistrations().get(brokerId);
-            return brokerRegistration.hasOnlineDir(replicaDirectory);
+            return clusterControl.hasOnlineDir(brokerId, replicaDirectory);
         }
     }
 }

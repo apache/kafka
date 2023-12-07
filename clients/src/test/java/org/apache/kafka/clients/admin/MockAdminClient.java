@@ -1306,7 +1306,9 @@ public class MockAdminClient extends AdminClient {
 
     @Override
     public ListClientMetricsResourcesResult listClientMetricsResources(ListClientMetricsResourcesOptions options) {
-        throw new UnsupportedOperationException("Not implemented yet");
+        KafkaFutureImpl<Collection<ClientMetricsResourceListing>> future = new KafkaFutureImpl<>();
+        future.complete(clientMetricsConfigs.keySet().stream().map(ClientMetricsResourceListing::new).collect(Collectors.toList()));
+        return new ListClientMetricsResourcesResult(future);
     }
 
     @Override

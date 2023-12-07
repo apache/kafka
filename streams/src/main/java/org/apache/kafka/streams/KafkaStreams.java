@@ -171,7 +171,7 @@ public class KafkaStreams implements AutoCloseable {
     private final StreamsMetricsImpl streamsMetrics;
     private final long totalCacheSize;
     private final StreamStateListener streamStateListener;
-    private final StateRestoreListener delegatingStateRestoreListener;
+    private final DelegatingStateRestoreListener delegatingStateRestoreListener;
     private final Map<Long, StreamThread.State> threadState;
     private final UUID processId;
     private final KafkaClientSupplier clientSupplier;
@@ -181,7 +181,6 @@ public class KafkaStreams implements AutoCloseable {
 
     GlobalStreamThread globalStreamThread;
     private KafkaStreams.StateListener stateListener;
-    private StateRestoreListener globalStateRestoreListener;
     private boolean oldHandler;
     private BiConsumer<Throwable, Boolean> streamsUncaughtExceptionHandler;
     private final Object changeThreadCount = new Object();
@@ -575,7 +574,7 @@ public class KafkaStreams implements AutoCloseable {
     public void setGlobalStateRestoreListener(final StateRestoreListener globalStateRestoreListener) {
         synchronized (stateLock) {
             if (state.hasNotStarted()) {
-                this.globalStateRestoreListener = globalStateRestoreListener;
+                delegatingStateRestoreListener.setUserStateRestoreListener(globalStateRestoreListener);
             } else {
                 throw new IllegalStateException("Can only set GlobalStateRestoreListener before calling start(). " +
                     "Current state is: " + state);
@@ -700,7 +699,9 @@ public class KafkaStreams implements AutoCloseable {
         }
     }
 
-    final class DelegatingStateRestoreListener implements StateRestoreListener {
+    static final class DelegatingStateRestoreListener implements StateRestoreListener {
+        private StateRestoreListener userStateRestoreListener;
+
         private void throwOnFatalException(final Exception fatalUserException,
                                            final TopicPartition topicPartition,
                                            final String storeName) {
@@ -711,14 +712,18 @@ public class KafkaStreams implements AutoCloseable {
                     fatalUserException);
         }
 
+        void setUserStateRestoreListener(final StateRestoreListener userStateRestoreListener) {
+            this.userStateRestoreListener = userStateRestoreListener;
+        }
+
         @Override
         public void onRestoreStart(final TopicPartition topicPartition,
                                    final String storeName,
                                    final long startingOffset,
                                    final long endingOffset) {
-            if (globalStateRestoreListener != null) {
+            if (userStateRestoreListener != null) {
                 try {
-                    globalStateRestoreListener.onRestoreStart(topicPartition, storeName, startingOffset, endingOffset);
+                    userStateRestoreListener.onRestoreStart(topicPartition, storeName, startingOffset, endingOffset);
                 } catch (final Exception fatalUserException) {
                     throwOnFatalException(fatalUserException, topicPartition, storeName);
                 }
@@ -730,9 +735,9 @@ public class KafkaStreams implements AutoCloseable {
                                     final String storeName,
                                     final long batchEndOffset,
                                     final long numRestored) {
-            if (globalStateRestoreListener != null) {
+            if (userStateRestoreListener != null) {
                 try {
-                    globalStateRestoreListener.onBatchRestored(topicPartition, storeName, batchEndOffset, numRestored);
+                    userStateRestoreListener.onBatchRestored(topicPartition, storeName, batchEndOffset, numRestored);
                 } catch (final Exception fatalUserException) {
                     throwOnFatalException(fatalUserException, topicPartition, storeName);
                 }
@@ -741,9 +746,9 @@ public class KafkaStreams implements AutoCloseable {
 
         @Override
         public void onRestoreEnd(final TopicPartition topicPartition, final String storeName, final long totalRestored) {
-            if (globalStateRestoreListener != null) {
+            if (userStateRestoreListener != null) {
                 try {
-                    globalStateRestoreListener.onRestoreEnd(topicPartition, storeName, totalRestored);
+                    userStateRestoreListener.onRestoreEnd(topicPartition, storeName, totalRestored);
                 } catch (final Exception fatalUserException) {
                     throwOnFatalException(fatalUserException, topicPartition, storeName);
                 }
@@ -752,9 +757,9 @@ public class KafkaStreams implements AutoCloseable {
 
         @Override
         public void onRestoreSuspended(final TopicPartition topicPartition, final String storeName, final long totalRestored) {
-            if (globalStateRestoreListener != null) {
+            if (userStateRestoreListener != null) {
                 try {
-                    globalStateRestoreListener.onRestoreSuspended(topicPartition, storeName, totalRestored);
+                    userStateRestoreListener.onRestoreSuspended(topicPartition, storeName, totalRestored);
                 } catch (final Exception fatalUserException) {
                     throwOnFatalException(fatalUserException, topicPartition, storeName);
                 }

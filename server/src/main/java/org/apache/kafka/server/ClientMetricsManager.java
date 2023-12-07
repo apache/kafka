@@ -91,6 +91,10 @@ public class ClientMetricsManager implements Closeable {
         this.time = time;
     }
 
+    public Set<String> listClientMetricsResources() {
+        return subscriptionMap.keySet();
+    }
+
     public void updateSubscription(String subscriptionName, Properties properties) {
         // Validate the subscription properties.
         ClientMetricsConfigs.validate(subscriptionName, properties);

@@ -29,7 +29,6 @@ import org.apache.kafka.image.writer.RecordListWriter;
 import org.apache.kafka.metadata.LeaderRecoveryState;
 import org.apache.kafka.metadata.PartitionRegistration;
 import org.apache.kafka.metadata.RecordTestUtils;
-import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.server.immutable.ImmutableMap;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.junit.jupiter.api.Test;
@@ -49,7 +48,6 @@ import static org.apache.kafka.common.metadata.MetadataRecordType.PARTITION_CHAN
 import static org.apache.kafka.common.metadata.MetadataRecordType.PARTITION_RECORD;
 import static org.apache.kafka.common.metadata.MetadataRecordType.REMOVE_TOPIC_RECORD;
 import static org.apache.kafka.common.metadata.MetadataRecordType.TOPIC_RECORD;
-import static org.apache.kafka.metadata.util.MetadataFeatureUtil.withDirectoryAssignmentSupport;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -440,9 +438,7 @@ public class TopicsImageTest {
 
     private static List<ApiMessageAndVersion> getImageRecords(TopicsImage image) {
         RecordListWriter writer = new RecordListWriter();
-        image.write(writer, new ImageWriterOptions.Builder().
-                setMetadataVersion(withDirectoryAssignmentSupport(MetadataVersion.latest())).
-                build());
+        image.write(writer, new ImageWriterOptions.Builder().build());
         return writer.records();
     }
 
