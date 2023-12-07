@@ -363,8 +363,6 @@ final class RocksDBVersionedStoreSegmentValueFormatter {
             long currTimestamp = -1;
             long currNextTimestamp = -1;
 
-//            int currentCumValueSize = cumulativeValueSize;
-//            int currIndex = deserIndex;
 
             if (order.equals(ResultOrder.ASCENDING) && valuesStartingIndex == -1) {
                 findValuesStartingIndex();
