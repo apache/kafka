@@ -251,13 +251,25 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
     AsyncKafkaConsumer(final ConsumerConfig config,
                        final Deserializer<K> keyDeserializer,
                        final Deserializer<V> valueDeserializer) {
-        this(config, keyDeserializer, valueDeserializer, new LinkedBlockingQueue<>());
+        this(
+            config,
+            keyDeserializer,
+            valueDeserializer,
+            Time.SYSTEM,
+            ApplicationEventHandler::new,
+            FetchCollector::new,
+            ConsumerMetadata::new
+        );
     }
 
+    // Visible for testing
     AsyncKafkaConsumer(final ConsumerConfig config,
                        final Deserializer<K> keyDeserializer,
                        final Deserializer<V> valueDeserializer,
-                       final LinkedBlockingQueue<BackgroundEvent> backgroundEventQueue) {
+                       final Time time,
+                       final ApplicationEventHandlerSupplier applicationEventHandlerFactory,
+                       final FetchCollectorFactory<K, V> fetchCollectorFactory,
+                       final ConsumerMetadataFactory metadataFactory) {
         try {
             GroupRebalanceConfig groupRebalanceConfig = new GroupRebalanceConfig(
                 config,
@@ -269,7 +281,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
 
             log.debug("Initializing the Kafka consumer");
             this.defaultApiTimeoutMs = config.getInt(ConsumerConfig.DEFAULT_API_TIMEOUT_MS_CONFIG);
-            this.time = Time.SYSTEM;
+            this.time = time;
             List<MetricsReporter> reporters = CommonClientConfigs.metricsReporters(clientId, config);
             this.clientTelemetryReporter = CommonClientConfigs.telemetryReporter(clientId, config);
             this.clientTelemetryReporter.ifPresent(reporters::add);
@@ -283,7 +295,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             ClusterResourceListeners clusterResourceListeners = ClientUtils.configureClusterResourceListeners(metrics.reporters(),
                     interceptorList,
                     Arrays.asList(deserializers.keyDeserializer, deserializers.valueDeserializer));
-            this.metadata = new ConsumerMetadata(config, subscriptions, logContext, clusterResourceListeners);
+            this.metadata = metadataFactory.build(config, subscriptions, logContext, clusterResourceListeners);
             final List<InetSocketAddress> addresses = ClientUtils.parseAndValidateAddresses(config);
             metadata.bootstrap(addresses);
 
@@ -320,7 +332,8 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                     metadata,
                     applicationEventQueue,
                     requestManagersSupplier);
-            this.applicationEventHandler = new ApplicationEventHandler(logContext,
+            this.applicationEventHandler = applicationEventHandlerFactory.build(
+                    logContext,
                     time,
                     applicationEventQueue,
                     applicationEventProcessorSupplier,
@@ -335,7 +348,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             this.groupMetadata = initializeGroupMetadata(config, groupRebalanceConfig);
 
             // The FetchCollector is only used on the application thread.
-            this.fetchCollector = new FetchCollector<>(logContext,
+            this.fetchCollector = fetchCollectorFactory.build(logContext,
                     metadata,
                     subscriptions,
                     fetchConfig,
@@ -480,6 +493,47 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                 applicationEventProcessorSupplier,
                 networkClientDelegateSupplier,
                 requestManagersSupplier);
+    }
+
+    // auxiliary interface for testing
+    interface ApplicationEventHandlerSupplier {
+
+        ApplicationEventHandler build(
+            final LogContext logContext,
+            final Time time,
+            final BlockingQueue<ApplicationEvent> applicationEventQueue,
+            final Supplier<ApplicationEventProcessor> applicationEventProcessorSupplier,
+            final Supplier<NetworkClientDelegate> networkClientDelegateSupplier,
+            final Supplier<RequestManagers> requestManagersSupplier
+        );
+
+    }
+
+    // auxiliary interface for testing
+    interface FetchCollectorFactory<K,V> {
+
+        FetchCollector<K,V> build(
+            final LogContext logContext,
+            final ConsumerMetadata metadata,
+            final SubscriptionState subscriptions,
+            final FetchConfig fetchConfig,
+            final Deserializers<K, V> deserializers,
+            final FetchMetricsManager metricsManager,
+            final Time time
+        );
+
+    }
+
+    // auxiliary interface for testing
+    interface ConsumerMetadataFactory {
+
+        ConsumerMetadata build(
+            final ConsumerConfig config,
+            final SubscriptionState subscriptions,
+            final LogContext logContext,
+            final ClusterResourceListeners clusterResourceListeners
+        );
+
     }
 
     private Optional<ConsumerGroupMetadata> initializeGroupMetadata(final ConsumerConfig config,
