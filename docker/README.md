@@ -5,7 +5,7 @@ This directory contains scripts to build, test, push and promote docker image fo
 
 Repository Setup
 ----------------
-Make sure the `DOCKERHUB_USERNAME` and `DOCKERHUB_TOKEN` secrets are added and made available to Github Actions in Github Repository settings. This is required for pushing the docker image.
+Make sure the `DOCKERHUB_USER` and `DOCKERHUB_TOKEN` secrets are added and made available to Github Actions in Github Repository settings. This is required for pushing the docker image.
 
 Local Setup
 -----------
@@ -64,18 +64,15 @@ Please note that we use docker buildx for preparing the multi-architecture image
 Creating a release using github actions
 ---------------------------------------
 This is the recommended way to push an RC docker image.
-Go to `Build and Push RC Docker Image` Github Actions Workflow.
+Go to `Build and Push Release Candidate Docker Image` Github Actions Workflow.
 Choose the `image_type` and and provide `kafka_url` that needs to be containerised in the `rc_docker_image` that will be pushed to github.
-Make sure the `DOCKERHUB_USERNAME` account has push access to dockerhub repo that you want to push the image to.
 
 Example:-
-If you want to push a jvm image which contains kafka from https://archive.apache.org/dist/kafka/3.6.0/kafka_2.13-3.6.0.tgz to dockerhub under the namespace kafka with name test and image tag as 3.6.0-rc1 then following values need to be added in Github Actions Workflow:-
+If you want to push a jvm image which contains kafka from https://archive.apache.org/dist/kafka/3.6.0/kafka_2.13-3.6.0.tgz to dockerhub under the namespace apache, repo name as kafka and image tag as 3.6.0-rc1 then following values need to be added in Github Actions Workflow:-
 ```
-# kafka/test is an example repo. Please replace with the docker hub repo you wanto push to.
-
 image_type: jvm
 kafka_url: https://archive.apache.org/dist/kafka/3.6.0/kafka_2.13-3.6.0.tgz
-rc_docker_image: kafka/test:3.6.0-rc0
+rc_docker_image: apache/kafka:3.6.0-rc0
 ```
 
 Promoting a release
@@ -85,14 +82,13 @@ Promoting a release
 Promoting a release using github actions
 ----------------------------------------
 This is the recommended way to promote an RC docker image.
-Go to `Promote RC Docker Image` Github Actions Workflow.
+Go to `Promote Release Candidate Docker Image` Github Actions Workflow.
 Choose the RC docker image (`rc_docker_image`) that you want to promote and where it needs to be pushed to (`promoted_docker_image`), i.e. the final docker image release. 
-Make sure the `DOCKERHUB_USERNAME` account has push access to dockerhub repo that you want to push the image to.
 
 Example:-
-If you want to promote kafka/test:3.6.0-rc0 RC docker image to apache/kafka:3.6.0 then following parameters can be provided to the workflow.
+If you want to promote apache/kafka:3.6.0-rc0 RC docker image to apache/kafka:3.6.0 then following parameters can be provided to the workflow.
 ```
-rc_docker_image: kafka/test:3.6.0-rc0
+rc_docker_image: apache/kafka:3.6.0-rc0
 promoted_docker_image: apache/kafka:3.6.0
 ```
 
