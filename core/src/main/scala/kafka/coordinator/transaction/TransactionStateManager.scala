@@ -281,12 +281,12 @@ class TransactionStateManager(brokerId: Int,
 
     inReadLock(stateLock) {
       replicaManager.appendRecords(
-        timeout = config.requestTimeoutMs,
-        requiredAcks = TransactionLog.EnforcedRequiredAcks,
+        config.requestTimeoutMs,
+        TransactionLog.EnforcedRequiredAcks,
         internalTopicsAllowed = true,
         origin = AppendOrigin.COORDINATOR,
         entriesPerPartition = Map(transactionPartition -> tombstoneRecords),
-        responseCallback = removeFromCacheCallback,
+        removeFromCacheCallback,
         requestLocal = RequestLocal.NoCaching)
     }
   }

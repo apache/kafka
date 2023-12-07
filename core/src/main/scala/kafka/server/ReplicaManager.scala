@@ -902,22 +902,21 @@ class ReplicaManager(val config: KafkaConfig,
     }
 
     actionQueue.add {
-      () =>
-        allResults.foreach { case (topicPartition, result) =>
-          val requestKey = TopicPartitionOperationKey(topicPartition)
-          result.info.leaderHwChange match {
-            case LeaderHwChange.INCREASED =>
-              // some delayed operations may be unblocked after HW changed
-              delayedProducePurgatory.checkAndComplete(requestKey)
-              delayedFetchPurgatory.checkAndComplete(requestKey)
-              delayedDeleteRecordsPurgatory.checkAndComplete(requestKey)
-            case LeaderHwChange.SAME =>
-              // probably unblock some follower fetch requests since log end offset has been updated
-              delayedFetchPurgatory.checkAndComplete(requestKey)
-            case LeaderHwChange.NONE =>
-            // nothing
-          }
+      () => allResults.foreach { case (topicPartition, result) =>
+        val requestKey = TopicPartitionOperationKey(topicPartition)
+        result.info.leaderHwChange match {
+          case LeaderHwChange.INCREASED =>
+            // some delayed operations may be unblocked after HW changed
+            delayedProducePurgatory.checkAndComplete(requestKey)
+            delayedFetchPurgatory.checkAndComplete(requestKey)
+            delayedDeleteRecordsPurgatory.checkAndComplete(requestKey)
+          case LeaderHwChange.SAME =>
+            // probably unblock some follower fetch requests since log end offset has been updated
+            delayedFetchPurgatory.checkAndComplete(requestKey)
+          case LeaderHwChange.NONE =>
+          // nothing
         }
+      }
     }
 
     recordConversionStatsCallback(localProduceResults.map { case (k, v) => k -> v.info.recordValidationStats })
@@ -1042,22 +1041,21 @@ class ReplicaManager(val config: KafkaConfig,
     }
 
     actionQueue.add {
-      () =>
-        allResults.foreach { case (topicPartition, result) =>
-          val requestKey = TopicPartitionOperationKey(topicPartition)
-          result.info.leaderHwChange match {
-            case LeaderHwChange.INCREASED =>
-              // some delayed operations may be unblocked after HW changed
-              delayedProducePurgatory.checkAndComplete(requestKey)
-              delayedFetchPurgatory.checkAndComplete(requestKey)
-              delayedDeleteRecordsPurgatory.checkAndComplete(requestKey)
-            case LeaderHwChange.SAME =>
-              // probably unblock some follower fetch requests since log end offset has been updated
-              delayedFetchPurgatory.checkAndComplete(requestKey)
-            case LeaderHwChange.NONE =>
-            // nothing
-          }
+      () => allResults.foreach { case (topicPartition, result) =>
+        val requestKey = TopicPartitionOperationKey(topicPartition)
+        result.info.leaderHwChange match {
+          case LeaderHwChange.INCREASED =>
+            // some delayed operations may be unblocked after HW changed
+            delayedProducePurgatory.checkAndComplete(requestKey)
+            delayedFetchPurgatory.checkAndComplete(requestKey)
+            delayedDeleteRecordsPurgatory.checkAndComplete(requestKey)
+          case LeaderHwChange.SAME =>
+            // probably unblock some follower fetch requests since log end offset has been updated
+            delayedFetchPurgatory.checkAndComplete(requestKey)
+          case LeaderHwChange.NONE =>
+          // nothing
         }
+      }
     }
 
     recordValidationStatsCallback(localProduceResults.map { case (k, v) => k -> v.info.recordValidationStats })
