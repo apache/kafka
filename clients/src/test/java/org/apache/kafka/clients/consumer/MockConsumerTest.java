@@ -154,6 +154,9 @@ public class MockConsumerTest {
 
             @Override
             public void onPartitionsAssigned(Collection<TopicPartition> partitions) {
+                if (partitions.isEmpty()) {
+                    return;
+                }
                 assigned.clear();
                 assigned.addAll(partitions);
             }

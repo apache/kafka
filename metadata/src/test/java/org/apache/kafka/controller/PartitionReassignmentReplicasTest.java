@@ -21,6 +21,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.Optional;
 
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.metadata.LeaderRecoveryState;
 import org.apache.kafka.metadata.PartitionRegistration;
 import org.apache.kafka.metadata.placement.PartitionAssignment;
@@ -134,6 +135,11 @@ public class PartitionReassignmentReplicasTest {
         assertTrue(PartitionReassignmentReplicas.isReassignmentInProgress(
             new PartitionRegistration.Builder().
                 setReplicas(new int[]{0, 1, 3, 2}).
+                setDirectories(new Uuid[]{
+                    Uuid.fromString("HEKOeWDdQOqr2cmHrnjqjA"),
+                    Uuid.fromString("I8kmmcM5TjOwNFnGvJLCjA"),
+                    Uuid.fromString("x8osEoRkQdupZNYpU5c3Lw"),
+                    Uuid.fromString("OT6qgtRqTiuiX8EikvAVow")}).
                 setIsr(new int[]{0, 1, 3, 2}).
                 setRemovingReplicas(new int[]{2}).
                 setAddingReplicas(new int[]{3}).
@@ -145,6 +151,12 @@ public class PartitionReassignmentReplicasTest {
         assertTrue(PartitionReassignmentReplicas.isReassignmentInProgress(
             new PartitionRegistration.Builder().
                 setReplicas(new int[]{0, 1, 3, 2}).
+                setDirectories(new Uuid[]{
+                    Uuid.fromString("QrbOddSYQg6JgFu7hLvOTg"),
+                    Uuid.fromString("S585FNNoSmiSH6ZYCrNqCg"),
+                    Uuid.fromString("wjT5ieLARfKYMWIzTFwcag"),
+                    Uuid.fromString("qzX9qWPVTWuLbiEQL0cgeg")
+                }).
                 setIsr(new int[]{0, 1, 3, 2}).
                 setRemovingReplicas(new int[]{2}).
                 setLeader(0).
@@ -155,6 +167,12 @@ public class PartitionReassignmentReplicasTest {
         assertTrue(PartitionReassignmentReplicas.isReassignmentInProgress(
             new PartitionRegistration.Builder().
                 setReplicas(new int[]{0, 1, 3, 2}).
+                setDirectories(new Uuid[]{
+                    Uuid.fromString("QIyJnfdUSz6laFLCgj3AjA"),
+                    Uuid.fromString("1QIvvBx2QVqNw2dsnYXUZg"),
+                    Uuid.fromString("yPvPnGrxR0q8KC2Q5k0FIg"),
+                    Uuid.fromString("a0lnxzleTcWVf1IyalE9cA")
+                }).
                 setIsr(new int[]{0, 1, 3, 2}).
                 setAddingReplicas(new int[]{3}).
                 setLeader(0).
@@ -165,6 +183,11 @@ public class PartitionReassignmentReplicasTest {
         assertFalse(PartitionReassignmentReplicas.isReassignmentInProgress(
             new PartitionRegistration.Builder().
                 setReplicas(new int[]{0, 1, 2}).
+                setDirectories(new Uuid[]{
+                    Uuid.fromString("I4qCCBe9TYGOB0xvmvTI7w"),
+                    Uuid.fromString("JvzGem0nTxiNPM5jIzNzlA"),
+                    Uuid.fromString("EfWjZ2EsSKSvEn9PkG7lWQ")
+                }).
                 setIsr(new int[]{0, 1, 2}).
                 setLeader(0).
                 setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).

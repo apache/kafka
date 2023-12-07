@@ -54,11 +54,13 @@ public final class QuorumFeatures {
         return Optional.empty();
     }
 
-    public static Map<String, VersionRange> defaultFeatureMap() {
+    public static Map<String, VersionRange> defaultFeatureMap(boolean enableUnstable) {
         Map<String, VersionRange> features = new HashMap<>(1);
         features.put(MetadataVersion.FEATURE_NAME, VersionRange.of(
                 MetadataVersion.MINIMUM_KRAFT_VERSION.featureLevel(),
-                MetadataVersion.latest().featureLevel()));
+                enableUnstable ?
+                    MetadataVersion.latest().featureLevel() :
+                    MetadataVersion.LATEST_PRODUCTION.featureLevel()));
         return features;
     }
 

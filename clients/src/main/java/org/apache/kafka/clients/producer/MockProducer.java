@@ -160,7 +160,8 @@ public class MockProducer<K, V> implements Producer<K, V> {
 
     @Override
     public void initTransactions() {
-        verifyProducerState();
+        verifyNotClosed();
+        verifyNotFenced();
         if (this.transactionInitialized) {
             throw new IllegalStateException("MockProducer has already been initialized for transactions.");
         }
@@ -176,7 +177,8 @@ public class MockProducer<K, V> implements Producer<K, V> {
 
     @Override
     public void beginTransaction() throws ProducerFencedException {
-        verifyProducerState();
+        verifyNotClosed();
+        verifyNotFenced();
         verifyTransactionsInitialized();
 
         if (this.beginTransactionException != null) {
@@ -205,7 +207,8 @@ public class MockProducer<K, V> implements Producer<K, V> {
     public void sendOffsetsToTransaction(Map<TopicPartition, OffsetAndMetadata> offsets,
                                          ConsumerGroupMetadata groupMetadata) throws ProducerFencedException {
         Objects.requireNonNull(groupMetadata);
-        verifyProducerState();
+        verifyNotClosed();
+        verifyNotFenced();
         verifyTransactionsInitialized();
         verifyTransactionInFlight();
 
@@ -224,7 +227,8 @@ public class MockProducer<K, V> implements Producer<K, V> {
 
     @Override
     public void commitTransaction() throws ProducerFencedException {
-        verifyProducerState();
+        verifyNotClosed();
+        verifyNotFenced();
         verifyTransactionsInitialized();
         verifyTransactionInFlight();
 
@@ -249,7 +253,8 @@ public class MockProducer<K, V> implements Producer<K, V> {
 
     @Override
     public void abortTransaction() throws ProducerFencedException {
-        verifyProducerState();
+        verifyNotClosed();
+        verifyNotFenced();
         verifyTransactionsInitialized();
         verifyTransactionInFlight();
 
@@ -265,10 +270,13 @@ public class MockProducer<K, V> implements Producer<K, V> {
         this.transactionInFlight = false;
     }
 
-    private synchronized void verifyProducerState() {
+    private synchronized void verifyNotClosed() {
         if (this.closed) {
             throw new IllegalStateException("MockProducer is already closed.");
         }
+    }
+
+    private synchronized void verifyNotFenced() {
         if (this.producerFenced) {
             throw new ProducerFencedException("MockProducer is fenced.");
         }
@@ -288,7 +296,7 @@ public class MockProducer<K, V> implements Producer<K, V> {
 
     /**
      * Adds the record to the list of sent records. The {@link RecordMetadata} returned will be immediately satisfied.
-     * 
+     *
      * @see #history()
      */
     @Override
@@ -362,7 +370,7 @@ public class MockProducer<K, V> implements Producer<K, V> {
     }
 
     public synchronized void flush() {
-        verifyProducerState();
+        verifyNotClosed();
 
         if (this.flushException != null) {
             throw this.flushException;
@@ -415,7 +423,8 @@ public class MockProducer<K, V> implements Producer<K, V> {
     }
 
     public synchronized void fenceProducer() {
-        verifyProducerState();
+        verifyNotClosed();
+        verifyNotFenced();
         verifyTransactionsInitialized();
         this.producerFenced = true;
     }

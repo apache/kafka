@@ -114,7 +114,8 @@ public class ApiVersionsResponse extends AbstractResponse {
         NodeApiVersions controllerApiVersions,
         ListenerType listenerType,
         boolean enableUnstableLastVersion,
-        boolean zkMigrationEnabled
+        boolean zkMigrationEnabled,
+        boolean clientTelemetryEnabled
     ) {
         ApiVersionCollection apiKeys;
         if (controllerApiVersions != null) {
@@ -122,13 +123,15 @@ public class ApiVersionsResponse extends AbstractResponse {
                 listenerType,
                 minRecordVersion,
                 controllerApiVersions.allSupportedApiVersions(),
-                enableUnstableLastVersion
+                enableUnstableLastVersion,
+                clientTelemetryEnabled
             );
         } else {
             apiKeys = filterApis(
                 minRecordVersion,
                 listenerType,
-                enableUnstableLastVersion
+                enableUnstableLastVersion,
+                clientTelemetryEnabled
             );
         }
 
@@ -167,16 +170,21 @@ public class ApiVersionsResponse extends AbstractResponse {
         RecordVersion minRecordVersion,
         ApiMessageType.ListenerType listenerType
     ) {
-        return filterApis(minRecordVersion, listenerType, false);
+        return filterApis(minRecordVersion, listenerType, false, false);
     }
 
     public static ApiVersionCollection filterApis(
         RecordVersion minRecordVersion,
         ApiMessageType.ListenerType listenerType,
-        boolean enableUnstableLastVersion
+        boolean enableUnstableLastVersion,
+        boolean clientTelemetryEnabled
     ) {
         ApiVersionCollection apiKeys = new ApiVersionCollection();
         for (ApiKeys apiKey : ApiKeys.apisForListener(listenerType)) {
+            // Skip telemetry APIs if client telemetry is disabled.
+            if ((apiKey == ApiKeys.GET_TELEMETRY_SUBSCRIPTIONS || apiKey == ApiKeys.PUSH_TELEMETRY) && !clientTelemetryEnabled)
+                continue;
+
             if (apiKey.minRequiredInterBrokerMagic <= minRecordVersion.value) {
                 apiKey.toApiVersion(enableUnstableLastVersion).ifPresent(apiKeys::add);
             }
@@ -203,13 +211,15 @@ public class ApiVersionsResponse extends AbstractResponse {
      * @param minRecordVersion min inter broker magic
      * @param activeControllerApiVersions controller ApiVersions
      * @param enableUnstableLastVersion whether unstable versions should be advertised or not
+     * @param clientTelemetryEnabled whether client telemetry is enabled or not
      * @return commonly agreed ApiVersion collection
      */
     public static ApiVersionCollection intersectForwardableApis(
         final ApiMessageType.ListenerType listenerType,
         final RecordVersion minRecordVersion,
         final Map<ApiKeys, ApiVersion> activeControllerApiVersions,
-        boolean enableUnstableLastVersion
+        boolean enableUnstableLastVersion,
+        boolean clientTelemetryEnabled
     ) {
         ApiVersionCollection apiKeys = new ApiVersionCollection();
         for (ApiKeys apiKey : ApiKeys.apisForListener(listenerType)) {
@@ -219,6 +229,10 @@ public class ApiVersionsResponse extends AbstractResponse {
                     // Broker does not support this API key.
                     continue;
                 }
+
+                // Skip telemetry APIs if client telemetry is disabled.
+                if ((apiKey == ApiKeys.GET_TELEMETRY_SUBSCRIPTIONS || apiKey == ApiKeys.PUSH_TELEMETRY) && !clientTelemetryEnabled)
+                    continue;
 
                 final ApiVersion finalApiVersion;
                 if (!apiKey.forwardable) {

@@ -239,6 +239,34 @@ public class StandaloneHerderTest {
     }
 
     @Test
+    public void testCreateConnectorWithStoppedInitialState() throws Exception {
+        connector = mock(BogusSinkConnector.class);
+        Map<String, String> config = connectorConfig(SourceSink.SINK);
+        Connector connectorMock = mock(SinkConnector.class);
+        expectConfigValidation(connectorMock, false, config);
+        when(plugins.newConnector(anyString())).thenReturn(connectorMock);
+
+        // Only the connector should be created; we expect no tasks to be spawned for a connector created with a paused or stopped initial state
+        final ArgumentCaptor<Callback<TargetState>> onStart = ArgumentCaptor.forClass(Callback.class);
+        doAnswer(invocation -> {
+            onStart.getValue().onCompletion(null, TargetState.STOPPED);
+            return true;
+        }).when(worker).startConnector(eq(CONNECTOR_NAME), eq(config), any(HerderConnectorContext.class),
+            eq(herder), eq(TargetState.STOPPED), onStart.capture());
+
+        when(worker.isRunning(CONNECTOR_NAME)).thenReturn(true);
+        when(herder.connectorType(any())).thenReturn(ConnectorType.SINK);
+
+        herder.putConnectorConfig(CONNECTOR_NAME, config, TargetState.STOPPED, false, createCallback);
+        Herder.Created<ConnectorInfo> connectorInfo = createCallback.get(1000L, TimeUnit.SECONDS);
+        assertEquals(
+            new ConnectorInfo(CONNECTOR_NAME, connectorConfig(SourceSink.SINK), Collections.emptyList(), ConnectorType.SINK),
+            connectorInfo.result()
+        );
+        verify(loaderSwap).close();
+    }
+
+    @Test
     public void testDestroyConnector() throws Exception {
         connector = mock(BogusSourceConnector.class);
         expectAdd(SourceSink.SOURCE);

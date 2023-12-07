@@ -30,6 +30,7 @@ import org.apache.kafka.common.errors.RecordTooLargeException;
 import org.apache.kafka.common.errors.UnknownMemberIdException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.internals.Topic;
+import org.apache.kafka.common.message.ConsumerGroupDescribeResponseData;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatRequestData;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatResponseData;
 import org.apache.kafka.common.message.DeleteGroupsResponseData;
@@ -55,14 +56,17 @@ import org.apache.kafka.common.message.TxnOffsetCommitResponseData;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.DescribeGroupsRequest;
 import org.apache.kafka.common.requests.DeleteGroupsRequest;
+import org.apache.kafka.common.requests.ConsumerGroupDescribeRequest;
 import org.apache.kafka.common.requests.OffsetCommitRequest;
 import org.apache.kafka.common.requests.RequestContext;
 import org.apache.kafka.common.requests.TransactionResult;
+import org.apache.kafka.common.requests.TxnOffsetCommitRequest;
 import org.apache.kafka.common.utils.BufferSupplier;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.coordinator.group.metrics.CoordinatorRuntimeMetrics;
+import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetrics;
 import org.apache.kafka.coordinator.group.runtime.CoordinatorShardBuilderSupplier;
 import org.apache.kafka.coordinator.group.runtime.CoordinatorEventProcessor;
 import org.apache.kafka.coordinator.group.runtime.CoordinatorLoader;
@@ -104,6 +108,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
         private Time time;
         private Timer timer;
         private CoordinatorRuntimeMetrics coordinatorRuntimeMetrics;
+        private GroupCoordinatorMetrics groupCoordinatorMetrics;
 
         public Builder(
             int nodeId,
@@ -138,6 +143,11 @@ public class GroupCoordinatorService implements GroupCoordinator {
             return this;
         }
 
+        public Builder withGroupCoordinatorMetrics(GroupCoordinatorMetrics groupCoordinatorMetrics) {
+            this.groupCoordinatorMetrics = groupCoordinatorMetrics;
+            return this;
+        }
+
         public GroupCoordinatorService build() {
             if (config == null)
                 throw new IllegalArgumentException("Config must be set.");
@@ -151,6 +161,8 @@ public class GroupCoordinatorService implements GroupCoordinator {
                 throw new IllegalArgumentException("Timer must be set.");
             if (coordinatorRuntimeMetrics == null)
                 throw new IllegalArgumentException("CoordinatorRuntimeMetrics must be set.");
+            if (groupCoordinatorMetrics == null)
+                throw new IllegalArgumentException("GroupCoordinatorMetrics must be set.");
 
             String logPrefix = String.format("GroupCoordinator id=%d", nodeId);
             LogContext logContext = new LogContext(String.format("[%s] ", logPrefix));
@@ -178,12 +190,14 @@ public class GroupCoordinatorService implements GroupCoordinator {
                     .withCoordinatorShardBuilderSupplier(supplier)
                     .withTime(time)
                     .withCoordinatorRuntimeMetrics(coordinatorRuntimeMetrics)
+                    .withCoordinatorMetrics(groupCoordinatorMetrics)
                     .build();
 
             return new GroupCoordinatorService(
                 logContext,
                 config,
-                runtime
+                runtime,
+                groupCoordinatorMetrics
             );
         }
     }
@@ -202,6 +216,11 @@ public class GroupCoordinatorService implements GroupCoordinator {
      * The coordinator runtime.
      */
     private final CoordinatorRuntime<GroupCoordinatorShard, Record> runtime;
+
+    /**
+     * The metrics registry.
+     */
+    private final GroupCoordinatorMetrics groupCoordinatorMetrics;
 
     /**
      * Boolean indicating whether the coordinator is active or not.
@@ -223,11 +242,13 @@ public class GroupCoordinatorService implements GroupCoordinator {
     GroupCoordinatorService(
         LogContext logContext,
         GroupCoordinatorConfig config,
-        CoordinatorRuntime<GroupCoordinatorShard, Record> runtime
+        CoordinatorRuntime<GroupCoordinatorShard, Record> runtime,
+        GroupCoordinatorMetrics groupCoordinatorMetrics
     ) {
         this.log = logContext.logger(CoordinatorLoader.class);
         this.config = config;
         this.runtime = runtime;
+        this.groupCoordinatorMetrics = groupCoordinatorMetrics;
     }
 
     /**
@@ -268,7 +289,9 @@ public class GroupCoordinatorService implements GroupCoordinator {
         ConsumerGroupHeartbeatRequestData request
     ) {
         if (!isActive.get()) {
-            return FutureUtils.failedFuture(Errors.COORDINATOR_NOT_AVAILABLE.exception());
+            return CompletableFuture.completedFuture(new ConsumerGroupHeartbeatResponseData()
+                .setErrorCode(Errors.COORDINATOR_NOT_AVAILABLE.code())
+            );
         }
 
         return runtime.scheduleWriteOperation(
@@ -311,18 +334,20 @@ public class GroupCoordinatorService implements GroupCoordinator {
         BufferSupplier bufferSupplier
     ) {
         if (!isActive.get()) {
-            return FutureUtils.failedFuture(Errors.COORDINATOR_NOT_AVAILABLE.exception());
+            return CompletableFuture.completedFuture(new JoinGroupResponseData()
+                .setMemberId(request.memberId())
+                .setErrorCode(Errors.COORDINATOR_NOT_AVAILABLE.code())
+            );
+        }
+
+        if (!isGroupIdNotEmpty(request.groupId())) {
+            return CompletableFuture.completedFuture(new JoinGroupResponseData()
+                .setMemberId(request.memberId())
+                .setErrorCode(Errors.INVALID_GROUP_ID.code())
+            );
         }
 
         CompletableFuture<JoinGroupResponseData> responseFuture = new CompletableFuture<>();
-
-        if (!isGroupIdNotEmpty(request.groupId())) {
-            responseFuture.complete(new JoinGroupResponseData()
-                .setMemberId(request.memberId())
-                .setErrorCode(Errors.INVALID_GROUP_ID.code()));
-
-            return responseFuture;
-        }
 
         runtime.scheduleWriteOperation(
             "generic-group-join",
@@ -354,12 +379,15 @@ public class GroupCoordinatorService implements GroupCoordinator {
         BufferSupplier bufferSupplier
     ) {
         if (!isActive.get()) {
-            return FutureUtils.failedFuture(Errors.COORDINATOR_NOT_AVAILABLE.exception());
+            return CompletableFuture.completedFuture(new SyncGroupResponseData()
+                .setErrorCode(Errors.COORDINATOR_NOT_AVAILABLE.code())
+            );
         }
 
         if (!isGroupIdNotEmpty(request.groupId())) {
             return CompletableFuture.completedFuture(new SyncGroupResponseData()
-                .setErrorCode(Errors.INVALID_GROUP_ID.code()));
+                .setErrorCode(Errors.INVALID_GROUP_ID.code())
+            );
         }
 
         CompletableFuture<SyncGroupResponseData> responseFuture = new CompletableFuture<>();
@@ -393,12 +421,15 @@ public class GroupCoordinatorService implements GroupCoordinator {
         HeartbeatRequestData request
     ) {
         if (!isActive.get()) {
-            return FutureUtils.failedFuture(Errors.COORDINATOR_NOT_AVAILABLE.exception());
+            return CompletableFuture.completedFuture(new HeartbeatResponseData()
+                .setErrorCode(Errors.COORDINATOR_NOT_AVAILABLE.code())
+            );
         }
 
         if (!isGroupIdNotEmpty(request.groupId())) {
             return CompletableFuture.completedFuture(new HeartbeatResponseData()
-                .setErrorCode(Errors.INVALID_GROUP_ID.code()));
+                .setErrorCode(Errors.INVALID_GROUP_ID.code())
+            );
         }
 
         // Using a read operation is okay here as we ignore the last committed offset in the snapshot registry.
@@ -432,12 +463,15 @@ public class GroupCoordinatorService implements GroupCoordinator {
         LeaveGroupRequestData request
     ) {
         if (!isActive.get()) {
-            return FutureUtils.failedFuture(Errors.COORDINATOR_NOT_AVAILABLE.exception());
+            return CompletableFuture.completedFuture(new LeaveGroupResponseData()
+                .setErrorCode(Errors.COORDINATOR_NOT_AVAILABLE.code())
+            );
         }
 
         if (!isGroupIdNotEmpty(request.groupId())) {
             return CompletableFuture.completedFuture(new LeaveGroupResponseData()
-                .setErrorCode(Errors.INVALID_GROUP_ID.code()));
+                .setErrorCode(Errors.INVALID_GROUP_ID.code())
+            );
         }
 
         return runtime.scheduleWriteOperation(
@@ -477,13 +511,19 @@ public class GroupCoordinatorService implements GroupCoordinator {
         ListGroupsRequestData request
     ) {
         if (!isActive.get()) {
-            return FutureUtils.failedFuture(Errors.COORDINATOR_NOT_AVAILABLE.exception());
+            return CompletableFuture.completedFuture(new ListGroupsResponseData()
+                .setErrorCode(Errors.COORDINATOR_NOT_AVAILABLE.code())
+            );
         }
 
         final CompletableFuture<ListGroupsResponseData> future = new CompletableFuture<>();
         final List<ListGroupsResponseData.ListedGroup> results = new ArrayList<>();
         final Set<TopicPartition> existingPartitionSet = runtime.partitions();
         final AtomicInteger cnt = new AtomicInteger(existingPartitionSet.size());
+
+        if (existingPartitionSet.isEmpty()) {
+            return CompletableFuture.completedFuture(new ListGroupsResponseData());
+        }
 
         for (TopicPartition tp : existingPartitionSet) {
             runtime.scheduleReadOperation(
@@ -510,6 +550,67 @@ public class GroupCoordinatorService implements GroupCoordinator {
     }
 
     /**
+     * See {@link GroupCoordinator#consumerGroupDescribe(RequestContext, List)}.
+     */
+    @Override
+    public CompletableFuture<List<ConsumerGroupDescribeResponseData.DescribedGroup>> consumerGroupDescribe(
+        RequestContext context,
+        List<String> groupIds
+    ) {
+        if (!isActive.get()) {
+            return CompletableFuture.completedFuture(ConsumerGroupDescribeRequest.getErrorDescribedGroupList(
+                groupIds,
+                Errors.COORDINATOR_NOT_AVAILABLE
+            ));
+        }
+
+        final List<CompletableFuture<List<ConsumerGroupDescribeResponseData.DescribedGroup>>> futures =
+            new ArrayList<>(groupIds.size());
+        final Map<TopicPartition, List<String>> groupsByTopicPartition = new HashMap<>();
+        groupIds.forEach(groupId -> {
+            if (isGroupIdNotEmpty(groupId)) {
+                groupsByTopicPartition
+                    .computeIfAbsent(topicPartitionFor(groupId), __ -> new ArrayList<>())
+                    .add(groupId);
+            } else {
+                futures.add(CompletableFuture.completedFuture(Collections.singletonList(
+                    new ConsumerGroupDescribeResponseData.DescribedGroup()
+                        .setGroupId(null)
+                        .setErrorCode(Errors.INVALID_GROUP_ID.code())
+                )));
+            }
+        });
+
+        groupsByTopicPartition.forEach((topicPartition, groupList) -> {
+            CompletableFuture<List<ConsumerGroupDescribeResponseData.DescribedGroup>> future =
+                runtime.scheduleReadOperation(
+                    "consumer-group-describe",
+                    topicPartition,
+                    (coordinator, lastCommittedOffset) -> coordinator.consumerGroupDescribe(groupIds, lastCommittedOffset)
+                ).exceptionally(exception -> {
+                    if (!(exception instanceof KafkaException)) {
+                        log.error("ConsumerGroupDescribe request {} hit an unexpected exception: {}.",
+                            groupList, exception.getMessage());
+                    }
+
+                    return ConsumerGroupDescribeRequest.getErrorDescribedGroupList(
+                        groupList,
+                        Errors.forException(exception)
+                    );
+                });
+
+            futures.add(future);
+        });
+
+        final CompletableFuture<Void> allFutures = CompletableFuture.allOf(futures.toArray(new CompletableFuture[0]));
+        return allFutures.thenApply(v -> {
+            final List<ConsumerGroupDescribeResponseData.DescribedGroup> res = new ArrayList<>();
+            futures.forEach(future -> res.addAll(future.join()));
+            return res;
+        });
+    }
+
+    /**
      * See {@link GroupCoordinator#describeGroups(RequestContext, List)}.
      */
     @Override
@@ -518,7 +619,10 @@ public class GroupCoordinatorService implements GroupCoordinator {
         List<String> groupIds
     ) {
         if (!isActive.get()) {
-            return FutureUtils.failedFuture(Errors.COORDINATOR_NOT_AVAILABLE.exception());
+            return CompletableFuture.completedFuture(DescribeGroupsRequest.getErrorDescribedGroupList(
+                groupIds,
+                Errors.COORDINATOR_NOT_AVAILABLE
+            ));
         }
 
         final List<CompletableFuture<List<DescribeGroupsResponseData.DescribedGroup>>> futures =
@@ -579,7 +683,10 @@ public class GroupCoordinatorService implements GroupCoordinator {
         BufferSupplier bufferSupplier
     ) {
         if (!isActive.get()) {
-            return FutureUtils.failedFuture(Errors.COORDINATOR_NOT_AVAILABLE.exception());
+            return CompletableFuture.completedFuture(DeleteGroupsRequest.getErrorResultCollection(
+                groupIds,
+                Errors.COORDINATOR_NOT_AVAILABLE
+            ));
         }
 
         final List<CompletableFuture<DeleteGroupsResponseData.DeletableGroupResultCollection>> futures =
@@ -638,12 +745,18 @@ public class GroupCoordinatorService implements GroupCoordinator {
         boolean requireStable
     ) {
         if (!isActive.get()) {
-            return FutureUtils.failedFuture(Errors.COORDINATOR_NOT_AVAILABLE.exception());
+            return CompletableFuture.completedFuture(new OffsetFetchResponseData.OffsetFetchResponseGroup()
+                .setGroupId(request.groupId())
+                .setErrorCode(Errors.COORDINATOR_NOT_AVAILABLE.code())
+            );
         }
 
         // For backwards compatibility, we support fetch commits for the empty group id.
         if (request.groupId() == null) {
-            return FutureUtils.failedFuture(Errors.INVALID_GROUP_ID.exception());
+            return CompletableFuture.completedFuture(new OffsetFetchResponseData.OffsetFetchResponseGroup()
+                .setGroupId(request.groupId())
+                .setErrorCode(Errors.INVALID_GROUP_ID.code())
+            );
         }
 
         // The require stable flag when set tells the broker to hold on returning unstable
@@ -682,12 +795,18 @@ public class GroupCoordinatorService implements GroupCoordinator {
         boolean requireStable
     ) {
         if (!isActive.get()) {
-            return FutureUtils.failedFuture(Errors.COORDINATOR_NOT_AVAILABLE.exception());
+            return CompletableFuture.completedFuture(new OffsetFetchResponseData.OffsetFetchResponseGroup()
+                .setGroupId(request.groupId())
+                .setErrorCode(Errors.COORDINATOR_NOT_AVAILABLE.code())
+            );
         }
 
         // For backwards compatibility, we support fetch commits for the empty group id.
         if (request.groupId() == null) {
-            return FutureUtils.failedFuture(Errors.INVALID_GROUP_ID.exception());
+            return CompletableFuture.completedFuture(new OffsetFetchResponseData.OffsetFetchResponseGroup()
+                .setGroupId(request.groupId())
+                .setErrorCode(Errors.INVALID_GROUP_ID.code())
+            );
         }
 
         // The require stable flag when set tells the broker to hold on returning unstable
@@ -726,7 +845,10 @@ public class GroupCoordinatorService implements GroupCoordinator {
         BufferSupplier bufferSupplier
     ) {
         if (!isActive.get()) {
-            return FutureUtils.failedFuture(Errors.COORDINATOR_NOT_AVAILABLE.exception());
+            return CompletableFuture.completedFuture(OffsetCommitRequest.getErrorResponse(
+                request,
+                Errors.COORDINATOR_NOT_AVAILABLE
+            ));
         }
 
         // For backwards compatibility, we support offset commits for the empty groupId.
@@ -756,7 +878,10 @@ public class GroupCoordinatorService implements GroupCoordinator {
         BufferSupplier bufferSupplier
     ) {
         if (!isActive.get()) {
-            return FutureUtils.failedFuture(Errors.COORDINATOR_NOT_AVAILABLE.exception());
+            return CompletableFuture.completedFuture(TxnOffsetCommitRequest.getErrorResponse(
+                request,
+                Errors.COORDINATOR_NOT_AVAILABLE
+            ));
         }
 
         return FutureUtils.failedFuture(Errors.UNSUPPORTED_VERSION.exception(
@@ -774,7 +899,9 @@ public class GroupCoordinatorService implements GroupCoordinator {
         BufferSupplier bufferSupplier
     ) {
         if (!isActive.get()) {
-            return FutureUtils.failedFuture(Errors.COORDINATOR_NOT_AVAILABLE.exception());
+            return CompletableFuture.completedFuture(new OffsetDeleteResponseData()
+                .setErrorCode(Errors.COORDINATOR_NOT_AVAILABLE.code())
+            );
         }
 
         if (!isGroupIdNotEmpty(request.groupId())) {
@@ -904,6 +1031,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
         log.info("Shutting down.");
         isActive.set(false);
         Utils.closeQuietly(runtime, "coordinator runtime");
+        Utils.closeQuietly(groupCoordinatorMetrics, "group coordinator metrics");
         log.info("Shutdown complete.");
     }
 

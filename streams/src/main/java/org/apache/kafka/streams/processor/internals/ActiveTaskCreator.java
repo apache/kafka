@@ -66,6 +66,7 @@ class ActiveTaskCreator {
     private final Map<TaskId, StreamsProducer> taskProducers;
     private final ProcessingMode processingMode;
     private final boolean stateUpdaterEnabled;
+    private final boolean processingThreadsEnabled;
 
     ActiveTaskCreator(final TopologyMetadata topologyMetadata,
                       final StreamsConfig applicationConfig,
@@ -78,7 +79,9 @@ class ActiveTaskCreator {
                       final String threadId,
                       final UUID processId,
                       final Logger log,
-                      final boolean stateUpdaterEnabled) {
+                      final boolean stateUpdaterEnabled,
+                      final boolean processingThreadsEnabled
+                      ) {
         this.topologyMetadata = topologyMetadata;
         this.applicationConfig = applicationConfig;
         this.streamsMetrics = streamsMetrics;
@@ -90,6 +93,7 @@ class ActiveTaskCreator {
         this.threadId = threadId;
         this.log = log;
         this.stateUpdaterEnabled = stateUpdaterEnabled;
+        this.processingThreadsEnabled = processingThreadsEnabled;
 
         createTaskSensor = ThreadMetrics.createTaskSensor(threadId, streamsMetrics);
         processingMode = processingMode(applicationConfig);
@@ -242,7 +246,8 @@ class ActiveTaskCreator {
             standbyTask.stateMgr,
             recordCollector,
             standbyTask.processorContext,
-            standbyTask.logContext
+            standbyTask.logContext,
+            processingThreadsEnabled
         );
 
         log.trace("Created active task {} from recycled standby task with assigned partitions {}", task.id, inputPartitions);
@@ -272,7 +277,8 @@ class ActiveTaskCreator {
             stateManager,
             recordCollector,
             context,
-            logContext
+            logContext,
+            processingThreadsEnabled
         );
 
         log.trace("Created active task {} with assigned partitions {}", taskId, inputPartitions);

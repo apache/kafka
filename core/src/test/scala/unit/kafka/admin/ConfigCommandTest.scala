@@ -1628,6 +1628,143 @@ class ConfigCommandTest extends Logging {
         Seq("<default>/clients/client-3", sanitizedPrincipal + "/clients/client-2"))
   }
 
+  @Test
+  def shouldAlterClientMetricsConfig(): Unit = {
+    val node = new Node(1, "localhost", 9092)
+    verifyAlterClientMetricsConfig(node, "1", List("--entity-name", "1"))
+  }
+
+  private def verifyAlterClientMetricsConfig(node: Node, resourceName: String, resourceOpts: List[String]): Unit = {
+    val optsList = List("--bootstrap-server", "localhost:9092",
+      "--entity-type", "client-metrics",
+      "--alter",
+      "--delete-config", "interval.ms",
+      "--add-config", "metrics=org.apache.kafka.consumer.," +
+        "match=[client_software_name=kafka.python,client_software_version=1\\.2\\..*]") ++ resourceOpts
+    val alterOpts = new ConfigCommandOptions(optsList.toArray)
+
+    val resource = new ConfigResource(ConfigResource.Type.CLIENT_METRICS, resourceName)
+    val configEntries = util.Collections.singletonList(new ConfigEntry("interval.ms", "1000",
+      ConfigEntry.ConfigSource.DYNAMIC_CLIENT_METRICS_CONFIG, false, false, util.Collections.emptyList[ConfigEntry.ConfigSynonym],
+      ConfigEntry.ConfigType.UNKNOWN, null))
+    val future = new KafkaFutureImpl[util.Map[ConfigResource, Config]]
+    future.complete(util.Collections.singletonMap(resource, new Config(configEntries)))
+    val describeResult: DescribeConfigsResult = mock(classOf[DescribeConfigsResult])
+    when(describeResult.all()).thenReturn(future)
+
+    val alterFuture = new KafkaFutureImpl[Void]
+    alterFuture.complete(null)
+    val alterResult: AlterConfigsResult = mock(classOf[AlterConfigsResult])
+    when(alterResult.all()).thenReturn(alterFuture)
+
+    val mockAdminClient = new MockAdminClient(util.Collections.singletonList(node), node) {
+      override def describeConfigs(resources: util.Collection[ConfigResource], options: DescribeConfigsOptions): DescribeConfigsResult = {
+        assertFalse(options.includeSynonyms(), "Config synonyms requested unnecessarily")
+        assertEquals(1, resources.size)
+        val resource = resources.iterator.next
+        assertEquals(ConfigResource.Type.CLIENT_METRICS, resource.`type`)
+        assertEquals(resourceName, resource.name)
+        describeResult
+      }
+
+      override def incrementalAlterConfigs(configs: util.Map[ConfigResource, util.Collection[AlterConfigOp]], options: AlterConfigsOptions): AlterConfigsResult = {
+        assertEquals(1, configs.size)
+        val entry = configs.entrySet.iterator.next
+        val resource = entry.getKey
+        val alterConfigOps = entry.getValue
+        assertEquals(ConfigResource.Type.CLIENT_METRICS, resource.`type`)
+        assertEquals(3, alterConfigOps.size)
+
+        val expectedConfigOps = List(
+          new AlterConfigOp(new ConfigEntry("match", "client_software_name=kafka.python,client_software_version=1\\.2\\..*"), AlterConfigOp.OpType.SET),
+          new AlterConfigOp(new ConfigEntry("metrics", "org.apache.kafka.consumer."), AlterConfigOp.OpType.SET),
+          new AlterConfigOp(new ConfigEntry("interval.ms", ""), AlterConfigOp.OpType.DELETE)
+        )
+        assertEquals(expectedConfigOps, alterConfigOps.asScala.toList)
+        alterResult
+      }
+    }
+    ConfigCommand.alterConfig(mockAdminClient, alterOpts)
+    verify(describeResult).all()
+    verify(alterResult).all()
+  }
+
+  @Test
+  def shouldDescribeClientMetricsConfigWithoutEntityName(): Unit = {
+    val describeOpts = new ConfigCommandOptions(Array("--bootstrap-server", "localhost:9092",
+      "--entity-type", "client-metrics",
+      "--describe"))
+
+    val resourceCustom = new ConfigResource(ConfigResource.Type.CLIENT_METRICS, "1")
+    val configEntry = new ConfigEntry("metrics", "*")
+    val future = new KafkaFutureImpl[util.Map[ConfigResource, Config]]
+    val describeResult: DescribeConfigsResult = mock(classOf[DescribeConfigsResult])
+    when(describeResult.all()).thenReturn(future)
+
+    val node = new Node(1, "localhost", 9092)
+    val mockAdminClient = new MockAdminClient(util.Collections.singletonList(node), node) {
+      override def describeConfigs(resources: util.Collection[ConfigResource], options: DescribeConfigsOptions): DescribeConfigsResult = {
+        assertTrue(options.includeSynonyms())
+        assertEquals(1, resources.size)
+        val resource = resources.iterator.next
+        assertEquals(ConfigResource.Type.CLIENT_METRICS, resource.`type`)
+        assertTrue(resourceCustom.name == resource.name)
+        future.complete(Map(resourceCustom -> new Config(util.Collections.singletonList(configEntry))).asJava)
+        describeResult
+      }
+    }
+    mockAdminClient.incrementalAlterConfigs(util.Collections.singletonMap(resourceCustom,
+      util.Collections.singletonList(new AlterConfigOp(configEntry, AlterConfigOp.OpType.SET))), new AlterConfigsOptions())
+    ConfigCommand.describeConfig(mockAdminClient, describeOpts)
+    verify(describeResult).all()
+  }
+
+  @Test
+  def shouldNotAlterClientMetricsConfigWithoutEntityName(): Unit = {
+    val alterOpts = new ConfigCommandOptions(Array("--bootstrap-server", "localhost:9092",
+      "--entity-type", "client-metrics",
+      "--alter",
+      "--add-config", "interval.ms=1000"))
+
+    val exception = assertThrows(classOf[IllegalArgumentException], () => alterOpts.checkArgs())
+    assertEquals("an entity name must be specified with --alter of client-metrics", exception.getMessage)
+  }
+
+  @Test
+  def shouldNotSupportAlterClientMetricsWithZookeeperArg(): Unit = {
+    val alterOpts = new ConfigCommandOptions(Array("--zookeeper", zkConnect,
+      "--entity-name", "sub",
+      "--entity-type", "client-metrics",
+      "--alter",
+      "--add-config", "interval.ms=1000"))
+
+    val exception = assertThrows(classOf[IllegalArgumentException], () => alterOpts.checkArgs())
+    assertEquals("Invalid entity type client-metrics, the entity type must be one of users, brokers with a --zookeeper argument", exception.getMessage)
+  }
+
+  @Test
+  def shouldNotSupportDescribeClientMetricsWithZookeeperArg(): Unit = {
+    val describeOpts = new ConfigCommandOptions(Array("--zookeeper", zkConnect,
+      "--entity-name", "sub",
+      "--entity-type", "client-metrics",
+      "--describe"))
+
+    val exception = assertThrows(classOf[IllegalArgumentException], () => describeOpts.checkArgs())
+    assertEquals("Invalid entity type client-metrics, the entity type must be one of users, brokers with a --zookeeper argument", exception.getMessage)
+  }
+
+  @Test
+  def shouldNotSupportAlterClientMetricsWithZookeeper(): Unit = {
+    val alterOpts = new ConfigCommandOptions(Array("--zookeeper", zkConnect,
+      "--entity-name", "sub",
+      "--entity-type", "client-metrics",
+      "--alter",
+      "--add-config", "interval.ms=1000"))
+
+    val exception = assertThrows(classOf[IllegalArgumentException], () => ConfigCommand.alterConfigWithZk(null, alterOpts, dummyAdminZkClient))
+    assertEquals("client-metrics is not a known entityType. Should be one of List(topics, clients, users, brokers, ips)", exception.getMessage)
+  }
+
   class DummyAdminZkClient(zkClient: KafkaZkClient) extends AdminZkClient(zkClient) {
     override def changeBrokerConfig(brokerIds: Seq[Int], configs: Properties): Unit = {}
     override def fetchEntityConfig(entityType: String, entityName: String): Properties = {new Properties}

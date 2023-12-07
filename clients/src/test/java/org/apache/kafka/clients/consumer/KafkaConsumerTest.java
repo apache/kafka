@@ -16,35 +16,23 @@
  */
 package org.apache.kafka.clients.consumer;
 
-import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.ClientRequest;
 import org.apache.kafka.clients.CommonClientConfigs;
-import org.apache.kafka.clients.GroupRebalanceConfig;
 import org.apache.kafka.clients.KafkaClient;
 import org.apache.kafka.clients.MockClient;
 import org.apache.kafka.clients.NodeApiVersions;
-import org.apache.kafka.clients.consumer.internals.ConsumerCoordinator;
-import org.apache.kafka.clients.consumer.internals.ConsumerInterceptors;
 import org.apache.kafka.clients.consumer.internals.ConsumerMetadata;
-import org.apache.kafka.clients.consumer.internals.ConsumerMetrics;
-import org.apache.kafka.clients.consumer.internals.ConsumerNetworkClient;
 import org.apache.kafka.clients.consumer.internals.ConsumerProtocol;
-import org.apache.kafka.clients.consumer.internals.Deserializers;
-import org.apache.kafka.clients.consumer.internals.FetchConfig;
-import org.apache.kafka.clients.consumer.internals.FetchMetricsManager;
-import org.apache.kafka.clients.consumer.internals.Fetcher;
 import org.apache.kafka.clients.consumer.internals.MockRebalanceListener;
-import org.apache.kafka.clients.consumer.internals.OffsetFetcher;
 import org.apache.kafka.clients.consumer.internals.SubscriptionState;
-import org.apache.kafka.clients.consumer.internals.TopicMetadataFetcher;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.Node;
-import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.TopicIdPartition;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.config.SslConfigs;
 import org.apache.kafka.common.errors.AuthenticationException;
@@ -68,6 +56,7 @@ import org.apache.kafka.common.message.ListOffsetsResponseData;
 import org.apache.kafka.common.message.ListOffsetsResponseData.ListOffsetsPartitionResponse;
 import org.apache.kafka.common.message.ListOffsetsResponseData.ListOffsetsTopicResponse;
 import org.apache.kafka.common.message.SyncGroupResponseData;
+import org.apache.kafka.common.metrics.JmxReporter;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.Avg;
@@ -98,6 +87,8 @@ import org.apache.kafka.common.requests.SyncGroupResponse;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
+import org.apache.kafka.common.telemetry.internals.ClientTelemetryReporter;
+import org.apache.kafka.common.telemetry.internals.ClientTelemetrySender;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
@@ -106,10 +97,11 @@ import org.apache.kafka.test.MockConsumerInterceptor;
 import org.apache.kafka.test.MockMetricsReporter;
 import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
+import org.mockito.MockedStatic;
+import org.mockito.internal.stubbing.answers.CallsRealMethods;
 
-import javax.management.MBeanServer;
-import javax.management.ObjectName;
 import java.lang.management.ManagementFactory;
 import java.nio.ByteBuffer;
 import java.time.Duration;
@@ -124,6 +116,7 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.OptionalLong;
@@ -142,12 +135,15 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
+import javax.management.MBeanServer;
+import javax.management.ObjectName;
 
 import static java.util.Collections.singleton;
 import static java.util.Collections.singletonList;
 import static java.util.Collections.singletonMap;
-import static org.apache.kafka.clients.consumer.KafkaConsumer.DEFAULT_REASON;
+import static org.apache.kafka.clients.consumer.internals.LegacyKafkaConsumer.DEFAULT_REASON;
 import static org.apache.kafka.common.requests.FetchMetadata.INVALID_SESSION_ID;
+import static org.apache.kafka.common.utils.Utils.propsToMap;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
@@ -157,8 +153,13 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.mockStatic;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
 
 /**
  * Note to future authors in this class. If you close the consumer, close with DURATION.ZERO to reduce the duration of
@@ -181,13 +182,11 @@ public class KafkaConsumerTest {
 
     private final int sessionTimeoutMs = 10000;
     private final int defaultApiTimeoutMs = 60000;
-    private final int requestTimeoutMs = defaultApiTimeoutMs / 2;
     private final int heartbeatIntervalMs = 1000;
 
     // Set auto commit interval lower than heartbeat so we don't need to deal with
     // a concurrent heartbeat request
     private final int autoCommitIntervalMs = 500;
-    private final int throttleMs = 10;
 
     private final String groupId = "mock-group";
     private final String memberId = "memberId";
@@ -222,42 +221,68 @@ public class KafkaConsumerTest {
         }
     }
 
-    @Test
-    public void testMetricsReporterAutoGeneratedClientId() {
+    @ParameterizedTest
+    @EnumSource(GroupProtocol.class)
+    public void testMetricsReporterAutoGeneratedClientId(GroupProtocol groupProtocol) {
         Properties props = new Properties();
+        props.setProperty(ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol.name());
         props.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
         props.setProperty(ConsumerConfig.METRIC_REPORTER_CLASSES_CONFIG, MockMetricsReporter.class.getName());
-        consumer = new KafkaConsumer<>(props, new StringDeserializer(), new StringDeserializer());
+        consumer = newConsumer(props, new StringDeserializer(), new StringDeserializer());
 
-        MockMetricsReporter mockMetricsReporter = (MockMetricsReporter) consumer.metrics.reporters().get(0);
+        assertEquals(3, consumer.metricsRegistry().reporters().size());
 
-        assertEquals(consumer.getClientId(), mockMetricsReporter.clientId);
-        assertEquals(2, consumer.metrics.reporters().size());
+        MockMetricsReporter mockMetricsReporter = (MockMetricsReporter) consumer.metricsRegistry().reporters().stream()
+            .filter(reporter -> reporter instanceof MockMetricsReporter).findFirst().get();
+        assertEquals(consumer.clientId(), mockMetricsReporter.clientId);
     }
 
-    @Test
+    @ParameterizedTest
+    @EnumSource(GroupProtocol.class)
     @SuppressWarnings("deprecation")
-    public void testDisableJmxReporter() {
+    public void testDisableJmxAndClientTelemetryReporter(GroupProtocol groupProtocol) {
         Properties props = new Properties();
+        props.setProperty(ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol.name());
         props.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
         props.setProperty(ConsumerConfig.AUTO_INCLUDE_JMX_REPORTER_CONFIG, "false");
-        consumer = new KafkaConsumer<>(props, new StringDeserializer(), new StringDeserializer());
-        assertTrue(consumer.metrics.reporters().isEmpty());
+        props.setProperty(ConsumerConfig.ENABLE_METRICS_PUSH_CONFIG, "false");
+        consumer = newConsumer(props, new StringDeserializer(), new StringDeserializer());
+        assertTrue(consumer.metricsRegistry().reporters().isEmpty());
     }
 
-    @Test
-    public void testExplicitlyEnableJmxReporter() {
+    @ParameterizedTest
+    @EnumSource(GroupProtocol.class)
+    public void testExplicitlyOnlyEnableJmxReporter(GroupProtocol groupProtocol) {
         Properties props = new Properties();
+        props.setProperty(ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol.name());
         props.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
         props.setProperty(ConsumerConfig.METRIC_REPORTER_CLASSES_CONFIG, "org.apache.kafka.common.metrics.JmxReporter");
-        consumer = new KafkaConsumer<>(props, new StringDeserializer(), new StringDeserializer());
-        assertEquals(1, consumer.metrics.reporters().size());
+        props.setProperty(ConsumerConfig.ENABLE_METRICS_PUSH_CONFIG, "false");
+        consumer = newConsumer(props, new StringDeserializer(), new StringDeserializer());
+        assertEquals(1, consumer.metricsRegistry().reporters().size());
+        assertTrue(consumer.metricsRegistry().reporters().get(0) instanceof JmxReporter);
     }
 
-    @Test
+    @ParameterizedTest
+    @EnumSource(GroupProtocol.class)
+    @SuppressWarnings("deprecation")
+    public void testExplicitlyOnlyEnableClientTelemetryReporter(GroupProtocol groupProtocol) {
+        Properties props = new Properties();
+        props.setProperty(ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol.name());
+        props.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
+        props.setProperty(ConsumerConfig.AUTO_INCLUDE_JMX_REPORTER_CONFIG, "false");
+        consumer = newConsumer(props, new StringDeserializer(), new StringDeserializer());
+        assertEquals(1, consumer.metricsRegistry().reporters().size());
+        assertTrue(consumer.metricsRegistry().reporters().get(0) instanceof ClientTelemetryReporter);
+    }
+
+    // TODO: this test requires rebalance logic which is not yet implemented in the CONSUMER group protocol.
+    //       Once it is implemented, this should use both group protocols.
+    @ParameterizedTest
+    @EnumSource(value = GroupProtocol.class, names = "GENERIC")
     @SuppressWarnings("unchecked")
-    public void testPollReturnsRecords() {
-        consumer = setUpConsumerWithRecordsToPoll(tp0, 5);
+    public void testPollReturnsRecords(GroupProtocol groupProtocol) {
+        consumer = setUpConsumerWithRecordsToPoll(groupProtocol, tp0, 5);
 
         ConsumerRecords<String, String> records = (ConsumerRecords<String, String>) consumer.poll(Duration.ZERO);
 
@@ -266,14 +291,17 @@ public class KafkaConsumerTest {
         assertEquals(records.records(tp0).size(), 5);
     }
 
-    @Test
+    // TODO: this test requires rebalance logic which is not yet implemented in the CONSUMER group protocol.
+    //       Once it is implemented, this should use both group protocols.
+    @ParameterizedTest
+    @EnumSource(value = GroupProtocol.class, names = "GENERIC")
     @SuppressWarnings("unchecked")
-    public void testSecondPollWithDeserializationErrorThrowsRecordDeserializationException() {
+    public void testSecondPollWithDeserializationErrorThrowsRecordDeserializationException(GroupProtocol groupProtocol) {
         int invalidRecordNumber = 4;
         int invalidRecordOffset = 3;
         StringDeserializer deserializer = mockErrorDeserializer(invalidRecordNumber);
 
-        consumer = setUpConsumerWithRecordsToPoll(tp0, 5, deserializer);
+        consumer = setUpConsumerWithRecordsToPoll(groupProtocol, tp0, 5, deserializer);
         ConsumerRecords<String, String> records = (ConsumerRecords<String, String>) consumer.poll(Duration.ZERO);
 
         assertEquals(invalidRecordNumber - 1, records.count());
@@ -317,18 +345,23 @@ public class KafkaConsumerTest {
         };
     }
 
-    private KafkaConsumer<?, ?> setUpConsumerWithRecordsToPoll(TopicPartition tp, int recordCount) {
-        return setUpConsumerWithRecordsToPoll(tp, recordCount, new StringDeserializer());
+    private KafkaConsumer<?, ?> setUpConsumerWithRecordsToPoll(GroupProtocol groupProtocol,
+                                                               TopicPartition tp,
+                                                               int recordCount) {
+        return setUpConsumerWithRecordsToPoll(groupProtocol, tp, recordCount, new StringDeserializer());
     }
 
-    private KafkaConsumer<?, ?> setUpConsumerWithRecordsToPoll(TopicPartition tp, int recordCount, Deserializer<String> deserializer) {
+    private KafkaConsumer<?, ?> setUpConsumerWithRecordsToPoll(GroupProtocol groupProtocol,
+                                                               TopicPartition tp,
+                                                               int recordCount,
+                                                               Deserializer<String> deserializer) {
         Cluster cluster = TestUtils.singletonCluster(tp.topic(), 1);
         Node node = cluster.nodes().get(0);
 
         ConsumerMetadata metadata = createMetadata(subscription);
         MockClient client = new MockClient(time, metadata);
         initMetadata(client, Collections.singletonMap(topic, 1));
-        consumer = newConsumer(time, client, subscription, metadata, assignor,
+        consumer = newConsumer(groupProtocol, time, client, subscription, metadata, assignor,
                 true, groupId, groupInstanceId, Optional.of(deserializer), false);
         consumer.subscribe(singleton(topic), getConsumerRebalanceListener(consumer));
         prepareRebalance(client, node, assignor, singletonList(tp), null);
@@ -337,9 +370,11 @@ public class KafkaConsumerTest {
         return consumer;
     }
 
-    @Test
-    public void testConstructorClose() {
+    @ParameterizedTest
+    @EnumSource(GroupProtocol.class)
+    public void testConstructorClose(GroupProtocol groupProtocol) {
         Properties props = new Properties();
+        props.setProperty(ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol.name());
         props.setProperty(ConsumerConfig.CLIENT_ID_CONFIG, "testConstructorClose");
         props.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "invalid-23-8409-adsfsdj");
         props.setProperty(ConsumerConfig.METRIC_REPORTER_CLASSES_CONFIG, MockMetricsReporter.class.getName());
@@ -347,7 +382,7 @@ public class KafkaConsumerTest {
         final int oldInitCount = MockMetricsReporter.INIT_COUNT.get();
         final int oldCloseCount = MockMetricsReporter.CLOSE_COUNT.get();
         try {
-            new KafkaConsumer<>(props, new ByteArrayDeserializer(), new ByteArrayDeserializer());
+            newConsumer(props, new ByteArrayDeserializer(), new ByteArrayDeserializer());
             fail("should have caught an exception and returned");
         } catch (KafkaException e) {
             assertEquals(oldInitCount + 1, MockMetricsReporter.INIT_COUNT.get());
@@ -356,44 +391,53 @@ public class KafkaConsumerTest {
         }
     }
 
-    @Test
-    public void testOsDefaultSocketBufferSizes() {
+    @ParameterizedTest
+    @EnumSource(GroupProtocol.class)
+    public void testOsDefaultSocketBufferSizes(GroupProtocol groupProtocol) {
         Map<String, Object> config = new HashMap<>();
+        config.put(ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol.name());
         config.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
         config.put(ConsumerConfig.SEND_BUFFER_CONFIG, Selectable.USE_DEFAULT_BUFFER_SIZE);
         config.put(ConsumerConfig.RECEIVE_BUFFER_CONFIG, Selectable.USE_DEFAULT_BUFFER_SIZE);
-        consumer = new KafkaConsumer<>(config, new ByteArrayDeserializer(), new ByteArrayDeserializer());
+        consumer = newConsumer(config, new ByteArrayDeserializer(), new ByteArrayDeserializer());
     }
 
-    @Test
-    public void testInvalidSocketSendBufferSize() {
+    @ParameterizedTest
+    @EnumSource(GroupProtocol.class)
+    public void testInvalidSocketSendBufferSize(GroupProtocol groupProtocol) {
         Map<String, Object> config = new HashMap<>();
+        config.put(ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol.name());
         config.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
         config.put(ConsumerConfig.SEND_BUFFER_CONFIG, -2);
         assertThrows(KafkaException.class,
-            () -> new KafkaConsumer<>(config, new ByteArrayDeserializer(), new ByteArrayDeserializer()));
+            () -> newConsumer(config, new ByteArrayDeserializer(), new ByteArrayDeserializer()));
     }
 
-    @Test
-    public void testInvalidSocketReceiveBufferSize() {
+    @ParameterizedTest
+    @EnumSource(GroupProtocol.class)
+    public void testInvalidSocketReceiveBufferSize(GroupProtocol groupProtocol) {
         Map<String, Object> config = new HashMap<>();
+        config.put(ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol.name());
         config.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
         config.put(ConsumerConfig.RECEIVE_BUFFER_CONFIG, -2);
         assertThrows(KafkaException.class,
-            () -> new KafkaConsumer<>(config, new ByteArrayDeserializer(), new ByteArrayDeserializer()));
+            () -> newConsumer(config, new ByteArrayDeserializer(), new ByteArrayDeserializer()));
     }
 
-    @Test
-    public void shouldIgnoreGroupInstanceIdForEmptyGroupId() {
+    @ParameterizedTest
+    @EnumSource(GroupProtocol.class)
+    public void shouldIgnoreGroupInstanceIdForEmptyGroupId(GroupProtocol groupProtocol) {
         Map<String, Object> config = new HashMap<>();
+        config.put(ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol.name());
         config.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
         config.put(ConsumerConfig.GROUP_INSTANCE_ID_CONFIG, "instance_id");
-        consumer = new KafkaConsumer<>(config, new ByteArrayDeserializer(), new ByteArrayDeserializer());
+        consumer = newConsumer(config, new ByteArrayDeserializer(), new ByteArrayDeserializer());
     }
 
-    @Test
-    public void testSubscription() {
-        consumer = newConsumer(groupId);
+    @ParameterizedTest
+    @EnumSource(GroupProtocol.class)
+    public void testSubscription(GroupProtocol groupProtocol) {
+        consumer = newConsumer(groupProtocol, groupId);
 
         consumer.subscribe(singletonList(topic));
         assertEquals(singleton(topic), consumer.subscription());
@@ -412,93 +456,107 @@ public class KafkaConsumerTest {
         assertTrue(consumer.assignment().isEmpty());
     }
 
-    @Test
-    public void testSubscriptionOnNullTopicCollection() {
-        consumer = newConsumer(groupId);
+    @ParameterizedTest
+    @EnumSource(GroupProtocol.class)
+    public void testSubscriptionOnNullTopicCollection(GroupProtocol groupProtocol) {
+        consumer = newConsumer(groupProtocol, groupId);
         assertThrows(IllegalArgumentException.class, () -> consumer.subscribe((List<String>) null));
     }
 
-    @Test
-    public void testSubscriptionOnNullTopic() {
-        consumer = newConsumer(groupId);
+    @ParameterizedTest
+    @EnumSource(GroupProtocol.class)
+    public void testSubscriptionOnNullTopic(GroupProtocol groupProtocol) {
+        consumer = newConsumer(groupProtocol, groupId);
         assertThrows(IllegalArgumentException.class, () -> consumer.subscribe(singletonList(null)));
     }
 
-    @Test
-    public void testSubscriptionOnEmptyTopic() {
-        consumer = newConsumer(groupId);
+    @ParameterizedTest
+    @EnumSource(GroupProtocol.class)
+    public void testSubscriptionOnEmptyTopic(GroupProtocol groupProtocol) {
+        consumer = newConsumer(groupProtocol, groupId);
         String emptyTopic = "  ";
         assertThrows(IllegalArgumentException.class, () -> consumer.subscribe(singletonList(emptyTopic)));
     }
 
-    @Test
-    public void testSubscriptionOnNullPattern() {
-        consumer = newConsumer(groupId);
+    @ParameterizedTest
+    @EnumSource(GroupProtocol.class)
+    public void testSubscriptionOnNullPattern(GroupProtocol groupProtocol) {
+        consumer = newConsumer(groupProtocol, groupId);
         assertThrows(IllegalArgumentException.class,
             () -> consumer.subscribe((Pattern) null));
     }
 
-    @Test
-    public void testSubscriptionOnEmptyPattern() {
-        consumer = newConsumer(groupId);
+    @ParameterizedTest
+    @EnumSource(GroupProtocol.class)
+    public void testSubscriptionOnEmptyPattern(GroupProtocol groupProtocol) {
+        consumer = newConsumer(groupProtocol, groupId);
         assertThrows(IllegalArgumentException.class,
             () -> consumer.subscribe(Pattern.compile("")));
     }
 
-    @Test
-    public void testSubscriptionWithEmptyPartitionAssignment() {
+    @ParameterizedTest
+    @EnumSource(GroupProtocol.class)
+    public void testSubscriptionWithEmptyPartitionAssignment(GroupProtocol groupProtocol) {
         Properties props = new Properties();
+        props.setProperty(ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol.name());
         props.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
         props.setProperty(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG, "");
         props.setProperty(ConsumerConfig.GROUP_ID_CONFIG, groupId);
-        consumer = newConsumer(props);
+        consumer = newConsumer(props, new ByteArrayDeserializer(), new ByteArrayDeserializer());
         assertThrows(IllegalStateException.class,
             () -> consumer.subscribe(singletonList(topic)));
     }
 
-    @Test
-    public void testSeekNegative() {
-        consumer = newConsumer((String) null);
+    @ParameterizedTest
+    @EnumSource(GroupProtocol.class)
+    public void testSeekNegative(GroupProtocol groupProtocol) {
+        consumer = newConsumer(groupProtocol, null);
         consumer.assign(singleton(new TopicPartition("nonExistTopic", 0)));
         assertThrows(IllegalArgumentException.class,
             () -> consumer.seek(new TopicPartition("nonExistTopic", 0), -1));
     }
 
-    @Test
-    public void testAssignOnNullTopicPartition() {
-        consumer = newConsumer((String) null);
+    @ParameterizedTest
+    @EnumSource(GroupProtocol.class)
+    public void testAssignOnNullTopicPartition(GroupProtocol groupProtocol) {
+        consumer = newConsumer(groupProtocol, null);
         assertThrows(IllegalArgumentException.class, () -> consumer.assign(null));
     }
 
-    @Test
-    public void testAssignOnEmptyTopicPartition() {
-        consumer = newConsumer(groupId);
+    @ParameterizedTest
+    @EnumSource(GroupProtocol.class)
+    public void testAssignOnEmptyTopicPartition(GroupProtocol groupProtocol) {
+        consumer = newConsumer(groupProtocol, groupId);
         consumer.assign(Collections.emptyList());
         assertTrue(consumer.subscription().isEmpty());
         assertTrue(consumer.assignment().isEmpty());
     }
 
-    @Test
-    public void testAssignOnNullTopicInPartition() {
-        consumer = newConsumer((String) null);
+    @ParameterizedTest
+    @EnumSource(GroupProtocol.class)
+    public void testAssignOnNullTopicInPartition(GroupProtocol groupProtocol) {
+        consumer = newConsumer(groupProtocol, null);
         assertThrows(IllegalArgumentException.class, () -> consumer.assign(singleton(new TopicPartition(null, 0))));
     }
 
-    @Test
-    public void testAssignOnEmptyTopicInPartition() {
-        consumer = newConsumer((String) null);
+    @ParameterizedTest
+    @EnumSource(GroupProtocol.class)
+    public void testAssignOnEmptyTopicInPartition(GroupProtocol groupProtocol) {
+        consumer = newConsumer(groupProtocol, null);
         assertThrows(IllegalArgumentException.class, () -> consumer.assign(singleton(new TopicPartition("  ", 0))));
     }
 
-    @Test
-    public void testInterceptorConstructorClose() {
+    @ParameterizedTest
+    @EnumSource(GroupProtocol.class)
+    public void testInterceptorConstructorClose(GroupProtocol groupProtocol) {
         try {
             Properties props = new Properties();
             // test with client ID assigned by KafkaConsumer
+            props.setProperty(ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol.name());
             props.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
             props.setProperty(ConsumerConfig.INTERCEPTOR_CLASSES_CONFIG, MockConsumerInterceptor.class.getName());
 
-            consumer = new KafkaConsumer<>(
+            consumer = newConsumer(
                     props, new StringDeserializer(), new StringDeserializer());
             assertEquals(1, MockConsumerInterceptor.INIT_COUNT.get());
             assertEquals(0, MockConsumerInterceptor.CLOSE_COUNT.get());
@@ -515,12 +573,14 @@ public class KafkaConsumerTest {
         }
     }
 
-    @Test
-    public void testInterceptorConstructorConfigurationWithExceptionShouldCloseRemainingInstances() {
+    @ParameterizedTest
+    @EnumSource(GroupProtocol.class)
+    public void testInterceptorConstructorConfigurationWithExceptionShouldCloseRemainingInstances(GroupProtocol groupProtocol) {
         final int targetInterceptor = 3;
 
         try {
             Properties props = new Properties();
+            props.setProperty(ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol.name());
             props.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
             props.setProperty(ConsumerConfig.INTERCEPTOR_CLASSES_CONFIG,  MockConsumerInterceptor.class.getName() + ", "
                     + MockConsumerInterceptor.class.getName() + ", "
@@ -528,10 +588,8 @@ public class KafkaConsumerTest {
 
             MockConsumerInterceptor.setThrowOnConfigExceptionThreshold(targetInterceptor);
 
-            assertThrows(KafkaException.class, () -> {
-                new KafkaConsumer<>(
-                        props, new StringDeserializer(), new StringDeserializer());
-            });
+            assertThrows(KafkaException.class, () -> newConsumer(
+                    props, new StringDeserializer(), new StringDeserializer()));
 
             assertEquals(3, MockConsumerInterceptor.CONFIG_COUNT.get());
             assertEquals(3, MockConsumerInterceptor.CLOSE_COUNT.get());
@@ -541,9 +599,10 @@ public class KafkaConsumerTest {
         }
     }
 
-    @Test
-    public void testPause() {
-        consumer = newConsumer(groupId);
+    @ParameterizedTest
+    @EnumSource(GroupProtocol.class)
+    public void testPause(GroupProtocol groupProtocol) {
+        consumer = newConsumer(groupProtocol, groupId);
 
         consumer.assign(singletonList(tp0));
         assertEquals(singleton(tp0), consumer.assignment());
@@ -559,27 +618,32 @@ public class KafkaConsumerTest {
         assertTrue(consumer.paused().isEmpty());
     }
 
-    @Test
-    public void testConsumerJmxPrefix() throws  Exception {
+    @ParameterizedTest
+    @EnumSource(GroupProtocol.class)
+    public void testConsumerJmxPrefix(GroupProtocol groupProtocol) throws  Exception {
         Map<String, Object> config = new HashMap<>();
+        config.put(ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol.name());
         config.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
         config.put(ConsumerConfig.SEND_BUFFER_CONFIG, Selectable.USE_DEFAULT_BUFFER_SIZE);
         config.put(ConsumerConfig.RECEIVE_BUFFER_CONFIG, Selectable.USE_DEFAULT_BUFFER_SIZE);
         config.put("client.id", "client-1");
-        consumer = new KafkaConsumer<>(config, new ByteArrayDeserializer(), new ByteArrayDeserializer());
+        consumer = newConsumer(config, new ByteArrayDeserializer(), new ByteArrayDeserializer());
         MBeanServer server = ManagementFactory.getPlatformMBeanServer();
-        MetricName testMetricName = consumer.metrics.metricName("test-metric",
+        MetricName testMetricName = consumer.metricsRegistry().metricName("test-metric",
                 "grp1", "test metric");
-        consumer.metrics.addMetric(testMetricName, new Avg());
+        consumer.metricsRegistry().addMetric(testMetricName, new Avg());
         assertNotNull(server.getObjectInstance(new ObjectName("kafka.consumer:type=grp1,client-id=client-1")));
     }
 
-    private KafkaConsumer<byte[], byte[]> newConsumer(String groupId) {
-        return newConsumer(groupId, Optional.empty());
+    private KafkaConsumer<byte[], byte[]> newConsumer(GroupProtocol groupProtocol, String groupId) {
+        return newConsumer(groupProtocol, groupId, Optional.empty());
     }
 
-    private KafkaConsumer<byte[], byte[]> newConsumer(String groupId, Optional<Boolean> enableAutoCommit) {
+    private KafkaConsumer<byte[], byte[]> newConsumer(GroupProtocol groupProtocol,
+                                                      String groupId,
+                                                      Optional<Boolean> enableAutoCommit) {
         Properties props = new Properties();
+        props.setProperty(ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol.name());
         props.setProperty(ConsumerConfig.CLIENT_ID_CONFIG, "my.consumer");
         props.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
         props.setProperty(ConsumerConfig.METRIC_REPORTER_CLASSES_CONFIG, MockMetricsReporter.class.getName());
@@ -587,22 +651,38 @@ public class KafkaConsumerTest {
             props.setProperty(ConsumerConfig.GROUP_ID_CONFIG, groupId);
         enableAutoCommit.ifPresent(
             autoCommit -> props.setProperty(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, autoCommit.toString()));
-        return newConsumer(props);
+        return newConsumer(props, new ByteArrayDeserializer(), new ByteArrayDeserializer());
     }
 
-    private KafkaConsumer<byte[], byte[]> newConsumer(Properties props) {
-        return new KafkaConsumer<>(props, new ByteArrayDeserializer(), new ByteArrayDeserializer());
+    private <K, V> KafkaConsumer<K, V> newConsumer(Properties props) {
+        return newConsumer(props, null, null);
     }
 
-    @Test
-    public void verifyHeartbeatSent() throws Exception {
+    private <K, V> KafkaConsumer<K, V> newConsumer(Map<String, Object> configs,
+                                                   Deserializer<K> keyDeserializer,
+                                                   Deserializer<V> valueDeserializer) {
+        return new KafkaConsumer<>(new ConsumerConfig(ConsumerConfig.appendDeserializerToConfig(configs, keyDeserializer, valueDeserializer)),
+                keyDeserializer, valueDeserializer);
+    }
+
+    private <K, V> KafkaConsumer<K, V> newConsumer(Properties props,
+                                                   Deserializer<K> keyDeserializer,
+                                                   Deserializer<V> valueDeserializer) {
+        return newConsumer(propsToMap(props), keyDeserializer, valueDeserializer);
+    }
+
+    // TODO: this test requires rebalance logic which is not yet implemented in the CONSUMER group protocol.
+    //       Once it is implemented, this should use both group protocols.
+    @ParameterizedTest
+    @EnumSource(value = GroupProtocol.class, names = "GENERIC")
+    public void verifyHeartbeatSent(GroupProtocol groupProtocol) throws Exception {
         ConsumerMetadata metadata = createMetadata(subscription);
         MockClient client = new MockClient(time, metadata);
 
         initMetadata(client, Collections.singletonMap(topic, 1));
         Node node = metadata.fetch().nodes().get(0);
 
-        consumer = newConsumer(time, client, subscription, metadata, assignor, true, groupInstanceId);
+        consumer = newConsumer(groupProtocol, time, client, subscription, metadata, assignor, true, groupInstanceId);
 
         consumer.subscribe(singleton(topic), getConsumerRebalanceListener(consumer));
         Node coordinator = prepareRebalance(client, node, assignor, singletonList(tp0), null);
@@ -624,15 +704,18 @@ public class KafkaConsumerTest {
         assertTrue(heartbeatReceived.get());
     }
 
-    @Test
-    public void verifyHeartbeatSentWhenFetchedDataReady() throws Exception {
+    // TODO: this test requires rebalance logic which is not yet implemented in the CONSUMER group protocol.
+    //       Once it is implemented, this should use both group protocols.
+    @ParameterizedTest
+    @EnumSource(value = GroupProtocol.class, names = "GENERIC")
+    public void verifyHeartbeatSentWhenFetchedDataReady(GroupProtocol groupProtocol) throws Exception {
         ConsumerMetadata metadata = createMetadata(subscription);
         MockClient client = new MockClient(time, metadata);
 
         initMetadata(client, Collections.singletonMap(topic, 1));
         Node node = metadata.fetch().nodes().get(0);
 
-        consumer = newConsumer(time, client, subscription, metadata, assignor, true, groupInstanceId);
+        consumer = newConsumer(groupProtocol, time, client, subscription, metadata, assignor, true, groupInstanceId);
         consumer.subscribe(singleton(topic), getConsumerRebalanceListener(consumer));
         Node coordinator = prepareRebalance(client, node, assignor, singletonList(tp0), null);
 
@@ -654,15 +737,16 @@ public class KafkaConsumerTest {
         assertTrue(heartbeatReceived.get());
     }
 
-    @Test
-    public void verifyPollTimesOutDuringMetadataUpdate() {
+    @ParameterizedTest
+    @EnumSource(value = GroupProtocol.class, names = "GENERIC")
+    public void verifyPollTimesOutDuringMetadataUpdate(GroupProtocol groupProtocol) {
         final ConsumerMetadata metadata = createMetadata(subscription);
         final MockClient client = new MockClient(time, metadata);
 
         initMetadata(client, Collections.singletonMap(topic, 1));
         Node node = metadata.fetch().nodes().get(0);
 
-        consumer = newConsumer(time, client, subscription, metadata, assignor, true, groupInstanceId);
+        consumer = newConsumer(groupProtocol, time, client, subscription, metadata, assignor, true, groupInstanceId);
         consumer.subscribe(singleton(topic), getConsumerRebalanceListener(consumer));
         // Since we would enable the heartbeat thread after received join-response which could
         // send the sync-group on behalf of the consumer if it is enqueued, we may still complete
@@ -677,16 +761,19 @@ public class KafkaConsumerTest {
         assertEquals(0, requests.stream().filter(request -> request.apiKey().equals(ApiKeys.FETCH)).count());
     }
 
+    // TODO: this test requires rebalance logic which is not yet implemented in the CONSUMER group protocol.
+    //       Once it is implemented, this should use both group protocols.
+    @ParameterizedTest
+    @EnumSource(value = GroupProtocol.class, names = "GENERIC")
     @SuppressWarnings("deprecation")
-    @Test
-    public void verifyDeprecatedPollDoesNotTimeOutDuringMetadataUpdate() {
+    public void verifyDeprecatedPollDoesNotTimeOutDuringMetadataUpdate(GroupProtocol groupProtocol) {
         final ConsumerMetadata metadata = createMetadata(subscription);
         final MockClient client = new MockClient(time, metadata);
 
         initMetadata(client, Collections.singletonMap(topic, 1));
         Node node = metadata.fetch().nodes().get(0);
 
-        consumer = newConsumer(time, client, subscription, metadata, assignor, true, groupInstanceId);
+        consumer = newConsumer(groupProtocol, time, client, subscription, metadata, assignor, true, groupInstanceId);
         consumer.subscribe(singleton(topic), getConsumerRebalanceListener(consumer));
         prepareRebalance(client, node, assignor, singletonList(tp0), null);
 
@@ -699,15 +786,16 @@ public class KafkaConsumerTest {
         assertEquals(FetchRequest.Builder.class, aClass);
     }
 
-    @Test
+    @ParameterizedTest
+    @EnumSource(GroupProtocol.class)
     @SuppressWarnings("unchecked")
-    public void verifyNoCoordinatorLookupForManualAssignmentWithSeek() {
+    public void verifyNoCoordinatorLookupForManualAssignmentWithSeek(GroupProtocol groupProtocol) {
         ConsumerMetadata metadata = createMetadata(subscription);
         MockClient client = new MockClient(time, metadata);
 
         initMetadata(client, Collections.singletonMap(topic, 1));
 
-        consumer = newConsumer(time, client, subscription, metadata, assignor, true, null, groupInstanceId, false);
+        consumer = newConsumer(groupProtocol, time, client, subscription, metadata, assignor, false, null, groupInstanceId, false);
         consumer.assign(singleton(tp0));
         consumer.seekToBeginning(singleton(tp0));
 
@@ -721,8 +809,11 @@ public class KafkaConsumerTest {
         assertEquals(55L, consumer.position(tp0));
     }
 
-    @Test
-    public void verifyNoCoordinatorLookupForManualAssignmentWithOffsetCommit() {
+    // TODO: this test triggers a bug with the CONSUMER group protocol implementation.
+    //       The bug will be investigated and fixed so this test can use both group protocols.
+    @ParameterizedTest
+    @EnumSource(value = GroupProtocol.class, names = "GENERIC")
+    public void verifyNoCoordinatorLookupForManualAssignmentWithOffsetCommit(GroupProtocol groupProtocol) {
         ConsumerMetadata metadata = createMetadata(subscription);
         MockClient client = new MockClient(time, metadata);
 
@@ -730,7 +821,7 @@ public class KafkaConsumerTest {
         Node node = metadata.fetch().nodes().get(0);
 
         // create a consumer with groupID with manual assignment
-        consumer = newConsumer(time, client, subscription, metadata, assignor, true, groupInstanceId);
+        consumer = newConsumer(groupProtocol, time, client, subscription, metadata, assignor, true, groupInstanceId);
         consumer.assign(singleton(tp0));
 
         // 1st coordinator error should cause coordinator unknown
@@ -757,8 +848,11 @@ public class KafkaConsumerTest {
         assertEquals(55, consumer.committed(Collections.singleton(tp0), Duration.ZERO).get(tp0).offset());
     }
 
-    @Test
-    public void testFetchProgressWithMissingPartitionPosition() {
+    // TODO: this test triggers a bug with the CONSUMER group protocol implementation.
+    //       The bug will be investigated and fixed so this test can use both group protocols.
+    @ParameterizedTest
+    @EnumSource(value = GroupProtocol.class, names = "GENERIC")
+    public void testFetchProgressWithMissingPartitionPosition(GroupProtocol groupProtocol) {
         // Verifies that we can make progress on one partition while we are awaiting
         // a reset on another partition.
 
@@ -767,7 +861,7 @@ public class KafkaConsumerTest {
         initMetadata(client, Collections.singletonMap(topic, 2));
         Node node = metadata.fetch().nodes().get(0);
 
-        consumer = newConsumerNoAutoCommit(time, client, subscription, metadata);
+        consumer = newConsumerNoAutoCommit(groupProtocol, time, client, subscription, metadata);
         consumer.assign(Arrays.asList(tp0, tp1));
         consumer.seekToEnd(singleton(tp0));
         consumer.seekToBeginning(singleton(tp1));
@@ -814,8 +908,11 @@ public class KafkaConsumerTest {
         mockClient.updateMetadata(initialMetadata);
     }
 
-    @Test
-    public void testMissingOffsetNoResetPolicy() {
+    // TODO: this test triggers a bug with the CONSUMER group protocol implementation.
+    //       The bug will be investigated and fixed so this test can use both group protocols.
+    @ParameterizedTest
+    @EnumSource(value = GroupProtocol.class, names = "GENERIC")
+    public void testMissingOffsetNoResetPolicy(GroupProtocol groupProtocol) {
         SubscriptionState subscription = new SubscriptionState(new LogContext(), OffsetResetStrategy.NONE);
         ConsumerMetadata metadata = createMetadata(subscription);
         MockClient client = new MockClient(time, metadata);
@@ -823,7 +920,7 @@ public class KafkaConsumerTest {
         initMetadata(client, Collections.singletonMap(topic, 1));
         Node node = metadata.fetch().nodes().get(0);
 
-        consumer = newConsumer(time, client, subscription, metadata, assignor,
+        consumer = newConsumer(groupProtocol, time, client, subscription, metadata, assignor,
                 true, groupId, groupInstanceId, false);
         consumer.assign(singletonList(tp0));
 
@@ -835,8 +932,11 @@ public class KafkaConsumerTest {
         assertThrows(NoOffsetForPartitionException.class, () -> consumer.poll(Duration.ZERO));
     }
 
-    @Test
-    public void testResetToCommittedOffset() {
+    // TODO: this test triggers a bug with the CONSUMER group protocol implementation.
+    //       The bug will be investigated and fixed so this test can use both group protocols.
+    @ParameterizedTest
+    @EnumSource(value = GroupProtocol.class, names = "GENERIC")
+    public void testResetToCommittedOffset(GroupProtocol groupProtocol) {
         SubscriptionState subscription = new SubscriptionState(new LogContext(), OffsetResetStrategy.NONE);
         ConsumerMetadata metadata = createMetadata(subscription);
         MockClient client = new MockClient(time, metadata);
@@ -844,7 +944,7 @@ public class KafkaConsumerTest {
         initMetadata(client, Collections.singletonMap(topic, 1));
         Node node = metadata.fetch().nodes().get(0);
 
-        KafkaConsumer<String, String> consumer = newConsumer(time, client, subscription, metadata, assignor,
+        KafkaConsumer<String, String> consumer = newConsumer(groupProtocol, time, client, subscription, metadata, assignor,
                 true, groupId, groupInstanceId, false);
         consumer.assign(singletonList(tp0));
 
@@ -857,8 +957,11 @@ public class KafkaConsumerTest {
         assertEquals(539L, consumer.position(tp0));
     }
 
-    @Test
-    public void testResetUsingAutoResetPolicy() {
+    // TODO: this test triggers a bug with the CONSUMER group protocol implementation.
+    //       The bug will be investigated and fixed so this test can use both group protocols.
+    @ParameterizedTest
+    @EnumSource(value = GroupProtocol.class, names = "GENERIC")
+    public void testResetUsingAutoResetPolicy(GroupProtocol groupProtocol) {
         SubscriptionState subscription = new SubscriptionState(new LogContext(), OffsetResetStrategy.LATEST);
         ConsumerMetadata metadata = createMetadata(subscription);
         MockClient client = new MockClient(time, metadata);
@@ -866,7 +969,7 @@ public class KafkaConsumerTest {
         initMetadata(client, Collections.singletonMap(topic, 1));
         Node node = metadata.fetch().nodes().get(0);
 
-        consumer = newConsumer(time, client, subscription, metadata, assignor,
+        consumer = newConsumer(groupProtocol, time, client, subscription, metadata, assignor,
                 true, groupId, groupInstanceId, false);
         consumer.assign(singletonList(tp0));
 
@@ -881,15 +984,16 @@ public class KafkaConsumerTest {
         assertEquals(50L, consumer.position(tp0));
     }
 
-    @Test
-    public void testOffsetIsValidAfterSeek() {
+    @ParameterizedTest
+    @EnumSource(GroupProtocol.class)
+    public void testOffsetIsValidAfterSeek(GroupProtocol groupProtocol) {
         SubscriptionState subscription = new SubscriptionState(new LogContext(), OffsetResetStrategy.LATEST);
         ConsumerMetadata metadata = createMetadata(subscription);
         MockClient client = new MockClient(time, metadata);
 
         initMetadata(client, Collections.singletonMap(topic, 1));
 
-        consumer = newConsumer(time, client, subscription, metadata, assignor,
+        consumer = newConsumer(groupProtocol, time, client, subscription, metadata, assignor,
                 true, groupId, Optional.empty(), false);
         consumer.assign(singletonList(tp0));
         consumer.seek(tp0, 20L);
@@ -897,8 +1001,11 @@ public class KafkaConsumerTest {
         assertEquals(subscription.validPosition(tp0).offset, 20L);
     }
 
-    @Test
-    public void testCommitsFetchedDuringAssign() {
+    // TODO: this test triggers a bug with the CONSUMER group protocol implementation.
+    //       The bug will be investigated and fixed so this test can use both group protocols.
+    @ParameterizedTest
+    @EnumSource(value = GroupProtocol.class, names = "GENERIC")
+    public void testCommitsFetchedDuringAssign(GroupProtocol groupProtocol) {
         long offset1 = 10000;
         long offset2 = 20000;
 
@@ -908,7 +1015,7 @@ public class KafkaConsumerTest {
         initMetadata(client, Collections.singletonMap(topic, 2));
         Node node = metadata.fetch().nodes().get(0);
 
-        consumer = newConsumer(time, client, subscription, metadata, assignor, true, groupInstanceId);
+        consumer = newConsumer(groupProtocol, time, client, subscription, metadata, assignor, true, groupInstanceId);
         consumer.assign(singletonList(tp0));
 
         // lookup coordinator
@@ -933,22 +1040,31 @@ public class KafkaConsumerTest {
         assertEquals(offset2, consumer.committed(Collections.singleton(tp1)).get(tp1).offset());
     }
 
-    @Test
-    public void testFetchStableOffsetThrowInCommitted() {
-        assertThrows(UnsupportedVersionException.class, () -> setupThrowableConsumer().committed(Collections.singleton(tp0)));
+    // TODO: this test triggers a bug with the CONSUMER group protocol implementation.
+    //       The bug will be investigated and fixed so this test can use both group protocols.
+    @ParameterizedTest
+    @EnumSource(value = GroupProtocol.class, names = "GENERIC")
+    public void testFetchStableOffsetThrowInCommitted(GroupProtocol groupProtocol) {
+        assertThrows(UnsupportedVersionException.class, () -> setupThrowableConsumer(groupProtocol).committed(Collections.singleton(tp0)));
     }
 
-    @Test
-    public void testFetchStableOffsetThrowInPoll() {
-        assertThrows(UnsupportedVersionException.class, () -> setupThrowableConsumer().poll(Duration.ZERO));
+    // TODO: this test triggers a bug with the CONSUMER group protocol implementation.
+    //       The bug will be investigated and fixed so this test can use both group protocols.
+    @ParameterizedTest
+    @EnumSource(value = GroupProtocol.class, names = "GENERIC")
+    public void testFetchStableOffsetThrowInPoll(GroupProtocol groupProtocol) {
+        assertThrows(UnsupportedVersionException.class, () -> setupThrowableConsumer(groupProtocol).poll(Duration.ZERO));
     }
 
-    @Test
-    public void testFetchStableOffsetThrowInPosition() {
-        assertThrows(UnsupportedVersionException.class, () -> setupThrowableConsumer().position(tp0));
+    // TODO: this test triggers a bug with the CONSUMER group protocol implementation.
+    //       The bug will be investigated and fixed so this test can use both group protocols.
+    @ParameterizedTest
+    @EnumSource(value = GroupProtocol.class, names = "GENERIC")
+    public void testFetchStableOffsetThrowInPosition(GroupProtocol groupProtocol) {
+        assertThrows(UnsupportedVersionException.class, () -> setupThrowableConsumer(groupProtocol).position(tp0));
     }
 
-    private KafkaConsumer<?, ?> setupThrowableConsumer() {
+    private KafkaConsumer<?, ?> setupThrowableConsumer(GroupProtocol groupProtocol) {
         long offset1 = 10000;
 
         ConsumerMetadata metadata = createMetadata(subscription);
@@ -960,7 +1076,7 @@ public class KafkaConsumerTest {
         Node node = metadata.fetch().nodes().get(0);
 
         consumer = newConsumer(
-            time, client, subscription, metadata, assignor, true, groupId, groupInstanceId, true);
+                groupProtocol, time, client, subscription, metadata, assignor, true, groupId, groupInstanceId, true);
         consumer.assign(singletonList(tp0));
 
         client.prepareResponseFrom(FindCoordinatorResponse.prepareResponse(Errors.NONE, groupId, node), node);
@@ -971,8 +1087,11 @@ public class KafkaConsumerTest {
         return consumer;
     }
 
-    @Test
-    public void testNoCommittedOffsets() {
+    // TODO: this test triggers a bug with the CONSUMER group protocol implementation.
+    //       The bug will be investigated and fixed so this test can use both group protocols.
+    @ParameterizedTest
+    @EnumSource(value = GroupProtocol.class, names = "GENERIC")
+    public void testNoCommittedOffsets(GroupProtocol groupProtocol) {
         long offset1 = 10000;
 
         ConsumerMetadata metadata = createMetadata(subscription);
@@ -981,7 +1100,7 @@ public class KafkaConsumerTest {
         initMetadata(client, Collections.singletonMap(topic, 2));
         Node node = metadata.fetch().nodes().get(0);
 
-        consumer = newConsumer(time, client, subscription, metadata, assignor, true, groupInstanceId);
+        consumer = newConsumer(groupProtocol, time, client, subscription, metadata, assignor, true, groupInstanceId);
         consumer.assign(Arrays.asList(tp0, tp1));
 
         // lookup coordinator
@@ -996,15 +1115,18 @@ public class KafkaConsumerTest {
         assertNull(committed.get(tp1));
     }
 
-    @Test
-    public void testAutoCommitSentBeforePositionUpdate() {
+    // TODO: this test requires rebalance logic which is not yet implemented in the CONSUMER group protocol.
+    //       Once it is implemented, this should use both group protocols.
+    @ParameterizedTest
+    @EnumSource(value = GroupProtocol.class, names = "GENERIC")
+    public void testAutoCommitSentBeforePositionUpdate(GroupProtocol groupProtocol) {
         ConsumerMetadata metadata = createMetadata(subscription);
         MockClient client = new MockClient(time, metadata);
 
         initMetadata(client, Collections.singletonMap(topic, 1));
         Node node = metadata.fetch().nodes().get(0);
 
-        consumer = newConsumer(time, client, subscription, metadata, assignor, true, groupInstanceId);
+        consumer = newConsumer(groupProtocol, time, client, subscription, metadata, assignor, true, groupInstanceId);
         consumer.subscribe(singleton(topic), getConsumerRebalanceListener(consumer));
         Node coordinator = prepareRebalance(client, node, assignor, singletonList(tp0), null);
 
@@ -1027,8 +1149,11 @@ public class KafkaConsumerTest {
         assertTrue(commitReceived.get());
     }
 
-    @Test
-    public void testRegexSubscription() {
+    // TODO: this test requires rebalance logic which is not yet implemented in the CONSUMER group protocol.
+    //       Once it is implemented, this should use both group protocols.
+    @ParameterizedTest
+    @EnumSource(value = GroupProtocol.class, names = "GENERIC")
+    public void testRegexSubscription(GroupProtocol groupProtocol) {
         String unmatchedTopic = "unmatched";
         ConsumerMetadata metadata = createMetadata(subscription);
         MockClient client = new MockClient(time, metadata);
@@ -1040,7 +1165,7 @@ public class KafkaConsumerTest {
         initMetadata(client, partitionCounts);
         Node node = metadata.fetch().nodes().get(0);
 
-        consumer = newConsumer(time, client, subscription, metadata, assignor, true, groupInstanceId);
+        consumer = newConsumer(groupProtocol, time, client, subscription, metadata, assignor, true, groupInstanceId);
         prepareRebalance(client, node, singleton(topic), assignor, singletonList(tp0), null);
 
         consumer.subscribe(Pattern.compile(topic), getConsumerRebalanceListener(consumer));
@@ -1053,8 +1178,11 @@ public class KafkaConsumerTest {
         assertEquals(singleton(tp0), consumer.assignment());
     }
 
-    @Test
-    public void testChangingRegexSubscription() {
+    // TODO: this test requires rebalance logic which is not yet implemented in the CONSUMER group protocol.
+    //       Once it is implemented, this should use both group protocols.
+    @ParameterizedTest
+    @EnumSource(value = GroupProtocol.class, names = "GENERIC")
+    public void testChangingRegexSubscription(GroupProtocol groupProtocol) {
         String otherTopic = "other";
         TopicPartition otherTopicPartition = new TopicPartition(otherTopic, 0);
 
@@ -1068,7 +1196,7 @@ public class KafkaConsumerTest {
         initMetadata(client, partitionCounts);
         Node node = metadata.fetch().nodes().get(0);
 
-        consumer = newConsumer(time, client, subscription, metadata, assignor, false, groupInstanceId);
+        consumer = newConsumer(groupProtocol, time, client, subscription, metadata, assignor, false, groupInstanceId);
 
         Node coordinator = prepareRebalance(client, node, singleton(topic), assignor, singletonList(tp0), null);
         consumer.subscribe(Pattern.compile(topic), getConsumerRebalanceListener(consumer));
@@ -1087,15 +1215,18 @@ public class KafkaConsumerTest {
         assertEquals(singleton(otherTopic), consumer.subscription());
     }
 
-    @Test
-    public void testWakeupWithFetchDataAvailable() throws Exception {
+    // TODO: this test requires rebalance logic which is not yet implemented in the CONSUMER group protocol.
+    //       Once it is implemented, this should use both group protocols.
+    @ParameterizedTest
+    @EnumSource(value = GroupProtocol.class, names = "GENERIC")
+    public void testWakeupWithFetchDataAvailable(GroupProtocol groupProtocol) throws Exception {
         ConsumerMetadata metadata = createMetadata(subscription);
         MockClient client = new MockClient(time, metadata);
 
         initMetadata(client, Collections.singletonMap(topic, 1));
         Node node = metadata.fetch().nodes().get(0);
 
-        consumer = newConsumer(time, client, subscription, metadata, assignor, true, groupInstanceId);
+        consumer = newConsumer(groupProtocol, time, client, subscription, metadata, assignor, true, groupInstanceId);
         consumer.subscribe(singleton(topic), getConsumerRebalanceListener(consumer));
         prepareRebalance(client, node, assignor, singletonList(tp0), null);
 
@@ -1125,15 +1256,18 @@ public class KafkaConsumerTest {
         exec.awaitTermination(5L, TimeUnit.SECONDS);
     }
 
-    @Test
-    public void testPollThrowsInterruptExceptionIfInterrupted() {
+    // TODO: this test requires rebalance logic which is not yet implemented in the CONSUMER group protocol.
+    //       Once it is implemented, this should use both group protocols.
+    @ParameterizedTest
+    @EnumSource(value = GroupProtocol.class, names = "GENERIC")
+    public void testPollThrowsInterruptExceptionIfInterrupted(GroupProtocol groupProtocol) {
         final ConsumerMetadata metadata = createMetadata(subscription);
         final MockClient client = new MockClient(time, metadata);
 
         initMetadata(client, Collections.singletonMap(topic, 1));
         Node node = metadata.fetch().nodes().get(0);
 
-        consumer = newConsumer(time, client, subscription, metadata, assignor, false, groupInstanceId);
+        consumer = newConsumer(groupProtocol, time, client, subscription, metadata, assignor, false, groupInstanceId);
         consumer.subscribe(singleton(topic), getConsumerRebalanceListener(consumer));
         prepareRebalance(client, node, assignor, singletonList(tp0), null);
 
@@ -1150,15 +1284,16 @@ public class KafkaConsumerTest {
         }
     }
 
-    @Test
-    public void fetchResponseWithUnexpectedPartitionIsIgnored() {
+    @ParameterizedTest
+    @EnumSource(value = GroupProtocol.class, names = "GENERIC")
+    public void fetchResponseWithUnexpectedPartitionIsIgnored(GroupProtocol groupProtocol) {
         ConsumerMetadata metadata = createMetadata(subscription);
         MockClient client = new MockClient(time, metadata);
 
         initMetadata(client, Collections.singletonMap(topic, 1));
         Node node = metadata.fetch().nodes().get(0);
 
-        consumer = newConsumer(time, client, subscription, metadata, assignor, true, groupInstanceId);
+        consumer = newConsumer(groupProtocol, time, client, subscription, metadata, assignor, true, groupInstanceId);
         consumer.subscribe(singletonList(topic), getConsumerRebalanceListener(consumer));
 
         prepareRebalance(client, node, assignor, singletonList(tp0), null);
@@ -1182,9 +1317,12 @@ public class KafkaConsumerTest {
      * Upon unsubscribing from subscribed topics the consumer subscription and assignment
      * are both updated right away but its consumed offsets are not auto committed.
      */
-    @Test
+    // TODO: this test requires rebalance logic which is not yet implemented in the CONSUMER group protocol.
+    //       Once it is implemented, this should use both group protocols.
+    @ParameterizedTest
+    @EnumSource(value = GroupProtocol.class, names = "GENERIC")
     @SuppressWarnings("unchecked")
-    public void testSubscriptionChangesWithAutoCommitEnabled() {
+    public void testSubscriptionChangesWithAutoCommitEnabled(GroupProtocol groupProtocol) {
         ConsumerMetadata metadata = createMetadata(subscription);
         MockClient client = new MockClient(time, metadata);
 
@@ -1197,7 +1335,7 @@ public class KafkaConsumerTest {
 
         ConsumerPartitionAssignor assignor = new RangeAssignor();
 
-        consumer = newConsumer(time, client, subscription, metadata, assignor, true, groupInstanceId);
+        consumer = newConsumer(groupProtocol, time, client, subscription, metadata, assignor, true, groupInstanceId);
 
         // initial subscription
         consumer.subscribe(Arrays.asList(topic, topic2), getConsumerRebalanceListener(consumer));
@@ -1295,8 +1433,11 @@ public class KafkaConsumerTest {
      * Upon unsubscribing from subscribed topics, the assigned partitions immediately
      * change but if auto-commit is disabled the consumer offsets are not committed.
      */
-    @Test
-    public void testSubscriptionChangesWithAutoCommitDisabled() {
+    // TODO: this test requires rebalance logic which is not yet implemented in the CONSUMER group protocol.
+    //       Once it is implemented, this should use both group protocols.
+    @ParameterizedTest
+    @EnumSource(value = GroupProtocol.class, names = "GENERIC")
+    public void testSubscriptionChangesWithAutoCommitDisabled(GroupProtocol groupProtocol) {
         ConsumerMetadata metadata = createMetadata(subscription);
         MockClient client = new MockClient(time, metadata);
 
@@ -1308,7 +1449,7 @@ public class KafkaConsumerTest {
 
         ConsumerPartitionAssignor assignor = new RangeAssignor();
 
-        consumer = newConsumer(time, client, subscription, metadata, assignor, false, groupInstanceId);
+        consumer = newConsumer(groupProtocol, time, client, subscription, metadata, assignor, false, groupInstanceId);
 
         initializeSubscriptionWithSingleTopic(consumer, getConsumerRebalanceListener(consumer));
 
@@ -1349,8 +1490,11 @@ public class KafkaConsumerTest {
         client.requests().clear();
     }
 
-    @Test
-    public void testUnsubscribeShouldTriggerPartitionsRevokedWithValidGeneration() {
+    // TODO: this test requires rebalance logic which is not yet implemented in the CONSUMER group protocol.
+    //       Once it is implemented, this should use both group protocols.
+    @ParameterizedTest
+    @EnumSource(value = GroupProtocol.class, names = "GENERIC")
+    public void testUnsubscribeShouldTriggerPartitionsRevokedWithValidGeneration(GroupProtocol groupProtocol) {
         ConsumerMetadata metadata = createMetadata(subscription);
         MockClient client = new MockClient(time, metadata);
 
@@ -1358,7 +1502,7 @@ public class KafkaConsumerTest {
         Node node = metadata.fetch().nodes().get(0);
 
         CooperativeStickyAssignor assignor = new CooperativeStickyAssignor();
-        consumer = newConsumer(time, client, subscription, metadata, assignor, false, groupInstanceId);
+        consumer = newConsumer(groupProtocol, time, client, subscription, metadata, assignor, false, groupInstanceId);
 
         initializeSubscriptionWithSingleTopic(consumer, getExceptionConsumerRebalanceListener());
 
@@ -1372,8 +1516,11 @@ public class KafkaConsumerTest {
         assertEquals(partitionRevoked + singleTopicPartition, unsubscribeException.getCause().getMessage());
     }
 
-    @Test
-    public void testUnsubscribeShouldTriggerPartitionsLostWithNoGeneration() throws Exception {
+    // TODO: this test requires rebalance logic which is not yet implemented in the CONSUMER group protocol.
+    //       Once it is implemented, this should use both group protocols.
+    @ParameterizedTest
+    @EnumSource(value = GroupProtocol.class, names = "GENERIC")
+    public void testUnsubscribeShouldTriggerPartitionsLostWithNoGeneration(GroupProtocol groupProtocol) throws Exception {
         ConsumerMetadata metadata = createMetadata(subscription);
         MockClient client = new MockClient(time, metadata);
 
@@ -1381,7 +1528,7 @@ public class KafkaConsumerTest {
         Node node = metadata.fetch().nodes().get(0);
 
         CooperativeStickyAssignor assignor = new CooperativeStickyAssignor();
-        consumer = newConsumer(time, client, subscription, metadata, assignor, false, groupInstanceId);
+        consumer = newConsumer(groupProtocol, time, client, subscription, metadata, assignor, false, groupInstanceId);
 
         initializeSubscriptionWithSingleTopic(consumer, getExceptionConsumerRebalanceListener());
         Node coordinator = prepareRebalance(client, node, assignor, singletonList(tp0), null);
@@ -1407,9 +1554,12 @@ public class KafkaConsumerTest {
         assertEquals(Collections.emptySet(), consumer.assignment());
     }
 
-    @Test
+    // TODO: this test triggers a bug with the CONSUMER group protocol implementation.
+    //       The bug will be investigated and fixed so this test can use both group protocols.
+    @ParameterizedTest
+    @EnumSource(value = GroupProtocol.class, names = "GENERIC")
     @SuppressWarnings("unchecked")
-    public void testManualAssignmentChangeWithAutoCommitEnabled() {
+    public void testManualAssignmentChangeWithAutoCommitEnabled(GroupProtocol groupProtocol) {
         ConsumerMetadata metadata = createMetadata(subscription);
         MockClient client = new MockClient(time, metadata);
 
@@ -1421,7 +1571,7 @@ public class KafkaConsumerTest {
 
         ConsumerPartitionAssignor assignor = new RangeAssignor();
 
-        consumer = newConsumer(time, client, subscription, metadata, assignor, true, groupInstanceId);
+        consumer = newConsumer(groupProtocol, time, client, subscription, metadata, assignor, true, groupInstanceId);
 
         // lookup coordinator
         client.prepareResponseFrom(FindCoordinatorResponse.prepareResponse(Errors.NONE, groupId, node), node);
@@ -1462,8 +1612,11 @@ public class KafkaConsumerTest {
         client.requests().clear();
     }
 
-    @Test
-    public void testManualAssignmentChangeWithAutoCommitDisabled() {
+    // TODO: this test triggers a bug with the CONSUMER group protocol implementation.
+    //       The bug will be investigated and fixed so this test can use both group protocols.
+    @ParameterizedTest
+    @EnumSource(value = GroupProtocol.class, names = "GENERIC")
+    public void testManualAssignmentChangeWithAutoCommitDisabled(GroupProtocol groupProtocol) {
         ConsumerMetadata metadata = createMetadata(subscription);
         MockClient client = new MockClient(time, metadata);
 
@@ -1475,7 +1628,7 @@ public class KafkaConsumerTest {
 
         ConsumerPartitionAssignor assignor = new RangeAssignor();
 
-        consumer = newConsumer(time, client, subscription, metadata, assignor, false, groupInstanceId);
+        consumer = newConsumer(groupProtocol, time, client, subscription, metadata, assignor, false, groupInstanceId);
 
         // lookup coordinator
         client.prepareResponseFrom(FindCoordinatorResponse.prepareResponse(Errors.NONE, groupId, node), node);
@@ -1517,8 +1670,11 @@ public class KafkaConsumerTest {
         client.requests().clear();
     }
 
-    @Test
-    public void testOffsetOfPausedPartitions() {
+    // TODO: this test triggers a bug with the CONSUMER group protocol implementation.
+    //       The bug will be investigated and fixed so this test can use both group protocols.
+    @ParameterizedTest
+    @EnumSource(value = GroupProtocol.class, names = "GENERIC")
+    public void testOffsetOfPausedPartitions(GroupProtocol groupProtocol) {
         ConsumerMetadata metadata = createMetadata(subscription);
         MockClient client = new MockClient(time, metadata);
 
@@ -1527,7 +1683,7 @@ public class KafkaConsumerTest {
 
         ConsumerPartitionAssignor assignor = new RangeAssignor();
 
-        consumer = newConsumer(time, client, subscription, metadata, assignor, true, groupInstanceId);
+        consumer = newConsumer(groupProtocol, time, client, subscription, metadata, assignor, true, groupInstanceId);
 
         // lookup coordinator
         client.prepareResponseFrom(FindCoordinatorResponse.prepareResponse(Errors.NONE, groupId, node), node);
@@ -1567,38 +1723,47 @@ public class KafkaConsumerTest {
         consumer.unsubscribe();
     }
 
-    @Test
-    public void testPollWithNoSubscription() {
-        consumer = newConsumer((String) null);
+    @ParameterizedTest
+    @EnumSource(GroupProtocol.class)
+    public void testPollWithNoSubscription(GroupProtocol groupProtocol) {
+        consumer = newConsumer(groupProtocol, null);
         assertThrows(IllegalStateException.class, () -> consumer.poll(Duration.ZERO));
     }
 
-    @Test
-    public void testPollWithEmptySubscription() {
-        consumer = newConsumer(groupId);
+    @ParameterizedTest
+    @EnumSource(GroupProtocol.class)
+    public void testPollWithEmptySubscription(GroupProtocol groupProtocol) {
+        consumer = newConsumer(groupProtocol, groupId);
         consumer.subscribe(Collections.emptyList());
         assertThrows(IllegalStateException.class, () -> consumer.poll(Duration.ZERO));
     }
 
-    @Test
-    public void testPollWithEmptyUserAssignment() {
-        consumer = newConsumer(groupId);
+    @ParameterizedTest
+    @EnumSource(GroupProtocol.class)
+    public void testPollWithEmptyUserAssignment(GroupProtocol groupProtocol) {
+        consumer = newConsumer(groupProtocol, groupId);
         consumer.assign(Collections.emptySet());
         assertThrows(IllegalStateException.class, () -> consumer.poll(Duration.ZERO));
     }
 
-    @Test
-    public void testGracefulClose() throws Exception {
+    // TODO: this test references RPCs to be sent that are not part of the CONSUMER group protocol.
+    //       We are deferring any attempts at generalizing this test for both group protocols to the future.
+    @ParameterizedTest
+    @EnumSource(value = GroupProtocol.class, names = "GENERIC")
+    public void testGracefulClose(GroupProtocol groupProtocol) throws Exception {
         Map<TopicPartition, Errors> response = new HashMap<>();
         response.put(tp0, Errors.NONE);
         OffsetCommitResponse commitResponse = offsetCommitResponse(response);
         LeaveGroupResponse leaveGroupResponse = new LeaveGroupResponse(new LeaveGroupResponseData().setErrorCode(Errors.NONE.code()));
         FetchResponse closeResponse = FetchResponse.of(Errors.NONE, 0, INVALID_SESSION_ID, new LinkedHashMap<>());
-        consumerCloseTest(5000, Arrays.asList(commitResponse, leaveGroupResponse, closeResponse), 0, false);
+        consumerCloseTest(groupProtocol, 5000, Arrays.asList(commitResponse, leaveGroupResponse, closeResponse), 0, false);
     }
 
-    @Test
-    public void testCloseTimeoutDueToNoResponseForCloseFetchRequest() throws Exception {
+    // TODO: this test references RPCs to be sent that are not part of the CONSUMER group protocol.
+    //       We are deferring any attempts at generalizing this test for both group protocols to the future.
+    @ParameterizedTest
+    @EnumSource(value = GroupProtocol.class, names = "GENERIC")
+    public void testCloseTimeoutDueToNoResponseForCloseFetchRequest(GroupProtocol groupProtocol) throws Exception {
         Map<TopicPartition, Errors> response = new HashMap<>();
         response.put(tp0, Errors.NONE);
         OffsetCommitResponse commitResponse = offsetCommitResponse(response);
@@ -1610,39 +1775,54 @@ public class KafkaConsumerTest {
         // than configured timeout.
         final int closeTimeoutMs = 5000;
         final int waitForCloseCompletionMs = closeTimeoutMs + 1000;
-        consumerCloseTest(closeTimeoutMs, serverResponsesWithoutCloseResponse, waitForCloseCompletionMs, false);
+        consumerCloseTest(groupProtocol, closeTimeoutMs, serverResponsesWithoutCloseResponse, waitForCloseCompletionMs, false);
     }
 
-    @Test
-    public void testCloseTimeout() throws Exception {
-        consumerCloseTest(5000, Collections.emptyList(), 5000, false);
+    // TODO: this test requires rebalance logic which is not yet implemented in the CONSUMER group protocol.
+    //       Once it is implemented, this should use both group protocols.
+    @ParameterizedTest
+    @EnumSource(value = GroupProtocol.class, names = "GENERIC")
+    public void testCloseTimeout(GroupProtocol groupProtocol) throws Exception {
+        consumerCloseTest(groupProtocol, 5000, Collections.emptyList(), 5000, false);
     }
 
-    @Test
-    public void testLeaveGroupTimeout() throws Exception {
+    // TODO: this test requires rebalance logic which is not yet implemented in the CONSUMER group protocol.
+    //       Once it is implemented, this should use both group protocols.
+    @ParameterizedTest
+    @EnumSource(value = GroupProtocol.class, names = "GENERIC")
+    public void testLeaveGroupTimeout(GroupProtocol groupProtocol) throws Exception {
         Map<TopicPartition, Errors> response = new HashMap<>();
         response.put(tp0, Errors.NONE);
         OffsetCommitResponse commitResponse = offsetCommitResponse(response);
-        consumerCloseTest(5000, singletonList(commitResponse), 5000, false);
+        consumerCloseTest(groupProtocol, 5000, singletonList(commitResponse), 5000, false);
     }
 
-    @Test
-    public void testCloseNoWait() throws Exception {
-        consumerCloseTest(0, Collections.emptyList(), 0, false);
+    // TODO: this test requires rebalance logic which is not yet implemented in the CONSUMER group protocol.
+    //       Once it is implemented, this should use both group protocols.
+    @ParameterizedTest
+    @EnumSource(value = GroupProtocol.class, names = "GENERIC")
+    public void testCloseNoWait(GroupProtocol groupProtocol) throws Exception {
+        consumerCloseTest(groupProtocol, 0, Collections.emptyList(), 0, false);
     }
 
-    @Test
-    public void testCloseInterrupt() throws Exception {
-        consumerCloseTest(Long.MAX_VALUE, Collections.emptyList(), 0, true);
+    // TODO: this test requires rebalance logic which is not yet implemented in the CONSUMER group protocol.
+    //       Once it is implemented, this should use both group protocols.
+    @ParameterizedTest
+    @EnumSource(value = GroupProtocol.class, names = "GENERIC")
+    public void testCloseInterrupt(GroupProtocol groupProtocol) throws Exception {
+        consumerCloseTest(groupProtocol, Long.MAX_VALUE, Collections.emptyList(), 0, true);
     }
 
-    @Test
-    public void testCloseShouldBeIdempotent() {
+    // TODO: this test triggers a bug with the CONSUMER group protocol implementation.
+    //       The bug will be investigated and fixed so this test can use both group protocols.
+    @ParameterizedTest
+    @EnumSource(value = GroupProtocol.class, names = "GENERIC")
+    public void testCloseShouldBeIdempotent(GroupProtocol groupProtocol) {
         ConsumerMetadata metadata = createMetadata(subscription);
         MockClient client = spy(new MockClient(time, metadata));
         initMetadata(client, singletonMap(topic, 1));
 
-        consumer = newConsumer(time, client, subscription, metadata, assignor, false, groupInstanceId);
+        consumer = newConsumer(groupProtocol, time, client, subscription, metadata, assignor, false, groupInstanceId);
 
         consumer.close(Duration.ZERO);
         consumer.close(Duration.ZERO);
@@ -1651,47 +1831,48 @@ public class KafkaConsumerTest {
         verify(client).close();
     }
 
-    @Test
-    public void testOperationsBySubscribingConsumerWithDefaultGroupId() {
-        try {
-            newConsumer(null, Optional.of(Boolean.TRUE));
+    @ParameterizedTest
+    @EnumSource(GroupProtocol.class)
+    public void testOperationsBySubscribingConsumerWithDefaultGroupId(GroupProtocol groupProtocol) {
+        try (KafkaConsumer<byte[], byte[]> consumer = newConsumer(groupProtocol, null, Optional.of(Boolean.TRUE))) {
             fail("Expected an InvalidConfigurationException");
-        } catch (KafkaException e) {
-            assertEquals(InvalidConfigurationException.class, e.getCause().getClass());
+        } catch (InvalidConfigurationException e) {
+            // OK, expected
         }
 
-        try {
-            newConsumer((String) null).subscribe(Collections.singleton(topic));
+        try (KafkaConsumer<byte[], byte[]> consumer = newConsumer(groupProtocol, (String) null)) {
+            consumer.subscribe(Collections.singleton(topic));
             fail("Expected an InvalidGroupIdException");
         } catch (InvalidGroupIdException e) {
             // OK, expected
         }
 
-        try {
-            newConsumer((String) null).committed(Collections.singleton(tp0)).get(tp0);
+        try (KafkaConsumer<byte[], byte[]> consumer = newConsumer(groupProtocol, (String) null)) {
+            consumer.committed(Collections.singleton(tp0)).get(tp0);
             fail("Expected an InvalidGroupIdException");
         } catch (InvalidGroupIdException e) {
             // OK, expected
         }
 
-        try {
-            newConsumer((String) null).commitAsync();
+        try (KafkaConsumer<byte[], byte[]> consumer = newConsumer(groupProtocol, (String) null)) {
+            consumer.commitAsync();
             fail("Expected an InvalidGroupIdException");
         } catch (InvalidGroupIdException e) {
             // OK, expected
         }
 
-        try {
-            newConsumer((String) null).commitSync();
+        try (KafkaConsumer<byte[], byte[]> consumer = newConsumer(groupProtocol, (String) null)) {
+            consumer.commitSync();
             fail("Expected an InvalidGroupIdException");
         } catch (InvalidGroupIdException e) {
             // OK, expected
         }
     }
 
-    @Test
-    public void testOperationsByAssigningConsumerWithDefaultGroupId() {
-        KafkaConsumer<byte[], byte[]> consumer = newConsumer((String) null);
+    @ParameterizedTest
+    @EnumSource(GroupProtocol.class)
+    public void testOperationsByAssigningConsumerWithDefaultGroupId(GroupProtocol groupProtocol) {
+        KafkaConsumer<byte[], byte[]> consumer = newConsumer(groupProtocol, null);
         consumer.assign(singleton(tp0));
 
         try {
@@ -1714,32 +1895,39 @@ public class KafkaConsumerTest {
         } catch (InvalidGroupIdException e) {
             // OK, expected
         }
+
+        consumer.close();
     }
 
-    @Test
-    public void testMetricConfigRecordingLevelInfo() {
+    @ParameterizedTest
+    @EnumSource(GroupProtocol.class)
+    public void testMetricConfigRecordingLevelInfo(GroupProtocol groupProtocol) {
         Properties props = new Properties();
+        props.put(ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol.name());
         props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9000");
-        KafkaConsumer<byte[], byte[]> consumer = new KafkaConsumer<>(props, new ByteArrayDeserializer(), new ByteArrayDeserializer());
-        assertEquals(Sensor.RecordingLevel.INFO, consumer.metrics.config().recordLevel());
+        KafkaConsumer<byte[], byte[]> consumer = newConsumer(props, new ByteArrayDeserializer(), new ByteArrayDeserializer());
+        assertEquals(Sensor.RecordingLevel.INFO, consumer.metricsRegistry().config().recordLevel());
         consumer.close(Duration.ZERO);
 
         props.put(ConsumerConfig.METRICS_RECORDING_LEVEL_CONFIG, "DEBUG");
-        KafkaConsumer<byte[], byte[]> consumer2 = new KafkaConsumer<>(props, new ByteArrayDeserializer(), new ByteArrayDeserializer());
-        assertEquals(Sensor.RecordingLevel.DEBUG, consumer2.metrics.config().recordLevel());
+        KafkaConsumer<byte[], byte[]> consumer2 = newConsumer(props, new ByteArrayDeserializer(), new ByteArrayDeserializer());
+        assertEquals(Sensor.RecordingLevel.DEBUG, consumer2.metricsRegistry().config().recordLevel());
         consumer2.close(Duration.ZERO);
     }
 
-    @Test
+    // TODO: this test references RPCs to be sent that are not part of the CONSUMER group protocol.
+    //       We are deferring any attempts at generalizing this test for both group protocols to the future.
+    @ParameterizedTest
+    @EnumSource(value = GroupProtocol.class, names = "GENERIC")
     @SuppressWarnings("unchecked")
-    public void testShouldAttemptToRejoinGroupAfterSyncGroupFailed() throws Exception {
+    public void testShouldAttemptToRejoinGroupAfterSyncGroupFailed(GroupProtocol groupProtocol) throws Exception {
         ConsumerMetadata metadata = createMetadata(subscription);
         MockClient client = new MockClient(time, metadata);
 
         initMetadata(client, Collections.singletonMap(topic, 1));
         Node node = metadata.fetch().nodes().get(0);
 
-        consumer = newConsumer(time, client, subscription, metadata, assignor, false, groupInstanceId);
+        consumer = newConsumer(groupProtocol, time, client, subscription, metadata, assignor, false, groupInstanceId);
         consumer.subscribe(singleton(topic), getConsumerRebalanceListener(consumer));
         client.prepareResponseFrom(FindCoordinatorResponse.prepareResponse(Errors.NONE, groupId, node), node);
         Node coordinator = new Node(Integer.MAX_VALUE - node.id(), node.host(), node.port());
@@ -1797,7 +1985,8 @@ public class KafkaConsumerTest {
         assertFalse(records.isEmpty());
     }
 
-    private void consumerCloseTest(final long closeTimeoutMs,
+    private void consumerCloseTest(GroupProtocol groupProtocol,
+                                   final long closeTimeoutMs,
                                    List<? extends AbstractResponse> responses,
                                    long waitMs,
                                    boolean interrupt) throws Exception {
@@ -1807,7 +1996,7 @@ public class KafkaConsumerTest {
         initMetadata(client, Collections.singletonMap(topic, 1));
         Node node = metadata.fetch().nodes().get(0);
 
-        final KafkaConsumer<String, String> consumer = newConsumer(time, client, subscription, metadata, assignor, false, Optional.empty());
+        final KafkaConsumer<String, String> consumer = newConsumer(groupProtocol, time, client, subscription, metadata, assignor, false, Optional.empty());
         consumer.subscribe(singleton(topic), getConsumerRebalanceListener(consumer));
         Node coordinator = prepareRebalance(client, node, assignor, singletonList(tp0), null);
 
@@ -1893,8 +2082,11 @@ public class KafkaConsumerTest {
         }
     }
 
-    @Test
-    public void testPartitionsForNonExistingTopic() {
+    // TODO: this test requires topic metadata logic which is not yet implemented in the CONSUMER group protocol.
+    //       Once it is implemented, this should use both group protocols.
+    @ParameterizedTest
+    @EnumSource(value = GroupProtocol.class, names = "GENERIC")
+    public void testPartitionsForNonExistingTopic(GroupProtocol groupProtocol) {
         ConsumerMetadata metadata = createMetadata(subscription);
         MockClient client = new MockClient(time, metadata);
 
@@ -1907,59 +2099,83 @@ public class KafkaConsumerTest {
             Collections.emptyList());
         client.prepareResponse(updateResponse);
 
-        KafkaConsumer<String, String> consumer = newConsumer(time, client, subscription, metadata, assignor, true, groupInstanceId);
+        KafkaConsumer<String, String> consumer = newConsumer(groupProtocol, time, client, subscription, metadata, assignor, true, groupInstanceId);
         assertEquals(Collections.emptyList(), consumer.partitionsFor("non-exist-topic"));
     }
 
-    @Test
-    public void testPartitionsForAuthenticationFailure() {
-        final KafkaConsumer<String, String> consumer = consumerWithPendingAuthenticationError();
+    // TODO: this test requires topic metadata logic which is not yet implemented in the CONSUMER group protocol.
+    //       Once it is implemented, this should use both group protocols.
+    @ParameterizedTest
+    @EnumSource(value = GroupProtocol.class, names = "GENERIC")
+    public void testPartitionsForAuthenticationFailure(GroupProtocol groupProtocol) {
+        final KafkaConsumer<String, String> consumer = consumerWithPendingAuthenticationError(groupProtocol);
         assertThrows(AuthenticationException.class, () -> consumer.partitionsFor("some other topic"));
     }
 
-    @Test
-    public void testBeginningOffsetsAuthenticationFailure() {
-        final KafkaConsumer<String, String> consumer = consumerWithPendingAuthenticationError();
+    // TODO: this test triggers a bug with the CONSUMER group protocol implementation.
+    //       The bug will be investigated and fixed so this test can use both group protocols.
+    @ParameterizedTest
+    @EnumSource(value = GroupProtocol.class, names = "GENERIC")
+    public void testBeginningOffsetsAuthenticationFailure(GroupProtocol groupProtocol) {
+        final KafkaConsumer<String, String> consumer = consumerWithPendingAuthenticationError(groupProtocol);
         assertThrows(AuthenticationException.class, () -> consumer.beginningOffsets(Collections.singleton(tp0)));
     }
 
-    @Test
-    public void testEndOffsetsAuthenticationFailure() {
-        final KafkaConsumer<String, String> consumer = consumerWithPendingAuthenticationError();
+    // TODO: this test triggers a bug with the CONSUMER group protocol implementation.
+    //       The bug will be investigated and fixed so this test can use both group protocols.
+    @ParameterizedTest
+    @EnumSource(value = GroupProtocol.class, names = "GENERIC")
+    public void testEndOffsetsAuthenticationFailure(GroupProtocol groupProtocol) {
+        final KafkaConsumer<String, String> consumer = consumerWithPendingAuthenticationError(groupProtocol);
         assertThrows(AuthenticationException.class, () -> consumer.endOffsets(Collections.singleton(tp0)));
     }
 
-    @Test
-    public void testPollAuthenticationFailure() {
-        final KafkaConsumer<String, String> consumer = consumerWithPendingAuthenticationError();
+    // TODO: this test requires rebalance logic which is not yet implemented in the CONSUMER group protocol.
+    //       Once it is implemented, this should use both group protocols.
+    @ParameterizedTest
+    @EnumSource(value = GroupProtocol.class, names = "GENERIC")
+    public void testPollAuthenticationFailure(GroupProtocol groupProtocol) {
+        final KafkaConsumer<String, String> consumer = consumerWithPendingAuthenticationError(groupProtocol);
         consumer.subscribe(singleton(topic));
         assertThrows(AuthenticationException.class, () -> consumer.poll(Duration.ZERO));
     }
 
-    @Test
-    public void testOffsetsForTimesAuthenticationFailure() {
-        final KafkaConsumer<String, String> consumer = consumerWithPendingAuthenticationError();
+    // TODO: this test triggers a bug with the CONSUMER group protocol implementation.
+    //       The bug will be investigated and fixed so this test can use both group protocols.
+    @ParameterizedTest
+    @EnumSource(value = GroupProtocol.class, names = "GENERIC")
+    public void testOffsetsForTimesAuthenticationFailure(GroupProtocol groupProtocol) {
+        final KafkaConsumer<String, String> consumer = consumerWithPendingAuthenticationError(groupProtocol);
         assertThrows(AuthenticationException.class, () -> consumer.offsetsForTimes(singletonMap(tp0, 0L)));
     }
 
-    @Test
-    public void testCommitSyncAuthenticationFailure() {
-        final KafkaConsumer<String, String> consumer = consumerWithPendingAuthenticationError();
+    // TODO: this test triggers a bug with the CONSUMER group protocol implementation.
+    //       The bug will be investigated and fixed so this test can use both group protocols.
+    @ParameterizedTest
+    @EnumSource(value = GroupProtocol.class, names = "GENERIC")
+    public void testCommitSyncAuthenticationFailure(GroupProtocol groupProtocol) {
+        final KafkaConsumer<String, String> consumer = consumerWithPendingAuthenticationError(groupProtocol);
         Map<TopicPartition, OffsetAndMetadata> offsets = new HashMap<>();
         offsets.put(tp0, new OffsetAndMetadata(10L));
         assertThrows(AuthenticationException.class, () -> consumer.commitSync(offsets));
     }
 
-    @Test
-    public void testCommittedAuthenticationFailure() {
-        final KafkaConsumer<String, String> consumer = consumerWithPendingAuthenticationError();
+    // TODO: this test triggers a bug with the CONSUMER group protocol implementation.
+    //       The bug will be investigated and fixed so this test can use both group protocols.
+    @ParameterizedTest
+    @EnumSource(value = GroupProtocol.class, names = "GENERIC")
+    public void testCommittedAuthenticationFailure(GroupProtocol groupProtocol) {
+        final KafkaConsumer<String, String> consumer = consumerWithPendingAuthenticationError(groupProtocol);
         assertThrows(AuthenticationException.class, () -> consumer.committed(Collections.singleton(tp0)).get(tp0));
     }
 
-    @Test
-    public void testMeasureCommitSyncDurationOnFailure() {
+    // TODO: this test triggers a bug with the CONSUMER group protocol implementation.
+    //       The bug will be investigated and fixed so this test can use both group protocols.
+    @ParameterizedTest
+    @EnumSource(value = GroupProtocol.class, names = "GENERIC")
+    public void testMeasureCommitSyncDurationOnFailure(GroupProtocol groupProtocol) {
         final KafkaConsumer<String, String> consumer
-            = consumerWithPendingError(new MockTime(Duration.ofSeconds(1).toMillis()));
+            = consumerWithPendingError(groupProtocol, new MockTime(Duration.ofSeconds(1).toMillis()));
 
         try {
             consumer.commitSync(Collections.singletonMap(tp0, new OffsetAndMetadata(10L)));
@@ -1967,12 +2183,15 @@ public class KafkaConsumerTest {
         }
 
         final Metric metric = consumer.metrics()
-            .get(consumer.metrics.metricName("commit-sync-time-ns-total", "consumer-metrics"));
+            .get(consumer.metricsRegistry().metricName("commit-sync-time-ns-total", "consumer-metrics"));
         assertTrue((Double) metric.metricValue() >= Duration.ofMillis(999).toNanos());
     }
 
-    @Test
-    public void testMeasureCommitSyncDuration() {
+    // TODO: this test triggers a bug with the CONSUMER group protocol implementation.
+    //       The bug will be investigated and fixed so this test can use both group protocols.
+    @ParameterizedTest
+    @EnumSource(value = GroupProtocol.class, names = "GENERIC")
+    public void testMeasureCommitSyncDuration(GroupProtocol groupProtocol) {
         Time time = new MockTime(Duration.ofSeconds(1).toMillis());
         SubscriptionState subscription = new SubscriptionState(new LogContext(),
             OffsetResetStrategy.EARLIEST);
@@ -1980,7 +2199,7 @@ public class KafkaConsumerTest {
         MockClient client = new MockClient(time, metadata);
         initMetadata(client, Collections.singletonMap(topic, 2));
         Node node = metadata.fetch().nodes().get(0);
-        KafkaConsumer<String, String> consumer = newConsumer(time, client, subscription, metadata,
+        KafkaConsumer<String, String> consumer = newConsumer(groupProtocol, time, client, subscription, metadata,
             assignor, true, groupInstanceId);
         consumer.assign(singletonList(tp0));
 
@@ -1995,14 +2214,17 @@ public class KafkaConsumerTest {
         consumer.commitSync(Collections.singletonMap(tp0, new OffsetAndMetadata(10L)));
 
         final Metric metric = consumer.metrics()
-            .get(consumer.metrics.metricName("commit-sync-time-ns-total", "consumer-metrics"));
+            .get(consumer.metricsRegistry().metricName("commit-sync-time-ns-total", "consumer-metrics"));
         assertTrue((Double) metric.metricValue() >= Duration.ofMillis(999).toNanos());
     }
 
-    @Test
-    public void testMeasureCommittedDurationOnFailure() {
+    // TODO: this test triggers a bug with the CONSUMER group protocol implementation.
+    //       The bug will be investigated and fixed so this test can use both group protocols.
+    @ParameterizedTest
+    @EnumSource(value = GroupProtocol.class, names = "GENERIC")
+    public void testMeasureCommittedDurationOnFailure(GroupProtocol groupProtocol) {
         final KafkaConsumer<String, String> consumer
-            = consumerWithPendingError(new MockTime(Duration.ofSeconds(1).toMillis()));
+            = consumerWithPendingError(groupProtocol, new MockTime(Duration.ofSeconds(1).toMillis()));
 
         try {
             consumer.committed(Collections.singleton(tp0));
@@ -2010,12 +2232,15 @@ public class KafkaConsumerTest {
         }
 
         final Metric metric = consumer.metrics()
-            .get(consumer.metrics.metricName("committed-time-ns-total", "consumer-metrics"));
+            .get(consumer.metricsRegistry().metricName("committed-time-ns-total", "consumer-metrics"));
         assertTrue((Double) metric.metricValue() >= Duration.ofMillis(999).toNanos());
     }
 
-    @Test
-    public void testMeasureCommittedDuration() {
+    // TODO: this test triggers a bug with the CONSUMER group protocol implementation.
+    //       The bug will be investigated and fixed so this test can use both group protocols.
+    @ParameterizedTest
+    @EnumSource(value = GroupProtocol.class, names = "GENERIC")
+    public void testMeasureCommittedDuration(GroupProtocol groupProtocol) {
         long offset1 = 10000;
         Time time = new MockTime(Duration.ofSeconds(1).toMillis());
         SubscriptionState subscription = new SubscriptionState(new LogContext(),
@@ -2024,7 +2249,7 @@ public class KafkaConsumerTest {
         MockClient client = new MockClient(time, metadata);
         initMetadata(client, Collections.singletonMap(topic, 2));
         Node node = metadata.fetch().nodes().get(0);
-        KafkaConsumer<String, String> consumer = newConsumer(time, client, subscription, metadata,
+        KafkaConsumer<String, String> consumer = newConsumer(groupProtocol, time, client, subscription, metadata,
             assignor, true, groupInstanceId);
         consumer.assign(singletonList(tp0));
 
@@ -2040,19 +2265,22 @@ public class KafkaConsumerTest {
         consumer.committed(Collections.singleton(tp0)).get(tp0).offset();
 
         final Metric metric = consumer.metrics()
-            .get(consumer.metrics.metricName("committed-time-ns-total", "consumer-metrics"));
+            .get(consumer.metricsRegistry().metricName("committed-time-ns-total", "consumer-metrics"));
         assertTrue((Double) metric.metricValue() >= Duration.ofMillis(999).toNanos());
     }
 
-    @Test
-    public void testRebalanceException() {
+    // TODO: this test requires rebalance logic which is not yet implemented in the CONSUMER group protocol.
+    //       Once it is implemented, this should use both group protocols.
+    @ParameterizedTest
+    @EnumSource(value = GroupProtocol.class, names = "GENERIC")
+    public void testRebalanceException(GroupProtocol groupProtocol) {
         ConsumerMetadata metadata = createMetadata(subscription);
         MockClient client = new MockClient(time, metadata);
 
         initMetadata(client, Collections.singletonMap(topic, 1));
         Node node = metadata.fetch().nodes().get(0);
 
-        KafkaConsumer<String, String> consumer = newConsumer(time, client, subscription, metadata, assignor, true, groupInstanceId);
+        KafkaConsumer<String, String> consumer = newConsumer(groupProtocol, time, client, subscription, metadata, assignor, true, groupInstanceId);
 
         consumer.subscribe(singleton(topic), getExceptionConsumerRebalanceListener());
         Node coordinator = new Node(Integer.MAX_VALUE - node.id(), node.host(), node.port());
@@ -2086,13 +2314,16 @@ public class KafkaConsumerTest {
         assertTrue(subscription.assignedPartitions().isEmpty());
     }
 
-    @Test
-    public void testReturnRecordsDuringRebalance() throws InterruptedException {
+    // TODO: this test requires rebalance logic which is not yet implemented in the CONSUMER group protocol.
+    //       Once it is implemented, this should use both group protocols.
+    @ParameterizedTest
+    @EnumSource(value = GroupProtocol.class, names = "GENERIC")
+    public void testReturnRecordsDuringRebalance(GroupProtocol groupProtocol) throws InterruptedException {
         Time time = new MockTime(1L);
         ConsumerMetadata metadata = createMetadata(subscription);
         MockClient client = new MockClient(time, metadata);
         ConsumerPartitionAssignor assignor = new CooperativeStickyAssignor();
-        KafkaConsumer<String, String> consumer = newConsumer(time, client, subscription, metadata, assignor, true, groupInstanceId);
+        KafkaConsumer<String, String> consumer = newConsumer(groupProtocol, time, client, subscription, metadata, assignor, true, groupInstanceId);
 
         initMetadata(client, Utils.mkMap(Utils.mkEntry(topic, 1), Utils.mkEntry(topic2, 1), Utils.mkEntry(topic3, 1)));
 
@@ -2211,15 +2442,18 @@ public class KafkaConsumerTest {
         consumer.close(Duration.ZERO);
     }
 
-    @Test
-    public void testGetGroupMetadata() {
+    // TODO: this test requires rebalance logic which is not yet implemented in the CONSUMER group protocol.
+    //       Once it is implemented, this should use both group protocols.
+    @ParameterizedTest
+    @EnumSource(value = GroupProtocol.class, names = "GENERIC")
+    public void testGetGroupMetadata(GroupProtocol groupProtocol) {
         final ConsumerMetadata metadata = createMetadata(subscription);
         final MockClient client = new MockClient(time, metadata);
 
         initMetadata(client, Collections.singletonMap(topic, 1));
         final Node node = metadata.fetch().nodes().get(0);
 
-        final KafkaConsumer<String, String> consumer = newConsumer(time, client, subscription, metadata, assignor, true, groupInstanceId);
+        final KafkaConsumer<String, String> consumer = newConsumer(groupProtocol, time, client, subscription, metadata, assignor, true, groupInstanceId);
 
         final ConsumerGroupMetadata groupMetadataOnStart = consumer.groupMetadata();
         assertEquals(groupId, groupMetadataOnStart.groupId());
@@ -2241,12 +2475,15 @@ public class KafkaConsumerTest {
         assertEquals(groupInstanceId, groupMetadataAfterPoll.groupInstanceId());
     }
 
-    @Test
-    public void testInvalidGroupMetadata() throws InterruptedException {
+    // TODO: this test requires rebalance logic which is not yet implemented in the CONSUMER group protocol.
+    //       Once it is implemented, this should use both group protocols.
+    @ParameterizedTest
+    @EnumSource(value = GroupProtocol.class, names = "GENERIC")
+    public void testInvalidGroupMetadata(GroupProtocol groupProtocol) throws InterruptedException {
         ConsumerMetadata metadata = createMetadata(subscription);
         MockClient client = new MockClient(time, metadata);
         initMetadata(client, Collections.singletonMap(topic, 1));
-        KafkaConsumer<String, String> consumer = newConsumer(time, client, subscription, metadata,
+        KafkaConsumer<String, String> consumer = newConsumer(groupProtocol, time, client, subscription, metadata,
                 new RoundRobinAssignor(), true, groupInstanceId);
         consumer.subscribe(singletonList(topic));
         // concurrent access is illegal
@@ -2268,15 +2505,18 @@ public class KafkaConsumerTest {
         assertThrows(IllegalStateException.class, consumer::groupMetadata);
     }
 
-    @Test
+    // TODO: this test triggers a bug with the CONSUMER group protocol implementation.
+    //       The bug will be investigated and fixed so this test can use both group protocols.
+    @ParameterizedTest
+    @EnumSource(value = GroupProtocol.class, names = "GENERIC")
     @SuppressWarnings("unchecked")
-    public void testCurrentLag() {
+    public void testCurrentLag(GroupProtocol groupProtocol) {
         final ConsumerMetadata metadata = createMetadata(subscription);
         final MockClient client = new MockClient(time, metadata);
 
         initMetadata(client, singletonMap(topic, 1));
 
-        consumer = newConsumer(time, client, subscription, metadata, assignor, true, groupInstanceId);
+        consumer = newConsumer(groupProtocol, time, client, subscription, metadata, assignor, true, groupInstanceId);
 
         // throws for unassigned partition
         assertThrows(IllegalStateException.class, () -> consumer.currentLag(tp0));
@@ -2321,14 +2561,17 @@ public class KafkaConsumerTest {
         assertEquals(OptionalLong.of(45L), consumer.currentLag(tp0));
     }
 
-    @Test
-    public void testListOffsetShouldUpdateSubscriptions() {
+    // TODO: this test triggers a bug with the CONSUMER group protocol implementation.
+    //       The bug will be investigated and fixed so this test can use both group protocols.
+    @ParameterizedTest
+    @EnumSource(value = GroupProtocol.class, names = "GENERIC")
+    public void testListOffsetShouldUpdateSubscriptions(GroupProtocol groupProtocol) {
         final ConsumerMetadata metadata = createMetadata(subscription);
         final MockClient client = new MockClient(time, metadata);
 
         initMetadata(client, singletonMap(topic, 1));
 
-        consumer = newConsumer(time, client, subscription, metadata, assignor, true, groupInstanceId);
+        consumer = newConsumer(groupProtocol, time, client, subscription, metadata, assignor, true, groupInstanceId);
 
         consumer.assign(singleton(tp0));
 
@@ -2344,7 +2587,8 @@ public class KafkaConsumerTest {
         assertEquals(OptionalLong.of(40L), consumer.currentLag(tp0));
     }
 
-    private KafkaConsumer<String, String> consumerWithPendingAuthenticationError(final Time time) {
+    private KafkaConsumer<String, String> consumerWithPendingAuthenticationError(GroupProtocol groupProtocol,
+                                                                                 final Time time) {
         ConsumerMetadata metadata = createMetadata(subscription);
         MockClient client = new MockClient(time, metadata);
 
@@ -2354,15 +2598,15 @@ public class KafkaConsumerTest {
         ConsumerPartitionAssignor assignor = new RangeAssignor();
 
         client.createPendingAuthenticationError(node, 0);
-        return newConsumer(time, client, subscription, metadata, assignor, false, groupInstanceId);
+        return newConsumer(groupProtocol, time, client, subscription, metadata, assignor, false, groupInstanceId);
     }
 
-    private KafkaConsumer<String, String> consumerWithPendingAuthenticationError() {
-        return consumerWithPendingAuthenticationError(new MockTime());
+    private KafkaConsumer<String, String> consumerWithPendingAuthenticationError(GroupProtocol groupProtocol) {
+        return consumerWithPendingAuthenticationError(groupProtocol, new MockTime());
     }
 
-    private KafkaConsumer<String, String> consumerWithPendingError(final Time time) {
-        return consumerWithPendingAuthenticationError(time);
+    private KafkaConsumer<String, String> consumerWithPendingError(GroupProtocol groupProtocol, final Time time) {
+        return consumerWithPendingAuthenticationError(groupProtocol, time);
     }
 
     private ConsumerRebalanceListener getConsumerRebalanceListener(final KafkaConsumer<?, ?> consumer) {
@@ -2512,6 +2756,7 @@ public class KafkaConsumerTest {
             partitionData.put(entry.getKey(), new OffsetFetchResponse.PartitionData(entry.getValue(),
                     Optional.empty(), "", error));
         }
+        int throttleMs = 10;
         return new OffsetFetchResponse(
             throttleMs,
             Collections.singletonMap(groupId, Errors.NONE),
@@ -2561,11 +2806,12 @@ public class KafkaConsumerTest {
             if (fetchCount == 0) {
                 records = MemoryRecords.EMPTY;
             } else {
-                MemoryRecordsBuilder builder = MemoryRecords.builder(ByteBuffer.allocate(1024), CompressionType.NONE,
-                        TimestampType.CREATE_TIME, fetchOffset);
-                for (int i = 0; i < fetchCount; i++)
-                    builder.append(0L, ("key-" + i).getBytes(), ("value-" + i).getBytes());
-                records = builder.build();
+                try (MemoryRecordsBuilder builder = MemoryRecords.builder(ByteBuffer.allocate(1024), CompressionType.NONE,
+                        TimestampType.CREATE_TIME, fetchOffset)) {
+                    for (int i = 0; i < fetchCount; i++)
+                        builder.append(0L, ("key-" + i).getBytes(), ("value-" + i).getBytes());
+                    records = builder.build();
+                }
             }
             tpResponses.put(new TopicIdPartition(topicIds.get(partition.topic()), partition),
                 new FetchResponseData.PartitionData()
@@ -2582,24 +2828,49 @@ public class KafkaConsumerTest {
         return fetchResponse(Collections.singletonMap(partition, fetchInfo));
     }
 
-    private KafkaConsumer<String, String> newConsumer(Time time,
+    private KafkaConsumer<String, String> newConsumer(GroupProtocol groupProtocol,
+                                                      Time time,
                                                       KafkaClient client,
                                                       SubscriptionState subscription,
                                                       ConsumerMetadata metadata,
                                                       ConsumerPartitionAssignor assignor,
                                                       boolean autoCommitEnabled,
                                                       Optional<String> groupInstanceId) {
-        return newConsumer(time, client, subscription, metadata, assignor, autoCommitEnabled, groupId, groupInstanceId, false);
+        return newConsumer(
+            groupProtocol,
+            time,
+            client,
+            subscription,
+            metadata,
+            assignor,
+            autoCommitEnabled,
+            groupId,
+            groupInstanceId,
+            false
+        );
     }
 
-    private KafkaConsumer<String, String> newConsumerNoAutoCommit(Time time,
+    private KafkaConsumer<String, String> newConsumerNoAutoCommit(GroupProtocol groupProtocol,
+                                                                  Time time,
                                                                   KafkaClient client,
                                                                   SubscriptionState subscription,
                                                                   ConsumerMetadata metadata) {
-        return newConsumer(time, client, subscription, metadata, new RangeAssignor(), false, groupId, groupInstanceId, false);
+        return newConsumer(
+            groupProtocol,
+            time,
+            client,
+            subscription,
+            metadata,
+            new RangeAssignor(),
+            false,
+            groupId,
+            groupInstanceId,
+            false
+        );
     }
 
-    private KafkaConsumer<String, String> newConsumer(Time time,
+    private KafkaConsumer<String, String> newConsumer(GroupProtocol groupProtocol,
+                                                      Time time,
                                                       KafkaClient client,
                                                       SubscriptionState subscription,
                                                       ConsumerMetadata metadata,
@@ -2608,22 +2879,64 @@ public class KafkaConsumerTest {
                                                       String groupId,
                                                       Optional<String> groupInstanceId,
                                                       boolean throwOnStableOffsetNotSupported) {
-        return newConsumer(time, client, subscription, metadata, assignor, autoCommitEnabled, groupId, groupInstanceId,
-        Optional.of(new StringDeserializer()), throwOnStableOffsetNotSupported);
+        return newConsumer(
+            groupProtocol,
+            time,
+            client,
+            subscription,
+            metadata,
+            assignor,
+            autoCommitEnabled,
+            groupId,
+            groupInstanceId,
+            Optional.of(new StringDeserializer()),
+            throwOnStableOffsetNotSupported
+        );
     }
 
-    private KafkaConsumer<String, String> newConsumer(Time time,
+    private KafkaConsumer<String, String> newConsumer(GroupProtocol groupProtocol,
+                                                      Time time,
                                                       KafkaClient client,
-                                                      SubscriptionState subscription,
+                                                      SubscriptionState subscriptions,
                                                       ConsumerMetadata metadata,
                                                       ConsumerPartitionAssignor assignor,
                                                       boolean autoCommitEnabled,
                                                       String groupId,
                                                       Optional<String> groupInstanceId,
-                                                      Optional<Deserializer<String>> valueDeserializer,
+                                                      Optional<Deserializer<String>> valueDeserializerOpt,
                                                       boolean throwOnStableOffsetNotSupported) {
+        Deserializer<String> keyDeserializer = new StringDeserializer();
+        Deserializer<String> valueDeserializer = valueDeserializerOpt.orElse(new StringDeserializer());
+        LogContext logContext = new LogContext();
+        List<ConsumerPartitionAssignor> assignors = singletonList(assignor);
+        ConsumerConfig config = newConsumerConfig(
+            groupProtocol,
+            autoCommitEnabled,
+            groupId,
+            groupInstanceId,
+            valueDeserializer,
+            throwOnStableOffsetNotSupported
+        );
+        return new KafkaConsumer<>(
+            logContext,
+            time,
+            config,
+            keyDeserializer,
+            valueDeserializer,
+            client,
+            subscriptions,
+            metadata,
+            assignors
+        );
+    }
+
+    private ConsumerConfig newConsumerConfig(GroupProtocol groupProtocol,
+                                             boolean autoCommitEnabled,
+                                             String groupId,
+                                             Optional<String> groupInstanceId,
+                                             Deserializer<String> valueDeserializer,
+                                             boolean throwOnStableOffsetNotSupported) {
         String clientId = "mock-consumer";
-        String metricGroupPrefix = "consumer";
         long retryBackoffMs = 100;
         long retryBackoffMaxMs = 1000;
         int minBytes = 1;
@@ -2633,100 +2946,35 @@ public class KafkaConsumerTest {
         int maxPollRecords = Integer.MAX_VALUE;
         boolean checkCrcs = true;
         int rebalanceTimeoutMs = 60000;
+        int requestTimeoutMs = defaultApiTimeoutMs / 2;
 
-        Deserializer<String> keyDeserializer = new StringDeserializer();
-        Deserializer<String> deserializer = valueDeserializer.orElse(new StringDeserializer());
+        Map<String, Object> configs = new HashMap<>();
+        configs.put(ConsumerConfig.AUTO_COMMIT_INTERVAL_MS_CONFIG, autoCommitIntervalMs);
+        configs.put(ConsumerConfig.CHECK_CRCS_CONFIG, checkCrcs);
+        configs.put(ConsumerConfig.CLIENT_ID_CONFIG, clientId);
+        configs.put(ConsumerConfig.CLIENT_RACK_CONFIG, CommonClientConfigs.DEFAULT_CLIENT_RACK);
+        configs.put(ConsumerConfig.DEFAULT_API_TIMEOUT_MS_CONFIG, defaultApiTimeoutMs);
+        configs.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, autoCommitEnabled);
+        configs.put(ConsumerConfig.FETCH_MAX_BYTES_CONFIG, maxBytes);
+        configs.put(ConsumerConfig.FETCH_MAX_WAIT_MS_CONFIG, maxWaitMs);
+        configs.put(ConsumerConfig.FETCH_MIN_BYTES_CONFIG, minBytes);
+        configs.put(ConsumerConfig.GROUP_ID_CONFIG, groupId);
+        configs.put(ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol.name());
+        configs.put(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, heartbeatIntervalMs);
+        configs.put(ConsumerConfig.ISOLATION_LEVEL_CONFIG, IsolationLevel.READ_UNCOMMITTED.name().toLowerCase(Locale.ROOT));
+        configs.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
+        configs.put(ConsumerConfig.MAX_PARTITION_FETCH_BYTES_CONFIG, fetchSize);
+        configs.put(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, rebalanceTimeoutMs);
+        configs.put(ConsumerConfig.MAX_POLL_RECORDS_CONFIG, maxPollRecords);
+        configs.put(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG, requestTimeoutMs);
+        configs.put(ConsumerConfig.RETRY_BACKOFF_MAX_MS_CONFIG, retryBackoffMaxMs);
+        configs.put(ConsumerConfig.RETRY_BACKOFF_MS_CONFIG, retryBackoffMs);
+        configs.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, sessionTimeoutMs);
+        configs.put(ConsumerConfig.THROW_ON_FETCH_STABLE_OFFSET_UNSUPPORTED, throwOnStableOffsetNotSupported);
+        configs.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, valueDeserializer.getClass());
+        groupInstanceId.ifPresent(gi -> configs.put(ConsumerConfig.GROUP_INSTANCE_ID_CONFIG, gi));
 
-        List<ConsumerPartitionAssignor> assignors = singletonList(assignor);
-        ConsumerInterceptors<String, String> interceptors = new ConsumerInterceptors<>(Collections.emptyList());
-
-        Metrics metrics = new Metrics(time);
-        ConsumerMetrics metricsRegistry = new ConsumerMetrics(metricGroupPrefix);
-
-        LogContext loggerFactory = new LogContext();
-        ConsumerNetworkClient consumerClient = new ConsumerNetworkClient(loggerFactory, client, metadata, time,
-                retryBackoffMs, requestTimeoutMs, heartbeatIntervalMs);
-
-        ConsumerCoordinator consumerCoordinator = null;
-        if (groupId != null) {
-            GroupRebalanceConfig rebalanceConfig = new GroupRebalanceConfig(sessionTimeoutMs,
-                rebalanceTimeoutMs,
-                heartbeatIntervalMs,
-                groupId,
-                groupInstanceId,
-                retryBackoffMs,
-                retryBackoffMaxMs,
-                true);
-            consumerCoordinator = new ConsumerCoordinator(rebalanceConfig,
-                loggerFactory,
-                consumerClient,
-                assignors,
-                metadata,
-                subscription,
-                metrics,
-                metricGroupPrefix,
-                time,
-                autoCommitEnabled,
-                autoCommitIntervalMs,
-                interceptors,
-                throwOnStableOffsetNotSupported,
-                null);
-        }
-        IsolationLevel isolationLevel = IsolationLevel.READ_UNCOMMITTED;
-        FetchMetricsManager metricsManager = new FetchMetricsManager(metrics, metricsRegistry.fetcherMetrics);
-        FetchConfig<String, String> fetchConfig = new FetchConfig<>(
-                minBytes,
-                maxBytes,
-                maxWaitMs,
-                fetchSize,
-                maxPollRecords,
-                checkCrcs,
-                CommonClientConfigs.DEFAULT_CLIENT_RACK,
-                new Deserializers<>(keyDeserializer, deserializer),
-                isolationLevel);
-        Fetcher<String, String> fetcher = new Fetcher<>(
-                loggerFactory,
-                consumerClient,
-                metadata,
-                subscription,
-                fetchConfig,
-                metricsManager,
-                time);
-        OffsetFetcher offsetFetcher = new OffsetFetcher(loggerFactory,
-                consumerClient,
-                metadata,
-                subscription,
-                time,
-                retryBackoffMs,
-                requestTimeoutMs,
-                isolationLevel,
-                new ApiVersions());
-        TopicMetadataFetcher topicMetadataFetcher = new TopicMetadataFetcher(loggerFactory,
-                consumerClient,
-                retryBackoffMs,
-                retryBackoffMaxMs);
-
-        return new KafkaConsumer<>(
-                loggerFactory,
-                clientId,
-                consumerCoordinator,
-                keyDeserializer,
-                deserializer,
-                fetcher,
-                offsetFetcher,
-                topicMetadataFetcher,
-                interceptors,
-                time,
-                consumerClient,
-                metrics,
-                subscription,
-                metadata,
-                retryBackoffMs,
-                retryBackoffMaxMs,
-                requestTimeoutMs,
-                defaultApiTimeoutMs,
-                assignors,
-                groupId);
+        return new ConsumerConfig(configs);
     }
 
     private static class FetchInfo {
@@ -2747,8 +2995,11 @@ public class KafkaConsumerTest {
         }
     }
 
-    @Test
-    public void testSubscriptionOnInvalidTopic() {
+    // TODO: this test requires rebalance logic which is not yet implemented in the CONSUMER group protocol.
+    //       Once it is implemented, this should use both group protocols.
+    @ParameterizedTest
+    @EnumSource(value = GroupProtocol.class, names = "GENERIC")
+    public void testSubscriptionOnInvalidTopic(GroupProtocol groupProtocol) {
         ConsumerMetadata metadata = createMetadata(subscription);
         MockClient client = new MockClient(time, metadata);
 
@@ -2766,22 +3017,23 @@ public class KafkaConsumerTest {
                 topicMetadata);
         client.prepareMetadataUpdate(updateResponse);
 
-        KafkaConsumer<String, String> consumer = newConsumer(time, client, subscription, metadata, assignor, true, groupInstanceId);
+        KafkaConsumer<String, String> consumer = newConsumer(groupProtocol, time, client, subscription, metadata, assignor, true, groupInstanceId);
         consumer.subscribe(singleton(invalidTopicName), getConsumerRebalanceListener(consumer));
 
         assertThrows(InvalidTopicException.class, () -> consumer.poll(Duration.ZERO));
     }
 
-    @Test
-    public void testPollTimeMetrics() {
+    @ParameterizedTest
+    @EnumSource(GroupProtocol.class)
+    public void testPollTimeMetrics(GroupProtocol groupProtocol) {
         ConsumerMetadata metadata = createMetadata(subscription);
         MockClient client = new MockClient(time, metadata);
         initMetadata(client, Collections.singletonMap(topic, 1));
 
-        KafkaConsumer<String, String> consumer = newConsumer(time, client, subscription, metadata, assignor, true, groupInstanceId);
+        KafkaConsumer<String, String> consumer = newConsumer(groupProtocol, time, client, subscription, metadata, assignor, true, groupInstanceId);
         consumer.subscribe(singletonList(topic));
         // MetricName objects to check
-        Metrics metrics = consumer.metrics;
+        Metrics metrics = consumer.metricsRegistry();
         MetricName lastPollSecondsAgoName = metrics.metricName("last-poll-seconds-ago", "consumer-metrics");
         MetricName timeBetweenPollAvgName = metrics.metricName("time-between-poll-avg", "consumer-metrics");
         MetricName timeBetweenPollMaxName = metrics.metricName("time-between-poll-max", "consumer-metrics");
@@ -2817,32 +3069,33 @@ public class KafkaConsumerTest {
         assertEquals(10 * 1000d, consumer.metrics().get(timeBetweenPollMaxName).metricValue());
     }
 
-    @Test
-    public void testPollIdleRatio() {
+    @ParameterizedTest
+    @EnumSource(GroupProtocol.class)
+public void testPollIdleRatio(GroupProtocol groupProtocol) {
         ConsumerMetadata metadata = createMetadata(subscription);
         MockClient client = new MockClient(time, metadata);
         initMetadata(client, Collections.singletonMap(topic, 1));
 
-        KafkaConsumer<String, String> consumer = newConsumer(time, client, subscription, metadata, assignor, true, groupInstanceId);
+        KafkaConsumer<String, String> consumer = newConsumer(groupProtocol, time, client, subscription, metadata, assignor, true, groupInstanceId);
         // MetricName object to check
-        Metrics metrics = consumer.metrics;
+        Metrics metrics = consumer.metricsRegistry();
         MetricName pollIdleRatio = metrics.metricName("poll-idle-ratio-avg", "consumer-metrics");
         // Test default value
         assertEquals(Double.NaN, consumer.metrics().get(pollIdleRatio).metricValue());
 
         // 1st poll
         // Spend 50ms in poll so value = 1.0
-        consumer.kafkaConsumerMetrics.recordPollStart(time.milliseconds());
+        consumer.kafkaConsumerMetrics().recordPollStart(time.milliseconds());
         time.sleep(50);
-        consumer.kafkaConsumerMetrics.recordPollEnd(time.milliseconds());
+        consumer.kafkaConsumerMetrics().recordPollEnd(time.milliseconds());
 
         assertEquals(1.0d, consumer.metrics().get(pollIdleRatio).metricValue());
 
         // 2nd poll
         // Spend 50m outside poll and 0ms in poll so value = 0.0
         time.sleep(50);
-        consumer.kafkaConsumerMetrics.recordPollStart(time.milliseconds());
-        consumer.kafkaConsumerMetrics.recordPollEnd(time.milliseconds());
+        consumer.kafkaConsumerMetrics().recordPollStart(time.milliseconds());
+        consumer.kafkaConsumerMetrics().recordPollEnd(time.milliseconds());
 
         // Avg of first two data points
         assertEquals((1.0d + 0.0d) / 2, consumer.metrics().get(pollIdleRatio).metricValue());
@@ -2850,9 +3103,9 @@ public class KafkaConsumerTest {
         // 3rd poll
         // Spend 25ms outside poll and 25ms in poll so value = 0.5
         time.sleep(25);
-        consumer.kafkaConsumerMetrics.recordPollStart(time.milliseconds());
+        consumer.kafkaConsumerMetrics().recordPollStart(time.milliseconds());
         time.sleep(25);
-        consumer.kafkaConsumerMetrics.recordPollEnd(time.milliseconds());
+        consumer.kafkaConsumerMetrics().recordPollEnd(time.milliseconds());
 
         // Avg of three data points
         assertEquals((1.0d + 0.0d + 0.5d) / 3, consumer.metrics().get(pollIdleRatio).metricValue());
@@ -2860,16 +3113,17 @@ public class KafkaConsumerTest {
 
     private static boolean consumerMetricPresent(KafkaConsumer<String, String> consumer, String name) {
         MetricName metricName = new MetricName(name, "consumer-metrics", "", Collections.emptyMap());
-        return consumer.metrics.metrics().containsKey(metricName);
+        return consumer.metricsRegistry().metrics().containsKey(metricName);
     }
 
-    @Test
-    public void testClosingConsumerUnregistersConsumerMetrics() {
+    @ParameterizedTest
+    @EnumSource(GroupProtocol.class)
+public void testClosingConsumerUnregistersConsumerMetrics(GroupProtocol groupProtocol) {
         Time time = new MockTime(1L);
         ConsumerMetadata metadata = createMetadata(subscription);
         MockClient client = new MockClient(time, metadata);
         initMetadata(client, Collections.singletonMap(topic, 1));
-        KafkaConsumer<String, String> consumer = newConsumer(time, client, subscription, metadata,
+        KafkaConsumer<String, String> consumer = newConsumer(groupProtocol, time, client, subscription, metadata,
             new RoundRobinAssignor(), true, groupInstanceId);
         consumer.subscribe(singletonList(topic));
         assertTrue(consumerMetricPresent(consumer, "last-poll-seconds-ago"));
@@ -2881,19 +3135,23 @@ public class KafkaConsumerTest {
         assertFalse(consumerMetricPresent(consumer, "time-between-poll-max"));
     }
 
-    @Test
-    public void testEnforceRebalanceWithManualAssignment() {
-        consumer = newConsumer((String) null);
+    // NOTE: this test uses the enforceRebalance API which is not implemented in the CONSUMER group protocol.
+    @ParameterizedTest
+    @EnumSource(value = GroupProtocol.class, names = "GENERIC")
+    public void testEnforceRebalanceWithManualAssignment(GroupProtocol groupProtocol) {
+        consumer = newConsumer(groupProtocol, null);
         consumer.assign(singleton(new TopicPartition("topic", 0)));
         assertThrows(IllegalStateException.class, consumer::enforceRebalance);
     }
 
-    @Test
-    public void testEnforceRebalanceTriggersRebalanceOnNextPoll() {
+    // NOTE: this test uses the enforceRebalance API which is not implemented in the CONSUMER group protocol.
+    @ParameterizedTest
+    @EnumSource(value = GroupProtocol.class, names = "GENERIC")
+    public void testEnforceRebalanceTriggersRebalanceOnNextPoll(GroupProtocol groupProtocol) {
         Time time = new MockTime(1L);
         ConsumerMetadata metadata = createMetadata(subscription);
         MockClient client = new MockClient(time, metadata);
-        KafkaConsumer<String, String> consumer = newConsumer(time, client, subscription, metadata, assignor, true, groupInstanceId);
+        KafkaConsumer<String, String> consumer = newConsumer(groupProtocol, time, client, subscription, metadata, assignor, true, groupInstanceId);
         MockRebalanceListener countingRebalanceListener = new MockRebalanceListener();
         initMetadata(client, Utils.mkMap(Utils.mkEntry(topic, 1), Utils.mkEntry(topic2, 1), Utils.mkEntry(topic3, 1)));
 
@@ -2917,8 +3175,10 @@ public class KafkaConsumerTest {
         assertEquals(countingRebalanceListener.revokedCount, 1);
     }
 
-    @Test
-    public void testEnforceRebalanceReason() {
+    // NOTE: this test uses the enforceRebalance API which is not implemented in the CONSUMER group protocol.
+    @ParameterizedTest
+    @EnumSource(value = GroupProtocol.class, names = "GENERIC")
+    public void testEnforceRebalanceReason(GroupProtocol groupProtocol) {
         Time time = new MockTime(1L);
 
         ConsumerMetadata metadata = createMetadata(subscription);
@@ -2927,6 +3187,7 @@ public class KafkaConsumerTest {
         Node node = metadata.fetch().nodes().get(0);
 
         consumer = newConsumer(
+            groupProtocol,
             time,
             client,
             subscription,
@@ -2977,24 +3238,30 @@ public class KafkaConsumerTest {
         );
     }
 
-    @Test
-    public void configurableObjectsShouldSeeGeneratedClientId() {
+    // TODO: this test triggers a bug with the CONSUMER group protocol implementation.
+    //       The bug will be investigated and fixed so this test can use both group protocols.
+    @ParameterizedTest
+    @EnumSource(value = GroupProtocol.class, names = "GENERIC")
+    public void configurableObjectsShouldSeeGeneratedClientId(GroupProtocol groupProtocol) {
         Properties props = new Properties();
+        props.put(ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol.name());
         props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
         props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, DeserializerForClientId.class.getName());
         props.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, DeserializerForClientId.class.getName());
         props.put(ConsumerConfig.INTERCEPTOR_CLASSES_CONFIG, ConsumerInterceptorForClientId.class.getName());
 
-        consumer = new KafkaConsumer<>(props);
-        assertNotNull(consumer.getClientId());
-        assertNotEquals(0, consumer.getClientId().length());
+        consumer = newConsumer(props);
+        assertNotNull(consumer.clientId());
+        assertNotEquals(0, consumer.clientId().length());
         assertEquals(3, CLIENT_IDS.size());
-        CLIENT_IDS.forEach(id -> assertEquals(id, consumer.getClientId()));
+        CLIENT_IDS.forEach(id -> assertEquals(id, consumer.clientId()));
     }
 
-    @Test
-    public void testUnusedConfigs() {
+    @ParameterizedTest
+    @EnumSource(GroupProtocol.class)
+    public void testUnusedConfigs(GroupProtocol groupProtocol) {
         Map<String, Object> props = new HashMap<>();
+        props.put(ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol.name());
         props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
         props.put(SslConfigs.SSL_PROTOCOL_CONFIG, "TLS");
         ConsumerConfig config = new ConsumerConfig(ConsumerConfig.appendDeserializerToConfig(props, new StringDeserializer(), new StringDeserializer()));
@@ -3005,45 +3272,103 @@ public class KafkaConsumerTest {
         assertTrue(config.unused().contains(SslConfigs.SSL_PROTOCOL_CONFIG));
     }
 
-    @Test
-    public void testAssignorNameConflict() {
+    @ParameterizedTest
+    @EnumSource(GroupProtocol.class)
+    public void testAssignorNameConflict(GroupProtocol groupProtocol) {
         Map<String, Object> configs = new HashMap<>();
+        configs.put(ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol.name());
         configs.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
         configs.put(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG,
             Arrays.asList(RangeAssignor.class.getName(), ConsumerPartitionAssignorTest.TestConsumerPartitionAssignor.class.getName()));
 
         assertThrows(KafkaException.class,
-            () -> new KafkaConsumer<>(configs, new StringDeserializer(), new StringDeserializer()));
+            () -> newConsumer(configs, new StringDeserializer(), new StringDeserializer()));
     }
 
-    @Test
-    public void testOffsetsForTimesTimeout() {
-        final KafkaConsumer<String, String> consumer = consumerForCheckingTimeoutException();
+    // TODO: this test triggers a bug with the CONSUMER group protocol implementation.
+    //       The bug will be investigated and fixed so this test can use both group protocols.
+    @ParameterizedTest
+    @EnumSource(value = GroupProtocol.class, names = "GENERIC")
+    public void testOffsetsForTimesTimeout(GroupProtocol groupProtocol) {
+        final KafkaConsumer<String, String> consumer = consumerForCheckingTimeoutException(groupProtocol);
         assertEquals(
             "Failed to get offsets by times in 60000ms",
             assertThrows(org.apache.kafka.common.errors.TimeoutException.class, () -> consumer.offsetsForTimes(singletonMap(tp0, 0L))).getMessage()
         );
     }
 
-    @Test
-    public void testBeginningOffsetsTimeout() {
-        final KafkaConsumer<String, String> consumer = consumerForCheckingTimeoutException();
+    // TODO: this test triggers a bug with the CONSUMER group protocol implementation.
+    //       The bug will be investigated and fixed so this test can use both group protocols.
+    @ParameterizedTest
+    @EnumSource(value = GroupProtocol.class, names = "GENERIC")
+    public void testBeginningOffsetsTimeout(GroupProtocol groupProtocol) {
+        final KafkaConsumer<String, String> consumer = consumerForCheckingTimeoutException(groupProtocol);
         assertEquals(
             "Failed to get offsets by times in 60000ms",
             assertThrows(org.apache.kafka.common.errors.TimeoutException.class, () -> consumer.beginningOffsets(singletonList(tp0))).getMessage()
         );
     }
 
-    @Test
-    public void testEndOffsetsTimeout() {
-        final KafkaConsumer<String, String> consumer = consumerForCheckingTimeoutException();
+    // TODO: this test triggers a bug with the CONSUMER group protocol implementation.
+    //       The bug will be investigated and fixed so this test can use both group protocols.
+    @ParameterizedTest
+    @EnumSource(value = GroupProtocol.class, names = "GENERIC")
+    public void testEndOffsetsTimeout(GroupProtocol groupProtocol) {
+        final KafkaConsumer<String, String> consumer = consumerForCheckingTimeoutException(groupProtocol);
         assertEquals(
             "Failed to get offsets by times in 60000ms",
             assertThrows(org.apache.kafka.common.errors.TimeoutException.class, () -> consumer.endOffsets(singletonList(tp0))).getMessage()
         );
     }
 
-    private KafkaConsumer<String, String> consumerForCheckingTimeoutException() {
+    @ParameterizedTest
+    @EnumSource(GroupProtocol.class)
+    public void testClientInstanceId() {
+        Properties props = new Properties();
+        props.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
+
+        ClientTelemetryReporter clientTelemetryReporter = mock(ClientTelemetryReporter.class);
+        clientTelemetryReporter.configure(any());
+
+        MockedStatic<CommonClientConfigs> mockedCommonClientConfigs = mockStatic(CommonClientConfigs.class, new CallsRealMethods());
+        mockedCommonClientConfigs.when(() -> CommonClientConfigs.telemetryReporter(anyString(), any())).thenReturn(Optional.of(clientTelemetryReporter));
+
+        ClientTelemetrySender clientTelemetrySender = mock(ClientTelemetrySender.class);
+        Uuid expectedUuid = Uuid.randomUuid();
+        when(clientTelemetryReporter.telemetrySender()).thenReturn(clientTelemetrySender);
+        when(clientTelemetrySender.clientInstanceId(any())).thenReturn(Optional.of(expectedUuid));
+
+        consumer = newConsumer(props, new StringDeserializer(), new StringDeserializer());
+        Uuid uuid = consumer.clientInstanceId(Duration.ofMillis(0));
+        assertEquals(expectedUuid, uuid);
+
+        mockedCommonClientConfigs.close();
+    }
+
+    @ParameterizedTest
+    @EnumSource(GroupProtocol.class)
+    public void testClientInstanceIdInvalidTimeout() {
+        Properties props = new Properties();
+        props.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
+
+        consumer = newConsumer(props, new StringDeserializer(), new StringDeserializer());
+        Exception exception = assertThrows(IllegalArgumentException.class, () -> consumer.clientInstanceId(Duration.ofMillis(-1)));
+        assertEquals("The timeout cannot be negative.", exception.getMessage());
+    }
+
+    @ParameterizedTest
+    @EnumSource(GroupProtocol.class)
+    public void testClientInstanceIdNoTelemetryReporterRegistered() {
+        Properties props = new Properties();
+        props.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
+        props.setProperty(ConsumerConfig.ENABLE_METRICS_PUSH_CONFIG, "false");
+
+        consumer = newConsumer(props, new StringDeserializer(), new StringDeserializer());
+        Exception exception = assertThrows(IllegalStateException.class, () -> consumer.clientInstanceId(Duration.ofMillis(0)));
+        assertEquals("Telemetry is not enabled. Set config `enable.metrics.push` to `true`.", exception.getMessage());
+    }
+
+    private KafkaConsumer<String, String> consumerForCheckingTimeoutException(GroupProtocol groupProtocol) {
         ConsumerMetadata metadata = createMetadata(subscription);
         MockClient client = new MockClient(time, metadata);
 
@@ -3051,7 +3376,7 @@ public class KafkaConsumerTest {
 
         ConsumerPartitionAssignor assignor = new RangeAssignor();
 
-        final KafkaConsumer<String, String> consumer = newConsumer(time, client, subscription, metadata, assignor, false, groupInstanceId);
+        final KafkaConsumer<String, String> consumer = newConsumer(groupProtocol, time, client, subscription, metadata, assignor, false, groupInstanceId);
 
         for (int i = 0; i < 10; i++) {
             client.prepareResponse(
@@ -3068,6 +3393,32 @@ public class KafkaConsumerTest {
         return consumer;
     }
 
+    @ParameterizedTest
+    @EnumSource(GroupProtocol.class)
+    public void testCommittedThrowsTimeoutExceptionForNoResponse(GroupProtocol groupProtocol) {
+        Time time = new MockTime(Duration.ofSeconds(1).toMillis());
+        
+        ConsumerMetadata metadata = createMetadata(subscription);
+        MockClient client = new MockClient(time, metadata);
+        
+        initMetadata(client, Collections.singletonMap(topic, 2));
+        Node node = metadata.fetch().nodes().get(0);
+        
+        consumer = newConsumer(groupProtocol, time, client, subscription, metadata, assignor, true, groupInstanceId);
+        consumer.assign(singletonList(tp0));
+        
+        // lookup coordinator
+        client.prepareResponseFrom(FindCoordinatorResponse.prepareResponse(Errors.NONE, groupId, node), node);
+        Node coordinator = new Node(Integer.MAX_VALUE - node.id(), node.host(), node.port());
+        
+        // try to get committed offsets for one topic-partition - but it is disconnected so there's no response and it will time out
+        client.prepareResponseFrom(offsetResponse(Collections.singletonMap(tp0, 0L), Errors.NONE), coordinator, true);
+        org.apache.kafka.common.errors.TimeoutException timeoutException = assertThrows(org.apache.kafka.common.errors.TimeoutException.class,
+            () -> consumer.committed(Collections.singleton(tp0), Duration.ofMillis(1000L)));
+        assertEquals("Timeout of 1000ms expired before the last committed offset for partitions [test-0] could be determined. " +
+            "Try tuning default.api.timeout.ms larger to relax the threshold.", timeoutException.getMessage());
+    }
+    
     private static final List<String> CLIENT_IDS = new ArrayList<>();
     public static class DeserializerForClientId implements Deserializer<byte[]> {
         @Override
