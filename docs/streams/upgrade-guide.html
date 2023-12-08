@@ -135,32 +135,26 @@
 
     <h3><a id="streams_api_changes_370" href="#streams_api_changes_370">Streams API changes in 3.7.0</a></h3>
     <p>
-        IQv2 supports <code>MultiVersionedKeyQuery</code> (introduced in <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-968%3A+Support+single-key_multi-timestamp+interactive+queries+%28IQv2%29+for+versioned+state+stores">KIP-968</a>)
-        that allows retrieving a set of records with the same specified key and different timestamps within a specified time range.
-        Users have to use <code>fromTime(Instant)</code> and/or <code>toTime(Instant)</code> to specify a half or a complete time range.
-        In the case of specifying no starting point and ending point for the time range, the query will return all the existing records associated with the specified key.
-        No ordering is guaranteed for the results, but the results can be sorted by timestamp in ascending or descending order by calling the corresponding defined methods
-        <code>withAscendingTimestamps()</code> or <code>withDescendingTimestamps()</code>, respectively.
+        IQv2 supports <code>RangeQuery</code> that allows to specify unbounded, bounded, or half-open key-ranges, which return data in unordered (byte[]-lexicographical) order (per partition).
+        <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-985%3A+Add+reverseRange+and+reverseAll+query+over+kv-store+in+IQv2">KIP-985</a> extends this functionality by adding <code>.withDescendingKeys()</code> and <code>.withAscendingKeys()</code>to allow user to receive data in descending or ascending order.
     </p>
-
-    <p>
-        IQv2 supports <code>VersionedKeyQuery</code> (introduced in <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-960%3A+Support+single-key_single-timestamp+interactive+queries+%28IQv2%29+for+versioned+state+stores">KIP-960</a>)
-        that allows retrieving a single record from a versioned state store based on its key and timestamp.
-        Calling the <code>withKey(K)</code> method defines a query that will retrieve the record from a versioned state store identified by <code>K</code> if it exists.
-        Users have to use the <code>asOf(Instant)</code> method to define a query that returns the record's version for the specified timestamp.
-        To be more precise, the key query returns the record with the greatest timestamp <code>&lt;= Instant</code>.
-        In the case of not specifying any timestamp for the query, it will return the latest record associated with the key <code>K</code>.
-    </p>
-
-    <p>
-        IQv2 supports <code>RangeQuery</code> that allows to specify unbounded, bounded, or half-open key-ranges, which return data in ascending (byte[]-lexicographical) order (per partition).
-        <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-985%3A+Add+reverseRange+and+reverseAll+query+over+kv-store+in+IQv2">KIP-985</a> extends this functionality by adding <code>.withDescendingKeys()</code> to allow user to receive data in descending order.
-    </p>
-
     <p>
         <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-992%3A+Proposal+to+introduce+IQv2+Query+Types%3A+TimestampedKeyQuery+and+TimestampedRangeQuery">KIP-992</a> adds two new query types,
         namely <code>TimestampedKeyQuery</code> and <code>TimestampedRangeQuery</code>. Both should be used to query a timestamped key-value store, to retrieve a <code>ValueAndTimestamp</code> result.
         The existing <code>KeyQuery</code> and <code>RangeQuery</code> are changed to always return the value only for timestamped key-value stores.
+    </p>
+
+    <p>
+        IQv2 adds support for <code>MultiVersionedKeyQuery</code> (introduced in <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-968%3A+Support+single-key_multi-timestamp+interactive+queries+%28IQv2%29+for+versioned+state+stores">KIP-968</a>)
+        that allows retrieving a set of records from a versioned state store for a given key and a specified time range.
+        Users have to use <code>fromTime(Instant)</code> and/or <code>toTime(Instant)</code> to specify a half or a complete time range.
+    </p>
+
+    <p>
+        IQv2 adds support for <code>VersionedKeyQuery</code> (introduced in <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-960%3A+Support+single-key_single-timestamp+interactive+queries+%28IQv2%29+for+versioned+state+stores">KIP-960</a>)
+        that allows retrieving a single record from a versioned state store based on its key and timestamp.
+        Users have to use the <code>asOf(Instant)</code> method to define a query that returns the record's version for the specified timestamp.
+        To be more precise, the key query returns the record with the greatest timestamp <code>&lt;= Instant</code>.
     </p>
 
     <p>
