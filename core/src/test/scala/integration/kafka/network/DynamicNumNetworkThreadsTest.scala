@@ -48,8 +48,6 @@ class DynamicNumNetworkThreadsTest extends BaseRequestTest {
   @BeforeEach
   override def setUp(testInfo: TestInfo): Unit = {
     super.setUp(testInfo)
-
-//    TestUtils.createTopic(zkClientOrNull, "test", brokerCount, brokerCount, brokers)
     admin = TestUtils.createAdminClient(brokers, ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT))
     assertEquals(2, getNumNetworkThreads(internal))
     TestUtils.createTopicWithAdmin(admin, "test", brokers, controllerServers)
@@ -57,7 +55,6 @@ class DynamicNumNetworkThreadsTest extends BaseRequestTest {
   }
   @AfterEach
   override def tearDown(): Unit = {
-//    TestUtils.shutdownServers(brokers)
     if (admin != null) admin.close()
     super.tearDown()
   }
@@ -81,7 +78,7 @@ class DynamicNumNetworkThreadsTest extends BaseRequestTest {
     assertEquals(2, getNumNetworkThreads(internal))
     assertEquals(newBaseNetworkThreadsCount, getNumNetworkThreads(external))
 
-    // Increase the network thread count for internalSS
+    // Increase the network thread count for internal
     val newInternalNetworkThreadsCount = 3
     props = new Properties
     props.put(s"listener.name.${internal.toLowerCase}.${KafkaConfig.NumNetworkThreadsProp}", newInternalNetworkThreadsCount.toString)
@@ -90,7 +87,6 @@ class DynamicNumNetworkThreadsTest extends BaseRequestTest {
     // The internal listener is changed
     assertEquals(newInternalNetworkThreadsCount, getNumNetworkThreads(internal))
     assertEquals(newBaseNetworkThreadsCount, getNumNetworkThreads(external))
-
   }
 
   private def reconfigureServers(newProps: Properties, aPropToVerify: (String, String)): Unit = {
