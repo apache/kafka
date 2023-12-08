@@ -44,11 +44,10 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyCollection;
-import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anySet;
-import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.clearInvocations;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.mock;
@@ -223,13 +222,13 @@ public class MembershipManagerImplTest {
         MemberStateListener listener = mock(MemberStateListener.class);
         membershipManager.registerStateListener(listener);
         mockStableMember(membershipManager);
-        verify(listener).onStateChange(MemberState.STABLE);
+        verify(listener).onMemberEpochUpdated(Optional.of(MEMBER_EPOCH), Optional.of(MEMBER_ID));
         clearInvocations(listener);
 
         // Transition to FAILED before getting member ID/epoch
         membershipManager.transitionToFatal();
         assertEquals(MemberState.FATAL, membershipManager.state());
-        verify(listener).onStateChange(MemberState.FATAL);
+        verify(listener).onMemberEpochUpdated(Optional.empty(), Optional.empty());
     }
 
     @Test
@@ -238,39 +237,13 @@ public class MembershipManagerImplTest {
         MemberStateListener listener = mock(MemberStateListener.class);
         membershipManager.registerStateListener(listener);
         mockStableMember(membershipManager);
-        verify(listener).onStateChange(MemberState.STABLE);
+        verify(listener).onMemberEpochUpdated(Optional.of(MEMBER_EPOCH), Optional.of(MEMBER_ID));
         clearInvocations(listener);
 
         mockLeaveGroup();
         membershipManager.leaveGroup();
         assertEquals(MemberState.LEAVING, membershipManager.state());
-        verify(listener).onStateChange(MemberState.LEAVING);
-
-        membershipManager.onHeartbeatRequestSent();
-        assertEquals(MemberState.UNSUBSCRIBED, membershipManager.state());
-        verify(listener).onStateChange(MemberState.UNSUBSCRIBED);
-    }
-
-    @Test
-    public void testListenersGetNotifiedOfMemberIdUpdatesOnlyIfItChanges() {
-        MembershipManagerImpl membershipManager = createMembershipManagerJoiningGroup();
-        MemberStateListener listener = mock(MemberStateListener.class);
-        membershipManager.registerStateListener(listener);
-        String oldMemberId = membershipManager.memberId();
-        String newMemberId = oldMemberId + "-new";
-        int unchangedEpoch = membershipManager.memberEpoch();
-
-        membershipManager.onHeartbeatResponseReceived(new ConsumerGroupHeartbeatResponseData()
-                .setErrorCode(Errors.NONE.code())
-                .setMemberId(newMemberId));
-
-        verify(listener).onMemberIdUpdated(newMemberId, unchangedEpoch);
-        clearInvocations(listener);
-
-        membershipManager.onHeartbeatResponseReceived(new ConsumerGroupHeartbeatResponseData()
-                .setErrorCode(Errors.NONE.code())
-                .setMemberId(newMemberId));
-        verify(listener, never()).onMemberIdUpdated(anyString(), anyInt());
+        verify(listener).onMemberEpochUpdated(Optional.empty(), Optional.empty());
     }
 
     @Test
@@ -282,15 +255,17 @@ public class MembershipManagerImplTest {
 
         membershipManager.onHeartbeatResponseReceived(new ConsumerGroupHeartbeatResponseData()
                 .setErrorCode(Errors.NONE.code())
+                .setMemberId(MEMBER_ID)
                 .setMemberEpoch(epoch));
 
-        verify(listener).onMemberEpochUpdated(epoch, null);
+        verify(listener).onMemberEpochUpdated(Optional.of(epoch), Optional.of(MEMBER_ID));
         clearInvocations(listener);
 
         membershipManager.onHeartbeatResponseReceived(new ConsumerGroupHeartbeatResponseData()
                 .setErrorCode(Errors.NONE.code())
+                .setMemberId(MEMBER_ID)
                 .setMemberEpoch(epoch));
-        verify(listener, never()).onMemberEpochUpdated(anyInt(), anyString());
+        verify(listener, never()).onMemberEpochUpdated(any(), any());
     }
 
     private void mockStableMember(MembershipManagerImpl membershipManager) {
@@ -966,7 +941,7 @@ public class MembershipManagerImplTest {
         if (withAutoCommit) {
             when(commitRequestManager.autoCommitEnabled()).thenReturn(true);
             CompletableFuture<Void> commitResult = new CompletableFuture<>();
-            when(commitRequestManager.maybeAutoCommitAllConsumed()).thenReturn(commitResult);
+            when(commitRequestManager.maybeAutoCommitAllConsumed(any())).thenReturn(commitResult);
             return commitResult;
         } else {
             return CompletableFuture.completedFuture(null);

@@ -33,9 +33,11 @@ import org.apache.kafka.common.requests.ConsumerGroupHeartbeatRequest;
 import org.apache.kafka.common.telemetry.internals.ClientTelemetryProvider;
 import org.apache.kafka.common.telemetry.internals.ClientTelemetryReporter;
 import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -240,7 +242,17 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
      */
     private boolean isRegisteredForMetadataUpdates;
 
-    private List<MemberStateListener> stateUpdatesListeners;
+    /**
+     * Registered listeners that will be notified whenever the memberID/epoch gets updated (valid
+     * values received from the broker, or values cleared due to member leaving the group, getting
+     * fenced or failing).
+     */
+    private final List<MemberStateListener> stateUpdatesListeners;
+
+    /**
+     * Time instance to get timer to use when auto-committing offsets prior to revocation.
+     */
+    private final Time time;
 
     /**
      * Optional client telemetry reporter which sends client telemetry data to the broker. This
@@ -270,6 +282,7 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
         this.currentAssignment = new HashSet<>();
         this.log = logContext.logger(MembershipManagerImpl.class);
         this.stateUpdatesListeners = new ArrayList<>();
+        this.time = Time.SYSTEM;
         this.clientTelemetryReporter = clientTelemetryReporter;
     }
 
@@ -286,7 +299,6 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
         }
         log.trace("Member {} transitioned from {} to {}.", memberId, state, nextState);
         this.state = nextState;
-        notifyTransition();
     }
 
     /**
@@ -344,7 +356,8 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
         }
 
         this.memberId = response.memberId();
-        this.memberEpoch = response.memberEpoch();
+        updateMemberEpoch(response.memberEpoch());
+
         ConsumerGroupHeartbeatResponseData.Assignment assignment = response.assignment();
 
         if (assignment != null) {
@@ -406,6 +419,7 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
     public void transitionToFatal() {
         transitionTo(MemberState.FATAL);
         log.error("Member {} with epoch {} transitioned to {} state", memberId, memberEpoch, MemberState.FATAL);
+        notifyEpochChange(Optional.empty(), Optional.empty());
 
         // Release assignment
         CompletableFuture<Void> callbackResult = invokeOnPartitionsLostCallback(subscriptions.assignedPartitions());
@@ -548,35 +562,18 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
      * request is sent out with it.
      */
     private void transitionToSendingLeaveGroup() {
-        memberEpoch = ConsumerGroupHeartbeatRequest.LEAVE_GROUP_MEMBER_EPOCH;
+        updateMemberEpoch(ConsumerGroupHeartbeatRequest.LEAVE_GROUP_MEMBER_EPOCH);
         currentAssignment = new HashSet<>();
         transitionTo(MemberState.LEAVING);
     }
 
     /**
-     * Call all listeners that are registered to get notified when the member ID is updated.
-     * This also includes the latest member epoch in the notification.
-     */
-    private void notifyMemberIdChange() {
-        stateUpdatesListeners.forEach(stateListener ->
-                stateListener.onMemberIdUpdated(memberId, memberEpoch));
-    }
-
-    /**
      * Call all listeners that are registered to get notified when the member epoch is updated.
-     * This also includes the latest member ID in the notification.
+     * This also includes the latest member ID in the notification. If the member fails or leaves
+     * the group, this will be invoked with empty epoch and member ID.
      */
-    private void notifyMemberEpochChange() {
-        stateUpdatesListeners.forEach(stateListener ->
-                stateListener.onMemberEpochUpdated(memberEpoch, memberId));
-    }
-
-    /**
-     * Call all listeners that are registered to get notified when the member transitions to a
-     * new state.
-     */
-    private void notifyTransition() {
-        stateUpdatesListeners.forEach(stateListener -> stateListener.onStateChange(state));
+    private void notifyEpochChange(Optional<Integer> epoch, Optional<String> memberId) {
+        stateUpdatesListeners.forEach(stateListener -> stateListener.onMemberEpochUpdated(epoch, memberId));
     }
 
     /**
@@ -704,9 +701,6 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
             revocationResult = revokePartitions(revokedPartitions);
         } else {
             revocationResult = CompletableFuture.completedFuture(null);
-            // Reschedule the auto commit starting from now (new assignment received without any
-            // revocation).
-            commitRequestManager.resetAutoCommitTimer();
         }
 
         // Future that will complete when the full reconciliation process completes (revocation
@@ -715,6 +709,9 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
                 revocationResult.thenCompose(__ -> {
                     boolean memberHasRejoined = memberEpochOnReconciliationStart != memberEpoch;
                     if (state == MemberState.RECONCILING && !memberHasRejoined) {
+                        // Reschedule the auto commit starting from now that member has a new assignment.
+                        commitRequestManager.resetAutoCommitTimer();
+
                         // Apply assignment
                         CompletableFuture<Void> assignResult = assignPartitions(assignedTopicPartitions,
                                 addedPartitions);
@@ -921,21 +918,23 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
         // request and user callback execution)
         CompletableFuture<Void> revocationResult = new CompletableFuture<>();
 
-        // Commit offsets if auto-commit enabled.
+        // Commit offsets if auto-commit enabled. Request will be retried until it succeeds,
+        // fails with non-retriable error, or timer expires.
         CompletableFuture<Void> commitResult;
         if (commitRequestManager.autoCommitEnabled()) {
-            commitResult = commitRequestManager.maybeAutoCommitAllConsumed();
+            // TODO: review auto commit time boundary. This will be effectively bounded by the
+            //  rebalance timeout.
+            commitResult = commitRequestManager.maybeAutoCommitAllConsumed(time.timer(Duration.ofMillis(Long.MAX_VALUE)));
         } else {
             commitResult = CompletableFuture.completedFuture(null);
         }
 
         commitResult.whenComplete((result, error) -> {
             if (error != null) {
-                // Commit request failed (commit request manager internally retries on
-                // retriable errors, so at this point we assume this is non-retriable, but
-                // proceed with the revocation anyway).
-                log.error("Commit request before revocation failed with non-retriable error. Will" +
-                        " proceed with the revocation anyway.", error);
+                // The call to commit, that includes retry logic for retriable errors, failed to
+                // complete within the time boundaries (fatal error or retriable that did not
+                // recover). Proceed with the revocation.
+                log.error("Commit request before revocation failed. Will proceed with the revocation anyway.", error);
             }
 
             CompletableFuture<Void> userCallbackResult = invokeOnPartitionsRevokedCallback(revokedPartitions);
@@ -1052,7 +1051,21 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
     }
 
     private void resetEpoch() {
-        this.memberEpoch = ConsumerGroupHeartbeatRequest.JOIN_GROUP_MEMBER_EPOCH;
+        updateMemberEpoch(ConsumerGroupHeartbeatRequest.JOIN_GROUP_MEMBER_EPOCH);
+    }
+
+    private void updateMemberEpoch(int newEpoch) {
+        boolean newEpochReceived = this.memberEpoch != newEpoch;
+        this.memberEpoch = newEpoch;
+        // Simply notify based on epoch change only, given that the member will never receive a
+        // new member ID without an epoch (member ID is only assigned when it joins the group).
+        if (newEpochReceived) {
+            if (memberEpoch > 0) {
+                notifyEpochChange(Optional.ofNullable(memberEpoch), Optional.ofNullable(memberId));
+            } else {
+                notifyEpochChange(Optional.empty(), Optional.empty());
+            }
+        }
     }
 
     /**

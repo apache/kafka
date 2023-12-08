@@ -17,32 +17,21 @@
 
 package org.apache.kafka.clients.consumer.internals;
 
+import java.util.Optional;
+
 /**
- * Listener to register for getting notified when the member state changes, or new member ID or
- * epoch are received.
+ * Listener for getting notified of member ID and epoch changes.
  */
 public interface MemberStateListener {
 
     /**
-     * Called when the member transitions to a new state.
+     * Called whenever member ID or epoch change with new values received from the broker or
+     * cleared if the member is not part of the group anymore (when it gets fenced, leaves the
+     * group or fails).
      *
-     * @param state New state.
+     * @param memberEpoch New member epoch received from the broker. Empty if the member is
+     *                    not part of the group anymore.
+     * @param memberId    Current member ID. Empty if the member is not part of the group.
      */
-    void onStateChange(MemberState state);
-
-    /**
-     * Called when the member receives a new member ID.
-     *
-     * @param memberId New member ID.
-     * @param epoch    Latest member epoch received.
-     */
-    void onMemberIdUpdated(String memberId, int epoch);
-
-    /**
-     * Called when a member receives a new member epoch.
-     *
-     * @param epoch    New member epoch.
-     * @param memberId Current member ID.
-     */
-    void onMemberEpochUpdated(int epoch, String memberId);
+    void onMemberEpochUpdated(Optional<Integer> memberEpoch, Optional<String> memberId);
 }

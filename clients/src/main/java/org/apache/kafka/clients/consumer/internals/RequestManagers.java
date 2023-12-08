@@ -172,7 +172,6 @@ public class RequestManagers implements Closeable {
                             subscriptions,
                             config,
                             coordinator,
-                            backgroundEventHandler,
                             groupRebalanceConfig.groupId,
                             groupRebalanceConfig.groupInstanceId);
                     membershipManager = new MembershipManagerImpl(
