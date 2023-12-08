@@ -5,16 +5,20 @@ Kafka Docker Image Examples
 
 - Run the commands from root of the repository.
 
+- Checkout `single-node` examples for quick small examples to play around with.
+
+- `cluster` contains multi node examples, for `combined` mode as well as `isolated` mode.
+
 - To bring up the docker compose examples, use docker compose command.
 
 For example:-
 ```
 # This command brings up JVM cluster in combined mode
-$ docker compose -f docker/examples/jvm/cluster-combined/docker-compose.yml up
+$ docker compose -f docker/examples/jvm/cluster/combined/plaintext/docker-compose.yml up
 ```
 
 - Kafka server can be accessed using cli scripts or your own client code.
-Make sure jars are built for the code, if cli scripts are being used.
+Make sure jars are built, if cli scripts are being used.
 
 For example:-
 ```

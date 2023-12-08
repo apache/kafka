@@ -24,14 +24,14 @@ services:
       - "9092:9092"
       - "9093:9093"
     volumes:
-      - ../../fixtures/secrets:/etc/kafka/secrets
-      - ../../fixtures/file-input:/mnt/shared/config
+      - ../../../fixtures/secrets:/etc/kafka/secrets
+      - ../../../fixtures/file-input:/mnt/shared/config
     environment:
       # Environment variables used by kafka scripts will be needed in case of File input.
       CLUSTER_ID: '4L6g3nShT-eMCtK--X86sw'
       # Set properties not provided in the file input
       KAFKA_NODE_ID: 1
       KAFKA_CONTROLLER_QUORUM_VOTERS: '1@broker:29093'
-      KAFKA_LISTENERS: 'PLAINTEXT://0.0.0.0:9092,SSL://0.0.0.0:9093,CONTROLLER://broker:29093'
+      KAFKA_LISTENERS: 'PLAINTEXT_HOST://:9092,SSL://:9093,CONTROLLER://:29093,PLAINTEXT://:19092'
       # Override an existing property
       KAFKA_PROCESS_ROLES: 'broker,controller'
