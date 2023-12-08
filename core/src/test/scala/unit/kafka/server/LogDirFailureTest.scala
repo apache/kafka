@@ -22,14 +22,16 @@ import java.util.concurrent.{ExecutionException, TimeUnit}
 import kafka.api.IntegrationTestHarness
 import kafka.controller.{OfflineReplica, PartitionAndReplica}
 import kafka.utils.TestUtils.{Checkpoint, LogDirFailureType, Roll}
-import kafka.utils.{CoreUtils, Exit, TestUtils}
+import kafka.utils.{CoreUtils, Exit, TestInfoUtils, TestUtils}
 import org.apache.kafka.clients.consumer.Consumer
 import org.apache.kafka.clients.producer.{ProducerConfig, ProducerRecord}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.{KafkaStorageException, NotLeaderOrFollowerException}
 import org.apache.kafka.common.utils.Utils
 import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.api.{BeforeEach, Test, TestInfo}
+import org.junit.jupiter.api.{BeforeEach, TestInfo}
+import org.junit.jupiter.params.provider.ValueSource
+import org.junit.jupiter.params.ParameterizedTest
 
 import java.nio.file.Files
 import scala.annotation.nowarn
@@ -56,20 +58,23 @@ class LogDirFailureTest extends IntegrationTestHarness {
     createTopic(topic, partitionNum, brokerCount)
   }
 
-  @Test
-  def testProduceErrorFromFailureOnLogRoll(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testProduceErrorFromFailureOnLogRoll(quorum: String): Unit = {
     testProduceErrorsFromLogDirFailureOnLeader(Roll)
   }
 
-  @Test
-  def testIOExceptionDuringLogRoll(): Unit = {
-    testProduceAfterLogDirFailureOnLeader(Roll)
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testIOExceptionDuringLogRoll(quorum: String): Unit = {
+    testProduceAfterLogDirFailureOnLeader(Roll, quorum)
   }
 
   // Broker should halt on any log directory failure if inter-broker protocol < 1.0
   @nowarn("cat=deprecation")
-  @Test
-  def brokerWithOldInterBrokerProtocolShouldHaltOnLogDirFailure(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def brokerWithOldInterBrokerProtocolShouldHaltOnLogDirFailure(quorum: String): Unit = {
     @volatile var statusCodeOption: Option[Int] = None
     Exit.setHaltProcedure { (statusCode, _) =>
       statusCodeOption = Some(statusCode)
@@ -97,18 +102,21 @@ class LogDirFailureTest extends IntegrationTestHarness {
     }
   }
 
-  @Test
-  def testProduceErrorFromFailureOnCheckpoint(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testProduceErrorFromFailureOnCheckpoint(quorum: String): Unit = {
     testProduceErrorsFromLogDirFailureOnLeader(Checkpoint)
   }
 
-  @Test
-  def testIOExceptionDuringCheckpoint(): Unit = {
-    testProduceAfterLogDirFailureOnLeader(Checkpoint)
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testIOExceptionDuringCheckpoint(quorum: String): Unit = {
+    testProduceAfterLogDirFailureOnLeader(Checkpoint, quorum)
   }
 
-  @Test
-  def testReplicaFetcherThreadAfterLogDirFailureOnFollower(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testReplicaFetcherThreadAfterLogDirFailureOnFollower(quorum: String): Unit = {
     this.producerConfig.setProperty(ProducerConfig.RETRIES_CONFIG, "0")
     this.producerConfig.setProperty(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, "false")
     val producer = createProducer()
@@ -116,9 +124,9 @@ class LogDirFailureTest extends IntegrationTestHarness {
 
     val partitionInfo = producer.partitionsFor(topic).asScala.find(_.partition() == 0).get
     val leaderServerId = partitionInfo.leader().id()
-    val leaderServer = servers.find(_.config.brokerId == leaderServerId).get
+    val leaderServer = brokers.find(_.config.brokerId == leaderServerId).get
     val followerServerId = partitionInfo.replicas().map(_.id()).find(_ != leaderServerId).get
-    val followerServer = servers.find(_.config.brokerId == followerServerId).get
+    val followerServer = brokers.find(_.config.brokerId == followerServerId).get
 
     followerServer.replicaManager.markPartitionOffline(partition)
     // Send a message to another partition whose leader is the same as partition 0
@@ -149,7 +157,7 @@ class LogDirFailureTest extends IntegrationTestHarness {
     val record = new ProducerRecord(topic, 0, s"key".getBytes, s"value".getBytes)
 
     val leaderServerId = producer.partitionsFor(topic).asScala.find(_.partition() == 0).get.leader().id()
-    val leaderServer = servers.find(_.config.brokerId == leaderServerId).get
+    val leaderServer = brokers.find(_.config.brokerId == leaderServerId).get
 
     TestUtils.causeLogDirFailure(failureType, leaderServer, partition)
 
@@ -160,7 +168,7 @@ class LogDirFailureTest extends IntegrationTestHarness {
       e.getCause.isInstanceOf[NotLeaderOrFollowerException])
   }
 
-  def testProduceAfterLogDirFailureOnLeader(failureType: LogDirFailureType): Unit = {
+  def testProduceAfterLogDirFailureOnLeader(failureType: LogDirFailureType, quorum: String): Unit = {
     val consumer = createConsumer()
     subscribeAndWaitForAssignment(topic, consumer)
 
@@ -170,7 +178,7 @@ class LogDirFailureTest extends IntegrationTestHarness {
     val record = new ProducerRecord(topic, 0, s"key".getBytes, s"value".getBytes)
 
     val leaderServerId = producer.partitionsFor(topic).asScala.find(_.partition() == 0).get.leader().id()
-    val leaderServer = servers.find(_.config.brokerId == leaderServerId).get
+    val leaderServer = brokers.find(_.config.brokerId == leaderServerId).get
 
     // The first send() should succeed
     producer.send(record).get()
@@ -194,9 +202,16 @@ class LogDirFailureTest extends IntegrationTestHarness {
     assertTrue(zkClient.getAllLogDirEventNotifications.isEmpty)
 
     // The controller should have marked the replica on the original leader as offline
-    val controllerServer = servers.find(_.kafkaController.isActive).get
-    val offlineReplicas = controllerServer.kafkaController.controllerContext.replicasInState(topic, OfflineReplica)
-    assertTrue(offlineReplicas.contains(PartitionAndReplica(new TopicPartition(topic, 0), leaderServerId)))
+    if (quorum == "kraft") {
+      brokers.flatMap(b => b.metadataCache.getPartitionInfo(topic, 0)).foreach { partitionInfo =>
+        assertTrue(partitionInfo.replicas.contains(leaderServerId))
+        assertTrue(partitionInfo.offlineReplicas.contains(leaderServerId))
+      }
+    } else {
+      val controllerServer = servers.find(_.kafkaController.isActive).get
+      val offlineReplicas = controllerServer.kafkaController.controllerContext.replicasInState(topic, OfflineReplica)
+      assertTrue(offlineReplicas.contains(PartitionAndReplica(new TopicPartition(topic, 0), leaderServerId)))
+    }
   }
 
 
