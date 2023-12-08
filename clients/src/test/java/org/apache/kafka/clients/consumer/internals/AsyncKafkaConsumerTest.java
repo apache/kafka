@@ -45,7 +45,6 @@ import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
 import org.apache.kafka.common.errors.InvalidGroupIdException;
-import org.apache.kafka.common.errors.NetworkException;
 import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.WakeupException;
@@ -103,12 +102,14 @@ import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.Mockito.atLeast;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doReturn;
@@ -199,7 +200,7 @@ public class AsyncKafkaConsumerTest {
         offsets.put(new TopicPartition("my-topic", 0), new OffsetAndMetadata(100L));
         offsets.put(new TopicPartition("my-topic", 1), new OffsetAndMetadata(200L));
 
-        doReturn(future).when(consumer).commit(offsets, false);
+        doReturn(future).when(consumer).commitAsync(offsets, false);
         consumer.commitAsync(offsets, null);
         future.complete(null);
         TestUtils.waitForCondition(future::isDone,
@@ -217,7 +218,7 @@ public class AsyncKafkaConsumerTest {
         Map<TopicPartition, OffsetAndMetadata> offsets = new HashMap<>();
         offsets.put(new TopicPartition("my-topic", 1), new OffsetAndMetadata(200L));
 
-        doReturn(future).when(consumer).commit(offsets, false);
+        doReturn(future).when(consumer).commit(any(), anyBoolean(), any());
         MockCommitCallback callback = new MockCommitCallback();
         assertDoesNotThrow(() -> consumer.commitAsync(offsets, callback));
 
@@ -228,6 +229,7 @@ public class AsyncKafkaConsumerTest {
         } else {
             future.completeExceptionally(exception);
             consumer.maybeInvokeCommitCallbacks();
+            assertNotNull(callback.exception);
             assertSame(exception.getClass(), callback.exception.getClass());
         }
     }
@@ -242,7 +244,7 @@ public class AsyncKafkaConsumerTest {
     @Test
     public void testFencedInstanceException() {
         CompletableFuture<Void> future = new CompletableFuture<>();
-        doReturn(future).when(consumer).commit(new HashMap<>(), false);
+        doReturn(future).when(consumer).commitAsync(new HashMap<>(), false);
         assertDoesNotThrow(() -> consumer.commitAsync());
         future.completeExceptionally(Errors.FENCED_INSTANCE_ID.exception());
     }
@@ -376,7 +378,7 @@ public class AsyncKafkaConsumerTest {
         CountDownLatch latch = new CountDownLatch(1);  // Initialize the latch with a count of 1
         try {
             CompletableFuture<Void> future = new CompletableFuture<>();
-            doReturn(future).when(consumer).commit(new HashMap<>(), false);
+            doReturn(future).when(consumer).commitAsync(new HashMap<>(), false);
             assertDoesNotThrow(() -> consumer.commitAsync(new HashMap<>(), callback));
             // Simulating some background work
             backgroundExecutor.submit(() -> {
@@ -394,16 +396,18 @@ public class AsyncKafkaConsumerTest {
         }
     }
 
+    // CommitSync should execute the callbacks of any previous completed commitAsync. If the
+    // callback fails, the commitSync should fail.
     @Test
     public void testEnsureCommitSyncExecutedCommitAsyncCallbacks() {
-        MockCommitCallback callback = new MockCommitCallback();
-        CompletableFuture<Void> future = new CompletableFuture<>();
-        doReturn(future).when(consumer).commit(new HashMap<>(), false);
+        KafkaException callbackException = new KafkaException("Async commit callback failed");
+        OffsetCommitCallback callback = (offsets, exception) -> {
+            throw callbackException;
+        };
+        // CommitAsync empty offsets (so it returns without requiring response), with a callback
+        // that fails.
         assertDoesNotThrow(() -> consumer.commitAsync(new HashMap<>(), callback));
-        future.completeExceptionally(new NetworkException("Test exception"));
-        assertMockCommitCallbackInvoked(() -> consumer.commitSync(),
-            callback,
-            Errors.NETWORK_EXCEPTION);
+        assertMockCommitCallbackInvoked(() -> consumer.commitSync(), callbackException);
     }
 
     @Test
@@ -462,35 +466,34 @@ public class AsyncKafkaConsumerTest {
         MockCommitCallback callback = new MockCommitCallback();
         CompletableFuture<Void> future = new CompletableFuture<>();
         consumer.assign(Collections.singleton(new TopicPartition("foo", 0)));
-        doReturn(future).when(consumer).commit(new HashMap<>(), false);
+        doReturn(future).when(consumer).commitAsync(new HashMap<>(), false);
         assertDoesNotThrow(() -> consumer.commitAsync(new HashMap<>(), callback));
         future.complete(null);
-        assertMockCommitCallbackInvoked(() -> consumer.poll(Duration.ZERO),
-            callback,
-            null);
+        assertMockCommitCallbackInvoked(() -> consumer.poll(Duration.ZERO), null);
     }
 
     @Test
     public void testEnsureShutdownExecutedCommitAsyncCallbacks() {
         MockCommitCallback callback = new MockCommitCallback();
         CompletableFuture<Void> future = new CompletableFuture<>();
-        doReturn(future).when(consumer).commit(new HashMap<>(), false);
+        doReturn(future).when(consumer).commitAsync(new HashMap<>(), false);
         assertDoesNotThrow(() -> consumer.commitAsync(new HashMap<>(), callback));
         future.complete(null);
-        assertMockCommitCallbackInvoked(() -> consumer.close(),
-            callback,
-            null);
+        assertMockCommitCallbackInvoked(() -> consumer.close(), null);
     }
 
     private void assertMockCommitCallbackInvoked(final Executable task,
-                                                 final MockCommitCallback callback,
-                                                 final Errors errors) {
-        assertDoesNotThrow(task);
-        assertEquals(1, callback.invoked);
-        if (errors == null)
-            assertNull(callback.exception);
-        else if (errors.exception() instanceof RetriableException)
-            assertTrue(callback.exception instanceof RetriableCommitFailedException);
+                                                 final Throwable expectedException) {
+        if (expectedException == null) {
+            assertDoesNotThrow(task);
+        } else {
+            Throwable t = assertThrows(Throwable.class, task);
+            if (expectedException instanceof RetriableException) {
+                assertTrue(t instanceof RetriableCommitFailedException);
+            } else {
+                assertEquals(t.getClass(), expectedException.getClass());
+            }
+        }
     }
 
     private static class MockCommitCallback implements OffsetCommitCallback {

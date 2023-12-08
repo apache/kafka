@@ -181,7 +181,6 @@ public class ConsumerTestBuilder implements Closeable {
                     subscriptions,
                     config,
                     coordinator,
-                    backgroundEventHandler,
                     gi.groupId,
                     gi.groupInstanceId));
             MembershipManager mm = spy(

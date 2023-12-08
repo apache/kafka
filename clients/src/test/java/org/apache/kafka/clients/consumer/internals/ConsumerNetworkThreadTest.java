@@ -134,7 +134,7 @@ public class ConsumerNetworkThreadTest {
 
     @Test
     public void testApplicationEvent() {
-        ApplicationEvent e = new CommitApplicationEvent(new HashMap<>());
+        ApplicationEvent e = new CommitApplicationEvent(new HashMap<>(), time.timer(Long.MAX_VALUE));
         applicationEventsQueue.add(e);
         consumerNetworkThread.runOnce();
         verify(applicationEventProcessor, times(1)).process(e);
@@ -150,7 +150,7 @@ public class ConsumerNetworkThreadTest {
 
     @Test
     public void testCommitEvent() {
-        ApplicationEvent e = new CommitApplicationEvent(new HashMap<>());
+        ApplicationEvent e = new CommitApplicationEvent(new HashMap<>(), time.timer(Long.MAX_VALUE));
         applicationEventsQueue.add(e);
         consumerNetworkThread.runOnce();
         verify(applicationEventProcessor).process(any(CommitApplicationEvent.class));
@@ -207,7 +207,8 @@ public class ConsumerNetworkThreadTest {
         verify(applicationEventProcessor).process(any(AssignmentChangeApplicationEvent.class));
         verify(networkClient, times(1)).poll(anyLong(), anyLong());
         verify(commitRequestManager, times(1)).updateAutoCommitTimer(currentTimeMs);
-        verify(commitRequestManager, times(1)).maybeAutoCommit(offset);
+        // Assignment change should generate an async commit (not retried).
+        verify(commitRequestManager, times(1)).maybeAutoCommitAllConsumedAsync();
     }
 
     @Test
@@ -271,8 +272,8 @@ public class ConsumerNetworkThreadTest {
         coordinatorRequestManager.markCoordinatorUnknown("test", time.milliseconds());
         client.prepareResponse(FindCoordinatorResponse.prepareResponse(Errors.NONE, "group-id", node));
         prepareOffsetCommitRequest(new HashMap<>(), Errors.NONE, false);
-        CompletableApplicationEvent<Void> event1 = spy(new CommitApplicationEvent(Collections.emptyMap()));
-        ApplicationEvent event2 = new CommitApplicationEvent(Collections.emptyMap());
+        CompletableApplicationEvent<Void> event1 = spy(new CommitApplicationEvent(Collections.emptyMap(), time.timer(Long.MAX_VALUE)));
+        ApplicationEvent event2 = new CommitApplicationEvent(Collections.emptyMap(), time.timer(Long.MAX_VALUE));
         CompletableFuture<Void> future = new CompletableFuture<>();
         when(event1.future()).thenReturn(future);
         applicationEventsQueue.add(event1);
@@ -311,7 +312,8 @@ public class ConsumerNetworkThreadTest {
         prepareOffsetCommitRequest(singletonMap(tp, 100L), Errors.NONE, false);
         consumerNetworkThread.maybeAutocommitOnClose(time.timer(1000));
         assertTrue(coordinatorRequestManager.coordinator().isPresent());
-        verify(commitRequestManager).createCommitAllConsumedRequest();
+        // Auto-commit on close should generate a sync commit request.
+        verify(commitRequestManager).createCommitAllConsumedRequestSync(any());
 
         assertFalse(client.hasPendingResponses());
         assertFalse(client.hasInFlightRequests());
