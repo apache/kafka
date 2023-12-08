@@ -258,7 +258,8 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             Time.SYSTEM,
             ApplicationEventHandler::new,
             FetchCollector::new,
-            ConsumerMetadata::new
+            ConsumerMetadata::new,
+            new LinkedBlockingQueue<>()
         );
     }
 
@@ -269,7 +270,8 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                        final Time time,
                        final ApplicationEventHandlerSupplier applicationEventHandlerFactory,
                        final FetchCollectorFactory<K, V> fetchCollectorFactory,
-                       final ConsumerMetadataFactory metadataFactory) {
+                       final ConsumerMetadataFactory metadataFactory,
+                       final LinkedBlockingQueue<BackgroundEvent> backgroundEventQueue) {
         try {
             GroupRebalanceConfig groupRebalanceConfig = new GroupRebalanceConfig(
                 config,
@@ -510,9 +512,9 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
     }
 
     // auxiliary interface for testing
-    interface FetchCollectorFactory<K,V> {
+    interface FetchCollectorFactory<K, V> {
 
-        FetchCollector<K,V> build(
+        FetchCollector<K, V> build(
             final LogContext logContext,
             final ConsumerMetadata metadata,
             final SubscriptionState subscriptions,
