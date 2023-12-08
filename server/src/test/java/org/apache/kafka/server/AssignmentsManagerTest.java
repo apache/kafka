@@ -86,11 +86,11 @@ public class AssignmentsManagerTest {
             return null;
         }).when(channelManager).sendRequest(any(AssignReplicasToDirsRequest.Builder.class), any(ControllerRequestCompletionHandler.class));
 
-        manager.onAssignment(new TopicIdPartition(TOPIC_1, 1), DIR_1);
-        manager.onAssignment(new TopicIdPartition(TOPIC_1, 2), DIR_2);
-        manager.onAssignment(new TopicIdPartition(TOPIC_1, 3), DIR_3);
-        manager.onAssignment(new TopicIdPartition(TOPIC_1, 4), DIR_1);
-        manager.onAssignment(new TopicIdPartition(TOPIC_2, 5), DIR_2);
+        manager.onAssignment(new TopicIdPartition(TOPIC_1, 1), DIR_1, () -> { });
+        manager.onAssignment(new TopicIdPartition(TOPIC_1, 2), DIR_2, () -> { });
+        manager.onAssignment(new TopicIdPartition(TOPIC_1, 3), DIR_3, () -> { });
+        manager.onAssignment(new TopicIdPartition(TOPIC_1, 4), DIR_1, () -> { });
+        manager.onAssignment(new TopicIdPartition(TOPIC_2, 5), DIR_2, () -> { });
         while (!readyToAssert.await(1, TimeUnit.MILLISECONDS)) {
             time.sleep(100);
             manager.wakeup();
@@ -122,21 +122,21 @@ public class AssignmentsManagerTest {
             }
             if (readyToAssert.getCount() == 4) {
                 invocation.getArgument(1, ControllerRequestCompletionHandler.class).onTimeout();
-                manager.onAssignment(new TopicIdPartition(TOPIC_1, 2), DIR_3);
+                manager.onAssignment(new TopicIdPartition(TOPIC_1, 2), DIR_3, () -> { });
             }
             if (readyToAssert.getCount() == 3) {
                 invocation.getArgument(1, ControllerRequestCompletionHandler.class).onComplete(
                         new ClientResponse(null, null, null, 0L, 0L, false, false,
                                 new UnsupportedVersionException("test unsupported version exception"), null, null)
                 );
-                manager.onAssignment(new TopicIdPartition(TOPIC_1, 3), Uuid.fromString("xHLCnG54R9W3lZxTPnpk1Q"));
+                manager.onAssignment(new TopicIdPartition(TOPIC_1, 3), Uuid.fromString("xHLCnG54R9W3lZxTPnpk1Q"), () -> { });
             }
             if (readyToAssert.getCount() == 2) {
                 invocation.getArgument(1, ControllerRequestCompletionHandler.class).onComplete(
                         new ClientResponse(null, null, null, 0L, 0L, false, false, null,
                                 new AuthenticationException("test authentication exception"), null)
                 );
-                manager.onAssignment(new TopicIdPartition(TOPIC_1, 4), Uuid.fromString("RCYu1A0CTa6eEIpuKDOfxw"));
+                manager.onAssignment(new TopicIdPartition(TOPIC_1, 4), Uuid.fromString("RCYu1A0CTa6eEIpuKDOfxw"), () -> { });
             }
             if (readyToAssert.getCount() == 1) {
                 invocation.getArgument(1, ControllerRequestCompletionHandler.class).onComplete(
@@ -149,7 +149,7 @@ public class AssignmentsManagerTest {
             return null;
         }).when(channelManager).sendRequest(any(AssignReplicasToDirsRequest.Builder.class), any(ControllerRequestCompletionHandler.class));
 
-        manager.onAssignment(new TopicIdPartition(TOPIC_1, 1), DIR_1);
+        manager.onAssignment(new TopicIdPartition(TOPIC_1, 1), DIR_1, () -> { });
         while (!readyToAssert.await(1, TimeUnit.MILLISECONDS)) {
             time.sleep(TimeUnit.SECONDS.toMillis(1));
             manager.wakeup();

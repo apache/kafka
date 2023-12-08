@@ -26,6 +26,7 @@ import org.apache.kafka.common.requests.AssignReplicasToDirsResponse;
 import org.apache.kafka.common.utils.ExponentialBackoff;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.queue.EventQueue;
 import org.apache.kafka.queue.KafkaEventQueue;
 import org.apache.kafka.server.common.TopicIdPartition;
@@ -91,8 +92,11 @@ public class AssignmentsManager {
         channelManager.shutdown();
     }
 
-    public void onAssignment(TopicIdPartition topicPartition, Uuid dirId) {
-        eventQueue.append(new AssignmentEvent(time.nanoseconds(), topicPartition, dirId));
+    public void onAssignment(TopicIdPartition topicPartition, Uuid dirId, Runnable callback) {
+        if (callback == null) {
+            callback = () -> { };
+        }
+        eventQueue.append(new AssignmentEvent(time.nanoseconds(), topicPartition, dirId, callback));
     }
 
     // only for testing
@@ -125,10 +129,12 @@ public class AssignmentsManager {
         final long timestampNs;
         final TopicIdPartition partition;
         final Uuid dirId;
-        AssignmentEvent(long timestampNs, TopicIdPartition partition, Uuid dirId) {
+        final Runnable callback;
+        AssignmentEvent(long timestampNs, TopicIdPartition partition, Uuid dirId, Runnable callback) {
             this.timestampNs = timestampNs;
             this.partition = partition;
             this.dirId = dirId;
+            this.callback = callback == null ? () -> { } : callback;
         }
         @Override
         public void run() throws Exception {
@@ -143,6 +149,7 @@ public class AssignmentsManager {
                 log.debug("Received new assignment {}", this);
             }
             pending.put(partition, this);
+
             if (inflight == null || inflight.isEmpty()) {
                 scheduleDispatch();
             }
@@ -228,7 +235,11 @@ public class AssignmentsManager {
             } else {
                 failedAttempts = 0;
                 AssignReplicasToDirsResponseData data = ((AssignReplicasToDirsResponse) response.responseBody()).data();
+
                 Set<AssignmentEvent> failed = filterFailures(data, inflight);
+                Set<AssignmentEvent> completed = Utils.diff(HashSet::new, inflight.values().stream().collect(Collectors.toSet()), failed);
+                completed.forEach(assignmentEvent -> assignmentEvent.callback.run());
+
                 log.warn("Re-queueing assignments: {}", failed);
                 if (!failed.isEmpty()) {
                     for (AssignmentEvent event : failed) {
