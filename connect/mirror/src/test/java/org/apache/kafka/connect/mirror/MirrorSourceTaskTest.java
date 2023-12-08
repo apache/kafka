@@ -431,6 +431,10 @@ public class MirrorSourceTaskTest {
         verify(producer, times(5)).send(any(), any());
         // Ack the latest sync immediately
         producerCallback.getValue().onCompletion(null, null);
+
+        mirrorSourceTask.commit();
+        // No more syncs should take place; we've been able to publish all of them so far
+        verify(producer, times(5)).send(any(), any());
     }
 
     private void compareHeaders(List<Header> expectedHeaders, List<org.apache.kafka.connect.header.Header> taskHeaders) {
