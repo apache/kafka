@@ -173,8 +173,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
          * could occur when processing the events. In such cases, the processor will take a reference to the first
          * error, continue to process the remaining events, and then throw the first error that occurred.
          */
-        @Override
-        public void process() {
+        private void process() {
             AtomicReference<KafkaException> firstError = new AtomicReference<>();
 
             ProcessHandler<BackgroundEvent> processHandler = (event, error) -> {

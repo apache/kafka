@@ -51,8 +51,8 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
-import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 
 public final class ConsumerUtils {
@@ -206,7 +206,7 @@ public final class ConsumerUtils {
         }
     }
 
-    public static <T> T getResult(CompletableFuture<T> future, Timer timer) {
+    public static <T> T getResult(Future<T> future, Timer timer) {
         try {
             return future.get(timer.remainingMs(), TimeUnit.MILLISECONDS);
         } catch (ExecutionException e) {

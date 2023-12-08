@@ -61,13 +61,12 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
      * an event generates an error. In such cases, the processor will log an exception, but we do not want those
      * errors to be propagated to the caller.
      */
-    @Override
     public void process() {
         process((event, error) -> error.ifPresent(e -> log.warn("Error processing event {}", e.getMessage(), e)));
     }
 
     @Override
-    public void process(ApplicationEvent event) {
+    protected void process(ApplicationEvent event) {
         switch (event.type()) {
             case COMMIT:
                 process((CommitApplicationEvent) event);
