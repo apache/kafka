@@ -347,7 +347,7 @@ public class MetadataLoader implements RaftClient.Listener<ApiMessageAndVersion>
         }
         metrics.updateLastAppliedImageProvenance(image.provenance());
         metrics.setCurrentMetadataVersion(image.features().metadataVersion());
-        if (uninitializedPublishers.isEmpty()) {
+        if (!uninitializedPublishers.isEmpty()) {
             scheduleInitializeNewPublishers(0);
         }
     }
@@ -451,6 +451,7 @@ public class MetadataLoader implements RaftClient.Listener<ApiMessageAndVersion>
                         publisher.name(), e);
                 }
             }
+            metrics.setCurrentControllerId(leaderAndEpoch.leaderId().orElseGet(() -> -1));
         });
     }
 

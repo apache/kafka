@@ -170,6 +170,40 @@ public class ClientTelemetryReporterTest {
     }
 
     @Test
+    public void testUpdateMetricsLabels() {
+        clientTelemetryReporter.configure(configs);
+        clientTelemetryReporter.contextChange(metricsContext);
+        assertTrue(clientTelemetryReporter.telemetryProvider().resource().getAttributesList().isEmpty());
+
+        clientTelemetryReporter.updateMetricsLabels(Collections.singletonMap("key1", "value1"));
+        assertEquals(1, clientTelemetryReporter.telemetryProvider().resource().getAttributesList().size());
+        assertEquals("key1", clientTelemetryReporter.telemetryProvider().resource().getAttributesList().get(0).getKey());
+        assertEquals("value1", clientTelemetryReporter.telemetryProvider().resource().getAttributesList().get(0).getValue().getStringValue());
+
+        clientTelemetryReporter.updateMetricsLabels(Collections.singletonMap("key2", "value2"));
+        assertEquals(2, clientTelemetryReporter.telemetryProvider().resource().getAttributesList().size());
+        clientTelemetryReporter.telemetryProvider().resource().getAttributesList().forEach(attribute -> {
+            if (attribute.getKey().equals("key1")) {
+                assertEquals("value1", attribute.getValue().getStringValue());
+            } else {
+                assertEquals("key2", attribute.getKey());
+                assertEquals("value2", attribute.getValue().getStringValue());
+            }
+        });
+
+        clientTelemetryReporter.updateMetricsLabels(Collections.singletonMap("key2", "valueUpdated"));
+        assertEquals(2, clientTelemetryReporter.telemetryProvider().resource().getAttributesList().size());
+        clientTelemetryReporter.telemetryProvider().resource().getAttributesList().forEach(attribute -> {
+            if (attribute.getKey().equals("key1")) {
+                assertEquals("value1", attribute.getValue().getStringValue());
+            } else {
+                assertEquals("key2", attribute.getKey());
+                assertEquals("valueUpdated", attribute.getValue().getStringValue());
+            }
+        });
+    }
+
+    @Test
     public void testTelemetrySenderTimeToNextUpdate() {
         ClientTelemetryReporter.DefaultClientTelemetrySender telemetrySender = (ClientTelemetryReporter.DefaultClientTelemetrySender) clientTelemetryReporter.telemetrySender();
 

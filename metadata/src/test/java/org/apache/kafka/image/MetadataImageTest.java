@@ -27,7 +27,6 @@ import org.junit.jupiter.api.Timeout;
 import java.util.List;
 import java.util.Optional;
 
-import static org.apache.kafka.metadata.util.MetadataFeatureUtil.withDirectoryAssignmentSupport;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 
@@ -115,7 +114,7 @@ public class MetadataImageTest {
 
     private static void testToImage(MetadataImage image) {
         testToImage(image, new ImageWriterOptions.Builder()
-            .setMetadataVersion(withDirectoryAssignmentSupport(image.features().metadataVersion()))
+            .setMetadataVersion(image.features().metadataVersion())
             .build(), Optional.empty());
     }
 

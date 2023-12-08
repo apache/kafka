@@ -1050,12 +1050,14 @@ class ControllerApis(
   }
 
   def handleDescribeCluster(request: RequestChannel.Request): CompletableFuture[Unit] = {
-    // Unlike on the broker, DESCRIBE_CLUSTER on the controller requires a high level of
-    // permissions (ALTER on CLUSTER).
+    // Nearly all RPCs should check MetadataVersion inside the QuorumController. However, this
+    // RPC is consulting a cache which lives outside the QC. So we check MetadataVersion here.
     if (!apiVersionManager.features.metadataVersion().isControllerRegistrationSupported()) {
       throw new UnsupportedVersionException("Direct-to-controller communication is not " +
         "supported with the current MetadataVersion.")
     }
+    // Unlike on the broker, DESCRIBE_CLUSTER on the controller requires a high level of
+    // permissions (ALTER on CLUSTER).
     authHelper.authorizeClusterOperation(request, ALTER)
     val response = authHelper.computeDescribeClusterResponse(
       request,
@@ -1070,11 +1072,13 @@ class ControllerApis(
   }
 
   def handleAssignReplicasToDirs(request: RequestChannel.Request): CompletableFuture[Unit] = {
+    authHelper.authorizeClusterOperation(request, CLUSTER_ACTION)
     val assignReplicasToDirsRequest = request.body[AssignReplicasToDirsRequest]
-
-    // TODO KAFKA-15426
-    requestHelper.sendMaybeThrottle(request,
-      assignReplicasToDirsRequest.getErrorResponse(Errors.UNSUPPORTED_VERSION.exception))
-    CompletableFuture.completedFuture[Unit](())
+    val context = new ControllerRequestContext(request.context.header.data, request.context.principal,
+      OptionalLong.empty())
+    controller.assignReplicasToDirs(context, assignReplicasToDirsRequest.data).thenApply { reply =>
+      requestHelper.sendResponseMaybeThrottle(request,
+        requestThrottleMs => new AssignReplicasToDirsResponse(reply.setThrottleTimeMs(requestThrottleMs)))
+    }
   }
 }

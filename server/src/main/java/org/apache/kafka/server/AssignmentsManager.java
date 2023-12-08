@@ -19,10 +19,6 @@ package org.apache.kafka.server;
 
 import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.common.Uuid;
-import org.apache.kafka.common.message.AssignReplicasToDirsRequestData;
-import org.apache.kafka.common.message.AssignReplicasToDirsRequestData.DirectoryData;
-import org.apache.kafka.common.message.AssignReplicasToDirsRequestData.PartitionData;
-import org.apache.kafka.common.message.AssignReplicasToDirsRequestData.TopicData;
 import org.apache.kafka.common.message.AssignReplicasToDirsResponseData;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.AssignReplicasToDirsRequest;
@@ -30,13 +26,13 @@ import org.apache.kafka.common.requests.AssignReplicasToDirsResponse;
 import org.apache.kafka.common.utils.ExponentialBackoff;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.queue.EventQueue;
 import org.apache.kafka.queue.KafkaEventQueue;
 import org.apache.kafka.server.common.TopicIdPartition;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -46,6 +42,8 @@ import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
+
+import static org.apache.kafka.metadata.AssignmentsHelper.buildRequestData;
 
 public class AssignmentsManager {
 
@@ -94,8 +92,11 @@ public class AssignmentsManager {
         channelManager.shutdown();
     }
 
-    public void onAssignment(TopicIdPartition topicPartition, Uuid dirId) {
-        eventQueue.append(new AssignmentEvent(time.nanoseconds(), topicPartition, dirId));
+    public void onAssignment(TopicIdPartition topicPartition, Uuid dirId, Runnable callback) {
+        if (callback == null) {
+            callback = () -> { };
+        }
+        eventQueue.append(new AssignmentEvent(time.nanoseconds(), topicPartition, dirId, callback));
     }
 
     // only for testing
@@ -128,10 +129,12 @@ public class AssignmentsManager {
         final long timestampNs;
         final TopicIdPartition partition;
         final Uuid dirId;
-        AssignmentEvent(long timestampNs, TopicIdPartition partition, Uuid dirId) {
+        final Runnable callback;
+        AssignmentEvent(long timestampNs, TopicIdPartition partition, Uuid dirId, Runnable callback) {
             this.timestampNs = timestampNs;
             this.partition = partition;
             this.dirId = dirId;
+            this.callback = callback == null ? () -> { } : callback;
         }
         @Override
         public void run() throws Exception {
@@ -146,6 +149,7 @@ public class AssignmentsManager {
                 log.debug("Received new assignment {}", this);
             }
             pending.put(partition, this);
+
             if (inflight == null || inflight.isEmpty()) {
                 scheduleDispatch();
             }
@@ -231,7 +235,11 @@ public class AssignmentsManager {
             } else {
                 failedAttempts = 0;
                 AssignReplicasToDirsResponseData data = ((AssignReplicasToDirsResponse) response.responseBody()).data();
+
                 Set<AssignmentEvent> failed = filterFailures(data, inflight);
+                Set<AssignmentEvent> completed = Utils.diff(HashSet::new, inflight.values().stream().collect(Collectors.toSet()), failed);
+                completed.forEach(assignmentEvent -> assignmentEvent.callback.run());
+
                 log.warn("Re-queueing assignments: {}", failed);
                 if (!failed.isEmpty()) {
                     for (AssignmentEvent event : failed) {
@@ -367,28 +375,5 @@ public class AssignmentsManager {
             }
         }
         return failures;
-    }
-
-    // visible for testing
-    static AssignReplicasToDirsRequestData buildRequestData(int brokerId, long brokerEpoch, Map<TopicIdPartition, Uuid> assignment) {
-        Map<Uuid, DirectoryData> directoryMap = new HashMap<>();
-        Map<Uuid, Map<Uuid, TopicData>> topicMap = new HashMap<>();
-        for (Map.Entry<TopicIdPartition, Uuid> entry : assignment.entrySet()) {
-            TopicIdPartition topicPartition = entry.getKey();
-            Uuid directoryId = entry.getValue();
-            DirectoryData directory = directoryMap.computeIfAbsent(directoryId, d -> new DirectoryData().setId(directoryId));
-            TopicData topic = topicMap.computeIfAbsent(directoryId, d -> new HashMap<>())
-                    .computeIfAbsent(topicPartition.topicId(), topicId -> {
-                        TopicData data = new TopicData().setTopicId(topicId);
-                        directory.topics().add(data);
-                        return data;
-                    });
-            PartitionData partition = new PartitionData().setPartitionIndex(topicPartition.partitionId());
-            topic.partitions().add(partition);
-        }
-        return new AssignReplicasToDirsRequestData()
-                .setBrokerId(brokerId)
-                .setBrokerEpoch(brokerEpoch)
-                .setDirectories(new ArrayList<>(directoryMap.values()));
     }
 }
