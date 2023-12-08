@@ -399,7 +399,35 @@ public class OffsetsApiIntegrationTest {
             offsetsToAlter.add(new ConnectorOffset(partition, Collections.singletonMap(SinkUtils.KAFKA_OFFSET_KEY, 5)));
         }
 
-        String response = connect.alterConnectorOffsets(connectorName, new ConnectorOffsets(offsetsToAlter));
+        AtomicReference<String> responseReference = new AtomicReference<>();
+        // Some retry logic is necessary to account for KAFKA-15826,
+        // where laggy sink task startup/shutdown can leave consumers running
+        waitForCondition(
+                () -> {
+                    try {
+                        responseReference.set(connect.alterConnectorOffsets(connectorName, new ConnectorOffsets(offsetsToAlter)));
+                        return true;
+                    } catch (ConnectRestException e) {
+                        boolean internalServerError = e.statusCode() == INTERNAL_SERVER_ERROR.getStatusCode();
+
+                        String message = Optional.of(e.getMessage()).orElse("");
+                        boolean failedToResetConsumerOffsets = message.contains("Failed to reset consumer group offsets for connector");
+                        boolean canBeRetried = message.contains("If the connector is in a stopped state, this operation can be safely retried");
+
+                        boolean retriable = internalServerError && failedToResetConsumerOffsets && canBeRetried;
+                        if (retriable) {
+                            return false;
+                        } else {
+                            throw new NoRetryException(e);
+                        }
+                    } catch (Throwable t) {
+                        throw new NoRetryException(t);
+                    }
+                },
+                30_000,
+                "Failed to reset sink connector offsets in time"
+        );
+        String response = responseReference.get();
         assertThat(response, containsString("The Connect framework-managed offsets for this connector have been altered successfully. " +
                 "However, if this connector manages offsets externally, they will need to be manually altered in the system that the connector uses."));
 
