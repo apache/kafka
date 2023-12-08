@@ -979,10 +979,15 @@ class ReplicaManager(val config: KafkaConfig,
    * Append messages to offsets topic, and wait for them to be replicated to other replicas;
    * the callback function will be triggered either when timeout or the required acks are satisfied;
    * if the callback function itself is already synchronized on some object then pass this object to avoid deadlock.
+   * This method should not return until the write to the local log is completed because updating offsets requires updating
+   * the in-memory and persisted state under a lock together.
    *
    * Noted that all pending delayed check operations are stored in a queue. All callers to ReplicaManager.appendRecords()
    * are expected to call ActionQueue.tryCompleteActions for all affected partitions, without holding any conflicting
    * locks.
+   *
+   * If appending transactional records, call maybeStartTransactionVerificationForPartition(s) and call this method in the callback.
+   * For example, the GroupCoordinator will pass `doCommitTxnOffsets` as the post-verification callback, and that method eventually call this.
    *
    * @param timeout                       maximum time we will wait to append before returning
    * @param requiredAcks                  number of replicas who must acknowledge the append before sending the response

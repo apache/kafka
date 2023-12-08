@@ -324,6 +324,7 @@ class GroupMetadataManager(brokerId: Int,
     }
   }
 
+  // This method should be called under the group lock to ensure atomicity of the update to the the in-memory and persisted state.
   private def appendForGroup(group: GroupMetadata,
                              records: Map[TopicPartition, MemoryRecords],
                              requestLocal: RequestLocal,
@@ -439,6 +440,8 @@ class GroupMetadataManager(brokerId: Int,
                  | Errors.INVALID_FETCH_SIZE =>
               Errors.INVALID_COMMIT_OFFSET_SIZE
 
+            // We may see INVALID_TXN_STATE or INVALID_PID_MAPPING here due to transaction verification.
+            // They can be returned without mapping to a new error.
             case other => other
           }
         }
@@ -462,6 +465,9 @@ class GroupMetadataManager(brokerId: Int,
 
   /**
    * Store offsets by appending it to the replicated log and then inserting to cache
+   *
+   * This method should be called under the group lock to ensure validations and updates are all performed
+   * atomically.
    */
   def storeOffsets(group: GroupMetadata,
                    consumerId: String,
@@ -472,12 +478,10 @@ class GroupMetadataManager(brokerId: Int,
                    producerEpoch: Short = RecordBatch.NO_PRODUCER_EPOCH,
                    requestLocal: RequestLocal = RequestLocal.NoCaching,
                    verificationGuard: Option[VerificationGuard]): Unit = {
-    group.inLock {
-      if (!group.hasReceivedConsistentOffsetCommits)
-        warn(s"group: ${group.groupId} with leader: ${group.leaderOrNull} has received offset commits from consumers as well " +
-          s"as transactional producers. Mixing both types of offset commits will generally result in surprises and " +
-          s"should be avoided.")
-    }
+    if (!group.hasReceivedConsistentOffsetCommits)
+      warn(s"group: ${group.groupId} with leader: ${group.leaderOrNull} has received offset commits from consumers as well " +
+        s"as transactional producers. Mixing both types of offset commits will generally result in surprises and " +
+        s"should be avoided.")
 
     val filteredOffsetMetadata = offsetMetadata.filter { case (_, offsetAndMetadata) =>
       validateOffsetMetadataLength(offsetAndMetadata.metadata)
@@ -504,13 +508,11 @@ class GroupMetadataManager(brokerId: Int,
 
     val verificationGuards = verificationGuard.map(guard => offsetTopicPartition -> guard).toMap
 
-    group.inLock {
-      if (isTxnOffsetCommit) {
-        addProducerGroup(producerId, group.groupId)
-        group.prepareTxnOffsetCommit(producerId, offsetMetadata)
-      } else {
-        group.prepareOffsetCommit(offsetMetadata)
-      }
+    if (isTxnOffsetCommit) {
+      addProducerGroup(producerId, group.groupId)
+      group.prepareTxnOffsetCommit(producerId, offsetMetadata)
+    } else {
+      group.prepareOffsetCommit(offsetMetadata)
     }
 
     appendForGroup(group, records, requestLocal, putCacheCallback, verificationGuards)
