@@ -18,7 +18,9 @@ package org.apache.kafka.streams.state.internals;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 import org.apache.kafka.streams.query.ResultOrder;
 import org.slf4j.Logger;
@@ -138,6 +140,9 @@ final class RocksDBVersionedStoreSegmentValueFormatter {
     }
 
     interface SegmentValue {
+        long getMinTimestamp();
+
+        long getNextTimestamp();
 
         /**
          * Finds the latest record in this segment row with (validFrom) timestamp not exceeding the
@@ -276,9 +281,11 @@ final class RocksDBVersionedStoreSegmentValueFormatter {
         private int deserIndex = -1; // index up through which this segment has been deserialized (inclusive)
         private List<TimestampAndValueSize> unpackedReversedTimestampAndValueSizes;
         private List<Integer> cumulativeValueSizes; // ordered same as timestamp and value sizes (reverse time-sorted)
-        private int valuesStartingIndex = -1; // the index of first value in the segment
+        private int valuesStartingIndex = -1; // the index of the first value in the segment (but the last one in the list)
         private int currentCumValueSize = 0; // this is for deserializing a segment records in a lazy manner
         private int currentDeserIndex = 0; // this is for deserializing a segment records in a lazy manner
+        private Map<Integer, Long> unpackedReversedTimestamps = new HashMap<>();
+
 
 
 
@@ -295,6 +302,14 @@ final class RocksDBVersionedStoreSegmentValueFormatter {
         private PartiallyDeserializedSegmentValue(
             final byte[] valueOrNull, final long validFrom, final long validTo) {
             initializeWithRecord(new ValueAndValueSize(valueOrNull), validFrom, validTo);
+        }
+
+        public long getMinTimestamp() {
+            return minTimestamp;
+        }
+
+        public long getNextTimestamp() {
+            return nextTimestamp;
         }
 
         @Override
@@ -370,9 +385,11 @@ final class RocksDBVersionedStoreSegmentValueFormatter {
 
             while (hasStillRecord(currTimestamp, currNextTimestamp, order)) {
                 final int timestampSegmentIndex = getTimestampIndex(order, currentDeserIndex);
-                currTimestamp = ByteBuffer.wrap(segmentValue).getLong(timestampSegmentIndex);
-                currNextTimestamp = timestampSegmentIndex == 2 * TIMESTAMP_SIZE ? nextTimestamp // if this is the first record metadata (timestamp + value size)
-                                                                                : ByteBuffer.wrap(segmentValue).getLong(timestampSegmentIndex - (TIMESTAMP_SIZE + VALUE_SIZE));
+                currTimestamp = unpackedReversedTimestamps.getOrDefault(timestampSegmentIndex, ByteBuffer.wrap(segmentValue).getLong(timestampSegmentIndex));
+                currNextTimestamp = timestampSegmentIndex == 2 * TIMESTAMP_SIZE
+                        ? nextTimestamp // if this is the first record metadata (timestamp + value size)
+                        : unpackedReversedTimestamps.getOrDefault(timestampSegmentIndex - (TIMESTAMP_SIZE + VALUE_SIZE),
+                            ByteBuffer.wrap(segmentValue).getLong(timestampSegmentIndex - (TIMESTAMP_SIZE + VALUE_SIZE)));
                 final int currValueSize = ByteBuffer.wrap(segmentValue).getInt(timestampSegmentIndex + TIMESTAMP_SIZE);
                 if (currValueSize >= 0) {
                     final byte[] value = new byte[currValueSize];
@@ -413,6 +430,7 @@ final class RocksDBVersionedStoreSegmentValueFormatter {
             while (currTimestamp != minTimestamp) {
                 timestampSegmentIndex = 2 * TIMESTAMP_SIZE + currIndex * (TIMESTAMP_SIZE + VALUE_SIZE);
                 currTimestamp = ByteBuffer.wrap(segmentValue).getLong(timestampSegmentIndex);
+                unpackedReversedTimestamps.put(timestampSegmentIndex, currTimestamp);
                 currIndex++;
             }
             valuesStartingIndex = timestampSegmentIndex + TIMESTAMP_SIZE + VALUE_SIZE;

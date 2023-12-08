@@ -25,7 +25,7 @@ import org.rocksdb.Snapshot;
 import java.util.ListIterator;
 import java.util.NoSuchElementException;
 
-public class LogicalSegmentIterator implements VersionedRecordIterator {
+public class LogicalSegmentIterator implements VersionedRecordIterator<byte[]> {
     private final ListIterator<LogicalKeyValueSegment> segmentIterator;
     private final Bytes key;
     private final Long fromTime;
@@ -35,12 +35,7 @@ public class LogicalSegmentIterator implements VersionedRecordIterator {
     private byte[] currentRawSegmentValue;
     // stores the deserialized value of the current segment (when current segment is one of the old segments)
     private RocksDBVersionedStoreSegmentValueFormatter.SegmentValue currentDeserializedSegmentValue;
-    // current segment minTimestamp (when current segment is not the latestValueStore)
-    private long minTimestamp;
-    // current segment nextTimestamp (when current segment is not the latestValueStore)
-    private long nextTimestamp;
-    private VersionedRecord next;
-    // current deserialization index
+    private VersionedRecord<byte[]> next;
     private volatile boolean open = true;
 
     // defined for creating/releasing the snapshot. 
@@ -86,7 +81,7 @@ public class LogicalSegmentIterator implements VersionedRecordIterator {
                 hasSegmentValue = maybeFillCurrentSegmentValue();
             }
             if (hasSegmentValue) {
-                this.next  = (VersionedRecord) getNextRecord();
+                this.next  = getNextRecord();
                 if (this.next == null) {
                     prepareToFetchNextSegment();
                 }
@@ -95,16 +90,15 @@ public class LogicalSegmentIterator implements VersionedRecordIterator {
         return this.next != null;
     }
 
-    @SuppressWarnings("unchecked")
     @Override
-    public Object next() {
+    public VersionedRecord<byte[]> next() {
         if (this.next == null) {
             if (!hasNext()) {
                 throw new NoSuchElementException();
             }
         }
-        final VersionedRecord clonedNext = this.next.validTo().isPresent() ? new VersionedRecord(this.next.value(), this.next.timestamp(), Long.parseLong(this.next.validTo().get().toString()))
-                                                                           : new VersionedRecord(this.next.value(), this.next.timestamp());
+        assert this.next != null;
+        final VersionedRecord<byte[]> clonedNext = next;
         this.next = null;
         return clonedNext;
     }
@@ -112,7 +106,6 @@ public class LogicalSegmentIterator implements VersionedRecordIterator {
     private void prepareToFetchNextSegment() {
         this.currentRawSegmentValue = null;
         this.currentDeserializedSegmentValue = null;
-        this.minTimestamp = this.nextTimestamp = -1;
     }
 
     /**
@@ -137,8 +130,6 @@ public class LogicalSegmentIterator implements VersionedRecordIterator {
                     this.currentRawSegmentValue = rawSegmentValue;
                 } else {
                     this.currentDeserializedSegmentValue = RocksDBVersionedStoreSegmentValueFormatter.deserialize(rawSegmentValue);
-                    this.minTimestamp = RocksDBVersionedStoreSegmentValueFormatter.getMinTimestamp(rawSegmentValue);
-                    this.nextTimestamp = RocksDBVersionedStoreSegmentValueFormatter.getNextTimestamp(rawSegmentValue);
                 }
                 return true;
             }
@@ -148,8 +139,8 @@ public class LogicalSegmentIterator implements VersionedRecordIterator {
         return false;
     }
 
-    private Object getNextRecord() {
-        VersionedRecord nextRecord = null;
+    private VersionedRecord<byte[]> getNextRecord() {
+        VersionedRecord<byte[]> nextRecord = null;
         if (currentRawSegmentValue != null) { // this is the latestValueStore
             final long recordTimestamp = RocksDBVersionedStore.LatestValueFormatter.getTimestamp(currentRawSegmentValue);
             if (recordTimestamp <= toTime) {
@@ -165,15 +156,15 @@ public class LogicalSegmentIterator implements VersionedRecordIterator {
             }
         }
         // no relevant record can be found in the segment
-        if (currentRawSegmentValue != null || nextRecord == null || !canSegmentHaveMoreRelevantRecords(nextRecord.timestamp(), Long.parseLong(nextRecord.validTo().get().toString()))) {
+        if (currentRawSegmentValue != null || nextRecord == null || !canSegmentHaveMoreRelevantRecords(nextRecord.timestamp(), nextRecord.validTo().get())) {
             prepareToFetchNextSegment();
         }
         return nextRecord;
     }
 
     private boolean canSegmentHaveMoreRelevantRecords(final long currentValidFrom, final long currentValidTo) {
-        final boolean isCurrentOutsideTimeRange = (order.equals(ResultOrder.ASCENDING) && (currentValidTo > toTime || nextTimestamp == currentValidTo))
-                                               || (!order.equals(ResultOrder.ASCENDING) && (currentValidFrom < fromTime || minTimestamp == currentValidFrom));
+        final boolean isCurrentOutsideTimeRange = (order.equals(ResultOrder.ASCENDING) && (currentValidTo > toTime || currentDeserializedSegmentValue.getNextTimestamp() == currentValidTo))
+                                               || (!order.equals(ResultOrder.ASCENDING) && (currentValidFrom < fromTime || currentDeserializedSegmentValue.getMinTimestamp() == currentValidFrom));
         return !isCurrentOutsideTimeRange;
     }
 

@@ -219,7 +219,6 @@ public class RocksDBVersionedStoreSegmentValueFormatterTest {
             assertThrows(IllegalArgumentException.class, () -> segmentValue.find(testCase.minTimestamp - 1, false));
         }
 
-        @SuppressWarnings("checkstyle:all")
         @Test
         public void shouldFindInTimeRangesWithDifferentOrders() {
             if (testCase.isDegenerate) {
@@ -228,34 +227,10 @@ public class RocksDBVersionedStoreSegmentValueFormatterTest {
             }
 
             // create a list of timestamps in ascending order to use them in combination for starting and ending point of the time range.
-            final List<Long> timestamps = new ArrayList<>();
-            timestamps.add(Long.MIN_VALUE);
-            for (int i = testCase.records.size() - 1; i >= 0; i--) {
-                final long timestamp = testCase.records.get(i).timestamp;
-                if (i == testCase.records.size() - 1) { // the oldest record
-                    timestamps.add(timestamp - 2);
-                    timestamps.add(timestamp - 1);
-                    timestamps.add(timestamp);
-                } else if (i != 0) { // records in between
-                    timestamps.add(timestamp);
-                    final long mid = (timestamp + testCase.records.get(i - 1).timestamp) / 2;
-                    if (!timestamps.contains(mid)) {
-                        timestamps.add(mid);
-                    } else {
-                        timestamps.add(mid + 1);
-                    }
-                } else { // the newest record
-                    timestamps.add(timestamp);
-                    timestamps.add(timestamp + 1);
-                    timestamps.add(timestamp + 2);
-                }
-            }
-            timestamps.add(Long.MAX_VALUE);
-
-
-            final List<ResultOrder> orders = Arrays.asList(ResultOrder.ASCENDING, ResultOrder.ANY, ResultOrder.DESCENDING);
+            final List<Long> timestamps = createTimestampsFromTestRecords(testCase);
 
             // verify results
+            final List<ResultOrder> orders = Arrays.asList(ResultOrder.ASCENDING, ResultOrder.ANY, ResultOrder.DESCENDING);
             for (final ResultOrder order: orders) {
                 for (final Long from : timestamps) {
                     for (final Long to : timestamps) {
@@ -434,6 +409,33 @@ public class RocksDBVersionedStoreSegmentValueFormatterTest {
         // verify expected exceptions from timestamp out-of-bounds
         assertThrows(IllegalArgumentException.class, () -> segmentValue.find(expectedRecords.nextTimestamp, false));
         assertThrows(IllegalArgumentException.class, () -> segmentValue.find(expectedRecords.minTimestamp - 1, false));
+    }
+
+    private static List<Long> createTimestampsFromTestRecords(final TestCase testCase) {
+        final List<Long> timestamps = new ArrayList<>();
+        timestamps.add(Long.MIN_VALUE);
+        for (int i = testCase.records.size() - 1; i >= 0; i--) {
+            final long timestamp = testCase.records.get(i).timestamp;
+            if (i == testCase.records.size() - 1) { // the oldest record
+                timestamps.add(timestamp - 2);
+                timestamps.add(timestamp - 1);
+                timestamps.add(timestamp);
+            } else if (i != 0) { // records in between
+                timestamps.add(timestamp);
+                final long mid = (timestamp + testCase.records.get(i - 1).timestamp) / 2;
+                if (!timestamps.contains(mid)) {
+                    timestamps.add(mid);
+                } else {
+                    timestamps.add(mid + 1);
+                }
+            } else { // the newest record
+                timestamps.add(timestamp);
+                timestamps.add(timestamp + 1);
+                timestamps.add(timestamp + 2);
+            }
+        }
+        timestamps.add(Long.MAX_VALUE);
+        return timestamps;
     }
 
     private static class TestRecord {
