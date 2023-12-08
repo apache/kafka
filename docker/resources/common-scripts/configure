@@ -123,7 +123,7 @@ fi
 # If no user provided kafka configs found, use default configs
 if ! grep -q '[^[:space:]]' "/opt/kafka/config/server.properties"; then
   echo "User provided kafka configs not found (neither via file input nor via environment variables). Falling back to default configs."
-  cp /opt/kafka/config/kraft/server.properties /opt/kafka/config/server.properties
+  cp /etc/kafka/docker/server.properties /opt/kafka/config/server.properties
 fi
 
 echo -e "\n$(utility render-template /etc/kafka/docker/kafka-log4j.properties.template)" >> /opt/kafka/config/log4j.properties

@@ -38,12 +38,12 @@ Usage:
 from datetime import date
 import argparse
 
-from common import execute, jvm_image
+from common import execute, build_image_runner
 
 def build_push_jvm(image, kafka_url):
     try:
         create_builder()
-        jvm_image(f"docker buildx build -f $DOCKER_FILE --build-arg kafka_url={kafka_url} --build-arg build_date={date.today()} --push \
+        build_image_runner(f"docker buildx build -f $DOCKER_FILE --build-arg kafka_url={kafka_url} --build-arg build_date={date.today()} --push \
               --platform linux/amd64,linux/arm64 --tag {image} $DOCKER_DIR")
     except:
         raise SystemError("Docker image push failed")
