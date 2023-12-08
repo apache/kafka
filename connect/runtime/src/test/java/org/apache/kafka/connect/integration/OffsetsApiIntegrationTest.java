@@ -30,7 +30,7 @@ import org.apache.kafka.connect.util.SinkUtils;
 import org.apache.kafka.connect.util.clusters.EmbeddedConnectCluster;
 import org.apache.kafka.connect.util.clusters.EmbeddedKafkaCluster;
 import org.apache.kafka.test.IntegrationTest;
-import org.apache.kafka.test.TestUtils;
+import org.apache.kafka.test.NoRetryException;
 import org.junit.After;
 import org.junit.AfterClass;
 import org.junit.Before;
@@ -47,11 +47,14 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 
+import static javax.ws.rs.core.Response.Status.INTERNAL_SERVER_ERROR;
 import static org.apache.kafka.connect.integration.MonitorableSourceConnector.TOPIC_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.CONNECTOR_CLASS_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.TASKS_MAX_CONFIG;
@@ -62,6 +65,7 @@ import static org.apache.kafka.connect.runtime.TopicCreationConfig.REPLICATION_F
 import static org.apache.kafka.connect.runtime.WorkerConfig.KEY_CONVERTER_CLASS_CONFIG;
 import static org.apache.kafka.connect.runtime.WorkerConfig.OFFSET_COMMIT_INTERVAL_MS_CONFIG;
 import static org.apache.kafka.connect.runtime.WorkerConfig.VALUE_CONVERTER_CLASS_CONFIG;
+import static org.apache.kafka.test.TestUtils.waitForCondition;
 import static org.hamcrest.CoreMatchers.containsString;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
@@ -746,8 +750,36 @@ public class OffsetsApiIntegrationTest {
                 "Connector did not stop in time"
         );
 
+        final AtomicReference<String> responseReference = new AtomicReference<>();
         // Reset the sink connector's offsets
-        String response = connect.resetConnectorOffsets(connectorName);
+        // Some retry logic is necessary to account for KAFKA-15826,
+        // where laggy sink task startup/shutdown can leave consumers running
+        waitForCondition(
+                () -> {
+                    try {
+                        responseReference.set(connect.resetConnectorOffsets(connectorName));
+                        return true;
+                    } catch (ConnectRestException e) {
+                        boolean internalServerError = e.statusCode() == INTERNAL_SERVER_ERROR.getStatusCode();
+
+                        String message = Optional.of(e.getMessage()).orElse("");
+                        boolean failedToResetConsumerOffsets = message.contains("Failed to reset consumer group offsets for connector");
+                        boolean canBeRetried = message.contains("If the connector is in a stopped state, this operation can be safely retried");
+
+                        boolean retriable = internalServerError && failedToResetConsumerOffsets && canBeRetried;
+                        if (retriable) {
+                            return false;
+                        } else {
+                            throw new NoRetryException(e);
+                        }
+                    } catch (Throwable t) {
+                        throw new NoRetryException(t);
+                    }
+                },
+                30_000,
+                "Failed to reset sink connector offsets in time"
+        );
+        String response = responseReference.get();
         assertThat(response, containsString("The Connect framework-managed offsets for this connector have been reset successfully. " +
                 "However, if this connector manages offsets externally, they will need to be manually reset in the system that the connector uses."));
 
@@ -919,7 +951,7 @@ public class OffsetsApiIntegrationTest {
      */
     private void verifyExpectedSinkConnectorOffsets(String connectorName, String expectedTopic, int expectedPartitions,
                                                     int expectedOffset, String conditionDetails) throws InterruptedException {
-        TestUtils.waitForCondition(() -> {
+        waitForCondition(() -> {
             ConnectorOffsets offsets = connect.connectorOffsets(connectorName);
             if (offsets.offsets().size() != expectedPartitions) {
                 return false;
@@ -949,7 +981,7 @@ public class OffsetsApiIntegrationTest {
      */
     private void verifyExpectedSourceConnectorOffsets(String connectorName, int numTasks,
                                                       int expectedOffset, String conditionDetails) throws InterruptedException {
-        TestUtils.waitForCondition(() -> {
+        waitForCondition(() -> {
             ConnectorOffsets offsets = connect.connectorOffsets(connectorName);
             // The MonitorableSourceConnector has a source partition per task
             if (offsets.offsets().size() != numTasks) {
@@ -974,7 +1006,7 @@ public class OffsetsApiIntegrationTest {
      * @throws InterruptedException if the thread is interrupted while waiting for the offsets to be empty
      */
     private void verifyEmptyConnectorOffsets(String connectorName) throws InterruptedException {
-        TestUtils.waitForCondition(() -> {
+        waitForCondition(() -> {
             ConnectorOffsets offsets = connect.connectorOffsets(connectorName);
             return offsets.offsets().isEmpty();
         }, OFFSET_READ_TIMEOUT_MS, "Connector offsets should be empty after resetting offsets");
