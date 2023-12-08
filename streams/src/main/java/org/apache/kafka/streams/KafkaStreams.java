@@ -41,6 +41,7 @@ import org.apache.kafka.common.metrics.Sensor.RecordingLevel;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.Timer;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.errors.InvalidStateStorePartitionException;
 import org.apache.kafka.streams.errors.ProcessorStateException;
@@ -1895,9 +1896,7 @@ public class KafkaStreams implements AutoCloseable {
             throw new IllegalStateException("KafkaStreams has been stopped (" + state + ").");
         }
 
-        long remainingTimeMs = timeout.toMillis();
-        long startTimestampMs = time.milliseconds();
-
+        final Timer remainingTime = time.timer(timeout.toMillis());
         final ClientInstanceIdsImpl clientInstanceIds = new ClientInstanceIdsImpl();
 
         // (1) fan-out calls to threads
@@ -1911,13 +1910,15 @@ public class KafkaStreams implements AutoCloseable {
         }
 
         // GlobalThread
+        KafkaFuture<Uuid> globalThreadFuture = null;
+        if (globalStreamThread != null) {
+            globalThreadFuture = globalStreamThread.globalConsumerInstanceId(timeout);
+        }
 
         // (2) get admin client instance id in a blocking fashion, while Stream/GlobalThreads work in parallel
         try {
             clientInstanceIds.setAdminInstanceId(adminClient.clientInstanceId(timeout));
-            final long nowMs = time.milliseconds();
-            remainingTimeMs -= nowMs - startTimestampMs;
-            startTimestampMs = nowMs;
+            remainingTime.update(time.milliseconds());
         } catch (final IllegalStateException telemetryDisabledError) {
             // swallow
             log.debug("Telemetry is disabled on the admin client.");
@@ -1933,15 +1934,13 @@ public class KafkaStreams implements AutoCloseable {
         for (final Map.Entry<String, KafkaFuture<Uuid>> consumerFuture : consumerFutures.entrySet()) {
             final Uuid instanceId = getOrThrowException(
                 consumerFuture.getValue(),
-                remainingTimeMs,
+                remainingTime.remainingMs(),
                 () -> String.format(
                     "Could not retrieve consumer instance id for %s.",
                     consumerFuture.getKey()
                 )
             );
-            final long nowMs = time.milliseconds();
-            remainingTimeMs -= nowMs - startTimestampMs;
-            startTimestampMs = nowMs;
+            remainingTime.update(time.milliseconds());
 
             // could be `null` if telemetry is disabled on the consumer itself
             if (instanceId != null) {
@@ -1957,6 +1956,24 @@ public class KafkaStreams implements AutoCloseable {
         // (3b) collect producers from StreamsThread
 
         // (3c) collect from GlobalThread
+        if (globalThreadFuture != null) {
+            final Uuid instanceId = getOrThrowException(
+                globalThreadFuture,
+                remainingTime.remainingMs(),
+                () -> "Could not retrieve global consumer client instance id."
+            );
+            remainingTime.update(time.milliseconds());
+
+            // could be `null` if telemetry is disabled on the client itself
+            if (instanceId != null) {
+                clientInstanceIds.addConsumerInstanceId(
+                    globalStreamThread.getName(),
+                    instanceId
+                );
+            } else {
+                log.debug("Telemetry is disabled for the global consumer.");
+            }
+        }
 
         return clientInstanceIds;
     }

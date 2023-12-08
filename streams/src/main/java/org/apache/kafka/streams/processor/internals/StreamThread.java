@@ -737,15 +737,14 @@ public class StreamThread extends Thread implements ProcessingThread {
                 if (fetchDeadlineClientInstanceId >= time.milliseconds()) {
                     try {
                         mainConsumerInstanceIdFuture.complete(mainConsumer.clientInstanceId(Duration.ZERO));
-                        maybeResetFetchDeadline();
                     } catch (final IllegalStateException disabledError) {
+                        // if telemetry is disabled on a client, we swallow the error,
+                        // to allow returning a partial result for all other clients
                         mainConsumerInstanceIdFuture.complete(null);
-                        maybeResetFetchDeadline();
                     } catch (final TimeoutException swallow) {
                         // swallow
                     } catch (final Exception error) {
                         mainConsumerInstanceIdFuture.completeExceptionally(error);
-                        maybeResetFetchDeadline();
                     }
                 } else {
                     mainConsumerInstanceIdFuture.completeExceptionally(
@@ -753,6 +752,7 @@ public class StreamThread extends Thread implements ProcessingThread {
                     );
                 }
             }
+            maybeResetFetchDeadline();
         }
     }
 
