@@ -18,6 +18,7 @@
 package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.common.protocol.Errors;
+
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -132,7 +133,7 @@ public enum MemberState {
 
         UNSUBSCRIBED.previousValidStates = Arrays.asList(LEAVING);
 
-        STALED.previousValidStates = Arrays.asList(LEAVING);
+        STALED.previousValidStates = Arrays.asList(JOINING, RECONCILING, ACKNOWLEDGING, STABLE);
     }
 
     private List<MemberState> previousValidStates;

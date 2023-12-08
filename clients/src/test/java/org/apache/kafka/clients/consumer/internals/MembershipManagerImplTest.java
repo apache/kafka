@@ -1047,9 +1047,10 @@ public class MembershipManagerImplTest {
 
     @Test
     public void testTransitionToStaled() {
-        MembershipManagerImpl membershipManager = createMemberInStableState();
+        MembershipManager membershipManager = memberJoinWithAssignment("topic", Uuid.randomUuid());
         membershipManager.transitionToStaled();
         assertEquals(LEAVE_GROUP_MEMBER_EPOCH, membershipManager.memberEpoch());
+        assertTrue(membershipManager.currentAssignment().isEmpty());
     }
 
     @Test
@@ -1398,5 +1399,15 @@ public class MembershipManagerImplTest {
                                 .setTopicId(topic2)
                                 .setPartitions(Arrays.asList(3, 4, 5))
                 ));
+    }
+
+    private MembershipManager memberJoinWithAssignment(String topicName, Uuid topicId) {
+        MembershipManagerImpl membershipManager = mockJoinAndReceiveAssignment(true);
+        membershipManager.onHeartbeatRequestSent();
+        when(metadata.topicNames()).thenReturn(Collections.singletonMap(topicId, topicName));
+        receiveAssignment(topicId, Collections.singletonList(0), membershipManager);
+        membershipManager.onHeartbeatRequestSent();
+        assertFalse(membershipManager.currentAssignment().isEmpty());
+        return membershipManager;
     }
 }

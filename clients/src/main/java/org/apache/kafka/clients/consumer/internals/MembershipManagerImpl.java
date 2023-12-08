@@ -668,14 +668,13 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
     }
 
     /**
-     * {@inheritDoc}
+     * Sets the epoch to the leave group epoch and clears the assignments. The member will rejoin with
+     * the existing subscriptions on the next time user polls.
      */
     @Override
     public void transitionToStaled() {
-        transitionTo(MemberState.PREPARE_LEAVING);
         memberEpoch = ConsumerGroupHeartbeatRequest.LEAVE_GROUP_MEMBER_EPOCH;
-        transitionTo(MemberState.LEAVING);
-        leaveGroupInProgress = Optional.of(CompletableFuture.completedFuture(null));
+        currentAssignment = new HashSet<>();
         transitionTo(MemberState.STALED);
     }
 
