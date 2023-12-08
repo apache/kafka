@@ -2212,9 +2212,11 @@ public class ReplicationControlManager {
             for (Uuid dir : previousDirectoryIds) {
                 if (!DirectoryId.reserved(dir)) {
                     TimelineHashSet<TopicIdPartition> partitions = directoriesToPartitions.get(dir);
-                    partitions.remove(topicIdPartition);
-                    if (partitions.isEmpty()) {
-                        directoriesToPartitions.remove(dir);
+                    if (partitions != null) {
+                        partitions.remove(topicIdPartition);
+                        if (partitions.isEmpty()) {
+                            directoriesToPartitions.remove(dir);
+                        }
                     }
                 }
             }
