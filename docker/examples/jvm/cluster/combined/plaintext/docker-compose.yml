@@ -22,7 +22,6 @@ services:
     container_name: kafka-1
     ports:
       - 29092:9092
-      - 19093:9093
     environment:
       KAFKA_NODE_ID: 1
       KAFKA_PROCESS_ROLES: 'broker,controller'
@@ -45,7 +44,6 @@ services:
     container_name: kafka-2
     ports:
       - 39092:9092
-      - 29093:9093
     environment:
       KAFKA_NODE_ID: 2
       KAFKA_PROCESS_ROLES: 'broker,controller'
@@ -68,7 +66,6 @@ services:
     container_name: kafka-3
     ports:
       - 49092:9092
-      - 39093:9093
     environment:
       KAFKA_NODE_ID: 3
       KAFKA_PROCESS_ROLES: 'broker,controller'
