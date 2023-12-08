@@ -825,10 +825,15 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
 
             final TopicMetadataApplicationEvent topicMetadataApplicationEvent =
                     new TopicMetadataApplicationEvent(topic, timeout.toMillis());
-            Map<String, List<PartitionInfo>> topicMetadata =
-                applicationEventHandler.addAndGet(topicMetadataApplicationEvent, time.timer(timeout));
+            wakeupTrigger.setActiveTask(topicMetadataApplicationEvent.future());
+            try {
+                Map<String, List<PartitionInfo>> topicMetadata =
+                        applicationEventHandler.addAndGet(topicMetadataApplicationEvent, time.timer(timeout));
 
-            return topicMetadata.getOrDefault(topic, Collections.emptyList());
+                return topicMetadata.getOrDefault(topic, Collections.emptyList());
+            } finally {
+                wakeupTrigger.clearTask();
+            }
         } finally {
             release();
         }
@@ -849,7 +854,12 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
 
             final TopicMetadataApplicationEvent topicMetadataApplicationEvent =
                     new TopicMetadataApplicationEvent(timeout.toMillis());
-            return applicationEventHandler.addAndGet(topicMetadataApplicationEvent, time.timer(timeout));
+            wakeupTrigger.setActiveTask(topicMetadataApplicationEvent.future());
+            try {
+                return applicationEventHandler.addAndGet(topicMetadataApplicationEvent, time.timer(timeout));
+            } finally {
+                wakeupTrigger.clearTask();
+            }
         } finally {
             release();
         }
