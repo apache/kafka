@@ -389,7 +389,7 @@ public class ReplicationControlManager {
     /**
      * A map from registered directory IDs to the partitions that are stored in that directory.
      */
-    private final TimelineHashMap<Uuid, Set<TopicIdPartition>> directoriesToPartitions;
+    private final TimelineHashMap<Uuid, TimelineHashSet<TopicIdPartition>> directoriesToPartitions;
 
     /**
      * A ClusterDescriber which supplies cluster information to our ReplicaPlacer.
@@ -1384,20 +1384,26 @@ public class ReplicationControlManager {
      * @param offlineDirs The list of directories that are offline.
      * @param records     The record list to append to.
      */
-    void handleDirectoriesOffline(int brokerId, long brokerEpoch, List<Uuid> offlineDirs, List<ApiMessageAndVersion> records) {
+    void handleDirectoriesOffline(
+        int brokerId,
+        long brokerEpoch,
+        List<Uuid> offlineDirs,
+        List<ApiMessageAndVersion> records
+    ) {
         BrokerRegistration registration = clusterControl.registration(brokerId);
-        List<Uuid> newOfflineDirs = offlineDirs.stream().filter(registration::hasOnlineDir).collect(Collectors.toList());
+        List<Uuid> newOfflineDirs = registration.directoryIntersection(offlineDirs);
         if (!newOfflineDirs.isEmpty()) {
-            List<Uuid> newOnlineDirs = new ArrayList<>(registration.directories());
-            newOnlineDirs.removeAll(newOfflineDirs);
+            for (Uuid newOfflineDir : newOfflineDirs) {
+                TimelineHashSet<TopicIdPartition> parts = directoriesToPartitions.get(newOfflineDir);
+                Iterator<TopicIdPartition> iterator = (parts == null) ?
+                    Collections.emptyIterator() : parts.iterator();
+                generateLeaderAndIsrUpdates("handleDirectoriesOffline[" + brokerId + ", " + newOfflineDirs + "]",
+                        brokerId, NO_LEADER, records, iterator);
+            }
             records.add(new ApiMessageAndVersion(new BrokerRegistrationChangeRecord().
                     setBrokerId(brokerId).setBrokerEpoch(brokerEpoch).
-                    setLogDirs(newOnlineDirs),
+                    setLogDirs(registration.directoryDifference(offlineDirs)),
                     (short) 2));
-            Iterator<TopicIdPartition> partitions = newOfflineDirs.stream()
-                    .map(directoriesToPartitions::get).flatMap(Set::stream).iterator();
-            generateLeaderAndIsrUpdates("handleDirectoriesOffline[" + brokerId + ", " + newOfflineDirs + "]",
-                    brokerId, NO_LEADER, records, partitions);
         }
     }
 
@@ -2193,21 +2199,30 @@ public class ReplicationControlManager {
      * be used for directories, there's no use in maintaining a set of
      * partitions assigned to them.
      */
-    private void updatePartitionDirectories(Uuid topicId, int partitionId, Uuid[] previousDirectoryIds, Uuid[] newDirectoryIds) {
+    private void updatePartitionDirectories(
+        Uuid topicId,
+        int partitionId,
+        Uuid[] previousDirectoryIds,
+        Uuid[] newDirectoryIds
+    ) {
         Objects.requireNonNull(topicId, "topicId cannot be null");
         TopicIdPartition topicIdPartition = new TopicIdPartition(topicId, partitionId);
         if (previousDirectoryIds != null) {
             for (Uuid dir : previousDirectoryIds) {
                 if (!DirectoryId.reserved(dir)) {
-                    Set<TopicIdPartition> partitions = directoriesToPartitions.computeIfAbsent(dir, d -> new HashSet<>());
+                    TimelineHashSet<TopicIdPartition> partitions = directoriesToPartitions.get(dir);
                     partitions.remove(topicIdPartition);
+                    if (partitions.isEmpty()) {
+                        directoriesToPartitions.remove(dir);
+                    }
                 }
             }
         }
         if (newDirectoryIds != null) {
             for (Uuid dir : newDirectoryIds) {
                 if (!DirectoryId.reserved(dir)) {
-                    Set<TopicIdPartition> partitions = directoriesToPartitions.computeIfAbsent(dir, d -> new HashSet<>());
+                    Set<TopicIdPartition> partitions = directoriesToPartitions.computeIfAbsent(dir,
+                        __ -> new TimelineHashSet<>(snapshotRegistry, 0));
                     partitions.add(topicIdPartition);
                 }
             }

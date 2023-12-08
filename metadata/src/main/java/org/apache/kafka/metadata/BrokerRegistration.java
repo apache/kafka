@@ -123,7 +123,7 @@ public class BrokerRegistration {
         }
 
         public Builder setDirectories(List<Uuid> directories) {
-            this.directories = new ArrayList<>(directories);
+            this.directories = directories;
             return this;
         }
 
@@ -159,7 +159,7 @@ public class BrokerRegistration {
     private final boolean fenced;
     private final boolean inControlledShutdown;
     private final boolean isMigratingZkBroker;
-    private final List<Uuid> sortedDirectories;
+    private final List<Uuid> directories;
 
     private BrokerRegistration(
         int id,
@@ -192,7 +192,7 @@ public class BrokerRegistration {
         this.isMigratingZkBroker = isMigratingZkBroker;
         directories = new ArrayList<>(directories);
         directories.sort(Uuid::compareTo);
-        this.sortedDirectories = Collections.unmodifiableList(directories);
+        this.directories = Collections.unmodifiableList(directories);
     }
 
     public static BrokerRegistration fromRecord(RegisterBrokerRecord record) {
@@ -265,11 +265,31 @@ public class BrokerRegistration {
     }
 
     public List<Uuid> directories() {
-        return sortedDirectories;
+        return directories;
     }
 
     public boolean hasOnlineDir(Uuid dir) {
-        return DirectoryId.isOnline(dir, sortedDirectories);
+        return DirectoryId.isOnline(dir, directories);
+    }
+
+    public List<Uuid> directoryIntersection(List<Uuid> otherDirectories) {
+        List<Uuid> results = new ArrayList<>();
+        for (Uuid directory : directories) {
+            if (otherDirectories.contains(directory)) {
+                results.add(directory);
+            }
+        }
+        return results;
+    }
+
+    public List<Uuid> directoryDifference(List<Uuid> otherDirectories) {
+        List<Uuid> results = new ArrayList<>();
+        for (Uuid directory : directories) {
+            if (!otherDirectories.contains(directory)) {
+                results.add(directory);
+            }
+        }
+        return results;
     }
 
     public ApiMessageAndVersion toRecord(ImageWriterOptions options) {
@@ -296,8 +316,8 @@ public class BrokerRegistration {
             }
         }
 
-        if (sortedDirectories.isEmpty() || options.metadataVersion().isDirectoryAssignmentSupported()) {
-            registrationRecord.setLogDirs(sortedDirectories);
+        if (directories.isEmpty() || options.metadataVersion().isDirectoryAssignmentSupported()) {
+            registrationRecord.setLogDirs(directories);
         } else {
             options.handleLoss("the online log directories of one or more brokers");
         }
@@ -325,7 +345,7 @@ public class BrokerRegistration {
     @Override
     public int hashCode() {
         return Objects.hash(id, epoch, incarnationId, listeners, supportedFeatures,
-            rack, fenced, inControlledShutdown, isMigratingZkBroker, sortedDirectories);
+            rack, fenced, inControlledShutdown, isMigratingZkBroker, directories);
     }
 
     @Override
@@ -341,7 +361,7 @@ public class BrokerRegistration {
             other.fenced == fenced &&
             other.inControlledShutdown == inControlledShutdown &&
             other.isMigratingZkBroker == isMigratingZkBroker &&
-            other.sortedDirectories.equals(sortedDirectories);
+            other.directories.equals(directories);
     }
 
     @Override
@@ -363,7 +383,7 @@ public class BrokerRegistration {
         bld.append(", fenced=").append(fenced);
         bld.append(", inControlledShutdown=").append(inControlledShutdown);
         bld.append(", isMigratingZkBroker=").append(isMigratingZkBroker);
-        bld.append(", directories=").append(sortedDirectories);
+        bld.append(", directories=").append(directories);
         bld.append(")");
         return bld.toString();
     }
@@ -388,7 +408,7 @@ public class BrokerRegistration {
             newFenced,
             newInControlledShutdownChange,
             isMigratingZkBroker,
-            sortedDirectories
+            directories
         );
     }
 }
