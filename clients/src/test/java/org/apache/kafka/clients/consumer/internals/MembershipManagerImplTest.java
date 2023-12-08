@@ -85,8 +85,8 @@ public class MembershipManagerImplTest {
 
     private MembershipManagerImpl createMembershipManagerJoiningGroup() {
         MembershipManagerImpl manager = spy(new MembershipManagerImpl(
-                GROUP_ID, subscriptionState, commitRequestManager,
-                metadata, testBuilder.logContext));
+                GROUP_ID, Optional.empty(), Optional.empty(), subscriptionState, commitRequestManager,
+                metadata, testBuilder.logContext, Optional.empty()));
         manager.transitionToJoining();
         return manager;
     }
@@ -95,7 +95,7 @@ public class MembershipManagerImplTest {
                                                                       String serverAssignor) {
         MembershipManagerImpl manager = new MembershipManagerImpl(
                 GROUP_ID, Optional.ofNullable(groupInstanceId), Optional.ofNullable(serverAssignor),
-                subscriptionState, commitRequestManager, metadata, testBuilder.logContext);
+                subscriptionState, commitRequestManager, metadata, testBuilder.logContext, Optional.empty());
         manager.transitionToJoining();
         return manager;
     }
@@ -119,8 +119,8 @@ public class MembershipManagerImplTest {
     public void testMembershipManagerRegistersForClusterMetadataUpdatesOnFirstJoin() {
         // First join should register to get metadata updates
         MembershipManagerImpl manager = new MembershipManagerImpl(
-                GROUP_ID, subscriptionState, commitRequestManager,
-                metadata, testBuilder.logContext);
+                GROUP_ID, Optional.empty(), Optional.empty(), subscriptionState, commitRequestManager,
+                metadata, testBuilder.logContext, Optional.empty());
         manager.transitionToJoining();
         verify(metadata).addClusterUpdateListener(manager);
         clearInvocations(metadata);
@@ -197,8 +197,8 @@ public class MembershipManagerImplTest {
     @Test
     public void testTransitionToFailedWhenTryingToJoin() {
         MembershipManagerImpl membershipManager = new MembershipManagerImpl(
-                GROUP_ID, subscriptionState, commitRequestManager, metadata,
-                testBuilder.logContext);
+                GROUP_ID, Optional.empty(), Optional.empty(), subscriptionState, commitRequestManager, metadata,
+                testBuilder.logContext, Optional.empty());
         assertEquals(MemberState.UNSUBSCRIBED, membershipManager.state());
         membershipManager.transitionToJoining();
 

@@ -22,6 +22,7 @@ import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEventHandler;
 import org.apache.kafka.common.internals.IdempotentCloser;
+import org.apache.kafka.common.telemetry.internals.ClientTelemetryReporter;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.slf4j.Logger;
@@ -119,7 +120,8 @@ public class RequestManagers implements Closeable {
                                                      final GroupRebalanceConfig groupRebalanceConfig,
                                                      final ApiVersions apiVersions,
                                                      final FetchMetricsManager fetchMetricsManager,
-                                                     final Supplier<NetworkClientDelegate> networkClientDelegateSupplier) {
+                                                     final Supplier<NetworkClientDelegate> networkClientDelegateSupplier,
+                                                     final Optional<ClientTelemetryReporter> clientTelemetryReporter) {
         return new CachedSupplier<RequestManagers>() {
             @Override
             protected RequestManagers create() {
@@ -157,6 +159,7 @@ public class RequestManagers implements Closeable {
                 CommitRequestManager commit = null;
 
                 if (groupRebalanceConfig != null && groupRebalanceConfig.groupId != null) {
+                    Optional<String> serverAssignor = Optional.ofNullable(config.getString(ConsumerConfig.GROUP_REMOTE_ASSIGNOR_CONFIG));
                     final GroupState groupState = new GroupState(groupRebalanceConfig);
                     coordinator = new CoordinatorRequestManager(time,
                             logContext,
@@ -173,10 +176,13 @@ public class RequestManagers implements Closeable {
                             groupState);
                     membershipManager = new MembershipManagerImpl(
                             groupState.groupId,
+                            groupState.groupInstanceId,
+                            serverAssignor,
                             subscriptions,
                             commit,
                             metadata,
-                            logContext);
+                            logContext,
+                            clientTelemetryReporter);
                     heartbeatRequestManager = new HeartbeatRequestManager(
                             logContext,
                             time,

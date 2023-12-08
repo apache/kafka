@@ -881,4 +881,17 @@ class GroupCoordinatorAdapterTest {
     assertTrue(future.isCompletedExceptionally)
     assertFutureThrows(future, classOf[InvalidGroupIdException])
   }
+
+  @Test
+  def testConsumerGroupDescribe(): Unit = {
+    val groupCoordinator = mock(classOf[GroupCoordinator])
+    val adapter = new GroupCoordinatorAdapter(groupCoordinator, Time.SYSTEM)
+    val context = makeContext(ApiKeys.CONSUMER_GROUP_DESCRIBE, ApiKeys.CONSUMER_GROUP_DESCRIBE.latestVersion)
+    val groupIds = List("group-id-1", "group-id-2").asJava
+
+    val future = adapter.consumerGroupDescribe(context, groupIds)
+    assertTrue(future.isDone)
+    assertTrue(future.isCompletedExceptionally)
+    assertFutureThrows(future, classOf[UnsupportedVersionException])
+  }
 }

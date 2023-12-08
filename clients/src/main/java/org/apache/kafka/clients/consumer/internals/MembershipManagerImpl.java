@@ -30,6 +30,8 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatResponseData;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.ConsumerGroupHeartbeatRequest;
+import org.apache.kafka.common.telemetry.internals.ClientTelemetryProvider;
+import org.apache.kafka.common.telemetry.internals.ClientTelemetryReporter;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
@@ -237,14 +239,12 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
      */
     private boolean isRegisteredForMetadataUpdates;
 
-    public MembershipManagerImpl(String groupId,
-                                 SubscriptionState subscriptions,
-                                 CommitRequestManager commitRequestManager,
-                                 ConsumerMetadata metadata,
-                                 LogContext logContext) {
-        this(groupId, Optional.empty(), Optional.empty(), subscriptions, commitRequestManager, metadata,
-                logContext);
-    }
+    /**
+     * Optional client telemetry reporter which sends client telemetry data to the broker. This
+     * will be empty if the client telemetry feature is not enabled. This is provided to update
+     * the group member id label when the member joins the group.
+     */
+    private final Optional<ClientTelemetryReporter> clientTelemetryReporter;
 
     public MembershipManagerImpl(String groupId,
                                  Optional<String> groupInstanceId,
@@ -252,7 +252,8 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
                                  SubscriptionState subscriptions,
                                  CommitRequestManager commitRequestManager,
                                  ConsumerMetadata metadata,
-                                 LogContext logContext) {
+                                 LogContext logContext,
+                                 Optional<ClientTelemetryReporter> clientTelemetryReporter) {
         this.groupId = groupId;
         this.state = MemberState.UNSUBSCRIBED;
         this.serverAssignor = serverAssignor;
@@ -265,6 +266,7 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
         this.assignmentReadyToReconcile = new TreeSet<>(TOPIC_ID_PARTITION_COMPARATOR);
         this.currentAssignment = new HashSet<>();
         this.log = logContext.logger(MembershipManagerImpl.class);
+        this.clientTelemetryReporter = clientTelemetryReporter;
     }
 
     /**
@@ -326,6 +328,16 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
             );
             throw new IllegalArgumentException(errorMessage);
         }
+
+        // Update the group member id label in the client telemetry reporter if the member id has
+        // changed. Initially the member id is empty, and it is updated when the member joins the
+        // group. This is done here to avoid updating the label on every heartbeat response. Also
+        // check if the member id is null, as the schema defines it as nullable.
+        if (response.memberId() != null && !response.memberId().equals(memberId)) {
+            clientTelemetryReporter.ifPresent(reporter -> reporter.updateMetricsLabels(
+                Collections.singletonMap(ClientTelemetryProvider.GROUP_MEMBER_ID, response.memberId())));
+        }
+
         this.memberId = response.memberId();
         this.memberEpoch = response.memberEpoch();
         ConsumerGroupHeartbeatResponseData.Assignment assignment = response.assignment();
@@ -414,7 +426,7 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
      * Update a new assignment by setting the assigned partitions in the member subscription.
      *
      * @param assignedPartitions Topic partitions to take as the new subscription assignment
-     * @param clearAssignments True if the
+     * @param clearAssignments True if the pending assignments and metadata cache should be cleared
      */
     private void updateSubscription(Collection<TopicPartition> assignedPartitions,
                                     boolean clearAssignments) {
@@ -605,6 +617,12 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
      * reconciliation loop.
      */
     boolean reconcile() {
+        if (reconciliationInProgress) {
+            log.debug("Ignoring reconciliation attempt. Another reconciliation is already in progress. Assignment " +
+                    assignmentReadyToReconcile + " will be handled in the next reconciliation loop.");
+            return false;
+        }
+
         // Make copy of the assignment to reconcile as it could change as new assignments or metadata updates are received
         SortedSet<TopicIdPartition> assignedTopicIdPartitions = new TreeSet<>(TOPIC_ID_PARTITION_COMPARATOR);
         assignedTopicIdPartitions.addAll(assignmentReadyToReconcile);
@@ -615,21 +633,15 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
         // Keep copy of assigned TopicPartitions created from the TopicIdPartitions that are
         // being reconciled. Needed for interactions with the centralized subscription state that
         // does not support topic IDs yet, and for the callbacks.
-        SortedSet<TopicPartition> assignedTopicPartition = toTopicPartitionSet(assignedTopicIdPartitions);
+        SortedSet<TopicPartition> assignedTopicPartitions = toTopicPartitionSet(assignedTopicIdPartitions);
 
         // Check same assignment. Based on topic names for now, until topic IDs are properly
         // supported in the centralized subscription state object.
-        boolean sameAssignmentReceived = assignedTopicPartition.equals(ownedPartitions);
+        boolean sameAssignmentReceived = assignedTopicPartitions.equals(ownedPartitions);
 
-        if (reconciliationInProgress || sameAssignmentReceived) {
-            String reason;
-            if (reconciliationInProgress) {
-                reason = "Another reconciliation is already in progress. Assignment " +
-                        assignmentReadyToReconcile + " will be handled in the next reconciliation loop.";
-            } else {
-                reason = "Target assignment ready to reconcile is equals to the member current assignment.";
-            }
-            log.debug("Ignoring reconciliation attempt. " + reason);
+        if (sameAssignmentReceived) {
+            log.debug("Ignoring reconciliation attempt. Target assignment ready to reconcile {} " +
+                    "is equal to the member current assignment {}.", assignedTopicPartitions, ownedPartitions);
             return false;
         }
 
@@ -637,13 +649,13 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
 
         // Partitions to assign (not previously owned)
         SortedSet<TopicPartition> addedPartitions = new TreeSet<>(TOPIC_PARTITION_COMPARATOR);
-        addedPartitions.addAll(assignedTopicPartition);
+        addedPartitions.addAll(assignedTopicPartitions);
         addedPartitions.removeAll(ownedPartitions);
 
         // Partitions to revoke
         SortedSet<TopicPartition> revokedPartitions = new TreeSet<>(TOPIC_PARTITION_COMPARATOR);
         revokedPartitions.addAll(ownedPartitions);
-        revokedPartitions.removeAll(assignedTopicPartition);
+        revokedPartitions.removeAll(assignedTopicPartitions);
 
         log.info("Updating assignment with\n" +
                         "\tAssigned partitions:                       {}\n" +
@@ -673,7 +685,7 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
                     boolean memberHasRejoined = memberEpochOnReconciliationStart != memberEpoch;
                     if (state == MemberState.RECONCILING && !memberHasRejoined) {
                         // Apply assignment
-                        CompletableFuture<Void> assignResult = assignPartitions(assignedTopicPartition,
+                        CompletableFuture<Void> assignResult = assignPartitions(assignedTopicPartitions,
                                 addedPartitions);
 
                         // Clear topic names cache only for topics that are not in the subscription anymore
@@ -783,6 +795,7 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
      * </ol>
      */
     private void resolveMetadataForUnresolvedAssignment() {
+        assignmentReadyToReconcile.clear();
         // Try to resolve topic names from metadata cache or subscription cache, and move
         // assignments from the "unresolved" collection, to the "readyToReconcile" one.
         Iterator<Map.Entry<Uuid, List<Integer>>> it = assignmentUnresolved.entrySet().iterator();
@@ -1074,6 +1087,7 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
     public void onUpdate(ClusterResource clusterResource) {
         resolveMetadataForUnresolvedAssignment();
         if (!assignmentReadyToReconcile.isEmpty()) {
+            transitionTo(MemberState.RECONCILING);
             reconcile();
         }
     }

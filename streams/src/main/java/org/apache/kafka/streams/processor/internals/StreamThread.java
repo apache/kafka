@@ -25,10 +25,14 @@ import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.InvalidOffsetException;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
+import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.utils.LogContext;
@@ -43,6 +47,7 @@ import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskCorruptedException;
 import org.apache.kafka.streams.errors.TaskMigratedException;
 import org.apache.kafka.streams.internals.metrics.ClientMetrics;
+import org.apache.kafka.streams.processor.StandbyUpdateListener;
 import org.apache.kafka.streams.processor.StateRestoreListener;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.assignment.AssignorError;
@@ -53,6 +58,7 @@ import org.apache.kafka.streams.processor.internals.tasks.DefaultTaskManager;
 import org.apache.kafka.streams.processor.internals.tasks.DefaultTaskManager.DefaultTaskExecutorCreator;
 import org.apache.kafka.streams.state.internals.ThreadCache;
 
+import java.util.HashMap;
 import java.util.Queue;
 import java.util.function.BiConsumer;
 import org.slf4j.Logger;
@@ -76,7 +82,7 @@ import static org.apache.kafka.streams.processor.internals.ClientUtils.getConsum
 import static org.apache.kafka.streams.processor.internals.ClientUtils.getRestoreConsumerClientId;
 import static org.apache.kafka.streams.processor.internals.ClientUtils.getSharedAdminClientId;
 
-public class StreamThread extends Thread {
+public class StreamThread extends Thread implements ProcessingThread {
 
     /**
      * Stream thread states are the possible states that a stream thread can be in.
@@ -335,6 +341,9 @@ public class StreamThread extends Thread {
     private final boolean stateUpdaterEnabled;
     private final boolean processingThreadsEnabled;
 
+    private volatile long fetchDeadlineClientInstanceId = -1;
+    private volatile KafkaFutureImpl<Uuid> mainConsumerInstanceIdFuture = new KafkaFutureImpl<>();
+
     public static StreamThread create(final TopologyMetadata topologyMetadata,
                                       final StreamsConfig config,
                                       final KafkaClientSupplier clientSupplier,
@@ -347,6 +356,7 @@ public class StreamThread extends Thread {
                                       final long cacheSizeBytes,
                                       final StateDirectory stateDirectory,
                                       final StateRestoreListener userStateRestoreListener,
+                                      final StandbyUpdateListener userStandbyUpdateListener,
                                       final int threadIdx,
                                       final Runnable shutdownErrorHook,
                                       final BiConsumer<Throwable, Boolean> streamsUncaughtExceptionHandler) {
@@ -372,7 +382,8 @@ public class StreamThread extends Thread {
             logContext,
             adminClient,
             restoreConsumer,
-            userStateRestoreListener
+            userStateRestoreListener,
+            userStandbyUpdateListener
         );
 
         final ThreadCache cache = new ThreadCache(logContext, cacheSizeBytes, streamsMetrics);
@@ -669,6 +680,8 @@ public class StreamThread extends Thread {
                     runOnceWithoutProcessingThreads();
                 }
 
+                maybeGetClientInstanceIds();
+
                 // Check for a scheduled rebalance but don't trigger it until the current rebalance is done
                 if (!taskManager.rebalanceInProgress() && nextProbingRebalanceMs.get() < time.milliseconds()) {
                     log.info("Triggering the followup rebalance scheduled for {}.", Utils.toLogDateTimeFormat(nextProbingRebalanceMs.get()));
@@ -711,6 +724,44 @@ public class StreamThread extends Thread {
             }
         }
         return true;
+    }
+
+    // visible for testing
+    void maybeGetClientInstanceIds() {
+        // we pass in a timeout of zero into each `clientInstanceId()` call
+        // to just trigger the "get instance id" background RPC;
+        // we don't want to block the stream thread that can do useful work in the meantime
+
+        if (fetchDeadlineClientInstanceId != -1) {
+            if (!mainConsumerInstanceIdFuture.isDone()) {
+                if (fetchDeadlineClientInstanceId >= time.milliseconds()) {
+                    try {
+                        mainConsumerInstanceIdFuture.complete(mainConsumer.clientInstanceId(Duration.ZERO));
+                        maybeResetFetchDeadline();
+                    } catch (final IllegalStateException disabledError) {
+                        mainConsumerInstanceIdFuture.complete(null);
+                        maybeResetFetchDeadline();
+                    } catch (final TimeoutException swallow) {
+                        // swallow
+                    } catch (final Exception error) {
+                        mainConsumerInstanceIdFuture.completeExceptionally(error);
+                        maybeResetFetchDeadline();
+                    }
+                } else {
+                    mainConsumerInstanceIdFuture.completeExceptionally(
+                        new TimeoutException("Could not retrieve main consumer client instance id.")
+                    );
+                }
+            }
+        }
+    }
+
+    private void maybeResetFetchDeadline() {
+        final boolean reset = mainConsumerInstanceIdFuture.isDone();
+
+        if (reset) {
+            fetchDeadlineClientInstanceId = -1L;
+        }
     }
 
     /**
@@ -1312,6 +1363,8 @@ public class StreamThread extends Thread {
 
         log.info("Shutting down {}", cleanRun ? "clean" : "unclean");
 
+        mainConsumerInstanceIdFuture.complete(null);
+
         try {
             taskManager.shutdown(cleanRun);
         } catch (final Throwable e) {
@@ -1475,6 +1528,29 @@ public class StreamThread extends Thread {
 
     public Object getStateLock() {
         return stateLock;
+    }
+
+    // this method is NOT thread-safe (we rely on the callee to be `synchronized`)
+    public Map<String, KafkaFuture<Uuid>> consumerClientInstanceIds(final Duration timeout) {
+        boolean setDeadline = false;
+
+        final Map<String, KafkaFuture<Uuid>> result = new HashMap<>();
+
+        if (mainConsumerInstanceIdFuture.isDone()) {
+            if (mainConsumerInstanceIdFuture.isCompletedExceptionally()) {
+                mainConsumerInstanceIdFuture = new KafkaFutureImpl<>();
+                setDeadline = true;
+            }
+        } else {
+            setDeadline = true;
+        }
+        result.put(getName() + "-consumer", mainConsumerInstanceIdFuture);
+
+        if (setDeadline) {
+            fetchDeadlineClientInstanceId = time.milliseconds() + timeout.toMillis();
+        }
+
+        return result;
     }
 
     // the following are for testing only

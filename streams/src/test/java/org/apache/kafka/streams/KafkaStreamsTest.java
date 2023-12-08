@@ -26,6 +26,8 @@ import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.clients.producer.MockProducer;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.MetricsReporter;
@@ -35,6 +37,7 @@ import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.KafkaStreams.State;
+import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.StreamsNotStartedException;
 import org.apache.kafka.streams.errors.StreamsUncaughtExceptionHandler;
 import org.apache.kafka.streams.errors.TopologyException;
@@ -42,6 +45,7 @@ import org.apache.kafka.streams.errors.UnknownStateStoreException;
 import org.apache.kafka.streams.internals.StreamsConfigUtils;
 import org.apache.kafka.streams.internals.metrics.ClientMetrics;
 import org.apache.kafka.streams.kstream.Materialized;
+import org.apache.kafka.streams.processor.StandbyUpdateListener;
 import org.apache.kafka.streams.processor.StateRestoreListener;
 import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.ProcessorContext;
@@ -91,6 +95,8 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static java.util.Collections.singletonList;
@@ -104,6 +110,7 @@ import static org.hamcrest.CoreMatchers.not;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.equalTo;
+import static org.hamcrest.Matchers.instanceOf;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertNull;
@@ -180,9 +187,9 @@ public class KafkaStreamsTest {
     @Before
     public void before() throws Exception {
         time = new MockTime();
-        adminClient = new MockAdminClient();
         supplier = new MockClientSupplier();
         supplier.setCluster(Cluster.bootstrap(singletonList(new InetSocketAddress("localhost", 9999))));
+        adminClient = (MockAdminClient) supplier.getAdmin(null);
         streamsStateListener = new StateListenerStub();
         props = new Properties();
         props.put(StreamsConfig.APPLICATION_ID_CONFIG, APPLICATION_ID);
@@ -254,6 +261,7 @@ public class KafkaStreamsTest {
                 anyLong(),
                 any(StateDirectory.class),
                 any(StateRestoreListener.class),
+                any(StandbyUpdateListener.class),
                 anyInt(),
                 any(Runnable.class),
                 any()
@@ -1253,6 +1261,183 @@ public class KafkaStreamsTest {
                 () -> streams.state() == KafkaStreams.State.NOT_RUNNING,
                 "Streams never stopped.");
         }
+    }
+
+    @Test
+    public void shouldThrowOnClientInstanceIdsWithNegativeTimeout() {
+        try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time)) {
+            final IllegalArgumentException error = assertThrows(
+                IllegalArgumentException.class,
+                () -> streams.clientInstanceIds(Duration.ofMillis(-1L))
+            );
+            assertThat(
+                error.getMessage(),
+                equalTo("The timeout cannot be negative.")
+            );
+        }
+    }
+
+    @Test
+    public void shouldThrowOnClientInstanceIdsWhenNotStarted() {
+        try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time)) {
+            final IllegalStateException error = assertThrows(
+                IllegalStateException.class,
+                () -> streams.clientInstanceIds(Duration.ZERO)
+            );
+            assertThat(
+                error.getMessage(),
+                equalTo("KafkaStreams has not been started, you can retry after calling start().")
+            );
+        }
+    }
+
+    @Test
+    public void shouldThrowOnClientInstanceIdsWhenClosed() {
+        try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time)) {
+            streams.close();
+
+            final IllegalStateException error = assertThrows(
+                IllegalStateException.class,
+                () -> streams.clientInstanceIds(Duration.ZERO)
+            );
+            assertThat(
+                error.getMessage(),
+                equalTo("KafkaStreams has been stopped (NOT_RUNNING).")
+            );
+        }
+    }
+
+    @Test
+    public void shouldThrowStreamsExceptionWhenAdminNotInitialized() {
+        try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time)) {
+            streams.start();
+
+            final StreamsException error = assertThrows(
+                StreamsException.class,
+                () -> streams.clientInstanceIds(Duration.ZERO)
+            );
+            assertThat(
+                error.getMessage(),
+                equalTo("Could not retrieve admin client instance id.")
+            );
+
+            final Throwable cause = error.getCause();
+            assertThat(cause, instanceOf(UnsupportedOperationException.class));
+            assertThat(
+                cause.getMessage(),
+                equalTo("clientInstanceId not set")
+            );
+        }
+    }
+
+    @Test
+    public void shouldNotCrashButThrowLaterIfAdminTelemetryDisabled() {
+        adminClient.disableTelemetry();
+        // set threads to zero to simplify set setup
+        props.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 0);
+
+        try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time)) {
+            streams.start();
+
+            final ClientInstanceIds clientInstanceIds = streams.clientInstanceIds(Duration.ZERO);
+
+            final IllegalStateException error = assertThrows(
+                IllegalStateException.class,
+                clientInstanceIds::adminInstanceId
+            );
+            assertThat(
+                error.getMessage(),
+                equalTo("Telemetry is not enabled on the admin client. Set config `enable.metrics.push` to `true`.")
+            );
+        }
+    }
+
+    @Test
+    public void shouldThrowTimeExceptionWhenAdminTimesOut() {
+        adminClient.setClientInstanceId(Uuid.randomUuid());
+        adminClient.injectTimeoutException(1);
+
+        try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time)) {
+            streams.start();
+
+            assertThrows(
+                TimeoutException.class,
+                () -> streams.clientInstanceIds(Duration.ZERO)
+            );
+        }
+    }
+
+    @Test
+    public void shouldReturnAdminInstanceID() {
+        final Uuid instanceId = Uuid.randomUuid();
+        adminClient.setClientInstanceId(instanceId);
+        // set threads to zero to simplify set setup
+        props.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 0);
+
+        try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time)) {
+            streams.start();
+
+            assertThat(
+                streams.clientInstanceIds(Duration.ZERO).adminInstanceId(),
+                equalTo(instanceId)
+            );
+        }
+    }
+
+    @Test
+    public void shouldThrowTimeoutExceptionWhenMainConsumerFutureDoesNotComplete() {
+        when(streamThreadOne.consumerClientInstanceIds(any()))
+            .thenReturn(Collections.singletonMap("consumer", new KafkaFutureImpl<>()));
+        adminClient.setClientInstanceId(Uuid.randomUuid());
+
+        try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time)) {
+            streams.start();
+            final TimeoutException timeoutException = assertThrows(
+                TimeoutException.class,
+                () -> streams.clientInstanceIds(Duration.ZERO)
+            );
+            assertThat(timeoutException.getCause(), instanceOf(java.util.concurrent.TimeoutException.class));
+        }
+    }
+
+    @Test
+    public void shouldCountDownTimeoutAcrossClient() {
+        adminClient.setClientInstanceId(Uuid.randomUuid());
+        adminClient.advanceTimeOnClientInstanceId(time, Duration.ofMillis(10L).toMillis());
+
+        final Time mockTime = time;
+        final AtomicLong expectedTimeout = new AtomicLong(20L);
+        final AtomicBoolean didAssertThreadOne = new AtomicBoolean(false);
+        final AtomicBoolean didAssertThreadTwo = new AtomicBoolean(false);
+        when(streamThreadOne.consumerClientInstanceIds(any()))
+            .thenReturn(Collections.singletonMap("consumer1", new KafkaFutureImpl<Uuid>() {
+                @Override
+                public Uuid get(final long timeout, final TimeUnit timeUnit) {
+                    didAssertThreadOne.set(true);
+                    assertThat(timeout, equalTo(expectedTimeout.getAndAdd(-10L)));
+                    mockTime.sleep(10L);
+                    return null;
+                }
+            }));
+        when(streamThreadTwo.consumerClientInstanceIds(any()))
+            .thenReturn(Collections.singletonMap("consumer2", new KafkaFutureImpl<Uuid>() {
+                @Override
+                public Uuid get(final long timeout, final TimeUnit timeUnit) {
+                    didAssertThreadTwo.set(true);
+                    assertThat(timeout, equalTo(expectedTimeout.getAndAdd(-5L)));
+                    mockTime.sleep(5L);
+                    return null;
+                }
+            }));
+
+
+        try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time)) {
+            streams.start();
+            streams.clientInstanceIds(Duration.ofMillis(30L));
+        }
+
+        assertThat(didAssertThreadOne.get(), equalTo(true));
+        assertThat(didAssertThreadTwo.get(), equalTo(true));
     }
 
     @Deprecated // testing old PAPI

@@ -17,12 +17,15 @@
 package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.processor.internals.TopologyMetadata.Subtopology;
 import org.apache.kafka.streams.processor.internals.testutil.DummyStreamsConfig;
 import org.junit.Assert;
 import org.junit.Test;
 import org.junit.runner.RunWith;
 import org.mockito.junit.MockitoJUnitRunner;
 
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertTrue;
 import static org.mockito.Mockito.mock;
 
 
@@ -43,11 +46,35 @@ public class TopologyMetadataTest {
         Assert.assertFalse(topologyMetadata.isPaused(TOPOLOGY2));
 
         topologyMetadata.pauseTopology(TOPOLOGY1);
-        Assert.assertTrue(topologyMetadata.isPaused(TOPOLOGY1));
+        assertTrue(topologyMetadata.isPaused(TOPOLOGY1));
         Assert.assertFalse(topologyMetadata.isPaused(TOPOLOGY2));
 
         topologyMetadata.resumeTopology(TOPOLOGY1);
         Assert.assertFalse(topologyMetadata.isPaused(TOPOLOGY1));
         Assert.assertFalse(topologyMetadata.isPaused(TOPOLOGY2));
+    }
+
+    @Test
+    public void testSubtopologyCompare() {
+        Subtopology subtopology1 = new Subtopology(0, "1");
+        Subtopology subtopology2 = new Subtopology(1, "1");
+
+        assertTrue(subtopology1.compareTo(subtopology2) < 0);
+
+        subtopology1 = new Subtopology(0, null);
+        subtopology2 = new Subtopology(0, null);
+        assertEquals(0, subtopology1.compareTo(subtopology2));
+
+        subtopology1 = new Subtopology(0, null);
+        subtopology2 = new Subtopology(0, "1");
+        assertTrue(subtopology1.compareTo(subtopology2) < 0);
+
+        subtopology1 = new Subtopology(0, "1");
+        subtopology2 = new Subtopology(0, null);
+        assertTrue(subtopology1.compareTo(subtopology2) > 0);
+
+        subtopology1 = new Subtopology(0, "1");
+        subtopology2 = new Subtopology(0, "2");
+        assertTrue(subtopology1.compareTo(subtopology2) < 0);
     }
 }

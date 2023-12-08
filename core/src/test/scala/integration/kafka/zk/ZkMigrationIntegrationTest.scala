@@ -72,7 +72,9 @@ object ZkMigrationIntegrationTest {
       MetadataVersion.IBP_3_5_IV2,
       MetadataVersion.IBP_3_6_IV2,
       MetadataVersion.IBP_3_7_IV0,
-      MetadataVersion.IBP_3_7_IV1
+      MetadataVersion.IBP_3_7_IV1,
+      MetadataVersion.IBP_3_7_IV2,
+      MetadataVersion.IBP_3_7_IV3
     ).foreach { mv =>
       val clusterConfig = ClusterConfig.defaultClusterBuilder()
         .metadataVersion(mv)

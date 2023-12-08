@@ -21,7 +21,6 @@ import org.apache.kafka.clients.consumer.CommitFailedException;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.RetriableCommitFailedException;
-import org.apache.kafka.clients.consumer.internals.events.AutoCommitCompletionBackgroundEvent;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEventHandler;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
@@ -166,6 +165,17 @@ public class CommitRequestManager implements RequestManager {
         return new NetworkClientDelegate.PollResult(timeUntilNextPoll, requests);
     }
 
+    /**
+     * Returns the delay for which the application thread can safely wait before it should be responsive
+     * to results from the request managers. For example, the subscription state can change when heartbeats
+     * are sent, so blocking for longer than the heartbeat interval might mean the application thread is not
+     * responsive to changes.
+     */
+    @Override
+    public long maximumTimeToWait(long currentTimeMs) {
+        return autoCommitState.map(ac -> ac.remainingMs(currentTimeMs)).orElse(Long.MAX_VALUE);
+    }
+
     private static long findMinTime(final Collection<? extends RequestState> requests, final long currentTimeMs) {
         return requests.stream()
             .mapToLong(request -> request.remainingBackoffMs(currentTimeMs))
@@ -184,12 +194,12 @@ public class CommitRequestManager implements RequestManager {
      * completed future if no request is generated.
      */
     public CompletableFuture<Void> maybeAutoCommit(final Map<TopicPartition, OffsetAndMetadata> offsets) {
-        if (!autoCommitState.isPresent()) {
+        if (!canAutoCommit()) {
             return CompletableFuture.completedFuture(null);
         }
 
         AutoCommitState autocommit = autoCommitState.get();
-        if (!autocommit.canSendAutocommit()) {
+        if (!autocommit.shouldAutoCommit()) {
             return CompletableFuture.completedFuture(null);
         }
 
@@ -210,17 +220,19 @@ public class CommitRequestManager implements RequestManager {
         return maybeAutoCommit(subscriptions.allConsumed());
     }
 
-    /**
-     * The consumer needs to send an auto commit during the shutdown if autocommit is enabled.
-     */
-    Optional<NetworkClientDelegate.UnsentRequest> maybeCreateAutoCommitRequest() {
-        if (!autoCommitState.isPresent()) {
-            return Optional.empty();
-        }
+    boolean canAutoCommit() {
+        return autoCommitState.isPresent() && !subscriptions.allConsumed().isEmpty();
+    }
 
-        OffsetCommitRequestState request = pendingRequests.createOffsetCommitRequest(subscriptions.allConsumed(), jitter);
+    /**
+     * Returns an OffsetCommitRequest of all assigned topicPartitions and their current positions.
+     */
+    NetworkClientDelegate.UnsentRequest createCommitAllConsumedRequest() {
+        Map<TopicPartition, OffsetAndMetadata> offsets = subscriptions.allConsumed();
+        OffsetCommitRequestState request = pendingRequests.createOffsetCommitRequest(offsets, jitter);
+        log.debug("Sending synchronous auto-commit of offsets {}", offsets);
         request.future.whenComplete(autoCommitCallback(subscriptions.allConsumed()));
-        return Optional.of(request.toUnsentRequest());
+        return request.toUnsentRequest();
     }
 
     private CompletableFuture<Void> sendAutoCommit(final Map<TopicPartition, OffsetAndMetadata> allConsumedOffsets) {
@@ -232,8 +244,6 @@ public class CommitRequestManager implements RequestManager {
         return (response, throwable) -> {
             autoCommitState.ifPresent(autoCommitState -> autoCommitState.setInflightCommitStatus(false));
             if (throwable == null) {
-                // We need to notify the application thread to execute OffsetCommitCallback
-                backgroundEventHandler.add(new AutoCommitCompletionBackgroundEvent());
                 log.debug("Completed asynchronous auto-commit of offsets {}", allConsumedOffsets);
             } else if (throwable instanceof RetriableCommitFailedException) {
                 log.debug("Asynchronous auto-commit of offsets {} failed due to retriable error: {}",
@@ -253,7 +263,7 @@ public class CommitRequestManager implements RequestManager {
     }
 
     /**
-     * Handles {@link org.apache.kafka.clients.consumer.internals.events.OffsetFetchApplicationEvent}. It creates an
+     * Handles {@link org.apache.kafka.clients.consumer.internals.events.FetchCommittedOffsetsApplicationEvent}. It creates an
      * {@link OffsetFetchRequestState} and enqueue it to send later.
      */
     public CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> addOffsetFetchRequest(final Set<TopicPartition> partitions) {
@@ -792,12 +802,17 @@ public class CommitRequestManager implements RequestManager {
             this.hasInflightCommit = false;
         }
 
-        public boolean canSendAutocommit() {
+        public boolean shouldAutoCommit() {
             return !this.hasInflightCommit && this.timer.isExpired();
         }
 
         public void resetTimer() {
             this.timer.reset(autoCommitInterval);
+        }
+
+        public long remainingMs(final long currentTimeMs) {
+            this.timer.update(currentTimeMs);
+            return this.timer.remainingMs();
         }
 
         public void ack(final long currentTimeMs) {

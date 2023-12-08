@@ -57,6 +57,7 @@ import java.util.concurrent.CompletableFuture;
 
 import static java.util.Collections.singleton;
 import static java.util.Collections.singletonMap;
+import static org.apache.kafka.clients.consumer.internals.ConsumerTestBuilder.DEFAULT_HEARTBEAT_INTERVAL_MS;
 import static org.apache.kafka.clients.consumer.internals.ConsumerTestBuilder.DEFAULT_REQUEST_TIMEOUT_MS;
 import static org.apache.kafka.test.TestUtils.DEFAULT_MAX_WAIT_MS;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
@@ -116,7 +117,6 @@ public class ConsumerNetworkThreadTest {
         // The consumer is closed in ConsumerTestBuilder.ConsumerNetworkThreadTestBuilder.close()
         // which is called from tearDown().
         consumerNetworkThread.start();
-
         TestCondition isStarted = () -> consumerNetworkThread.isRunning();
         TestCondition isClosed = () -> !(consumerNetworkThread.isRunning() || consumerNetworkThread.isAlive());
 
@@ -240,9 +240,19 @@ public class ConsumerNetworkThreadTest {
     }
 
     @Test
+    void testMaximumTimeToWait() {
+        // Initial value before runOnce has been called
+        assertEquals(ConsumerNetworkThread.MAX_POLL_TIMEOUT_MS, consumerNetworkThread.maximumTimeToWait());
+        consumerNetworkThread.runOnce();
+        // After runOnce has been called, it takes the default heartbeat interval from the heartbeat request manager
+        assertEquals(DEFAULT_HEARTBEAT_INTERVAL_MS, consumerNetworkThread.maximumTimeToWait());
+    }
+
+    @Test
     void testRequestManagersArePolledOnce() {
         consumerNetworkThread.runOnce();
         testBuilder.requestManagers.entries().forEach(rmo -> rmo.ifPresent(rm -> verify(rm, times(1)).poll(anyLong())));
+        testBuilder.requestManagers.entries().forEach(rmo -> rmo.ifPresent(rm -> verify(rm, times(1)).maximumTimeToWait(anyLong())));
         verify(networkClient, times(1)).poll(anyLong(), anyLong());
     }
 
@@ -277,11 +287,14 @@ public class ConsumerNetworkThreadTest {
 
     @Test
     void testCoordinatorConnectionOnClose() {
+        TopicPartition tp = new TopicPartition("topic", 0);
+        subscriptions.assignFromUser(singleton(new TopicPartition("topic", 0)));
+        subscriptions.seekUnvalidated(tp, new SubscriptionState.FetchPosition(100));
         Node node = metadata.fetch().nodes().get(0);
         coordinatorRequestManager.markCoordinatorUnknown("test", time.milliseconds());
         client.prepareResponse(FindCoordinatorResponse.prepareResponse(Errors.NONE, "group-id", node));
-        prepareOffsetCommitRequest(new HashMap<>(), Errors.NONE, false);
-        consumerNetworkThread.maybeAutoCommitAndLeaveGroup(time.timer(1000));
+        prepareOffsetCommitRequest(singletonMap(tp, 100L), Errors.NONE, false);
+        consumerNetworkThread.cleanup();
         assertTrue(coordinatorRequestManager.coordinator().isPresent());
         assertFalse(client.hasPendingResponses());
         assertFalse(client.hasInFlightRequests());
@@ -296,9 +309,9 @@ public class ConsumerNetworkThreadTest {
         coordinatorRequestManager.markCoordinatorUnknown("test", time.milliseconds());
         client.prepareResponse(FindCoordinatorResponse.prepareResponse(Errors.NONE, "group-id", node));
         prepareOffsetCommitRequest(singletonMap(tp, 100L), Errors.NONE, false);
-        consumerNetworkThread.maybeAutoCommitAndLeaveGroup(time.timer(1000));
+        consumerNetworkThread.maybeAutocommitOnClose(time.timer(1000));
         assertTrue(coordinatorRequestManager.coordinator().isPresent());
-        verify(commitRequestManager).maybeCreateAutoCommitRequest();
+        verify(commitRequestManager).createCommitAllConsumedRequest();
 
         assertFalse(client.hasPendingResponses());
         assertFalse(client.hasInFlightRequests());
@@ -308,7 +321,6 @@ public class ConsumerNetworkThreadTest {
         Node node = metadata.fetch().nodes().get(0);
         client.prepareResponse(FindCoordinatorResponse.prepareResponse(Errors.NONE, "group-id", node));
         prepareOffsetCommitRequest(new HashMap<>(), Errors.NONE, false);
-
     }
 
     private void prepareOffsetCommitRequest(final Map<TopicPartition, Long> expectedOffsets,

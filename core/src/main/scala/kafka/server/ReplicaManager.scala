@@ -2370,7 +2370,7 @@ class ReplicaManager(val config: KafkaConfig,
                 throw new IllegalStateException(s"Assignment for topic without ID: ${tp.topic()}")
               case Some(topicId) =>
                 val topicIdPartition = new common.TopicIdPartition(topicId, tp.partition())
-                directoryEventHandler.handleAssignment(topicIdPartition, dirId)
+                directoryEventHandler.handleAssignment(topicIdPartition, dirId, () => ())
             }
           }
         }
@@ -2419,7 +2419,7 @@ class ReplicaManager(val config: KafkaConfig,
   }
 
   protected def createReplicaAlterLogDirsManager(quotaManager: ReplicationQuotaManager, brokerTopicStats: BrokerTopicStats) = {
-    new ReplicaAlterLogDirsManager(config, this, quotaManager, brokerTopicStats)
+    new ReplicaAlterLogDirsManager(config, this, quotaManager, brokerTopicStats, directoryEventHandler)
   }
 
   protected def createReplicaSelector(): Option[ReplicaSelector] = {
