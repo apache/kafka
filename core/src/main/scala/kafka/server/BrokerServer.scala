@@ -614,7 +614,8 @@ class BrokerServer(
             log.updateLogStartOffsetFromRemoteTier(remoteLogStartOffset)
           }
         },
-        brokerTopicStats))
+        brokerTopicStats,
+        metadataCache))
     } else {
       None
     }

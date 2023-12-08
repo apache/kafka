@@ -741,8 +741,8 @@ abstract class AbstractControllerBrokerRequestBatch(config: KafkaConfig,
   def sendRequestsToBrokers(controllerEpoch: Int): Unit = {
     try {
       val stateChangeLog = stateChangeLogger.withControllerEpoch(controllerEpoch)
-      sendLeaderAndIsrRequest(controllerEpoch, stateChangeLog)
       sendUpdateMetadataRequests(controllerEpoch, stateChangeLog)
+      sendLeaderAndIsrRequest(controllerEpoch, stateChangeLog)
       sendStopReplicaRequests(controllerEpoch, stateChangeLog)
       this.updateType = AbstractControlRequest.Type.UNKNOWN
     } catch {
