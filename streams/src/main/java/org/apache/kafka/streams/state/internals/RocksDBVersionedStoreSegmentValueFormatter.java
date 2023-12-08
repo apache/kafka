@@ -165,7 +165,7 @@ final class RocksDBVersionedStoreSegmentValueFormatter {
          * @param order specifies the order (based on timestamp) in which records are returned
          * @return the record that is found, null if no record is found
          */
-        SegmentSearchResult find(long fromTime, long toTime, ResultOrder order);
+        SegmentSearchResult find(long fromTime, long toTime, ResultOrder order, int index);
 
         /**
          * Inserts the provided record into the segment as the latest record in the segment row.
@@ -282,9 +282,11 @@ final class RocksDBVersionedStoreSegmentValueFormatter {
         private List<TimestampAndValueSize> unpackedReversedTimestampAndValueSizes;
         private List<Integer> cumulativeValueSizes; // ordered same as timestamp and value sizes (reverse time-sorted)
         private int valuesStartingIndex = -1; // the index of the first value in the segment (but the last one in the list)
-        private int currentCumValueSize = 0; // this is for deserializing a segment records in a lazy manner
-        private int currentDeserIndex = 0; // this is for deserializing a segment records in a lazy manner
-        private Map<Integer, Long> unpackedReversedTimestamps = new HashMap<>();
+        private int reversedDeserIndex = -1; // index up through which this segment has been deserialized, when deserializing in ascending order of timestamps
+        private final List<TimestampAndValueSize> unpackedTimestampAndValueSizes = new ArrayList<>(); // counterpart of unpackedReversedTimestampAndValueSizes when deserializing in ascending order of timestamps
+        private final List<Integer> reversedCumulativeValueSizes = new ArrayList<>(); // counterpart of cumulativeValueSizes when deserializing in ascending order of timestamps
+        private int recordNumber = -1; // number of segment records
+
 
 
 
@@ -304,10 +306,12 @@ final class RocksDBVersionedStoreSegmentValueFormatter {
             initializeWithRecord(new ValueAndValueSize(valueOrNull), validFrom, validTo);
         }
 
+        @Override
         public long getMinTimestamp() {
             return minTimestamp;
         }
 
+        @Override
         public long getNextTimestamp() {
             return nextTimestamp;
         }
@@ -370,40 +374,78 @@ final class RocksDBVersionedStoreSegmentValueFormatter {
         }
 
         @Override
-        public SegmentSearchResult find(final long fromTime, final long toTime, final ResultOrder order) {
+        public SegmentSearchResult find(final long fromTime, final long toTime, final ResultOrder order, final int index) {
             // this segment does not have any record in query specified time range
             if (toTime < minTimestamp || fromTime > nextTimestamp) {
                 return null;
             }
+
+            final boolean isAscending = order.equals(ResultOrder.ASCENDING);
             long currTimestamp = -1;
             long currNextTimestamp = -1;
+            int currIndex = index;
+            // todo: what happens if cumulativeValueSizes is reset by one of the methods such as initializeWithRecord()
+            int cumValueSize = index == 0 ? 0 : isAscending ? reversedCumulativeValueSizes.get(currIndex - 1) : cumulativeValueSizes.get(currIndex - 1);
+            int currValueSize;
+            int currDeserIndex = isAscending ? reversedDeserIndex : deserIndex;
 
-
-            if (order.equals(ResultOrder.ASCENDING) && valuesStartingIndex == -1) {
+            if (isAscending && valuesStartingIndex == -1) {
                 findValuesStartingIndex();
             }
 
             while (hasStillRecord(currTimestamp, currNextTimestamp, order)) {
-                final int timestampSegmentIndex = getTimestampIndex(order, currentDeserIndex);
-                currTimestamp = unpackedReversedTimestamps.getOrDefault(timestampSegmentIndex, ByteBuffer.wrap(segmentValue).getLong(timestampSegmentIndex));
-                currNextTimestamp = timestampSegmentIndex == 2 * TIMESTAMP_SIZE
-                        ? nextTimestamp // if this is the first record metadata (timestamp + value size)
-                        : unpackedReversedTimestamps.getOrDefault(timestampSegmentIndex - (TIMESTAMP_SIZE + VALUE_SIZE),
-                            ByteBuffer.wrap(segmentValue).getLong(timestampSegmentIndex - (TIMESTAMP_SIZE + VALUE_SIZE)));
-                final int currValueSize = ByteBuffer.wrap(segmentValue).getInt(timestampSegmentIndex + TIMESTAMP_SIZE);
+                if (currIndex <= currDeserIndex) {
+                    final TimestampAndValueSize curr;
+                    if (isAscending) {
+                        curr = unpackedReversedTimestampAndValueSizes.get(currIndex);
+                        currTimestamp = curr.timestamp;
+                        if (curr.valueSize == Integer.MIN_VALUE) {
+                            final int timestampSegmentIndex = getTimestampIndex(order, currIndex);
+                            currValueSize = ByteBuffer.wrap(segmentValue).getInt(timestampSegmentIndex + TIMESTAMP_SIZE);
+                            unpackedReversedTimestampAndValueSizes.add(currIndex, new TimestampAndValueSize(currTimestamp, cumValueSize));
+                        } else {
+                            currValueSize = curr.valueSize;
+                        }
+                        currNextTimestamp = currIndex == recordNumber - 1 ? nextTimestamp : unpackedTimestampAndValueSizes.get(currIndex - 1).timestamp;
+                        cumValueSize = reversedCumulativeValueSizes.get(currIndex);
+                    } else {
+                        curr = unpackedReversedTimestampAndValueSizes.get(currIndex);
+                        currTimestamp = curr.timestamp;
+                        currValueSize = curr.valueSize;
+                        currNextTimestamp = currIndex == 0 ? nextTimestamp : unpackedReversedTimestampAndValueSizes.get(currIndex - 1).timestamp;
+                        cumValueSize = cumulativeValueSizes.get(currIndex);
+                    }
+                } else {
+                    final int timestampSegmentIndex = getTimestampIndex(order, currIndex);
+                    currTimestamp = ByteBuffer.wrap(segmentValue).getLong(timestampSegmentIndex);
+                    currValueSize = ByteBuffer.wrap(segmentValue).getInt(timestampSegmentIndex + TIMESTAMP_SIZE);
+                    currNextTimestamp = timestampSegmentIndex == 2 * TIMESTAMP_SIZE
+                            ? nextTimestamp // if this is the first record metadata (timestamp + value size)
+                            : ByteBuffer.wrap(segmentValue).getLong(timestampSegmentIndex - (TIMESTAMP_SIZE + VALUE_SIZE));
+                    cumValueSize += Math.max(currValueSize, 0);
+
+                    // update deserHelpers
+                    if (isAscending) {
+                        reversedDeserIndex = currIndex;
+                        unpackedTimestampAndValueSizes.add(new TimestampAndValueSize(currTimestamp, currValueSize));
+                        reversedCumulativeValueSizes.add(cumValueSize);
+                    } else {
+                        deserIndex = currIndex;
+                        unpackedReversedTimestampAndValueSizes.add(new TimestampAndValueSize(currTimestamp, currValueSize));
+                        cumulativeValueSizes.add(cumValueSize);
+                    }
+                }
+
                 if (currValueSize >= 0) {
                     final byte[] value = new byte[currValueSize];
-                    final int valueSegmentIndex = getValueSegmentIndex(order, currentCumValueSize, currValueSize);
+                    final int valueSegmentIndex = getValueSegmentIndex(order, cumValueSize, currValueSize);
                     System.arraycopy(segmentValue, valueSegmentIndex, value, 0, currValueSize);
                     if (currTimestamp <= toTime && currNextTimestamp > fromTime) {
-                        currentCumValueSize += currValueSize;
-                        currentDeserIndex++;
-                        return new SegmentSearchResult(currentDeserIndex - 1, currTimestamp, currNextTimestamp, value);
+                        return new SegmentSearchResult(currIndex, currTimestamp, currNextTimestamp, value);
                     }
                 }
                 // prep for next iteration
-                currentCumValueSize += Math.max(currValueSize, 0);
-                currentDeserIndex++;
+                currIndex++;
             }
             // search in segment expected to find result but did not
             return null;
@@ -414,8 +456,8 @@ final class RocksDBVersionedStoreSegmentValueFormatter {
         }
 
         private int getValueSegmentIndex(final ResultOrder order, final int currentCumValueSize, final int currValueSize) {
-            return order.equals(ResultOrder.ASCENDING) ? valuesStartingIndex + currentCumValueSize
-                                                       : segmentValue.length - (currentCumValueSize + currValueSize);
+            return order.equals(ResultOrder.ASCENDING) ? valuesStartingIndex + (currentCumValueSize - currValueSize)
+                                                       : segmentValue.length - currentCumValueSize;
         }
 
         private int getTimestampIndex(final ResultOrder order, final int currIndex) {
@@ -430,10 +472,11 @@ final class RocksDBVersionedStoreSegmentValueFormatter {
             while (currTimestamp != minTimestamp) {
                 timestampSegmentIndex = 2 * TIMESTAMP_SIZE + currIndex * (TIMESTAMP_SIZE + VALUE_SIZE);
                 currTimestamp = ByteBuffer.wrap(segmentValue).getLong(timestampSegmentIndex);
-                unpackedReversedTimestamps.put(timestampSegmentIndex, currTimestamp);
+                unpackedTimestampAndValueSizes.add(new TimestampAndValueSize(currTimestamp, Integer.MIN_VALUE));
                 currIndex++;
             }
             valuesStartingIndex = timestampSegmentIndex + TIMESTAMP_SIZE + VALUE_SIZE;
+            recordNumber = currIndex - 1;
         }
 
         @Override

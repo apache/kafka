@@ -36,6 +36,8 @@ public class LogicalSegmentIterator implements VersionedRecordIterator<byte[]> {
     // stores the deserialized value of the current segment (when current segment is one of the old segments)
     private RocksDBVersionedStoreSegmentValueFormatter.SegmentValue currentDeserializedSegmentValue;
     private VersionedRecord<byte[]> next;
+    private int nextIndex;
+
     private volatile boolean open = true;
 
     // defined for creating/releasing the snapshot. 
@@ -150,9 +152,10 @@ public class LogicalSegmentIterator implements VersionedRecordIterator<byte[]> {
             }
         } else {
             final RocksDBVersionedStoreSegmentValueFormatter.SegmentValue.SegmentSearchResult currentRecord =
-                    currentDeserializedSegmentValue.find(fromTime, toTime, order);
+                    currentDeserializedSegmentValue.find(fromTime, toTime, order, nextIndex);
             if (currentRecord != null) {
                 nextRecord = new VersionedRecord<>(currentRecord.value(), currentRecord.validFrom(), currentRecord.validTo());
+                this.nextIndex = currentRecord.index() + 1;
             }
         }
         // no relevant record can be found in the segment

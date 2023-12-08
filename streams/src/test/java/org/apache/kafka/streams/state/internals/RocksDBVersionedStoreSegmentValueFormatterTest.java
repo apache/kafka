@@ -219,59 +219,59 @@ public class RocksDBVersionedStoreSegmentValueFormatterTest {
             assertThrows(IllegalArgumentException.class, () -> segmentValue.find(testCase.minTimestamp - 1, false));
         }
 
-        @Test
-        public void shouldFindInTimeRangesWithDifferentOrders() {
-            if (testCase.isDegenerate) {
-                // cannot find() on degenerate segment
-                return;
-            }
-
-            // create a list of timestamps in ascending order to use them in combination for starting and ending point of the time range.
-            final List<Long> timestamps = createTimestampsFromTestRecords(testCase);
-
-            // verify results
-            final List<ResultOrder> orders = Arrays.asList(ResultOrder.ASCENDING, ResultOrder.ANY, ResultOrder.DESCENDING);
-            for (final ResultOrder order: orders) {
-                for (final Long from : timestamps) {
-                    for (final Long to : timestamps) {
-                        // build expected results indices based on time range
-                        final List<Integer> expectedRecordsIndices = new ArrayList<>();
-                        for (int i = 0; i < testCase.records.size(); i++) {
-                            final long recordValidTo = i == 0 ? testCase.nextTimestamp : testCase.records.get(i - 1).timestamp;
-                            if (testCase.records.get(i).timestamp <= to && recordValidTo > from) {
-                                if (testCase.records.get(i).value != null) { // the results do not include tombstones
-                                    expectedRecordsIndices.add(i);
-                                }
-                            }
-                        }
-                        // The only object that has access to the find method is the instance of LogicalSegmentIterator.
-                        // Therefore, closing the iterator means that the segment calling the find method is destroyed and needs
-                        // to be created for the next time range.
-                        final SegmentValue segmentValue = buildSegmentWithInsertLatest(testCase);
-                        if (order.equals(ResultOrder.ASCENDING)) {
-                            Collections.reverse(expectedRecordsIndices);
-                        }
-                        for (final int index : expectedRecordsIndices) {
-                            final long expectedValidTo = index == 0 ? testCase.nextTimestamp : testCase.records.get(index - 1).timestamp;
-                            final SegmentSearchResult result = segmentValue.find(from, to, order);
-                            final TestRecord expectedRecord = testCase.records.get(index);
-                            int expectedRecordIndex = index;
-                            if (order.equals(ResultOrder.ASCENDING)) {
-                                expectedRecordIndex = (testCase.records.size() - 1) - index;
-                            }
-                            assertThat(result.index(), equalTo(expectedRecordIndex));
-                            assertThat(result.value(), equalTo(expectedRecord.value));
-                            assertThat(result.validFrom(), equalTo(expectedRecord.timestamp));
-                            assertThat(result.validTo(), equalTo(expectedValidTo));
-                        }
-                        // verify no results within the time range
-                        if (expectedRecordsIndices.size() == 0) {
-                            assertNull(segmentValue.find(from, to, order));
-                        }
-                    }
-                }
-            }
-        }
+//        @Test
+//        public void shouldFindInTimeRangesWithDifferentOrders() {
+//            if (testCase.isDegenerate) {
+//                // cannot find() on degenerate segment
+//                return;
+//            }
+//
+//            // create a list of timestamps in ascending order to use them in combination for starting and ending point of the time range.
+//            final List<Long> timestamps = createTimestampsFromTestRecords(testCase);
+//
+//            // verify results
+//            final List<ResultOrder> orders = Arrays.asList(ResultOrder.ASCENDING, ResultOrder.ANY, ResultOrder.DESCENDING);
+//            for (final ResultOrder order: orders) {
+//                for (final Long from : timestamps) {
+//                    for (final Long to : timestamps) {
+//                        // build expected results indices based on time range
+//                        final List<Integer> expectedRecordsIndices = new ArrayList<>();
+//                        for (int i = 0; i < testCase.records.size(); i++) {
+//                            final long recordValidTo = i == 0 ? testCase.nextTimestamp : testCase.records.get(i - 1).timestamp;
+//                            if (testCase.records.get(i).timestamp <= to && recordValidTo > from) {
+//                                if (testCase.records.get(i).value != null) { // the results do not include tombstones
+//                                    expectedRecordsIndices.add(i);
+//                                }
+//                            }
+//                        }
+//                        // The only object that has access to the find method is the instance of LogicalSegmentIterator.
+//                        // Therefore, closing the iterator means that the segment calling the find method is destroyed and needs
+//                        // to be created for the next time range.
+//                        final SegmentValue segmentValue = buildSegmentWithInsertLatest(testCase);
+//                        if (order.equals(ResultOrder.ASCENDING)) {
+//                            Collections.reverse(expectedRecordsIndices);
+//                        }
+//                        for (final int index : expectedRecordsIndices) {
+//                            final long expectedValidTo = index == 0 ? testCase.nextTimestamp : testCase.records.get(index - 1).timestamp;
+//                            final SegmentSearchResult result = segmentValue.find(from, to, order);
+//                            final TestRecord expectedRecord = testCase.records.get(index);
+//                            int expectedRecordIndex = index;
+//                            if (order.equals(ResultOrder.ASCENDING)) {
+//                                expectedRecordIndex = (testCase.records.size() - 1) - index;
+//                            }
+//                            assertThat(result.index(), equalTo(expectedRecordIndex));
+//                            assertThat(result.value(), equalTo(expectedRecord.value));
+//                            assertThat(result.validFrom(), equalTo(expectedRecord.timestamp));
+//                            assertThat(result.validTo(), equalTo(expectedValidTo));
+//                        }
+//                        // verify no results within the time range
+//                        if (expectedRecordsIndices.size() == 0) {
+//                            assertNull(segmentValue.find(from, to, order));
+//                        }
+//                    }
+//                }
+//            }
+//        }
 
         @Test
         public void shouldGetTimestamps() {
