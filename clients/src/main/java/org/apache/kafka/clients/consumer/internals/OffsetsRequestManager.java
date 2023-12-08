@@ -193,22 +193,20 @@ public class OffsetsRequestManager implements RequestManager, ClusterResourceLis
      * an error is received in the response, it will be saved to be thrown on the next call to
      * this function (ex. {@link org.apache.kafka.common.errors.TopicAuthorizationException})
      */
-    public void resetPositionsIfNeeded() {
+    public CompletableFuture<Void> resetPositionsIfNeeded() {
         Map<TopicPartition, Long> offsetResetTimestamps;
 
         try {
             offsetResetTimestamps = offsetFetcherUtils.getOffsetResetTimestamp();
         } catch (Exception e) {
             backgroundEventHandler.add(new ErrorBackgroundEvent(e));
-            return;
+            return CompletableFuture.completedFuture(null);
         }
 
         if (offsetResetTimestamps.isEmpty())
-            return;
+            return CompletableFuture.completedFuture(null);
 
-        List<NetworkClientDelegate.UnsentRequest> unsentRequests =
-                buildListOffsetsRequestsAndResetPositions(offsetResetTimestamps);
-        requestsToSend.addAll(unsentRequests);
+        return sendListOffsetsRequestsAndResetPositions(offsetResetTimestamps);
     }
 
     /**
@@ -223,15 +221,14 @@ public class OffsetsRequestManager implements RequestManager, ClusterResourceLis
      * detected, a {@link LogTruncationException} will be saved in memory, to be thrown on the
      * next call to this function.
      */
-    public void validatePositionsIfNeeded() {
+    public CompletableFuture<Void> validatePositionsIfNeeded() {
         Map<TopicPartition, SubscriptionState.FetchPosition> partitionsToValidate =
                 offsetFetcherUtils.getPartitionsToValidate();
         if (partitionsToValidate.isEmpty()) {
-            return;
+            return CompletableFuture.completedFuture(null);
         }
-        List<NetworkClientDelegate.UnsentRequest> unsentRequests =
-                buildOffsetsForLeaderEpochRequestsAndValidatePositions(partitionsToValidate);
-        requestsToSend.addAll(unsentRequests);
+
+        return sendOffsetsForLeaderEpochRequestsAndValidatePositions(partitionsToValidate);
     }
 
     /**
@@ -380,19 +377,20 @@ public class OffsetsRequestManager implements RequestManager, ClusterResourceLis
 
     /**
      * Make asynchronous ListOffsets request to fetch offsets by target times for the specified
-     * partitions.
-     * Use the retrieved offsets to reset positions in the subscription state.
+     * partitions. Use the retrieved offsets to reset positions in the subscription state.
+     * This also adds the request to the list of unsentRequests.
      *
      * @param timestampsToSearch the mapping between partitions and target time
-     * @return A list of
-     * {@link org.apache.kafka.clients.consumer.internals.NetworkClientDelegate.UnsentRequest}
-     * that can be polled to obtain the corresponding timestamps and offsets.
+     * @return A {@link CompletableFuture} which completes when the requests are
+     * complete.
      */
-    private List<NetworkClientDelegate.UnsentRequest> buildListOffsetsRequestsAndResetPositions(
+    private CompletableFuture<Void> sendListOffsetsRequestsAndResetPositions(
             final Map<TopicPartition, Long> timestampsToSearch) {
         Map<Node, Map<TopicPartition, ListOffsetsRequestData.ListOffsetsPartition>> timestampsToSearchByNode =
                 groupListOffsetRequests(timestampsToSearch, Optional.empty());
 
+        final AtomicInteger expectedResponses = new AtomicInteger(0);
+        final CompletableFuture<Void> globalResult = new CompletableFuture<>();
         final List<NetworkClientDelegate.UnsentRequest> unsentRequests = new ArrayList<>();
 
         timestampsToSearchByNode.forEach((node, resetTimestamps) -> {
@@ -419,9 +417,20 @@ public class OffsetsRequestManager implements RequestManager, ClusterResourceLis
                     }
                     offsetFetcherUtils.onFailedResponseForResettingPositions(resetTimestamps, e);
                 }
+                if (expectedResponses.decrementAndGet() == 0) {
+                    globalResult.complete(null);
+                }
             });
         });
-        return unsentRequests;
+
+        if (unsentRequests.size() > 0) {
+            expectedResponses.set(unsentRequests.size());
+            requestsToSend.addAll(unsentRequests);
+        } else {
+            globalResult.complete(null);
+        }
+
+        return globalResult;
     }
 
     /**
@@ -429,14 +438,22 @@ public class OffsetsRequestManager implements RequestManager, ClusterResourceLis
      * for the partition with the epoch less than or equal to the epoch the partition last saw.
      * <p/>
      * Requests are grouped by Node for efficiency.
+     * This also adds the request to the list of unsentRequests.
+     *
+     * @param partitionsToValidate a map of topic-partition positions to validate
+     * @return A {@link CompletableFuture} which completes when the requests are
+     * complete.
+
      */
-    private List<NetworkClientDelegate.UnsentRequest> buildOffsetsForLeaderEpochRequestsAndValidatePositions(
+    private CompletableFuture<Void> sendOffsetsForLeaderEpochRequestsAndValidatePositions(
             Map<TopicPartition, SubscriptionState.FetchPosition> partitionsToValidate) {
 
         final Map<Node, Map<TopicPartition, SubscriptionState.FetchPosition>> regrouped =
                 regroupFetchPositionsByLeader(partitionsToValidate);
 
         long nextResetTimeMs = time.milliseconds() + requestTimeoutMs;
+        final AtomicInteger expectedResponses = new AtomicInteger(0);
+        final CompletableFuture<Void> globalResult = new CompletableFuture<>();
         final List<NetworkClientDelegate.UnsentRequest> unsentRequests = new ArrayList<>();
         regrouped.forEach((node, fetchPositions) -> {
 
@@ -480,11 +497,20 @@ public class OffsetsRequestManager implements RequestManager, ClusterResourceLis
                     }
                     offsetFetcherUtils.onFailedResponseForValidatingPositions(fetchPositions, e);
                 }
+                if (expectedResponses.decrementAndGet() == 0) {
+                    globalResult.complete(null);
+                }
             });
-
         });
 
-        return unsentRequests;
+        if (unsentRequests.size() > 0) {
+            expectedResponses.set(unsentRequests.size());
+            requestsToSend.addAll(unsentRequests);
+        } else {
+            globalResult.complete(null);
+        }
+
+        return globalResult;
     }
 
     /**

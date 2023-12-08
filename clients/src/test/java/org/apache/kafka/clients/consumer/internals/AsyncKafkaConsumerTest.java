@@ -33,10 +33,10 @@ import org.apache.kafka.clients.consumer.internals.events.AssignmentChangeApplic
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
 import org.apache.kafka.clients.consumer.internals.events.CommitApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.ErrorBackgroundEvent;
+import org.apache.kafka.clients.consumer.internals.events.FetchCommittedOffsetsApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.GroupMetadataUpdateEvent;
 import org.apache.kafka.clients.consumer.internals.events.ListOffsetsApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.NewTopicsMetadataUpdateRequestEvent;
-import org.apache.kafka.clients.consumer.internals.events.OffsetFetchApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.ResetPositionsApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.SubscriptionChangeApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.UnsubscribeApplicationEvent;
@@ -109,6 +109,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.atLeast;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doThrow;
@@ -252,9 +253,9 @@ public class AsyncKafkaConsumerTest {
         CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> committedFuture = new CompletableFuture<>();
         committedFuture.complete(offsets);
 
-        try (MockedConstruction<OffsetFetchApplicationEvent> ignored = offsetFetchEventMocker(committedFuture)) {
+        try (MockedConstruction<FetchCommittedOffsetsApplicationEvent> ignored = offsetFetchEventMocker(committedFuture)) {
             assertDoesNotThrow(() -> consumer.committed(offsets.keySet(), Duration.ofMillis(1000)));
-            verify(applicationEventHandler).add(ArgumentMatchers.isA(OffsetFetchApplicationEvent.class));
+            verify(applicationEventHandler).add(ArgumentMatchers.isA(FetchCommittedOffsetsApplicationEvent.class));
         }
     }
 
@@ -271,12 +272,12 @@ public class AsyncKafkaConsumerTest {
         CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> committedFuture = new CompletableFuture<>();
         committedFuture.complete(topicPartitionOffsets);
 
-        try (MockedConstruction<OffsetFetchApplicationEvent> ignored = offsetFetchEventMocker(committedFuture)) {
+        try (MockedConstruction<FetchCommittedOffsetsApplicationEvent> ignored = offsetFetchEventMocker(committedFuture)) {
             assertDoesNotThrow(() -> consumer.committed(topicPartitionOffsets.keySet(), Duration.ofMillis(1000)));
         }
         verify(testBuilder.metadata).updateLastSeenEpochIfNewer(t0, 2);
         verify(testBuilder.metadata).updateLastSeenEpochIfNewer(t2, 3);
-        verify(applicationEventHandler).add(ArgumentMatchers.isA(OffsetFetchApplicationEvent.class));
+        verify(applicationEventHandler).add(ArgumentMatchers.isA(FetchCommittedOffsetsApplicationEvent.class));
     }
 
     @Test
@@ -285,9 +286,9 @@ public class AsyncKafkaConsumerTest {
         CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> committedFuture = new CompletableFuture<>();
         committedFuture.completeExceptionally(new KafkaException("Test exception"));
 
-        try (MockedConstruction<OffsetFetchApplicationEvent> ignored = offsetFetchEventMocker(committedFuture)) {
+        try (MockedConstruction<FetchCommittedOffsetsApplicationEvent> ignored = offsetFetchEventMocker(committedFuture)) {
             assertThrows(KafkaException.class, () -> consumer.committed(offsets.keySet(), Duration.ofMillis(1000)));
-            verify(applicationEventHandler).add(ArgumentMatchers.isA(OffsetFetchApplicationEvent.class));
+            verify(applicationEventHandler).add(ArgumentMatchers.isA(FetchCommittedOffsetsApplicationEvent.class));
         }
     }
 
@@ -298,7 +299,7 @@ public class AsyncKafkaConsumerTest {
         final TopicPartition tp = new TopicPartition(topicName, partition);
         doReturn(Fetch.empty()).when(fetchCollector).collectFetch(any(FetchBuffer.class));
         Map<TopicPartition, OffsetAndMetadata> offsets = mkMap(mkEntry(tp, new OffsetAndMetadata(1)));
-        doReturn(offsets).when(applicationEventHandler).addAndGet(any(OffsetFetchApplicationEvent.class), any(Timer.class));
+        doReturn(offsets).when(applicationEventHandler).addAndGet(any(FetchCommittedOffsetsApplicationEvent.class), any(Timer.class));
         consumer.assign(singleton(tp));
 
         consumer.wakeup();
@@ -317,7 +318,7 @@ public class AsyncKafkaConsumerTest {
             return Fetch.empty();
         }).when(fetchCollector).collectFetch(any(FetchBuffer.class));
         Map<TopicPartition, OffsetAndMetadata> offsets = mkMap(mkEntry(tp, new OffsetAndMetadata(1)));
-        doReturn(offsets).when(applicationEventHandler).addAndGet(any(OffsetFetchApplicationEvent.class), any(Timer.class));
+        doReturn(offsets).when(applicationEventHandler).addAndGet(any(FetchCommittedOffsetsApplicationEvent.class), any(Timer.class));
         consumer.assign(singleton(tp));
 
         assertThrows(WakeupException.class, () -> consumer.poll(Duration.ofMinutes(1)));
@@ -338,7 +339,7 @@ public class AsyncKafkaConsumerTest {
             return Fetch.forPartition(tp, records, true);
         }).when(fetchCollector).collectFetch(Mockito.any(FetchBuffer.class));
         Map<TopicPartition, OffsetAndMetadata> offsets = mkMap(mkEntry(tp, new OffsetAndMetadata(1)));
-        doReturn(offsets).when(applicationEventHandler).addAndGet(any(OffsetFetchApplicationEvent.class), any(Timer.class));
+        doReturn(offsets).when(applicationEventHandler).addAndGet(any(FetchCommittedOffsetsApplicationEvent.class), any(Timer.class));
         consumer.assign(singleton(tp));
 
         // since wakeup() is called when the non-empty fetch is returned the wakeup should be ignored
@@ -359,7 +360,7 @@ public class AsyncKafkaConsumerTest {
         doReturn(Fetch.forPartition(tp, records, true))
             .when(fetchCollector).collectFetch(any(FetchBuffer.class));
         Map<TopicPartition, OffsetAndMetadata> offsets = mkMap(mkEntry(tp, new OffsetAndMetadata(1)));
-        doReturn(offsets).when(applicationEventHandler).addAndGet(any(OffsetFetchApplicationEvent.class), any(Timer.class));
+        doReturn(offsets).when(applicationEventHandler).addAndGet(any(FetchCommittedOffsetsApplicationEvent.class), any(Timer.class));
         consumer.assign(singleton(tp));
 
         consumer.poll(Duration.ZERO);
@@ -510,12 +511,12 @@ public class AsyncKafkaConsumerTest {
      * <p/>
      *
      * Inside the {@link org.apache.kafka.clients.consumer.Consumer#committed(Set, Duration)} call we create an
-     * instance of {@link OffsetFetchApplicationEvent} that holds the partitions and internally holds a
+     * instance of {@link FetchCommittedOffsetsApplicationEvent} that holds the partitions and internally holds a
      * {@link CompletableFuture}. We want to test different behaviours of the {@link Future#get()}, such as
      * returning normally, timing out, throwing an error, etc. By mocking the construction of the event object that
      * is created, we can affect that behavior.
      */
-    private static MockedConstruction<OffsetFetchApplicationEvent> offsetFetchEventMocker(CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> future) {
+    private static MockedConstruction<FetchCommittedOffsetsApplicationEvent> offsetFetchEventMocker(CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> future) {
         // This "answer" is where we pass the future to be invoked by the ConsumerUtils.getResult() method
         Answer<Map<TopicPartition, OffsetAndMetadata>> getInvocationAnswer = invocation -> {
             // This argument captures the actual argument value that was passed to the event's get() method, so we
@@ -524,18 +525,18 @@ public class AsyncKafkaConsumerTest {
             return ConsumerUtils.getResult(future, timer);
         };
 
-        MockedConstruction.MockInitializer<OffsetFetchApplicationEvent> mockInitializer = (mock, ctx) -> {
+        MockedConstruction.MockInitializer<FetchCommittedOffsetsApplicationEvent> mockInitializer = (mock, ctx) -> {
             // When the event's get() method is invoked, we call the "answer" method just above
             when(mock.get(any())).thenAnswer(getInvocationAnswer);
 
             // When the event's type() method is invoked, we have to return the type as it will be null in the mock
-            when(mock.type()).thenReturn(ApplicationEvent.Type.FETCH_COMMITTED_OFFSET);
+            when(mock.type()).thenReturn(ApplicationEvent.Type.FETCH_COMMITTED_OFFSETS);
 
             // This is needed for the WakeupTrigger code that keeps track of the active task
             when(mock.future()).thenReturn(future);
         };
 
-        return mockConstruction(OffsetFetchApplicationEvent.class, mockInitializer);
+        return mockConstruction(FetchCommittedOffsetsApplicationEvent.class, mockInitializer);
     }
 
     private static MockedConstruction<CommitApplicationEvent> commitEventMocker(CompletableFuture<Void> future) {
@@ -1008,22 +1009,25 @@ public class AsyncKafkaConsumerTest {
 
         consumer.assign(singleton(new TopicPartition("t1", 1)));
 
-        try (MockedConstruction<OffsetFetchApplicationEvent> ignored = offsetFetchEventMocker(committedFuture)) {
-            // Poll with 0 timeout to run a single iteration of the poll loop
-            consumer.poll(Duration.ofMillis(0));
+        try (MockedConstruction<FetchCommittedOffsetsApplicationEvent> ignored = offsetFetchEventMocker(committedFuture)) {
+            // Poll with 250ms timeout to give the background thread time to process the events without timing out
+            consumer.poll(Duration.ofMillis(250));
 
-            verify(applicationEventHandler).add(ArgumentMatchers.isA(ValidatePositionsApplicationEvent.class));
+            verify(applicationEventHandler, atLeast(1))
+                .addAndGet(ArgumentMatchers.isA(ValidatePositionsApplicationEvent.class), ArgumentMatchers.isA(Timer.class));
 
             if (committedOffsetsEnabled) {
-                // Verify there was an OffsetFetch event and no ResetPositions event
-                verify(applicationEventHandler).add(ArgumentMatchers.isA(OffsetFetchApplicationEvent.class));
-                verify(applicationEventHandler,
-                        never()).add(ArgumentMatchers.isA(ResetPositionsApplicationEvent.class));
+                // Verify there was an FetchCommittedOffsets event and no ResetPositions event
+                verify(applicationEventHandler, atLeast(1))
+                    .addAndGet(ArgumentMatchers.isA(FetchCommittedOffsetsApplicationEvent.class), ArgumentMatchers.isA(Timer.class));
+                verify(applicationEventHandler, never())
+                    .addAndGet(ArgumentMatchers.isA(ResetPositionsApplicationEvent.class), ArgumentMatchers.isA(Timer.class));
             } else {
-                // Verify there was not any OffsetFetch event but there should be a ResetPositions
-                verify(applicationEventHandler,
-                        never()).add(ArgumentMatchers.isA(OffsetFetchApplicationEvent.class));
-                verify(applicationEventHandler).add(ArgumentMatchers.isA(ResetPositionsApplicationEvent.class));
+                // Verify there was not any FetchCommittedOffsets event but there should be a ResetPositions
+                verify(applicationEventHandler, never())
+                    .addAndGet(ArgumentMatchers.isA(FetchCommittedOffsetsApplicationEvent.class), ArgumentMatchers.isA(Timer.class));
+                verify(applicationEventHandler, atLeast(1))
+                    .addAndGet(ArgumentMatchers.isA(ResetPositionsApplicationEvent.class), ArgumentMatchers.isA(Timer.class));
             }
         }
     }
@@ -1033,13 +1037,16 @@ public class AsyncKafkaConsumerTest {
         CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> committedFuture = new CompletableFuture<>();
         committedFuture.complete(committedOffsets);
         consumer.assign(partitions);
-        try (MockedConstruction<OffsetFetchApplicationEvent> ignored = offsetFetchEventMocker(committedFuture)) {
-            // Poll with 0 timeout to run a single iteration of the poll loop
-            consumer.poll(Duration.ofMillis(0));
+        try (MockedConstruction<FetchCommittedOffsetsApplicationEvent> ignored = offsetFetchEventMocker(committedFuture)) {
+            // Poll with 250ms timeout to give the background thread time to process the events without timing out
+            consumer.poll(Duration.ofMillis(250));
 
-            verify(applicationEventHandler).add(ArgumentMatchers.isA(ValidatePositionsApplicationEvent.class));
-            verify(applicationEventHandler).add(ArgumentMatchers.isA(OffsetFetchApplicationEvent.class));
-            verify(applicationEventHandler).add(ArgumentMatchers.isA(ResetPositionsApplicationEvent.class));
+            verify(applicationEventHandler, atLeast(1))
+                .addAndGet(ArgumentMatchers.isA(ValidatePositionsApplicationEvent.class), ArgumentMatchers.isA(Timer.class));
+            verify(applicationEventHandler, atLeast(1))
+                .addAndGet(ArgumentMatchers.isA(FetchCommittedOffsetsApplicationEvent.class), ArgumentMatchers.isA(Timer.class));
+            verify(applicationEventHandler, atLeast(1))
+                .addAndGet(ArgumentMatchers.isA(ResetPositionsApplicationEvent.class), ArgumentMatchers.isA(Timer.class));
         }
     }
 
