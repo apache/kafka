@@ -9,8 +9,8 @@ Kafka Docker Image Examples
 
 For example:-
 ```
-# This command brings up JVM cluster
-$ docker compose -f docker/examples/jvm/cluster/docker-compose.yml up
+# This command brings up JVM cluster in combined mode
+$ docker compose -f docker/examples/jvm/cluster-combined/docker-compose.yml up
 ```
 
 - Kafka server can be accessed using cli scripts or your own client code.
