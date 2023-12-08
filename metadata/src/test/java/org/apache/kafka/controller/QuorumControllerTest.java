@@ -24,6 +24,7 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -464,7 +465,7 @@ public class QuorumControllerTest {
             sendBrokerHeartbeatToUnfenceBrokers(active, allBrokers, brokerEpochs);
 
             // Let the unfenced broker, 3, join the ISR partition 2
-            Set<TopicIdPartition> imbalancedPartitions = active.replicationControl().imbalancedPartitions();
+            Set<TopicIdPartition> imbalancedPartitions = new HashSet<>(active.replicationControl().imbalancedPartitions());
             assertEquals(1, imbalancedPartitions.size());
             int imbalancedPartitionId = imbalancedPartitions.iterator().next().partitionId();
             PartitionRegistration partitionRegistration = active.replicationControl().getPartition(topicIdFoo, imbalancedPartitionId);

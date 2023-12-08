@@ -998,8 +998,8 @@ public class ReplicationControlManager {
     }
 
     // VisibleForTesting
-    Set<TopicIdPartition> imbalancedPartitions() {
-        return new HashSet<>(imbalancedPartitions);
+    TimelineHashSet<TopicIdPartition> imbalancedPartitions() {
+        return imbalancedPartitions;
     }
 
     boolean isElrEnabled() {
