@@ -284,7 +284,7 @@ public final class StoreQueryUtils {
         }
     }
 
-    @SuppressWarnings("unchecked")
+    @SuppressWarnings({"unchecked","deprecation"})
     private static <R> QueryResult<R> runWindowRangeQuery(final Query<R> query,
                                                           final PositionBound positionBound,
                                                           final QueryConfig config,

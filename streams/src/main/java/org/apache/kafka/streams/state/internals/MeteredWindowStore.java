@@ -385,7 +385,7 @@ public class MeteredWindowStore<K, V>
         return result;
     }
 
-    @SuppressWarnings("unchecked")
+    @SuppressWarnings({"unchecked", "deprecation"})
     private <R> QueryResult<R> runRangeQuery(final Query<R> query,
                                              final PositionBound positionBound,
                                              final QueryConfig config) {

@@ -84,12 +84,12 @@ public class WindowRangeQuery<K, V> implements Query<KeyValueIterator<Windowed<K
         return upper;
     }
 
-    //@Deprecated
+    @Deprecated
     public Optional<Instant> getTimeFrom() {
         return oldTimeFrom;
     }
 
-    //@Deprecated
+    @Deprecated
     public Optional<Instant> getTimeTo() {
         return oldTimeTo;
     }
