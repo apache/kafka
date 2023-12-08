@@ -18,17 +18,29 @@ package org.apache.kafka.clients.consumer.internals.events;
 
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.utils.Timer;
 
 import java.util.Collections;
 import java.util.Map;
 
 public class CommitApplicationEvent extends CompletableApplicationEvent<Void> {
 
+    /**
+     * Offsets to commit per partition.
+     */
     private final Map<TopicPartition, OffsetAndMetadata> offsets;
 
-    public CommitApplicationEvent(final Map<TopicPartition, OffsetAndMetadata> offsets) {
+    /**
+     * Timer to control how long the commit request should be retried if it fails with retriable
+     * errors. If a zero-time timer is provided, the request will be sent without any retry.
+     */
+    private final Timer timer;
+
+    public CommitApplicationEvent(final Map<TopicPartition, OffsetAndMetadata> offsets,
+                                  final Timer timer) {
         super(Type.COMMIT);
         this.offsets = Collections.unmodifiableMap(offsets);
+        this.timer = timer;
 
         for (OffsetAndMetadata offsetAndMetadata : offsets.values()) {
             if (offsetAndMetadata.offset() < 0) {
@@ -39,6 +51,10 @@ public class CommitApplicationEvent extends CompletableApplicationEvent<Void> {
 
     public Map<TopicPartition, OffsetAndMetadata> offsets() {
         return offsets;
+    }
+
+    public Timer timer() {
+        return timer;
     }
 
     @Override
@@ -64,6 +80,7 @@ public class CommitApplicationEvent extends CompletableApplicationEvent<Void> {
         return "CommitApplicationEvent{" +
                 toStringBase() +
                 ", offsets=" + offsets +
+                ", retriable=" + !timer.isExpired() +
                 '}';
     }
 }

@@ -607,7 +607,9 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
     public void commitAsync(Map<TopicPartition, OffsetAndMetadata> offsets, OffsetCommitCallback callback) {
         acquireAndEnsureOpen();
         try {
-            CompletableFuture<Void> future = commit(offsets, false);
+            // Commit with zero duration to indicate that the commit should be triggered without
+            // waiting for a response.
+            CompletableFuture<Void> future = commit(offsets, false, time.timer(Duration.ZERO));
             future.whenComplete((r, t) -> {
                 if (callback == null) {
                     if (t != null) {
@@ -624,7 +626,15 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
     }
 
     // Visible for testing
-    CompletableFuture<Void> commit(final Map<TopicPartition, OffsetAndMetadata> offsets, final boolean isWakeupable) {
+    CompletableFuture<Void> commitAsync(final Map<TopicPartition, OffsetAndMetadata> offsets,
+                                        final boolean isWakeupable) {
+        return commit(offsets, isWakeupable, time.timer(Duration.ZERO));
+    }
+
+    // Visible for testing
+    CompletableFuture<Void> commit(final Map<TopicPartition, OffsetAndMetadata> offsets,
+                                   final boolean isWakeupable,
+                                   final Timer timer) {
         maybeInvokeCommitCallbacks();
         maybeThrowFencedInstanceException();
         maybeThrowInvalidGroupIdException();
@@ -636,7 +646,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             return CompletableFuture.completedFuture(null);
         }
 
-        final CommitApplicationEvent commitEvent = new CommitApplicationEvent(offsets);
+        final CommitApplicationEvent commitEvent = new CommitApplicationEvent(offsets, timer);
         if (isWakeupable) {
             // the task can only be woken up if the top level API call is commitSync
             wakeupTrigger.setActiveTask(commitEvent.future());
@@ -773,7 +783,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                 return Collections.emptyMap();
             }
 
-            final FetchCommittedOffsetsApplicationEvent event = new FetchCommittedOffsetsApplicationEvent(partitions);
+            final FetchCommittedOffsetsApplicationEvent event = new FetchCommittedOffsetsApplicationEvent(partitions, time.timer(timeout));
             wakeupTrigger.setActiveTask(event.future());
             try {
                 final Map<TopicPartition, OffsetAndMetadata> committedOffsets = applicationEventHandler.addAndGet(event,
@@ -1078,8 +1088,9 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         acquireAndEnsureOpen();
         long commitStart = time.nanoseconds();
         try {
-            CompletableFuture<Void> commitFuture = commit(offsets, true);
-            ConsumerUtils.getResult(commitFuture, time.timer(timeout));
+            Timer commitTimer = time.timer(timeout);
+            CompletableFuture<Void> commitFuture = commit(offsets, true, commitTimer);
+            ConsumerUtils.getResult(commitFuture, commitTimer);
         } finally {
             wakeupTrigger.clearTask();
             kafkaConsumerMetrics.recordCommitSync(time.nanoseconds() - commitStart);
@@ -1340,7 +1351,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
 
         log.debug("Refreshing committed offsets for partitions {}", initializingPartitions);
         try {
-            final FetchCommittedOffsetsApplicationEvent event = new FetchCommittedOffsetsApplicationEvent(initializingPartitions);
+            final FetchCommittedOffsetsApplicationEvent event = new FetchCommittedOffsetsApplicationEvent(initializingPartitions, timer);
             final Map<TopicPartition, OffsetAndMetadata> offsets = applicationEventHandler.addAndGet(event, timer);
             refreshCommittedOffsets(offsets, metadata, subscriptions);
             return true;

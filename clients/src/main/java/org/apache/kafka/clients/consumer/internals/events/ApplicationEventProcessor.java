@@ -142,7 +142,7 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
         }
 
         CommitRequestManager manager = requestManagers.commitRequestManager.get();
-        event.chain(manager.addOffsetCommitRequest(event.offsets()));
+        event.chain(manager.addOffsetCommitRequest(event.offsets(), event.timer()));
     }
 
     private void process(final FetchCommittedOffsetsApplicationEvent event) {
@@ -152,20 +152,25 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
             return;
         }
         CommitRequestManager manager = requestManagers.commitRequestManager.get();
-        event.chain(manager.addOffsetFetchRequest(event.partitions()));
+        event.chain(manager.addOffsetFetchRequest(event.partitions(), event.timer()));
     }
 
     private void process(final NewTopicsMetadataUpdateRequestEvent ignored) {
         metadata.requestUpdateForNewTopics();
     }
 
+
+    /**
+     * Commit all consumed if auto-commit is enabled. Note this will trigger an async commit,
+     * that will not be retried if the commit request fails.
+     */
     private void process(final AssignmentChangeApplicationEvent event) {
         if (!requestManagers.commitRequestManager.isPresent()) {
             return;
         }
         CommitRequestManager manager = requestManagers.commitRequestManager.get();
         manager.updateAutoCommitTimer(event.currentTimeMs());
-        manager.maybeAutoCommit(event.offsets());
+        manager.maybeAutoCommitAllConsumedAsync();
     }
 
     private void process(final ListOffsetsApplicationEvent event) {

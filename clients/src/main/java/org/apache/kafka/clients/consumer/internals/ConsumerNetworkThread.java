@@ -312,7 +312,7 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
 
         ensureCoordinatorReady(timer);
         NetworkClientDelegate.UnsentRequest autocommitRequest =
-            requestManagers.commitRequestManager.get().createCommitAllConsumedRequest();
+            requestManagers.commitRequestManager.get().createCommitAllConsumedRequestSync(timer);
         networkClientDelegate.add(autocommitRequest);
         do {
             long currentTimeMs = timer.currentTimeMs();
