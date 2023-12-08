@@ -1396,8 +1396,9 @@ public class ReplicationControlManager {
             for (Uuid newOfflineDir : newOfflineDirs) {
                 TimelineHashSet<TopicIdPartition> parts = directoriesToPartitions.get(newOfflineDir);
                 Iterator<TopicIdPartition> iterator = (parts == null) ?
-                    Collections.emptyIterator() : parts.iterator();
-                generateLeaderAndIsrUpdates("handleDirectoriesOffline[" + brokerId + ", " + newOfflineDirs + "]",
+                        Collections.emptyIterator() : parts.iterator();
+                generateLeaderAndIsrUpdates(
+                        "handleDirectoriesOffline[" + brokerId + ":" + newOfflineDir + "]",
                         brokerId, NO_LEADER, records, iterator);
             }
             records.add(new ApiMessageAndVersion(new BrokerRegistrationChangeRecord().
