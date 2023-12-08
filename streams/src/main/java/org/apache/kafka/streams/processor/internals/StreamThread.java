@@ -346,7 +346,8 @@ public class StreamThread extends Thread implements ProcessingThread {
 
     private volatile long fetchDeadlineClientInstanceId = -1;
     private volatile KafkaFutureImpl<Uuid> mainConsumerInstanceIdFuture = new KafkaFutureImpl<>();
-    private volatile KafkaFutureImpl<Uuid> threadProducerInstanceIdFuture;
+    private volatile KafkaFutureImpl<Map<String, KafkaFuture<Uuid>>> producerInstanceIdFuture = new KafkaFutureImpl<>();
+    private volatile KafkaFutureImpl<Uuid> threadProducerInstanceIdFuture = new KafkaFutureImpl<>();
 
     public static StreamThread create(final TopologyMetadata topologyMetadata,
                                       final StreamsConfig config,
@@ -756,25 +757,32 @@ public class StreamThread extends Thread implements ProcessingThread {
                         new TimeoutException("Could not retrieve main consumer client instance id.")
                     );
                 }
-
+            }
 
             if (!processingMode.equals(StreamsConfigUtils.ProcessingMode.EXACTLY_ONCE_ALPHA) &&
                     !threadProducerInstanceIdFuture.isDone()) {
 
                 if (fetchDeadlineClientInstanceId >= time.milliseconds()) {
                     try {
-                        threadProducerClientInstanceId = taskManager.threadProducer().kafkaProducer().clientInstanceId(Duration.ZERO);
-                        threadProducerInstanceIdFuture.complete(threadProducerClientInstanceId);
-                        maybeResetFetchDeadline();
+                        threadProducerInstanceIdFuture.complete(
+                            taskManager.threadProducer().kafkaProducer().clientInstanceId(Duration.ZERO)
+                        );
                     } catch (final IllegalStateException disabledError) {
+                        // if telemetry is disabled on a client, we swallow the error,
+                        // to allow returning a partial result for all other clients
                         threadProducerInstanceIdFuture.complete(null);
+                    } catch (final TimeoutException swallow) {
+                        // swallow
+                    } catch (final Exception error) {
                         threadProducerInstanceIdFuture.completeExceptionally(error);
-                        maybeResetFetchDeadline();
                     }
                 } else {
                     threadProducerInstanceIdFuture.completeExceptionally(
                         new TimeoutException("Could not retrieve thread producer client instance id.")
+                    );
+                }
             }
+
             maybeResetFetchDeadline();
         }
     }
@@ -1584,25 +1592,36 @@ public class StreamThread extends Thread implements ProcessingThread {
 
     // this method is NOT thread-safe (we rely on the callee to be `synchronized`)
     public KafkaFuture<Map<String, KafkaFuture<Uuid>>> producersClientInstanceIds(final Duration timeout) {
-        final KafkaFutureImpl<Map<String, KafkaFuture<Uuid>>> result = new KafkaFutureImpl<>();
+        boolean setDeadline = false;
+
+        if (producerInstanceIdFuture.isDone()) {
+            if (producerInstanceIdFuture.isCompletedExceptionally()) {
+                producerInstanceIdFuture = new KafkaFutureImpl<>();
+                setDeadline = true;
+            }
+        } else {
+            setDeadline = true;
+        }
 
         if (processingMode.equals(StreamsConfigUtils.ProcessingMode.EXACTLY_ONCE_ALPHA)) {
             throw new UnsupportedOperationException("not yet implemented");
         } else {
-            final KafkaFutureImpl<Uuid> producerFuture = new KafkaFutureImpl<>();
-            if (threadProducerClientInstanceId != null) {
-                producerFuture.complete(threadProducerClientInstanceId);
-            } else {
-                threadProducerInstanceIdFuture = producerFuture;
-                if (fetchDeadlineClientInstanceId == -1) {
-                    fetchDeadlineClientInstanceId = time.milliseconds() + timeout.toMillis();
+            if (threadProducerInstanceIdFuture.isDone()) {
+                if (threadProducerInstanceIdFuture.isCompletedExceptionally()) {
+                    threadProducerInstanceIdFuture = new KafkaFutureImpl<>();
+                    setDeadline = true;
                 }
+            } else {
+                setDeadline = true;
             }
+            producerInstanceIdFuture.complete(Collections.singletonMap(getName() + "-producer", threadProducerInstanceIdFuture));
 
-            result.complete(Collections.singletonMap(getName() + "-producer", producerFuture));
+            if (setDeadline) {
+                fetchDeadlineClientInstanceId = time.milliseconds() + timeout.toMillis();
+            }
         }
 
-        return result;
+        return producerInstanceIdFuture;
     }
 
     // the following are for testing only

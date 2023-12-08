@@ -1959,28 +1959,24 @@ public class KafkaStreams implements AutoCloseable {
         for (final Map.Entry<String, KafkaFuture<Map<String, KafkaFuture<Uuid>>>> threadProducerFuture : producerFutures.entrySet()) {
             final Map<String, KafkaFuture<Uuid>> streamThreadProducerFutures = getOrThrowException(
                 threadProducerFuture.getValue(),
-                remainingTimeMs,
+                remainingTime.remainingMs(),
                 () -> String.format(
                     "Could not retrieve producer instance id for %s.",
                     threadProducerFuture.getKey()
                 )
             );
-            long nowMs = time.milliseconds();
-            remainingTimeMs -= nowMs - startTimestampMs;
-            startTimestampMs = nowMs;
+            remainingTime.update(time.milliseconds());
 
             for (final Map.Entry<String, KafkaFuture<Uuid>> producerFuture : streamThreadProducerFutures.entrySet()) {
                 final Uuid instanceId = getOrThrowException(
                     producerFuture.getValue(),
-                    remainingTimeMs,
+                    remainingTime.remainingMs(),
                     () -> String.format(
                         "Could not retrieve producer instance id for %s.",
                         producerFuture.getKey()
                     )
                 );
-                nowMs = time.milliseconds();
-                remainingTimeMs -= nowMs - startTimestampMs;
-                startTimestampMs = nowMs;
+                remainingTime.update(time.milliseconds());
 
                 // could be `null` if telemetry is disabled on the producer itself
                 if (instanceId != null) {
@@ -1993,6 +1989,7 @@ public class KafkaStreams implements AutoCloseable {
                 }
             }
         }
+
         // (3c) collect from GlobalThread
         if (globalThreadFuture != null) {
             final Uuid instanceId = getOrThrowException(
@@ -2025,7 +2022,7 @@ public class KafkaStreams implements AutoCloseable {
         try {
             return future.get(timeoutMs, TimeUnit.MILLISECONDS);
         } catch (final java.util.concurrent.TimeoutException timeout) {
-            throw new TimeoutException(timeout);
+            throw new TimeoutException(errorMessage.get(), timeout);
         } catch (final ExecutionException exception) {
             cause = exception.getCause();
             if (cause instanceof TimeoutException) {

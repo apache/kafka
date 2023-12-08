@@ -3387,7 +3387,7 @@ public class StreamThreadTest {
     }
 
     @Test
-    public void shouldReturnErrorIfProducerInstanceIdNotInitialized() {
+    public void shouldReturnErrorIfProducerInstanceIdNotInitialized() throws Exception {
         thread = createStreamThread("clientId");
         thread.setState(State.STARTING);
 
