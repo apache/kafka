@@ -223,11 +223,12 @@ class DeleteTopicTest extends QuorumTestHarness {
     // increase the partition count for topic
     val props = new Properties()
     props.setProperty(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, TestUtils.plaintextBootstrapServers(servers))
-    val adminClient = Admin.create(props)
-    try {
-      adminClient.createPartitions(Map(topic -> NewPartitions.increaseTo(2)).asJava).all().get()
-    } catch {
-      case _: ExecutionException =>
+    TestUtils.resource(Admin.create(props)) { adminClient =>
+      try {
+        adminClient.createPartitions(Map(topic -> NewPartitions.increaseTo(2)).asJava).all().get()
+      } catch {
+        case _: ExecutionException =>
+      }
     }
     // trigger a controller switch now
     val previousControllerId = controllerId
@@ -245,7 +246,6 @@ class DeleteTopicTest extends QuorumTestHarness {
     follower.startup()
     controller.startup()
     TestUtils.verifyTopicDeletion(zkClient, topic, 2, servers)
-    adminClient.close()
   }
 
 
