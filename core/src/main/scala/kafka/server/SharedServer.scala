@@ -95,8 +95,10 @@ class SharedServer(
   val controllerQuorumVotersFuture: CompletableFuture[util.Map[Integer, AddressSpec]],
   val faultHandlerFactory: FaultHandlerFactory
 ) extends Logging {
-  private val logContext: LogContext = new LogContext(s"[SharedServer id=${sharedServerConfig.nodeId}] ")
-  this.logIdent = logContext.logPrefix
+  private val logContext: LogContext = LogContext.newBuilder("SharedServer")
+    .withTag("id", sharedServerConfig.nodeId)
+    .build()
+  this.logContext = logContext.logPrefix
   private var started = false
   private var usedByBroker: Boolean = false
   private var usedByController: Boolean = false

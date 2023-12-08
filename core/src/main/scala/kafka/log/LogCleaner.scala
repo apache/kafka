@@ -344,7 +344,7 @@ class LogCleaner(initialConfig: CleanerConfig,
     extends ShutdownableThread(s"kafka-log-cleaner-thread-$threadId", false) with Logging {
     protected override def loggerName: String = classOf[LogCleaner].getName
 
-    this.logIdent = logPrefix
+    this.logContext = logPrefix
 
     if (config.dedupeBufferSize / config.numThreads > Int.MaxValue)
       warn("Cannot use more than 2G of cleaner buffer space per cleaner thread, ignoring excess buffer space...")
@@ -556,7 +556,7 @@ private[log] class Cleaner(val id: Int,
 
   protected override def loggerName: String = classOf[LogCleaner].getName
 
-  this.logIdent = s"Cleaner $id: "
+  this.logContext = s"Cleaner $id: "
 
   /* buffer used for read i/o */
   private var readBuffer = ByteBuffer.allocate(ioBufferSize)

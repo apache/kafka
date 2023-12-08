@@ -57,7 +57,10 @@ public final class Heartbeat {
                 rebalanceConfig.retryBackoffMaxMs,
                 CommonClientConfigs.RETRY_BACKOFF_JITTER);
 
-        final LogContext logContext = new LogContext("[Heartbeat groupID=" + config.groupId + "] ");
+        final LogContext logContext =
+            LogContext.newBuilder("Heartbeat")
+                .withTag("groupId", config.groupId)
+                .build();
         this.log = logContext.logger(getClass());
     }
 

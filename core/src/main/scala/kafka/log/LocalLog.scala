@@ -74,7 +74,7 @@ class LocalLog(@volatile private var _dir: File,
 
   import kafka.log.LocalLog._
 
-  this.logIdent = s"[LocalLog partition=$topicPartition, dir=${dir.getParent}] "
+  this.logContext = s"[LocalLog partition=$topicPartition, dir=${dir.getParent}] "
 
   // The memory mapped buffer for index files of this log will be closed with either delete() or closeHandlers()
   // After memory mapped buffer is closed, no disk IO operation should be performed for this log.
@@ -286,7 +286,7 @@ class LocalLog(@volatile private var _dir: File,
       toDelete.foreach { segment =>
         segments.remove(segment.baseOffset)
       }
-      LocalLog.deleteSegmentFiles(toDelete, asyncDelete, dir, topicPartition, config, scheduler, logDirFailureChannel, logIdent)
+      LocalLog.deleteSegmentFiles(toDelete, asyncDelete, dir, topicPartition, config, scheduler, logDirFailureChannel, logContext)
     }
   }
 
@@ -323,7 +323,7 @@ class LocalLog(@volatile private var _dir: File,
     reason.logReason(List(segmentToDelete))
     if (newOffset != segmentToDelete.baseOffset)
       segments.remove(segmentToDelete.baseOffset)
-    LocalLog.deleteSegmentFiles(List(segmentToDelete), asyncDelete, dir, topicPartition, config, scheduler, logDirFailureChannel, logIdent)
+    LocalLog.deleteSegmentFiles(List(segmentToDelete), asyncDelete, dir, topicPartition, config, scheduler, logDirFailureChannel, logContext)
 
     newSegment
   }

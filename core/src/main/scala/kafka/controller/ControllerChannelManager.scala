@@ -61,7 +61,7 @@ class ControllerChannelManager(controllerEpoch: () => Int,
 
   protected val brokerStateInfo = new mutable.HashMap[Int, ControllerBrokerStateInfo]
   private val brokerLock = new Object
-  this.logIdent = "[Channel manager on controller " + config.brokerId + "]: "
+  this.logContext = LogContext.newBuilder("ChannelManagerOnController").withTag("id", config.brokerId).build()
 
   metricsGroup.newGauge("TotalQueueSize",
     () => brokerLock synchronized {
@@ -120,7 +120,10 @@ class ControllerChannelManager(controllerEpoch: () => Int,
     val controllerToBrokerListenerName = config.controlPlaneListenerName.getOrElse(config.interBrokerListenerName)
     val controllerToBrokerSecurityProtocol = config.controlPlaneSecurityProtocol.getOrElse(config.interBrokerSecurityProtocol)
     val brokerNode = broker.node(controllerToBrokerListenerName)
-    val logContext = new LogContext(s"[Controller id=${config.brokerId}, targetBrokerId=${brokerNode.idString}] ")
+    val logContext = LogContext.newBuilder("Controller")
+      .withTag("id", config.brokerId.toString)
+      .withTag("targetBrokerId", brokerNode.idString())
+      .build()
     val (networkClient, reconfigurableChannelBuilder) = {
       val channelBuilder = ChannelBuilders.clientChannelBuilder(
         controllerToBrokerSecurityProtocol,
@@ -227,10 +230,12 @@ class RequestSendThread(val controllerId: Int,
                         val requestRateAndQueueTimeMetrics: Timer,
                         val stateChangeLogger: StateChangeLogger,
                         name: String)
-  extends ShutdownableThread(name, true, s"[RequestSendThread controllerId=$controllerId] ")
+  extends ShutdownableThread(name, true, LogContext.newBuilder("RequestSendThread")
+    .withTag("controllerId", controllerId)
+    .build())
     with Logging {
 
-  logIdent = logPrefix
+  logContext = logContext
 
   private val socketTimeoutMs = config.controllerSocketTimeoutMs
 

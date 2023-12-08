@@ -57,7 +57,7 @@ object KafkaRaftManager {
     fatalFaultHandler: FaultHandler
   ) extends ShutdownableThread(threadNamePrefix + "-io-thread", false) with Logging {
 
-    this.logIdent = logPrefix
+    this.logContext = logPrefix
 
     override def doWork(): Unit = {
       try {
@@ -143,8 +143,10 @@ class KafkaRaftManager[T](
   val apiVersions = new ApiVersions()
   private val raftConfig = new RaftConfig(config)
   private val threadNamePrefix = threadNamePrefixOpt.getOrElse("kafka-raft")
-  private val logContext = new LogContext(s"[RaftManager id=${config.nodeId}] ")
-  this.logIdent = logContext.logPrefix()
+  private val logContext = LogContext.newBuilder("RaftManager")
+    .withTag("id", config.nodeId.toString)
+    .build()
+  this.logContext = logContext.logPrefix()
 
   private val scheduler = new KafkaScheduler(1, true, threadNamePrefix + "-scheduler")
   scheduler.startup()

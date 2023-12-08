@@ -562,7 +562,7 @@ public class KafkaAdminClient extends AdminClient {
     }
 
     static LogContext createLogContext(String clientId) {
-        return new LogContext("[AdminClient clientId=" + clientId + "] ");
+        return LogContext.newBuilder("AdminClient").withTag("clientId", clientId).build();
     }
 
     private KafkaAdminClient(AdminClientConfig config,

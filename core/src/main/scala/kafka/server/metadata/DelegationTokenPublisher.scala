@@ -31,7 +31,7 @@ class DelegationTokenPublisher(
   nodeType: String,
   tokenManager: DelegationTokenManager,
 ) extends Logging with org.apache.kafka.image.publisher.MetadataPublisher {
-  logIdent = s"[${name()}] "
+  logContext = s"[${name()}] "
 
   var _firstPublish = true
 

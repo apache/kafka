@@ -45,7 +45,7 @@ import scala.compat.java8.OptionConverters._
 
 
 class KRaftMetadataCache(val brokerId: Int) extends MetadataCache with Logging with ConfigRepository {
-  this.logIdent = s"[MetadataCache brokerId=$brokerId] "
+  this.logContext = s"[MetadataCache brokerId=$brokerId] "
 
   // This is the cache state. Every MetadataImage instance is immutable, and updates
   // replace this value with a completely new one. This means reads (which are not under

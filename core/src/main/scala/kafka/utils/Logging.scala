@@ -18,6 +18,7 @@
 package kafka.utils
 
 import com.typesafe.scalalogging.Logger
+import org.apache.kafka.common.utils.LogContext
 import org.slf4j.{LoggerFactory, Marker, MarkerFactory}
 
 
@@ -40,16 +41,16 @@ private object Logging {
 
 trait Logging {
 
-  protected lazy val logger = Logger(LoggerFactory.getLogger(loggerName))
+  protected lazy val logger: Logger = Logger(LoggerFactory.getLogger(loggerName))
 
-  protected var logIdent: String = _
+  protected var logContext: LogContext = _
 
   Log4jControllerRegistration
 
   protected def loggerName: String = getClass.getName
 
   protected def msgWithLogIdent(msg: String): String =
-    if (logIdent == null) msg else logIdent + msg
+    if (logContext == null) msg else logContext + msg
 
   def trace(msg: => String): Unit = logger.trace(msgWithLogIdent(msg))
 

@@ -123,7 +123,7 @@ class GroupMetadataManager(brokerId: Int,
       "group-coordinator-metrics",
       "The total number of expired offsets")))
 
-  this.logIdent = s"[GroupMetadataManager brokerId=$brokerId] "
+  this.logContext = s"[GroupMetadataManager brokerId=$brokerId] "
 
   private def recreateGauge[T](name: String, gauge: Gauge[T]): Gauge[T] = {
     metricsGroup.removeMetric(name)

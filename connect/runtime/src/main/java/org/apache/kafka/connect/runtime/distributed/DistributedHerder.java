@@ -303,7 +303,10 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
         // Thread factory uses String.format and '%' is handled as a placeholder
         // need to escape if the client.id contains an actual % character
         String escapedClientIdForThreadNameFormat = clientId.replace("%", "%%");
-        LogContext logContext = new LogContext("[Worker clientId=" + clientId + ", groupId=" + this.workerGroupId + "] ");
+        LogContext logContext = LogContext.newBuilder("Worker")
+            .withTag("clientId", clientId)
+            .withTag("groupId", this.workerGroupId)
+            .build();
         log = logContext.logger(DistributedHerder.class);
 
         this.member = member != null

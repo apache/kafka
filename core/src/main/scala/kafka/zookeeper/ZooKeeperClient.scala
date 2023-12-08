@@ -72,7 +72,7 @@ class ZooKeeperClient(connectString: String,
   }
 
 
-  this.logIdent = s"[ZooKeeperClient $name] "
+  this.logContext = s"[ZooKeeperClient $name] "
   private val initializationLock = new ReentrantReadWriteLock()
   private val isConnectedOrExpiredLock = new ReentrantLock()
   private val isConnectedOrExpiredCondition = isConnectedOrExpiredLock.newCondition()

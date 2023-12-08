@@ -42,7 +42,7 @@ class ReplicaFetcherThread(name: String,
                                 isInterruptible = false,
                                 replicaMgr.brokerTopicStats) {
 
-  this.logIdent = logPrefix
+  this.logContext = logPrefix
 
   // Visible for testing
   private[server] val partitionsWithNewHighWatermark = mutable.Buffer[TopicPartition]()

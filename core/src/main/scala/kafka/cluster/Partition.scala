@@ -339,7 +339,7 @@ class Partition(val topicPartition: TopicPartition,
    * In addition to the leader, the controller can also send the epoch of the controller that elected the leader for
    * each partition. */
   private var controllerEpoch: Int = KafkaController.InitialControllerEpoch
-  this.logIdent = s"[Partition $topicPartition broker=$localBrokerId] "
+  this.logContext = s"[Partition $topicPartition broker=$localBrokerId] "
 
   private val tags = Map("topic" -> topic, "partition" -> partitionId.toString).asJava
 

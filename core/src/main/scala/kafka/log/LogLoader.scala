@@ -69,7 +69,7 @@ class LogLoader(
   numRemainingSegments: ConcurrentMap[String, Int] = new ConcurrentHashMap[String, Int],
   isRemoteLogEnabled: Boolean = false,
 ) extends Logging {
-  logIdent = s"[LogLoader partition=$topicPartition, dir=${dir.getParent}] "
+  logContext = s"[LogLoader partition=$topicPartition, dir=${dir.getParent}] "
 
   /**
    * Load the log segments from the log files on disk, and returns the components of the loaded log.
@@ -198,7 +198,7 @@ class LogLoader(
       config.recordVersion,
       time,
       reloadFromCleanShutdown = hadCleanShutdown,
-      logIdent)
+      logContext)
     val activeSegment = segments.lastSegment.get
     new LoadedLogOffsets(
       newLogStartOffset,
@@ -281,7 +281,7 @@ class LogLoader(
             config,
             scheduler,
             logDirFailureChannel,
-            logIdent)
+            logContext)
           deleteProducerSnapshotsAsync(result.deletedSegments)
       }
     }
@@ -366,7 +366,7 @@ class LogLoader(
       config.recordVersion,
       time,
       reloadFromCleanShutdown = false,
-      logIdent)
+      logContext)
     val bytesTruncated = segment.recover(producerStateManager, leaderEpochCache)
     // once we have recovered the segment's data, take a snapshot to ensure that we won't
     // need to reload the same segment again while recovering another segment.
@@ -509,7 +509,7 @@ class LogLoader(
         config,
         scheduler,
         logDirFailureChannel,
-        logIdent)
+        logContext)
       deleteProducerSnapshotsAsync(segmentsToDelete)
     }
   }

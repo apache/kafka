@@ -147,7 +147,7 @@ class TransactionMarkerChannelManager(
 
   private val metricsGroup = new KafkaMetricsGroup(this.getClass)
 
-  this.logIdent = "[Transaction Marker Channel Manager " + config.brokerId + "]: "
+  this.logContext = "[Transaction Marker Channel Manager " + config.brokerId + "]: "
 
   private val interBrokerListenerName: ListenerName = config.interBrokerListenerName
 

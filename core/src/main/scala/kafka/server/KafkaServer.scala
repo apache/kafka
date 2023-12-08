@@ -252,8 +252,8 @@ class KafkaServer(
 
         /* generate brokerId */
         config.brokerId = getOrGenerateBrokerId(initialMetaPropsEnsemble)
-        logContext = new LogContext(s"[KafkaServer id=${config.brokerId}] ")
-        this.logIdent = logContext.logPrefix
+        logContext = LogContext.newBuilder("KafkaServer").withTag("id", config.brokerId).build()
+        this.logContext = logContext.logPrefix
 
         // initialize dynamic broker configs from ZooKeeper. Any updates made after this will be
         // applied after ZkConfigManager starts.
@@ -681,7 +681,9 @@ class KafkaServer(
   }
 
   protected def createReplicaManager(isShuttingDown: AtomicBoolean): ReplicaManager = {
-    val addPartitionsLogContext = new LogContext(s"[AddPartitionsToTxnManager broker=${config.brokerId}]")
+    val addPartitionsLogContext = LogContext.newBuilder("AddPartitionsToTxnManager")
+      .withTag("brokerId", config.brokerId.toString)
+      .build()
     val addPartitionsToTxnNetworkClient = NetworkUtils.buildNetworkClient("AddPartitionsManager", config, metrics, time, addPartitionsLogContext)
     val addPartitionsToTxnManager = new AddPartitionsToTxnManager(
       config,

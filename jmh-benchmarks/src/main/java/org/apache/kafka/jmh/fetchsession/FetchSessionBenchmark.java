@@ -54,7 +54,7 @@ import java.util.concurrent.TimeUnit;
 @BenchmarkMode(Mode.AverageTime)
 @OutputTimeUnit(TimeUnit.NANOSECONDS)
 public class FetchSessionBenchmark {
-    private static final LogContext LOG_CONTEXT = new LogContext("[BenchFetchSessionHandler]=");
+    private static final LogContext LOG_CONTEXT = LogContext.newBuilder("BenchFetchSessionHandler").build();
 
     @Param(value = {"10", "100", "1000"})
     private int partitionCount;

@@ -117,7 +117,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
     }
   }
 
-  this.logIdent = s"[UnifiedLog partition=$topicPartition, dir=$parentDir] "
+  this.logContext = s"[UnifiedLog partition=$topicPartition, dir=$parentDir] "
 
   /* A lock that guards all modifications to the log */
   private val lock = new Object
@@ -519,7 +519,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
   }
 
   private def initializeLeaderEpochCache(): Unit = lock synchronized {
-    leaderEpochCache = UnifiedLog.maybeCreateLeaderEpochCache(dir, topicPartition, logDirFailureChannel, recordVersion, logIdent)
+    leaderEpochCache = UnifiedLog.maybeCreateLeaderEpochCache(dir, topicPartition, logDirFailureChannel, recordVersion, logContext)
   }
 
   private def updateHighWatermarkWithLogEndOffset(): Unit = {
@@ -554,7 +554,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
                                    producerStateManager: ProducerStateManager): Unit = lock synchronized {
     localLog.checkIfMemoryMappedBufferClosed()
     UnifiedLog.rebuildProducerState(producerStateManager, localLog.segments, logStartOffset, lastOffset, recordVersion, time,
-      reloadFromCleanShutdown = false, logIdent)
+      reloadFromCleanShutdown = false, logContext)
   }
 
   @threadsafe
@@ -1872,7 +1872,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
     lock synchronized {
       localLog.checkIfMemoryMappedBufferClosed()
       val deletedSegments = UnifiedLog.replaceSegments(localLog.segments, newSegments, oldSegments, dir, topicPartition,
-        config, scheduler, logDirFailureChannel, logIdent)
+        config, scheduler, logDirFailureChannel, logContext)
       deleteProducerSnapshots(deletedSegments, asyncDelete = true)
     }
   }
@@ -1912,7 +1912,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
   }
 
   private[log] def splitOverflowedSegment(segment: LogSegment): List[LogSegment] = lock synchronized {
-    val result = UnifiedLog.splitOverflowedSegment(segment, localLog.segments, dir, topicPartition, config, scheduler, logDirFailureChannel, logIdent)
+    val result = UnifiedLog.splitOverflowedSegment(segment, localLog.segments, dir, topicPartition, config, scheduler, logDirFailureChannel, logContext)
     deleteProducerSnapshots(result.deletedSegments, asyncDelete = true)
     result.newSegments.toList
   }

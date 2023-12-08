@@ -39,7 +39,7 @@ class StateChangeLogger(brokerId: Int, inControllerContext: Boolean, controllerE
   locally {
     val prefix = if (inControllerContext) "Controller" else "Broker"
     val epochEntry = controllerEpoch.fold("")(epoch => s" epoch=$epoch")
-    logIdent = s"[$prefix id=$brokerId$epochEntry] "
+    logContext = s"[$prefix id=$brokerId$epochEntry] "
   }
 
   def withControllerEpoch(controllerEpoch: Int): StateChangeLogger =

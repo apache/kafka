@@ -37,7 +37,7 @@ abstract class AbstractFetcherManager[T <: AbstractFetcherThread](val name: Stri
   private val lock = new Object
   private var numFetchersPerBroker = numFetchers
   val failedPartitions = new FailedPartitions
-  this.logIdent = "[" + name + "] "
+  this.logContext = "[" + name + "] "
 
   private val tags = Map("clientId" -> clientId).asJava
 

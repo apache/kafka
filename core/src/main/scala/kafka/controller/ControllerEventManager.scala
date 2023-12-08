@@ -123,7 +123,7 @@ class ControllerEventManager(controllerId: Int,
       name, false, s"[ControllerEventThread controllerId=$controllerId] ")
       with Logging {
 
-    logIdent = logPrefix
+    logContext = logPrefix
 
     override def doWork(): Unit = {
       val dequeued = pollFromEventQueue()

@@ -114,7 +114,7 @@ object ZkProducerIdManager {
 
 class ZkProducerIdManager(brokerId: Int, zkClient: KafkaZkClient) extends ProducerIdManager with Logging {
 
-  this.logIdent = "[ZK ProducerId Manager " + brokerId + "]: "
+  this.logContext = "[ZK ProducerId Manager " + brokerId + "]: "
 
   private var currentProducerIdBlock: ProducerIdsBlock = ProducerIdsBlock.EMPTY
   private var nextProducerId: Long = _
@@ -164,7 +164,7 @@ class RPCProducerIdManager(brokerId: Int,
                            brokerEpochSupplier: () => Long,
                            controllerChannel: NodeToControllerChannelManager) extends ProducerIdManager with Logging {
 
-  this.logIdent = "[RPC ProducerId Manager " + brokerId + "]: "
+  this.logContext = "[RPC ProducerId Manager " + brokerId + "]: "
 
   // Visible for testing
   private[transaction] var nextProducerIdBlock = new AtomicReference[ProducerIdsBlock](null)

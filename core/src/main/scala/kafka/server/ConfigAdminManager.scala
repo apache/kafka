@@ -84,7 +84,7 @@ class ConfigAdminManager(nodeId: Int,
                          configRepository: ConfigRepository) extends Logging {
   import ConfigAdminManager._
 
-  this.logIdent = "[ConfigAdminManager[nodeId=" + nodeId + "]: "
+  this.logContext = "[ConfigAdminManager[nodeId=" + nodeId + "]: "
 
   val runtimeLoggerManager = new RuntimeLoggerManager(nodeId, logger.underlying)
 

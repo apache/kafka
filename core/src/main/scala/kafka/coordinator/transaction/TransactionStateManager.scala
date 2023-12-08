@@ -79,7 +79,7 @@ class TransactionStateManager(brokerId: Int,
                               time: Time,
                               metrics: Metrics) extends Logging {
 
-  this.logIdent = "[Transaction State Manager " + brokerId + "]: "
+  this.logContext = "[Transaction State Manager " + brokerId + "]: "
 
   type SendTxnMarkersCallback = (Int, TransactionResult, TransactionMetadata, TxnTransitMetadata) => Unit
 

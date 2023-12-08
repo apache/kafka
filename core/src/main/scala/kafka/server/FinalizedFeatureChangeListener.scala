@@ -147,7 +147,7 @@ class FinalizedFeatureChangeListener(private val finalizedFeatureCache: ZkMetada
    */
   private class ChangeNotificationProcessorThread(name: String) extends ShutdownableThread(name) with Logging {
 
-    this.logIdent = logPrefix
+    this.logContext = logPrefix
 
     override def doWork(): Unit = {
       try {

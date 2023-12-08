@@ -103,7 +103,11 @@ class ReplicaFetcherThreadTest {
                                          replicaMgr: ReplicaManager,
                                          quota: ReplicaQuota,
                                          leaderEndpointBlockingSend: BlockingSend): ReplicaFetcherThread = {
-    val logContext = new LogContext(s"[ReplicaFetcher replicaId=${brokerConfig.brokerId}, leaderId=${leaderEndpointBlockingSend.brokerEndPoint().id}, fetcherId=$fetcherId] ")
+    val logContext = LogContext.newBuilder("ReplicaFetcher")
+      .withTag("replicaId", brokerConfig.brokerId)
+      .withTag("leaderId", leaderEndpointBlockingSend.brokerEndPoint().id)
+      .withTag("fetcherId", fetcherId)
+      .build()
     val fetchSessionHandler = new FetchSessionHandler(logContext, leaderEndpointBlockingSend.brokerEndPoint().id)
     val leader = new RemoteLeaderEndPoint(logContext.logPrefix, leaderEndpointBlockingSend, fetchSessionHandler,
       brokerConfig, replicaMgr, quota, () => brokerConfig.interBrokerProtocolVersion, () => 1)
@@ -583,7 +587,11 @@ class ReplicaFetcherThreadTest {
 
     // Create the fetcher thread
     val mockNetwork = new MockBlockingSender(Collections.emptyMap(), brokerEndPoint, new SystemTime())
-    val logContext = new LogContext(s"[ReplicaFetcher replicaId=${config.brokerId}, leaderId=${brokerEndPoint.id}, fetcherId=0] ")
+    val logContext = LogContext.newBuilder("ReplicaFetcher")
+      .withTag("replicaId", config.brokerId)
+      .withTag("leaderId", brokerEndPoint.id)
+      .withTag("fetcherId", "0")
+      .build()
     val fetchSessionHandler = new FetchSessionHandler(logContext, brokerEndPoint.id)
     val leader = new RemoteLeaderEndPoint(logContext.logPrefix, mockNetwork, fetchSessionHandler, config,
       replicaManager, quota, () => config.interBrokerProtocolVersion, () => 1)
@@ -687,7 +695,11 @@ class ReplicaFetcherThreadTest {
     when(partition.localLogOrException).thenReturn(log)
     when(partition.appendRecordsToFollowerOrFutureReplica(any(), any())).thenReturn(None)
 
-    val logContext = new LogContext(s"[ReplicaFetcher replicaId=${config.brokerId}, leaderId=${brokerEndPoint.id}, fetcherId=0] ")
+    val logContext = LogContext.newBuilder("ReplicaFetcher")
+      .withTag("replicaId", config.brokerId)
+      .withTag("leaderId", brokerEndPoint.id)
+      .withTag("fetcherId", "0")
+      .build()
 
     val mockNetwork = new MockBlockingSender(
       Collections.emptyMap(),
@@ -780,7 +792,11 @@ class ReplicaFetcherThreadTest {
       -1L
     )))
 
-    val logContext = new LogContext(s"[ReplicaFetcher replicaId=${config.brokerId}, leaderId=${brokerEndPoint.id}, fetcherId=0] ")
+    val logContext = LogContext.newBuilder("ReplicaFetcher")
+      .withTag("replicaId", config.brokerId)
+      .withTag("leaderId", brokerEndPoint.id)
+      .withTag("fetcherId", "0")
+      .build()
 
     val mockNetwork = new MockBlockingSender(
       Collections.emptyMap(),
@@ -1219,7 +1235,11 @@ class ReplicaFetcherThreadTest {
     when(replicaQuota.isThrottled(any[TopicPartition])).thenReturn(false)
     when(log.logStartOffset).thenReturn(0)
 
-    val logContext = new LogContext(s"[ReplicaFetcher replicaId=${config.brokerId}, leaderId=${brokerEndPoint.id}, fetcherId=0] ")
+    val logContext = LogContext.newBuilder("ReplicaFetcher")
+      .withTag("replicaId", config.brokerId)
+      .withTag("leaderId", brokerEndPoint.id)
+      .withTag("fetcherId", "0")
+      .build()
     val fetchSessionHandler = new FetchSessionHandler(logContext, brokerEndPoint.id)
     val leader = new RemoteLeaderEndPoint(logContext.logPrefix, mockBlockingSend, fetchSessionHandler, config,
       replicaManager, replicaQuota, () => config.interBrokerProtocolVersion, () => 1)

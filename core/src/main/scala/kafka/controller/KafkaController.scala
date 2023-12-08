@@ -116,7 +116,7 @@ class KafkaController(val config: KafkaConfig,
 
   private val metricsGroup = new KafkaMetricsGroup(this.getClass)
 
-  this.logIdent = s"[Controller id=${config.brokerId}] "
+  this.logContext = s"[Controller id=${config.brokerId}] "
 
   @volatile private var brokerInfo = initialBrokerInfo
   @volatile private var _brokerEpoch = initialBrokerEpoch

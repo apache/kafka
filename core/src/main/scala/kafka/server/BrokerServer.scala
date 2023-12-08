@@ -81,9 +81,9 @@ class BrokerServer(
 
   import kafka.server.Server._
 
-  private val logContext: LogContext = new LogContext(s"[BrokerServer id=${config.nodeId}] ")
+  private val logContext: LogContext = LogContext.newBuilder("BrokerServer").withTag("id", config.nodeId.toString).build()
 
-  this.logIdent = logContext.logPrefix
+  this.logContext = logContext.logPrefix
 
   @volatile var lifecycleManager: BrokerLifecycleManager = _
 
@@ -218,7 +218,7 @@ class BrokerServer(
       tokenCache = new DelegationTokenCache(ScramMechanism.mechanismNames)
       credentialProvider = new CredentialProvider(ScramMechanism.mechanismNames, tokenCache)
 
-      val voterConnections = FutureUtils.waitWithLogging(logger.underlying, logIdent,
+      val voterConnections = FutureUtils.waitWithLogging(logger.underlying, logContext,
         "controller quorum voters future",
         sharedServer.controllerQuorumVotersFuture,
         startupDeadline, time)
@@ -271,7 +271,9 @@ class BrokerServer(
       )
       alterPartitionManager.start()
 
-      val addPartitionsLogContext = new LogContext(s"[AddPartitionsToTxnManager broker=${config.brokerId}]")
+      val addPartitionsLogContext = LogContext.newBuilder("AddPartitionsToTxnManager")
+        .withTag("brokerId", config.brokerId.toString)
+        .build()
       val addPartitionsToTxnNetworkClient = NetworkUtils.buildNetworkClient("AddPartitionsManager", config, metrics, time, addPartitionsLogContext)
       val addPartitionsToTxnManager = new AddPartitionsToTxnManager(
         config,
@@ -461,14 +463,14 @@ class BrokerServer(
       config.dynamicConfig.addReconfigurables(this)
 
       // Install all the metadata publishers.
-      FutureUtils.waitWithLogging(logger.underlying, logIdent,
+      FutureUtils.waitWithLogging(logger.underlying, logContext,
         "the broker metadata publishers to be installed",
         sharedServer.loader.installPublishers(metadataPublishers), startupDeadline, time)
 
       // Wait for this broker to contact the quorum, and for the active controller to acknowledge
       // us as caught up. It will do this by returning a heartbeat response with isCaughtUp set to
       // true. The BrokerLifecycleManager tracks this.
-      FutureUtils.waitWithLogging(logger.underlying, logIdent,
+      FutureUtils.waitWithLogging(logger.underlying, logContext,
         "the controller to acknowledge that we are caught up",
         lifecycleManager.initialCatchUpFuture, startupDeadline, time)
 
@@ -477,7 +479,7 @@ class BrokerServer(
       // Usually, we publish the initial metadata before lifecycleManager.initialCatchUpFuture
       // is completed, so this check is not necessary. But this is a simple check to make
       // completely sure.
-      FutureUtils.waitWithLogging(logger.underlying, logIdent,
+      FutureUtils.waitWithLogging(logger.underlying, logContext,
         "the initial broker metadata update to be published",
         brokerMetadataPublisher.firstPublishFuture , startupDeadline, time)
 
@@ -506,7 +508,7 @@ class BrokerServer(
 
       // We're now ready to unfence the broker. This also allows this broker to transition
       // from RECOVERY state to RUNNING state, once the controller unfences the broker.
-      FutureUtils.waitWithLogging(logger.underlying, logIdent,
+      FutureUtils.waitWithLogging(logger.underlying, logContext,
         "the broker to be unfenced",
         lifecycleManager.setReadyToUnfence(), startupDeadline, time)
 
@@ -526,12 +528,12 @@ class BrokerServer(
       val enableRequestProcessingFuture = socketServer.enableRequestProcessing(authorizerFutures)
 
       // Block here until all the authorizer futures are complete.
-      FutureUtils.waitWithLogging(logger.underlying, logIdent,
+      FutureUtils.waitWithLogging(logger.underlying, logContext,
         "all of the authorizer futures to be completed",
         CompletableFuture.allOf(authorizerFutures.values.toSeq: _*), startupDeadline, time)
 
       // Wait for all the SocketServer ports to be open, and the Acceptors to be started.
-      FutureUtils.waitWithLogging(logger.underlying, logIdent,
+      FutureUtils.waitWithLogging(logger.underlying, logContext,
         "all of the SocketServer Acceptors to be started",
         enableRequestProcessingFuture, startupDeadline, time)
 

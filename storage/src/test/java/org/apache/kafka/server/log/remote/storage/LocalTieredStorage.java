@@ -241,7 +241,10 @@ public final class LocalTieredStorage implements RemoteStorageManager {
         }
 
         brokerId = brokerIdInt;
-        logger = new LogContext(format("[LocalTieredStorage Id=%d] ", brokerId)).logger(this.getClass());
+        logger = LogContext.newBuilder("LocalTieredStorage")
+            .withTag("id", brokerId)
+            .build()
+            .logger(this.getClass());
 
         if (shouldDeleteOnClose != null) {
             deleteOnClose = Boolean.parseBoolean(shouldDeleteOnClose);

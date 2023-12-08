@@ -96,7 +96,7 @@ public class AssignmentsManager {
         this.brokerId = brokerId;
         this.brokerEpochSupplier = brokerEpochSupplier;
         this.eventQueue = new KafkaEventQueue(time,
-                new LogContext("[AssignmentsManager id=" + brokerId + "]"),
+                LogContext.newBuilder("AssignmentsManager").withTag("id", brokerId).build(),
                 "broker-" + brokerId + "-directory-assignments-manager-",
                 new ShutdownEvent());
         channelManager.start();

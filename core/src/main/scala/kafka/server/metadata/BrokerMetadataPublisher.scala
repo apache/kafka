@@ -110,7 +110,7 @@ class BrokerMetadataPublisher(
   fatalFaultHandler: FaultHandler,
   metadataPublishingFaultHandler: FaultHandler
 ) extends MetadataPublisher with Logging {
-  logIdent = s"[BrokerMetadataPublisher id=${config.nodeId}] "
+  logContext = s"[BrokerMetadataPublisher id=${config.nodeId}] "
 
   import BrokerMetadataPublisher._
 

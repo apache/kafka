@@ -58,7 +58,9 @@ object TransactionCoordinator {
     val txnStateManager = new TransactionStateManager(config.brokerId, scheduler, replicaManager, txnConfig,
       time, metrics)
 
-    val logContext = new LogContext(s"[TransactionCoordinator id=${config.brokerId}] ")
+    val logContext = LogContext.newBuilder("TransactionCoordinator")
+      .withTag("id", config.brokerId.toString)
+      .build()
     val txnMarkerChannelManager = TransactionMarkerChannelManager(config, metrics, metadataCache, txnStateManager,
       time, logContext)
 
@@ -90,7 +92,7 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
                              txnMarkerChannelManager: TransactionMarkerChannelManager,
                              time: Time,
                              logContext: LogContext) extends Logging {
-  this.logIdent = logContext.logPrefix
+  this.logContext = logContext.logPrefix
 
   import TransactionCoordinator._
 

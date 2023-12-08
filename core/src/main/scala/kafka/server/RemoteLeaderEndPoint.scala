@@ -59,7 +59,7 @@ class RemoteLeaderEndPoint(logPrefix: String,
                            metadataVersionSupplier: () => MetadataVersion,
                            brokerEpochSupplier: () => Long) extends LeaderEndPoint with Logging {
 
-  this.logIdent = logPrefix
+  this.logContext = logPrefix
 
   private val maxWait = brokerConfig.replicaFetchWaitMaxMs
   private val minBytes = brokerConfig.replicaFetchMinBytes

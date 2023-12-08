@@ -2457,7 +2457,9 @@ public class KafkaProducerTest {
         }
 
         public KafkaProducer<T, T> newKafkaProducer() {
-            LogContext logContext = new LogContext("[Producer test=" + testInfo.getDisplayName() + "] ");
+            LogContext logContext = LogContext.newBuilder("Producer")
+                .withTag("test", testInfo.getDisplayName())
+                .build();
 
             ProducerConfig producerConfig = new ProducerConfig(
                 ProducerConfig.appendSerializerToConfig(configs, serializer, serializer));

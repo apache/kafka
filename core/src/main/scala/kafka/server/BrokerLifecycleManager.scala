@@ -61,19 +61,18 @@ class BrokerLifecycleManager(
   val logDirs: Set[Uuid]
 ) extends Logging {
 
-  private def logPrefix(): String = {
-    val builder = new StringBuilder("[BrokerLifecycleManager")
-    builder.append(" id=").append(config.nodeId)
+  private def logContextBuilder(): LogContext.Builder = {
+    val builder = LogContext.newBuilder("BrokerLifecycleManager")
+    builder.withTag("id", config.nodeId)
     if (isZkBroker) {
-      builder.append(" isZkBroker=true")
+      builder.withTag("isZkBroker", "true")
     }
-    builder.append("] ")
-    builder.toString()
+    builder
   }
 
-  val logContext = new LogContext(logPrefix())
+  val logContext: LogContext = logContextBuilder().build()
 
-  this.logIdent = logContext.logPrefix()
+  this.logContext = logContext.logPrefix()
 
   /**
    * The broker id.

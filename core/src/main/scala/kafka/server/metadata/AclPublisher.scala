@@ -33,7 +33,7 @@ class AclPublisher(
   nodeType: String,
   authorizer: Option[Authorizer],
 ) extends Logging with org.apache.kafka.image.publisher.MetadataPublisher {
-  logIdent = s"[${name()}] "
+  logContext = s"[${name()}] "
 
   override def name(): String = s"AclPublisher $nodeType id=$nodeId"
 

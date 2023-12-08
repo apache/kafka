@@ -268,7 +268,9 @@ object BrokerApiVersionsCommand {
 
     def create(config: AdminConfig): AdminClient = {
       val clientId = "admin-" + AdminClientIdSequence.getAndIncrement()
-      val logContext = new LogContext(s"[LegacyAdminClient clientId=$clientId] ")
+      val logContext = LogContext.newBuilder("LegacyAdminClient")
+        .withTag("clientId", clientId)
+        .build()
       val time = Time.SYSTEM
       val metrics = new Metrics(time)
       val metadata = new Metadata(CommonClientConfigs.DEFAULT_RETRY_BACKOFF_MS,

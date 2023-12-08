@@ -64,7 +64,7 @@ class AddPartitionsToTxnManager(
   time
 ) with Logging {
 
-  this.logIdent = logPrefix
+  this.logContext = logPrefix
 
   private val inflightNodes = mutable.HashSet[Node]()
   private val nodesToTransactions = mutable.Map[Node, TransactionDataAndCallbacks]()

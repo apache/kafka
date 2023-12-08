@@ -31,7 +31,7 @@ class ScramPublisher(
   nodeType: String,
   credentialProvider: CredentialProvider,
 ) extends Logging with org.apache.kafka.image.publisher.MetadataPublisher {
-  logIdent = s"[${name()}] "
+  logContext = s"[${name()}] "
 
   override def name(): String = s"ScramPublisher $nodeType id=${conf.nodeId}"
 

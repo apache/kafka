@@ -62,7 +62,7 @@ abstract class AbstractFetcherThread(name: String,
                                      val brokerTopicStats: BrokerTopicStats) //BrokerTopicStats's lifecycle managed by ReplicaManager
   extends ShutdownableThread(name, isInterruptible) with Logging {
 
-  this.logIdent = this.logPrefix
+  this.logContext = this.logPrefix
 
   type FetchData = FetchResponseData.PartitionData
   type EpochData = OffsetForLeaderEpochRequestData.OffsetForLeaderPartition

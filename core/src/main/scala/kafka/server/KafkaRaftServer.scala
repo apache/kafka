@@ -52,12 +52,12 @@ class KafkaRaftServer(
   time: Time,
 ) extends Server with Logging {
 
-  this.logIdent = s"[KafkaRaftServer nodeId=${config.nodeId}] "
+  this.logContext = s"[KafkaRaftServer nodeId=${config.nodeId}] "
   KafkaMetricsReporter.startReporters(VerifiableProperties(config.originals))
   KafkaYammerMetrics.INSTANCE.configure(config.originals)
 
   private val (metaPropsEnsemble, bootstrapMetadata) =
-    KafkaRaftServer.initializeLogDirs(config, this.logger.underlying, this.logIdent)
+    KafkaRaftServer.initializeLogDirs(config, this.logger.underlying, this.logContext)
 
   private val metrics = Server.initializeMetrics(
     config,
