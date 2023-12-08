@@ -68,6 +68,7 @@ import org.apache.kafka.common.metadata.RemoveTopicRecord;
 import org.apache.kafka.common.metadata.TopicRecord;
 import org.apache.kafka.common.metadata.PartitionRecord;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.ApiMessage;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.AlterPartitionRequest;
 import org.apache.kafka.common.requests.ApiError;
@@ -2932,6 +2933,54 @@ public class ReplicationControlManagerTest {
             RecordTestUtils.iteratorToSet(ctx.replicationControl.brokersToIsrs().iterator(2, true)));
     }
 
+    @Test
+    void testHandleDirectoriesOffline() throws Exception {
+        ReplicationControlTestContext ctx = new ReplicationControlTestContext.Builder().build();
+        int b1 = 101, b2 = 102;
+        Uuid dir1b1 = Uuid.fromString("suitdzfTTdqoWcy8VqmkUg");
+        Uuid dir2b1 = Uuid.fromString("yh3acnzGSeurSTj8aIhOjw");
+        Uuid dir1b2 = Uuid.fromString("OmpmJ8RjQliQlEFht56DwQ");
+        Uuid dir2b2 = Uuid.fromString("w05baLpsT5Oz0LvKTKXoDw");
+        ctx.registerBrokersWithDirs(b1, asList(dir1b1, dir2b1), b2, asList(dir1b2, dir2b2));
+        ctx.unfenceBrokers(b1, b2);
+        Uuid topicA = ctx.createTestTopic("a", new int[][]{new int[]{b1, b2}, new int[]{b1, b2}}).topicId();
+        Uuid topicB = ctx.createTestTopic("b", new int[][]{new int[]{b1, b2}, new int[]{b1, b2}}).topicId();
+        ctx.assignReplicasToDirs(b1, new HashMap<TopicIdPartition, Uuid>() {{
+                put(new TopicIdPartition(topicA, 0), dir1b1);
+                put(new TopicIdPartition(topicA, 1), dir2b1);
+                put(new TopicIdPartition(topicB, 0), dir1b1);
+                put(new TopicIdPartition(topicB, 1), dir2b1);
+            }});
+        ctx.assignReplicasToDirs(b2, new HashMap<TopicIdPartition, Uuid>() {{
+                put(new TopicIdPartition(topicA, 0), dir1b2);
+                put(new TopicIdPartition(topicA, 1), dir2b2);
+                put(new TopicIdPartition(topicB, 0), dir1b2);
+                put(new TopicIdPartition(topicB, 1), dir2b2);
+            }});
+        List<ApiMessageAndVersion> records = new ArrayList<>();
+        ctx.replicationControl.handleDirectoriesOffline(b1, defaultBrokerEpoch(b1), asList(
+                dir1b1,
+                dir1b2 // should not cause update to dir1b2 as it's not registered to b1
+        ), records);
+        assertEquals(
+            singletonList(new ApiMessageAndVersion(new BrokerRegistrationChangeRecord()
+                    .setBrokerId(b1).setBrokerEpoch(defaultBrokerEpoch(b1))
+                    .setLogDirs(singletonList(dir2b1)), (short) 2)),
+            filter(records, BrokerRegistrationChangeRecord.class)
+        );
+        short partitionChangeRecordVersion = ctx.featureControl.metadataVersion().partitionChangeRecordVersion();
+        assertEquals(
+            sortPartitionChangeRecords(asList(
+                new ApiMessageAndVersion(new PartitionChangeRecord().setTopicId(topicA).setPartitionId(0)
+                        .setLeader(b2).setIsr(singletonList(b2)), partitionChangeRecordVersion),
+                new ApiMessageAndVersion(new PartitionChangeRecord().setTopicId(topicB).setPartitionId(0)
+                        .setLeader(b2).setIsr(singletonList(b2)), partitionChangeRecordVersion)
+            )),
+            sortPartitionChangeRecords(filter(records, PartitionChangeRecord.class))
+        );
+        assertEquals(3, records.size());
+    }
+
     /**
      * Sorts {@link PartitionChangeRecord} by topic ID and partition ID,
      * so that the order of the records is deterministic, and can be compared.
@@ -2943,5 +2992,9 @@ public class ReplicationControlManagerTest {
             return partitionChangeRecord.topicId() + "-" + partitionChangeRecord.partitionId();
         }));
         return records;
+    }
+
+    private static List<ApiMessageAndVersion> filter(List<ApiMessageAndVersion> records, Class<? extends ApiMessage> clazz) {
+        return records.stream().filter(r -> clazz.equals(r.message().getClass())).collect(Collectors.toList());
     }
 }
