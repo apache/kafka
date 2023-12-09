@@ -45,3 +45,4 @@ services:
       KAFKA_SSL_TRUSTSTORE_FILENAME: 'kafka.truststore.jks'
       KAFKA_SSL_TRUSTSTORE_CREDENTIALS: 'kafka_truststore_creds'
       KAFKA_SSL_CLIENT_AUTH: 'required'
+      KAFKA_SSL_ENDPOINT_IDENTIFICATION_ALGORITHM: ""
