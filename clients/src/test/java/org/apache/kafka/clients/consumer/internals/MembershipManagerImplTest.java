@@ -290,9 +290,7 @@ public class MembershipManagerImplTest {
         CompletableFuture<Void> commitResult =
                 mockNewAssignmentAndRevocationStuckOnCommit(membershipManager, topicId1, topic1,
                         Arrays.asList(1, 2), true);
-        Set<TopicIdPartition> assignment1 = new HashSet<>();
-        assignment1.add(new TopicIdPartition(topicId1, new TopicPartition(topic1, 1)));
-        assignment1.add(new TopicIdPartition(topicId1, new TopicPartition(topic1, 2)));
+        Set<TopicIdPartition> assignment1 = topicIdPartitions(topicId1, topic1, 1, 2);
         assertEquals(assignment1, membershipManager.assignmentReadyToReconcile());
 
         // Get fenced and rejoin while still reconciling. Get new assignment to reconcile after
@@ -307,8 +305,7 @@ public class MembershipManagerImplTest {
         mockOwnedPartitionAndAssignmentReceived(topicId3, "topic3", owned, true);
         receiveAssignmentAfterRejoin(topicId3, Collections.singletonList(5), membershipManager);
         verifyReconciliationNotTriggered(membershipManager);
-        Set<TopicIdPartition> assignmentAfterRejoin = Collections.singleton(
-                new TopicIdPartition(topicId3, new TopicPartition("topic3", 5)));
+        Set<TopicIdPartition> assignmentAfterRejoin = topicIdPartitions(topicId3, "topic3", 5);
         assertEquals(assignmentAfterRejoin, membershipManager.assignmentReadyToReconcile());
 
         // Reconciliation completes when the member has already re-joined the group. Should not
@@ -372,9 +369,7 @@ public class MembershipManagerImplTest {
 
         // Pending assignment that was discovered in metadata should be ready to reconcile in the
         // next reconciliation loop.
-        Set<TopicIdPartition> topic2Assignment = new HashSet<>(Arrays.asList(
-                new TopicIdPartition(topicId2, new TopicPartition(topic2, 1)),
-                new TopicIdPartition(topicId2, new TopicPartition(topic2, 2))));
+        Set<TopicIdPartition> topic2Assignment = topicIdPartitions(topicId2, topic2, 1, 2);
         assertEquals(topic2Assignment, membershipManager.assignmentReadyToReconcile());
     }
 
@@ -568,9 +563,7 @@ public class MembershipManagerImplTest {
         MembershipManagerImpl membershipManager = createMembershipManagerJoiningGroup();
         receiveAssignment(topicId, Arrays.asList(0, 1), membershipManager);
 
-        Set<TopicIdPartition> assignedPartitions = new HashSet<>(Arrays.asList(
-                new TopicIdPartition(topicId, new TopicPartition(topicName, 0)),
-                new TopicIdPartition(topicId, new TopicPartition(topicName, 1))));
+        Set<TopicIdPartition> assignedPartitions = topicIdPartitions(topicId, topicName, 0, 1);
         verifyReconciliationTriggeredAndCompleted(membershipManager, assignedPartitions);
     }
 
@@ -586,10 +579,9 @@ public class MembershipManagerImplTest {
         // New assignment received, adding partitions 1 and 2 to the previously owned partition 0.
         receiveAssignment(topicId, Arrays.asList(0, 1, 2), membershipManager);
 
-        Set<TopicIdPartition> assignedPartitions = new HashSet<>(Arrays.asList(
-                new TopicIdPartition(topicId, ownedPartition),
-                new TopicIdPartition(topicId, new TopicPartition("topic1", 1)),
-                new TopicIdPartition(topicId, new TopicPartition("topic1", 2))));
+        Set<TopicIdPartition> assignedPartitions = new HashSet<>();
+        assignedPartitions.add(new TopicIdPartition(topicId, ownedPartition));
+        assignedPartitions.addAll(topicIdPartitions(topicId, topicName, 1, 2));
         verifyReconciliationTriggeredAndCompleted(membershipManager, assignedPartitions);
     }
 
@@ -603,11 +595,7 @@ public class MembershipManagerImplTest {
         // Receive assignment different from what the member owns - should reconcile
         Set<TopicPartition> owned = Collections.emptySet();
         mockOwnedPartitionAndAssignmentReceived(topicId, topicName, owned, true);
-        Set<TopicIdPartition> expectedAssignmentReconciled = new HashSet<>();
-        expectedAssignmentReconciled.add(new TopicIdPartition(topicId,
-                new TopicPartition(topicName, 0)));
-        expectedAssignmentReconciled.add(new TopicIdPartition(topicId,
-                new TopicPartition(topicName, 1)));
+        Set<TopicIdPartition> expectedAssignmentReconciled = topicIdPartitions(topicId, topicName, 0, 1);
         receiveAssignment(topicId, Arrays.asList(0, 1), membershipManager);
         verifyReconciliationTriggeredAndCompleted(membershipManager, expectedAssignmentReconciled);
         assertEquals(MemberState.ACKNOWLEDGING, membershipManager.state());
@@ -691,9 +679,7 @@ public class MembershipManagerImplTest {
         receiveAssignment(topicId, Arrays.asList(1, 2), membershipManager);
 
         assertEquals(MemberState.ACKNOWLEDGING, membershipManager.state());
-        Set<TopicIdPartition> assignedPartitions = new HashSet<>(Arrays.asList(
-                new TopicIdPartition(topicId, new TopicPartition("topic1", 1)),
-                new TopicIdPartition(topicId, new TopicPartition("topic1", 2))));
+        Set<TopicIdPartition> assignedPartitions = topicIdPartitions(topicId, topicName, 1, 2);
         assertEquals(assignedPartitions, membershipManager.currentAssignment());
         assertFalse(membershipManager.reconciliationInProgress());
 
@@ -723,9 +709,7 @@ public class MembershipManagerImplTest {
 
         // When metadata is updated, the member should re-trigger reconciliation
         membershipManager.onUpdate(null);
-        Set<TopicIdPartition> expectedAssignmentReconciled = new HashSet<>(Arrays.asList(
-                new TopicIdPartition(topicId, new TopicPartition(topicName, 0)),
-                new TopicIdPartition(topicId, new TopicPartition(topicName, 1))));
+        Set<TopicIdPartition> expectedAssignmentReconciled = topicIdPartitions(topicId, topicName, 0, 1);
         verifyReconciliationTriggeredAndCompleted(membershipManager, expectedAssignmentReconciled);
         assertEquals(MemberState.ACKNOWLEDGING, membershipManager.state());
         assertTrue(membershipManager.topicsWaitingForMetadata().isEmpty());
@@ -793,8 +777,7 @@ public class MembershipManagerImplTest {
         // Revocation should complete without requesting any metadata update given that the topic
         // received in target assignment should exist in local topic name cache.
         verify(metadata, never()).requestUpdate(anyBoolean());
-        Set<TopicIdPartition> remainingAssignment = Collections.singleton(
-                new TopicIdPartition(topicId, new TopicPartition(topicName, 1)));
+        Set<TopicIdPartition> remainingAssignment = topicIdPartitions(topicId, topicName, 1);
 
         testRevocationCompleted(membershipManager, remainingAssignment);
     }
@@ -812,15 +795,21 @@ public class MembershipManagerImplTest {
     public void testListenerCallbacksBasic() {
         // Step 1: set up mocks
         MembershipManagerImpl membershipManager = createMemberInStableState();
-        mockOwnedPartition("topic1", 0);
         CounterConsumerRebalanceListener listener = new CounterConsumerRebalanceListener();
         ConsumerRebalanceListenerInvoker invoker = consumerRebalanceListenerInvoker();
 
+        String topicName = "topic1";
+        Uuid topicId = Uuid.randomUuid();
+
+        when(subscriptionState.assignedPartitions()).thenReturn(Collections.emptySet());
+        when(subscriptionState.hasAutoAssignedPartitions()).thenReturn(true);
         when(subscriptionState.rebalanceListener()).thenReturn(Optional.of(listener));
         doNothing().when(subscriptionState).markPendingRevocation(anySet());
+        when(metadata.topicNames()).thenReturn(Collections.singletonMap(topicId, topicName));
 
         // Step 2: put the state machine into the appropriate... state
-        receiveEmptyAssignment(membershipManager);
+        when(metadata.topicNames()).thenReturn(Collections.singletonMap(topicId, topicName));
+        receiveAssignment(topicId, Arrays.asList(0, 1), membershipManager);
         assertEquals(MemberState.RECONCILING, membershipManager.state());
         assertEquals(Collections.emptySet(), membershipManager.currentAssignment());
         assertTrue(membershipManager.reconciliationInProgress());
@@ -830,52 +819,49 @@ public class MembershipManagerImplTest {
 
         assertTrue(membershipManager.reconciliationInProgress());
 
-        // Step 3: revoke partitions
-        performCallback(
-                membershipManager,
-                invoker,
-                ConsumerRebalanceListenerMethodName.ON_PARTITIONS_REVOKED,
-                topicPartitions(new TopicPartition("topic1", 0))
-        );
-
-        assertTrue(membershipManager.reconciliationInProgress());
-
-        // Step 4: assign partitions
+        // Step 3: assign partitions
         performCallback(
                 membershipManager,
                 invoker,
                 ConsumerRebalanceListenerMethodName.ON_PARTITIONS_ASSIGNED,
-                Collections.emptySortedSet()
+                topicPartitions(topicName, 0, 1)
         );
 
         assertFalse(membershipManager.reconciliationInProgress());
 
-        // Step 5: Receive ack and make sure we're done and our listener was called appropriately
+        // Step 4: Send ack and make sure we're done and our listener was called appropriately
         membershipManager.onHeartbeatRequestSent();
         assertEquals(MemberState.STABLE, membershipManager.state());
+        assertEquals(topicPartitions(topicName, 0, 1), subscriptionState.assignedPartitions());
+        assertEquals(topicIdPartitions(topicId, topicName, 0, 1), membershipManager.currentAssignment());
 
-        assertEquals(1, listener.revokedCounter.get());
+        assertEquals(0, listener.revokedCounter.get());
         assertEquals(1, listener.assignedCounter.get());
         assertEquals(0, listener.lostCounter.get());
-    }
 
-    @Test
-    public void testListenerCallbacksNoListeners() {
-        // Step 1: set up mocks
-        MembershipManagerImpl membershipManager = createMemberInStableState();
-        mockOwnedPartition("topic1", 0);
-
-        when(subscriptionState.rebalanceListener()).thenReturn(Optional.empty());
-        doNothing().when(subscriptionState).markPendingRevocation(anySet());
-
-        // Step 2: put the state machine into the appropriate... state
         receiveEmptyAssignment(membershipManager);
-        assertEquals(MemberState.ACKNOWLEDGING, membershipManager.state());
-        assertEquals(Collections.emptySet(), membershipManager.currentAssignment());
-        assertFalse(membershipManager.reconciliationInProgress());
-        assertEquals(0, backgroundEventQueue.size());
+        assertEquals(MemberState.RECONCILING, membershipManager.state());
+        assertTrue(membershipManager.reconciliationInProgress());
 
-        // Step 3: Receive ack and make sure we're done and our listener was called appropriately
+        // Step 6: revoke partitions
+        performCallback(
+                membershipManager,
+                invoker,
+                ConsumerRebalanceListenerMethodName.ON_PARTITIONS_REVOKED,
+                topicPartitions("topic1", 0)
+        );
+
+        assertTrue(membershipManager.reconciliationInProgress());
+
+        // Step 5: assign partitions
+        performCallback(
+                membershipManager,
+                invoker,
+                ConsumerRebalanceListenerMethodName.ON_PARTITIONS_ASSIGNED,
+                topicPartitions("topic1", 0)
+        );
+
+        // Step 3: Send ack and make sure we're done and our listener was called appropriately
         membershipManager.onHeartbeatRequestSent();
         assertEquals(MemberState.STABLE, membershipManager.state());
         assertFalse(membershipManager.reconciliationInProgress());
@@ -884,7 +870,7 @@ public class MembershipManagerImplTest {
     // TODO: Reconciliation needs to support when a listener throws an error on onPartitionsRevoked. When that
     //       happens, the assignment step is skipped
     // @Test
-    public void testListenerCallbacksFailsRevocation() {
+    public void testListenerCallbacksThrowsErrorOnPartitionsRevoked() {
         // Step 1: set up mocks
         MembershipManagerImpl membershipManager = createMemberInStableState();
         mockOwnedPartition("topic1", 0);
@@ -914,13 +900,13 @@ public class MembershipManagerImplTest {
                 membershipManager,
                 invoker,
                 ConsumerRebalanceListenerMethodName.ON_PARTITIONS_REVOKED,
-                topicPartitions(new TopicPartition("topic1", 0))
+                topicPartitions("topic1", 0)
         );
 
         assertFalse(membershipManager.reconciliationInProgress());
         assertEquals(MemberState.RECONCILING, membershipManager.state());
 
-        // Step 4: Receive ack and make sure we're done and our listener was called appropriately
+        // Step 4: Send ack and make sure we're done and our listener was called appropriately
         membershipManager.onHeartbeatRequestSent();
         assertEquals(MemberState.RECONCILING, membershipManager.state());
 
@@ -930,7 +916,7 @@ public class MembershipManagerImplTest {
     }
 
     @Test
-    public void testListenerCallbacksFailsAssignment() {
+    public void testListenerCallbacksThrowsErrorOnPartitionsAssigned() {
         // Step 1: set up mocks
         MembershipManagerImpl membershipManager = createMemberInStableState();
         mockOwnedPartition("topic1", 0);
@@ -960,7 +946,7 @@ public class MembershipManagerImplTest {
                 membershipManager,
                 invoker,
                 ConsumerRebalanceListenerMethodName.ON_PARTITIONS_REVOKED,
-                topicPartitions(new TopicPartition("topic1", 0))
+                topicPartitions("topic1", 0)
         );
 
         assertTrue(membershipManager.reconciliationInProgress());
@@ -976,7 +962,7 @@ public class MembershipManagerImplTest {
         assertFalse(membershipManager.reconciliationInProgress());
         assertEquals(MemberState.RECONCILING, membershipManager.state());
 
-        // Step 5: Receive ack and make sure we're done and our listener was called appropriately
+        // Step 5: Send ack and make sure we're done and our listener was called appropriately
         membershipManager.onHeartbeatRequestSent();
         assertEquals(MemberState.RECONCILING, membershipManager.state());
 
@@ -1023,7 +1009,7 @@ public class MembershipManagerImplTest {
                 membershipManager,
                 invoker,
                 ConsumerRebalanceListenerMethodName.ON_PARTITIONS_LOST,
-                topicPartitions(new TopicPartition("topic1", 0))
+                topicPartitions("topic1", 0)
         );
 
         // Step 4: Receive ack and make sure we're done and our listener was called appropriately
@@ -1048,10 +1034,22 @@ public class MembershipManagerImplTest {
         );
     }
 
-    private SortedSet<TopicPartition> topicPartitions(TopicPartition... topicPartitions) {
-        SortedSet<TopicPartition> revokedPartitions = new TreeSet<>(new Utils.TopicPartitionComparator());
-        revokedPartitions.addAll(Arrays.asList(topicPartitions));
-        return revokedPartitions;
+    private SortedSet<TopicPartition> topicPartitions(String topicName, int... partitions) {
+        SortedSet<TopicPartition> topicPartitions = new TreeSet<>(new Utils.TopicPartitionComparator());
+
+        for (int partition : partitions)
+            topicPartitions.add(new TopicPartition(topicName, partition));
+
+        return topicPartitions;
+    }
+
+    private SortedSet<TopicIdPartition> topicIdPartitions(Uuid topicId, String topicName, int... partitions) {
+        SortedSet<TopicIdPartition> topicIdPartitions = new TreeSet<>(new Utils.TopicIdPartitionComparator());
+
+        for (int partition : partitions)
+            topicIdPartitions.add(new TopicIdPartition(topicId, new TopicPartition(topicName, partition)));
+
+        return topicIdPartitions;
     }
 
     private void performCallback(MembershipManagerImpl membershipManager,
