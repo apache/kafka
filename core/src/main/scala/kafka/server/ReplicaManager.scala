@@ -1165,7 +1165,18 @@ class ReplicaManager(val config: KafkaConfig,
       requestLocal: RequestLocal,
       verificationErrors: Map[TopicPartition, Errors]
     ): Unit = {
-      callback(errors ++ verificationErrors, requestLocal, verificationGuards.toMap)
+      // Map transaction coordinator errors to known errors for the response
+      val convertedErrors = verificationErrors.map { case (tp, error) =>
+        error match {
+          case Errors.CONCURRENT_TRANSACTIONS |
+            Errors.COORDINATOR_LOAD_IN_PROGRESS |
+            Errors.COORDINATOR_NOT_AVAILABLE |
+            Errors.NOT_COORDINATOR => tp -> Errors.NOT_ENOUGH_REPLICAS
+          case _ => tp -> error
+        }
+
+      }
+      callback(errors ++ convertedErrors, requestLocal, verificationGuards.toMap)
     }
 
     // Wrap the callback to be handled on an arbitrary request handler thread when transaction verification is complete.
