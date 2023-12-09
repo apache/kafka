@@ -102,7 +102,9 @@ public class Fetcher<K, V> extends AbstractFetch {
      * @return number of fetches sent
      */
     public synchronized int sendFetches() {
-        final Map<Node, FetchSessionHandler.FetchRequestData> fetchRequests = prepareFetchRequests();
+        boolean checkNodeAvailability = true;
+
+        final Map<Node, FetchSessionHandler.FetchRequestData> fetchRequests = prepareFetchRequests(checkNodeAvailability);
         sendFetchesInternal(
                 fetchRequests,
                 (fetchTarget, data, clientResponse) -> {
@@ -119,8 +121,10 @@ public class Fetcher<K, V> extends AbstractFetch {
     }
 
     protected void maybeCloseFetchSessions(final Timer timer) {
+        boolean checkNodeAvailability = true;
+
         final List<RequestFuture<ClientResponse>> requestFutures = sendFetchesInternal(
-                prepareCloseFetchSessionRequests(),
+                prepareCloseFetchSessionRequests(checkNodeAvailability),
                 this::handleCloseFetchSessionSuccess,
                 this::handleCloseFetchSessionFailure
         );

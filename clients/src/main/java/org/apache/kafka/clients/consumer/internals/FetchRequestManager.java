@@ -70,8 +70,10 @@ public class FetchRequestManager extends AbstractFetch implements RequestManager
      */
     @Override
     public PollResult poll(long currentTimeMs) {
+        boolean checkNodeAvailability = false;
+
         return pollInternal(
-                prepareFetchRequests(),
+                prepareFetchRequests(checkNodeAvailability),
                 this::handleFetchSuccess,
                 this::handleFetchFailure
         );
@@ -82,8 +84,10 @@ public class FetchRequestManager extends AbstractFetch implements RequestManager
      */
     @Override
     public PollResult pollOnClose() {
+        boolean checkNodeAvailability = false;
+
         return pollInternal(
-                prepareCloseFetchSessionRequests(),
+                prepareCloseFetchSessionRequests(checkNodeAvailability),
                 this::handleCloseFetchSessionSuccess,
                 this::handleCloseFetchSessionFailure
         );

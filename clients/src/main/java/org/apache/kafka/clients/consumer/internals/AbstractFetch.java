@@ -372,7 +372,7 @@ public abstract class AbstractFetch implements Closeable {
         }
     }
 
-    protected Map<Node, FetchSessionHandler.FetchRequestData> prepareCloseFetchSessionRequests() {
+    protected Map<Node, FetchSessionHandler.FetchRequestData> prepareCloseFetchSessionRequests(boolean checkNodeAvailability) {
         final Cluster cluster = metadata.fetch();
         Map<Node, FetchSessionHandler.Builder> fetchable = new HashMap<>();
 
@@ -385,7 +385,9 @@ public abstract class AbstractFetch implements Closeable {
                 // skip sending the close request.
                 final Node fetchTarget = cluster.nodeById(fetchTargetNodeId);
 
-                if (fetchTarget == null || isUnavailable(fetchTarget)) {
+                boolean fetchTargetAvailability = checkNodeAvailability ? (fetchTarget == null || isUnavailable(fetchTarget)) : fetchTarget == null;
+
+                if (fetchTargetAvailability) {
                     log.debug("Skip sending close session request to broker {} since it is not reachable", fetchTarget);
                     return;
                 }
@@ -403,7 +405,7 @@ public abstract class AbstractFetch implements Closeable {
      * Create fetch requests for all nodes for which we have assigned partitions
      * that have no existing requests in flight.
      */
-    protected Map<Node, FetchSessionHandler.FetchRequestData> prepareFetchRequests() {
+    protected Map<Node, FetchSessionHandler.FetchRequestData> prepareFetchRequests(boolean checkNodeAvailability) {
         // Update metrics in case there was an assignment change
         metricsManager.maybeUpdateAssignment(subscriptions);
 
@@ -428,35 +430,51 @@ public abstract class AbstractFetch implements Closeable {
             // Use the preferred read replica if set, otherwise the partition's leader
             Node node = selectReadReplica(partition, leaderOpt.get(), currentTimeMs);
 
-            if (isUnavailable(node)) {
-                maybeThrowAuthFailure(node);
+            if (checkNodeAvailability) {
+                if (isUnavailable(node)) {
+                    maybeThrowAuthFailure(node);
 
-                // If we try to send during the reconnect backoff window, then the request is just
-                // going to be failed anyway before being sent, so skip sending the request for now
-                log.trace("Skipping fetch for partition {} because node {} is awaiting reconnect backoff", partition, node);
-            } else if (nodesWithPendingFetchRequests.contains(node.id())) {
-                log.trace("Skipping fetch for partition {} because previous request to {} has not been processed", partition, node);
+                    // If we try to send during the reconnect backoff window, then the request is just
+                    // going to be failed anyway before being sent, so skip sending the request for now
+                    log.trace("Skipping fetch for partition {} because node {} is awaiting reconnect backoff", partition, node);
+                } else if (nodesWithPendingFetchRequests.contains(node.id())) {
+                    log.trace("Skipping fetch for partition {} because previous request to {} has not been processed", partition, node);
+                } else {
+                    buildFetchRequests(fetchable, node, topicIds, partition, position);
+                }
             } else {
-                // if there is a leader and no in-flight requests, issue a new fetch
-                FetchSessionHandler.Builder builder = fetchable.computeIfAbsent(node, k -> {
-                    FetchSessionHandler fetchSessionHandler = sessionHandlers.computeIfAbsent(node.id(), n -> new FetchSessionHandler(logContext, n));
-                    return fetchSessionHandler.newBuilder();
-                });
-                Uuid topicId = topicIds.getOrDefault(partition.topic(), Uuid.ZERO_UUID);
-                FetchRequest.PartitionData partitionData = new FetchRequest.PartitionData(topicId,
-                        position.offset,
-                        FetchRequest.INVALID_LOG_START_OFFSET,
-                        fetchConfig.fetchSize,
-                        position.currentLeader.epoch,
-                        Optional.empty());
-                builder.add(partition, partitionData);
-
-                log.debug("Added {} fetch request for partition {} at position {} to node {}", fetchConfig.isolationLevel,
-                        partition, position, node);
+                if (nodesWithPendingFetchRequests.contains(node.id())) {
+                    log.trace("Skipping fetch for partition {} because previous request to {} has not been processed", partition, node);
+                } else {
+                    buildFetchRequests(fetchable, node, topicIds, partition, position);
+                }
             }
         }
-
         return fetchable.entrySet().stream().collect(Collectors.toMap(Map.Entry::getKey, e -> e.getValue().build()));
+    }
+
+    private void buildFetchRequests(Map<Node, FetchSessionHandler.Builder> fetchable,
+                                    Node node,
+                                    Map<String, Uuid> topicIds,
+                                    TopicPartition partition,
+                                    SubscriptionState.FetchPosition position) {
+
+        // if there is a leader and no in-flight requests, issue a new fetch
+        FetchSessionHandler.Builder builder = fetchable.computeIfAbsent(node, k -> {
+            FetchSessionHandler fetchSessionHandler = sessionHandlers.computeIfAbsent(node.id(), n -> new FetchSessionHandler(logContext, n));
+            return fetchSessionHandler.newBuilder();
+        });
+        Uuid topicId = topicIds.getOrDefault(partition.topic(), Uuid.ZERO_UUID);
+        FetchRequest.PartitionData partitionData = new FetchRequest.PartitionData(topicId,
+                position.offset,
+                FetchRequest.INVALID_LOG_START_OFFSET,
+                fetchConfig.fetchSize,
+                position.currentLeader.epoch,
+                Optional.empty());
+        builder.add(partition, partitionData);
+
+        log.debug("Added {} fetch request for partition {} at position {} to node {}", fetchConfig.isolationLevel,
+                partition, position, node);
     }
 
     // Visible for testing
