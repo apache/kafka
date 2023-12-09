@@ -832,13 +832,14 @@ public class MembershipManagerImplTest {
         // Step 4: Send ack and make sure we're done and our listener was called appropriately
         membershipManager.onHeartbeatRequestSent();
         assertEquals(MemberState.STABLE, membershipManager.state());
-        assertEquals(topicPartitions(topicName, 0, 1), subscriptionState.assignedPartitions());
         assertEquals(topicIdPartitions(topicId, topicName, 0, 1), membershipManager.currentAssignment());
 
         assertEquals(0, listener.revokedCounter.get());
         assertEquals(1, listener.assignedCounter.get());
         assertEquals(0, listener.lostCounter.get());
 
+        // Step 5: receive an empty assignment, which means we should call revoke
+        when(subscriptionState.assignedPartitions()).thenReturn(topicPartitions(topicName, 0, 1));
         receiveEmptyAssignment(membershipManager);
         assertEquals(MemberState.RECONCILING, membershipManager.state());
         assertTrue(membershipManager.reconciliationInProgress());
@@ -848,27 +849,34 @@ public class MembershipManagerImplTest {
                 membershipManager,
                 invoker,
                 ConsumerRebalanceListenerMethodName.ON_PARTITIONS_REVOKED,
-                topicPartitions("topic1", 0)
+                topicPartitions(topicName, 0, 1)
         );
-
         assertTrue(membershipManager.reconciliationInProgress());
 
-        // Step 5: assign partitions
+        // Step 7: assign partitions should still be called, even though it's empty
         performCallback(
                 membershipManager,
                 invoker,
                 ConsumerRebalanceListenerMethodName.ON_PARTITIONS_ASSIGNED,
-                topicPartitions("topic1", 0)
+                Collections.emptySortedSet()
         );
+        assertFalse(membershipManager.reconciliationInProgress());
 
-        // Step 3: Send ack and make sure we're done and our listener was called appropriately
+        // Step 8: Send ack and make sure we're done and our listener was called appropriately
         membershipManager.onHeartbeatRequestSent();
         assertEquals(MemberState.STABLE, membershipManager.state());
         assertFalse(membershipManager.reconciliationInProgress());
+
+        assertEquals(1, listener.revokedCounter.get());
+        assertEquals(2, listener.assignedCounter.get());
+        assertEquals(0, listener.lostCounter.get());
     }
 
-    // TODO: Reconciliation needs to support when a listener throws an error on onPartitionsRevoked. When that
-    //       happens, the assignment step is skipped
+    // TODO: Reconciliation needs to support when a listener throws an error on onPartitionsRevoked(). When that
+    //       happens, the assignment step is skipped, which means onPartitionsAssigned() is never run.
+    //       The jury is out on whether or not this is a bug or intentional.
+    //
+    //       See https://github.com/apache/kafka/pull/14640#discussion_r1421253120 for more details.
     // @Test
     public void testListenerCallbacksThrowsErrorOnPartitionsRevoked() {
         // Step 1: set up mocks
