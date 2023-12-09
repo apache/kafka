@@ -185,18 +185,13 @@ object AbstractCoordinatorConcurrencyTest {
 
     override def appendForGroup(timeout: Long,
                                 requiredAcks: Short,
-                                internalTopicsAllowed: Boolean,
-                                origin: AppendOrigin,
                                 entriesPerPartition: Map[TopicPartition, MemoryRecords],
                                 responseCallback: Map[TopicPartition, PartitionResponse] => Unit,
                                 delayedProduceLock: Option[Lock] = None,
-                                recordValidationStatsCallback: Map[TopicPartition, RecordValidationStats] => Unit = _ => (),
                                 requestLocal: RequestLocal = RequestLocal.NoCaching,
-                                actionQueue: ActionQueue = null,
-                                verificationGuards: Map[TopicPartition, VerificationGuard] = Map.empty,
-                                preAppendErrors: Map[TopicPartition, LogAppendResult] = Map.empty): Unit = {
-      appendRecords(timeout, requiredAcks, internalTopicsAllowed, origin, entriesPerPartition, responseCallback,
-        delayedProduceLock, recordValidationStatsCallback, requestLocal, null, actionQueue)
+                                verificationGuards: Map[TopicPartition, VerificationGuard] = Map.empty): Unit = {
+      appendRecords(timeout, requiredAcks, true, AppendOrigin.COORDINATOR, entriesPerPartition, responseCallback,
+        delayedProduceLock, requestLocal = requestLocal)
     }
 
     override def appendRecords(timeout: Long,

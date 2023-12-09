@@ -325,24 +325,23 @@ class GroupMetadataManager(brokerId: Int,
   }
 
   // This method should be called under the group lock to ensure atomicity of the update to the the in-memory and persisted state.
-  private def appendForGroup(group: GroupMetadata,
-                             records: Map[TopicPartition, MemoryRecords],
-                             requestLocal: RequestLocal,
-                             callback: Map[TopicPartition, PartitionResponse] => Unit,
-                             verificationGuards: Map[TopicPartition, VerificationGuard] = Map.empty,
-                             preAppendErrors: Map[TopicPartition, LogAppendResult] = Map.empty): Unit = {
+  private def appendForGroup(
+    group: GroupMetadata,
+    records: Map[TopicPartition, MemoryRecords],
+    requestLocal: RequestLocal,
+    callback: Map[TopicPartition, PartitionResponse] => Unit,
+    verificationGuards: Map[TopicPartition, VerificationGuard] = Map.empty
+  ): Unit = {
     // call replica manager to append the group message
     replicaManager.appendForGroup(
       timeout = config.offsetCommitTimeoutMs.toLong,
       requiredAcks = config.offsetCommitRequiredAcks,
-      internalTopicsAllowed = true,
-      origin = AppendOrigin.COORDINATOR,
       entriesPerPartition = records,
       delayedProduceLock = Some(group.lock),
       responseCallback = callback,
       requestLocal = requestLocal,
-      verificationGuards = verificationGuards,
-      preAppendErrors = preAppendErrors)
+      verificationGuards = verificationGuards
+    )
   }
 
   private def generateOffsetRecords(magicValue: Byte,

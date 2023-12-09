@@ -886,58 +886,22 @@ class ReplicaManager(val config: KafkaConfig,
     }
 
     val allResults = localProduceResults ++ errorResults
-    val produceStatus = allResults.map { case (topicPartition, result) =>
-      topicPartition -> ProducePartitionStatus(
-        result.info.lastOffset + 1, // required offset
-        new PartitionResponse(
-          result.error,
-          result.info.firstOffset,
-          result.info.lastOffset,
-          result.info.logAppendTime,
-          result.info.logStartOffset,
-          result.info.recordErrors,
-          result.errorMessage
-        )
-      ) // response status
-    }
+    val produceStatus = buildProducePartitionStatus(allResults)
 
-    actionQueue.add {
-      () => allResults.foreach { case (topicPartition, result) =>
-        val requestKey = TopicPartitionOperationKey(topicPartition)
-        result.info.leaderHwChange match {
-          case LeaderHwChange.INCREASED =>
-            // some delayed operations may be unblocked after HW changed
-            delayedProducePurgatory.checkAndComplete(requestKey)
-            delayedFetchPurgatory.checkAndComplete(requestKey)
-            delayedDeleteRecordsPurgatory.checkAndComplete(requestKey)
-          case LeaderHwChange.SAME =>
-            // probably unblock some follower fetch requests since log end offset has been updated
-            delayedFetchPurgatory.checkAndComplete(requestKey)
-          case LeaderHwChange.NONE =>
-            // nothing
-        }
-      }
-    }
+    addCompletePurgatoryAction(actionQueue, allResults)
+    recordConversionStatsCallback(localProduceResults.map { case (k, v) =>
+      k -> v.info.recordValidationStats
+    })
 
-    recordConversionStatsCallback(localProduceResults.map { case (k, v) => k -> v.info.recordValidationStats })
-
-    if (delayedProduceRequestRequired(requiredAcks, allEntries, allResults)) {
-      // create delayed produce operation
-      val produceMetadata = ProduceMetadata(requiredAcks, produceStatus)
-      val delayedProduce = new DelayedProduce(timeout, produceMetadata, this, responseCallback, delayedProduceLock)
-
-      // create a list of (topic, partition) pairs to use as keys for this delayed produce operation
-      val producerRequestKeys = allEntries.keys.map(TopicPartitionOperationKey(_)).toSeq
-
-      // try to complete the request immediately, otherwise put it into the purgatory
-      // this is because while the delayed produce operation is being created, new
-      // requests may arrive and hence make this operation completable.
-      delayedProducePurgatory.tryCompleteElseWatch(delayedProduce, producerRequestKeys)
-    } else {
-      // we can respond immediately
-      val produceResponseStatus = produceStatus.map { case (k, status) => k -> status.responseStatus }
-      responseCallback(produceResponseStatus)
-    }
+    maybeAddDelayedProduce(
+      requiredAcks,
+      delayedProduceLock,
+      timeout,
+      allEntries,
+      allResults,
+      produceStatus,
+      responseCallback
+    )
   }
 
   private def partitionEntriesForVerification(verificationGuards: mutable.Map[TopicPartition, VerificationGuard],
@@ -975,6 +939,48 @@ class ReplicaManager(val config: KafkaConfig,
     }
   }
 
+  private def buildProducePartitionStatus(
+    results: Map[TopicPartition, LogAppendResult]
+  ): Map[TopicPartition, ProducePartitionStatus] = {
+    results.map { case (topicPartition, result) =>
+      topicPartition -> ProducePartitionStatus(
+        result.info.lastOffset + 1, // required offset
+        new PartitionResponse(
+          result.error,
+          result.info.firstOffset,
+          result.info.lastOffset,
+          result.info.logAppendTime,
+          result.info.logStartOffset,
+          result.info.recordErrors,
+          result.errorMessage
+        )
+      )
+    }
+  }
+
+  private def addCompletePurgatoryAction(
+    actionQueue: ActionQueue,
+    appendResults: Map[TopicPartition, LogAppendResult]
+  ): Unit = {
+    actionQueue.add {
+      () => appendResults.foreach { case (topicPartition, result) =>
+        val requestKey = TopicPartitionOperationKey(topicPartition)
+        result.info.leaderHwChange match {
+          case LeaderHwChange.INCREASED =>
+            // some delayed operations may be unblocked after HW changed
+            delayedProducePurgatory.checkAndComplete(requestKey)
+            delayedFetchPurgatory.checkAndComplete(requestKey)
+            delayedDeleteRecordsPurgatory.checkAndComplete(requestKey)
+          case LeaderHwChange.SAME =>
+            // probably unblock some follower fetch requests since log end offset has been updated
+            delayedFetchPurgatory.checkAndComplete(requestKey)
+          case LeaderHwChange.NONE =>
+          // nothing
+        }
+      }
+    }
+  }
+
   /**
    * Append messages to offsets topic, and wait for them to be replicated to other replicas;
    * the callback function will be triggered either when timeout or the required acks are satisfied;
@@ -996,79 +1002,65 @@ class ReplicaManager(val config: KafkaConfig,
    * @param entriesPerPartition           the records per partition to be appended
    * @param responseCallback              callback for sending the response
    * @param delayedProduceLock            lock for the delayed actions
-   * @param recordValidationStatsCallback callback for updating stats on record conversions
    * @param requestLocal                  container for the stateful instances scoped to this request -- this must correspond to the
    *                                      thread calling this method
-   * @param actionQueue                   the action queue to use. ReplicaManager#defaultActionQueue is used by default.
    * @param verificationGuards            the mapping from topic partition to verification guards if transaction verification is used
-   * @param preAppendErrors               the mapping from topic partition to LogAppendResult for errors that occurred before appending
    */
-  def appendForGroup(timeout: Long,
-                     requiredAcks: Short,
-                     internalTopicsAllowed: Boolean,
-                     origin: AppendOrigin,
-                     entriesPerPartition: Map[TopicPartition, MemoryRecords],
-                     responseCallback: Map[TopicPartition, PartitionResponse] => Unit,
-                     delayedProduceLock: Option[Lock] = None,
-                     recordValidationStatsCallback: Map[TopicPartition, RecordValidationStats] => Unit = _ => (),
-                     requestLocal: RequestLocal = RequestLocal.NoCaching,
-                     actionQueue: ActionQueue = this.defaultActionQueue,
-                     verificationGuards: Map[TopicPartition, VerificationGuard] = Map.empty,
-                     preAppendErrors: Map[TopicPartition, LogAppendResult] = Map.empty): Unit = {
+  def appendForGroup(
+    timeout: Long,
+    requiredAcks: Short,
+    entriesPerPartition: Map[TopicPartition, MemoryRecords],
+    responseCallback: Map[TopicPartition, PartitionResponse] => Unit,
+    delayedProduceLock: Option[Lock],
+    requestLocal: RequestLocal,
+    verificationGuards: Map[TopicPartition, VerificationGuard]
+  ): Unit = {
     if (!isValidRequiredAcks(requiredAcks)) {
       sendInvalidRequiredAcksResponse(entriesPerPartition, responseCallback)
       return
     }
 
-    val nonErrorEntriesPerPartition = entriesPerPartition.filter {
-      case (tp, _) => !preAppendErrors.contains(tp)
-    }
-
     val sTime = time.milliseconds
-    val localProduceResults = appendToLocalLog(internalTopicsAllowed = internalTopicsAllowed,
-      origin, nonErrorEntriesPerPartition, requiredAcks, requestLocal, verificationGuards.toMap)
+    val localProduceResults = appendToLocalLog(
+      internalTopicsAllowed = true,
+      origin = AppendOrigin.COORDINATOR,
+      entriesPerPartition,
+      requiredAcks,
+      requestLocal,
+      verificationGuards.toMap
+    )
+
     debug("Produce to local log in %d ms".format(time.milliseconds - sTime))
 
-    val allResults = localProduceResults ++ preAppendErrors
-    val produceStatus = allResults.map { case (topicPartition, result) =>
-      topicPartition -> ProducePartitionStatus(
-        result.info.lastOffset + 1, // required offset
-        new PartitionResponse(
-          result.error,
-          result.info.firstOffset,
-          result.info.lastOffset,
-          result.info.logAppendTime,
-          result.info.logStartOffset,
-          result.info.recordErrors,
-          result.errorMessage
-        )
-      ) // response status
-    }
+    val allResults = localProduceResults
+    val produceStatus = buildProducePartitionStatus(allResults)
 
-    actionQueue.add {
-      () => allResults.foreach { case (topicPartition, result) =>
-        val requestKey = TopicPartitionOperationKey(topicPartition)
-        result.info.leaderHwChange match {
-          case LeaderHwChange.INCREASED =>
-            // some delayed operations may be unblocked after HW changed
-            delayedProducePurgatory.checkAndComplete(requestKey)
-            delayedFetchPurgatory.checkAndComplete(requestKey)
-            delayedDeleteRecordsPurgatory.checkAndComplete(requestKey)
-          case LeaderHwChange.SAME =>
-            // probably unblock some follower fetch requests since log end offset has been updated
-            delayedFetchPurgatory.checkAndComplete(requestKey)
-          case LeaderHwChange.NONE =>
-            // nothing
-        }
-      }
-    }
+    addCompletePurgatoryAction(defaultActionQueue, allResults)
 
-    recordValidationStatsCallback(localProduceResults.map { case (k, v) => k -> v.info.recordValidationStats })
+    maybeAddDelayedProduce(
+      requiredAcks,
+      delayedProduceLock,
+      timeout,
+      entriesPerPartition,
+      allResults,
+      produceStatus,
+      responseCallback
+    )
+  }
 
-    if (delayedProduceRequestRequired(requiredAcks, entriesPerPartition, allResults)) {
+  private def maybeAddDelayedProduce(
+    requiredAcks: Short,
+    delayedProduceLock: Option[Lock],
+    timeoutMs: Long,
+    entriesPerPartition: Map[TopicPartition, MemoryRecords],
+    initialAppendResults: Map[TopicPartition, LogAppendResult],
+    initialProduceStatus: Map[TopicPartition, ProducePartitionStatus],
+    responseCallback: Map[TopicPartition, PartitionResponse] => Unit,
+  ): Unit = {
+    if (delayedProduceRequestRequired(requiredAcks, entriesPerPartition, initialAppendResults)) {
       // create delayed produce operation
-      val produceMetadata = ProduceMetadata(requiredAcks, produceStatus)
-      val delayedProduce = new DelayedProduce(timeout, produceMetadata, this, responseCallback, delayedProduceLock)
+      val produceMetadata = ProduceMetadata(requiredAcks, initialProduceStatus)
+      val delayedProduce = new DelayedProduce(timeoutMs, produceMetadata, this, responseCallback, delayedProduceLock)
 
       // create a list of (topic, partition) pairs to use as keys for this delayed produce operation
       val producerRequestKeys = entriesPerPartition.keys.map(TopicPartitionOperationKey(_)).toSeq
@@ -1079,7 +1071,7 @@ class ReplicaManager(val config: KafkaConfig,
       delayedProducePurgatory.tryCompleteElseWatch(delayedProduce, producerRequestKeys)
     } else {
       // we can respond immediately
-      val produceResponseStatus = produceStatus.map { case (k, status) => k -> status.responseStatus }
+      val produceResponseStatus = initialProduceStatus.map { case (k, status) => k -> status.responseStatus }
       responseCallback(produceResponseStatus)
     }
   }
