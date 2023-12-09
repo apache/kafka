@@ -47,6 +47,8 @@ public abstract class EventProcessor<T> implements Closeable {
         this.closer = new IdempotentCloser();
     }
 
+    public abstract boolean process();
+
     protected abstract void process(T event);
 
     @Override
@@ -63,14 +65,14 @@ public abstract class EventProcessor<T> implements Closeable {
      * Drains all available events from the queue, and then processes them in order. If any errors are thrown while
      * processing the individual events, these are submitted to the given {@link ProcessHandler}.
      */
-    protected void process(ProcessHandler<T> processHandler) {
+    protected boolean process(ProcessHandler<T> processHandler) {
         closer.assertOpen("The processor was previously closed, so no further processing can occur");
 
         List<T> events = drain();
 
         if (events.isEmpty()) {
             log.trace("No events to process");
-            return;
+            return false;
         }
 
         try {
@@ -96,6 +98,8 @@ public abstract class EventProcessor<T> implements Closeable {
         } finally {
             log.trace("Completed processing");
         }
+
+        return true;
     }
 
     /**

@@ -224,4 +224,21 @@ public final class ConsumerUtils {
             throw new TimeoutException(e);
         }
     }
+
+    public static <T> T getResult(Future<T> future) {
+        try {
+            return future.get();
+        } catch (ExecutionException e) {
+            Throwable t = e.getCause();
+
+            if (t instanceof WakeupException)
+                throw new WakeupException();
+            else if (t instanceof KafkaException)
+                throw (KafkaException) t;
+            else
+                throw new KafkaException(t);
+        } catch (InterruptedException e) {
+            throw new InterruptException(e);
+        }
+    }
 }

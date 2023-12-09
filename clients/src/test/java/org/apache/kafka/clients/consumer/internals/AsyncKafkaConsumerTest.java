@@ -33,6 +33,7 @@ import org.apache.kafka.clients.consumer.internals.events.AssignmentChangeApplic
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
 import org.apache.kafka.clients.consumer.internals.events.CommitApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.ErrorBackgroundEvent;
+import org.apache.kafka.clients.consumer.internals.events.EventProcessor;
 import org.apache.kafka.clients.consumer.internals.events.FetchCommittedOffsetsApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.GroupMetadataUpdateEvent;
 import org.apache.kafka.clients.consumer.internals.events.ListOffsetsApplicationEvent;
@@ -59,6 +60,8 @@ import org.apache.kafka.common.requests.ListOffsetsRequest;
 import org.apache.kafka.common.requests.OffsetCommitResponse;
 import org.apache.kafka.common.requests.RequestHeader;
 import org.apache.kafka.common.serialization.StringDeserializer;
+import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
 import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.AfterEach;
@@ -91,6 +94,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -1080,6 +1084,70 @@ public class AsyncKafkaConsumerTest {
 
         assertEquals(singleton(topicName), consumer.subscription());
         assertEquals(singleton(tp), consumer.assignment());
+    }
+
+    @Test
+    public void testProcessBackgroundEventsWithInitialDelay() throws Exception {
+        Time time = new MockTime();
+        Timer timer = time.timer(1000);
+        CompletableFuture<?> future = mock(CompletableFuture.class);
+        CountDownLatch latch = new CountDownLatch(3);
+
+        doAnswer(invocation -> {
+            latch.countDown();
+
+            if (latch.getCount() > 0) {
+                long timeout = invocation.getArgument(0, Long.class);
+                timer.sleep(timeout);
+                throw new java.util.concurrent.TimeoutException("Intentional timeout");
+            }
+
+            future.complete(null);
+            return "success";
+        }).when(future).get(any(Long.class), any(TimeUnit.class));
+
+        try (EventProcessor<?> processor = mock(EventProcessor.class)) {
+            consumer.processBackgroundEvents(processor, future, timer);
+            assertEquals(800, timer.remainingMs());
+        }
+    }
+
+    @Test
+    public void testProcessBackgroundEventsWithoutDelay() throws Exception {
+        CompletableFuture<?> future = mock(CompletableFuture.class);
+
+        doReturn(true).when(future).isDone();
+        doAnswer(invocation -> {
+            future.complete(null);
+            return null;
+        }).when(future).get(any(Long.class), any(TimeUnit.class));
+
+        try (EventProcessor<?> processor = mock(EventProcessor.class)) {
+            doAnswer(invocation -> true).when(processor).process();
+
+            Time time = new MockTime();
+            Timer timer = time.timer(1000);
+            consumer.processBackgroundEvents(processor, future, timer);
+            assertEquals(1000, timer.remainingMs());
+        }
+    }
+
+    @Test
+    public void testProcessBackgroundEventsTimesOut() throws Exception {
+        Time time = new MockTime();
+        Timer timer = time.timer(1000);
+        CompletableFuture<?> future = mock(CompletableFuture.class);
+
+        doAnswer(invocation -> {
+            long timeout = invocation.getArgument(0, Long.class);
+            timer.sleep(timeout);
+            throw new java.util.concurrent.TimeoutException("Intentional timeout");
+        }).when(future).get(any(Long.class), any(TimeUnit.class));
+
+        try (EventProcessor<?> processor = mock(EventProcessor.class)) {
+            assertThrows(TimeoutException.class, () -> consumer.processBackgroundEvents(processor, future, timer));
+            assertEquals(0, timer.remainingMs());
+        }
     }
 
     private void assertNoPendingWakeup(final WakeupTrigger wakeupTrigger) {

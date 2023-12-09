@@ -101,6 +101,7 @@ import java.util.Set;
 import java.util.SortedSet;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.Future;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
@@ -173,7 +174,8 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
          * could occur when processing the events. In such cases, the processor will take a reference to the first
          * error, continue to process the remaining events, and then throw the first error that occurred.
          */
-        private void process() {
+        @Override
+        public boolean process() {
             AtomicReference<KafkaException> firstError = new AtomicReference<>();
 
             ProcessHandler<BackgroundEvent> processHandler = (event, error) -> {
@@ -186,10 +188,12 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                 }
             };
 
-            process(processHandler);
+            boolean hadEvents = process(processHandler);
 
             if (firstError.get() != null)
                 throw firstError.get();
+
+            return hadEvents;
         }
 
         @Override
@@ -1316,10 +1320,12 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                 log.info("Unsubscribing all topics or patterns and assigned partitions");
                 Timer timer = time.timer(Long.MAX_VALUE);
 
-                if (processBackgroundEvents(unsubscribeApplicationEvent, timer))
+                try {
+                    processBackgroundEvents(backgroundEventProcessor, unsubscribeApplicationEvent.future(), timer);
                     log.info("Unsubscribed all topics or patterns and assigned partitions");
-                else
+                } catch (TimeoutException e) {
                     log.error("Failed while waiting for the unsubscribe event to complete");
+                }
             }
             subscriptions.unsubscribe();
         } finally {
@@ -1654,23 +1660,39 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
      * execution of the rebalancing logic. The rebalancing logic cannot complete until the
      * {@link ConsumerRebalanceListener} callback is performed.
      *
-     * @param event Event that contains a {@link CompletableFuture}; it is on this future that the application thread
-     *              will wait for completion
-     * @param timer Overall timer that bounds how long the application thread will wait for the event to complete
+     * @param eventProcessor Event processor that contains the queue of events to process
+     * @param future         Event that contains a {@link CompletableFuture}; it is on this future that the
+     *                       application thread will wait for completion
+     * @param timer          Overall timer that bounds how long to wait for the event to complete
      * @return {@code true} if the event completed within the timeout, {@code false} otherwise
      */
-    private boolean processBackgroundEvents(CompletableApplicationEvent<?> event, Timer timer) {
-        log.trace("Enqueuing event {} for processing; will wait up to {} ms to complete", event, timer.remainingMs());
+    // Visible for testing
+    <T> T processBackgroundEvents(EventProcessor<?> eventProcessor,
+                                  Future<T> future,
+                                  Timer timer) {
+        log.trace("Will wait up to {} ms for future {} to complete", timer.remainingMs(), future);
 
         do {
-            backgroundEventProcessor.process();
+            boolean hadEvents = eventProcessor.process();
 
             try {
-                Timer pollInterval = time.timer(100L);
-                log.trace("Waiting {} ms for event {} to complete", event, pollInterval.remainingMs());
-                ConsumerUtils.getResult(event.future(), pollInterval);
-                log.trace("Event {} completed successfully", event);
-                return true;
+                if (future.isDone()) {
+                    // If the event is done (either successfully or otherwise), go ahead and attempt to return
+                    // without waiting. We use the ConsumerUtils.getResult() method here to handle the conversion
+                    // of the exception types.
+                    T result = ConsumerUtils.getResult(future);
+                    log.trace("Future {} completed successfully", future);
+                    return result;
+                } else if (!hadEvents) {
+                    // If the above processing yielded no events, then let's sit tight for a bit to allow the
+                    // background thread to either a) finish the task, or b) populate the background event
+                    // queue with things to process in our next loop.
+                    Timer pollInterval = time.timer(100L);
+                    log.trace("Waiting {} ms for future {} to complete", pollInterval.remainingMs(), future);
+                    T result = ConsumerUtils.getResult(future, pollInterval);
+                    log.trace("Future {} completed successfully", future);
+                    return result;
+                }
             } catch (TimeoutException e) {
                 // Ignore this as we will retry the event until the timeout expires.
             } finally {
@@ -1678,8 +1700,8 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             }
         } while (timer.notExpired());
 
-        log.trace("Event {} did not complete within timeout", event);
-        return false;
+        log.trace("Future {} did not complete within timeout", future);
+        throw new TimeoutException("Operation timed out before completion");
     }
 
     @Override
