@@ -3898,8 +3898,8 @@ class GroupCoordinatorTest {
       any[Map[TopicPartition, MemoryRecords]],
       capturedArgument.capture(),
       any[Option[ReentrantLock]],
-      any(),
-      any(),
+      any(classOf[RequestLocal]),
+      any[Map[TopicPartition, VerificationGuard]]
     )).thenAnswer(_ => {
       capturedArgument.getValue.apply(
         Map(new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, groupPartitionId) ->
@@ -3930,8 +3930,9 @@ class GroupCoordinatorTest {
       any[Map[TopicPartition, MemoryRecords]],
       capturedArgument.capture(),
       any[Option[ReentrantLock]],
-      any(),
-      any())).thenAnswer(_ => {
+      any(classOf[RequestLocal]),
+      any[Map[TopicPartition, VerificationGuard]]
+    )).thenAnswer(_ => {
         capturedArgument.getValue.apply(
           Map(new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, groupPartitionId) ->
             new PartitionResponse(Errors.NONE, 0L, RecordBatch.NO_TIMESTAMP, 0L)
@@ -4072,8 +4073,8 @@ class GroupCoordinatorTest {
       any[Map[TopicPartition, MemoryRecords]],
       capturedArgument.capture(),
       any[Option[ReentrantLock]],
-      any(),
-      any()
+      any(classOf[RequestLocal]),
+      any[Map[TopicPartition, VerificationGuard]]
     )).thenAnswer(_ => {
       capturedArgument.getValue.apply(
         Map(new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, groupPartitionId) ->
@@ -4114,8 +4115,8 @@ class GroupCoordinatorTest {
       any[Map[TopicPartition, MemoryRecords]],
       capturedArgument.capture(),
       any[Option[ReentrantLock]],
-      any(),
-      any()
+      any(classOf[RequestLocal]),
+      any[Map[TopicPartition, VerificationGuard]]
     )).thenAnswer(_ => {
       capturedArgument.getValue.apply(
         Map(offsetTopicPartition ->
