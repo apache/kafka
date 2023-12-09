@@ -1086,6 +1086,10 @@ public class AsyncKafkaConsumerTest {
         assertEquals(singleton(tp), consumer.assignment());
     }
 
+    /**
+     * Tests {@link AsyncKafkaConsumer#processBackgroundEvents(EventProcessor, Future, Timer) processBackgroundEvents}
+     * handles the case where the {@link Future} takes a bit of time to complete, but does within the timeout.
+     */
     @Test
     public void testProcessBackgroundEventsWithInitialDelay() throws Exception {
         Time time = new MockTime();
@@ -1093,6 +1097,9 @@ public class AsyncKafkaConsumerTest {
         CompletableFuture<?> future = mock(CompletableFuture.class);
         CountDownLatch latch = new CountDownLatch(3);
 
+        // Mock our call to Future.get(timeout) so that it mimics a delay of 200 milliseconds. Keep in mind that
+        // the incremental timeout inside processBackgroundEvents is 100 seconds for each pass. Our first two passes
+        // will exceed the incremental timeout, but the third will return.
         doAnswer(invocation -> {
             latch.countDown();
 
@@ -1103,35 +1110,42 @@ public class AsyncKafkaConsumerTest {
             }
 
             future.complete(null);
-            return "success";
-        }).when(future).get(any(Long.class), any(TimeUnit.class));
-
-        try (EventProcessor<?> processor = mock(EventProcessor.class)) {
-            consumer.processBackgroundEvents(processor, future, timer);
-            assertEquals(800, timer.remainingMs());
-        }
-    }
-
-    @Test
-    public void testProcessBackgroundEventsWithoutDelay() throws Exception {
-        CompletableFuture<?> future = mock(CompletableFuture.class);
-
-        doReturn(true).when(future).isDone();
-        doAnswer(invocation -> {
-            future.complete(null);
             return null;
         }).when(future).get(any(Long.class), any(TimeUnit.class));
 
         try (EventProcessor<?> processor = mock(EventProcessor.class)) {
-            doAnswer(invocation -> true).when(processor).process();
-
-            Time time = new MockTime();
-            Timer timer = time.timer(1000);
             consumer.processBackgroundEvents(processor, future, timer);
+
+            // 800 is the 1000 ms timeout (above) minus the 200 ms delay for the two incremental timeouts/retries.
+            assertEquals(800, timer.remainingMs());
+        }
+    }
+
+    /**
+     * Tests {@link AsyncKafkaConsumer#processBackgroundEvents(EventProcessor, Future, Timer) processBackgroundEvents}
+     * handles the case where the {@link Future} is already complete when invoked, so it doesn't have to wait.
+     */
+    @Test
+    public void testProcessBackgroundEventsWithoutDelay() {
+        Time time = new MockTime();
+        Timer timer = time.timer(1000);
+
+        // Create a future that is already completed.
+        CompletableFuture<?> future = CompletableFuture.completedFuture(null);
+
+        try (EventProcessor<?> processor = mock(EventProcessor.class)) {
+            consumer.processBackgroundEvents(processor, future, timer);
+
+            // Because we didn't need to perform a timed get, we should still have every last millisecond
+            // of our initial timeout.
             assertEquals(1000, timer.remainingMs());
         }
     }
 
+    /**
+     * Tests {@link AsyncKafkaConsumer#processBackgroundEvents(EventProcessor, Future, Timer) processBackgroundEvents}
+     * handles the case where the {@link Future} does not complete within the timeout.
+     */
     @Test
     public void testProcessBackgroundEventsTimesOut() throws Exception {
         Time time = new MockTime();
@@ -1146,6 +1160,8 @@ public class AsyncKafkaConsumerTest {
 
         try (EventProcessor<?> processor = mock(EventProcessor.class)) {
             assertThrows(TimeoutException.class, () -> consumer.processBackgroundEvents(processor, future, timer));
+
+            // Because we forced our mocked future to continuously time out, we should have no time remaining.
             assertEquals(0, timer.remainingMs());
         }
     }

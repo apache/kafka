@@ -18,13 +18,10 @@ package org.apache.kafka.clients.consumer.internals.events;
 
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.internals.ConsumerRebalanceListenerMethodName;
-import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.KafkaException;
 
-import java.util.Collections;
 import java.util.Objects;
 import java.util.Optional;
-import java.util.SortedSet;
 import java.util.concurrent.CompletableFuture;
 
 /**
@@ -34,27 +31,20 @@ import java.util.concurrent.CompletableFuture;
 public class ConsumerRebalanceListenerCallbackCompletedEvent extends ApplicationEvent {
 
     private final ConsumerRebalanceListenerMethodName methodName;
-    private final SortedSet<TopicPartition> partitions;
     private final CompletableFuture<Void> future;
     private final Optional<KafkaException> error;
 
     public ConsumerRebalanceListenerCallbackCompletedEvent(ConsumerRebalanceListenerMethodName methodName,
-                                                           SortedSet<TopicPartition> partitions,
                                                            CompletableFuture<Void> future,
                                                            Optional<KafkaException> error) {
         super(Type.CONSUMER_REBALANCE_LISTENER_CALLBACK_COMPLETED);
         this.methodName = Objects.requireNonNull(methodName);
-        this.partitions = Collections.unmodifiableSortedSet(partitions);
         this.future = Objects.requireNonNull(future);
         this.error = Objects.requireNonNull(error);
     }
 
     public ConsumerRebalanceListenerMethodName methodName() {
         return methodName;
-    }
-
-    public SortedSet<TopicPartition> partitions() {
-        return partitions;
     }
 
     public CompletableFuture<Void> future() {
@@ -74,21 +64,19 @@ public class ConsumerRebalanceListenerCallbackCompletedEvent extends Application
         ConsumerRebalanceListenerCallbackCompletedEvent that = (ConsumerRebalanceListenerCallbackCompletedEvent) o;
 
         return methodName == that.methodName &&
-                partitions.equals(that.partitions) &&
                 future.equals(that.future) &&
                 error.equals(that.error);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(methodName, partitions, future, error);
+        return Objects.hash(methodName, future, error);
     }
 
     @Override
     protected String toStringBase() {
         return super.toStringBase() +
                 ", methodName=" + methodName +
-                ", partitions=" + partitions +
                 ", future=" + future +
                 ", error=" + error;
     }

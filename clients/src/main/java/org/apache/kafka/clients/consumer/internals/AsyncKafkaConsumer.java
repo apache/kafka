@@ -222,69 +222,16 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         }
 
         private void process(final GroupMetadataUpdateEvent event) {
-            if (AsyncKafkaConsumer.this.groupMetadata.isPresent()) {
-                final ConsumerGroupMetadata currentGroupMetadata = AsyncKafkaConsumer.this.groupMetadata.get();
-                final String currentMemberId = currentGroupMetadata.memberId();
-                AsyncKafkaConsumer.this.groupMetadata = Optional.of(new ConsumerGroupMetadata(
-                    currentGroupMetadata.groupId(),
-                    event.memberEpoch(),
-                    event.memberId(),
-                    currentGroupMetadata.groupInstanceId()
-                ));
-
-                // Update the group member id label in the client telemetry reporter if the member id has
-                // changed. Initially the member id is empty, and it is updated when the member joins the
-                // group. This is done here to avoid updating the label on every heartbeat response. Also
-                // check if the member id is null, as the schema defines it as nullable.
-                if (!currentMemberId.equals(event.memberId()) && clientTelemetryReporter.isPresent()) {
-                    Map<String, String> labels = Collections.singletonMap(
-                        ClientTelemetryProvider.GROUP_MEMBER_ID,
-                        event.memberId()
-                    );
-                    ClientTelemetryReporter reporter = clientTelemetryReporter.get();
-                    reporter.updateMetricsLabels(labels);
-                }
-            }
+            updateConsumerGroupMetadata(event.memberId(), event.memberEpoch());
         }
 
         private void process(final ConsumerRebalanceListenerCallbackNeededEvent event) {
-            SortedSet<TopicPartition> partitions = event.partitions();
-            ConsumerRebalanceListenerMethodName methodName = event.methodName();
-            final Exception e;
-
-            switch (methodName) {
-                case ON_PARTITIONS_REVOKED:
-                    e = rebalanceListenerInvoker.invokePartitionsRevoked(partitions);
-                    break;
-
-                case ON_PARTITIONS_ASSIGNED:
-                    e = rebalanceListenerInvoker.invokePartitionsAssigned(partitions);
-                    break;
-
-                case ON_PARTITIONS_LOST:
-                    e = rebalanceListenerInvoker.invokePartitionsLost(partitions);
-                    break;
-
-                default:
-                    throw new IllegalArgumentException("The method " + methodName.fullyQualifiedMethodName() + " to invoke was not expected");
-            }
-
-            final Optional<KafkaException> error;
-
-            if (e != null) {
-                if (e instanceof KafkaException)
-                    error = Optional.of((KafkaException) e);
-                else
-                    error = Optional.of(new KafkaException("User rebalance callback throws an error", e));
-            } else {
-                error = Optional.empty();
-            }
-
-            ApplicationEvent invokedEvent = new ConsumerRebalanceListenerCallbackCompletedEvent(
-                    methodName,
-                    partitions,
-                    event.future(),
-                    error);
+            ApplicationEvent invokedEvent = invokeRebalanceCallbacks(
+                rebalanceListenerInvoker,
+                event.methodName(),
+                event.partitions(),
+                event.future()
+            );
             applicationEventHandler.add(invokedEvent);
         }
     }
@@ -1702,6 +1649,73 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
 
         log.trace("Future {} did not complete within timeout", future);
         throw new TimeoutException("Operation timed out before completion");
+    }
+
+    void updateConsumerGroupMetadata(String newMemberId, int newMemberEpoch) {
+        if (groupMetadata.isPresent()) {
+            final ConsumerGroupMetadata currentGroupMetadata = groupMetadata.get();
+            final String oldMemberId = currentGroupMetadata.memberId();
+            this.groupMetadata = Optional.of(new ConsumerGroupMetadata(
+                currentGroupMetadata.groupId(),
+                newMemberEpoch,
+                newMemberId,
+                currentGroupMetadata.groupInstanceId()
+            ));
+
+            // Update the group member id label in the client telemetry reporter if the member id has
+            // changed. Initially the member id is empty, and it is updated when the member joins the
+            // group. This is done here to avoid updating the label on every heartbeat response. Also
+            // check if the member id is null, as the schema defines it as nullable.
+            if (!oldMemberId.equals(newMemberId) && clientTelemetryReporter.isPresent()) {
+                Map<String, String> labels = Collections.singletonMap(
+                    ClientTelemetryProvider.GROUP_MEMBER_ID,
+                    newMemberId
+                );
+                ClientTelemetryReporter reporter = clientTelemetryReporter.get();
+                reporter.updateMetricsLabels(labels);
+            }
+        }
+    }
+
+    static ConsumerRebalanceListenerCallbackCompletedEvent invokeRebalanceCallbacks(ConsumerRebalanceListenerInvoker rebalanceListenerInvoker,
+                                                                                    ConsumerRebalanceListenerMethodName methodName,
+                                                                                    SortedSet<TopicPartition> partitions,
+                                                                                    CompletableFuture<Void> future) {
+        final Exception e;
+
+        switch (methodName) {
+            case ON_PARTITIONS_REVOKED:
+                e = rebalanceListenerInvoker.invokePartitionsRevoked(partitions);
+                break;
+
+            case ON_PARTITIONS_ASSIGNED:
+                e = rebalanceListenerInvoker.invokePartitionsAssigned(partitions);
+                break;
+
+            case ON_PARTITIONS_LOST:
+                e = rebalanceListenerInvoker.invokePartitionsLost(partitions);
+                break;
+
+            default:
+                throw new IllegalArgumentException("The method " + methodName.fullyQualifiedMethodName() + " to invoke was not expected");
+        }
+
+        final Optional<KafkaException> error;
+
+        if (e != null) {
+            if (e instanceof KafkaException)
+                error = Optional.of((KafkaException) e);
+            else
+                error = Optional.of(new KafkaException("User rebalance callback throws an error", e));
+        } else {
+            error = Optional.empty();
+        }
+
+        return new ConsumerRebalanceListenerCallbackCompletedEvent(
+            methodName,
+            future,
+            error
+        );
     }
 
     @Override

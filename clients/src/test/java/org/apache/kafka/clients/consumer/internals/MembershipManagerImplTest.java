@@ -53,6 +53,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 
+import static org.apache.kafka.clients.consumer.internals.AsyncKafkaConsumer.invokeRebalanceCallbacks;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
@@ -858,7 +859,6 @@ public class MembershipManagerImplTest {
         // Step 1: set up mocks
         MembershipManagerImpl membershipManager = createMemberInStableState();
         mockOwnedPartition("topic1", 0);
-        CounterConsumerRebalanceListener listener = new CounterConsumerRebalanceListener();
 
         when(subscriptionState.rebalanceListener()).thenReturn(Optional.empty());
         doNothing().when(subscriptionState).markPendingRevocation(anySet());
@@ -869,13 +869,10 @@ public class MembershipManagerImplTest {
         assertEquals(Collections.emptySet(), membershipManager.currentAssignment());
         assertFalse(membershipManager.reconciliationInProgress());
         assertEquals(0, backgroundEventQueue.size());
-        listener.assertCounts(0, 0, 0);
 
         // Step 3: Receive ack and make sure we're done and our listener was called appropriately
         membershipManager.onHeartbeatRequestSent();
         assertEquals(MemberState.STABLE, membershipManager.state());
-
-        listener.assertCounts(0, 0, 0);
     }
 
     @Test
@@ -965,41 +962,12 @@ public class MembershipManagerImplTest {
         assertEquals(methodName, neededEvent.methodName());
         assertEquals(partitions, neededEvent.partitions());
 
-        final Exception e;
-
-        switch (methodName) {
-            case ON_PARTITIONS_REVOKED:
-                e = invoker.invokePartitionsRevoked(partitions);
-                break;
-
-            case ON_PARTITIONS_ASSIGNED:
-                e = invoker.invokePartitionsAssigned(partitions);
-                break;
-
-            case ON_PARTITIONS_LOST:
-                e = invoker.invokePartitionsLost(partitions);
-                break;
-
-            default:
-                throw new IllegalArgumentException("The method " + methodName + " to invoke was not expected");
-        }
-
-        final Optional<KafkaException> error;
-
-        if (e != null) {
-            if (e instanceof KafkaException)
-                error = Optional.of((KafkaException) e);
-            else
-                error = Optional.of(new KafkaException("User rebalance callback throws an error", e));
-        } else {
-            error = Optional.empty();
-        }
-
-        ApplicationEvent invokedEvent = new ConsumerRebalanceListenerCallbackCompletedEvent(
+        ApplicationEvent invokedEvent = invokeRebalanceCallbacks(
+                invoker,
                 methodName,
                 partitions,
-                neededEvent.future(),
-                error);
+                neededEvent.future()
+        );
         applicationEventHandler.add(invokedEvent);
     }
 
