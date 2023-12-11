@@ -35,6 +35,7 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
@@ -1123,7 +1124,8 @@ public class MembershipManagerImplTest {
     //       The jury is out on whether or not this is a bug or intentional.
     //
     //       See https://github.com/apache/kafka/pull/14640#discussion_r1421253120 for more details.
-    // @Test
+    @Test
+    @Disabled
     public void testListenerCallbacksThrowsErrorOnPartitionsRevoked() {
         // Step 1: set up mocks
         String topicName = "topic1";
