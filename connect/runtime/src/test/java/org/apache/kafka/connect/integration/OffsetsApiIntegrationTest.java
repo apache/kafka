@@ -399,35 +399,9 @@ public class OffsetsApiIntegrationTest {
             offsetsToAlter.add(new ConnectorOffset(partition, Collections.singletonMap(SinkUtils.KAFKA_OFFSET_KEY, 5)));
         }
 
-        AtomicReference<String> responseReference = new AtomicReference<>();
-        // Some retry logic is necessary to account for KAFKA-15826,
-        // where laggy sink task startup/shutdown can leave consumers running
-        waitForCondition(
-                () -> {
-                    try {
-                        responseReference.set(connect.alterConnectorOffsets(connectorName, new ConnectorOffsets(offsetsToAlter)));
-                        return true;
-                    } catch (ConnectRestException e) {
-                        boolean internalServerError = e.statusCode() == INTERNAL_SERVER_ERROR.getStatusCode();
+        // Alter the sink connector's offsets, with retry logic (since we just stopped the connector)
+        String response = modifySinkConnectorOffsetsWithRetry(new ConnectorOffsets(offsetsToAlter));
 
-                        String message = Optional.of(e.getMessage()).orElse("");
-                        boolean failedToResetConsumerOffsets = message.contains("Failed to reset consumer group offsets for connector");
-                        boolean canBeRetried = message.contains("If the connector is in a stopped state, this operation can be safely retried");
-
-                        boolean retriable = internalServerError && failedToResetConsumerOffsets && canBeRetried;
-                        if (retriable) {
-                            return false;
-                        } else {
-                            throw new NoRetryException(e);
-                        }
-                    } catch (Throwable t) {
-                        throw new NoRetryException(t);
-                    }
-                },
-                30_000,
-                "Failed to reset sink connector offsets in time"
-        );
-        String response = responseReference.get();
         assertThat(response, containsString("The Connect framework-managed offsets for this connector have been altered successfully. " +
                 "However, if this connector manages offsets externally, they will need to be manually altered in the system that the connector uses."));
 
@@ -781,36 +755,8 @@ public class OffsetsApiIntegrationTest {
                 "Connector did not stop in time"
         );
 
-        final AtomicReference<String> responseReference = new AtomicReference<>();
-        // Reset the sink connector's offsets
-        // Some retry logic is necessary to account for KAFKA-15826,
-        // where laggy sink task startup/shutdown can leave consumers running
-        waitForCondition(
-                () -> {
-                    try {
-                        responseReference.set(connect.resetConnectorOffsets(connectorName));
-                        return true;
-                    } catch (ConnectRestException e) {
-                        boolean internalServerError = e.statusCode() == INTERNAL_SERVER_ERROR.getStatusCode();
-
-                        String message = Optional.of(e.getMessage()).orElse("");
-                        boolean failedToResetConsumerOffsets = message.contains("Failed to reset consumer group offsets for connector");
-                        boolean canBeRetried = message.contains("If the connector is in a stopped state, this operation can be safely retried");
-
-                        boolean retriable = internalServerError && failedToResetConsumerOffsets && canBeRetried;
-                        if (retriable) {
-                            return false;
-                        } else {
-                            throw new NoRetryException(e);
-                        }
-                    } catch (Throwable t) {
-                        throw new NoRetryException(t);
-                    }
-                },
-                30_000,
-                "Failed to reset sink connector offsets in time"
-        );
-        String response = responseReference.get();
+        // Reset the sink connector's offsets, with retry logic (since we just stopped the connector)
+        String response = modifySinkConnectorOffsetsWithRetry(null);
         assertThat(response, containsString("The Connect framework-managed offsets for this connector have been reset successfully. " +
                 "However, if this connector manages offsets externally, they will need to be manually reset in the system that the connector uses."));
 
@@ -961,6 +907,55 @@ public class OffsetsApiIntegrationTest {
         props.put(DEFAULT_TOPIC_CREATION_PREFIX + REPLICATION_FACTOR_CONFIG, "1");
         props.put(DEFAULT_TOPIC_CREATION_PREFIX + PARTITIONS_CONFIG, "1");
         return props;
+    }
+
+    /**
+     * Modify (i.e., alter or reset) the offsets for a sink connector, with retry logic to
+     * handle cases where laggy task shutdown may have left a consumer in the group.
+     * @param offsetsToAlter the offsets to alter for the sink connector, or null if
+     *                       the connector's offets should be reset instead
+     * @return the response from the REST API, if the request was successful
+     * @throws InterruptedException if the thread is interrupted while waiting for a
+     * request to modify the connector's offsets to succeed
+     * @see <a href="https://issues.apache.org/jira/browse/KAFKA-15826">KAFKA-15826</a>
+     */
+    private String modifySinkConnectorOffsetsWithRetry(ConnectorOffsets offsetsToAlter) throws InterruptedException {
+        // Some retry logic is necessary to account for KAFKA-15826,
+        // where laggy sink task startup/shutdown can leave consumers running
+        String conditionDetails = "Failed to "
+                + (offsetsToAlter != null ?  "alter" : "reset")
+                + " sink connector offsets in time";
+        AtomicReference<String> responseReference = new AtomicReference<>();
+        waitForCondition(
+                () -> {
+                    try {
+                        if (offsetsToAlter == null) {
+                            responseReference.set(connect.resetConnectorOffsets(connectorName));
+                        } else {
+                            responseReference.set(connect.alterConnectorOffsets(connectorName, offsetsToAlter));
+                        }
+                        return true;
+                    } catch (ConnectRestException e) {
+                        boolean internalServerError = e.statusCode() == INTERNAL_SERVER_ERROR.getStatusCode();
+
+                        String message = Optional.of(e.getMessage()).orElse("");
+                        boolean failedToResetConsumerOffsets = message.contains("Failed to reset consumer group offsets for connector");
+                        boolean canBeRetried = message.contains("If the connector is in a stopped state, this operation can be safely retried");
+
+                        boolean retriable = internalServerError && failedToResetConsumerOffsets && canBeRetried;
+                        if (retriable) {
+                            return false;
+                        } else {
+                            throw new NoRetryException(e);
+                        }
+                    } catch (Throwable t) {
+                        throw new NoRetryException(t);
+                    }
+                },
+                30_000,
+                conditionDetails
+        );
+        return responseReference.get();
     }
 
     /**
