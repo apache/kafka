@@ -17,6 +17,7 @@
 
 package org.apache.kafka.image;
 
+import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.metadata.PartitionChangeRecord;
@@ -191,6 +192,7 @@ public final class TopicsDelta {
         Map<TopicPartition, LocalReplicaChanges.PartitionInfo> leaders = new HashMap<>();
         Map<TopicPartition, LocalReplicaChanges.PartitionInfo> followers = new HashMap<>();
         Map<String, Uuid> topicIds = new HashMap<>();
+        Map<TopicIdPartition, Uuid> directoryIds = new HashMap<>();
 
         for (TopicDelta delta : changedTopics.values()) {
             LocalReplicaChanges changes = delta.localChanges(brokerId);
@@ -199,6 +201,7 @@ public final class TopicsDelta {
             leaders.putAll(changes.leaders());
             followers.putAll(changes.followers());
             topicIds.putAll(changes.topicIds());
+            directoryIds.putAll(changes.directoryIds());
         }
 
         // Add all of the removed topic partitions to the set of locally removed partitions
@@ -211,7 +214,7 @@ public final class TopicsDelta {
             });
         });
 
-        return new LocalReplicaChanges(deletes, leaders, followers, topicIds);
+        return new LocalReplicaChanges(deletes, leaders, followers, topicIds, directoryIds);
     }
 
     @Override

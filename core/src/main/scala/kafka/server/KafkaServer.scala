@@ -417,7 +417,7 @@ class KafkaServer(
             time,
             s"zk-broker-${config.nodeId}-",
             isZkBroker = true,
-            logManager.directoryIds.values.toSet)
+            logManager.directoryIdsSet)
 
           // If the ZK broker is in migration mode, start up a RaftManager to learn about the new KRaft controller
           val controllerQuorumVotersFuture = CompletableFuture.completedFuture(
