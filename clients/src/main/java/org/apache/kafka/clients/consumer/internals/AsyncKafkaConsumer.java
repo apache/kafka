@@ -1683,11 +1683,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         else
             error = Optional.empty();
 
-        return new ConsumerRebalanceListenerCallbackCompletedEvent(
-            methodName,
-            future,
-            error
-        );
+        return new ConsumerRebalanceListenerCallbackCompletedEvent(methodName, future, error);
     }
 
     @Override
