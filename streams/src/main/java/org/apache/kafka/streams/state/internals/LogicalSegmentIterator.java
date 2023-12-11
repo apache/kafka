@@ -34,7 +34,7 @@ public class LogicalSegmentIterator implements VersionedRecordIterator<byte[]> {
     // stores the raw value of the latestValueStore when latestValueStore is the current segment
     private byte[] currentRawSegmentValue;
     // stores the deserialized value of the current segment (when current segment is one of the old segments)
-    private RocksDBVersionedStoreSegmentValueFormatter.SegmentValue currentDeserializedSegmentValue;
+    private ReadonlyPartiallyDeserializedSegmentValue currentDeserializedSegmentValue;
     private VersionedRecord<byte[]> next;
     private int nextIndex;
 
@@ -108,6 +108,7 @@ public class LogicalSegmentIterator implements VersionedRecordIterator<byte[]> {
     private void prepareToFetchNextSegment() {
         this.currentRawSegmentValue = null;
         this.currentDeserializedSegmentValue = null;
+        this.nextIndex = order.equals(ResultOrder.ASCENDING) ? Integer.MAX_VALUE : 0;
     }
 
     /**
@@ -131,7 +132,7 @@ public class LogicalSegmentIterator implements VersionedRecordIterator<byte[]> {
                 if (segment.id() == -1) { // this is the latestValueStore
                     this.currentRawSegmentValue = rawSegmentValue;
                 } else {
-                    this.currentDeserializedSegmentValue = RocksDBVersionedStoreSegmentValueFormatter.deserialize(rawSegmentValue);
+                    this.currentDeserializedSegmentValue = new ReadonlyPartiallyDeserializedSegmentValue(rawSegmentValue);
                 }
                 return true;
             }
@@ -155,7 +156,7 @@ public class LogicalSegmentIterator implements VersionedRecordIterator<byte[]> {
                     currentDeserializedSegmentValue.find(fromTime, toTime, order, nextIndex);
             if (currentRecord != null) {
                 nextRecord = new VersionedRecord<>(currentRecord.value(), currentRecord.validFrom(), currentRecord.validTo());
-                this.nextIndex = currentRecord.index() + 1;
+                this.nextIndex = order.equals(ResultOrder.ASCENDING) ? currentRecord.index() - 1 : currentRecord.index() + 1;
             }
         }
         // no relevant record can be found in the segment
