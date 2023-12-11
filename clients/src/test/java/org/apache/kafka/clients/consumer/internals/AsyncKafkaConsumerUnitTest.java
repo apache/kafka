@@ -52,6 +52,7 @@ import org.apache.kafka.clients.Metadata.LeaderAndEpoch;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.GroupProtocol;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetAndTimestamp;
@@ -633,6 +634,39 @@ public class AsyncKafkaConsumerUnitTest {
         consumer = setup(config);
 
         assertFalse(config.unused().contains(ConsumerConfig.GROUP_REMOTE_ASSIGNOR_CONFIG));
+    }
+
+    @Test
+    public void testLongPollWaitIsLimited() {
+        consumer = setup();
+        String topicName = "topic1";
+        consumer.subscribe(singletonList(topicName));
+
+        assertEquals(singleton(topicName), consumer.subscription());
+        assertTrue(consumer.assignment().isEmpty());
+
+        final int partition = 3;
+        final TopicPartition tp = new TopicPartition(topicName, partition);
+        final List<ConsumerRecord<String, String>> records = asList(
+            new ConsumerRecord<>(topicName, partition, 2, "key1", "value1"),
+            new ConsumerRecord<>(topicName, partition, 3, "key2", "value2")
+        );
+
+        // On the first iteration, return no data; on the second, return two records
+        doAnswer(invocation -> {
+            // Mock the subscription being assigned as the first fetch is collected
+            consumer.subscriptions().assignFromSubscribed(Collections.singleton(tp));
+            return Fetch.empty();
+        })
+            .doAnswer(invocation -> Fetch.forPartition(tp, records, true))
+            .when(fetchCollector).collectFetch(any(FetchBuffer.class));
+
+        // And then poll for up to 10000ms, which should return 2 records without timing out
+        ConsumerRecords<?, ?> returnedRecords = consumer.poll(Duration.ofMillis(10000));
+        assertEquals(2, returnedRecords.count());
+
+        assertEquals(singleton(topicName), consumer.subscription());
+        assertEquals(singleton(tp), consumer.assignment());
     }
 
     @Test

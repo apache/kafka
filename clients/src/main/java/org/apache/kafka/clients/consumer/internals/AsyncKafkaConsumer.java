@@ -1591,6 +1591,9 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         return invoker.callbackQueue.size();
     }
 
+    // Visible for testing
+    SubscriptionState subscriptions() { return subscriptions; }
+
     /**
      * Utility class that helps the application thread to invoke user registered {@link OffsetCommitCallback}. This is
      * achieved by having the background thread register a {@link OffsetCommitCallbackTask} to the invoker upon the
