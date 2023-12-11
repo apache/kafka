@@ -25,6 +25,7 @@ import org.apache.kafka.clients.consumer.MockConsumer;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.clients.producer.MockProducer;
 import org.apache.kafka.common.Cluster;
+import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.TimeoutException;
@@ -91,6 +92,7 @@ import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ThreadFactory;
@@ -100,6 +102,8 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static java.util.Collections.singletonList;
+import static org.apache.kafka.common.utils.Utils.mkEntry;
+import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.safeUniqueTestName;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.waitForApplicationState;
 import static org.apache.kafka.streams.state.QueryableStoreTypes.keyValueStore;
@@ -1396,6 +1400,50 @@ public class KafkaStreamsTest {
                 TimeoutException.class,
                 () -> streams.clientInstanceIds(Duration.ZERO)
             );
+            assertThat(timeoutException.getMessage(), equalTo("Could not retrieve consumer instance id for consumer."));
+            assertThat(timeoutException.getCause(), instanceOf(java.util.concurrent.TimeoutException.class));
+        }
+    }
+
+    @Test
+    public void shouldThrowTimeoutExceptionWhenGlobalConsumerFutureDoesNotComplete() throws Exception {
+        final KafkaFutureImpl<Map<String, KafkaFuture<Uuid>>> producerFuture = new KafkaFutureImpl<>();
+        producerFuture.complete(Collections.emptyMap());
+        when(streamThreadOne.producersClientInstanceIds(any())).thenReturn(producerFuture);
+        when(streamThreadTwo.producersClientInstanceIds(any())).thenReturn(producerFuture);
+
+        adminClient.setClientInstanceId(Uuid.randomUuid());
+
+        final StreamsBuilder builder = getBuilderWithSource();
+        builder.globalTable("anyTopic");
+        try (final KafkaStreams streams = new KafkaStreams(builder.build(), props, supplier, time)) {
+            streams.start();
+
+            when(globalStreamThreadMockedConstruction.constructed().get(0).globalConsumerInstanceId(any()))
+                .thenReturn(new KafkaFutureImpl<>());
+
+            final TimeoutException timeoutException = assertThrows(
+                TimeoutException.class,
+                () -> streams.clientInstanceIds(Duration.ZERO)
+            );
+            assertThat(timeoutException.getMessage(), equalTo("Could not retrieve global consumer client instance id."));
+            assertThat(timeoutException.getCause(), instanceOf(java.util.concurrent.TimeoutException.class));
+        }
+    }
+
+    @Test
+    public void shouldThrowTimeoutExceptionWhenThreadProducerFutureDoesNotComplete() {
+        when(streamThreadOne.producersClientInstanceIds(any())).thenReturn(new KafkaFutureImpl<>());
+        adminClient.setClientInstanceId(Uuid.randomUuid());
+
+        try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time)) {
+            streams.start();
+
+            final TimeoutException timeoutException = assertThrows(
+                TimeoutException.class,
+                () -> streams.clientInstanceIds(Duration.ZERO)
+            );
+            assertThat(timeoutException.getMessage(), equalTo("Could not retrieve producer instance id for processId-StreamThread-1."));
             assertThat(timeoutException.getCause(), instanceOf(java.util.concurrent.TimeoutException.class));
         }
     }
@@ -1406,9 +1454,15 @@ public class KafkaStreamsTest {
         adminClient.advanceTimeOnClientInstanceId(time, Duration.ofMillis(10L).toMillis());
 
         final Time mockTime = time;
-        final AtomicLong expectedTimeout = new AtomicLong(20L);
+        final AtomicLong expectedTimeout = new AtomicLong(50L);
         final AtomicBoolean didAssertThreadOne = new AtomicBoolean(false);
         final AtomicBoolean didAssertThreadTwo = new AtomicBoolean(false);
+        final AtomicBoolean didAssertThreadProducer = new AtomicBoolean(false);
+        final AtomicBoolean didAssertTaskProducers = new AtomicBoolean(false);
+        final AtomicBoolean didAssertTask1 = new AtomicBoolean(false);
+        final AtomicBoolean didAssertTask2 = new AtomicBoolean(false);
+        final AtomicBoolean didAssertGlobalThread = new AtomicBoolean(false);
+
         when(streamThreadOne.consumerClientInstanceIds(any()))
             .thenReturn(Collections.singletonMap("consumer1", new KafkaFutureImpl<Uuid>() {
                 @Override
@@ -1430,14 +1484,78 @@ public class KafkaStreamsTest {
                 }
             }));
 
+        // mimic thread producer on stream-thread-one
+        final KafkaFutureImpl<Map<String, KafkaFuture<Uuid>>> threadProducerFuture = new KafkaFutureImpl<>();
+        threadProducerFuture.complete(Collections.singletonMap("threadProducer", new KafkaFutureImpl<Uuid>() {
+            @Override
+            public Uuid get(final long timeout, final TimeUnit timeUnit) {
+                didAssertThreadProducer.set(true);
+                assertThat(timeout, equalTo(expectedTimeout.getAndAdd(-9L)));
+                mockTime.sleep(9L);
+                return null;
+            }
+        }));
+        when(streamThreadOne.producersClientInstanceIds(any())).thenReturn(threadProducerFuture);
+        // mimic task producer on stream-thread-two
+        final KafkaFutureImpl<Map<String, KafkaFuture<Uuid>>> taskProducersFuture = new KafkaFutureImpl<Map<String, KafkaFuture<Uuid>>>() {
+            @Override
+            public Map<String, KafkaFuture<Uuid>> get(final long timeout, final TimeUnit timeUnit)
+                throws InterruptedException, ExecutionException, java.util.concurrent.TimeoutException {
+                didAssertTaskProducers.set(true);
+                assertThat(timeout, equalTo(expectedTimeout.getAndAdd(-7L)));
+                mockTime.sleep(7L);
+                return super.get(timeout, timeUnit);
+            }
+        };
+        taskProducersFuture.complete(mkMap(
+            mkEntry("task1", new KafkaFutureImpl<Uuid>() {
+                @Override
+                public Uuid get(final long timeout, final TimeUnit timeUnit) {
+                    didAssertTask1.set(true);
+                    assertThat(timeout, equalTo(expectedTimeout.getAndAdd(-4L)));
+                    mockTime.sleep(4L);
+                    return null;
+                }
+            }),
+            mkEntry("task2", new KafkaFutureImpl<Uuid>() {
+                @Override
+                public Uuid get(final long timeout, final TimeUnit timeUnit) {
+                    didAssertTask2.set(true);
+                    assertThat(timeout, equalTo(expectedTimeout.getAndAdd(-6L)));
+                    mockTime.sleep(6L);
+                    return null;
+                }
+            })
+        ));
+        when(streamThreadTwo.producersClientInstanceIds(any())).thenReturn(taskProducersFuture);
 
-        try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time)) {
+        final StreamsBuilder builder = getBuilderWithSource();
+        builder.globalTable("anyTopic");
+
+        try (final KafkaStreams streams = new KafkaStreams(builder.build(), props, supplier, time)) {
             streams.start();
-            streams.clientInstanceIds(Duration.ofMillis(30L));
+
+            when(globalStreamThreadMockedConstruction.constructed().get(0).globalConsumerInstanceId(any()))
+                .thenReturn(new KafkaFutureImpl<Uuid>() {
+                    @Override
+                    public Uuid get(final long timeout, final TimeUnit timeUnit) {
+                        didAssertGlobalThread.set(true);
+                        assertThat(timeout, equalTo(expectedTimeout.getAndAdd(-8L)));
+                        mockTime.sleep(8L);
+                        return null;
+                    }
+                });
+
+            streams.clientInstanceIds(Duration.ofMillis(60L));
         }
 
         assertThat(didAssertThreadOne.get(), equalTo(true));
         assertThat(didAssertThreadTwo.get(), equalTo(true));
+        assertThat(didAssertThreadProducer.get(), equalTo(true));
+        assertThat(didAssertTaskProducers.get(), equalTo(true));
+        assertThat(didAssertTask1.get(), equalTo(true));
+        assertThat(didAssertTask2.get(), equalTo(true));
+        assertThat(didAssertGlobalThread.get(), equalTo(true));
     }
 
     @Deprecated // testing old PAPI

@@ -52,11 +52,11 @@ import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.utils.{LogContext, Time, Utils}
-import org.apache.kafka.common.{IsolationLevel, Node, TopicIdPartition, TopicPartition, Uuid}
+import org.apache.kafka.common.{DirectoryId, IsolationLevel, Node, TopicIdPartition, TopicPartition, Uuid}
 import org.apache.kafka.image._
 import org.apache.kafka.metadata.LeaderConstants.NO_LEADER
 import org.apache.kafka.metadata.LeaderRecoveryState
-import org.apache.kafka.server.common.OffsetAndEpoch
+import org.apache.kafka.server.common.{DirectoryEventHandler, OffsetAndEpoch}
 import org.apache.kafka.server.common.MetadataVersion.IBP_2_6_IV0
 import org.apache.kafka.server.metrics.{KafkaMetricsGroup, KafkaYammerMetrics}
 import org.apache.kafka.server.util.{MockScheduler, MockTime}
@@ -68,6 +68,7 @@ import org.junit.jupiter.params.provider.{EnumSource, ValueSource}
 import com.yammer.metrics.core.Gauge
 import kafka.log.remote.RemoteLogManager
 import org.apache.kafka.common.config.{AbstractConfig, TopicConfig}
+import org.apache.kafka.metadata.properties.{MetaProperties, MetaPropertiesEnsemble, MetaPropertiesVersion, PropertiesUtils}
 import org.apache.kafka.raft.RaftConfig
 import org.apache.kafka.server.log.remote.storage.{NoOpRemoteLogMetadataManager, NoOpRemoteStorageManager, RemoteLogManagerConfig}
 import org.apache.kafka.server.util.timer.MockTimer
@@ -76,7 +77,7 @@ import org.mockito.invocation.InvocationOnMock
 import org.mockito.stubbing.Answer
 import org.mockito.{ArgumentCaptor, ArgumentMatchers}
 import org.mockito.ArgumentMatchers.{any, anyInt, anyLong, anyMap, anySet, anyString}
-import org.mockito.Mockito.{doAnswer, doReturn, mock, mockConstruction, never, reset, spy, times, verify, verifyNoMoreInteractions, when}
+import org.mockito.Mockito.{atLeastOnce, doAnswer, doReturn, mock, mockConstruction, never, reset, spy, times, verify, verifyNoInteractions, verifyNoMoreInteractions, when}
 
 import scala.collection.{Map, Seq, mutable}
 import scala.compat.java8.OptionConverters.RichOptionForJava8
@@ -2779,7 +2780,7 @@ class ReplicaManagerTest {
     val topicPartitionObj = new TopicPartition(topic, topicPartition)
     val mockLogMgr: LogManager = mock(classOf[LogManager])
     when(mockLogMgr.liveLogDirs).thenReturn(config.logDirs.map(new File(_).getAbsoluteFile))
-    when(mockLogMgr.getOrCreateLog(ArgumentMatchers.eq(topicPartitionObj), ArgumentMatchers.eq(false), ArgumentMatchers.eq(false), any())).thenReturn(mockLog)
+    when(mockLogMgr.getOrCreateLog(ArgumentMatchers.eq(topicPartitionObj), ArgumentMatchers.eq(false), ArgumentMatchers.eq(false), any(), any())).thenReturn(mockLog)
     when(mockLogMgr.getLog(topicPartitionObj, isFuture = false)).thenReturn(Some(mockLog))
     when(mockLogMgr.getLog(topicPartitionObj, isFuture = true)).thenReturn(None)
     val allLogs = new Pool[TopicPartition, UnifiedLog]()
@@ -3119,7 +3120,9 @@ class ReplicaManagerTest {
     enableRemoteStorage: Boolean = false,
     shouldMockLog: Boolean = false,
     remoteLogManager: Option[RemoteLogManager] = None,
-    defaultTopicRemoteLogStorageEnable: Boolean = true
+    defaultTopicRemoteLogStorageEnable: Boolean = true,
+    setupLogDirMetaProperties: Boolean = false,
+    directoryEventHandler: DirectoryEventHandler = DirectoryEventHandler.NOOP
   ): ReplicaManager = {
     val props = TestUtils.createBrokerConfig(brokerId, TestUtils.MockZkConnect)
     val path1 = TestUtils.tempRelativeDir("data").getAbsolutePath
@@ -3132,6 +3135,19 @@ class ReplicaManagerTest {
       logProps.put(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG, "true")
     }
     val mockLog = setupMockLog(path1)
+    if (setupLogDirMetaProperties) {
+      // add meta.properties file in each dir
+      config.logDirs.foreach(dir => {
+        val metaProps = new MetaProperties.Builder().
+          setVersion(MetaPropertiesVersion.V0).
+          setClusterId("clusterId").
+          setNodeId(brokerId).
+          setDirectoryId(DirectoryId.random()).
+          build()
+        PropertiesUtils.writePropertiesFile(metaProps.toProperties,
+          new File(new File(dir), MetaPropertiesEnsemble.META_PROPERTIES_NAME).getAbsolutePath, false)
+      })
+    }
     val mockLogMgr = TestUtils.createLogManager(config.logDirs.map(new File(_)), new LogConfig(logProps), log = if (shouldMockLog) Some(mockLog) else None, remoteStorageSystemEnable = enableRemoteStorage)
     val aliveBrokers = aliveBrokerIds.map(brokerId => new Node(brokerId, s"host$brokerId", brokerId))
 
@@ -3175,6 +3191,7 @@ class ReplicaManagerTest {
       delayedRemoteFetchPurgatoryParam = Some(mockDelayedRemoteFetchPurgatory),
       threadNamePrefix = Option(this.getClass.getName),
       addPartitionsToTxnManager = Some(addPartitionsToTxnManager),
+      directoryEventHandler = directoryEventHandler,
       remoteLogManager = if (enableRemoteStorage) {
         if (remoteLogManager.isDefined)
           remoteLogManager
@@ -4410,6 +4427,138 @@ class ReplicaManagerTest {
 
   @ParameterizedTest
   @ValueSource(booleans = Array(true, false))
+  def testApplyDeltaShouldHandleReplicaAssignedToOnlineDirectory(enableRemoteStorage: Boolean): Unit = {
+    val localId = 1
+    val topicPartition0 = new TopicPartition("foo", 0)
+    val topicPartition1 = new TopicPartition("foo", 1)
+    val directoryEventHandler = mock(classOf[DirectoryEventHandler])
+
+    val replicaManager = setupReplicaManagerWithMockedPurgatories(new MockTimer(time), localId,
+      enableRemoteStorage = enableRemoteStorage, setupLogDirMetaProperties = true, directoryEventHandler = directoryEventHandler)
+
+    try {
+
+      // Test applying delta as leader
+      val directoryIds = replicaManager.logManager.directoryIdsSet.toList
+      // Make the local replica the leader
+      val leaderTopicsDelta = topicsCreateDelta(localId, true, partition = 0, directoryIds = directoryIds)
+      val leaderMetadataImage = imageFromTopics(leaderTopicsDelta.apply())
+      replicaManager.applyDelta(leaderTopicsDelta, leaderMetadataImage)
+
+      // Check the broker shouldn't updated the controller with the correct assignment.
+      verifyNoInteractions(replicaManager.directoryEventHandler)
+      val logDirIdHostingPartition0 = replicaManager.logManager.directoryId(replicaManager.logManager.getLog(topicPartition0).get.dir.getParent).get
+      assertEquals(directoryIds.head, logDirIdHostingPartition0)
+
+      // Test applying delta as follower
+      val followerTopicsDelta = topicsCreateDelta(localId, false, partition = 1, directoryIds = directoryIds)
+      val followerMetadataImage = imageFromTopics(followerTopicsDelta.apply())
+
+      replicaManager.applyDelta(followerTopicsDelta, followerMetadataImage)
+
+      // Check the broker shouldn't updated the controller with the correct assignment.
+      verifyNoInteractions(replicaManager.directoryEventHandler)
+      val logDirIdHostingPartition1 = replicaManager.logManager.directoryId(replicaManager.logManager.getLog(topicPartition1).get.dir.getParent).get
+      assertEquals(directoryIds.head, logDirIdHostingPartition1)
+
+    } finally {
+      replicaManager.shutdown(checkpointHW = false)
+    }
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = Array(true, false))
+  def testApplyDeltaShouldHandleReplicaAssignedToUnassignedDirectory(enableRemoteStorage: Boolean): Unit = {
+    val localId = 1
+    val topicPartition0 = new TopicPartition("foo", 0)
+    val topicPartition1 = new TopicPartition("foo", 1)
+    val directoryEventHandler = mock(classOf[DirectoryEventHandler])
+
+    val replicaManager = setupReplicaManagerWithMockedPurgatories(new MockTimer(time), localId,
+      enableRemoteStorage = enableRemoteStorage, setupLogDirMetaProperties = true, directoryEventHandler = directoryEventHandler)
+
+    try {
+      // Make the local replica the leader
+      val leaderTopicsDelta = topicsCreateDelta(localId, true, partition = 0, directoryIds = List(DirectoryId.UNASSIGNED, DirectoryId.UNASSIGNED))
+      val leaderMetadataImage = imageFromTopics(leaderTopicsDelta.apply())
+      val topicId = leaderMetadataImage.topics().topicsByName.get("foo").id
+      val topicIdPartition0 = new TopicIdPartition(topicId, topicPartition0)
+      val topicIdPartition1 = new TopicIdPartition(topicId, topicPartition1)
+      replicaManager.applyDelta(leaderTopicsDelta, leaderMetadataImage)
+
+      // Make the local replica the as follower
+      val followerTopicsDelta = topicsCreateDelta(localId, false, partition = 1, directoryIds = List(DirectoryId.UNASSIGNED, DirectoryId.UNASSIGNED))
+      val followerMetadataImage = imageFromTopics(followerTopicsDelta.apply())
+      replicaManager.applyDelta(followerTopicsDelta, followerMetadataImage)
+
+      // Check the broker updated the controller with the correct assignment.
+      val topicIdPartitionCapture: ArgumentCaptor[org.apache.kafka.server.common.TopicIdPartition] =
+        ArgumentCaptor.forClass(classOf[org.apache.kafka.server.common.TopicIdPartition])
+      val logIdCaptureForPartition: ArgumentCaptor[Uuid] = ArgumentCaptor.forClass(classOf[Uuid])
+      verify(replicaManager.directoryEventHandler, atLeastOnce()).handleAssignment(topicIdPartitionCapture.capture(), logIdCaptureForPartition.capture(), any())
+
+      assertEquals(topicIdPartitionCapture.getAllValues.asScala,
+        List(
+          new org.apache.kafka.server.common.TopicIdPartition(topicId, topicIdPartition0.partition()),
+          new org.apache.kafka.server.common.TopicIdPartition(topicId, topicIdPartition1.partition())
+        )
+      )
+      val logDirIdHostingPartition0 = replicaManager.logManager.directoryId(replicaManager.logManager.getLog(topicPartition0).get.dir.getParent).get
+      val logDirIdHostingPartition1 = replicaManager.logManager.directoryId(replicaManager.logManager.getLog(topicPartition1).get.dir.getParent).get
+      assertEquals(logIdCaptureForPartition.getAllValues.asScala, List(logDirIdHostingPartition0, logDirIdHostingPartition1))
+    } finally {
+      replicaManager.shutdown(checkpointHW = false)
+    }
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = Array(true, false))
+  def testApplyDeltaShouldHandleReplicaAssignedToLostDirectory(enableRemoteStorage: Boolean): Unit = {
+    val localId = 1
+    val topicPartition0 = new TopicPartition("foo", 0)
+    val topicPartition1 = new TopicPartition("foo", 1)
+    val directoryEventHandler = mock(classOf[DirectoryEventHandler])
+
+    val replicaManager = setupReplicaManagerWithMockedPurgatories(new MockTimer(time), localId,
+      enableRemoteStorage = enableRemoteStorage, setupLogDirMetaProperties = true, directoryEventHandler = directoryEventHandler)
+
+    try {
+      // Make the local replica the leader
+      val leaderTopicsDelta = topicsCreateDelta(localId, true, directoryIds = List(DirectoryId.LOST, DirectoryId.LOST))
+      val leaderMetadataImage = imageFromTopics(leaderTopicsDelta.apply())
+      val topicId = leaderMetadataImage.topics().topicsByName.get("foo").id
+      val topicIdPartition0 = new TopicIdPartition(topicId, topicPartition0)
+      val topicIdPartition1 = new TopicIdPartition(topicId, topicPartition1)
+      replicaManager.applyDelta(leaderTopicsDelta, leaderMetadataImage)
+
+      // Make the local replica the as follower
+      val followerTopicsDelta = topicsCreateDelta(localId, false, partition = 1, directoryIds = List(DirectoryId.LOST, DirectoryId.LOST))
+      val followerMetadataImage = imageFromTopics(followerTopicsDelta.apply())
+      replicaManager.applyDelta(followerTopicsDelta, followerMetadataImage)
+
+      // Check the broker updated the controller with the correct assignment.
+      val topicIdPartitionCapture: ArgumentCaptor[org.apache.kafka.server.common.TopicIdPartition] =
+        ArgumentCaptor.forClass(classOf[org.apache.kafka.server.common.TopicIdPartition])
+      val logIdCaptureForPartition: ArgumentCaptor[Uuid] = ArgumentCaptor.forClass(classOf[Uuid])
+      verify(replicaManager.directoryEventHandler, atLeastOnce()).handleAssignment(topicIdPartitionCapture.capture(), logIdCaptureForPartition.capture(), any())
+
+      assertEquals(topicIdPartitionCapture.getAllValues.asScala,
+        List(
+          new org.apache.kafka.server.common.TopicIdPartition(topicId, topicIdPartition0.partition()),
+          new org.apache.kafka.server.common.TopicIdPartition(topicId, topicIdPartition1.partition())
+        )
+      )
+      val logDirIdHostingPartition0 = replicaManager.logManager.directoryId(replicaManager.logManager.getLog(topicPartition0).get.dir.getParent).get
+      val logDirIdHostingPartition1 = replicaManager.logManager.directoryId(replicaManager.logManager.getLog(topicPartition1).get.dir.getParent).get
+      assertEquals(logIdCaptureForPartition.getAllValues.asScala, List(logDirIdHostingPartition0, logDirIdHostingPartition1))
+
+    } finally {
+      replicaManager.shutdown(checkpointHW = false)
+    }
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = Array(true, false))
   def testDeltaFromLeaderToFollower(enableRemoteStorage: Boolean): Unit = {
     val localId = 1
     val otherId = localId + 1
@@ -5140,17 +5289,7 @@ class ReplicaManagerTest {
       // Make the local replica the follower.
       var followerTopicsDelta = new TopicsDelta(TopicsImage.EMPTY)
       followerTopicsDelta.replay(new TopicRecord().setName("foo").setTopicId(FOO_UUID))
-      followerTopicsDelta.replay(new PartitionRecord()
-        .setPartitionId(0)
-        .setTopicId(FOO_UUID)
-        .setReplicas(util.Arrays.asList(localId, localId + 1))
-        .setIsr(util.Arrays.asList(localId, localId + 1))
-        .setRemovingReplicas(Collections.emptyList())
-        .setAddingReplicas(Collections.emptyList())
-        .setLeader(localId + 1)
-        .setLeaderEpoch(0)
-        .setPartitionEpoch(0)
-      )
+      followerTopicsDelta.replay(partitionRecord(localId, localId + 1))
       var followerMetadataImage = imageFromTopics(followerTopicsDelta.apply())
       replicaManager.applyDelta(followerTopicsDelta, followerMetadataImage)
 
@@ -5477,38 +5616,46 @@ class ReplicaManagerTest {
     }
   }
 
-  private def topicsCreateDelta(startId: Int, isStartIdLeader: Boolean): TopicsDelta = {
+  private def topicsCreateDelta(startId: Int, isStartIdLeader: Boolean, partition:Int = 0, directoryIds: List[Uuid] = List.empty): TopicsDelta = {
     val leader = if (isStartIdLeader) startId else startId + 1
     val delta = new TopicsDelta(TopicsImage.EMPTY)
     delta.replay(new TopicRecord().setName("foo").setTopicId(FOO_UUID))
-    delta.replay(
-      new PartitionRecord()
-        .setPartitionId(0)
-        .setTopicId(FOO_UUID)
-        .setReplicas(util.Arrays.asList(startId, startId + 1))
-        .setIsr(util.Arrays.asList(startId, startId + 1))
-        .setRemovingReplicas(Collections.emptyList())
-        .setAddingReplicas(Collections.emptyList())
-        .setLeader(leader)
-        .setLeaderEpoch(0)
-        .setPartitionEpoch(0)
-    )
+    val record = partitionRecord(startId, leader, partition)
+    if (!directoryIds.isEmpty) {
+      record.setDirectories(directoryIds.asJava)
+    }
+    delta.replay(record)
 
     delta
+  }
+
+  private def partitionRecord(startId: Int, leader: Int, partition: Int = 0) = {
+    new PartitionRecord()
+      .setPartitionId(partition)
+      .setTopicId(FOO_UUID)
+      .setReplicas(util.Arrays.asList(startId, startId + 1))
+      .setIsr(util.Arrays.asList(startId, startId + 1))
+      .setRemovingReplicas(Collections.emptyList())
+      .setAddingReplicas(Collections.emptyList())
+      .setLeader(leader)
+      .setLeaderEpoch(0)
+      .setPartitionEpoch(0)
   }
 
   private def topicsChangeDelta(topicsImage: TopicsImage, startId: Int, isStartIdLeader: Boolean): TopicsDelta = {
     val leader = if (isStartIdLeader) startId else startId + 1
     val delta = new TopicsDelta(topicsImage)
-    delta.replay(
-      new PartitionChangeRecord()
-        .setPartitionId(0)
-        .setTopicId(FOO_UUID)
-        .setReplicas(util.Arrays.asList(startId, startId + 1))
-        .setIsr(util.Arrays.asList(startId, startId + 1))
-        .setLeader(leader)
-    )
+    delta.replay(partitionChangeRecord(startId, leader))
     delta
+  }
+
+  private def partitionChangeRecord(startId: Int, leader: Int) = {
+    new PartitionChangeRecord()
+      .setPartitionId(0)
+      .setTopicId(FOO_UUID)
+      .setReplicas(util.Arrays.asList(startId, startId + 1))
+      .setIsr(util.Arrays.asList(startId, startId + 1))
+      .setLeader(leader)
   }
 
   private def topicsDeleteDelta(topicsImage: TopicsImage): TopicsDelta = {
