@@ -268,7 +268,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                        final Deserializer<K> keyDeserializer,
                        final Deserializer<V> valueDeserializer,
                        final Time time,
-                       final ApplicationEventHandlerSupplier applicationEventHandlerFactory,
+                       final ApplicationEventHandlerFactory applicationEventHandlerFactory,
                        final FetchCollectorFactory<K, V> fetchCollectorFactory,
                        final ConsumerMetadataFactory metadataFactory,
                        final LinkedBlockingQueue<BackgroundEvent> backgroundEventQueue) {
@@ -498,7 +498,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
     }
 
     // auxiliary interface for testing
-    interface ApplicationEventHandlerSupplier {
+    interface ApplicationEventHandlerFactory {
 
         ApplicationEventHandler build(
             final LogContext logContext,
@@ -1579,8 +1579,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         }
     }
 
-    // Visible for testing
-    void maybeInvokeCommitCallbacks() {
+    private void maybeInvokeCommitCallbacks() {
         if (callbacks() > 0) {
             invoker.executeCallbacks();
         }
