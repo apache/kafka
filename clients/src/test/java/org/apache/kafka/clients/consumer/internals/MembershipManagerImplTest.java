@@ -129,8 +129,8 @@ public class MembershipManagerImplTest {
                                                                       String serverAssignor) {
         MembershipManagerImpl manager = new MembershipManagerImpl(
                 GROUP_ID, Optional.ofNullable(groupInstanceId), Optional.ofNullable(serverAssignor),
-                subscriptionState, commitRequestManager, metadata, logContext,
-                Optional.empty(), backgroundEventHandler);
+                subscriptionState, commitRequestManager, metadata, logContext, Optional.empty(),
+                backgroundEventHandler);
         manager.transitionToJoining();
         return manager;
     }
@@ -836,8 +836,7 @@ public class MembershipManagerImplTest {
         String topicName = "topic1";
 
         // Receive assignment different from what the member owns - should reconcile
-        List<TopicIdPartition> owned = Collections.emptyList();
-        mockOwnedPartitionAndAssignmentReceived(membershipManager, topicId, topicName, owned);
+        mockOwnedPartitionAndAssignmentReceived(membershipManager, topicId, topicName, Collections.emptyList());
         List<TopicIdPartition> expectedAssignmentReconciled = topicIdPartitions(topicId, topicName, 0, 1);
         receiveAssignment(topicId, Arrays.asList(0, 1), membershipManager);
         verifyReconciliationTriggeredAndCompleted(membershipManager, expectedAssignmentReconciled);
@@ -999,6 +998,7 @@ public class MembershipManagerImplTest {
         mockOwnedPartitionAndAssignmentReceived(membershipManager, topicId, topicName, Collections.emptyList());
 
         // Member received assignment to reconcile;
+
         receiveAssignment(topicId, Arrays.asList(0, 1), membershipManager);
 
         // Member should complete reconciliation
@@ -1364,7 +1364,8 @@ public class MembershipManagerImplTest {
     private MembershipManagerImpl mockMemberSuccessfullyReceivesAndAcksAssignment(
             Uuid topicId, String topicName, List<Integer> partitions) {
         MembershipManagerImpl membershipManager = createMembershipManagerJoiningGroup();
-        mockOwnedPartitionAndAssignmentReceived(membershipManager, topicId, topicName, Collections.emptyList());
+        mockOwnedPartitionAndAssignmentReceived(membershipManager, topicId, topicName,
+            Collections.emptyList());
 
         receiveAssignment(topicId, partitions, membershipManager);
 

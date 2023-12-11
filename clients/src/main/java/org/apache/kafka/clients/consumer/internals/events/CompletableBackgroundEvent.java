@@ -16,9 +16,6 @@
  */
 package org.apache.kafka.clients.consumer.internals.events;
 
-import org.apache.kafka.clients.consumer.internals.ConsumerUtils;
-import org.apache.kafka.common.utils.Timer;
-
 import java.util.concurrent.CompletableFuture;
 
 /**
@@ -38,20 +35,6 @@ public abstract class CompletableBackgroundEvent<T> extends BackgroundEvent impl
 
     public CompletableFuture<T> future() {
         return future;
-    }
-
-    public T get(Timer timer) {
-        return ConsumerUtils.getResult(future, timer);
-    }
-
-    public void chain(final CompletableFuture<T> providedFuture) {
-        providedFuture.whenComplete((value, exception) -> {
-            if (exception != null) {
-                this.future.completeExceptionally(exception);
-            } else {
-                this.future.complete(value);
-            }
-        });
     }
 
     @Override
