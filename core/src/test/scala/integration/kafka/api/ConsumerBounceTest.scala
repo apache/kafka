@@ -86,7 +86,6 @@ class ConsumerBounceTest extends AbstractConsumerTest with Logging {
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft", "kraft+kip848"))
   def testConsumptionWithBrokerFailures(quorum: String): Unit = consumeWithBrokerFailures(10)
-  // trigger a rebuild
 
   /*
    * 1. Produce a bunch of messages
