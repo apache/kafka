@@ -38,6 +38,7 @@ import org.apache.kafka.clients.consumer.internals.events.ErrorBackgroundEvent;
 import org.apache.kafka.clients.consumer.internals.events.EventProcessor;
 import org.apache.kafka.clients.consumer.internals.events.FetchCommittedOffsetsApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.GroupMetadataUpdateEvent;
+import org.apache.kafka.clients.consumer.internals.events.LeaveOnCloseApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.ListOffsetsApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.NewTopicsMetadataUpdateRequestEvent;
 import org.apache.kafka.clients.consumer.internals.events.ResetPositionsApplicationEvent;
@@ -513,7 +514,21 @@ public class AsyncKafkaConsumerTest {
         subscriptions.assignFromSubscribed(singleton(tp));
         consumer.close(Duration.ZERO);
         assertTrue(subscriptions.assignedPartitions().isEmpty());
-        verify(consumer).maybeRevokePartitions(any());
+        try {
+            verify(consumer).maybeRevokePartitions();
+        } catch (Exception e) {
+            fail("Should not throw exception", e);
+        }
+    }
+
+    @Test
+    public void testFailedPartitionRevocation() {
+        subscriptions.subscribe(singleton("topic"), Optional.empty());
+        TopicPartition tp = new TopicPartition("topic", 0);
+        subscriptions.assignFromSubscribed(singleton(tp));
+        doThrow(new KafkaException()).when(consumer).maybeRevokePartitions();
+        assertThrows(KafkaException.class, () -> consumer.close(Duration.ZERO));
+        verify(applicationEventHandler, never()).addAndGet(any(LeaveOnCloseApplicationEvent.class), any());
     }
 
     @Test
