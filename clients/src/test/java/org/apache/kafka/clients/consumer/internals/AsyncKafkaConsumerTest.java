@@ -99,32 +99,6 @@ public class AsyncKafkaConsumerTest {
         setup(Optional.empty(), false);
     }
 
-    private void resetWithAutoCommitEnabled() {
-        cleanup();
-        setup(ConsumerTestBuilder.createDefaultGroupInformation(), true);
-    }
-
-    @Test
-    public void testSuccessfulStartupShutdown() {
-        assertDoesNotThrow(() -> consumer.close());
-    }
-
-    @Test
-    public void testSuccessfulStartupShutdownWithAutoCommit() {
-        resetWithAutoCommitEnabled();
-        TopicPartition tp = new TopicPartition("topic", 0);
-        consumer.assign(singleton(tp));
-        consumer.seek(tp, 100);
-        prepAutocommitOnClose();
-    }
-
-    @Test
-    public void testFailOnClosedConsumer() {
-        consumer.close();
-        final IllegalStateException res = assertThrows(IllegalStateException.class, consumer::assignment);
-        assertEquals("This consumer has already been closed.", res.getMessage());
-    }
-
     /**
      * This is a rather ugly bit of code. Not my choice :(
      *
@@ -157,13 +131,6 @@ public class AsyncKafkaConsumerTest {
         };
 
         return mockConstruction(FetchCommittedOffsetsApplicationEvent.class, mockInitializer);
-    }
-
-    @Test
-    public void testWakeup_committed() {
-        consumer.wakeup();
-        assertThrows(WakeupException.class, () -> consumer.committed(mockTopicPartitionOffset().keySet()));
-        assertNoPendingWakeup(consumer.wakeupTrigger());
     }
 
     @Test
@@ -239,19 +206,6 @@ public class AsyncKafkaConsumerTest {
             verify(applicationEventHandler, atLeast(1))
                 .addAndGet(ArgumentMatchers.isA(ResetPositionsApplicationEvent.class), ArgumentMatchers.isA(Timer.class));
         }
-    }
-
-    private void assertNoPendingWakeup(final WakeupTrigger wakeupTrigger) {
-        assertNull(wakeupTrigger.getPendingTask());
-    }
-
-    private HashMap<TopicPartition, OffsetAndMetadata> mockTopicPartitionOffset() {
-        final TopicPartition t0 = new TopicPartition("t0", 2);
-        final TopicPartition t1 = new TopicPartition("t0", 3);
-        HashMap<TopicPartition, OffsetAndMetadata> topicPartitionOffsets = new HashMap<>();
-        topicPartitionOffsets.put(t0, new OffsetAndMetadata(10L));
-        topicPartitionOffsets.put(t1, new OffsetAndMetadata(20L));
-        return topicPartitionOffsets;
     }
 
     private void prepAutocommitOnClose() {

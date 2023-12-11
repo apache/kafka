@@ -214,6 +214,19 @@ public class AsyncKafkaConsumerUnitTest {
     }
 
     @Test
+    public void testSuccessfulStartupShutdown() {
+        consumer = setup();
+        assertDoesNotThrow(() -> consumer.close());
+    }
+
+    @Test
+    public void testFailOnClosedConsumer() {
+        consumer.close();
+        final IllegalStateException res = assertThrows(IllegalStateException.class, consumer::assignment);
+        assertEquals("This consumer has already been closed.", res.getMessage());
+    }
+
+    @Test
     public void testAssign() {
         consumer = setup();
         final TopicPartition tp = new TopicPartition("foo", 3);
@@ -894,6 +907,25 @@ public class AsyncKafkaConsumerUnitTest {
         consumer.poll(Duration.ZERO);
 
         assertDoesNotThrow(() -> consumer.poll(Duration.ZERO));
+    }
+
+    @Test
+    public void testWakeupCommitted() {
+        consumer = setup();
+        final HashMap<TopicPartition, OffsetAndMetadata> offsets = mockTopicPartitionOffset();
+        doAnswer(invocation -> {
+            CompletableApplicationEvent<?> event = invocation.getArgument(0);
+            Timer timer = invocation.getArgument(1);
+            assertTrue(event instanceof FetchCommittedOffsetsApplicationEvent);
+            assertTrue(event.future().isCompletedExceptionally());
+            return ConsumerUtils.getResult(event.future(), timer);
+        })
+            .when(applicationEventHandler)
+            .addAndGet(any(FetchCommittedOffsetsApplicationEvent.class), any(Timer.class));
+
+        consumer.wakeup();
+        assertThrows(WakeupException.class, () -> consumer.committed(offsets.keySet()));
+        assertNull(consumer.wakeupTrigger().getPendingTask());
     }
 
     private HashMap<TopicPartition, OffsetAndMetadata> mockTopicPartitionOffset() {
