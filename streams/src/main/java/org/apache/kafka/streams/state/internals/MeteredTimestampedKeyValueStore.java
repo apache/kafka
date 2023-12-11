@@ -206,13 +206,16 @@ public class MeteredTimestampedKeyValueStore<K, V>
         final QueryResult<R> result;
         final TimestampedRangeQuery<K, V> typedQuery = (TimestampedRangeQuery<K, V>) query;
         RangeQuery<Bytes, byte[]> rawRangeQuery;
-        final boolean isKeyAscending = typedQuery.isKeyAscending();
+        final ResultOrder order = typedQuery.resultOrder();
         rawRangeQuery = RangeQuery.withRange(
                 keyBytes(typedQuery.lowerBound().orElse(null)),
                 keyBytes(typedQuery.upperBound().orElse(null))
         );
-        if (!isKeyAscending) {
+        if (order.equals(ResultOrder.DESCENDING)) {
             rawRangeQuery = rawRangeQuery.withDescendingKeys();
+        }
+        if (order.equals(ResultOrder.ASCENDING)) {
+            rawRangeQuery = rawRangeQuery.withAscendingKeys();
         }
         final QueryResult<KeyValueIterator<Bytes, byte[]>> rawResult =
                 wrapped().query(rawRangeQuery, positionBound, config);
