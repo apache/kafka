@@ -46,6 +46,7 @@ import org.apache.kafka.streams.ThreadMetadata;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskCorruptedException;
 import org.apache.kafka.streams.errors.TaskMigratedException;
+import org.apache.kafka.streams.internals.StreamsConfigUtils;
 import org.apache.kafka.streams.internals.metrics.ClientMetrics;
 import org.apache.kafka.streams.processor.StandbyUpdateListener;
 import org.apache.kafka.streams.processor.StateRestoreListener;
@@ -78,6 +79,7 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
 
 import static org.apache.kafka.streams.internals.StreamsConfigUtils.eosEnabled;
+import static org.apache.kafka.streams.internals.StreamsConfigUtils.processingMode;
 import static org.apache.kafka.streams.processor.internals.ClientUtils.getConsumerClientId;
 import static org.apache.kafka.streams.processor.internals.ClientUtils.getRestoreConsumerClientId;
 import static org.apache.kafka.streams.processor.internals.ClientUtils.getSharedAdminClientId;
@@ -338,11 +340,14 @@ public class StreamThread extends Thread implements ProcessingThread {
     private final AtomicLong cacheResizeSize = new AtomicLong(-1L);
     private final AtomicBoolean leaveGroupRequested = new AtomicBoolean(false);
     private final boolean eosEnabled;
+    private final StreamsConfigUtils.ProcessingMode processingMode;
     private final boolean stateUpdaterEnabled;
     private final boolean processingThreadsEnabled;
 
     private volatile long fetchDeadlineClientInstanceId = -1;
     private volatile KafkaFutureImpl<Uuid> mainConsumerInstanceIdFuture = new KafkaFutureImpl<>();
+    private volatile KafkaFutureImpl<Map<String, KafkaFuture<Uuid>>> producerInstanceIdFuture = new KafkaFutureImpl<>();
+    private volatile KafkaFutureImpl<Uuid> threadProducerInstanceIdFuture = new KafkaFutureImpl<>();
 
     public static StreamThread create(final TopologyMetadata topologyMetadata,
                                       final StreamsConfig config,
@@ -610,6 +615,7 @@ public class StreamThread extends Thread implements ProcessingThread {
 
         this.numIterations = 1;
         this.eosEnabled = eosEnabled(config);
+        this.processingMode = processingMode(config);
         this.stateUpdaterEnabled = InternalConfig.getStateUpdaterEnabled(config.originals());
         this.processingThreadsEnabled = InternalConfig.getProcessingThreadsEnabled(config.originals());
     }
@@ -752,12 +758,43 @@ public class StreamThread extends Thread implements ProcessingThread {
                     );
                 }
             }
+
+            if (!processingMode.equals(StreamsConfigUtils.ProcessingMode.EXACTLY_ONCE_ALPHA) &&
+                    !threadProducerInstanceIdFuture.isDone()) {
+
+                if (fetchDeadlineClientInstanceId >= time.milliseconds()) {
+                    try {
+                        threadProducerInstanceIdFuture.complete(
+                            taskManager.threadProducer().kafkaProducer().clientInstanceId(Duration.ZERO)
+                        );
+                    } catch (final IllegalStateException disabledError) {
+                        // if telemetry is disabled on a client, we swallow the error,
+                        // to allow returning a partial result for all other clients
+                        threadProducerInstanceIdFuture.complete(null);
+                    } catch (final TimeoutException swallow) {
+                        // swallow
+                    } catch (final Exception error) {
+                        threadProducerInstanceIdFuture.completeExceptionally(error);
+                    }
+                } else {
+                    threadProducerInstanceIdFuture.completeExceptionally(
+                        new TimeoutException("Could not retrieve thread producer client instance id.")
+                    );
+                }
+            }
+
             maybeResetFetchDeadline();
         }
     }
 
     private void maybeResetFetchDeadline() {
-        final boolean reset = mainConsumerInstanceIdFuture.isDone();
+        boolean reset = mainConsumerInstanceIdFuture.isDone();
+
+        if (processingMode.equals(StreamsConfigUtils.ProcessingMode.EXACTLY_ONCE_ALPHA)) {
+            throw new UnsupportedOperationException("not implemented yet");
+        } else if (!threadProducerInstanceIdFuture.isDone()) {
+            reset = false;
+        }
 
         if (reset) {
             fetchDeadlineClientInstanceId = -1L;
@@ -1551,6 +1588,40 @@ public class StreamThread extends Thread implements ProcessingThread {
         }
 
         return result;
+    }
+
+    // this method is NOT thread-safe (we rely on the callee to be `synchronized`)
+    public KafkaFuture<Map<String, KafkaFuture<Uuid>>> producersClientInstanceIds(final Duration timeout) {
+        boolean setDeadline = false;
+
+        if (producerInstanceIdFuture.isDone()) {
+            if (producerInstanceIdFuture.isCompletedExceptionally()) {
+                producerInstanceIdFuture = new KafkaFutureImpl<>();
+                setDeadline = true;
+            }
+        } else {
+            setDeadline = true;
+        }
+
+        if (processingMode.equals(StreamsConfigUtils.ProcessingMode.EXACTLY_ONCE_ALPHA)) {
+            throw new UnsupportedOperationException("not yet implemented");
+        } else {
+            if (threadProducerInstanceIdFuture.isDone()) {
+                if (threadProducerInstanceIdFuture.isCompletedExceptionally()) {
+                    threadProducerInstanceIdFuture = new KafkaFutureImpl<>();
+                    setDeadline = true;
+                }
+            } else {
+                setDeadline = true;
+            }
+            producerInstanceIdFuture.complete(Collections.singletonMap(getName() + "-producer", threadProducerInstanceIdFuture));
+
+            if (setDeadline) {
+                fetchDeadlineClientInstanceId = time.milliseconds() + timeout.toMillis();
+            }
+        }
+
+        return producerInstanceIdFuture;
     }
 
     // the following are for testing only
