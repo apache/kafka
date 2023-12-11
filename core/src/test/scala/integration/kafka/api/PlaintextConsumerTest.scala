@@ -2338,4 +2338,19 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     assertEquals(numRecords, consumer.committed(Set(tp).asJava).get(tp).offset)
     assertEquals(numRecords, consumer.committed(Set(tp).asJava).get(tp).offset)
   }
+
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
+  def testSubscribeAndCommitSync(quorum: String, groupProtocol: String): Unit = {
+    // This test ensure that the member ID is propagated from the group coordinator when the
+    // assignment is received into a subsequent offset commit
+    val consumer = createConsumer()
+    assertEquals(0, consumer.assignment.size)
+    consumer.subscribe(List(topic).asJava)
+    awaitAssignment(consumer, Set(tp, tp2))
+
+    consumer.seek(tp, 0)
+
+    consumer.commitSync()
+  }
 }
