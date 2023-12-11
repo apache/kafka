@@ -221,14 +221,13 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         }
 
         private void process(final GroupMetadataUpdateEvent event) {
-            if (groupMetadata.isPresent()) {
-                final ConsumerGroupMetadata currentGroupMetadata = groupMetadata.get();
-                final String newMemberId = event.memberId();
+            if (AsyncKafkaConsumer.this.groupMetadata.isPresent()) {
+                final ConsumerGroupMetadata currentGroupMetadata = AsyncKafkaConsumer.this.groupMetadata.get();
                 AsyncKafkaConsumer.this.groupMetadata = Optional.of(new ConsumerGroupMetadata(
-                        currentGroupMetadata.groupId(),
-                        event.memberEpoch(),
-                        newMemberId,
-                        currentGroupMetadata.groupInstanceId()
+                    currentGroupMetadata.groupId(),
+                    event.memberEpoch(),
+                    event.memberId(),
+                    currentGroupMetadata.groupInstanceId()
                 ));
             }
         }
@@ -1679,14 +1678,10 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
 
         final Optional<KafkaException> error;
 
-        if (e != null) {
-            if (e instanceof KafkaException)
-                error = Optional.of((KafkaException) e);
-            else
-                error = Optional.of(new KafkaException("User rebalance callback throws an error", e));
-        } else {
+        if (e != null)
+            error = Optional.of(ConsumerUtils.maybeWrapAsKafkaException(e, "User rebalance callback throws an error"));
+        else
             error = Optional.empty();
-        }
 
         return new ConsumerRebalanceListenerCallbackCompletedEvent(
             methodName,

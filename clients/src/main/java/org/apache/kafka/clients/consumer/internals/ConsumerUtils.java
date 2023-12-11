@@ -31,7 +31,6 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.errors.TimeoutException;
-import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.metrics.KafkaMetricsContext;
 import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
@@ -210,14 +209,7 @@ public final class ConsumerUtils {
         try {
             return future.get(timer.remainingMs(), TimeUnit.MILLISECONDS);
         } catch (ExecutionException e) {
-            Throwable t = e.getCause();
-
-            if (t instanceof WakeupException)
-                throw new WakeupException();
-            else if (t instanceof KafkaException)
-                throw (KafkaException) t;
-            else
-                throw new KafkaException(t);
+            throw maybeWrapAsKafkaException(e.getCause());
         } catch (InterruptedException e) {
             throw new InterruptException(e);
         } catch (java.util.concurrent.TimeoutException e) {
@@ -229,16 +221,23 @@ public final class ConsumerUtils {
         try {
             return future.get();
         } catch (ExecutionException e) {
-            Throwable t = e.getCause();
-
-            if (t instanceof WakeupException)
-                throw new WakeupException();
-            else if (t instanceof KafkaException)
-                throw (KafkaException) t;
-            else
-                throw new KafkaException(t);
+            throw maybeWrapAsKafkaException(e.getCause());
         } catch (InterruptedException e) {
             throw new InterruptException(e);
         }
+    }
+
+    public static KafkaException maybeWrapAsKafkaException(Throwable t) {
+        if (t instanceof KafkaException)
+            return (KafkaException) t;
+        else
+            return new KafkaException(t);
+    }
+
+    public static KafkaException maybeWrapAsKafkaException(Throwable t, String message) {
+        if (t instanceof KafkaException)
+            return (KafkaException) t;
+        else
+            return new KafkaException(message, t);
     }
 }

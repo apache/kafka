@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.clients.consumer.internals.events;
 
+import org.apache.kafka.clients.consumer.internals.ConsumerUtils;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.internals.IdempotentCloser;
 import org.apache.kafka.common.utils.LogContext;
@@ -85,13 +86,7 @@ public abstract class EventProcessor<T> implements Closeable {
                     process(event);
                     processHandler.onProcess(event, Optional.empty());
                 } catch (Throwable t) {
-                    KafkaException error;
-
-                    if (t instanceof KafkaException)
-                        error = (KafkaException) t;
-                    else
-                        error = new KafkaException(t);
-
+                    KafkaException error = ConsumerUtils.maybeWrapAsKafkaException(t);
                     processHandler.onProcess(event, Optional.of(error));
                 }
             }

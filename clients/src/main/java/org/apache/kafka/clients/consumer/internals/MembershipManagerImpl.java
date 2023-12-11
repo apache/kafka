@@ -352,7 +352,7 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
         // check if the member id is null, as the schema defines it as nullable.
         if (response.memberId() != null && !response.memberId().equals(memberId)) {
             clientTelemetryReporter.ifPresent(reporter -> reporter.updateMetricsLabels(
-                    Collections.singletonMap(ClientTelemetryProvider.GROUP_MEMBER_ID, response.memberId())));
+                Collections.singletonMap(ClientTelemetryProvider.GROUP_MEMBER_ID, response.memberId())));
         }
 
         this.memberId = response.memberId();
