@@ -613,7 +613,16 @@ class Partition(val topicPartition: TopicPartition,
   // Only ReplicaAlterDirThread will call this method and ReplicaAlterDirThread should remove the partition
   // from its partitionStates if this method returns true
   def maybeReplaceCurrentWithFutureReplica(): Boolean = {
-    // lock to prevent the log append by followers while checking if the log dir could be replaced with future log.
+    runCallbackIfFutureReplicaCaughtUp((futurePartitionLog: UnifiedLog) => {
+      logManager.replaceCurrentWithFutureLog(topicPartition)
+      futurePartitionLog.setLogOffsetsListener(logOffsetsListener)
+      log = futureLog
+      removeFutureLocalReplica(false)
+    })
+  }
+
+  def runCallbackIfFutureReplicaCaughtUp(callback: UnifiedLog => Unit): Boolean = {
+    // lock to prevent the log append by followers while checking if future log caught-up.
     futureLogLock.synchronized {
       val localReplicaLEO = localLogOrException.logEndOffset
       val futureReplicaLEO = futureLog.map(_.logEndOffset)
@@ -624,10 +633,7 @@ class Partition(val topicPartition: TopicPartition,
           futureLog match {
             case Some(futurePartitionLog) =>
               if (log.exists(_.logEndOffset == futurePartitionLog.logEndOffset)) {
-                logManager.replaceCurrentWithFutureLog(topicPartition)
-                futurePartitionLog.setLogOffsetsListener(logOffsetsListener)
-                log = futureLog
-                removeFutureLocalReplica(false)
+                callback(futurePartitionLog)
                 true
               } else false
             case None =>
@@ -642,6 +648,8 @@ class Partition(val topicPartition: TopicPartition,
     }
   }
 
+  def futureReplicaDirectoryId(): Option[Uuid] = futureLog.flatMap(log => logManager.directoryId(log.dir.getParent))
+  def logDirectoryId(): Option[Uuid] = log.flatMap(log => logManager.directoryId(log.dir.getParent))
   /**
    * Delete the partition. Note that deleting the partition does not delete the underlying logs.
    * The logs are deleted by the ReplicaManager after having deleted the partition.

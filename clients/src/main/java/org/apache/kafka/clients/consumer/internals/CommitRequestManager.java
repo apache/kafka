@@ -225,6 +225,13 @@ public class CommitRequestManager implements RequestManager {
     }
 
     /**
+     * Updates the member ID and epoch upon receiving ConsumerGroupHeartbeatResponse.
+     */
+    void updateMemberInformation(String memberId, int memberEpoch) {
+        groupState.generation = new GroupState.Generation(memberEpoch, memberId, null);
+    }
+
+    /**
      * Returns an OffsetCommitRequest of all assigned topicPartitions and their current positions.
      */
     NetworkClientDelegate.UnsentRequest createCommitAllConsumedRequest() {
@@ -263,7 +270,7 @@ public class CommitRequestManager implements RequestManager {
     }
 
     /**
-     * Handles {@link org.apache.kafka.clients.consumer.internals.events.OffsetFetchApplicationEvent}. It creates an
+     * Handles {@link org.apache.kafka.clients.consumer.internals.events.FetchCommittedOffsetsApplicationEvent}. It creates an
      * {@link OffsetFetchRequestState} and enqueue it to send later.
      */
     public CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> addOffsetFetchRequest(final Set<TopicPartition> partitions) {

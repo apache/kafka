@@ -1506,7 +1506,7 @@ public class StreamsConfigTest {
     }
 
     @Test
-    public void shouldEnableMetricCollectionForAllInternalClients() {
+    public void shouldEnableMetricCollectionForAllInternalClientsByDefault() {
         props.put(StreamsConfig.ENABLE_METRICS_PUSH_CONFIG, true);
         final StreamsConfig streamsConfig = new StreamsConfig(props);
 

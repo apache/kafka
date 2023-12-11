@@ -595,12 +595,11 @@ public class RackAwareTaskAssignorTest {
     }
 
     @Test
-    public void shouldMaintainOriginalAssignment() {
+    public void shouldMaintainOriginalAssignmentForMinCost() {
         final int nodeSize = 20;
         final int tpSize = 40;
         final int partitionSize = 3;
         final int clientSize = 30;
-        final int topicGroupSize = 20;
         final SortedMap<TaskId, Set<TopicPartition>> taskTopicPartitionMap = getTaskTopicPartitionMap(tpSize, partitionSize, false);
         final RackAwareTaskAssignor assignor = new RackAwareTaskAssignor(
             getRandomCluster(nodeSize, tpSize, partitionSize),
@@ -638,8 +637,8 @@ public class RackAwareTaskAssignorTest {
                 assertTrue(clientState.hasAssignedTask(entry.getKey()));
             }
         } else {
+            // Balanced assignment recalculate the assignment using max flow first, so original assignment may not be maintained
             assertValidAssignment(0, taskIds, emptySet(), clientStateMap, new StringBuilder());
-            assertBalancedTasks(clientStateMap);
         }
     }
 

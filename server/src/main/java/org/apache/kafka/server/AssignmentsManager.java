@@ -30,6 +30,7 @@ import org.apache.kafka.common.requests.AssignReplicasToDirsResponse;
 import org.apache.kafka.common.utils.ExponentialBackoff;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.queue.EventQueue;
 import org.apache.kafka.queue.KafkaEventQueue;
 import org.apache.kafka.server.common.TopicIdPartition;
@@ -46,6 +47,8 @@ import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
+
+import static org.apache.kafka.metadata.AssignmentsHelper.buildRequestData;
 
 public class AssignmentsManager {
 
@@ -86,16 +89,20 @@ public class AssignmentsManager {
         this.brokerEpochSupplier = brokerEpochSupplier;
         this.eventQueue = new KafkaEventQueue(time,
                 new LogContext("[AssignmentsManager id=" + brokerId + "]"),
-                "broker-" + brokerId + "-directory-assignments-manager-");
+                "broker-" + brokerId + "-directory-assignments-manager-",
+                new ShutdownEvent());
+        channelManager.start();
     }
 
     public void close() throws InterruptedException {
         eventQueue.close();
-        channelManager.shutdown();
     }
 
-    public void onAssignment(TopicIdPartition topicPartition, Uuid dirId) {
-        eventQueue.append(new AssignmentEvent(time.nanoseconds(), topicPartition, dirId));
+    public void onAssignment(TopicIdPartition topicPartition, Uuid dirId, Runnable callback) {
+        if (callback == null) {
+            callback = () -> { };
+        }
+        eventQueue.append(new AssignmentEvent(time.nanoseconds(), topicPartition, dirId, callback));
     }
 
     // only for testing
@@ -119,6 +126,16 @@ public class AssignmentsManager {
     }
 
     /**
+     * Handles shutdown of the {@link AssignmentsManager}.
+     */
+    private class ShutdownEvent extends Event {
+        @Override
+        public void run() throws Exception {
+            channelManager.shutdown();
+        }
+    }
+
+    /**
      * Handles new generated assignments, to be propagated to the controller.
      * Assignment events may be handled out of order, so for any two assignment
      * events for the same topic partition, the one with the oldest timestamp is
@@ -128,24 +145,34 @@ public class AssignmentsManager {
         final long timestampNs;
         final TopicIdPartition partition;
         final Uuid dirId;
-        AssignmentEvent(long timestampNs, TopicIdPartition partition, Uuid dirId) {
+        final Runnable callback;
+        AssignmentEvent(long timestampNs, TopicIdPartition partition, Uuid dirId, Runnable callback) {
             this.timestampNs = timestampNs;
             this.partition = partition;
             this.dirId = dirId;
+            this.callback = callback == null ? () -> { } : callback;
         }
         @Override
         public void run() throws Exception {
             AssignmentEvent existing = pending.getOrDefault(partition, null);
-            if (existing != null && existing.timestampNs > timestampNs) {
-                if (log.isDebugEnabled()) {
-                    log.debug("Dropping assignment {} because it's older than {}", this, existing);
+            if (existing == null && inflight != null) {
+                existing = inflight.getOrDefault(partition, null);
+            }
+            if (existing != null) {
+                if (existing.dirId.equals(dirId)) {
+                    if (log.isDebugEnabled()) log.debug("Ignoring duplicate assignment {}", this);
+                    return;
                 }
-                return;
+                if (existing.timestampNs > timestampNs) {
+                    if (log.isDebugEnabled()) log.debug("Dropping assignment {} because it's older than {}", this, existing);
+                    return;
+                }
             }
             if (log.isDebugEnabled()) {
                 log.debug("Received new assignment {}", this);
             }
             pending.put(partition, this);
+
             if (inflight == null || inflight.isEmpty()) {
                 scheduleDispatch();
             }
@@ -231,9 +258,13 @@ public class AssignmentsManager {
             } else {
                 failedAttempts = 0;
                 AssignReplicasToDirsResponseData data = ((AssignReplicasToDirsResponse) response.responseBody()).data();
+
                 Set<AssignmentEvent> failed = filterFailures(data, inflight);
-                log.warn("Re-queueing assignments: {}", failed);
+                Set<AssignmentEvent> completed = Utils.diff(HashSet::new, inflight.values().stream().collect(Collectors.toSet()), failed);
+                completed.forEach(assignmentEvent -> assignmentEvent.callback.run());
+
                 if (!failed.isEmpty()) {
+                    log.warn("Re-queueing assignments: {}", failed);
                     for (AssignmentEvent event : failed) {
                         pending.put(event.partition, event);
                     }
