@@ -218,7 +218,7 @@ public class PartitionCreationBench {
                     .setReplicas(replicas)
                     .setIsNew(true);
 
-            partition.makeFollower(partitionState, checkpoints, topicId);
+            partition.makeFollower(partitionState, checkpoints, topicId, Option.empty());
         }
     }
 }

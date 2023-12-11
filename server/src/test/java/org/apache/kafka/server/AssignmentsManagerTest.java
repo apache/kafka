@@ -27,10 +27,12 @@ import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.AssignReplicasToDirsRequest;
 import org.apache.kafka.common.requests.AssignReplicasToDirsResponse;
 import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.metadata.AssignmentsHelper;
 import org.apache.kafka.server.common.TopicIdPartition;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
 import org.mockito.ArgumentCaptor;
 
 import java.util.Arrays;
@@ -42,7 +44,6 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
 import static org.apache.kafka.metadata.AssignmentsHelper.buildRequestData;
-import static org.apache.kafka.metadata.AssignmentsHelper.normalize;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.atMostOnce;
@@ -267,5 +268,40 @@ public class AssignmentsManagerTest {
                     put(new TopicIdPartition(TOPIC_1, 4), Uuid.fromString("RCYu1A0CTa6eEIpuKDOfxw"));
                 }}
         ), captor.getAllValues().get(4).build().data());
+    }
+
+    @Timeout(30)
+    @Test
+    void testOnCompletion() throws Exception {
+        CountDownLatch readyToAssert = new CountDownLatch(300);
+        doAnswer(invocation -> {
+            AssignReplicasToDirsRequestData request = invocation.getArgument(0, AssignReplicasToDirsRequest.Builder.class).build().data();
+            ControllerRequestCompletionHandler completionHandler = invocation.getArgument(1, ControllerRequestCompletionHandler.class);
+            Map<Uuid, Map<TopicIdPartition, Errors>> errors = new HashMap<>();
+            for (AssignReplicasToDirsRequestData.DirectoryData directory : request.directories()) {
+                for (AssignReplicasToDirsRequestData.TopicData topic : directory.topics()) {
+                    for (AssignReplicasToDirsRequestData.PartitionData partition : topic.partitions()) {
+                        TopicIdPartition topicIdPartition = new TopicIdPartition(topic.topicId(), partition.partitionIndex());
+                        errors.computeIfAbsent(directory.id(), d -> new HashMap<>()).put(topicIdPartition, Errors.NONE);
+                    }
+                }
+            }
+            AssignReplicasToDirsResponseData responseData = AssignmentsHelper.buildResponseData(Errors.NONE.code(), 0, errors);
+            completionHandler.onComplete(new ClientResponse(null, null, null,
+                    0L, 0L, false, false, null, null,
+                            new AssignReplicasToDirsResponse(responseData)));
+
+            return null;
+        }).when(channelManager).sendRequest(any(AssignReplicasToDirsRequest.Builder.class),
+                any(ControllerRequestCompletionHandler.class));
+
+        for (int i = 0; i < 300; i++) {
+            manager.onAssignment(new TopicIdPartition(TOPIC_1, i % 5), DIR_1, readyToAssert::countDown);
+        }
+
+        while (!readyToAssert.await(1, TimeUnit.MILLISECONDS)) {
+            time.sleep(TimeUnit.SECONDS.toMillis(1));
+            manager.wakeup();
+        }
     }
 }
