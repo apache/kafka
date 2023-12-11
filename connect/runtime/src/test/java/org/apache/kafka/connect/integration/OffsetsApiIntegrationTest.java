@@ -429,7 +429,6 @@ public class OffsetsApiIntegrationTest {
         ConnectRestException e = assertThrows(ConnectRestException.class,
                 () -> connect.alterConnectorOffsets(CONNECTOR_NAME, new ConnectorOffsets(offsetsToAlter)));
         assertThat(e.getMessage(), containsString("zombie sink task"));
-        BlockingConnectorTest.Block.resetBlockLatch();
     }
 
     @Test
@@ -786,7 +785,6 @@ public class OffsetsApiIntegrationTest {
         // Try to reset the offsets
         ConnectRestException e = assertThrows(ConnectRestException.class, () -> connect.resetConnectorOffsets(CONNECTOR_NAME));
         assertThat(e.getMessage(), containsString("zombie sink task"));
-        BlockingConnectorTest.Block.resetBlockLatch();
     }
 
     @Test
