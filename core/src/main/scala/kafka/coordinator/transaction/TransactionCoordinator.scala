@@ -92,7 +92,7 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
                              txnMarkerChannelManager: TransactionMarkerChannelManager,
                              time: Time,
                              logContext: LogContext) extends Logging {
-  this.logContext = logContext.logPrefix
+  this.logIdent = logContext.logPrefix
 
   import TransactionCoordinator._
 

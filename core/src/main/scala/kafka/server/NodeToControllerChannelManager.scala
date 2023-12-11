@@ -274,8 +274,6 @@ class NodeToControllerRequestThread(
   false
 ) with Logging {
 
-  this.logContext = logPrefix
-
   private def maybeResetNetworkClient(controllerInformation: ControllerInformation): Unit = {
     if (isNetworkClientForZkController != controllerInformation.isZkController) {
       debug("Controller changed to " + (if (isNetworkClientForZkController) "kraft" else "zk") + " mode. " +

@@ -61,7 +61,7 @@ class ControllerChannelManager(controllerEpoch: () => Int,
 
   protected val brokerStateInfo = new mutable.HashMap[Int, ControllerBrokerStateInfo]
   private val brokerLock = new Object
-  this.logContext = LogContext.newBuilder("ChannelManagerOnController").withTag("id", config.brokerId).build()
+  this.logIdent = LogContext.newBuilder("ChannelManagerOnController").withTag("id", config.brokerId).build().logPrefix()
 
   metricsGroup.newGauge("TotalQueueSize",
     () => brokerLock synchronized {
@@ -232,10 +232,11 @@ class RequestSendThread(val controllerId: Int,
                         name: String)
   extends ShutdownableThread(name, true, LogContext.newBuilder("RequestSendThread")
     .withTag("controllerId", controllerId)
-    .build())
+    .build()
+    .logPrefix())
     with Logging {
 
-  logContext = logContext
+  logIdent = logPrefix
 
   private val socketTimeoutMs = config.controllerSocketTimeoutMs
 

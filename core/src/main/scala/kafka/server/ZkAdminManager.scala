@@ -46,7 +46,7 @@ import org.apache.kafka.common.quota.{ClientQuotaAlteration, ClientQuotaEntity, 
 import org.apache.kafka.common.requests.CreateTopicsRequest._
 import org.apache.kafka.common.requests.{AlterConfigsRequest, ApiError}
 import org.apache.kafka.common.security.scram.internals.{ScramCredentialUtils, ScramFormatter}
-import org.apache.kafka.common.utils.Sanitizer
+import org.apache.kafka.common.utils.{LogContext, Sanitizer}
 import org.apache.kafka.server.common.AdminOperationException
 import org.apache.kafka.server.config.ConfigType
 import org.apache.kafka.storage.internals.log.LogConfig
@@ -72,7 +72,7 @@ class ZkAdminManager(val config: KafkaConfig,
                      val metadataCache: MetadataCache,
                      val zkClient: KafkaZkClient) extends Logging {
 
-  this.logContext = "[Admin Manager on Broker " + config.brokerId + "]: "
+  this.logIdent = LogContext.newBuilder("AdminManager").withTag("brokerId", config.brokerId).build().logPrefix()
 
   private val topicPurgatory = DelayedOperationPurgatory[DelayedOperation]("topic", config.brokerId)
   private val adminZkClient = new AdminZkClient(zkClient, Some(config))

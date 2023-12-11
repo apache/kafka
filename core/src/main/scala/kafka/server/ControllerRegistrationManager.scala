@@ -66,7 +66,7 @@ class ControllerRegistrationManager(
 
   val logContext: LogContext = logContextBuilder().build()
 
-  this.logContext = logContext.logPrefix()
+  this.logIdent = logContext.logPrefix()
 
   /**
    * True if there is a pending RPC. Only read or written from the event queue thread.

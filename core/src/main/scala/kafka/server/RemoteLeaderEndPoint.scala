@@ -18,25 +18,24 @@
 package kafka.server
 
 import kafka.cluster.BrokerEndPoint
-
-import java.util.{Collections, Optional}
 import kafka.server.AbstractFetcherThread.{ReplicaFetch, ResultWithPartitions}
 import kafka.utils.Implicits.MapExtensionMethods
 import kafka.utils.Logging
 import org.apache.kafka.clients.FetchSessionHandler
 import org.apache.kafka.common.errors.KafkaStorageException
-import org.apache.kafka.common.{TopicPartition, Uuid}
 import org.apache.kafka.common.message.ListOffsetsRequestData.{ListOffsetsPartition, ListOffsetsTopic}
 import org.apache.kafka.common.message.OffsetForLeaderEpochRequestData.{OffsetForLeaderTopic, OffsetForLeaderTopicCollection}
 import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.EpochEndOffset
 import org.apache.kafka.common.protocol.Errors
-import org.apache.kafka.common.requests.{FetchRequest, FetchResponse, ListOffsetsRequest, ListOffsetsResponse, OffsetsForLeaderEpochRequest, OffsetsForLeaderEpochResponse}
-import org.apache.kafka.server.common.{OffsetAndEpoch, MetadataVersion}
+import org.apache.kafka.common.requests._
+import org.apache.kafka.common.{TopicPartition, Uuid}
 import org.apache.kafka.server.common.MetadataVersion.IBP_0_10_1_IV2
+import org.apache.kafka.server.common.{MetadataVersion, OffsetAndEpoch}
 
-import scala.jdk.CollectionConverters._
+import java.util.{Collections, Optional}
 import scala.collection.{Map, mutable}
 import scala.compat.java8.OptionConverters.RichOptionForJava8
+import scala.jdk.CollectionConverters._
 
 /**
  * Facilitates fetches from a remote replica leader.
@@ -59,7 +58,7 @@ class RemoteLeaderEndPoint(logPrefix: String,
                            metadataVersionSupplier: () => MetadataVersion,
                            brokerEpochSupplier: () => Long) extends LeaderEndPoint with Logging {
 
-  this.logContext = logPrefix
+  this.logIdent = logPrefix
 
   private val maxWait = brokerConfig.replicaFetchWaitMaxMs
   private val minBytes = brokerConfig.replicaFetchMinBytes

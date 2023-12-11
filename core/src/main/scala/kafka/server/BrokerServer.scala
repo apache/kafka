@@ -83,7 +83,7 @@ class BrokerServer(
 
   private val logContext: LogContext = LogContext.newBuilder("BrokerServer").withTag("id", config.nodeId.toString).build()
 
-  this.logContext = logContext.logPrefix
+  this.logIdent = logContext.logPrefix
 
   @volatile var lifecycleManager: BrokerLifecycleManager = _
 
@@ -218,7 +218,7 @@ class BrokerServer(
       tokenCache = new DelegationTokenCache(ScramMechanism.mechanismNames)
       credentialProvider = new CredentialProvider(ScramMechanism.mechanismNames, tokenCache)
 
-      val voterConnections = FutureUtils.waitWithLogging(logger.underlying, logContext,
+      val voterConnections = FutureUtils.waitWithLogging(logger.underlying, logIdent,
         "controller quorum voters future",
         sharedServer.controllerQuorumVotersFuture,
         startupDeadline, time)
@@ -463,14 +463,14 @@ class BrokerServer(
       config.dynamicConfig.addReconfigurables(this)
 
       // Install all the metadata publishers.
-      FutureUtils.waitWithLogging(logger.underlying, logContext,
+      FutureUtils.waitWithLogging(logger.underlying, logIdent,
         "the broker metadata publishers to be installed",
         sharedServer.loader.installPublishers(metadataPublishers), startupDeadline, time)
 
       // Wait for this broker to contact the quorum, and for the active controller to acknowledge
       // us as caught up. It will do this by returning a heartbeat response with isCaughtUp set to
       // true. The BrokerLifecycleManager tracks this.
-      FutureUtils.waitWithLogging(logger.underlying, logContext,
+      FutureUtils.waitWithLogging(logger.underlying, logIdent,
         "the controller to acknowledge that we are caught up",
         lifecycleManager.initialCatchUpFuture, startupDeadline, time)
 
@@ -479,7 +479,7 @@ class BrokerServer(
       // Usually, we publish the initial metadata before lifecycleManager.initialCatchUpFuture
       // is completed, so this check is not necessary. But this is a simple check to make
       // completely sure.
-      FutureUtils.waitWithLogging(logger.underlying, logContext,
+      FutureUtils.waitWithLogging(logger.underlying, logIdent,
         "the initial broker metadata update to be published",
         brokerMetadataPublisher.firstPublishFuture , startupDeadline, time)
 
@@ -508,7 +508,7 @@ class BrokerServer(
 
       // We're now ready to unfence the broker. This also allows this broker to transition
       // from RECOVERY state to RUNNING state, once the controller unfences the broker.
-      FutureUtils.waitWithLogging(logger.underlying, logContext,
+      FutureUtils.waitWithLogging(logger.underlying, logIdent,
         "the broker to be unfenced",
         lifecycleManager.setReadyToUnfence(), startupDeadline, time)
 
@@ -528,12 +528,12 @@ class BrokerServer(
       val enableRequestProcessingFuture = socketServer.enableRequestProcessing(authorizerFutures)
 
       // Block here until all the authorizer futures are complete.
-      FutureUtils.waitWithLogging(logger.underlying, logContext,
+      FutureUtils.waitWithLogging(logger.underlying, logIdent,
         "all of the authorizer futures to be completed",
         CompletableFuture.allOf(authorizerFutures.values.toSeq: _*), startupDeadline, time)
 
       // Wait for all the SocketServer ports to be open, and the Acceptors to be started.
-      FutureUtils.waitWithLogging(logger.underlying, logContext,
+      FutureUtils.waitWithLogging(logger.underlying, logIdent,
         "all of the SocketServer Acceptors to be started",
         enableRequestProcessingFuture, startupDeadline, time)
 
@@ -608,7 +608,7 @@ class BrokerServer(
   protected def createRemoteLogManager(): Option[RemoteLogManager] = {
     if (config.remoteLogManagerConfig.enableRemoteStorageSystem()) {
       if (config.logDirs.size > 1) {
-        throw new KafkaException("Tiered storage is not supported with multiple log dirs.");
+        throw new KafkaException("Tiered storage is not supported with multiple log dirs.")
       }
 
       Some(new RemoteLogManager(config.remoteLogManagerConfig, config.brokerId, config.logDirs.head, clusterId, time,

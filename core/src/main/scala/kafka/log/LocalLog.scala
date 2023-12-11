@@ -21,7 +21,7 @@ import kafka.utils.Logging
 import org.apache.kafka.common.errors.{KafkaStorageException, OffsetOutOfRangeException}
 import org.apache.kafka.common.message.FetchResponseData
 import org.apache.kafka.common.record.MemoryRecords
-import org.apache.kafka.common.utils.{Time, Utils}
+import org.apache.kafka.common.utils.{LogContext, Time, Utils}
 import org.apache.kafka.common.{KafkaException, TopicPartition}
 import org.apache.kafka.server.util.Scheduler
 import org.apache.kafka.storage.internals.log.{AbortedTxn, FetchDataInfo, LogConfig, LogDirFailureChannel, LogFileUtils, LogOffsetMetadata, LogSegment, LogSegments, OffsetPosition}
@@ -74,7 +74,7 @@ class LocalLog(@volatile private var _dir: File,
 
   import kafka.log.LocalLog._
 
-  this.logContext = s"[LocalLog partition=$topicPartition, dir=${dir.getParent}] "
+  this.logIdent = LogContext.newBuilder("LocalLog").withTag("partition", topicPartition).withTag("dir", dir.getParent).build().logPrefix()
 
   // The memory mapped buffer for index files of this log will be closed with either delete() or closeHandlers()
   // After memory mapped buffer is closed, no disk IO operation should be performed for this log.
@@ -286,7 +286,7 @@ class LocalLog(@volatile private var _dir: File,
       toDelete.foreach { segment =>
         segments.remove(segment.baseOffset)
       }
-      LocalLog.deleteSegmentFiles(toDelete, asyncDelete, dir, topicPartition, config, scheduler, logDirFailureChannel, logContext)
+      LocalLog.deleteSegmentFiles(toDelete, asyncDelete, dir, topicPartition, config, scheduler, logDirFailureChannel, logIdent)
     }
   }
 
@@ -323,7 +323,7 @@ class LocalLog(@volatile private var _dir: File,
     reason.logReason(List(segmentToDelete))
     if (newOffset != segmentToDelete.baseOffset)
       segments.remove(segmentToDelete.baseOffset)
-    LocalLog.deleteSegmentFiles(List(segmentToDelete), asyncDelete, dir, topicPartition, config, scheduler, logDirFailureChannel, logContext)
+    LocalLog.deleteSegmentFiles(List(segmentToDelete), asyncDelete, dir, topicPartition, config, scheduler, logDirFailureChannel, logIdent)
 
     newSegment
   }

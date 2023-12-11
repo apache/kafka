@@ -72,7 +72,7 @@ class BrokerLifecycleManager(
 
   val logContext: LogContext = logContextBuilder().build()
 
-  this.logContext = logContext.logPrefix()
+  this.logIdent = logContext.logPrefix()
 
   /**
    * The broker id.

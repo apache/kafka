@@ -27,7 +27,7 @@ import java.util.concurrent.TimeUnit;
 
 public abstract class ShutdownableThread extends Thread {
 
-    public final LogContext logContext;
+    public final String logPrefix;
 
     protected final Logger log;
 
@@ -43,15 +43,15 @@ public abstract class ShutdownableThread extends Thread {
     }
 
     public ShutdownableThread(String name, boolean isInterruptible) {
-        this(name, isInterruptible, LogContext.newBuilder(name).build());
+        this(name, isInterruptible, "[" + name + "]: ");
     }
 
     @SuppressWarnings("this-escape")
-    public ShutdownableThread(String name, boolean isInterruptible, LogContext logContext) {
+    public ShutdownableThread(String name, boolean isInterruptible, String logPrefix) {
         super(name);
         this.isInterruptible = isInterruptible;
-        this.logContext = logContext;
-        log = logContext.logger(this.getClass());
+        this.logPrefix = logPrefix;
+        log = new LogContext(logPrefix).logger(this.getClass());
         this.setDaemon(false);
     }
 

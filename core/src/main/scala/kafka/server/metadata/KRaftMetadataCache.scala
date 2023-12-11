@@ -36,6 +36,7 @@ import java.util.concurrent.ThreadLocalRandom
 import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.message.{DescribeClientQuotasRequestData, DescribeClientQuotasResponseData}
 import org.apache.kafka.common.message.{DescribeUserScramCredentialsRequestData, DescribeUserScramCredentialsResponseData}
+import org.apache.kafka.common.utils.LogContext
 import org.apache.kafka.metadata.{BrokerRegistration, PartitionRegistration, Replicas}
 import org.apache.kafka.server.common.{Features, MetadataVersion}
 
@@ -45,7 +46,7 @@ import scala.compat.java8.OptionConverters._
 
 
 class KRaftMetadataCache(val brokerId: Int) extends MetadataCache with Logging with ConfigRepository {
-  this.logContext = s"[MetadataCache brokerId=$brokerId] "
+  this.logIdent = LogContext.newBuilder("MetadataCache").withTag("brokerId", brokerId).build().logPrefix()
 
   // This is the cache state. Every MetadataImage instance is immutable, and updates
   // replace this value with a completely new one. This means reads (which are not under

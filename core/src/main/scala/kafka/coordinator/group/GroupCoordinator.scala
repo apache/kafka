@@ -31,7 +31,7 @@ import org.apache.kafka.common.metrics.stats.Meter
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.record.RecordBatch
 import org.apache.kafka.common.requests._
-import org.apache.kafka.common.utils.Time
+import org.apache.kafka.common.utils.{LogContext, Time}
 import org.apache.kafka.server.record.BrokerCompressionType
 import org.apache.kafka.storage.internals.log.VerificationGuard
 
@@ -86,7 +86,7 @@ private[group] class GroupCoordinator(
       "group-coordinator-metrics",
       "The total number of completed rebalance")))
 
-  this.logContext = "[GroupCoordinator " + brokerId + "]: "
+  this.logIdent = LogContext.newBuilder("GroupCoordinator").withTag("id", brokerId).build().logPrefix()
 
   private val isActive = new AtomicBoolean(false)
 

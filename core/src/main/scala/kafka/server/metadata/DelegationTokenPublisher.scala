@@ -20,6 +20,7 @@ package kafka.server.metadata
 import kafka.server.DelegationTokenManager
 import kafka.server.KafkaConfig
 import kafka.utils.Logging
+import org.apache.kafka.common.utils.LogContext
 import org.apache.kafka.image.loader.LoaderManifest
 import org.apache.kafka.image.{MetadataDelta, MetadataImage}
 import org.apache.kafka.server.fault.FaultHandler
@@ -31,7 +32,7 @@ class DelegationTokenPublisher(
   nodeType: String,
   tokenManager: DelegationTokenManager,
 ) extends Logging with org.apache.kafka.image.publisher.MetadataPublisher {
-  logContext = s"[${name()}] "
+  logIdent = LogContext.newBuilder(name()).build().logPrefix()
 
   var _firstPublish = true
 

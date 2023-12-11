@@ -145,7 +145,7 @@ class ControllerServer(
     if (!maybeChangeStatus(SHUTDOWN, STARTING)) return
     val startupDeadline = Deadline.fromDelay(time, config.serverMaxStartupTimeMs, TimeUnit.MILLISECONDS)
     try {
-      this.logContext = logContext.logPrefix()
+      this.logIdent = logContext.logPrefix()
       info("Starting controller")
       config.dynamicConfig.initialize(zkClientOpt = None, clientMetricsReceiverPluginOpt = None)
 
@@ -211,7 +211,7 @@ class ControllerServer(
       alterConfigPolicy = Option(config.
         getConfiguredInstance(AlterConfigPolicyClassNameProp, classOf[AlterConfigPolicy]))
 
-      val voterConnections = FutureUtils.waitWithLogging(logger.underlying, logContext,
+      val voterConnections = FutureUtils.waitWithLogging(logger.underlying, logIdent,
         "controller quorum voters future",
         sharedServer.controllerQuorumVotersFuture,
         startupDeadline, time)
@@ -410,7 +410,7 @@ class ControllerServer(
       ))
 
       // Install all metadata publishers.
-      FutureUtils.waitWithLogging(logger.underlying, logContext,
+      FutureUtils.waitWithLogging(logger.underlying, logIdent,
         "the controller metadata publishers to be installed",
         sharedServer.loader.installPublishers(metadataPublishers), startupDeadline, time)
 
@@ -442,12 +442,12 @@ class ControllerServer(
       registrationManager.start(registrationChannelManager)
 
       // Block here until all the authorizer futures are complete
-      FutureUtils.waitWithLogging(logger.underlying, logContext,
+      FutureUtils.waitWithLogging(logger.underlying, logIdent,
         "all of the authorizer futures to be completed",
         CompletableFuture.allOf(authorizerFutures.values.toSeq: _*), startupDeadline, time)
 
       // Wait for all the SocketServer ports to be open, and the Acceptors to be started.
-      FutureUtils.waitWithLogging(logger.underlying, logContext,
+      FutureUtils.waitWithLogging(logger.underlying, logIdent,
         "all of the SocketServer Acceptors to be started",
         socketServerFuture, startupDeadline, time)
 

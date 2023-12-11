@@ -69,9 +69,9 @@ import java.io.{File, IOException}
 import java.net.{InetAddress, SocketTimeoutException}
 import java.nio.file.{Files, Paths}
 import java.util
-import java.util.{Optional, OptionalInt, OptionalLong}
 import java.util.concurrent._
 import java.util.concurrent.atomic.{AtomicBoolean, AtomicInteger}
+import java.util.{Optional, OptionalInt, OptionalLong}
 import scala.collection.{Map, Seq}
 import scala.compat.java8.OptionConverters.RichOptionForJava8
 import scala.jdk.CollectionConverters._
@@ -253,7 +253,7 @@ class KafkaServer(
         /* generate brokerId */
         config.brokerId = getOrGenerateBrokerId(initialMetaPropsEnsemble)
         logContext = LogContext.newBuilder("KafkaServer").withTag("id", config.brokerId).build()
-        this.logContext = logContext.logPrefix
+        this.logIdent = logContext.logPrefix
 
         // initialize dynamic broker configs from ZooKeeper. Any updates made after this will be
         // applied after ZkConfigManager starts.

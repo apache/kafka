@@ -26,7 +26,9 @@ import kafka.zk.KafkaZkClient.UpdateLeaderAndIsrResult
 import kafka.zk.TopicPartitionStateZNode
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.ControllerMovedException
+import org.apache.kafka.common.utils.LogContext
 import org.apache.zookeeper.KeeperException.Code
+
 import scala.collection.{Seq, mutable}
 
 abstract class ReplicaStateMachine(controllerContext: ControllerContext) extends Logging {
@@ -102,7 +104,7 @@ class ZkReplicaStateMachine(config: KafkaConfig,
   extends ReplicaStateMachine(controllerContext) with Logging {
 
   private val controllerId = config.brokerId
-  this.logContext = s"[ReplicaStateMachine controllerId=$controllerId] "
+  this.logIdent = LogContext.newBuilder("ReplicaStateMachine").withTag("controllerId", controllerId).build().logPrefix()
 
   override def handleStateChanges(replicas: Seq[PartitionAndReplica], targetState: ReplicaState): Unit = {
     if (replicas.nonEmpty) {

@@ -31,7 +31,7 @@ import org.apache.kafka.common.record._
 import org.apache.kafka.common.requests.ListOffsetsRequest
 import org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.UNDEFINED_EPOCH_OFFSET
 import org.apache.kafka.common.requests.ProduceResponse.RecordError
-import org.apache.kafka.common.utils.{PrimitiveRef, Time, Utils}
+import org.apache.kafka.common.utils.{LogContext, PrimitiveRef, Time, Utils}
 import org.apache.kafka.common.{InvalidRecordException, KafkaException, TopicPartition, Uuid}
 import org.apache.kafka.server.common.{MetadataVersion, OffsetAndEpoch}
 import org.apache.kafka.server.common.MetadataVersion.IBP_0_10_0_IV0
@@ -117,7 +117,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
     }
   }
 
-  this.logContext = s"[UnifiedLog partition=$topicPartition, dir=$parentDir] "
+  this.logIdent = LogContext.newBuilder("UnifiedLog").withTag("partition", topicPartition).withTag("dir", parentDir).build().logPrefix()
 
   /* A lock that guards all modifications to the log */
   private val lock = new Object
@@ -519,7 +519,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
   }
 
   private def initializeLeaderEpochCache(): Unit = lock synchronized {
-    leaderEpochCache = UnifiedLog.maybeCreateLeaderEpochCache(dir, topicPartition, logDirFailureChannel, recordVersion, logContext)
+    leaderEpochCache = UnifiedLog.maybeCreateLeaderEpochCache(dir, topicPartition, logDirFailureChannel, recordVersion, logIdent)
   }
 
   private def updateHighWatermarkWithLogEndOffset(): Unit = {
@@ -554,7 +554,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
                                    producerStateManager: ProducerStateManager): Unit = lock synchronized {
     localLog.checkIfMemoryMappedBufferClosed()
     UnifiedLog.rebuildProducerState(producerStateManager, localLog.segments, logStartOffset, lastOffset, recordVersion, time,
-      reloadFromCleanShutdown = false, logContext)
+      reloadFromCleanShutdown = false, logIdent)
   }
 
   @threadsafe
@@ -1872,7 +1872,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
     lock synchronized {
       localLog.checkIfMemoryMappedBufferClosed()
       val deletedSegments = UnifiedLog.replaceSegments(localLog.segments, newSegments, oldSegments, dir, topicPartition,
-        config, scheduler, logDirFailureChannel, logContext)
+        config, scheduler, logDirFailureChannel, logIdent)
       deleteProducerSnapshots(deletedSegments, asyncDelete = true)
     }
   }
@@ -1912,7 +1912,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
   }
 
   private[log] def splitOverflowedSegment(segment: LogSegment): List[LogSegment] = lock synchronized {
-    val result = UnifiedLog.splitOverflowedSegment(segment, localLog.segments, dir, topicPartition, config, scheduler, logDirFailureChannel, logContext)
+    val result = UnifiedLog.splitOverflowedSegment(segment, localLog.segments, dir, topicPartition, config, scheduler, logDirFailureChannel, logIdent)
     deleteProducerSnapshots(result.deletedSegments, asyncDelete = true)
     result.newSegments.toList
   }

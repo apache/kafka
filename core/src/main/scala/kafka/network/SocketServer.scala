@@ -91,7 +91,7 @@ class SocketServer(val config: KafkaConfig,
     .withTag("nodeId", nodeId)
     .build()
 
-  this.logContext = logContext.logPrefix
+  this.logIdent = logContext.logPrefix
 
   private val memoryPoolSensor = metrics.sensor("MemoryPoolUtilization")
   private val memoryPoolDepletedPercentMetricName = metrics.metricName("MemoryPoolAvgDepletedPercent", MetricsGroup)

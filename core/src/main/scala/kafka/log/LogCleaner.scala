@@ -31,7 +31,7 @@ import org.apache.kafka.common.errors.{CorruptRecordException, KafkaStorageExcep
 import org.apache.kafka.common.record.MemoryRecords.RecordFilter
 import org.apache.kafka.common.record.MemoryRecords.RecordFilter.BatchRetention
 import org.apache.kafka.common.record._
-import org.apache.kafka.common.utils.{BufferSupplier, Time}
+import org.apache.kafka.common.utils.{BufferSupplier, LogContext, Time}
 import org.apache.kafka.server.metrics.KafkaMetricsGroup
 import org.apache.kafka.server.util.ShutdownableThread
 import org.apache.kafka.storage.internals.log.{AbortedTxn, CleanerConfig, LastRecord, LogDirFailureChannel, LogSegment, LogSegmentOffsetOverflowException, OffsetMap, SkimpyOffsetMap, TransactionIndex}
@@ -344,7 +344,7 @@ class LogCleaner(initialConfig: CleanerConfig,
     extends ShutdownableThread(s"kafka-log-cleaner-thread-$threadId", false) with Logging {
     protected override def loggerName: String = classOf[LogCleaner].getName
 
-    this.logContext = logPrefix
+    this.logIdent = logPrefix
 
     if (config.dedupeBufferSize / config.numThreads > Int.MaxValue)
       warn("Cannot use more than 2G of cleaner buffer space per cleaner thread, ignoring excess buffer space...")
@@ -556,7 +556,7 @@ private[log] class Cleaner(val id: Int,
 
   protected override def loggerName: String = classOf[LogCleaner].getName
 
-  this.logContext = s"Cleaner $id: "
+  this.logIdent = LogContext.newBuilder("Cleaner").withTag("id", id).build().logPrefix()
 
   /* buffer used for read i/o */
   private var readBuffer = ByteBuffer.allocate(ioBufferSize)

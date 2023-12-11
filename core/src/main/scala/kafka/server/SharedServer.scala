@@ -98,7 +98,7 @@ class SharedServer(
   private val logContext: LogContext = LogContext.newBuilder("SharedServer")
     .withTag("id", sharedServerConfig.nodeId)
     .build()
-  this.logContext = logContext.logPrefix
+  this.logIdent = logContext.logPrefix
   private var started = false
   private var usedByBroker: Boolean = false
   private var usedByController: Boolean = false

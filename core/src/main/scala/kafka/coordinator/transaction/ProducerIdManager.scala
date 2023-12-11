@@ -24,7 +24,7 @@ import org.apache.kafka.common.KafkaException
 import org.apache.kafka.common.message.AllocateProducerIdsRequestData
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{AllocateProducerIdsRequest, AllocateProducerIdsResponse}
-import org.apache.kafka.common.utils.Time
+import org.apache.kafka.common.utils.{LogContext, Time}
 import org.apache.kafka.server.{ControllerRequestCompletionHandler, NodeToControllerChannelManager}
 import org.apache.kafka.server.common.ProducerIdsBlock
 
@@ -114,7 +114,7 @@ object ZkProducerIdManager {
 
 class ZkProducerIdManager(brokerId: Int, zkClient: KafkaZkClient) extends ProducerIdManager with Logging {
 
-  this.logContext = "[ZK ProducerId Manager " + brokerId + "]: "
+  this.logIdent = LogContext.newBuilder("ZKProducerIdManager").withTag("brokerId", brokerId).build().logPrefix()
 
   private var currentProducerIdBlock: ProducerIdsBlock = ProducerIdsBlock.EMPTY
   private var nextProducerId: Long = _
@@ -164,7 +164,7 @@ class RPCProducerIdManager(brokerId: Int,
                            brokerEpochSupplier: () => Long,
                            controllerChannel: NodeToControllerChannelManager) extends ProducerIdManager with Logging {
 
-  this.logContext = "[RPC ProducerId Manager " + brokerId + "]: "
+  this.logIdent = LogContext.newBuilder("RPCProducerIdManager").withTag("brokerId", brokerId).build().logPrefix()
 
   // Visible for testing
   private[transaction] var nextProducerIdBlock = new AtomicReference[ProducerIdsBlock](null)

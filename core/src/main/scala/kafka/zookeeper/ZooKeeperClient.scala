@@ -25,7 +25,7 @@ import com.yammer.metrics.core.MetricName
 import kafka.utils.CoreUtils.{inLock, inReadLock, inWriteLock}
 import kafka.utils.Logging
 import kafka.zookeeper.ZooKeeperClient._
-import org.apache.kafka.common.utils.Time
+import org.apache.kafka.common.utils.{LogContext, Time}
 import org.apache.kafka.server.util.KafkaScheduler
 import org.apache.kafka.server.metrics.KafkaMetricsGroup
 import org.apache.zookeeper.AsyncCallback.{Children2Callback, DataCallback, StatCallback}
@@ -72,7 +72,7 @@ class ZooKeeperClient(connectString: String,
   }
 
 
-  this.logContext = s"[ZooKeeperClient $name] "
+  this.logIdent = LogContext.newBuilder("ZooKeeperClient").withTag("clientName", name).build().logPrefix()
   private val initializationLock = new ReentrantReadWriteLock()
   private val isConnectedOrExpiredLock = new ReentrantLock()
   private val isConnectedOrExpiredCondition = isConnectedOrExpiredLock.newCondition()
