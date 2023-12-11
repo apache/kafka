@@ -239,19 +239,31 @@ public class HeartbeatRequestManager implements RequestManager {
 
     private NetworkClientDelegate.UnsentRequest makeHeartbeatRequest(final boolean ignoreResponse) {
         NetworkClientDelegate.UnsentRequest request = new NetworkClientDelegate.UnsentRequest(
-                new ConsumerGroupHeartbeatRequest.Builder(this.heartbeatState.buildRequestData()),
-                coordinatorRequestManager.coordinator());
+            new ConsumerGroupHeartbeatRequest.Builder(this.heartbeatState.buildRequestData()),
+            coordinatorRequestManager.coordinator());
+        if (ignoreResponse)
+            return logResponse(request);
+        else
+            return request.whenComplete((response, exception) -> {
+                if (response != null) {
+                    onResponse((ConsumerGroupHeartbeatResponse) response.responseBody(), request.handler().completionTimeMs());
+                } else {
+                    onFailure(exception, request.handler().completionTimeMs());
+                }
+            });
+    }
+
+    private NetworkClientDelegate.UnsentRequest logResponse(final NetworkClientDelegate.UnsentRequest request) {
         return request.whenComplete((response, exception) -> {
             if (response != null) {
-                onResponse((ConsumerGroupHeartbeatResponse) response.responseBody(), request.handler().completionTimeMs());
-                // The response is only ignore when the member becomes staled. This is because the member needs to
-                // rejoin on the next poll regardless the server has responded to the heartbeat.
-                if (!ignoreResponse) {
-                    membershipManager.onHeartbeatResponseReceived(((ConsumerGroupHeartbeatResponse) response.responseBody()).data());
-                    maybeSendGroupMetadataUpdateEvent();
-                }
+                Errors error =
+                    Errors.forCode(((ConsumerGroupHeartbeatResponse) response.responseBody()).data().errorCode());
+                if (error == Errors.NONE)
+                    logger.debug("GroupHeartbeat responded successfully: {}", response);
+                else
+                    logger.error("GroupHeartbeat failed because of {}: {}", error, response);
             } else {
-                onFailure(exception, request.handler().completionTimeMs());
+                logger.error("GroupHeartbeat failed because of unexpected exception.", exception);
             }
         });
     }
@@ -273,9 +285,11 @@ public class HeartbeatRequestManager implements RequestManager {
 
     private void onResponse(final ConsumerGroupHeartbeatResponse response, long currentTimeMs) {
         if (Errors.forCode(response.data().errorCode()) == Errors.NONE) {
-            this.heartbeatRequestState.updateHeartbeatIntervalMs(response.data().heartbeatIntervalMs());
-            this.heartbeatRequestState.onSuccessfulAttempt(currentTimeMs);
-            this.heartbeatRequestState.resetTimer();
+            heartbeatRequestState.updateHeartbeatIntervalMs(response.data().heartbeatIntervalMs());
+            heartbeatRequestState.onSuccessfulAttempt(currentTimeMs);
+            heartbeatRequestState.resetTimer();
+            membershipManager.onHeartbeatResponseReceived(response.data());
+            maybeSendGroupMetadataUpdateEvent();
             return;
         }
         onErrorResponse(response, currentTimeMs);
