@@ -1113,10 +1113,10 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             return;
         maybeAutoCommitSync(autoCommitEnabled, timer, firstException);
         applicationEventHandler.add(new CommitOnCloseApplicationEvent());
-        maybeRevokePartitions(firstException);
         timer.update();
         completeQuietly(
             () -> {
+                maybeRevokePartitions();
                 applicationEventHandler.addAndGet(new LeaveOnCloseApplicationEvent(), timer);
                 timer.update();
             },
@@ -1140,14 +1140,18 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
     }
 
     // Visible for testing
-    void maybeRevokePartitions(final AtomicReference<Throwable> firstException) {
+    void maybeRevokePartitions() {
         if (!subscriptions.hasAutoAssignedPartitions() || subscriptions.assignedPartitions().isEmpty())
             return;
-        CompletableFuture<Void> revocationFuture = invokePartitionRevocationListener();
-        completeQuietly(revocationFuture::get,
-            "Failed revoking partitions of " + subscriptions.assignedPartitions(),
-            firstException);
-        subscriptions.assignFromSubscribed(Collections.emptySet());
+        try {
+            invokePartitionRevocationListener().get();
+        } catch (ExecutionException e) {
+            throw new KafkaException(e.getCause());
+        } catch (InterruptedException e) {
+            throw new InterruptException(e);
+        } finally {
+            subscriptions.assignFromSubscribed(Collections.emptySet());
+        }
     }
 
     // Visible for testing
