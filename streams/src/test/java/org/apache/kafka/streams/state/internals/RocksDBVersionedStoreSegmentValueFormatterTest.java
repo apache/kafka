@@ -216,60 +216,6 @@ public class RocksDBVersionedStoreSegmentValueFormatterTest {
             assertThrows(IllegalArgumentException.class, () -> segmentValue.find(testCase.minTimestamp - 1, false));
         }
 
-//        @Test
-//        public void shouldFindInTimeRangesWithDifferentOrders() {
-//            if (testCase.isDegenerate) {
-//                // cannot find() on degenerate segment
-//                return;
-//            }
-//
-//            // create a list of timestamps in ascending order to use them in combination for starting and ending point of the time range.
-//            final List<Long> timestamps = createTimestampsFromTestRecords(testCase);
-//
-//            // verify results
-//            final List<ResultOrder> orders = Arrays.asList(ResultOrder.ASCENDING, ResultOrder.ANY, ResultOrder.DESCENDING);
-//            for (final ResultOrder order: orders) {
-//                for (final Long from : timestamps) {
-//                    for (final Long to : timestamps) {
-//                        // build expected results indices based on time range
-//                        final List<Integer> expectedRecordsIndices = new ArrayList<>();
-//                        for (int i = 0; i < testCase.records.size(); i++) {
-//                            final long recordValidTo = i == 0 ? testCase.nextTimestamp : testCase.records.get(i - 1).timestamp;
-//                            if (testCase.records.get(i).timestamp <= to && recordValidTo > from) {
-//                                if (testCase.records.get(i).value != null) { // the results do not include tombstones
-//                                    expectedRecordsIndices.add(i);
-//                                }
-//                            }
-//                        }
-//                        // The only object that has access to the find method is the instance of LogicalSegmentIterator.
-//                        // Therefore, closing the iterator means that the segment calling the find method is destroyed and needs
-//                        // to be created for the next time range.
-//                        final SegmentValue segmentValue = buildSegmentWithInsertLatest(testCase);
-//                        if (order.equals(ResultOrder.ASCENDING)) {
-//                            Collections.reverse(expectedRecordsIndices);
-//                        }
-//                        for (final int index : expectedRecordsIndices) {
-//                            final long expectedValidTo = index == 0 ? testCase.nextTimestamp : testCase.records.get(index - 1).timestamp;
-//                            final SegmentSearchResult result = segmentValue.find(from, to, order);
-//                            final TestRecord expectedRecord = testCase.records.get(index);
-//                            int expectedRecordIndex = index;
-//                            if (order.equals(ResultOrder.ASCENDING)) {
-//                                expectedRecordIndex = (testCase.records.size() - 1) - index;
-//                            }
-//                            assertThat(result.index(), equalTo(expectedRecordIndex));
-//                            assertThat(result.value(), equalTo(expectedRecord.value));
-//                            assertThat(result.validFrom(), equalTo(expectedRecord.timestamp));
-//                            assertThat(result.validTo(), equalTo(expectedValidTo));
-//                        }
-//                        // verify no results within the time range
-//                        if (expectedRecordsIndices.size() == 0) {
-//                            assertNull(segmentValue.find(from, to, order));
-//                        }
-//                    }
-//                }
-//            }
-//        }
-
         @Test
         public void shouldGetTimestamps() {
             final byte[] segmentValue = buildSegmentWithInsertLatest(testCase).serialize();
@@ -406,33 +352,6 @@ public class RocksDBVersionedStoreSegmentValueFormatterTest {
         // verify expected exceptions from timestamp out-of-bounds
         assertThrows(IllegalArgumentException.class, () -> segmentValue.find(expectedRecords.nextTimestamp, false));
         assertThrows(IllegalArgumentException.class, () -> segmentValue.find(expectedRecords.minTimestamp - 1, false));
-    }
-
-    private static List<Long> createTimestampsFromTestRecords(final TestCase testCase) {
-        final List<Long> timestamps = new ArrayList<>();
-        timestamps.add(Long.MIN_VALUE);
-        for (int i = testCase.records.size() - 1; i >= 0; i--) {
-            final long timestamp = testCase.records.get(i).timestamp;
-            if (i == testCase.records.size() - 1) { // the oldest record
-                timestamps.add(timestamp - 2);
-                timestamps.add(timestamp - 1);
-                timestamps.add(timestamp);
-            } else if (i != 0) { // records in between
-                timestamps.add(timestamp);
-                final long mid = (timestamp + testCase.records.get(i - 1).timestamp) / 2;
-                if (!timestamps.contains(mid)) {
-                    timestamps.add(mid);
-                } else {
-                    timestamps.add(mid + 1);
-                }
-            } else { // the newest record
-                timestamps.add(timestamp);
-                timestamps.add(timestamp + 1);
-                timestamps.add(timestamp + 2);
-            }
-        }
-        timestamps.add(Long.MAX_VALUE);
-        return timestamps;
     }
 
     private static class TestRecord {
