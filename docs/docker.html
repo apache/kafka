@@ -20,85 +20,38 @@
 </script>
 
 <script id="docker-template" type="text/x-handlebars-template">
+    <h4 class="anchor-heading">Introduction</h4>
+
+    <p>
+        <a href="https://www.docker.com/">Docker</a> is a popular container runtime. Docker images for Apache Kafka can be found on <a href="https://hub.docker.com/r/apache/kafka">Docker Hub</a> and are available from version 3.7.0.
+    </p>
+
+    <h4 class="anchor-heading">Getting the kafka image</h4>
+
+    <p>
+        Docker image can be pulled from Docker Hub using the following command:-
+    </p>
+
+    <pre class="line-numbers"><code class="language-bash">$ docker pull apache/kafka:{{fullDotVersion}}</code></pre>
+
+    <p>
+        If you want to fetch the latest version of the docker image use following command:-
+    </p>
+
+    <pre class="line-numbers"><code class="language-bash">$ docker pull apache/kafka:latest</code></pre>
+
     <h4 class="anchor-heading">Start kafka with default configs</h4>
+
     <p>
         Run docker image on default port 9092:-
     </p>
 
     <pre class="line-numbers"><code class="language-bash">$ docker run -p 9092:9092 apache/kafka:{{fullDotVersion}}</code></pre>
 
-    <h4 class="anchor-heading">Passing configs to kafka in docker container</h4>
+    <h4 class="anchor-heading">Usage guide</h4>
     <p>
-        When no user provided input is present, default configs will be used to start the kafka server, as seen in <a href="../quickstart">quickstart</a>.
-        Configs can be provided to kafka running inside the container either by environment variables or by providing property files through file input.
+        Detailed instructions for using the docker image is mentioned <a href="https://github.com/apache/kafka/blob/trunk/docker/examples/README.md">here</a>.
     </p>
-
-    <h5>File input</h5>
-    <ul>
-        <li>This method requires users to provide path to a local folder which contains kafka property files and mount it to docker container using docker volume.</li>
-        <li>It replaces the default config file present in docker container.</li>
-        <li>Mount the folder containing kafka property files to <code class="language-bash">/mnt/shared/config</code> in docker container.</li>
-        <li>Command <code class="language-bash">docker run --volume path/to/property/folder:/mnt/shared/config -p 9092:9092 apache/kafka:{{fullDotVersion}}</code> can be used to mount the folder containing property files.</li>
-        <li>Property files will be only read by the docker container.</li>
-    </ul>
-
-    <h5>Using Environment Variables</h5>
-    <ul>
-        <li>Kafka property defined via env variables will override the value of that property defined in file input and default config.</li>
-        <li>If properties are provided via environment variables only, default configs will be replaced by user provided properties.</li>
-        <li>To construct the environment key variable name for server.properties configs, following steps can be followed:-</li>
-        <ul>
-            <li>Replace . with _</li>
-            <li>Replace _ with __(double underscore)</li>
-            <li>Replace - with ___(triple underscore)</li>
-            <li>Prefix the result with KAFKA_</li>
-            <li>Examples:</li>
-            <ul>
-                <li>For abc.def, use KAFKA_ABC_DEF</li>
-                <li>For abc-def, use KAFKA_ABC___DEF</li>
-                <li>For abc_def, use KAFKA_ABC__DEF</li>
-            </ul>
-        </ul>
-        <li>To provide configs to log4j property files, following points should be considered:-</li>
-        <ul>
-            <li>log4j properties provided via environment variables will be appended to the default properties file (log4j properties files bundled with kafka)</li>
-            <li>KAFKA_LOG4J_ROOT_LOGLEVEL can be provided to set the value of log4j.rootLogger in log4j.properties and tools-log4j.properties</li>
-            <li>log4j loggers can be added to log4j.properties by setting them in KAFKA_LOG4J_LOGGERS environment variable in a single comma separated string</li>
-            <li>Example:</li>
-            <ul>
-                <li>Assuming that KAFKA_LOG4J_LOGGERS='property1=value1,property2=value2' environment variable is provided to docker container.</li>
-                <li>log4j.logger.property1=value1 and log4j.logger.property2=value2 will be added to the log4j.properties file</li>
-            </ul>
-        </ul>
-        <li>Environment variables commonly used in Kafka can be provided via environment variables as well, for example <code class="language-bash">CLUSTER_ID</code></li>
-        <li>Command <code class="language-bash">docker run --env CONFIG_NAME=CONFIG_VALUE -p 9092:9092 apache/kafka:{{fullDotVersion}}</code> can be used to provide environment variables to docker container</li>
-    </ul>
-
-    <h4>Running in SSL mode</h4>
-    <ul>
-        <li>
-            Recommended way to run in ssl mode is by mounting secrets on /etc/kafka/secrets in docker container and providing configs following through environment variables (KAFKA_SSL_KEYSTORE_FILENAME, KAFKA_SSL_KEYSTORE_CREDENTIALS, KAFKA_SSL_KEY_CREDENTIALS, KAFKA_SSL_TRUSTSTORE_FILENAME and KAFKA_SSL_TRUSTSTORE_CREDENTIALS) to let the docker image scripts extract passwords and populate correct paths in server.properties.
-        </li>
-        <li>
-            Please ensure appropriate KAFKA_ADVERTISED_LISTENERS are provided through environment variables to enable SSL mode in Kafka server.
-        </li>
-        <li>
-            Alternatively property file input can be used to provide ssl properties, but note that advertised.listeners property needs to be provided along with SSL properties in file input and cannot be provided through environment variable separately.
-        </li>
-        <li>
-            In conclusion, ssl properties with advertised.listeners should be treated as a group and provided in file input or environment variables in it's entirety.
-        </li>
-        <li>
-            In case ssl properties are provided both through file input and environment variables, environment variable properties will override the file input properties, just as mentioned in the beginning of this section
-        </li>
-    </ul>
-
-    <h4>Examples</h4>
-    <p>
-        Recommended way of using the docker image is through docker compose files.
-        Some example compose files can be found <a href="https://github.com/apache/kafka/blob/trunk/docker/examples">here</a>.
-    </p>
-
 </script>
 
 <div class="p-docker"></div>
