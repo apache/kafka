@@ -16,33 +16,22 @@
  */
 package org.apache.kafka.connect.util;
 
-/**
- * Generic interface for callbacks
- */
-public interface Callback<V> {
-    /**
-     * Invoked upon completion of the operation.
-     *
-     * @param error the error that caused the operation to fail, or null if no error occurred
-     * @param result the return value, or null if the operation failed
-     */
-    void onCompletion(Throwable error, V result);
+import org.apache.kafka.common.utils.Time;
 
-    default void recordStage(Stage stage) {
+public class TemporaryStage implements AutoCloseable {
+
+    private final Stage stage;
+    private final Time time;
+
+    public TemporaryStage(String description, Callback<?> callback, Time time) {
+        this.stage = new Stage(description, time.milliseconds());
+        this.time = time;
+        callback.recordStage(stage);
     }
 
-    default <V2> Callback<V2> chainStaging(Callback<V2> chained) {
-        return new Callback<V2>() {
-            @Override
-            public void recordStage(Stage stage) {
-                Callback.this.recordStage(stage);
-            }
-
-            @Override
-            public void onCompletion(Throwable error, V2 result) {
-                chained.onCompletion(error, result);
-            }
-        };
+    @Override
+    public void close() {
+        stage.complete(time.milliseconds());
     }
 
 }
