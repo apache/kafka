@@ -617,6 +617,8 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                 }
 
                 invoker.submit(new OffsetCommitCallbackTask(callback, offsets, (Exception) t));
+                if (interceptors != null)
+                    interceptors.onCommit(offsets);
             });
         } finally {
             release();
@@ -1080,6 +1082,12 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         try {
             CompletableFuture<Void> commitFuture = commit(offsets, true);
             ConsumerUtils.getResult(commitFuture, time.timer(timeout));
+
+            if (!commitFuture.isCompletedExceptionally()) {
+                if (interceptors != null)
+                    interceptors.onCommit(offsets);
+            }
+                
         } finally {
             wakeupTrigger.clearTask();
             kafkaConsumerMetrics.recordCommitSync(time.nanoseconds() - commitStart);
