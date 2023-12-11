@@ -205,6 +205,7 @@ public class ConsumerTestBuilder implements Closeable {
                         commit,
                         metadata,
                         logContext,
+                        Optional.empty(),
                         backgroundEventHandler
                 )
             );
