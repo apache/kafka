@@ -143,6 +143,20 @@
         namely <code>TimestampedKeyQuery</code> and <code>TimestampedRangeQuery</code>. Both should be used to query a timestamped key-value store, to retrieve a <code>ValueAndTimestamp</code> result.
         The existing <code>KeyQuery</code> and <code>RangeQuery</code> are changed to always return the value only for timestamped key-value stores.
     </p>
+
+    <p>
+        IQv2 adds support for <code>MultiVersionedKeyQuery</code> (introduced in <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-968%3A+Support+single-key_multi-timestamp+interactive+queries+%28IQv2%29+for+versioned+state+stores">KIP-968</a>)
+        that allows retrieving a set of records from a versioned state store for a given key and a specified time range.
+        Users have to use <code>fromTime(Instant)</code> and/or <code>toTime(Instant)</code> to specify a half or a complete time range.
+    </p>
+
+    <p>
+        IQv2 adds support for <code>VersionedKeyQuery</code> (introduced in <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-960%3A+Support+single-key_single-timestamp+interactive+queries+%28IQv2%29+for+versioned+state+stores">KIP-960</a>)
+        that allows retrieving a single record from a versioned state store based on its key and timestamp.
+        Users have to use the <code>asOf(Instant)</code> method to define a query that returns the record's version for the specified timestamp.
+        To be more precise, the key query returns the record with the greatest timestamp <code>&lt;= Instant</code>.
+    </p>
+
     <p>
         The non-null key requirements for Kafka Streams join operators were relaxed as part of <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-962%3A+Relax+non-null+key+requirement+in+Kafka+Streams">KIP-962</a>.
         The behavior of the following operators changed.
