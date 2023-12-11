@@ -15,10 +15,10 @@
 # limitations under the License.
 SIGNAL=${SIGNAL:-TERM}
 
-if [[ "$1" == *"process-role="* ]]; then
-      ProcessRole="${1#*=}"
-  elif [[ "$1" == *"node-id="* ]]; then
-      NodeID="${1#*=}"
+ProcessRole=$(echo "$@" | grep -o -- '--process-role=[^ ]*' | cut -d'=' -f2)
+NodeID=$(echo "$@" | grep -o -- '--node-id=[^ ]*' | cut -d'=' -f2)
+if [ -n "$NodeID" ] && [ -n "$ProcessRole" ]; then
+  echo "When both node-id and process-role are provided, the value for node-id will take precedence"
 fi
 
 OSNAME=$(uname -s)
@@ -31,7 +31,13 @@ elif [[ "$OSNAME" == "OS400" ]]; then
     PIDS=$(ps -Af | grep -i 'kafka\.Kafka' | grep java | grep -v grep | awk '{print $2}')
 else
     PIDS=$(ps ax | grep ' kafka\.Kafka ' | grep java | grep -v grep | awk '{print $1}'| xargs)
-    ConfigFiles=$(ps ax | grep ' kafka\.Kafka ' | grep java | grep -v grep | sed 's/--override property=[^ ]*//g' | awk 'NF>1{print $NF}' | xargs)
+    RelativePathToConfig=$(ps ax | grep ' kafka\.Kafka ' | grep java | grep -v grep | sed 's/--override property=[^ ]*//g' | awk 'NF>1{print $NF}' | xargs)
+    IFS=' ' read -ra RelativePathArray <<< "$RelativePathToConfig"
+    declare -a AbsolutePathToConfigArray
+    for ((i = 0; i < ${#RelativePathArray[@]}; i++)); do
+        AbsolutePathToConfig=$(readlink -f "${RelativePathArray[i]}")
+        AbsolutePathToConfigArray+=("$AbsolutePathToConfig")
+    done
 fi
 
 if [ -z "$PIDS" ]; then
@@ -41,15 +47,14 @@ else
   if [ -z "$ProcessRole" ] && [ -z "$NodeID" ]; then
     kill -s $SIGNAL $PIDS
   else
-    IFS=' ' read -ra ConfigFilesArray <<< "$ConfigFiles"
     IFS=' ' read -ra PIDSArray <<< "$PIDS"
-    for ((i = 0; i < ${#ConfigFilesArray[@]}; i++)); do
-        if [ -n "$ProcessRole" ]; then
-          keyword="process.roles="
-          PRCRole=$(sed -n "/$keyword/ { s/$keyword//p; q; }" "${ConfigFilesArray[i]}")
-        else
-          keyword="node.id="
-          NID=$(sed -n "/$keyword/ { s/$keyword//p; q; }" "${ConfigFilesArray[i]}")
+    for ((i = 0; i < ${#AbsolutePathToConfigArray[@]}; i++)); do
+        if [ -n "$NodeID" ] ; then
+            keyword="node.id="
+            NID=$(sed -n "/$keyword/ { s/$keyword//p; q; }" "${AbsolutePathToConfigArray[i]}")
+        elif [ -n "$ProcessRole" ] && [ -z "$NodeID" ]; then
+            keyword="process.roles="
+            PRCRole=$(sed -n "/$keyword/ { s/$keyword//p; q; }" "${AbsolutePathToConfigArray[i]}")
         fi
         if [ -n "$ProcessRole" ] && [ "$PRCRole" == "$ProcessRole" ] || [ -n "$NodeID" ] && [ "$NID" == "$NodeID" ]; then
           kill -s $SIGNAL ${PIDSArray[i]}
