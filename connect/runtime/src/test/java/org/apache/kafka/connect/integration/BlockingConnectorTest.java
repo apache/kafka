@@ -138,8 +138,8 @@ public class BlockingConnectorTest {
     @After
     public void close() {
         // stop all Connect, Kafka and Zk threads.
-        connect.stop();
         Block.resetBlockLatch();
+        connect.stop();
     }
 
     @Test
@@ -349,8 +349,9 @@ public class BlockingConnectorTest {
         connect.requestTimeout(ConnectResource.DEFAULT_REST_REQUEST_TIMEOUT_MS);
     }
 
-    private static class Block {
+    public static class Block {
         private static CountDownLatch blockLatch;
+        private static CountDownLatch clearLatch;
 
         private final String block;
 
@@ -392,6 +393,10 @@ public class BlockingConnectorTest {
                     blockLatch.countDown();
                     blockLatch = null;
                 }
+                if (clearLatch != null) {
+                    clearLatch.countDown();
+                    clearLatch = null;
+                }
             }
         }
 
@@ -406,6 +411,7 @@ public class BlockingConnectorTest {
                     blockLatch.countDown();
                 }
                 blockLatch = new CountDownLatch(1);
+                clearLatch = new CountDownLatch(1);
             }
         }
 
@@ -415,7 +421,8 @@ public class BlockingConnectorTest {
                 blockLatch.countDown();
                 while (true) {
                     try {
-                        Thread.sleep(Long.MAX_VALUE);
+                        clearLatch.await(Long.MAX_VALUE, TimeUnit.MILLISECONDS);
+                        return;
                     } catch (InterruptedException e) {
                         // No-op. Just keep blocking.
                     }
