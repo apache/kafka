@@ -50,11 +50,11 @@ final class ReadonlyPartiallyDeserializedSegmentValue {
     }
 
 
-    public long getMinTimestamp() {
+    public long minTimestamp() {
         return minTimestamp;
     }
 
-    public long getNextTimestamp() {
+    public long nextTimestamp() {
         return nextTimestamp;
     }
 
@@ -81,7 +81,7 @@ final class ReadonlyPartiallyDeserializedSegmentValue {
         long currTimestamp = -1;
         long currNextTimestamp = -1;
         int currIndex = initializeCurrentIndex(index, isAscending);
-        int cumValueSize = initializeCumvalueSize(index, currIndex, isAscending);
+        int cumValueSize = initializeCumValueSize(index, currIndex, isAscending);
         int currValueSize;
 
 
@@ -140,14 +140,18 @@ final class ReadonlyPartiallyDeserializedSegmentValue {
         }
     }
 
-    private int initializeCumvalueSize(final int index, final int currIndex, final boolean isAscending) {
-        return (index == Integer.MAX_VALUE || (!isAscending && index == 0)) ? 0
-                                                                            : isAscending ? cumulativeValueSizes.get(currIndex + 1)
-                                                                                          : cumulativeValueSizes.get(currIndex - 1);
+    private int initializeCumValueSize(final int index, final int currIndex, final boolean isAscending) {
+        if (index == -1) { // if it is the first record to be deserialized
+            return 0;
+        }
+        return isAscending ? cumulativeValueSizes.get(currIndex + 1) : cumulativeValueSizes.get(currIndex - 1);
     }
 
     private int initializeCurrentIndex(final int index, final boolean isAscending) {
-        return isAscending && index == Integer.MAX_VALUE ? recordNumber - 1 : index;
+        if (index == -1) { // if it is the first record to be deserialized
+            return isAscending ? recordNumber - 1 : 0;
+        }
+        return index;
     }
 
 

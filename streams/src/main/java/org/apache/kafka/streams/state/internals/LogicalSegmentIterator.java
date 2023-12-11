@@ -108,7 +108,7 @@ public class LogicalSegmentIterator implements VersionedRecordIterator<byte[]> {
     private void prepareToFetchNextSegment() {
         this.currentRawSegmentValue = null;
         this.currentDeserializedSegmentValue = null;
-        this.nextIndex = order.equals(ResultOrder.ASCENDING) ? Integer.MAX_VALUE : 0;
+        this.nextIndex = -1;
     }
 
     /**
@@ -167,8 +167,8 @@ public class LogicalSegmentIterator implements VersionedRecordIterator<byte[]> {
     }
 
     private boolean canSegmentHaveMoreRelevantRecords(final long currentValidFrom, final long currentValidTo) {
-        final boolean isCurrentOutsideTimeRange = (order.equals(ResultOrder.ASCENDING) && (currentValidTo > toTime || currentDeserializedSegmentValue.getNextTimestamp() == currentValidTo))
-                                               || (!order.equals(ResultOrder.ASCENDING) && (currentValidFrom < fromTime || currentDeserializedSegmentValue.getMinTimestamp() == currentValidFrom));
+        final boolean isCurrentOutsideTimeRange = (order.equals(ResultOrder.ASCENDING) && (currentValidTo > toTime || currentDeserializedSegmentValue.nextTimestamp() == currentValidTo))
+                                               || (!order.equals(ResultOrder.ASCENDING) && (currentValidFrom < fromTime || currentDeserializedSegmentValue.minTimestamp() == currentValidFrom));
         return !isCurrentOutsideTimeRange;
     }
 
