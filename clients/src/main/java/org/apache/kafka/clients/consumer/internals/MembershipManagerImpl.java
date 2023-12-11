@@ -674,7 +674,7 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
     @Override
     public void transitionToStaled() {
         memberEpoch = ConsumerGroupHeartbeatRequest.LEAVE_GROUP_MEMBER_EPOCH;
-        currentAssignment = new HashSet<>();
+        currentAssignment.clear();
         transitionTo(MemberState.STALED);
     }
 
