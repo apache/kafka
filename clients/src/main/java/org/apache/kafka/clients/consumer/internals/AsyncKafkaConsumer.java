@@ -1592,7 +1592,9 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
     }
 
     // Visible for testing
-    SubscriptionState subscriptions() { return subscriptions; }
+    SubscriptionState subscriptions() {
+        return subscriptions;
+    }
 
     /**
      * Utility class that helps the application thread to invoke user registered {@link OffsetCommitCallback}. This is
