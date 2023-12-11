@@ -16,11 +16,12 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
-import org.apache.kafka.common.TopicIdPartition;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatResponseData;
 
+import java.util.Map;
 import java.util.Optional;
-import java.util.Set;
+import java.util.SortedSet;
 import java.util.concurrent.CompletableFuture;
 
 /**
@@ -88,9 +89,10 @@ public interface MembershipManager {
     Optional<String> serverAssignor();
 
     /**
-     * @return Current assignment for the member.
+     * @return Current assignment for the member as received from the broker (topic IDs and
+     * partitions). This is the last assignment that the member has successfully reconciled.
      */
-    Set<TopicIdPartition> currentAssignment();
+    Map<Uuid, SortedSet<Integer>> currentAssignment();
 
     /**
      * Transition the member to the FENCED state, where the member will release the assignment by

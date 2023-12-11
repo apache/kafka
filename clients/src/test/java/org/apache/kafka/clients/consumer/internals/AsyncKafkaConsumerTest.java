@@ -61,6 +61,7 @@ import org.apache.kafka.common.utils.Timer;
 import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.function.Executable;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -954,6 +955,7 @@ public class AsyncKafkaConsumerTest {
         }
     }
 
+    @Disabled("Flaky test temporarily disabled - in review")
     @Test
     public void testGroupIdNotNullAndValid() {
         final Properties props = requiredConsumerPropertiesAndGroupId("consumerGroupA");

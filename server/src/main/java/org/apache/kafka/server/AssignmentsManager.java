@@ -41,6 +41,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -145,12 +146,29 @@ public class AssignmentsManager {
         final long timestampNs;
         final TopicIdPartition partition;
         final Uuid dirId;
-        final Runnable callback;
-        AssignmentEvent(long timestampNs, TopicIdPartition partition, Uuid dirId, Runnable callback) {
+        final List<Runnable> completionHandlers;
+        AssignmentEvent(long timestampNs, TopicIdPartition partition, Uuid dirId, Runnable onComplete) {
             this.timestampNs = timestampNs;
             this.partition = partition;
             this.dirId = dirId;
-            this.callback = callback == null ? () -> { } : callback;
+            this.completionHandlers = new ArrayList<>();
+            if (onComplete != null) {
+                completionHandlers.add(onComplete);
+            }
+        }
+        void merge(AssignmentEvent other) {
+            if (!partition.equals(other.partition)) {
+                throw new IllegalArgumentException("Cannot merge events for different partitions");
+            }
+            if (!dirId.equals(other.dirId)) {
+                throw new IllegalArgumentException("Cannot merge events for different directories");
+            }
+            completionHandlers.addAll(other.completionHandlers);
+        }
+        void onComplete() {
+            for (Runnable onComplete : completionHandlers) {
+                onComplete.run();
+            }
         }
         @Override
         public void run() throws Exception {
@@ -160,10 +178,12 @@ public class AssignmentsManager {
             }
             if (existing != null) {
                 if (existing.dirId.equals(dirId)) {
+                    existing.merge(this);
                     if (log.isDebugEnabled()) log.debug("Ignoring duplicate assignment {}", this);
                     return;
                 }
                 if (existing.timestampNs > timestampNs) {
+                    existing.onComplete();
                     if (log.isDebugEnabled()) log.debug("Dropping assignment {} because it's older than {}", this, existing);
                     return;
                 }
@@ -261,7 +281,9 @@ public class AssignmentsManager {
 
                 Set<AssignmentEvent> failed = filterFailures(data, inflight);
                 Set<AssignmentEvent> completed = Utils.diff(HashSet::new, inflight.values().stream().collect(Collectors.toSet()), failed);
-                completed.forEach(assignmentEvent -> assignmentEvent.callback.run());
+                for (AssignmentEvent assignmentEvent : completed) {
+                    assignmentEvent.onComplete();
+                }
 
                 if (!failed.isEmpty()) {
                     log.warn("Re-queueing assignments: {}", failed);
@@ -309,7 +331,7 @@ public class AssignmentsManager {
     }
 
     private void scheduleDispatch(long delayNs) {
-        if (log.isTraceEnabled()) {
+        if (log.isDebugEnabled()) {
             log.debug("Scheduling dispatch in {}ns", delayNs);
         }
         eventQueue.enqueue(EventQueue.EventInsertionType.DEFERRED, DispatchEvent.TAG,
