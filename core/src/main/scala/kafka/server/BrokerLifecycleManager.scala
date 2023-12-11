@@ -58,7 +58,7 @@ class BrokerLifecycleManager(
   val time: Time,
   val threadNamePrefix: String,
   val isZkBroker: Boolean,
-  val logDirs: Set[Uuid] = Set.empty[Uuid]
+  val logDirs: Set[Uuid]
 ) extends Logging {
 
   private def logPrefix(): String = {

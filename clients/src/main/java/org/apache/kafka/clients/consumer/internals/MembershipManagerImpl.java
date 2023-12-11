@@ -358,7 +358,6 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
         updateMemberEpoch(response.memberEpoch());
 
         ConsumerGroupHeartbeatResponseData.Assignment assignment = response.assignment();
-
         if (assignment != null) {
             transitionTo(MemberState.RECONCILING);
             replaceUnresolvedAssignmentWithNewAssignment(assignment);
