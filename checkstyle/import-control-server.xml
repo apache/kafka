@@ -58,6 +58,11 @@
   <!-- utilities and reusable classes from server-common -->
   <allow pkg="org.apache.kafka.queue" />
   <allow pkg="org.apache.kafka.server.common" />
+  <allow pkg="org.apache.kafka.server.metrics" />
+  <allow pkg="com.yammer.metrics" />
+
+  <!-- utilities for testing -->
+  <allow pkg="org.apache.kafka.test" />
 
   <!-- persistent collection factories/non-library-specific wrappers -->
   <allow pkg="org.apache.kafka.server.immutable" exact-match="true" />
