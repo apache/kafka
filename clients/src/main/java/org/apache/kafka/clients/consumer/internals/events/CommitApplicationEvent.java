@@ -22,6 +22,7 @@ import org.apache.kafka.common.utils.Timer;
 
 import java.util.Collections;
 import java.util.Map;
+import java.util.Optional;
 
 public class CommitApplicationEvent extends CompletableApplicationEvent<Void> {
 
@@ -31,13 +32,19 @@ public class CommitApplicationEvent extends CompletableApplicationEvent<Void> {
     private final Map<TopicPartition, OffsetAndMetadata> offsets;
 
     /**
-     * Timer to control how long the commit request should be retried if it fails with retriable
-     * errors. If a zero-time timer is provided, the request will be sent without any retry.
+     * Timer to wait for a response, retrying on retriable errors. If not present, the request is
+     * triggered without waiting for a response or being retried.
      */
-    private final Timer timer;
+    private final Optional<Timer> timer;
 
+    /**
+     * Create new event to commit offsets. If timer is present, the request will be retried on
+     * retriable errors until the timer expires (sync commit offsets request). If the timer is
+     * not present, the request will be sent without waiting for a response of retrying (async
+     * commit offsets request).
+     */
     public CommitApplicationEvent(final Map<TopicPartition, OffsetAndMetadata> offsets,
-                                  final Timer timer) {
+                                  final Optional<Timer> timer) {
         super(Type.COMMIT);
         this.offsets = Collections.unmodifiableMap(offsets);
         this.timer = timer;
@@ -53,7 +60,7 @@ public class CommitApplicationEvent extends CompletableApplicationEvent<Void> {
         return offsets;
     }
 
-    public Timer timer() {
+    public Optional<Timer> timer() {
         return timer;
     }
 
@@ -80,7 +87,7 @@ public class CommitApplicationEvent extends CompletableApplicationEvent<Void> {
         return "CommitApplicationEvent{" +
                 toStringBase() +
                 ", offsets=" + offsets +
-                ", retriable=" + !timer.isExpired() +
+                ", retriable=" + (timer.isPresent() && !timer.get().isExpired()) +
                 '}';
     }
 }

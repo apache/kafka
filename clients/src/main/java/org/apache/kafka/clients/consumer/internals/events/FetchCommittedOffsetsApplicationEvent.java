@@ -32,8 +32,7 @@ public class FetchCommittedOffsetsApplicationEvent extends CompletableApplicatio
     private final Set<TopicPartition> partitions;
 
     /**
-     * Timer to control how long the fetch committed offsets request should be retried if it fails
-     * with retriable errors. If a zero-time timer is provided, the request will be sent without any retry.
+     * Timer to wait for a response, retrying on retriable errors.
      */
     private final Timer timer;
 

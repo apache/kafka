@@ -134,7 +134,7 @@ public class ConsumerNetworkThreadTest {
 
     @Test
     public void testApplicationEvent() {
-        ApplicationEvent e = new CommitApplicationEvent(new HashMap<>(), time.timer(Long.MAX_VALUE));
+        ApplicationEvent e = new CommitApplicationEvent(new HashMap<>(), Optional.empty());
         applicationEventsQueue.add(e);
         consumerNetworkThread.runOnce();
         verify(applicationEventProcessor, times(1)).process(e);
@@ -150,7 +150,7 @@ public class ConsumerNetworkThreadTest {
 
     @Test
     public void testCommitEvent() {
-        ApplicationEvent e = new CommitApplicationEvent(new HashMap<>(), time.timer(Long.MAX_VALUE));
+        ApplicationEvent e = new CommitApplicationEvent(new HashMap<>(), Optional.empty());
         applicationEventsQueue.add(e);
         consumerNetworkThread.runOnce();
         verify(applicationEventProcessor).process(any(CommitApplicationEvent.class));
@@ -272,8 +272,8 @@ public class ConsumerNetworkThreadTest {
         coordinatorRequestManager.markCoordinatorUnknown("test", time.milliseconds());
         client.prepareResponse(FindCoordinatorResponse.prepareResponse(Errors.NONE, "group-id", node));
         prepareOffsetCommitRequest(new HashMap<>(), Errors.NONE, false);
-        CompletableApplicationEvent<Void> event1 = spy(new CommitApplicationEvent(Collections.emptyMap(), time.timer(Long.MAX_VALUE)));
-        ApplicationEvent event2 = new CommitApplicationEvent(Collections.emptyMap(), time.timer(Long.MAX_VALUE));
+        CompletableApplicationEvent<Void> event1 = spy(new CommitApplicationEvent(Collections.emptyMap(), Optional.empty()));
+        ApplicationEvent event2 = new CommitApplicationEvent(Collections.emptyMap(), Optional.empty());
         CompletableFuture<Void> future = new CompletableFuture<>();
         when(event1.future()).thenReturn(future);
         applicationEventsQueue.add(event1);

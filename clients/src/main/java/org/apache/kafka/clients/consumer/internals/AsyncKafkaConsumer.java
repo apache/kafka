@@ -607,9 +607,9 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
     public void commitAsync(Map<TopicPartition, OffsetAndMetadata> offsets, OffsetCommitCallback callback) {
         acquireAndEnsureOpen();
         try {
-            // Commit with zero duration to indicate that the commit should be triggered without
+            // Commit without timer to indicate that the commit should be triggered without
             // waiting for a response.
-            CompletableFuture<Void> future = commit(offsets, false, time.timer(Duration.ZERO));
+            CompletableFuture<Void> future = commit(offsets, false, Optional.empty());
             future.whenComplete((r, t) -> {
                 if (callback == null) {
                     if (t != null) {
@@ -628,13 +628,13 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
     // Visible for testing
     CompletableFuture<Void> commitAsync(final Map<TopicPartition, OffsetAndMetadata> offsets,
                                         final boolean isWakeupable) {
-        return commit(offsets, isWakeupable, time.timer(Duration.ZERO));
+        return commit(offsets, isWakeupable, Optional.empty());
     }
 
     // Visible for testing
     CompletableFuture<Void> commit(final Map<TopicPartition, OffsetAndMetadata> offsets,
                                    final boolean isWakeupable,
-                                   final Timer timer) {
+                                   final Optional<Timer> timer) {
         maybeInvokeCommitCallbacks();
         maybeThrowFencedInstanceException();
         maybeThrowInvalidGroupIdException();
@@ -1088,9 +1088,11 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         acquireAndEnsureOpen();
         long commitStart = time.nanoseconds();
         try {
-            Timer commitTimer = time.timer(timeout);
-            CompletableFuture<Void> commitFuture = commit(offsets, true, commitTimer);
-            ConsumerUtils.getResult(commitFuture, commitTimer);
+            Timer requestTimer = time.timer(timeout.toMillis());
+            // Commit with a timer to control how long the request should be retried until it
+            // gets a successful response or non-retriable error.
+            CompletableFuture<Void> commitFuture = commit(offsets, true, Optional.of(requestTimer));
+            ConsumerUtils.getResult(commitFuture, requestTimer);
         } finally {
             wakeupTrigger.clearTask();
             kafkaConsumerMetrics.recordCommitSync(time.nanoseconds() - commitStart);

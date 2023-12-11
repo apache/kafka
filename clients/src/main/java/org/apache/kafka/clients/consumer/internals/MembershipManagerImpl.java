@@ -37,7 +37,6 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 
-import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -924,7 +923,7 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
         if (commitRequestManager.autoCommitEnabled()) {
             // TODO: review auto commit time boundary. This will be effectively bounded by the
             //  rebalance timeout.
-            commitResult = commitRequestManager.maybeAutoCommitAllConsumed(time.timer(Duration.ofMillis(Long.MAX_VALUE)));
+            commitResult = commitRequestManager.maybeAutoCommitAllConsumed(Optional.of(time.timer(Long.MAX_VALUE)));
         } else {
             commitResult = CompletableFuture.completedFuture(null);
         }
