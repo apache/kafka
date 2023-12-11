@@ -69,7 +69,7 @@ class LogLoader(
   numRemainingSegments: ConcurrentMap[String, Int] = new ConcurrentHashMap[String, Int],
   isRemoteLogEnabled: Boolean = false,
 ) extends Logging {
-  logIdent = LogContext.newBuilder("LogLoader").withTag("partition", topicPartition).withTag("dir", dir.getParent).build().logPrefix()
+  logIdent = LogContext.forComponent("LogLoader").withTag("partition", topicPartition).withTag("dir", dir.getParent).build().logPrefix()
 
   /**
    * Load the log segments from the log files on disk, and returns the components of the loaded log.

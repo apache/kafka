@@ -74,7 +74,7 @@ class LocalLog(@volatile private var _dir: File,
 
   import kafka.log.LocalLog._
 
-  this.logIdent = LogContext.newBuilder("LocalLog").withTag("partition", topicPartition).withTag("dir", dir.getParent).build().logPrefix()
+  this.logIdent = LogContext.forComponent("LocalLog").withTag("partition", topicPartition).withTag("dir", dir.getParent).build().logPrefix()
 
   // The memory mapped buffer for index files of this log will be closed with either delete() or closeHandlers()
   // After memory mapped buffer is closed, no disk IO operation should be performed for this log.

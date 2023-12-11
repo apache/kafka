@@ -2912,7 +2912,7 @@ class ReplicaManagerTest {
         new ReplicaFetcherManager(this.config, rm, metrics, time, threadNamePrefix, replicationQuotaManager, () => this.metadataCache.metadataVersion(), () => 1) {
 
           override def createFetcherThread(fetcherId: Int, sourceBroker: BrokerEndPoint): ReplicaFetcherThread = {
-            val logContext = LogContext.newBuilder("ReplicaFetcher")
+            val logContext = LogContext.forComponent("ReplicaFetcher")
               .withTag("replicaId", rm.config.brokerId)
               .withTag("leaderId", sourceBroker.id)
               .withTag("fetcherId", fetcherId)

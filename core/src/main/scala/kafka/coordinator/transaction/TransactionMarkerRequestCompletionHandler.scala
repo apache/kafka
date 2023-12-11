@@ -32,7 +32,7 @@ class TransactionMarkerRequestCompletionHandler(brokerId: Int,
                                                 txnMarkerChannelManager: TransactionMarkerChannelManager,
                                                 txnIdAndMarkerEntries: java.util.List[TxnIdAndMarkerEntry]) extends RequestCompletionHandler with Logging {
 
-  this.logIdent = LogContext.newBuilder("TransactionMarkerRequestCompletionHandler").withTag("brokerId", brokerId).build().logPrefix()
+  this.logIdent = LogContext.forComponent("TransactionMarkerRequestCompletionHandler").withTag("brokerId", brokerId).build().logPrefix()
 
   override def onComplete(response: ClientResponse): Unit = {
     val requestHeader = response.requestHeader

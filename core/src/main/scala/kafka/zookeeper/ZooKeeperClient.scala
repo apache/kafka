@@ -72,7 +72,7 @@ class ZooKeeperClient(connectString: String,
   }
 
 
-  this.logIdent = LogContext.newBuilder("ZooKeeperClient").withTag("clientName", name).build().logPrefix()
+  this.logIdent = LogContext.forComponent("ZooKeeperClient").withTag("clientName", name).build().logPrefix()
   private val initializationLock = new ReentrantReadWriteLock()
   private val isConnectedOrExpiredLock = new ReentrantLock()
   private val isConnectedOrExpiredCondition = isConnectedOrExpiredLock.newCondition()

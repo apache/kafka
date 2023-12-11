@@ -117,7 +117,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
     }
   }
 
-  this.logIdent = LogContext.newBuilder("UnifiedLog").withTag("partition", topicPartition).withTag("dir", parentDir).build().logPrefix()
+  this.logIdent = LogContext.forComponent("UnifiedLog").withTag("partition", topicPartition).withTag("dir", parentDir).build().logPrefix()
 
   /* A lock that guards all modifications to the log */
   private val lock = new Object

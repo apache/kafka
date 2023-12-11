@@ -99,7 +99,7 @@ object DelegationTokenManager {
 class DelegationTokenManager(val config: KafkaConfig,
                              val tokenCache: DelegationTokenCache,
                              val time: Time) extends Logging {
-  this.logIdent = LogContext.newBuilder("TokenManager").withTag("nodeId", config.brokerId).build().logPrefix()
+  this.logIdent = LogContext.forComponent("TokenManager").withTag("nodeId", config.brokerId).build().logPrefix()
 
   protected val lock = new Object()
 

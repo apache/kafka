@@ -52,7 +52,7 @@ class KafkaRaftServer(
   time: Time,
 ) extends Server with Logging {
 
-  this.logIdent = LogContext.newBuilder("KafkaRaftServer").withTag("nodeId", config.nodeId).build().logPrefix()
+  this.logIdent = LogContext.forComponent("KafkaRaftServer").withTag("nodeId", config.nodeId).build().logPrefix()
   KafkaMetricsReporter.startReporters(VerifiableProperties(config.originals))
   KafkaYammerMetrics.INSTANCE.configure(config.originals)
 

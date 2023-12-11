@@ -93,7 +93,7 @@ class ControllerServer(
   private val metricsGroup = new KafkaMetricsGroup(this.getClass)
 
   val config = sharedServer.controllerConfig
-  val logContext = LogContext.newBuilder("ControllerServer").withTag("id", config.nodeId).build()
+  val logContext = LogContext.forComponent("ControllerServer").withTag("id", config.nodeId).build()
   val time = sharedServer.time
   def metrics = sharedServer.metrics
   def raftManager: KafkaRaftManager[ApiMessageAndVersion] = sharedServer.raftManager

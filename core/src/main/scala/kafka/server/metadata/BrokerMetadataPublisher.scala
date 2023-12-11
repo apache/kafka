@@ -111,7 +111,7 @@ class BrokerMetadataPublisher(
   fatalFaultHandler: FaultHandler,
   metadataPublishingFaultHandler: FaultHandler
 ) extends MetadataPublisher with Logging {
-  logIdent = LogContext.newBuilder("BrokerMetadataPublisher").withTag("id", config.nodeId).build().logPrefix()
+  logIdent = LogContext.forComponent("BrokerMetadataPublisher").withTag("id", config.nodeId).build().logPrefix()
 
   import BrokerMetadataPublisher._
 

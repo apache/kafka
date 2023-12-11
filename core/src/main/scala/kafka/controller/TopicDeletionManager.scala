@@ -90,7 +90,7 @@ class TopicDeletionManager(config: KafkaConfig,
                            replicaStateMachine: ReplicaStateMachine,
                            partitionStateMachine: PartitionStateMachine,
                            client: DeletionClient) extends Logging {
-  this.logIdent = LogContext.newBuilder("TopicDeletionManager").withTag("id", config.brokerId).build().logPrefix()
+  this.logIdent = LogContext.forComponent("TopicDeletionManager").withTag("id", config.brokerId).build().logPrefix()
   val isDeleteTopicEnabled: Boolean = config.deleteTopicEnable
 
   def init(initialTopicsToBeDeleted: Set[String], initialTopicsIneligibleForDeletion: Set[String]): Unit = {

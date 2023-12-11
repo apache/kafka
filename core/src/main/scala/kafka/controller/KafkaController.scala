@@ -116,7 +116,7 @@ class KafkaController(val config: KafkaConfig,
 
   private val metricsGroup = new KafkaMetricsGroup(this.getClass)
 
-  this.logIdent = LogContext.newBuilder("Controller").withTag("id", config.brokerId).build().logPrefix()
+  this.logIdent = LogContext.forComponent("Controller").withTag("id", config.brokerId).build().logPrefix()
 
   @volatile private var brokerInfo = initialBrokerInfo
   @volatile private var _brokerEpoch = initialBrokerEpoch

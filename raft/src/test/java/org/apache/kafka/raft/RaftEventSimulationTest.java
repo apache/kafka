@@ -515,7 +515,7 @@ public class RaftEventSimulationTest {
             log = new MockLog(
                 METADATA_PARTITION,
                 Uuid.METADATA_TOPIC_ID,
-                LogContext.newBuilder("Node").withTag("id", nodeId).build()
+                LogContext.forComponent("Node").withTag("id", nodeId).build()
             );
         }
     }
@@ -713,7 +713,7 @@ public class RaftEventSimulationTest {
         }
 
         void start(int nodeId) {
-            LogContext logContext = LogContext.newBuilder("Node").withTag("id", nodeId).build();
+            LogContext logContext = LogContext.forComponent("Node").withTag("id", nodeId).build();
             PersistentState persistentState = nodes.get(nodeId);
             MockNetworkChannel channel = new MockNetworkChannel(correlationIdCounter, voters);
             MockMessageQueue messageQueue = new MockMessageQueue();

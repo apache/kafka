@@ -104,7 +104,7 @@ class ZkReplicaStateMachine(config: KafkaConfig,
   extends ReplicaStateMachine(controllerContext) with Logging {
 
   private val controllerId = config.brokerId
-  this.logIdent = LogContext.newBuilder("ReplicaStateMachine").withTag("controllerId", controllerId).build().logPrefix()
+  this.logIdent = LogContext.forComponent("ReplicaStateMachine").withTag("controllerId", controllerId).build().logPrefix()
 
   override def handleStateChanges(replicas: Seq[PartitionAndReplica], targetState: ReplicaState): Unit = {
     if (replicas.nonEmpty) {

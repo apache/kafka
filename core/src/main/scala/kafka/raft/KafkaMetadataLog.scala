@@ -49,7 +49,7 @@ final class KafkaMetadataLog private (
   config: MetadataLogConfig
 ) extends ReplicatedLog with Logging {
 
-  this.logIdent = LogContext.newBuilder("MetadataLog").withTag("partition", topicPartition).withTag("nodeId", config.nodeId).build().logPrefix()
+  this.logIdent = LogContext.forComponent("MetadataLog").withTag("partition", topicPartition).withTag("nodeId", config.nodeId).build().logPrefix()
 
   override def read(startOffset: Long, readIsolation: Isolation): LogFetchInfo = {
     val isolation = readIsolation match {

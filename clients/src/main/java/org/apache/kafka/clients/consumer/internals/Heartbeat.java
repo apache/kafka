@@ -58,7 +58,7 @@ public final class Heartbeat {
                 CommonClientConfigs.RETRY_BACKOFF_JITTER);
 
         final LogContext logContext =
-            LogContext.newBuilder("Heartbeat")
+            LogContext.forComponent("Heartbeat")
                 .withTag("groupId", config.groupId)
                 .build();
         this.log = logContext.logger(getClass());

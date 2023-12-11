@@ -132,7 +132,7 @@ public class KRaftMigrationDriver implements MetadataPublisher {
         this.zkMigrationClient = zkMigrationClient;
         this.propagator = propagator;
         this.time = time;
-        LogContext logContext = LogContext.newBuilder("KRaftMigrationDriver").withTag("id", nodeId).build();
+        LogContext logContext = LogContext.forComponent("KRaftMigrationDriver").withTag("id", nodeId).build();
         this.controllerMetrics = controllerMetrics;
         this.log = logContext.logger(KRaftMigrationDriver.class);
         this.migrationState = MigrationDriverState.UNINITIALIZED;

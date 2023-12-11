@@ -119,7 +119,7 @@ class ControllerEventManager(controllerId: Int,
   def isEmpty: Boolean = queue.isEmpty
 
   class ControllerEventThread(name: String)
-    extends ShutdownableThread(name, false, LogContext.newBuilder("ControllerEventThread").withTag("controllerId", controllerId).build().logPrefix())
+    extends ShutdownableThread(name, false, LogContext.forComponent("ControllerEventThread").withTag("controllerId", controllerId).build().logPrefix())
       with Logging {
 
     logIdent = logPrefix

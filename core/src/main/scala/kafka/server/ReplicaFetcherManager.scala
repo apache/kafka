@@ -39,7 +39,7 @@ class ReplicaFetcherManager(brokerConfig: KafkaConfig,
   override def createFetcherThread(fetcherId: Int, sourceBroker: BrokerEndPoint): ReplicaFetcherThread = {
     val prefix = threadNamePrefix.map(tp => s"$tp:").getOrElse("")
     val threadName = s"${prefix}ReplicaFetcherThread-$fetcherId-${sourceBroker.id}"
-    val logContext = LogContext.newBuilder("ReplicaFetcher")
+    val logContext = LogContext.forComponent("ReplicaFetcher")
       .withTag("replicaId", brokerConfig.brokerId)
       .withTag("leaderId", sourceBroker.id)
       .withTag("fetcherId", fetcherId)

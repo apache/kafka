@@ -2457,7 +2457,7 @@ public class KafkaProducerTest {
         }
 
         public KafkaProducer<T, T> newKafkaProducer() {
-            LogContext logContext = LogContext.newBuilder("Producer")
+            LogContext logContext = LogContext.forComponent("Producer")
                 .withTag("test", testInfo.getDisplayName())
                 .build();
 

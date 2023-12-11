@@ -86,7 +86,7 @@ private[group] class GroupCoordinator(
       "group-coordinator-metrics",
       "The total number of completed rebalance")))
 
-  this.logIdent = LogContext.newBuilder("GroupCoordinator").withTag("id", brokerId).build().logPrefix()
+  this.logIdent = LogContext.forComponent("GroupCoordinator").withTag("id", brokerId).build().logPrefix()
 
   private val isActive = new AtomicBoolean(false)
 

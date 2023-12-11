@@ -67,7 +67,7 @@ public final class SnapshotFileReader implements AutoCloseable {
         this.listener = listener;
         this.queue = new KafkaEventQueue(
             Time.SYSTEM,
-            LogContext.newBuilder("SnapshotReaderQueue").build(),
+            LogContext.forComponent("SnapshotReaderQueue").build(),
             "snapshotReaderQueue_",
             new ShutdownEvent()
         );

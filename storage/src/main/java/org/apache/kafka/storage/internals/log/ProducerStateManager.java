@@ -141,7 +141,7 @@ public class ProducerStateManager {
         this.maxTransactionTimeoutMs = maxTransactionTimeoutMs;
         this.producerStateManagerConfig = producerStateManagerConfig;
         this.time = time;
-        log = LogContext.newBuilder("ProducerStateManager")
+        log = LogContext.forComponent("ProducerStateManager")
             .withTag("partition", topicPartition)
             .build()
             .logger(ProducerStateManager.class);

@@ -355,7 +355,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
 
             this.clientId = config.getString(ProducerConfig.CLIENT_ID_CONFIG);
 
-            LogContext.Builder logContextBuilder = LogContext.newBuilder("Producer")
+            LogContext.Builder logContextBuilder = LogContext.forComponent("Producer")
                 .withTag("clientId", clientId);
             if (transactionalId != null)
                 logContextBuilder.withTag("transactionalId", transactionalId);

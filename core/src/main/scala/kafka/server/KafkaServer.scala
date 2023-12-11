@@ -252,7 +252,7 @@ class KafkaServer(
 
         /* generate brokerId */
         config.brokerId = getOrGenerateBrokerId(initialMetaPropsEnsemble)
-        logContext = LogContext.newBuilder("KafkaServer").withTag("id", config.brokerId).build()
+        logContext = LogContext.forComponent("KafkaServer").withTag("id", config.brokerId).build()
         this.logIdent = logContext.logPrefix
 
         // initialize dynamic broker configs from ZooKeeper. Any updates made after this will be
@@ -681,7 +681,7 @@ class KafkaServer(
   }
 
   protected def createReplicaManager(isShuttingDown: AtomicBoolean): ReplicaManager = {
-    val addPartitionsLogContext = LogContext.newBuilder("AddPartitionsToTxnManager")
+    val addPartitionsLogContext = LogContext.forComponent("AddPartitionsToTxnManager")
       .withTag("brokerId", config.brokerId.toString)
       .build()
     val addPartitionsToTxnNetworkClient = NetworkUtils.buildNetworkClient("AddPartitionsManager", config, metrics, time, addPartitionsLogContext)

@@ -62,7 +62,7 @@ class BrokerLifecycleManager(
 ) extends Logging {
 
   private def logContextBuilder(): LogContext.Builder = {
-    val builder = LogContext.newBuilder("BrokerLifecycleManager")
+    val builder = LogContext.forComponent("BrokerLifecycleManager")
     builder.withTag("id", config.nodeId)
     if (isZkBroker) {
       builder.withTag("isZkBroker", "true")

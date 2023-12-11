@@ -556,7 +556,7 @@ private[log] class Cleaner(val id: Int,
 
   protected override def loggerName: String = classOf[LogCleaner].getName
 
-  this.logIdent = LogContext.newBuilder("Cleaner").withTag("id", id).build().logPrefix()
+  this.logIdent = LogContext.forComponent("Cleaner").withTag("id", id).build().logPrefix()
 
   /* buffer used for read i/o */
   private var readBuffer = ByteBuffer.allocate(ioBufferSize)

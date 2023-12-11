@@ -135,7 +135,7 @@ class ZkMetadataCache(
     aliveBrokers = mutable.LongMap.empty,
     aliveNodes = mutable.LongMap.empty)
 
-  this.logIdent = LogContext.newBuilder("MetadataCache").withTag("brokerId", brokerId).build().logPrefix()
+  this.logIdent = LogContext.forComponent("MetadataCache").withTag("brokerId", brokerId).build().logPrefix()
   private val stateChangeLogger = new StateChangeLogger(brokerId, inControllerContext = false, None)
 
   // Features are updated via ZK notification (see FinalizedFeatureChangeListener)

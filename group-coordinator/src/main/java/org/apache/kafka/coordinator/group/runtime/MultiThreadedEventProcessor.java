@@ -121,7 +121,7 @@ public class MultiThreadedEventProcessor implements CoordinatorEventProcessor {
             String name
         ) {
             super(name);
-            log = LogContext.newBuilder(name).build().logger(EventProcessorThread.class);
+            log = LogContext.forComponent(name).build().logger(EventProcessorThread.class);
             setDaemon(false);
         }
 

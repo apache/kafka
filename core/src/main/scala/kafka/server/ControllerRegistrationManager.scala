@@ -58,7 +58,7 @@ class ControllerRegistrationManager(
   override def name(): String = "ControllerRegistrationManager"
 
   private def logContextBuilder(): LogContext.Builder = {
-    val builder = LogContext.newBuilder("ControllerRegistrationManager")
+    val builder = LogContext.forComponent("ControllerRegistrationManager")
     builder.withTag("id", nodeId)
     builder.withTag("incarnation", incarnationId)
     builder

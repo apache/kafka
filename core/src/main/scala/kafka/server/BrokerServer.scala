@@ -81,7 +81,7 @@ class BrokerServer(
 
   import kafka.server.Server._
 
-  private val logContext: LogContext = LogContext.newBuilder("BrokerServer").withTag("id", config.nodeId.toString).build()
+  private val logContext: LogContext = LogContext.forComponent("BrokerServer").withTag("id", config.nodeId.toString).build()
 
   this.logIdent = logContext.logPrefix
 
@@ -271,7 +271,7 @@ class BrokerServer(
       )
       alterPartitionManager.start()
 
-      val addPartitionsLogContext = LogContext.newBuilder("AddPartitionsToTxnManager")
+      val addPartitionsLogContext = LogContext.forComponent("AddPartitionsToTxnManager")
         .withTag("brokerId", config.brokerId.toString)
         .build()
       val addPartitionsToTxnNetworkClient = NetworkUtils.buildNetworkClient("AddPartitionsManager", config, metrics, time, addPartitionsLogContext)

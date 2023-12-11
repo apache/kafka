@@ -148,7 +148,7 @@ class NodeToControllerChannelManagerImpl(
   threadNamePrefix: String,
   retryTimeoutMs: Long
 ) extends NodeToControllerChannelManager with Logging {
-  private val logContext = LogContext.newBuilder("NodeToControllerChannelManager")
+  private val logContext = LogContext.forComponent("NodeToControllerChannelManager")
     .withTag("id", config.nodeId)
     .withTag("name", channelName)
     .build()

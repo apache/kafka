@@ -108,7 +108,7 @@ public class MetadataLoader implements RaftClient.Listener<ApiMessageAndVersion>
 
         public MetadataLoader build() {
             if (logContext == null) {
-                logContext = LogContext.newBuilder("MetadataLoader").withTag("id", nodeId).build();
+                logContext = LogContext.forComponent("MetadataLoader").withTag("id", nodeId).build();
             }
             if (highWaterMarkAccessor == null) {
                 throw new RuntimeException("You must set the high water mark accessor.");

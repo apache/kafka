@@ -309,7 +309,7 @@ class ReplicaManager(val config: KafkaConfig,
 
   @volatile private var isInControlledShutdown = false
 
-  this.logIdent = LogContext.newBuilder("ReplicaManager").withTag("brokerId", localBrokerId).build().logPrefix()
+  this.logIdent = LogContext.forComponent("ReplicaManager").withTag("brokerId", localBrokerId).build().logPrefix()
   protected val stateChangeLogger = new StateChangeLogger(localBrokerId, inControllerContext = false, None)
 
   private var logDirFailureHandler: LogDirFailureHandler = _

@@ -124,7 +124,7 @@ public class LocalLogManagerTestEnv implements AutoCloseable {
         try {
             for (int nodeId = 0; nodeId < numManagers; nodeId++) {
                 newLogManagers.add(new LocalLogManager(
-                    LogContext.newBuilder("LocalLogManager").withTag("id", nodeId).build(),
+                    LogContext.forComponent("LocalLogManager").withTag("id", nodeId).build(),
                     nodeId,
                     shared,
                     String.format("LocalLogManager-%d_", nodeId)));

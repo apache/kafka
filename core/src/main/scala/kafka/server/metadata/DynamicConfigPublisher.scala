@@ -35,7 +35,7 @@ class DynamicConfigPublisher(
   dynamicConfigHandlers: Map[String, ConfigHandler],
   nodeType: String,
 ) extends Logging with org.apache.kafka.image.publisher.MetadataPublisher {
-  logIdent = LogContext.newBuilder(name()).build().logPrefix()
+  logIdent = LogContext.forComponent(name()).build().logPrefix()
 
   override def name(): String = s"DynamicConfigPublisher $nodeType id=${conf.nodeId}"
 

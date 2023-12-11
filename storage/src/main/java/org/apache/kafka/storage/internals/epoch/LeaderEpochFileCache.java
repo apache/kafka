@@ -60,7 +60,7 @@ public class LeaderEpochFileCache {
     public LeaderEpochFileCache(TopicPartition topicPartition, LeaderEpochCheckpoint checkpoint) {
         this.checkpoint = checkpoint;
         this.topicPartition = topicPartition;
-        LogContext logContext = LogContext.newBuilder("LeaderEpochCache")
+        LogContext logContext = LogContext.forComponent("LeaderEpochCache")
             .withTag("partition", topicPartition)
             .build();
         log = logContext.logger(LeaderEpochFileCache.class);

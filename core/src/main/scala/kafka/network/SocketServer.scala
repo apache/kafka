@@ -86,7 +86,7 @@ class SocketServer(val config: KafkaConfig,
 
   protected val nodeId = config.brokerId
 
-  private val logContext = LogContext.newBuilder("SocketServer")
+  private val logContext = LogContext.forComponent("SocketServer")
     .withTag("listenerType", apiVersionManager.listenerType.toString)
     .withTag("nodeId", nodeId)
     .build()

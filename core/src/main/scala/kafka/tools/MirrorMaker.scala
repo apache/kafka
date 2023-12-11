@@ -191,7 +191,7 @@ object MirrorMaker extends Logging {
     private val shutdownLatch: CountDownLatch = new CountDownLatch(1)
     private var lastOffsetCommitMs = System.currentTimeMillis()
     @volatile private var shuttingDown: Boolean = false
-    this.logIdent = LogContext.newBuilder("MirrorMaker").withTag("threadName", threadName).build().logPrefix()
+    this.logIdent = LogContext.forComponent("MirrorMaker").withTag("threadName", threadName).build().logPrefix()
 
     setName(threadName)
 

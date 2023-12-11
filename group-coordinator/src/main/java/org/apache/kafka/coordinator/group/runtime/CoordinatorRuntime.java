@@ -150,7 +150,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
 
         public CoordinatorRuntime<S, U> build() {
             if (logContextBuilder == null)
-                logContextBuilder = LogContext.newBuilder("CoordinatorRuntime");
+                logContextBuilder = LogContext.forComponent("CoordinatorRuntime");
             if (eventProcessor == null)
                 throw new IllegalArgumentException("Event processor must be set.");
             if (partitionWriter == null)

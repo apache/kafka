@@ -137,7 +137,7 @@ class ZkPartitionStateMachine(config: KafkaConfig,
   private val isLeaderRecoverySupported = config.interBrokerProtocolVersion.isAtLeast(IBP_3_2_IV0)
 
   private val controllerId = config.brokerId
-  this.logIdent = LogContext.newBuilder("PartitionStateMachine").withTag("controllerId", controllerId).build().logPrefix()
+  this.logIdent = LogContext.forComponent("PartitionStateMachine").withTag("controllerId", controllerId).build().logPrefix()
 
   /**
    * Try to change the state of the given partitions to the given targetState, using the given

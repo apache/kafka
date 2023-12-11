@@ -114,7 +114,7 @@ class KafkaApis(val requestChannel: RequestChannel,
 ) extends ApiRequestHandler with Logging {
 
   type FetchResponseStats = Map[TopicPartition, RecordValidationStats]
-  this.logIdent = LogContext.newBuilder("KafkaApi").withTag("brokerId", brokerId).build().logPrefix()
+  this.logIdent = LogContext.forComponent("KafkaApi").withTag("brokerId", brokerId).build().logPrefix()
   val configHelper = new ConfigHelper(metadataCache, config, configRepository)
   val authHelper = new AuthHelper(authorizer)
   val requestHelper = new RequestHandlerHelper(requestChannel, quotas, time)

@@ -79,7 +79,7 @@ class ControllerApis(
   val metadataCache: KRaftMetadataCache
 ) extends ApiRequestHandler with Logging {
 
-  this.logIdent = LogContext.newBuilder("ControllerApis").withTag("nodeId", config.nodeId).build().logPrefix()
+  this.logIdent = LogContext.forComponent("ControllerApis").withTag("nodeId", config.nodeId).build().logPrefix()
   val authHelper = new AuthHelper(authorizer)
   val configHelper = new ConfigHelper(metadataCache, config, metadataCache)
   val requestHelper = new RequestHandlerHelper(requestChannel, quotas, time)

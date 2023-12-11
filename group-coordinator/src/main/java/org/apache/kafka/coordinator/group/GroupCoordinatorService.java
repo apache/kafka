@@ -166,7 +166,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
             if (groupCoordinatorMetrics == null)
                 throw new IllegalArgumentException("GroupCoordinatorMetrics must be set.");
 
-            LogContext.Builder logContextBuilder = LogContext.newBuilder("GroupCoordinator")
+            LogContext.Builder logContextBuilder = LogContext.forComponent("GroupCoordinator")
                 .withTag("id", nodeId);
 
             CoordinatorShardBuilderSupplier<GroupCoordinatorShard, Record> supplier = () ->

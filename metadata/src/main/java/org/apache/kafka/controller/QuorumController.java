@@ -397,7 +397,7 @@ public final class QuorumController implements Controller {
                 threadNamePrefix = String.format("quorum-controller-%d-", nodeId);
             }
             if (logContext == null) {
-                logContext = LogContext.newBuilder("QuorumController").withTag("id", nodeId).build();
+                logContext = LogContext.forComponent("QuorumController").withTag("id", nodeId).build();
             }
             if (controllerMetrics == null) {
                 controllerMetrics = new QuorumControllerMetrics(Optional.empty(), time, zkMigrationEnabled);

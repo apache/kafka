@@ -241,7 +241,7 @@ public final class LocalTieredStorage implements RemoteStorageManager {
         }
 
         brokerId = brokerIdInt;
-        logger = LogContext.newBuilder("LocalTieredStorage")
+        logger = LogContext.forComponent("LocalTieredStorage")
             .withTag("id", brokerId)
             .build()
             .logger(this.getClass());

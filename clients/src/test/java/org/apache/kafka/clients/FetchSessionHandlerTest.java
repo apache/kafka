@@ -60,7 +60,7 @@ import static org.junit.jupiter.api.Assertions.fail;
  */
 @Timeout(120)
 public class FetchSessionHandlerTest {
-    private static final LogContext LOG_CONTEXT = LogContext.newBuilder("FetchSessionHandler").build();
+    private static final LogContext LOG_CONTEXT = LogContext.forComponent("FetchSessionHandler").build();
 
     /**
      * Create a set of TopicPartitions.  We use a TreeSet, in order to get a deterministic

@@ -113,13 +113,13 @@ public final class ConsumerUtils {
 
         // If group.instance.id is set, we will append it to the log context.
         if (groupRebalanceConfig.groupInstanceId.isPresent()) {
-            return LogContext.newBuilder("Consumer")
+            return LogContext.forComponent("Consumer")
                 .withTag("instanceId", groupRebalanceConfig.groupInstanceId.get())
                 .withTag("clientId", clientId)
                 .withTag("groupId", groupId.orElse("null"))
                 .build();
         } else {
-            return LogContext.newBuilder("Consumer")
+            return LogContext.forComponent("Consumer")
                 .withTag("clientId", clientId)
                 .withTag("groupId", groupId.orElse("null"))
                 .build();

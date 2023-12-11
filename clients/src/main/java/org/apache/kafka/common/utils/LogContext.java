@@ -39,7 +39,7 @@ public class LogContext {
 
     private final String logPrefix;
 
-    public static Builder newBuilder(String componentName) {
+    public static Builder forComponent(String componentName) {
         return new Builder(componentName);
     }
 

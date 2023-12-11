@@ -123,7 +123,7 @@ class GroupMetadataManager(brokerId: Int,
       "group-coordinator-metrics",
       "The total number of expired offsets")))
 
-  this.logIdent = LogContext.newBuilder("GroupMetadataManager").withTag("brokerId", brokerId).build().logPrefix()
+  this.logIdent = LogContext.forComponent("GroupMetadataManager").withTag("brokerId", brokerId).build().logPrefix()
 
   private def recreateGauge[T](name: String, gauge: Gauge[T]): Gauge[T] = {
     metricsGroup.removeMetric(name)

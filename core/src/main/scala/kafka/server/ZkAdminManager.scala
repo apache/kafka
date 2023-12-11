@@ -72,7 +72,7 @@ class ZkAdminManager(val config: KafkaConfig,
                      val metadataCache: MetadataCache,
                      val zkClient: KafkaZkClient) extends Logging {
 
-  this.logIdent = LogContext.newBuilder("AdminManager").withTag("brokerId", config.brokerId).build().logPrefix()
+  this.logIdent = LogContext.forComponent("AdminManager").withTag("brokerId", config.brokerId).build().logPrefix()
 
   private val topicPurgatory = DelayedOperationPurgatory[DelayedOperation]("topic", config.brokerId)
   private val adminZkClient = new AdminZkClient(zkClient, Some(config))

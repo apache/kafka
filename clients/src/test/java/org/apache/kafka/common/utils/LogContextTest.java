@@ -24,27 +24,27 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 class LogContextTest {
     @Test
     void testBuilderCannotBuildWithoutComponent() {
-        assertThrows(NullPointerException.class, () -> LogContext.newBuilder(null));
-        assertThrows(IllegalArgumentException.class, () -> LogContext.newBuilder(""));
+        assertThrows(NullPointerException.class, () -> LogContext.forComponent(null));
+        assertThrows(IllegalArgumentException.class, () -> LogContext.forComponent(""));
     }
 
     @Test
     void testBuilderCannotAddEmptyTags() {
-        assertThrows(NullPointerException.class, () -> LogContext.newBuilder("test").withTag(null, "test"));
-        assertThrows(IllegalArgumentException.class, () -> LogContext.newBuilder("test").withTag("", "test"));
-        assertThrows(NullPointerException.class, () -> LogContext.newBuilder("test").withTag("test", null));
-        assertThrows(IllegalArgumentException.class, () -> LogContext.newBuilder("test").withTag("test", ""));
+        assertThrows(NullPointerException.class, () -> LogContext.forComponent("test").withTag(null, "test"));
+        assertThrows(IllegalArgumentException.class, () -> LogContext.forComponent("test").withTag("", "test"));
+        assertThrows(NullPointerException.class, () -> LogContext.forComponent("test").withTag("test", null));
+        assertThrows(IllegalArgumentException.class, () -> LogContext.forComponent("test").withTag("test", ""));
     }
 
     @Test
     void testBuilderWithoutComponent() {
-        LogContext context = LogContext.newBuilder("test").build();
+        LogContext context = LogContext.forComponent("test").build();
         assertEquals("[test] ", context.logPrefix());
     }
 
     @Test
     void testBuilderWithComponentAndTags() {
-        LogContext context = LogContext.newBuilder("test")
+        LogContext context = LogContext.forComponent("test")
             .withTag("client-id", "test-client")
             .withTag("group-id", "test-group")
             .build();

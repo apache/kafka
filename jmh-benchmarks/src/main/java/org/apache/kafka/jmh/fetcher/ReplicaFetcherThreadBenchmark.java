@@ -291,7 +291,7 @@ public class ReplicaFetcherThreadBenchmark {
 
 
     static class ReplicaFetcherBenchThread extends ReplicaFetcherThread {
-        private static final LogContext.Builder LOG_CONTEXT_BUILDER = LogContext.newBuilder("ReplicaFetcher")
+        private static final LogContext.Builder LOG_CONTEXT_BUILDER = LogContext.forComponent("ReplicaFetcher")
             .withTag("leaderId", "3")
             .withTag("fetcherId", "3");
         private final Pool<TopicPartition, Partition> pool;

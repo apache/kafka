@@ -31,7 +31,7 @@ class DynamicClientQuotaPublisher(
   nodeType: String,
   clientQuotaMetadataManager: ClientQuotaMetadataManager,
 ) extends Logging with org.apache.kafka.image.publisher.MetadataPublisher {
-  logIdent = LogContext.newBuilder(name()).build().logPrefix()
+  logIdent = LogContext.forComponent(name()).build().logPrefix()
 
   override def name(): String = s"DynamicClientQuotaPublisher $nodeType id=${conf.nodeId}"
 

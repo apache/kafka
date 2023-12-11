@@ -122,7 +122,7 @@ public class SnapshotEmitter implements SnapshotGenerator.Emitter {
         SnapshotEmitterMetrics metrics
     ) {
         this.time = time;
-        this.log = LogContext.newBuilder("SnapshotEmitter")
+        this.log = LogContext.forComponent("SnapshotEmitter")
             .withTag("id", nodeId)
             .build()
             .logger(SnapshotEmitter.class);

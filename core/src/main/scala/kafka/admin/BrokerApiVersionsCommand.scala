@@ -268,7 +268,7 @@ object BrokerApiVersionsCommand {
 
     def create(config: AdminConfig): AdminClient = {
       val clientId = "admin-" + AdminClientIdSequence.getAndIncrement()
-      val logContext = LogContext.newBuilder("LegacyAdminClient")
+      val logContext = LogContext.forComponent("LegacyAdminClient")
         .withTag("clientId", clientId)
         .build()
       val time = Time.SYSTEM

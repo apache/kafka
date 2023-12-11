@@ -190,7 +190,7 @@ public class SnapshotGenerator implements MetadataPublisher {
         this.faultHandler = faultHandler;
         this.maxBytesSinceLastSnapshot = maxBytesSinceLastSnapshot;
         this.maxTimeSinceLastSnapshotNs = maxTimeSinceLastSnapshotNs;
-        LogContext logContext = LogContext.newBuilder("SnapshotGenerator")
+        LogContext logContext = LogContext.forComponent("SnapshotGenerator")
             .withTag("id", nodeId)
             .build();
         this.log = logContext.logger(SnapshotGenerator.class);

@@ -51,8 +51,6 @@ import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
-import static org.apache.kafka.metadata.AssignmentsHelper.buildRequestData;
-
 public class AssignmentsManager {
 
     private static final Logger log = LoggerFactory.getLogger(AssignmentsManager.class);
@@ -96,7 +94,7 @@ public class AssignmentsManager {
         this.brokerId = brokerId;
         this.brokerEpochSupplier = brokerEpochSupplier;
         this.eventQueue = new KafkaEventQueue(time,
-                LogContext.newBuilder("AssignmentsManager").withTag("id", brokerId).build(),
+                LogContext.forComponent("AssignmentsManager").withTag("id", brokerId).build(),
                 "broker-" + brokerId + "-directory-assignments-manager-",
                 new ShutdownEvent());
         channelManager.start();

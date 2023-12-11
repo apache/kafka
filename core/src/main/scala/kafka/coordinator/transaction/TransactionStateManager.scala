@@ -79,7 +79,7 @@ class TransactionStateManager(brokerId: Int,
                               time: Time,
                               metrics: Metrics) extends Logging {
 
-  this.logIdent = LogContext.newBuilder("TransactionStateManager").withTag("brokerId", brokerId).build().logPrefix()
+  this.logIdent = LogContext.forComponent("TransactionStateManager").withTag("brokerId", brokerId).build().logPrefix()
 
   type SendTxnMarkersCallback = (Int, TransactionResult, TransactionMetadata, TxnTransitMetadata) => Unit
 
