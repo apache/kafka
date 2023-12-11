@@ -120,7 +120,8 @@ public class GroupCoordinatorServiceTest {
             120,
             10 * 5 * 1000,
             600000L,
-            24 * 60 * 1000L
+            24 * 60 * 1000L,
+            5000
         );
     }
 
@@ -183,7 +184,8 @@ public class GroupCoordinatorServiceTest {
         when(runtime.scheduleWriteOperation(
             ArgumentMatchers.eq("consumer-group-heartbeat"),
             ArgumentMatchers.eq(new TopicPartition("__consumer_offsets", 0)),
-            ArgumentMatchers.any()
+            ArgumentMatchers.any(),
+            ArgumentMatchers.anyInt()
         )).thenReturn(CompletableFuture.completedFuture(
             new ConsumerGroupHeartbeatResponseData()
         ));
@@ -232,7 +234,8 @@ public class GroupCoordinatorServiceTest {
         when(runtime.scheduleWriteOperation(
             ArgumentMatchers.eq("consumer-group-heartbeat"),
             ArgumentMatchers.eq(new TopicPartition("__consumer_offsets", 0)),
-            ArgumentMatchers.any()
+            ArgumentMatchers.any(),
+            ArgumentMatchers.anyInt()
         )).thenReturn(FutureUtils.failedFuture(exception));
 
         CompletableFuture<ConsumerGroupHeartbeatResponseData> future = service.consumerGroupHeartbeat(
@@ -346,7 +349,8 @@ public class GroupCoordinatorServiceTest {
         when(runtime.scheduleWriteOperation(
             ArgumentMatchers.eq("generic-group-join"),
             ArgumentMatchers.eq(new TopicPartition("__consumer_offsets", 0)),
-            ArgumentMatchers.any()
+            ArgumentMatchers.any(),
+            ArgumentMatchers.anyInt()
         )).thenReturn(CompletableFuture.completedFuture(
             new JoinGroupResponseData()
         ));
@@ -378,7 +382,8 @@ public class GroupCoordinatorServiceTest {
         when(runtime.scheduleWriteOperation(
             ArgumentMatchers.eq("generic-group-join"),
             ArgumentMatchers.eq(new TopicPartition("__consumer_offsets", 0)),
-            ArgumentMatchers.any()
+            ArgumentMatchers.any(),
+            ArgumentMatchers.anyInt()
         )).thenReturn(FutureUtils.failedFuture(new IllegalStateException()));
 
         CompletableFuture<JoinGroupResponseData> future = service.joinGroup(
@@ -484,7 +489,8 @@ public class GroupCoordinatorServiceTest {
         when(runtime.scheduleWriteOperation(
             ArgumentMatchers.eq("generic-group-sync"),
             ArgumentMatchers.eq(new TopicPartition("__consumer_offsets", 0)),
-            ArgumentMatchers.any()
+            ArgumentMatchers.any(),
+            ArgumentMatchers.anyInt()
         )).thenReturn(CompletableFuture.completedFuture(
             new SyncGroupResponseData()
         ));
@@ -516,7 +522,8 @@ public class GroupCoordinatorServiceTest {
         when(runtime.scheduleWriteOperation(
             ArgumentMatchers.eq("generic-group-sync"),
             ArgumentMatchers.eq(new TopicPartition("__consumer_offsets", 0)),
-            ArgumentMatchers.any()
+            ArgumentMatchers.any(),
+            ArgumentMatchers.anyInt()
         )).thenReturn(FutureUtils.failedFuture(new IllegalStateException()));
 
         CompletableFuture<SyncGroupResponseData> future = service.syncGroup(
@@ -1072,7 +1079,8 @@ public class GroupCoordinatorServiceTest {
             when(runtime.scheduleWriteOperation(
                 ArgumentMatchers.eq("fetch-offsets"),
                 ArgumentMatchers.eq(new TopicPartition("__consumer_offsets", 0)),
-                ArgumentMatchers.any()
+                ArgumentMatchers.any(),
+                ArgumentMatchers.anyInt()
             )).thenReturn(CompletableFuture.completedFuture(response));
         } else {
             when(runtime.scheduleReadOperation(
@@ -1157,7 +1165,8 @@ public class GroupCoordinatorServiceTest {
             when(runtime.scheduleWriteOperation(
                 ArgumentMatchers.eq("fetch-all-offsets"),
                 ArgumentMatchers.eq(new TopicPartition("__consumer_offsets", 0)),
-                ArgumentMatchers.any()
+                ArgumentMatchers.any(),
+                ArgumentMatchers.anyInt()
             )).thenReturn(CompletableFuture.completedFuture(response));
         } else {
             when(runtime.scheduleReadOperation(
@@ -1225,7 +1234,8 @@ public class GroupCoordinatorServiceTest {
         when(runtime.scheduleWriteOperation(
             ArgumentMatchers.eq("generic-group-leave"),
             ArgumentMatchers.eq(new TopicPartition("__consumer_offsets", 0)),
-            ArgumentMatchers.any()
+            ArgumentMatchers.any(),
+            ArgumentMatchers.anyInt()
         )).thenReturn(CompletableFuture.completedFuture(
             new LeaveGroupResponseData()
         ));
@@ -1265,7 +1275,8 @@ public class GroupCoordinatorServiceTest {
         when(runtime.scheduleWriteOperation(
             ArgumentMatchers.eq("generic-group-leave"),
             ArgumentMatchers.eq(new TopicPartition("__consumer_offsets", 0)),
-            ArgumentMatchers.any()
+            ArgumentMatchers.any(),
+            ArgumentMatchers.anyInt()
         )).thenReturn(FutureUtils.failedFuture(
             new UnknownMemberIdException()
         ));
@@ -1491,7 +1502,8 @@ public class GroupCoordinatorServiceTest {
         when(runtime.scheduleWriteOperation(
             ArgumentMatchers.eq("delete-offsets"),
             ArgumentMatchers.eq(new TopicPartition("__consumer_offsets", 0)),
-            ArgumentMatchers.any()
+            ArgumentMatchers.any(),
+            ArgumentMatchers.anyInt()
         )).thenReturn(CompletableFuture.completedFuture(response));
 
         CompletableFuture<OffsetDeleteResponseData> future = service.deleteOffsets(
@@ -1532,7 +1544,8 @@ public class GroupCoordinatorServiceTest {
         when(runtime.scheduleWriteOperation(
             ArgumentMatchers.eq("delete-offsets"),
             ArgumentMatchers.eq(new TopicPartition("__consumer_offsets", 0)),
-            ArgumentMatchers.any()
+            ArgumentMatchers.any(),
+            ArgumentMatchers.anyInt()
         )).thenReturn(CompletableFuture.completedFuture(response));
 
         CompletableFuture<OffsetDeleteResponseData> future = service.deleteOffsets(
@@ -1578,7 +1591,8 @@ public class GroupCoordinatorServiceTest {
         when(runtime.scheduleWriteOperation(
             ArgumentMatchers.eq("delete-offsets"),
             ArgumentMatchers.eq(new TopicPartition("__consumer_offsets", 0)),
-            ArgumentMatchers.any()
+            ArgumentMatchers.any(),
+            ArgumentMatchers.anyInt()
         )).thenReturn(FutureUtils.failedFuture(exception));
 
         CompletableFuture<OffsetDeleteResponseData> future = service.deleteOffsets(
@@ -1662,20 +1676,23 @@ public class GroupCoordinatorServiceTest {
         when(runtime.scheduleWriteOperation(
             ArgumentMatchers.eq("delete-groups"),
             ArgumentMatchers.eq(new TopicPartition("__consumer_offsets", 2)),
-            ArgumentMatchers.any()
+            ArgumentMatchers.any(),
+            ArgumentMatchers.anyInt()
         )).thenReturn(CompletableFuture.completedFuture(resultCollection1));
 
         CompletableFuture<Object> resultCollectionFuture = new CompletableFuture<>();
         when(runtime.scheduleWriteOperation(
             ArgumentMatchers.eq("delete-groups"),
             ArgumentMatchers.eq(new TopicPartition("__consumer_offsets", 0)),
-            ArgumentMatchers.any()
+            ArgumentMatchers.any(),
+            ArgumentMatchers.anyInt()
         )).thenReturn(resultCollectionFuture);
 
         when(runtime.scheduleWriteOperation(
             ArgumentMatchers.eq("delete-groups"),
             ArgumentMatchers.eq(new TopicPartition("__consumer_offsets", 1)),
-            ArgumentMatchers.any()
+            ArgumentMatchers.any(),
+            ArgumentMatchers.anyInt()
         )).thenReturn(FutureUtils.failedFuture(Errors.COORDINATOR_LOAD_IN_PROGRESS.exception()));
 
         List<String> groupIds = Arrays.asList("group-id-1", "group-id-2", "group-id-3", null);
@@ -1707,7 +1724,8 @@ public class GroupCoordinatorServiceTest {
         when(runtime.scheduleWriteOperation(
             ArgumentMatchers.eq("delete-groups"),
             ArgumentMatchers.eq(new TopicPartition("__consumer_offsets", 0)),
-            ArgumentMatchers.any()
+            ArgumentMatchers.any(),
+            ArgumentMatchers.anyInt()
         )).thenReturn(FutureUtils.failedFuture(exception));
 
         CompletableFuture<DeleteGroupsResponseData.DeletableGroupResultCollection> future =

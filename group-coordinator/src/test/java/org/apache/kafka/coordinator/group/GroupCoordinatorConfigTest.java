@@ -42,7 +42,8 @@ public class GroupCoordinatorConfigTest {
             120,
             10 * 60 * 1000,
             600000L,
-            24 * 60 * 60 * 1000L
+            24 * 60 * 60 * 1000L,
+            5000
         );
 
         assertEquals(10, config.numThreads);
@@ -80,7 +81,8 @@ public class GroupCoordinatorConfigTest {
             120,
             10 * 5 * 1000,
             offsetsRetentionCheckIntervalMs,
-            offsetsRetentionMs
+            offsetsRetentionMs,
+            5000
         );
     }
 }

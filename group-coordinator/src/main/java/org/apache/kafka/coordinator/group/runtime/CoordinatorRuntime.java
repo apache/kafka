@@ -45,6 +45,7 @@ import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.RejectedExecutionException;
+import java.util.concurrent.TimeoutException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.ReentrantLock;
@@ -92,6 +93,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
         private CoordinatorShardBuilderSupplier<S, U> coordinatorShardBuilderSupplier;
         private Time time = Time.SYSTEM;
         private Timer timer;
+        private int timeout;
         private CoordinatorRuntimeMetrics runtimeMetrics;
         private CoordinatorMetrics coordinatorMetrics;
 
@@ -132,6 +134,11 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
 
         public Builder<S, U> withTimer(Timer timer) {
             this.timer = timer;
+            return this;
+        }
+
+        public Builder<S, U> withWriteTimeout(int timeout) {
+            this.timeout = timeout;
             return this;
         }
 
@@ -176,6 +183,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
                 coordinatorShardBuilderSupplier,
                 time,
                 timer,
+                timeout,
                 runtimeMetrics,
                 coordinatorMetrics
             );
@@ -313,7 +321,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
 
                         // Execute the timeout operation.
                         return operation.generateRecords();
-                    });
+                    }, timeout);
 
                     // If the write event fails, it is rescheduled with a small backoff except if retry
                     // is disabled or if the error is fatal.
@@ -657,6 +665,12 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
         final CompletableFuture<T> future;
 
         /**
+         * Timeout value for the write operation
+         */
+
+        final int timeout;
+
+        /**
          * The result of the write operation. It could be null
          * if an exception is thrown before it is assigned.
          */
@@ -670,14 +684,16 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
         /**
          * Constructor.
          *
-         * @param name  The operation name.
-         * @param tp    The topic partition that the operation is applied to.
-         * @param op    The write operation.
+         * @param name      The operation name.
+         * @param tp        The topic partition that the operation is applied to.
+         * @param op        The write operation.
+         * @param timeout   The write operation timeout
          */
         CoordinatorWriteEvent(
             String name,
             TopicPartition tp,
-            CoordinatorWriteOperation<S, T, U> op
+            CoordinatorWriteOperation<S, T, U> op,
+            int timeout
         ) {
             this(
                 name,
@@ -685,7 +701,8 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
                 null,
                 RecordBatch.NO_PRODUCER_ID,
                 RecordBatch.NO_PRODUCER_EPOCH,
-                op
+                op,
+                timeout
             );
         }
 
@@ -698,6 +715,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
          * @param producerId        The producer id.
          * @param producerEpoch     The producer epoch.
          * @param op                The write operation.
+         * @param timeout           The write operation timeout
          */
         CoordinatorWriteEvent(
             String name,
@@ -705,7 +723,8 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
             String transactionalId,
             long producerId,
             short producerEpoch,
-            CoordinatorWriteOperation<S, T, U> op
+            CoordinatorWriteOperation<S, T, U> op,
+            int timeout
         ) {
             this.tp = tp;
             this.name = name;
@@ -715,6 +734,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
             this.producerEpoch = producerEpoch;
             this.future = new CompletableFuture<>();
             this.createdTimeMs = time.milliseconds();
+            this.timeout = timeout;
         }
 
         /**
@@ -773,6 +793,14 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
                                 producerEpoch,
                                 result.records()
                             );
+
+                            timer.add(new TimerTask(timeout) {
+                                @Override
+                                public void run() {
+                                    scheduleInternalOperation(name, tp, () -> complete(new TimeoutException("Writing records to the log timed out")));
+                                }
+                            });
+
                             context.updateLastWrittenOffset(offset);
 
                             // Add the response to the deferred queue.
@@ -1093,6 +1121,11 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
     private final Timer timer;
 
     /**
+     * The write operation timeout
+     */
+    private final int timeout;
+
+    /**
      * The coordinators keyed by topic partition.
      */
     private final ConcurrentHashMap<TopicPartition, CoordinatorContext> coordinators;
@@ -1155,6 +1188,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
      * @param coordinatorShardBuilderSupplier   The coordinator builder.
      * @param time                              The system time.
      * @param timer                             The system timer.
+     * @param timeout                           The write operation timeout.
      */
     private CoordinatorRuntime(
         String logPrefix,
@@ -1165,6 +1199,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
         CoordinatorShardBuilderSupplier<S, U> coordinatorShardBuilderSupplier,
         Time time,
         Timer timer,
+        int timeout,
         CoordinatorRuntimeMetrics runtimeMetrics,
         CoordinatorMetrics coordinatorMetrics
     ) {
@@ -1173,6 +1208,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
         this.log = logContext.logger(CoordinatorRuntime.class);
         this.time = time;
         this.timer = timer;
+        this.timeout = timeout;
         this.coordinators = new ConcurrentHashMap<>();
         this.processor = processor;
         this.partitionWriter = partitionWriter;
@@ -1288,9 +1324,10 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
     /**
      * Schedules a write operation.
      *
-     * @param name  The name of the write operation.
-     * @param tp    The address of the coordinator (aka its topic-partitions).
-     * @param op    The write operation.
+     * @param name      The name of the write operation.
+     * @param tp        The address of the coordinator (aka its topic-partitions).
+     * @param op        The write operation.
+     * @param timeout   The write operation timeout.
      *
      * @return A future that will be completed with the result of the write operation
      * when the operation is completed or an exception if the write operation failed.
@@ -1300,11 +1337,12 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
     public <T> CompletableFuture<T> scheduleWriteOperation(
         String name,
         TopicPartition tp,
-        CoordinatorWriteOperation<S, T, U> op
+        CoordinatorWriteOperation<S, T, U> op,
+        int timeout
     ) {
         throwIfNotRunning();
         log.debug("Scheduled execution of write operation {}.", name);
-        CoordinatorWriteEvent<T> event = new CoordinatorWriteEvent<>(name, tp, op);
+        CoordinatorWriteEvent<T> event = new CoordinatorWriteEvent<>(name, tp, op, timeout);
         enqueue(event);
         return event.future;
     }
@@ -1318,6 +1356,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
      * @param producerId        The producer id.
      * @param producerEpoch     The producer epoch.
      * @param op                The write operation.
+     * @param timeout           The write operation timeout.
      *
      * @return A future that will be completed with the result of the write operation
      * when the operation is completed or an exception if the write operation failed.
@@ -1330,7 +1369,8 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
         String transactionalId,
         long producerId,
         short producerEpoch,
-        CoordinatorWriteOperation<S, T, U> op
+        CoordinatorWriteOperation<S, T, U> op,
+        int timeout
     ) {
         throwIfNotRunning();
         log.debug("Scheduled execution of transactional write operation {}.", name);
@@ -1340,7 +1380,8 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
             transactionalId,
             producerId,
             producerEpoch,
-            op
+            op,
+            timeout
         );
         enqueue(event);
         return event.future;

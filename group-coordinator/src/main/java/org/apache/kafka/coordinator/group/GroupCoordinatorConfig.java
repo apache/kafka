@@ -112,6 +112,12 @@ public class GroupCoordinatorConfig {
      */
     public final long offsetsRetentionMs;
 
+    /**
+     * Offset commit will be delayed until all replicas for the offsets topic receive the commit
+     * or this timeout is reached
+     */
+    public final int offsetCommitTimeoutMs;
+
     public GroupCoordinatorConfig(
         int numThreads,
         int consumerGroupSessionTimeoutMs,
@@ -126,7 +132,8 @@ public class GroupCoordinatorConfig {
         int genericGroupMinSessionTimeoutMs,
         int genericGroupMaxSessionTimeoutMs,
         long offsetsRetentionCheckIntervalMs,
-        long offsetsRetentionMs
+        long offsetsRetentionMs,
+        int offsetCommitTimeoutMs
     ) {
         this.numThreads = numThreads;
         this.consumerGroupSessionTimeoutMs = consumerGroupSessionTimeoutMs;
@@ -142,5 +149,6 @@ public class GroupCoordinatorConfig {
         this.genericGroupMaxSessionTimeoutMs = genericGroupMaxSessionTimeoutMs;
         this.offsetsRetentionCheckIntervalMs = offsetsRetentionCheckIntervalMs;
         this.offsetsRetentionMs = offsetsRetentionMs;
+        this.offsetCommitTimeoutMs = offsetCommitTimeoutMs;
     }
 }

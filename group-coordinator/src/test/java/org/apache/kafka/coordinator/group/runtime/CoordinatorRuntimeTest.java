@@ -27,6 +27,7 @@ import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorRuntimeMetrics
 import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.image.MetadataProvenance;
+import org.apache.kafka.server.util.MockTime;
 import org.apache.kafka.server.util.timer.MockTimer;
 import org.apache.kafka.timeline.SnapshotRegistry;
 import org.apache.kafka.timeline.TimelineHashSet;
@@ -60,14 +61,11 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.spy;
-import static org.mockito.Mockito.times;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.*;
 
 public class CoordinatorRuntimeTest {
     private static final TopicPartition TP = new TopicPartition("__consumer_offsets", 0);
+    private final int DEFAULT_WRITE_TIMEOUT = 5;
 
     /**
      * A CoordinatorEventProcessor that directly executes the operations. This is
@@ -698,7 +696,7 @@ public class CoordinatorRuntimeTest {
 
         // Write #1.
         CompletableFuture<String> write1 = runtime.scheduleWriteOperation("write#1", TP,
-            state -> new CoordinatorResult<>(Arrays.asList("record1", "record2"), "response1"));
+            state -> new CoordinatorResult<>(Arrays.asList("record1", "record2"), "response1"), DEFAULT_WRITE_TIMEOUT);
 
         // Verify that the write is not committed yet.
         assertFalse(write1.isDone());
@@ -716,7 +714,7 @@ public class CoordinatorRuntimeTest {
 
         // Write #2.
         CompletableFuture<String> write2 = runtime.scheduleWriteOperation("write#2", TP,
-            state -> new CoordinatorResult<>(Arrays.asList("record3"), "response2"));
+            state -> new CoordinatorResult<>(Arrays.asList("record3"), "response2"), DEFAULT_WRITE_TIMEOUT);
 
         // Verify that the write is not committed yet.
         assertFalse(write2.isDone());
@@ -734,7 +732,7 @@ public class CoordinatorRuntimeTest {
 
         // Write #3 but without any records.
         CompletableFuture<String> write3 = runtime.scheduleWriteOperation("write#3", TP,
-            state -> new CoordinatorResult<>(Collections.emptyList(), "response3"));
+            state -> new CoordinatorResult<>(Collections.emptyList(), "response3"), DEFAULT_WRITE_TIMEOUT);
 
         // Verify that the write is not committed yet.
         assertFalse(write3.isDone());
@@ -774,7 +772,7 @@ public class CoordinatorRuntimeTest {
 
         // Write #4 but without records.
         CompletableFuture<String> write4 = runtime.scheduleWriteOperation("write#4", TP,
-            state -> new CoordinatorResult<>(Collections.emptyList(), "response4"));
+            state -> new CoordinatorResult<>(Collections.emptyList(), "response4"), DEFAULT_WRITE_TIMEOUT);
 
         // It is completed immediately because the state is fully committed.
         assertTrue(write4.isDone());
@@ -800,7 +798,7 @@ public class CoordinatorRuntimeTest {
         // Scheduling a write fails with a NotCoordinatorException because the coordinator
         // does not exist.
         CompletableFuture<String> write = runtime.scheduleWriteOperation("write", TP,
-            state -> new CoordinatorResult<>(Collections.emptyList(), "response1"));
+            state -> new CoordinatorResult<>(Collections.emptyList(), "response1"), DEFAULT_WRITE_TIMEOUT);
         assertFutureThrows(write, NotCoordinatorException.class);
     }
 
@@ -826,7 +824,7 @@ public class CoordinatorRuntimeTest {
         // is used to complete the future.
         CompletableFuture<String> write = runtime.scheduleWriteOperation("write", TP, state -> {
             throw new KafkaException("error");
-        });
+        }, DEFAULT_WRITE_TIMEOUT);
         assertFutureThrows(write, KafkaException.class);
     }
 
@@ -869,7 +867,7 @@ public class CoordinatorRuntimeTest {
 
         // Write. It should fail.
         CompletableFuture<String> write = runtime.scheduleWriteOperation("write", TP,
-            state -> new CoordinatorResult<>(Arrays.asList("record1", "record2"), "response1"));
+            state -> new CoordinatorResult<>(Arrays.asList("record1", "record2"), "response1"), DEFAULT_WRITE_TIMEOUT);
         assertFutureThrows(write, IllegalArgumentException.class);
 
         // Verify that the state has not changed.
@@ -907,7 +905,7 @@ public class CoordinatorRuntimeTest {
 
         // Write #1. It should succeed and be applied to the coordinator.
         runtime.scheduleWriteOperation("write#1", TP,
-            state -> new CoordinatorResult<>(Arrays.asList("record1", "record2"), "response1"));
+            state -> new CoordinatorResult<>(Arrays.asList("record1", "record2"), "response1"), DEFAULT_WRITE_TIMEOUT);
 
         // Verify that the state has been updated.
         assertEquals(2L, ctx.lastWrittenOffset);
@@ -918,12 +916,61 @@ public class CoordinatorRuntimeTest {
         // Write #2. It should fail because the writer is configured to only
         // accept 2 records per batch.
         CompletableFuture<String> write2 = runtime.scheduleWriteOperation("write#2", TP,
-            state -> new CoordinatorResult<>(Arrays.asList("record3", "record4", "record5"), "response2"));
+            state -> new CoordinatorResult<>(Arrays.asList("record3", "record4", "record5"), "response2"), DEFAULT_WRITE_TIMEOUT);
         assertFutureThrows(write2, KafkaException.class);
 
         // Verify that the state has not changed.
         assertEquals(2L, ctx.lastWrittenOffset);
         assertEquals(0L, ctx.lastCommittedOffset);
+        assertEquals(Arrays.asList(0L, 2L), ctx.snapshotRegistry.epochsList());
+        assertEquals(mkSet("record1", "record2"), ctx.coordinator.records());
+    }
+
+    @Test
+    public void testScheduleWriteOpWhenWriteTimesout() throws InterruptedException {
+        MockTimer timer = new MockTimer();
+        MockTime time = new MockTime();
+        // The partition writer only accept on write.
+        MockPartitionWriter writer = mock(MockPartitionWriter.class);
+
+        CoordinatorRuntime<MockCoordinatorShard, String> runtime =
+            new CoordinatorRuntime.Builder<MockCoordinatorShard, String>()
+                .withTime(timer.time())
+                .withTimer(timer)
+                .withLoader(new MockCoordinatorLoader())
+                .withEventProcessor(new DirectEventProcessor())
+                .withPartitionWriter(writer)
+                .withCoordinatorShardBuilderSupplier(new MockCoordinatorShardBuilderSupplier())
+                .withCoordinatorRuntimeMetrics(mock(GroupCoordinatorRuntimeMetrics.class))
+                .withCoordinatorMetrics(mock(GroupCoordinatorMetrics.class))
+                .build();
+
+        // Loads the coordinator.
+        runtime.scheduleLoadOperation(TP, 10);
+
+        // Verify the initial state.
+        CoordinatorRuntime<MockCoordinatorShard, String>.CoordinatorContext ctx = runtime.contextOrThrow(TP);
+        assertEquals(0, ctx.lastWrittenOffset);
+        assertEquals(0, ctx.lastCommittedOffset);
+        assertEquals(Collections.singletonList(0L), ctx.snapshotRegistry.epochsList());
+
+        // The partition writer times out when trying to append records.
+        doAnswer(invocation -> {
+            time.sleep(DEFAULT_WRITE_TIMEOUT * 3);
+            return 2L;
+        }).when(writer).append(any(), anyLong(), anyShort(), any());
+
+        // Write #1. The write should fail because partition log append takes more than the timeout.
+        CompletableFuture<String> timedOutWrite = runtime.scheduleWriteOperation("write#1", TP,
+            state -> new CoordinatorResult<>(Arrays.asList("record1", "record2"), "response1"), DEFAULT_WRITE_TIMEOUT);
+
+        timer.advanceClock(DEFAULT_WRITE_TIMEOUT * 2);
+
+        assertFutureThrows(timedOutWrite, TimeoutException.class);
+
+        // Verify that the state has not changed.
+        assertEquals(2, ctx.lastWrittenOffset);
+        assertEquals(0, ctx.lastCommittedOffset);
         assertEquals(Arrays.asList(0L, 2L), ctx.snapshotRegistry.epochsList());
         assertEquals(mkSet("record1", "record2"), ctx.coordinator.records());
     }
@@ -971,7 +1018,8 @@ public class CoordinatorRuntimeTest {
             "transactional-id",
             100L,
             (short) 50,
-            state -> new CoordinatorResult<>(Arrays.asList("record1", "record2"), "response")
+            state -> new CoordinatorResult<>(Arrays.asList("record1", "record2"), "response"),
+            5000
         );
 
         // Verify that the writer got the records with the correct
@@ -1024,11 +1072,11 @@ public class CoordinatorRuntimeTest {
 
         // Write #1.
         CompletableFuture<String> write1 = runtime.scheduleWriteOperation("write#1", TP,
-            state -> new CoordinatorResult<>(Arrays.asList("record1", "record2"), "response1"));
+            state -> new CoordinatorResult<>(Arrays.asList("record1", "record2"), "response1"), DEFAULT_WRITE_TIMEOUT);
 
         // Write #2.
         CompletableFuture<String> write2 = runtime.scheduleWriteOperation("write#2", TP,
-            state -> new CoordinatorResult<>(Arrays.asList("record3", "record4"), "response2"));
+            state -> new CoordinatorResult<>(Arrays.asList("record3", "record4"), "response2"), DEFAULT_WRITE_TIMEOUT);
 
         // Commit write #1.
         writer.commit(TP, 2);
@@ -1103,11 +1151,11 @@ public class CoordinatorRuntimeTest {
 
         // Write #1.
         runtime.scheduleWriteOperation("write#1", TP,
-            state -> new CoordinatorResult<>(Arrays.asList("record1", "record2"), "response1"));
+            state -> new CoordinatorResult<>(Arrays.asList("record1", "record2"), "response1"), DEFAULT_WRITE_TIMEOUT);
 
         // Write #2.
         runtime.scheduleWriteOperation("write#2", TP,
-            state -> new CoordinatorResult<>(Arrays.asList("record3", "record4"), "response2"));
+            state -> new CoordinatorResult<>(Arrays.asList("record3", "record4"), "response2"), DEFAULT_WRITE_TIMEOUT);
 
         // Commit write #1.
         writer.commit(TP, 2);
@@ -1146,11 +1194,11 @@ public class CoordinatorRuntimeTest {
 
         // Write #1.
         CompletableFuture<String> write1 = runtime.scheduleWriteOperation("write#1", TP,
-            state -> new CoordinatorResult<>(Arrays.asList("record1", "record2"), "response1"));
+            state -> new CoordinatorResult<>(Arrays.asList("record1", "record2"), "response1"), DEFAULT_WRITE_TIMEOUT);
 
         // Write #2.
         CompletableFuture<String> write2 = runtime.scheduleWriteOperation("write#2", TP,
-            state -> new CoordinatorResult<>(Arrays.asList("record3", "record4"), "response2"));
+            state -> new CoordinatorResult<>(Arrays.asList("record3", "record4"), "response2"), DEFAULT_WRITE_TIMEOUT);
 
         // Writes are inflight.
         assertFalse(write1.isDone());
