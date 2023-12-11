@@ -3791,18 +3791,19 @@ class GroupCoordinatorTest {
     val producerId = 1000L
     val producerEpoch: Short = 2
 
-    def verifyErrors(error: Errors): Unit = {
+    def verifyErrors(error: Errors, expectedError: Errors): Unit = {
       val commitOffsetResult = commitTransactionalOffsets(groupId,
         producerId,
         producerEpoch,
         Map(tip1 -> offset1, tip2 -> offset2),
         verificationError = error)
-      assertEquals(error, commitOffsetResult(tip1))
-      assertEquals(error, commitOffsetResult(tip2))
+      assertEquals(expectedError, commitOffsetResult(tip1))
+      assertEquals(expectedError, commitOffsetResult(tip2))
     }
 
-    verifyErrors(Errors.INVALID_PRODUCER_ID_MAPPING)
-    verifyErrors(Errors.INVALID_TXN_STATE)
+    verifyErrors(Errors.INVALID_PRODUCER_ID_MAPPING, Errors.INVALID_PRODUCER_ID_MAPPING)
+    verifyErrors(Errors.INVALID_TXN_STATE, Errors.INVALID_TXN_STATE)
+    verifyErrors(Errors.NOT_ENOUGH_REPLICAS, Errors.COORDINATOR_NOT_AVAILABLE)
   }
 
   @Test
