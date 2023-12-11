@@ -726,13 +726,16 @@ public class OffsetsApiIntegrationTest {
     @Test
     public void testResetSinkConnectorOffsetsOverriddenConsumerGroupId() throws Exception {
         Map<String, String> connectorConfigs = baseSinkConnectorConfigs();
-        connectorConfigs.put(ConnectorConfig.CONNECTOR_CLIENT_CONSUMER_OVERRIDES_PREFIX + CommonClientConfigs.GROUP_ID_CONFIG,
-                "overridden-group-id");
+        String overriddenGroupId = connectorName + "-overridden-group-id";
+        connectorConfigs.put(
+                ConnectorConfig.CONNECTOR_CLIENT_CONSUMER_OVERRIDES_PREFIX + CommonClientConfigs.GROUP_ID_CONFIG,
+                overriddenGroupId
+        );
         resetAndVerifySinkConnectorOffsets(connectorConfigs, connect.kafka());
         // Ensure that the overridden consumer group ID was the one actually used
         try (Admin admin = connect.kafka().createAdminClient()) {
             Collection<ConsumerGroupListing> consumerGroups = admin.listConsumerGroups().all().get();
-            assertTrue(consumerGroups.stream().anyMatch(consumerGroupListing -> "overridden-group-id".equals(consumerGroupListing.groupId())));
+            assertTrue(consumerGroups.stream().anyMatch(consumerGroupListing -> overriddenGroupId.equals(consumerGroupListing.groupId())));
             assertTrue(consumerGroups.stream().noneMatch(consumerGroupListing -> SinkUtils.consumerGroupId(connectorName).equals(consumerGroupListing.groupId())));
         }
     }
