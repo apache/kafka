@@ -25,8 +25,11 @@ import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doReturn;
@@ -46,8 +49,13 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 import org.apache.kafka.clients.Metadata.LeaderAndEpoch;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
@@ -71,6 +79,7 @@ import org.apache.kafka.clients.consumer.internals.events.SubscriptionChangeAppl
 import org.apache.kafka.clients.consumer.internals.events.UnsubscribeApplicationEvent;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.GroupAuthorizationException;
 import org.apache.kafka.common.errors.InvalidGroupIdException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.WakeupException;
@@ -83,6 +92,8 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.ArgumentMatchers;
 import org.mockito.Mockito;
@@ -315,6 +326,76 @@ public class AsyncKafkaConsumerUnitTest {
 
         verify(metadata).updateLastSeenEpochIfNewer(t0, 2);
         verify(metadata).updateLastSeenEpochIfNewer(t1, 1);
+    }
+
+    @ParameterizedTest
+    @MethodSource("commitExceptionSupplier")
+    public void testCommitAsyncUserSuppliedCallback(Exception exception) {
+        consumer = setup();
+
+        Map<TopicPartition, OffsetAndMetadata> offsets = new HashMap<>();
+        offsets.put(new TopicPartition("my-topic", 1), new OffsetAndMetadata(200L));
+
+        Mockito.doAnswer(invocation -> {
+            CompletableApplicationEvent<?> event = invocation.getArgument(0);
+            assertTrue(event instanceof CommitApplicationEvent);
+            if (exception == null) {
+                event.future().complete(null);
+            } else {
+                event.future().completeExceptionally(exception);
+            }
+            event.future().complete(null);
+            return null;
+        }).when(applicationEventHandler).add(any());
+
+        MockCommitCallback callback = new MockCommitCallback();
+        assertDoesNotThrow(() -> consumer.commitAsync(offsets, callback));
+        consumer.maybeInvokeCommitCallbacks();
+
+        if (exception == null) {
+            assertNull(callback.exception);
+        } else {
+            assertSame(exception.getClass(), callback.exception.getClass());
+        }
+    }
+
+    private static Stream<Exception> commitExceptionSupplier() {
+        return Stream.of(
+            null,  // For the successful completion scenario
+            new KafkaException("Test exception"),
+            new GroupAuthorizationException("Group authorization exception"));
+    }
+
+    @Test
+    public void testEnsureCallbackExecutedByApplicationThread() {
+        consumer = setup();
+        final String currentThread = Thread.currentThread().getName();
+        MockCommitCallback callback = new MockCommitCallback();
+
+        Mockito.doAnswer(invocation -> {
+            CompletableApplicationEvent<?> event = invocation.getArgument(0);
+            assertTrue(event instanceof CommitApplicationEvent);
+            event.future().complete(null);
+            return null;
+        }).when(applicationEventHandler).add(any());
+
+        assertDoesNotThrow(() -> consumer.commitAsync(new HashMap<>(), callback));
+        assertEquals(1, consumer.callbacks());
+        consumer.maybeInvokeCommitCallbacks();
+        assertEquals(currentThread, callback.completionThread);
+    }
+
+    private static class MockCommitCallback implements OffsetCommitCallback {
+        public int invoked = 0;
+        public Exception exception = null;
+        public String completionThread;
+
+        @Override
+        public void onComplete(Map<TopicPartition, OffsetAndMetadata> offsets, Exception exception) {
+            invoked++;
+            this.completionThread = Thread.currentThread().getName();
+            this.exception = exception;
+        }
     }
 
     @Test
