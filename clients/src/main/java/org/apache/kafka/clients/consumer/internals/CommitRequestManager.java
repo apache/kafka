@@ -225,6 +225,13 @@ public class CommitRequestManager implements RequestManager {
     }
 
     /**
+     * Updates the member ID and epoch upon receiving ConsumerGroupHeartbeatResponse.
+     */
+    void updateMemberInformation(String memberId, int memberEpoch) {
+        groupState.generation = new GroupState.Generation(memberEpoch, memberId, null);
+    }
+
+    /**
      * Returns an OffsetCommitRequest of all assigned topicPartitions and their current positions.
      */
     NetworkClientDelegate.UnsentRequest createCommitAllConsumedRequest() {
