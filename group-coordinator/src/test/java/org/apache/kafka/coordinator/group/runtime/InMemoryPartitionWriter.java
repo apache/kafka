@@ -18,6 +18,7 @@ package org.apache.kafka.coordinator.group.runtime;
 
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.requests.WriteTxnMarkersRequest;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -100,6 +101,14 @@ public class InMemoryPartitionWriter<T> implements PartitionWriter<T> {
         } finally {
             state.lock.unlock();
         }
+    }
+
+    @Override
+    public long completeTransaction(
+        TopicPartition tp,
+        WriteTxnMarkersRequest.TxnMarkerEntry marker
+    ) throws KafkaException {
+        throw new IllegalStateException("Not implemented");
     }
 
     public void commit(

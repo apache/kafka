@@ -18,6 +18,7 @@ package org.apache.kafka.coordinator.group.runtime;
 
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.requests.WriteTxnMarkersRequest;
 
 import java.util.List;
 
@@ -95,5 +96,18 @@ public interface PartitionWriter<T> {
         long producerId,
         short producerEpoch,
         List<T> records
+    ) throws KafkaException;
+
+    /**
+     * Write the transaction end marker.
+     *
+     * @param tp        The partition to write records to.
+     * @param marker    The marker.
+     * @return The log end offset right after the written records.
+     * @throws KafkaException Any KafkaException caught during the write operation.
+     */
+    long completeTransaction(
+        TopicPartition tp,
+        WriteTxnMarkersRequest.TxnMarkerEntry marker
     ) throws KafkaException;
 }

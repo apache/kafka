@@ -21,9 +21,10 @@ import kafka.server.{ActionQueue, ReplicaManager}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.RecordTooLargeException
 import org.apache.kafka.common.protocol.Errors
-import org.apache.kafka.common.record.{CompressionType, MemoryRecords, RecordBatch, TimestampType}
+import org.apache.kafka.common.record.{CompressionType, ControlRecordType, EndTransactionMarker, MemoryRecords, RecordBatch, TimestampType}
 import org.apache.kafka.common.record.Record.EMPTY_HEADERS
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
+import org.apache.kafka.common.requests.{TransactionResult, WriteTxnMarkersRequest}
 import org.apache.kafka.common.utils.{BufferSupplier, Time}
 import org.apache.kafka.coordinator.group.runtime.PartitionWriter
 import org.apache.kafka.storage.internals.log.AppendOrigin
@@ -160,28 +161,7 @@ class CoordinatorPartitionWriter[T](
               s"in append to partition $tp which exceeds the maximum configured size of $maxBatchSize.")
           }
 
-          var appendResults: Map[TopicPartition, PartitionResponse] = Map.empty
-          replicaManager.appendRecords(
-            timeout = 0L,
-            requiredAcks = 1,
-            internalTopicsAllowed = true,
-            origin = AppendOrigin.COORDINATOR,
-            entriesPerPartition = Map(tp -> recordsBuilder.build()),
-            responseCallback = results => appendResults = results,
-            // We can directly complete the purgatories here because we don't hold
-            // any conflicting locks.
-            actionQueue = directActionQueue
-          )
-
-          val partitionResult = appendResults.getOrElse(tp,
-            throw new IllegalStateException(s"Append status $appendResults should have partition $tp."))
-
-          if (partitionResult.error != Errors.NONE) {
-            throw partitionResult.error.exception()
-          }
-
-          // Required offset.
-          partitionResult.lastOffset + 1
+          internalAppend(tp, recordsBuilder.build())
         } finally {
           bufferSupplier.release(buffer)
         }
@@ -189,5 +169,57 @@ class CoordinatorPartitionWriter[T](
       case None =>
         throw Errors.NOT_LEADER_OR_FOLLOWER.exception()
     }
+  }
+
+  /**
+   * Write the transaction end marker.
+   *
+   * @param tp     The partition to write records to.
+   * @param marker The marker.
+   * @return The log end offset right after the written records.
+   * @throws KafkaException Any KafkaException caught during the write operation.
+   */
+  override def completeTransaction(
+    tp: TopicPartition,
+    marker: WriteTxnMarkersRequest.TxnMarkerEntry
+  ): Long = {
+    val controlRecordType = marker.transactionResult match {
+      case TransactionResult.COMMIT => ControlRecordType.COMMIT
+      case TransactionResult.ABORT => ControlRecordType.ABORT
+    }
+
+    internalAppend(tp, MemoryRecords.withEndTransactionMarker(
+      marker.producerId,
+      marker.producerEpoch,
+      new EndTransactionMarker(controlRecordType, marker.coordinatorEpoch)
+    ))
+  }
+
+  private def internalAppend(
+    tp: TopicPartition,
+    memoryRecords: MemoryRecords
+  ): Long = {
+    var appendResults: Map[TopicPartition, PartitionResponse] = Map.empty
+    replicaManager.appendRecords(
+      timeout = 0L,
+      requiredAcks = 1,
+      internalTopicsAllowed = true,
+      origin = AppendOrigin.COORDINATOR,
+      entriesPerPartition = Map(tp -> memoryRecords),
+      responseCallback = results => appendResults = results,
+      // We can directly complete the purgatories here because we don't hold
+      // any conflicting locks.
+      actionQueue = directActionQueue
+    )
+
+    val partitionResult = appendResults.getOrElse(tp,
+      throw new IllegalStateException(s"Append status $appendResults should have partition $tp."))
+
+    if (partitionResult.error != Errors.NONE) {
+      throw partitionResult.error.exception()
+    }
+
+    // Required offset.
+    partitionResult.lastOffset + 1
   }
 }

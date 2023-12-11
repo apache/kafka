@@ -24,7 +24,7 @@ import org.apache.kafka.common.message.{ConsumerGroupDescribeResponseData, Consu
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.record.RecordBatch
-import org.apache.kafka.common.requests.{OffsetCommitRequest, RequestContext, TransactionResult}
+import org.apache.kafka.common.requests.{OffsetCommitRequest, RequestContext, TransactionResult, WriteTxnMarkersRequest}
 import org.apache.kafka.common.utils.{BufferSupplier, Time}
 import org.apache.kafka.image.{MetadataDelta, MetadataImage}
 import org.apache.kafka.server.util.FutureUtils
@@ -544,6 +544,15 @@ private[group] class GroupCoordinatorAdapter(
     }
 
     future
+  }
+
+  override def completeTransaction(
+    tp: TopicPartition,
+    marker: WriteTxnMarkersRequest.TxnMarkerEntry
+  ): CompletableFuture[Void] = {
+    FutureUtils.failedFuture(new IllegalStateException(
+      s"The old group coordinator does not support `completeTransaction` API."
+    ))
   }
 
   override def partitionFor(groupId: String): Int = {

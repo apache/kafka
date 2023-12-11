@@ -61,6 +61,7 @@ import org.apache.kafka.common.requests.OffsetCommitRequest;
 import org.apache.kafka.common.requests.RequestContext;
 import org.apache.kafka.common.requests.TransactionResult;
 import org.apache.kafka.common.requests.TxnOffsetCommitRequest;
+import org.apache.kafka.common.requests.WriteTxnMarkersRequest;
 import org.apache.kafka.common.utils.BufferSupplier;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
@@ -77,6 +78,7 @@ import org.apache.kafka.coordinator.group.runtime.PartitionWriter;
 import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.server.record.BrokerCompressionType;
+import org.apache.kafka.server.util.FutureUtils;
 import org.apache.kafka.server.util.timer.Timer;
 import org.slf4j.Logger;
 
@@ -931,6 +933,25 @@ public class GroupCoordinatorService implements GroupCoordinator {
     }
 
     /**
+     * See {@link GroupCoordinator#completeTransaction(TopicPartition, WriteTxnMarkersRequest.TxnMarkerEntry)}.
+     */
+    @Override
+    public CompletableFuture<Void> completeTransaction(
+        TopicPartition tp,
+        WriteTxnMarkersRequest.TxnMarkerEntry marker
+    ) {
+        if (!isActive.get()) {
+            return FutureUtils.failedFuture(Errors.COORDINATOR_NOT_AVAILABLE.exception());
+        }
+
+        return runtime.scheduleTransactionalEndMarker(
+            "write-txn-marker",
+            tp,
+            marker
+        );
+    }
+
+    /**
      * See {@link GroupCoordinator#onTransactionCompleted(long, Iterable, TransactionResult)}.
      */
     @Override
@@ -940,6 +961,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
         TransactionResult transactionResult
     ) {
         throwIfNotActive();
+        throw new IllegalStateException("onTransactionCompleted is not supported.");
     }
 
     /**

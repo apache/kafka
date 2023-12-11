@@ -36,6 +36,7 @@ import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.requests.OffsetCommitRequest;
 import org.apache.kafka.common.requests.RequestContext;
+import org.apache.kafka.common.requests.TransactionResult;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.coordinator.group.generated.OffsetCommitKey;
@@ -889,6 +890,43 @@ public class OffsetMetadataManager {
             if (offsets.remove(groupId, topic, partition) != null) {
                 metrics.decrementLocalGauge(NUM_OFFSETS);
             }
+        }
+    }
+
+    /**
+     * Applies the given transaction marker.
+     *
+     * @param producerId    The producer id.
+     * @param result        The result of the transaction.
+     * @throws RuntimeException if the transaction can not be completed.
+     */
+    public void completeTransaction(
+        long producerId,
+        TransactionResult result
+    ) throws RuntimeException {
+        Offsets pendingOffsets = pendingTransactionalOffsets.remove(producerId);
+
+        if (result == TransactionResult.COMMIT) {
+            log.debug("Committed transactional offset commits for producer id {}.", producerId);
+            if (pendingOffsets == null) return;
+
+            pendingOffsets.offsetsByGroup.forEach((groupId, topicOffsets) -> {
+                topicOffsets.forEach((topicName, partitionOffsets) -> {
+                    partitionOffsets.forEach((partitionId, offsetAndMetadata) -> {
+                        log.debug("Committed transaction offset commit for producer id {} in group {} " +
+                            "with topic {}, partition {}, and offset {}.",
+                            producerId, groupId, topicName, partitionId, offsetAndMetadata);
+                        offsets.put(
+                            groupId,
+                            topicName,
+                            partitionId,
+                            offsetAndMetadata
+                        );
+                    });
+                });
+            });
+        } else {
+            log.debug("Aborted transactional offset commits for producer id {}.", producerId);
         }
     }
 
