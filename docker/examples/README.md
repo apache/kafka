@@ -132,10 +132,13 @@ Multi Node Cluster
 - Combined:-
     - Examples are present in `jvm/cluster/combined` directory.
     - Plaintext:-
+        - Each broker must expose a unique port to host machine.
+            - For example broker-1, broker2 and broker3 are listening on port 9092, they're exposing it to the host via ports 29092, 39092 and 49092 respectively.
         - Here important thing to note is that to ensure that kafka brokers are accessible both to clients as well as to each other we have introduced an additional listener.
         - PLAINTEXT is supposed to be listener accessible to other brokers.
+            - The inter broker listener advertised by the brokers is exposed on container's hostname. This is done so that brokers can find each other in docker network.
         - PLAINTEXT_HOST is supposed to be listener accessible to the clients.
-        - This port mapping is required to ensure brokers can communicate with each other.
+            - The port advertised for host machine is done on localhost, as this is the domain (in this example) that client will use to connect with kafka running inside docker container.
         - Here we take advantage of hostname set for each broker and set the listner accordingly.
         - To run the example:-
         ```
