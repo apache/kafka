@@ -2582,6 +2582,31 @@ class ReplicaManagerTest {
     }
   }
 
+  @Test
+  def testPreVerificationError(): Unit = {
+    val tp0 = new TopicPartition(topic, 0)
+    val transactionalId = "txn-id"
+    val producerId = 24L
+    val producerEpoch = 0.toShort
+    val addPartitionsToTxnManager = mock(classOf[AddPartitionsToTxnManager])
+
+    val replicaManager = setUpReplicaManagerWithMockedAddPartitionsToTxnManager(addPartitionsToTxnManager, List(tp0))
+    try {
+      val result = maybeStartTransactionVerificationForPartition(replicaManager, tp0, transactionalId, producerId, producerEpoch)
+      val appendCallback = ArgumentCaptor.forClass(classOf[AddPartitionsToTxnManager.AppendCallback])
+      verify(addPartitionsToTxnManager, times(0)).verifyTransaction(
+        ArgumentMatchers.eq(transactionalId),
+        ArgumentMatchers.eq(producerId),
+        ArgumentMatchers.eq(producerEpoch),
+        ArgumentMatchers.eq(Seq(tp0)),
+        appendCallback.capture()
+      )
+      assertEquals(Errors.NOT_LEADER_OR_FOLLOWER, result.assertFired.left.getOrElse(Errors.NONE))
+    } finally {
+      replicaManager.shutdown(checkpointHW = false)
+    }
+  }
+
   @ParameterizedTest
   @ValueSource(booleans = Array(true, false))
   def testFullLeaderAndIsrStrayPartitions(zkMigrationEnabled: Boolean): Unit = {

@@ -1155,9 +1155,9 @@ class ReplicaManager(val config: KafkaConfig,
       }
     }
 
-    // All partitions are already verified
+    // No partitions require verification.
     if (verificationGuards.isEmpty) {
-      callback(Map.empty[TopicPartition, Errors], requestLocal, Map.empty[TopicPartition, VerificationGuard])
+      callback(errors.toMap, requestLocal, Map.empty[TopicPartition, VerificationGuard])
       return
     }
 
