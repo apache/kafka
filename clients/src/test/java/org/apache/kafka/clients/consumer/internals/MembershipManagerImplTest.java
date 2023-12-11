@@ -17,7 +17,6 @@
 
 package org.apache.kafka.clients.consumer.internals;
 
-import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEventHandler;
 import org.apache.kafka.clients.consumer.internals.events.ConsumerRebalanceListenerCallbackCompletedEvent;
@@ -40,7 +39,6 @@ import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -52,7 +50,6 @@ import java.util.SortedSet;
 import java.util.TreeSet;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 
 import static org.apache.kafka.clients.consumer.internals.AsyncKafkaConsumer.invokeRebalanceCallbacks;
@@ -1060,9 +1057,9 @@ public class MembershipManagerImplTest {
         receiveAssignment(topicId, Arrays.asList(0, 1), membershipManager);
         assertEquals(MemberState.RECONCILING, membershipManager.state());
         assertTrue(membershipManager.reconciliationInProgress());
-        assertEquals(0, listener.revokedCounter.get());
-        assertEquals(0, listener.assignedCounter.get());
-        assertEquals(0, listener.lostCounter.get());
+        assertEquals(0, listener.revokedCount());
+        assertEquals(0, listener.assignedCount());
+        assertEquals(0, listener.lostCount());
 
         assertTrue(membershipManager.reconciliationInProgress());
 
@@ -1081,9 +1078,9 @@ public class MembershipManagerImplTest {
         assertEquals(MemberState.STABLE, membershipManager.state());
         assertEquals(topicIdPartitionsMap(topicId, 0, 1), membershipManager.currentAssignment());
 
-        assertEquals(0, listener.revokedCounter.get());
-        assertEquals(1, listener.assignedCounter.get());
-        assertEquals(0, listener.lostCounter.get());
+        assertEquals(0, listener.revokedCount());
+        assertEquals(1, listener.assignedCount());
+        assertEquals(0, listener.lostCount());
 
         // Step 5: receive an empty assignment, which means we should call revoke
         when(subscriptionState.assignedPartitions()).thenReturn(topicPartitions(topicName, 0, 1));
@@ -1114,9 +1111,9 @@ public class MembershipManagerImplTest {
         assertEquals(MemberState.STABLE, membershipManager.state());
         assertFalse(membershipManager.reconciliationInProgress());
 
-        assertEquals(1, listener.revokedCounter.get());
-        assertEquals(2, listener.assignedCounter.get());
-        assertEquals(0, listener.lostCounter.get());
+        assertEquals(1, listener.revokedCount());
+        assertEquals(2, listener.assignedCount());
+        assertEquals(0, listener.lostCount());
     }
 
     // TODO: Reconciliation needs to support when a listener throws an error on onPartitionsRevoked(). When that
@@ -1148,9 +1145,9 @@ public class MembershipManagerImplTest {
         assertEquals(MemberState.RECONCILING, membershipManager.state());
         assertEquals(Collections.emptySet(), membershipManager.currentAssignment());
         assertTrue(membershipManager.reconciliationInProgress());
-        assertEquals(0, listener.revokedCounter.get());
-        assertEquals(0, listener.assignedCounter.get());
-        assertEquals(0, listener.lostCounter.get());
+        assertEquals(0, listener.revokedCount());
+        assertEquals(0, listener.assignedCount());
+        assertEquals(0, listener.lostCount());
 
         assertTrue(membershipManager.reconciliationInProgress());
 
@@ -1169,9 +1166,9 @@ public class MembershipManagerImplTest {
         membershipManager.onHeartbeatRequestSent();
         assertEquals(MemberState.RECONCILING, membershipManager.state());
 
-        assertEquals(1, listener.revokedCounter.get());
-        assertEquals(1, listener.assignedCounter.get());
-        assertEquals(0, listener.lostCounter.get());
+        assertEquals(1, listener.revokedCount());
+        assertEquals(1, listener.assignedCount());
+        assertEquals(0, listener.lostCount());
     }
 
     @Test
@@ -1196,9 +1193,9 @@ public class MembershipManagerImplTest {
         assertEquals(MemberState.RECONCILING, membershipManager.state());
         assertEquals(topicIdPartitionsMap(topicId, 0), membershipManager.currentAssignment());
         assertTrue(membershipManager.reconciliationInProgress());
-        assertEquals(0, listener.revokedCounter.get());
-        assertEquals(0, listener.assignedCounter.get());
-        assertEquals(0, listener.lostCounter.get());
+        assertEquals(0, listener.revokedCount());
+        assertEquals(0, listener.assignedCount());
+        assertEquals(0, listener.lostCount());
 
         assertTrue(membershipManager.reconciliationInProgress());
 
@@ -1227,9 +1224,9 @@ public class MembershipManagerImplTest {
         membershipManager.onHeartbeatRequestSent();
         assertEquals(MemberState.RECONCILING, membershipManager.state());
 
-        assertEquals(1, listener.revokedCounter.get());
-        assertEquals(1, listener.assignedCounter.get());
-        assertEquals(0, listener.lostCounter.get());
+        assertEquals(1, listener.revokedCount());
+        assertEquals(1, listener.assignedCount());
+        assertEquals(0, listener.lostCount());
     }
 
     @Test
@@ -1267,9 +1264,9 @@ public class MembershipManagerImplTest {
         membershipManager.transitionToFenced();
         assertEquals(MemberState.FENCED, membershipManager.state());
         assertEquals(Collections.emptyMap(), membershipManager.currentAssignment());
-        assertEquals(0, listener.revokedCounter.get());
-        assertEquals(0, listener.assignedCounter.get());
-        assertEquals(0, listener.lostCounter.get());
+        assertEquals(0, listener.revokedCount());
+        assertEquals(0, listener.assignedCount());
+        assertEquals(0, listener.lostCount());
 
         // Step 3: invoke the callback
         performCallback(
@@ -1283,9 +1280,9 @@ public class MembershipManagerImplTest {
         membershipManager.onHeartbeatRequestSent();
         assertEquals(MemberState.JOINING, membershipManager.state());
 
-        assertEquals(0, listener.revokedCounter.get());
-        assertEquals(0, listener.assignedCounter.get());
-        assertEquals(1, listener.lostCounter.get());
+        assertEquals(0, listener.revokedCount());
+        assertEquals(0, listener.assignedCount());
+        assertEquals(1, listener.lostCount());
     }
 
     private ConsumerRebalanceListenerInvoker consumerRebalanceListenerInvoker() {
@@ -1696,58 +1693,5 @@ public class MembershipManagerImplTest {
                                 .setTopicId(topic2)
                                 .setPartitions(Arrays.asList(3, 4, 5))
                 ));
-    }
-
-    private static class CounterConsumerRebalanceListener implements ConsumerRebalanceListener {
-
-        private final AtomicInteger revokedCounter = new AtomicInteger();
-        private final AtomicInteger assignedCounter = new AtomicInteger();
-        private final AtomicInteger lostCounter = new AtomicInteger();
-
-        private final Optional<RuntimeException> revokedError;
-        private final Optional<RuntimeException> assignedError;
-        private final Optional<RuntimeException> lostError;
-
-        public CounterConsumerRebalanceListener() {
-            this(Optional.empty(), Optional.empty(), Optional.empty());
-        }
-
-        public CounterConsumerRebalanceListener(Optional<RuntimeException> revokedError,
-                                                Optional<RuntimeException> assignedError,
-                                                Optional<RuntimeException> lostError) {
-            this.revokedError = revokedError;
-            this.assignedError = assignedError;
-            this.lostError = lostError;
-        }
-
-        @Override
-        public void onPartitionsRevoked(Collection<TopicPartition> partitions) {
-            try {
-                if (revokedError.isPresent())
-                    throw revokedError.get();
-            } finally {
-                revokedCounter.incrementAndGet();
-            }
-        }
-
-        @Override
-        public void onPartitionsAssigned(Collection<TopicPartition> partitions) {
-            try {
-                if (assignedError.isPresent())
-                    throw assignedError.get();
-            } finally {
-                assignedCounter.incrementAndGet();
-            }
-        }
-
-        @Override
-        public void onPartitionsLost(Collection<TopicPartition> partitions) {
-            try {
-                if (lostError.isPresent())
-                    throw lostError.get();
-            } finally {
-                lostCounter.incrementAndGet();
-            }
-        }
     }
 }
