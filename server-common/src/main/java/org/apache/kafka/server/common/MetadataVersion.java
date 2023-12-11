@@ -195,7 +195,7 @@ public enum MetadataVersion {
     IBP_3_7_IV2(17, "3.7", "IV2", true),
 
     // Add ELR related supports (KIP-966).
-    IBP_3_7_IV3(18, "3.7", "IV3", true);
+    IBP_4_0_IV0(18, "4.0", "IV0", true);
 
     // NOTES when adding a new version:
     //   Update the default version in @ClusterTest annotation to point to the latest version
@@ -316,7 +316,7 @@ public enum MetadataVersion {
     }
 
     public boolean isElrSupported() {
-        return this.isAtLeast(IBP_3_7_IV3);
+        return this.isAtLeast(IBP_4_0_IV0);
     }
 
     public boolean isKRaftSupported() {

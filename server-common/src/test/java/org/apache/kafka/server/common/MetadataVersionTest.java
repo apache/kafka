@@ -171,7 +171,9 @@ class MetadataVersionTest {
         assertEquals(IBP_3_7_IV0, MetadataVersion.fromVersionString("3.7-IV0"));
         assertEquals(IBP_3_7_IV1, MetadataVersion.fromVersionString("3.7-IV1"));
         assertEquals(IBP_3_7_IV2, MetadataVersion.fromVersionString("3.7-IV2"));
-        assertEquals(IBP_3_7_IV3, MetadataVersion.fromVersionString("3.7-IV3"));
+
+        assertEquals(IBP_4_0_IV0, MetadataVersion.fromVersionString("4.0"));
+        assertEquals(IBP_4_0_IV0, MetadataVersion.fromVersionString("4.0-IV0"));
     }
 
     @Test
@@ -274,7 +276,7 @@ class MetadataVersionTest {
         assertEquals("3.7-IV0", IBP_3_7_IV0.version());
         assertEquals("3.7-IV1", IBP_3_7_IV1.version());
         assertEquals("3.7-IV2", IBP_3_7_IV2.version());
-        assertEquals("3.7-IV3", IBP_3_7_IV3.version());
+        assertEquals("4.0-IV0", IBP_4_0_IV0.version());
     }
 
     @Test
@@ -342,7 +344,7 @@ class MetadataVersionTest {
     @ParameterizedTest
     @EnumSource(value = MetadataVersion.class)
     public void testIsElrSupported(MetadataVersion metadataVersion) {
-        assertEquals(metadataVersion.isAtLeast(IBP_3_7_IV3), metadataVersion.isElrSupported());
+        assertEquals(metadataVersion.isAtLeast(IBP_4_0_IV0), metadataVersion.isElrSupported());
     }
 
     @ParameterizedTest
