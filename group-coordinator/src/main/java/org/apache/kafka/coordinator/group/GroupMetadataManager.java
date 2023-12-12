@@ -1758,8 +1758,7 @@ public class GroupMetadataManager {
 
     /**
      * The coordinator has been loaded. Session timeouts are registered
-     * for all members. Increment the group size metrics for each group
-     * that was successfully loaded.
+     * for all members.
      */
     public void onLoaded() {
         groups.forEach((groupId, group) -> {
