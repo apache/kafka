@@ -104,7 +104,7 @@ Single Node
     # Run from root of the repo
     $ docker compose -f docker/examples/jvm/single-node/ssl/docker-compose.yml up
     ```
-    - To produce messages using client scripts:-
+    - To produce messages using client scripts (Ensure that java version >= 17):-
     ```
     # Run from root of the repo
     $ bin/kafka-console-producer.sh --topic test --bootstrap-server localhost:9093 --producer.config ./docker/examples/fixtures/client-secrets/client-ssl.properties
@@ -119,7 +119,7 @@ Single Node
     # Run from root of the repo
     $ docker compose -f docker/examples/jvm/single-node/file-input/docker-compose.yml up
     ```
-    - To produce messages using client scripts:-
+    - To produce messages using client scripts (Ensure that java version >= 17):-
     ```
     # Run from root of the repo
     $ bin/kafka-console-producer.sh --topic test --bootstrap-server localhost:9093 --producer.config ./docker/examples/fixtures/client-secrets/client-ssl.properties
@@ -159,7 +159,7 @@ Multi Node Cluster
         # Run from root of the repo
         $ docker compose -f docker/examples/jvm/cluster/combined/ssl/docker-compose.yml up
         ```
-        - To produce messages using client scripts:-
+        - To produce messages using client scripts (Ensure that java version >= 17):-
         ```
         # Run from root of the repo
         $ bin/kafka-console-producer.sh --topic test --bootstrap-server localhost:29093 --producer.config ./docker/examples/fixtures/client-secrets/client-ssl.properties
@@ -188,7 +188,7 @@ Multi Node Cluster
         # Run from root of the repo
         $ docker compose -f docker/examples/jvm/cluster/isolated/ssl/docker-compose.yml up
         ```
-        - To produce messages using client scripts:-
+        - To produce messages using client scripts (Ensure that java version >= 17):-
         ```
         # Run from root of the repo
         $ bin/kafka-console-producer.sh --topic test --bootstrap-server localhost:29093 --producer.config ./docker/examples/fixtures/client-secrets/client-ssl.properties
