@@ -125,7 +125,7 @@ public class PartitionMakeFollowerBenchmark {
             MetadataVersion.latest(), 0, () -> -1, Time.SYSTEM,
             alterPartitionListener, delayedOperations,
             Mockito.mock(MetadataCache.class), logManager, alterPartitionManager);
-        partition.createLogIfNotExists(true, false, offsetCheckpoints, topicId);
+        partition.createLogIfNotExists(true, false, offsetCheckpoints, topicId, Option.empty());
         executorService.submit((Runnable) () -> {
             SimpleRecord[] simpleRecords = new SimpleRecord[] {
                 new SimpleRecord(1L, "foo".getBytes(StandardCharsets.UTF_8), "1".getBytes(StandardCharsets.UTF_8)),
@@ -158,6 +158,6 @@ public class PartitionMakeFollowerBenchmark {
             .setPartitionEpoch(1)
             .setReplicas(replicas)
             .setIsNew(true);
-        return partition.makeFollower(partitionState, offsetCheckpoints, topicId);
+        return partition.makeFollower(partitionState, offsetCheckpoints, topicId, Option.empty());
     }
 }

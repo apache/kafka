@@ -44,6 +44,7 @@ import org.apache.kafka.common.message.CreateTopicsResponseData.{CreatableTopicR
 import org.apache.kafka.common.message.DeleteRecordsResponseData.{DeleteRecordsPartitionResult, DeleteRecordsTopicResult}
 import org.apache.kafka.common.message.DeleteTopicsResponseData.{DeletableTopicResult, DeletableTopicResultCollection}
 import org.apache.kafka.common.message.ElectLeadersResponseData.{PartitionResult, ReplicaElectionResult}
+import org.apache.kafka.common.message.ListClientMetricsResourcesResponseData.ClientMetricsResource
 import org.apache.kafka.common.message.ListOffsetsRequestData.ListOffsetsPartition
 import org.apache.kafka.common.message.ListOffsetsResponseData.{ListOffsetsPartitionResponse, ListOffsetsTopicResponse}
 import org.apache.kafka.common.message.MetadataResponseData.{MetadataResponsePartition, MetadataResponseTopic}
@@ -3810,16 +3811,24 @@ class KafkaApis(val requestChannel: RequestChannel,
     }
   }
 
-  // Just a placeholder for now.
   def handleListClientMetricsResources(request: RequestChannel.Request): Unit = {
     val listClientMetricsResourcesRequest = request.body[ListClientMetricsResourcesRequest]
 
     if (!authHelper.authorize(request.context, DESCRIBE_CONFIGS, CLUSTER, CLUSTER_NAME)) {
       requestHelper.sendMaybeThrottle(request, listClientMetricsResourcesRequest.getErrorResponse(Errors.CLUSTER_AUTHORIZATION_FAILED.exception))
     } else {
-      // Just return an empty list in the placeholder
-      val data = new ListClientMetricsResourcesResponseData()
-      requestHelper.sendMaybeThrottle(request, new ListClientMetricsResourcesResponse(data))
+      clientMetricsManager match {
+        case Some(metricsManager) =>
+          val data = new ListClientMetricsResourcesResponseData().setClientMetricsResources(
+            metricsManager.listClientMetricsResources.asScala.map(
+              name => new ClientMetricsResource().setName(name)).toList.asJava)
+          requestHelper.sendMaybeThrottle(request, new ListClientMetricsResourcesResponse(data))
+        case None =>
+          // This should never happen as ZK based cluster calls should get rejected earlier itself,
+          // but we should handle it gracefully.
+          info("Received list client metrics resources request for zookeeper based cluster")
+          requestHelper.sendMaybeThrottle(request, listClientMetricsResourcesRequest.getErrorResponse(Errors.UNSUPPORTED_VERSION.exception))
+      }
     }
   }
 

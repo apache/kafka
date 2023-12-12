@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import java.util.Optional;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.metrics.Sensor.RecordingLevel;
 import org.apache.kafka.common.serialization.Serializer;
@@ -52,9 +53,11 @@ import org.rocksdb.FlushOptions;
 import org.rocksdb.InfoLogLevel;
 import org.rocksdb.LRUCache;
 import org.rocksdb.Options;
+import org.rocksdb.ReadOptions;
 import org.rocksdb.RocksDB;
 import org.rocksdb.RocksDBException;
 import org.rocksdb.RocksIterator;
+import org.rocksdb.Snapshot;
 import org.rocksdb.Statistics;
 import org.rocksdb.TableFormatConfig;
 import org.rocksdb.WriteBatch;
@@ -372,6 +375,14 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
         }
     }
 
+    public Snapshot getSnapshot() {
+        return db.getSnapshot();
+    }
+
+    public void releaseSnapshot(final Snapshot snapshot) {
+        db.releaseSnapshot(snapshot);
+    }
+
     @Override
     public synchronized void put(final Bytes key,
                                  final byte[] value) {
@@ -455,9 +466,17 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
 
     @Override
     public synchronized byte[] get(final Bytes key) {
+        return get(key, Optional.empty());
+    }
+
+    public synchronized byte[] get(final Bytes key, final ReadOptions readOptions) {
+        return get(key, Optional.of(readOptions));
+    }
+
+    private synchronized byte[] get(final Bytes key, final Optional<ReadOptions> readOptions) {
         validateStoreOpen();
         try {
-            return dbAccessor.get(key.get());
+            return readOptions.isPresent() ? dbAccessor.get(key.get(), readOptions.get()) : dbAccessor.get(key.get());
         } catch (final RocksDBException e) {
             // String format is happening in wrapping stores. So formatted message is thrown from wrapping stores.
             throw new ProcessorStateException("Error while getting value for key from store " + name, e);
@@ -704,6 +723,8 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
 
         byte[] get(final byte[] key) throws RocksDBException;
 
+        byte[] get(final byte[] key, ReadOptions readOptions) throws RocksDBException;
+
         /**
          * In contrast to get(), we don't migrate the key to new CF.
          * <p>
@@ -775,6 +796,11 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
         @Override
         public byte[] get(final byte[] key) throws RocksDBException {
             return db.get(columnFamily, key);
+        }
+
+        @Override
+        public byte[] get(final byte[] key, final ReadOptions readOptions) throws RocksDBException {
+            return db.get(columnFamily, readOptions, key);
         }
 
         @Override

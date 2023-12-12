@@ -1690,13 +1690,33 @@ class ConfigCommandTest extends Logging {
   }
 
   @Test
-  def shouldNotDescribeClientMetricsConfigWithoutEntityName(): Unit = {
+  def shouldDescribeClientMetricsConfigWithoutEntityName(): Unit = {
     val describeOpts = new ConfigCommandOptions(Array("--bootstrap-server", "localhost:9092",
       "--entity-type", "client-metrics",
       "--describe"))
 
-    val exception = assertThrows(classOf[IllegalArgumentException], () => describeOpts.checkArgs())
-    assertEquals("an entity name must be specified with --describe of client-metrics", exception.getMessage)
+    val resourceCustom = new ConfigResource(ConfigResource.Type.CLIENT_METRICS, "1")
+    val configEntry = new ConfigEntry("metrics", "*")
+    val future = new KafkaFutureImpl[util.Map[ConfigResource, Config]]
+    val describeResult: DescribeConfigsResult = mock(classOf[DescribeConfigsResult])
+    when(describeResult.all()).thenReturn(future)
+
+    val node = new Node(1, "localhost", 9092)
+    val mockAdminClient = new MockAdminClient(util.Collections.singletonList(node), node) {
+      override def describeConfigs(resources: util.Collection[ConfigResource], options: DescribeConfigsOptions): DescribeConfigsResult = {
+        assertTrue(options.includeSynonyms())
+        assertEquals(1, resources.size)
+        val resource = resources.iterator.next
+        assertEquals(ConfigResource.Type.CLIENT_METRICS, resource.`type`)
+        assertTrue(resourceCustom.name == resource.name)
+        future.complete(Map(resourceCustom -> new Config(util.Collections.singletonList(configEntry))).asJava)
+        describeResult
+      }
+    }
+    mockAdminClient.incrementalAlterConfigs(util.Collections.singletonMap(resourceCustom,
+      util.Collections.singletonList(new AlterConfigOp(configEntry, AlterConfigOp.OpType.SET))), new AlterConfigsOptions())
+    ConfigCommand.describeConfig(mockAdminClient, describeOpts)
+    verify(describeResult).all()
   }
 
   @Test

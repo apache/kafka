@@ -192,14 +192,14 @@ public class BalanceSubtopologyGraphConstructor implements RackAwareGraphConstru
                 final UUID processId = clientList.get(clientIndex);
                 final int clientNodeId = getClientNodeId(clientIndex, taskIdList, clientList, topicGroupIndex);
                 int startingTaskNodeId = taskNodeId;
-                boolean hasTask = false;
+                int validTaskCount = 0;
                 for (final TaskId taskId : taskIds) {
                     // It's possible some taskId is not in the tasks we want to assign. For example, taskIdSet is only stateless tasks,
                     // but the tasks in subtopology map contains all tasks including stateful ones.
                     if (!taskIdSet.contains(taskId)) {
                         continue;
                     }
-                    hasTask = true;
+                    validTaskCount++;
                     final boolean inCurrentAssignment = hasAssignedTask.test(clientStates.get(processId), taskId);
                     graph.addEdge(startingTaskNodeId, clientNodeId, 1, costFunction.getCost(taskId, processId, inCurrentAssignment, trafficCost, nonOverlapCost, isStandby), 0);
                     startingTaskNodeId++;
@@ -212,13 +212,12 @@ public class BalanceSubtopologyGraphConstructor implements RackAwareGraphConstru
                     }
                 }
 
-                if (hasTask) {
+                if (validTaskCount > 0) {
                     final int secondStageClientNodeId = getSecondStageClientNodeId(taskIdList,
                         clientList, tasksForTopicGroup, clientIndex);
                     final int capacity =
-                        originalAssignedTaskNumber.containsKey(processId) ? (int) Math.ceil(
-                            originalAssignedTaskNumber.get(processId) * 1.0 / taskIdList.size()
-                                * taskIds.size()) : 0;
+                        originalAssignedTaskNumber.containsKey(processId) ?
+                            (int) Math.ceil(originalAssignedTaskNumber.get(processId) * 1.0 / taskIdList.size() * validTaskCount) : 0;
                     graph.addEdge(clientNodeId, secondStageClientNodeId, capacity, 0, 0);
                 }
             }

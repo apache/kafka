@@ -26,7 +26,7 @@ import org.apache.directory.api.util.FileUtils
 import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.errors.OffsetOutOfRangeException
 import org.apache.kafka.common.utils.Utils
-import org.apache.kafka.common.{KafkaException, TopicPartition, Uuid}
+import org.apache.kafka.common.{DirectoryId, KafkaException, TopicPartition, Uuid}
 import org.apache.kafka.metadata.properties.{MetaProperties, MetaPropertiesEnsemble, MetaPropertiesVersion, PropertiesUtils}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
@@ -90,6 +90,54 @@ class LogManagerTest {
 
     val logFile = new File(logDir, name + "-0")
     assertTrue(logFile.exists)
+    log.appendAsLeader(TestUtils.singletonRecords("test".getBytes()), leaderEpoch = 0)
+  }
+
+  /**
+   * Test that getOrCreateLog on a non-existent log creates a new log in given logDirectory using directory id and that we can append to the new log.
+   */
+  @Test
+  def testCreateLogOnTargetedLogDirectory(): Unit = {
+    val targetedLogDirectoryId = DirectoryId.random()
+
+    val dirs: Seq[File] = Seq.fill(5)(TestUtils.tempDir())
+    writeMetaProperties(dirs(0))
+    writeMetaProperties(dirs(1), Optional.of(targetedLogDirectoryId))
+    writeMetaProperties(dirs(3), Optional.of(DirectoryId.random()))
+    writeMetaProperties(dirs(4))
+
+    logManager = createLogManager(dirs)
+
+    val log = logManager.getOrCreateLog(new TopicPartition(name, 0), topicId = None, targetLogDirectoryId = Some(targetedLogDirectoryId))
+    assertEquals(5, logManager.liveLogDirs.size)
+
+    val logFile = new File(dirs(1), name + "-0")
+    assertTrue(logFile.exists)
+    assertEquals(dirs(1).getAbsolutePath, logFile.getParent)
+    log.appendAsLeader(TestUtils.singletonRecords("test".getBytes()), leaderEpoch = 0)
+  }
+
+  /**
+   * Test that getOrCreateLog on a non-existent log creates a new log in the next selected logDirectory if the given directory id is DirectoryId.UNASSIGNED.
+   */
+  @Test
+  def testCreateLogWithTargetedLogDirectorySetAsUnassigned(): Unit = {
+    val log = logManager.getOrCreateLog(new TopicPartition(name, 0), topicId = None, targetLogDirectoryId = Some(DirectoryId.UNASSIGNED))
+    assertEquals(1, logManager.liveLogDirs.size)
+    val logFile = new File(logDir, name + "-0")
+    assertTrue(logFile.exists)
+    assertFalse(logManager.directoryId(logFile.getParent).equals(DirectoryId.UNASSIGNED))
+    log.appendAsLeader(TestUtils.singletonRecords("test".getBytes()), leaderEpoch = 0)
+  }
+
+  @Test
+  def testCreateLogWithTargetedLogDirectorySetAsUnknownWithoutAnyOfflineDirectories(): Unit = {
+
+    val log = logManager.getOrCreateLog(new TopicPartition(name, 0), topicId = None, targetLogDirectoryId = Some(DirectoryId.LOST))
+    assertEquals(1, logManager.liveLogDirs.size)
+    val logFile = new File(logDir, name + "-0")
+    assertTrue(logFile.exists)
+    assertFalse(logManager.directoryId(logFile.getParent).equals(DirectoryId.random()))
     log.appendAsLeader(TestUtils.singletonRecords("test".getBytes()), leaderEpoch = 0)
   }
 
@@ -1044,19 +1092,6 @@ class LogManagerTest {
 
   @Test
   def testLoadDirectoryIds(): Unit = {
-    def writeMetaProperties(
-      dir: File,
-      directoryId: Optional[Uuid] = Optional.empty()
-    ): Unit = {
-      val metaProps = new MetaProperties.Builder().
-        setVersion(MetaPropertiesVersion.V0).
-        setClusterId("IVT1Seu3QjacxS7oBTKhDQ").
-        setNodeId(1).
-        setDirectoryId(directoryId).
-        build()
-      PropertiesUtils.writePropertiesFile(metaProps.toProperties,
-        new File(dir, MetaPropertiesEnsemble.META_PROPERTIES_NAME).getAbsolutePath, false)
-    }
     val dirs: Seq[File] = Seq.fill(5)(TestUtils.tempDir())
     writeMetaProperties(dirs(0))
     writeMetaProperties(dirs(1), Optional.of(Uuid.fromString("ZwkGXjB0TvSF6mjVh6gO7Q")))
@@ -1072,6 +1107,17 @@ class LogManagerTest {
     assertEquals(None, logManager.directoryId(dirs(2).getAbsolutePath))
     assertEquals(Some(Uuid.fromString("kQfNPJ2FTHq_6Qlyyv6Jqg")), logManager.directoryId(dirs(3).getAbsolutePath))
     assertTrue(logManager.directoryId(dirs(3).getAbsolutePath).isDefined)
-    assertEquals(2, logManager.directoryIds.size)
+    assertEquals(2, logManager.directoryIdsSet.size)
+  }
+
+  def writeMetaProperties(dir: File, directoryId: Optional[Uuid] = Optional.empty()): Unit = {
+    val metaProps = new MetaProperties.Builder().
+      setVersion(MetaPropertiesVersion.V0).
+      setClusterId("IVT1Seu3QjacxS7oBTKhDQ").
+      setNodeId(1).
+      setDirectoryId(directoryId).
+      build()
+    PropertiesUtils.writePropertiesFile(metaProps.toProperties,
+      new File(dir, MetaPropertiesEnsemble.META_PROPERTIES_NAME).getAbsolutePath, false)
   }
 }
