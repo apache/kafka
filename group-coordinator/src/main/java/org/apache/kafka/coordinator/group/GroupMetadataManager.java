@@ -575,6 +575,7 @@ public class GroupMetadataManager {
         if (group == null) {
             ConsumerGroup consumerGroup = new ConsumerGroup(snapshotRegistry, groupId, metrics);
             groups.put(groupId, consumerGroup);
+            metrics.onConsumerGroupStateTransition(null, consumerGroup.state());
             return consumerGroup;
         } else {
             if (group.type() == CONSUMER) {
@@ -613,6 +614,7 @@ public class GroupMetadataManager {
         if (group == null) {
             GenericGroup genericGroup = new GenericGroup(logContext, groupId, GenericGroupState.EMPTY, time, metrics);
             groups.put(groupId, genericGroup);
+            metrics.onGenericGroupStateTransition(null, genericGroup.currentState());
             return genericGroup;
         } else {
             if (group.type() == GENERIC) {
@@ -684,7 +686,19 @@ public class GroupMetadataManager {
     private void removeGroup(
         String groupId
     ) {
-        groups.remove(groupId);
+        Group group = groups.remove(groupId);
+        if (group != null) {
+            switch (group.type()) {
+                case CONSUMER:
+                    ConsumerGroup consumerGroup = (ConsumerGroup) group;
+                    metrics.onConsumerGroupStateTransition(consumerGroup.state(), null);
+                    break;
+                case GENERIC:
+                    GenericGroup genericGroup = (GenericGroup) group;
+                    metrics.onGenericGroupStateTransition(genericGroup.currentState(), null);
+                    break;
+            }
+        }
     }
 
     /**
@@ -1600,7 +1614,6 @@ public class GroupMetadataManager {
                     + " but did not receive ConsumerGroupTargetAssignmentMetadataValue tombstone.");
             }
             removeGroup(groupId);
-            metrics.onConsumerGroupStateTransition(consumerGroup.state(), null);
         }
 
     }
@@ -1745,7 +1758,8 @@ public class GroupMetadataManager {
 
     /**
      * The coordinator has been loaded. Session timeouts are registered
-     * for all members.
+     * for all members. Increment the group size metrics for each group
+     * that was successfully loaded.
      */
     public void onLoaded() {
         groups.forEach((groupId, group) -> {
@@ -1809,11 +1823,6 @@ public class GroupMetadataManager {
 
         if (value == null)  {
             // Tombstone. Group should be removed.
-            Group group = groups.get(groupId);
-            if (group != null && group.type() == GENERIC) {
-                GenericGroup genericGroup = (GenericGroup) group;
-                metrics.onGenericGroupStateTransition(genericGroup.currentState(), null);
-            }
             removeGroup(groupId);
         } else {
             List<GenericGroupMember> loadedMembers = new ArrayList<>();
@@ -1857,7 +1866,10 @@ public class GroupMetadataManager {
             );
 
             loadedMembers.forEach(member -> genericGroup.add(member, null));
-            groups.put(groupId, genericGroup);
+            Group prevGroup = groups.put(groupId, genericGroup);
+            if (prevGroup == null) {
+                metrics.onGenericGroupStateTransition(null, genericGroup.currentState());
+            }
 
             genericGroup.setSubscribedTopics(
                 genericGroup.computeSubscribedTopics()
