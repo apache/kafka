@@ -195,7 +195,10 @@ public enum MetadataVersion {
     IBP_3_7_IV2(17, "3.7", "IV2", true),
 
     // Add ELR related supports (KIP-966).
-    IBP_3_7_IV3(18, "3.7", "IV3", true);
+    IBP_3_7_IV3(18, "3.7", "IV3", true),
+
+    // Add new fetch request version for KIP-951
+    IBP_3_7_IV4(19, "3.7", "IV4", false);
 
     // NOTES when adding a new version:
     //   Update the default version in @ClusterTest annotation to point to the latest version
@@ -393,7 +396,7 @@ public enum MetadataVersion {
     }
 
     public short fetchRequestVersion() {
-        if (this.isAtLeast(IBP_3_7_IV0)) {
+        if (this.isAtLeast(IBP_3_7_IV4)) {
             return 16;
         } else if (this.isAtLeast(IBP_3_5_IV1)) {
             return 15;
