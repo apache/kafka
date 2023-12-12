@@ -863,6 +863,7 @@ public class OffsetMetadataManager {
             }
 
             if (producerId == RecordBatch.NO_PRODUCER_ID) {
+                log.debug("Replaying offset commit with producer id {}, key {}, value {}", producerId, key, value);
                 // If the offset is not part of a transaction, it is directly stored
                 // in the offsets store.
                 OffsetAndMetadata previousValue = offsets.put(
@@ -875,6 +876,7 @@ public class OffsetMetadataManager {
                     metrics.incrementLocalGauge(NUM_OFFSETS);
                 }
             } else {
+                log.debug("Replaying transactional offset commit with producer id {}, key {}, value {}", producerId, key, value);
                 // Otherwise, the transaction offset is stored in the pending transactional
                 // offsets store. Pending offsets there are moved to the main store when
                 // the transaction is committed; or removed when the transaction is aborted.
