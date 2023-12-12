@@ -14,19 +14,24 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+package org.apache.kafka.connect.util;
 
-package org.apache.kafka.metadata.util;
+import org.apache.kafka.common.utils.Time;
 
-import org.apache.kafka.server.common.MetadataVersion;
-import org.mockito.internal.util.MockUtil;
+public class TemporaryStage implements AutoCloseable {
 
-import static org.mockito.Mockito.spy;
-import static org.mockito.Mockito.when;
+    private final Stage stage;
+    private final Time time;
 
-public class MetadataFeatureUtil {
-    public static MetadataVersion withDirectoryAssignmentSupport(MetadataVersion metadataVersion) {
-        MetadataVersion spy = MockUtil.isMock(metadataVersion) ? metadataVersion : spy(metadataVersion);
-        when(spy.isDirectoryAssignmentSupported()).thenReturn(true);
-        return spy;
+    public TemporaryStage(String description, Callback<?> callback, Time time) {
+        this.stage = new Stage(description, time.milliseconds());
+        this.time = time;
+        callback.recordStage(stage);
     }
+
+    @Override
+    public void close() {
+        stage.complete(time.milliseconds());
+    }
+
 }

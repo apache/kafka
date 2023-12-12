@@ -18,6 +18,7 @@ package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
+import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEventHandler;
 import org.apache.kafka.clients.consumer.internals.events.GroupMetadataUpdateEvent;
 import org.apache.kafka.common.KafkaException;
@@ -71,6 +72,7 @@ public class HeartbeatRequestManagerTest {
     private Time time;
     private CoordinatorRequestManager coordinatorRequestManager;
     private SubscriptionState subscriptions;
+    private Metadata metadata;
     private HeartbeatRequestManager heartbeatRequestManager;
     private MembershipManager membershipManager;
     private HeartbeatRequestManager.HeartbeatRequestState heartbeatRequestState;
@@ -96,6 +98,7 @@ public class HeartbeatRequestManagerTest {
         backgroundEventQueue = testBuilder.backgroundEventQueue;
         subscriptions = testBuilder.subscriptions;
         membershipManager = testBuilder.membershipManager.orElseThrow(IllegalStateException::new);
+        metadata = testBuilder.metadata;
 
         when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(new Node(1, "localhost", 9999)));
     }
@@ -295,8 +298,6 @@ public class HeartbeatRequestManagerTest {
         assertEquals(subscribedTopics, heartbeatRequest.data().subscribedTopicNames());
         assertEquals(DEFAULT_GROUP_INSTANCE_ID, heartbeatRequest.data().instanceId());
         assertEquals(DEFAULT_REMOTE_ASSIGNOR, heartbeatRequest.data().serverAssignor());
-        // TODO: Test pattern subscription.
-        assertNull(heartbeatRequest.data().subscribedTopicRegex());
     }
 
     @Test
@@ -453,7 +454,6 @@ public class HeartbeatRequestManagerTest {
         assertNull(data.instanceId());
         assertEquals(ConsumerTestBuilder.DEFAULT_MAX_POLL_INTERVAL_MS, data.rebalanceTimeoutMs());
         assertEquals(Collections.emptyList(), data.subscribedTopicNames());
-        assertNull(data.subscribedTopicRegex());
         assertEquals(ConsumerTestBuilder.DEFAULT_REMOTE_ASSIGNOR, data.serverAssignor());
         assertEquals(Collections.emptyList(), data.topicPartitions());
         membershipManager.onHeartbeatRequestSent();
@@ -468,7 +468,6 @@ public class HeartbeatRequestManagerTest {
         assertNull(data.instanceId());
         assertEquals(-1, data.rebalanceTimeoutMs());
         assertNull(data.subscribedTopicNames());
-        assertNull(data.subscribedTopicRegex());
         assertNull(data.serverAssignor());
         assertNull(data.topicPartitions());
         membershipManager.onHeartbeatRequestSent();
@@ -486,7 +485,6 @@ public class HeartbeatRequestManagerTest {
         assertNull(data.instanceId());
         assertEquals(-1, data.rebalanceTimeoutMs());
         assertEquals(Collections.singletonList(topic), data.subscribedTopicNames());
-        assertNull(data.subscribedTopicRegex());
         assertNull(data.serverAssignor());
         assertNull(data.topicPartitions());
         membershipManager.onHeartbeatRequestSent();
@@ -495,7 +493,8 @@ public class HeartbeatRequestManagerTest {
         // Mock the response from the group coordinator which returns an assignment
         ConsumerGroupHeartbeatResponseData.TopicPartitions tpTopic1 =
             new ConsumerGroupHeartbeatResponseData.TopicPartitions();
-        tpTopic1.setTopicId(Uuid.randomUuid());
+        Uuid topicId = Uuid.randomUuid();
+        tpTopic1.setTopicId(topicId);
         tpTopic1.setPartitions(Collections.singletonList(0));
         ConsumerGroupHeartbeatResponseData.Assignment assignmentTopic1 =
             new ConsumerGroupHeartbeatResponseData.Assignment();
@@ -505,8 +504,9 @@ public class HeartbeatRequestManagerTest {
                 .setMemberId(memberId)
                 .setMemberEpoch(1)
                 .setAssignment(assignmentTopic1));
+        when(metadata.topicNames()).thenReturn(Collections.singletonMap(topicId, "topic1"));
         membershipManager.onHeartbeatResponseReceived(rs1.data());
-        assertEquals(MemberState.RECONCILING, membershipManager.state());
+        assertEquals(MemberState.ACKNOWLEDGING, membershipManager.state());
     }
 
     private void mockStableMember() {

@@ -17,6 +17,7 @@
 package org.apache.kafka.coordinator.group;
 
 import org.apache.kafka.common.message.OffsetCommitRequestData;
+import org.apache.kafka.common.message.TxnOffsetCommitRequestData;
 import org.apache.kafka.coordinator.group.generated.OffsetCommitValue;
 import org.apache.kafka.server.util.MockTime;
 import org.junit.jupiter.api.Test;
@@ -130,6 +131,48 @@ public class OffsetAndMetadataTest {
                 partition,
                 time.milliseconds(),
                 OptionalLong.of(5678L)
+            )
+        );
+    }
+
+    @Test
+    public void testFromTransactionalRequest() {
+        MockTime time = new MockTime();
+
+        TxnOffsetCommitRequestData.TxnOffsetCommitRequestPartition partition =
+            new TxnOffsetCommitRequestData.TxnOffsetCommitRequestPartition()
+                .setPartitionIndex(0)
+                .setCommittedOffset(100L)
+                .setCommittedLeaderEpoch(-1)
+                .setCommittedMetadata(null);
+
+        assertEquals(
+            new OffsetAndMetadata(
+                100L,
+                OptionalInt.empty(),
+                "",
+                time.milliseconds(),
+                OptionalLong.empty()
+            ), OffsetAndMetadata.fromRequest(
+                partition,
+                time.milliseconds()
+            )
+        );
+
+        partition
+            .setCommittedLeaderEpoch(10)
+            .setCommittedMetadata("hello");
+
+        assertEquals(
+            new OffsetAndMetadata(
+                100L,
+                OptionalInt.of(10),
+                "hello",
+                time.milliseconds(),
+                OptionalLong.empty()
+            ), OffsetAndMetadata.fromRequest(
+                partition,
+                time.milliseconds()
             )
         );
     }

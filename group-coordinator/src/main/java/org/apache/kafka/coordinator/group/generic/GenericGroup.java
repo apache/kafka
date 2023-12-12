@@ -809,12 +809,14 @@ public class GenericGroup implements Group {
      * @param memberId          The member id.
      * @param groupInstanceId   The group instance id.
      * @param generationId      The generation id.
+     * @param isTransactional   Whether the offset commit is transactional or not.
      */
     @Override
     public void validateOffsetCommit(
         String memberId,
         String groupInstanceId,
-        int generationId
+        int generationId,
+        boolean isTransactional
     ) throws CoordinatorNotAvailableException, UnknownMemberIdException, IllegalGenerationException, FencedInstanceIdException {
         if (isInState(DEAD)) {
             throw Errors.COORDINATOR_NOT_AVAILABLE.exception();
@@ -828,22 +830,26 @@ public class GenericGroup implements Group {
         }
 
         if (generationId >= 0 || !memberId.isEmpty() || groupInstanceId != null) {
-            validateMember(memberId, groupInstanceId, "offset-commit");
+            validateMember(memberId, groupInstanceId, isTransactional ? "offset-commit" : "txn-offset-commit");
 
             if (generationId != this.generationId) {
                 throw Errors.ILLEGAL_GENERATION.exception();
             }
-        } else if (!isInState(EMPTY)) {
+        } else if (!isTransactional && !isInState(EMPTY)) {
             // If the request does not contain the member id and the generation id (version 0),
             // offset commits are only accepted when the group is empty.
+            // This does not apply to transactional offset commits, since the older versions
+            // of this protocol do not require member id and generation id.
             throw Errors.UNKNOWN_MEMBER_ID.exception();
         }
 
-        if (isInState(COMPLETING_REBALANCE)) {
+        if (!isTransactional && isInState(COMPLETING_REBALANCE)) {
             // We should not receive a commit request if the group has not completed rebalance;
             // but since the consumer's member.id and generation is valid, it means it has received
             // the latest group generation information from the JoinResponse.
             // So let's return a REBALANCE_IN_PROGRESS to let consumer handle it gracefully.
+            // This does not apply to transactional offset commits, since the group state
+            // is not enforced for those.
             throw Errors.REBALANCE_IN_PROGRESS.exception();
         }
     }

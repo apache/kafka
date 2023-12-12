@@ -1750,9 +1750,11 @@ class KafkaConfigTest {
     props.setProperty(KafkaConfig.MigrationEnabledProp, "true")
     props.setProperty(KafkaConfig.QuorumVotersProp, "3000@localhost:9093")
     props.setProperty(KafkaConfig.ControllerListenerNamesProp, "CONTROLLER")
+    props.setProperty(KafkaConfig.InterBrokerProtocolVersionProp, MetadataVersion.IBP_3_7_IV1.version())
 
     assertEquals(
-      "requirement failed: Cannot enable ZooKeeper migration when multiple log directories (aka JBOD) are in use.",
+      "requirement failed: Cannot enable ZooKeeper migration with multiple log directories " +
+      "(aka JBOD) without setting 'inter.broker.protocol.version' to 3.7-IV2 or higher",
       assertThrows(classOf[IllegalArgumentException], () => KafkaConfig.fromProps(props)).getMessage)
   }
 
