@@ -13,7 +13,7 @@
 package kafka.api
 
 import java.util.{Locale, Properties}
-import kafka.server.{BrokerTopicStats, KafkaConfig, KafkaServer}
+import kafka.server.{KafkaConfig, KafkaServer}
 import kafka.utils.{JaasTestUtils, TestUtils}
 import com.yammer.metrics.core.{Gauge, Histogram, Meter}
 import org.apache.kafka.clients.consumer.Consumer
@@ -330,7 +330,7 @@ class MetricsTest extends IntegrationTestHarness with SaslSetup {
         metric._1.getMBeanName().equals(name.getMBeanName)
       }).isDefined
     ).toList
-    val aggregatedBrokerTopicStats = Set(BrokerTopicStats.RemoteCopyLagBytes)
+    val aggregatedBrokerTopicStats = Set(RemoteStorageMetrics.REMOTE_COPY_LOG_BYTES_METRIC.getName)
     val aggregatedBrokerTopicMetrics = aggregatedBrokerTopicStats.filter(name =>
       KafkaYammerMetrics.defaultRegistry().allMetrics().asScala.find(metric => {
         metric._1.getMBeanName().equals(fromNameToBrokerTopicStatsMBean(name))

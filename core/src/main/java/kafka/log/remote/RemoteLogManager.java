@@ -341,9 +341,10 @@ public class RemoteLogManager implements Closeable {
 
             leaderPartitions.forEach(this::cacheTopicPartitionIds);
             followerPartitions.forEach(this::cacheTopicPartitionIds);
+            followerPartitions.forEach(
+                    topicIdPartition -> brokerTopicStats.topicStats(topicIdPartition.topic()).removeRemoteCopyBytesLag(topicIdPartition.partition()));
 
-            remoteLogMetadataManager.onPartitionLeadershipChanges(leaderPartitions, followerPartitions);
-            followerPartitions.forEach(topicIdPartition ->
+            remoteLogMetadataManager.onPartitionLeadershipChanges(leaderPartitions, followerPartitions);followerPartitions.forEach(topicIdPartition ->
                     doHandleLeaderOrFollowerPartitions(topicIdPartition, RLMTask::convertToFollower));
 
             leaderPartitionsWithLeaderEpoch.forEach((topicIdPartition, leaderEpoch) ->
@@ -373,6 +374,9 @@ public class RemoteLogManager implements Closeable {
                         LOGGER.info("Cancelling the RLM task for tpId: {}", tpId);
                         task.cancel();
                     }
+
+                    brokerTopicStats.topicStats(tp.topic()).removeRemoteCopyBytesLag(tp.partition());
+
                     if (stopPartition.deleteRemoteLog()) {
                         LOGGER.info("Deleting the remote log segments task for partition: {}", tpId);
                         deleteRemoteLogPartition(tpId);
@@ -782,7 +786,7 @@ public class RemoteLogManager implements Closeable {
             long bytesLag = log.onlyLocalLogSegmentsSize() - log.activeSegment().size();
             String topic = topicIdPartition.topic();
             int partition = topicIdPartition.partition();
-            brokerTopicStats.topicStats(topic).remoteBrokerTopicAggregateMetrics().get().setPartitionMetricValue(partition, bytesLag);
+            brokerTopicStats.topicStats(topic).recordRemoteCopyBytesLag(partition, bytesLag);
         }
 
         private Path toPathIfExists(File file) {

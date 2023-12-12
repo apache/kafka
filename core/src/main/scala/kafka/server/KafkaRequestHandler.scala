@@ -284,28 +284,21 @@ class BrokerTopicMetrics(name: Option[String], configOpt: java.util.Optional[Kaf
   }
 
   case class GaugeWrapper(metricType: String, brokerTopicAggregatedMetric: BrokerTopicAggregatedMetric) {
-    @volatile private var lazyGauge: Gauge[Long] = _
-    private val gaugeLock = new Object
+    @volatile private var gaugeObject: Gauge[Long] = _
+    final private val gaugeLock = new Object
 
-    def gauge(): Gauge[Long] = {
-      var gauge = lazyGauge
-      if (gauge == null) {
-        gaugeLock synchronized {
-          gauge = lazyGauge
-          if (gauge == null) {
-            gauge = metricsGroup.newGauge(metricType, () => brokerTopicAggregatedMetric.value())
-            lazyGauge = gauge
-          }
-        }
+    def gauge(): Gauge[Long] = gaugeLock synchronized {
+      if (gaugeObject == null) {
+        gaugeObject = metricsGroup.newGauge(metricType, () => brokerTopicAggregatedMetric.value())
       }
-      gauge
+      return gaugeObject
     }
 
     def close(): Unit = gaugeLock synchronized {
-      if (lazyGauge != null) {
+      if (gaugeObject != null) {
         metricsGroup.removeMetric(metricType)
         brokerTopicAggregatedMetric.close()
-        lazyGauge = null
+        gaugeObject = null
       }
     }
 
@@ -350,7 +343,7 @@ class BrokerTopicMetrics(name: Option[String], configOpt: java.util.Optional[Kaf
         RemoteStorageMetrics.FAILED_REMOTE_COPY_PER_SEC_METRIC.getName -> MeterWrapper(RemoteStorageMetrics.FAILED_REMOTE_COPY_PER_SEC_METRIC.getName, "requests")
       ).asJava)
       metricGaugeTypeMap.putAll(Map(
-        BrokerTopicStats.RemoteCopyLagBytes -> GaugeWrapper(BrokerTopicStats.RemoteCopyLagBytes, new BrokerTopicAggregatedMetric)
+        RemoteStorageMetrics.REMOTE_COPY_LOG_BYTES_METRIC.getName -> GaugeWrapper(RemoteStorageMetrics.REMOTE_COPY_LOG_BYTES_METRIC.getName, new BrokerTopicAggregatedMetric)
       ).asJava)
     })
 
@@ -403,15 +396,17 @@ class BrokerTopicMetrics(name: Option[String], configOpt: java.util.Optional[Kaf
 
   def invalidOffsetOrSequenceRecordsPerSec: Meter = metricTypeMap.get(BrokerTopicStats.InvalidOffsetOrSequenceRecordsPerSec).meter()
 
-  def remoteCopyLagBytesWrapper: Gauge[Long] = metricGaugeTypeMap.get(BrokerTopicStats.RemoteCopyLagBytes).gauge()
-
-  def remoteBrokerTopicAggregateMetrics: Option[BrokerTopicAggregatedMetric] = {
-    if (metricGaugeTypeMap.contains(BrokerTopicStats.RemoteCopyLagBytes)) {
-      Option.apply(metricGaugeTypeMap.get(BrokerTopicStats.RemoteCopyLagBytes).brokerTopicAggregatedMetric)
-    } else {
-      Option.empty[BrokerTopicAggregatedMetric]
-    }
+  def recordRemoteCopyBytesLag(partition: Int, bytesLag: Long): Unit = {
+    val brokerTopicAggregatedMetric = metricGaugeTypeMap.get(RemoteStorageMetrics.REMOTE_COPY_LOG_BYTES_METRIC.getName).brokerTopicAggregatedMetric
+    brokerTopicAggregatedMetric.setPartitionMetricValue(partition, bytesLag)
   }
+
+  def removeRemoteCopyBytesLag(partition: Int): Unit = {
+    val brokerTopicAggregatedMetric = metricGaugeTypeMap.get(RemoteStorageMetrics.REMOTE_COPY_LOG_BYTES_METRIC.getName).brokerTopicAggregatedMetric
+    brokerTopicAggregatedMetric.removePartition(partition)
+  }
+
+  def remoteCopyBytesLag: Long = metricGaugeTypeMap.get(RemoteStorageMetrics.REMOTE_COPY_LOG_BYTES_METRIC.getName).brokerTopicAggregatedMetric.value()
 
   def remoteCopyBytesRate: Meter = metricTypeMap.get(RemoteStorageMetrics.REMOTE_COPY_BYTES_PER_SEC_METRIC.getName).meter()
 
@@ -429,6 +424,9 @@ class BrokerTopicMetrics(name: Option[String], configOpt: java.util.Optional[Kaf
     val meter = metricTypeMap.get(metricType)
     if (meter != null)
       meter.close()
+    val gauge = metricGaugeTypeMap.get(metricType)
+    if (gauge != null)
+      gauge.close()
   }
 
   def close(): Unit = {
@@ -438,17 +436,17 @@ class BrokerTopicMetrics(name: Option[String], configOpt: java.util.Optional[Kaf
 }
 
 class BrokerTopicAggregatedMetric() {
-  private val partitionMetricValues = new ConcurrentHashMap[Int, Long]().asScala
+  private val partitionMetricValues = new ConcurrentHashMap[Int, Long]()
 
-  def setPartitionMetricValue(partition: Int, partitionValue: Long): Option[Long] = {
+  def setPartitionMetricValue(partition: Int, partitionValue: Long): Unit = {
     partitionMetricValues.put(partition, partitionValue)
   }
 
   def removePartition(partition: Int): Option[Long] = {
-    partitionMetricValues.remove(partition)
+    Option.apply(partitionMetricValues.remove(partition))
   }
 
-  def value(): Long = partitionMetricValues.values.sum
+  def value(): Long = partitionMetricValues.values().stream().mapToLong(v => v).sum()
 
   def close(): Unit = partitionMetricValues.clear()
 }
@@ -468,7 +466,6 @@ object BrokerTopicStats {
   val ProduceMessageConversionsPerSec = "ProduceMessageConversionsPerSec"
   val ReassignmentBytesInPerSec = "ReassignmentBytesInPerSec"
   val ReassignmentBytesOutPerSec = "ReassignmentBytesOutPerSec"
-  val RemoteCopyLagBytes = "RemoteCopyLagBytes"
   // These following topics are for LogValidator for better debugging on failed records
   val NoKeyCompactedTopicRecordsPerSec = "NoKeyCompactedTopicRecordsPerSec"
   val InvalidMagicNumberRecordsPerSec = "InvalidMagicNumberRecordsPerSec"
@@ -527,6 +524,7 @@ class BrokerTopicStats(configOpt: java.util.Optional[KafkaConfig] = java.util.Op
       topicMetrics.closeMetric(RemoteStorageMetrics.REMOTE_COPY_REQUESTS_PER_SEC_METRIC.getName)
       topicMetrics.closeMetric(RemoteStorageMetrics.FAILED_REMOTE_FETCH_PER_SEC_METRIC.getName)
       topicMetrics.closeMetric(RemoteStorageMetrics.FAILED_REMOTE_COPY_PER_SEC_METRIC.getName)
+      topicMetrics.closeMetric(RemoteStorageMetrics.REMOTE_COPY_LOG_BYTES_METRIC.getName)
     }
   }
 

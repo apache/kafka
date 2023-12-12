@@ -703,9 +703,7 @@ public class RemoteLogManagerTest {
 
         // before running tasks, the remote log manager tasks should be all idle
         assertEquals(1.0, (double) yammerMetricValue("RemoteLogManagerTasksAvgIdlePercent"));
-        Map<MetricName, Metric> metricNameMetricMapBefore = KafkaYammerMetrics.defaultRegistry().allMetrics();
         remoteLogManager.onLeadershipChange(Collections.singleton(mockLeaderPartition), Collections.singleton(mockFollowerPartition), topicIds);
-        Map<MetricName, Metric> metricNameMetricMapAfter = KafkaYammerMetrics.defaultRegistry().allMetrics();
         assertTrue((double) yammerMetricValue("RemoteLogManagerTasksAvgIdlePercent") < 1.0);
         // unlock copyLogSegmentData
         latch.countDown();
@@ -744,7 +742,6 @@ public class RemoteLogManagerTest {
 
         FileRecords olderFileRecords = mock(FileRecords.class);
         when(olderSegment.log()).thenReturn(olderFileRecords);
-        // TODO: Do I need another temporary file?
         when(olderFileRecords.file()).thenReturn(tempFile);
         when(olderFileRecords.sizeInBytes()).thenReturn(10);
         when(olderSegment.readNextOffset()).thenReturn(nextSegmentStartOffset);
@@ -788,17 +785,16 @@ public class RemoteLogManagerTest {
             return Optional.empty();
         }).when(remoteStorageManager).copyLogSegmentData(any(RemoteLogSegmentMetadata.class), any(LogSegmentData.class));
         Partition mockLeaderPartition = mockPartition(leaderTopicIdPartition);
-        Partition mockFollowerPartition = mockPartition(followerTopicIdPartition);
 
         when(mockLog.onlyLocalLogSegmentsSize()).thenReturn(175L, 100L);
         when(activeSegment.size()).thenReturn(100);
 
         // before running tasks, the metric should not be registered
-        assertThrows(NoSuchElementException.class, () -> yammerMetricValue("RemoteCopyLogBytes"));
-        remoteLogManager.onLeadershipChange(Collections.singleton(mockLeaderPartition), Collections.singleton(mockFollowerPartition), topicIds);
+        assertThrows(NoSuchElementException.class, () -> yammerMetricValue("RemoteCopyLagBytes"));
+        remoteLogManager.onLeadershipChange(Collections.singleton(mockLeaderPartition), Collections.emptySet(), topicIds);
         TestUtils.waitForCondition(
                 () -> 75 == safeLongYammerMetricValue("RemoteCopyLagBytes"),
-                String.format("Expected to find 75 for RemoteCopyLagBytes metric value, but found", safeLongYammerMetricValue("RemoteCopyLagBytes")));
+                String.format("Expected to find 75 for RemoteCopyLagBytes metric value, but found %d", safeLongYammerMetricValue("RemoteCopyLagBytes")));
         // unlock copyLogSegmentData
         latch.countDown();
     }
