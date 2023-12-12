@@ -21,7 +21,7 @@ import java.util.Collections
 import java.util.concurrent.{ExecutionException, TimeUnit}
 import kafka.api.IntegrationTestHarness
 import kafka.controller.{OfflineReplica, PartitionAndReplica}
-import kafka.utils.TestUtils.{Checkpoint, LogDirFailureType, Roll}
+import kafka.utils.TestUtils.{waitUntilTrue, Checkpoint, LogDirFailureType, Roll}
 import kafka.utils.{CoreUtils, Exit, TestInfoUtils, TestUtils}
 import org.apache.kafka.clients.consumer.Consumer
 import org.apache.kafka.clients.producer.{ProducerConfig, ProducerRecord}
@@ -29,7 +29,7 @@ import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.{KafkaStorageException, NotLeaderOrFollowerException}
 import org.apache.kafka.common.utils.Utils
 import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.api.{BeforeEach, TestInfo}
+import org.junit.jupiter.api.{BeforeEach, Test, TestInfo}
 import org.junit.jupiter.params.provider.ValueSource
 import org.junit.jupiter.params.ParameterizedTest
 
@@ -72,9 +72,8 @@ class LogDirFailureTest extends IntegrationTestHarness {
 
   // Broker should halt on any log directory failure if inter-broker protocol < 1.0
   @nowarn("cat=deprecation")
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
-  @ValueSource(strings = Array("zk", "kraft"))
-  def brokerWithOldInterBrokerProtocolShouldHaltOnLogDirFailure(quorum: String): Unit = {
+  @Test
+  def zkBrokerWithOldInterBrokerProtocolShouldHaltOnLogDirFailure(): Unit = {
     @volatile var statusCodeOption: Option[Int] = None
     Exit.setHaltProcedure { (statusCode, _) =>
       statusCodeOption = Some(statusCode)
@@ -100,6 +99,12 @@ class LogDirFailureTest extends IntegrationTestHarness {
       if (server != null)
         TestUtils.shutdownServers(List(server))
     }
+  }
+
+  // TODO: depends on KAFKA-15893
+  @Test
+  def kraftBrokerWithOldInterBrokerProtocolShouldHaltOnLogDirFailure(): Unit = {
+    fail("KRaft broker should fail on log dir failure if inter-broker protocol < 3.7")
   }
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
@@ -177,19 +182,19 @@ class LogDirFailureTest extends IntegrationTestHarness {
     val partition = new TopicPartition(topic, 0)
     val record = new ProducerRecord(topic, 0, s"key".getBytes, s"value".getBytes)
 
-    val leaderServerId = producer.partitionsFor(topic).asScala.find(_.partition() == 0).get.leader().id()
-    val leaderServer = brokers.find(_.config.brokerId == leaderServerId).get
+    val originalLeaderServerId = producer.partitionsFor(topic).asScala.find(_.partition() == 0).get.leader().id()
+    val originalLeaderServer = brokers.find(_.config.brokerId == originalLeaderServerId).get
 
     // The first send() should succeed
     producer.send(record).get()
     TestUtils.consumeRecords(consumer, 1)
 
-    TestUtils.causeLogDirFailure(failureType, leaderServer, partition)
+    val failedLogDir = TestUtils.causeLogDirFailure(failureType, originalLeaderServer, partition)
 
     TestUtils.waitUntilTrue(() => {
       // ProduceResponse may contain KafkaStorageException and trigger metadata update
       producer.send(record)
-      producer.partitionsFor(topic).asScala.find(_.partition() == 0).get.leader().id() != leaderServerId
+      producer.partitionsFor(topic).asScala.find(_.partition() == 0).get.leader().id() != originalLeaderServerId
     }, "Expected new leader for the partition", 6000L)
 
     // Block on send to ensure that new leader accepts a message.
@@ -199,18 +204,26 @@ class LogDirFailureTest extends IntegrationTestHarness {
     TestUtils.pollUntilAtLeastNumRecords(consumer, 1)
 
     // There should be no remaining LogDirEventNotification znode
-    assertTrue(zkClient.getAllLogDirEventNotifications.isEmpty)
+    if (quorum == "zk") {
+      assertTrue(zkClient.getAllLogDirEventNotifications.isEmpty)
+    }
 
-    // The controller should have marked the replica on the original leader as offline
     if (quorum == "kraft") {
-      brokers.flatMap(b => b.metadataCache.getPartitionInfo(topic, 0)).foreach { partitionInfo =>
-        assertTrue(partitionInfo.replicas.contains(leaderServerId))
-        assertTrue(partitionInfo.offlineReplicas.contains(leaderServerId))
-      }
+      waitUntilTrue(() => {
+        brokers.exists(broker => {
+          val hasOfflineDir = broker.asInstanceOf[BrokerServer].logDirFailureChannel.hasOfflineLogDir(failedLogDir.toPath.toString)
+          hasOfflineDir && broker.asInstanceOf[BrokerServer]
+            .replicaManager
+            .metadataCache
+            .getClusterMetadata(broker.clusterId, broker.config.interBrokerListenerName)
+            .partition(new TopicPartition(topic, 0)).offlineReplicas().map(_.id()).contains(originalLeaderServerId)
+        })
+      }, "Expected to find an offline log dir", 60000L)
     } else {
+      // The controller should have marked the replica on the original leader as offline
       val controllerServer = servers.find(_.kafkaController.isActive).get
       val offlineReplicas = controllerServer.kafkaController.controllerContext.replicasInState(topic, OfflineReplica)
-      assertTrue(offlineReplicas.contains(PartitionAndReplica(new TopicPartition(topic, 0), leaderServerId)))
+      assertTrue(offlineReplicas.contains(PartitionAndReplica(new TopicPartition(topic, 0), originalLeaderServerId)))
     }
   }
 
