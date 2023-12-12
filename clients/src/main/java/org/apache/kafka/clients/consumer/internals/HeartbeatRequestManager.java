@@ -22,7 +22,6 @@ import org.apache.kafka.clients.consumer.internals.NetworkClientDelegate.PollRes
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEventHandler;
 import org.apache.kafka.clients.consumer.internals.events.ErrorBackgroundEvent;
 import org.apache.kafka.clients.consumer.internals.events.GroupMetadataUpdateEvent;
-import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
 import org.apache.kafka.common.errors.RetriableException;
@@ -37,10 +36,9 @@ import org.slf4j.Logger;
 
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
+import java.util.SortedSet;
 import java.util.TreeSet;
 import java.util.stream.Collectors;
 
@@ -315,17 +313,15 @@ public class HeartbeatRequestManager implements RequestManager {
                 break;
 
             case FENCED_MEMBER_EPOCH:
-                message = String.format("GroupHeartbeatRequest failed because member ID %s with epoch %s is invalid. " +
-                                "Will abandon all partitions and rejoin the group",
+                message = String.format("GroupHeartbeatRequest failed for member %s because epoch %s is fenced.",
                         membershipManager.memberId(), membershipManager.memberEpoch());
                 logInfo(message, response, currentTimeMs);
                 membershipManager.transitionToFenced();
                 break;
 
             case UNKNOWN_MEMBER_ID:
-                message = String.format("GroupHeartbeatRequest failed because member of unknown ID %s with epoch %s is invalid. " +
-                                "Will abandon all partitions and rejoin the group",
-                        membershipManager.memberId(), membershipManager.memberEpoch());
+                message = String.format("GroupHeartbeatRequest failed because member %s is unknown.",
+                        membershipManager.memberId());
                 logInfo(message, response, currentTimeMs);
                 membershipManager.transitionToFenced();
                 break;
@@ -485,17 +481,16 @@ public class HeartbeatRequestManager implements RequestManager {
 
             // ClientAssignors - not supported yet
 
-            // TopicPartitions - only sent if has changed since the last heartbeat
-            //   Note that TopicIdPartition.toString is being avoided here so that
-            //   the string consists of just the topic ID and the partition. 
-            //   When an assignment is received, we might not yet know the topic name
-            //   and then it is learnt subsequently by a metadata update.
-            TreeSet<String> assignedPartitions = membershipManager.currentAssignment().stream()
-                    .map(tp -> tp.topicId() + "-" + tp.partition())
-                    .collect(Collectors.toCollection(TreeSet::new));
+            // TopicPartitions - only sent if it has changed since the last heartbeat. Note that
+            // the string consists of just the topic ID and the partitions. When an assignment is
+            // received, we might not yet know the topic name, and then it is learnt subsequently
+            // by a metadata update.
+            TreeSet<String> assignedPartitions = membershipManager.currentAssignment().entrySet().stream()
+                .map(entry -> entry.getKey() + "-" + entry.getValue())
+                .collect(Collectors.toCollection(TreeSet::new));
             if (!assignedPartitions.equals(sentFields.topicPartitions)) {
                 List<ConsumerGroupHeartbeatRequestData.TopicPartitions> topicPartitions =
-                        buildTopicPartitionsList(membershipManager.currentAssignment());
+                    buildTopicPartitionsList(membershipManager.currentAssignment());
                 data.setTopicPartitions(topicPartitions);
                 sentFields.topicPartitions = assignedPartitions;
             }
@@ -503,21 +498,12 @@ public class HeartbeatRequestManager implements RequestManager {
             return data;
         }
 
-        private List<ConsumerGroupHeartbeatRequestData.TopicPartitions> buildTopicPartitionsList(Set<TopicIdPartition> topicIdPartitions) {
-            List<ConsumerGroupHeartbeatRequestData.TopicPartitions> result = new ArrayList<>();
-            Map<Uuid, List<Integer>> partitionsPerTopicId = new HashMap<>();
-            for (TopicIdPartition topicIdPartition : topicIdPartitions) {
-                Uuid topicId = topicIdPartition.topicId();
-                partitionsPerTopicId.computeIfAbsent(topicId, __ -> new ArrayList<>()).add(topicIdPartition.partition());
-            }
-            for (Map.Entry<Uuid, List<Integer>> entry : partitionsPerTopicId.entrySet()) {
-                Uuid topicId = entry.getKey();
-                List<Integer> partitions = entry.getValue();
-                result.add(new ConsumerGroupHeartbeatRequestData.TopicPartitions()
-                        .setTopicId(topicId)
-                        .setPartitions(partitions));
-            }
-            return result;
+        private List<ConsumerGroupHeartbeatRequestData.TopicPartitions> buildTopicPartitionsList(Map<Uuid, SortedSet<Integer>> topicIdPartitions) {
+            return topicIdPartitions.entrySet().stream().map(
+                    entry -> new ConsumerGroupHeartbeatRequestData.TopicPartitions()
+                        .setTopicId(entry.getKey())
+                        .setPartitions(new ArrayList<>(entry.getValue())))
+                .collect(Collectors.toList());
         }
 
         // Fields of ConsumerHeartbeatRequest sent in the most recent request

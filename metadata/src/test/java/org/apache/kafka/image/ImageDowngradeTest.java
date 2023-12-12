@@ -38,7 +38,6 @@ import java.util.Collections;
 import java.util.List;
 import java.util.function.Consumer;
 
-import static org.apache.kafka.metadata.util.MetadataFeatureUtil.withDirectoryAssignmentSupport;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 
@@ -132,7 +131,7 @@ public class ImageDowngradeTest {
     @Test
     void testDirectoryAssignmentState() {
         MetadataVersion outputMetadataVersion = MetadataVersion.IBP_3_7_IV0;
-        MetadataVersion inputMetadataVersion = withDirectoryAssignmentSupport(outputMetadataVersion);
+        MetadataVersion inputMetadataVersion = outputMetadataVersion;
         PartitionRecord testPartitionRecord = (PartitionRecord) TEST_RECORDS.get(1).message();
         writeWithExpectedLosses(outputMetadataVersion,
                 Collections.singletonList("the directory assignment state of one or more replicas"),

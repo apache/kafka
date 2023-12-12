@@ -49,7 +49,6 @@ import static org.apache.kafka.controller.PartitionChangeBuilder.Election;
 import static org.apache.kafka.controller.PartitionChangeBuilder.changeRecordIsNoOp;
 import static org.apache.kafka.metadata.LeaderConstants.NO_LEADER;
 import static org.apache.kafka.metadata.LeaderConstants.NO_LEADER_CHANGE;
-import static org.apache.kafka.metadata.util.MetadataFeatureUtil.withDirectoryAssignmentSupport;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -1058,7 +1057,7 @@ public class PartitionChangeBuilderTest {
                 setPartitionEpoch(200).
                 build();
         Optional<ApiMessageAndVersion> built = new PartitionChangeBuilder(registration, FOO_ID,
-                0, r -> true, withDirectoryAssignmentSupport(MetadataVersion.latest()), 2).
+                0, r -> true, MetadataVersion.latest(), 2).
                 setDirectory(3, Uuid.fromString("pN1VKs9zRzK4APflpegAVg")).
                 setDirectory(1, DirectoryId.LOST).
                 setDefaultDirProvider(DEFAULT_DIR_PROVIDER).

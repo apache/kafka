@@ -22,6 +22,7 @@ import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.runtime.distributed.DistributedConfig;
 import org.apache.kafka.connect.runtime.rest.entities.CreateConnectorRequest;
 import org.apache.kafka.connect.runtime.rest.resources.ConnectorsResource;
+import org.apache.kafka.connect.runtime.rest.errors.ConnectRestException;
 import org.apache.kafka.connect.storage.StringConverter;
 import org.apache.kafka.connect.util.clusters.EmbeddedConnectCluster;
 import org.apache.kafka.connect.util.clusters.WorkerHandle;
@@ -44,7 +45,9 @@ import java.util.Objects;
 import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 
+import static javax.ws.rs.core.Response.Status.INTERNAL_SERVER_ERROR;
 import static org.apache.kafka.clients.CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG;
 import static org.apache.kafka.connect.integration.MonitorableSourceConnector.TOPIC_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.CONNECTOR_CLASS_CONFIG;
@@ -58,11 +61,16 @@ import static org.apache.kafka.connect.runtime.TopicCreationConfig.PARTITIONS_CO
 import static org.apache.kafka.connect.runtime.TopicCreationConfig.REPLICATION_FACTOR_CONFIG;
 import static org.apache.kafka.connect.runtime.WorkerConfig.CONNECTOR_CLIENT_POLICY_CLASS_CONFIG;
 import static org.apache.kafka.connect.runtime.WorkerConfig.OFFSET_COMMIT_INTERVAL_MS_CONFIG;
+import static org.apache.kafka.connect.runtime.distributed.DistributedConfig.CONFIG_TOPIC_CONFIG;
+import static org.apache.kafka.connect.runtime.distributed.DistributedConfig.SCHEDULED_REBALANCE_MAX_DELAY_MS_CONFIG;
+import static org.apache.kafka.connect.runtime.rest.resources.ConnectResource.DEFAULT_REST_REQUEST_TIMEOUT_MS;
 import static org.apache.kafka.connect.util.clusters.ConnectAssertions.CONNECTOR_SETUP_DURATION_MS;
+import static org.apache.kafka.test.TestUtils.waitForCondition;
 import static org.hamcrest.CoreMatchers.containsString;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertTrue;
 
 /**
@@ -769,6 +777,111 @@ public class ConnectWorkerIntegrationTest {
         props.put(TOPICS_CONFIG, topics);
 
         return props;
+    }
+
+    @Test
+    public void testRequestTimeouts() throws Exception {
+        final String configTopic = "test-request-timeout-configs";
+        workerProps.put(CONFIG_TOPIC_CONFIG, configTopic);
+        // Workaround for KAFKA-15676, which can cause the scheduled rebalance delay to
+        // be spuriously triggered after the group coordinator for a Connect cluster is bounced
+        workerProps.put(SCHEDULED_REBALANCE_MAX_DELAY_MS_CONFIG, "0");
+        connect = connectBuilder
+                .numBrokers(1)
+                .numWorkers(1)
+                .build();
+        connect.start();
+        connect.assertions().assertAtLeastNumWorkersAreUp(1,
+                "Worker did not start in time");
+
+        Map<String, String> connectorConfig1 = defaultSourceConnectorProps(TOPIC_NAME);
+        Map<String, String> connectorConfig2 = new HashMap<>(connectorConfig1);
+        connectorConfig2.put(TASKS_MAX_CONFIG, Integer.toString(NUM_TASKS + 1));
+
+        // Create a connector to ensure that the worker has completed startup
+        log.info("Creating initial connector");
+        connect.configureConnector(CONNECTOR_NAME, connectorConfig1);
+        connect.assertions().assertConnectorAndExactlyNumTasksAreRunning(
+                CONNECTOR_NAME, NUM_TASKS, "connector and tasks did not start in time"
+        );
+
+        // Bring down Kafka, which should cause some REST requests to fail
+        log.info("Stopping Kafka cluster");
+        connect.kafka().stopOnlyKafka();
+
+        // Try to reconfigure the connector, which should fail with a timeout error
+        log.info("Trying to reconfigure connector while Kafka cluster is down");
+        assertTimeoutException(
+                () -> connect.configureConnector(CONNECTOR_NAME, connectorConfig2),
+                "flushing updates to the status topic"
+        );
+        log.info("Restarting Kafka cluster");
+        connect.kafka().startOnlyKafkaOnSamePorts();
+        connect.assertions().assertExactlyNumBrokersAreUp(1, "Broker did not complete startup in time");
+        log.info("Kafka cluster is restarted");
+
+        // Reconfigure the connector to ensure that the broker has completed startup
+        log.info("Reconfiguring connector with one more task");
+        connect.configureConnector(CONNECTOR_NAME, connectorConfig2);
+        connect.assertions().assertConnectorAndExactlyNumTasksAreRunning(
+                CONNECTOR_NAME, NUM_TASKS + 1, "connector and tasks did not start in time"
+        );
+
+        // Delete the config topic--WCGW?
+        log.info("Deleting Kafka Connect config topic");
+        connect.kafka().deleteTopic(configTopic);
+
+        // Try to delete the connector, which should fail with a slightly-different timeout error
+        log.info("Trying to reconfigure connector after config topic has been deleted");
+        assertTimeoutException(
+                () -> connect.deleteConnector(CONNECTOR_NAME),
+                "removing the config for connector " + CONNECTOR_NAME + " from the config topic"
+        );
+
+        // The worker should still be blocked on the same operation
+        log.info("Trying again to reconfigure connector after config topic has been deleted");
+        assertTimeoutException(
+                () -> connect.configureConnector(CONNECTOR_NAME, connectorConfig1),
+                "removing the config for connector " + CONNECTOR_NAME + " from the config topic"
+        );
+    }
+
+    private void assertTimeoutException(Runnable operation, String expectedStageDescription) throws InterruptedException {
+        connect.requestTimeout(1_000);
+        AtomicReference<Throwable> latestError = new AtomicReference<>();
+        waitForCondition(
+                () -> {
+                    try {
+                        operation.run();
+                        latestError.set(null);
+                        return false;
+                    } catch (Throwable t) {
+                        latestError.set(t);
+                        assertTrue(t instanceof ConnectRestException);
+                        ConnectRestException restException = (ConnectRestException) t;
+
+                        assertEquals(INTERNAL_SERVER_ERROR.getStatusCode(), restException.statusCode());
+                        assertNotNull(restException.getMessage());
+                        assertTrue(
+                                "Message '" + restException.getMessage() + "' does not match expected format",
+                                restException.getMessage().contains("Request timed out. The worker is currently " + expectedStageDescription)
+                        );
+
+                        return true;
+                    }
+                },
+                30_000,
+                () -> {
+                    String baseMessage = "REST request did not time out with expected error message in time. ";
+                    Throwable t = latestError.get();
+                    if (t == null) {
+                        return baseMessage + "The most recent request did not fail.";
+                    } else {
+                        return baseMessage + "Most recent error: " + t;
+                    }
+                }
+        );
+        connect.requestTimeout(DEFAULT_REST_REQUEST_TIMEOUT_MS);
     }
 
     private Map<String, String> defaultSourceConnectorProps(String topic) {

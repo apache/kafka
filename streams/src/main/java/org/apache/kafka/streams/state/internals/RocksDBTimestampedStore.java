@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import java.util.Optional;
 import org.apache.kafka.common.utils.AbstractIterator;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
@@ -27,6 +28,7 @@ import org.rocksdb.ColumnFamilyDescriptor;
 import org.rocksdb.ColumnFamilyHandle;
 import org.rocksdb.ColumnFamilyOptions;
 import org.rocksdb.DBOptions;
+import org.rocksdb.ReadOptions;
 import org.rocksdb.RocksDB;
 import org.rocksdb.RocksDBException;
 import org.rocksdb.RocksIterator;
@@ -139,12 +141,21 @@ public class RocksDBTimestampedStore extends RocksDBStore implements Timestamped
 
         @Override
         public byte[] get(final byte[] key) throws RocksDBException {
-            final byte[] valueWithTimestamp = db.get(newColumnFamily, key);
+            return get(key, Optional.empty());
+        }
+
+        @Override
+        public byte[] get(final byte[] key, final ReadOptions readOptions) throws RocksDBException {
+            return get(key, Optional.of(readOptions));
+        }
+
+        private byte[] get(final byte[] key, final Optional<ReadOptions> readOptions) throws RocksDBException {
+            final byte[] valueWithTimestamp = readOptions.isPresent() ? db.get(newColumnFamily, readOptions.get(), key) : db.get(newColumnFamily, key);
             if (valueWithTimestamp != null) {
                 return valueWithTimestamp;
             }
 
-            final byte[] plainValue = db.get(oldColumnFamily, key);
+            final byte[] plainValue = readOptions.isPresent() ? db.get(oldColumnFamily, readOptions.get(), key) : db.get(oldColumnFamily, key);
             if (plainValue != null) {
                 final byte[] valueWithUnknownTimestamp = convertToTimestampedFormat(plainValue);
                 // this does only work, because the changelog topic contains correct data already

@@ -32,6 +32,8 @@ import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetricsShard;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.timeline.SnapshotRegistry;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.Arrays;
 import java.util.Collections;
@@ -670,31 +672,32 @@ public class ConsumerGroupTest {
         assertEquals(0, group.metadataRefreshDeadline().epoch);
     }
 
-    @Test
-    public void testValidateOffsetCommit() {
+    @ParameterizedTest
+    @ValueSource(booleans = {false, true})
+    public void testValidateOffsetCommit(boolean isTransactional) {
         ConsumerGroup group = createConsumerGroup("group-foo");
 
         // Simulate a call from the admin client without member id and member epoch.
         // This should pass only if the group is empty.
-        group.validateOffsetCommit("", "", -1);
+        group.validateOffsetCommit("", "", -1, isTransactional);
 
         // The member does not exist.
         assertThrows(UnknownMemberIdException.class, () ->
-            group.validateOffsetCommit("member-id", null, 0));
+            group.validateOffsetCommit("member-id", null, 0, isTransactional));
 
         // Create a member.
         group.getOrMaybeCreateMember("member-id", true);
 
         // A call from the admin client should fail as the group is not empty.
         assertThrows(UnknownMemberIdException.class, () ->
-            group.validateOffsetCommit("", "", -1));
+            group.validateOffsetCommit("", "", -1, isTransactional));
 
         // The member epoch is stale.
         assertThrows(StaleMemberEpochException.class, () ->
-            group.validateOffsetCommit("member-id", "", 10));
+            group.validateOffsetCommit("member-id", "", 10, isTransactional));
 
         // This should succeed.
-        group.validateOffsetCommit("member-id", "", 0);
+        group.validateOffsetCommit("member-id", "", 0, isTransactional);
     }
 
     @Test

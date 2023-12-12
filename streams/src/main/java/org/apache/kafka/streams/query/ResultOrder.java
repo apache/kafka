@@ -15,18 +15,10 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.metadata.util;
+package org.apache.kafka.streams.query;
 
-import org.apache.kafka.server.common.MetadataVersion;
-import org.mockito.internal.util.MockUtil;
-
-import static org.mockito.Mockito.spy;
-import static org.mockito.Mockito.when;
-
-public class MetadataFeatureUtil {
-    public static MetadataVersion withDirectoryAssignmentSupport(MetadataVersion metadataVersion) {
-        MetadataVersion spy = MockUtil.isMock(metadataVersion) ? metadataVersion : spy(metadataVersion);
-        when(spy.isDirectoryAssignmentSupported()).thenReturn(true);
-        return spy;
-    }
+public enum ResultOrder {
+    ANY,
+    ASCENDING,
+    DESCENDING
 }

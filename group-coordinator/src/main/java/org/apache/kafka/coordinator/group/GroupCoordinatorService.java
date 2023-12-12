@@ -77,7 +77,6 @@ import org.apache.kafka.coordinator.group.runtime.PartitionWriter;
 import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.server.record.BrokerCompressionType;
-import org.apache.kafka.server.util.FutureUtils;
 import org.apache.kafka.server.util.timer.Timer;
 import org.slf4j.Logger;
 
@@ -884,9 +883,20 @@ public class GroupCoordinatorService implements GroupCoordinator {
             ));
         }
 
-        return FutureUtils.failedFuture(Errors.UNSUPPORTED_VERSION.exception(
-            "This API is not implemented yet."
-        ));
+        if (!isGroupIdNotEmpty(request.groupId())) {
+            return CompletableFuture.completedFuture(TxnOffsetCommitRequest.getErrorResponse(
+                request,
+                Errors.INVALID_GROUP_ID
+            ));
+        }
+
+        return runtime.scheduleWriteOperation(
+            "txn-commit-offset",
+            topicPartitionFor(request.groupId()),
+            coordinator -> coordinator.commitTransactionalOffset(context, request)
+        ).exceptionally(exception ->
+            TxnOffsetCommitRequest.getErrorResponse(request, normalizeException(exception))
+        );
     }
 
     /**
