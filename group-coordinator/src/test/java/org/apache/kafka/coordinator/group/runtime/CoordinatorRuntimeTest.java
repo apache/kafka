@@ -323,7 +323,7 @@ public class CoordinatorRuntimeTest {
                 .withTime(timer.time())
                 .withTimer(timer)
                 .withLoader(loader)
-                .withWriteTimeOut(DEFAULT_WRITE_TIMEOUT)
+                .withDefaultWriteTimeOut(DEFAULT_WRITE_TIMEOUT)
                 .withEventProcessor(new DirectEventProcessor())
                 .withPartitionWriter(writer)
                 .withCoordinatorShardBuilderSupplier(supplier)
@@ -392,7 +392,7 @@ public class CoordinatorRuntimeTest {
                 .withTime(timer.time())
                 .withTimer(timer)
                 .withLoader(loader)
-                .withWriteTimeOut(DEFAULT_WRITE_TIMEOUT)
+                .withDefaultWriteTimeOut(DEFAULT_WRITE_TIMEOUT)
                 .withEventProcessor(new DirectEventProcessor())
                 .withPartitionWriter(writer)
                 .withCoordinatorShardBuilderSupplier(supplier)
@@ -447,7 +447,7 @@ public class CoordinatorRuntimeTest {
                 .withTime(timer.time())
                 .withTimer(timer)
                 .withLoader(loader)
-                .withWriteTimeOut(DEFAULT_WRITE_TIMEOUT)
+                .withDefaultWriteTimeOut(DEFAULT_WRITE_TIMEOUT)
                 .withEventProcessor(new DirectEventProcessor())
                 .withPartitionWriter(new MockPartitionWriter())
                 .withCoordinatorShardBuilderSupplier(supplier)
@@ -500,7 +500,7 @@ public class CoordinatorRuntimeTest {
                 .withTime(timer.time())
                 .withTimer(timer)
                 .withLoader(loader)
-                .withWriteTimeOut(DEFAULT_WRITE_TIMEOUT)
+                .withDefaultWriteTimeOut(DEFAULT_WRITE_TIMEOUT)
                 .withEventProcessor(new DirectEventProcessor())
                 .withPartitionWriter(new MockPartitionWriter())
                 .withCoordinatorShardBuilderSupplier(supplier)
@@ -569,7 +569,7 @@ public class CoordinatorRuntimeTest {
             new CoordinatorRuntime.Builder<MockCoordinatorShard, String>()
                 .withTime(timer.time())
                 .withTimer(timer)
-                .withWriteTimeOut(DEFAULT_WRITE_TIMEOUT)
+                .withDefaultWriteTimeOut(DEFAULT_WRITE_TIMEOUT)
                 .withLoader(new MockCoordinatorLoader())
                 .withEventProcessor(new DirectEventProcessor())
                 .withPartitionWriter(writer)
@@ -621,7 +621,7 @@ public class CoordinatorRuntimeTest {
             new CoordinatorRuntime.Builder<MockCoordinatorShard, String>()
                 .withTime(timer.time())
                 .withTimer(timer)
-                .withWriteTimeOut(DEFAULT_WRITE_TIMEOUT)
+                .withDefaultWriteTimeOut(DEFAULT_WRITE_TIMEOUT)
                 .withLoader(new MockCoordinatorLoader())
                 .withEventProcessor(new DirectEventProcessor())
                 .withPartitionWriter(writer)
@@ -662,7 +662,7 @@ public class CoordinatorRuntimeTest {
             new CoordinatorRuntime.Builder<MockCoordinatorShard, String>()
                 .withTime(timer.time())
                 .withTimer(timer)
-                .withWriteTimeOut(DEFAULT_WRITE_TIMEOUT)
+                .withDefaultWriteTimeOut(DEFAULT_WRITE_TIMEOUT)
                 .withLoader(new MockCoordinatorLoader())
                 .withEventProcessor(new DirectEventProcessor())
                 .withPartitionWriter(new MockPartitionWriter())
@@ -704,7 +704,7 @@ public class CoordinatorRuntimeTest {
             new CoordinatorRuntime.Builder<MockCoordinatorShard, String>()
                 .withTime(timer.time())
                 .withTimer(timer)
-                .withWriteTimeOut(DEFAULT_WRITE_TIMEOUT)
+                .withDefaultWriteTimeOut(DEFAULT_WRITE_TIMEOUT)
                 .withLoader(new MockCoordinatorLoader())
                 .withEventProcessor(new DirectEventProcessor())
                 .withPartitionWriter(writer)
@@ -816,7 +816,7 @@ public class CoordinatorRuntimeTest {
             new CoordinatorRuntime.Builder<MockCoordinatorShard, String>()
                 .withTime(timer.time())
                 .withTimer(timer)
-                .withWriteTimeOut(DEFAULT_WRITE_TIMEOUT)
+                .withDefaultWriteTimeOut(DEFAULT_WRITE_TIMEOUT)
                 .withLoader(new MockCoordinatorLoader())
                 .withEventProcessor(new DirectEventProcessor())
                 .withPartitionWriter(new MockPartitionWriter())
@@ -839,7 +839,7 @@ public class CoordinatorRuntimeTest {
             new CoordinatorRuntime.Builder<MockCoordinatorShard, String>()
                 .withTime(timer.time())
                 .withTimer(timer)
-                .withWriteTimeOut(DEFAULT_WRITE_TIMEOUT)
+                .withDefaultWriteTimeOut(DEFAULT_WRITE_TIMEOUT)
                 .withLoader(new MockCoordinatorLoader())
                 .withEventProcessor(new DirectEventProcessor())
                 .withPartitionWriter(new MockPartitionWriter())
@@ -866,7 +866,7 @@ public class CoordinatorRuntimeTest {
             new CoordinatorRuntime.Builder<MockCoordinatorShard, String>()
                 .withTime(timer.time())
                 .withTimer(timer)
-                .withWriteTimeOut(DEFAULT_WRITE_TIMEOUT)
+                .withDefaultWriteTimeOut(DEFAULT_WRITE_TIMEOUT)
                 .withLoader(new MockCoordinatorLoader())
                 .withEventProcessor(new DirectEventProcessor())
                 .withPartitionWriter(new MockPartitionWriter())
@@ -924,7 +924,7 @@ public class CoordinatorRuntimeTest {
             new CoordinatorRuntime.Builder<MockCoordinatorShard, String>()
                 .withTime(timer.time())
                 .withTimer(timer)
-                .withWriteTimeOut(DEFAULT_WRITE_TIMEOUT)
+                .withDefaultWriteTimeOut(DEFAULT_WRITE_TIMEOUT)
                 .withLoader(new MockCoordinatorLoader())
                 .withEventProcessor(new DirectEventProcessor())
                 .withPartitionWriter(writer)
@@ -966,7 +966,7 @@ public class CoordinatorRuntimeTest {
     }
 
     @Test
-    public void testScheduleWriteOpWhenWriteTimesout() throws InterruptedException {
+    public void testScheduleWriteOpWhenWriteTimesOut() throws InterruptedException {
         MockTimer timer = new MockTimer();
         // The partition writer only accept on write.
         MockPartitionWriter writer = new MockPartitionWriter();
@@ -975,7 +975,7 @@ public class CoordinatorRuntimeTest {
             new CoordinatorRuntime.Builder<MockCoordinatorShard, String>()
                 .withTime(timer.time())
                 .withTimer(timer)
-                .withWriteTimeOut(DEFAULT_WRITE_TIMEOUT)
+                .withDefaultWriteTimeOut(DEFAULT_WRITE_TIMEOUT)
                 .withLoader(new MockCoordinatorLoader())
                 .withEventProcessor(new DirectEventProcessor())
                 .withPartitionWriter(writer)
@@ -993,7 +993,7 @@ public class CoordinatorRuntimeTest {
         assertEquals(0, ctx.coordinator.lastCommittedOffset());
         assertEquals(Collections.singletonList(0L), ctx.coordinator.snapshotRegistry().epochsList());
 
-        // Write #1. We should get a TimeoutException because the HWM will not advance
+        // Write #1. We should get a TimeoutException because the HWM will not advance.
         CompletableFuture<String> timedOutWrite = runtime.scheduleWriteOperation("write#1", TP, DEFAULT_WRITE_TIMEOUT,
             state -> new CoordinatorResult<>(Arrays.asList("record1", "record2"), "response1"));
 
@@ -1024,7 +1024,7 @@ public class CoordinatorRuntimeTest {
             new CoordinatorRuntime.Builder<MockCoordinatorShard, String>()
                 .withTime(timer.time())
                 .withTimer(timer)
-                .withWriteTimeOut(DEFAULT_WRITE_TIMEOUT)
+                .withDefaultWriteTimeOut(DEFAULT_WRITE_TIMEOUT)
                 .withLoader(new MockCoordinatorLoader())
                 .withEventProcessor(new DirectEventProcessor())
                 .withPartitionWriter(writer)
@@ -1082,7 +1082,7 @@ public class CoordinatorRuntimeTest {
             new CoordinatorRuntime.Builder<MockCoordinatorShard, String>()
                 .withTime(timer.time())
                 .withTimer(timer)
-                .withWriteTimeOut(DEFAULT_WRITE_TIMEOUT)
+                .withDefaultWriteTimeOut(DEFAULT_WRITE_TIMEOUT)
                 .withLoader(new MockCoordinatorLoader())
                 .withEventProcessor(new DirectEventProcessor())
                 .withPartitionWriter(writer)
@@ -1139,7 +1139,7 @@ public class CoordinatorRuntimeTest {
             new CoordinatorRuntime.Builder<MockCoordinatorShard, String>()
                 .withTime(timer.time())
                 .withTimer(timer)
-                .withWriteTimeOut(DEFAULT_WRITE_TIMEOUT)
+                .withDefaultWriteTimeOut(DEFAULT_WRITE_TIMEOUT)
                 .withLoader(new MockCoordinatorLoader())
                 .withEventProcessor(new DirectEventProcessor())
                 .withPartitionWriter(new MockPartitionWriter())
@@ -1163,7 +1163,7 @@ public class CoordinatorRuntimeTest {
             new CoordinatorRuntime.Builder<MockCoordinatorShard, String>()
                 .withTime(timer.time())
                 .withTimer(timer)
-                .withWriteTimeOut(DEFAULT_WRITE_TIMEOUT)
+                .withDefaultWriteTimeOut(DEFAULT_WRITE_TIMEOUT)
                 .withLoader(new MockCoordinatorLoader())
                 .withEventProcessor(new DirectEventProcessor())
                 .withPartitionWriter(writer)
@@ -1208,7 +1208,7 @@ public class CoordinatorRuntimeTest {
                 .withTime(timer.time())
                 .withTimer(timer)
                 .withLoader(loader)
-                .withWriteTimeOut(DEFAULT_WRITE_TIMEOUT)
+                .withDefaultWriteTimeOut(DEFAULT_WRITE_TIMEOUT)
                 .withEventProcessor(new DirectEventProcessor())
                 .withPartitionWriter(new MockPartitionWriter())
                 .withCoordinatorShardBuilderSupplier(new MockCoordinatorShardBuilderSupplier())
@@ -1276,7 +1276,7 @@ public class CoordinatorRuntimeTest {
                 .withTime(timer.time())
                 .withTimer(timer)
                 .withLoader(loader)
-                .withWriteTimeOut(DEFAULT_WRITE_TIMEOUT)
+                .withDefaultWriteTimeOut(DEFAULT_WRITE_TIMEOUT)
                 .withEventProcessor(new DirectEventProcessor())
                 .withPartitionWriter(writer)
                 .withCoordinatorShardBuilderSupplier(supplier)
@@ -1337,7 +1337,7 @@ public class CoordinatorRuntimeTest {
             new CoordinatorRuntime.Builder<MockCoordinatorShard, String>()
                 .withTime(timer.time())
                 .withTimer(timer)
-                .withWriteTimeOut(Duration.ofMillis(30))
+                .withDefaultWriteTimeOut(Duration.ofMillis(30))
                 .withLoader(new MockCoordinatorLoader())
                 .withEventProcessor(new DirectEventProcessor())
                 .withPartitionWriter(new MockPartitionWriter())
@@ -1391,7 +1391,7 @@ public class CoordinatorRuntimeTest {
             new CoordinatorRuntime.Builder<MockCoordinatorShard, String>()
                 .withTime(timer.time())
                 .withTimer(timer)
-                .withWriteTimeOut(DEFAULT_WRITE_TIMEOUT)
+                .withDefaultWriteTimeOut(DEFAULT_WRITE_TIMEOUT)
                 .withLoader(new MockCoordinatorLoader())
                 .withEventProcessor(processor)
                 .withPartitionWriter(new MockPartitionWriter())
@@ -1465,7 +1465,7 @@ public class CoordinatorRuntimeTest {
             new CoordinatorRuntime.Builder<MockCoordinatorShard, String>()
                 .withTime(timer.time())
                 .withTimer(timer)
-                .withWriteTimeOut(DEFAULT_WRITE_TIMEOUT)
+                .withDefaultWriteTimeOut(DEFAULT_WRITE_TIMEOUT)
                 .withLoader(new MockCoordinatorLoader())
                 .withEventProcessor(processor)
                 .withPartitionWriter(new MockPartitionWriter())
@@ -1536,7 +1536,7 @@ public class CoordinatorRuntimeTest {
             new CoordinatorRuntime.Builder<MockCoordinatorShard, String>()
                 .withTime(timer.time())
                 .withTimer(timer)
-                .withWriteTimeOut(DEFAULT_WRITE_TIMEOUT)
+                .withDefaultWriteTimeOut(DEFAULT_WRITE_TIMEOUT)
                 .withLoader(new MockCoordinatorLoader())
                 .withEventProcessor(new DirectEventProcessor())
                 .withPartitionWriter(new MockPartitionWriter())
@@ -1595,7 +1595,7 @@ public class CoordinatorRuntimeTest {
             new CoordinatorRuntime.Builder<MockCoordinatorShard, String>()
                 .withTime(timer.time())
                 .withTimer(timer)
-                .withWriteTimeOut(DEFAULT_WRITE_TIMEOUT)
+                .withDefaultWriteTimeOut(DEFAULT_WRITE_TIMEOUT)
                 .withLoader(new MockCoordinatorLoader())
                 .withEventProcessor(new DirectEventProcessor())
                 .withPartitionWriter(new MockPartitionWriter())
@@ -1644,7 +1644,7 @@ public class CoordinatorRuntimeTest {
             new CoordinatorRuntime.Builder<MockCoordinatorShard, String>()
                 .withTime(timer.time())
                 .withTimer(timer)
-                .withWriteTimeOut(DEFAULT_WRITE_TIMEOUT)
+                .withDefaultWriteTimeOut(DEFAULT_WRITE_TIMEOUT)
                 .withLoader(loader)
                 .withEventProcessor(new DirectEventProcessor())
                 .withPartitionWriter(writer)
@@ -1713,7 +1713,7 @@ public class CoordinatorRuntimeTest {
             new CoordinatorRuntime.Builder<MockCoordinatorShard, String>()
                 .withTime(timer.time())
                 .withTimer(timer)
-                .withWriteTimeOut(DEFAULT_WRITE_TIMEOUT)
+                .withDefaultWriteTimeOut(DEFAULT_WRITE_TIMEOUT)
                 .withLoader(new MockCoordinatorLoader(
                     new CoordinatorLoader.LoadSummary(
                         startTimeMs,
@@ -1767,7 +1767,7 @@ public class CoordinatorRuntimeTest {
             new CoordinatorRuntime.Builder<MockCoordinatorShard, String>()
                 .withTime(Time.SYSTEM)
                 .withTimer(timer)
-                .withWriteTimeOut(DEFAULT_WRITE_TIMEOUT)
+                .withDefaultWriteTimeOut(DEFAULT_WRITE_TIMEOUT)
                 .withLoader(new MockCoordinatorLoader(
                     new CoordinatorLoader.LoadSummary(
                         1000,
@@ -1822,7 +1822,7 @@ public class CoordinatorRuntimeTest {
             new CoordinatorRuntime.Builder<MockCoordinatorShard, String>()
                 .withTime(Time.SYSTEM)
                 .withTimer(timer)
-                .withWriteTimeOut(DEFAULT_WRITE_TIMEOUT)
+                .withDefaultWriteTimeOut(DEFAULT_WRITE_TIMEOUT)
                 .withLoader(new MockCoordinatorLoader(
                     new CoordinatorLoader.LoadSummary(
                         1000,
