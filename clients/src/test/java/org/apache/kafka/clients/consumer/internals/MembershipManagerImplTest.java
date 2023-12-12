@@ -42,6 +42,7 @@ import java.util.TreeSet;
 import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 
+import static org.apache.kafka.common.requests.ConsumerGroupHeartbeatRequest.LEAVE_GROUP_MEMBER_EPOCH;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
@@ -1044,6 +1045,22 @@ public class MembershipManagerImplTest {
         assertEquals(0, rebalanceListener.revokedCount);
     }
 
+    @Test
+    public void testTransitionToStaled() {
+        MembershipManager membershipManager = memberJoinWithAssignment("topic", Uuid.randomUuid());
+        membershipManager.transitionToStaled();
+        assertEquals(LEAVE_GROUP_MEMBER_EPOCH, membershipManager.memberEpoch());
+        assertTrue(membershipManager.currentAssignment().isEmpty());
+    }
+
+    @Test
+    public void testHeartbeatSentOnStaledMember() {
+        MembershipManagerImpl membershipManager = createMemberInStableState();
+        membershipManager.transitionToStaled();
+        membershipManager.onHeartbeatRequestSent();
+        assertEquals(MemberState.JOINING, membershipManager.state());
+    }
+
     private MembershipManagerImpl mockMemberSuccessfullyReceivesAndAcksAssignment(
             Uuid topicId, String topicName, List<Integer> partitions) {
         MembershipManagerImpl membershipManager = createMembershipManagerJoiningGroup();
@@ -1382,5 +1399,15 @@ public class MembershipManagerImplTest {
                                 .setTopicId(topic2)
                                 .setPartitions(Arrays.asList(3, 4, 5))
                 ));
+    }
+
+    private MembershipManager memberJoinWithAssignment(String topicName, Uuid topicId) {
+        MembershipManagerImpl membershipManager = mockJoinAndReceiveAssignment(true);
+        membershipManager.onHeartbeatRequestSent();
+        when(metadata.topicNames()).thenReturn(Collections.singletonMap(topicId, topicName));
+        receiveAssignment(topicId, Collections.singletonList(0), membershipManager);
+        membershipManager.onHeartbeatRequestSent();
+        assertFalse(membershipManager.currentAssignment().isEmpty());
+        return membershipManager;
     }
 }

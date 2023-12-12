@@ -94,32 +94,7 @@ promoted_docker_image: apache/kafka:3.6.0
 
 Using the image in a docker container
 -------------------------------------
-- The image uses the kafka downloaded from provided kafka url
-- The image can be run in a container in default mode by running
-`docker run -p 9092:9092 <image-name:tag>`
-- Default configs run kafka in kraft mode with plaintext listners on 9092 port.
-- Once user provided config properties are provided default configs will get replaced.
-- User can provide kafka configs following two ways:-
-    - By mounting folder containing property files
-        - Mount the folder containing kafka property files to `/mnt/shared/config`
-        - These files will replace the default config files
-    - Using environment variables
-        - Kafka properties defined via env variables will override properties defined in file input
-        - If properties are provided via environment variables only, default configs will be replaced by user provided properties
-        - Input format for env variables:-
-            - Replace . with _
-            - Replace _ with __(double underscore)
-            - Replace - with ___(triple underscore)
-            - Prefix the result with KAFKA_
-            - Examples:
-                - For abc.def, use KAFKA_ABC_DEF
-                - For abc-def, use KAFKA_ABC___DEF
-                - For abc_def, use KAFKA_ABC__DEF
-- Hence order of precedence of properties is the following:-
-    - Env variable (highest)
-    - File input
-    - Default configs (only when there is no user provided config)
-- Any env variable that is commonly used in starting kafka(for example, CLUSTER_ID) can be supplied to docker container and it will be available when kafka starts
+Please check [this](./examples/README.md) for usage guide of the docker image.
 
 Steps to release docker image
 -----------------------------

@@ -133,6 +133,11 @@ public class BlockingConnectorTest {
                 NUM_WORKERS,
                 "Initial group of workers did not start in time"
         );
+
+        try (Response response = connect.requestGet(connect.endpointForResource("connectors/nonexistent"))) {
+            // hack: make sure the worker is actually up (has joined the cluster, created and read to the end of internal topics, etc.)
+            assertEquals(404, response.getStatus());
+        }
     }
 
     @After
@@ -145,7 +150,11 @@ public class BlockingConnectorTest {
     @Test
     public void testBlockInConnectorValidate() throws Exception {
         log.info("Starting test testBlockInConnectorValidate");
-        assertRequestTimesOut("create connector that blocks during validation", () -> createConnectorWithBlock(ValidateBlockingConnector.class, CONNECTOR_VALIDATE));
+        assertRequestTimesOut(
+                "create connector that blocks during validation",
+                () -> createConnectorWithBlock(ValidateBlockingConnector.class, CONNECTOR_VALIDATE),
+                "The worker is currently performing multi-property validation for the connector"
+        );
         // Will NOT assert that connector has failed, since the request should fail before it's even created
 
         // Connector should already be blocked so this should return immediately, but check just to
@@ -159,7 +168,11 @@ public class BlockingConnectorTest {
     @Test
     public void testBlockInConnectorConfig() throws Exception {
         log.info("Starting test testBlockInConnectorConfig");
-        assertRequestTimesOut("create connector that blocks while getting config", () -> createConnectorWithBlock(ConfigBlockingConnector.class, CONNECTOR_CONFIG));
+        assertRequestTimesOut(
+                "create connector that blocks while getting config",
+                () -> createConnectorWithBlock(ConfigBlockingConnector.class, CONNECTOR_CONFIG),
+                "The worker is currently retrieving the configuration definition from the connector"
+        );
         // Will NOT assert that connector has failed, since the request should fail before it's even created
 
         // Connector should already be blocked so this should return immediately, but check just to
@@ -178,6 +191,13 @@ public class BlockingConnectorTest {
 
         createNormalConnector();
         verifyNormalConnector();
+
+        // Try to restart the connector
+        assertRequestTimesOut(
+                "restart connector that blocks during initialize",
+                () -> connect.restartConnector(BLOCKING_CONNECTOR_NAME),
+                "The worker is currently starting the connector"
+        );
     }
 
     @Test
@@ -188,6 +208,13 @@ public class BlockingConnectorTest {
 
         createNormalConnector();
         verifyNormalConnector();
+
+        // Try to restart the connector
+        assertRequestTimesOut(
+                "restart connector that blocks during start",
+                () -> connect.restartConnector(BLOCKING_CONNECTOR_NAME),
+                "The worker is currently starting the connector"
+        );
     }
 
     @Test
@@ -329,7 +356,7 @@ public class BlockingConnectorTest {
         normalConnectorHandle.awaitCommits(RECORD_TRANSFER_TIMEOUT_MS);
     }
 
-    private void assertRequestTimesOut(String requestDescription, ThrowingRunnable request) {
+    private void assertRequestTimesOut(String requestDescription, ThrowingRunnable request, String expectedTimeoutMessage) {
         // Artificially reduce the REST request timeout so that these don't take 90 seconds
         connect.requestTimeout(REDUCED_REST_REQUEST_TIMEOUT);
         ConnectRestException exception = assertThrows(
@@ -345,6 +372,12 @@ public class BlockingConnectorTest {
                         + "; instead, message was: " + exception.getMessage(),
                 exception.getMessage().contains("Request timed out")
         );
+        if (expectedTimeoutMessage != null) {
+            assertTrue(
+                    "Timeout error message '" + exception.getMessage() + "' does not match expected format",
+                    exception.getMessage().contains(expectedTimeoutMessage)
+            );
+        }
         // Reset the REST request timeout so that other requests aren't impacted
         connect.requestTimeout(ConnectResource.DEFAULT_REST_REQUEST_TIMEOUT_MS);
     }

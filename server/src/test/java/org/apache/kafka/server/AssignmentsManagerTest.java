@@ -17,6 +17,9 @@
 
 package org.apache.kafka.server;
 
+import com.yammer.metrics.core.Gauge;
+import com.yammer.metrics.core.Metric;
+import com.yammer.metrics.core.MetricName;
 import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.AuthenticationException;
@@ -29,6 +32,8 @@ import org.apache.kafka.common.requests.AssignReplicasToDirsResponse;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.metadata.AssignmentsHelper;
 import org.apache.kafka.server.common.TopicIdPartition;
+import org.apache.kafka.server.metrics.KafkaYammerMetrics;
+import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -303,5 +308,41 @@ public class AssignmentsManagerTest {
             time.sleep(TimeUnit.SECONDS.toMillis(1));
             manager.wakeup();
         }
+    }
+
+    static Metric findMetric(String name) {
+        for (Map.Entry<MetricName, Metric> entry : KafkaYammerMetrics.defaultRegistry().allMetrics().entrySet()) {
+            MetricName metricName = entry.getKey();
+            if (AssignmentsManager.class.getSimpleName().equals(metricName.getType()) && metricName.getName().equals(name)) {
+                return entry.getValue();
+            }
+        }
+        throw new IllegalArgumentException("metric named " + name + " not found");
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    void testQueuedReplicaToDirAssignmentsMetric() throws Exception {
+        CountDownLatch readyToAssert = new CountDownLatch(1);
+        doAnswer(invocation -> {
+            readyToAssert.countDown();
+            return null;
+        }).when(channelManager).sendRequest(any(AssignReplicasToDirsRequest.Builder.class), any(ControllerRequestCompletionHandler.class));
+
+        Gauge<Integer> queuedReplicaToDirAssignments = (Gauge<Integer>) findMetric(AssignmentsManager.QUEUE_REPLICA_TO_DIR_ASSIGNMENTS_METRIC_NAME);
+        assertEquals(0, queuedReplicaToDirAssignments.value());
+
+        for (int i = 0; i < 4; i++) {
+            manager.onAssignment(new TopicIdPartition(TOPIC_1, i), DIR_1, () -> { });
+        }
+        while (!readyToAssert.await(1, TimeUnit.MILLISECONDS)) {
+            time.sleep(100);
+        }
+        assertEquals(4, queuedReplicaToDirAssignments.value());
+
+        for (int i = 4; i < 8; i++) {
+            manager.onAssignment(new TopicIdPartition(TOPIC_1, i), DIR_1, () -> { });
+        }
+        TestUtils.retryOnExceptionWithTimeout(5_000, () -> assertEquals(8, queuedReplicaToDirAssignments.value()));
     }
 }
