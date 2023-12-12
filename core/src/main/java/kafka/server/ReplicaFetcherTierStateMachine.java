@@ -229,8 +229,11 @@ public class ReplicaFetcherTierStateMachine implements TierStateMachine {
                 Partition partition = replicaMgr.getPartitionOrException(topicPartition);
                 partition.truncateFullyAndStartAt(nextOffset, false, Option.apply(leaderLogStartOffset));
 
-                // Build leader epoch cache.
+                // Increment start offsets
                 unifiedLog.maybeIncrementLogStartOffset(leaderLogStartOffset, LeaderOffsetIncremented);
+                unifiedLog.maybeIncrementLocalLogStartOffset(nextOffset, LeaderOffsetIncremented);
+
+                // Build leader epoch cache.
                 List<EpochEntry> epochs = readLeaderEpochCheckpoint(rlm, remoteLogSegmentMetadata);
                 if (unifiedLog.leaderEpochCache().isDefined()) {
                     unifiedLog.leaderEpochCache().get().assign(epochs);
