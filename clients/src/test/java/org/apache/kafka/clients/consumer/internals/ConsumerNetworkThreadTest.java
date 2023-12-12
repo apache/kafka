@@ -127,7 +127,6 @@ public class ConsumerNetworkThreadTest {
         TestUtils.waitForCondition(isStarted,
                 "The consumer network thread did not start within " + DEFAULT_MAX_WAIT_MS + " ms");
 
-        prepareTearDown();
         consumerNetworkThread.close(Duration.ofMillis(DEFAULT_MAX_WAIT_MS));
 
         TestUtils.waitForCondition(isClosed,
@@ -285,12 +284,6 @@ public class ConsumerNetworkThreadTest {
         consumerNetworkThread.cleanup();
         assertTrue(future.isCompletedExceptionally());
         assertTrue(applicationEventsQueue.isEmpty());
-    }
-
-    private void prepareTearDown() {
-        Node node = metadata.fetch().nodes().get(0);
-        client.prepareResponse(FindCoordinatorResponse.prepareResponse(Errors.NONE, "group-id", node));
-        prepareOffsetCommitRequest(new HashMap<>(), Errors.NONE, false);
     }
 
     private void prepareOffsetCommitRequest(final Map<TopicPartition, Long> expectedOffsets,

@@ -18,6 +18,7 @@ package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
+import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.GroupProtocol;
@@ -108,10 +109,12 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.atLeast;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.mockConstruction;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -508,17 +511,34 @@ public class AsyncKafkaConsumerTest {
     }
 
     @Test
-    public void testFailedPartitionRevocation() {
-        subscriptions.subscribe(singleton("topic"), Optional.empty());
+    public void testPartitionRevocationOnClose() {
+        MockRebalanceListener listener = new MockRebalanceListener();
+        consumer.subscribe(singleton("topic"), listener);
         TopicPartition tp = new TopicPartition("topic", 0);
         subscriptions.assignFromSubscribed(singleton(tp));
-        doThrow(new KafkaException()).when(consumer).maybeRevokePartitions();
-        assertThrows(KafkaException.class, () -> consumer.close(Duration.ZERO));
-        verify(applicationEventHandler, never()).addAndGet(any(LeaveOnCloseApplicationEvent.class), any());
+        consumer.close(Duration.ZERO);
+        assertTrue(subscriptions.assignedPartitions().isEmpty());
+        assertEquals(1, listener.revokedCount);
+        assertTrue(listener.revoked.contains(tp));
     }
 
     @Test
-    public void testWaitOnCompletionDoesNotThrow() {
+    public void testFailedPartitionRevocationOnClose() {
+        // If rebalance listener failed to execute during close, we will skip sending leave group and proceed with
+        // closing the consumer.
+        ConsumerRebalanceListener listener = mock(ConsumerRebalanceListener.class);
+        subscriptions.subscribe(singleton("topic"), Optional.of(listener));
+        TopicPartition tp = new TopicPartition("topic", 0);
+        subscriptions.assignFromSubscribed(singleton(tp));
+        doThrow(new KafkaException()).when(listener).onPartitionsRevoked(eq(singleton(tp)));
+        assertThrows(KafkaException.class, () -> consumer.close(Duration.ZERO));
+        verify(applicationEventHandler, never()).addAndGet(any(LeaveOnCloseApplicationEvent.class), any());
+        verify(listener).onPartitionsRevoked(eq(singleton(tp)));
+        verify(subscriptions).assignFromSubscribed(eq(Collections.emptySet()));
+    }
+
+    @Test
+    public void testCompleteQuietly() {
         AtomicReference<Throwable> exception = new AtomicReference<>();
         CompletableFuture<Object> future = CompletableFuture.completedFuture(null);
         assertDoesNotThrow(() -> consumer.completeQuietly(() -> {
@@ -533,13 +553,13 @@ public class AsyncKafkaConsumerTest {
     }
 
     @Test
-    public void testEnsureAutocommitSent() {
+    public void testAutoCommitSyncEnabled() {
         consumer.maybeAutoCommitSync(true, testBuilder.time.timer(100), null);
         verify(consumer).completeQuietly(any(), any(), any());
     }
 
     @Test
-    public void testEnsureautocommitNotSent() {
+    public void testAutoCommitSyncDisabled() {
         consumer.maybeAutoCommitSync(false, testBuilder.time.timer(100), null);
         verify(consumer, never()).completeQuietly(any(), any(), any());
     }
