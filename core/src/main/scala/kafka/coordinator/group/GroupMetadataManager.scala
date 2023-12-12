@@ -284,7 +284,36 @@ class GroupMetadataManager(brokerId: Int,
           } else {
             debug(s"Metadata from group ${group.groupId} with generation $generationId failed when appending to log " +
               s"due to ${status.error.exceptionName}")
-            maybeConvertError(status.error)
+
+            // transform the log append error code to the corresponding the commit status error code
+            status.error match {
+              case Errors.UNKNOWN_TOPIC_OR_PARTITION
+                   | Errors.NOT_ENOUGH_REPLICAS
+                   | Errors.NOT_ENOUGH_REPLICAS_AFTER_APPEND =>
+                Errors.COORDINATOR_NOT_AVAILABLE
+
+              case Errors.NOT_LEADER_OR_FOLLOWER
+                   | Errors.KAFKA_STORAGE_ERROR =>
+                Errors.NOT_COORDINATOR
+
+              case Errors.REQUEST_TIMED_OUT =>
+                Errors.REBALANCE_IN_PROGRESS
+
+              case Errors.MESSAGE_TOO_LARGE
+                   | Errors.RECORD_LIST_TOO_LARGE
+                   | Errors.INVALID_FETCH_SIZE =>
+
+                error(s"Appending metadata message for group ${group.groupId} generation $generationId failed due to " +
+                  s"${status.error.exceptionName}, returning UNKNOWN error code to the client")
+
+                Errors.UNKNOWN_SERVER_ERROR
+
+              case other =>
+                error(s"Appending metadata message for group ${group.groupId} generation $generationId failed " +
+                  s"due to unexpected error: ${status.error.exceptionName}")
+
+                other
+            }
           }
 
           responseCallback(responseError)
@@ -395,26 +424,7 @@ class GroupMetadataManager(brokerId: Int,
           debug(s"Offset commit $filteredOffsetMetadata from group ${group.groupId}, consumer $consumerId " +
             s"with generation ${group.generationId} failed when appending to log due to ${status.error.exceptionName}")
 
-          // transform the log append error code to the corresponding the commit status error code
-          status.error match {
-            case Errors.UNKNOWN_TOPIC_OR_PARTITION
-                 | Errors.NOT_ENOUGH_REPLICAS
-                 | Errors.NOT_ENOUGH_REPLICAS_AFTER_APPEND =>
-              Errors.COORDINATOR_NOT_AVAILABLE
-
-            case Errors.NOT_LEADER_OR_FOLLOWER
-                 | Errors.KAFKA_STORAGE_ERROR =>
-              Errors.NOT_COORDINATOR
-
-            case Errors.MESSAGE_TOO_LARGE
-                 | Errors.RECORD_LIST_TOO_LARGE
-                 | Errors.INVALID_FETCH_SIZE =>
-              Errors.INVALID_COMMIT_OFFSET_SIZE
-
-            // We may see INVALID_TXN_STATE or INVALID_PID_MAPPING here due to transaction verification.
-            // They can be returned without mapping to a new error.
-            case other => other
-          }
+          maybeConvertError(status.error)
         }
       }
 
