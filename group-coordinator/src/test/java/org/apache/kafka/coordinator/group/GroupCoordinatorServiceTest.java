@@ -1850,6 +1850,8 @@ public class GroupCoordinatorServiceTest {
         TxnOffsetCommitRequestData request = new TxnOffsetCommitRequestData()
             .setGroupId("foo")
             .setTransactionalId("transactional-id")
+            .setProducerId(10L)
+            .setProducerEpoch((short) 5)
             .setMemberId("member-id")
             .setGenerationId(10)
             .setTopics(Collections.singletonList(new TxnOffsetCommitRequestData.TxnOffsetCommitRequestTopic()
@@ -1865,9 +1867,12 @@ public class GroupCoordinatorServiceTest {
                     .setPartitionIndex(0)
                     .setErrorCode(Errors.NONE.code())))));
 
-        when(runtime.scheduleWriteOperation(
+        when(runtime.scheduleTransactionalWriteOperation(
             ArgumentMatchers.eq("txn-commit-offset"),
             ArgumentMatchers.eq(new TopicPartition("__consumer_offsets", 0)),
+            ArgumentMatchers.eq("transactional-id"),
+            ArgumentMatchers.eq(10L),
+            ArgumentMatchers.eq((short) 5),
             ArgumentMatchers.any()
         )).thenReturn(CompletableFuture.completedFuture(response));
 

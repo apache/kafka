@@ -892,9 +892,12 @@ public class GroupCoordinatorService implements GroupCoordinator {
             ));
         }
 
-        return runtime.scheduleWriteOperation(
+        return runtime.scheduleTransactionalWriteOperation(
             "txn-commit-offset",
             topicPartitionFor(request.groupId()),
+            request.transactionalId(),
+            request.producerId(),
+            request.producerEpoch(),
             coordinator -> coordinator.commitTransactionalOffset(context, request)
         ).exceptionally(exception ->
             TxnOffsetCommitRequest.getErrorResponse(request, normalizeException(exception))
