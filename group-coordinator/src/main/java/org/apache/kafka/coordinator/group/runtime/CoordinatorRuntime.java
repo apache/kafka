@@ -953,7 +953,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
                             tp,
                             marker
                         );
-                        context.coordinator.updateLastCommittedOffset(offset);
+                        context.coordinator.updateLastWrittenOffset(offset);
 
                         if (!future.isDone()) {
                             context.deferredEventQueue.add(offset, this);
@@ -1412,6 +1412,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
             tp,
             marker
         );
+        enqueue(event);
         return event.future;
     }
 
