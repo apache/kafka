@@ -96,6 +96,7 @@ class CoordinatorLoaderImpl[T](
           // the log end offset but the log is empty. This could happen with compacted topics.
           var readAtLeastOneRecord = true
 
+          var previousHighWatermark = -1L
           var numRecords = 0
           var numBytes = 0
           while (currentOffset < logEndOffset && readAtLeastOneRecord && isRunning.get) {
@@ -152,7 +153,19 @@ class CoordinatorLoaderImpl[T](
                 }
               }
 
+              // Note that the high watermark can be greater than the current offset but as we load more records
+              // the current offset will eventually surpass the high watermark. Also note that the high watermark
+              // will continue to advance while loading.
               currentOffset = batch.nextOffset
+              val currentHighWatermark = log.highWatermark
+              if (currentOffset >= currentHighWatermark) {
+                coordinator.updateLastWrittenOffset(currentOffset)
+              }
+
+              if (currentHighWatermark > previousHighWatermark) {
+                coordinator.updateLastCommittedOffset(currentHighWatermark)
+                previousHighWatermark = currentHighWatermark
+              }
             }
             numBytes = numBytes + memoryRecords.sizeInBytes()
           }

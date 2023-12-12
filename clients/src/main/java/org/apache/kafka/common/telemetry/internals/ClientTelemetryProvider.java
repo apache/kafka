@@ -29,6 +29,7 @@ import org.apache.kafka.common.metrics.MetricsContext;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 public class ClientTelemetryProvider implements Configurable {
 
@@ -116,9 +117,12 @@ public class ClientTelemetryProvider implements Configurable {
      */
     synchronized void updateLabels(Map<String, String> labels) {
         final Resource.Builder resourceBuilder = resource.toBuilder();
-        labels.forEach((key, value) -> {
-            addAttribute(resourceBuilder, key, value);
-        });
+        Map<String, String> finalLabels = resource.getAttributesList().stream().collect(Collectors.toMap(
+            KeyValue::getKey, kv -> kv.getValue().getStringValue()));
+        finalLabels.putAll(labels);
+
+        resourceBuilder.clearAttributes();
+        finalLabels.forEach((key, value) -> addAttribute(resourceBuilder, key, value));
         resource = resourceBuilder.build();
     }
 

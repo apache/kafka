@@ -35,7 +35,7 @@ import java.util.SortedSet;
  * interface. When consumer group partition assignment changes, these methods are invoked. This class wraps those
  * callback calls with some logging, optional {@link Sensor} updates, etc.
  */
-class ConsumerRebalanceListenerInvoker {
+public class ConsumerRebalanceListenerInvoker {
 
     private final Logger log;
     private final SubscriptionState subscriptions;
@@ -52,7 +52,7 @@ class ConsumerRebalanceListenerInvoker {
         this.coordinatorMetrics = coordinatorMetrics;
     }
 
-    Exception invokePartitionsAssigned(final SortedSet<TopicPartition> assignedPartitions) {
+    public Exception invokePartitionsAssigned(final SortedSet<TopicPartition> assignedPartitions) {
         log.info("Adding newly assigned partitions: {}", Utils.join(assignedPartitions, ", "));
 
         Optional<ConsumerRebalanceListener> listener = subscriptions.rebalanceListener();
@@ -66,7 +66,7 @@ class ConsumerRebalanceListenerInvoker {
                 throw e;
             } catch (Exception e) {
                 log.error("User provided listener {} failed on invocation of onPartitionsAssigned for partitions {}",
-                        listener.getClass().getName(), assignedPartitions, e);
+                        listener.get().getClass().getName(), assignedPartitions, e);
                 return e;
             }
         }
@@ -74,7 +74,7 @@ class ConsumerRebalanceListenerInvoker {
         return null;
     }
 
-    Exception invokePartitionsRevoked(final SortedSet<TopicPartition> revokedPartitions) {
+    public Exception invokePartitionsRevoked(final SortedSet<TopicPartition> revokedPartitions) {
         log.info("Revoke previously assigned partitions {}", Utils.join(revokedPartitions, ", "));
         Set<TopicPartition> revokePausedPartitions = subscriptions.pausedPartitions();
         revokePausedPartitions.retainAll(revokedPartitions);
@@ -92,7 +92,7 @@ class ConsumerRebalanceListenerInvoker {
                 throw e;
             } catch (Exception e) {
                 log.error("User provided listener {} failed on invocation of onPartitionsRevoked for partitions {}",
-                        listener.getClass().getName(), revokedPartitions, e);
+                        listener.get().getClass().getName(), revokedPartitions, e);
                 return e;
             }
         }
@@ -100,7 +100,7 @@ class ConsumerRebalanceListenerInvoker {
         return null;
     }
 
-    Exception invokePartitionsLost(final SortedSet<TopicPartition> lostPartitions) {
+    public Exception invokePartitionsLost(final SortedSet<TopicPartition> lostPartitions) {
         log.info("Lost previously assigned partitions {}", Utils.join(lostPartitions, ", "));
         Set<TopicPartition> lostPausedPartitions = subscriptions.pausedPartitions();
         lostPausedPartitions.retainAll(lostPartitions);
@@ -118,7 +118,7 @@ class ConsumerRebalanceListenerInvoker {
                 throw e;
             } catch (Exception e) {
                 log.error("User provided listener {} failed on invocation of onPartitionsLost for partitions {}",
-                        listener.getClass().getName(), lostPartitions, e);
+                        listener.get().getClass().getName(), lostPartitions, e);
                 return e;
             }
         }
