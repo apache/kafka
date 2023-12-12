@@ -36,7 +36,7 @@ else
     declare -a AbsolutePathToConfigArray
     for ((i = 0; i < ${#RelativePathArray[@]}; i++)); do
         AbsolutePathToConfig=$(readlink -f "${RelativePathArray[i]}")
-        if [ -z "$AbsolutePathToConfig" ]; then
+        if [ -z "$AbsolutePathToConfig" ] && [ -n "$INPUT_PROCESS_ROLE" ] || [ -n "$INPUT_NID" ]; then
           echo "Can not find the configuration file in the current directory. Please make sure the kafka stop process and the start process are called in the same directory."
           exit 1
         fi
