@@ -19,8 +19,6 @@ package org.apache.kafka.image;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import static org.apache.kafka.server.common.MetadataVersion.IBP_3_0_IV1;
 import static org.apache.kafka.server.common.MetadataVersion.IBP_3_3_IV0;
@@ -31,7 +29,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @Timeout(value = 40)
 public class MetadataVersionChangeTest {
-    private static final Logger log = LoggerFactory.getLogger(MetadataVersionChangeTest.class);
 
     private final static MetadataVersionChange CHANGE_3_0_IV1_TO_3_3_IV0 =
         new MetadataVersionChange(IBP_3_0_IV1, IBP_3_3_IV0);
@@ -40,19 +37,19 @@ public class MetadataVersionChangeTest {
         new MetadataVersionChange(IBP_3_3_IV0, IBP_3_0_IV1);
 
     @Test
-    public void testIsUpgrade() throws Throwable {
+    public void testIsUpgrade() {
         assertTrue(CHANGE_3_0_IV1_TO_3_3_IV0.isUpgrade());
         assertFalse(CHANGE_3_3_IV0_TO_3_0_IV1.isUpgrade());
     }
 
     @Test
-    public void testIsDowngrade() throws Throwable {
+    public void testIsDowngrade() {
         assertFalse(CHANGE_3_0_IV1_TO_3_3_IV0.isDowngrade());
         assertTrue(CHANGE_3_3_IV0_TO_3_0_IV1.isDowngrade());
     }
 
     @Test
-    public void testMetadataVersionChangeExceptionToString() throws Throwable {
+    public void testMetadataVersionChangeExceptionToString() {
         assertEquals("org.apache.kafka.image.MetadataVersionChangeException: The metadata " +
             "version is changing from 3.0-IV1 to 3.3-IV0",
                 new MetadataVersionChangeException(CHANGE_3_0_IV1_TO_3_3_IV0).toString());

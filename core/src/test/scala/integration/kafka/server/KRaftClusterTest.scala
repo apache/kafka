@@ -26,7 +26,7 @@ import org.apache.kafka.clients.admin._
 import org.apache.kafka.common.acl.{AclBinding, AclBindingFilter}
 import org.apache.kafka.common.config.{ConfigException, ConfigResource}
 import org.apache.kafka.common.config.ConfigResource.Type
-import org.apache.kafka.common.errors.PolicyViolationException
+import org.apache.kafka.common.errors.{PolicyViolationException, UnsupportedVersionException}
 import org.apache.kafka.common.message.DescribeClusterRequestData
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.ListenerName
@@ -52,12 +52,11 @@ import org.slf4j.LoggerFactory
 import java.io.File
 import java.nio.file.{FileSystems, Path}
 import java.{lang, util}
-import java.util.concurrent.{CompletableFuture, CompletionStage}
+import java.util.concurrent.{CompletableFuture, CompletionStage, ExecutionException, TimeUnit}
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.{Arrays, Collections, Optional, OptionalLong, Properties}
 import scala.annotation.nowarn
 import scala.collection.mutable
-import scala.concurrent.ExecutionException
 import scala.concurrent.duration.{FiniteDuration, MILLISECONDS, SECONDS}
 import scala.jdk.CollectionConverters._
 
@@ -985,6 +984,11 @@ class KRaftClusterTest {
       val countAfterTenIntervals = snapshotCounter(metaLog)
       assertTrue(countAfterTenIntervals > 1, s"Expected to see at least one more snapshot, saw $countAfterTenIntervals")
       assertTrue(countAfterTenIntervals < 20, s"Did not expect to see more than twice as many snapshots as snapshot intervals, saw $countAfterTenIntervals")
+      TestUtils.waitUntilTrue(() => {
+        val emitterMetrics = cluster.controllers().values().iterator().next().
+          sharedServer.snapshotEmitter.metrics()
+        emitterMetrics.latestSnapshotGeneratedBytes() > 0
+      }, "Failed to see latestSnapshotGeneratedBytes > 0")
     } finally {
       cluster.close()
     }
@@ -1159,6 +1163,57 @@ class KRaftClusterTest {
         assertEquals(0, controller.sharedServer.controllerServerMetrics.fencedBrokerCount())
         assertTrue(controller.quorumControllerMetrics.timedOutHeartbeats() > 0,
           "Expected timedOutHeartbeats to be greater than 0.");
+      }
+    } finally {
+      cluster.close()
+    }
+  }
+
+  @Test
+  def testRegisteredControllerEndpoints(): Unit = {
+    val cluster = new KafkaClusterTestKit.Builder(
+      new TestKitNodes.Builder().
+        setNumBrokerNodes(1).
+        setNumControllerNodes(3).build()).
+      build()
+    try {
+      cluster.format()
+      cluster.startup()
+      TestUtils.retry(60000) {
+        val controller = cluster.controllers().values().iterator().next()
+        val registeredControllers = controller.registrationsPublisher.controllers()
+        assertEquals(3, registeredControllers.size(), "Expected 3 controller registrations")
+        registeredControllers.values().forEach(registration => {
+          assertNotNull(registration.listeners.get("CONTROLLER"));
+          assertNotEquals(0, registration.listeners.get("CONTROLLER").port());
+        })
+      }
+    } finally {
+      cluster.close()
+    }
+  }
+
+  @Test
+  def testDirectToControllerCommunicationFailsOnOlderMetadataVersion(): Unit = {
+    val cluster = new KafkaClusterTestKit.Builder(
+      new TestKitNodes.Builder().
+        setBootstrapMetadataVersion(MetadataVersion.IBP_3_6_IV2).
+        setNumBrokerNodes(1).
+        setNumControllerNodes(1).build()).
+      build()
+    try {
+      cluster.format()
+      cluster.startup()
+      val admin = Admin.create(cluster.newClientPropertiesBuilder().
+        setUsingBootstrapControllers(true).
+        build())
+      try {
+        val exception = assertThrows(classOf[ExecutionException],
+          () => admin.describeCluster().clusterId().get(1, TimeUnit.MINUTES))
+        assertNotNull(exception.getCause)
+        assertEquals(classOf[UnsupportedVersionException], exception.getCause.getClass)
+      } finally {
+        admin.close()
       }
     } finally {
       cluster.close()

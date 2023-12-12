@@ -263,7 +263,7 @@ class ZkMigrationClient(
         recordConsumer.accept(List(new ApiMessageAndVersion(new ProducerIdsRecord()
           .setBrokerEpoch(-1)
           .setBrokerId(producerIdBlock.assignedBrokerId)
-          .setNextProducerId(producerIdBlock.firstProducerId()), 0.toShort)).asJava)
+          .setNextProducerId(producerIdBlock.nextBlockFirstId()), 0.toShort)).asJava)
       case None => // Nothing to migrate
     }
   }

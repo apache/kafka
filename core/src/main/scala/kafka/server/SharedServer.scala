@@ -29,7 +29,9 @@ import org.apache.kafka.image.MetadataProvenance
 import org.apache.kafka.image.loader.MetadataLoader
 import org.apache.kafka.image.loader.metrics.MetadataLoaderMetrics
 import org.apache.kafka.image.publisher.{SnapshotEmitter, SnapshotGenerator}
+import org.apache.kafka.image.publisher.metrics.SnapshotEmitterMetrics
 import org.apache.kafka.metadata.MetadataRecordSerde
+import org.apache.kafka.metadata.properties.MetaPropertiesEnsemble
 import org.apache.kafka.raft.RaftConfig.AddressSpec
 import org.apache.kafka.server.common.ApiMessageAndVersion
 import org.apache.kafka.server.fault.{FaultHandler, LoggingFaultHandler, ProcessTerminatingFaultHandler}
@@ -87,7 +89,7 @@ class StandardFaultHandlerFactory extends FaultHandlerFactory {
  */
 class SharedServer(
   private val sharedServerConfig: KafkaConfig,
-  val metaProps: MetaProperties,
+  val metaPropsEnsemble: MetaPropertiesEnsemble,
   val time: Time,
   private val _metrics: Metrics,
   val controllerQuorumVotersFuture: CompletableFuture[util.Map[Integer, AddressSpec]],
@@ -109,6 +111,10 @@ class SharedServer(
   @volatile var snapshotEmitter: SnapshotEmitter = _
   @volatile var snapshotGenerator: SnapshotGenerator = _
   @volatile var metadataLoaderMetrics: MetadataLoaderMetrics = _
+
+  def clusterId: String = metaPropsEnsemble.clusterId().get()
+
+  def nodeId: Int = metaPropsEnsemble.nodeId().getAsInt()
 
   def isUsed(): Boolean = synchronized {
     usedByController || usedByBroker
@@ -239,7 +245,7 @@ class SharedServer(
           // This is only done in tests.
           metrics = new Metrics()
         }
-        sharedServerConfig.dynamicConfig.initialize(zkClientOpt = None)
+        sharedServerConfig.dynamicConfig.initialize(zkClientOpt = None, clientMetricsReceiverPluginOpt = None)
 
         if (sharedServerConfig.processRoles.contains(BrokerRole)) {
           brokerMetrics = BrokerServerMetrics(metrics)
@@ -248,7 +254,7 @@ class SharedServer(
           controllerServerMetrics = new ControllerMetadataMetrics(Optional.of(KafkaYammerMetrics.defaultRegistry()))
         }
         val _raftManager = new KafkaRaftManager[ApiMessageAndVersion](
-          metaProps,
+          clusterId,
           sharedServerConfig,
           new MetadataRecordSerde,
           KafkaRaftServer.MetadataPartition,
@@ -274,7 +280,7 @@ class SharedServer(
             new AtomicReference[MetadataProvenance](MetadataProvenance.EMPTY))
         }
         val loaderBuilder = new MetadataLoader.Builder().
-          setNodeId(metaProps.nodeId).
+          setNodeId(nodeId).
           setTime(time).
           setThreadNamePrefix(s"kafka-${sharedServerConfig.nodeId}-").
           setFaultHandler(metadataLoaderFaultHandler).
@@ -282,11 +288,13 @@ class SharedServer(
           setMetrics(metadataLoaderMetrics)
         loader = loaderBuilder.build()
         snapshotEmitter = new SnapshotEmitter.Builder().
-          setNodeId(metaProps.nodeId).
+          setNodeId(nodeId).
           setRaftClient(_raftManager.client).
+          setMetrics(new SnapshotEmitterMetrics(
+            Optional.of(KafkaYammerMetrics.defaultRegistry()), time)).
           build()
         snapshotGenerator = new SnapshotGenerator.Builder(snapshotEmitter).
-          setNodeId(metaProps.nodeId).
+          setNodeId(nodeId).
           setTime(time).
           setFaultHandler(metadataPublishingFaultHandler).
           setMaxBytesSinceLastSnapshot(sharedServerConfig.metadataSnapshotMaxNewRecordBytes).
@@ -309,6 +317,7 @@ class SharedServer(
         case e: Throwable => {
           error("Got exception while starting SharedServer", e)
           stop()
+          throw e
         }
       }
     }

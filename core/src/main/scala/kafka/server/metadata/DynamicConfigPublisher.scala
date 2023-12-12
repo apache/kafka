@@ -21,7 +21,7 @@ import java.util.Properties
 import kafka.server.ConfigAdminManager.toLoggableProps
 import kafka.server.{ConfigEntityName, ConfigHandler, ConfigType, KafkaConfig}
 import kafka.utils.Logging
-import org.apache.kafka.common.config.ConfigResource.Type.{BROKER, TOPIC}
+import org.apache.kafka.common.config.ConfigResource.Type.{BROKER, CLIENT_METRICS, TOPIC}
 import org.apache.kafka.image.loader.LoaderManifest
 import org.apache.kafka.image.{MetadataDelta, MetadataImage}
 import org.apache.kafka.server.fault.FaultHandler
@@ -35,7 +35,7 @@ class DynamicConfigPublisher(
 ) extends Logging with org.apache.kafka.image.publisher.MetadataPublisher {
   logIdent = s"[${name()}] "
 
-  override def name(): String = s"DynamicConfigPublisher ${nodeType} id=${conf.nodeId}"
+  override def name(): String = s"DynamicConfigPublisher $nodeType id=${conf.nodeId}"
 
   override def onMetadataUpdate(
     delta: MetadataDelta,
@@ -66,7 +66,7 @@ class DynamicConfigPublisher(
                 } catch {
                   case t: Throwable => faultHandler.handleFault("Error updating topic " +
                     s"${resource.name()} with new configuration: ${toLoggableProps(resource, props).mkString(",")} " +
-                    s"in ${deltaName}", t)
+                    s"in $deltaName", t)
                 }
               )
             case BROKER =>
@@ -81,7 +81,7 @@ class DynamicConfigPublisher(
                   } catch {
                     case t: Throwable => faultHandler.handleFault("Error updating " +
                       s"cluster with new configuration: ${toLoggableProps(resource, props).mkString(",")} " +
-                      s"in ${deltaName}", t)
+                      s"in $deltaName", t)
                   }
                 } else if (resource.name() == conf.nodeId.toString) {
                   try {
@@ -97,17 +97,29 @@ class DynamicConfigPublisher(
                   } catch {
                     case t: Throwable => faultHandler.handleFault("Error updating " +
                       s"node with new configuration: ${toLoggableProps(resource, props).mkString(",")} " +
-                      s"in ${deltaName}", t)
+                      s"in $deltaName", t)
                   }
                 }
               )
+            case CLIENT_METRICS =>
+              // Apply changes to client metrics subscription.
+              dynamicConfigHandlers.get(ConfigType.ClientMetrics).foreach(metricsConfigHandler =>
+                try {
+                  info(s"Updating client metrics ${resource.name()} with new configuration : " +
+                    toLoggableProps(resource, props).mkString(","))
+                  metricsConfigHandler.processConfigChanges(resource.name(), props)
+                } catch {
+                  case t: Throwable => faultHandler.handleFault("Error updating client metrics" +
+                    s"${resource.name()} with new configuration: ${toLoggableProps(resource, props).mkString(",")} " +
+                    s"in $deltaName", t)
+                })
             case _ => // nothing to do
           }
         }
       }
     } catch {
       case t: Throwable => faultHandler.handleFault("Uncaught exception while " +
-        s"publishing dynamic configuration changes from ${deltaName}", t)
+        s"publishing dynamic configuration changes from $deltaName", t)
     }
   }
 

@@ -1745,6 +1745,20 @@ class KafkaConfigTest {
   }
 
   @Test
+  def testMigrationCannotBeEnabledWithJBOD(): Unit = {
+    val props = TestUtils.createBrokerConfig(1, TestUtils.MockZkConnect, port = TestUtils.MockZkPort, logDirCount = 2)
+    props.setProperty(KafkaConfig.MigrationEnabledProp, "true")
+    props.setProperty(KafkaConfig.QuorumVotersProp, "3000@localhost:9093")
+    props.setProperty(KafkaConfig.ControllerListenerNamesProp, "CONTROLLER")
+    props.setProperty(KafkaConfig.InterBrokerProtocolVersionProp, MetadataVersion.IBP_3_7_IV1.version())
+
+    assertEquals(
+      "requirement failed: Cannot enable ZooKeeper migration with multiple log directories " +
+      "(aka JBOD) without setting 'inter.broker.protocol.version' to 3.7-IV2 or higher",
+      assertThrows(classOf[IllegalArgumentException], () => KafkaConfig.fromProps(props)).getMessage)
+  }
+
+  @Test
   def testMigrationEnabledKRaftMode(): Unit = {
     val props = new Properties()
     props.putAll(kraftProps())

@@ -34,6 +34,7 @@ import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
+import org.apache.kafka.streams.StreamsConfig.InternalConfig;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.KStream;
@@ -149,17 +150,23 @@ public class EosIntegrationTest {
     private String stateTmpDir;
 
     @SuppressWarnings("deprecation")
-    @Parameters(name = "{0}")
-    public static Collection<String[]> data() {
-        return Arrays.asList(new String[][]{
-                {StreamsConfig.AT_LEAST_ONCE},
-                {StreamsConfig.EXACTLY_ONCE},
-                {StreamsConfig.EXACTLY_ONCE_V2}
+    @Parameters(name = "{0}, processing threads = {1}")
+    public static Collection<Object[]> data() {
+        return Arrays.asList(new Object[][]{
+                {StreamsConfig.AT_LEAST_ONCE, false},
+                {StreamsConfig.EXACTLY_ONCE, false},
+                {StreamsConfig.EXACTLY_ONCE_V2, false},
+                {StreamsConfig.AT_LEAST_ONCE, true},
+                {StreamsConfig.EXACTLY_ONCE, true},
+                {StreamsConfig.EXACTLY_ONCE_V2, true}
         });
     }
 
-    @Parameter
+    @Parameter(0)
     public String eosConfig;
+
+    @Parameter(1)
+    public boolean processingThreadsEnabled;
 
     @Before
     public void createTopics() throws Exception {
@@ -876,9 +883,14 @@ public class EosIntegrationTest {
                             LOG.info(dummyHostName + " is executing the injected stall");
                             stallingHost.set(dummyHostName);
                             while (doStall) {
-                                final StreamThread thread = (StreamThread) Thread.currentThread();
-                                if (thread.isInterrupted() || !thread.isRunning()) {
+                                final Thread thread = Thread.currentThread();
+                                if (thread.isInterrupted()) {
                                     throw new RuntimeException("Detected we've been interrupted.");
+                                }
+                                if (!processingThreadsEnabled) {
+                                    if (!((StreamThread) thread).isRunning()) {
+                                        throw new RuntimeException("Detected we've been interrupted.");
+                                    }
                                 }
                                 try {
                                     Thread.sleep(100);
@@ -943,6 +955,7 @@ public class EosIntegrationTest {
         properties.put(StreamsConfig.STATESTORE_CACHE_MAX_BYTES_CONFIG, 0);
         properties.put(StreamsConfig.STATE_DIR_CONFIG, stateTmpDir + appDir);
         properties.put(StreamsConfig.APPLICATION_SERVER_CONFIG, dummyHostName + ":2142");
+        properties.put(InternalConfig.PROCESSING_THREADS_ENABLED, processingThreadsEnabled);
 
         final Properties config = StreamsTestUtils.getStreamsConfig(
             applicationId,

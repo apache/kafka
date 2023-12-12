@@ -1026,7 +1026,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
 
   /**
     * Test closing the AdminClient with a generous timeout.  Calls in progress should be completed,
-    * since they can be done within the timeout.  New calls should receive timeouts.
+    * since they can be done within the timeout.  New calls should receive exceptions.
     */
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
@@ -1037,7 +1037,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     val future = client.createTopics(newTopics.asJava, new CreateTopicsOptions().validateOnly(true)).all()
     client.close(time.Duration.ofHours(2))
     val future2 = client.createTopics(newTopics.asJava, new CreateTopicsOptions().validateOnly(true)).all()
-    assertFutureExceptionTypeEquals(future2, classOf[TimeoutException])
+    assertFutureExceptionTypeEquals(future2, classOf[IllegalStateException])
     future.get
     client.close(time.Duration.ofMinutes(30)) // multiple close-with-timeout should have no effect
   }
@@ -2692,11 +2692,11 @@ object PlaintextAdminIntegrationTest {
     // Create topics
     val topic1 = "invalid-alter-configs-topic-1"
     val topicResource1 = new ConfigResource(ConfigResource.Type.TOPIC, topic1)
-    createTopicWithAdmin(admin, topic1, test.brokers, numPartitions = 1, replicationFactor = 1)
+    createTopicWithAdmin(admin, topic1, test.brokers, test.controllerServers, numPartitions = 1, replicationFactor = 1)
 
     val topic2 = "invalid-alter-configs-topic-2"
     val topicResource2 = new ConfigResource(ConfigResource.Type.TOPIC, topic2)
-    createTopicWithAdmin(admin, topic2, test.brokers, numPartitions = 1, replicationFactor = 1)
+    createTopicWithAdmin(admin, topic2, test.brokers, test.controllerServers, numPartitions = 1, replicationFactor = 1)
 
     val topicConfigEntries1 = Seq(
       new ConfigEntry(TopicConfig.MIN_CLEANABLE_DIRTY_RATIO_CONFIG, "1.1"), // this value is invalid as it's above 1.0

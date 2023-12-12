@@ -38,6 +38,8 @@ object ConfigType {
   val User = "users"
   val Broker = "brokers"
   val Ip = "ips"
+  val ClientMetrics = "client-metrics"
+  // Do not include ClientMetrics in `all` as ClientMetrics is not supported on ZK.
   val all = Seq(Topic, Client, User, Broker, Ip)
 }
 

@@ -20,7 +20,6 @@ package kafka.log
 import java.io.File
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.locks.ReentrantLock
-
 import kafka.common.LogCleaningAbortedException
 import kafka.server.checkpoints.OffsetCheckpointFile
 import kafka.utils.CoreUtils._
@@ -31,6 +30,7 @@ import org.apache.kafka.common.utils.Time
 import org.apache.kafka.storage.internals.log.LogDirFailureChannel
 import org.apache.kafka.server.metrics.KafkaMetricsGroup
 
+import java.util.Comparator
 import scala.collection.{Iterable, Seq, mutable}
 import scala.jdk.CollectionConverters._
 
@@ -595,13 +595,9 @@ private[log] object LogCleanerManager extends Logging {
     */
   def maxCompactionDelay(log: UnifiedLog, firstDirtyOffset: Long, now: Long) : Long = {
     val dirtyNonActiveSegments = log.nonActiveLogSegmentsFrom(firstDirtyOffset)
-    val firstBatchTimestamps = log.getFirstBatchTimestampForSegments(dirtyNonActiveSegments).filter(_ > 0)
+    val firstBatchTimestamps = log.getFirstBatchTimestampForSegments(dirtyNonActiveSegments).stream.filter(_ > 0)
 
-    val earliestDirtySegmentTimestamp = {
-      if (firstBatchTimestamps.nonEmpty)
-        firstBatchTimestamps.min
-      else Long.MaxValue
-    }
+    val earliestDirtySegmentTimestamp = firstBatchTimestamps.min(Comparator.naturalOrder()).orElse(Long.MaxValue);
 
     val maxCompactionLagMs = math.max(log.config.maxCompactionLagMs, 0L)
     val cleanUntilTime = now - maxCompactionLagMs
@@ -662,7 +658,7 @@ private[log] object LogCleanerManager extends Logging {
       if (minCompactionLagMs > 0) {
         // dirty log segments
         val dirtyNonActiveSegments = log.nonActiveLogSegmentsFrom(firstDirtyOffset)
-        dirtyNonActiveSegments.find { s =>
+        dirtyNonActiveSegments.asScala.find { s =>
           val isUncleanable = s.largestTimestamp > now - minCompactionLagMs
           debug(s"Checking if log segment may be cleaned: log='${log.name}' segment.baseOffset=${s.baseOffset} " +
             s"segment.largestTimestamp=${s.largestTimestamp}; now - compactionLag=${now - minCompactionLagMs}; " +
@@ -684,7 +680,7 @@ private[log] object LogCleanerManager extends Logging {
    * @return the biggest uncleanable offset and the total amount of cleanable bytes
    */
   def calculateCleanableBytes(log: UnifiedLog, firstDirtyOffset: Long, uncleanableOffset: Long): (Long, Long) = {
-    val firstUncleanableSegment = log.nonActiveLogSegmentsFrom(uncleanableOffset).headOption.getOrElse(log.activeSegment)
+    val firstUncleanableSegment = log.nonActiveLogSegmentsFrom(uncleanableOffset).asScala.headOption.getOrElse(log.activeSegment)
     val firstUncleanableOffset = firstUncleanableSegment.baseOffset
     val cleanableBytes = log.logSegments(math.min(firstDirtyOffset, firstUncleanableOffset), firstUncleanableOffset).map(_.size.toLong).sum
 

@@ -24,7 +24,7 @@ import com.fasterxml.jackson.databind.JsonNode
 import com.typesafe.scalalogging.Logger
 import com.yammer.metrics.core.Meter
 import kafka.network
-import kafka.server.KafkaConfig
+import kafka.server.{KafkaConfig, RequestLocal}
 import kafka.utils.{Logging, NotNothing, Pool}
 import kafka.utils.Implicits._
 import org.apache.kafka.common.config.ConfigResource
@@ -80,7 +80,7 @@ object RequestChannel extends Logging {
     }
   }
 
-  case class CallbackRequest(fun: () => Unit,
+  case class CallbackRequest(fun: RequestLocal => Unit,
                              originalRequest: Request) extends BaseRequest
 
   class Request(val processor: Int,
@@ -140,7 +140,7 @@ object RequestChannel extends Logging {
         case Some(request) =>
           val envelopeResponse = if (shouldReturnNotController(abstractResponse)) {
             // Since it's a NOT_CONTROLLER error response, we need to make envelope response with NOT_CONTROLLER error
-            // to notify the requester (i.e. BrokerToControllerRequestThread) to update active controller
+            // to notify the requester (i.e. NodeToControllerRequestThread) to update active controller
             new EnvelopeResponse(new EnvelopeResponseData()
               .setErrorCode(Errors.NOT_CONTROLLER.code()))
           } else {

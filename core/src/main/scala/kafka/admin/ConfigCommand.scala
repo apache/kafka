@@ -27,7 +27,6 @@ import kafka.utils.{Exit, Logging, PasswordEncoder}
 import kafka.utils.Implicits._
 import kafka.zk.{AdminZkClient, KafkaZkClient}
 import org.apache.kafka.clients.admin.{Admin, AlterClientQuotasOptions, AlterConfigOp, AlterConfigsOptions, ConfigEntry, DescribeClusterOptions, DescribeConfigsOptions, ListTopicsOptions, ScramCredentialInfo, UserScramCredentialDeletion, UserScramCredentialUpsertion, Config => JConfig, ScramMechanism => PublicScramMechanism}
-import org.apache.kafka.clients.CommonClientConfigs
 import org.apache.kafka.common.config.{ConfigResource, TopicConfig}
 import org.apache.kafka.common.config.types.Password
 import org.apache.kafka.common.errors.InvalidConfigurationException
@@ -45,7 +44,7 @@ import scala.jdk.CollectionConverters._
 import scala.collection._
 
 /**
- * This script can be used to change configs for topics/clients/users/brokers/ips dynamically
+ * This script can be used to change configs for topics/clients/users/brokers/ips/client-metrics dynamically
  * An entity described or altered by the command may be one of:
  * <ul>
  *     <li> topic: --topic <topic> OR --entity-type topics --entity-name <topic>
@@ -56,6 +55,7 @@ import scala.collection._
  *     <li> broker: --broker <broker-id> OR --entity-type brokers --entity-name <broker-id>
  *     <li> broker-logger: --broker-logger <broker-id> OR --entity-type broker-loggers --entity-name <broker-id>
  *     <li> ip: --ip <ip> OR --entity-type ips --entity-name <ip>
+ *     <li> client-metrics: --client-metrics <name> OR --entity-type client-metrics --entity-name <name>
  * </ul>
  * --entity-type <users|clients|brokers|ips> --entity-default may be specified in place of --entity-type <users|clients|brokers|ips> --entity-name <entityName>
  * when describing or altering default configuration for users, clients, brokers, or ips, respectively.
@@ -77,7 +77,7 @@ object ConfigCommand extends Logging {
 
   val BrokerDefaultEntityName = ""
   val BrokerLoggerConfigType = "broker-loggers"
-  val BrokerSupportedConfigTypes = ConfigType.all :+ BrokerLoggerConfigType
+  val BrokerSupportedConfigTypes = ConfigType.all :+ BrokerLoggerConfigType :+ ConfigType.ClientMetrics
   val ZkSupportedConfigTypes = Seq(ConfigType.User, ConfigType.Broker)
   val DefaultScramIterations = 4096
 
@@ -85,7 +85,7 @@ object ConfigCommand extends Logging {
     try {
       val opts = new ConfigCommandOptions(args)
 
-      CommandLineUtils.maybePrintHelpOrVersion(opts, "This tool helps to manipulate and describe entity config for a topic, client, user, broker or ip")
+      CommandLineUtils.maybePrintHelpOrVersion(opts, "This tool helps to manipulate and describe entity config for a topic, client, user, broker, ip or client-metrics")
 
       opts.checkArgs()
 
@@ -298,18 +298,27 @@ object ConfigCommand extends Logging {
         "This configuration will be ignored if the version is newer than the inter.broker.protocol.version specified in the broker or " +
         "if the inter.broker.protocol.version is 3.0 or newer. This configuration is deprecated and it will be removed in Apache Kafka 4.0.")
     }
+    validatePropsKey(props)
     props
   }
 
   private[admin] def parseConfigsToBeDeleted(opts: ConfigCommandOptions): Seq[String] = {
     if (opts.options.has(opts.deleteConfig)) {
       val configsToBeDeleted = opts.options.valuesOf(opts.deleteConfig).asScala.map(_.trim())
-      val propsToBeDeleted = new Properties
-      configsToBeDeleted.foreach(propsToBeDeleted.setProperty(_, ""))
       configsToBeDeleted
     }
     else
       Seq.empty
+  }
+
+  private def validatePropsKey(props: Properties): Unit = {
+    props.keySet.forEach { propsKey =>
+      if (!propsKey.toString.matches("[a-zA-Z0-9._-]*")) {
+        throw new IllegalArgumentException(
+          s"Invalid character found for config key: ${propsKey}"
+        )
+      }
+    }
   }
 
   private def processCommand(opts: ConfigCommandOptions): Unit = {
@@ -317,7 +326,11 @@ object ConfigCommand extends Logging {
       Utils.loadProps(opts.options.valueOf(opts.commandConfigOpt))
     else
       new Properties()
-    props.put(CommonClientConfigs.BOOTSTRAP_SERVERS_CONFIG, opts.options.valueOf(opts.bootstrapServerOpt))
+    CommandLineUtils.initializeBootstrapProperties(opts.parser,
+      opts.options,
+      props,
+      opts.bootstrapServerOpt,
+      opts.bootstrapControllerOpt)
     val adminClient = Admin.create(props)
 
     if (opts.options.has(opts.alterOpt) && opts.entityTypes.size != opts.entityNames.size)
@@ -433,6 +446,21 @@ object ConfigCommand extends Logging {
         if (unknownConfigs.nonEmpty)
           throw new IllegalArgumentException(s"Only connection quota configs can be added for '${ConfigType.Ip}' using --bootstrap-server. Unexpected config names: ${unknownConfigs.mkString(",")}")
         alterQuotaConfigs(adminClient, entityTypes, entityNames, configsToBeAddedMap, configsToBeDeleted)
+      case ConfigType.ClientMetrics =>
+        val oldConfig = getResourceConfig(adminClient, entityTypeHead, entityNameHead, includeSynonyms = false, describeAll = false)
+          .map { entry => (entry.name, entry) }.toMap
+
+        // fail the command if any of the configs to be deleted does not exist
+        val invalidConfigs = configsToBeDeleted.filterNot(oldConfig.contains)
+        if (invalidConfigs.nonEmpty)
+          throw new InvalidConfigurationException(s"Invalid config(s): ${invalidConfigs.mkString(",")}")
+
+        val configResource = new ConfigResource(ConfigResource.Type.CLIENT_METRICS, entityNameHead)
+        val alterOptions = new AlterConfigsOptions().timeoutMs(30000).validateOnly(false)
+        val alterEntries = (configsToBeAdded.values.map(new AlterConfigOp(_, AlterConfigOp.OpType.SET))
+          ++ configsToBeDeleted.map { k => new AlterConfigOp(new ConfigEntry(k, ""), AlterConfigOp.OpType.DELETE) }
+          ).asJavaCollection
+        adminClient.incrementalAlterConfigs(Map(configResource -> alterEntries).asJava, alterOptions).all().get(60, TimeUnit.SECONDS)
       case _ => throw new IllegalArgumentException(s"Unsupported entity type: $entityTypeHead")
     }
 
@@ -506,7 +534,7 @@ object ConfigCommand extends Logging {
     val describeAll = opts.options.has(opts.allOpt)
 
     entityTypes.head match {
-      case ConfigType.Topic | ConfigType.Broker | BrokerLoggerConfigType =>
+      case ConfigType.Topic | ConfigType.Broker | BrokerLoggerConfigType | ConfigType.ClientMetrics =>
         describeResourceConfig(adminClient, entityTypes.head, entityNames.headOption, describeAll)
       case ConfigType.User | ConfigType.Client =>
         describeClientQuotaAndUserScramCredentialConfigs(adminClient, entityTypes, entityNames)
@@ -524,6 +552,8 @@ object ConfigCommand extends Logging {
           adminClient.listTopics(new ListTopicsOptions().listInternal(true)).names().get().asScala.toSeq
         case ConfigType.Broker | BrokerLoggerConfigType =>
           adminClient.describeCluster(new DescribeClusterOptions()).nodes().get().asScala.map(_.idString).toSeq :+ BrokerDefaultEntityName
+        case ConfigType.ClientMetrics =>
+          adminClient.listClientMetricsResources().all().get().asScala.map(_.name).toSeq
         case entityType => throw new IllegalArgumentException(s"Invalid entity type: $entityType")
       })
 
@@ -564,6 +594,8 @@ object ConfigCommand extends Logging {
         if (entityName.nonEmpty)
           validateBrokerId()
         (ConfigResource.Type.BROKER_LOGGER, None)
+      case ConfigType.ClientMetrics =>
+        (ConfigResource.Type.CLIENT_METRICS, Some(ConfigEntry.ConfigSource.DYNAMIC_CLIENT_METRICS_CONFIG))
       case entityType => throw new IllegalArgumentException(s"Invalid entity type: $entityType")
     }
 
@@ -762,10 +794,13 @@ object ConfigCommand extends Logging {
       .withRequiredArg
       .describedAs("urls")
       .ofType(classOf[String])
-    val bootstrapServerOpt = parser.accepts("bootstrap-server", "The Kafka server to connect to. " +
-      "This is required for describing and altering broker configs.")
+    val bootstrapServerOpt = parser.accepts("bootstrap-server", "The Kafka servers to connect to.")
       .withRequiredArg
       .describedAs("server to connect to")
+      .ofType(classOf[String])
+    val bootstrapControllerOpt = parser.accepts("bootstrap-controller", "The Kafka controllers to connect to.")
+      .withRequiredArg
+      .describedAs("controller to connect to")
       .ofType(classOf[String])
     val commandConfigOpt = parser.accepts("command-config", "Property file containing configs to be passed to Admin Client. " +
       "This is used only with --bootstrap-server option for describing and altering broker configs.")
@@ -776,10 +811,10 @@ object ConfigCommand extends Logging {
     val describeOpt = parser.accepts("describe", "List configs for the given entity.")
     val allOpt = parser.accepts("all", "List all configs for the given topic, broker, or broker-logger entity (includes static configuration when the entity type is brokers)")
 
-    val entityType = parser.accepts("entity-type", "Type of entity (topics/clients/users/brokers/broker-loggers/ips)")
+    val entityType = parser.accepts("entity-type", "Type of entity (topics/clients/users/brokers/broker-loggers/ips/client-metrics)")
       .withRequiredArg
       .ofType(classOf[String])
-    val entityName = parser.accepts("entity-name", "Name of entity (topic name/client id/user principal name/broker id/ip)")
+    val entityName = parser.accepts("entity-name", "Name of entity (topic name/client id/user principal name/broker id/ip/client metrics)")
       .withRequiredArg
       .ofType(classOf[String])
     val entityDefault = parser.accepts("entity-default", "Default entity name for clients/users/brokers/ips (applies to corresponding entity type in command line)")
@@ -791,6 +826,7 @@ object ConfigCommand extends Logging {
       "For entity-type '" + ConfigType.User + "': " + DynamicConfig.User.names.asScala.toSeq.sorted.map("\t" + _).mkString(nl, nl, nl) +
       "For entity-type '" + ConfigType.Client + "': " + DynamicConfig.Client.names.asScala.toSeq.sorted.map("\t" + _).mkString(nl, nl, nl) +
       "For entity-type '" + ConfigType.Ip + "': " + DynamicConfig.Ip.names.asScala.toSeq.sorted.map("\t" + _).mkString(nl, nl, nl) +
+      "For entity-type '" + ConfigType.ClientMetrics + "': " + DynamicConfig.ClientMetrics.names.asScala.toSeq.sorted.map("\t" + _).mkString(nl, nl, nl) +
       s"Entity types '${ConfigType.User}' and '${ConfigType.Client}' may be specified together to update config for clients of a specific user.")
       .withRequiredArg
       .ofType(classOf[String])
@@ -873,14 +909,14 @@ object ConfigCommand extends Logging {
       if (entityTypeVals.size != entityTypeVals.distinct.size)
         throw new IllegalArgumentException(s"Duplicate entity type(s) specified: ${entityTypeVals.diff(entityTypeVals.distinct).mkString(",")}")
 
-      val (allowedEntityTypes, connectOptString) = if (options.has(bootstrapServerOpt))
-        (BrokerSupportedConfigTypes, "--bootstrap-server")
+      val (allowedEntityTypes, connectOptString) = if (options.has(bootstrapServerOpt) || options.has(bootstrapControllerOpt))
+        (BrokerSupportedConfigTypes, "--bootstrap-server or --bootstrap-controller")
       else
         (ZkSupportedConfigTypes, "--zookeeper")
 
       entityTypeVals.foreach(entityTypeVal =>
         if (!allowedEntityTypes.contains(entityTypeVal))
-          throw new IllegalArgumentException(s"Invalid entity type $entityTypeVal, the entity type must be one of ${allowedEntityTypes.mkString(", ")} with the $connectOptString argument")
+          throw new IllegalArgumentException(s"Invalid entity type $entityTypeVal, the entity type must be one of ${allowedEntityTypes.mkString(", ")} with a $connectOptString argument")
       )
       if (entityTypeVals.isEmpty)
         throw new IllegalArgumentException("At least one entity type must be specified")
@@ -894,21 +930,20 @@ object ConfigCommand extends Logging {
       val hasEntityName = entityNames.exists(_.nonEmpty)
       val hasEntityDefault = entityNames.exists(_.isEmpty)
 
-      if (!options.has(bootstrapServerOpt) && !options.has(zkConnectOpt))
-        throw new IllegalArgumentException("One of the required --bootstrap-server or --zookeeper arguments must be specified")
-      else if (options.has(bootstrapServerOpt) && options.has(zkConnectOpt))
-        throw new IllegalArgumentException("Only one of --bootstrap-server or --zookeeper must be specified")
+      val numConnectOptions = (if (options.has(bootstrapServerOpt)) 1 else 0) +
+        (if (options.has(bootstrapControllerOpt)) 1 else 0) +
+        (if (options.has(zkConnectOpt)) 1 else 0)
+      if (numConnectOptions == 0)
+        throw new IllegalArgumentException("One of the required --bootstrap-server, --boostrap-controller, or --zookeeper arguments must be specified")
+      else if (numConnectOptions > 1)
+        throw new IllegalArgumentException("Only one of --bootstrap-server, --boostrap-controller, and --zookeeper can be specified")
 
       if (options.has(allOpt) && options.has(zkConnectOpt)) {
         throw new IllegalArgumentException(s"--bootstrap-server must be specified for --all")
       }
-
-      if (options.has(zkTlsConfigFile) && options.has(bootstrapServerOpt)) {
-        throw new IllegalArgumentException("--bootstrap-server doesn't support --zk-tls-config-file option. " +
-          "If you intend the command to communicate directly with ZooKeeper, please use the option --zookeeper instead of --bootstrap-server. " +
-          "Otherwise, remove the --zk-tls-config-file option.")
+      if (options.has(zkTlsConfigFile) && !options.has(zkConnectOpt)) {
+        throw new IllegalArgumentException("Only the --zookeeper option can be used with the --zk-tls-config-file option.")
       }
-
       if (hasEntityName && (entityTypeVals.contains(ConfigType.Broker) || entityTypeVals.contains(BrokerLoggerConfigType))) {
         Seq(entityName, broker, brokerLogger).filter(options.has(_)).map(options.valueOf(_)).foreach { brokerId =>
           try brokerId.toInt catch {

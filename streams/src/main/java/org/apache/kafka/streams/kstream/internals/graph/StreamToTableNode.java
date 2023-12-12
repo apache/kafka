@@ -22,8 +22,8 @@ import org.apache.kafka.streams.kstream.internals.KTableSource;
 import org.apache.kafka.streams.kstream.internals.MaterializedInternal;
 import org.apache.kafka.streams.kstream.internals.KeyValueStoreMaterializer;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
+import org.apache.kafka.streams.processor.internals.StoreFactory;
 import org.apache.kafka.streams.state.KeyValueStore;
-import org.apache.kafka.streams.state.StoreBuilder;
 
 /**
  * Represents a KTable convert From KStream
@@ -52,16 +52,16 @@ public class StreamToTableNode<K, V> extends GraphNode {
     @SuppressWarnings("unchecked")
     @Override
     public void writeToTopology(final InternalTopologyBuilder topologyBuilder) {
-        final StoreBuilder<?> storeBuilder =
-            new KeyValueStoreMaterializer<>((MaterializedInternal<K, V, KeyValueStore<Bytes, byte[]>>) materializedInternal).materialize();
+        final StoreFactory storeFactory =
+            new KeyValueStoreMaterializer<>((MaterializedInternal<K, V, KeyValueStore<Bytes, byte[]>>) materializedInternal);
 
         final String processorName = processorParameters.processorName();
         final KTableSource<K, V> tableSource =  processorParameters.processorSupplier() instanceof KTableSource ?
                 (KTableSource<K, V>) processorParameters.processorSupplier() : null;
         topologyBuilder.addProcessor(processorName, processorParameters.processorSupplier(), parentNodeNames());
 
-        if (storeBuilder != null && tableSource.materialized()) {
-            topologyBuilder.addStateStore(storeBuilder, processorName);
+        if (storeFactory != null && tableSource.materialized()) {
+            topologyBuilder.addStateStore(storeFactory, processorName);
         }
     }
 }

@@ -20,6 +20,7 @@ import org.apache.kafka.common.utils.AbstractIterator;
 import org.apache.kafka.common.utils.Time;
 
 import java.util.Iterator;
+import java.util.Optional;
 
 
 /**
@@ -69,6 +70,13 @@ public interface Records extends TransferableRecords {
      * @return An iterator over the record batches of the log
      */
     AbstractIterator<? extends RecordBatch> batchIterator();
+
+    /**
+     * Return the last record batch if non-empty or an empty `Optional` otherwise.
+     *
+     * Note that this requires iterating over all the record batches and hence it's expensive.
+     */
+    Optional<RecordBatch> lastBatch();
 
     /**
      * Check whether all batches in this buffer have a certain magic value.

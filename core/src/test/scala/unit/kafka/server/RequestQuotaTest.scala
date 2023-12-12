@@ -710,6 +710,21 @@ class RequestQuotaTest extends BaseRequestTest {
         case ApiKeys.CONSUMER_GROUP_HEARTBEAT =>
           new ConsumerGroupHeartbeatRequest.Builder(new ConsumerGroupHeartbeatRequestData(), true)
 
+        case ApiKeys.CONSUMER_GROUP_DESCRIBE =>
+          new ConsumerGroupDescribeRequest.Builder(new ConsumerGroupDescribeRequestData(), true)
+
+        case ApiKeys.GET_TELEMETRY_SUBSCRIPTIONS =>
+          new GetTelemetrySubscriptionsRequest.Builder(new GetTelemetrySubscriptionsRequestData(), true)
+
+        case ApiKeys.PUSH_TELEMETRY =>
+          new PushTelemetryRequest.Builder(new PushTelemetryRequestData(), true)
+
+        case ApiKeys.ASSIGN_REPLICAS_TO_DIRS =>
+          new AssignReplicasToDirsRequest.Builder(new AssignReplicasToDirsRequestData())
+
+        case ApiKeys.LIST_CLIENT_METRICS_RESOURCES =>
+          new ListClientMetricsResourcesRequest.Builder(new ListClientMetricsResourcesRequestData())
+
         case _ =>
           throw new IllegalArgumentException("Unsupported API key " + apiKey)
     }

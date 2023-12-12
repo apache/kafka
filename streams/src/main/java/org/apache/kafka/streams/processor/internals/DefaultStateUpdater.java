@@ -73,6 +73,7 @@ public class DefaultStateUpdater implements StateUpdater {
         private final ChangelogReader changelogReader;
         private final StateUpdaterMetrics updaterMetrics;
         private final AtomicBoolean isRunning = new AtomicBoolean(true);
+        private final AtomicBoolean isIdle = new AtomicBoolean(false);
         private final Map<TaskId, Task> updatingTasks = new ConcurrentHashMap<>();
         private final Map<TaskId, Task> pausedTasks = new ConcurrentHashMap<>();
 
@@ -305,12 +306,14 @@ public class DefaultStateUpdater implements StateUpdater {
 
         private void waitIfAllChangelogsCompletelyRead() {
             tasksAndActionsLock.lock();
+            final boolean noTasksToUpdate = changelogReader.allChangelogsCompleted() || updatingTasks.isEmpty();
             try {
                 while (isRunning.get() &&
-                    changelogReader.allChangelogsCompleted() &&
+                    noTasksToUpdate &&
                     tasksAndActions.isEmpty() &&
                     !isTopologyResumed.get()) {
 
+                    isIdle.set(true);
                     tasksAndActionsCondition.await();
                 }
             } catch (final InterruptedException ignored) {
@@ -318,6 +321,7 @@ public class DefaultStateUpdater implements StateUpdater {
                 // and hence this exception should never be thrown
             } finally {
                 tasksAndActionsLock.unlock();
+                isIdle.set(false);
             }
         }
 
@@ -766,6 +770,14 @@ public class DefaultStateUpdater implements StateUpdater {
         return executeWithQueuesLocked(
             () -> getStreamOfTasks().filter(t -> !t.isActive()).map(t -> (StandbyTask) t).collect(Collectors.toSet())
         );
+    }
+
+    // used for testing
+    boolean isIdle() {
+        if (stateUpdaterThread != null) {
+            return stateUpdaterThread.isIdle.get();
+        }
+        return false;
     }
 
     private <T> Set<T> executeWithQueuesLocked(final Supplier<Set<T>> action) {

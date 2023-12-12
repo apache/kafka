@@ -17,6 +17,7 @@
 
 package org.apache.kafka.coordinator.group.generic;
 
+import org.apache.kafka.common.message.DescribeGroupsResponseData;
 import org.apache.kafka.common.message.JoinGroupRequestData.JoinGroupRequestProtocol;
 import org.apache.kafka.common.message.JoinGroupRequestData.JoinGroupRequestProtocolCollection;
 import org.junit.jupiter.api.Test;
@@ -257,5 +258,66 @@ public class GenericGroupMemberTest {
         member.setAwaitingJoinFuture(null);
         member.setAwaitingSyncFuture(new CompletableFuture<>());
         assertTrue(member.hasSatisfiedHeartbeat());
+    }
+
+    @Test
+    public void testDescribeNoMetadata() {
+        GenericGroupMember member = new GenericGroupMember(
+            "member",
+            Optional.of("group-instance-id"),
+            "client-id",
+            "client-host",
+            10,
+            4500,
+            "generic",
+            new JoinGroupRequestProtocolCollection(),
+            new byte[0]
+        );
+
+        DescribeGroupsResponseData.DescribedGroupMember expectedDescribedGroupMember =
+            new DescribeGroupsResponseData.DescribedGroupMember()
+                .setMemberId("member")
+                .setGroupInstanceId("group-instance-id")
+                .setClientId("client-id")
+                .setClientHost("client-host")
+                .setMemberAssignment(new byte[0]);
+
+        DescribeGroupsResponseData.DescribedGroupMember describedGroupMember = member.describeNoMetadata();
+
+        assertEquals(expectedDescribedGroupMember, describedGroupMember);
+    }
+
+    @Test
+    public void testDescribe() {
+        JoinGroupRequestProtocolCollection protocols = new JoinGroupRequestProtocolCollection(Collections.singletonList(
+            new JoinGroupRequestProtocol()
+                .setName("range")
+                .setMetadata(new byte[]{0})
+        ).iterator());
+
+        GenericGroupMember member = new GenericGroupMember(
+            "member",
+            Optional.of("group-instance-id"),
+            "client-id",
+            "client-host",
+            10,
+            4500,
+            "generic",
+            protocols,
+            new byte[0]
+        );
+
+        DescribeGroupsResponseData.DescribedGroupMember expectedDescribedGroupMember =
+            new DescribeGroupsResponseData.DescribedGroupMember()
+                .setMemberId("member")
+                .setGroupInstanceId("group-instance-id")
+                .setClientId("client-id")
+                .setClientHost("client-host")
+                .setMemberAssignment(new byte[0])
+                .setMemberMetadata(member.metadata("range"));
+
+        DescribeGroupsResponseData.DescribedGroupMember describedGroupMember = member.describe("range");
+
+        assertEquals(expectedDescribedGroupMember, describedGroupMember);
     }
 }

@@ -34,7 +34,7 @@ import java.util.concurrent.ExecutionException;
 import java.util.stream.Collectors;
 
 import static org.apache.kafka.server.log.remote.storage.LocalTieredStorageEvent.EventType.FETCH_SEGMENT;
-import static org.apache.kafka.tiered.storage.utils.ActionUtils.tieredStorageRecords;
+import static org.apache.kafka.tiered.storage.utils.TieredStorageTestUtils.tieredStorageRecords;
 import static org.apache.kafka.tiered.storage.utils.RecordsKeyValueMatcher.correspondTo;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -81,7 +81,7 @@ public final class ConsumeAction implements TieredStorageTestAction {
                 context.consume(topicPartition, expectedTotalCount, fetchOffset);
 
         // (A) Comparison of records consumed with records in the second-tier storage.
-        // Reads all records physically found in the second-tier storage ∂for the given topic-partition.
+        // Reads all records physically found in the second-tier storage for the given topic-partition.
         // The resulting sequence is sorted by records offset, as there is no guarantee on ordering from
         // the LocalTieredStorageSnapshot.
         List<Record> tieredStorageRecords = tieredStorageRecords(context, topicPartition);
@@ -92,8 +92,7 @@ public final class ConsumeAction implements TieredStorageTestAction {
                 .findFirst();
 
         if (!firstExpectedRecordOpt.isPresent()) {
-            // If no records could be found in the second-tier storage or their offset are less
-            // than the consumer fetch offset, no record would be consumed from that storage.
+            // If no records could be found in the second-tier storage, no record would be consumed from that storage.
             if (expectedFromSecondTierCount > 0) {
                 fail("Could not find any record with offset >= " + fetchOffset + " from tier storage.");
             }

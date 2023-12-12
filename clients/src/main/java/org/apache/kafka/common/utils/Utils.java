@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.utils;
 
+import java.lang.reflect.Modifier;
 import java.nio.BufferUnderflowException;
 import java.nio.ByteOrder;
 import java.nio.file.StandardOpenOption;
@@ -71,6 +72,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Properties;
 import java.util.Set;
+import java.util.concurrent.Callable;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiConsumer;
 import java.util.function.BinaryOperator;
@@ -1021,6 +1023,17 @@ public final class Utils {
     }
 
     /**
+     * Flushes dirty file with swallowing {@link NoSuchFileException}
+     */
+    public static void flushFileIfExists(Path path) throws IOException {
+        try (FileChannel fileChannel = FileChannel.open(path, StandardOpenOption.READ)) {
+            fileChannel.force(true);
+        } catch (NoSuchFileException e) {
+            log.warn("Failed to flush file {}", path, e);
+        }
+    }
+
+    /**
      * Closes all the provided closeables.
      * @throws IOException if any of the close methods throws an IOException.
      *         The first IOException is thrown with subsequent exceptions
@@ -1042,14 +1055,20 @@ public final class Utils {
         if (exception != null)
             throw exception;
     }
-    public static void swallow(final Logger log, final Level level, final String what, final Runnable code) {
+
+    @FunctionalInterface
+    public interface SwallowAction {
+        void run() throws Throwable;
+    }
+
+    public static void swallow(final Logger log, final Level level, final String what, final SwallowAction code) {
         swallow(log, level, what, code, null);
     }
 
     /**
      * Run the supplied code. If an exception is thrown, it is swallowed and registered to the firstException parameter.
      */
-    public static void swallow(final Logger log, final Level level, final String what, final Runnable code,
+    public static void swallow(final Logger log, final Level level, final String what, final SwallowAction code,
                                final AtomicReference<Throwable> firstException) {
         if (code != null) {
             try {
@@ -1091,6 +1110,15 @@ public final class Utils {
     }
 
     /**
+     * Closes {@code maybeCloseable} if it implements the {@link AutoCloseable} interface,
+     * and if an exception is thrown, it is logged at the WARN level.
+     */
+    public static void maybeCloseQuietly(Object maybeCloseable, String name) {
+        if (maybeCloseable instanceof AutoCloseable)
+            closeQuietly((AutoCloseable) maybeCloseable, name);
+    }
+
+    /**
      * Closes {@code closeable} and if an exception is thrown, it is logged at the WARN level.
      * <b>Be cautious when passing method references as an argument.</b> For example:
      * <p>
@@ -1102,11 +1130,26 @@ public final class Utils {
      * use a method reference from it.
      */
     public static void closeQuietly(AutoCloseable closeable, String name) {
+        closeQuietly(closeable, name, log);
+    }
+
+    /**
+     * Closes {@code closeable} and if an exception is thrown, it is logged with the provided logger at the WARN level.
+     * <b>Be cautious when passing method references as an argument.</b> For example:
+     * <p>
+     * {@code closeQuietly(task::stop, "source task");}
+     * <p>
+     * Although this method gracefully handles null {@link AutoCloseable} objects, attempts to take a method
+     * reference from a null object will result in a {@link NullPointerException}. In the example code above,
+     * it would be the caller's responsibility to ensure that {@code task} was non-null before attempting to
+     * use a method reference from it.
+     */
+    public static void closeQuietly(AutoCloseable closeable, String name, Logger logger) {
         if (closeable != null) {
             try {
                 closeable.close();
             } catch (Throwable t) {
-                log.warn("Failed to close {} with type {}", name, closeable.getClass().getName(), t);
+                logger.warn("Failed to close {} with type {}", name, closeable.getClass().getName(), t);
             }
         }
     }
@@ -1141,6 +1184,30 @@ public final class Utils {
      */
     public static void closeAllQuietly(AtomicReference<Throwable> firstException, String name, AutoCloseable... closeables) {
         for (AutoCloseable closeable : closeables) closeQuietly(closeable, name, firstException);
+    }
+
+    /**
+     * Invokes every function in `all` even if one or more functions throws an exception.
+     *
+     * If any of the functions throws an exception, the first one will be rethrown at the end with subsequent exceptions
+     * added as suppressed exceptions.
+     */
+    // Note that this is a generalised version of `closeAll`. We could potentially make it more general by
+    // changing the signature to `public <R> List<R> tryAll(all: List[Callable<R>])`
+    public static void tryAll(List<Callable<Void>> all) throws Throwable {
+        Throwable exception = null;
+        for (Callable call : all) {
+            try {
+                call.call();
+            } catch (Throwable t) {
+                if (exception != null)
+                    exception.addSuppressed(t);
+                else
+                    exception = t;
+            }
+        }
+        if (exception != null)
+            throw exception;
     }
 
     /**
@@ -1497,7 +1564,7 @@ public final class Utils {
      * Checks if a string is null, empty or whitespace only.
      * @param str a string to be checked
      * @return true if the string is null, empty or whitespace only; otherwise, return false.
-     */    
+     */
     public static boolean isBlank(String str) {
         return str == null || str.trim().isEmpty();
     }
@@ -1517,6 +1584,38 @@ public final class Utils {
         return Stream.of(enumClass.getEnumConstants())
                 .map(Object::toString)
                 .toArray(String[]::new);
+    }
+
+    /**
+     * Ensure that the class is concrete (i.e., not abstract), and that it subclasses a given base class.
+     * If it is abstract or does not subclass the given base class, throw a {@link ConfigException}
+     * with a friendly error message suggesting a list of concrete child subclasses (if any are known).
+     * @param baseClass the expected superclass; may not be null
+     * @param klass the class to check; may not be null
+     * @throws ConfigException if the class is not concrete
+     */
+    public static void ensureConcreteSubclass(Class<?> baseClass, Class<?> klass) {
+        Objects.requireNonNull(baseClass);
+        Objects.requireNonNull(klass);
+
+        if (!baseClass.isAssignableFrom(klass)) {
+            String inheritFrom = baseClass.isInterface() ? "implement" : "extend";
+            String baseClassType = baseClass.isInterface() ? "interface" : "class";
+            throw new ConfigException("Class " + klass + " does not " + inheritFrom + " the " + baseClass.getSimpleName() + " " + baseClassType);
+        }
+
+        if (Modifier.isAbstract(klass.getModifiers())) {
+            String childClassNames = Stream.of(klass.getClasses())
+                    .filter(baseClass::isAssignableFrom)
+                    .filter(c -> !Modifier.isAbstract(c.getModifiers()))
+                    .filter(c -> Modifier.isPublic(c.getModifiers()))
+                    .map(Class::getName)
+                    .collect(Collectors.joining(", "));
+            String message = "This class is abstract and cannot be created.";
+            if (!Utils.isBlank(childClassNames))
+                message += " Did you mean " + childClassNames + "?";
+            throw new ConfigException(message);
+        }
     }
 
     /**

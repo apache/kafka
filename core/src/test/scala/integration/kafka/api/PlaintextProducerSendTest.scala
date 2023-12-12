@@ -66,7 +66,7 @@ class PlaintextProducerSendTest extends BaseProducerSendTest {
     val producer = createProducer(batchSize = 0)
     val numRecords = 10;
     try {
-      TestUtils.createTopicWithAdmin(admin, topic, brokers, 2)
+      TestUtils.createTopicWithAdmin(admin, topic, brokers, controllerServers, 2)
       val futures = for (i <- 1 to numRecords) yield {
         val record = new ProducerRecord[Array[Byte], Array[Byte]](topic, null, s"value$i".getBytes(StandardCharsets.UTF_8))
         producer.send(record)
@@ -128,7 +128,7 @@ class PlaintextProducerSendTest extends BaseProducerSendTest {
     // set the TopicConfig for timestamp validation to have 1 minute threshold. Note that recordTimestamp has 5 minutes diff
     val oneMinuteInMs: Long = 1 * 60 * 60 * 1000L
     topicProps.setProperty(messageTimeStampConfig, oneMinuteInMs.toString)
-    TestUtils.createTopicWithAdmin(admin, topic, brokers, 1, 2, topicConfig = topicProps)
+    TestUtils.createTopicWithAdmin(admin, topic, brokers, controllerServers, 1, 2, topicConfig = topicProps)
 
     val producer = createProducer()
     try {
@@ -157,7 +157,7 @@ class PlaintextProducerSendTest extends BaseProducerSendTest {
 
     // set the TopicConfig for timestamp validation to be the same as the record timestamp
     topicProps.setProperty(messageTimeStampConfig, recordTimestamp.toString)
-    TestUtils.createTopicWithAdmin(admin, topic, brokers, 1, 2, topicConfig = topicProps)
+    TestUtils.createTopicWithAdmin(admin, topic, brokers, controllerServers, 1, 2, topicConfig = topicProps)
 
     val producer = createProducer()
 
@@ -178,7 +178,7 @@ class PlaintextProducerSendTest extends BaseProducerSendTest {
     // set the TopicConfig for timestamp validation to have 10 minute threshold. Note that recordTimestamp has 5 minutes diff
     val tenMinutesInMs: Long = 10 * 60 * 60 * 1000L
     topicProps.setProperty(messageTimeStampConfig, tenMinutesInMs.toString)
-    TestUtils.createTopicWithAdmin(admin, topic, brokers, 1, 2, topicConfig = topicProps)
+    TestUtils.createTopicWithAdmin(admin, topic, brokers, controllerServers, 1, 2, topicConfig = topicProps)
 
     val producer = createProducer()
 

@@ -19,6 +19,13 @@ package org.apache.kafka.clients.consumer.internals.events;
 public class NewTopicsMetadataUpdateRequestEvent extends ApplicationEvent {
 
     public NewTopicsMetadataUpdateRequestEvent() {
-        super(Type.METADATA_UPDATE);
+        super(Type.NEW_TOPICS_METADATA_UPDATE);
+    }
+
+    @Override
+    public String toString() {
+        return "NewTopicsMetadataUpdateRequestEvent{" +
+                toStringBase() +
+                '}';
     }
 }

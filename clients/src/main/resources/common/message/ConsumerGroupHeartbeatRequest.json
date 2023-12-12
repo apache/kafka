@@ -18,10 +18,6 @@
   "type": "request",
   "listeners": ["zkBroker", "broker"],
   "name": "ConsumerGroupHeartbeatRequest",
-  // The ConsumerGroupHeartbeat API is added as part of KIP-848 and is still
-  // under development. Hence, the API is not exposed by default by brokers
-  // unless explicitly enabled.
-  "latestVersionUnstable": true,
   "validVersions": "0",
   "flexibleVersions": "0+",
   "fields": [
@@ -36,28 +32,11 @@
     { "name": "RackId", "type": "string", "versions": "0+",  "nullableVersions": "0+", "default": "null",
       "about": "null if not provided or if it didn't change since the last heartbeat; the rack ID of consumer otherwise." },
     { "name": "RebalanceTimeoutMs", "type": "int32", "versions": "0+", "default": -1,
-      "about": "-1 if it didn't chance since the last heartbeat; the maximum time in milliseconds that the coordinator will wait on the member to revoke its partitions otherwise." },
+      "about": "-1 if it didn't change since the last heartbeat; the maximum time in milliseconds that the coordinator will wait on the member to revoke its partitions otherwise." },
     { "name": "SubscribedTopicNames", "type": "[]string", "versions": "0+", "nullableVersions": "0+", "default": "null", "entityType": "topicName",
       "about": "null if it didn't change since the last heartbeat; the subscribed topic names otherwise." },
-    { "name": "SubscribedTopicRegex", "type": "string", "versions": "0+", "nullableVersions": "0+", "default": "null",
-      "about": "null if it didn't change since the last heartbeat; the subscribed topic regex otherwise" },
     { "name": "ServerAssignor", "type": "string", "versions": "0+", "nullableVersions": "0+", "default": "null",
       "about": "null if not used or if it didn't change since the last heartbeat; the server side assignor to use otherwise." },
-    { "name": "ClientAssignors", "type": "[]Assignor", "versions": "0+", "nullableVersions": "0+", "default": "null",
-      "about": "null if not used or if it didn't change since the last heartbeat; the list of client-side assignors otherwise.", "fields": [
-      { "name": "Name", "type": "string", "versions": "0+",
-        "about": "The name of the assignor." },
-      { "name": "MinimumVersion", "type": "int16", "versions": "0+",
-        "about": "The minimum supported version for the metadata." },
-      { "name": "MaximumVersion", "type": "int16", "versions": "0+",
-        "about": "The maximum supported version for the metadata." },
-      { "name": "Reason", "type": "int8", "versions": "0+",
-        "about": "The reason of the metadata update." },
-      { "name": "MetadataVersion", "type": "int16", "versions": "0+",
-        "about": "The version of the metadata." },
-      { "name": "MetadataBytes", "type": "bytes", "versions": "0+",
-        "about": "The metadata." }
-    ]},
     { "name": "TopicPartitions", "type": "[]TopicPartitions", "versions": "0+", "nullableVersions": "0+", "default": "null",
       "about": "null if it didn't change since the last heartbeat; the partitions owned by the member.", "fields": [
       { "name": "TopicId", "type": "uuid", "versions": "0+",

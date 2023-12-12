@@ -156,10 +156,10 @@ pipeline {
           }
         }
 
-        stage('JDK 20 and Scala 2.13') {
+        stage('JDK 21 and Scala 2.13') {
           agent { label 'ubuntu' }
           tools {
-            jdk 'jdk_20_latest'
+            jdk 'jdk_21_latest'
           }
           options {
             timeout(time: 8, unit: 'HOURS')
@@ -171,7 +171,7 @@ pipeline {
           steps {
             doValidation()
             doTest(env)
-            echo 'Skipping Kafka Streams archetype test for Java 20'
+            echo 'Skipping Kafka Streams archetype test for Java 21'
           }
         }
       }

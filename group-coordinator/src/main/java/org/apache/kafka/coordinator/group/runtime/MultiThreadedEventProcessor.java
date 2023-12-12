@@ -18,9 +18,12 @@ package org.apache.kafka.coordinator.group.runtime;
 
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.coordinator.group.metrics.CoordinatorRuntimeMetrics;
 import org.slf4j.Logger;
 
 import java.util.List;
+import java.util.Objects;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
@@ -53,20 +56,49 @@ public class MultiThreadedEventProcessor implements CoordinatorEventProcessor {
     private volatile boolean shuttingDown;
 
     /**
+     * The coordinator runtime metrics.
+     */
+    private final CoordinatorRuntimeMetrics metrics;
+
+    /**
+     * The time.
+     */
+    private final Time time;
+
+    public MultiThreadedEventProcessor(
+        LogContext logContext,
+        String threadPrefix,
+        int numThreads,
+        Time time,
+        CoordinatorRuntimeMetrics metrics
+    ) {
+        this(logContext, threadPrefix, numThreads, time, metrics, new EventAccumulator<>());
+    }
+
+    /**
      * Constructor.
      *
-     * @param logContext    The log context.
-     * @param threadPrefix  The thread prefix.
-     * @param numThreads    The number of threads.
+     * @param logContext        The log context.
+     * @param threadPrefix      The thread prefix.
+     * @param numThreads        The number of threads.
+     * @param metrics           The coordinator runtime metrics.
+     * @param time              The time.
+     * @param eventAccumulator  The event accumulator.
      */
     public MultiThreadedEventProcessor(
         LogContext logContext,
         String threadPrefix,
-        int numThreads
+        int numThreads,
+        Time time,
+        CoordinatorRuntimeMetrics metrics,
+        EventAccumulator<TopicPartition, CoordinatorEvent> eventAccumulator
     ) {
         this.log = logContext.logger(MultiThreadedEventProcessor.class);
         this.shuttingDown = false;
-        this.accumulator = new EventAccumulator<>();
+        this.accumulator = eventAccumulator;
+        this.time = Objects.requireNonNull(time);
+        this.metrics = Objects.requireNonNull(metrics);
+        this.metrics.registerEventQueueSizeGauge(accumulator::size);
         this.threads = IntStream.range(0, numThreads).mapToObj(threadId ->
             new EventProcessorThread(
                 threadPrefix + threadId
@@ -81,6 +113,9 @@ public class MultiThreadedEventProcessor implements CoordinatorEventProcessor {
      */
     private class EventProcessorThread extends Thread {
         private final Logger log;
+        private long pollStartMs;
+        private long timeSinceLastPollMs;
+        private long lastPollMs;
 
         EventProcessorThread(
             String name
@@ -92,11 +127,16 @@ public class MultiThreadedEventProcessor implements CoordinatorEventProcessor {
 
         private void handleEvents() {
             while (!shuttingDown) {
+                recordPollStartTime(time.milliseconds());
                 CoordinatorEvent event = accumulator.poll();
+                recordPollEndTime(time.milliseconds());
                 if (event != null) {
                     try {
                         log.debug("Executing event: {}.", event);
+                        long dequeuedTimeMs = time.milliseconds();
+                        metrics.recordEventQueueTime(dequeuedTimeMs - event.createdTimeMs());
                         event.run();
+                        metrics.recordEventQueueProcessingTime(time.milliseconds() - dequeuedTimeMs);
                     } catch (Throwable t) {
                         log.error("Failed to run event {} due to: {}.", event, t.getMessage(), t);
                         event.complete(t);
@@ -112,6 +152,7 @@ public class MultiThreadedEventProcessor implements CoordinatorEventProcessor {
             while (event != null) {
                 try {
                     log.debug("Draining event: {}.", event);
+                    metrics.recordEventQueueTime(time.milliseconds() - event.createdTimeMs());
                     event.complete(new RejectedExecutionException("EventProcessor is closed."));
                 } catch (Throwable t) {
                     log.error("Failed to reject event {} due to: {}.", event, t.getMessage(), t);
@@ -144,6 +185,18 @@ public class MultiThreadedEventProcessor implements CoordinatorEventProcessor {
                 }
                 log.info("Shutdown completed");
             }
+        }
+
+        private void recordPollStartTime(long pollStartMs) {
+            this.pollStartMs = pollStartMs;
+            this.timeSinceLastPollMs = lastPollMs != 0L ? pollStartMs - lastPollMs : 0;
+            this.lastPollMs = pollStartMs;
+        }
+
+        private void recordPollEndTime(long pollEndMs) {
+            long pollTimeMs = pollEndMs - pollStartMs;
+            double pollIdleRatio = pollTimeMs * 1.0 / (pollTimeMs + timeSinceLastPollMs);
+            metrics.recordThreadIdleRatio(pollIdleRatio);
         }
     }
 

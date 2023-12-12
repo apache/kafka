@@ -28,7 +28,6 @@ import kafka.server.KafkaConfig
 import kafka.server.KafkaRaftServer.BrokerRole
 import kafka.server.KafkaRaftServer.ControllerRole
 import kafka.server.KafkaRaftServer.ProcessRole
-import kafka.server.MetaProperties
 import kafka.utils.TestUtils
 import kafka.tools.TestRaftServer.ByteArraySerde
 import org.apache.kafka.common.TopicPartition
@@ -83,13 +82,9 @@ class RaftManagerTest {
     config: KafkaConfig
   ): KafkaRaftManager[Array[Byte]] = {
     val topicId = new Uuid(0L, 2L)
-    val metaProperties = MetaProperties(
-      clusterId = Uuid.randomUuid.toString,
-      nodeId = config.nodeId
-    )
 
     new KafkaRaftManager[Array[Byte]](
-      metaProperties,
+      Uuid.randomUuid.toString,
       config,
       new ByteArraySerde,
       topicPartition,

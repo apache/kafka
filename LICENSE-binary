@@ -205,15 +205,17 @@
 This project bundles some components that are also licensed under the Apache
 License Version 2.0:
 
-audience-annotations-0.13.0
+audience-annotations-0.12.0
 caffeine-2.9.3
 commons-beanutils-1.9.4
 commons-cli-1.4
 commons-collections-3.2.2
 commons-digester-2.1
+commons-io-2.11.0
 commons-lang3-3.8.1
 commons-logging-1.2
 commons-validator-1.7
+error_prone_annotations-2.10.0
 jackson-annotations-2.13.5
 jackson-core-2.13.5
 jackson-databind-2.13.5
@@ -226,43 +228,44 @@ jackson-module-scala_2.13-2.13.5
 jackson-module-scala_2.12-2.13.5
 jakarta.validation-api-2.0.2
 javassist-3.29.2-GA
-jetty-client-9.4.51.v20230217
-jetty-continuation-9.4.51.v20230217
-jetty-http-9.4.51.v20230217
-jetty-io-9.4.51.v20230217
-jetty-security-9.4.51.v20230217
-jetty-server-9.4.51.v20230217
-jetty-servlet-9.4.51.v20230217
-jetty-servlets-9.4.51.v20230217
-jetty-util-9.4.51.v20230217
-jetty-util-ajax-9.4.51.v20230217
+jetty-client-9.4.53.v20231009
+jetty-continuation-9.4.53.v20231009
+jetty-http-9.4.53.v20231009
+jetty-io-9.4.53.v20231009
+jetty-security-9.4.53.v20231009
+jetty-server-9.4.53.v20231009
+jetty-servlet-9.4.53.v20231009
+jetty-servlets-9.4.53.v20231009
+jetty-util-9.4.53.v20231009
+jetty-util-ajax-9.4.53.v20231009
 jose4j-0.9.3
 lz4-java-1.8.0
 maven-artifact-3.8.8
 metrics-core-4.1.12.1
 metrics-core-2.2.0
-netty-buffer-4.1.94.Final
-netty-codec-4.1.94.Final
-netty-common-4.1.94.Final
-netty-handler-4.1.94.Final
-netty-resolver-4.1.94.Final
-netty-transport-4.1.94.Final
-netty-transport-classes-epoll-4.1.94.Final
-netty-transport-native-epoll-4.1.94.Final
-netty-transport-native-unix-common-4.1.94.Final
-plexus-utils-3.3.0
+netty-buffer-4.1.100.Final
+netty-codec-4.1.100.Final
+netty-common-4.1.100.Final
+netty-handler-4.1.100.Final
+netty-resolver-4.1.100.Final
+netty-transport-4.1.100.Final
+netty-transport-classes-epoll-4.1.100.Final
+netty-transport-native-epoll-4.1.100.Final
+netty-transport-native-unix-common-4.1.100.Final
+opentelemetry-proto-1.0.0-alpha
+plexus-utils-3.3.1
 reflections-0.10.2
 reload4j-1.2.25
 rocksdbjni-7.9.2
 scala-collection-compat_2.13-2.10.0
-scala-library-2.13.11
+scala-library-2.13.12
 scala-logging_2.13-3.9.4
-scala-reflect-2.13.11
+scala-reflect-2.13.12
 scala-java8-compat_2.13-1.0.2
-snappy-java-1.1.10.3
+snappy-java-1.1.10.5
 swagger-annotations-2.2.8
-zookeeper-3.8.2
-zookeeper-jute-3.8.2
+zookeeper-3.8.3
+zookeeper-jute-3.8.3
 
 ===============================================================================
 This product bundles various third-party components under other open source
@@ -310,6 +313,7 @@ activation-1.1.1
 MIT License
 
 argparse4j-0.7.0, see: licenses/argparse-MIT
+checker-qual-3.19.0, see: licenses/checker-qual-MIT
 jopt-simple-5.0.4, see: licenses/jopt-simple-MIT
 slf4j-api-1.7.36, see: licenses/slf4j-MIT
 slf4j-reload4j-1.7.36, see: licenses/slf4j-MIT
@@ -318,13 +322,15 @@ pcollections-4.0.1, see: licenses/pcollections-MIT
 ---------------------------------------
 BSD 2-Clause
 
-zstd-jni-1.5.5-1 see: licenses/zstd-jni-BSD-2-clause
+zstd-jni-1.5.5-6 see: licenses/zstd-jni-BSD-2-clause
 
 ---------------------------------------
 BSD 3-Clause
 
 jline-3.22.0, see: licenses/jline-BSD-3-clause
+jsr305-3.0.2, see: licenses/jsr305-BSD-3-clause
 paranamer-2.8, see: licenses/paranamer-BSD-3-clause
+protobuf-java-3.23.4, see: licenses/protobuf-java-BSD-3-clause
 
 ---------------------------------------
 Do What The F*ck You Want To Public License

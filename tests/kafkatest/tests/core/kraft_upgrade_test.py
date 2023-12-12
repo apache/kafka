@@ -13,7 +13,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from ducktape.mark import parametrize
+from ducktape.mark import parametrize, matrix
 from ducktape.mark.resource import cluster
 from ducktape.utils.util import wait_until
 from kafkatest.services.console_consumer import ConsoleConsumer
@@ -23,7 +23,7 @@ from kafkatest.services.verifiable_producer import VerifiableProducer
 from kafkatest.tests.produce_consume_validate import ProduceConsumeValidateTest
 from kafkatest.utils import is_int
 from kafkatest.version import LATEST_3_1, LATEST_3_2, LATEST_3_3, LATEST_3_4, LATEST_3_5, \
-    DEV_BRANCH, DEV_VERSION, KafkaVersion, LATEST_METADATA_VERSION
+    DEV_BRANCH, KafkaVersion, LATEST_METADATA_VERSION
 
 #
 # Test upgrading between different KRaft versions.
@@ -109,22 +109,16 @@ class TestKRaftUpgrade(ProduceConsumeValidateTest):
         assert self.kafka.check_protocol_errors(self)
 
     @cluster(num_nodes=5)
-    @parametrize(from_kafka_version=str(LATEST_3_1), metadata_quorum=combined_kraft)
-    @parametrize(from_kafka_version=str(LATEST_3_2), metadata_quorum=combined_kraft)
-    @parametrize(from_kafka_version=str(LATEST_3_3), metadata_quorum=combined_kraft)
-    @parametrize(from_kafka_version=str(LATEST_3_4), metadata_quorum=combined_kraft)
-    @parametrize(from_kafka_version=str(LATEST_3_5), metadata_quorum=combined_kraft)
-    @parametrize(from_kafka_version=str(DEV_VERSION), metadata_quorum=combined_kraft)
-    def test_combined_mode_upgrade(self, from_kafka_version, metadata_quorum):
+    @matrix(from_kafka_version=[str(LATEST_3_1), str(LATEST_3_2), str(LATEST_3_3), str(LATEST_3_4), str(LATEST_3_5), str(DEV_BRANCH)], 
+            use_new_coordinator=[True, False], 
+            metadata_quorum=[combined_kraft])
+    def test_combined_mode_upgrade(self, from_kafka_version, metadata_quorum, use_new_coordinator=False):
         self.run_upgrade(from_kafka_version)
 
     @cluster(num_nodes=8)
-    @parametrize(from_kafka_version=str(LATEST_3_1), metadata_quorum=isolated_kraft)
-    @parametrize(from_kafka_version=str(LATEST_3_2), metadata_quorum=isolated_kraft)
-    @parametrize(from_kafka_version=str(LATEST_3_3), metadata_quorum=isolated_kraft)
-    @parametrize(from_kafka_version=str(LATEST_3_4), metadata_quorum=isolated_kraft)
-    @parametrize(from_kafka_version=str(LATEST_3_5), metadata_quorum=isolated_kraft)
-    @parametrize(from_kafka_version=str(DEV_VERSION), metadata_quorum=isolated_kraft)
-    def test_isolated_mode_upgrade(self, from_kafka_version, metadata_quorum):
+    @matrix(from_kafka_version=[str(LATEST_3_1), str(LATEST_3_2), str(LATEST_3_3), str(LATEST_3_4), str(LATEST_3_5), str(DEV_BRANCH)], 
+            use_new_coordinator=[True, False], 
+            metadata_quorum=[isolated_kraft])
+    def test_isolated_mode_upgrade(self, from_kafka_version, metadata_quorum, use_new_coordinator=False):
         self.run_upgrade(from_kafka_version)
 

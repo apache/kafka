@@ -24,7 +24,7 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * Test Cases (A):
+ * Test Cases:
  *    Elementary offloads and fetches from tiered storage.
  */
 public final class OffloadAndConsumeFromLeaderTest extends TieredStorageTestHarness {
@@ -46,14 +46,14 @@ public final class OffloadAndConsumeFromLeaderTest extends TieredStorageTestHarn
         final Integer p0 = 0;
         final Integer partitionCount = 1;
         final Integer replicationFactor = 1;
-        final Integer maxBatchCountPerSegment = 1;
+        final Integer oneBatchPerSegment = 1;
+        final Integer twoBatchPerSegment = 2;
         final Map<Integer, List<Integer>> replicaAssignment = null;
         final boolean enableRemoteLogStorage = true;
-        final Integer batchSize = 1;
 
         builder
                 /*
-                 * (A.1) Create a topic which segments contain only one batch and produce three records
+                 * (1) Create a topic which segments contain only one batch and produce three records
                  *       with a batch size of 1.
                  *
                  *       The topic and broker are configured so that the two rolled segments are picked from
@@ -68,23 +68,23 @@ public final class OffloadAndConsumeFromLeaderTest extends TieredStorageTestHarn
                  *           Log tA-p0                         Log tA-p0
                  *          *-------------------*             *-------------------*
                  *          | base offset = 2   |             |  base offset = 0  |
-                 *          | (k3, v3)          |             |  (k1, v1)         |
+                 *          | (k2, v2)          |             |  (k0, v0)         |
                  *          *-------------------*             *-------------------*
                  *                                            *-------------------*
                  *                                            |  base offset = 1  |
-                 *                                            |  (k2, v2)         |
+                 *                                            |  (k1, v1)         |
                  *                                            *-------------------*
                  */
-                .createTopic(topicA, partitionCount, replicationFactor, maxBatchCountPerSegment, replicaAssignment,
+                .createTopic(topicA, partitionCount, replicationFactor, oneBatchPerSegment, replicaAssignment,
                         enableRemoteLogStorage)
-                .withBatchSize(topicA, p0, batchSize)
-                .expectSegmentToBeOffloaded(broker, topicA, p0, 0, new KeyValueSpec("k1", "v1"))
-                .expectSegmentToBeOffloaded(broker, topicA, p0, 1, new KeyValueSpec("k2", "v2"))
-                .produce(topicA, p0, new KeyValueSpec("k1", "v1"), new KeyValueSpec("k2", "v2"),
-                        new KeyValueSpec("k3", "v3"))
+                .expectSegmentToBeOffloaded(broker, topicA, p0, 0, new KeyValueSpec("k0", "v0"))
+                .expectSegmentToBeOffloaded(broker, topicA, p0, 1, new KeyValueSpec("k1", "v1"))
+                .expectEarliestLocalOffsetInLogDirectory(topicA, p0, 2L)
+                .produce(topicA, p0, new KeyValueSpec("k0", "v0"), new KeyValueSpec("k1", "v1"),
+                        new KeyValueSpec("k2", "v2"))
 
                 /*
-                 * (A.2) Similar scenario as above, but with segments of two records.
+                 * (2) Similar scenario as above, but with segments of two records.
                  *
                  *       Acceptance:
                  *       -----------
@@ -95,28 +95,27 @@ public final class OffloadAndConsumeFromLeaderTest extends TieredStorageTestHarn
                  *           Log tB-p0                         Log tB-p0
                  *          *-------------------*             *-------------------*
                  *          | base offset = 4   |             |  base offset = 0  |
-                 *          | (k5, v5)          |             |  (k1, v1)         |
-                 *          *-------------------*             |  (k2, v2)         |
+                 *          | (k4, v4)          |             |  (k0, v0)         |
+                 *          *-------------------*             |  (k1, v1)         |
                  *                                            *-------------------*
                  *                                            *-------------------*
                  *                                            |  base offset = 2  |
+                 *                                            |  (k2, v2)         |
                  *                                            |  (k3, v3)         |
-                 *                                            |  (k4, v4)         |
                  *                                            *-------------------*
                  */
-                .createTopic(topicB, partitionCount, replicationFactor, 2, replicaAssignment,
+                .createTopic(topicB, partitionCount, replicationFactor, twoBatchPerSegment, replicaAssignment,
                         enableRemoteLogStorage)
-                .withBatchSize(topicB, p0, batchSize)
                 .expectEarliestLocalOffsetInLogDirectory(topicB, p0, 4L)
                 .expectSegmentToBeOffloaded(broker, topicB, p0, 0,
-                        new KeyValueSpec("k1", "v1"), new KeyValueSpec("k2", "v2"))
+                        new KeyValueSpec("k0", "v0"), new KeyValueSpec("k1", "v1"))
                 .expectSegmentToBeOffloaded(broker, topicB, p0, 2,
-                        new KeyValueSpec("k3", "v3"), new KeyValueSpec("k4", "v4"))
-                .produce(topicB, p0, new KeyValueSpec("k1", "v1"), new KeyValueSpec("k2", "v2"),
-                        new KeyValueSpec("k3", "v3"), new KeyValueSpec("k4", "v4"), new KeyValueSpec("k5", "v5"))
+                        new KeyValueSpec("k2", "v2"), new KeyValueSpec("k3", "v3"))
+                .produce(topicB, p0, new KeyValueSpec("k0", "v0"), new KeyValueSpec("k1", "v1"),
+                        new KeyValueSpec("k2", "v2"), new KeyValueSpec("k3", "v3"), new KeyValueSpec("k4", "v4"))
 
                 /*
-                 * (A.3) Stops and restarts the broker. The purpose of this test is to a) exercise consumption
+                 * (3) Stops and restarts the broker. The purpose of this test is to a) exercise consumption
                  *       from a given offset and b) verify that upon broker start, existing remote log segments
                  *       metadata are loaded by Kafka and these log segments available.
                  *
@@ -124,10 +123,10 @@ public final class OffloadAndConsumeFromLeaderTest extends TieredStorageTestHarn
                  *       -----------
                  *       - For topic A, this offset is defined such that only the second segment is fetched from
                  *         the tiered storage.
-                 *       - For topic B, only one segment is present in the tiered storage, as asserted by the
+                 *       - For topic B, two segments are present in the tiered storage, as asserted by the
                  *         previous sub-test-case.
                  */
-                // .bounce(broker)
+                .bounce(broker)
                 .expectFetchFromTieredStorage(broker, topicA, p0, 1)
                 .consume(topicA, p0, 1L, 2, 1)
                 .expectFetchFromTieredStorage(broker, topicB, p0, 2)

@@ -36,40 +36,39 @@ import org.apache.kafka.streams.kstream.ValueTransformerWithKeySupplier;
 import org.apache.kafka.streams.kstream.internals.graph.ProcessorGraphNode;
 import org.apache.kafka.streams.kstream.internals.graph.ProcessorParameters;
 import org.junit.Test;
+import org.junit.runner.RunWith;
+import org.mockito.junit.MockitoJUnitRunner;
 
 import java.util.Random;
 
-import static org.easymock.EasyMock.createMock;
-import static org.easymock.EasyMock.expect;
-import static org.easymock.EasyMock.replay;
-import static org.easymock.EasyMock.verify;
 import static org.junit.Assert.assertTrue;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
+@RunWith(MockitoJUnitRunner.StrictStubs.class)
 public class AbstractStreamTest {
 
     @Test
     public void testToInternalValueTransformerSupplierSuppliesNewTransformers() {
-        final ValueTransformerSupplier<?, ?> valueTransformerSupplier = createMock(ValueTransformerSupplier.class);
-        expect(valueTransformerSupplier.get()).andAnswer(NoopValueTransformer::new).atLeastOnce();
-        replay(valueTransformerSupplier);
+        final ValueTransformerSupplier<?, ?> valueTransformerSupplier = mock(ValueTransformerSupplier.class);
+        when(valueTransformerSupplier.get())
+            .thenReturn(new NoopValueTransformer<>())
+            .thenReturn(new NoopValueTransformer<>());
         final ValueTransformerWithKeySupplier<?, ?, ?> valueTransformerWithKeySupplier =
             AbstractStream.toValueTransformerWithKeySupplier(valueTransformerSupplier);
         valueTransformerWithKeySupplier.get();
         valueTransformerWithKeySupplier.get();
         valueTransformerWithKeySupplier.get();
-        verify(valueTransformerSupplier);
     }
 
     @Test
     public void testToInternalValueTransformerWithKeySupplierSuppliesNewTransformers() {
         final ValueTransformerWithKeySupplier<?, ?, ?> valueTransformerWithKeySupplier =
-            createMock(ValueTransformerWithKeySupplier.class);
-        expect(valueTransformerWithKeySupplier.get()).andAnswer(NoopValueTransformerWithKey::new).atLeastOnce();
-        replay(valueTransformerWithKeySupplier);
+            mock(ValueTransformerWithKeySupplier.class);
+        when(valueTransformerWithKeySupplier.get()).thenReturn(new NoopValueTransformerWithKey<>());
         valueTransformerWithKeySupplier.get();
         valueTransformerWithKeySupplier.get();
         valueTransformerWithKeySupplier.get();
-        verify(valueTransformerWithKeySupplier);
     }
 
     @Test
