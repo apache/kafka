@@ -53,6 +53,7 @@ public class JsonSerializer implements Serializer<JsonNode> {
     ) {
         serializationFeatures.forEach(objectMapper::enable);
         objectMapper.setNodeFactory(jsonNodeFactory);
+        objectMapper.findAndRegisterModules();
     }
 
     @Override
