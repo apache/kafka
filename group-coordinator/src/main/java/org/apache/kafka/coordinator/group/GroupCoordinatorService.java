@@ -80,6 +80,7 @@ import org.apache.kafka.server.record.BrokerCompressionType;
 import org.apache.kafka.server.util.timer.Timer;
 import org.slf4j.Logger;
 
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -188,6 +189,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
                     .withLoader(loader)
                     .withCoordinatorShardBuilderSupplier(supplier)
                     .withTime(time)
+                    .withWriteTimeOut(Duration.ofMillis(config.offsetCommitTimeoutMs))
                     .withCoordinatorRuntimeMetrics(coordinatorRuntimeMetrics)
                     .withCoordinatorMetrics(groupCoordinatorMetrics)
                     .build();
@@ -296,8 +298,8 @@ public class GroupCoordinatorService implements GroupCoordinator {
         return runtime.scheduleWriteOperation(
             "consumer-group-heartbeat",
             topicPartitionFor(request.groupId()),
-            coordinator -> coordinator.consumerGroupHeartbeat(context, request),
-            config.offsetCommitTimeoutMs
+            Duration.ofMillis(config.offsetCommitTimeoutMs),
+            coordinator -> coordinator.consumerGroupHeartbeat(context, request)
         ).exceptionally(exception -> {
             if (exception instanceof UnknownTopicOrPartitionException ||
                 exception instanceof NotEnoughReplicasException) {
@@ -352,8 +354,8 @@ public class GroupCoordinatorService implements GroupCoordinator {
         runtime.scheduleWriteOperation(
             "generic-group-join",
             topicPartitionFor(request.groupId()),
-            coordinator -> coordinator.genericGroupJoin(context, request, responseFuture),
-            config.offsetCommitTimeoutMs
+            Duration.ofMillis(config.offsetCommitTimeoutMs),
+            coordinator -> coordinator.genericGroupJoin(context, request, responseFuture)
         ).exceptionally(exception -> {
             if (!(exception instanceof KafkaException)) {
                 log.error("JoinGroup request {} hit an unexpected exception: {}",
@@ -396,8 +398,8 @@ public class GroupCoordinatorService implements GroupCoordinator {
         runtime.scheduleWriteOperation(
             "generic-group-sync",
             topicPartitionFor(request.groupId()),
-            coordinator -> coordinator.genericGroupSync(context, request, responseFuture),
-            config.offsetCommitTimeoutMs
+            Duration.ofMillis(config.offsetCommitTimeoutMs),
+            coordinator -> coordinator.genericGroupSync(context, request, responseFuture)
         ).exceptionally(exception -> {
             if (!(exception instanceof KafkaException)) {
                 log.error("SyncGroup request {} hit an unexpected exception: {}",
@@ -479,8 +481,8 @@ public class GroupCoordinatorService implements GroupCoordinator {
         return runtime.scheduleWriteOperation(
             "generic-group-leave",
             topicPartitionFor(request.groupId()),
-            coordinator -> coordinator.genericGroupLeave(context, request),
-            config.offsetCommitTimeoutMs
+            Duration.ofMillis(config.offsetCommitTimeoutMs),
+            coordinator -> coordinator.genericGroupLeave(context, request)
         ).exceptionally(exception -> {
             if (!(exception instanceof KafkaException)) {
                 log.error("LeaveGroup request {} hit an unexpected exception: {}",
@@ -716,8 +718,8 @@ public class GroupCoordinatorService implements GroupCoordinator {
                 runtime.scheduleWriteOperation(
                     "delete-groups",
                     topicPartition,
-                    coordinator -> coordinator.deleteGroups(context, groupList),
-                    config.offsetCommitTimeoutMs
+                    Duration.ofMillis(config.offsetCommitTimeoutMs),
+                    coordinator -> coordinator.deleteGroups(context, groupList)
                 ).exceptionally(exception ->
                     DeleteGroupsRequest.getErrorResultCollection(groupList, normalizeException(exception))
                 );
@@ -775,11 +777,11 @@ public class GroupCoordinatorService implements GroupCoordinator {
             return runtime.scheduleWriteOperation(
                 "fetch-offsets",
                 topicPartitionFor(request.groupId()),
+                Duration.ofMillis(config.offsetCommitTimeoutMs),
                 coordinator -> new CoordinatorResult<>(
                     Collections.emptyList(),
                     coordinator.fetchOffsets(request, Long.MAX_VALUE)
-                ),
-                config.offsetCommitTimeoutMs
+                )
             );
         } else {
             return runtime.scheduleReadOperation(
@@ -826,10 +828,11 @@ public class GroupCoordinatorService implements GroupCoordinator {
             return runtime.scheduleWriteOperation(
                 "fetch-all-offsets",
                 topicPartitionFor(request.groupId()),
+                Duration.ofMillis(config.offsetCommitTimeoutMs),
                 coordinator -> new CoordinatorResult<>(
                     Collections.emptyList(),
                     coordinator.fetchAllOffsets(request, Long.MAX_VALUE)
-                ), config.offsetCommitTimeoutMs
+                )
             );
         } else {
             return runtime.scheduleReadOperation(
@@ -867,8 +870,8 @@ public class GroupCoordinatorService implements GroupCoordinator {
         return runtime.scheduleWriteOperation(
             "commit-offset",
             topicPartitionFor(request.groupId()),
-            coordinator -> coordinator.commitOffset(context, request),
-            config.offsetCommitTimeoutMs
+            Duration.ofMillis(config.offsetCommitTimeoutMs),
+            coordinator -> coordinator.commitOffset(context, request)
         ).exceptionally(exception ->
             OffsetCommitRequest.getErrorResponse(request, normalizeException(exception))
         );
@@ -900,6 +903,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
         return runtime.scheduleWriteOperation(
             "txn-commit-offset",
             topicPartitionFor(request.groupId()),
+            Duration.ofMillis(config.offsetCommitTimeoutMs),
             coordinator -> coordinator.commitTransactionalOffset(context, request)
         ).exceptionally(exception ->
             TxnOffsetCommitRequest.getErrorResponse(request, normalizeException(exception))
@@ -930,8 +934,8 @@ public class GroupCoordinatorService implements GroupCoordinator {
         return runtime.scheduleWriteOperation(
             "delete-offsets",
             topicPartitionFor(request.groupId()),
-            coordinator -> coordinator.deleteOffsets(context, request),
-            config.offsetCommitTimeoutMs
+            Duration.ofMillis(config.offsetCommitTimeoutMs),
+            coordinator -> coordinator.deleteOffsets(context, request)
         ).exceptionally(exception ->
             new OffsetDeleteResponseData()
                 .setErrorCode(normalizeException(exception).code())
