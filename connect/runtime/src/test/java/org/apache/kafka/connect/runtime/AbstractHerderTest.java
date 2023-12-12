@@ -360,7 +360,7 @@ public class AbstractHerderTest {
         config.put("required", "value");
         config.put("testKey", null);
 
-        final ConfigInfos configInfos = herder.validateConnectorConfig(config, false);
+        final ConfigInfos configInfos = herder.validateConnectorConfig(config, s -> null, false);
 
         assertEquals(1, configInfos.errorCount());
         assertErrorForKey(configInfos, "testKey");
@@ -378,7 +378,7 @@ public class AbstractHerderTest {
         config.put("testKey", null);
         config.put("secondTestKey", null);
 
-        final ConfigInfos configInfos = herder.validateConnectorConfig(config, false);
+        final ConfigInfos configInfos = herder.validateConnectorConfig(config, s -> null, false);
 
         assertEquals(2, configInfos.errorCount());
         assertErrorForKey(configInfos, "testKey");
@@ -448,7 +448,7 @@ public class AbstractHerderTest {
     public void testConfigValidationEmptyConfig() {
         AbstractHerder herder = createConfigValidationHerder(SampleSourceConnector.class, noneConnectorClientConfigOverridePolicy, 0);
 
-        assertThrows(BadRequestException.class, () -> herder.validateConnectorConfig(Collections.emptyMap(), false));
+        assertThrows(BadRequestException.class, () -> herder.validateConnectorConfig(Collections.emptyMap(), s -> null, false));
         verify(transformer).transform(Collections.emptyMap());
     }
 
@@ -458,7 +458,7 @@ public class AbstractHerderTest {
         AbstractHerder herder = createConfigValidationHerder(connectorClass, noneConnectorClientConfigOverridePolicy);
 
         Map<String, String> config = Collections.singletonMap(ConnectorConfig.CONNECTOR_CLASS_CONFIG, connectorClass.getName());
-        ConfigInfos result = herder.validateConnectorConfig(config, false);
+        ConfigInfos result = herder.validateConnectorConfig(config, s -> null, false);
 
         // We expect there to be errors due to the missing name and .... Note that these assertions depend heavily on
         // the config fields for SourceConnectorConfig, but we expect these to change rarely.
@@ -493,7 +493,7 @@ public class AbstractHerderTest {
         config.put(SinkConnectorConfig.TOPICS_CONFIG, "topic1,topic2");
         config.put(SinkConnectorConfig.TOPICS_REGEX_CONFIG, "topic.*");
 
-        ConfigInfos validation = herder.validateConnectorConfig(config, false);
+        ConfigInfos validation = herder.validateConnectorConfig(config, s -> null, false);
 
         ConfigInfo topicsListInfo = findInfo(validation, SinkConnectorConfig.TOPICS_CONFIG);
         assertNotNull(topicsListInfo);
@@ -516,7 +516,7 @@ public class AbstractHerderTest {
         config.put(SinkConnectorConfig.TOPICS_CONFIG, "topic1");
         config.put(SinkConnectorConfig.DLQ_TOPIC_NAME_CONFIG, "topic1");
 
-        ConfigInfos validation = herder.validateConnectorConfig(config, false);
+        ConfigInfos validation = herder.validateConnectorConfig(config, s -> null, false);
 
         ConfigInfo topicsListInfo = findInfo(validation, SinkConnectorConfig.TOPICS_CONFIG);
         assertNotNull(topicsListInfo);
@@ -535,7 +535,7 @@ public class AbstractHerderTest {
         config.put(SinkConnectorConfig.TOPICS_REGEX_CONFIG, "topic.*");
         config.put(SinkConnectorConfig.DLQ_TOPIC_NAME_CONFIG, "topic1");
 
-        ConfigInfos validation = herder.validateConnectorConfig(config, false);
+        ConfigInfos validation = herder.validateConnectorConfig(config, s -> null, false);
 
         ConfigInfo topicsRegexInfo = findInfo(validation, SinkConnectorConfig.TOPICS_REGEX_CONFIG);
         assertNotNull(topicsRegexInfo);
@@ -560,7 +560,7 @@ public class AbstractHerderTest {
         config.put(ConnectorConfig.TRANSFORMS_CONFIG, "xformA,xformB");
         config.put(ConnectorConfig.TRANSFORMS_CONFIG + ".xformA.type", SampleTransformation.class.getName());
         config.put("required", "value"); // connector required config
-        ConfigInfos result = herder.validateConnectorConfig(config, false);
+        ConfigInfos result = herder.validateConnectorConfig(config, s -> null, false);
         assertEquals(herder.connectorType(config), ConnectorType.SOURCE);
 
         // We expect there to be errors due to the missing name and .... Note that these assertions depend heavily on
@@ -616,7 +616,7 @@ public class AbstractHerderTest {
         config.put(ConnectorConfig.PREDICATES_CONFIG + ".predX.type", SamplePredicate.class.getName());
         config.put("required", "value"); // connector required config
 
-        ConfigInfos result = herder.validateConnectorConfig(config, false);
+        ConfigInfos result = herder.validateConnectorConfig(config, s -> null, false);
         assertEquals(ConnectorType.SOURCE, herder.connectorType(config));
 
         // We expect there to be errors due to the missing name and .... Note that these assertions depend heavily on
@@ -682,7 +682,7 @@ public class AbstractHerderTest {
         config.put(ackConfigKey, "none");
         config.put(saslConfigKey, "jaas_config");
 
-        ConfigInfos result = herder.validateConnectorConfig(config, false);
+        ConfigInfos result = herder.validateConnectorConfig(config, s -> null, false);
         assertEquals(herder.connectorType(config), ConnectorType.SOURCE);
 
         // We expect there to be errors due to now allowed override policy for ACKS.... Note that these assertions depend heavily on
@@ -741,7 +741,7 @@ public class AbstractHerderTest {
         overriddenClientConfigs.add(bootstrapServersConfigKey);
         overriddenClientConfigs.add(loginCallbackHandlerConfigKey);
 
-        ConfigInfos result = herder.validateConnectorConfig(config, false);
+        ConfigInfos result = herder.validateConnectorConfig(config, s -> null, false);
         assertEquals(herder.connectorType(config), ConnectorType.SOURCE);
 
         Map<String, String> validatedOverriddenClientConfigs = new HashMap<>();

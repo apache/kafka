@@ -18,6 +18,7 @@ package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.CommonClientConfigs;
+import org.apache.kafka.clients.GroupRebalanceConfig;
 import org.apache.kafka.clients.MockClient;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor;
@@ -34,6 +35,7 @@ import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.Timer;
 
 import java.io.Closeable;
 import java.time.Duration;
@@ -79,6 +81,7 @@ public class ConsumerTestBuilder implements Closeable {
     final FetchConfig fetchConfig;
     final FetchBuffer fetchBuffer;
     final Metrics metrics;
+    final Timer pollTimer;
     final FetchMetricsManager metricsManager;
     final NetworkClientDelegate networkClientDelegate;
     final OffsetsRequestManager offsetsRequestManager;
@@ -110,6 +113,15 @@ public class ConsumerTestBuilder implements Closeable {
         this.applicationEventQueue = new LinkedBlockingQueue<>();
         this.backgroundEventQueue = new LinkedBlockingQueue<>();
         this.backgroundEventHandler = spy(new BackgroundEventHandler(logContext, backgroundEventQueue));
+        GroupRebalanceConfig groupRebalanceConfig = new GroupRebalanceConfig(
+            100,
+            DEFAULT_MAX_POLL_INTERVAL_MS,
+            DEFAULT_HEARTBEAT_INTERVAL_MS,
+            groupInfo.map(gi -> gi.groupId).orElse(null),
+            groupInfo.flatMap(gi -> gi.groupInstanceId),
+            DEFAULT_RETRY_BACKOFF_MS,
+            DEFAULT_RETRY_BACKOFF_MAX_MS,
+            true);
         ApiVersions apiVersions = new ApiVersions();
 
         Properties properties = new Properties();
@@ -137,6 +149,7 @@ public class ConsumerTestBuilder implements Closeable {
         this.subscriptions = spy(createSubscriptionState(config, logContext));
         this.metadata = spy(new ConsumerMetadata(config, subscriptions, logContext, new ClusterResourceListeners()));
         this.metricsManager = createFetchMetricsManager(metrics);
+        this.pollTimer = time.timer(groupRebalanceConfig.rebalanceTimeoutMs);
 
         this.client = new MockClient(time, metadata);
         MetadataResponse metadataResponse = RequestTestUtils.metadataUpdateWith(1, new HashMap<String, Integer>() {
@@ -208,6 +221,7 @@ public class ConsumerTestBuilder implements Closeable {
                     gi.heartbeatJitterMs));
             HeartbeatRequestManager heartbeat = spy(new HeartbeatRequestManager(
                     logContext,
+                    pollTimer,
                     config,
                     coordinator,
                     mm,

@@ -231,7 +231,7 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
      * (callbacks executed and heartbeat request to leave is sent out). This will be empty is the
      * member is not leaving.
      */
-    private Optional<CompletableFuture<Void>> leaveGroupInProgress;
+    private Optional<CompletableFuture<Void>> leaveGroupInProgress = Optional.empty();
 
     /**
      * True if the member has registered to be notified when the cluster metadata is updated.
@@ -330,6 +330,11 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
     @Override
     public int memberEpoch() {
         return memberEpoch;
+    }
+
+    @Override
+    public boolean isStaled() {
+        return state == MemberState.STALED;
     }
 
     /**
@@ -498,7 +503,8 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
      * the user calls the subscribe API, or when the member wants to rejoin after getting fenced.
      * Visible for testing.
      */
-    void transitionToJoining() {
+    @Override
+    public void transitionToJoining() {
         if (state == MemberState.FATAL) {
             log.warn("No action taken to join the group with the updated subscription because " +
                     "the member is in FATAL state");
@@ -627,7 +633,7 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
     @Override
     public boolean shouldHeartbeatNow() {
         MemberState state = state();
-        return state == MemberState.ACKNOWLEDGING || state == MemberState.LEAVING;
+        return state == MemberState.ACKNOWLEDGING || state == MemberState.LEAVING || state == MemberState.JOINING;
     }
 
     /**
@@ -636,6 +642,12 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
     @Override
     public void onHeartbeatRequestSent() {
         MemberState state = state();
+        if (isStaled()) {
+            log.debug("Member {} is staled and is therefore leaving the group.  It will rejoin upon the next poll.", memberEpoch);
+            transitionToJoining();
+            return;
+        }
+
         if (state == MemberState.ACKNOWLEDGING) {
             if (allPendingAssignmentsReconciled()) {
                 transitionTo(MemberState.STABLE);
@@ -679,6 +691,17 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
     public boolean shouldSkipHeartbeat() {
         MemberState state = state();
         return state == MemberState.UNSUBSCRIBED || state == MemberState.FATAL;
+    }
+
+    /**
+     * Sets the epoch to the leave group epoch and clears the assignments. The member will rejoin with
+     * the existing subscriptions on the next time user polls.
+     */
+    @Override
+    public void transitionToStaled() {
+        memberEpoch = ConsumerGroupHeartbeatRequest.LEAVE_GROUP_MEMBER_EPOCH;
+        currentAssignment.clear();
+        transitionTo(MemberState.STALED);
     }
 
     /**

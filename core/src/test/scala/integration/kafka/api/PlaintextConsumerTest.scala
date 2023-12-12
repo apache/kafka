@@ -948,6 +948,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     // 1 consumer using range assignment
     this.consumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, "range-group")
     this.consumerConfig.setProperty(ConsumerConfig.GROUP_REMOTE_ASSIGNOR_CONFIG, "range")
+    this.consumerConfig.setProperty(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, "30000")
     val consumer = createConsumer()
 
     // create two new topics, each having 2 partitions
