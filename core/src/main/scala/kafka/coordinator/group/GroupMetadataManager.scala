@@ -26,7 +26,7 @@ import java.util.concurrent.locks.ReentrantLock
 import java.util.concurrent.ConcurrentHashMap
 import com.yammer.metrics.core.Gauge
 import kafka.common.OffsetAndMetadata
-import kafka.coordinator.group.GroupMetadataManager.maybeConvertError
+import kafka.coordinator.group.GroupMetadataManager.maybeConvertOffsetCommitError
 import kafka.server.{LogAppendResult, ReplicaManager, RequestLocal}
 import kafka.utils.CoreUtils.inLock
 import kafka.utils.Implicits._
@@ -424,7 +424,7 @@ class GroupMetadataManager(brokerId: Int,
           debug(s"Offset commit $filteredOffsetMetadata from group ${group.groupId}, consumer $consumerId " +
             s"with generation ${group.generationId} failed when appending to log due to ${status.error.exceptionName}")
 
-          maybeConvertError(status.error)
+          maybeConvertOffsetCommitError(status.error)
         }
       }
 
@@ -1360,7 +1360,7 @@ object GroupMetadataManager {
       "%X".format(BigInt(1, bytes))
   }
 
-  def maybeConvertError(error: Errors) : Errors = {
+  def maybeConvertOffsetCommitError(error: Errors) : Errors = {
     error match {
       case Errors.UNKNOWN_TOPIC_OR_PARTITION
            | Errors.NOT_ENOUGH_REPLICAS
