@@ -75,20 +75,8 @@ public class SubscriptionReceiveProcessorSupplier<K, KO>
 
             @Override
             public void process(final Record<KO, SubscriptionWrapper<K>> record) {
-                if (record.key() == null) {
-                    if (context().recordMetadata().isPresent()) {
-                        final RecordMetadata recordMetadata = context().recordMetadata().get();
-                        LOG.warn(
-                            "Skipping record due to null foreign key. "
-                                + "topic=[{}] partition=[{}] offset=[{}]",
-                            recordMetadata.topic(), recordMetadata.partition(), recordMetadata.offset()
-                        );
-                    } else {
-                        LOG.warn(
-                            "Skipping record due to null foreign key. Topic, partition, and offset not known."
-                        );
-                    }
-                    droppedRecordsSensor.record();
+                if (record.key() == null && !SubscriptionWrapper.Instruction.PROPAGATE_NULL_IF_NO_FK_VAL_AVAILABLE.equals(record.value().getInstruction())) {
+                    dropRecord();
                     return;
                 }
                 if (record.value().getVersion() > SubscriptionWrapper.CURRENT_VERSION) {
@@ -97,7 +85,22 @@ public class SubscriptionReceiveProcessorSupplier<K, KO>
                     //from older SubscriptionWrapper versions to newer versions.
                     throw new UnsupportedVersionException("SubscriptionWrapper is of an incompatible version.");
                 }
+                context().forward(
+                    record.withKey(new CombinedKey<>(record.key(), record.value().getPrimaryKey()))
+                        .withValue(inferChange(record))
+                        .withTimestamp(record.timestamp())
+                );
+            }
 
+            private Change<ValueAndTimestamp<SubscriptionWrapper<K>>> inferChange(final Record<KO, SubscriptionWrapper<K>> record) {
+                if (record.key() == null) {
+                    return new Change<>(ValueAndTimestamp.make(record.value(), record.timestamp()), null);
+                } else {
+                    return inferBasedOnState(record);
+                }
+            }
+
+            private Change<ValueAndTimestamp<SubscriptionWrapper<K>>> inferBasedOnState(final Record<KO, SubscriptionWrapper<K>> record) {
                 final Bytes subscriptionKey = keySchema.toBytes(record.key(), record.value().getPrimaryKey());
 
                 final ValueAndTimestamp<SubscriptionWrapper<K>> newValue = ValueAndTimestamp.make(record.value(), record.timestamp());
@@ -110,14 +113,23 @@ public class SubscriptionReceiveProcessorSupplier<K, KO>
                 } else {
                     store.put(subscriptionKey, newValue);
                 }
-                final Change<ValueAndTimestamp<SubscriptionWrapper<K>>> change = new Change<>(newValue, oldValue);
-                // note: key is non-nullable
-                // note: newValue is non-nullable
-                context().forward(
-                    record.withKey(new CombinedKey<>(record.key(), record.value().getPrimaryKey()))
-                        .withValue(change)
-                        .withTimestamp(newValue.timestamp())
-                );
+                return new Change<>(newValue, oldValue);
+            }
+
+            private void dropRecord() {
+                if (context().recordMetadata().isPresent()) {
+                    final RecordMetadata recordMetadata = context().recordMetadata().get();
+                    LOG.warn(
+                        "Skipping record due to null foreign key. "
+                            + "topic=[{}] partition=[{}] offset=[{}]",
+                        recordMetadata.topic(), recordMetadata.partition(), recordMetadata.offset()
+                    );
+                } else {
+                    LOG.warn(
+                        "Skipping record due to null foreign key. Topic, partition, and offset not known."
+                    );
+                }
+                droppedRecordsSensor.record();
             }
         };
     }

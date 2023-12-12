@@ -34,6 +34,7 @@ import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiFunction;
+import java.util.function.Predicate;
 import java.util.stream.Collectors;
 
 import static org.apache.kafka.test.TestUtils.waitForCondition;
@@ -302,20 +303,16 @@ public class ConnectAssertions {
      */
     public void assertConnectorAndAtLeastNumTasksAreRunning(String connectorName, int numTasks, String detailMessage)
             throws InterruptedException {
-        try {
-            waitForCondition(
-                () -> checkConnectorState(
-                    connectorName,
-                    AbstractStatus.State.RUNNING,
-                    numTasks,
-                    AbstractStatus.State.RUNNING,
-                    (actual, expected) -> actual >= expected
-                ).orElse(false),
-                CONNECTOR_SETUP_DURATION_MS,
-                "The connector or at least " + numTasks + " of tasks are not running.");
-        } catch (AssertionError e) {
-            throw new AssertionError(detailMessage, e);
-        }
+        waitForConnectorState(
+                connectorName,
+                AbstractStatus.State.RUNNING,
+                atLeast(numTasks),
+                null,
+                AbstractStatus.State.RUNNING,
+                "The connector or at least " + numTasks + " of tasks are not running.",
+                detailMessage,
+                CONNECTOR_SETUP_DURATION_MS
+        );
     }
 
     /**
@@ -329,20 +326,16 @@ public class ConnectAssertions {
      */
     public void assertConnectorAndExactlyNumTasksAreRunning(String connectorName, int numTasks, String detailMessage)
             throws InterruptedException {
-        try {
-            waitForCondition(
-                () -> checkConnectorState(
-                    connectorName,
-                    AbstractStatus.State.RUNNING,
-                    numTasks,
-                    AbstractStatus.State.RUNNING,
-                    (actual, expected) -> actual == expected
-                ).orElse(false),
-                CONNECTOR_SETUP_DURATION_MS,
-                "The connector or exactly " + numTasks + " tasks are not running.");
-        } catch (AssertionError e) {
-            throw new AssertionError(detailMessage, e);
-        }
+        waitForConnectorState(
+                connectorName,
+                AbstractStatus.State.RUNNING,
+                exactly(numTasks),
+                null,
+                AbstractStatus.State.RUNNING,
+                "The connector or exactly " + numTasks + " tasks are not running.",
+                detailMessage,
+                CONNECTOR_SETUP_DURATION_MS
+        );
     }
 
     /**
@@ -356,20 +349,16 @@ public class ConnectAssertions {
      */
     public void assertConnectorAndExactlyNumTasksArePaused(String connectorName, int numTasks, String detailMessage)
             throws InterruptedException {
-        try {
-            waitForCondition(
-                    () -> checkConnectorState(
-                            connectorName,
-                            AbstractStatus.State.PAUSED,
-                            numTasks,
-                            AbstractStatus.State.PAUSED,
-                            Integer::equals
-                    ).orElse(false),
-                    CONNECTOR_SHUTDOWN_DURATION_MS,
-                    "The connector or exactly " + numTasks + " tasks are not paused.");
-        } catch (AssertionError e) {
-            throw new AssertionError(detailMessage, e);
-        }
+        waitForConnectorState(
+                connectorName,
+                AbstractStatus.State.PAUSED,
+                exactly(numTasks),
+                null,
+                AbstractStatus.State.PAUSED,
+                "The connector or exactly " + numTasks + " tasks are not paused.",
+                detailMessage,
+                CONNECTOR_SHUTDOWN_DURATION_MS
+        );
     }
 
     /**
@@ -383,24 +372,20 @@ public class ConnectAssertions {
      */
     public void assertConnectorIsRunningAndTasksHaveFailed(String connectorName, int numTasks, String detailMessage)
             throws InterruptedException {
-        try {
-            waitForCondition(
-                () -> checkConnectorState(
-                    connectorName,
-                    AbstractStatus.State.RUNNING,
-                    numTasks,
-                    AbstractStatus.State.FAILED,
-                    (actual, expected) -> actual >= expected
-                ).orElse(false),
-                CONNECTOR_SETUP_DURATION_MS,
-                "Either the connector is not running or not all the " + numTasks + " tasks have failed.");
-        } catch (AssertionError e) {
-            throw new AssertionError(detailMessage, e);
-        }
+        waitForConnectorState(
+                connectorName,
+                AbstractStatus.State.RUNNING,
+                exactly(numTasks),
+                null,
+                AbstractStatus.State.FAILED,
+                "Either the connector is not running or not all the " + numTasks + " tasks have failed.",
+                detailMessage,
+                CONNECTOR_SETUP_DURATION_MS
+        );
     }
 
     /**
-     * Assert that a connector is running, that it has a specific number of tasks out of that numFailedTasks are in the FAILED state.
+     * Assert that a connector is running, that it has a specific number of tasks, and out of those, numFailedTasks are in the FAILED state.
      *
      * @param connectorName the connector name
      * @param numTasks the number of tasks
@@ -410,21 +395,16 @@ public class ConnectAssertions {
      */
     public void assertConnectorIsRunningAndNumTasksHaveFailed(String connectorName, int numTasks, int numFailedTasks, String detailMessage)
             throws InterruptedException {
-        try {
-            waitForCondition(
-                    () -> checkConnectorState(
-                            connectorName,
-                            AbstractStatus.State.RUNNING,
-                            numTasks,
-                            numFailedTasks,
-                            AbstractStatus.State.FAILED,
-                            (actual, expected) -> actual >= expected
-                    ).orElse(false),
-                    CONNECTOR_SETUP_DURATION_MS,
-                    "Either the connector is not running or not all the " + numTasks + " tasks have failed.");
-        } catch (AssertionError e) {
-            throw new AssertionError(detailMessage, e);
-        }
+        waitForConnectorState(
+                connectorName,
+                AbstractStatus.State.RUNNING,
+                exactly(numTasks),
+                numFailedTasks,
+                AbstractStatus.State.FAILED,
+                "Either the connector is not running or not all the " + numTasks + " tasks have failed.",
+                detailMessage,
+                CONNECTOR_SETUP_DURATION_MS
+        );
     }
 
     /**
@@ -438,20 +418,16 @@ public class ConnectAssertions {
      */
     public void assertConnectorIsFailedAndTasksHaveFailed(String connectorName, int numTasks, String detailMessage)
             throws InterruptedException {
-        try {
-            waitForCondition(
-                    () -> checkConnectorState(
-                            connectorName,
-                            AbstractStatus.State.FAILED,
-                            numTasks,
-                            AbstractStatus.State.FAILED,
-                            (actual, expected) -> actual >= expected
-                    ).orElse(false),
-                    CONNECTOR_SETUP_DURATION_MS,
-                    "Either the connector is running or not all the " + numTasks + " tasks have failed.");
-        } catch (AssertionError e) {
-            throw new AssertionError(detailMessage, e);
-        }
+        waitForConnectorState(
+                connectorName,
+                AbstractStatus.State.FAILED,
+                exactly(numTasks),
+                null,
+                AbstractStatus.State.FAILED,
+                "Either the connector is running or not all the " + numTasks + " tasks have failed.",
+                detailMessage,
+                CONNECTOR_SETUP_DURATION_MS
+        );
     }
 
     /**
@@ -500,82 +476,84 @@ public class ConnectAssertions {
      */
     public void assertConnectorIsStopped(String connectorName, String detailMessage)
             throws InterruptedException {
+        waitForConnectorState(
+                connectorName,
+                AbstractStatus.State.STOPPED,
+                exactly(0),
+                null,
+                null,
+                "At least the connector or one of its tasks is still running",
+                detailMessage,
+                CONNECTOR_SHUTDOWN_DURATION_MS
+        );
+    }
+
+    /**
+     * Check whether the given connector state matches the current state of the connector and
+     * whether it has at least the given number of tasks, with some number of tasks matching the given
+     * task state.
+     * @param connectorName the connector
+     * @param connectorState
+     * @param expectedNumTasks the expected number of tasks
+     * @param tasksState
+     */
+    protected void waitForConnectorState(
+            String connectorName,
+            AbstractStatus.State connectorState,
+            Predicate<Integer> expectedNumTasks,
+            Integer numTasksInTasksState,
+            AbstractStatus.State tasksState,
+            String conditionMessage,
+            String detailMessage,
+            long maxWaitMs
+    ) throws InterruptedException {
+        AtomicReference<ConnectorStateInfo> lastInfo = new AtomicReference<>();
+        AtomicReference<Exception> lastInfoError = new AtomicReference<>();
         try {
             waitForCondition(
-                    () -> checkConnectorState(
-                            connectorName,
-                            AbstractStatus.State.STOPPED,
-                            0,
-                            null,
-                            Integer::equals
-                    ).orElse(false),
-                    CONNECTOR_SHUTDOWN_DURATION_MS,
-                    "At least the connector or one of its tasks is still running");
+                    () -> {
+                        try {
+                            ConnectorStateInfo info = connect.connectorStatus(connectorName);
+                            lastInfo.set(info);
+                            lastInfoError.set(null);
+
+                            if (info == null)
+                                return false;
+
+                            int numTasks = info.tasks().size();
+                            int expectedTasksInState = Optional.ofNullable(numTasksInTasksState).orElse(numTasks);
+                            return expectedNumTasks.test(info.tasks().size())
+                                    && info.connector().state().equals(connectorState.toString())
+                                    && info.tasks().stream().filter(s -> s.state().equals(tasksState.toString())).count() == expectedTasksInState;
+                        } catch (Exception e) {
+                            log.error("Could not check connector state info.", e);
+                            lastInfo.set(null);
+                            lastInfoError.set(e);
+                            return false;
+                        }
+                    },
+                    maxWaitMs,
+                    () -> {
+                        String result = conditionMessage;
+                        if (lastInfo.get() != null) {
+                            return result + " When last checked, " + stateSummary(lastInfo.get());
+                        } else if (lastInfoError.get() != null) {
+                            result +=  " The last attempt to check the connector state failed: " + lastInfoError.get().getClass();
+                            String exceptionMessage = lastInfoError.get().getMessage();
+                            if (exceptionMessage != null) {
+                                result += ": " + exceptionMessage;
+                            }
+                            return result;
+                        } else {
+                            return result;
+                        }
+                    }
+            );
         } catch (AssertionError e) {
             throw new AssertionError(detailMessage, e);
         }
     }
 
-    /**
-     * Check whether the given connector state matches the current state of the connector and
-     * whether it has at least the given number of tasks, with all the tasks matching the given
-     * task state.
-     * @param connectorName the connector
-     * @param connectorState
-     * @param numTasks the expected number of tasks
-     * @param tasksState
-     * @return true if the connector and tasks are in the expected state; false otherwise
-     */
-    protected Optional<Boolean> checkConnectorState(
-            String connectorName,
-            AbstractStatus.State connectorState,
-            int numTasks,
-            AbstractStatus.State tasksState,
-            BiFunction<Integer, Integer, Boolean> comp
-    ) {
-        try {
-            ConnectorStateInfo info = connect.connectorStatus(connectorName);
-            boolean result = info != null
-                    && comp.apply(info.tasks().size(), numTasks)
-                    && info.connector().state().equals(connectorState.toString())
-                    && info.tasks().stream().allMatch(s -> s.state().equals(tasksState.toString()));
-            return Optional.of(result);
-        } catch (Exception e) {
-            log.error("Could not check connector state info.", e);
-            return Optional.empty();
-        }
-    }
-
-    /**
-     * Check whether the given connector state matches the current state of the connector and
-     * whether it has at least the given number of tasks, with numTasksInTasksState matching the given
-     * task state.
-     * @param connectorName the connector
-     * @param connectorState
-     * @param numTasks the expected number of tasks
-     * @param tasksState
-     * @return true if the connector and tasks are in the expected state; false otherwise
-     */
-    protected Optional<Boolean> checkConnectorState(
-            String connectorName,
-            AbstractStatus.State connectorState,
-            int numTasks,
-            int numTasksInTasksState,
-            AbstractStatus.State tasksState,
-            BiFunction<Integer, Integer, Boolean> comp
-    ) {
-        try {
-            ConnectorStateInfo info = connect.connectorStatus(connectorName);
-            boolean result = info != null
-                    && comp.apply(info.tasks().size(), numTasks)
-                    && info.connector().state().equals(connectorState.toString())
-                    && info.tasks().stream().filter(s -> s.state().equals(tasksState.toString())).count() == numTasksInTasksState;
-            return Optional.of(result);
-        } catch (Exception e) {
-            log.error("Could not check connector state info.", e);
-            return Optional.empty();
-        }
-    }
     /**
      * Assert that a connector's set of active topics matches the given collection of topic names.
      *
@@ -614,5 +592,25 @@ public class ConnectAssertions {
             log.error("Could not check connector {} state info.", connectorName, e);
             return Optional.empty();
         }
+    }
+
+    private static String stateSummary(ConnectorStateInfo info) {
+        String result = "the connector was " + info.connector().state();
+        if (info.tasks().isEmpty()) {
+            return result + " and no tasks were running";
+        } else {
+            String taskStates = info.tasks().stream()
+                    .map(ConnectorStateInfo.TaskState::state)
+                    .collect(Collectors.joining(", "));
+            return result + " and its tasks were in these states: " + taskStates;
+        }
+    }
+
+    private static Predicate<Integer> exactly(int expected) {
+        return actual -> actual == expected;
+    }
+
+    private static Predicate<Integer> atLeast(int expected) {
+        return actual -> actual >= expected;
     }
 }

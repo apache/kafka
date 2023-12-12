@@ -39,8 +39,6 @@ import java.util.List;
 import java.util.function.Consumer;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.mockito.Mockito.spy;
-import static org.mockito.Mockito.when;
 
 
 @Timeout(value = 40)
@@ -166,8 +164,7 @@ public class ImageDowngradeTest {
     @Test
     void testDirectoryAssignmentState() {
         MetadataVersion outputMetadataVersion = MetadataVersion.IBP_3_7_IV0;
-        MetadataVersion inputMetadataVersion = spy(outputMetadataVersion); // TODO replace with actual MV after bump for KIP-858
-        when(inputMetadataVersion.isDirectoryAssignmentSupported()).thenReturn(true);
+        MetadataVersion inputMetadataVersion = outputMetadataVersion;
         PartitionRecord testPartitionRecord = (PartitionRecord) TEST_RECORDS.get(1).message();
         writeWithExpectedLosses(outputMetadataVersion,
                 Collections.singletonList("the directory assignment state of one or more replicas"),

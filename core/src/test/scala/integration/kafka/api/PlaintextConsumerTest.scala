@@ -24,15 +24,16 @@ import kafka.utils.{TestInfoUtils, TestUtils}
 import org.apache.kafka.clients.admin.{NewPartitions, NewTopic}
 import org.apache.kafka.clients.consumer._
 import org.apache.kafka.clients.producer.{ProducerConfig, ProducerRecord}
-import org.apache.kafka.common.{MetricName, PartitionInfo, TopicPartition}
+import org.apache.kafka.common.{KafkaException, MetricName, PartitionInfo, TopicPartition}
 import org.apache.kafka.common.config.TopicConfig
-import org.apache.kafka.common.errors.{InvalidGroupIdException, InvalidTopicException}
+import org.apache.kafka.common.errors.{InvalidGroupIdException, InvalidTopicException, UnsupportedAssignorException}
 import org.apache.kafka.common.header.Headers
 import org.apache.kafka.common.record.{CompressionType, TimestampType}
 import org.apache.kafka.common.serialization._
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.test.{MockConsumerInterceptor, MockProducerInterceptor}
 import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.Timeout
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{CsvSource, MethodSource}
 
@@ -40,6 +41,7 @@ import scala.collection.mutable
 import scala.collection.mutable.Buffer
 import scala.jdk.CollectionConverters._
 
+@Timeout(600)
 class PlaintextConsumerTest extends BaseConsumerTest {
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
@@ -904,6 +906,78 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     }.toSet
 
     assertEquals(expected, actual)
+  }
+
+
+  // Remote assignors only supported with consumer group protocol
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @CsvSource(Array(
+    "kraft+kip848, consumer"
+  ))
+  def testRemoteAssignorInvalid(quorum: String, groupProtocol: String): Unit = {
+    // 1 consumer using invalid remote assignor
+    this.consumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, "invalid-assignor-group")
+    this.consumerConfig.setProperty(ConsumerConfig.GROUP_REMOTE_ASSIGNOR_CONFIG, "invalid")
+    val consumer = createConsumer()
+
+    // create two new topics, each having 2 partitions
+    val topic1 = "topic1"
+    val producer = createProducer()
+    val expectedAssignment = createTopicAndSendRecords(producer, topic1, 2, 100)
+
+    assertEquals(0, consumer.assignment().size)
+
+    // subscribe to two topics
+    consumer.subscribe(List(topic1).asJava)
+
+    val e:UnsupportedAssignorException = assertThrows(
+      classOf[UnsupportedAssignorException],
+      () => awaitAssignment(consumer, expectedAssignment)
+    )
+
+    assertTrue(e.getMessage.startsWith("ServerAssignor invalid is not supported. " +
+      "Supported assignors: "))
+  }
+
+  // Remote assignors only supported with consumer group protocol
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @CsvSource(Array(
+    "kraft+kip848, consumer"
+  ))
+  def testRemoteAssignorRange(quorum: String, groupProtocol: String): Unit = {
+    // 1 consumer using range assignment
+    this.consumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, "range-group")
+    this.consumerConfig.setProperty(ConsumerConfig.GROUP_REMOTE_ASSIGNOR_CONFIG, "range")
+    this.consumerConfig.setProperty(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, "30000")
+    val consumer = createConsumer()
+
+    // create two new topics, each having 2 partitions
+    val topic1 = "topic1"
+    val topic2 = "topic2"
+    val producer = createProducer()
+    val expectedAssignment = createTopicAndSendRecords(producer, topic1, 2, 100) ++
+      createTopicAndSendRecords(producer, topic2, 2, 100)
+
+    assertEquals(0, consumer.assignment().size)
+
+    // subscribe to two topics
+    consumer.subscribe(List(topic1, topic2).asJava)
+    awaitAssignment(consumer, expectedAssignment)
+
+    // add one more topic with 2 partitions
+    val topic3 = "topic3"
+    val additionalAssignment = createTopicAndSendRecords(producer, topic3, 2, 100)
+
+    val newExpectedAssignment = expectedAssignment ++ additionalAssignment
+    consumer.subscribe(List(topic1, topic2, topic3).asJava)
+    awaitAssignment(consumer, newExpectedAssignment)
+
+    // remove the topic we just added
+    consumer.subscribe(List(topic1, topic2).asJava)
+    awaitAssignment(consumer, expectedAssignment)
+
+    consumer.unsubscribe()
+    assertEquals(0, consumer.assignment().size)
   }
 
   // Only the generic group protocol supports client-side assignors
@@ -2026,10 +2100,8 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     consumer1Config.put(ConsumerConfig.GROUP_ID_CONFIG, "")
     consumer1Config.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest")
     consumer1Config.put(ConsumerConfig.CLIENT_ID_CONFIG, "consumer1")
-    val consumer1 = createConsumer(configOverrides = consumer1Config)
 
-    consumer1.assign(List(tp).asJava)
-    assertThrows(classOf[InvalidGroupIdException], () => consumer1.commitSync())
+    assertThrows(classOf[KafkaException], () => createConsumer(configOverrides = consumer1Config))
   }
 
   // Static membership temporarily not supported in consumer group protocol
@@ -2266,5 +2338,20 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     // Check committed offsets twice with same consumer
     assertEquals(numRecords, consumer.committed(Set(tp).asJava).get(tp).offset)
     assertEquals(numRecords, consumer.committed(Set(tp).asJava).get(tp).offset)
+  }
+
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
+  def testSubscribeAndCommitSync(quorum: String, groupProtocol: String): Unit = {
+    // This test ensure that the member ID is propagated from the group coordinator when the
+    // assignment is received into a subsequent offset commit
+    val consumer = createConsumer()
+    assertEquals(0, consumer.assignment.size)
+    consumer.subscribe(List(topic).asJava)
+    awaitAssignment(consumer, Set(tp, tp2))
+
+    consumer.seek(tp, 0)
+
+    consumer.commitSync()
   }
 }

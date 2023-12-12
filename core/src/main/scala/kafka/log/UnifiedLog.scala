@@ -972,7 +972,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
     }
   }
 
-  private def maybeIncrementLocalLogStartOffset(newLocalLogStartOffset: Long, reason: LogStartOffsetIncrementReason): Unit = {
+  def maybeIncrementLocalLogStartOffset(newLocalLogStartOffset: Long, reason: LogStartOffsetIncrementReason): Unit = {
     lock synchronized {
       if (newLocalLogStartOffset > localLogStartOffset()) {
         _localLogStartOffset = newLocalLogStartOffset
@@ -1443,11 +1443,14 @@ class UnifiedLog(@volatile var logStartOffset: Long,
    * @return the segments ready to be deleted
    */
   private[log] def deletableSegments(predicate: (LogSegment, Option[LogSegment]) => Boolean): Iterable[LogSegment] = {
-    def isSegmentEligibleForDeletion(upperBoundOffset: Long): Boolean = {
+    def isSegmentEligibleForDeletion(nextSegmentOpt: Option[LogSegment], upperBoundOffset: Long): Boolean = {
+      val allowDeletionDueToLogStartOffsetIncremented = nextSegmentOpt.isDefined && logStartOffset >= nextSegmentOpt.get.baseOffset
       // Segments are eligible for deletion when:
       //    1. they are uploaded to the remote storage
+      //    2. log-start-offset was incremented higher than the largest offset in the candidate segment
       if (remoteLogEnabled()) {
-        upperBoundOffset > 0 && upperBoundOffset - 1 <= highestOffsetInRemoteStorage
+        (upperBoundOffset > 0 && upperBoundOffset - 1 <= highestOffsetInRemoteStorage) ||
+          allowDeletionDueToLogStartOffsetIncremented
       } else {
         true
       }
@@ -1474,7 +1477,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
         if (predicateResult && remoteLogEnabled() && nextSegmentOpt.isEmpty && segment.size > 0) {
           shouldRoll = true
         }
-        if (predicateResult && !isLastSegmentAndEmpty && isSegmentEligibleForDeletion(upperBoundOffset)) {
+        if (predicateResult && !isLastSegmentAndEmpty && isSegmentEligibleForDeletion(nextSegmentOpt, upperBoundOffset)) {
           deletable += segment
           segmentOpt = nextSegmentOpt
         } else {
@@ -1812,6 +1815,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
         leaderEpochCache.foreach(_.clearAndFlush())
         producerStateManager.truncateFullyAndStartAt(newOffset)
         logStartOffset = logStartOffsetOpt.getOrElse(newOffset)
+        if (remoteLogEnabled()) _localLogStartOffset = newOffset
         rebuildProducerState(newOffset, producerStateManager)
         updateHighWatermark(localLog.logEndOffsetMetadata)
       }

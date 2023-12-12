@@ -21,7 +21,7 @@ import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.internals.NetworkClientDelegate.PollResult;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEventHandler;
 import org.apache.kafka.clients.consumer.internals.events.ErrorBackgroundEvent;
-import org.apache.kafka.common.TopicIdPartition;
+import org.apache.kafka.clients.consumer.internals.events.GroupMetadataUpdateEvent;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
 import org.apache.kafka.common.errors.RetriableException;
@@ -36,10 +36,11 @@ import org.slf4j.Logger;
 
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
+import java.util.SortedSet;
+import java.util.TreeSet;
+import java.util.stream.Collectors;
 
 /**
  * <p>Manages the request creation and response handling for the heartbeat. The module creates a
@@ -74,7 +75,7 @@ public class HeartbeatRequestManager implements RequestManager {
      * Time that the group coordinator will wait on member to revoke its partitions. This is provided by the group
      * coordinator in the heartbeat
      */
-    private final int rebalanceTimeoutMs;
+    private final int maxPollIntervalMs;
 
     /**
      * CoordinatorRequestManager manages the connection to the group coordinator
@@ -82,14 +83,14 @@ public class HeartbeatRequestManager implements RequestManager {
     private final CoordinatorRequestManager coordinatorRequestManager;
 
     /**
-     * SubscriptionState tracks the topic, partition and offset of the member
-     */
-    private final SubscriptionState subscriptions;
-
-    /**
      * HeartbeatRequestState manages heartbeat request timing and retries
      */
     private final HeartbeatRequestState heartbeatRequestState;
+
+    /*
+     * HeartbeatState manages building the heartbeat requests correctly
+     */
+    private final HeartbeatState heartbeatState;
 
     /**
      * MembershipManager manages member's essential attributes like epoch and id, and its rebalance state
@@ -101,6 +102,14 @@ public class HeartbeatRequestManager implements RequestManager {
      */
     private final BackgroundEventHandler backgroundEventHandler;
 
+    /**
+     * Timer for tracking the time since the last consumer poll.  If the timer expires, the consumer will stop
+     * sending heartbeat until the next poll.
+     */
+    private final Timer pollTimer;
+
+    private GroupMetadataUpdateEvent previousGroupMetadataUpdateEvent = null;
+
     public HeartbeatRequestManager(
         final LogContext logContext,
         final Time time,
@@ -111,32 +120,35 @@ public class HeartbeatRequestManager implements RequestManager {
         final BackgroundEventHandler backgroundEventHandler) {
         this.coordinatorRequestManager = coordinatorRequestManager;
         this.logger = logContext.logger(getClass());
-        this.subscriptions = subscriptions;
         this.membershipManager = membershipManager;
         this.backgroundEventHandler = backgroundEventHandler;
-        this.rebalanceTimeoutMs = config.getInt(CommonClientConfigs.MAX_POLL_INTERVAL_MS_CONFIG);
+        this.maxPollIntervalMs = config.getInt(CommonClientConfigs.MAX_POLL_INTERVAL_MS_CONFIG);
         long retryBackoffMs = config.getLong(ConsumerConfig.RETRY_BACKOFF_MS_CONFIG);
         long retryBackoffMaxMs = config.getLong(ConsumerConfig.RETRY_BACKOFF_MAX_MS_CONFIG);
+        this.heartbeatState = new HeartbeatState(subscriptions, membershipManager, maxPollIntervalMs);
         this.heartbeatRequestState = new HeartbeatRequestState(logContext, time, 0, retryBackoffMs,
-            retryBackoffMaxMs, rebalanceTimeoutMs);
+            retryBackoffMaxMs, maxPollIntervalMs);
+        this.pollTimer = time.timer(maxPollIntervalMs);
     }
 
     // Visible for testing
     HeartbeatRequestManager(
         final LogContext logContext,
+        final Timer timer,
         final ConsumerConfig config,
         final CoordinatorRequestManager coordinatorRequestManager,
-        final SubscriptionState subscriptions,
         final MembershipManager membershipManager,
+        final HeartbeatState heartbeatState,
         final HeartbeatRequestState heartbeatRequestState,
         final BackgroundEventHandler backgroundEventHandler) {
         this.logger = logContext.logger(this.getClass());
-        this.subscriptions = subscriptions;
-        this.rebalanceTimeoutMs = config.getInt(CommonClientConfigs.MAX_POLL_INTERVAL_MS_CONFIG);
+        this.maxPollIntervalMs = config.getInt(CommonClientConfigs.MAX_POLL_INTERVAL_MS_CONFIG);
         this.coordinatorRequestManager = coordinatorRequestManager;
         this.heartbeatRequestState = heartbeatRequestState;
+        this.heartbeatState = heartbeatState;
         this.membershipManager = membershipManager;
         this.backgroundEventHandler = backgroundEventHandler;
+        this.pollTimer = timer;
     }
 
     /**
@@ -164,85 +176,101 @@ public class HeartbeatRequestManager implements RequestManager {
      */
     @Override
     public NetworkClientDelegate.PollResult poll(long currentTimeMs) {
-        if (!coordinatorRequestManager.coordinator().isPresent() || membershipManager.shouldSkipHeartbeat()) {
+        if (!coordinatorRequestManager.coordinator().isPresent() ||
+            membershipManager.shouldSkipHeartbeat() ||
+            pollTimer.isExpired()) {
             membershipManager.onHeartbeatRequestSkipped();
             return NetworkClientDelegate.PollResult.EMPTY;
         }
+        pollTimer.update(currentTimeMs);
+        if (pollTimer.isExpired()) {
+            logger.warn("consumer poll timeout has expired. This means the time between subsequent calls to poll() " +
+                "was longer than the configured max.poll.interval.ms, which typically implies that " +
+                "the poll loop is spending too much time processing messages. You can address this " +
+                "either by increasing max.poll.interval.ms or by reducing the maximum size of batches " +
+                "returned in poll() with max.poll.records.");
+            // This should trigger a heartbeat with leave group epoch
+            membershipManager.transitionToStaled();
+            NetworkClientDelegate.UnsentRequest request = makeHeartbeatRequest(currentTimeMs, true);
+            // We can ignore the leave response because we can join before or after receiving the response.
+            heartbeatRequestState.reset();
+            return new NetworkClientDelegate.PollResult(heartbeatRequestState.heartbeatIntervalMs, Collections.singletonList(request));
+        }
 
         boolean heartbeatNow = membershipManager.shouldHeartbeatNow() && !heartbeatRequestState.requestInFlight();
-
         if (!heartbeatRequestState.canSendRequest(currentTimeMs) && !heartbeatNow) {
             return new NetworkClientDelegate.PollResult(heartbeatRequestState.nextHeartbeatMs(currentTimeMs));
         }
 
-        heartbeatRequestState.onSendAttempt(currentTimeMs);
-        membershipManager.onHeartbeatRequestSent();
-        NetworkClientDelegate.UnsentRequest request = makeHeartbeatRequest();
+        NetworkClientDelegate.UnsentRequest request = makeHeartbeatRequest(currentTimeMs, false);
         return new NetworkClientDelegate.PollResult(heartbeatRequestState.heartbeatIntervalMs, Collections.singletonList(request));
     }
 
-    private NetworkClientDelegate.UnsentRequest makeHeartbeatRequest() {
-        // TODO: extract this logic for building the ConsumerGroupHeartbeatRequestData to a
-        //  stateful builder (HeartbeatState), that will keep the last data sent, and determine
-        //  the fields that changed and need to be included in the next HB (ex. check
-        //  subscriptionState changed from last sent to include assignment). It should also
-        //  ensure that all fields are sent on failure.
-        ConsumerGroupHeartbeatRequestData data = new ConsumerGroupHeartbeatRequestData()
-            .setGroupId(membershipManager.groupId())
-            .setMemberEpoch(membershipManager.memberEpoch())
-            .setRebalanceTimeoutMs(rebalanceTimeoutMs);
+    /**
+     * Returns the delay for which the application thread can safely wait before it should be responsive
+     * to results from the request managers. For example, the subscription state can change when heartbeats
+     * are sent, so blocking for longer than the heartbeat interval might mean the application thread is not
+     * responsive to changes.
+     *
+     * <p>In the event that heartbeats are currently being skipped, this still returns the next heartbeat
+     * delay rather than {@code Long.MAX_VALUE} so that the application thread remains responsive.
+     */
+    @Override
+    public long maximumTimeToWait(long currentTimeMs) {
+        boolean heartbeatNow = membershipManager.shouldHeartbeatNow() && !heartbeatRequestState.requestInFlight();
+        return heartbeatNow ? 0L : heartbeatRequestState.nextHeartbeatMs(currentTimeMs);
+    }
 
-        if (membershipManager.memberId() != null) {
-            data.setMemberId(membershipManager.memberId());
-        }
+    /**
+     * When consumer polls, we need to reset the pollTimer.  If the poll timer has expired, we rejoin only when the
+     * member is in the {@link MemberState#UNSUBSCRIBED} state.
+     */
+    public void resetPollTimer() {
+        pollTimer.reset(maxPollIntervalMs);
+    }
 
-        membershipManager.groupInstanceId().ifPresent(data::setInstanceId);
+    private NetworkClientDelegate.UnsentRequest makeHeartbeatRequest(final long currentTimeMs,
+                                                                     final boolean ignoreResponse) {
+        NetworkClientDelegate.UnsentRequest request = makeHeartbeatRequest(ignoreResponse);
+        heartbeatRequestState.onSendAttempt(currentTimeMs);
+        membershipManager.onHeartbeatRequestSent();
+        return request;
+    }
 
-        if (this.subscriptions.hasPatternSubscription()) {
-            // TODO: Pass the string to the GC if server side regex is used.
-        } else {
-            data.setSubscribedTopicNames(new ArrayList<>(this.subscriptions.subscription()));
-            List<ConsumerGroupHeartbeatRequestData.TopicPartitions> topicPartitions =
-                    buildTopicPartitionsList(membershipManager.currentAssignment());
-            data.setTopicPartitions(topicPartitions);
-        }
-
-        this.membershipManager.serverAssignor().ifPresent(data::setServerAssignor);
-
+    private NetworkClientDelegate.UnsentRequest makeHeartbeatRequest(final boolean ignoreResponse) {
         NetworkClientDelegate.UnsentRequest request = new NetworkClientDelegate.UnsentRequest(
-            new ConsumerGroupHeartbeatRequest.Builder(data),
+            new ConsumerGroupHeartbeatRequest.Builder(this.heartbeatState.buildRequestData()),
             coordinatorRequestManager.coordinator());
+        if (ignoreResponse)
+            return logResponse(request);
+        else
+            return request.whenComplete((response, exception) -> {
+                if (response != null) {
+                    onResponse((ConsumerGroupHeartbeatResponse) response.responseBody(), request.handler().completionTimeMs());
+                } else {
+                    onFailure(exception, request.handler().completionTimeMs());
+                }
+            });
+    }
+
+    private NetworkClientDelegate.UnsentRequest logResponse(final NetworkClientDelegate.UnsentRequest request) {
         return request.whenComplete((response, exception) -> {
             if (response != null) {
-                onResponse((ConsumerGroupHeartbeatResponse) response.responseBody(), request.handler().completionTimeMs());
+                Errors error =
+                    Errors.forCode(((ConsumerGroupHeartbeatResponse) response.responseBody()).data().errorCode());
+                if (error == Errors.NONE)
+                    logger.debug("GroupHeartbeat responded successfully: {}", response);
+                else
+                    logger.error("GroupHeartbeat failed because of {}: {}", error, response);
             } else {
-                onFailure(exception, request.handler().completionTimeMs());
+                logger.error("GroupHeartbeat failed because of unexpected exception.", exception);
             }
         });
     }
 
-    private List<ConsumerGroupHeartbeatRequestData.TopicPartitions> buildTopicPartitionsList(Set<TopicIdPartition> topicIdPartitions) {
-        List<ConsumerGroupHeartbeatRequestData.TopicPartitions> result = new ArrayList<>();
-        Map<Uuid, List<Integer>> partitionsPerTopicId = new HashMap<>();
-        for (TopicIdPartition topicIdPartition : topicIdPartitions) {
-            Uuid topicId = topicIdPartition.topicId();
-            if (!partitionsPerTopicId.containsKey(topicId)) {
-                partitionsPerTopicId.put(topicId, new ArrayList<>());
-            }
-            partitionsPerTopicId.get(topicId).add(topicIdPartition.partition());
-        }
-        for (Map.Entry<Uuid, List<Integer>> entry : partitionsPerTopicId.entrySet()) {
-            Uuid topicId = entry.getKey();
-            List<Integer> partitions = entry.getValue();
-            result.add(new ConsumerGroupHeartbeatRequestData.TopicPartitions()
-                    .setTopicId(topicId)
-                    .setPartitions(partitions));
-        }
-        return result;
-    }
-
     private void onFailure(final Throwable exception, final long responseTimeMs) {
         this.heartbeatRequestState.onFailedAttempt(responseTimeMs);
+        this.heartbeatState.reset();
         if (exception instanceof RetriableException) {
             String message = String.format("GroupHeartbeatRequest failed because of the retriable exception. " +
                     "Will retry in %s ms: %s",
@@ -257,13 +285,29 @@ public class HeartbeatRequestManager implements RequestManager {
 
     private void onResponse(final ConsumerGroupHeartbeatResponse response, long currentTimeMs) {
         if (Errors.forCode(response.data().errorCode()) == Errors.NONE) {
-            this.heartbeatRequestState.updateHeartbeatIntervalMs(response.data().heartbeatIntervalMs());
-            this.heartbeatRequestState.onSuccessfulAttempt(currentTimeMs);
-            this.heartbeatRequestState.resetTimer();
-            this.membershipManager.onHeartbeatResponseReceived(response.data());
+            heartbeatRequestState.updateHeartbeatIntervalMs(response.data().heartbeatIntervalMs());
+            heartbeatRequestState.onSuccessfulAttempt(currentTimeMs);
+            heartbeatRequestState.resetTimer();
+            membershipManager.onHeartbeatResponseReceived(response.data());
+            maybeSendGroupMetadataUpdateEvent();
             return;
         }
         onErrorResponse(response, currentTimeMs);
+    }
+
+    private void maybeSendGroupMetadataUpdateEvent() {
+        if (previousGroupMetadataUpdateEvent == null ||
+            !previousGroupMetadataUpdateEvent.memberId().equals(membershipManager.memberId()) ||
+            previousGroupMetadataUpdateEvent.memberEpoch() != membershipManager.memberEpoch()) {
+
+            final GroupMetadataUpdateEvent currentGroupMetadataUpdateEvent = new GroupMetadataUpdateEvent(
+                membershipManager.memberEpoch(),
+                previousGroupMetadataUpdateEvent != null && membershipManager.memberId() == null ?
+                    previousGroupMetadataUpdateEvent.memberId() : membershipManager.memberId()
+            );
+            this.backgroundEventHandler.add(currentGroupMetadataUpdateEvent);
+            previousGroupMetadataUpdateEvent = currentGroupMetadataUpdateEvent;
+        }
     }
 
     private void onErrorResponse(final ConsumerGroupHeartbeatResponse response,
@@ -271,6 +315,9 @@ public class HeartbeatRequestManager implements RequestManager {
         Errors error = Errors.forCode(response.data().errorCode());
         String errorMessage = response.data().errorMessage();
         String message;
+
+        this.heartbeatState.reset();
+
         // TODO: upon encountering a fatal/fenced error, trigger onPartitionLost logic to give up the current
         //  assignments.
         switch (error) {
@@ -322,17 +369,15 @@ public class HeartbeatRequestManager implements RequestManager {
                 break;
 
             case FENCED_MEMBER_EPOCH:
-                message = String.format("GroupHeartbeatRequest failed because member ID %s with epoch %s is invalid. " +
-                                "Will abandon all partitions and rejoin the group",
+                message = String.format("GroupHeartbeatRequest failed for member %s because epoch %s is fenced.",
                         membershipManager.memberId(), membershipManager.memberEpoch());
                 logInfo(message, response, currentTimeMs);
                 membershipManager.transitionToFenced();
                 break;
 
             case UNKNOWN_MEMBER_ID:
-                message = String.format("GroupHeartbeatRequest failed because member of unknown ID %s with epoch %s is invalid. " +
-                                "Will abandon all partitions and rejoin the group",
-                        membershipManager.memberId(), membershipManager.memberEpoch());
+                message = String.format("GroupHeartbeatRequest failed because member %s is unknown.",
+                        membershipManager.memberId());
                 logInfo(message, response, currentTimeMs);
                 membershipManager.transitionToFenced();
                 break;
@@ -415,6 +460,125 @@ public class HeartbeatRequestManager implements RequestManager {
             }
             this.heartbeatIntervalMs = heartbeatIntervalMs;
             this.heartbeatTimer.updateAndReset(heartbeatIntervalMs);
+        }
+    }
+
+    /**
+     * Builds the heartbeat requests correctly, ensuring that all information is sent according to
+     * the protocol, but subsequent requests do not send information which has not changed. This
+     * is important to ensure that reconciliation completes successfully.
+     */
+    static class HeartbeatState {
+        private final SubscriptionState subscriptions;
+        private final MembershipManager membershipManager;
+        private final int rebalanceTimeoutMs;
+        private final SentFields sentFields;
+
+        public HeartbeatState(
+            final SubscriptionState subscriptions,
+            final MembershipManager membershipManager,
+            final int rebalanceTimeoutMs) {
+            this.subscriptions = subscriptions;
+            this.membershipManager = membershipManager;
+            this.rebalanceTimeoutMs = rebalanceTimeoutMs;
+            this.sentFields = new SentFields();
+        }
+
+
+        public void reset() {
+            sentFields.reset();
+        }
+
+        public ConsumerGroupHeartbeatRequestData buildRequestData() {
+            ConsumerGroupHeartbeatRequestData data = new ConsumerGroupHeartbeatRequestData();
+
+            // GroupId - always sent
+            data.setGroupId(membershipManager.groupId());
+
+            // MemberId - always sent, empty until it has been received from the coordinator
+            data.setMemberId(membershipManager.memberId());
+
+            // MemberEpoch - always sent
+            data.setMemberEpoch(membershipManager.memberEpoch());
+
+            // InstanceId - only sent if has changed since the last heartbeat
+            membershipManager.groupInstanceId().ifPresent(groupInstanceId -> {
+                if (!groupInstanceId.equals(sentFields.instanceId)) {
+                    data.setInstanceId(groupInstanceId);
+                    sentFields.instanceId = groupInstanceId;
+                }
+            });
+
+            // RebalanceTimeoutMs - only sent if has changed since the last heartbeat
+            if (sentFields.rebalanceTimeoutMs != rebalanceTimeoutMs) {
+                data.setRebalanceTimeoutMs(rebalanceTimeoutMs);
+                sentFields.rebalanceTimeoutMs = rebalanceTimeoutMs;
+            }
+
+            if (!this.subscriptions.hasPatternSubscription()) {
+                // SubscribedTopicNames - only sent if has changed since the last heartbeat
+                TreeSet<String> subscribedTopicNames = new TreeSet<>(this.subscriptions.subscription());
+                if (!subscribedTopicNames.equals(sentFields.subscribedTopicNames)) {
+                    data.setSubscribedTopicNames(new ArrayList<>(this.subscriptions.subscription()));
+                    sentFields.subscribedTopicNames = subscribedTopicNames;
+                }
+            } else {
+                // SubscribedTopicRegex - only sent if has changed since the last heartbeat
+                //                      - not supported yet
+            }
+
+            // ServerAssignor - only sent if has changed since the last heartbeat
+            this.membershipManager.serverAssignor().ifPresent(serverAssignor -> {
+                if (!serverAssignor.equals(sentFields.serverAssignor)) {
+                    data.setServerAssignor(serverAssignor);
+                    sentFields.serverAssignor = serverAssignor;
+                }
+            });
+
+            // ClientAssignors - not supported yet
+
+            // TopicPartitions - only sent if it has changed since the last heartbeat. Note that
+            // the string consists of just the topic ID and the partitions. When an assignment is
+            // received, we might not yet know the topic name, and then it is learnt subsequently
+            // by a metadata update.
+            TreeSet<String> assignedPartitions = membershipManager.currentAssignment().entrySet().stream()
+                .map(entry -> entry.getKey() + "-" + entry.getValue())
+                .collect(Collectors.toCollection(TreeSet::new));
+            if (!assignedPartitions.equals(sentFields.topicPartitions)) {
+                List<ConsumerGroupHeartbeatRequestData.TopicPartitions> topicPartitions =
+                    buildTopicPartitionsList(membershipManager.currentAssignment());
+                data.setTopicPartitions(topicPartitions);
+                sentFields.topicPartitions = assignedPartitions;
+            }
+
+            return data;
+        }
+
+        private List<ConsumerGroupHeartbeatRequestData.TopicPartitions> buildTopicPartitionsList(Map<Uuid, SortedSet<Integer>> topicIdPartitions) {
+            return topicIdPartitions.entrySet().stream().map(
+                    entry -> new ConsumerGroupHeartbeatRequestData.TopicPartitions()
+                        .setTopicId(entry.getKey())
+                        .setPartitions(new ArrayList<>(entry.getValue())))
+                .collect(Collectors.toList());
+        }
+
+        // Fields of ConsumerHeartbeatRequest sent in the most recent request
+        static class SentFields {
+            private String instanceId = null;
+            private int rebalanceTimeoutMs = -1;
+            private TreeSet<String> subscribedTopicNames = null;
+            private String serverAssignor = null;
+            private TreeSet<String> topicPartitions = null;
+
+            SentFields() {}
+
+            void reset() {
+                instanceId = null;
+                rebalanceTimeoutMs = -1;
+                subscribedTopicNames = null;
+                serverAssignor = null;
+                topicPartitions = null;
+            }
         }
     }
 }

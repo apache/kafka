@@ -25,7 +25,7 @@ import java.nio.file.{Files, StandardOpenOption}
 import java.security.cert.X509Certificate
 import java.time.Duration
 import java.util
-import java.util.concurrent.atomic.{AtomicBoolean, AtomicInteger, AtomicReference}
+import java.util.concurrent.atomic.{AtomicBoolean, AtomicInteger}
 import java.util.concurrent.{Callable, CompletableFuture, ExecutionException, Executors, TimeUnit}
 import java.util.{Arrays, Collections, Optional, Properties}
 import com.yammer.metrics.core.{Gauge, Histogram, Meter}
@@ -597,10 +597,10 @@ object TestUtils extends Logging {
    * Wait until the leader is elected and the metadata is propagated to all brokers.
    * Return the leader for each partition.
    */
-  def createTopic(zkClient: KafkaZkClient,
+  def createTopic[B <: KafkaBroker](zkClient: KafkaZkClient,
                   topic: String,
                   partitionReplicaAssignment: collection.Map[Int, Seq[Int]],
-                  servers: Seq[KafkaBroker]): scala.collection.immutable.Map[Int, Int] = {
+                  servers: Seq[B]): scala.collection.immutable.Map[Int, Int] = {
     createTopic(zkClient, topic, partitionReplicaAssignment, servers, new Properties())
   }
 
@@ -1471,7 +1471,7 @@ object TestUtils extends Logging {
 
     if (log.isDefined) {
       val spyLogManager = Mockito.spy(logManager)
-      Mockito.doReturn(log.get, Nil: _*).when(spyLogManager).getOrCreateLog(any(classOf[TopicPartition]), anyBoolean(), anyBoolean(), any(classOf[Option[Uuid]]))
+      Mockito.doReturn(log.get, Nil: _*).when(spyLogManager).getOrCreateLog(any(classOf[TopicPartition]), anyBoolean(), anyBoolean(), any(classOf[Option[Uuid]]), any(classOf[Option[Uuid]]))
       spyLogManager
     } else
       logManager
@@ -1529,7 +1529,6 @@ object TestUtils extends Logging {
     val expands: AtomicInteger = new AtomicInteger(0)
     val shrinks: AtomicInteger = new AtomicInteger(0)
     val failures: AtomicInteger = new AtomicInteger(0)
-    val directory: AtomicReference[String] = new AtomicReference[String]()
 
     override def markIsrExpand(): Unit = expands.incrementAndGet()
 
@@ -1537,13 +1536,11 @@ object TestUtils extends Logging {
 
     override def markFailed(): Unit = failures.incrementAndGet()
 
-    override def assignDir(dir: String): Unit = directory.set(dir)
 
     def reset(): Unit = {
       expands.set(0)
       shrinks.set(0)
       failures.set(0)
-      directory.set(null)
     }
   }
 

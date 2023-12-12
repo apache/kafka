@@ -30,6 +30,7 @@ import org.apache.kafka.common.errors.UnknownServerException;
 import org.apache.kafka.common.errors.UnsupportedAssignorException;
 import org.apache.kafka.common.errors.FencedInstanceIdException;
 import org.apache.kafka.common.errors.UnreleasedInstanceIdException;
+import org.apache.kafka.common.message.ConsumerGroupDescribeResponseData;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatRequestData;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatResponseData;
 import org.apache.kafka.common.message.DescribeGroupsResponseData;
@@ -270,7 +271,6 @@ public class GroupMetadataManager {
             );
         }
     }
-
     /**
      * The log context.
      */
@@ -468,6 +468,34 @@ public class GroupMetadataManager {
         return groupStream.map(group -> group.asListedGroup(committedOffset)).collect(Collectors.toList());
     }
 
+
+    /**
+     * Handles a ConsumerGroupDescribe request.
+     *
+     * @param groupIds          The IDs of the groups to describe.
+     * @param committedOffset   A specified committed offset corresponding to this shard.
+     *
+     * @return A list containing the ConsumerGroupDescribeResponseData.DescribedGroup.
+     */
+    public List<ConsumerGroupDescribeResponseData.DescribedGroup> consumerGroupDescribe(
+        List<String> groupIds,
+        long committedOffset
+    ) {
+        final List<ConsumerGroupDescribeResponseData.DescribedGroup> describedGroups = new ArrayList<>();
+        groupIds.forEach(groupId -> {
+            try {
+                describedGroups.add(consumerGroup(groupId, committedOffset).asDescribedGroup(committedOffset, defaultAssignor.name()));
+            } catch (GroupIdNotFoundException exception) {
+                describedGroups.add(new ConsumerGroupDescribeResponseData.DescribedGroup()
+                    .setGroupId(groupId)
+                    .setErrorCode(Errors.GROUP_ID_NOT_FOUND.code())
+                );
+            }
+        });
+
+        return describedGroups;
+    }
+
     /**
      * Handles a DescribeGroup request.
      *
@@ -624,6 +652,31 @@ public class GroupMetadataManager {
     }
 
     /**
+     * Gets a consumer group by committed offset.
+     *
+     * @param groupId           The group id.
+     * @param committedOffset   A specified committed offset corresponding to this shard.
+     *
+     * @return A ConsumerGroup.
+     * @throws GroupIdNotFoundException if the group does not exist or is not a consumer group.
+     */
+    public ConsumerGroup consumerGroup(
+        String groupId,
+        long committedOffset
+    ) throws GroupIdNotFoundException {
+        Group group = group(groupId, committedOffset);
+
+        if (group.type() == CONSUMER) {
+            return (ConsumerGroup) group;
+        } else {
+            // We don't support upgrading/downgrading between protocols at the moment so
+            // we throw an exception if a group exists with the wrong type.
+            throw new GroupIdNotFoundException(String.format("Group %s is not a consumer group.",
+                groupId));
+        }
+    }
+
+    /**
      * Removes the group.
      *
      * @param groupId The group id.
@@ -696,7 +749,6 @@ public class GroupMetadataManager {
         throwIfEmptyString(request.groupId(), "GroupId can't be empty.");
         throwIfEmptyString(request.instanceId(), "InstanceId can't be empty.");
         throwIfEmptyString(request.rackId(), "RackId can't be empty.");
-        throwIfNotNull(request.subscribedTopicRegex(), "SubscribedTopicRegex is not supported yet.");
 
         if (request.memberEpoch() > 0 || request.memberEpoch() == LEAVE_GROUP_MEMBER_EPOCH) {
             throwIfEmptyString(request.memberId(), "MemberId can't be empty.");
@@ -892,8 +944,6 @@ public class GroupMetadataManager {
      * @param clientHost            The client host.
      * @param subscribedTopicNames  The list of subscribed topic names from the request
      *                              of null.
-     * @param subscribedTopicRegex  The regular expression based subscription from the
-     *                              request or null.
      * @param assignorName          The assignor name from the request or null.
      * @param ownedTopicPartitions  The list of owned partitions from the request or null.
      *
@@ -910,7 +960,6 @@ public class GroupMetadataManager {
         String clientId,
         String clientHost,
         List<String> subscribedTopicNames,
-        String subscribedTopicRegex,
         String assignorName,
         List<ConsumerGroupHeartbeatRequestData.TopicPartitions> ownedTopicPartitions
     ) throws ApiException {
@@ -977,7 +1026,6 @@ public class GroupMetadataManager {
             .maybeUpdateRebalanceTimeoutMs(ofSentinel(rebalanceTimeoutMs))
             .maybeUpdateServerAssignorName(Optional.ofNullable(assignorName))
             .maybeUpdateSubscribedTopicNames(Optional.ofNullable(subscribedTopicNames))
-            .maybeUpdateSubscribedTopicRegex(Optional.ofNullable(subscribedTopicRegex))
             .setClientId(clientId)
             .setClientHost(clientHost)
             .build();
@@ -1056,8 +1104,9 @@ public class GroupMetadataManager {
                     assignmentResult = assignmentResultBuilder
                         .build();
                 }
-                log.info("[GroupId {}] Computed a new target assignment for epoch {}: {}.",
-                    groupId, groupEpoch, assignmentResult.targetAssignment());
+
+                log.info("[GroupId {}] Computed a new target assignment for epoch {} with '{}' assignor: {}.",
+                    groupId, groupEpoch, preferredServerAssignor, assignmentResult.targetAssignment());
 
                 records.addAll(assignmentResult.records());
                 targetAssignment = assignmentResult.targetAssignment().get(memberId);
@@ -1394,7 +1443,6 @@ public class GroupMetadataManager {
                 context.clientId(),
                 context.clientAddress.toString(),
                 request.subscribedTopicNames(),
-                request.subscribedTopicRegex(),
                 request.serverAssignor(),
                 request.topicPartitions()
             );
@@ -2505,7 +2553,7 @@ public class GroupMetadataManager {
         if (group.isInState(PREPARING_REBALANCE) && group.previousState() == EMPTY) {
             group.setNewMemberAdded(true);
         }
-        
+
         group.add(member, responseFuture);
 
         // The session timeout does not affect new members since they do not have their memberId and
@@ -2648,7 +2696,7 @@ public class GroupMetadataManager {
 
     /**
      * Reset assignment for all members and propagate the error to all members in the group.
-     * 
+     *
      * @param group  The group.
      * @param error  The error to propagate.
      */

@@ -165,6 +165,17 @@ public class CommitRequestManager implements RequestManager {
         return new NetworkClientDelegate.PollResult(timeUntilNextPoll, requests);
     }
 
+    /**
+     * Returns the delay for which the application thread can safely wait before it should be responsive
+     * to results from the request managers. For example, the subscription state can change when heartbeats
+     * are sent, so blocking for longer than the heartbeat interval might mean the application thread is not
+     * responsive to changes.
+     */
+    @Override
+    public long maximumTimeToWait(long currentTimeMs) {
+        return autoCommitState.map(ac -> ac.remainingMs(currentTimeMs)).orElse(Long.MAX_VALUE);
+    }
+
     private static long findMinTime(final Collection<? extends RequestState> requests, final long currentTimeMs) {
         return requests.stream()
             .mapToLong(request -> request.remainingBackoffMs(currentTimeMs))
@@ -214,6 +225,13 @@ public class CommitRequestManager implements RequestManager {
     }
 
     /**
+     * Updates the member ID and epoch upon receiving ConsumerGroupHeartbeatResponse.
+     */
+    void updateMemberInformation(String memberId, int memberEpoch) {
+        groupState.generation = new GroupState.Generation(memberEpoch, memberId, null);
+    }
+
+    /**
      * Returns an OffsetCommitRequest of all assigned topicPartitions and their current positions.
      */
     NetworkClientDelegate.UnsentRequest createCommitAllConsumedRequest() {
@@ -252,7 +270,7 @@ public class CommitRequestManager implements RequestManager {
     }
 
     /**
-     * Handles {@link org.apache.kafka.clients.consumer.internals.events.OffsetFetchApplicationEvent}. It creates an
+     * Handles {@link org.apache.kafka.clients.consumer.internals.events.FetchCommittedOffsetsApplicationEvent}. It creates an
      * {@link OffsetFetchRequestState} and enqueue it to send later.
      */
     public CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> addOffsetFetchRequest(final Set<TopicPartition> partitions) {
@@ -797,6 +815,11 @@ public class CommitRequestManager implements RequestManager {
 
         public void resetTimer() {
             this.timer.reset(autoCommitInterval);
+        }
+
+        public long remainingMs(final long currentTimeMs) {
+            this.timer.update(currentTimeMs);
+            return this.timer.remainingMs();
         }
 
         public void ack(final long currentTimeMs) {

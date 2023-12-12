@@ -23,7 +23,7 @@ import org.apache.kafka.image.MetadataImage;
  * CoordinatorShard is basically a replicated state machine managed by the
  * {@link CoordinatorRuntime}.
  */
-public interface CoordinatorShard<U> extends CoordinatorPlayback<U> {
+public interface CoordinatorShard<U> {
 
     /**
      * The coordinator has been loaded. This is used to apply any
@@ -47,4 +47,15 @@ public interface CoordinatorShard<U> extends CoordinatorPlayback<U> {
      * any post unloading operations.
      */
     default void onUnloaded() {}
+
+    /**
+     * Replay a record to update the state machine.
+     *
+     * @param record The record to replay.
+     */
+    void replay(
+        long producerId,
+        short producerEpoch,
+        U record
+    ) throws RuntimeException;
 }

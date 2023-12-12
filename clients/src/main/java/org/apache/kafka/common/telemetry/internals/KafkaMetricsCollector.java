@@ -129,6 +129,7 @@ public class KafkaMetricsCollector implements MetricsCollector {
     private final StateLedger ledger;
     private final Time time;
     private final MetricNamingStrategy<MetricName> metricNamingStrategy;
+    private final Set<String> excludeLabels;
 
     private static final Field METRIC_VALUE_PROVIDER_FIELD;
 
@@ -141,15 +142,16 @@ public class KafkaMetricsCollector implements MetricsCollector {
         }
     }
 
-    public KafkaMetricsCollector(MetricNamingStrategy<MetricName> metricNamingStrategy) {
-        this(metricNamingStrategy, Time.SYSTEM);
+    public KafkaMetricsCollector(MetricNamingStrategy<MetricName> metricNamingStrategy, Set<String> excludeLabels) {
+        this(metricNamingStrategy, Time.SYSTEM, excludeLabels);
     }
 
     // Visible for testing
-    KafkaMetricsCollector(MetricNamingStrategy<MetricName> metricNamingStrategy, Time time) {
+    KafkaMetricsCollector(MetricNamingStrategy<MetricName> metricNamingStrategy, Time time, Set<String> excludeLabels) {
         this.metricNamingStrategy = metricNamingStrategy;
         this.time = time;
         this.ledger = new StateLedger();
+        this.excludeLabels = excludeLabels;
     }
 
     public void init(List<KafkaMetric> metrics) {
@@ -241,11 +243,11 @@ public class KafkaMetricsCollector implements MetricsCollector {
 
             metricsEmitter.emitMetric(
                 SinglePointMetric.deltaSum(metricKey, instantAndValue.getValue(), true, timestamp,
-                    instantAndValue.getIntervalStart())
+                    instantAndValue.getIntervalStart(), excludeLabels)
             );
         } else {
             metricsEmitter.emitMetric(
-                SinglePointMetric.sum(metricKey, value, true, timestamp, ledger.instantAdded(metricKey))
+                SinglePointMetric.sum(metricKey, value, true, timestamp, ledger.instantAdded(metricKey), excludeLabels)
             );
         }
     }
@@ -256,7 +258,7 @@ public class KafkaMetricsCollector implements MetricsCollector {
         }
 
         metricsEmitter.emitMetric(
-            SinglePointMetric.gauge(metricKey, value, timestamp)
+            SinglePointMetric.gauge(metricKey, value, timestamp, excludeLabels)
         );
     }
 

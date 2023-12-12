@@ -21,6 +21,7 @@ import org.apache.kafka.clients.consumer.internals.CachedSupplier;
 import org.apache.kafka.clients.consumer.internals.CommitRequestManager;
 import org.apache.kafka.clients.consumer.internals.ConsumerMetadata;
 import org.apache.kafka.clients.consumer.internals.ConsumerNetworkThread;
+import org.apache.kafka.clients.consumer.internals.HeartbeatRequestManager;
 import org.apache.kafka.clients.consumer.internals.MembershipManager;
 import org.apache.kafka.clients.consumer.internals.RequestManagers;
 import org.apache.kafka.common.KafkaException;
@@ -77,11 +78,11 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
                 process((PollApplicationEvent) event);
                 return;
 
-            case FETCH_COMMITTED_OFFSET:
-                process((OffsetFetchApplicationEvent) event);
+            case FETCH_COMMITTED_OFFSETS:
+                process((FetchCommittedOffsetsApplicationEvent) event);
                 return;
 
-            case METADATA_UPDATE:
+            case NEW_TOPICS_METADATA_UPDATE:
                 process((NewTopicsMetadataUpdateRequestEvent) event);
                 return;
 
@@ -98,19 +99,19 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
                 return;
 
             case RESET_POSITIONS:
-                processResetPositionsEvent();
+                process((ResetPositionsApplicationEvent) event);
                 return;
 
             case VALIDATE_POSITIONS:
-                processValidatePositionsEvent();
+                process((ValidatePositionsApplicationEvent) event);
                 return;
 
             case SUBSCRIPTION_CHANGE:
-                processSubscriptionChangeEvent();
+                process((SubscriptionChangeApplicationEvent) event);
                 return;
 
             case UNSUBSCRIBE:
-                processUnsubscribeEvent((UnsubscribeApplicationEvent) event);
+                process((UnsubscribeApplicationEvent) event);
                 return;
 
             default:
@@ -128,8 +129,8 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
             return;
         }
 
-        CommitRequestManager manager = requestManagers.commitRequestManager.get();
-        manager.updateAutoCommitTimer(event.pollTimeMs());
+        requestManagers.commitRequestManager.ifPresent(m -> m.updateAutoCommitTimer(event.pollTimeMs()));
+        requestManagers.heartbeatRequestManager.ifPresent(HeartbeatRequestManager::resetPollTimer);
     }
 
     private void process(final CommitApplicationEvent event) {
@@ -145,7 +146,7 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
         event.chain(manager.addOffsetCommitRequest(event.offsets()));
     }
 
-    private void process(final OffsetFetchApplicationEvent event) {
+    private void process(final FetchCommittedOffsetsApplicationEvent event) {
         if (!requestManagers.commitRequestManager.isPresent()) {
             event.future().completeExceptionally(new KafkaException("Unable to fetch committed " +
                     "offset because the CommittedRequestManager is not available. Check if group.id was set correctly"));
@@ -180,7 +181,7 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
      * consumer join the group if it is not part of it yet, or send the updated subscription if
      * it is already a member.
      */
-    private void processSubscriptionChangeEvent() {
+    private void process(final SubscriptionChangeApplicationEvent event) {
         if (!requestManagers.membershipManager.isPresent()) {
             throw new RuntimeException("Group membership manager not present when processing a " +
                     "subscribe event");
@@ -197,7 +198,7 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
      *              execution for releasing the assignment completes, and the request to leave
      *              the group is sent out.
      */
-    private void processUnsubscribeEvent(UnsubscribeApplicationEvent event) {
+    private void process(final UnsubscribeApplicationEvent event) {
         if (!requestManagers.membershipManager.isPresent()) {
             throw new RuntimeException("Group membership manager not present when processing an " +
                     "unsubscribe event");
@@ -207,12 +208,14 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
         event.chain(result);
     }
 
-    private void processResetPositionsEvent() {
-        requestManagers.offsetsRequestManager.resetPositionsIfNeeded();
+    private void process(final ResetPositionsApplicationEvent event) {
+        CompletableFuture<Void> result = requestManagers.offsetsRequestManager.resetPositionsIfNeeded();
+        event.chain(result);
     }
 
-    private void processValidatePositionsEvent() {
-        requestManagers.offsetsRequestManager.validatePositionsIfNeeded();
+    private void process(final ValidatePositionsApplicationEvent event) {
+        CompletableFuture<Void> result = requestManagers.offsetsRequestManager.validatePositionsIfNeeded();
+        event.chain(result);
     }
 
     private void process(final TopicMetadataApplicationEvent event) {

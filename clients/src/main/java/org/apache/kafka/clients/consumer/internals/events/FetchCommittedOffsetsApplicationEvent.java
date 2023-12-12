@@ -23,12 +23,12 @@ import java.util.Collections;
 import java.util.Map;
 import java.util.Set;
 
-public class OffsetFetchApplicationEvent extends CompletableApplicationEvent<Map<TopicPartition, OffsetAndMetadata>> {
+public class FetchCommittedOffsetsApplicationEvent extends CompletableApplicationEvent<Map<TopicPartition, OffsetAndMetadata>> {
 
     private final Set<TopicPartition> partitions;
 
-    public OffsetFetchApplicationEvent(final Set<TopicPartition> partitions) {
-        super(Type.FETCH_COMMITTED_OFFSET);
+    public FetchCommittedOffsetsApplicationEvent(final Set<TopicPartition> partitions) {
+        super(Type.FETCH_COMMITTED_OFFSETS);
         this.partitions = Collections.unmodifiableSet(partitions);
     }
 
@@ -42,7 +42,7 @@ public class OffsetFetchApplicationEvent extends CompletableApplicationEvent<Map
         if (o == null || getClass() != o.getClass()) return false;
         if (!super.equals(o)) return false;
 
-        OffsetFetchApplicationEvent that = (OffsetFetchApplicationEvent) o;
+        FetchCommittedOffsetsApplicationEvent that = (FetchCommittedOffsetsApplicationEvent) o;
 
         return partitions.equals(that.partitions);
     }
