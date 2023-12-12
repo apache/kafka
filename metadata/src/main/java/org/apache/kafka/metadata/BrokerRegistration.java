@@ -17,6 +17,7 @@
 
 package org.apache.kafka.metadata;
 
+import org.apache.kafka.common.DirectoryId;
 import org.apache.kafka.common.Endpoint;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.Uuid;
@@ -27,6 +28,7 @@ import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.image.writer.ImageWriterOptions;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -50,6 +52,7 @@ public class BrokerRegistration {
         private boolean fenced = false;
         private boolean inControlledShutdown = false;
         private boolean isMigratingZkBroker = false;
+        private List<Uuid> directories;
 
         public Builder() {
             this.id = 0;
@@ -61,6 +64,7 @@ public class BrokerRegistration {
             this.fenced = false;
             this.inControlledShutdown = false;
             this.isMigratingZkBroker = false;
+            this.directories = Collections.emptyList();
         }
 
         public Builder setId(int id) {
@@ -118,6 +122,11 @@ public class BrokerRegistration {
             return this;
         }
 
+        public Builder setDirectories(List<Uuid> directories) {
+            this.directories = directories;
+            return this;
+        }
+
         public BrokerRegistration build() {
             return new BrokerRegistration(
                 id,
@@ -128,7 +137,8 @@ public class BrokerRegistration {
                 rack,
                 fenced,
                 inControlledShutdown,
-                isMigratingZkBroker);
+                isMigratingZkBroker,
+                directories);
         }
     }
 
@@ -149,6 +159,7 @@ public class BrokerRegistration {
     private final boolean fenced;
     private final boolean inControlledShutdown;
     private final boolean isMigratingZkBroker;
+    private final List<Uuid> directories;
 
     private BrokerRegistration(
         int id,
@@ -159,7 +170,8 @@ public class BrokerRegistration {
         Optional<String> rack,
         boolean fenced,
         boolean inControlledShutdown,
-        boolean isMigratingZkBroker
+        boolean isMigratingZkBroker,
+        List<Uuid> directories
     ) {
         this.id = id;
         this.epoch = epoch;
@@ -178,6 +190,9 @@ public class BrokerRegistration {
         this.fenced = fenced;
         this.inControlledShutdown = inControlledShutdown;
         this.isMigratingZkBroker = isMigratingZkBroker;
+        directories = new ArrayList<>(directories);
+        directories.sort(Uuid::compareTo);
+        this.directories = Collections.unmodifiableList(directories);
     }
 
     public static BrokerRegistration fromRecord(RegisterBrokerRecord record) {
@@ -201,7 +216,8 @@ public class BrokerRegistration {
             Optional.ofNullable(record.rack()),
             record.fenced(),
             record.inControlledShutdown(),
-            record.isMigratingZkBroker());
+            record.isMigratingZkBroker(),
+            record.logDirs());
     }
 
     public int id() {
@@ -248,6 +264,34 @@ public class BrokerRegistration {
         return isMigratingZkBroker;
     }
 
+    public List<Uuid> directories() {
+        return directories;
+    }
+
+    public boolean hasOnlineDir(Uuid dir) {
+        return DirectoryId.isOnline(dir, directories);
+    }
+
+    public List<Uuid> directoryIntersection(List<Uuid> otherDirectories) {
+        List<Uuid> results = new ArrayList<>();
+        for (Uuid directory : directories) {
+            if (otherDirectories.contains(directory)) {
+                results.add(directory);
+            }
+        }
+        return results;
+    }
+
+    public List<Uuid> directoryDifference(List<Uuid> otherDirectories) {
+        List<Uuid> results = new ArrayList<>();
+        for (Uuid directory : directories) {
+            if (!otherDirectories.contains(directory)) {
+                results.add(directory);
+            }
+        }
+        return results;
+    }
+
     public ApiMessageAndVersion toRecord(ImageWriterOptions options) {
         RegisterBrokerRecord registrationRecord = new RegisterBrokerRecord().
             setBrokerId(id).
@@ -270,6 +314,12 @@ public class BrokerRegistration {
             } else {
                 options.handleLoss("the isMigratingZkBroker state of one or more brokers");
             }
+        }
+
+        if (directories.isEmpty() || options.metadataVersion().isDirectoryAssignmentSupported()) {
+            registrationRecord.setLogDirs(directories);
+        } else {
+            options.handleLoss("the online log directories of one or more brokers");
         }
 
         for (Entry<String, Endpoint> entry : listeners.entrySet()) {
@@ -295,7 +345,7 @@ public class BrokerRegistration {
     @Override
     public int hashCode() {
         return Objects.hash(id, epoch, incarnationId, listeners, supportedFeatures,
-            rack, fenced, inControlledShutdown, isMigratingZkBroker);
+            rack, fenced, inControlledShutdown, isMigratingZkBroker, directories);
     }
 
     @Override
@@ -310,7 +360,8 @@ public class BrokerRegistration {
             other.rack.equals(rack) &&
             other.fenced == fenced &&
             other.inControlledShutdown == inControlledShutdown &&
-            other.isMigratingZkBroker == isMigratingZkBroker;
+            other.isMigratingZkBroker == isMigratingZkBroker &&
+            other.directories.equals(directories);
     }
 
     @Override
@@ -332,6 +383,7 @@ public class BrokerRegistration {
         bld.append(", fenced=").append(fenced);
         bld.append(", inControlledShutdown=").append(inControlledShutdown);
         bld.append(", isMigratingZkBroker=").append(isMigratingZkBroker);
+        bld.append(", directories=").append(directories);
         bld.append(")");
         return bld.toString();
     }
@@ -355,7 +407,8 @@ public class BrokerRegistration {
             rack,
             newFenced,
             newInControlledShutdownChange,
-            isMigratingZkBroker
+            isMigratingZkBroker,
+            directories
         );
     }
 }

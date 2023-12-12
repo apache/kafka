@@ -434,7 +434,7 @@
             <a href="https://www.slf4j.org/codes.html#no_tlm">possible compatibility issues originating from the logging framework</a>.</li>
         <li>The example connectors, <code>FileStreamSourceConnector</code> and <code>FileStreamSinkConnector</code>, have been
             removed from the default classpath. To use them in Kafka Connect standalone or distributed mode they need to be
-            explicitly added, for example <code>CLASSPATH=./lib/connect-file-3.2.0.jar ./bin/connect-distributed.sh</code>.</li>
+            explicitly added, for example <code>CLASSPATH=./libs/connect-file-3.2.0.jar ./bin/connect-distributed.sh</code>.</li>
     </ul>
 
 <h4><a id="upgrade_3_1_0" href="#upgrade_3_1_0">Upgrading to 3.1.0 from any version 0.8.x through 3.0.x</a></h4>
@@ -1067,11 +1067,11 @@
         if there are no snapshot files in 3.4 data directory. For more details about the workaround please refer to <a href="https://cwiki.apache.org/confluence/display/ZOOKEEPER/Upgrade+FAQ">ZooKeeper Upgrade FAQ</a>.
     </li>
     <li>
-        An embedded Jetty based <a href="http://zookeeper.apache.org/doc/r3.5.6/zookeeperAdmin.html#sc_adminserver">AdminServer</a> added in ZooKeeper 3.5.
+        An embedded Jetty based <a href="https://zookeeper.apache.org/doc/r3.5.6/zookeeperAdmin.html#sc_adminserver">AdminServer</a> added in ZooKeeper 3.5.
         AdminServer is enabled by default in ZooKeeper and is started on port 8080.
         AdminServer is disabled by default in the ZooKeeper config (<code>zookeeper.properties</code>) provided by the Apache Kafka distribution.
         Make sure to update your local <code>zookeeper.properties</code> file with <code>admin.enableServer=false</code> if you wish to disable the AdminServer.
-        Please refer <a href="http://zookeeper.apache.org/doc/r3.5.6/zookeeperAdmin.html#sc_adminserver">AdminServer config</a> to configure the AdminServer.
+        Please refer <a href="https://zookeeper.apache.org/doc/r3.5.6/zookeeperAdmin.html#sc_adminserver">AdminServer config</a> to configure the AdminServer.
     </li>
 </ol>
 

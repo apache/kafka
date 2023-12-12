@@ -77,7 +77,10 @@ public class SubscriptionJoinProcessorSupplier<K, KO, VO>
                     throw new UnsupportedVersionException("SubscriptionWrapper is of an incompatible version.");
                 }
 
-                final ValueAndTimestamp<VO> foreignValueAndTime = foreignValues.get(record.key().getForeignKey());
+                final ValueAndTimestamp<VO> foreignValueAndTime =
+                    record.key().getForeignKey() == null ?
+                        null :
+                        foreignValues.get(record.key().getForeignKey());
 
                 final long resultTimestamp =
                     foreignValueAndTime == null ?
