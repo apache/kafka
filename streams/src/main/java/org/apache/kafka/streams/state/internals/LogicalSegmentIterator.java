@@ -31,6 +31,7 @@ public class LogicalSegmentIterator implements VersionedRecordIterator<byte[]> {
     private final Long fromTime;
     private final Long toTime;
     private final ResultOrder order;
+    private final int increment;
     // stores the raw value of the latestValueStore when latestValueStore is the current segment
     private byte[] currentRawSegmentValue;
     // stores the deserialized value of the current segment (when current segment is one of the old segments)
@@ -58,6 +59,11 @@ public class LogicalSegmentIterator implements VersionedRecordIterator<byte[]> {
         this.toTime = toTime;
         this.order = order;
         this.next = null;
+        // If the order is ascending, the first record to be deserialized has the last index (record number -1),
+        // therefore, the next record index is the decremented index of the previous record. It will be the other
+        // way around, when the order is not ascending. It means that the first record to be deserialized has the
+        // index 0 and the next record index is the incremented index of the previous record.
+        this.increment = order.equals(ResultOrder.ASCENDING) ? -1 : 1;
         prepareToFetchNextSegment();
     }
 
@@ -83,7 +89,7 @@ public class LogicalSegmentIterator implements VersionedRecordIterator<byte[]> {
                 hasSegmentValue = maybeFillCurrentSegmentValue();
             }
             if (hasSegmentValue) {
-                this.next  = getNextRecord();
+                this.next = getNextRecord();
                 if (this.next == null) {
                     prepareToFetchNextSegment();
                 }
@@ -99,7 +105,6 @@ public class LogicalSegmentIterator implements VersionedRecordIterator<byte[]> {
                 throw new NoSuchElementException();
             }
         }
-        assert this.next != null;
         final VersionedRecord<byte[]> clonedNext = next;
         this.next = null;
         return clonedNext;
@@ -156,10 +161,13 @@ public class LogicalSegmentIterator implements VersionedRecordIterator<byte[]> {
                     currentDeserializedSegmentValue.find(fromTime, toTime, order, nextIndex);
             if (currentRecord != null) {
                 nextRecord = new VersionedRecord<>(currentRecord.value(), currentRecord.validFrom(), currentRecord.validTo());
-                this.nextIndex = order.equals(ResultOrder.ASCENDING) ? currentRecord.index() - 1 : currentRecord.index() + 1;
+                this.nextIndex = currentRecord.index() + increment;
             }
         }
         // no relevant record can be found in the segment
+        // currentRawSegmentValue != null: the latestValueStore has been processed, so fetch the next segment.
+        // nextRecord == null: noting was found in this segment, so fetch the next segment.
+        // when `canSegmentHaveMoreRelevantRecords()` returns false, it means that this segment has no more records that fits in the query time range.
         if (currentRawSegmentValue != null || nextRecord == null || !canSegmentHaveMoreRelevantRecords(nextRecord.timestamp(), nextRecord.validTo().get())) {
             prepareToFetchNextSegment();
         }
@@ -167,8 +175,12 @@ public class LogicalSegmentIterator implements VersionedRecordIterator<byte[]> {
     }
 
     private boolean canSegmentHaveMoreRelevantRecords(final long currentValidFrom, final long currentValidTo) {
-        final boolean isCurrentOutsideTimeRange = (order.equals(ResultOrder.ASCENDING) && (currentValidTo > toTime || currentDeserializedSegmentValue.nextTimestamp() == currentValidTo))
-                                               || (!order.equals(ResultOrder.ASCENDING) && (currentValidFrom < fromTime || currentDeserializedSegmentValue.minTimestamp() == currentValidFrom));
+        final boolean isCurrentOutsideTimeRange;
+        if (order.equals(ResultOrder.ASCENDING)) {
+            isCurrentOutsideTimeRange = currentValidTo > toTime || currentDeserializedSegmentValue.nextTimestamp() == currentValidTo;
+        } else {
+            isCurrentOutsideTimeRange = currentValidFrom < fromTime || currentDeserializedSegmentValue.minTimestamp() == currentValidFrom;
+        }
         return !isCurrentOutsideTimeRange;
     }
 

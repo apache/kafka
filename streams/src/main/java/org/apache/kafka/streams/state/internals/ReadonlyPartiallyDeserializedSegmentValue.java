@@ -27,9 +27,9 @@ final class ReadonlyPartiallyDeserializedSegmentValue {
 
     private static final int TIMESTAMP_SIZE = 8;
     private static final int VALUE_SIZE = 4;
-    private byte[] segmentValue;
-    private long nextTimestamp;
-    private long minTimestamp;
+    private final byte[] segmentValue;
+    private final long nextTimestamp;
+    private final long minTimestamp;
 
     private int deserIndex = -1; // index up through which this segment has been deserialized (inclusive)
 
@@ -90,21 +90,15 @@ final class ReadonlyPartiallyDeserializedSegmentValue {
                 final TimestampAndValueSize curr;
                 curr = unpackedTimestampAndValueSizes.get(currIndex);
                 currTimestamp = curr.timestamp;
-                cumValueSize = cumulativeValueSizes.get(currIndex);
                 currValueSize = curr.valueSize;
-
-                // update currValueSize
-                if (currValueSize == Integer.MIN_VALUE) {
-                    final int timestampSegmentIndex = getTimestampIndex(order, currIndex);
-                    currValueSize = ByteBuffer.wrap(segmentValue).getInt(timestampSegmentIndex + TIMESTAMP_SIZE);
-                    unpackedTimestampAndValueSizes.put(currIndex, new TimestampAndValueSize(currTimestamp, cumValueSize));
-                }
-
+                cumValueSize = cumulativeValueSizes.get(currIndex);
                 currNextTimestamp = updateCurrNextTimestamp(currIndex, isAscending);
 
             } else {
                 final int timestampSegmentIndex = getTimestampIndex(order, currIndex);
-                currTimestamp = ByteBuffer.wrap(segmentValue).getLong(timestampSegmentIndex);
+                currTimestamp = unpackedTimestampAndValueSizes.containsKey(currIndex) // `findValuesStartingIndex()` stores the timestamps without increasing deserIndex
+                        ? unpackedTimestampAndValueSizes.get(currIndex).timestamp
+                        : ByteBuffer.wrap(segmentValue).getLong(timestampSegmentIndex);
                 currValueSize = ByteBuffer.wrap(segmentValue).getInt(timestampSegmentIndex + TIMESTAMP_SIZE);
                 currNextTimestamp = timestampSegmentIndex == 2 * TIMESTAMP_SIZE
                         ? nextTimestamp // if this is the first record metadata (timestamp + value size)
@@ -118,10 +112,10 @@ final class ReadonlyPartiallyDeserializedSegmentValue {
             }
 
             if (currValueSize >= 0) {
-                final byte[] value = new byte[currValueSize];
-                final int valueSegmentIndex = getValueSegmentIndex(order, cumValueSize, currValueSize);
-                System.arraycopy(segmentValue, valueSegmentIndex, value, 0, currValueSize);
                 if (currTimestamp <= toTime && currNextTimestamp > fromTime) {
+                    final byte[] value = new byte[currValueSize];
+                    final int valueSegmentIndex = getValueSegmentIndex(order, cumValueSize, currValueSize);
+                    System.arraycopy(segmentValue, valueSegmentIndex, value, 0, currValueSize);
                     return new RocksDBVersionedStoreSegmentValueFormatter.SegmentValue.SegmentSearchResult(currIndex, currTimestamp, currNextTimestamp, value);
                 }
             }
@@ -183,6 +177,7 @@ final class ReadonlyPartiallyDeserializedSegmentValue {
         while (currTimestamp != minTimestamp) {
             timestampSegmentIndex = 2 * TIMESTAMP_SIZE + currIndex * (TIMESTAMP_SIZE + VALUE_SIZE);
             currTimestamp = ByteBuffer.wrap(segmentValue).getLong(timestampSegmentIndex);
+            // Integer.MIN_VALUE means that we have not computed the value size.
             unpackedTimestampAndValueSizes.put(currIndex, new TimestampAndValueSize(currTimestamp, Integer.MIN_VALUE));
             currIndex++;
         }

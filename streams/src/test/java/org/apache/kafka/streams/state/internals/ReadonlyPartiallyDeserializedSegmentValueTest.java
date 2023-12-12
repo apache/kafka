@@ -32,6 +32,7 @@ import java.util.List;
 
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 
 @RunWith(Enclosed.class)
@@ -104,7 +105,8 @@ public class ReadonlyPartiallyDeserializedSegmentValueTest {
                             final long expectedValidTo = index == 0 ? testCase.nextTimestamp : testCase.records.get(index - 1).timestamp;
 
                             final SegmentSearchResult result = segmentValue.find(from, to, order, segmentRecordIndex);
-                            assert result != null;
+
+                            assertNotNull(result);
 
                             final TestRecord expectedRecord = testCase.records.get(index);
 
@@ -122,14 +124,6 @@ public class ReadonlyPartiallyDeserializedSegmentValueTest {
                     }
                 }
             }
-        }
-
-        @Test
-        public void shouldGetTimestamps() {
-            final byte[] segmentValue = buildSegmentWithInsertLatest(testCase).serialize();
-
-            assertThat(RocksDBVersionedStoreSegmentValueFormatter.getNextTimestamp(segmentValue), equalTo(testCase.nextTimestamp));
-            assertThat(RocksDBVersionedStoreSegmentValueFormatter.getMinTimestamp(segmentValue), equalTo(testCase.minTimestamp));
         }
     }
 
@@ -152,7 +146,7 @@ public class ReadonlyPartiallyDeserializedSegmentValueTest {
                 segmentValue.insertAsLatest(record.timestamp, validTo, record.value);
             }
         }
-        assert segmentValue != null;
+        assertNotNull(segmentValue);
         return new ReadonlyPartiallyDeserializedSegmentValue(segmentValue.serialize());
     }
 

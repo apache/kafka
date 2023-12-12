@@ -137,9 +137,6 @@ final class RocksDBVersionedStoreSegmentValueFormatter {
     }
 
     interface SegmentValue {
-        long getMinTimestamp();
-
-        long getNextTimestamp();
 
         /**
          * Finds the latest record in this segment row with (validFrom) timestamp not exceeding the
@@ -153,16 +150,6 @@ final class RocksDBVersionedStoreSegmentValueFormatter {
          * @throws IllegalArgumentException if the provided timestamp is not contained within this segment
          */
         SegmentSearchResult find(long timestamp, boolean includeValue);
-
-//        /**
-//         * Finds the next/previous record in this segment row that is valid within the query specified time range
-//         *
-//         * @param fromTime the query starting time point
-//         * @param toTime the query ending time point
-//         * @param order specifies the order (based on timestamp) in which records are returned
-//         * @return the record that is found, null if no record is found
-//         */
-//        SegmentSearchResult find(long fromTime, long toTime, ResultOrder order, int index);
 
         /**
          * Inserts the provided record into the segment as the latest record in the segment row.
@@ -296,16 +283,6 @@ final class RocksDBVersionedStoreSegmentValueFormatter {
         private PartiallyDeserializedSegmentValue(
             final byte[] valueOrNull, final long validFrom, final long validTo) {
             initializeWithRecord(new ValueAndValueSize(valueOrNull), validFrom, validTo);
-        }
-
-        @Override
-        public long getMinTimestamp() {
-            return minTimestamp;
-        }
-
-        @Override
-        public long getNextTimestamp() {
-            return nextTimestamp;
         }
 
         @Override
