@@ -25,10 +25,14 @@ import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.InvalidOffsetException;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
+import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.utils.LogContext;
@@ -42,6 +46,7 @@ import org.apache.kafka.streams.ThreadMetadata;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskCorruptedException;
 import org.apache.kafka.streams.errors.TaskMigratedException;
+import org.apache.kafka.streams.internals.StreamsConfigUtils;
 import org.apache.kafka.streams.internals.metrics.ClientMetrics;
 import org.apache.kafka.streams.processor.StandbyUpdateListener;
 import org.apache.kafka.streams.processor.StateRestoreListener;
@@ -54,6 +59,7 @@ import org.apache.kafka.streams.processor.internals.tasks.DefaultTaskManager;
 import org.apache.kafka.streams.processor.internals.tasks.DefaultTaskManager.DefaultTaskExecutorCreator;
 import org.apache.kafka.streams.state.internals.ThreadCache;
 
+import java.util.HashMap;
 import java.util.Queue;
 import java.util.function.BiConsumer;
 import org.slf4j.Logger;
@@ -73,6 +79,7 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
 
 import static org.apache.kafka.streams.internals.StreamsConfigUtils.eosEnabled;
+import static org.apache.kafka.streams.internals.StreamsConfigUtils.processingMode;
 import static org.apache.kafka.streams.processor.internals.ClientUtils.getConsumerClientId;
 import static org.apache.kafka.streams.processor.internals.ClientUtils.getRestoreConsumerClientId;
 import static org.apache.kafka.streams.processor.internals.ClientUtils.getSharedAdminClientId;
@@ -333,8 +340,14 @@ public class StreamThread extends Thread implements ProcessingThread {
     private final AtomicLong cacheResizeSize = new AtomicLong(-1L);
     private final AtomicBoolean leaveGroupRequested = new AtomicBoolean(false);
     private final boolean eosEnabled;
+    private final StreamsConfigUtils.ProcessingMode processingMode;
     private final boolean stateUpdaterEnabled;
     private final boolean processingThreadsEnabled;
+
+    private volatile long fetchDeadlineClientInstanceId = -1;
+    private volatile KafkaFutureImpl<Uuid> mainConsumerInstanceIdFuture = new KafkaFutureImpl<>();
+    private volatile KafkaFutureImpl<Map<String, KafkaFuture<Uuid>>> producerInstanceIdFuture = new KafkaFutureImpl<>();
+    private volatile KafkaFutureImpl<Uuid> threadProducerInstanceIdFuture = new KafkaFutureImpl<>();
 
     public static StreamThread create(final TopologyMetadata topologyMetadata,
                                       final StreamsConfig config,
@@ -602,6 +615,7 @@ public class StreamThread extends Thread implements ProcessingThread {
 
         this.numIterations = 1;
         this.eosEnabled = eosEnabled(config);
+        this.processingMode = processingMode(config);
         this.stateUpdaterEnabled = InternalConfig.getStateUpdaterEnabled(config.originals());
         this.processingThreadsEnabled = InternalConfig.getProcessingThreadsEnabled(config.originals());
     }
@@ -672,6 +686,8 @@ public class StreamThread extends Thread implements ProcessingThread {
                     runOnceWithoutProcessingThreads();
                 }
 
+                maybeGetClientInstanceIds();
+
                 // Check for a scheduled rebalance but don't trigger it until the current rebalance is done
                 if (!taskManager.rebalanceInProgress() && nextProbingRebalanceMs.get() < time.milliseconds()) {
                     log.info("Triggering the followup rebalance scheduled for {}.", Utils.toLogDateTimeFormat(nextProbingRebalanceMs.get()));
@@ -714,6 +730,75 @@ public class StreamThread extends Thread implements ProcessingThread {
             }
         }
         return true;
+    }
+
+    // visible for testing
+    void maybeGetClientInstanceIds() {
+        // we pass in a timeout of zero into each `clientInstanceId()` call
+        // to just trigger the "get instance id" background RPC;
+        // we don't want to block the stream thread that can do useful work in the meantime
+
+        if (fetchDeadlineClientInstanceId != -1) {
+            if (!mainConsumerInstanceIdFuture.isDone()) {
+                if (fetchDeadlineClientInstanceId >= time.milliseconds()) {
+                    try {
+                        mainConsumerInstanceIdFuture.complete(mainConsumer.clientInstanceId(Duration.ZERO));
+                    } catch (final IllegalStateException disabledError) {
+                        // if telemetry is disabled on a client, we swallow the error,
+                        // to allow returning a partial result for all other clients
+                        mainConsumerInstanceIdFuture.complete(null);
+                    } catch (final TimeoutException swallow) {
+                        // swallow
+                    } catch (final Exception error) {
+                        mainConsumerInstanceIdFuture.completeExceptionally(error);
+                    }
+                } else {
+                    mainConsumerInstanceIdFuture.completeExceptionally(
+                        new TimeoutException("Could not retrieve main consumer client instance id.")
+                    );
+                }
+            }
+
+            if (!processingMode.equals(StreamsConfigUtils.ProcessingMode.EXACTLY_ONCE_ALPHA) &&
+                    !threadProducerInstanceIdFuture.isDone()) {
+
+                if (fetchDeadlineClientInstanceId >= time.milliseconds()) {
+                    try {
+                        threadProducerInstanceIdFuture.complete(
+                            taskManager.threadProducer().kafkaProducer().clientInstanceId(Duration.ZERO)
+                        );
+                    } catch (final IllegalStateException disabledError) {
+                        // if telemetry is disabled on a client, we swallow the error,
+                        // to allow returning a partial result for all other clients
+                        threadProducerInstanceIdFuture.complete(null);
+                    } catch (final TimeoutException swallow) {
+                        // swallow
+                    } catch (final Exception error) {
+                        threadProducerInstanceIdFuture.completeExceptionally(error);
+                    }
+                } else {
+                    threadProducerInstanceIdFuture.completeExceptionally(
+                        new TimeoutException("Could not retrieve thread producer client instance id.")
+                    );
+                }
+            }
+
+            maybeResetFetchDeadline();
+        }
+    }
+
+    private void maybeResetFetchDeadline() {
+        boolean reset = mainConsumerInstanceIdFuture.isDone();
+
+        if (processingMode.equals(StreamsConfigUtils.ProcessingMode.EXACTLY_ONCE_ALPHA)) {
+            throw new UnsupportedOperationException("not implemented yet");
+        } else if (!threadProducerInstanceIdFuture.isDone()) {
+            reset = false;
+        }
+
+        if (reset) {
+            fetchDeadlineClientInstanceId = -1L;
+        }
     }
 
     /**
@@ -1315,6 +1400,8 @@ public class StreamThread extends Thread implements ProcessingThread {
 
         log.info("Shutting down {}", cleanRun ? "clean" : "unclean");
 
+        mainConsumerInstanceIdFuture.complete(null);
+
         try {
             taskManager.shutdown(cleanRun);
         } catch (final Throwable e) {
@@ -1478,6 +1565,63 @@ public class StreamThread extends Thread implements ProcessingThread {
 
     public Object getStateLock() {
         return stateLock;
+    }
+
+    // this method is NOT thread-safe (we rely on the callee to be `synchronized`)
+    public Map<String, KafkaFuture<Uuid>> consumerClientInstanceIds(final Duration timeout) {
+        boolean setDeadline = false;
+
+        final Map<String, KafkaFuture<Uuid>> result = new HashMap<>();
+
+        if (mainConsumerInstanceIdFuture.isDone()) {
+            if (mainConsumerInstanceIdFuture.isCompletedExceptionally()) {
+                mainConsumerInstanceIdFuture = new KafkaFutureImpl<>();
+                setDeadline = true;
+            }
+        } else {
+            setDeadline = true;
+        }
+        result.put(getName() + "-consumer", mainConsumerInstanceIdFuture);
+
+        if (setDeadline) {
+            fetchDeadlineClientInstanceId = time.milliseconds() + timeout.toMillis();
+        }
+
+        return result;
+    }
+
+    // this method is NOT thread-safe (we rely on the callee to be `synchronized`)
+    public KafkaFuture<Map<String, KafkaFuture<Uuid>>> producersClientInstanceIds(final Duration timeout) {
+        boolean setDeadline = false;
+
+        if (producerInstanceIdFuture.isDone()) {
+            if (producerInstanceIdFuture.isCompletedExceptionally()) {
+                producerInstanceIdFuture = new KafkaFutureImpl<>();
+                setDeadline = true;
+            }
+        } else {
+            setDeadline = true;
+        }
+
+        if (processingMode.equals(StreamsConfigUtils.ProcessingMode.EXACTLY_ONCE_ALPHA)) {
+            throw new UnsupportedOperationException("not yet implemented");
+        } else {
+            if (threadProducerInstanceIdFuture.isDone()) {
+                if (threadProducerInstanceIdFuture.isCompletedExceptionally()) {
+                    threadProducerInstanceIdFuture = new KafkaFutureImpl<>();
+                    setDeadline = true;
+                }
+            } else {
+                setDeadline = true;
+            }
+            producerInstanceIdFuture.complete(Collections.singletonMap(getName() + "-producer", threadProducerInstanceIdFuture));
+
+            if (setDeadline) {
+                fetchDeadlineClientInstanceId = time.milliseconds() + timeout.toMillis();
+            }
+        }
+
+        return producerInstanceIdFuture;
     }
 
     // the following are for testing only

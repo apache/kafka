@@ -209,7 +209,8 @@ if (repo != null) {
         '**/generated/**',
         'clients/src/test/resources/serializedData/*',
         'docker/resources/utility/go.sum',
-        'docker/test/fixtures/secrets/*'
+        'docker/test/fixtures/secrets/*',
+        'docker/examples/fixtures/secrets/*'
     ])
   }
 } else {
@@ -419,7 +420,6 @@ subprojects {
     testsToExclude.addAll([
       // connect tests
       "**/KafkaConfigBackingStoreTest.*",
-      "**/StandaloneHerderTest.*",
       "**/WorkerSinkTaskTest.*"
     ])
   }
@@ -2097,6 +2097,11 @@ project(':shell') {
     implementation libs.jacksonJaxrsJsonProvider
 
     testImplementation project(':clients')
+    testImplementation project(':clients').sourceSets.test.output
+    testImplementation project(':core')
+    testImplementation project(':core').sourceSets.test.output
+    testImplementation project(':server-common')
+    testImplementation project(':server-common').sourceSets.test.output
     testImplementation libs.junitJupiter
 
     testRuntimeOnly libs.slf4jlog4j

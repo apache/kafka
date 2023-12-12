@@ -38,6 +38,8 @@ import org.apache.kafka.common.message.OffsetFetchResponseData;
 import org.apache.kafka.common.message.SyncGroupRequestData;
 import org.apache.kafka.common.message.SyncGroupResponseData;
 import org.apache.kafka.common.errors.ApiException;
+import org.apache.kafka.common.message.TxnOffsetCommitRequestData;
+import org.apache.kafka.common.message.TxnOffsetCommitResponseData;
 import org.apache.kafka.common.protocol.ApiMessage;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.RequestContext;
@@ -455,6 +457,22 @@ public class GroupCoordinatorShard implements CoordinatorShard<Record> {
     }
 
     /**
+     * Handles an TxnOffsetCommit request.
+     *
+     * @param context The request context.
+     * @param request The actual TxnOffsetCommit request.
+     *
+     * @return A Result containing the TxnOffsetCommitResponse response and
+     *         a list of records to update the state machine.
+     */
+    public CoordinatorResult<TxnOffsetCommitResponseData, Record> commitTransactionalOffset(
+        RequestContext context,
+        TxnOffsetCommitRequestData request
+    ) throws ApiException {
+        return offsetMetadataManager.commitTransactionalOffset(context, request);
+    }
+
+    /**
      * Handles a ListGroups request.
      *
      * @param statesFilter    The states of the groups we want to list.
@@ -638,6 +656,7 @@ public class GroupCoordinatorShard implements CoordinatorShard<Record> {
             case 0:
             case 1:
                 offsetMetadataManager.replay(
+                    producerId,
                     (OffsetCommitKey) key.message(),
                     (OffsetCommitValue) messageOrNull(value)
                 );

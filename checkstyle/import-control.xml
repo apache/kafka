@@ -275,6 +275,7 @@
     <allow pkg="kafka.raft"/>
     <allow pkg="kafka.server"/>
     <allow pkg="kafka.tools"/>
+    <allow pkg="kafka.utils"/>
     <allow pkg="net.sourceforge.argparse4j" />
     <allow pkg="org.apache.kafka.common"/>
     <allow pkg="org.apache.kafka.metadata"/>

@@ -42,13 +42,12 @@ public final class RangeQuery<K, V> implements Query<KeyValueIterator<K, V>> {
 
     private final Optional<K> lower;
     private final Optional<K> upper;
+    private final ResultOrder order;
 
-    private final boolean isKeyAscending;
-
-    private RangeQuery(final Optional<K> lower, final Optional<K> upper, final boolean isKeyAscending) {
+    private RangeQuery(final Optional<K> lower, final Optional<K> upper, final ResultOrder order) {
         this.lower = lower;
         this.upper = upper;
-        this.isKeyAscending = isKeyAscending;
+        this.order = order;
     }
 
     /**
@@ -59,16 +58,16 @@ public final class RangeQuery<K, V> implements Query<KeyValueIterator<K, V>> {
      * @param <V> The value type
      */
     public static <K, V> RangeQuery<K, V> withRange(final K lower, final K upper) {
-        return new RangeQuery<>(Optional.ofNullable(lower), Optional.ofNullable(upper), true);
+        return new RangeQuery<>(Optional.ofNullable(lower), Optional.ofNullable(upper), ResultOrder.ANY);
     }
 
     /**
-     * Determines if the serialized byte[] of the keys in ascending order.
+     * Determines if the serialized byte[] of the keys in ascending or descending or unordered order.
      * Order is based on the serialized byte[] of the keys, not the 'logical' key order.
-     * @return true if ascending, false otherwise.
+     * @return return the order of returned records based on the serialized byte[] of the keys (can be unordered, or in ascending or in descending order).
      */
-    public boolean isKeyAscending() {
-        return isKeyAscending;
+    public ResultOrder resultOrder() {
+        return order;
     }
 
     /**
@@ -77,7 +76,16 @@ public final class RangeQuery<K, V> implements Query<KeyValueIterator<K, V>> {
      * @return a new RangeQuery instance with descending flag set.
      */
     public RangeQuery<K, V> withDescendingKeys() {
-        return new RangeQuery<>(this.lower, this.upper, false);
+        return new RangeQuery<>(this.lower, this.upper, ResultOrder.DESCENDING);
+    }
+
+    /**
+     * Set the query to return the serialized byte[] of the keys in ascending order.
+     * Order is based on the serialized byte[] of the keys, not the 'logical' key order.
+     * @return a new RangeQuery instance with ascending flag set.
+     */
+    public RangeQuery<K, V> withAscendingKeys() {
+        return new RangeQuery<>(this.lower, this.upper, ResultOrder.ASCENDING);
     }
 
     /**
@@ -88,7 +96,7 @@ public final class RangeQuery<K, V> implements Query<KeyValueIterator<K, V>> {
      * @param <V> The value type
      */
     public static <K, V> RangeQuery<K, V> withUpperBound(final K upper) {
-        return new RangeQuery<>(Optional.empty(), Optional.of(upper), true);
+        return new RangeQuery<>(Optional.empty(), Optional.of(upper), ResultOrder.ANY);
     }
 
     /**
@@ -98,7 +106,7 @@ public final class RangeQuery<K, V> implements Query<KeyValueIterator<K, V>> {
      * @param <V> The value type
      */
     public static <K, V> RangeQuery<K, V> withLowerBound(final K lower) {
-        return new RangeQuery<>(Optional.of(lower), Optional.empty(), true);
+        return new RangeQuery<>(Optional.of(lower), Optional.empty(), ResultOrder.ANY);
     }
 
     /**
@@ -107,7 +115,7 @@ public final class RangeQuery<K, V> implements Query<KeyValueIterator<K, V>> {
      * @param <V> The value type
      */
     public static <K, V> RangeQuery<K, V> withNoBounds() {
-        return new RangeQuery<>(Optional.empty(), Optional.empty(), true);
+        return new RangeQuery<>(Optional.empty(), Optional.empty(), ResultOrder.ANY);
     }
 
     /**
