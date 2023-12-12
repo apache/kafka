@@ -920,10 +920,7 @@ private[group] class GroupCoordinator(
           verificationGuard: VerificationGuard
         ): Unit = {
           if (error != Errors.NONE) {
-            val finalError = error match {
-              case Errors.NOT_ENOUGH_REPLICAS => Errors.COORDINATOR_NOT_AVAILABLE
-              case e => e
-            }
+            val finalError = GroupMetadataManager.maybeConvertError(error)
             responseCallback(offsetMetadata.map { case (k, _) => k -> finalError })
           } else {
             doTxnCommitOffsets(group, memberId, groupInstanceId, generationId, producerId, producerEpoch,

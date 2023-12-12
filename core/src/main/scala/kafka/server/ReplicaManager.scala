@@ -997,8 +997,6 @@ class ReplicaManager(val config: KafkaConfig,
    *
    * @param timeout                       maximum time we will wait to append before returning
    * @param requiredAcks                  number of replicas who must acknowledge the append before sending the response
-   * @param internalTopicsAllowed         boolean indicating whether internal topics can be appended to
-   * @param origin                        source of the append request (ie, client, replication, coordinator)
    * @param entriesPerPartition           the records per partition to be appended
    * @param responseCallback              callback for sending the response
    * @param delayedProduceLock            lock for the delayed actions
@@ -1018,6 +1016,12 @@ class ReplicaManager(val config: KafkaConfig,
     if (!isValidRequiredAcks(requiredAcks)) {
       sendInvalidRequiredAcksResponse(entriesPerPartition, responseCallback)
       return
+    }
+
+    // This should only be called on __consumer_offsets until KAFKA-15987 is complete
+    entriesPerPartition.keys.foreach { tp =>
+      if (!tp.topic.equals(Topic.GROUP_METADATA_TOPIC_NAME))
+        throw new IllegalArgumentException()
     }
 
     val sTime = time.milliseconds
@@ -1091,6 +1095,21 @@ class ReplicaManager(val config: KafkaConfig,
     responseCallback(responseStatus)
   }
 
+  /**
+   *
+   * @param topicPartition  the topic partition to maybe verify
+   * @param transactionalId the transactional id for the transaction
+   * @param producerId      the producer id for the producer writing to the transaction
+   * @param producerEpoch   the epoch of the producer writing to the transaction
+   * @param baseSequence    the base sequence of the first record in the batch we are trying to append
+   * @param requestLocal    container for the stateful instances scoped to this request -- this must correspond to the
+   *                        thread calling this method
+   * @param callback        the method to execute once the verification is either completed or returns an error
+   *
+   * When the verification returns, the callback will be supplied the error if it exists or Errors.NONE.
+   * If the verification guard exists, it will also be supplied. Otherwise the SENTINEL verification guard will be returned.
+   * This guard can not be used for verification and any appends that attenpt to use it will fail.
+   */
   def maybeStartTransactionVerificationForPartition(
     topicPartition: TopicPartition,
     transactionalId: String,
@@ -1119,6 +1138,23 @@ class ReplicaManager(val config: KafkaConfig,
     )
   }
 
+  /**
+   *
+   * @param topicPartitionBatchInfo  the topic partitions to maybe verify mapped to the base sequence of their first record batch
+   * @param transactionalId          the transactional id for the transaction
+   * @param producerId               the producer id for the producer writing to the transaction
+   * @param producerEpoch            the epoch of the producer writing to the transaction
+   * @param requestLocal             container for the stateful instances scoped to this request -- this must correspond to the
+   *                                 thread calling this method
+   * @param callback                 the method to execute once the verification is either completed or returns an error
+   *
+   * When the verification returns, the callback will be supplied the errors per topic partition if there were errors.
+   * The callback will also be supplied the verification guards per partition if they exist. It is possible to have an
+   * error and a verification guard for a topic partition if the topic partition was unable to be verified by the transaction
+   * coordinator. Transaction coordinator errors are mapped to append-friendly errors. The callback is wrapped so that it
+   * is scheduled on a request handler thread. There, it should be called with that request handler thread's thread local and
+   * not the one supplied to this method.
+   */
   def maybeStartTransactionVerificationForPartitions(
     topicPartitionBatchInfo: Map[TopicPartition, Int],
     transactionalId: String,
@@ -1136,7 +1172,6 @@ class ReplicaManager(val config: KafkaConfig,
       return
     }
 
-    // Wrap the callback to be handled on an arbitrary request handler thread when transaction verification is complete.
     val verificationGuards = mutable.Map[TopicPartition, VerificationGuard]()
     val errors = mutable.Map[TopicPartition, Errors]()
 

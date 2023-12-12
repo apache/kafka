@@ -3804,6 +3804,8 @@ class GroupCoordinatorTest {
     verifyErrors(Errors.INVALID_PRODUCER_ID_MAPPING, Errors.INVALID_PRODUCER_ID_MAPPING)
     verifyErrors(Errors.INVALID_TXN_STATE, Errors.INVALID_TXN_STATE)
     verifyErrors(Errors.NOT_ENOUGH_REPLICAS, Errors.COORDINATOR_NOT_AVAILABLE)
+    verifyErrors(Errors.NOT_LEADER_OR_FOLLOWER, Errors.NOT_COORDINATOR)
+    verifyErrors(Errors.KAFKA_STORAGE_ERROR, Errors.NOT_COORDINATOR)
   }
 
   @Test
