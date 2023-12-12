@@ -505,20 +505,6 @@ public class AsyncKafkaConsumerTest {
     }
 
     @Test
-    public void testEnsureSubscribedPartitionsRevokedOnClosed() {
-        subscriptions.subscribe(singleton("topic"), Optional.empty());
-        TopicPartition tp = new TopicPartition("topic", 0);
-        subscriptions.assignFromSubscribed(singleton(tp));
-        consumer.close(Duration.ZERO);
-        assertTrue(subscriptions.assignedPartitions().isEmpty());
-        try {
-            verify(consumer).maybeRevokePartitions();
-        } catch (Exception e) {
-            fail("Should not throw exception", e);
-        }
-    }
-
-    @Test
     public void testPartitionRevocationOnClose() {
         MockRebalanceListener listener = new MockRebalanceListener();
         consumer.subscribe(singleton("topic"), listener);
@@ -1013,7 +999,6 @@ public class AsyncKafkaConsumerTest {
         final ErrorBackgroundEvent errorBackgroundEvent = new ErrorBackgroundEvent(expectedException);
         backgroundEventQueue.add(errorBackgroundEvent);
         consumer.assign(singletonList(new TopicPartition("topic", 0)));
-
         final KafkaException exception = assertThrows(KafkaException.class, () -> consumer.poll(Duration.ZERO));
 
         assertEquals(expectedException.getMessage(), exception.getMessage());
@@ -1032,7 +1017,6 @@ public class AsyncKafkaConsumerTest {
         final ErrorBackgroundEvent errorBackgroundEvent2 = new ErrorBackgroundEvent(expectedException2);
         backgroundEventQueue.add(errorBackgroundEvent2);
         consumer.assign(singletonList(new TopicPartition("topic", 0)));
-
         final KafkaException exception = assertThrows(KafkaException.class, () -> consumer.poll(Duration.ZERO));
 
         assertEquals(expectedException1.getMessage(), exception.getMessage());
@@ -1087,8 +1071,7 @@ public class AsyncKafkaConsumerTest {
 
     @Test
     public void testGroupIdNotNullAndValid() {
-        final Properties props = requiredConsumerProperties();
-        props.put(ConsumerConfig.GROUP_ID_CONFIG, "consumerGroupA");
+        final Properties props = requiredConsumerPropertiesAndGroupId("consumerGroupA");
         props.put(ConsumerConfig.AUTO_COMMIT_INTERVAL_MS_CONFIG, 10000);
         props.put(THROW_ON_FETCH_STABLE_OFFSET_UNSUPPORTED, true);
         final ConsumerConfig config = new ConsumerConfig(props);
