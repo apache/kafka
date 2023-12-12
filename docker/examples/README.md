@@ -22,7 +22,7 @@ Use file input for providing configs
 - This method requires users to provide path to a local folder which contains kafka property files and mount it to docker container using docker volume.
 - It replaces the default config file present in docker container.
 - Mount the folder containing kafka property files to `/mnt/shared/config` in docker container.
-- Command `docker run --volume path/to/property/folder:/mnt/shared/config -p 9092:9092 apache/kafka:{{fullDotVersion}}` can be used to mount the folder containing property files.
+- Command `docker run --volume path/to/property/folder:/mnt/shared/config -p 9092:9092 apache/kafka:latest` can be used to mount the folder containing property files.
 - Property files will be only read by the docker container.
 
 Using Environment Variables
@@ -49,7 +49,7 @@ Using Environment Variables
         - log4j.logger.property1=value1 and log4j.logger.property2=value2 will be added to the log4j.properties file inside docker container.
             
 - Environment variables commonly used in Kafka can be provided via environment variables, for example `CLUSTER_ID`.
-- Command `docker run --env CONFIG_NAME=CONFIG_VALUE -p 9092:9092 apache/kafka:{{fullDotVersion}}` can be used to provide environment variables to docker container
+- Command `docker run --env CONFIG_NAME=CONFIG_VALUE -p 9092:9092 apache/kafka:latest` can be used to provide environment variables to docker container
 - Note that it is recommended to use docker compose files to provide configs using environment variables.
 
 Running in SSL mode
@@ -138,7 +138,7 @@ Multi Node Cluster
         - PLAINTEXT is supposed to be listener accessible to other brokers.
             - The inter broker listener advertised by the brokers is exposed on container's hostname. This is done so that brokers can find each other in docker network.
         - PLAINTEXT_HOST is supposed to be listener accessible to the clients.
-            - The port advertised for host machine is done on localhost, as this is the domain (in this example) that client will use to connect with kafka running inside docker container.
+            - The port advertised for host machine is done on localhost, as this is the hostname (in this example) that client will use to connect with kafka running inside docker container.
         - Here we take advantage of hostname set for each broker and set the listner accordingly.
         - To run the example:-
         ```
@@ -151,7 +151,7 @@ Multi Node Cluster
         $ bin/kafka-console-producer.sh --topic quickstart-events --bootstrap-server localhost:29092
         ```
     - SSL:-
-        - Similar to Plaintext example, for inter broker communication in SSL mode, SSL-INTERNAL is required.
+        - Similar to Plaintext example, for inter broker communication in SSL mode, SSL-INTERNAL is required and for client to broker communication, SSL is required.
         - Note that `KAFKA_SSL_ENDPOINT_IDENTIFICATION_ALGORITHM` is set to empty as hostname was not set in credentials. This won't be needed in production usecases.
         - Also note that for example we have used the same credentials for all brokers. Make sure each broker has it's own secrets.
         - To run the example:-
