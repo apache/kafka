@@ -254,7 +254,8 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
         if (!requestManagers.commitRequestManager.isPresent())
             return;
         log.debug("Signal CommitRequestManager closing");
-        requestManagers.commitRequestManager.get().signalClose();    }
+        requestManagers.commitRequestManager.get().signalClose();
+    }
 
     private void process(final LeaveOnCloseApplicationEvent event) {
         if (!requestManagers.membershipManager.isPresent()) {

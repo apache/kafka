@@ -1190,12 +1190,10 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             return;
         maybeAutoCommitSync(autoCommitEnabled, timer, firstException);
         applicationEventHandler.add(new CommitOnCloseApplicationEvent());
-        timer.update();
         completeQuietly(
             () -> {
                 maybeRevokePartitions();
                 applicationEventHandler.addAndGet(new LeaveOnCloseApplicationEvent(), timer);
-                timer.update();
             },
             "Failed to send leaveGroup heartbeat with a timeout(ms)=" + timer.timeoutMs(), firstException);
         swallow(log, Level.ERROR, "Failed invoking asynchronous commit callback.", this::maybeInvokeCommitCallbacks,
@@ -1221,11 +1219,12 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         if (!subscriptions.hasAutoAssignedPartitions() || subscriptions.assignedPartitions().isEmpty())
             return;
         try {
-            invokePartitionRevocationListener().get();
-        } catch (ExecutionException e) {
-            throw new KafkaException(e.getCause());
-        } catch (InterruptedException e) {
-            throw new InterruptException(e);
+            SortedSet<TopicPartition> droppedPartitions = new TreeSet<>(MembershipManagerImpl.TOPIC_PARTITION_COMPARATOR);
+            droppedPartitions.addAll(subscriptions.assignedPartitions());
+            if (subscriptions.rebalanceListener().isPresent())
+                subscriptions.rebalanceListener().get().onPartitionsRevoked(droppedPartitions);
+        } catch (Exception e) {
+            throw new KafkaException(e);
         } finally {
             subscriptions.assignFromSubscribed(Collections.emptySet());
         }
@@ -1242,15 +1241,6 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         } catch (Exception e) {
             firstException.compareAndSet(null, e);
         }
-    }
-
-    private CompletableFuture<Void> invokePartitionRevocationListener() {
-        SortedSet<TopicPartition> droppedPartitions = new TreeSet<>(MembershipManagerImpl.TOPIC_PARTITION_COMPARATOR);
-        droppedPartitions.addAll(subscriptions.assignedPartitions());
-        if (!subscriptions.hasAutoAssignedPartitions() || droppedPartitions.isEmpty())
-            return CompletableFuture.completedFuture(null);
-        // TODO: Invoke rebalanceListener via KAFKA-15276
-        return CompletableFuture.completedFuture(null);
     }
 
     @Override
