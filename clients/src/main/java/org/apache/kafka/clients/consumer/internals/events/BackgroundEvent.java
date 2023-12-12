@@ -26,7 +26,8 @@ import java.util.Objects;
 public abstract class BackgroundEvent {
 
     public enum Type {
-        ERROR, AUTO_COMMIT_COMPLETION
+        ERROR,
+        GROUP_METADATA_UPDATE
     }
 
     protected final Type type;

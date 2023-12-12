@@ -134,8 +134,8 @@ class Tasks implements TasksRegistry {
     }
 
     @Override
-    public boolean removePendingTaskToCloseDirty(final TaskId taskId) {
-        if (containsTaskIdWithAction(taskId, Action.CLOSE_DIRTY)) {
+    public boolean removePendingTaskToAddBack(final TaskId taskId) {
+        if (containsTaskIdWithAction(taskId, Action.ADD_BACK)) {
             pendingUpdateActions.remove(taskId);
             return true;
         }
@@ -143,8 +143,8 @@ class Tasks implements TasksRegistry {
     }
 
     @Override
-    public void addPendingTaskToCloseDirty(final TaskId taskId) {
-        pendingUpdateActions.put(taskId, PendingUpdateAction.createCloseDirty());
+    public void addPendingTaskToAddBack(final TaskId taskId) {
+        pendingUpdateActions.put(taskId, PendingUpdateAction.createAddBack());
     }
 
     @Override

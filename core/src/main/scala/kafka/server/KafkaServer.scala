@@ -47,6 +47,7 @@ import org.apache.kafka.common.security.{JaasContext, JaasUtils}
 import org.apache.kafka.common.utils.{AppInfoParser, LogContext, Time, Utils}
 import org.apache.kafka.common.{Endpoint, KafkaException, Node, TopicPartition}
 import org.apache.kafka.coordinator.group.GroupCoordinator
+import org.apache.kafka.image.loader.metrics.MetadataLoaderMetrics
 import org.apache.kafka.metadata.properties.MetaPropertiesEnsemble.VerificationFlag
 import org.apache.kafka.metadata.properties.MetaPropertiesEnsemble.VerificationFlag.REQUIRE_V0
 import org.apache.kafka.metadata.properties.{MetaProperties, MetaPropertiesEnsemble}
@@ -255,7 +256,7 @@ class KafkaServer(
 
         // initialize dynamic broker configs from ZooKeeper. Any updates made after this will be
         // applied after ZkConfigManager starts.
-        config.dynamicConfig.initialize(Some(zkClient))
+        config.dynamicConfig.initialize(Some(zkClient), clientMetricsReceiverPluginOpt = None)
 
         /* start scheduler */
         kafkaScheduler = new KafkaScheduler(config.backgroundThreads)
@@ -265,6 +266,7 @@ class KafkaServer(
         kafkaYammerMetrics = KafkaYammerMetrics.INSTANCE
         kafkaYammerMetrics.configure(config.originals)
         metrics = Server.initializeMetrics(config, time, clusterId)
+        createCurrentControllerIdMetric()
 
         /* register broker metrics */
         _brokerTopicStats = new BrokerTopicStats(java.util.Optional.of(config))
@@ -283,7 +285,9 @@ class KafkaServer(
               setClusterId(_clusterId).
               setNodeId(config.brokerId)
             if (!builder.directoryId().isPresent()) {
-              builder.setDirectoryId(copier.generateValidDirectoryId())
+              if (config.migrationEnabled) {
+                builder.setDirectoryId(copier.generateValidDirectoryId())
+              }
             }
             copier.setLogDirProps(logDir, builder.build())
           })
@@ -363,7 +367,8 @@ class KafkaServer(
           config,
           forwardingManager,
           brokerFeatures,
-          metadataCache
+          metadataCache,
+          None
         )
 
         // Create and start the socket server acceptor threads so that the bound port is known.
@@ -411,7 +416,8 @@ class KafkaServer(
           lifecycleManager = new BrokerLifecycleManager(config,
             time,
             s"zk-broker-${config.nodeId}-",
-            isZkBroker = true)
+            isZkBroker = true,
+            logManager.directoryIdsSet)
 
           // If the ZK broker is in migration mode, start up a RaftManager to learn about the new KRaft controller
           val controllerQuorumVotersFuture = CompletableFuture.completedFuture(
@@ -636,6 +642,22 @@ class KafkaServer(
         shutdown()
         throw e
     }
+  }
+
+  def createCurrentControllerIdMetric(): Unit = {
+    KafkaYammerMetrics.defaultRegistry().newGauge(MetadataLoaderMetrics.CURRENT_CONTROLLER_ID, () => {
+      Option(metadataCache) match {
+        case None => -1
+        case Some(cache) => cache.getControllerId match {
+          case None => -1
+          case Some(id) => id.id
+        }
+      }
+    })
+  }
+
+  def unregisterCurrentControllerIdMetric(): Unit = {
+    KafkaYammerMetrics.defaultRegistry().removeMetric(MetadataLoaderMetrics.CURRENT_CONTROLLER_ID)
   }
 
   protected def createRemoteLogManager(): Option[RemoteLogManager] = {
@@ -1003,6 +1025,7 @@ class KafkaServer(
         // avoid any failures (e.g. when metrics are recorded)
         if (socketServer != null)
           CoreUtils.swallow(socketServer.shutdown(), this)
+        unregisterCurrentControllerIdMetric()
         if (metrics != null)
           CoreUtils.swallow(metrics.close(), this)
         if (brokerTopicStats != null)

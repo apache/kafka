@@ -104,15 +104,17 @@ public enum MemberState {
     // Valid state transitions
     static {
 
-        STABLE.previousValidStates = Arrays.asList(JOINING, ACKNOWLEDGING);
+        STABLE.previousValidStates = Arrays.asList(JOINING, ACKNOWLEDGING, RECONCILING);
 
         RECONCILING.previousValidStates = Arrays.asList(STABLE, JOINING, ACKNOWLEDGING);
 
         ACKNOWLEDGING.previousValidStates = Arrays.asList(RECONCILING);
 
-        FATAL.previousValidStates = Arrays.asList(JOINING, STABLE, RECONCILING, ACKNOWLEDGING);
+        FATAL.previousValidStates = Arrays.asList(JOINING, STABLE, RECONCILING, ACKNOWLEDGING,
+                PREPARE_LEAVING, LEAVING, UNSUBSCRIBED);
 
-        FENCED.previousValidStates = Arrays.asList(JOINING, STABLE, RECONCILING, ACKNOWLEDGING);
+        FENCED.previousValidStates = Arrays.asList(JOINING, STABLE, RECONCILING, ACKNOWLEDGING,
+                PREPARE_LEAVING, LEAVING);
 
         JOINING.previousValidStates = Arrays.asList(FENCED, UNSUBSCRIBED);
 

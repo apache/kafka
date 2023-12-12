@@ -37,6 +37,8 @@ import org.apache.kafka.common.message.AlterPartitionReassignmentsRequestData;
 import org.apache.kafka.common.message.AlterPartitionReassignmentsResponseData;
 import org.apache.kafka.common.message.AlterUserScramCredentialsRequestData;
 import org.apache.kafka.common.message.AlterUserScramCredentialsResponseData;
+import org.apache.kafka.common.message.AssignReplicasToDirsRequestData;
+import org.apache.kafka.common.message.AssignReplicasToDirsResponseData;
 import org.apache.kafka.common.message.BrokerHeartbeatRequestData;
 import org.apache.kafka.common.message.BrokerRegistrationRequestData;
 import org.apache.kafka.common.message.ControllerRegistrationRequestData;
@@ -2293,6 +2295,15 @@ public final class QuorumController implements Controller {
     ) {
         return appendWriteEvent("deleteAcls", context.deadlineNs(),
             () -> aclControlManager.deleteAcls(filters));
+    }
+
+    @Override
+    public CompletableFuture<AssignReplicasToDirsResponseData> assignReplicasToDirs(
+        ControllerRequestContext context,
+        AssignReplicasToDirsRequestData request
+    ) {
+        return appendWriteEvent("assignReplicasToDirs", context.deadlineNs(),
+                () -> replicationControl.handleAssignReplicasToDirs(request));
     }
 
     @Override

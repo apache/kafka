@@ -14,10 +14,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.clients.consumer.internals.events;
 
-public class AutoCommitCompletionBackgroundEvent extends BackgroundEvent {
-    public AutoCommitCompletionBackgroundEvent() {
-        super(Type.AUTO_COMMIT_COMPLETION);
-    }
+package org.apache.kafka.streams.query;
+
+public enum ResultOrder {
+    ANY,
+    ASCENDING,
+    DESCENDING
 }

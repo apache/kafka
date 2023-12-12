@@ -48,14 +48,14 @@ class BrokerLifecycleManagerTest {
   @Test
   def testCreateAndClose(): Unit = {
     val context = new RegistrationTestContext(configProperties)
-    val manager = new BrokerLifecycleManager(context.config, context.time, "create-and-close-", isZkBroker = false)
+    val manager = new BrokerLifecycleManager(context.config, context.time, "create-and-close-", isZkBroker = false, Set(Uuid.fromString("oFoTeS9QT0aAyCyH41v45A")))
     manager.close()
   }
 
   @Test
   def testCreateStartAndClose(): Unit = {
     val context = new RegistrationTestContext(configProperties)
-    val manager = new BrokerLifecycleManager(context.config, context.time, "create-start-and-close-", isZkBroker = false)
+    val manager = new BrokerLifecycleManager(context.config, context.time, "create-start-and-close-", isZkBroker = false, Set(Uuid.fromString("uiUADXZWTPixVvp6UWFWnw")))
     assertEquals(BrokerState.NOT_RUNNING, manager.state)
     manager.start(() => context.highestMetadataOffset.get(),
       context.mockChannelManager, context.clusterId, context.advertisedListeners,
@@ -70,7 +70,7 @@ class BrokerLifecycleManagerTest {
   @Test
   def testSuccessfulRegistration(): Unit = {
     val context = new RegistrationTestContext(configProperties)
-    val manager = new BrokerLifecycleManager(context.config, context.time, "successful-registration-", isZkBroker = false)
+    val manager = new BrokerLifecycleManager(context.config, context.time, "successful-registration-", isZkBroker = false, Set(Uuid.fromString("gCpDJgRlS2CBCpxoP2VMsQ")))
     val controllerNode = new Node(3000, "localhost", 8021)
     context.controllerNodeProvider.node.set(controllerNode)
     manager.start(() => context.highestMetadataOffset.get(),
@@ -93,7 +93,7 @@ class BrokerLifecycleManagerTest {
   def testRegistrationTimeout(): Unit = {
     val context = new RegistrationTestContext(configProperties)
     val controllerNode = new Node(3000, "localhost", 8021)
-    val manager = new BrokerLifecycleManager(context.config, context.time, "registration-timeout-", isZkBroker = false)
+    val manager = new BrokerLifecycleManager(context.config, context.time, "registration-timeout-", isZkBroker = false, Set(Uuid.fromString("9XBOAtr4T0Wbx2sbiWh6xg")))
     context.controllerNodeProvider.node.set(controllerNode)
     def newDuplicateRegistrationResponse(): Unit = {
       context.mockClient.prepareResponseFrom(new BrokerRegistrationResponse(
@@ -134,7 +134,7 @@ class BrokerLifecycleManagerTest {
   @Test
   def testControlledShutdown(): Unit = {
     val context = new RegistrationTestContext(configProperties)
-    val manager = new BrokerLifecycleManager(context.config, context.time, "controlled-shutdown-", isZkBroker = false)
+    val manager = new BrokerLifecycleManager(context.config, context.time, "controlled-shutdown-", isZkBroker = false, Set(Uuid.fromString("B4RtUz1ySGip3A7ZFYB2dg")))
     val controllerNode = new Node(3000, "localhost", 8021)
     context.controllerNodeProvider.node.set(controllerNode)
     context.mockClient.prepareResponseFrom(new BrokerRegistrationResponse(
@@ -209,7 +209,7 @@ class BrokerLifecycleManagerTest {
   @Test
   def testAlwaysSendsAccumulatedOfflineDirs(): Unit = {
     val ctx = new RegistrationTestContext(configProperties)
-    val manager = new BrokerLifecycleManager(ctx.config, ctx.time, "offline-dirs-sent-in-heartbeat-", isZkBroker = false)
+    val manager = new BrokerLifecycleManager(ctx.config, ctx.time, "offline-dirs-sent-in-heartbeat-", isZkBroker = false, Set(Uuid.fromString("0IbF1sjhSGG6FNvnrPbqQg")))
     val controllerNode = new Node(3000, "localhost", 8021)
     ctx.controllerNodeProvider.node.set(controllerNode)
 

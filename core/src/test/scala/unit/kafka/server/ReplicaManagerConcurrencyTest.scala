@@ -34,7 +34,7 @@ import org.apache.kafka.common.replica.ClientMetadata.DefaultClientMetadata
 import org.apache.kafka.common.requests.{FetchRequest, ProduceResponse}
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.utils.Time
-import org.apache.kafka.common.{IsolationLevel, TopicIdPartition, TopicPartition, Uuid}
+import org.apache.kafka.common.{DirectoryId, IsolationLevel, TopicIdPartition, TopicPartition, Uuid}
 import org.apache.kafka.image.{MetadataDelta, MetadataImage}
 import org.apache.kafka.metadata.LeaderRecoveryState
 import org.apache.kafka.metadata.PartitionRegistration
@@ -474,6 +474,7 @@ class ReplicaManagerConcurrencyTest {
   ): PartitionRegistration = {
     new PartitionRegistration.Builder().
       setReplicas(replicaIds.toArray).
+      setDirectories(DirectoryId.unassignedArray(replicaIds.size)).
       setIsr(isr.toArray).
       setLeader(leader).
       setLeaderRecoveryState(leaderRecoveryState).

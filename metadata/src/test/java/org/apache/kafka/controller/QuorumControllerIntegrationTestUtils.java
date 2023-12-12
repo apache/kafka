@@ -18,6 +18,7 @@
 package org.apache.kafka.controller;
 
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -95,6 +96,9 @@ public class QuorumControllerIntegrationTestUtils {
                     .setClusterId(controller.clusterId())
                     .setFeatures(brokerFeatures(MetadataVersion.IBP_3_0_IV1, MetadataVersion.latest()))
                     .setIncarnationId(Uuid.fromString("kxAT73dKQsitIedpiPtwB" + brokerId))
+                    .setLogDirs(Collections.singletonList(
+                        Uuid.fromString("TESTBROKER" + Integer.toString(100000 + brokerId).substring(1) + "DIRAAAA")
+                    ))
                     .setListeners(new ListenerCollection(
                         Arrays.asList(
                             new Listener()

@@ -42,8 +42,8 @@ import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.EnumSource
 import org.mockito.ArgumentMatchers
-import org.mockito.ArgumentMatchers.anyLong
-import org.mockito.Mockito.{mock, when}
+import org.mockito.ArgumentMatchers.{any, anyLong}
+import org.mockito.Mockito.{doThrow, mock, spy, when}
 
 import java.io._
 import java.nio.ByteBuffer
@@ -3625,7 +3625,7 @@ class UnifiedLogTest {
         val records = TestUtils.singletonRecords(value = s"test$i".getBytes)
         log.appendAsLeader(records, leaderEpoch = 0)
       }
-      
+
       log.updateHighWatermark(90L)
       log.maybeIncrementLogStartOffset(20L, LogStartOffsetIncrementReason.SegmentDeletion)
       assertEquals(20, log.logStartOffset)
@@ -3912,6 +3912,24 @@ class UnifiedLogTest {
   }
 
   @Test
+  def testRecoveryPointNotIncrementedOnProducerStateSnapshotFlushFailure(): Unit = {
+    val logConfig = LogTestUtils.createLogConfig()
+    val log = spy(createLog(logDir, logConfig))
+
+    doThrow(new KafkaStorageException("Injected exception")).when(log).flushProducerStateSnapshot(any())
+
+    log.appendAsLeader(TestUtils.singletonRecords("a".getBytes), leaderEpoch = 0)
+    try {
+      log.roll(Some(1L))
+    } catch {
+      case _: KafkaStorageException => // ignore
+    }
+
+    // check that the recovery point isn't incremented
+    assertEquals(0L, log.recoveryPoint)
+  }
+
+  @Test
   def testDeletableSegmentsFilter(): Unit = {
     val logConfig = LogTestUtils.createLogConfig(segmentBytes = 1024 * 1024)
     val log = createLog(logDir, logConfig)
@@ -4024,6 +4042,47 @@ class UnifiedLogTest {
     assertEquals(1, log.localLogStartOffset())
     assertEquals(1, log.logEndOffset)
     assertEquals(0, log.logStartOffset)
+  }
+
+  @Test
+  def testSegmentDeletionEnabledBeforeUploadToRemoteTierWhenLogStartOffsetMovedAhead(): Unit = {
+    val logConfig = LogTestUtils.createLogConfig(retentionBytes = 1, fileDeleteDelayMs = 0, remoteLogStorageEnable = true)
+    val log = createLog(logDir, logConfig, remoteStorageSystemEnable = true)
+    val pid = 1L
+    val epoch = 0.toShort
+
+    log.appendAsLeader(TestUtils.records(List(new SimpleRecord("a".getBytes)),
+      producerId = pid, producerEpoch = epoch, sequence = 0), leaderEpoch = 0)
+    log.appendAsLeader(TestUtils.records(List(new SimpleRecord("b".getBytes)),
+      producerId = pid, producerEpoch = epoch, sequence = 1), leaderEpoch = 0)
+    log.appendAsLeader(TestUtils.records(List(new SimpleRecord("c".getBytes)),
+      producerId = pid, producerEpoch = epoch, sequence = 2), leaderEpoch = 0)
+    log.appendAsLeader(TestUtils.records(List(new SimpleRecord("d".getBytes)),
+      producerId = pid, producerEpoch = epoch, sequence = 3), leaderEpoch = 1)
+    log.roll()
+    log.appendAsLeader(TestUtils.records(List(new SimpleRecord("e".getBytes)),
+      producerId = pid, producerEpoch = epoch, sequence = 4), leaderEpoch = 2)
+    log.updateHighWatermark(log.logEndOffset)
+    assertEquals(2, log.logSegments.size)
+
+    // No segments are uploaded to remote storage, none of the local log segments should be eligible for deletion
+    log.updateHighestOffsetInRemoteStorage(-1L)
+    log.deleteOldSegments()
+    mockTime.sleep(1)
+    assertEquals(2, log.logSegments.size)
+
+    // Update the log-start-offset from 0 to 3, then the base segment should not be eligible for deletion
+    log.updateLogStartOffsetFromRemoteTier(3L)
+    log.deleteOldSegments()
+    mockTime.sleep(1)
+    assertEquals(2, log.logSegments.size)
+
+    // Update the log-start-offset from 3 to 4, then the base segment should be eligible for deletion now even
+    // if it is not uploaded to remote storage
+    log.updateLogStartOffsetFromRemoteTier(4L)
+    log.deleteOldSegments()
+    mockTime.sleep(1)
+    assertEquals(1, log.logSegments.size)
   }
 
   private def appendTransactionalToBuffer(buffer: ByteBuffer,

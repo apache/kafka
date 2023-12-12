@@ -21,6 +21,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.CoordinatorLoadInProgressException;
 import org.apache.kafka.common.errors.NotCoordinatorException;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
@@ -282,6 +283,18 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
             boolean retry,
             TimeoutOperation<Void, U> operation
         ) {
+            schedule(key, delay, unit, retry, 500, operation);
+        }
+
+        @Override
+        public void schedule(
+            String key,
+            long delay,
+            TimeUnit unit,
+            boolean retry,
+            long retryBackoff,
+            TimeoutOperation<Void, U> operation
+        ) {
             // The TimerTask wraps the TimeoutOperation into a CoordinatorWriteEvent. When the TimerTask
             // expires, the event is pushed to the queue of the coordinator runtime to be executed. This
             // ensures that the threading model of the runtime is respected.
@@ -320,7 +333,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
                         if (retry) {
                             log.info("The write event {} for the timer {} failed due to {}. Rescheduling it. ",
                                 event.name, key, ex.getMessage());
-                            schedule(key, 500, TimeUnit.MILLISECONDS, retry, operation);
+                            schedule(key, retryBackoff, TimeUnit.MILLISECONDS, retry, operation);
                         } else {
                             log.error("The write event {} for the timer {} failed due to {}. Ignoring it. ",
                                 event.name, key, ex.getMessage());
@@ -408,25 +421,10 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
         int epoch;
 
         /**
-         * The snapshot registry backing the coordinator.
+         * The state machine and the metadata that can be accessed by
+         * other threads.
          */
-        SnapshotRegistry snapshotRegistry;
-
-        /**
-         * The actual state machine.
-         */
-        S coordinator;
-
-        /**
-         * The last offset written to the partition.
-         */
-        long lastWrittenOffset;
-
-        /**
-         * The last offset committed. This represents the high
-         * watermark of the partition.
-         */
-        long lastCommittedOffset;
+        SnapshottableCoordinator<S, U> coordinator;
 
         /**
          * Constructor.
@@ -450,67 +448,6 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
         }
 
         /**
-         * Updates the last written offset. This also create a new snapshot
-         * in the snapshot registry.
-         *
-         * @param offset The new last written offset.
-         */
-        private void updateLastWrittenOffset(
-            long offset
-        ) {
-            if (offset <= lastWrittenOffset) {
-                throw new IllegalStateException("New last written offset " + offset + " of " + tp +
-                    " must be larger than " + lastWrittenOffset + ".");
-            }
-
-            log.debug("Update last written offset of {} to {}.", tp, offset);
-            lastWrittenOffset = offset;
-            snapshotRegistry.getOrCreateSnapshot(offset);
-        }
-
-        /**
-         * Reverts the last written offset. This also reverts the snapshot
-         * registry to this offset. All the changes applied after the offset
-         * are lost.
-         *
-         * @param offset The offset to revert to.
-         */
-        private void revertLastWrittenOffset(
-            long offset
-        ) {
-            if (offset > lastWrittenOffset) {
-                throw new IllegalStateException("New offset " + offset + " of " + tp +
-                    " must be smaller than " + lastWrittenOffset + ".");
-            }
-
-            log.debug("Revert last written offset of {} to {}.", tp, offset);
-            lastWrittenOffset = offset;
-            snapshotRegistry.revertToSnapshot(offset);
-        }
-
-        /**
-         * Updates the last committed offset. This completes all the deferred
-         * events waiting on this offset. This also cleanups all the snapshots
-         * prior to this offset.
-         *
-         * @param offset The new last committed offset.
-         */
-        private void updateLastCommittedOffset(
-            long offset
-        ) {
-            if (offset <= lastCommittedOffset) {
-                throw new IllegalStateException("New committed offset " + offset + " of " + tp +
-                    " must be larger than " + lastCommittedOffset + ".");
-            }
-
-            log.debug("Update committed offset of {} to {}.", tp, offset);
-            lastCommittedOffset = offset;
-            deferredEventQueue.completeUpTo(offset);
-            snapshotRegistry.deleteSnapshotsUpTo(offset);
-            coordinatorMetrics.onUpdateLastCommittedOffset(tp, offset);
-        }
-
-        /**
          * Transitions to the new state.
          *
          * @param newState The new state.
@@ -527,23 +464,25 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
             switch (newState) {
                 case LOADING:
                     state = CoordinatorState.LOADING;
-                    snapshotRegistry = new SnapshotRegistry(logContext);
-                    lastWrittenOffset = 0L;
-                    lastCommittedOffset = 0L;
-                    coordinator = coordinatorShardBuilderSupplier
-                        .get()
-                        .withLogContext(logContext)
-                        .withSnapshotRegistry(snapshotRegistry)
-                        .withTime(time)
-                        .withTimer(timer)
-                        .withCoordinatorMetrics(coordinatorMetrics)
-                        .withTopicPartition(tp)
-                        .build();
+                    SnapshotRegistry snapshotRegistry = new SnapshotRegistry(logContext);
+                    coordinator = new SnapshottableCoordinator<>(
+                        logContext,
+                        snapshotRegistry,
+                        coordinatorShardBuilderSupplier
+                            .get()
+                            .withLogContext(logContext)
+                            .withSnapshotRegistry(snapshotRegistry)
+                            .withTime(time)
+                            .withTimer(timer)
+                            .withCoordinatorMetrics(coordinatorMetrics)
+                            .withTopicPartition(tp)
+                            .build(),
+                        tp
+                    );
                     break;
 
                 case ACTIVE:
                     state = CoordinatorState.ACTIVE;
-                    snapshotRegistry.getOrCreateSnapshot(0);
                     partitionWriter.registerListener(tp, highWatermarklistener);
                     coordinator.onLoaded(metadataImage);
                     break;
@@ -576,7 +515,6 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
                 coordinator.onUnloaded();
             }
             coordinator = null;
-            snapshotRegistry = null;
         }
     }
 
@@ -618,6 +556,21 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
         final String name;
 
         /**
+         * The transactional id.
+         */
+        final String transactionalId;
+
+        /**
+         * The producer id.
+         */
+        final long producerId;
+
+        /**
+         * The producer epoch.
+         */
+        final short producerEpoch;
+
+        /**
          * The write operation to execute.
          */
         final CoordinatorWriteOperation<S, T, U> op;
@@ -651,9 +604,40 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
             TopicPartition tp,
             CoordinatorWriteOperation<S, T, U> op
         ) {
+            this(
+                name,
+                tp,
+                null,
+                RecordBatch.NO_PRODUCER_ID,
+                RecordBatch.NO_PRODUCER_EPOCH,
+                op
+            );
+        }
+
+        /**
+         * Constructor.
+         *
+         * @param name              The operation name.
+         * @param tp                The topic partition that the operation is applied to.
+         * @param transactionalId   The transactional id.
+         * @param producerId        The producer id.
+         * @param producerEpoch     The producer epoch.
+         * @param op                The write operation.
+         */
+        CoordinatorWriteEvent(
+            String name,
+            TopicPartition tp,
+            String transactionalId,
+            long producerId,
+            short producerEpoch,
+            CoordinatorWriteOperation<S, T, U> op
+        ) {
             this.tp = tp;
             this.name = name;
             this.op = op;
+            this.transactionalId = transactionalId;
+            this.producerId = producerId;
+            this.producerEpoch = producerEpoch;
             this.future = new CompletableFuture<>();
             this.createdTimeMs = time.milliseconds();
         }
@@ -675,10 +659,10 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
             try {
                 // Get the context of the coordinator or fail if the coordinator is not in active state.
                 withActiveContextOrThrow(tp, context -> {
-                    long prevLastWrittenOffset = context.lastWrittenOffset;
+                    long prevLastWrittenOffset = context.coordinator.lastWrittenOffset();
 
                     // Execute the operation.
-                    result = op.generateRecordsAndResult(context.coordinator);
+                    result = op.generateRecordsAndResult(context.coordinator.coordinator());
 
                     if (result.records().isEmpty()) {
                         // If the records are empty, it was a read operation after all. In this case,
@@ -697,13 +681,24 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
                         try {
                             // Apply the records to the state machine.
                             if (result.replayRecords()) {
-                                result.records().forEach(context.coordinator::replay);
+                                result.records().forEach(record ->
+                                    context.coordinator.replay(
+                                        producerId,
+                                        producerEpoch,
+                                        record
+                                    )
+                                );
                             }
 
                             // Write the records to the log and update the last written
                             // offset.
-                            long offset = partitionWriter.append(tp, result.records());
-                            context.updateLastWrittenOffset(offset);
+                            long offset = partitionWriter.append(
+                                tp,
+                                producerId,
+                                producerEpoch,
+                                result.records()
+                            );
+                            context.coordinator.updateLastWrittenOffset(offset);
 
                             // Add the response to the deferred queue.
                             if (!future.isDone()) {
@@ -712,7 +707,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
                                 complete(null);
                             }
                         } catch (Throwable t) {
-                            context.revertLastWrittenOffset(prevLastWrittenOffset);
+                            context.coordinator.revertLastWrittenOffset(prevLastWrittenOffset);
                             complete(t);
                         }
                     }
@@ -848,8 +843,8 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
                 withActiveContextOrThrow(tp, context -> {
                     // Execute the read operation.
                     response = op.generateResponse(
-                        context.coordinator,
-                        context.lastCommittedOffset
+                        context.coordinator.coordinator(),
+                        context.coordinator.lastCommittedOffset()
                     );
 
                     // The response can be completed immediately.
@@ -991,7 +986,9 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
             log.debug("High watermark of {} incremented to {}.", tp, offset);
             scheduleInternalOperation("HighWatermarkUpdated(tp=" + tp + ", offset=" + offset + ")", tp, () -> {
                 withActiveContextOrThrow(tp, context -> {
-                    context.updateLastCommittedOffset(offset);
+                    context.coordinator.updateLastCommittedOffset(offset);
+                    context.deferredEventQueue.completeUpTo(offset);
+                    coordinatorMetrics.onUpdateLastCommittedOffset(tp, offset);
                 });
             });
         }
@@ -1141,8 +1138,10 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
      * Creates the context if it does not exist.
      *
      * @param tp    The topic partition.
+     *
+     * Visible for testing.
      */
-    private void maybeCreateContext(TopicPartition tp) {
+    void maybeCreateContext(TopicPartition tp) {
         coordinators.computeIfAbsent(tp, CoordinatorContext::new);
     }
 
@@ -1240,6 +1239,43 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
     }
 
     /**
+     * Schedules a transactional write operation.
+     *
+     * @param name              The name of the write operation.
+     * @param tp                The address of the coordinator (aka its topic-partitions).
+     * @param transactionalId   The transactional id.
+     * @param producerId        The producer id.
+     * @param producerEpoch     The producer epoch.
+     * @param op                The write operation.
+     *
+     * @return A future that will be completed with the result of the write operation
+     * when the operation is completed or an exception if the write operation failed.
+     *
+     * @param <T> The type of the result.
+     */
+    public <T> CompletableFuture<T> scheduleTransactionalWriteOperation(
+        String name,
+        TopicPartition tp,
+        String transactionalId,
+        long producerId,
+        short producerEpoch,
+        CoordinatorWriteOperation<S, T, U> op
+    ) {
+        throwIfNotRunning();
+        log.debug("Scheduled execution of transactional write operation {}.", name);
+        CoordinatorWriteEvent<T> event = new CoordinatorWriteEvent<>(
+            name,
+            tp,
+            transactionalId,
+            producerId,
+            producerEpoch,
+            op
+        );
+        enqueue(event);
+        return event.future;
+    }
+
+    /**
      * Schedules a read operation.
      *
      * @param name  The name of the write operation.
@@ -1315,7 +1351,10 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
                         case FAILED:
                         case INITIAL:
                             context.transitionTo(CoordinatorState.LOADING);
-                            loader.load(tp, context.coordinator).whenComplete((summary, exception) -> {
+                            loader.load(
+                                tp,
+                                context.coordinator
+                            ).whenComplete((summary, exception) -> {
                                 scheduleInternalOperation("CompleteLoad(tp=" + tp + ", epoch=" + partitionEpoch + ")", tp, () -> {
                                     withContextOrThrow(tp, ctx -> {
                                         if (ctx.state != CoordinatorState.LOADING) {

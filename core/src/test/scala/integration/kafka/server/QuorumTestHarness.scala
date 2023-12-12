@@ -25,6 +25,7 @@ import java.util.concurrent.{CompletableFuture, TimeUnit}
 import javax.security.auth.login.Configuration
 import kafka.utils.{CoreUtils, Logging, TestInfoUtils, TestUtils}
 import kafka.zk.{AdminZkClient, EmbeddedZookeeper, KafkaZkClient}
+import org.apache.kafka.clients.consumer.GroupProtocol
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.{DirectoryId, Uuid}
 import org.apache.kafka.common.security.JaasUtils
@@ -193,6 +194,10 @@ abstract class QuorumTestHarness extends Logging {
     TestInfoUtils.isNewGroupCoordinatorEnabled(testInfo)
   }
 
+  def maybeGroupProtocolSpecified(testInfo: TestInfo): Option[GroupProtocol] = {
+    TestInfoUtils.maybeGroupProtocolSpecified(testInfo)
+  }
+
   def checkIsZKTest(): Unit = {
     if (isKRaftTest()) {
       throw new RuntimeException("This function can't be accessed when running the test " +
@@ -312,6 +317,7 @@ abstract class QuorumTestHarness extends Logging {
     val props = propsList(0)
     props.setProperty(KafkaConfig.ServerMaxStartupTimeMsProp, TimeUnit.MINUTES.toMillis(10).toString)
     props.setProperty(KafkaConfig.ProcessRolesProp, "controller")
+    props.setProperty(KafkaConfig.UnstableMetadataVersionsEnableProp, "true")
     if (props.getProperty(KafkaConfig.NodeIdProp) == null) {
       props.setProperty(KafkaConfig.NodeIdProp, "1000")
     }
