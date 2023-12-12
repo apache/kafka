@@ -34,7 +34,6 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
@@ -1117,13 +1116,7 @@ public class MembershipManagerImplTest {
         assertEquals(0, listener.lostCount());
     }
 
-    // TODO: Reconciliation needs to support when a listener throws an error on onPartitionsRevoked(). When that
-    //       happens, the assignment step is skipped, which means onPartitionsAssigned() is never run.
-    //       The jury is out on whether or not this is a bug or intentional.
-    //
-    //       See https://github.com/apache/kafka/pull/14640#discussion_r1421253120 for more details.
     @Test
-    @Disabled
     public void testListenerCallbacksThrowsErrorOnPartitionsRevoked() {
         // Step 1: set up mocks
         String topicName = "topic1";
@@ -1144,7 +1137,7 @@ public class MembershipManagerImplTest {
         // Step 2: put the state machine into the appropriate... state
         receiveEmptyAssignment(membershipManager);
         assertEquals(MemberState.RECONCILING, membershipManager.state());
-        assertEquals(Collections.emptySet(), membershipManager.currentAssignment());
+        assertEquals(topicIdPartitionsMap(topicId, 0), membershipManager.currentAssignment());
         assertTrue(membershipManager.reconciliationInProgress());
         assertEquals(0, listener.revokedCount());
         assertEquals(0, listener.assignedCount());
@@ -1168,7 +1161,7 @@ public class MembershipManagerImplTest {
         assertEquals(MemberState.RECONCILING, membershipManager.state());
 
         assertEquals(1, listener.revokedCount());
-        assertEquals(1, listener.assignedCount());
+        assertEquals(0, listener.assignedCount());
         assertEquals(0, listener.lostCount());
     }
 
