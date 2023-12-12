@@ -17,12 +17,10 @@
 
 package org.apache.kafka.clients.consumer.internals;
 
-import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEventHandler;
 import org.apache.kafka.clients.consumer.internals.events.ConsumerRebalanceListenerCallbackCompletedEvent;
 import org.apache.kafka.clients.consumer.internals.events.ConsumerRebalanceListenerCallbackNeededEvent;
-import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
@@ -67,7 +65,6 @@ import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.ArgumentMatchers.anySet;
 import static org.mockito.Mockito.clearInvocations;
 import static org.mockito.Mockito.doNothing;
-import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
@@ -1403,21 +1400,6 @@ public class MembershipManagerImplTest {
         membershipManager.transitionToStaled();
         membershipManager.onHeartbeatRequestSent();
         assertEquals(MemberState.JOINING, membershipManager.state());
-    }
-    public void testLeaveGroupOnShutdown() {
-        ConsumerRebalanceListener cb = mock(ConsumerRebalanceListener.class);
-        MembershipManagerImpl membershipManager = createMemberInStableState();
-        subscriptionState.subscribe(Collections.singleton("topic1"), Optional.of(cb));
-        subscriptionState.assignFromSubscribed(Collections.singleton(new TopicPartition("topic1", 0)));
-        dropAssignedPartitions();
-        assertTrue(subscriptionState.assignedPartitions().isEmpty());
-        CompletableFuture<Void> leaveGroupFuture = membershipManager.leaveGroup();
-        membershipManager.onHeartbeatRequestSent();
-        assertTrue(leaveGroupFuture.isDone());
-        verify(membershipManager, never()).revokePartitions(anySet());
-        verify(membershipManager, never()).invokeOnPartitionsLostCallback(anySet());
-        verify(membershipManager).transitionToSendingLeaveGroup();
-
     }
 
     private void dropAssignedPartitions() {
