@@ -940,6 +940,7 @@ project(':core') {
     implementation libs.jacksonModuleScala
     implementation libs.jacksonDataformatCsv
     implementation libs.jacksonJDK8Datatypes
+    implementation libs.jacksonAfterburner
     implementation libs.joptSimple
     implementation libs.jose4j
     implementation libs.metrics
@@ -2851,6 +2852,7 @@ project(':connect:json') {
 
     api libs.jacksonDatabind
     api libs.jacksonJDK8Datatypes
+    api libs.jacksonAfterburner
 
     implementation libs.slf4jApi
 
