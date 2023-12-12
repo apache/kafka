@@ -17,8 +17,9 @@
 package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.ClientResponse;
-import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
 import org.apache.kafka.clients.Metadata;
+import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEventHandler;
 import org.apache.kafka.clients.consumer.internals.events.GroupMetadataUpdateEvent;
 import org.apache.kafka.common.KafkaException;
@@ -32,7 +33,10 @@ import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.ConsumerGroupHeartbeatRequest;
 import org.apache.kafka.common.requests.ConsumerGroupHeartbeatResponse;
 import org.apache.kafka.common.requests.RequestHeader;
+import org.apache.kafka.common.serialization.StringDeserializer;
+import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.Timer;
 import org.apache.kafka.common.utils.annotation.ApiKeyVersionsSource;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -48,28 +52,37 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
+import java.util.Properties;
 import java.util.concurrent.BlockingQueue;
 
-import static org.apache.kafka.clients.consumer.internals.ConsumerTestBuilder.DEFAULT_GROUP_ID;
 import static org.apache.kafka.clients.consumer.internals.ConsumerTestBuilder.DEFAULT_GROUP_INSTANCE_ID;
 import static org.apache.kafka.clients.consumer.internals.ConsumerTestBuilder.DEFAULT_HEARTBEAT_INTERVAL_MS;
 import static org.apache.kafka.clients.consumer.internals.ConsumerTestBuilder.DEFAULT_MAX_POLL_INTERVAL_MS;
-import static org.apache.kafka.clients.consumer.internals.ConsumerTestBuilder.DEFAULT_RETRY_BACKOFF_MS;
 import static org.apache.kafka.clients.consumer.internals.ConsumerTestBuilder.DEFAULT_REMOTE_ASSIGNOR;
+import static org.apache.kafka.clients.consumer.internals.ConsumerTestBuilder.DEFAULT_RETRY_BACKOFF_MAX_MS;
+import static org.apache.kafka.clients.consumer.internals.ConsumerTestBuilder.DEFAULT_RETRY_BACKOFF_MS;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 public class HeartbeatRequestManagerTest {
+    private long retryBackoffMs = DEFAULT_RETRY_BACKOFF_MS;
+    private int heartbeatIntervalMs = DEFAULT_HEARTBEAT_INTERVAL_MS;
+    private int maxPollIntervalMs = DEFAULT_MAX_POLL_INTERVAL_MS;
+    private long retryBackoffMaxMs = DEFAULT_RETRY_BACKOFF_MAX_MS;
+    private static final String DEFAULT_GROUP_ID = "groupId";
 
     private ConsumerTestBuilder testBuilder;
     private Time time;
+    private Timer pollTimer;
+    private ConsumerConfig config;
     private CoordinatorRequestManager coordinatorRequestManager;
     private SubscriptionState subscriptions;
     private Metadata metadata;
@@ -99,6 +112,7 @@ public class HeartbeatRequestManagerTest {
         subscriptions = testBuilder.subscriptions;
         membershipManager = testBuilder.membershipManager.orElseThrow(IllegalStateException::new);
         metadata = testBuilder.metadata;
+        config = testBuilder.config;
 
         when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(new Node(1, "localhost", 9999)));
     }
@@ -509,6 +523,41 @@ public class HeartbeatRequestManagerTest {
         assertEquals(MemberState.ACKNOWLEDGING, membershipManager.state());
     }
 
+    @Test
+    public void testPollTimerExpiration() {
+        heartbeatRequestManager = createHeartbeatRequestManager();
+        when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(new Node(1, "localhost", 9999)));
+        when(membershipManager.shouldSkipHeartbeat()).thenReturn(false);
+
+        time.sleep(maxPollIntervalMs);
+        assertLeaveGroup(heartbeatRequestManager);
+        verify(membershipManager).transitionToStaled();
+
+        assertNoHeartbeat(heartbeatRequestManager);
+        heartbeatRequestManager.resetPollTimer();
+        assertTrue(pollTimer.notExpired());
+        assertHeartbeat(heartbeatRequestManager);
+    }
+
+    private void assertHeartbeat(HeartbeatRequestManager hrm) {
+        NetworkClientDelegate.PollResult pollResult = hrm.poll(time.milliseconds());
+        assertEquals(1, pollResult.unsentRequests.size());
+        assertEquals(DEFAULT_HEARTBEAT_INTERVAL_MS, pollResult.timeUntilNextPollMs);
+        pollResult.unsentRequests.get(0).handler().onComplete(createHeartbeatResponse(pollResult.unsentRequests.get(0),
+            Errors.NONE));
+    }
+
+    private void assertNoHeartbeat(HeartbeatRequestManager hrm) {
+        NetworkClientDelegate.PollResult pollResult = hrm.poll(time.milliseconds());
+        assertEquals(0, pollResult.unsentRequests.size());
+    }
+
+    private NetworkClientDelegate.PollResult assertLeaveGroup(HeartbeatRequestManager hrm) {
+        NetworkClientDelegate.PollResult pollResult = hrm.poll(time.milliseconds());
+        assertEquals(1, pollResult.unsentRequests.size());
+        return pollResult;
+    }
+
     private void mockStableMember() {
         membershipManager.onSubscriptionUpdated();
         // Heartbeat response without assignment to set the state to STABLE.
@@ -590,5 +639,44 @@ public class HeartbeatRequestManagerTest {
             null,
             null,
             response);
+    }
+
+    private ConsumerConfig config() {
+        Properties prop = new Properties();
+        prop.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
+        prop.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
+        prop.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
+
+        prop.setProperty(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, String.valueOf(maxPollIntervalMs));
+        prop.setProperty(ConsumerConfig.RETRY_BACKOFF_MS_CONFIG, String.valueOf(retryBackoffMs));
+        prop.setProperty(ConsumerConfig.RETRY_BACKOFF_MAX_MS_CONFIG, String.valueOf(retryBackoffMaxMs));
+        prop.setProperty(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, String.valueOf(heartbeatIntervalMs));
+        return new ConsumerConfig(prop);
+    }
+
+    private HeartbeatRequestManager createHeartbeatRequestManager() {
+        LogContext logContext = new LogContext();
+        coordinatorRequestManager = mock(CoordinatorRequestManager.class);
+        subscriptions = mock(SubscriptionState.class);
+        membershipManager = mock(MembershipManager.class);
+        backgroundEventHandler = mock(BackgroundEventHandler.class);
+        heartbeatState = new HeartbeatRequestManager.HeartbeatState(subscriptions, membershipManager, maxPollIntervalMs);
+        heartbeatRequestState = new HeartbeatRequestManager.HeartbeatRequestState(
+            logContext,
+            time,
+            heartbeatIntervalMs,
+            retryBackoffMs,
+            retryBackoffMaxMs,
+            0);
+        pollTimer = time.timer(maxPollIntervalMs);
+        return new HeartbeatRequestManager(
+            logContext,
+            pollTimer,
+            config(),
+            coordinatorRequestManager,
+            membershipManager,
+            heartbeatState,
+            heartbeatRequestState,
+            backgroundEventHandler);
     }
 }

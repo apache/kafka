@@ -62,6 +62,11 @@ public interface MembershipManager {
     MemberState state();
 
     /**
+     * @return True if the member is staled due to expired poll timer.
+     */
+    boolean isStaled();
+
+    /**
      * Update member info and transition member state based on a successful heartbeat response.
      *
      * @param response Heartbeat response to extract member info and errors from.
@@ -139,4 +144,15 @@ public interface MembershipManager {
      * Note that list of topics of the subscription is taken from the shared subscription state.
      */
     void onSubscriptionUpdated();
+
+    /**
+     * Transition to the {@link MemberState#JOINING} state to attempt joining a group.
+     */
+    void transitionToJoining();
+
+    /**
+     * When the user stops polling the consumer and the <code>max.poll.interval.ms</code> timer expires, we transition
+     * the member to STALE.
+     */
+    void transitionToStaled();
 }
