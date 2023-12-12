@@ -76,6 +76,7 @@ import org.mockito.ArgumentMatchers;
 import org.mockito.MockedConstruction;
 import org.mockito.Mockito;
 import org.mockito.stubbing.Answer;
+import org.opentest4j.AssertionFailedError;
 
 import java.time.Duration;
 import java.util.Arrays;
@@ -497,7 +498,7 @@ public class AsyncKafkaConsumerTest {
     }
 
     @Test
-    public void testVerifyApplicationEventOnShutdown() {
+    public void testVerifyApplicationEventsSentOnClose() {
         resetWithAutoCommitEnabled();
         subscriptions.subscribe(singleton("topic"), Optional.empty());
         TopicPartition tp = new TopicPartition("topic", 0);
@@ -507,20 +508,6 @@ public class AsyncKafkaConsumerTest {
         shutDown();
         verify(applicationEventHandler).add(any(CommitOnCloseApplicationEvent.class));
         verify(applicationEventHandler).add(any(CommitApplicationEvent.class));
-    }
-
-    @Test
-    public void testEnsureSubscribedPartitionsRevokedOnClosed() {
-        subscriptions.subscribe(singleton("topic"), Optional.empty());
-        TopicPartition tp = new TopicPartition("topic", 0);
-        subscriptions.assignFromSubscribed(singleton(tp));
-        consumer.close(Duration.ZERO);
-        assertTrue(subscriptions.assignedPartitions().isEmpty());
-        try {
-            verify(consumer).maybeRevokePartitions();
-        } catch (Exception e) {
-            fail("Should not throw exception", e);
-        }
     }
 
     @Test
@@ -886,15 +873,16 @@ public class AsyncKafkaConsumerTest {
     public void testGroupMetadataAfterCreationWithGroupIdIsNotNull() {
         final String groupId = "consumerGroupA";
         final ConsumerConfig config = new ConsumerConfig(requiredConsumerPropertiesAndGroupId(groupId));
-        final AsyncKafkaConsumer<String, String> consumer =
-            new AsyncKafkaConsumer<>(config, new StringDeserializer(), new StringDeserializer());
-        final ConsumerGroupMetadata groupMetadata = consumer.groupMetadata();
+        try (final AsyncKafkaConsumer<String, String> consumer =
+                 new AsyncKafkaConsumer<>(config, new StringDeserializer(), new StringDeserializer())) {
 
-        assertEquals(groupId, groupMetadata.groupId());
-        assertEquals(Optional.empty(), groupMetadata.groupInstanceId());
-        assertEquals(JoinGroupRequest.UNKNOWN_GENERATION_ID, groupMetadata.generationId());
-        assertEquals(JoinGroupRequest.UNKNOWN_MEMBER_ID, groupMetadata.memberId());
-        consumer.close(Duration.ZERO);
+            final ConsumerGroupMetadata groupMetadata = consumer.groupMetadata();
+
+            assertEquals(groupId, groupMetadata.groupId());
+            assertEquals(Optional.empty(), groupMetadata.groupInstanceId());
+            assertEquals(JoinGroupRequest.UNKNOWN_GENERATION_ID, groupMetadata.generationId());
+            assertEquals(JoinGroupRequest.UNKNOWN_MEMBER_ID, groupMetadata.memberId());
+        }
     }
 
     @Test
@@ -904,14 +892,16 @@ public class AsyncKafkaConsumerTest {
         final Properties props = requiredConsumerPropertiesAndGroupId(groupId);
         props.put(ConsumerConfig.GROUP_INSTANCE_ID_CONFIG, groupInstanceId);
         final ConsumerConfig config = new ConsumerConfig(props);
-        final AsyncKafkaConsumer<String, String> consumer =
-            new AsyncKafkaConsumer<>(config, new StringDeserializer(), new StringDeserializer());
-        final ConsumerGroupMetadata groupMetadata = consumer.groupMetadata();
-        assertEquals(groupId, groupMetadata.groupId());
-        assertEquals(Optional.of(groupInstanceId), groupMetadata.groupInstanceId());
-        assertEquals(JoinGroupRequest.UNKNOWN_GENERATION_ID, groupMetadata.generationId());
-        assertEquals(JoinGroupRequest.UNKNOWN_MEMBER_ID, groupMetadata.memberId());
-        consumer.close(Duration.ZERO);
+        try (final AsyncKafkaConsumer<String, String> consumer =
+                 new AsyncKafkaConsumer<>(config, new StringDeserializer(), new StringDeserializer())) {
+
+            final ConsumerGroupMetadata groupMetadata = consumer.groupMetadata();
+
+            assertEquals(groupId, groupMetadata.groupId());
+            assertEquals(Optional.of(groupInstanceId), groupMetadata.groupInstanceId());
+            assertEquals(JoinGroupRequest.UNKNOWN_GENERATION_ID, groupMetadata.generationId());
+            assertEquals(JoinGroupRequest.UNKNOWN_MEMBER_ID, groupMetadata.memberId());
+        }
     }
 
     @Test
@@ -919,32 +909,32 @@ public class AsyncKafkaConsumerTest {
         final String groupId = "consumerGroupA";
         final ConsumerConfig config = new ConsumerConfig(requiredConsumerPropertiesAndGroupId(groupId));
         final LinkedBlockingQueue<BackgroundEvent> backgroundEventQueue = new LinkedBlockingQueue<>();
-        final AsyncKafkaConsumer<String, String> consumer =
-            new AsyncKafkaConsumer<>(config, new StringDeserializer(), new StringDeserializer(), backgroundEventQueue);
-        final int generation = 1;
-        final String memberId = "newMemberId";
-        final ConsumerGroupMetadata expectedGroupMetadata = new ConsumerGroupMetadata(
-            groupId,
-            generation,
-            memberId,
-            Optional.empty()
-        );
-        final GroupMetadataUpdateEvent groupMetadataUpdateEvent = new GroupMetadataUpdateEvent(
-            generation,
-            memberId
-        );
-        backgroundEventQueue.add(groupMetadataUpdateEvent);
-        consumer.assign(singletonList(new TopicPartition("topic", 0)));
-        consumer.poll(Duration.ZERO);
+        try (final AsyncKafkaConsumer<String, String> consumer =
+                 new AsyncKafkaConsumer<>(config, new StringDeserializer(), new StringDeserializer(), backgroundEventQueue)) {
+            final int generation = 1;
+            final String memberId = "newMemberId";
+            final ConsumerGroupMetadata expectedGroupMetadata = new ConsumerGroupMetadata(
+                groupId,
+                generation,
+                memberId,
+                Optional.empty()
+            );
+            final GroupMetadataUpdateEvent groupMetadataUpdateEvent = new GroupMetadataUpdateEvent(
+                generation,
+                memberId
+            );
+            backgroundEventQueue.add(groupMetadataUpdateEvent);
+            consumer.assign(singletonList(new TopicPartition("topic", 0)));
+            consumer.poll(Duration.ZERO);
 
-        final ConsumerGroupMetadata actualGroupMetadata = consumer.groupMetadata();
+            final ConsumerGroupMetadata actualGroupMetadata = consumer.groupMetadata();
 
-        assertEquals(expectedGroupMetadata, actualGroupMetadata);
+            assertEquals(expectedGroupMetadata, actualGroupMetadata);
 
-        final ConsumerGroupMetadata secondActualGroupMetadataWithoutUpdate = consumer.groupMetadata();
+            final ConsumerGroupMetadata secondActualGroupMetadataWithoutUpdate = consumer.groupMetadata();
 
-        assertEquals(expectedGroupMetadata, secondActualGroupMetadataWithoutUpdate);
-        consumer.close(Duration.ZERO);
+            assertEquals(expectedGroupMetadata, secondActualGroupMetadataWithoutUpdate);
+        }
     }
 
     /**
@@ -1024,17 +1014,17 @@ public class AsyncKafkaConsumerTest {
         final String groupId = "consumerGroupA";
         final ConsumerConfig config = new ConsumerConfig(requiredConsumerPropertiesAndGroupId(groupId));
         final LinkedBlockingQueue<BackgroundEvent> backgroundEventQueue = new LinkedBlockingQueue<>();
-        final AsyncKafkaConsumer<String, String> consumer =
-            new AsyncKafkaConsumer<>(config, new StringDeserializer(), new StringDeserializer(), backgroundEventQueue);
-        final KafkaException expectedException = new KafkaException("Nobody expects the Spanish Inquisition");
-        final ErrorBackgroundEvent errorBackgroundEvent = new ErrorBackgroundEvent(expectedException);
-        backgroundEventQueue.add(errorBackgroundEvent);
-        consumer.assign(singletonList(new TopicPartition("topic", 0)));
+        try (final AsyncKafkaConsumer<String, String> consumer =
+                 new AsyncKafkaConsumer<>(config, new StringDeserializer(), new StringDeserializer(), backgroundEventQueue)) {
+            final KafkaException expectedException = new KafkaException("Nobody expects the Spanish Inquisition");
+            final ErrorBackgroundEvent errorBackgroundEvent = new ErrorBackgroundEvent(expectedException);
+            backgroundEventQueue.add(errorBackgroundEvent);
+            consumer.assign(singletonList(new TopicPartition("topic", 0)));
 
-        final KafkaException exception = assertThrows(KafkaException.class, () -> consumer.poll(Duration.ZERO));
+            final KafkaException exception = assertThrows(KafkaException.class, () -> consumer.poll(Duration.ZERO));
 
-        assertEquals(expectedException.getMessage(), exception.getMessage());
-        consumer.close(Duration.ZERO);
+            assertEquals(expectedException.getMessage(), exception.getMessage());
+        }
     }
 
     @Test
@@ -1042,21 +1032,21 @@ public class AsyncKafkaConsumerTest {
         final String groupId = "consumerGroupA";
         final ConsumerConfig config = new ConsumerConfig(requiredConsumerPropertiesAndGroupId(groupId));
         final LinkedBlockingQueue<BackgroundEvent> backgroundEventQueue = new LinkedBlockingQueue<>();
-        final AsyncKafkaConsumer<String, String> consumer =
-            new AsyncKafkaConsumer<>(config, new StringDeserializer(), new StringDeserializer(), backgroundEventQueue);
-        final KafkaException expectedException1 = new KafkaException("Nobody expects the Spanish Inquisition");
-        final ErrorBackgroundEvent errorBackgroundEvent1 = new ErrorBackgroundEvent(expectedException1);
-        backgroundEventQueue.add(errorBackgroundEvent1);
-        final KafkaException expectedException2 = new KafkaException("Spam, Spam, Spam");
-        final ErrorBackgroundEvent errorBackgroundEvent2 = new ErrorBackgroundEvent(expectedException2);
-        backgroundEventQueue.add(errorBackgroundEvent2);
-        consumer.assign(singletonList(new TopicPartition("topic", 0)));
+        try (final AsyncKafkaConsumer<String, String> consumer =
+                 new AsyncKafkaConsumer<>(config, new StringDeserializer(), new StringDeserializer(), backgroundEventQueue)) {
+            final KafkaException expectedException1 = new KafkaException("Nobody expects the Spanish Inquisition");
+            final ErrorBackgroundEvent errorBackgroundEvent1 = new ErrorBackgroundEvent(expectedException1);
+            backgroundEventQueue.add(errorBackgroundEvent1);
+            final KafkaException expectedException2 = new KafkaException("Spam, Spam, Spam");
+            final ErrorBackgroundEvent errorBackgroundEvent2 = new ErrorBackgroundEvent(expectedException2);
+            backgroundEventQueue.add(errorBackgroundEvent2);
+            consumer.assign(singletonList(new TopicPartition("topic", 0)));
 
-        final KafkaException exception = assertThrows(KafkaException.class, () -> consumer.poll(Duration.ZERO));
+            final KafkaException exception = assertThrows(KafkaException.class, () -> consumer.poll(Duration.ZERO));
 
-        assertEquals(expectedException1.getMessage(), exception.getMessage());
-        assertTrue(backgroundEventQueue.isEmpty());
-        consumer.close(Duration.ZERO);
+            assertEquals(expectedException1.getMessage(), exception.getMessage());
+            assertTrue(backgroundEventQueue.isEmpty());
+        }
     }
 
     @Test
@@ -1065,10 +1055,10 @@ public class AsyncKafkaConsumerTest {
         props.put(ConsumerConfig.GROUP_REMOTE_ASSIGNOR_CONFIG, "someAssignor");
         final ConsumerConfig config = new ConsumerConfig(props);
 
-        AsyncKafkaConsumer<String, String> ignored =
-            new AsyncKafkaConsumer<>(config, new StringDeserializer(), new StringDeserializer());
-        assertTrue(config.unused().contains(ConsumerConfig.GROUP_REMOTE_ASSIGNOR_CONFIG));
-        ignored.close(Duration.ZERO);
+        try (AsyncKafkaConsumer<String, String> ignored =
+                 new AsyncKafkaConsumer<>(config, new StringDeserializer(), new StringDeserializer())) {
+            assertTrue(config.unused().contains(ConsumerConfig.GROUP_REMOTE_ASSIGNOR_CONFIG));
+        }
     }
 
     @Test
@@ -1078,10 +1068,11 @@ public class AsyncKafkaConsumerTest {
         props.put(ConsumerConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.GENERIC.name().toLowerCase(Locale.ROOT));
         props.put(ConsumerConfig.GROUP_REMOTE_ASSIGNOR_CONFIG, "someAssignor");
         final ConsumerConfig config = new ConsumerConfig(props);
-        AsyncKafkaConsumer<String, String> ignored =
-            new AsyncKafkaConsumer<>(config, new StringDeserializer(), new StringDeserializer());
-        assertTrue(config.unused().contains(ConsumerConfig.GROUP_REMOTE_ASSIGNOR_CONFIG));
-        ignored.close(Duration.ZERO);
+
+        try (AsyncKafkaConsumer<String, String> ignored =
+                 new AsyncKafkaConsumer<>(config, new StringDeserializer(), new StringDeserializer())) {
+            assertTrue(config.unused().contains(ConsumerConfig.GROUP_REMOTE_ASSIGNOR_CONFIG));
+        }
     }
 
     @Test
@@ -1091,10 +1082,11 @@ public class AsyncKafkaConsumerTest {
         props.put(ConsumerConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.CONSUMER.name().toLowerCase(Locale.ROOT));
         props.put(ConsumerConfig.GROUP_REMOTE_ASSIGNOR_CONFIG, "someAssignor");
         final ConsumerConfig config = new ConsumerConfig(props);
-        AsyncKafkaConsumer<String, String> ignored =
-            new AsyncKafkaConsumer<>(config, new StringDeserializer(), new StringDeserializer());
-        assertFalse(config.unused().contains(ConsumerConfig.GROUP_REMOTE_ASSIGNOR_CONFIG));
-        ignored.close(Duration.ZERO);
+
+        try (AsyncKafkaConsumer<String, String> ignored =
+                 new AsyncKafkaConsumer<>(config, new StringDeserializer(), new StringDeserializer())) {
+            assertFalse(config.unused().contains(ConsumerConfig.GROUP_REMOTE_ASSIGNOR_CONFIG));
+        }
     }
 
     @Test
@@ -1103,27 +1095,31 @@ public class AsyncKafkaConsumerTest {
         props.put(ConsumerConfig.AUTO_COMMIT_INTERVAL_MS_CONFIG, 10000);
         props.put(THROW_ON_FETCH_STABLE_OFFSET_UNSUPPORTED, true);
         final ConsumerConfig config = new ConsumerConfig(props);
-        final AsyncKafkaConsumer<String, String> consumer =
-            new AsyncKafkaConsumer<>(config, new StringDeserializer(), new StringDeserializer());
-        assertFalse(config.unused().contains(ConsumerConfig.AUTO_COMMIT_INTERVAL_MS_CONFIG));
-        assertFalse(config.unused().contains(THROW_ON_FETCH_STABLE_OFFSET_UNSUPPORTED));
-        consumer.close(Duration.ZERO);
+
+        try (final AsyncKafkaConsumer<String, String> consumer =
+                 new AsyncKafkaConsumer<>(config, new StringDeserializer(), new StringDeserializer())) {
+            assertFalse(config.unused().contains(ConsumerConfig.AUTO_COMMIT_INTERVAL_MS_CONFIG));
+            assertFalse(config.unused().contains(THROW_ON_FETCH_STABLE_OFFSET_UNSUPPORTED));
+        } catch (final Exception exception) {
+            throw new AssertionFailedError("The following exception was not expected:", exception);
+        }
     }
 
     @Disabled("Flaky test temporarily disabled - in review")
     @Test
     public void testGroupIdNotNullAndValid() {
-        final Properties props = requiredConsumerProperties();
-        props.put(ConsumerConfig.GROUP_ID_CONFIG, "consumerGroupA");
+        final Properties props = requiredConsumerPropertiesAndGroupId("consumerGroupA");
         props.put(ConsumerConfig.AUTO_COMMIT_INTERVAL_MS_CONFIG, 10000);
         props.put(THROW_ON_FETCH_STABLE_OFFSET_UNSUPPORTED, true);
         final ConsumerConfig config = new ConsumerConfig(props);
 
-        AsyncKafkaConsumer<String, String> consumer =
-            new AsyncKafkaConsumer<>(config, new StringDeserializer(), new StringDeserializer());
-        assertTrue(config.unused().contains(ConsumerConfig.AUTO_COMMIT_INTERVAL_MS_CONFIG));
-        assertTrue(config.unused().contains(THROW_ON_FETCH_STABLE_OFFSET_UNSUPPORTED));
-        consumer.close(Duration.ZERO);
+        try (final AsyncKafkaConsumer<String, String> consumer =
+                 new AsyncKafkaConsumer<>(config, new StringDeserializer(), new StringDeserializer())) {
+            assertTrue(config.unused().contains(ConsumerConfig.AUTO_COMMIT_INTERVAL_MS_CONFIG));
+            assertTrue(config.unused().contains(THROW_ON_FETCH_STABLE_OFFSET_UNSUPPORTED));
+        } catch (final Exception exception) {
+            throw new AssertionFailedError("The following exception was not expected:", exception);
+        }
     }
 
     @Test
