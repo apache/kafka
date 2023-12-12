@@ -1085,7 +1085,6 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         if (applicationEventHandler != null)
             closeQuietly(() -> applicationEventHandler.close(Duration.ofMillis(closeTimer.remainingMs())), "Failed shutting down network thread", firstException);
         closeTimer.update();
-        // Ensure all async commit callbacks are invoked
         closeQuietly(interceptors, "consumer interceptors", firstException);
         closeQuietly(kafkaConsumerMetrics, "kafka consumer metrics", firstException);
         closeQuietly(metrics, "consumer metrics", firstException);
@@ -1107,6 +1106,8 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
      * Prior to closing the network thread, we need to make sure the following operations happen in the right sequence:
      * 1. autocommit offsets
      * 2. revoke all partitions
+     * 3. if partition revocation completes successfully, send leave group
+     * 4. invoke all async commit callbacks if there is any
      */
     void prepareShutdown(final Timer timer, final AtomicReference<Throwable> firstException) {
         if (!groupMetadata.isPresent())
