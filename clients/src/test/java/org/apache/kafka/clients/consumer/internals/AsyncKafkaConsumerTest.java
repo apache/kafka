@@ -86,6 +86,7 @@ import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -163,7 +164,7 @@ public class AsyncKafkaConsumerTest {
     @Test
     public void testInvalidGroupId() {
         KafkaException e = assertThrows(KafkaException.class, this::newConsumerWithEmptyGroupId);
-        assertTrue(e.getCause() instanceof InvalidGroupIdException);
+        assertInstanceOf(InvalidGroupIdException.class, e.getCause());
     }
 
     @Test
@@ -199,7 +200,7 @@ public class AsyncKafkaConsumerTest {
 
         Map<TopicPartition, OffsetAndMetadata> offsets = new HashMap<>();
         offsets.put(new TopicPartition("my-topic", 1), new OffsetAndMetadata(200L));
-        mockCommitApplicationEventCompleted();
+        completeCommitApplicationEventExceptionally();
 
         MockCommitCallback callback = new MockCommitCallback();
         assertDoesNotThrow(() -> consumer.commitAsync(offsets, callback));
@@ -215,7 +216,7 @@ public class AsyncKafkaConsumerTest {
 
         Map<TopicPartition, OffsetAndMetadata> offsets = new HashMap<>();
         offsets.put(new TopicPartition("my-topic", 1), new OffsetAndMetadata(200L));
-        mockCommitApplicationEventException(exception);
+        completeCommitApplicationEventExceptionally(exception);
 
         MockCommitCallback callback = new MockCommitCallback();
         assertDoesNotThrow(() -> consumer.commitAsync(offsets, callback));
@@ -236,8 +237,6 @@ public class AsyncKafkaConsumerTest {
         final HashMap<TopicPartition, OffsetAndMetadata> offsets = mockTopicPartitionOffset();
         MockCommitCallback callback = new MockCommitCallback();
 
-        consumer.assign(offsets.keySet());
-
         assertDoesNotThrow(() -> consumer.commitAsync(offsets, callback));
 
         final ArgumentCaptor<CommitApplicationEvent> commitEventCaptor = ArgumentCaptor.forClass(CommitApplicationEvent.class);
@@ -252,7 +251,7 @@ public class AsyncKafkaConsumerTest {
     public void testCommitted() {
         consumer = newConsumer();
         Map<TopicPartition, OffsetAndMetadata> topicPartitionOffsets = mockTopicPartitionOffset();
-        mockFetchedCommittedOffsetApplicationEventCompleted(topicPartitionOffsets);
+        completeFetchedCommittedOffsetApplicationEventSuccessfully(topicPartitionOffsets);
 
         assertEquals(topicPartitionOffsets, consumer.committed(topicPartitionOffsets.keySet(), Duration.ofMillis(1000)));
         verify(applicationEventHandler).addAndGet(ArgumentMatchers.isA(FetchCommittedOffsetsApplicationEvent.class), any());
@@ -268,7 +267,7 @@ public class AsyncKafkaConsumerTest {
         topicPartitionOffsets.put(t0, new OffsetAndMetadata(10L, Optional.of(2), ""));
         topicPartitionOffsets.put(t1, null);
         topicPartitionOffsets.put(t2, new OffsetAndMetadata(20L, Optional.of(3), ""));
-        mockFetchedCommittedOffsetApplicationEventCompleted(topicPartitionOffsets);
+        completeFetchedCommittedOffsetApplicationEventSuccessfully(topicPartitionOffsets);
 
         assertDoesNotThrow(() -> consumer.committed(topicPartitionOffsets.keySet(), Duration.ofMillis(1000)));
 
@@ -283,7 +282,7 @@ public class AsyncKafkaConsumerTest {
         Map<TopicPartition, OffsetAndMetadata> offsets = mockTopicPartitionOffset();
         when(applicationEventHandler.addAndGet(any(), any())).thenAnswer(invocation -> {
             CompletableApplicationEvent<?> event = invocation.getArgument(0);
-            assertTrue(event instanceof FetchCommittedOffsetsApplicationEvent);
+            assertInstanceOf(FetchCommittedOffsetsApplicationEvent.class, event);
             throw new KafkaException("Test exception");
         });
 
@@ -298,7 +297,7 @@ public class AsyncKafkaConsumerTest {
         final TopicPartition tp = new TopicPartition(topicName, partition);
         doReturn(Fetch.empty()).when(fetchCollector).collectFetch(any(FetchBuffer.class));
         Map<TopicPartition, OffsetAndMetadata> offsets = mkMap(mkEntry(tp, new OffsetAndMetadata(1)));
-        mockFetchedCommittedOffsetApplicationEventCompleted(offsets);
+        completeFetchedCommittedOffsetApplicationEventSuccessfully(offsets);
         doReturn(LeaderAndEpoch.noLeaderOrEpoch()).when(metadata).currentLeader(any());
         consumer.assign(singleton(tp));
 
@@ -319,7 +318,7 @@ public class AsyncKafkaConsumerTest {
             return Fetch.empty();
         }).when(fetchCollector).collectFetch(any(FetchBuffer.class));
         Map<TopicPartition, OffsetAndMetadata> offsets = mkMap(mkEntry(tp, new OffsetAndMetadata(1)));
-        mockFetchedCommittedOffsetApplicationEventCompleted(offsets);
+        completeFetchedCommittedOffsetApplicationEventSuccessfully(offsets);
         doReturn(LeaderAndEpoch.noLeaderOrEpoch()).when(metadata).currentLeader(any());
         consumer.assign(singleton(tp));
 
@@ -342,7 +341,7 @@ public class AsyncKafkaConsumerTest {
             return Fetch.forPartition(tp, records, true);
         }).when(fetchCollector).collectFetch(Mockito.any(FetchBuffer.class));
         Map<TopicPartition, OffsetAndMetadata> offsets = mkMap(mkEntry(tp, new OffsetAndMetadata(1)));
-        mockFetchedCommittedOffsetApplicationEventCompleted(offsets);
+        completeFetchedCommittedOffsetApplicationEventSuccessfully(offsets);
         doReturn(LeaderAndEpoch.noLeaderOrEpoch()).when(metadata).currentLeader(any());
         consumer.assign(singleton(tp));
 
@@ -365,7 +364,7 @@ public class AsyncKafkaConsumerTest {
         doReturn(Fetch.forPartition(tp, records, true))
             .when(fetchCollector).collectFetch(any(FetchBuffer.class));
         Map<TopicPartition, OffsetAndMetadata> offsets = mkMap(mkEntry(tp, new OffsetAndMetadata(1)));
-        mockFetchedCommittedOffsetApplicationEventCompleted(offsets);
+        completeFetchedCommittedOffsetApplicationEventSuccessfully(offsets);
         doReturn(LeaderAndEpoch.noLeaderOrEpoch()).when(metadata).currentLeader(any());
         consumer.assign(singleton(tp));
 
@@ -379,7 +378,7 @@ public class AsyncKafkaConsumerTest {
         consumer = newConsumer();
         final String currentThread = Thread.currentThread().getName();
         MockCommitCallback callback = new MockCommitCallback();
-        mockCommitApplicationEventCompleted();
+        completeCommitApplicationEventExceptionally();
 
         assertDoesNotThrow(() -> consumer.commitAsync(new HashMap<>(), callback));
         assertEquals(1, consumer.callbacks());
@@ -421,7 +420,7 @@ public class AsyncKafkaConsumerTest {
         HashMap<TopicPartition, OffsetAndMetadata> topicPartitionOffsets = new HashMap<>();
         topicPartitionOffsets.put(t0, new OffsetAndMetadata(10L, Optional.of(2), ""));
         topicPartitionOffsets.put(t1, new OffsetAndMetadata(20L, Optional.of(1), ""));
-        mockCommitApplicationEventCompleted();
+        completeCommitApplicationEventExceptionally();
 
         consumer.assign(Arrays.asList(t0, t1));
 
@@ -455,9 +454,9 @@ public class AsyncKafkaConsumerTest {
     public void testEnsurePollExecutedCommitAsyncCallbacks() {
         consumer = newConsumer();
         MockCommitCallback callback = new MockCommitCallback();
-        mockCommitApplicationEventCompleted();
+        completeCommitApplicationEventExceptionally();
         doReturn(Fetch.empty()).when(fetchCollector).collectFetch(any(FetchBuffer.class));
-        mockFetchedCommittedOffsetApplicationEventCompleted(mkMap());
+        completeFetchedCommittedOffsetApplicationEventSuccessfully(mkMap());
 
         consumer.assign(Collections.singleton(new TopicPartition("foo", 0)));
         assertDoesNotThrow(() -> consumer.commitAsync(new HashMap<>(), callback));
@@ -470,7 +469,7 @@ public class AsyncKafkaConsumerTest {
     public void testEnsureShutdownExecutedCommitAsyncCallbacks() {
         consumer = newConsumer();
         MockCommitCallback callback = new MockCommitCallback();
-        mockCommitApplicationEventCompleted();
+        completeCommitApplicationEventExceptionally();
         assertDoesNotThrow(() -> consumer.commitAsync(new HashMap<>(), callback));
         assertMockCommitCallbackInvoked(() -> consumer.close(),
             callback,
@@ -485,7 +484,7 @@ public class AsyncKafkaConsumerTest {
         if (errors == null)
             assertNull(callback.exception);
         else if (errors.exception() instanceof RetriableException)
-            assertTrue(callback.exception instanceof RetriableCommitFailedException);
+            assertInstanceOf(RetriableCommitFailedException.class, callback.exception);
     }
 
     private static class MockCommitCallback implements OffsetCommitCallback {
@@ -521,7 +520,7 @@ public class AsyncKafkaConsumerTest {
     @Test
     public void testAssignOnEmptyTopicPartition() {
         consumer = newConsumer();
-        mockUnsubscribeApplicationEventCompleted();
+        completeUnsubscribeApplicationEventSuccessfully();
 
         consumer.assign(Collections.emptyList());
         assertTrue(consumer.subscription().isEmpty());
@@ -657,7 +656,7 @@ public class AsyncKafkaConsumerTest {
         doAnswer(invocation -> {
             CompletableApplicationEvent<?> event = invocation.getArgument(0);
             Timer timer = invocation.getArgument(1);
-            assertTrue(event instanceof FetchCommittedOffsetsApplicationEvent);
+            assertInstanceOf(FetchCommittedOffsetsApplicationEvent.class, event);
             assertTrue(event.future().isCompletedExceptionally());
             return ConsumerUtils.getResult(event.future(), timer);
         })
@@ -714,7 +713,7 @@ public class AsyncKafkaConsumerTest {
     @Test
     public void testUnsubscribeGeneratesUnsubscribeEvent() {
         consumer = newConsumer();
-        mockUnsubscribeApplicationEventCompleted();
+        completeUnsubscribeApplicationEventSuccessfully();
 
         consumer.unsubscribe();
 
@@ -726,7 +725,7 @@ public class AsyncKafkaConsumerTest {
     @Test
     public void testSubscribeToEmptyListActsAsUnsubscribe() {
         consumer = newConsumer();
-        mockUnsubscribeApplicationEventCompleted();
+        completeUnsubscribeApplicationEventSuccessfully();
 
         consumer.subscribe(Collections.emptyList());
         assertTrue(consumer.subscription().isEmpty());
@@ -807,7 +806,7 @@ public class AsyncKafkaConsumerTest {
         consumer = newConsumer(config);
 
         doReturn(Fetch.empty()).when(fetchCollector).collectFetch(any(FetchBuffer.class));
-        mockFetchedCommittedOffsetApplicationEventCompleted(mkMap());
+        completeFetchedCommittedOffsetApplicationEventSuccessfully(mkMap());
 
         final int generation = 1;
         final String memberId = "newMemberId";
@@ -965,7 +964,7 @@ public class AsyncKafkaConsumerTest {
     }
 
     private void testUpdateFetchPositionsWithFetchCommittedOffsetsTimeout(boolean committedOffsetsEnabled) {
-        mockFetchedCommittedOffsetApplicationEventException(new TimeoutException());
+        completeFetchedCommittedOffsetApplicationEventExceptionally(new TimeoutException());
         doReturn(Fetch.empty()).when(fetchCollector).collectFetch(any(FetchBuffer.class));
 
         consumer.assign(singleton(new TopicPartition("t1", 1)));
@@ -992,7 +991,7 @@ public class AsyncKafkaConsumerTest {
 
     private void testRefreshCommittedOffsetsSuccess(Set<TopicPartition> partitions,
                                                     Map<TopicPartition, OffsetAndMetadata> committedOffsets) {
-        mockFetchedCommittedOffsetApplicationEventCompleted(committedOffsets);
+        completeFetchedCommittedOffsetApplicationEventSuccessfully(committedOffsets);
         doReturn(Fetch.empty()).when(fetchCollector).collectFetch(any(FetchBuffer.class));
         doReturn(LeaderAndEpoch.noLeaderOrEpoch()).when(metadata).currentLeader(any());
 
@@ -1069,7 +1068,7 @@ public class AsyncKafkaConsumerTest {
         return timestampToSearch;
     }
 
-    private void mockCommitApplicationEventException(Exception ex) {
+    private void completeCommitApplicationEventExceptionally(Exception ex) {
         doAnswer(invocation -> {
             CommitApplicationEvent event = invocation.getArgument(0);
             event.future().completeExceptionally(ex);
@@ -1077,7 +1076,7 @@ public class AsyncKafkaConsumerTest {
         }).when(applicationEventHandler).add(ArgumentMatchers.isA(CommitApplicationEvent.class));
     }
 
-    private void mockCommitApplicationEventCompleted() {
+    private void completeCommitApplicationEventExceptionally() {
         doAnswer(invocation -> {
             CommitApplicationEvent event = invocation.getArgument(0);
             event.future().complete(null);
@@ -1085,19 +1084,19 @@ public class AsyncKafkaConsumerTest {
         }).when(applicationEventHandler).add(ArgumentMatchers.isA(CommitApplicationEvent.class));
     }
 
-    private void mockFetchedCommittedOffsetApplicationEventCompleted(final Map<TopicPartition, OffsetAndMetadata> committedOffsets) {
+    private void completeFetchedCommittedOffsetApplicationEventSuccessfully(final Map<TopicPartition, OffsetAndMetadata> committedOffsets) {
         doReturn(committedOffsets)
             .when(applicationEventHandler)
             .addAndGet(any(FetchCommittedOffsetsApplicationEvent.class), any(Timer.class));
     }
 
-    private void mockFetchedCommittedOffsetApplicationEventException(Exception ex) {
+    private void completeFetchedCommittedOffsetApplicationEventExceptionally(Exception ex) {
         doThrow(ex)
             .when(applicationEventHandler)
             .addAndGet(any(FetchCommittedOffsetsApplicationEvent.class), any(Timer.class));
     }
 
-    private void mockUnsubscribeApplicationEventCompleted() {
+    private void completeUnsubscribeApplicationEventSuccessfully() {
         doAnswer(invocation -> {
             UnsubscribeApplicationEvent event = invocation.getArgument(0);
             event.future().complete(null);

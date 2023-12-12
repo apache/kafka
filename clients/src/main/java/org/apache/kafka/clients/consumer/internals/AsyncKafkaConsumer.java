@@ -89,7 +89,6 @@ import java.util.ConcurrentModificationException;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Optional;
 import java.util.OptionalLong;
 import java.util.Set;
@@ -376,44 +375,6 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             // now propagate the exception
             throw new KafkaException("Failed to construct kafka consumer", t);
         }
-    }
-
-    // Visible for testing
-    AsyncKafkaConsumer(LogContext logContext,
-                       String clientId,
-                       Deserializers<K, V> deserializers,
-                       FetchBuffer fetchBuffer,
-                       FetchCollector<K, V> fetchCollector,
-                       ConsumerInterceptors<K, V> interceptors,
-                       Time time,
-                       ApplicationEventHandler applicationEventHandler,
-                       BlockingQueue<BackgroundEvent> backgroundEventQueue,
-                       Metrics metrics,
-                       SubscriptionState subscriptions,
-                       ConsumerMetadata metadata,
-                       long retryBackoffMs,
-                       int defaultApiTimeoutMs,
-                       List<ConsumerPartitionAssignor> assignors,
-                       String groupId) {
-        this.log = logContext.logger(getClass());
-        this.subscriptions = subscriptions;
-        this.clientId = clientId;
-        this.fetchBuffer = fetchBuffer;
-        this.fetchCollector = fetchCollector;
-        this.isolationLevel = IsolationLevel.READ_UNCOMMITTED;
-        this.interceptors = Objects.requireNonNull(interceptors);
-        this.time = time;
-        this.backgroundEventProcessor = new BackgroundEventProcessor(logContext, backgroundEventQueue);
-        this.metrics = metrics;
-        this.groupMetadata = initializeGroupMetadata(groupId, Optional.empty());
-        this.metadata = metadata;
-        this.retryBackoffMs = retryBackoffMs;
-        this.defaultApiTimeoutMs = defaultApiTimeoutMs;
-        this.deserializers = deserializers;
-        this.applicationEventHandler = applicationEventHandler;
-        this.assignors = assignors;
-        this.kafkaConsumerMetrics = new KafkaConsumerMetrics(metrics, "consumer");
-        this.clientTelemetryReporter = Optional.empty();
     }
 
     // Visible for testing
