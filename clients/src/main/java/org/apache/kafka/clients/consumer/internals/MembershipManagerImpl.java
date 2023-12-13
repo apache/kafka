@@ -348,7 +348,7 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
         ConsumerGroupHeartbeatResponseData.Assignment assignment = response.assignment();
 
         if (assignment != null) {
-            if (!MemberState.RECONCILING.getPreviousValidStates().contains(state)) {
+            if (!state.canHandleNewAssignment()) {
                 // New assignment received but member is in a state where it cannot take new
                 // assignments (ex. preparing to leave the group)
                 log.debug("Ignoring new assignment {} received from server because member is in {} state.",

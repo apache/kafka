@@ -145,4 +145,13 @@ public enum MemberState {
     public List<MemberState> getPreviousValidStates() {
         return this.previousValidStates;
     }
+
+    /**
+     * @return True if the member is in a state where it should reconcile the new assignment.
+     * Expected to be true whenever the member is part of the group and intends of staying in it
+     * (ex. false when the member is preparing to leave the group).
+     */
+    public boolean canHandleNewAssignment() {
+        return MemberState.RECONCILING.getPreviousValidStates().contains(this);
+    }
 }
