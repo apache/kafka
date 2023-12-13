@@ -126,8 +126,7 @@ public class KTableKTableForeignKeyJoinDistributedTest {
         quietlyCleanStateAfterTest(CLUSTER, client2);
     }
 
-    public Properties getStreamsConfiguration(final TestInfo testInfo) {
-        final String safeTestName = safeUniqueTestName(getClass(), testInfo);
+    public Properties getStreamsConfiguration(final String safeTestName) {
         final Properties streamsConfiguration = new Properties();
         streamsConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG, "app-" + safeTestName);
         streamsConfiguration.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
@@ -158,8 +157,9 @@ public class KTableKTableForeignKeyJoinDistributedTest {
 
     @Test
     public void shouldBeInitializedWithDefaultSerde(final TestInfo testInfo) throws Exception {
-        final Properties streamsConfiguration1 = getStreamsConfiguration(testInfo);
-        final Properties streamsConfiguration2 = getStreamsConfiguration(testInfo);
+        final String safeTestName = safeUniqueTestName(testInfo);
+        final Properties streamsConfiguration1 = getStreamsConfiguration(safeTestName);
+        final Properties streamsConfiguration2 = getStreamsConfiguration(safeTestName);
 
         //Each streams client needs to have it's own StreamsBuilder in order to simulate
         //a truly distributed run

@@ -132,9 +132,9 @@ public class KStreamAggregationIntegrationTest {
     @BeforeEach
     public void before(final TestInfo testInfo) throws InterruptedException {
         builder = new StreamsBuilder();
-        createTopics(testInfo);
+        final String safeTestName = safeUniqueTestName(testInfo);
+        createTopics(safeTestName);
         streamsConfiguration = new Properties();
-        final String safeTestName = safeUniqueTestName(getClass(), testInfo);
         streamsConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG, "app-" + safeTestName);
         streamsConfiguration.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
         streamsConfiguration.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
@@ -1041,8 +1041,7 @@ public class KStreamAggregationIntegrationTest {
     }
 
 
-    private void createTopics(final TestInfo testInfo) throws InterruptedException {
-        final String safeTestName = safeUniqueTestName(getClass(), testInfo);
+    private void createTopics(final String safeTestName) throws InterruptedException {
         streamOneInput = "stream-one-" + safeTestName;
         outputTopic = "output-" + safeTestName;
         userSessionsStream = "user-sessions-" + safeTestName;
@@ -1071,7 +1070,7 @@ public class KStreamAggregationIntegrationTest {
                                                                  final TestInfo testInfo)
             throws Exception {
 
-        final String safeTestName = safeUniqueTestName(getClass(), testInfo);
+        final String safeTestName = safeUniqueTestName(testInfo);
         final Properties consumerProperties = new Properties();
         consumerProperties.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
         consumerProperties.setProperty(ConsumerConfig.GROUP_ID_CONFIG, "group-" + safeTestName);
@@ -1095,7 +1094,7 @@ public class KStreamAggregationIntegrationTest {
                                                                               final Class innerClass,
                                                                               final int numMessages,
                                                                               final TestInfo testInfo) throws Exception {
-        final String safeTestName = safeUniqueTestName(getClass(), testInfo);
+        final String safeTestName = safeUniqueTestName(testInfo);
         final Properties consumerProperties = new Properties();
         consumerProperties.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
         consumerProperties.setProperty(ConsumerConfig.GROUP_ID_CONFIG, "group-" + safeTestName);

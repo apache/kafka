@@ -164,7 +164,7 @@ public abstract class AbstractResetIntegrationTest {
     protected static final int TIMEOUT_MULTIPLIER = 15;
 
     void prepareTest() throws Exception {
-        final String appID = IntegrationTestUtils.safeUniqueTestName(getClass(), testName);
+        final String appID = IntegrationTestUtils.safeUniqueTestName(testName);
         prepareConfigs(appID);
         prepareEnvironment();
 
@@ -205,7 +205,7 @@ public abstract class AbstractResetIntegrationTest {
 
     @Test
     public void testResetWhenInternalTopicsAreSpecified() throws Exception {
-        final String appID = IntegrationTestUtils.safeUniqueTestName(getClass(), testName);
+        final String appID = IntegrationTestUtils.safeUniqueTestName(testName);
         streamsConfig.put(StreamsConfig.APPLICATION_ID_CONFIG, appID);
 
         // RUN
@@ -233,7 +233,7 @@ public abstract class AbstractResetIntegrationTest {
 
     @Test
     public void testReprocessingFromScratchAfterResetWithoutIntermediateUserTopic() throws Exception {
-        final String appID = IntegrationTestUtils.safeUniqueTestName(getClass(), testName);
+        final String appID = IntegrationTestUtils.safeUniqueTestName(testName);
         streamsConfig.put(StreamsConfig.APPLICATION_ID_CONFIG, appID);
 
         // RUN
@@ -278,7 +278,7 @@ public abstract class AbstractResetIntegrationTest {
             cluster.createTopic(INTERMEDIATE_USER_TOPIC);
         }
 
-        final String appID = IntegrationTestUtils.safeUniqueTestName(getClass(), testName);
+        final String appID = IntegrationTestUtils.safeUniqueTestName(testName);
         streamsConfig.put(StreamsConfig.APPLICATION_ID_CONFIG, appID);
 
         // RUN

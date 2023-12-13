@@ -217,7 +217,7 @@ public class NamedTopologyIntegrationTest {
 
     @BeforeEach
     public void setup(final TestInfo testInfo) throws Exception {
-        appId = safeUniqueTestName(NamedTopologyIntegrationTest.class, testInfo);
+        appId = safeUniqueTestName(testInfo);
         changelog1 = TOPIC_PREFIX + "-" + TOPOLOGY_1 + "-store-changelog";
         changelog2 = TOPIC_PREFIX + "-" + TOPOLOGY_2 + "-store-changelog";
         changelog3 = TOPIC_PREFIX + "-" + TOPOLOGY_3 + "-store-changelog";

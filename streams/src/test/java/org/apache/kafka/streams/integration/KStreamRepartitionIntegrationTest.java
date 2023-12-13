@@ -135,7 +135,7 @@ public class KStreamRepartitionIntegrationTest {
         streamsConfiguration = new Properties();
         kafkaStreamsInstances = new ArrayList<>();
 
-        safeTestName = safeUniqueTestName(getClass(), testName);
+        safeTestName = safeUniqueTestName(testName);
 
         topicB = "topic-b-" + safeTestName;
         inputTopic = "input-topic-" + safeTestName;
@@ -890,7 +890,7 @@ public class KStreamRepartitionIntegrationTest {
                                                  final List<KeyValue<K, V>> expectedRecords,
                                                  final String outputTopic) throws Exception {
 
-        final String safeTestName = safeUniqueTestName(getClass(), testName);
+        final String safeTestName = safeUniqueTestName(testName);
         final Properties consumerProperties = new Properties();
         consumerProperties.setProperty(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
         consumerProperties.setProperty(ConsumerConfig.GROUP_ID_CONFIG, "group-" + safeTestName);

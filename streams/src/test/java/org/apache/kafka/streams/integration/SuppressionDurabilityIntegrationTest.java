@@ -130,7 +130,7 @@ public class SuppressionDurabilityIntegrationTest {
     @Test
     @SuppressWarnings("deprecation")
     public void shouldRecoverBufferAfterShutdown() {
-        final String testId = safeUniqueTestName(getClass(), testName);
+        final String testId = safeUniqueTestName(testName);
         final String appId = "appId_" + testId;
         final String input = "input" + testId;
         final String storeName = "counts";

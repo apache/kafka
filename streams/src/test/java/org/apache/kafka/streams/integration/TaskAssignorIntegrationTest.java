@@ -92,7 +92,7 @@ public class TaskAssignorIntegrationTest {
         // ensure these configurations wind up where they belong, and any number of future code changes
         // could break this change.
 
-        final String testId = safeUniqueTestName(getClass(), testName);
+        final String testId = safeUniqueTestName(testName);
         final String appId = "appId_" + testId;
         final String inputTopic = "input" + testId;
 

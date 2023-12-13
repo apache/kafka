@@ -159,7 +159,9 @@ public class IQv2IntegrationTest {
             Materialized.as(STORE_NAME)
         );
 
-        kafkaStreams = new KafkaStreams(builder.build(), streamsConfiguration(testInfo));
+
+        final String safeTestName = IntegrationTestUtils.safeUniqueTestName(testInfo);
+        kafkaStreams = new KafkaStreams(builder.build(), streamsConfiguration(safeTestName));
         kafkaStreams.cleanUp();
     }
 
@@ -420,7 +422,8 @@ public class IQv2IntegrationTest {
 
         // Discard the basic streams and replace with test-specific topology
         kafkaStreams.close();
-        kafkaStreams = new KafkaStreams(builder.build(), streamsConfiguration(testInfo));
+        final String safeTestName = IntegrationTestUtils.safeUniqueTestName(testInfo);
+        kafkaStreams = new KafkaStreams(builder.build(), streamsConfiguration(safeTestName));
         kafkaStreams.cleanUp();
 
         kafkaStreams.start();
@@ -438,9 +441,7 @@ public class IQv2IntegrationTest {
     }
 
 
-    private Properties streamsConfiguration(final TestInfo testInfo) {
-        final String safeTestName = IntegrationTestUtils.safeUniqueTestName(getClass(), testInfo);
-
+    private Properties streamsConfiguration(final String safeTestName) {
         final Properties config = new Properties();
         config.put(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, StreamsConfig.OPTIMIZE);
         config.put(StreamsConfig.APPLICATION_ID_CONFIG, "app-" + safeTestName);

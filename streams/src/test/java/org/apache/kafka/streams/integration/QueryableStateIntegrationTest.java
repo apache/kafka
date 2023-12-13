@@ -160,8 +160,7 @@ public class QueryableStateIntegrationTest {
     private Comparator<KeyValue<String, String>> stringComparator;
     private Comparator<KeyValue<String, Long>> stringLongComparator;
 
-    private void createTopics(final TestInfo testInfo) throws Exception {
-        final String safeTestName = safeUniqueTestName(getClass(), testInfo);
+    private void createTopics(final String safeTestName) throws Exception {
         streamOne = streamOne + "-" + safeTestName;
         streamConcurrent = streamConcurrent + "-" + safeTestName;
         streamThree = streamThree + "-" + safeTestName;
@@ -214,9 +213,9 @@ public class QueryableStateIntegrationTest {
 
     @BeforeEach
     public void before(final TestInfo testInfo) throws Exception {
-        createTopics(testInfo);
+        final String safeTestName = safeUniqueTestName(testInfo);
+        createTopics(safeTestName);
         streamsConfiguration = new Properties();
-        final String safeTestName = safeUniqueTestName(getClass(), testInfo);
 
         streamsConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG, "app-" + safeTestName);
         streamsConfiguration.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
@@ -444,7 +443,7 @@ public class QueryableStateIntegrationTest {
 
     @Test
     public void shouldRejectNonExistentStoreName(final TestInfo testInfo) throws InterruptedException {
-        final String uniqueTestName = safeUniqueTestName(getClass(), testInfo);
+        final String uniqueTestName = safeUniqueTestName(testInfo);
         final String input = uniqueTestName + "-input";
         final String storeName = uniqueTestName + "-input-table";
 
@@ -458,7 +457,7 @@ public class QueryableStateIntegrationTest {
         );
 
         final Properties properties = mkProperties(mkMap(
-            mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, safeUniqueTestName(getClass(), testInfo)),
+            mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, uniqueTestName),
             mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers())
         ));
 
@@ -482,7 +481,7 @@ public class QueryableStateIntegrationTest {
 
     @Test
     public void shouldRejectWronglyTypedStore(final TestInfo testInfo) throws InterruptedException {
-        final String uniqueTestName = safeUniqueTestName(getClass(), testInfo);
+        final String uniqueTestName = safeUniqueTestName(testInfo);
         final String input = uniqueTestName + "-input";
         final String storeName = uniqueTestName + "-input-table";
 

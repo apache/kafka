@@ -100,7 +100,7 @@ public class AdjustStreamThreadCountTest {
 
     @BeforeEach
     public void setup(final TestInfo testInfo) {
-        final String testId = safeUniqueTestName(getClass(), testInfo);
+        final String testId = safeUniqueTestName(testInfo);
         appId = "appId_" + testId;
         inputTopic = "input" + testId;
         IntegrationTestUtils.cleanStateBeforeTest(CLUSTER, inputTopic);

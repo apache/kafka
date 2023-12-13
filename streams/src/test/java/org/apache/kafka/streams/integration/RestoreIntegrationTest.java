@@ -139,7 +139,7 @@ public class RestoreIntegrationTest {
 
     @BeforeEach
     public void createTopics(final TestInfo testInfo) throws InterruptedException {
-        appId = safeUniqueTestName(RestoreIntegrationTest.class, testInfo);
+        appId = safeUniqueTestName(testInfo);
         inputStream = appId + "-input-stream";
         CLUSTER.createTopic(inputStream, 2, 1);
     }
