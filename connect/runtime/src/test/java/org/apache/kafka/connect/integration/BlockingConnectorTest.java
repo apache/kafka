@@ -390,6 +390,8 @@ public class BlockingConnectorTest {
     public static class Block {
         // All latches that blocking connectors/tasks are or will be waiting on during a test case
         private static final Set<CountDownLatch> BLOCK_LATCHES = new HashSet<>();
+        // All threads that are or were at one point blocked
+        private static final Set<Thread> BLOCKED_THREADS = new HashSet<>();
         // The latch that can be used to wait for a connector/task to reach the most-recently-registered blocking point
         private static CountDownLatch awaitBlockLatch;
 
@@ -444,6 +446,17 @@ public class BlockingConnectorTest {
             resetAwaitBlockLatch();
             BLOCK_LATCHES.forEach(CountDownLatch::countDown);
             BLOCK_LATCHES.clear();
+            BLOCKED_THREADS.forEach(t -> {
+                try {
+                    t.join(30_000);
+                    if (t.isAlive()) {
+                        log.warn("Thread {} failed to finish in time", t);
+                    }
+                } catch (InterruptedException e) {
+                    throw new RuntimeException("Interrupted while waiting for blocked thread " + t + " to finish");
+                }
+            });
+            BLOCKED_THREADS.clear();
         }
 
         // Note that there is only ever at most one global await-block latch at a time, which makes tests that
@@ -487,6 +500,7 @@ public class BlockingConnectorTest {
                 synchronized (Block.class) {
                     awaitBlockLatch.countDown();
                     blockLatch = newBlockLatch();
+                    BLOCKED_THREADS.add(Thread.currentThread());
                 }
                 while (true) {
                     try {
