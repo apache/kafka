@@ -89,6 +89,8 @@ public class KRaftMigrationDriver implements MetadataPublisher {
      */
     private final static int METADATA_COMMIT_MAX_WAIT_MS = 300_000;
 
+    private final static int MIGRATION_MIN_BATCH_SIZE = 1_000;
+
     private final Time time;
     private final Logger log;
     private final int nodeId;
@@ -645,6 +647,29 @@ public class KRaftMigrationDriver implements MetadataPublisher {
         }
     }
 
+    private BufferingBatchConsumer buildMigrationBatchConsumer(
+        MigrationManifest.Builder manifestBuilder
+    ) {
+        return new BufferingBatchConsumer(batch -> {
+            try {
+                if (log.isTraceEnabled()) {
+                    batch.forEach(apiMessageAndVersion ->
+                            log.trace(recordRedactor.toLoggableString(apiMessageAndVersion.message())));
+                }
+                CompletableFuture<?> future = zkRecordConsumer.acceptBatch(batch);
+                long batchStart = time.nanoseconds();
+                FutureUtils.waitWithLogging(KRaftMigrationDriver.this.log, "",
+                    "the metadata layer to commit " + batch.size() + " migration records",
+                    future, Deadline.fromDelay(time, METADATA_COMMIT_MAX_WAIT_MS, TimeUnit.MILLISECONDS), time);
+                long batchEnd = time.nanoseconds();
+                manifestBuilder.acceptBatch(batch, batchEnd - batchStart);
+            } catch (Throwable e) {
+                // This will cause readAllMetadata to throw since this batch consumer is called directly from readAllMetadata
+                throw new RuntimeException(e);
+            }
+        }, MIGRATION_MIN_BATCH_SIZE);
+    }
+
     class MigrateMetadataEvent extends MigrationEvent {
         @Override
         public void run() throws Exception {
@@ -664,23 +689,12 @@ public class KRaftMigrationDriver implements MetadataPublisher {
                 super.handleException(t);
             }
             try {
-                zkMigrationClient.readAllMetadata(batch -> {
-                    try {
-                        log.info("Migrating {} records from ZK", batch.size());
-                        if (log.isTraceEnabled()) {
-                            batch.forEach(apiMessageAndVersion ->
-                                log.trace(recordRedactor.toLoggableString(apiMessageAndVersion.message())));
-                        }
-                        CompletableFuture<?> future = zkRecordConsumer.acceptBatch(batch);
-                        FutureUtils.waitWithLogging(KRaftMigrationDriver.this.log, "",
-                            "the metadata layer to commit migration record batch",
-                            future, Deadline.fromDelay(time, METADATA_COMMIT_MAX_WAIT_MS, TimeUnit.MILLISECONDS), time);
-                        manifestBuilder.acceptBatch(batch);
-                    } catch (Throwable e) {
-                        // This will cause readAllMetadata to throw since this batch consumer is called directly from readAllMetadata
-                        throw new RuntimeException(e);
-                    }
-                }, brokersInMetadata::add);
+                BufferingBatchConsumer migrationBatchConsumer = buildMigrationBatchConsumer(manifestBuilder);
+                zkMigrationClient.readAllMetadata(
+                    migrationBatchConsumer,
+                    brokersInMetadata::add
+                );
+                migrationBatchConsumer.close();
                 CompletableFuture<OffsetAndEpoch> completeMigrationFuture = zkRecordConsumer.completeMigration();
                 OffsetAndEpoch offsetAndEpochAfterMigration = FutureUtils.waitWithLogging(
                     KRaftMigrationDriver.this.log, "",
