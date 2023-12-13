@@ -101,12 +101,6 @@ class LogDirFailureTest extends IntegrationTestHarness {
     }
   }
 
-  // TODO: depends on KAFKA-15893
-  @Test
-  def kraftBrokerWithOldInterBrokerProtocolShouldHaltOnLogDirFailure(): Unit = {
-    fail("KRaft broker should fail on log dir failure if inter-broker protocol < 3.7")
-  }
-
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testProduceErrorFromFailureOnCheckpoint(quorum: String): Unit = {
