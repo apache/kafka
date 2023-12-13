@@ -2348,7 +2348,8 @@ public class GroupMetadataManager {
                         // We failed to write the empty group metadata. If the broker fails before another rebalance,
                         // the previous generation written to the log will become active again (and most likely timeout).
                         // This should be safe since there are no active members in an empty generation, so we just warn.
-                        log.warn("Failed to write empty metadata for group {}: {}", group.groupId(), t.getMessage());
+                        Errors error = appendGroupMetadataErrorToResponseError(Errors.forException(t));
+                        log.warn("Failed to write empty metadata for group {}: {}", group.groupId(), error.message());
                     }
                 });
 
@@ -3096,7 +3097,7 @@ public class GroupMetadataManager {
                     // when it gets invoked. if we have transitioned to another state, then do nothing
                     if (group.isInState(COMPLETING_REBALANCE) && request.generationId() == group.generationId()) {
                         if (t != null) {
-                            Errors error = Errors.forException(t);
+                            Errors error = appendGroupMetadataErrorToResponseError(Errors.forException(t));
                             resetAndPropagateAssignmentWithError(group, error);
                             maybePrepareRebalanceOrCompleteJoin(group, "Error " + error + " when storing group assignment" +
                                 "during SyncGroup (member: " + memberId + ").");
