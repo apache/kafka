@@ -913,7 +913,7 @@ public class OffsetsApiIntegrationTest {
      * Modify (i.e., alter or reset) the offsets for a sink connector, with retry logic to
      * handle cases where laggy task shutdown may have left a consumer in the group.
      * @param offsetsToAlter the offsets to alter for the sink connector, or null if
-     *                       the connector's offets should be reset instead
+     *                       the connector's offsets should be reset instead
      * @return the response from the REST API, if the request was successful
      * @throws InterruptedException if the thread is interrupted while waiting for a
      * request to modify the connector's offsets to succeed
