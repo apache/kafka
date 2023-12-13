@@ -114,7 +114,7 @@ public enum MemberState {
 
         STABLE.previousValidStates = Arrays.asList(JOINING, ACKNOWLEDGING, RECONCILING);
 
-        RECONCILING.previousValidStates = Arrays.asList(STABLE, JOINING, ACKNOWLEDGING);
+        RECONCILING.previousValidStates = Arrays.asList(STABLE, JOINING, ACKNOWLEDGING, RECONCILING);
 
         ACKNOWLEDGING.previousValidStates = Arrays.asList(RECONCILING);
 
