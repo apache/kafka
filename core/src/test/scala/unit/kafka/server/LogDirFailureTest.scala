@@ -73,7 +73,7 @@ class LogDirFailureTest extends IntegrationTestHarness {
   // Broker should halt on any log directory failure if inter-broker protocol < 1.0
   @nowarn("cat=deprecation")
   @Test
-  def zkBrokerWithOldInterBrokerProtocolShouldHaltOnLogDirFailure(): Unit = {
+  def testZkBrokerWithOldInterBrokerProtocolShouldHaltOnLogDirFailure(): Unit = {
     @volatile var statusCodeOption: Option[Int] = None
     Exit.setHaltProcedure { (statusCode, _) =>
       statusCodeOption = Some(statusCode)
@@ -195,7 +195,7 @@ class LogDirFailureTest extends IntegrationTestHarness {
       // ProduceResponse may contain KafkaStorageException and trigger metadata update
       producer.send(record)
       producer.partitionsFor(topic).asScala.find(_.partition() == 0).get.leader().id() != originalLeaderServerId
-    }, "Expected new leader for the partition", 6000L)
+    }, "Expected new leader for the partition")
 
     // Block on send to ensure that new leader accepts a message.
     producer.send(record).get(6000L, TimeUnit.MILLISECONDS)
@@ -218,7 +218,7 @@ class LogDirFailureTest extends IntegrationTestHarness {
             .getClusterMetadata(broker.clusterId, broker.config.interBrokerListenerName)
             .partition(new TopicPartition(topic, 0)).offlineReplicas().map(_.id()).contains(originalLeaderServerId)
         })
-      }, "Expected to find an offline log dir", 60000L)
+      }, "Expected to find an offline log dir")
     } else {
       // The controller should have marked the replica on the original leader as offline
       val controllerServer = servers.find(_.kafkaController.isActive).get
