@@ -997,7 +997,7 @@ public class CoordinatorRuntimeTest {
         CompletableFuture<String> timedOutWrite = runtime.scheduleWriteOperation("write#1", TP, Duration.ofMillis(3),
             state -> new CoordinatorResult<>(Arrays.asList("record1", "record2"), "response1"));
 
-        timer.advanceClock(DEFAULT_WRITE_TIMEOUT.toMillis() + 3);
+        timer.advanceClock(4);
 
         assertFutureThrows(timedOutWrite, org.apache.kafka.common.errors.TimeoutException.class);
     }
