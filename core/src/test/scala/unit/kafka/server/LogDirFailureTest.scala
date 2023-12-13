@@ -197,23 +197,21 @@ class LogDirFailureTest extends IntegrationTestHarness {
     // Consumer should receive some messages
     TestUtils.pollUntilAtLeastNumRecords(consumer, 1)
 
-    // There should be no remaining LogDirEventNotification znode
-    if (quorum == "zk") {
-      assertTrue(zkClient.getAllLogDirEventNotifications.isEmpty)
-    }
-
     if (quorum == "kraft") {
       waitUntilTrue(() => {
-        brokers.exists(broker => {
-          val hasOfflineDir = broker.asInstanceOf[BrokerServer].logDirFailureChannel.hasOfflineLogDir(failedLogDir.toPath.toString)
-          hasOfflineDir && broker.asInstanceOf[BrokerServer]
-            .replicaManager
-            .metadataCache
+        // get the broker with broker.nodeId == originalLeaderServerId
+        val brokerWithDirFail = brokers.find(_.config.nodeId == originalLeaderServerId).map(_.asInstanceOf[BrokerServer])
+        // check if the broker has the offline log dir
+        val hasOfflineDir = brokerWithDirFail.exists(_.logDirFailureChannel.hasOfflineLogDir(failedLogDir.toPath.toString))
+        // check if the broker has the offline replica
+        hasOfflineDir && brokerWithDirFail.exists(broker =>
+          broker.replicaManager.metadataCache
             .getClusterMetadata(broker.clusterId, broker.config.interBrokerListenerName)
-            .partition(new TopicPartition(topic, 0)).offlineReplicas().map(_.id()).contains(originalLeaderServerId)
-        })
+            .partition(new TopicPartition(topic, 0)).offlineReplicas().map(_.id()).contains(originalLeaderServerId))
       }, "Expected to find an offline log dir")
     } else {
+      // There should be no remaining LogDirEventNotification znode
+      assertTrue(zkClient.getAllLogDirEventNotifications.isEmpty)
       // The controller should have marked the replica on the original leader as offline
       val controllerServer = servers.find(_.kafkaController.isActive).get
       val offlineReplicas = controllerServer.kafkaController.controllerContext.replicasInState(topic, OfflineReplica)
