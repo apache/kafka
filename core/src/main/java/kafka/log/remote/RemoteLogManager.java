@@ -344,7 +344,8 @@ public class RemoteLogManager implements Closeable {
             followerPartitions.forEach(
                     topicIdPartition -> brokerTopicStats.topicStats(topicIdPartition.topic()).removeRemoteCopyBytesLag(topicIdPartition.partition()));
 
-            remoteLogMetadataManager.onPartitionLeadershipChanges(leaderPartitions, followerPartitions);followerPartitions.forEach(topicIdPartition ->
+            remoteLogMetadataManager.onPartitionLeadershipChanges(leaderPartitions, followerPartitions);
+            followerPartitions.forEach(topicIdPartition ->
                     doHandleLeaderOrFollowerPartitions(topicIdPartition, RLMTask::convertToFollower));
 
             leaderPartitionsWithLeaderEpoch.forEach((topicIdPartition, leaderEpoch) ->
