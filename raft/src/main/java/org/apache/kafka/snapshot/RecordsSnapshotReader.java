@@ -62,12 +62,7 @@ public final class RecordsSnapshotReader<T> implements SnapshotReader<T> {
     public long lastContainedLogTimestamp() {
         if (!lastContainedLogTimestamp.isPresent()) {
             nextBatch.ifPresent(batch -> {
-                throw new IllegalStateException(
-                    String.format(
-                        "nextBatch was present when last contained log timestamp was not present",
-                        batch
-                    )
-                );
+                throw new IllegalStateException("nextBatch was present when last contained log timestamp was not present");
             });
             nextBatch = nextBatch();
         }
