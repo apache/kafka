@@ -994,12 +994,12 @@ public class CoordinatorRuntimeTest {
         assertEquals(Collections.singletonList(0L), ctx.coordinator.snapshotRegistry().epochsList());
 
         // Write #1. We should get a TimeoutException because the HWM will not advance.
-        CompletableFuture<String> timedOutWrite = runtime.scheduleWriteOperation("write#1", TP, DEFAULT_WRITE_TIMEOUT,
+        CompletableFuture<String> timedOutWrite = runtime.scheduleWriteOperation("write#1", TP, Duration.ofMillis(3),
             state -> new CoordinatorResult<>(Arrays.asList("record1", "record2"), "response1"));
 
-        timer.advanceClock(DEFAULT_WRITE_TIMEOUT.toMillis() * 2);
+        timer.advanceClock(DEFAULT_WRITE_TIMEOUT.toMillis() + 1);
 
-        assertFutureThrows(timedOutWrite, TimeoutException.class);
+        assertFutureThrows(timedOutWrite, org.apache.kafka.common.errors.TimeoutException.class);
     }
 
     @Test
