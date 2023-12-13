@@ -17,6 +17,7 @@
 
 package org.apache.kafka.server;
 
+import com.yammer.metrics.core.Gauge;
 import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.AssignReplicasToDirsRequestData;
@@ -34,6 +35,7 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.queue.EventQueue;
 import org.apache.kafka.queue.KafkaEventQueue;
 import org.apache.kafka.server.common.TopicIdPartition;
+import org.apache.kafka.server.metrics.KafkaMetricsGroup;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -41,6 +43,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -66,15 +69,20 @@ public class AssignmentsManager {
 
     private static final long MAX_BACKOFF_INTERVAL_MS = TimeUnit.SECONDS.toNanos(10);
 
+    // visible for testing.
+    static final String QUEUE_REPLICA_TO_DIR_ASSIGNMENTS_METRIC_NAME = "QueuedReplicaToDirAssignments";
+
     private final Time time;
     private final NodeToControllerChannelManager channelManager;
     private final int brokerId;
     private final Supplier<Long> brokerEpochSupplier;
     private final KafkaEventQueue eventQueue;
+    private final KafkaMetricsGroup metricsGroup = new KafkaMetricsGroup(this.getClass());
 
-    // These variables should only be mutated from the KafkaEventQueue thread
-    private Map<TopicIdPartition, AssignmentEvent> inflight = null;
-    private Map<TopicIdPartition, AssignmentEvent> pending = new HashMap<>();
+    // These variables should only be mutated from the KafkaEventQueue thread,
+    // but `inflight` and `pending` are also read from a Yammer metrics gauge.
+    private volatile Map<TopicIdPartition, AssignmentEvent> inflight = null;
+    private volatile Map<TopicIdPartition, AssignmentEvent> pending = new HashMap<>();
     private final ExponentialBackoff resendExponentialBackoff =
             new ExponentialBackoff(100, 2, MAX_BACKOFF_INTERVAL_MS, 0.02);
     private int failedAttempts = 0;
@@ -92,10 +100,24 @@ public class AssignmentsManager {
                 "broker-" + brokerId + "-directory-assignments-manager-",
                 new ShutdownEvent());
         channelManager.start();
+        this.metricsGroup.newGauge(QUEUE_REPLICA_TO_DIR_ASSIGNMENTS_METRIC_NAME, new Gauge<Integer>() {
+            @Override
+            public Integer value() {
+                return getMapSize(inflight) + getMapSize(pending);
+            }
+
+            private int getMapSize(Map<TopicIdPartition, AssignmentEvent> map) {
+                return map == null ? 0 : map.size();
+            }
+        });
     }
 
     public void close() throws InterruptedException {
-        eventQueue.close();
+        try {
+            eventQueue.close();
+        } finally {
+            metricsGroup.removeMetric(QUEUE_REPLICA_TO_DIR_ASSIGNMENTS_METRIC_NAME);
+        }
     }
 
     public void onAssignment(TopicIdPartition topicPartition, Uuid dirId, Runnable callback) {
@@ -145,12 +167,29 @@ public class AssignmentsManager {
         final long timestampNs;
         final TopicIdPartition partition;
         final Uuid dirId;
-        final Runnable callback;
-        AssignmentEvent(long timestampNs, TopicIdPartition partition, Uuid dirId, Runnable callback) {
+        final List<Runnable> completionHandlers;
+        AssignmentEvent(long timestampNs, TopicIdPartition partition, Uuid dirId, Runnable onComplete) {
             this.timestampNs = timestampNs;
             this.partition = partition;
             this.dirId = dirId;
-            this.callback = callback == null ? () -> { } : callback;
+            this.completionHandlers = new ArrayList<>();
+            if (onComplete != null) {
+                completionHandlers.add(onComplete);
+            }
+        }
+        void merge(AssignmentEvent other) {
+            if (!partition.equals(other.partition)) {
+                throw new IllegalArgumentException("Cannot merge events for different partitions");
+            }
+            if (!dirId.equals(other.dirId)) {
+                throw new IllegalArgumentException("Cannot merge events for different directories");
+            }
+            completionHandlers.addAll(other.completionHandlers);
+        }
+        void onComplete() {
+            for (Runnable onComplete : completionHandlers) {
+                onComplete.run();
+            }
         }
         @Override
         public void run() throws Exception {
@@ -160,10 +199,12 @@ public class AssignmentsManager {
             }
             if (existing != null) {
                 if (existing.dirId.equals(dirId)) {
+                    existing.merge(this);
                     if (log.isDebugEnabled()) log.debug("Ignoring duplicate assignment {}", this);
                     return;
                 }
                 if (existing.timestampNs > timestampNs) {
+                    existing.onComplete();
                     if (log.isDebugEnabled()) log.debug("Dropping assignment {} because it's older than {}", this, existing);
                     return;
                 }
@@ -261,7 +302,9 @@ public class AssignmentsManager {
 
                 Set<AssignmentEvent> failed = filterFailures(data, inflight);
                 Set<AssignmentEvent> completed = Utils.diff(HashSet::new, inflight.values().stream().collect(Collectors.toSet()), failed);
-                completed.forEach(assignmentEvent -> assignmentEvent.callback.run());
+                for (AssignmentEvent assignmentEvent : completed) {
+                    assignmentEvent.onComplete();
+                }
 
                 if (!failed.isEmpty()) {
                     log.warn("Re-queueing assignments: {}", failed);
@@ -309,7 +352,7 @@ public class AssignmentsManager {
     }
 
     private void scheduleDispatch(long delayNs) {
-        if (log.isTraceEnabled()) {
+        if (log.isDebugEnabled()) {
             log.debug("Scheduling dispatch in {}ns", delayNs);
         }
         eventQueue.enqueue(EventQueue.EventInsertionType.DEFERRED, DispatchEvent.TAG,

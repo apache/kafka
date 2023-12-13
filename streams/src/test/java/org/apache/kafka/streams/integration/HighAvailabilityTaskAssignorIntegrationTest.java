@@ -134,7 +134,7 @@ public class HighAvailabilityTaskAssignorIntegrationTest {
                                                final TestInfo testInfo,
                                                final String rackAwareStrategy) throws InterruptedException {
         // Replace "balance_subtopology" with shorter name since max name length is 249
-        final String testId = safeUniqueTestName(getClass(), testInfo).replaceAll("balance_subtopology", "balance");
+        final String testId = safeUniqueTestName(testInfo).replaceAll("balance_subtopology", "balance");
         final String appId = "appId_" + System.currentTimeMillis() + "_" + testId;
         final String inputTopic = "input" + testId;
         final Set<TopicPartition> inputTopicPartitions = mkSet(
