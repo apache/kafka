@@ -20,6 +20,7 @@ import com.yammer.metrics.core.Gauge;
 import kafka.cluster.EndPoint;
 import kafka.cluster.Partition;
 import kafka.log.UnifiedLog;
+import kafka.server.BrokerTopicMetrics;
 import kafka.server.BrokerTopicStats;
 import kafka.server.KafkaConfig;
 import kafka.server.StopPartition;
@@ -1020,6 +1021,7 @@ public class RemoteLogManager implements Closeable {
             Iterator<Integer> epochIterator = epochWithOffsets.navigableKeySet().iterator();
             boolean canProcess = true;
             List<RemoteLogSegmentMetadata> segmentsToDelete = new ArrayList<>();
+            long sizeOfDeletableSegmentsBytes = 0L;
             while (canProcess && epochIterator.hasNext()) {
                 Integer epoch = epochIterator.next();
                 Iterator<RemoteLogSegmentMetadata> segmentsIterator = remoteLogMetadataManager.listRemoteLogSegments(topicIdPartition, epoch);
@@ -1055,6 +1057,7 @@ public class RemoteLogManager implements Closeable {
                     }
                     if (shouldDeleteSegment) {
                         segmentsToDelete.add(metadata);
+                        sizeOfDeletableSegmentsBytes += metadata.segmentSizeInBytes();
                     }
                     canProcess = shouldDeleteSegment || !isValidSegment;
                 }
@@ -1071,10 +1074,20 @@ public class RemoteLogManager implements Closeable {
             // and delete them accordingly.
             // If the follower HAS NOT picked up the changes, and they become the leader then they will go through this process
             // again and delete them with the original deletion reason i.e. size, time or log start offset breach.
+            BrokerTopicMetrics brokerTopicMetrics = brokerTopicStats.topicStats(topicIdPartition.topic());
+            int partition = topicIdPartition.partition();
+            brokerTopicMetrics.recordRemoteDeleteBytesLag(partition, sizeOfDeletableSegmentsBytes);
+            int segmentsLeftToDelete = segmentsToDelete.size();
+            brokerTopicMetrics.recordRemoteDeleteSegmentsLag(partition, segmentsLeftToDelete);
             List<String> undeletedSegments = new ArrayList<>();
             for (RemoteLogSegmentMetadata segmentMetadata : segmentsToDelete) {
                 if (!remoteLogRetentionHandler.deleteRemoteLogSegment(segmentMetadata, x -> !isCancelled() && isLeader())) {
                     undeletedSegments.add(segmentMetadata.remoteLogSegmentId().toString());
+                } else {
+                    sizeOfDeletableSegmentsBytes -= segmentMetadata.segmentSizeInBytes();
+                    segmentsLeftToDelete--;
+                    brokerTopicMetrics.recordRemoteDeleteBytesLag(partition, sizeOfDeletableSegmentsBytes);
+                    brokerTopicMetrics.recordRemoteDeleteSegmentsLag(partition, segmentsLeftToDelete);
                 }
             }
             if (!undeletedSegments.isEmpty()) {
