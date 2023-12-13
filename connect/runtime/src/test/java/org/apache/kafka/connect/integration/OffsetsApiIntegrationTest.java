@@ -172,7 +172,7 @@ public class OffsetsApiIntegrationTest {
     @Test
     public void testGetSinkConnectorOffsetsOverriddenConsumerGroupId() throws Exception {
         Map<String, String> connectorConfigs = baseSinkConnectorConfigs();
-        String overriddenGroupId = connectorName = "-overridden-group-id";
+        String overriddenGroupId = connectorName + "-overridden-group-id";
         connectorConfigs.put(
                 ConnectorConfig.CONNECTOR_CLIENT_CONSUMER_OVERRIDES_PREFIX + CommonClientConfigs.GROUP_ID_CONFIG,
                 overriddenGroupId
