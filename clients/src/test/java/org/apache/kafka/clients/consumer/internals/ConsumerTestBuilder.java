@@ -200,6 +200,7 @@ public class ConsumerTestBuilder implements Closeable {
                     new MembershipManagerImpl(
                         gi.groupId,
                         gi.groupInstanceId,
+                        groupRebalanceConfig.rebalanceTimeoutMs,
                         gi.serverAssignor,
                         subscriptions,
                         commit,

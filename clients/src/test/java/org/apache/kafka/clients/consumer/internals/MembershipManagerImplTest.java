@@ -66,6 +66,7 @@ public class MembershipManagerImplTest {
 
     private static final String GROUP_ID = "test-group";
     private static final String MEMBER_ID = "test-member-1";
+    private static final int REBALANCE_TIMEOUT = 100;
     private static final int MEMBER_EPOCH = 1;
 
     private SubscriptionState subscriptionState;
@@ -92,15 +93,15 @@ public class MembershipManagerImplTest {
 
     private MembershipManagerImpl createMembershipManagerJoiningGroup() {
         MembershipManagerImpl manager = spy(new MembershipManagerImpl(
-                GROUP_ID, Optional.empty(), Optional.empty(), subscriptionState, commitRequestManager,
-                metadata, testBuilder.logContext, Optional.empty()));
+                GROUP_ID, Optional.empty(), REBALANCE_TIMEOUT, Optional.empty(), subscriptionState,
+                commitRequestManager, metadata, testBuilder.logContext, Optional.empty()));
         manager.transitionToJoining();
         return manager;
     }
 
     private MembershipManagerImpl createMembershipManagerJoiningGroup(String groupInstanceId) {
         MembershipManagerImpl manager = spy(new MembershipManagerImpl(
-                GROUP_ID, Optional.ofNullable(groupInstanceId), Optional.empty(),
+                GROUP_ID, Optional.ofNullable(groupInstanceId), REBALANCE_TIMEOUT, Optional.empty(),
                 subscriptionState, commitRequestManager, metadata, testBuilder.logContext,
                 Optional.empty()));
         manager.transitionToJoining();
@@ -110,7 +111,7 @@ public class MembershipManagerImplTest {
     private MembershipManagerImpl createMembershipManagerJoiningGroup(String groupInstanceId,
                                                                       String serverAssignor) {
         MembershipManagerImpl manager = new MembershipManagerImpl(
-                GROUP_ID, Optional.ofNullable(groupInstanceId), Optional.ofNullable(serverAssignor),
+                GROUP_ID, Optional.ofNullable(groupInstanceId), REBALANCE_TIMEOUT, Optional.ofNullable(serverAssignor),
                 subscriptionState, commitRequestManager, metadata, testBuilder.logContext, Optional.empty());
         manager.transitionToJoining();
         return manager;
@@ -135,7 +136,7 @@ public class MembershipManagerImplTest {
     public void testMembershipManagerRegistersForClusterMetadataUpdatesOnFirstJoin() {
         // First join should register to get metadata updates
         MembershipManagerImpl manager = new MembershipManagerImpl(
-                GROUP_ID, Optional.empty(), Optional.empty(), subscriptionState, commitRequestManager,
+                GROUP_ID, Optional.empty(), REBALANCE_TIMEOUT, Optional.empty(), subscriptionState, commitRequestManager,
                 metadata, testBuilder.logContext, Optional.empty());
         manager.transitionToJoining();
         verify(metadata).addClusterUpdateListener(manager);
@@ -213,8 +214,8 @@ public class MembershipManagerImplTest {
     @Test
     public void testTransitionToFailedWhenTryingToJoin() {
         MembershipManagerImpl membershipManager = new MembershipManagerImpl(
-                GROUP_ID, Optional.empty(), Optional.empty(), subscriptionState, commitRequestManager, metadata,
-                testBuilder.logContext, Optional.empty());
+                GROUP_ID, Optional.empty(), REBALANCE_TIMEOUT, Optional.empty(), subscriptionState,
+                commitRequestManager, metadata, testBuilder.logContext, Optional.empty());
         assertEquals(MemberState.UNSUBSCRIBED, membershipManager.state());
         membershipManager.transitionToJoining();
 
@@ -1214,7 +1215,7 @@ public class MembershipManagerImplTest {
         if (withAutoCommit) {
             when(commitRequestManager.autoCommitEnabled()).thenReturn(true);
             CompletableFuture<Void> commitResult = new CompletableFuture<>();
-            when(commitRequestManager.autoCommitAllConsumedNow(any())).thenReturn(commitResult);
+            when(commitRequestManager.maybeAutoCommitAllConsumedNow(any())).thenReturn(commitResult);
             return commitResult;
         } else {
             return CompletableFuture.completedFuture(null);
@@ -1400,7 +1401,7 @@ public class MembershipManagerImplTest {
         doNothing().when(subscriptionState).markPendingRevocation(anySet());
         when(commitRequestManager.autoCommitEnabled()).thenReturn(true);
         CompletableFuture<Void> commitResult = new CompletableFuture<>();
-        when(commitRequestManager.autoCommitAllConsumedNow(any())).thenReturn(commitResult);
+        when(commitRequestManager.maybeAutoCommitAllConsumedNow(any())).thenReturn(commitResult);
         return commitResult;
     }
 

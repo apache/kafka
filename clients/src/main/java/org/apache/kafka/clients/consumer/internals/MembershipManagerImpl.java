@@ -129,6 +129,13 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
     private final Optional<String> groupInstanceId;
 
     /**
+     * Rebalance timeout. To be used as time limit for the commit request issued
+     * when a new assignment is received, that is retried until it succeeds, fails with a
+     * non-retriable error, it the time limit expires.
+     */
+    private final int rebalanceTimeoutMs;
+
+    /**
      * Member ID assigned by the server to the member, received in a heartbeat response when
      * joining the group specified in {@link #groupId}
      */
@@ -256,6 +263,7 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
 
     public MembershipManagerImpl(String groupId,
                                  Optional<String> groupInstanceId,
+                                 int rebalanceTimeoutMs,
                                  Optional<String> serverAssignor,
                                  SubscriptionState subscriptions,
                                  CommitRequestManager commitRequestManager,
@@ -276,6 +284,7 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
         this.log = logContext.logger(MembershipManagerImpl.class);
         this.stateUpdatesListeners = new ArrayList<>();
         this.clientTelemetryReporter = clientTelemetryReporter;
+        this.rebalanceTimeoutMs = rebalanceTimeoutMs;
     }
 
     /**
@@ -764,14 +773,11 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
         // be retried until it succeeds, fails with non-retriable error, or timer expires.
         CompletableFuture<Void> commitResult;
 
-        if (commitRequestManager.autoCommitEnabled()) {
-            // TODO: review auto commit time boundary. This will be effectively bounded by the
-            //  rebalance timeout.
-            commitResult =
-                commitRequestManager.autoCommitAllConsumedNow(Optional.of(Long.MAX_VALUE));
-        } else {
-            commitResult = CompletableFuture.completedFuture(null);
-        }
+        // Issue commit request that will be retried until it succeeds, fails with a
+        // non-retriable error, ot the time limit expires. Using the rebalance timeout as it is
+        // the limit enforced by the broker to complete the reconciliation process.
+        commitResult = commitRequestManager.maybeAutoCommitAllConsumedNow(
+            Optional.of(Long.valueOf(rebalanceTimeoutMs)));
 
         // Execute commit -> onPartitionsRevoked -> onPartitionsAssigned.
         commitResult.whenComplete((commitReqResult, commitReqError) -> {
@@ -785,65 +791,77 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
                 log.debug("Auto-commit before reconciling new assignment completed successfully.");
             }
 
-            CompletableFuture<Void> revocationResult;
-            if (!revokedPartitions.isEmpty()) {
-                revocationResult = revokePartitions(revokedPartitions);
-            } else {
-                revocationResult = CompletableFuture.completedFuture(null);
-            }
-
-            // Future that will complete when the full reconciliation process completes (revocation
-            // and assignment, executed sequentially).
-            CompletableFuture<Void> reconciliationResult =
-                revocationResult.thenCompose(__ -> {
-                    boolean memberHasRejoined = memberEpochOnReconciliationStart != memberEpoch;
-                    if (state == MemberState.RECONCILING && !memberHasRejoined) {
-                        // Reschedule the auto commit starting from now that member has a new assignment.
-                        commitRequestManager.resetAutoCommitTimer();
-
-                        // Apply assignment
-                        return assignPartitions(assignedTopicIdPartitions, addedPartitions);
-                    } else {
-                        log.debug("Revocation callback completed but the member already " +
-                            "transitioned out of the reconciling state for epoch {} into " +
-                            "{} state with epoch {}. Interrupting reconciliation as it's " +
-                            "not relevant anymore,", memberEpochOnReconciliationStart, state, memberEpoch);
-                        String reason = interruptedReconciliationErrorMessage();
-                        CompletableFuture<Void> res = new CompletableFuture<>();
-                        res.completeExceptionally(new KafkaException("Interrupting reconciliation" +
-                            " after revocation. " + reason));
-                        return res;
-                    }
-                });
-
-            reconciliationResult.whenComplete((result, error) -> {
-                markReconciliationCompleted();
-                if (error != null) {
-                    // Leaving member in RECONCILING state after callbacks fail. The member
-                    // won't send the ack, and the expectation is that the broker will kick the
-                    // member out of the group after the rebalance timeout expires, leading to a
-                    // RECONCILING -> FENCED transition.
-                    log.error("Reconciliation failed.", error);
-                } else {
-                    boolean memberHasRejoined = memberEpochOnReconciliationStart != memberEpoch;
-                    if (state == MemberState.RECONCILING && !memberHasRejoined) {
-                        // Make assignment effective on the broker by transitioning to send acknowledge.
-                        transitionTo(MemberState.ACKNOWLEDGING);
-
-                        // Indicate that we completed reconciling a subset of the assignment ready to
-                        // reconcile (new assignments might have been received or discovered in
-                        // metadata).
-                        assignmentReadyToReconcile.removeAll(assignedTopicIdPartitions);
-                    } else {
-                        String reason = interruptedReconciliationErrorMessage();
-                        log.error("Interrupting reconciliation after partitions assigned callback " +
-                            "completed. " + reason);
-                    }
-                }
-            });
+            revokeAndAssign(assignedTopicIdPartitions, revokedPartitions, addedPartitions);
         });
 
         return true;
+    }
+
+    /**
+     * Trigger onPartitionsRevoked callbacks if any partitions where revoked. If it succeeds,
+     * proceed to trigger the onPartitionsAssigned (even if no new partitions were added), and
+     * then complete the reconciliation by updating the assignment and making the appropriate state
+     * transition. Note that if any of the 2 callbacks fails, the reconciliation should fail.
+     */
+    private void revokeAndAssign(SortedSet<TopicIdPartition> assignedTopicIdPartitions,
+                                 SortedSet<TopicPartition> revokedPartitions,
+                                 SortedSet<TopicPartition> addedPartitions) {
+        CompletableFuture<Void> revocationResult;
+        if (!revokedPartitions.isEmpty()) {
+            revocationResult = revokePartitions(revokedPartitions);
+        } else {
+            revocationResult = CompletableFuture.completedFuture(null);
+        }
+
+        // Future that will complete when the full reconciliation process completes (revocation
+        // and assignment, executed sequentially).
+        CompletableFuture<Void> reconciliationResult =
+            revocationResult.thenCompose(__ -> {
+                boolean memberHasRejoined = memberEpochOnReconciliationStart != memberEpoch;
+                if (state == MemberState.RECONCILING && !memberHasRejoined) {
+                    // Reschedule the auto commit starting from now that member has a new assignment.
+                    commitRequestManager.resetAutoCommitTimer();
+
+                    // Apply assignment
+                    return assignPartitions(assignedTopicIdPartitions, addedPartitions);
+                } else {
+                    log.debug("Revocation callback completed but the member already " +
+                        "transitioned out of the reconciling state for epoch {} into " +
+                        "{} state with epoch {}. Interrupting reconciliation as it's " +
+                        "not relevant anymore,", memberEpochOnReconciliationStart, state, memberEpoch);
+                    String reason = interruptedReconciliationErrorMessage();
+                    CompletableFuture<Void> res = new CompletableFuture<>();
+                    res.completeExceptionally(new KafkaException("Interrupting reconciliation" +
+                        " after revocation. " + reason));
+                    return res;
+                }
+            });
+
+        reconciliationResult.whenComplete((result, error) -> {
+            markReconciliationCompleted();
+            if (error != null) {
+                // Leaving member in RECONCILING state after callbacks fail. The member
+                // won't send the ack, and the expectation is that the broker will kick the
+                // member out of the group after the rebalance timeout expires, leading to a
+                // RECONCILING -> FENCED transition.
+                log.error("Reconciliation failed.", error);
+            } else {
+                boolean memberHasRejoined = memberEpochOnReconciliationStart != memberEpoch;
+                if (state == MemberState.RECONCILING && !memberHasRejoined) {
+                    // Make assignment effective on the broker by transitioning to send acknowledge.
+                    transitionTo(MemberState.ACKNOWLEDGING);
+
+                    // Indicate that we completed reconciling a subset of the assignment ready to
+                    // reconcile (new assignments might have been received or discovered in
+                    // metadata).
+                    assignmentReadyToReconcile.removeAll(assignedTopicIdPartitions);
+                } else {
+                    String reason = interruptedReconciliationErrorMessage();
+                    log.error("Interrupting reconciliation after partitions assigned callback " +
+                        "completed. " + reason);
+                }
+            }
+        });
     }
 
     // Visible for testing.

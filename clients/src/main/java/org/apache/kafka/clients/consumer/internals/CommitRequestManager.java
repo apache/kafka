@@ -132,7 +132,7 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
         this.jitter = jitter;
         this.throwOnFetchStableOffsetUnsupported = config.getBoolean(THROW_ON_FETCH_STABLE_OFFSET_UNSUPPORTED);
         this.memberInfo = new MemberInfo();
-        this.time = Time.SYSTEM;
+        this.time = time;
     }
 
     /**
@@ -191,14 +191,13 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
     private CompletableFuture<Void> maybeAutoCommit(final Map<TopicPartition, OffsetAndMetadata> offsets,
                                                     final Optional<Long> expirationTimeMs,
                                                     boolean checkInterval) {
-        if (!autoCommitState.isPresent()) {
+        if (!autoCommitEnabled()) {
             log.debug("Skipping auto-commit because auto-commit config is not enabled.");
             return CompletableFuture.completedFuture(null);
         }
 
         AutoCommitState autocommit = autoCommitState.get();
         if (checkInterval && !autocommit.shouldAutoCommit()) {
-            log.debug("Skipping auto-commit, remaining time {}", autocommit.timer.remainingMs());
             return CompletableFuture.completedFuture(null);
         }
 
@@ -243,10 +242,10 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
     }
 
     /**
-     * Commit consumed offsets it auto-commit is enabled. Retry while the timer is not expired,
+     * Commit consumed offsets if auto-commit is enabled. Retry while the timer is not expired,
      * until the request succeeds or fails with a fatal error.
      */
-    public CompletableFuture<Void> autoCommitAllConsumedNow(Optional<Long> expirationTimeMs) {
+    public CompletableFuture<Void> maybeAutoCommitAllConsumedNow(Optional<Long> expirationTimeMs) {
         return maybeAutoCommit(subscriptions.allConsumed(), expirationTimeMs, false);
     }
 
@@ -559,11 +558,11 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
             pendingRequests.addOffsetCommitRequest(this);
         }
 
-        boolean isExpired(final long currentTimeMs) {
+        private boolean isExpired(final long currentTimeMs) {
             return expirationTimeMs.isPresent() && expirationTimeMs.get() <= currentTimeMs;
         }
 
-        void expire() {
+        private void expire() {
             future.completeExceptionally(new TimeoutException("OffsetCommit could not complete " +
                 "before timeout expired."));
         }
@@ -744,11 +743,11 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
             pendingRequests.addOffsetFetchRequest(this);
         }
 
-        boolean isExpired(final long currentTimeMs) {
+        private boolean isExpired(final long currentTimeMs) {
             return expirationTimeMs <= currentTimeMs;
         }
 
-        void expire() {
+        private void expire() {
             future.completeExceptionally(new TimeoutException("OffsetFetch request could not " +
                 "complete before timeout expired."));
         }

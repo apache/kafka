@@ -255,7 +255,7 @@ public class CommitRequestManagerTest {
         // Auto-commit all consume sync (ex. triggered when the consumer is closed).
         long expirationTimeMs = time.milliseconds() + defaultApiTimeoutMs;
         CompletableFuture<Void> commitResult =
-            commitRequestManger.autoCommitAllConsumedNow(Optional.of(expirationTimeMs));
+            commitRequestManger.maybeAutoCommitAllConsumedNow(Optional.of(expirationTimeMs));
         sendAndVerifyOffsetCommitRequestFailedAndMaybeRetried(commitRequestManger, error, commitResult);
 
         // We expect that request should have been retried on this sync commit.

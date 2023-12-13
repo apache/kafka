@@ -177,6 +177,7 @@ public class RequestManagers implements Closeable {
                     membershipManager = new MembershipManagerImpl(
                             groupRebalanceConfig.groupId,
                             groupRebalanceConfig.groupInstanceId,
+                            groupRebalanceConfig.rebalanceTimeoutMs,
                             serverAssignor,
                             subscriptions,
                             commit,

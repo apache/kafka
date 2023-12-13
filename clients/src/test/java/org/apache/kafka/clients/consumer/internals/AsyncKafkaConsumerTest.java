@@ -201,7 +201,7 @@ public class AsyncKafkaConsumerTest {
         offsets.put(new TopicPartition("my-topic", 0), new OffsetAndMetadata(100L));
         offsets.put(new TopicPartition("my-topic", 1), new OffsetAndMetadata(200L));
 
-        doReturn(future).when(consumer).commitAsync(offsets, false);
+        doReturn(future).when(consumer).commit(offsets, false, Optional.empty());
         consumer.commitAsync(offsets, null);
         future.complete(null);
         TestUtils.waitForCondition(future::isDone,
@@ -245,7 +245,7 @@ public class AsyncKafkaConsumerTest {
     @Test
     public void testFencedInstanceException() {
         CompletableFuture<Void> future = new CompletableFuture<>();
-        doReturn(future).when(consumer).commitAsync(new HashMap<>(), false);
+        doReturn(future).when(consumer).commit(new HashMap<>(), false, Optional.empty());
         assertDoesNotThrow(() -> consumer.commitAsync());
         future.completeExceptionally(Errors.FENCED_INSTANCE_ID.exception());
     }
@@ -379,7 +379,7 @@ public class AsyncKafkaConsumerTest {
         CountDownLatch latch = new CountDownLatch(1);  // Initialize the latch with a count of 1
         try {
             CompletableFuture<Void> future = new CompletableFuture<>();
-            doReturn(future).when(consumer).commitAsync(new HashMap<>(), false);
+            doReturn(future).when(consumer).commit(new HashMap<>(), false, Optional.empty());
             assertDoesNotThrow(() -> consumer.commitAsync(new HashMap<>(), callback));
             // Simulating some background work
             backgroundExecutor.submit(() -> {
@@ -467,7 +467,7 @@ public class AsyncKafkaConsumerTest {
         MockCommitCallback callback = new MockCommitCallback();
         CompletableFuture<Void> future = new CompletableFuture<>();
         consumer.assign(Collections.singleton(new TopicPartition("foo", 0)));
-        doReturn(future).when(consumer).commitAsync(new HashMap<>(), false);
+        doReturn(future).when(consumer).commit(new HashMap<>(), false, Optional.empty());
         assertDoesNotThrow(() -> consumer.commitAsync(new HashMap<>(), callback));
         future.complete(null);
         assertMockCommitCallbackInvoked(() -> consumer.poll(Duration.ZERO), null);
@@ -477,7 +477,7 @@ public class AsyncKafkaConsumerTest {
     public void testEnsureShutdownExecutedCommitAsyncCallbacks() {
         MockCommitCallback callback = new MockCommitCallback();
         CompletableFuture<Void> future = new CompletableFuture<>();
-        doReturn(future).when(consumer).commitAsync(new HashMap<>(), false);
+        doReturn(future).when(consumer).commit(new HashMap<>(), false, Optional.empty());
         assertDoesNotThrow(() -> consumer.commitAsync(new HashMap<>(), callback));
         future.complete(null);
         assertMockCommitCallbackInvoked(() -> consumer.close(), null);

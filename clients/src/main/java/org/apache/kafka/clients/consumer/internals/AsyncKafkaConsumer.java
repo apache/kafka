@@ -626,12 +626,6 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
     }
 
     // Visible for testing
-    CompletableFuture<Void> commitAsync(final Map<TopicPartition, OffsetAndMetadata> offsets,
-                                        final boolean isWakeupable) {
-        return commit(offsets, isWakeupable, Optional.empty());
-    }
-
-    // Visible for testing
     CompletableFuture<Void> commit(final Map<TopicPartition, OffsetAndMetadata> offsets,
                                    final boolean isWakeupable,
                                    final Optional<Long> timeoutMs) {
