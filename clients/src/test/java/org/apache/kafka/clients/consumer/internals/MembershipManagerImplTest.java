@@ -262,7 +262,7 @@ public class MembershipManagerImplTest {
     }
 
     @Test
-    public void testAssignmentReceivedWhenStateIsPrepareLeaving() {
+    public void testNewAssignmentIgnoredWhenStateIsPrepareLeaving() {
         MembershipManagerImpl membershipManager = createMemberInStableState();
 
         // Start leaving group, blocked waiting for commit of all consumed to complete.
