@@ -33,7 +33,6 @@ import org.apache.kafka.common.requests.ConsumerGroupHeartbeatRequest;
 import org.apache.kafka.common.telemetry.internals.ClientTelemetryProvider;
 import org.apache.kafka.common.telemetry.internals.ClientTelemetryReporter;
 import org.apache.kafka.common.utils.LogContext;
-import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 
@@ -249,11 +248,6 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
     private final List<MemberStateListener> stateUpdatesListeners;
 
     /**
-     * Time instance to get timer to use when auto-committing offsets prior to revocation.
-     */
-    private final Time time;
-
-    /**
      * Optional client telemetry reporter which sends client telemetry data to the broker. This
      * will be empty if the client telemetry feature is not enabled. This is provided to update
      * the group member id label when the member joins the group.
@@ -281,7 +275,6 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
         this.currentAssignment = new HashMap<>();
         this.log = logContext.logger(MembershipManagerImpl.class);
         this.stateUpdatesListeners = new ArrayList<>();
-        this.time = Time.SYSTEM;
         this.clientTelemetryReporter = clientTelemetryReporter;
     }
 
@@ -774,7 +767,8 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
         if (commitRequestManager.autoCommitEnabled()) {
             // TODO: review auto commit time boundary. This will be effectively bounded by the
             //  rebalance timeout.
-            commitResult = commitRequestManager.autoCommitAllConsumedNow(Optional.of(time.timer(Long.MAX_VALUE)));
+            commitResult =
+                commitRequestManager.autoCommitAllConsumedNow(Optional.of(Long.MAX_VALUE));
         } else {
             commitResult = CompletableFuture.completedFuture(null);
         }
@@ -1147,7 +1141,7 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
         // new member ID without an epoch (member ID is only assigned when it joins the group).
         if (newEpochReceived) {
             if (memberEpoch > 0) {
-                notifyEpochChange(Optional.ofNullable(memberEpoch), Optional.ofNullable(memberId));
+                notifyEpochChange(Optional.of(memberEpoch), Optional.ofNullable(memberId));
             } else {
                 notifyEpochChange(Optional.empty(), Optional.empty());
             }

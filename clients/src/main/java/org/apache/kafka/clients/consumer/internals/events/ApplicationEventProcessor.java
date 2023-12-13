@@ -143,7 +143,9 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
         }
 
         CommitRequestManager manager = requestManagers.commitRequestManager.get();
-        event.chain(manager.addOffsetCommitRequest(event.offsets(), event.timer()));
+        Optional<Long> expirationTimeMs =
+            event.timeoutMs().map(timeout -> getExpirationTimeForTimeout(timeout));
+        event.chain(manager.addOffsetCommitRequest(event.offsets(), expirationTimeMs));
     }
 
     private void process(final FetchCommittedOffsetsApplicationEvent event) {
@@ -153,7 +155,8 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
             return;
         }
         CommitRequestManager manager = requestManagers.commitRequestManager.get();
-        event.chain(manager.addOffsetFetchRequest(event.partitions(), event.timer()));
+        long expirationTimeMs = getExpirationTimeForTimeout(event.timeout());
+        event.chain(manager.addOffsetFetchRequest(event.partitions(), expirationTimeMs));
     }
 
     private void process(final NewTopicsMetadataUpdateRequestEvent ignored) {
@@ -227,6 +230,10 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
         final CompletableFuture<Map<String, List<PartitionInfo>>> future =
                 requestManagers.topicMetadataRequestManager.requestTopicMetadata(Optional.of(event.topic()));
         event.chain(future);
+    }
+
+    private long getExpirationTimeForTimeout(final long timeoutMs) {
+        return (timeoutMs == Long.MAX_VALUE) ? Long.MAX_VALUE : System.currentTimeMillis() + timeoutMs;
     }
 
     /**

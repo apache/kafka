@@ -634,7 +634,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
     // Visible for testing
     CompletableFuture<Void> commit(final Map<TopicPartition, OffsetAndMetadata> offsets,
                                    final boolean isWakeupable,
-                                   final Optional<Timer> timer) {
+                                   final Optional<Long> timeoutMs) {
         maybeInvokeCommitCallbacks();
         maybeThrowFencedInstanceException();
         maybeThrowInvalidGroupIdException();
@@ -646,7 +646,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             return CompletableFuture.completedFuture(null);
         }
 
-        final CommitApplicationEvent commitEvent = new CommitApplicationEvent(offsets, timer);
+        final CommitApplicationEvent commitEvent = new CommitApplicationEvent(offsets, timeoutMs);
         if (isWakeupable) {
             // the task can only be woken up if the top level API call is commitSync
             wakeupTrigger.setActiveTask(commitEvent.future());
@@ -783,7 +783,9 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                 return Collections.emptyMap();
             }
 
-            final FetchCommittedOffsetsApplicationEvent event = new FetchCommittedOffsetsApplicationEvent(partitions, time.timer(timeout));
+            final FetchCommittedOffsetsApplicationEvent event = new FetchCommittedOffsetsApplicationEvent(
+                partitions,
+                timeout.toMillis());
             wakeupTrigger.setActiveTask(event.future());
             try {
                 final Map<TopicPartition, OffsetAndMetadata> committedOffsets = applicationEventHandler.addAndGet(event,
@@ -1091,7 +1093,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             Timer requestTimer = time.timer(timeout.toMillis());
             // Commit with a timer to control how long the request should be retried until it
             // gets a successful response or non-retriable error.
-            CompletableFuture<Void> commitFuture = commit(offsets, true, Optional.of(requestTimer));
+            CompletableFuture<Void> commitFuture = commit(offsets, true, Optional.of(timeout.toMillis()));
             ConsumerUtils.getResult(commitFuture, requestTimer);
         } finally {
             wakeupTrigger.clearTask();
@@ -1353,7 +1355,10 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
 
         log.debug("Refreshing committed offsets for partitions {}", initializingPartitions);
         try {
-            final FetchCommittedOffsetsApplicationEvent event = new FetchCommittedOffsetsApplicationEvent(initializingPartitions, timer);
+            final FetchCommittedOffsetsApplicationEvent event =
+                new FetchCommittedOffsetsApplicationEvent(
+                    initializingPartitions,
+                    timer.remainingMs());
             final Map<TopicPartition, OffsetAndMetadata> offsets = applicationEventHandler.addAndGet(event, timer);
             refreshCommittedOffsets(offsets, metadata, subscriptions);
             return true;

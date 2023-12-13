@@ -18,7 +18,6 @@ package org.apache.kafka.clients.consumer.internals.events;
 
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.utils.Timer;
 
 import java.util.Collections;
 import java.util.Map;
@@ -32,10 +31,10 @@ public class CommitApplicationEvent extends CompletableApplicationEvent<Void> {
     private final Map<TopicPartition, OffsetAndMetadata> offsets;
 
     /**
-     * Timer to wait for a response, retrying on retriable errors. If not present, the request is
+     * Time to wait for a response, retrying on retriable errors. If not present, the request is
      * triggered without waiting for a response or being retried.
      */
-    private final Optional<Timer> timer;
+    private final Optional<Long> timeoutMs;
 
     /**
      * Create new event to commit offsets. If timer is present, the request will be retried on
@@ -44,10 +43,10 @@ public class CommitApplicationEvent extends CompletableApplicationEvent<Void> {
      * commit offsets request).
      */
     public CommitApplicationEvent(final Map<TopicPartition, OffsetAndMetadata> offsets,
-                                  final Optional<Timer> timer) {
+                                  final Optional<Long> timeoutMs) {
         super(Type.COMMIT);
         this.offsets = Collections.unmodifiableMap(offsets);
-        this.timer = timer;
+        this.timeoutMs = timeoutMs;
 
         for (OffsetAndMetadata offsetAndMetadata : offsets.values()) {
             if (offsetAndMetadata.offset() < 0) {
@@ -60,8 +59,8 @@ public class CommitApplicationEvent extends CompletableApplicationEvent<Void> {
         return offsets;
     }
 
-    public Optional<Timer> timer() {
-        return timer;
+    public Optional<Long> timeoutMs() {
+        return timeoutMs;
     }
 
     @Override
@@ -87,7 +86,7 @@ public class CommitApplicationEvent extends CompletableApplicationEvent<Void> {
         return "CommitApplicationEvent{" +
                 toStringBase() +
                 ", offsets=" + offsets +
-                ", retriable=" + (timer.isPresent() && !timer.get().isExpired()) +
+                ", timeout=" + (timeoutMs.map(t -> t + "ms").orElse("none")) +
                 '}';
     }
 }

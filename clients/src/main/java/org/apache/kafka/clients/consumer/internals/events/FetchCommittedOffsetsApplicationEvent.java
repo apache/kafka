@@ -18,7 +18,6 @@ package org.apache.kafka.clients.consumer.internals.events;
 
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.utils.Timer;
 
 import java.util.Collections;
 import java.util.Map;
@@ -32,22 +31,23 @@ public class FetchCommittedOffsetsApplicationEvent extends CompletableApplicatio
     private final Set<TopicPartition> partitions;
 
     /**
-     * Timer to wait for a response, retrying on retriable errors.
+     * Time until which the request will be retried if it fails with a retriable error.
      */
-    private final Timer timer;
+    private final long timeoutMs;
 
-    public FetchCommittedOffsetsApplicationEvent(final Set<TopicPartition> partitions, final Timer timer) {
+    public FetchCommittedOffsetsApplicationEvent(final Set<TopicPartition> partitions,
+                                                 final long timeoutMs) {
         super(Type.FETCH_COMMITTED_OFFSETS);
         this.partitions = Collections.unmodifiableSet(partitions);
-        this.timer = timer;
+        this.timeoutMs = timeoutMs;
     }
 
     public Set<TopicPartition> partitions() {
         return partitions;
     }
 
-    public Timer timer() {
-        return timer;
+    public long timeout() {
+        return timeoutMs;
     }
 
     @Override
@@ -73,7 +73,7 @@ public class FetchCommittedOffsetsApplicationEvent extends CompletableApplicatio
         return getClass().getSimpleName() + "{" +
                 toStringBase() +
                 ", partitions=" + partitions +
-                ", retriable=" + !timer.isExpired() +
+                ", timeout=" + timeoutMs + "ms" +
                 '}';
     }
 }
