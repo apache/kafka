@@ -19,16 +19,7 @@ package org.apache.kafka.coordinator.group;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.TopicConfig;
-import org.apache.kafka.common.errors.CoordinatorLoadInProgressException;
-import org.apache.kafka.common.errors.InvalidFetchSizeException;
-import org.apache.kafka.common.errors.KafkaStorageException;
-import org.apache.kafka.common.errors.NotCoordinatorException;
-import org.apache.kafka.common.errors.NotEnoughReplicasException;
-import org.apache.kafka.common.errors.NotLeaderOrFollowerException;
-import org.apache.kafka.common.errors.RecordBatchTooLargeException;
-import org.apache.kafka.common.errors.RecordTooLargeException;
-import org.apache.kafka.common.errors.UnknownMemberIdException;
-import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
+import org.apache.kafka.common.errors.*;
 import org.apache.kafka.common.internals.Topic;
 import org.apache.kafka.common.message.ConsumerGroupDescribeResponseData;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatRequestData;
@@ -302,7 +293,8 @@ public class GroupCoordinatorService implements GroupCoordinator {
             coordinator -> coordinator.consumerGroupHeartbeat(context, request)
         ).exceptionally(exception -> {
             if (exception instanceof UnknownTopicOrPartitionException ||
-                exception instanceof NotEnoughReplicasException) {
+                exception instanceof NotEnoughReplicasException ||
+                exception instanceof TimeoutException) {
                 return new ConsumerGroupHeartbeatResponseData()
                     .setErrorCode(Errors.COORDINATOR_NOT_AVAILABLE.code());
             }
@@ -1067,7 +1059,8 @@ public class GroupCoordinatorService implements GroupCoordinator {
      */
     private static Errors normalizeException(Throwable exception) {
         if (exception instanceof UnknownTopicOrPartitionException ||
-            exception instanceof NotEnoughReplicasException) {
+            exception instanceof NotEnoughReplicasException ||
+            exception instanceof TimeoutException) {
             return Errors.COORDINATOR_NOT_AVAILABLE;
         }
 
