@@ -199,17 +199,17 @@ class DockerSanityTest(unittest.TestCase):
 
 class DockerSanityTestJVMCombinedMode(DockerSanityTest):
     def setUp(self) -> None:
-        self.start_compose(f"{self.FIXTURES_DIR}/{constants.JVM_COMBINED_MODE_COMPOSE}")
+        self.start_compose(f"{self.FIXTURES_DIR}/{constants.COMBINED_MODE_COMPOSE}")
     def tearDown(self) -> None:
-        self.destroy_compose(f"{self.FIXTURES_DIR}/{constants.JVM_COMBINED_MODE_COMPOSE}")
+        self.destroy_compose(f"{self.FIXTURES_DIR}/{constants.COMBINED_MODE_COMPOSE}")
     def test_bed(self):
         self.execute()
 
 class DockerSanityTestJVMIsolatedMode(DockerSanityTest):
     def setUp(self) -> None:
-        self.start_compose(f"{self.FIXTURES_DIR}/{constants.JVM_ISOLATED_COMPOSE}")
+        self.start_compose(f"{self.FIXTURES_DIR}/{constants.ISOLATED_MODE_COMPOSE}")
     def tearDown(self) -> None:
-        self.destroy_compose(f"{self.FIXTURES_DIR}/{constants.JVM_ISOLATED_COMPOSE}")
+        self.destroy_compose(f"{self.FIXTURES_DIR}/{constants.ISOLATED_MODE_COMPOSE}")
     def test_bed(self):
         self.execute()
 
