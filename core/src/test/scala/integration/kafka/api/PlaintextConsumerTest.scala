@@ -562,9 +562,8 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     awaitAssignment(consumer, shrunkenAssignment)
   }
 
-  // partitionsFor not implemented in consumer group protocol
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersGenericGroupProtocolOnly"))
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
   def testPartitionsFor(quorum: String, groupProtocol: String): Unit = {
     val numParts = 2
     createTopic("part-test", numParts, 1)
@@ -574,9 +573,8 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     assertEquals(2, parts.size)
   }
 
-  // partitionsFor not implemented in consumer group protocol
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersGenericGroupProtocolOnly"))
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
   def testPartitionsForAutoCreate(quorum: String, groupProtocol: String): Unit = {
     val consumer = createConsumer()
     // First call would create the topic
@@ -586,9 +584,8 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     }, s"Timed out while awaiting non empty partitions.")
   }
 
-  // partitionsFor not implemented in consumer group protocol
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersGenericGroupProtocolOnly"))
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
   def testPartitionsForInvalidTopic(quorum: String, groupProtocol: String): Unit = {
     val consumer = createConsumer()
     assertThrows(classOf[InvalidTopicException], () => consumer.partitionsFor(";3# ads,{234"))
@@ -1469,9 +1466,8 @@ class PlaintextConsumerTest extends BaseConsumerTest {
       startingTimestamp = startTime, timestampType = TimestampType.LOG_APPEND_TIME)
   }
 
-  // listTopics temporarily not supported for consumer group protocol
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersGenericGroupProtocolOnly"))
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
   def testListTopics(quorum: String, groupProtocol: String): Unit = {
     val numParts = 2
     val topic1 = "part-test-topic-1"
