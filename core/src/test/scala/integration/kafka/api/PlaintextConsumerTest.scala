@@ -1278,9 +1278,8 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     runMultiConsumerSessionTimeoutTest(true)
   }
 
-  // TODO: enable this test for the consumer group protocol when consumer interceptors are supported
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersGenericGroupProtocolOnly"))
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
   def testInterceptors(quorum: String, groupProtocol: String): Unit = {
     val appendStr = "mock"
     MockConsumerInterceptor.resetCounters()
@@ -1391,9 +1390,8 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     MockConsumerInterceptor.resetCounters()
   }
 
-  // TODO: enable this test for the consumer group protocol when consumer interceptors are supported
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersGenericGroupProtocolOnly"))
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
   def testInterceptorsWithWrongKeyValue(quorum: String, groupProtocol: String): Unit = {
     val appendStr = "mock"
     // create producer with interceptor that has different key and value types from the producer

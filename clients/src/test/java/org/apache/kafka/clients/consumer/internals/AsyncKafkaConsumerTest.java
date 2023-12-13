@@ -24,6 +24,7 @@ import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.GroupProtocol;
+import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetAndTimestamp;
 import org.apache.kafka.clients.consumer.OffsetCommitCallback;
@@ -67,6 +68,7 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
+import org.apache.kafka.test.MockConsumerInterceptor;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.function.Executable;
@@ -154,19 +156,21 @@ public class AsyncKafkaConsumerTest {
     private AsyncKafkaConsumer<String, String> newConsumer() {
         final Properties props = requiredConsumerProperties();
         props.put(ConsumerConfig.GROUP_ID_CONFIG, "group-id");
-        final ConsumerConfig config = new ConsumerConfig(props);
-        return newConsumer(config);
+        return newConsumer(props);
     }
 
     private AsyncKafkaConsumer<String, String> newConsumerWithoutGroupId() {
         final Properties props = requiredConsumerProperties();
-        final ConsumerConfig config = new ConsumerConfig(props);
-        return newConsumer(config);
+        return newConsumer(props);
     }
 
     @SuppressWarnings("UnusedReturnValue")
     private AsyncKafkaConsumer<String, String> newConsumerWithEmptyGroupId() {
         final Properties props = requiredConsumerPropertiesAndGroupId("");
+        return newConsumer(props);
+    }
+
+    private AsyncKafkaConsumer<String, String> newConsumer(Properties props) {
         final ConsumerConfig config = new ConsumerConfig(props);
         return newConsumer(config);
     }
@@ -848,6 +852,24 @@ public class AsyncKafkaConsumerTest {
         assertNull(consumer.wakeupTrigger().getPendingTask());
     }
 
+    @Test
+    public void testInterceptorConstructorClose() {
+        try {
+            Properties props = requiredConsumerProperties();
+            props.setProperty(ConsumerConfig.INTERCEPTOR_CLASSES_CONFIG, MockConsumerInterceptor.class.getName());
+
+            AsyncKafkaConsumer<String, String> consumer = newConsumer(props);
+            assertEquals(1, MockConsumerInterceptor.INIT_COUNT.get());
+            assertEquals(0, MockConsumerInterceptor.CLOSE_COUNT.get());
+
+            consumer.close();
+            assertEquals(1, MockConsumerInterceptor.INIT_COUNT.get());
+            assertEquals(1, MockConsumerInterceptor.CLOSE_COUNT.get());
+        } finally {
+            // cleanup since we are using mutable static variables in MockConsumerInterceptor
+            MockConsumerInterceptor.resetCounters();
+        }
+    }
 
     @Test
     public void testRefreshCommittedOffsetsSuccess() {
