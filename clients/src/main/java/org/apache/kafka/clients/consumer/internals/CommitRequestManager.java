@@ -185,17 +185,19 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
      * completed future if no request is generated.
      */
     private CompletableFuture<Void> maybeAutoCommit(final Map<TopicPartition, OffsetAndMetadata> offsets,
-                                                   final Optional<Timer> timer) {
-        if (!canAutoCommit()) {
+                                                    final Optional<Timer> timer,
+                                                    boolean checkInterval) {
+        if (!autoCommitState.isPresent()) {
+            log.debug("Skipping auto-commit because auto-commit config is not enabled.");
             return CompletableFuture.completedFuture(null);
         }
 
         AutoCommitState autocommit = autoCommitState.get();
-        if (!autocommit.shouldAutoCommit()) {
+        if (checkInterval && !autocommit.shouldAutoCommit()) {
+            log.debug("Skipping auto-commit, remaining time {}", autocommit.timer.remainingMs());
             return CompletableFuture.completedFuture(null);
         }
 
-        log.debug("Enqueuing autocommit offsets: {}", offsets);
         CompletableFuture<Void> result = addOffsetCommitRequest(offsets, timer).whenComplete(autoCommitCallback(offsets));
         autocommit.resetTimer();
         autocommit.setInflightCommitStatus(true);
@@ -218,7 +220,7 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
             return CompletableFuture.completedFuture(null);
         }
         Map<TopicPartition, OffsetAndMetadata> offsets = subscriptions.allConsumed();
-        CompletableFuture<Void> result = maybeAutoCommit(offsets, Optional.empty());
+        CompletableFuture<Void> result = maybeAutoCommit(offsets, Optional.empty(), true);
         result.whenComplete((__, error) -> {
             if (error != null) {
                 if (error instanceof RetriableCommitFailedException) {
@@ -239,8 +241,8 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
      * Commit consumed offsets it auto-commit is enabled. Retry while the timer is not expired,
      * until the request succeeds or fails with a fatal error.
      */
-    public CompletableFuture<Void> maybeAutoCommitAllConsumed(Optional<Timer> timer) {
-        return maybeAutoCommit(subscriptions.allConsumed(), timer);
+    public CompletableFuture<Void> autoCommitAllConsumedNow(Optional<Timer> timer) {
+        return maybeAutoCommit(subscriptions.allConsumed(), timer, false);
     }
 
     boolean canAutoCommit() {
@@ -281,6 +283,10 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
      */
     public CompletableFuture<Void> addOffsetCommitRequest(final Map<TopicPartition, OffsetAndMetadata> offsets,
                                                           final Optional<Timer> timer) {
+        if (offsets.isEmpty()) {
+            log.debug("Skipping commit of empty offsets");
+            return CompletableFuture.completedFuture(null);
+        }
         return pendingRequests.addOffsetCommitRequest(offsets, timer).future;
     }
 
@@ -451,8 +457,10 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
                 (response, throwable) -> {
                     try {
                         if (throwable == null) {
+                            log.debug("OffsetCommit response received for offsets {} ", offsets);
                             onResponse(response);
                         } else {
+                            log.debug("OffsetCommit completed with error for offsets {}", offsets, throwable);
                             long currentTimeMs = resp.handler().completionTimeMs();
                             handleCoordinatorDisconnect(throwable, currentTimeMs);
                             if (throwable instanceof RetriableException) {
@@ -480,7 +488,7 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
                     long offset = offsetAndMetadata.offset();
                     Errors error = Errors.forCode(partition.errorCode());
                     if (error == Errors.NONE) {
-                        log.debug("OffsetCommit completed for offset {} partition {}", offset, tp);
+                        log.debug("OffsetCommit completed successfully for offset {} partition {}", offset, tp);
                         continue;
                     }
 
@@ -847,6 +855,7 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
         }
 
         OffsetCommitRequestState addOffsetCommitRequest(OffsetCommitRequestState request) {
+            log.debug("Enqueuing OffsetCommit request for offsets: {}", request.offsets);
             unsentOffsetCommits.add(request);
             return request;
         }
@@ -1020,11 +1029,6 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
         }
 
         public boolean shouldAutoCommit() {
-            if (this.timer.isExpired()) {
-                System.out.println("Timer expired, should auto-commit now. Left: " + timer.remainingMs());
-            } else {
-                System.out.println("Timer NOT expired, should NOT auto-commit now. Left: " + timer.remainingMs());
-            }
             return !this.hasInflightCommit && this.timer.isExpired();
         }
 
