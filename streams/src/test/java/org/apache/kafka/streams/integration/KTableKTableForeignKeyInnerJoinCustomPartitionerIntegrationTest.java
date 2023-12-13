@@ -152,7 +152,7 @@ public class KTableKTableForeignKeyInnerJoinCustomPartitionerIntegrationTest {
     @BeforeEach
     public void before(final TestInfo testInfo) throws IOException {
         final String stateDirBasePath = TestUtils.tempDirectory().getPath();
-        final String safeTestName = safeUniqueTestName(getClass(), testInfo);
+        final String safeTestName = safeUniqueTestName(testInfo);
         streamsConfig = getStreamsConfig(safeTestName);
         streamsConfigTwo = getStreamsConfig(safeTestName);
         streamsConfigThree = getStreamsConfig(safeTestName);
