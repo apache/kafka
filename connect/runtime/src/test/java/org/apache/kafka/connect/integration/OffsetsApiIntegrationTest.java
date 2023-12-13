@@ -922,9 +922,8 @@ public class OffsetsApiIntegrationTest {
     private String modifySinkConnectorOffsetsWithRetry(ConnectorOffsets offsetsToAlter) throws InterruptedException {
         // Some retry logic is necessary to account for KAFKA-15826,
         // where laggy sink task startup/shutdown can leave consumers running
-        String conditionDetails = "Failed to "
-                + (offsetsToAlter != null ?  "alter" : "reset")
-                + " sink connector offsets in time";
+        String modifyVerb = offsetsToAlter != null ?  "alter" : "reset";
+        String conditionDetails = "Failed to " + modifyVerb + " sink connector offsets in time";
         AtomicReference<String> responseReference = new AtomicReference<>();
         waitForCondition(
                 () -> {
@@ -939,7 +938,9 @@ public class OffsetsApiIntegrationTest {
                         boolean internalServerError = e.statusCode() == INTERNAL_SERVER_ERROR.getStatusCode();
 
                         String message = Optional.of(e.getMessage()).orElse("");
-                        boolean failedToResetConsumerOffsets = message.contains("Failed to reset consumer group offsets for connector");
+                        boolean failedToResetConsumerOffsets = message.contains(
+                                "Failed to " + modifyVerb + " consumer group offsets for connector"
+                        );
                         boolean canBeRetried = message.contains("If the connector is in a stopped state, this operation can be safely retried");
 
                         boolean retriable = internalServerError && failedToResetConsumerOffsets && canBeRetried;
