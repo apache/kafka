@@ -3136,6 +3136,7 @@ public class GroupMetadataManager {
         switch (appendError) {
             case UNKNOWN_TOPIC_OR_PARTITION:
             case NOT_ENOUGH_REPLICAS:
+            case REQUEST_TIMED_OUT:
                 return COORDINATOR_NOT_AVAILABLE;
 
             case NOT_LEADER_OR_FOLLOWER:
