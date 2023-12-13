@@ -767,16 +767,40 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
                 revokedPartitions
         );
 
-        CompletableFuture<Void> revocationResult;
-        if (!revokedPartitions.isEmpty()) {
-            revocationResult = revokePartitions(revokedPartitions);
+        // Commit offsets if auto-commit enabled before reconciling a new assignment. Request will
+        // be retried until it succeeds, fails with non-retriable error, or timer expires.
+        CompletableFuture<Void> commitResult;
+
+        if (commitRequestManager.autoCommitEnabled()) {
+            // TODO: review auto commit time boundary. This will be effectively bounded by the
+            //  rebalance timeout.
+            commitResult = commitRequestManager.autoCommitAllConsumedNow(Optional.of(time.timer(Long.MAX_VALUE)));
         } else {
-            revocationResult = CompletableFuture.completedFuture(null);
+            commitResult = CompletableFuture.completedFuture(null);
         }
 
-        // Future that will complete when the full reconciliation process completes (revocation
-        // and assignment, executed sequentially).
-        CompletableFuture<Void> reconciliationResult =
+        // Execute commit -> onPartitionsRevoked -> onPartitionsAssigned.
+        commitResult.whenComplete((commitReqResult, commitReqError) -> {
+            if (commitReqError != null) {
+                // The call to commit, that includes retry logic for retriable errors, failed to
+                // complete within the time boundaries (fatal error or retriable that did not
+                // recover). Proceed with the revocation.
+                log.error("Auto-commit request before reconciling new assignment failed. " +
+                    "Will proceed with the reconciliation anyway.", commitReqError);
+            } else {
+                log.debug("Auto-commit before reconciling new assignment completed successfully.");
+            }
+
+            CompletableFuture<Void> revocationResult;
+            if (!revokedPartitions.isEmpty()) {
+                revocationResult = revokePartitions(revokedPartitions);
+            } else {
+                revocationResult = CompletableFuture.completedFuture(null);
+            }
+
+            // Future that will complete when the full reconciliation process completes (revocation
+            // and assignment, executed sequentially).
+            CompletableFuture<Void> reconciliationResult =
                 revocationResult.thenCompose(__ -> {
                     boolean memberHasRejoined = memberEpochOnReconciliationStart != memberEpoch;
                     if (state == MemberState.RECONCILING && !memberHasRejoined) {
@@ -787,41 +811,42 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
                         return assignPartitions(assignedTopicIdPartitions, addedPartitions);
                     } else {
                         log.debug("Revocation callback completed but the member already " +
-                                "transitioned out of the reconciling state for epoch {} into " +
-                                "{} state with epoch {}. Interrupting reconciliation as it's " +
-                                "not relevant anymore,", memberEpochOnReconciliationStart, state, memberEpoch);
+                            "transitioned out of the reconciling state for epoch {} into " +
+                            "{} state with epoch {}. Interrupting reconciliation as it's " +
+                            "not relevant anymore,", memberEpochOnReconciliationStart, state, memberEpoch);
                         String reason = interruptedReconciliationErrorMessage();
                         CompletableFuture<Void> res = new CompletableFuture<>();
                         res.completeExceptionally(new KafkaException("Interrupting reconciliation" +
-                                " after revocation. " + reason));
+                            " after revocation. " + reason));
                         return res;
                     }
                 });
 
-        reconciliationResult.whenComplete((result, error) -> {
-            markReconciliationCompleted();
-            if (error != null) {
-                // Leaving member in RECONCILING state after callbacks fail. The member
-                // won't send the ack, and the expectation is that the broker will kick the
-                // member out of the group after the rebalance timeout expires, leading to a
-                // RECONCILING -> FENCED transition.
-                log.error("Reconciliation failed.", error);
-            } else {
-                boolean memberHasRejoined = memberEpochOnReconciliationStart != memberEpoch;
-                if (state == MemberState.RECONCILING && !memberHasRejoined) {
-                    // Make assignment effective on the broker by transitioning to send acknowledge.
-                    transitionTo(MemberState.ACKNOWLEDGING);
-
-                    // Indicate that we completed reconciling a subset of the assignment ready to
-                    // reconcile (new assignments might have been received or discovered in
-                    // metadata).
-                    assignmentReadyToReconcile.removeAll(assignedTopicIdPartitions);
+            reconciliationResult.whenComplete((result, error) -> {
+                markReconciliationCompleted();
+                if (error != null) {
+                    // Leaving member in RECONCILING state after callbacks fail. The member
+                    // won't send the ack, and the expectation is that the broker will kick the
+                    // member out of the group after the rebalance timeout expires, leading to a
+                    // RECONCILING -> FENCED transition.
+                    log.error("Reconciliation failed.", error);
                 } else {
-                    String reason = interruptedReconciliationErrorMessage();
-                    log.error("Interrupting reconciliation after partitions assigned callback " +
+                    boolean memberHasRejoined = memberEpochOnReconciliationStart != memberEpoch;
+                    if (state == MemberState.RECONCILING && !memberHasRejoined) {
+                        // Make assignment effective on the broker by transitioning to send acknowledge.
+                        transitionTo(MemberState.ACKNOWLEDGING);
+
+                        // Indicate that we completed reconciling a subset of the assignment ready to
+                        // reconcile (new assignments might have been received or discovered in
+                        // metadata).
+                        assignmentReadyToReconcile.removeAll(assignedTopicIdPartitions);
+                    } else {
+                        String reason = interruptedReconciliationErrorMessage();
+                        log.error("Interrupting reconciliation after partitions assigned callback " +
                             "completed. " + reason);
+                    }
                 }
-            }
+            });
         });
 
         return true;
@@ -979,49 +1004,29 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
         // request and user callback execution).
         CompletableFuture<Void> revocationResult = new CompletableFuture<>();
 
-        // Commit offsets if auto-commit enabled. Request will be retried until it succeeds,
-        // fails with non-retriable error, or timer expires.
-        CompletableFuture<Void> commitResult;
-        if (commitRequestManager.autoCommitEnabled()) {
-            // TODO: review auto commit time boundary. This will be effectively bounded by the
-            //  rebalance timeout.
-            commitResult = commitRequestManager.maybeAutoCommitAllConsumed(Optional.of(time.timer(Long.MAX_VALUE)));
-        } else {
-            commitResult = CompletableFuture.completedFuture(null);
+        // At this point we expect to be in a middle of a revocation triggered from RECONCILING
+        // or PREPARE_LEAVING, but it could be the case that the member received a fatal error
+        // while waiting for the commit to complete. Check if that's the case and abort the
+        // revocation.
+        if (state == MemberState.FATAL) {
+            String errorMsg = String.format("Member %s with epoch %s received a fatal error " +
+                "while waiting for a revocation commit to complete. Will abort revocation " +
+                "without triggering user callback.", memberId, memberEpoch);
+            log.debug(errorMsg);
+            revocationResult.completeExceptionally(new KafkaException(errorMsg));
+            return revocationResult;
         }
 
-        commitResult.whenComplete((result, error) -> {
-            if (error != null) {
-                // The call to commit, that includes retry logic for retriable errors, failed to
-                // complete within the time boundaries (fatal error or retriable that did not
-                // recover). Proceed with the revocation.
-                log.error("Commit request before revocation failed. Will proceed with the revocation anyway.", error);
+        CompletableFuture<Void> userCallbackResult = invokeOnPartitionsRevokedCallback(revokedPartitions);
+        userCallbackResult.whenComplete((callbackResult, callbackError) -> {
+            if (callbackError != null) {
+                log.error("onPartitionsRevoked callback invocation failed for partitions {}",
+                    revokedPartitions, callbackError);
+                revocationResult.completeExceptionally(callbackError);
+            } else {
+                revocationResult.complete(null);
             }
 
-            // At this point we expect to be in a middle of a revocation triggered from RECONCILING
-            // or PREPARE_LEAVING, but it could be the case that the member received a fatal error
-            // while waiting for the commit to complete. Check if that's the case and abort the
-            // revocation.
-            if (state == MemberState.FATAL) {
-                String errorMsg = String.format("Member %s with epoch %s received a fatal error " +
-                        "while waiting for a revocation commit to complete. Will abort revocation " +
-                        "without triggering user callback.", memberId, memberEpoch);
-                log.debug(errorMsg);
-                revocationResult.completeExceptionally(new KafkaException(errorMsg));
-                return;
-            }
-
-            CompletableFuture<Void> userCallbackResult = invokeOnPartitionsRevokedCallback(revokedPartitions);
-            userCallbackResult.whenComplete((callbackResult, callbackError) -> {
-                if (callbackError != null) {
-                    log.error("onPartitionsRevoked callback invocation failed for partitions {}",
-                            revokedPartitions, callbackError);
-                    revocationResult.completeExceptionally(callbackError);
-                } else {
-                    revocationResult.complete(null);
-                }
-
-            });
         });
         return revocationResult;
     }
