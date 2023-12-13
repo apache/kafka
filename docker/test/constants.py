@@ -18,8 +18,8 @@ KAFKA_CONSOLE_PRODUCER="fixtures/kafka/bin/kafka-console-producer.sh"
 KAFKA_CONSOLE_CONSUMER="fixtures/kafka/bin/kafka-console-consumer.sh"
 KAFKA_RUN_CLASS="fixtures/kafka/bin/kafka-run-class.sh"
 
-JVM_COMBINED_MODE_COMPOSE="fixtures/jvm/combined/docker-compose.yml"
-JVM_ISOLATED_COMPOSE="fixtures/jvm/isolated/docker-compose.yml"
+COMBINED_MODE_COMPOSE="fixtures/mode/combined/docker-compose.yml"
+ISOLATED_MODE_COMPOSE="fixtures/mode/isolated/docker-compose.yml"
 
 CLIENT_TIMEOUT=40000
 

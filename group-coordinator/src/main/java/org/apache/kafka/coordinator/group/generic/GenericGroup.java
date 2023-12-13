@@ -236,7 +236,6 @@ public class GenericGroup implements Group {
         this.protocolName = protocolName;
         this.leaderId = leaderId;
         this.currentStateTimestamp = currentStateTimestamp;
-        metrics.onGenericGroupStateTransition(null, initialState);
     }
 
     /**
