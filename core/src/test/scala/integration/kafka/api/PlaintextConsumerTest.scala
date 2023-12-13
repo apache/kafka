@@ -169,7 +169,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
       startingTimestamp = startingTimestamp)
   }
 
-  // TODO: enable this test for the consumer group protocol when max.poll.interval.ms is implemented.
+  // TODO: enable this test for the consumer group protocol when KAFKA-16008 has been fixed.
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
   @MethodSource(Array("getTestQuorumAndGroupProtocolParametersGenericGroupProtocolOnly"))
   def testMaxPollIntervalMs(quorum: String, groupProtocol: String): Unit = {
@@ -196,7 +196,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     assertEquals(1, listener.callsToRevoked)
   }
 
-  // TODO: enable this test for the consumer group protocol when max.poll.interval.ms is implemented.
+  // TODO: enable this test for the consumer group protocol when KAFKA-16009 has been fixed.
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
   @MethodSource(Array("getTestQuorumAndGroupProtocolParametersGenericGroupProtocolOnly"))
   def testMaxPollIntervalMsDelayInRevocation(quorum: String, groupProtocol: String): Unit = {
@@ -238,9 +238,8 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     assertTrue(commitCompleted)
   }
 
-  // TODO: enable this test for the consumer group protocol when max.poll.interval.ms is implemented.
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersGenericGroupProtocolOnly"))
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
   def testMaxPollIntervalMsDelayInAssignment(quorum: String, groupProtocol: String): Unit = {
     this.consumerConfig.setProperty(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, 5000.toString)
     this.consumerConfig.setProperty(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, 500.toString)
@@ -266,7 +265,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
 
   // TODO: enable this test for the consumer group protocol when support for committing offsets on close is implemented.
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersGenericGroupProtocolOnly"))
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
   def testAutoCommitOnClose(quorum: String, groupProtocol: String): Unit = {
     this.consumerConfig.setProperty(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "true")
     val consumer = createConsumer()
@@ -548,9 +547,8 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     awaitAssignment(consumer, expandedAssignment)
   }
 
-  // TODO: enable this test for the consumer group protocol when proper support for assignment change is implemented.
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersGenericGroupProtocolOnly"))
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
   def testShrinkingTopicSubscriptions(quorum: String, groupProtocol: String): Unit = {
     val otherTopic = "other"
     createTopic(otherTopic, 2, brokerCount)
@@ -1266,15 +1264,16 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     }
   }
 
-  // TODO: enable this test for the consumer group protocol when fixes for hanging reconciliation is implemented.
+  // TODO: enable this test for the consumer group protocol when KAFKA-16010 has been fixed.
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
   @MethodSource(Array("getTestQuorumAndGroupProtocolParametersGenericGroupProtocolOnly"))
   def testMultiConsumerSessionTimeoutOnStopPolling(quorum: String, groupProtocol: String): Unit = {
     runMultiConsumerSessionTimeoutTest(false)
   }
 
+  // TODO: enable this test for the consumer group protocol when KAFKA-16011 has been fixed.
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersGenericGroupProtocolOnly"))
   def testMultiConsumerSessionTimeoutOnClose(quorum: String, groupProtocol: String): Unit = {
     runMultiConsumerSessionTimeoutTest(true)
   }
@@ -1596,9 +1595,8 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     assertEquals(500, consumer.committed(Set(tp2).asJava).get(tp2).offset)
   }
 
-  // TODO: enable this test for the consumer group protocol when fixes for hanging reconciliation is implemented.
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersGenericGroupProtocolOnly"))
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
   def testPerPartitionLeadMetricsCleanUpWithSubscribe(quorum: String, groupProtocol: String): Unit = {
     val numMessages = 1000
     val topic2 = "topic2"
