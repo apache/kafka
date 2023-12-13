@@ -23,7 +23,8 @@ import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.coordinator.group.consumer.ConsumerGroup;
+import org.apache.kafka.coordinator.group.consumer.ConsumerGroup.ConsumerGroupState;
+import org.apache.kafka.coordinator.group.generic.GenericGroupState;
 import org.apache.kafka.timeline.SnapshotRegistry;
 import org.junit.jupiter.api.Test;
 
@@ -99,6 +100,7 @@ public class GroupCoordinatorMetricsTest {
             try (GroupCoordinatorMetrics ignored = new GroupCoordinatorMetrics(registry, metrics)) {
                 HashSet<String> expectedRegistry = new HashSet<>(Arrays.asList(
                     "kafka.coordinator.group:type=GroupMetadataManager,name=NumOffsets",
+                    "kafka.coordinator.group:type=GroupMetadataManager,name=NumGroups",
                     "kafka.coordinator.group:type=GroupMetadataManager,name=NumGroupsPreparingRebalance",
                     "kafka.coordinator.group:type=GroupMetadataManager,name=NumGroupsCompletingRebalance",
                     "kafka.coordinator.group:type=GroupMetadataManager,name=NumGroupsStable",
@@ -117,7 +119,7 @@ public class GroupCoordinatorMetricsTest {
     }
 
     @Test
-    public void sumLocalGauges() {
+    public void aggregateShards() {
         MetricsRegistry registry = new MetricsRegistry();
         Metrics metrics = new Metrics();
         GroupCoordinatorMetrics coordinatorMetrics = new GroupCoordinatorMetrics(registry, metrics);
@@ -130,21 +132,36 @@ public class GroupCoordinatorMetricsTest {
         coordinatorMetrics.activateMetricsShard(shard0);
         coordinatorMetrics.activateMetricsShard(shard1);
 
-        IntStream.range(0, 5).forEach(__ -> shard0.incrementNumConsumerGroups(ConsumerGroup.ConsumerGroupState.ASSIGNING));
-        IntStream.range(0, 5).forEach(__ -> shard1.incrementNumConsumerGroups(ConsumerGroup.ConsumerGroupState.RECONCILING));
-        IntStream.range(0, 3).forEach(__ -> shard1.decrementNumConsumerGroups(ConsumerGroup.ConsumerGroupState.DEAD));
+        IntStream.range(0, 5).forEach(__ -> shard0.incrementNumGenericGroups(GenericGroupState.PREPARING_REBALANCE));
+        IntStream.range(0, 1).forEach(__ -> shard0.decrementNumGenericGroups(GenericGroupState.COMPLETING_REBALANCE));
+        IntStream.range(0, 5).forEach(__ -> shard1.incrementNumGenericGroups(GenericGroupState.STABLE));
+        IntStream.range(0, 4).forEach(__ -> shard1.incrementNumGenericGroups(GenericGroupState.DEAD));
+        IntStream.range(0, 4).forEach(__ -> shard1.decrementNumGenericGroups(GenericGroupState.EMPTY));
+
+        IntStream.range(0, 5).forEach(__ -> shard0.incrementNumConsumerGroups(ConsumerGroupState.ASSIGNING));
+        IntStream.range(0, 5).forEach(__ -> shard1.incrementNumConsumerGroups(ConsumerGroupState.RECONCILING));
+        IntStream.range(0, 3).forEach(__ -> shard1.decrementNumConsumerGroups(ConsumerGroupState.DEAD));
 
         IntStream.range(0, 6).forEach(__ -> shard0.incrementNumOffsets());
         IntStream.range(0, 2).forEach(__ -> shard1.incrementNumOffsets());
         IntStream.range(0, 1).forEach(__ -> shard1.decrementNumOffsets());
+
+        assertEquals(4, shard0.numGenericGroups());
+        assertEquals(5, shard1.numGenericGroups());
+        assertGaugeValue(registry, metricName("GroupMetadataManager", "NumGroups"), 9);
+        assertGaugeValue(
+            metrics,
+            metrics.metricName("groups-count", METRICS_GROUP, Collections.singletonMap("type", "generic")),
+            9
+        );
 
         snapshotRegistry0.getOrCreateSnapshot(1000);
         snapshotRegistry1.getOrCreateSnapshot(1500);
         shard0.commitUpTo(1000);
         shard1.commitUpTo(1500);
 
-        assertEquals(5, shard0.numConsumerGroups(null));
-        assertEquals(2, shard1.numConsumerGroups(null));
+        assertEquals(5, shard0.numConsumerGroups());
+        assertEquals(2, shard1.numConsumerGroups());
         assertEquals(6, shard0.numOffsets());
         assertEquals(1, shard1.numOffsets());
         assertGaugeValue(

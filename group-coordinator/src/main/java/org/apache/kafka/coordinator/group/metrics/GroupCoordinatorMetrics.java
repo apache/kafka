@@ -17,6 +17,7 @@
 package org.apache.kafka.coordinator.group.metrics;
 
 import com.yammer.metrics.core.MetricsRegistry;
+import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.metrics.Gauge;
 import org.apache.kafka.common.metrics.Metrics;
@@ -24,7 +25,7 @@ import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.Meter;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.coordinator.group.Group;
-import org.apache.kafka.coordinator.group.consumer.ConsumerGroup;
+import org.apache.kafka.coordinator.group.consumer.ConsumerGroup.ConsumerGroupState;
 import org.apache.kafka.coordinator.group.generic.GenericGroupState;
 import org.apache.kafka.server.metrics.KafkaYammerMetrics;
 import org.apache.kafka.timeline.SnapshotRegistry;
@@ -43,6 +44,11 @@ public class GroupCoordinatorMetrics extends CoordinatorMetrics implements AutoC
 
     public static final String METRICS_GROUP = "group-coordinator-metrics";
 
+    /**
+     * Old generic group count metric. To be deprecated.
+     */
+    public final static com.yammer.metrics.core.MetricName NUM_GENERIC_GROUPS = getMetricName(
+        "GroupMetadataManager", "NumGroups");
     public final static com.yammer.metrics.core.MetricName NUM_OFFSETS = getMetricName(
         "GroupMetadataManager", "NumOffsets");
     public final static com.yammer.metrics.core.MetricName NUM_GENERIC_GROUPS_PREPARING_REBALANCE = getMetricName(
@@ -68,6 +74,14 @@ public class GroupCoordinatorMetrics extends CoordinatorMetrics implements AutoC
     public static final String GENERIC_GROUP_REBALANCES_SENSOR_NAME = "GenericGroupRebalances";
     public static final String CONSUMER_GROUP_REBALANCES_SENSOR_NAME = "ConsumerGroupRebalances";
 
+    private final MetricName genericGroupsCountMetricName;
+    private final MetricName consumerGroupsCountMetricName;
+    private final MetricName consumerGroupsCountEmptyMetricName;
+    private final MetricName consumerGroupsCountAssigningMetricName;
+    private final MetricName consumerGroupsCountReconcilingMetricName;
+    private final MetricName consumerGroupsCountStableMetricName;
+    private final MetricName consumerGroupsCountDeadMetricName;
+
     private final MetricsRegistry registry;
     private final Metrics metrics;
     private final Map<TopicPartition, GroupCoordinatorMetricsShard> shards = new ConcurrentHashMap<>();
@@ -84,6 +98,55 @@ public class GroupCoordinatorMetrics extends CoordinatorMetrics implements AutoC
     public GroupCoordinatorMetrics(MetricsRegistry registry, Metrics metrics) {
         this.registry = Objects.requireNonNull(registry);
         this.metrics = Objects.requireNonNull(metrics);
+
+        genericGroupsCountMetricName = metrics.metricName(
+            GROUPS_COUNT_METRIC_NAME,
+            METRICS_GROUP,
+            "The total number of generic groups.",
+            Collections.singletonMap(GROUPS_COUNT_TYPE_TAG, Group.GroupType.GENERIC.toString())
+        );
+
+        consumerGroupsCountMetricName = metrics.metricName(
+            GROUPS_COUNT_METRIC_NAME,
+            METRICS_GROUP,
+            "The total number of consumer groups.",
+            Collections.singletonMap(GROUPS_COUNT_TYPE_TAG, Group.GroupType.CONSUMER.toString())
+        );
+
+        consumerGroupsCountEmptyMetricName = metrics.metricName(
+            CONSUMER_GROUPS_COUNT_METRIC_NAME,
+            METRICS_GROUP,
+            "The number of consumer groups in empty state.",
+            Collections.singletonMap(CONSUMER_GROUPS_COUNT_STATE_TAG, ConsumerGroupState.EMPTY.toString())
+        );
+
+        consumerGroupsCountAssigningMetricName = metrics.metricName(
+            CONSUMER_GROUPS_COUNT_METRIC_NAME,
+            METRICS_GROUP,
+            "The number of consumer groups in assigning state.",
+            Collections.singletonMap(CONSUMER_GROUPS_COUNT_STATE_TAG, ConsumerGroupState.ASSIGNING.toString())
+        );
+
+        consumerGroupsCountReconcilingMetricName = metrics.metricName(
+            CONSUMER_GROUPS_COUNT_METRIC_NAME,
+            METRICS_GROUP,
+            "The number of consumer groups in reconciling state.",
+            Collections.singletonMap(CONSUMER_GROUPS_COUNT_STATE_TAG, ConsumerGroupState.RECONCILING.toString())
+        );
+
+        consumerGroupsCountStableMetricName = metrics.metricName(
+            CONSUMER_GROUPS_COUNT_METRIC_NAME,
+            METRICS_GROUP,
+            "The number of consumer groups in stable state.",
+            Collections.singletonMap(CONSUMER_GROUPS_COUNT_STATE_TAG, ConsumerGroupState.STABLE.toString())
+        );
+
+        consumerGroupsCountDeadMetricName = metrics.metricName(
+            CONSUMER_GROUPS_COUNT_METRIC_NAME,
+            METRICS_GROUP,
+            "The number of consumer groups in dead state.",
+            Collections.singletonMap(CONSUMER_GROUPS_COUNT_STATE_TAG, ConsumerGroupState.DEAD.toString())
+        );
 
         registerGauges();
 
@@ -156,56 +219,26 @@ public class GroupCoordinatorMetrics extends CoordinatorMetrics implements AutoC
     }
 
     private Long numGenericGroups() {
-        return shards.values().stream().mapToLong(shard -> shard.numGenericGroups(null)).sum();
+        return shards.values().stream().mapToLong(GroupCoordinatorMetricsShard::numGenericGroups).sum();
     }
 
-    private Long numGenericGroupsPreparingRebalance() {
-        return shards.values().stream().mapToLong(shard -> shard.numGenericGroups(GenericGroupState.PREPARING_REBALANCE)).sum();
-    }
-
-    private Long numGenericGroupsCompletingRebalance() {
-        return shards.values().stream().mapToLong(shard -> shard.numGenericGroups(GenericGroupState.COMPLETING_REBALANCE)).sum();
-    }
-    private Long numGenericGroupsStable() {
-        return shards.values().stream().mapToLong(shard -> shard.numGenericGroups(GenericGroupState.STABLE)).sum();
-    }
-
-    private Long numGenericGroupsDead() {
-        return shards.values().stream().mapToLong(shard -> shard.numGenericGroups(GenericGroupState.DEAD)).sum();
-    }
-
-    private Long numGenericGroupsEmpty() {
-        return shards.values().stream().mapToLong(shard -> shard.numGenericGroups(GenericGroupState.EMPTY)).sum();
+    private Long numGenericGroups(GenericGroupState state) {
+        return shards.values().stream().mapToLong(shard -> shard.numGenericGroups(state)).sum();
     }
 
     private long numConsumerGroups() {
-        return shards.values().stream().mapToLong(shard -> shard.numConsumerGroups(null)).sum();
+        return shards.values().stream().mapToLong(GroupCoordinatorMetricsShard::numConsumerGroups).sum();
     }
 
-    private long numConsumerGroupsEmpty() {
-        return shards.values().stream().mapToLong(shard -> shard.numConsumerGroups(ConsumerGroup.ConsumerGroupState.EMPTY)).sum();
-    }
-
-    private long numConsumerGroupsAssigning() {
-        return shards.values().stream().mapToLong(shard -> shard.numConsumerGroups(ConsumerGroup.ConsumerGroupState.ASSIGNING)).sum();
-    }
-
-    private long numConsumerGroupsReconciling() {
-        return shards.values().stream().mapToLong(shard -> shard.numConsumerGroups(ConsumerGroup.ConsumerGroupState.RECONCILING)).sum();
-    }
-
-    private long numConsumerGroupsStable() {
-        return shards.values().stream().mapToLong(shard -> shard.numConsumerGroups(ConsumerGroup.ConsumerGroupState.STABLE)).sum();
-    }
-
-    private long numConsumerGroupsDead() {
-        return shards.values().stream().mapToLong(shard -> shard.numConsumerGroups(ConsumerGroup.ConsumerGroupState.DEAD)).sum();
+    private long numConsumerGroups(ConsumerGroupState state) {
+        return shards.values().stream().mapToLong(shard -> shard.numConsumerGroups(state)).sum();
     }
 
     @Override
     public void close() {
         Arrays.asList(
             NUM_OFFSETS,
+            NUM_GENERIC_GROUPS,
             NUM_GENERIC_GROUPS_PREPARING_REBALANCE,
             NUM_GENERIC_GROUPS_COMPLETING_REBALANCE,
             NUM_GENERIC_GROUPS_STABLE,
@@ -213,28 +246,15 @@ public class GroupCoordinatorMetrics extends CoordinatorMetrics implements AutoC
             NUM_GENERIC_GROUPS_EMPTY
         ).forEach(registry::removeMetric);
 
-        metrics.removeMetric(metrics.metricName(CONSUMER_GROUPS_COUNT_METRIC_NAME, METRICS_GROUP));
-
         Arrays.asList(
-            Group.GroupType.GENERIC,
-            Group.GroupType.CONSUMER
-        ).forEach(tag -> metrics.removeMetric(metrics.metricName(
-            GROUPS_COUNT_METRIC_NAME,
-            METRICS_GROUP,
-            Collections.singletonMap(GROUPS_COUNT_TYPE_TAG, tag.toString())
-        )));
-
-        Arrays.asList(
-            ConsumerGroup.ConsumerGroupState.EMPTY,
-            ConsumerGroup.ConsumerGroupState.ASSIGNING,
-            ConsumerGroup.ConsumerGroupState.RECONCILING,
-            ConsumerGroup.ConsumerGroupState.STABLE,
-            ConsumerGroup.ConsumerGroupState.DEAD
-        ).forEach(tag -> metrics.removeMetric(metrics.metricName(
-            CONSUMER_GROUPS_COUNT_METRIC_NAME,
-            METRICS_GROUP,
-            Collections.singletonMap(CONSUMER_GROUPS_COUNT_STATE_TAG, tag.toString())
-        )));
+            genericGroupsCountMetricName,
+            consumerGroupsCountMetricName,
+            consumerGroupsCountEmptyMetricName,
+            consumerGroupsCountAssigningMetricName,
+            consumerGroupsCountReconcilingMetricName,
+            consumerGroupsCountStableMetricName,
+            consumerGroupsCountDeadMetricName
+        ).forEach(metrics::removeMetric);
 
         Arrays.asList(
             OFFSET_COMMITS_SENSOR_NAME,
@@ -289,87 +309,81 @@ public class GroupCoordinatorMetrics extends CoordinatorMetrics implements AutoC
             }
         });
 
+        registry.newGauge(NUM_GENERIC_GROUPS, new com.yammer.metrics.core.Gauge<Long>() {
+            @Override
+            public Long value() {
+                return numGenericGroups();
+            }
+        });
+
         registry.newGauge(NUM_GENERIC_GROUPS_PREPARING_REBALANCE, new com.yammer.metrics.core.Gauge<Long>() {
             @Override
             public Long value() {
-                return numGenericGroupsPreparingRebalance();
+                return numGenericGroups(GenericGroupState.PREPARING_REBALANCE);
             }
         });
 
         registry.newGauge(NUM_GENERIC_GROUPS_COMPLETING_REBALANCE, new com.yammer.metrics.core.Gauge<Long>() {
             @Override
             public Long value() {
-                return numGenericGroupsCompletingRebalance();
+                return numGenericGroups(GenericGroupState.COMPLETING_REBALANCE);
             }
         });
 
         registry.newGauge(NUM_GENERIC_GROUPS_STABLE, new com.yammer.metrics.core.Gauge<Long>() {
             @Override
             public Long value() {
-                return numGenericGroupsStable();
+                return numGenericGroups(GenericGroupState.STABLE);
             }
         });
 
         registry.newGauge(NUM_GENERIC_GROUPS_DEAD, new com.yammer.metrics.core.Gauge<Long>() {
             @Override
             public Long value() {
-                return numGenericGroupsDead();
+                return numGenericGroups(GenericGroupState.DEAD);
             }
         });
 
         registry.newGauge(NUM_GENERIC_GROUPS_EMPTY, new com.yammer.metrics.core.Gauge<Long>() {
             @Override
             public Long value() {
-                return numGenericGroupsEmpty();
+                return numGenericGroups(GenericGroupState.EMPTY);
             }
         });
+
         metrics.addMetric(
-            metrics.metricName(GROUPS_COUNT_METRIC_NAME, METRICS_GROUP, Collections.singletonMap(
-                GROUPS_COUNT_TYPE_TAG, Group.GroupType.GENERIC.toString()
-            )),
+            genericGroupsCountMetricName,
             (Gauge<Long>) (config, now) -> numGenericGroups()
         );
 
         metrics.addMetric(
-            metrics.metricName(GROUPS_COUNT_METRIC_NAME, METRICS_GROUP, Collections.singletonMap(
-                GROUPS_COUNT_TYPE_TAG, Group.GroupType.CONSUMER.toString()
-            )),
+            consumerGroupsCountMetricName,
             (Gauge<Long>) (config, now) -> numConsumerGroups()
         );
 
         metrics.addMetric(
-            metrics.metricName(CONSUMER_GROUPS_COUNT_METRIC_NAME, METRICS_GROUP, Collections.singletonMap(
-                CONSUMER_GROUPS_COUNT_STATE_TAG, ConsumerGroup.ConsumerGroupState.EMPTY.toString()
-            )),
-            (Gauge<Long>) (config, now) -> numConsumerGroupsEmpty()
+            consumerGroupsCountEmptyMetricName,
+            (Gauge<Long>) (config, now) -> numConsumerGroups(ConsumerGroupState.EMPTY)
         );
 
         metrics.addMetric(
-            metrics.metricName(CONSUMER_GROUPS_COUNT_METRIC_NAME, METRICS_GROUP, Collections.singletonMap(
-                CONSUMER_GROUPS_COUNT_STATE_TAG, ConsumerGroup.ConsumerGroupState.ASSIGNING.toString()
-            )),
-            (Gauge<Long>) (config, now) -> numConsumerGroupsAssigning()
+            consumerGroupsCountAssigningMetricName,
+            (Gauge<Long>) (config, now) -> numConsumerGroups(ConsumerGroupState.ASSIGNING)
         );
 
         metrics.addMetric(
-            metrics.metricName(CONSUMER_GROUPS_COUNT_METRIC_NAME, METRICS_GROUP, Collections.singletonMap(
-                CONSUMER_GROUPS_COUNT_STATE_TAG, ConsumerGroup.ConsumerGroupState.RECONCILING.toString()
-            )),
-            (Gauge<Long>) (config, now) -> numConsumerGroupsReconciling()
+            consumerGroupsCountReconcilingMetricName,
+            (Gauge<Long>) (config, now) -> numConsumerGroups(ConsumerGroupState.RECONCILING)
         );
 
         metrics.addMetric(
-            metrics.metricName(CONSUMER_GROUPS_COUNT_METRIC_NAME, METRICS_GROUP, Collections.singletonMap(
-                CONSUMER_GROUPS_COUNT_STATE_TAG, ConsumerGroup.ConsumerGroupState.STABLE.toString()
-            )),
-            (Gauge<Long>) (config, now) -> numConsumerGroupsStable()
+            consumerGroupsCountStableMetricName,
+            (Gauge<Long>) (config, now) -> numConsumerGroups(ConsumerGroupState.STABLE)
         );
 
         metrics.addMetric(
-            metrics.metricName(CONSUMER_GROUPS_COUNT_METRIC_NAME, METRICS_GROUP, Collections.singletonMap(
-                CONSUMER_GROUPS_COUNT_STATE_TAG, ConsumerGroup.ConsumerGroupState.DEAD.toString()
-            )),
-            (Gauge<Long>) (config, now) -> numConsumerGroupsDead()
+            consumerGroupsCountDeadMetricName,
+            (Gauge<Long>) (config, now) -> numConsumerGroups(ConsumerGroupState.DEAD)
         );
     }
 }

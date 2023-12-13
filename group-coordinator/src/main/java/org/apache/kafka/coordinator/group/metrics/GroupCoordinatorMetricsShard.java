@@ -19,7 +19,7 @@ package org.apache.kafka.coordinator.group.metrics;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.coordinator.group.consumer.ConsumerGroup;
+import org.apache.kafka.coordinator.group.consumer.ConsumerGroup.ConsumerGroupState;
 import org.apache.kafka.coordinator.group.generic.GenericGroupState;
 import org.apache.kafka.timeline.SnapshotRegistry;
 import org.apache.kafka.timeline.TimelineLong;
@@ -63,7 +63,7 @@ public class GroupCoordinatorMetricsShard implements CoordinatorMetricsShard {
     /**
      * Consumer group size gauge counters keyed by the metric name.
      */
-    private final Map<ConsumerGroup.ConsumerGroupState, TimelineGaugeCounter> consumerGroupGauges;
+    private final Map<ConsumerGroupState, TimelineGaugeCounter> consumerGroupGauges;
 
     /**
      * All sensors keyed by the sensor name. A Sensor object is shared across all metrics shards.
@@ -109,15 +109,15 @@ public class GroupCoordinatorMetricsShard implements CoordinatorMetricsShard {
         TimelineLong numConsumerGroupsDeadTimeline = new TimelineLong(snapshotRegistry);
 
         this.consumerGroupGauges = Utils.mkMap(
-            Utils.mkEntry(ConsumerGroup.ConsumerGroupState.EMPTY,
+            Utils.mkEntry(ConsumerGroupState.EMPTY,
                 new TimelineGaugeCounter(numConsumerGroupsEmptyTimeline, new AtomicLong(0))),
-            Utils.mkEntry(ConsumerGroup.ConsumerGroupState.ASSIGNING,
+            Utils.mkEntry(ConsumerGroupState.ASSIGNING,
                 new TimelineGaugeCounter(numConsumerGroupsAssigningTimeline, new AtomicLong(0))),
-            Utils.mkEntry(ConsumerGroup.ConsumerGroupState.RECONCILING,
+            Utils.mkEntry(ConsumerGroupState.RECONCILING,
                 new TimelineGaugeCounter(numConsumerGroupsReconcilingTimeline, new AtomicLong(0))),
-            Utils.mkEntry(ConsumerGroup.ConsumerGroupState.STABLE,
+            Utils.mkEntry(ConsumerGroupState.STABLE,
                 new TimelineGaugeCounter(numConsumerGroupsStableTimeline, new AtomicLong(0))),
-            Utils.mkEntry(ConsumerGroup.ConsumerGroupState.DEAD,
+            Utils.mkEntry(ConsumerGroupState.DEAD,
                 new TimelineGaugeCounter(numConsumerGroupsDeadTimeline, new AtomicLong(0)))
         );
 
@@ -146,7 +146,7 @@ public class GroupCoordinatorMetricsShard implements CoordinatorMetricsShard {
      *
      * @param state the consumer group state.
      */
-    public void incrementNumConsumerGroups(ConsumerGroup.ConsumerGroupState state) {
+    public void incrementNumConsumerGroups(ConsumerGroupState state) {
         TimelineGaugeCounter gaugeCounter = consumerGroupGauges.get(state);
         if (gaugeCounter != null) {
             synchronized (gaugeCounter.timelineLong) {
@@ -181,7 +181,7 @@ public class GroupCoordinatorMetricsShard implements CoordinatorMetricsShard {
      *
      * @param state the consumer group state.
      */
-    public void decrementNumConsumerGroups(ConsumerGroup.ConsumerGroupState state) {
+    public void decrementNumConsumerGroups(ConsumerGroupState state) {
         TimelineGaugeCounter gaugeCounter = consumerGroupGauges.get(state);
         if (gaugeCounter != null) {
             synchronized (gaugeCounter.timelineLong) {
@@ -191,23 +191,20 @@ public class GroupCoordinatorMetricsShard implements CoordinatorMetricsShard {
     }
 
     /**
-     * Obtain the number of offsets.
+     * @return The number of offsets.
      */
     public long numOffsets() {
         return numOffsetsTimelineGaugeCounter.atomicLong.get();
     }
 
     /**
-     * Obtain the number of generic groups.
+     * Obtain the number of generic groups in the specified state.
      *
-     * @param state  The generic group state. `null` indicates all states.
+     * @param state  The generic group state.
+     *
+     * @return   The number of generic groups in `state`.
      */
     public long numGenericGroups(GenericGroupState state) {
-        if (state == null) {
-            return genericGroupGauges.values().stream()
-                .mapToLong(AtomicLong::get).sum();
-        }
-
         AtomicLong counter = genericGroupGauges.get(state);
         if (counter != null) {
             return counter.get();
@@ -216,21 +213,34 @@ public class GroupCoordinatorMetricsShard implements CoordinatorMetricsShard {
     }
 
     /**
-     * Obtain the current value of a local consumer group gauge.
-     *
-     * @param state  the consumer group state. `null` indicates all states.
+     * @return The total number of generic groups.
      */
-    public long numConsumerGroups(ConsumerGroup.ConsumerGroupState state) {
-        if (state == null) {
-            return consumerGroupGauges.values().stream()
-                .mapToLong(timelineGaugeCounter -> timelineGaugeCounter.atomicLong.get()).sum();
-        }
+    public long numGenericGroups() {
+        return genericGroupGauges.values().stream()
+            .mapToLong(AtomicLong::get).sum();
+    }
 
+    /**
+     * Obtain the number of consumer groups in the specified state.
+     *
+     * @param state  the consumer group state.
+     *
+     * @return   The number of consumer groups in `state`.
+     */
+    public long numConsumerGroups(ConsumerGroupState state) {
         TimelineGaugeCounter gaugeCounter = consumerGroupGauges.get(state);
         if (gaugeCounter != null) {
             return gaugeCounter.atomicLong.get();
         }
         return 0L;
+    }
+
+    /**
+     * @return The total number of generic groups.
+     */
+    public long numConsumerGroups() {
+        return consumerGroupGauges.values().stream()
+            .mapToLong(timelineGaugeCounter -> timelineGaugeCounter.atomicLong.get()).sum();
     }
 
     @Override
@@ -333,44 +343,44 @@ public class GroupCoordinatorMetricsShard implements CoordinatorMetricsShard {
      * @param newState The next state. null value means that the group has been removed.
      */
     public void onConsumerGroupStateTransition(
-        ConsumerGroup.ConsumerGroupState oldState,
-        ConsumerGroup.ConsumerGroupState newState
+        ConsumerGroupState oldState,
+        ConsumerGroupState newState
     ) {
         if (newState != null) {
             switch (newState) {
                 case EMPTY:
-                    incrementNumConsumerGroups(ConsumerGroup.ConsumerGroupState.EMPTY);
+                    incrementNumConsumerGroups(ConsumerGroupState.EMPTY);
                     break;
                 case ASSIGNING:
-                    incrementNumConsumerGroups(ConsumerGroup.ConsumerGroupState.ASSIGNING);
+                    incrementNumConsumerGroups(ConsumerGroupState.ASSIGNING);
                     break;
                 case RECONCILING:
-                    incrementNumConsumerGroups(ConsumerGroup.ConsumerGroupState.RECONCILING);
+                    incrementNumConsumerGroups(ConsumerGroupState.RECONCILING);
                     break;
                 case STABLE:
-                    incrementNumConsumerGroups(ConsumerGroup.ConsumerGroupState.STABLE);
+                    incrementNumConsumerGroups(ConsumerGroupState.STABLE);
                     break;
                 case DEAD:
-                    incrementNumConsumerGroups(ConsumerGroup.ConsumerGroupState.DEAD);
+                    incrementNumConsumerGroups(ConsumerGroupState.DEAD);
             }
         }
 
         if (oldState != null) {
             switch (oldState) {
                 case EMPTY:
-                    decrementNumConsumerGroups(ConsumerGroup.ConsumerGroupState.EMPTY);
+                    decrementNumConsumerGroups(ConsumerGroupState.EMPTY);
                     break;
                 case ASSIGNING:
-                    decrementNumConsumerGroups(ConsumerGroup.ConsumerGroupState.ASSIGNING);
+                    decrementNumConsumerGroups(ConsumerGroupState.ASSIGNING);
                     break;
                 case RECONCILING:
-                    decrementNumConsumerGroups(ConsumerGroup.ConsumerGroupState.RECONCILING);
+                    decrementNumConsumerGroups(ConsumerGroupState.RECONCILING);
                     break;
                 case STABLE:
-                    decrementNumConsumerGroups(ConsumerGroup.ConsumerGroupState.STABLE);
+                    decrementNumConsumerGroups(ConsumerGroupState.STABLE);
                     break;
                 case DEAD:
-                    decrementNumConsumerGroups(ConsumerGroup.ConsumerGroupState.DEAD);
+                    decrementNumConsumerGroups(ConsumerGroupState.DEAD);
             }
         }
     }
