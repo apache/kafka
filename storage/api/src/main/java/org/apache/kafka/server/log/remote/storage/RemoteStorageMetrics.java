@@ -43,10 +43,11 @@ public class RemoteStorageMetrics {
     private static final String BUILD_REMOTE_LOG_AUX_STATE_REQUESTS_PER_SEC = "BuildRemoteLogAuxStateRequestsPerSec";
     private static final String FAILED_REMOTE_FETCH_PER_SEC = "RemoteFetchErrorsPerSec";
     private static final String FAILED_REMOTE_COPY_PER_SEC = "RemoteCopyErrorsPerSec";
-    private static final String REMOTE_COPY_LAG_BYTES = "RemoteCopyLagBytes";
     private static final String REMOTE_LOG_SIZE_COMPUTATION_TIME = "RemoteLogSizeComputationTime";
     private static final String FAILED_REMOTE_DELETE_PER_SEC = "RemoteDeleteErrorsPerSec";
     private static final String FAILED_BUILD_REMOTE_LOG_AUX_STATE_PER_SEC = "BuildRemoteLogAuxStateErrorsPerSec";
+    private static final String REMOTE_COPY_LAG_BYTES = "RemoteCopyLagBytes";
+    private static final String REMOTE_COPY_LAG_SEGMENTS = "RemoteCopyLagSegments";
     private static final String REMOTE_LOG_READER_TASK_QUEUE_SIZE = REMOTE_LOG_READER_METRICS_NAME_PREFIX + TASK_QUEUE_SIZE;
     private static final String REMOTE_LOG_READER_AVG_IDLE_PERCENT = REMOTE_LOG_READER_METRICS_NAME_PREFIX + AVG_IDLE_PERCENT;
     public static final Set<String> REMOTE_STORAGE_THREAD_POOL_METRICS = Collections.unmodifiableSet(
@@ -68,14 +69,16 @@ public class RemoteStorageMetrics {
             "kafka.server", "BrokerTopicMetrics", FAILED_REMOTE_FETCH_PER_SEC);
     public final static MetricName FAILED_REMOTE_COPY_PER_SEC_METRIC = getMetricName(
             "kafka.server", "BrokerTopicMetrics", FAILED_REMOTE_COPY_PER_SEC);
-    public final static MetricName REMOTE_COPY_LOG_BYTES_METRIC = getMetricName(
-            "kafka.server", "BrokerTopicMetrics", REMOTE_COPY_LAG_BYTES);
     public final static MetricName REMOTE_LOG_SIZE_COMPUTATION_TIME_METRIC = getMetricName(
             "kafka.server", "BrokerTopicMetrics", REMOTE_LOG_SIZE_COMPUTATION_TIME);
     public final static MetricName FAILED_REMOTE_DELETE_PER_SEC_METRIC = getMetricName(
             "kafka.server", "BrokerTopicMetrics", FAILED_REMOTE_DELETE_PER_SEC);
     public final static MetricName FAILED_BUILD_REMOTE_LOG_AUX_STATE_PER_SEC_METRIC = getMetricName(
             "kafka.server", "BrokerTopicMetrics", FAILED_BUILD_REMOTE_LOG_AUX_STATE_PER_SEC);
+    public final static MetricName REMOTE_COPY_LAG_BYTES_METRIC = getMetricName(
+            "kafka.server", "BrokerTopicMetrics", REMOTE_COPY_LAG_BYTES);
+    public final static MetricName REMOTE_COPY_LAG_SEGMENTS_METRIC = getMetricName(
+            "kafka.server", "BrokerTopicMetrics", REMOTE_COPY_LAG_SEGMENTS);
     public final static MetricName REMOTE_LOG_MANAGER_TASKS_AVG_IDLE_PERCENT_METRIC = getMetricName(
             "kafka.log.remote", "RemoteLogManager", REMOTE_LOG_MANAGER_TASKS_AVG_IDLE_PERCENT);
     public final static MetricName REMOTE_LOG_READER_TASK_QUEUE_SIZE_METRIC = getMetricName(
@@ -94,9 +97,9 @@ public class RemoteStorageMetrics {
         metrics.add(BUILD_REMOTE_LOG_AUX_STATE_REQUESTS_PER_SEC_METRIC);
         metrics.add(FAILED_REMOTE_FETCH_PER_SEC_METRIC);
         metrics.add(FAILED_REMOTE_COPY_PER_SEC_METRIC);
-        metrics.add(REMOTE_COPY_LOG_BYTES_METRIC);
         metrics.add(FAILED_REMOTE_DELETE_PER_SEC_METRIC);
         metrics.add(FAILED_BUILD_REMOTE_LOG_AUX_STATE_PER_SEC_METRIC);
+        metrics.add(REMOTE_COPY_LAG_BYTES_METRIC);
         metrics.add(REMOTE_LOG_MANAGER_TASKS_AVG_IDLE_PERCENT_METRIC);
         metrics.add(REMOTE_LOG_READER_AVG_IDLE_PERCENT_METRIC);
         metrics.add(REMOTE_LOG_READER_TASK_QUEUE_SIZE_METRIC);
@@ -116,10 +119,10 @@ public class RemoteStorageMetrics {
         metrics.add(BUILD_REMOTE_LOG_AUX_STATE_REQUESTS_PER_SEC_METRIC);
         metrics.add(FAILED_REMOTE_FETCH_PER_SEC_METRIC);
         metrics.add(FAILED_REMOTE_COPY_PER_SEC_METRIC);
-        metrics.add(REMOTE_COPY_LOG_BYTES_METRIC);
         metrics.add(REMOTE_LOG_SIZE_COMPUTATION_TIME_METRIC);
         metrics.add(FAILED_REMOTE_DELETE_PER_SEC_METRIC);
         metrics.add(FAILED_BUILD_REMOTE_LOG_AUX_STATE_PER_SEC_METRIC);
+        metrics.add(REMOTE_COPY_LAG_BYTES_METRIC);
 
         return metrics;
     }
