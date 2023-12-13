@@ -136,8 +136,6 @@ public class CommitRequestManagerTest {
         CommitRequestManager commitRequestManger = create(true, 100);
         assertPoll(0, commitRequestManger);
 
-        Map<TopicPartition, OffsetAndMetadata> offsets = new HashMap<>();
-        offsets.put(tp, new OffsetAndMetadata(0));
         commitRequestManger.updateAutoCommitTimer(time.milliseconds());
         time.sleep(100);
         commitRequestManger.updateAutoCommitTimer(time.milliseconds());
@@ -191,7 +189,10 @@ public class CommitRequestManagerTest {
     public void testPoll_EnsureEmptyPendingRequestAfterPoll() {
         CommitRequestManager commitRequestManger = create(true, 100);
         when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(mockedNode));
-        commitRequestManger.addOffsetCommitRequest(new HashMap<>(), Optional.empty());
+        Map<TopicPartition, OffsetAndMetadata> offsets = Collections.singletonMap(
+            new TopicPartition("topic", 1),
+            new OffsetAndMetadata(0));
+        commitRequestManger.addOffsetCommitRequest(offsets, Optional.empty());
         assertEquals(1, commitRequestManger.unsentOffsetCommitRequests().size());
         assertEquals(1, commitRequestManger.poll(time.milliseconds()).unsentRequests.size());
         assertTrue(commitRequestManger.unsentOffsetCommitRequests().isEmpty());
@@ -254,7 +255,7 @@ public class CommitRequestManagerTest {
 
         // Auto-commit all consume sync (ex. triggered when the consumer is closed).
         Timer timer = time.timer(defaultApiTimeoutMs);
-        CompletableFuture<Void> commitResult = commitRequestManger.maybeAutoCommitAllConsumed(Optional.of(timer));
+        CompletableFuture<Void> commitResult = commitRequestManger.autoCommitAllConsumedNow(Optional.of(timer));
         sendAndVerifyOffsetCommitRequestFailedAndMaybeRetried(commitRequestManger, timer, error, commitResult);
 
         // We expect that request should have been retried on this sync commit.
@@ -266,19 +267,17 @@ public class CommitRequestManagerTest {
     public void testAutocommit_EnsureOnlyOneInflightRequest() {
         TopicPartition t1p = new TopicPartition("topic1", 0);
         subscriptionState.assignFromUser(singleton(t1p));
+        subscriptionState.seek(t1p, 100);
 
         CommitRequestManager commitRequestManger = create(true, 100);
         time.sleep(100);
         commitRequestManger.updateAutoCommitTimer(time.milliseconds());
-        // Nothing consumed therefore no commit request is sent
-        assertPoll(0, commitRequestManger);
-        time.sleep(10);
-        subscriptionState.seekUnvalidated(t1p, new SubscriptionState.FetchPosition(100L));
         List<NetworkClientDelegate.FutureCompletionHandler> futures = assertPoll(1, commitRequestManger);
 
-        time.sleep(90);
+        time.sleep(100);
         commitRequestManger.updateAutoCommitTimer(time.milliseconds());
-        // We want to make sure we don't resend autocommit if the previous request has not been completed
+        // We want to make sure we don't resend autocommit if the previous request has not been
+        // completed, even if the interval expired
         assertPoll(0, commitRequestManger);
         assertEmptyPendingRequests(commitRequestManger);
 
