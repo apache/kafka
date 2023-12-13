@@ -22,6 +22,8 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.Config;
 import org.apache.kafka.common.config.ConfigDef;
+import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.Timer;
 import org.apache.kafka.connect.connector.Connector;
 import org.apache.kafka.connect.connector.ConnectorContext;
 import org.apache.kafka.connect.connector.Task;
@@ -385,7 +387,7 @@ public class BlockingConnectorTest {
         connect.requestTimeout(DEFAULT_REST_REQUEST_TIMEOUT_MS);
     }
 
-    private static class Block {
+    public static class Block {
         // All latches that blocking connectors/tasks are or will be waiting on during a test case
         private static final Set<CountDownLatch> BLOCK_LATCHES = new HashSet<>();
         // The latch that can be used to wait for a connector/task to reach the most-recently-registered blocking point
@@ -412,17 +414,23 @@ public class BlockingConnectorTest {
          * it will block.
          */
         public static void waitForBlock() throws InterruptedException, TimeoutException {
+            Timer timer = Time.SYSTEM.timer(CONNECTOR_BLOCK_TIMEOUT_MS);
+
             CountDownLatch awaitBlockLatch;
             synchronized (Block.class) {
+                while (Block.awaitBlockLatch == null) {
+                    timer.update();
+                    if (timer.isExpired()) {
+                        throw new TimeoutException("Timed out waiting for connector to block.");
+                    }
+                    Block.class.wait(timer.remainingMs());
+                }
                 awaitBlockLatch = Block.awaitBlockLatch;
             }
 
-            if (awaitBlockLatch == null) {
-                throw new IllegalArgumentException("No connector has been created yet");
-            }
-
             log.debug("Waiting for connector to block");
-            if (!awaitBlockLatch.await(CONNECTOR_BLOCK_TIMEOUT_MS, TimeUnit.MILLISECONDS)) {
+            timer.update();
+            if (!awaitBlockLatch.await(timer.remainingMs(), TimeUnit.MILLISECONDS)) {
                 throw new TimeoutException("Timed out waiting for connector to block.");
             }
             log.debug("Connector should now be blocked");
@@ -467,6 +475,7 @@ public class BlockingConnectorTest {
                 synchronized (Block.class) {
                     resetAwaitBlockLatch();
                     awaitBlockLatch = new CountDownLatch(1);
+                    Block.class.notify();
                 }
             }
         }
