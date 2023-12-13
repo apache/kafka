@@ -51,6 +51,7 @@ import org.apache.kafka.clients.consumer.internals.events.ListOffsetsApplication
 import org.apache.kafka.clients.consumer.internals.events.NewTopicsMetadataUpdateRequestEvent;
 import org.apache.kafka.clients.consumer.internals.events.ResetPositionsApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.SubscriptionChangeApplicationEvent;
+import org.apache.kafka.clients.consumer.internals.events.TopicMetadataApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.UnsubscribeApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.ValidatePositionsApplicationEvent;
 import org.apache.kafka.common.Cluster;
@@ -811,7 +812,31 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
 
     @Override
     public List<PartitionInfo> partitionsFor(String topic, Duration timeout) {
-        throw new KafkaException("method not implemented");
+        acquireAndEnsureOpen();
+        try {
+            Cluster cluster = this.metadata.fetch();
+            List<PartitionInfo> parts = cluster.partitionsForTopic(topic);
+            if (!parts.isEmpty())
+                return parts;
+
+            if (timeout.toMillis() == 0L) {
+                throw new TimeoutException();
+            }
+
+            final TopicMetadataApplicationEvent topicMetadataApplicationEvent =
+                    new TopicMetadataApplicationEvent(topic, timeout.toMillis());
+            wakeupTrigger.setActiveTask(topicMetadataApplicationEvent.future());
+            try {
+                Map<String, List<PartitionInfo>> topicMetadata =
+                        applicationEventHandler.addAndGet(topicMetadataApplicationEvent, time.timer(timeout));
+
+                return topicMetadata.getOrDefault(topic, Collections.emptyList());
+            } finally {
+                wakeupTrigger.clearTask();
+            }
+        } finally {
+            release();
+        }
     }
 
     @Override
@@ -821,7 +846,23 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
 
     @Override
     public Map<String, List<PartitionInfo>> listTopics(Duration timeout) {
-        throw new KafkaException("method not implemented");
+        acquireAndEnsureOpen();
+        try {
+            if (timeout.toMillis() == 0L) {
+                throw new TimeoutException();
+            }
+
+            final TopicMetadataApplicationEvent topicMetadataApplicationEvent =
+                    new TopicMetadataApplicationEvent(timeout.toMillis());
+            wakeupTrigger.setActiveTask(topicMetadataApplicationEvent.future());
+            try {
+                return applicationEventHandler.addAndGet(topicMetadataApplicationEvent, time.timer(timeout));
+            } finally {
+                wakeupTrigger.clearTask();
+            }
+        } finally {
+            release();
+        }
     }
 
     @Override

@@ -407,10 +407,34 @@ public class MirrorSourceTaskTest {
         mirrorSourceTask.commitRecord(sourceRecord, recordMetadata);
         // We should have dispatched this sync to the producer
         verify(producer, times(4)).send(any(), any());
+        // Ack the latest sync immediately
+        producerCallback.getValue().onCompletion(null, null);
 
         mirrorSourceTask.commit();
         // No more syncs should take place; we've been able to publish all of them so far
         verify(producer, times(4)).send(any(), any());
+
+        // Don't skip the upstream record, so that the offset.lag.max determines whether the offset is emitted.
+        recordOffset = 7;
+        metadataOffset = 107;
+        recordMetadata = new RecordMetadata(sourceTopicPartition, metadataOffset, 0, 0, 0, recordPartition);
+        sourceRecord = mirrorSourceTask.convertRecord(new ConsumerRecord<>(topicName, recordPartition,
+                recordOffset, System.currentTimeMillis(), TimestampType.CREATE_TIME, recordKey.length,
+                recordValue.length, recordKey, recordValue, headers, Optional.empty()));
+
+        mirrorSourceTask.commitRecord(sourceRecord, recordMetadata);
+        // We should not have dispatched any more syncs to the producer; this sync was within offset.lag.max of the previous one.
+        verify(producer, times(4)).send(any(), any());
+
+        mirrorSourceTask.commit();
+        // We should dispatch the offset sync that was delayed until the next periodic offset commit.
+        verify(producer, times(5)).send(any(), any());
+        // Ack the latest sync immediately
+        producerCallback.getValue().onCompletion(null, null);
+
+        mirrorSourceTask.commit();
+        // No more syncs should take place; we've been able to publish all of them so far
+        verify(producer, times(5)).send(any(), any());
     }
 
     private void compareHeaders(List<Header> expectedHeaders, List<org.apache.kafka.connect.header.Header> taskHeaders) {

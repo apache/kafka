@@ -18,6 +18,7 @@
 package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.common.protocol.Errors;
+
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -99,22 +100,31 @@ public enum MemberState {
      * unrecoverable state where the member won't send any requests to the broker and cannot
      * perform any other transition.
      */
-    FATAL;
+    FATAL,
+
+    /**
+     * An intermediate state indicating the consumer is staled because the user has not polled the consumer
+     * within the <code>max.poll.interval.ms</code> time bound; therefore causing the member to leave the
+     * group. The member rejoins on the next poll.
+     */
+    STALED;
 
     // Valid state transitions
     static {
 
-        STABLE.previousValidStates = Arrays.asList(JOINING, ACKNOWLEDGING);
+        STABLE.previousValidStates = Arrays.asList(JOINING, ACKNOWLEDGING, RECONCILING);
 
         RECONCILING.previousValidStates = Arrays.asList(STABLE, JOINING, ACKNOWLEDGING);
 
         ACKNOWLEDGING.previousValidStates = Arrays.asList(RECONCILING);
 
-        FATAL.previousValidStates = Arrays.asList(JOINING, STABLE, RECONCILING, ACKNOWLEDGING);
+        FATAL.previousValidStates = Arrays.asList(JOINING, STABLE, RECONCILING, ACKNOWLEDGING,
+                PREPARE_LEAVING, LEAVING, UNSUBSCRIBED);
 
-        FENCED.previousValidStates = Arrays.asList(JOINING, STABLE, RECONCILING, ACKNOWLEDGING);
+        FENCED.previousValidStates = Arrays.asList(JOINING, STABLE, RECONCILING, ACKNOWLEDGING,
+                PREPARE_LEAVING, LEAVING);
 
-        JOINING.previousValidStates = Arrays.asList(FENCED, UNSUBSCRIBED);
+        JOINING.previousValidStates = Arrays.asList(FENCED, UNSUBSCRIBED, STALED);
 
         PREPARE_LEAVING.previousValidStates = Arrays.asList(JOINING, STABLE, RECONCILING,
                 ACKNOWLEDGING, UNSUBSCRIBED, FENCED);
@@ -122,6 +132,8 @@ public enum MemberState {
         LEAVING.previousValidStates = Arrays.asList(PREPARE_LEAVING);
 
         UNSUBSCRIBED.previousValidStates = Arrays.asList(LEAVING);
+
+        STALED.previousValidStates = Arrays.asList(JOINING, RECONCILING, ACKNOWLEDGING, STABLE);
     }
 
     private List<MemberState> previousValidStates;
