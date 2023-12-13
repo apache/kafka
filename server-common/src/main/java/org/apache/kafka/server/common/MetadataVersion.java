@@ -195,6 +195,7 @@ public enum MetadataVersion {
     IBP_3_7_IV2(17, "3.7", "IV2", true),
 
     // IBP_3_7_IV3 was ELR related supports (KIP-966) and has been moved forward
+    IBP_3_7_IV3(18, "3.7", "IV3", false),
 
     // Add new fetch request version for KIP-951
     IBP_3_7_IV4(19, "3.7", "IV4", false),
