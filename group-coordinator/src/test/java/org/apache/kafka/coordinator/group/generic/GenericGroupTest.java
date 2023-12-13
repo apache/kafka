@@ -62,7 +62,10 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 
 public class GenericGroupTest {
     private final String protocolType = "consumer";
@@ -1249,6 +1252,27 @@ public class GenericGroupTest {
         assertEquals(Optional.of(Collections.singleton("topic")), group.computeSubscribedTopics());
         assertTrue(group.usesConsumerGroupProtocol());
         assertTrue(group.isSubscribedToTopic("topic"));
+    }
+
+    @Test
+    public void testStateTransitionMetrics() {
+        // Confirm metrics is not updated when a new GenericGroup is created but only when the group transitions
+        // its state.
+        GroupCoordinatorMetricsShard metrics = mock(GroupCoordinatorMetricsShard.class);
+        GenericGroup group = new GenericGroup(new LogContext(), "groupId", EMPTY, Time.SYSTEM, metrics);
+        verify(metrics, times(0)).onGenericGroupStateTransition(any(), any());
+
+        group.transitionTo(PREPARING_REBALANCE);
+        verify(metrics, times(1)).onGenericGroupStateTransition(EMPTY, PREPARING_REBALANCE);
+
+        group.transitionTo(COMPLETING_REBALANCE);
+        verify(metrics, times(1)).onGenericGroupStateTransition(PREPARING_REBALANCE, COMPLETING_REBALANCE);
+
+        group.transitionTo(STABLE);
+        verify(metrics, times(1)).onGenericGroupStateTransition(COMPLETING_REBALANCE, STABLE);
+
+        group.transitionTo(DEAD);
+        verify(metrics, times(1)).onGenericGroupStateTransition(STABLE, DEAD);
     }
 
     private void assertState(GenericGroup group, GenericGroupState targetState) {

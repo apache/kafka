@@ -29,6 +29,7 @@ import org.apache.kafka.timeline.SnapshotRegistry;
 import org.junit.jupiter.api.Test;
 
 import java.util.Collections;
+import java.util.stream.IntStream;
 
 import static org.apache.kafka.coordinator.group.generic.GenericGroupState.COMPLETING_REBALANCE;
 import static org.apache.kafka.coordinator.group.generic.GenericGroupState.DEAD;
@@ -130,6 +131,11 @@ public class GroupCoordinatorMetricsShardTest {
         GenericGroup group2 = new GenericGroup(logContext, "groupId2", EMPTY, Time.SYSTEM, shard);
         GenericGroup group3 = new GenericGroup(logContext, "groupId3", EMPTY, Time.SYSTEM, shard);
 
+        IntStream.range(0, 4).forEach(__ -> {
+            shard.incrementLocalGauge(NUM_GENERIC_GROUPS);
+            shard.incrementGlobalGauge(NUM_GENERIC_GROUPS_EMPTY);
+        });
+
         snapshotRegistry.getOrCreateSnapshot(1000);
         shard.commitUpTo(1000);
         assertEquals(4, shard.localGaugeValue(NUM_GENERIC_GROUPS));
@@ -197,6 +203,11 @@ public class GroupCoordinatorMetricsShardTest {
             "group-3",
             shard
         );
+
+        IntStream.range(0, 4).forEach(__ -> {
+            shard.incrementLocalGauge(NUM_CONSUMER_GROUPS);
+            shard.incrementLocalGauge(NUM_CONSUMER_GROUPS_EMPTY);
+        });
 
         snapshotRegistry.getOrCreateSnapshot(1000);
         shard.commitUpTo(1000);
