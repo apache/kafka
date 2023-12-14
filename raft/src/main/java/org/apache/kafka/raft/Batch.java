@@ -120,6 +120,16 @@ public final class Batch<T> implements Iterable<T> {
             ')';
     }
 
+    public String describe() {
+        return "Batch(" +
+                "baseOffset=" + baseOffset +
+                ", epoch=" + epoch +
+                ", appendTimestamp=" + appendTimestamp +
+                ", sizeInBytes=" + sizeInBytes +
+                ", lastOffset=" + lastOffset +
+                ')';
+    }
+
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
