@@ -131,7 +131,7 @@ public class FetchCollector<K, V> {
                     pausedCompletedFetches.add(nextInLineFetch);
                     fetchBuffer.setNextInLineFetch(null);
                 } else {
-                    final Fetch<K, V> nextFetch = fetchRecords(nextInLineFetch);
+                    final Fetch<K, V> nextFetch = fetchRecords(nextInLineFetch, recordsRemaining);
                     recordsRemaining -= nextFetch.numRecords();
                     fetch.add(nextFetch);
                 }
@@ -148,7 +148,7 @@ public class FetchCollector<K, V> {
         return fetch;
     }
 
-    private Fetch<K, V> fetchRecords(final CompletedFetch nextInLineFetch) {
+    private Fetch<K, V> fetchRecords(final CompletedFetch nextInLineFetch, int maxRecords) {
         final TopicPartition tp = nextInLineFetch.partition;
 
         if (!subscriptions.isAssigned(tp)) {
@@ -167,7 +167,7 @@ public class FetchCollector<K, V> {
             if (nextInLineFetch.nextFetchOffset() == position.offset) {
                 List<ConsumerRecord<K, V>> partRecords = nextInLineFetch.fetchRecords(fetchConfig,
                         deserializers,
-                        fetchConfig.maxPollRecords);
+                        maxRecords);
 
                 log.trace("Returning {} fetched records at offset {} for assigned partition {}",
                         partRecords.size(), position, tp);

@@ -21,7 +21,7 @@ import java.util.Properties
 import kafka.server.ConfigAdminManager.toLoggableProps
 import kafka.server.{ConfigEntityName, ConfigHandler, ConfigType, KafkaConfig}
 import kafka.utils.Logging
-import org.apache.kafka.common.config.ConfigResource.Type.{BROKER, TOPIC}
+import org.apache.kafka.common.config.ConfigResource.Type.{BROKER, CLIENT_METRICS, TOPIC}
 import org.apache.kafka.image.loader.LoaderManifest
 import org.apache.kafka.image.{MetadataDelta, MetadataImage}
 import org.apache.kafka.server.fault.FaultHandler
@@ -101,6 +101,18 @@ class DynamicConfigPublisher(
                   }
                 }
               )
+            case CLIENT_METRICS =>
+              // Apply changes to client metrics subscription.
+              dynamicConfigHandlers.get(ConfigType.ClientMetrics).foreach(metricsConfigHandler =>
+                try {
+                  info(s"Updating client metrics ${resource.name()} with new configuration : " +
+                    toLoggableProps(resource, props).mkString(","))
+                  metricsConfigHandler.processConfigChanges(resource.name(), props)
+                } catch {
+                  case t: Throwable => faultHandler.handleFault("Error updating client metrics" +
+                    s"${resource.name()} with new configuration: ${toLoggableProps(resource, props).mkString(",")} " +
+                    s"in $deltaName", t)
+                })
             case _ => // nothing to do
           }
         }

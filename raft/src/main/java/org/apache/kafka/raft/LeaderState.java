@@ -22,6 +22,8 @@ import org.apache.kafka.common.message.LeaderChangeMessage.Voter;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.ControlRecordUtils;
 import org.apache.kafka.common.utils.LogContext;
+import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.Timer;
 import org.apache.kafka.raft.internals.BatchAccumulator;
 import org.slf4j.Logger;
 
@@ -44,6 +46,7 @@ import java.util.stream.Collectors;
  */
 public class LeaderState<T> implements EpochState {
     static final long OBSERVER_SESSION_TIMEOUT_MS = 300_000L;
+    static final double CHECK_QUORUM_TIMEOUT_FACTOR = 1.5;
 
     private final int localId;
     private final int epoch;
@@ -55,17 +58,23 @@ public class LeaderState<T> implements EpochState {
     private final Map<Integer, ReplicaState> observerStates = new HashMap<>();
     private final Logger log;
     private final BatchAccumulator<T> accumulator;
+    // The set includes all of the followers voters that FETCH or FETCH_SNAPSHOT during the current checkQuorumTimer interval.
+    private final Set<Integer> fetchedVoters = new HashSet<>();
+    private final Timer checkQuorumTimer;
+    private final int checkQuorumTimeoutMs;
 
     // This is volatile because resignation can be requested from an external thread.
     private volatile boolean resignRequested = false;
 
     protected LeaderState(
+        Time time,
         int localId,
         int epoch,
         long epochStartOffset,
         Set<Integer> voters,
         Set<Integer> grantingVoters,
         BatchAccumulator<T> accumulator,
+        int fetchTimeoutMs,
         LogContext logContext
     ) {
         this.localId = localId;
@@ -79,6 +88,55 @@ public class LeaderState<T> implements EpochState {
         this.grantingVoters = Collections.unmodifiableSet(new HashSet<>(grantingVoters));
         this.log = logContext.logger(LeaderState.class);
         this.accumulator = Objects.requireNonNull(accumulator, "accumulator must be non-null");
+        // use the 1.5x of fetch timeout to tolerate some network transition time or other IO time.
+        this.checkQuorumTimeoutMs = (int) (fetchTimeoutMs * CHECK_QUORUM_TIMEOUT_FACTOR);
+        this.checkQuorumTimer = time.timer(checkQuorumTimeoutMs);
+    }
+
+    /**
+     * Get the remaining time in milliseconds until the checkQuorumTimer expires.
+     * This will happen if we didn't receive a valid fetch/fetchSnapshot request from the majority of the voters within checkQuorumTimeoutMs.
+     *
+     * @param currentTimeMs the current timestamp in millisecond
+     * @return the remainingMs before the checkQuorumTimer expired
+     */
+    public long timeUntilCheckQuorumExpires(long currentTimeMs) {
+        checkQuorumTimer.update(currentTimeMs);
+        long remainingMs = checkQuorumTimer.remainingMs();
+        if (remainingMs == 0) {
+            log.info(
+                "Did not receive fetch request from the majority of the voters within {}ms. Current fetched voters are {}.",
+                checkQuorumTimeoutMs,
+                fetchedVoters);
+        }
+        return remainingMs;
+    }
+
+    /**
+     * Reset the checkQuorumTimer if we've received fetch/fetchSnapshot request from the majority of the voter
+     *
+     * @param id the node id
+     * @param currentTimeMs the current timestamp in millisecond
+     */
+    public void updateCheckQuorumForFollowingVoter(int id, long currentTimeMs) {
+        updateFetchedVoters(id);
+        // The majority number of the voters excluding the leader. Ex: 3 voters, the value will be 1
+        int majority = voterStates.size() / 2;
+        if (fetchedVoters.size() >= majority) {
+            fetchedVoters.clear();
+            checkQuorumTimer.update(currentTimeMs);
+            checkQuorumTimer.reset(checkQuorumTimeoutMs);
+        }
+    }
+
+    private void updateFetchedVoters(int id) {
+        if (id == localId) {
+            throw new IllegalArgumentException("Received a FETCH/FETCH_SNAPSHOT request from the leader itself.");
+        }
+
+        if (isVoter(id)) {
+            fetchedVoters.add(id);
+        }
     }
 
     public BatchAccumulator<T> accumulator() {
@@ -287,6 +345,7 @@ public class LeaderState<T> implements EpochState {
             fetchOffsetMetadata,
             leaderEndOffsetOpt
         );
+        updateCheckQuorumForFollowingVoter(replicaId, currentTimeMs);
 
         return isVoter(state.nodeId) && maybeUpdateHighWatermark();
     }

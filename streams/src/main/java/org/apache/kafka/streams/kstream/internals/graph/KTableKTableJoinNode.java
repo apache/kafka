@@ -24,7 +24,7 @@ import org.apache.kafka.streams.kstream.internals.KTableKTableJoinMerger;
 import org.apache.kafka.streams.kstream.internals.KTableProcessorSupplier;
 import org.apache.kafka.streams.processor.api.ProcessorSupplier;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
-import org.apache.kafka.streams.state.StoreBuilder;
+import org.apache.kafka.streams.processor.internals.StoreFactory;
 
 import java.util.Arrays;
 
@@ -37,7 +37,7 @@ public class KTableKTableJoinNode<K, V1, V2, VR> extends BaseJoinProcessorNode<K
     private final Serde<VR> valueSerde;
     private final String[] joinThisStoreNames;
     private final String[] joinOtherStoreNames;
-    private final StoreBuilder<?> storeBuilder;
+    private final StoreFactory storeFactory;
 
     KTableKTableJoinNode(final String nodeName,
                          final ProcessorParameters<K, Change<V1>, ?, ?> joinThisProcessorParameters,
@@ -49,7 +49,7 @@ public class KTableKTableJoinNode<K, V1, V2, VR> extends BaseJoinProcessorNode<K
                          final Serde<VR> valueSerde,
                          final String[] joinThisStoreNames,
                          final String[] joinOtherStoreNames,
-                         final StoreBuilder<?> storeBuilder) {
+                         final StoreFactory storeFactory) {
 
         super(nodeName,
             null,
@@ -63,7 +63,7 @@ public class KTableKTableJoinNode<K, V1, V2, VR> extends BaseJoinProcessorNode<K
         this.valueSerde = valueSerde;
         this.joinThisStoreNames = joinThisStoreNames;
         this.joinOtherStoreNames = joinOtherStoreNames;
-        this.storeBuilder = storeBuilder;
+        this.storeFactory = storeFactory;
     }
 
     public Serde<K> keySerde() {
@@ -141,8 +141,8 @@ public class KTableKTableJoinNode<K, V1, V2, VR> extends BaseJoinProcessorNode<K
         topologyBuilder.connectProcessorAndStateStores(thisProcessorName, joinOtherStoreNames);
         topologyBuilder.connectProcessorAndStateStores(otherProcessorName, joinThisStoreNames);
 
-        if (storeBuilder != null) {
-            topologyBuilder.addStateStore(storeBuilder, mergeProcessorName);
+        if (storeFactory != null) {
+            topologyBuilder.addStateStore(storeFactory, mergeProcessorName);
         }
     }
 
@@ -169,7 +169,7 @@ public class KTableKTableJoinNode<K, V1, V2, VR> extends BaseJoinProcessorNode<K
         private String[] joinThisStoreNames;
         private String[] joinOtherStoreNames;
         private String queryableStoreName;
-        private StoreBuilder<?> storeBuilder;
+        private StoreFactory storeFactory;
 
         private KTableKTableJoinNodeBuilder() {
         }
@@ -224,8 +224,8 @@ public class KTableKTableJoinNode<K, V1, V2, VR> extends BaseJoinProcessorNode<K
             return this;
         }
 
-        public KTableKTableJoinNodeBuilder<K, V1, V2, VR> withStoreBuilder(final StoreBuilder<?> storeBuilder) {
-            this.storeBuilder = storeBuilder;
+        public KTableKTableJoinNodeBuilder<K, V1, V2, VR> withStoreBuilder(final StoreFactory storeFactory) {
+            this.storeFactory = storeFactory;
             return this;
         }
 
@@ -247,7 +247,7 @@ public class KTableKTableJoinNode<K, V1, V2, VR> extends BaseJoinProcessorNode<K
                 valueSerde,
                 joinThisStoreNames,
                 joinOtherStoreNames,
-                storeBuilder
+                storeFactory
             );
         }
     }

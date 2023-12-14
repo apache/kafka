@@ -54,6 +54,7 @@ import org.apache.kafka.controller.{Controller, ControllerRequestContext, Result
 import org.apache.kafka.image.publisher.ControllerRegistrationsPublisher
 import org.apache.kafka.server.authorizer.{Action, AuthorizableRequestContext, AuthorizationResult, Authorizer}
 import org.apache.kafka.server.common.{ApiMessageAndVersion, Features, MetadataVersion, ProducerIdsBlock}
+import org.apache.kafka.server.util.FutureUtils
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, Test}
 import org.junit.jupiter.params.ParameterizedTest
@@ -159,7 +160,7 @@ class ControllerApisTest {
       controller,
       raftManager,
       new KafkaConfig(props),
-      MetaProperties("JgxuGe9URy-E-ceaL04lEw", nodeId = nodeId),
+      "JgxuGe9URy-E-ceaL04lEw",
       new ControllerRegistrationsPublisher(),
       new SimpleApiVersionManager(
         ListenerType.CONTROLLER,
@@ -468,6 +469,13 @@ class ControllerApisTest {
             setName(TopicConfig.FLUSH_MS_CONFIG).
             setValue("1000").
             setConfigOperation(AlterConfigOp.OpType.SET.id())).iterator())),
+        new AlterConfigsResource().
+          setResourceName("sub").
+          setResourceType(ConfigResource.Type.CLIENT_METRICS.id()).
+          setConfigs(new AlterableConfigCollection(util.Arrays.asList(new AlterableConfig().
+            setName("interval.ms").
+            setValue("100000").
+            setConfigOperation(AlterConfigOp.OpType.SET.id())).iterator()))
         ).iterator()))
     val request = buildRequest(new IncrementalAlterConfigsRequest.Builder(requestData).build(0))
     createControllerApis(Some(createDenyAllAuthorizer()),
@@ -489,7 +497,12 @@ class ControllerApisTest {
         setErrorCode(TOPIC_AUTHORIZATION_FAILED.code()).
         setErrorMessage(TOPIC_AUTHORIZATION_FAILED.message()).
         setResourceName("foo").
-        setResourceType(ConfigResource.Type.TOPIC.id())),
+        setResourceType(ConfigResource.Type.TOPIC.id()),
+      new AlterConfigsResourceResponse().
+        setErrorCode(CLUSTER_AUTHORIZATION_FAILED.code()).
+        setErrorMessage(CLUSTER_AUTHORIZATION_FAILED.message()).
+        setResourceName("sub").
+        setResourceType(ConfigResource.Type.CLIENT_METRICS.id())),
       response.data().responses().asScala.toSet)
   }
 
@@ -526,6 +539,27 @@ class ControllerApisTest {
             setName("foo").
             setValue("bar").
             setConfigOperation(AlterConfigOp.OpType.SET.id())).iterator())),
+        new AlterConfigsResource().
+          setResourceName("sub").
+          setResourceType(ConfigResource.Type.CLIENT_METRICS.id()).
+          setConfigs(new AlterableConfigCollection(util.Arrays.asList(new AlterableConfig().
+            setName("interval.ms").
+            setValue("1").
+            setConfigOperation(AlterConfigOp.OpType.SET.id())).iterator())),
+        new AlterConfigsResource().
+          setResourceName("sub1").
+          setResourceType(ConfigResource.Type.CLIENT_METRICS.id()).
+          setConfigs(new AlterableConfigCollection(util.Arrays.asList(new AlterableConfig().
+            setName("interval.ms").
+            setValue("1").
+            setConfigOperation(AlterConfigOp.OpType.SET.id())).iterator())),
+        new AlterConfigsResource().
+          setResourceName("sub1").
+          setResourceType(ConfigResource.Type.CLIENT_METRICS.id()).
+          setConfigs(new AlterableConfigCollection(util.Arrays.asList(new AlterableConfig().
+            setName("interval.ms").
+            setValue("1").
+            setConfigOperation(AlterConfigOp.OpType.SET.id())).iterator()))
         ).iterator()))
     val request = buildRequest(new IncrementalAlterConfigsRequest.Builder(requestData).build(0))
     val authorizer = if (denyAllAuthorizer) {
@@ -558,7 +592,17 @@ class ControllerApisTest {
         setErrorCode(UNSUPPORTED_VERSION.code()).
         setErrorMessage("Unknown resource type 124.").
         setResourceName("foo").
-        setResourceType(124.toByte)),
+        setResourceType(124.toByte),
+      new AlterConfigsResourceResponse().
+        setErrorCode(if (denyAllAuthorizer) CLUSTER_AUTHORIZATION_FAILED.code() else NONE.code()).
+        setErrorMessage(if (denyAllAuthorizer) CLUSTER_AUTHORIZATION_FAILED.message() else null).
+        setResourceName("sub").
+        setResourceType(ConfigResource.Type.CLIENT_METRICS.id()),
+      new AlterConfigsResourceResponse().
+        setErrorCode(INVALID_REQUEST.code()).
+        setErrorMessage("Duplicate resource.").
+        setResourceName("sub1").
+        setResourceType(ConfigResource.Type.CLIENT_METRICS.id())),
       response.data().responses().asScala.toSet)
   }
 
@@ -1093,6 +1137,27 @@ class ControllerApisTest {
 
     val response = handleRequest[AllocateProducerIdsResponse](request, controllerApis)
     assertEquals(Errors.NOT_CONTROLLER, response.error)
+  }
+
+  @Test
+  def testAssignReplicasToDirs(): Unit = {
+    val controller = mock(classOf[Controller])
+    val authorizer = mock(classOf[Authorizer])
+    val controllerApis = createControllerApis(Some(authorizer), controller)
+
+    val request = new AssignReplicasToDirsRequest.Builder(new AssignReplicasToDirsRequestData()).build()
+
+    when(authorizer.authorize(any[RequestContext], ArgumentMatchers.eq(Collections.singletonList(new Action(
+      AclOperation.CLUSTER_ACTION,
+      new ResourcePattern(ResourceType.CLUSTER, Resource.CLUSTER_NAME, PatternType.LITERAL),
+      1, true, true
+    )))))
+      .thenReturn(Collections.singletonList(AuthorizationResult.ALLOWED))
+    when(controller.assignReplicasToDirs(any[ControllerRequestContext], ArgumentMatchers.eq(request.data)))
+      .thenReturn(FutureUtils.failedFuture[AssignReplicasToDirsResponseData](Errors.UNKNOWN_TOPIC_OR_PARTITION.exception()))
+
+    val response = handleRequest[AssignReplicasToDirsResponse](request, controllerApis)
+    assertEquals(new AssignReplicasToDirsResponseData().setErrorCode(Errors.UNKNOWN_TOPIC_OR_PARTITION.code()), response.data)
   }
 
   private def handleRequest[T <: AbstractResponse](

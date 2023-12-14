@@ -35,7 +35,7 @@ public class ProducerIdAndEpoch {
 
     @Override
     public String toString() {
-        return "ProducerIdAndEpoch(producerId=" + producerId + ", epoch=" + epoch + ")";
+        return "(producerId=" + producerId + ", epoch=" + epoch + ")";
     }
 
     @Override

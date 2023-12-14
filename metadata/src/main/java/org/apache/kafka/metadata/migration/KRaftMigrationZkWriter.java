@@ -69,6 +69,7 @@ public class KRaftMigrationZkWriter {
     private static final String CREATE_TOPIC = "CreateTopic";
     private static final String UPDATE_TOPIC = "UpdateTopic";
     private static final String DELETE_TOPIC = "DeleteTopic";
+    private static final String DELETE_PENDING_TOPIC_DELETION = "DeletePendingTopicDeletion";
     private static final String UPDATE_PARTITION = "UpdatePartition";
     private static final String DELETE_PARTITION = "DeletePartition";
     private static final String UPDATE_BROKER_CONFIG = "UpdateBrokerConfig";
@@ -145,6 +146,15 @@ public class KRaftMigrationZkWriter {
         Map<String, Set<Integer>> extraneousPartitionsInZk = new HashMap<>();
         Map<Uuid, Map<Integer, PartitionRegistration>> changedPartitions = new HashMap<>();
         Map<Uuid, Map<Integer, PartitionRegistration>> newPartitions = new HashMap<>();
+
+        Set<String> pendingTopicDeletions = migrationClient.topicClient().readPendingTopicDeletions();
+        if (!pendingTopicDeletions.isEmpty()) {
+            operationConsumer.accept(
+                DELETE_PENDING_TOPIC_DELETION,
+                "Delete pending topic deletions",
+                migrationState -> migrationClient.topicClient().clearPendingTopicDeletions(pendingTopicDeletions, migrationState)
+            );
+        }
 
         migrationClient.topicClient().iterateTopics(
             EnumSet.of(

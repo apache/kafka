@@ -107,6 +107,7 @@ import static org.apache.kafka.common.utils.Utils.mkProperties;
 import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.apache.kafka.streams.StreamsConfig.AT_LEAST_ONCE;
 import static org.apache.kafka.streams.StreamsConfig.EXACTLY_ONCE_V2;
+import static org.apache.kafka.streams.processor.internals.Task.State.CLOSED;
 import static org.apache.kafka.streams.processor.internals.Task.State.CREATED;
 import static org.apache.kafka.streams.processor.internals.Task.State.RESTORING;
 import static org.apache.kafka.streams.processor.internals.Task.State.RUNNING;
@@ -322,7 +323,7 @@ public class StreamTaskTest {
 
     @Test
     public void shouldAttemptToDeleteStateDirectoryWhenCloseDirtyAndEosEnabled() throws IOException {
-        final IMocksControl ctrl = EasyMock.createStrictControl();
+        final IMocksControl ctrl = EasyMock.createNiceControl();
         final ProcessorStateManager stateManager = ctrl.createMock(ProcessorStateManager.class);
         EasyMock.expect(stateManager.taskType()).andStubReturn(TaskType.ACTIVE);
         stateDirectory = ctrl.createMock(StateDirectory.class);
@@ -335,6 +336,12 @@ public class StreamTaskTest {
         EasyMock.expect(stateDirectory.lock(taskId)).andReturn(true);
 
         stateManager.close();
+        EasyMock.expectLastCall();
+
+        stateManager.transitionTaskState(SUSPENDED);
+        EasyMock.expectLastCall();
+
+        stateManager.transitionTaskState(CLOSED);
         EasyMock.expectLastCall();
 
         // The `baseDir` will be accessed when attempting to delete the state store.
