@@ -194,7 +194,8 @@ public enum MetadataVersion {
     // Add JBOD support for KRaft.
     IBP_3_7_IV2(17, "3.7", "IV2", true),
 
-    // IBP_3_7_IV3 was ELR related supports (KIP-966) and has been moved forward
+    // IBP_3_7_IV3 was reserved for ELR support (KIP-966) but has been moved forward to
+    // a later release requiring a new MetadataVersion. MVs are not reused.
     IBP_3_7_IV3(18, "3.7", "IV3", false),
 
     // Add new fetch request version for KIP-951
