@@ -301,7 +301,7 @@ public class MembershipManagerImplTest {
         // the group, ignoring the new assignment received.
         Uuid topicId = Uuid.randomUuid();
         mockOwnedPartitionAndAssignmentReceived(membershipManager, topicId, "topic1",
-            Collections.emptyList(), true);
+            Collections.emptyList());
         receiveAssignment(topicId, Arrays.asList(0, 1), membershipManager);
         assertEquals(MemberState.PREPARE_LEAVING, membershipManager.state());
         assertTrue(membershipManager.assignmentReadyToReconcile().isEmpty());
