@@ -255,6 +255,13 @@ public class MembershipManagerImplTest {
         verify(subscriptionState).assignFromSubscribed(Collections.emptySet());
     }
 
+    /**
+     * Members keep sending heartbeats while preparing to leave, so they could get fenced. This
+     * tests ensures that if a member gets fenced while preparing to leave, it will directly
+     * transition to UNSUBSCRIBE (no callbacks triggered or rejoin as in regular fencing
+     * scenarios), and when the PREPARE_LEAVING completes it remains UNSUBSCRIBED (no last
+     * heartbeat sent).
+     */
     @Test
     public void testFencingWhenStateIsPrepareLeaving() {
         MembershipManagerImpl membershipManager = createMemberInStableState();
@@ -264,16 +271,44 @@ public class MembershipManagerImplTest {
         membershipManager.leaveGroup();
         assertEquals(MemberState.PREPARE_LEAVING, membershipManager.state());
 
-        // Get fenced while preparing to leave the group. Member should not trigger any
-        // callback or try to rejoin, and should continue leaving the group as it was
-        // before getting fenced.
+        // Get fenced while preparing to leave the group. Member should ignore the fence
+        // (no callbacks or rejoin) and should transition to UNSUBSCRIBED to
+        // effectively stop sending heartbeats.
         MockRebalanceListener rebalanceListener = new MockRebalanceListener();
         when(subscriptionState.rebalanceListener()).thenReturn(Optional.of(rebalanceListener));
         membershipManager.transitionToFenced();
-        assertEquals(MemberState.PREPARE_LEAVING, membershipManager.state());
+        assertEquals(MemberState.UNSUBSCRIBED, membershipManager.state());
         testFenceIsNoOp(membershipManager, rebalanceListener);
 
-        // When commit completes member should transition to LEAVE.
+        // When PREPARE_LEAVING completes, the member should remain UNSUBSCRIBED (no last HB sent
+        // because member is already out of the group in the broker).
+        when(subscriptionState.rebalanceListener()).thenReturn(Optional.empty());
+        commitResult.complete(null);
+        assertEquals(MemberState.UNSUBSCRIBED, membershipManager.state());
+        assertTrue(membershipManager.shouldSkipHeartbeat());
+    }
+
+    @Test
+    public void testNewAssignmentIgnoredWhenStateIsPrepareLeaving() {
+        MembershipManagerImpl membershipManager = createMemberInStableState();
+
+        // Start leaving group, blocked waiting for commit of all consumed to complete.
+        CompletableFuture<Void> commitResult = mockPrepareLeavingStuckCommitting();
+        membershipManager.leaveGroup();
+        assertEquals(MemberState.PREPARE_LEAVING, membershipManager.state());
+
+        // Get new assignment while preparing to leave the group. Member should continue leaving
+        // the group, ignoring the new assignment received.
+        Uuid topicId = Uuid.randomUuid();
+        mockOwnedPartitionAndAssignmentReceived(membershipManager, topicId, "topic1",
+            Collections.emptyList(), true);
+        receiveAssignment(topicId, Arrays.asList(0, 1), membershipManager);
+        assertEquals(MemberState.PREPARE_LEAVING, membershipManager.state());
+        assertTrue(membershipManager.assignmentReadyToReconcile().isEmpty());
+        assertTrue(membershipManager.topicsWaitingForMetadata().isEmpty());
+        verify(membershipManager, never()).markReconciliationInProgress();
+
+        // When commit completes member should transition to LEAVING.
         when(subscriptionState.rebalanceListener()).thenReturn(Optional.empty());
         commitResult.complete(null);
         assertEquals(MemberState.LEAVING, membershipManager.state());

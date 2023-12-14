@@ -42,7 +42,8 @@ public class GroupCoordinatorConfigTest {
             120,
             10 * 60 * 1000,
             600000L,
-            24 * 60 * 60 * 1000L
+            24 * 60 * 60 * 1000L,
+            5000
         );
 
         assertEquals(10, config.numThreads);
@@ -59,6 +60,7 @@ public class GroupCoordinatorConfigTest {
         assertEquals(10 * 60 * 1000, config.genericGroupMaxSessionTimeoutMs);
         assertEquals(10 * 60 * 1000, config.offsetsRetentionCheckIntervalMs);
         assertEquals(24 * 60 * 60 * 1000L, config.offsetsRetentionMs);
+        assertEquals(5000, config.offsetCommitTimeoutMs);
     }
 
     public static GroupCoordinatorConfig createGroupCoordinatorConfig(
@@ -80,7 +82,8 @@ public class GroupCoordinatorConfigTest {
             120,
             10 * 5 * 1000,
             offsetsRetentionCheckIntervalMs,
-            offsetsRetentionMs
+            offsetsRetentionMs,
+            5000
         );
     }
 }
