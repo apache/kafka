@@ -1072,8 +1072,8 @@ public class RemoteLogManager implements Closeable {
             // again and delete them with the original deletion reason i.e. size, time or log start offset breach.
             BrokerTopicMetrics brokerTopicMetrics = brokerTopicStats.topicStats(topicIdPartition.topic());
             int partition = topicIdPartition.partition();
-            brokerTopicMetrics.recordRemoteDeleteBytesLag(partition, sizeOfDeletableSegmentsBytes);
             int segmentsLeftToDelete = segmentsToDelete.size();
+            brokerTopicMetrics.recordRemoteDeleteBytesLag(partition, sizeOfDeletableSegmentsBytes);
             brokerTopicMetrics.recordRemoteDeleteSegmentsLag(partition, segmentsLeftToDelete);
             List<String> undeletedSegments = new ArrayList<>();
             for (RemoteLogSegmentMetadata segmentMetadata : segmentsToDelete) {
@@ -1102,13 +1102,29 @@ public class RemoteLogManager implements Closeable {
                         .iterator();
                 while (epochsToClean.hasNext()) {
                     int epoch = epochsToClean.next();
+                    List<RemoteLogSegmentMetadata> listOfSegmentsToBeCleaned = new ArrayList<>();
+                    sizeOfDeletableSegmentsBytes = 0L;
                     Iterator<RemoteLogSegmentMetadata> segmentsToBeCleaned = remoteLogMetadataManager.listRemoteLogSegments(topicIdPartition, epoch);
                     while (segmentsToBeCleaned.hasNext()) {
                         if (isCancelled() || !isLeader()) {
                             return;
+                        } else {
+                            RemoteLogSegmentMetadata nextSegmentMetadata = segmentsToBeCleaned.next();
+                            sizeOfDeletableSegmentsBytes += nextSegmentMetadata.segmentSizeInBytes();
+                            listOfSegmentsToBeCleaned.add(nextSegmentMetadata);
                         }
+                    }
+                    segmentsLeftToDelete = listOfSegmentsToBeCleaned.size();
+                    brokerTopicMetrics.recordRemoteDeleteBytesLag(partition, sizeOfDeletableSegmentsBytes);
+                    brokerTopicMetrics.recordRemoteDeleteSegmentsLag(partition, segmentsLeftToDelete);
+                    for (RemoteLogSegmentMetadata segmentMetadata : listOfSegmentsToBeCleaned) {
                         // No need to update the log-start-offset even though the segment is deleted as these epochs/offsets are earlier to that value.
-                        remoteLogRetentionHandler.deleteLogSegmentsDueToLeaderEpochCacheTruncation(earliestEpochEntry, segmentsToBeCleaned.next());
+                        if (remoteLogRetentionHandler.deleteLogSegmentsDueToLeaderEpochCacheTruncation(earliestEpochEntry, segmentMetadata)) {
+                            sizeOfDeletableSegmentsBytes -= segmentMetadata.segmentSizeInBytes();
+                            segmentsLeftToDelete--;
+                            brokerTopicMetrics.recordRemoteDeleteBytesLag(partition, sizeOfDeletableSegmentsBytes);
+                            brokerTopicMetrics.recordRemoteDeleteSegmentsLag(partition, segmentsLeftToDelete);
+                        };
                     }
                 }
             }
