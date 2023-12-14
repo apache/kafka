@@ -285,6 +285,7 @@ public class StreamThread extends Thread {
     private final Sensor commitRatioSensor;
     private final Sensor failedStreamThreadSensor;
 
+    private static final long REBALANCING_MAX_POLL_INTERVAL_MS = 5 * 1_000L;
     private static final long LOG_SUMMARY_INTERVAL_MS = 2 * 60 * 1000L; // log a summary of processing every 2 minutes
     private long lastLogSummaryMs = -1L;
     private long totalRecordsProcessedSinceLastSummary = 0L;
@@ -852,6 +853,9 @@ public class StreamThread extends Thread {
 
                 if (processed == 0) {
                     // if there are no records to be processed, exit after punctuate / commit
+                    break;
+                } else if (taskManager.rebalanceInProgress() && now - lastPollMs > REBALANCING_MAX_POLL_INTERVAL_MS) {
+                    // exit the processing loop early if we're in the middle of a rebalance so we don't miss events
                     break;
                 } else if (Math.max(now - lastPollMs, 0) > maxPollTimeMs / 2) {
                     numIterations = numIterations > 1 ? numIterations / 2 : numIterations;
