@@ -29,20 +29,20 @@ import java.util.function.Consumer;
  * will not be broken apart, only combined with other batches to reach the minimum batch size. Note that
  * {@link #close()} must be called after the last batch has been accepted in order to flush any buffered records.
  */
-public class BufferingBatchConsumer implements Consumer<List<ApiMessageAndVersion>> {
+public class BufferingBatchConsumer<T> implements Consumer<List<T>> {
 
-    private final Consumer<List<ApiMessageAndVersion>> delegateConsumer;
-    private final List<ApiMessageAndVersion> bufferedBatch;
+    private final Consumer<List<T>> delegateConsumer;
+    private final List<T> bufferedBatch;
     private final int minBatchSize;
 
-    BufferingBatchConsumer(Consumer<List<ApiMessageAndVersion>> delegateConsumer, int minBatchSize) {
+    BufferingBatchConsumer(Consumer<List<T>> delegateConsumer, int minBatchSize) {
         this.delegateConsumer = delegateConsumer;
         this.bufferedBatch = new ArrayList<>(minBatchSize);
         this.minBatchSize = minBatchSize;
     }
 
     @Override
-    public void accept(List<ApiMessageAndVersion> apiMessageAndVersions) {
+    public void accept(List<T> apiMessageAndVersions) {
         bufferedBatch.addAll(apiMessageAndVersions);
         if (bufferedBatch.size() >= minBatchSize) {
             delegateConsumer.accept(new ArrayList<>(bufferedBatch));

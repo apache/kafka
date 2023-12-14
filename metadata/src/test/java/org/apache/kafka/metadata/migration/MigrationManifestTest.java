@@ -38,7 +38,7 @@ public class MigrationManifestTest {
         MigrationManifest manifest = manifestBuilder.build();
         assertEquals(0L, manifest.durationMs());
         assertEquals(
-            "0 records were generated in 0 ms across 0 batches. The record types were {}",
+            "0 records were generated in 0 ms across 0 batches. The average batch size was -1.00 and the average batch commit duration was -1.00 ms. The record types were {}",
             manifest.toString());
     }
 

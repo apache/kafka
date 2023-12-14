@@ -34,6 +34,7 @@ import org.apache.kafka.queue.EventQueue;
 import org.apache.kafka.queue.KafkaEventQueue;
 import org.apache.kafka.raft.LeaderAndEpoch;
 import org.apache.kafka.raft.OffsetAndEpoch;
+import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.fault.FaultHandler;
 import org.apache.kafka.server.util.Deadline;
 import org.apache.kafka.server.util.FutureUtils;
@@ -87,9 +88,9 @@ public class KRaftMigrationDriver implements MetadataPublisher {
      * amount of time. A large value is selected to avoid timeouts in the common case, but prevent us from
      * blocking indefinitely.
      */
-    private final static int METADATA_COMMIT_MAX_WAIT_MS = 300_000;
+    final static int METADATA_COMMIT_MAX_WAIT_MS = 300_000;
 
-    private final static int MIGRATION_MIN_BATCH_SIZE = 1_000;
+    final static int MIGRATION_MIN_BATCH_SIZE = 1_000;
 
     private final Time time;
     private final Logger log;
@@ -650,11 +651,11 @@ public class KRaftMigrationDriver implements MetadataPublisher {
     private BufferingBatchConsumer buildMigrationBatchConsumer(
         MigrationManifest.Builder manifestBuilder
     ) {
-        return new BufferingBatchConsumer(batch -> {
+        return new BufferingBatchConsumer<ApiMessageAndVersion>(batch -> {
             try {
                 if (log.isTraceEnabled()) {
                     batch.forEach(apiMessageAndVersion ->
-                            log.trace(recordRedactor.toLoggableString(apiMessageAndVersion.message())));
+                        log.trace(recordRedactor.toLoggableString(apiMessageAndVersion.message())));
                 }
                 CompletableFuture<?> future = zkRecordConsumer.acceptBatch(batch);
                 long batchStart = time.nanoseconds();
