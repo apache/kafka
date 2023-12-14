@@ -938,7 +938,7 @@ public class OffsetsApiIntegrationTest {
                         boolean internalServerError = e.statusCode() == INTERNAL_SERVER_ERROR.getStatusCode();
 
                         String message = Optional.of(e.getMessage()).orElse("");
-                        boolean failedToResetConsumerOffsets = message.contains(
+                        boolean failedToModifyConsumerOffsets = message.contains(
                                 "Failed to " + modifyVerb + " consumer group offsets for connector"
                         );
                         boolean canBeRetried = message.contains("If the connector is in a stopped state, this operation can be safely retried");
