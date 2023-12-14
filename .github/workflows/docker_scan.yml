@@ -1,0 +1,26 @@
+name: Docker Image CVE Scanner
+on:
+  schedule:
+    - cron: '30 3 * * *'
+jobs:
+  scan_jvm:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        supported_image_tag: ['3.7.0-rc0']
+    steps:
+      - name: Run CVE scan
+        uses: aquasecurity/trivy-action@master
+        if: always()
+        with:
+          image-ref: apache/kafka:${{ matrix.supported_image_tag }}
+          format: 'table'
+          severity: 'CRITICAL,HIGH'
+          output: scan_report_jvm_${{ matrix.supported_image_tag }}.txt
+          exit-code: '1'
+      - name: Upload CVE scan report
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: scan_report_jvm_${{ matrix.supported_image_tag }}.txt
+          path: scan_report_jvm_${{ matrix.supported_image_tag }}.txt
