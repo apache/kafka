@@ -25,7 +25,6 @@ import org.apache.kafka.clients.consumer.GroupProtocol;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetAndTimestamp;
 import org.apache.kafka.clients.consumer.OffsetCommitCallback;
-import org.apache.kafka.clients.consumer.RetriableCommitFailedException;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEventHandler;
 import org.apache.kafka.clients.consumer.internals.events.AssignmentChangeApplicationEvent;
@@ -45,7 +44,6 @@ import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
 import org.apache.kafka.common.errors.InvalidGroupIdException;
-import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.message.OffsetCommitResponseData;
@@ -63,7 +61,6 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.function.Executable;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.mockito.ArgumentCaptor;
@@ -408,7 +405,7 @@ public class AsyncKafkaConsumerTest {
         // CommitAsync empty offsets (so it returns without requiring response), with a callback
         // that fails.
         assertDoesNotThrow(() -> consumer.commitAsync(new HashMap<>(), callback));
-        assertMockCommitCallbackInvoked(() -> consumer.commitSync(), callbackException);
+        assertThrows(callbackException.getClass(), () -> consumer.commitSync());
     }
 
     @Test
@@ -470,7 +467,7 @@ public class AsyncKafkaConsumerTest {
         doReturn(future).when(consumer).commit(new HashMap<>(), false, Optional.empty());
         assertDoesNotThrow(() -> consumer.commitAsync(new HashMap<>(), callback));
         future.complete(null);
-        assertMockCommitCallbackInvoked(() -> consumer.poll(Duration.ZERO), null);
+        assertDoesNotThrow(() -> consumer.poll(Duration.ZERO));
     }
 
     @Test
@@ -480,21 +477,7 @@ public class AsyncKafkaConsumerTest {
         doReturn(future).when(consumer).commit(new HashMap<>(), false, Optional.empty());
         assertDoesNotThrow(() -> consumer.commitAsync(new HashMap<>(), callback));
         future.complete(null);
-        assertMockCommitCallbackInvoked(() -> consumer.close(), null);
-    }
-
-    private void assertMockCommitCallbackInvoked(final Executable task,
-                                                 final Throwable expectedException) {
-        if (expectedException == null) {
-            assertDoesNotThrow(task);
-        } else {
-            Throwable t = assertThrows(Throwable.class, task);
-            if (expectedException instanceof RetriableException) {
-                assertTrue(t instanceof RetriableCommitFailedException);
-            } else {
-                assertEquals(t.getClass(), expectedException.getClass());
-            }
-        }
+        assertDoesNotThrow(() -> consumer.close());
     }
 
     private static class MockCommitCallback implements OffsetCommitCallback {
