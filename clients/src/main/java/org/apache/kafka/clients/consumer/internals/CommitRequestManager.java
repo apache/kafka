@@ -502,8 +502,8 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
                         coordinatorRequestManager.markCoordinatorUnknown(error.message(), currentTimeMs);
                         retry(currentTimeMs, error.exception());
                         return;
-                    } else if (error == Errors.COORDINATOR_LOAD_IN_PROGRESS
-                        || error == Errors.UNKNOWN_TOPIC_OR_PARTITION) {
+                    } else if (error == Errors.COORDINATOR_LOAD_IN_PROGRESS ||
+                        error == Errors.UNKNOWN_TOPIC_OR_PARTITION) {
                         // just retry
                         retry(currentTimeMs, error.exception());
                         return;
@@ -567,9 +567,19 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
             return expirationTimeMs.isPresent() && expirationTimeMs.get() <= currentTimeMs;
         }
 
-        private void expire() {
-            future.completeExceptionally(new TimeoutException("OffsetCommit could not complete " +
-                "before timeout expired."));
+        /**
+         * Complete the request future with a TimeoutException if the request expired. No action
+         * taken if the request is still active.
+         *
+         * @return True if the request expired.
+         */
+        private boolean maybeExpire(final long currentTimeMs) {
+            if (isExpired(currentTimeMs)) {
+                future.completeExceptionally(new TimeoutException("OffsetCommit could not complete " +
+                    "before timeout expired."));
+                return true;
+            }
+            return false;
         }
     }
 
@@ -756,9 +766,19 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
             return expirationTimeMs <= currentTimeMs;
         }
 
-        private void expire() {
-            future.completeExceptionally(new TimeoutException("OffsetFetch request could not " +
-                "complete before timeout expired."));
+        /**
+         * Complete the request future with a TimeoutException if the request expired. No action
+         * taken if the request is still active.
+         *
+         * @return True if the request expired.
+         */
+        private boolean maybeExpire(final long currentTimeMs) {
+            if (isExpired(currentTimeMs)) {
+                future.completeExceptionally(new TimeoutException("OffsetFetch request could not " +
+                    "complete before timeout expired."));
+                return true;
+            }
+            return false;
         }
 
         private void onSuccess(final long currentTimeMs,
@@ -995,10 +1015,7 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
          * futures with a TimeoutException.
          */
         private void failAndRemoveExpiredCommitRequests(final long currentTimeMs) {
-            List<OffsetCommitRequestState> expiredRequests = unsentOffsetCommits.stream()
-                .filter(req -> req.isExpired(currentTimeMs)).collect(Collectors.toList());
-            unsentOffsetCommits.removeAll(expiredRequests);
-            expiredRequests.forEach(OffsetCommitRequestState::expire);
+            unsentOffsetCommits.removeIf(req -> req.maybeExpire(currentTimeMs));
         }
 
         /**
@@ -1006,10 +1023,7 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
          * futures with a TimeoutException.
          */
         private void failAndRemoveExpiredFetchRequests(final long currentTimeMs) {
-            List<OffsetFetchRequestState> expiredFetchRequests = unsentOffsetFetches.stream()
-                .filter(req -> req.isExpired(currentTimeMs)).collect(Collectors.toList());
-            unsentOffsetFetches.removeAll(expiredFetchRequests);
-            expiredFetchRequests.forEach(OffsetFetchRequestState::expire);
+            unsentOffsetFetches.removeIf(req -> req.maybeExpire(currentTimeMs));
         }
 
         private void clearAll() {
