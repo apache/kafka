@@ -22,10 +22,12 @@ import java.util.List;
 import java.util.function.Consumer;
 
 /**
- * A record batch consumer that re-batches incoming batches into a given size. It does so by buffering
- * the records into an array that is later flushed to a downstream consumer. Batches consumed by this class
- * will not be broken apart, only combined with other batches to reach the minimum batch size. Note that
- * {@link #close()} must be called after the last batch has been accepted in order to flush any buffered records.
+ * A record batch consumer that merges incoming batches into batches of a minimum a given size. It does so
+ * by buffering the records into an array that is later flushed to a downstream consumer. Batches consumed
+ * by this class will not be broken apart, only combined with other batches to reach the minimum batch size.
+ * </p>
+ * Note that {@link #close()} must be called after the last batch has been accepted in order to flush any
+ * buffered records.
  */
 public class BufferingBatchConsumer<T> implements Consumer<List<T>> {
 
