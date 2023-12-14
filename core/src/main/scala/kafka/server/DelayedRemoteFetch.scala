@@ -82,7 +82,10 @@ class DelayedRemoteFetch(remoteFetchTask: Future[Void],
     val cancelled = remoteFetchTask.cancel(true)
     if (!cancelled) debug(s"Remote fetch task for for RemoteStorageFetchInfo: $remoteFetchInfo could not be cancelled and its isDone value is ${remoteFetchTask.isDone}")
 
-    DelayedRemoteFetchMetrics.expiredRequestMeter.mark()
+    if (fetchParams.isFromFollower)
+      warn(s"The follower should not invoke remote fetch. Fetch params are: $fetchParams")
+    else
+      DelayedRemoteFetchMetrics.expiredRequestMeter.mark()
   }
 
   /**
