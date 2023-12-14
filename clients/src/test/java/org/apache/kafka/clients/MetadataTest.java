@@ -1079,8 +1079,8 @@ public class MetadataTest {
         metadata.addClusterUpdateListener(mockListener);
 
         // topic1 has 2 partitions p0 & p1.
-        // p0 would be updated, so corresponding metadata should be updated as well.
-        // p1 would not be updated, it should be present unchanged in metadata.
+        // p0 would see an update, so corresponding metadata should be updated as well.
+        // p1 would not see an update, it should be present unchanged in metadata.
         String topic1 = "topic1";
         TopicPartition partition1 = new TopicPartition(topic1, 0);
         PartitionMetadata part1Metadata = new PartitionMetadata(Errors.NONE, partition1, Optional.of(1), Optional.of(100), Arrays.asList(1, 2), Arrays.asList(1, 2), Arrays.asList(3));
