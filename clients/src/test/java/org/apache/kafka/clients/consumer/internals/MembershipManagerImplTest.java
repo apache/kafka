@@ -88,20 +88,20 @@ public class MembershipManagerImplTest {
         return manager;
     }
 
-    private MembershipManagerImpl createMembershipManagerJoiningGroup(String groupInstanceId,
-                                                                      String serverAssignor) {
-        MembershipManagerImpl manager = new MembershipManagerImpl(
-                GROUP_ID, Optional.ofNullable(groupInstanceId), Optional.ofNullable(serverAssignor),
-                subscriptionState, commitRequestManager, metadata, logContext, Optional.empty());
-        manager.transitionToJoining();
-        return manager;
-    }
-
     private MembershipManagerImpl createMembershipManagerJoiningGroup(String groupInstanceId) {
         MembershipManagerImpl manager = spy(new MembershipManagerImpl(
                 GROUP_ID, Optional.ofNullable(groupInstanceId), Optional.empty(),
                 subscriptionState, commitRequestManager, metadata, logContext,
                 Optional.empty()));
+        manager.transitionToJoining();
+        return manager;
+    }
+
+    private MembershipManagerImpl createMembershipManagerJoiningGroup(String groupInstanceId,
+                                                                      String serverAssignor) {
+        MembershipManagerImpl manager = new MembershipManagerImpl(
+                GROUP_ID, Optional.ofNullable(groupInstanceId), Optional.ofNullable(serverAssignor),
+                subscriptionState, commitRequestManager, metadata, logContext, Optional.empty());
         manager.transitionToJoining();
         return manager;
     }
