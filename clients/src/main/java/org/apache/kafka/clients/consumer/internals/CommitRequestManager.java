@@ -507,8 +507,13 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
                         // just retry
                         retry(currentTimeMs, error.exception());
                         return;
-                    } else if (error == Errors.UNKNOWN_MEMBER_ID || error == Errors.STALE_MEMBER_EPOCH) {
-                        boolean retried = maybeRetryOnGroupError(currentTimeMs, error);
+                    } else if (error == Errors.UNKNOWN_MEMBER_ID) {
+                        log.error("OffsetCommit failed with {} on partition {} for offset {}",
+                            error, tp, offset);
+                        future.completeExceptionally(error.exception());
+                        return;
+                    } else if (error == Errors.STALE_MEMBER_EPOCH) {
+                        boolean retried = maybeRetryWithNewMemberEpoch(currentTimeMs, error);
                         if (!retried) {
                             log.error("OffsetCommit failed with {} and the consumer is not part " +
                                     "of the group anymore (it probably left the group, got fenced" +
@@ -593,16 +598,16 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
         }
 
         /**
-         * Retry with backoff if the request failed with {@link Errors#UNKNOWN_MEMBER_ID} or
-         * {@link Errors#STALE_MEMBER_EPOCH} and the member has valid member ID and epoch.
+         * Retry with backoff if the request failed with {@link Errors#STALE_MEMBER_EPOCH} and
+         * the member has valid epoch.
          *
          * @return True if the request has been enqueued to be retried with the latest member ID
          * and epoch.
          */
-        boolean maybeRetryOnGroupError(long currentTimeMs, Errors responseError) {
-            if (responseError == Errors.STALE_MEMBER_EPOCH || responseError == Errors.UNKNOWN_MEMBER_ID) {
+        boolean maybeRetryWithNewMemberEpoch(long currentTimeMs, Errors responseError) {
+            if (responseError == Errors.STALE_MEMBER_EPOCH) {
                 if (memberInfo.memberEpoch.isPresent()) {
-                    // Request failed with invalid ID/epoch, but the member has a valid one, so
+                    // Request failed with invalid epoch, but the member has a valid one, so
                     // retry the request with the latest ID/epoch.
                     retry(currentTimeMs, responseError.exception());
                     return true;
@@ -705,8 +710,12 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
             log.debug("Offset fetch failed: {}", responseError.message());
             if (responseError == COORDINATOR_LOAD_IN_PROGRESS) {
                 retry(currentTimeMs, responseError.exception());
-            } else if (responseError == Errors.STALE_MEMBER_EPOCH || responseError == Errors.UNKNOWN_MEMBER_ID) {
-                boolean retried = maybeRetryOnGroupError(currentTimeMs, responseError);
+            } else if (responseError == Errors.UNKNOWN_MEMBER_ID) {
+                log.error("OffsetFetch failed with {} because the member is not part of the group" +
+                    " anymore.", responseError);
+                future.completeExceptionally(responseError.exception());
+            } else if (responseError == Errors.STALE_MEMBER_EPOCH) {
+                boolean retried = maybeRetryWithNewMemberEpoch(currentTimeMs, responseError);
                 if (!retried) {
                     log.error("OffsetFetch failed with {} and the consumer is not part " +
                         "of the group anymore (it probably left the group, got fenced" +

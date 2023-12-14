@@ -457,18 +457,17 @@ public class CommitRequestManagerTest {
         assertPoll(1, commitRequestManager);
     }
 
-    // This should be the case where the OffsetFetch fails with invalid member ID/epoch and the
-    // member already has a new ID/epoch (ex. when member just joined the group or got a new
-    // epoch after a reconciliation). The request should just be retried with the new ID/epoch
+    // This should be the case where the OffsetFetch fails with invalid member epoch and the
+    // member already has a new epoch (ex. when member just joined the group or got a new
+    // epoch after a reconciliation). The request should just be retried with the new epoch
     // and succeed.
-    @ParameterizedTest
-    @MethodSource("retriableGroupErrors")
-    public void testSyncOffsetFetchFailsWithGroupErrorsAndRetriesWithNewMemberIdAndEpoch(final Errors error) {
+    @Test
+    public void testSyncOffsetFetchFailsWithStaleEpochAndRetriesWithNewEpoch() {
         CommitRequestManager commitRequestManager = create(false, 100);
         Set<TopicPartition> partitions = Collections.singleton(new TopicPartition("t1", 0));
         when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(mockedNode));
 
-        // Send request that is expected to fail with invalid ID/epoch.
+        // Send request that is expected to fail with invalid epoch.
         long expirationTimeMs = time.milliseconds() + defaultApiTimeoutMs;
         commitRequestManager.addOffsetFetchRequest(partitions, expirationTimeMs);
 
@@ -477,8 +476,8 @@ public class CommitRequestManagerTest {
         String memberId = "member1";
         commitRequestManager.onMemberEpochUpdated(Optional.of(newEpoch), Optional.of(memberId));
 
-        // Receive error when member already has a newer member ID/epoch. Request should be retried.
-        completeOffsetFetchRequestWithError(commitRequestManager, partitions, error);
+        // Receive error when member already has a newer member epoch. Request should be retried.
+        completeOffsetFetchRequestWithError(commitRequestManager, partitions, Errors.STALE_MEMBER_EPOCH);
 
         // Check that the request that failed was removed from the inflight requests buffer.
         assertEquals(0, commitRequestManager.pendingRequests.inflightOffsetFetches.size());
@@ -501,14 +500,13 @@ public class CommitRequestManagerTest {
     // This should be the case of an OffsetFetch that fails because the member is not in the
     // group anymore (left the group, failed with fatal error, or got fenced). In that case the
     // request should fail without retry.
-    @ParameterizedTest
-    @MethodSource("retriableGroupErrors")
-    public void testSyncOffsetFetchFailsWithGroupErrorsAndNotRetriedIfMemberNotInGroupAnymore(final Errors error) {
+    @Test
+    public void testSyncOffsetFetchFailsWithStaleEpochAndNotRetriedIfMemberNotInGroupAnymore() {
         CommitRequestManager commitRequestManager = create(false, 100);
         Set<TopicPartition> partitions = Collections.singleton(new TopicPartition("t1", 0));
         when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(mockedNode));
 
-        // Send request that is expected to fail with invalid ID/epoch.
+        // Send request that is expected to fail with invalid epoch.
         long expirationTimeMs = time.milliseconds() + defaultApiTimeoutMs;
         CompletableFuture<Map<TopicPartition, OffsetAndMetadata>> requestResult =
             commitRequestManager.addOffsetFetchRequest(partitions, expirationTimeMs);
@@ -517,7 +515,7 @@ public class CommitRequestManagerTest {
         commitRequestManager.onMemberEpochUpdated(Optional.empty(), Optional.empty());
 
         // Receive error when member is not in the group anymore. Request should fail.
-        completeOffsetFetchRequestWithError(commitRequestManager, partitions, error);
+        completeOffsetFetchRequestWithError(commitRequestManager, partitions, Errors.STALE_MEMBER_EPOCH);
 
         assertTrue(requestResult.isDone());
         assertTrue(requestResult.isCompletedExceptionally());
@@ -527,13 +525,12 @@ public class CommitRequestManagerTest {
         assertEquals(0, res.unsentRequests.size());
     }
 
-    // This should be the case where the OffsetCommit fails with invalid member ID/epoch and the
-    // member already has a new ID/epoch (ex. when member just joined the group or got a new
-    // epoch after a reconciliation). The request should just be retried with the new ID/epoch
+    // This should be the case where the OffsetCommit fails with invalid member epoch and the
+    // member already has a new epoch (ex. when member just joined the group or got a new
+    // epoch after a reconciliation). The request should just be retried with the new epoch
     // and succeed.
-    @ParameterizedTest
-    @MethodSource("retriableGroupErrors")
-    public void testSyncOffsetCommitFailsWithGroupErrorsAndRetriesWithNewMemberIdAndEpoch(final Errors error) {
+    @Test
+    public void testSyncOffsetCommitFailsWithStaleEpochAndRetriesWithNewEpoch() {
         CommitRequestManager commitRequestManager = create(true, 100);
         when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(mockedNode));
 
@@ -550,7 +547,7 @@ public class CommitRequestManagerTest {
         String memberId = "member1";
         commitRequestManager.onMemberEpochUpdated(Optional.of(newEpoch), Optional.of(memberId));
 
-        completeOffsetCommitRequestWithError(commitRequestManager, error);
+        completeOffsetCommitRequestWithError(commitRequestManager, Errors.STALE_MEMBER_EPOCH);
 
         // Check that the request that failed was removed from the inflight requests buffer.
         assertEquals(0, commitRequestManager.pendingRequests.inflightOffsetFetches.size());
@@ -616,13 +613,6 @@ public class CommitRequestManagerTest {
             Arguments.of(Errors.UNKNOWN_MEMBER_ID));
     }
 
-    // Errors that should be retried only if a new member ID/epoch has been received.
-    private static Stream<Arguments> retriableGroupErrors() {
-        return Stream.of(
-                Arguments.of(Errors.STALE_MEMBER_EPOCH),
-                Arguments.of(Errors.UNKNOWN_MEMBER_ID));
-    }
-
     // Supplies (error, isRetriable)
     private static Stream<Arguments> offsetFetchExceptionSupplier() {
         // fetchCommit is only retrying on a subset of RetriableErrors
@@ -638,11 +628,10 @@ public class CommitRequestManagerTest {
             Arguments.of(Errors.REQUEST_TIMED_OUT, false),
             Arguments.of(Errors.FENCED_INSTANCE_ID, false),
             Arguments.of(Errors.TOPIC_AUTHORIZATION_FAILED, false),
-            // Adding STALE_MEMBER_EPOCH and UNKNOWN_MEMBER_ID as non-retriable here
-            // because they are only retried if a new member ID/epoch is
-            // received. Tested separately.
-            Arguments.of(Errors.STALE_MEMBER_EPOCH, false),
-            Arguments.of(Errors.UNKNOWN_MEMBER_ID, false));
+            Arguments.of(Errors.UNKNOWN_MEMBER_ID, false),
+            // Adding STALE_MEMBER_EPOCH as non-retriable here because it is only retried if a new
+            // member epoch is received. Tested separately.
+            Arguments.of(Errors.STALE_MEMBER_EPOCH, false));
     }
 
     @ParameterizedTest
