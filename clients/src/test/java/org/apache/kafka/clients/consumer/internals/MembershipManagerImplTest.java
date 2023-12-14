@@ -70,6 +70,7 @@ public class MembershipManagerImplTest {
     private final LogContext logContext = new LogContext();
     private SubscriptionState subscriptionState;
     private ConsumerMetadata metadata;
+
     private CommitRequestManager commitRequestManager;
 
     @BeforeEach
