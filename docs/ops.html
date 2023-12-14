@@ -3898,10 +3898,11 @@ controller.listener.names=CONTROLLER</pre>
       <li>
         For each KRaft broker:
         <ul>
+          <li>Stop the broker.</li>
           <li>Remove the __cluster_metadata directory on the broker.</li>
           <li>Remove the <code>zookeeper.metadata.migration.enable</code> configuration and the KRaft controllers related configurations like <code>controller.quorum.voters</code>
             and <code>controller.listener.names</code> from the broker configuration properties file.</li>
-          <li>Then, restart the broker in ZooKeeper mode.</li>
+          <li>Restart the broker in ZooKeeper mode.</li>
         </ul>
       </li>
       <li>Take down the KRaft quorum.</li>
