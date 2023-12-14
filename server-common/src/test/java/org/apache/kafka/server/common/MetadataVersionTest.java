@@ -232,6 +232,7 @@ class MetadataVersionTest {
         assertEquals("3.7", IBP_3_7_IV0.shortVersion());
         assertEquals("3.7", IBP_3_7_IV1.shortVersion());
         assertEquals("3.7", IBP_3_7_IV2.shortVersion());
+        assertEquals("3.7", IBP_3_7_IV3.shortVersion());
         assertEquals("3.7", IBP_3_7_IV4.shortVersion());
     }
 
