@@ -232,8 +232,9 @@ public class IntegrationTestUtils {
      * The name is safe even for parameterized methods.
      * Used by tests not yet migrated from JUnit 4.
      */
-    public static String safeUniqueTestName(final Class<?> testClass, final TestName testName) {
-        return safeUniqueTestName(testClass, testName.getMethodName());
+    public static String safeUniqueTestName(final TestName testName) {
+        final String methodName = testName.getMethodName();
+        return safeUniqueTestName(methodName);
     }
 
     /**
@@ -241,13 +242,13 @@ public class IntegrationTestUtils {
      * JUnit 5 instead of a TestName from JUnit 4.
      * Used by tests migrated to JUnit 5.
      */
-    public static String safeUniqueTestName(final Class<?> testClass, final TestInfo testInfo) {
+    public static String safeUniqueTestName(final TestInfo testInfo) {
         final String methodName = testInfo.getTestMethod().map(Method::getName).orElse("unknownMethodName");
-        return sanitize(methodName + Uuid.randomUuid().toString());
+        return safeUniqueTestName(methodName);
     }
 
-    private static String safeUniqueTestName(final Class<?> testClass, final String testName) {
-        return sanitize(testClass.getSimpleName() + testName);
+    private static String safeUniqueTestName(final String testName) {
+        return sanitize(testName + Uuid.randomUuid().toString());
     }
 
     private static String sanitize(final String str) {

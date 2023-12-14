@@ -190,8 +190,6 @@ public class ConsumerGroup implements Group {
         this.targetAssignment = new TimelineHashMap<>(snapshotRegistry, 0);
         this.currentPartitionEpoch = new TimelineHashMap<>(snapshotRegistry, 0);
         this.metrics = Objects.requireNonNull(metrics);
-
-        metrics.onConsumerGroupStateTransition(null, this.state.get());
     }
 
     /**
@@ -653,12 +651,15 @@ public class ConsumerGroup implements Group {
      * @param memberId          The member id.
      * @param groupInstanceId   The group instance id.
      * @param memberEpoch       The member epoch.
+     * @param isTransactional   Whether the offset commit is transactional or not. It has no
+     *                          impact when a consumer group is used.
      */
     @Override
     public void validateOffsetCommit(
         String memberId,
         String groupInstanceId,
-        int memberEpoch
+        int memberEpoch,
+        boolean isTransactional
     ) throws UnknownMemberIdException, StaleMemberEpochException {
         // When the member epoch is -1, the request comes from either the admin client
         // or a consumer which does not use the group management facility. In this case,

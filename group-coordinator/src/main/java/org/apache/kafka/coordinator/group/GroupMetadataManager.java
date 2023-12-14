@@ -575,6 +575,7 @@ public class GroupMetadataManager {
         if (group == null) {
             ConsumerGroup consumerGroup = new ConsumerGroup(snapshotRegistry, groupId, metrics);
             groups.put(groupId, consumerGroup);
+            metrics.onConsumerGroupStateTransition(null, consumerGroup.state());
             return consumerGroup;
         } else {
             if (group.type() == CONSUMER) {
@@ -613,6 +614,7 @@ public class GroupMetadataManager {
         if (group == null) {
             GenericGroup genericGroup = new GenericGroup(logContext, groupId, GenericGroupState.EMPTY, time, metrics);
             groups.put(groupId, genericGroup);
+            metrics.onGenericGroupStateTransition(null, genericGroup.currentState());
             return genericGroup;
         } else {
             if (group.type() == GENERIC) {
@@ -684,7 +686,19 @@ public class GroupMetadataManager {
     private void removeGroup(
         String groupId
     ) {
-        groups.remove(groupId);
+        Group group = groups.remove(groupId);
+        if (group != null) {
+            switch (group.type()) {
+                case CONSUMER:
+                    ConsumerGroup consumerGroup = (ConsumerGroup) group;
+                    metrics.onConsumerGroupStateTransition(consumerGroup.state(), null);
+                    break;
+                case GENERIC:
+                    GenericGroup genericGroup = (GenericGroup) group;
+                    metrics.onGenericGroupStateTransition(genericGroup.currentState(), null);
+                    break;
+            }
+        }
     }
 
     /**
@@ -749,7 +763,6 @@ public class GroupMetadataManager {
         throwIfEmptyString(request.groupId(), "GroupId can't be empty.");
         throwIfEmptyString(request.instanceId(), "InstanceId can't be empty.");
         throwIfEmptyString(request.rackId(), "RackId can't be empty.");
-        throwIfNotNull(request.subscribedTopicRegex(), "SubscribedTopicRegex is not supported yet.");
 
         if (request.memberEpoch() > 0 || request.memberEpoch() == LEAVE_GROUP_MEMBER_EPOCH) {
             throwIfEmptyString(request.memberId(), "MemberId can't be empty.");
@@ -945,8 +958,6 @@ public class GroupMetadataManager {
      * @param clientHost            The client host.
      * @param subscribedTopicNames  The list of subscribed topic names from the request
      *                              of null.
-     * @param subscribedTopicRegex  The regular expression based subscription from the
-     *                              request or null.
      * @param assignorName          The assignor name from the request or null.
      * @param ownedTopicPartitions  The list of owned partitions from the request or null.
      *
@@ -963,7 +974,6 @@ public class GroupMetadataManager {
         String clientId,
         String clientHost,
         List<String> subscribedTopicNames,
-        String subscribedTopicRegex,
         String assignorName,
         List<ConsumerGroupHeartbeatRequestData.TopicPartitions> ownedTopicPartitions
     ) throws ApiException {
@@ -1030,7 +1040,6 @@ public class GroupMetadataManager {
             .maybeUpdateRebalanceTimeoutMs(ofSentinel(rebalanceTimeoutMs))
             .maybeUpdateServerAssignorName(Optional.ofNullable(assignorName))
             .maybeUpdateSubscribedTopicNames(Optional.ofNullable(subscribedTopicNames))
-            .maybeUpdateSubscribedTopicRegex(Optional.ofNullable(subscribedTopicRegex))
             .setClientId(clientId)
             .setClientHost(clientHost)
             .build();
@@ -1448,7 +1457,6 @@ public class GroupMetadataManager {
                 context.clientId(),
                 context.clientAddress.toString(),
                 request.subscribedTopicNames(),
-                request.subscribedTopicRegex(),
                 request.serverAssignor(),
                 request.topicPartitions()
             );
@@ -1600,7 +1608,6 @@ public class GroupMetadataManager {
                     + " but did not receive ConsumerGroupTargetAssignmentMetadataValue tombstone.");
             }
             removeGroup(groupId);
-            metrics.onConsumerGroupStateTransition(consumerGroup.state(), null);
         }
 
     }
@@ -1809,11 +1816,6 @@ public class GroupMetadataManager {
 
         if (value == null)  {
             // Tombstone. Group should be removed.
-            Group group = groups.get(groupId);
-            if (group != null && group.type() == GENERIC) {
-                GenericGroup genericGroup = (GenericGroup) group;
-                metrics.onGenericGroupStateTransition(genericGroup.currentState(), null);
-            }
             removeGroup(groupId);
         } else {
             List<GenericGroupMember> loadedMembers = new ArrayList<>();
@@ -1857,7 +1859,10 @@ public class GroupMetadataManager {
             );
 
             loadedMembers.forEach(member -> genericGroup.add(member, null));
-            groups.put(groupId, genericGroup);
+            Group prevGroup = groups.put(groupId, genericGroup);
+            if (prevGroup == null) {
+                metrics.onGenericGroupStateTransition(null, genericGroup.currentState());
+            }
 
             genericGroup.setSubscribedTopics(
                 genericGroup.computeSubscribedTopics()
@@ -3131,6 +3136,7 @@ public class GroupMetadataManager {
         switch (appendError) {
             case UNKNOWN_TOPIC_OR_PARTITION:
             case NOT_ENOUGH_REPLICAS:
+            case REQUEST_TIMED_OUT:
                 return COORDINATOR_NOT_AVAILABLE;
 
             case NOT_LEADER_OR_FOLLOWER:
