@@ -2116,6 +2116,7 @@ public class CoordinatorRuntimeTest {
                     new CoordinatorLoader.LoadSummary(
                         startTimeMs,
                         startTimeMs + 1000,
+                        startTimeMs + 500,
                         30,
                         3000),
                     Collections.emptyList(),
@@ -2170,6 +2171,7 @@ public class CoordinatorRuntimeTest {
                     new CoordinatorLoader.LoadSummary(
                         1000,
                         2000,
+                        1500,
                         30,
                         3000),
                     Arrays.asList(5L, 15L, 27L),
@@ -2225,6 +2227,7 @@ public class CoordinatorRuntimeTest {
                     new CoordinatorLoader.LoadSummary(
                         1000,
                         2000,
+                        1500,
                         30,
                         3000),
                     Collections.emptyList(),
