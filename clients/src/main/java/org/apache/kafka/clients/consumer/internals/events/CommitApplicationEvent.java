@@ -34,7 +34,7 @@ public class CommitApplicationEvent extends CompletableApplicationEvent<Void> {
      * Time to wait for a response, retrying on retriable errors. If not present, the request is
      * triggered without waiting for a response or being retried.
      */
-    private final Optional<Long> timeoutMs;
+    private final Optional<Long> retryTimeoutMs;
 
     /**
      * Create new event to commit offsets. If timer is present, the request will be retried on
@@ -43,10 +43,10 @@ public class CommitApplicationEvent extends CompletableApplicationEvent<Void> {
      * commit offsets request).
      */
     public CommitApplicationEvent(final Map<TopicPartition, OffsetAndMetadata> offsets,
-                                  final Optional<Long> timeoutMs) {
+                                  final Optional<Long> retryTimeoutMs) {
         super(Type.COMMIT);
         this.offsets = Collections.unmodifiableMap(offsets);
-        this.timeoutMs = timeoutMs;
+        this.retryTimeoutMs = retryTimeoutMs;
 
         for (OffsetAndMetadata offsetAndMetadata : offsets.values()) {
             if (offsetAndMetadata.offset() < 0) {
@@ -59,8 +59,8 @@ public class CommitApplicationEvent extends CompletableApplicationEvent<Void> {
         return offsets;
     }
 
-    public Optional<Long> timeoutMs() {
-        return timeoutMs;
+    public Optional<Long> retryTimeoutMs() {
+        return retryTimeoutMs;
     }
 
     @Override
@@ -86,7 +86,7 @@ public class CommitApplicationEvent extends CompletableApplicationEvent<Void> {
         return "CommitApplicationEvent{" +
                 toStringBase() +
                 ", offsets=" + offsets +
-                ", timeout=" + (timeoutMs.map(t -> t + "ms").orElse("none")) +
+                ", retryTimeout=" + (retryTimeoutMs.map(t -> t + "ms").orElse("none")) +
                 '}';
     }
 }

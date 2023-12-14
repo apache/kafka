@@ -468,7 +468,7 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
                             long currentTimeMs = resp.handler().completionTimeMs();
                             handleCoordinatorDisconnect(throwable, currentTimeMs);
                             if (throwable instanceof RetriableException) {
-                                retry(currentTimeMs, throwable);
+                                maybeRetry(currentTimeMs, throwable);
                             } else {
                                 future.completeExceptionally(throwable);
                             }
@@ -500,12 +500,12 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
                         error == Errors.NOT_COORDINATOR ||
                         error == Errors.REQUEST_TIMED_OUT) {
                         coordinatorRequestManager.markCoordinatorUnknown(error.message(), currentTimeMs);
-                        retry(currentTimeMs, error.exception());
+                        maybeRetry(currentTimeMs, error.exception());
                         return;
                     } else if (error == Errors.COORDINATOR_LOAD_IN_PROGRESS ||
                         error == Errors.UNKNOWN_TOPIC_OR_PARTITION) {
                         // just retry
-                        retry(currentTimeMs, error.exception());
+                        maybeRetry(currentTimeMs, error.exception());
                         return;
                     } else if (error == Errors.UNKNOWN_MEMBER_ID) {
                         log.error("OffsetCommit failed with {} on partition {} for offset {}",
@@ -545,11 +545,12 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
         }
 
         /**
-         * Enqueue the request to be retried with exponential backoff. This will fail the request
-         * without retrying if the request timer expired.
+         * Enqueue the request to be retried with exponential backoff, if the request allows
+         * retries and the timer has not expired. Complete the request future exceptionally if
+         * the request won't be retried.
          */
         @Override
-        void retry(long currentTimeMs, Throwable throwable) {
+        void maybeRetry(long currentTimeMs, Throwable throwable) {
             if (!allowsRetries()) {
                 // Fail requests that do not allow retries (async requests), making sure to
                 // propagate a RetriableCommitException if the failure is retriable.
@@ -644,14 +645,14 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
                 if (memberInfo.memberEpoch.isPresent()) {
                     // Request failed with invalid epoch, but the member has a valid one, so
                     // retry the request with the latest ID/epoch.
-                    retry(currentTimeMs, responseError.exception());
+                    maybeRetry(currentTimeMs, responseError.exception());
                     return true;
                 }
             }
             return false;
         }
 
-        abstract void retry(long currentTimeMs, Throwable throwable);
+        abstract void maybeRetry(long currentTimeMs, Throwable throwable);
     }
 
     class OffsetFetchRequestState extends RetriableRequestState {
@@ -744,7 +745,7 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
             handleCoordinatorDisconnect(responseError.exception(), currentTimeMs);
             log.debug("Offset fetch failed: {}", responseError.message());
             if (responseError == COORDINATOR_LOAD_IN_PROGRESS) {
-                retry(currentTimeMs, responseError.exception());
+                maybeRetry(currentTimeMs, responseError.exception());
             } else if (responseError == Errors.UNKNOWN_MEMBER_ID) {
                 log.error("OffsetFetch failed with {} because the member is not part of the group" +
                     " anymore.", responseError);
@@ -764,7 +765,7 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
             } else if (responseError == Errors.NOT_COORDINATOR) {
                 // re-discover the coordinator and retry
                 coordinatorRequestManager.markCoordinatorUnknown("error response " + responseError.name(), currentTimeMs);
-                retry(currentTimeMs, responseError.exception());
+                maybeRetry(currentTimeMs, responseError.exception());
             } else if (responseError == Errors.GROUP_AUTHORIZATION_FAILED) {
                 future.completeExceptionally(GroupAuthorizationException.forGroupId(groupId));
             } else {
@@ -773,11 +774,11 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
         }
 
         /**
-         * Enqueue the request to be retried with exponential backoff. This will fail the request
-         * without retrying if the request timer expired.
+         * Enqueue the request to be retried with exponential backoff if the time has not expired.
+         * This will fail the request future if the request is not retried.
          */
         @Override
-        void retry(long currentTimeMs, Throwable throwable) {
+        void maybeRetry(long currentTimeMs, Throwable throwable) {
             if (isExpired(currentTimeMs)) {
                 future.completeExceptionally(throwable);
                 return;
@@ -856,7 +857,7 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
                         ", this could be either " +
                         "transactional offsets waiting for completion, or " +
                         "normal offsets waiting for replication after appending to local log", unstableTxnOffsetTopicPartitions);
-                retry(currentTimeMs, Errors.UNSTABLE_OFFSET_COMMIT.exception());
+                maybeRetry(currentTimeMs, Errors.UNSTABLE_OFFSET_COMMIT.exception());
             } else {
                 future.complete(offsets);
             }
