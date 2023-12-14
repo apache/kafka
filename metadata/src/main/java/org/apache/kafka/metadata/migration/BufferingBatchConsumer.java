@@ -17,8 +17,6 @@
 
 package org.apache.kafka.metadata.migration;
 
-import org.apache.kafka.server.common.ApiMessageAndVersion;
-
 import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Consumer;
