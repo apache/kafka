@@ -101,24 +101,18 @@ public class GroupCoordinatorMetricsShard implements CoordinatorMetricsShard {
             Utils.mkEntry(GenericGroupState.DEAD, new AtomicLong(0)),
             Utils.mkEntry(GenericGroupState.EMPTY, new AtomicLong(0))
         );
-        
-        TimelineLong numConsumerGroupsEmptyTimeline = new TimelineLong(snapshotRegistry);
-        TimelineLong numConsumerGroupsAssigningTimeline = new TimelineLong(snapshotRegistry);
-        TimelineLong numConsumerGroupsReconcilingTimeline = new TimelineLong(snapshotRegistry);
-        TimelineLong numConsumerGroupsStableTimeline = new TimelineLong(snapshotRegistry);
-        TimelineLong numConsumerGroupsDeadTimeline = new TimelineLong(snapshotRegistry);
 
         this.consumerGroupGauges = Utils.mkMap(
             Utils.mkEntry(ConsumerGroupState.EMPTY,
-                new TimelineGaugeCounter(numConsumerGroupsEmptyTimeline, new AtomicLong(0))),
+                new TimelineGaugeCounter(new TimelineLong(snapshotRegistry), new AtomicLong(0))),
             Utils.mkEntry(ConsumerGroupState.ASSIGNING,
-                new TimelineGaugeCounter(numConsumerGroupsAssigningTimeline, new AtomicLong(0))),
+                new TimelineGaugeCounter(new TimelineLong(snapshotRegistry), new AtomicLong(0))),
             Utils.mkEntry(ConsumerGroupState.RECONCILING,
-                new TimelineGaugeCounter(numConsumerGroupsReconcilingTimeline, new AtomicLong(0))),
+                new TimelineGaugeCounter(new TimelineLong(snapshotRegistry), new AtomicLong(0))),
             Utils.mkEntry(ConsumerGroupState.STABLE,
-                new TimelineGaugeCounter(numConsumerGroupsStableTimeline, new AtomicLong(0))),
+                new TimelineGaugeCounter(new TimelineLong(snapshotRegistry), new AtomicLong(0))),
             Utils.mkEntry(ConsumerGroupState.DEAD,
-                new TimelineGaugeCounter(numConsumerGroupsDeadTimeline, new AtomicLong(0)))
+                new TimelineGaugeCounter(new TimelineLong(snapshotRegistry), new AtomicLong(0)))
         );
 
         this.globalSensors = Objects.requireNonNull(globalSensors);
