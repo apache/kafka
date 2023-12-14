@@ -550,9 +550,14 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
          */
         @Override
         void retry(long currentTimeMs, Throwable throwable) {
-            if (!expirationTimeMs.isPresent() || isExpired(currentTimeMs)) {
-                // Fail requests that had no expiration time (async requests), or that had it, and
-                // it expired (sync requests).
+            if (!allowsRetries()) {
+                // Fail requests that do not allow retries (async requests), making sure to
+                // propagate a RetriableCommitException if the failure is retriable.
+                future.completeExceptionally(commitExceptionForRetriableError(throwable));
+                return;
+            }
+            if (isExpired(currentTimeMs)) {
+                // Fail requests that allowed retries (sync requests), but expired.
                 future.completeExceptionally(throwable);
                 return;
             }
@@ -568,6 +573,16 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
         }
 
         /**
+         * @return True if the requests allows to be retried (sync requests that provide an
+         * expiration time to bound the retries). False if the request does not allow to be
+         * retried on RetriableErrors (async requests that does not provide an expiration time
+         * for retries)
+         */
+        private boolean allowsRetries() {
+            return expirationTimeMs.isPresent();
+        }
+
+        /**
          * Complete the request future with a TimeoutException if the request expired. No action
          * taken if the request is still active.
          *
@@ -580,6 +595,16 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
                 return true;
             }
             return false;
+        }
+
+        /**
+         * @return A RetriableCommitFailedException if the original Exception was a
+         * RetriableException. Return the original one in any other case.
+         */
+        private Throwable commitExceptionForRetriableError(Throwable throwable) {
+            if (throwable instanceof RetriableException)
+                return new RetriableCommitFailedException(throwable);
+            return throwable;
         }
     }
 

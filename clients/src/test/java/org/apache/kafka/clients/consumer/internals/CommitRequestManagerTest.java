@@ -20,6 +20,7 @@ import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
+import org.apache.kafka.clients.consumer.RetriableCommitFailedException;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.DisconnectException;
@@ -58,6 +59,7 @@ import java.util.OptionalDouble;
 import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -71,6 +73,7 @@ import static org.apache.kafka.clients.consumer.internals.ConsumerTestBuilder.DE
 import static org.apache.kafka.clients.consumer.internals.ConsumerTestBuilder.DEFAULT_GROUP_INSTANCE_ID;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
@@ -379,6 +382,66 @@ public class CommitRequestManagerTest {
         assertTrue(commitResult.isDone());
         assertTrue(commitResult.isCompletedExceptionally());
     }
+
+    /**
+     * Sync commit requests that fail with a retriable error continue to be retry while there is
+     * time. When time expires, they should fail with a TimeoutException.
+     */
+    @Test
+    public void testOffsetCommitSyncFailedWithRetriableThrowsTimeoutWhenRetryTimeExpires() {
+        CommitRequestManager commitRequestManger = create(false, 100);
+        when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(mockedNode));
+
+        Map<TopicPartition, OffsetAndMetadata> offsets = Collections.singletonMap(
+            new TopicPartition("topic", 1),
+            new OffsetAndMetadata(0));
+
+        // Send offset commit request that fails with retriable error.
+        Long expirationTimeMs = time.milliseconds() + retryBackoffMs * 2;
+        CompletableFuture<Void> commitResult = commitRequestManger.addOffsetCommitRequest(offsets, Optional.of(expirationTimeMs));
+        completeOffsetCommitRequestWithError(commitRequestManger, Errors.COORDINATOR_NOT_AVAILABLE);
+
+        // Sleep to expire the request timeout. Request should fail on the next poll with a
+        // TimeoutException.
+        time.sleep(expirationTimeMs);
+        NetworkClientDelegate.PollResult res = commitRequestManger.poll(time.milliseconds());
+        assertEquals(0, res.unsentRequests.size());
+        assertTrue(commitResult.isDone());
+        assertTrue(commitResult.isCompletedExceptionally());
+        Throwable t = assertThrows(ExecutionException.class, () -> commitResult.get());
+        assertEquals(TimeoutException.class, t.getCause().getClass());
+    }
+
+    /**
+     * Async commit requests that fail with a retriable error are not retried, and they should fail
+     * with a RetriableCommitException.
+     */
+    @Test
+    public void testOffsetCommitAsyncFailedWithRetriableThrowsRetriableCommitException() {
+        CommitRequestManager commitRequestManger = create(true, 100);
+        when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(mockedNode));
+
+        Map<TopicPartition, OffsetAndMetadata> offsets = Collections.singletonMap(new TopicPartition("topic", 1),
+            new OffsetAndMetadata(0));
+
+        // Send async commit request that fails with retriable error (not expected to be retried).
+        Errors retriableError = Errors.COORDINATOR_NOT_AVAILABLE;
+        CompletableFuture<Void> commitResult = commitRequestManger.addOffsetCommitRequest(offsets, Optional.empty());
+        completeOffsetCommitRequestWithError(commitRequestManger, retriableError);
+        NetworkClientDelegate.PollResult res = commitRequestManger.poll(time.milliseconds());
+        assertEquals(0, res.unsentRequests.size());
+        assertTrue(commitResult.isDone());
+        assertTrue(commitResult.isCompletedExceptionally());
+
+        // We expect that the request should not have been retried on this async commit.
+        assertExceptionHandling(commitRequestManger, retriableError, false);
+
+        // Request should have been completed with a RetriableCommitExpcetion
+        Throwable t = assertThrows(ExecutionException.class, () -> commitResult.get());
+        assertEquals(RetriableCommitFailedException.class, t.getCause().getClass());
+        assertEquals(retriableError.exception().getClass(), t.getCause().getCause().getClass());
+    }
+
 
     @Test
     public void testEnsureBackoffRetryOnOffsetCommitRequestTimeout() {
