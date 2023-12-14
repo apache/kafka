@@ -262,6 +262,32 @@ public class MembershipManagerImplTest {
     }
 
     @Test
+    public void testNewAssignmentIgnoredWhenStateIsPrepareLeaving() {
+        MembershipManagerImpl membershipManager = createMemberInStableState();
+
+        // Start leaving group, blocked waiting for commit of all consumed to complete.
+        CompletableFuture<Void> commitResult = mockPrepareLeavingStuckCommitting();
+        membershipManager.leaveGroup();
+        assertEquals(MemberState.PREPARE_LEAVING, membershipManager.state());
+
+        // Get new assignment while preparing to leave the group. Member should continue leaving
+        // the group, ignoring the new assignment received.
+        Uuid topicId = Uuid.randomUuid();
+        mockOwnedPartitionAndAssignmentReceived(membershipManager, topicId, "topic1",
+            Collections.emptyList(), true);
+        receiveAssignment(topicId, Arrays.asList(0, 1), membershipManager);
+        assertEquals(MemberState.PREPARE_LEAVING, membershipManager.state());
+        assertTrue(membershipManager.assignmentReadyToReconcile().isEmpty());
+        assertTrue(membershipManager.topicsWaitingForMetadata().isEmpty());
+        verify(membershipManager, never()).markReconciliationInProgress();
+
+        // When commit completes member should transition to LEAVING.
+        when(subscriptionState.rebalanceListener()).thenReturn(Optional.empty());
+        commitResult.complete(null);
+        assertEquals(MemberState.LEAVING, membershipManager.state());
+    }
+
+    @Test
     public void testFencingWhenStateIsLeaving() {
         MembershipManagerImpl membershipManager = createMemberInStableState();
 
