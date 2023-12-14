@@ -20,9 +20,10 @@ package kafka.server
 import org.apache.kafka.common.TopicIdPartition
 import org.apache.kafka.common.errors._
 import org.apache.kafka.common.protocol.Errors
+import org.apache.kafka.server.metrics.KafkaMetricsGroup
 import org.apache.kafka.storage.internals.log.{FetchParams, FetchPartitionData, LogOffsetMetadata, RemoteLogReadResult, RemoteStorageFetchInfo}
 
-import java.util.concurrent.{CompletableFuture, Future}
+import java.util.concurrent.{CompletableFuture, Future, TimeUnit}
 import java.util.{Optional, OptionalInt, OptionalLong}
 import scala.collection._
 
@@ -80,6 +81,8 @@ class DelayedRemoteFetch(remoteFetchTask: Future[Void],
     // cancel the remote storage read task, if it has not been executed yet
     val cancelled = remoteFetchTask.cancel(true)
     if (!cancelled) debug(s"Remote fetch task for for RemoteStorageFetchInfo: $remoteFetchInfo could not be cancelled and its isDone value is ${remoteFetchTask.isDone}")
+
+    DelayedRemoteFetchMetrics.expiredRequestMeter.mark()
   }
 
   /**
@@ -113,4 +116,9 @@ class DelayedRemoteFetch(remoteFetchTask: Future[Void],
 
     responseCallback(fetchPartitionData)
   }
+}
+
+object DelayedRemoteFetchMetrics {
+  private val metricsGroup = new KafkaMetricsGroup(DelayedRemoteFetchMetrics.getClass)
+  val expiredRequestMeter = metricsGroup.newMeter("ExpiresPerSec", "requests", TimeUnit.SECONDS)
 }
