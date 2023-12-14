@@ -17,6 +17,7 @@
 package kafka.log.remote;
 
 import com.yammer.metrics.core.Gauge;
+import kafka.cluster.Broker;
 import kafka.cluster.EndPoint;
 import kafka.cluster.Partition;
 import kafka.log.UnifiedLog;
@@ -342,11 +343,7 @@ public class RemoteLogManager implements Closeable {
 
             leaderPartitions.forEach(this::cacheTopicPartitionIds);
             followerPartitions.forEach(this::cacheTopicPartitionIds);
-            followerPartitions.forEach(
-                    topicIdPartition -> {
-                        brokerTopicStats.topicStats(topicIdPartition.topic()).removeRemoteCopyBytesLag(topicIdPartition.partition());
-                        brokerTopicStats.topicStats(topicIdPartition.topic()).removeRemoteCopySegmentsLag(topicIdPartition.partition());
-                    });
+            followerPartitions.forEach(this::removeRemoteTopicPartitionMetrics);
 
             remoteLogMetadataManager.onPartitionLeadershipChanges(leaderPartitions, followerPartitions);
             followerPartitions.forEach(topicIdPartition ->
@@ -380,8 +377,7 @@ public class RemoteLogManager implements Closeable {
                         task.cancel();
                     }
 
-                    brokerTopicStats.topicStats(tp.topic()).removeRemoteCopyBytesLag(tp.partition());
-                    brokerTopicStats.topicStats(tp.topic()).removeRemoteCopySegmentsLag(tp.partition());
+                    removeRemoteTopicPartitionMetrics(tpId);
 
                     if (stopPartition.deleteRemoteLog()) {
                         LOGGER.info("Deleting the remote log segments task for partition: {}", tpId);
@@ -1619,6 +1615,15 @@ public class RemoteLogManager implements Closeable {
         }
 
         LOGGER.info("Shutting down of thread pool {} is completed", poolName);
+    }
+
+    private void removeRemoteTopicPartitionMetrics(TopicIdPartition topicIdPartition) {
+        BrokerTopicMetrics topicMetrics = brokerTopicStats.topicStats(topicIdPartition.topic());
+        int partition = topicIdPartition.partition();
+        topicMetrics.removeRemoteCopyBytesLag(partition);
+        topicMetrics.removeRemoteCopySegmentsLag(partition);
+        topicMetrics.removeRemoteDeleteBytesLag(partition);
+        topicMetrics.removeRemoteDeleteSegmentsLag(partition);
     }
 
     //Visible for testing
