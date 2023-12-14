@@ -114,7 +114,7 @@ public enum MemberState {
 
         STABLE.previousValidStates = Arrays.asList(JOINING, ACKNOWLEDGING, RECONCILING);
 
-        RECONCILING.previousValidStates = Arrays.asList(STABLE, JOINING, ACKNOWLEDGING);
+        RECONCILING.previousValidStates = Arrays.asList(STABLE, JOINING, ACKNOWLEDGING, RECONCILING);
 
         ACKNOWLEDGING.previousValidStates = Arrays.asList(RECONCILING);
 
@@ -144,5 +144,14 @@ public enum MemberState {
 
     public List<MemberState> getPreviousValidStates() {
         return this.previousValidStates;
+    }
+
+    /**
+     * @return True if the member is in a state where it should reconcile the new assignment.
+     * Expected to be true whenever the member is part of the group and intends of staying in it
+     * (ex. false when the member is preparing to leave the group).
+     */
+    public boolean canHandleNewAssignment() {
+        return MemberState.RECONCILING.getPreviousValidStates().contains(this);
     }
 }

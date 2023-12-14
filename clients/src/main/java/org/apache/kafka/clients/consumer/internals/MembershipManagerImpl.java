@@ -348,31 +348,51 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
         ConsumerGroupHeartbeatResponseData.Assignment assignment = response.assignment();
 
         if (assignment != null) {
-            replaceUnresolvedAssignmentWithNewAssignment(assignment);
-            if (!assignmentUnresolved.equals(currentAssignment)) {
-                // Transition the member to RECONCILING when receiving a new target
-                // assignment from the broker, different from the current assignment. Note that the
-                // reconciliation might not be triggered just yet because of missing metadata.
-                transitionTo(MemberState.RECONCILING);
-                assignmentReadyToReconcile.clear();
-                resolveMetadataForUnresolvedAssignment();
-                reconcile();
-            } else {
-                // Same assignment received, nothing to reconcile.
-                log.debug("Target assignment {} received from the broker is equals to the member " +
-                        "current assignment {}. Nothing to reconcile.",
-                    assignmentUnresolved, currentAssignment);
-                // Make sure we transition the member back to STABLE if it was RECONCILING (ex.
-                // member was RECONCILING unresolved assignments that were just removed by the
-                // broker).
-                if (state == MemberState.RECONCILING) {
-                    // This is the case where a member was RECONCILING an unresolved
-                    // assignment that was removed by the broker in a following assignment.
-                    transitionTo(MemberState.STABLE);
-                }
+            if (!state.canHandleNewAssignment()) {
+                // New assignment received but member is in a state where it cannot take new
+                // assignments (ex. preparing to leave the group)
+                log.debug("Ignoring new assignment {} received from server because member is in {} state.",
+                    assignment, state);
+                return;
             }
+            processAssignmentReceived(assignment);
+
         } else if (allPendingAssignmentsReconciled()) {
             transitionTo(MemberState.STABLE);
+        }
+    }
+
+    /**
+     * This will process the assignment received if it is different from the member's current
+     * assignment. If a new assignment is received, this will try to resolve the topic names from
+     * metadata, reconcile the resolved assignment, and keep the unresolved to be reconciled when
+     * metadata is discovered.
+     *
+     * @param assignment Assignment received from the broker.
+     */
+    private void processAssignmentReceived(ConsumerGroupHeartbeatResponseData.Assignment assignment) {
+        replaceUnresolvedAssignmentWithNewAssignment(assignment);
+        if (!assignmentUnresolved.equals(currentAssignment)) {
+            // Transition the member to RECONCILING when receiving a new target
+            // assignment from the broker, different from the current assignment. Note that the
+            // reconciliation might not be triggered just yet because of missing metadata.
+            transitionTo(MemberState.RECONCILING);
+            assignmentReadyToReconcile.clear();
+            resolveMetadataForUnresolvedAssignment();
+            reconcile();
+        } else {
+            // Same assignment received, nothing to reconcile.
+            log.debug("Target assignment {} received from the broker is equals to the member " +
+                    "current assignment {}. Nothing to reconcile.",
+                assignmentUnresolved, currentAssignment);
+            // Make sure we transition the member back to STABLE if it was RECONCILING (ex.
+            // member was RECONCILING unresolved assignments that were just removed by the
+            // broker).
+            if (state == MemberState.RECONCILING) {
+                // This is the case where a member was RECONCILING an unresolved
+                // assignment that was removed by the broker in a following assignment.
+                transitionTo(MemberState.STABLE);
+            }
         }
     }
 
