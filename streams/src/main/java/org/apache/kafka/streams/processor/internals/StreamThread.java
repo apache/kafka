@@ -286,6 +286,7 @@ public class StreamThread extends Thread implements ProcessingThread {
     private final int maxPollTimeMs;
     private final String originalReset;
     private final TaskManager taskManager;
+    private final StateUpdater stateUpdater;
 
     private final StreamsMetricsImpl streamsMetrics;
     private final Sensor commitSensor;
@@ -346,6 +347,7 @@ public class StreamThread extends Thread implements ProcessingThread {
 
     private volatile long fetchDeadlineClientInstanceId = -1;
     private volatile KafkaFutureImpl<Uuid> mainConsumerInstanceIdFuture = new KafkaFutureImpl<>();
+    private volatile KafkaFutureImpl<Uuid> restoreConsumerInstanceIdFuture = new KafkaFutureImpl<>();
     private volatile KafkaFutureImpl<Map<String, KafkaFuture<Uuid>>> producerInstanceIdFuture = new KafkaFutureImpl<>();
     private volatile KafkaFutureImpl<Uuid> threadProducerInstanceIdFuture = new KafkaFutureImpl<>();
 
@@ -427,7 +429,17 @@ public class StreamThread extends Thread implements ProcessingThread {
         final DefaultTaskManager schedulingTaskManager =
             maybeCreateSchedulingTaskManager(processingThreadsEnabled, stateUpdaterEnabled, topologyMetadata, time, threadId, tasks);
         final StateUpdater stateUpdater =
-            maybeCreateAndStartStateUpdater(stateUpdaterEnabled, streamsMetrics, config, changelogReader, topologyMetadata, time, clientId, threadIdx);
+            maybeCreateAndStartStateUpdater(
+                stateUpdaterEnabled,
+                streamsMetrics,
+                config,
+                restoreConsumer,
+                changelogReader,
+                topologyMetadata,
+                time,
+                clientId,
+                threadIdx
+            );
 
         final TaskManager taskManager = new TaskManager(
             time,
@@ -469,6 +481,7 @@ public class StreamThread extends Thread implements ProcessingThread {
             changelogReader,
             originalReset,
             taskManager,
+            stateUpdater,
             streamsMetrics,
             topologyMetadata,
             threadId,
@@ -512,6 +525,7 @@ public class StreamThread extends Thread implements ProcessingThread {
     private static StateUpdater maybeCreateAndStartStateUpdater(final boolean stateUpdaterEnabled,
                                                                 final StreamsMetricsImpl streamsMetrics,
                                                                 final StreamsConfig streamsConfig,
+                                                                final Consumer<byte[], byte[]> restoreConsumer,
                                                                 final ChangelogReader changelogReader,
                                                                 final TopologyMetadata topologyMetadata,
                                                                 final Time time,
@@ -519,7 +533,15 @@ public class StreamThread extends Thread implements ProcessingThread {
                                                                 final int threadIdx) {
         if (stateUpdaterEnabled) {
             final String name = clientId + "-StateUpdater-" + threadIdx;
-            final StateUpdater stateUpdater = new DefaultStateUpdater(name, streamsMetrics.metricsRegistry(), streamsConfig, changelogReader, topologyMetadata, time);
+            final StateUpdater stateUpdater = new DefaultStateUpdater(
+                name,
+                streamsMetrics.metricsRegistry(),
+                streamsConfig,
+                restoreConsumer,
+                changelogReader,
+                topologyMetadata,
+                time
+            );
             stateUpdater.start();
             return stateUpdater;
         } else {
@@ -536,6 +558,7 @@ public class StreamThread extends Thread implements ProcessingThread {
                         final ChangelogReader changelogReader,
                         final String originalReset,
                         final TaskManager taskManager,
+                        final StateUpdater stateUpdater,
                         final StreamsMetricsImpl streamsMetrics,
                         final TopologyMetadata topologyMetadata,
                         final String threadId,
@@ -598,6 +621,7 @@ public class StreamThread extends Thread implements ProcessingThread {
         this.log = logContext.logger(StreamThread.class);
         this.rebalanceListener = new StreamsRebalanceListener(time, taskManager, this, this.log, this.assignmentErrorCode);
         this.taskManager = taskManager;
+        this.stateUpdater = stateUpdater;
         this.restoreConsumer = restoreConsumer;
         this.mainConsumer = mainConsumer;
         this.changelogReader = changelogReader;
@@ -759,6 +783,27 @@ public class StreamThread extends Thread implements ProcessingThread {
                 }
             }
 
+
+            if (!stateUpdaterEnabled && !restoreConsumerInstanceIdFuture.isDone()) {
+                if (fetchDeadlineClientInstanceId >= time.milliseconds()) {
+                    try {
+                        restoreConsumerInstanceIdFuture.complete(restoreConsumer.clientInstanceId(Duration.ZERO));
+                    } catch (final IllegalStateException disabledError) {
+                        // if telemetry is disabled on a client, we swallow the error,
+                        // to allow returning a partial result for all other clients
+                        restoreConsumerInstanceIdFuture.complete(null);
+                    } catch (final TimeoutException swallow) {
+                        // swallow
+                    } catch (final Exception error) {
+                        restoreConsumerInstanceIdFuture.completeExceptionally(error);
+                    }
+                } else {
+                    restoreConsumerInstanceIdFuture.completeExceptionally(
+                        new TimeoutException("Could not retrieve restore consumer client instance id.")
+                    );
+                }
+            }
+
             if (!processingMode.equals(StreamsConfigUtils.ProcessingMode.EXACTLY_ONCE_ALPHA) &&
                     !threadProducerInstanceIdFuture.isDone()) {
 
@@ -788,7 +833,8 @@ public class StreamThread extends Thread implements ProcessingThread {
     }
 
     private void maybeResetFetchDeadline() {
-        boolean reset = mainConsumerInstanceIdFuture.isDone();
+        boolean reset = mainConsumerInstanceIdFuture.isDone()
+            && (!stateUpdaterEnabled && restoreConsumerInstanceIdFuture.isDone());
 
         if (processingMode.equals(StreamsConfigUtils.ProcessingMode.EXACTLY_ONCE_ALPHA)) {
             throw new UnsupportedOperationException("not implemented yet");
@@ -1582,6 +1628,20 @@ public class StreamThread extends Thread implements ProcessingThread {
             setDeadline = true;
         }
         result.put(getName() + "-consumer", mainConsumerInstanceIdFuture);
+
+        if (stateUpdaterEnabled) {
+            restoreConsumerInstanceIdFuture = stateUpdater.restoreConsumerInstanceId(timeout);
+        } else {
+            if (restoreConsumerInstanceIdFuture.isDone()) {
+                if (restoreConsumerInstanceIdFuture.isCompletedExceptionally()) {
+                    restoreConsumerInstanceIdFuture = new KafkaFutureImpl<>();
+                    setDeadline = true;
+                }
+            } else {
+                setDeadline = true;
+            }
+        }
+        result.put(getName() + "-restore-consumer", restoreConsumerInstanceIdFuture);
 
         if (setDeadline) {
             fetchDeadlineClientInstanceId = time.milliseconds() + timeout.toMillis();

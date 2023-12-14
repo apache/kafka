@@ -112,7 +112,7 @@ public class ResetPartitionTimeIntegrationTest {
 
     @Test
     public void shouldPreservePartitionTimeOnKafkaStreamRestart() {
-        final String appId = "app-" + safeUniqueTestName(getClass(), testName);
+        final String appId = "app-" + safeUniqueTestName(testName);
         final String input = "input";
         final String outputRaw = "output-raw";
 

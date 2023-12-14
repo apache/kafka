@@ -365,32 +365,53 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
         updateMemberEpoch(response.memberEpoch());
 
         ConsumerGroupHeartbeatResponseData.Assignment assignment = response.assignment();
+
         if (assignment != null) {
-            replaceUnresolvedAssignmentWithNewAssignment(assignment);
-            if (!assignmentUnresolved.equals(currentAssignment)) {
-                // Transition the member to RECONCILING when receiving a new target
-                // assignment from the broker, different from the current assignment. Note that the
-                // reconciliation might not be triggered just yet because of missing metadata.
-                transitionTo(MemberState.RECONCILING);
-                assignmentReadyToReconcile.clear();
-                resolveMetadataForUnresolvedAssignment();
-                reconcile();
-            } else {
-                // Same assignment received, nothing to reconcile.
-                log.debug("Target assignment {} received from the broker is equals to the member " +
-                        "current assignment {}. Nothing to reconcile.",
-                    assignmentUnresolved, currentAssignment);
-                // Make sure we transition the member back to STABLE if it was RECONCILING (ex.
-                // member was RECONCILING unresolved assignments that were just removed by the
-                // broker).
-                if (state == MemberState.RECONCILING) {
-                    // This is the case where a member was RECONCILING an unresolved
-                    // assignment that was removed by the broker in a following assignment.
-                    transitionTo(MemberState.STABLE);
-                }
+            if (!state.canHandleNewAssignment()) {
+                // New assignment received but member is in a state where it cannot take new
+                // assignments (ex. preparing to leave the group)
+                log.debug("Ignoring new assignment {} received from server because member is in {} state.",
+                    assignment, state);
+                return;
             }
+            processAssignmentReceived(assignment);
+
         } else if (allPendingAssignmentsReconciled()) {
             transitionTo(MemberState.STABLE);
+        }
+    }
+
+    /**
+     * This will process the assignment received if it is different from the member's current
+     * assignment. If a new assignment is received, this will try to resolve the topic names from
+     * metadata, reconcile the resolved assignment, and keep the unresolved to be reconciled when
+     * metadata is discovered.
+     *
+     * @param assignment Assignment received from the broker.
+     */
+    private void processAssignmentReceived(ConsumerGroupHeartbeatResponseData.Assignment assignment) {
+        replaceUnresolvedAssignmentWithNewAssignment(assignment);
+        if (!assignmentUnresolved.equals(currentAssignment)) {
+            // Transition the member to RECONCILING when receiving a new target
+            // assignment from the broker, different from the current assignment. Note that the
+            // reconciliation might not be triggered just yet because of missing metadata.
+            transitionTo(MemberState.RECONCILING);
+            assignmentReadyToReconcile.clear();
+            resolveMetadataForUnresolvedAssignment();
+            reconcile();
+        } else {
+            // Same assignment received, nothing to reconcile.
+            log.debug("Target assignment {} received from the broker is equals to the member " +
+                    "current assignment {}. Nothing to reconcile.",
+                assignmentUnresolved, currentAssignment);
+            // Make sure we transition the member back to STABLE if it was RECONCILING (ex.
+            // member was RECONCILING unresolved assignments that were just removed by the
+            // broker).
+            if (state == MemberState.RECONCILING) {
+                // This is the case where a member was RECONCILING an unresolved
+                // assignment that was removed by the broker in a following assignment.
+                transitionTo(MemberState.STABLE);
+            }
         }
     }
 
@@ -419,7 +440,18 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
      */
     @Override
     public void transitionToFenced() {
-        if (state == MemberState.PREPARE_LEAVING || state == MemberState.LEAVING) {
+        if (state == MemberState.PREPARE_LEAVING) {
+            log.debug("Member {} with epoch {} got fenced but it is already preparing to leave " +
+                    "the group, so it will stop sending heartbeat and won't attempt to rejoin.",
+                memberId, memberEpoch);
+            // Transition to UNSUBSCRIBED, ensuring that the member (that is not part of the
+            // group anymore from the broker point of view) will stop sending heartbeats while it
+            // completes the ongoing leaving operation.
+            transitionTo(MemberState.UNSUBSCRIBED);
+            return;
+        }
+
+        if (state == MemberState.LEAVING) {
             log.debug("Member {} with epoch {} got fenced but it is already leaving the group " +
                     "with state {}, so it won't attempt to rejoin.", memberId, memberEpoch, state);
             return;
@@ -610,6 +642,11 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
         if (state == MemberState.FATAL) {
             log.warn("Member {} with epoch {} won't send leave group request because it is in " +
                     "FATAL state", memberId, memberEpoch);
+            return;
+        }
+        if (state == MemberState.UNSUBSCRIBED) {
+            log.warn("Member {} won't send leave group request because it is already out of the group.",
+                memberId);
             return;
         }
         int leaveEpoch = groupInstanceId.isPresent() ?

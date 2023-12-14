@@ -143,8 +143,7 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
         }
 
         CommitRequestManager manager = requestManagers.commitRequestManager.get();
-        Optional<Long> expirationTimeMs =
-            event.timeoutMs().map(timeout -> getExpirationTimeForTimeout(timeout));
+        Optional<Long> expirationTimeMs = event.timeoutMs().map(this::getExpirationTimeForTimeout);
         event.chain(manager.addOffsetCommitRequest(event.offsets(), expirationTimeMs));
     }
 
@@ -227,8 +226,16 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
     }
 
     private void process(final TopicMetadataApplicationEvent event) {
-        final CompletableFuture<Map<String, List<PartitionInfo>>> future =
-                requestManagers.topicMetadataRequestManager.requestTopicMetadata(Optional.of(event.topic()));
+        final CompletableFuture<Map<String, List<PartitionInfo>>> future;
+
+        long expirationTimeMs =
+            (event.getTimeoutMs() == Long.MAX_VALUE) ? Long.MAX_VALUE : System.currentTimeMillis() + event.getTimeoutMs();
+        if (event.isAllTopics()) {
+            future = requestManagers.topicMetadataRequestManager.requestAllTopicsMetadata(expirationTimeMs);
+        } else {
+            future = requestManagers.topicMetadataRequestManager.requestTopicMetadata(event.topic(), expirationTimeMs);
+        }
+
         event.chain(future);
     }
 
