@@ -120,6 +120,9 @@ public final class Batch<T> implements Iterable<T> {
             ')';
     }
 
+    /**
+     * @return a descriptive short String of the batch.
+     */
     public String describe() {
         return "Batch(" +
                 "baseOffset=" + baseOffset +
