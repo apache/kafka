@@ -131,7 +131,7 @@ public enum MemberState {
 
         LEAVING.previousValidStates = Arrays.asList(PREPARE_LEAVING);
 
-        UNSUBSCRIBED.previousValidStates = Arrays.asList(LEAVING);
+        UNSUBSCRIBED.previousValidStates = Arrays.asList(PREPARE_LEAVING, LEAVING);
 
         STALED.previousValidStates = Arrays.asList(JOINING, RECONCILING, ACKNOWLEDGING, STABLE);
     }

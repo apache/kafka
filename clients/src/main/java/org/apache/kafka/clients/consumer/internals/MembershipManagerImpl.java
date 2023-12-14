@@ -421,7 +421,18 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
      */
     @Override
     public void transitionToFenced() {
-        if (state == MemberState.PREPARE_LEAVING || state == MemberState.LEAVING) {
+        if (state == MemberState.PREPARE_LEAVING) {
+            log.debug("Member {} with epoch {} got fenced but it is already preparing to leave " +
+                    "the group, so it will stop sending heartbeat and won't attempt to rejoin.",
+                memberId, memberEpoch);
+            // Transition to UNSUBSCRIBED, ensuring that the member (that is not part of the
+            // group anymore from the broker point of view) will stop sending heartbeats while it
+            // completes the ongoing leaving operation.
+            transitionTo(MemberState.UNSUBSCRIBED);
+            return;
+        }
+
+        if (state == MemberState.LEAVING) {
             log.debug("Member {} with epoch {} got fenced but it is already leaving the group " +
                     "with state {}, so it won't attempt to rejoin.", memberId, memberEpoch, state);
             return;
@@ -611,6 +622,11 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
         if (state == MemberState.FATAL) {
             log.warn("Member {} with epoch {} won't send leave group request because it is in " +
                     "FATAL state", memberId, memberEpoch);
+            return;
+        }
+        if (state == MemberState.UNSUBSCRIBED) {
+            log.warn("Member {} won't send leave group request because it is already out of the group.",
+                memberId);
             return;
         }
         memberEpoch = groupInstanceId.isPresent() ?
