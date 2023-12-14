@@ -21,6 +21,7 @@ import org.apache.kafka.clients.consumer.internals.CachedSupplier;
 import org.apache.kafka.clients.consumer.internals.CommitRequestManager;
 import org.apache.kafka.clients.consumer.internals.ConsumerMetadata;
 import org.apache.kafka.clients.consumer.internals.ConsumerNetworkThread;
+import org.apache.kafka.clients.consumer.internals.HeartbeatRequestManager;
 import org.apache.kafka.clients.consumer.internals.MembershipManager;
 import org.apache.kafka.clients.consumer.internals.RequestManagers;
 import org.apache.kafka.common.KafkaException;
@@ -31,7 +32,6 @@ import org.slf4j.Logger;
 
 import java.util.List;
 import java.util.Map;
-import java.util.Optional;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Supplier;
@@ -128,8 +128,8 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
             return;
         }
 
-        CommitRequestManager manager = requestManagers.commitRequestManager.get();
-        manager.updateAutoCommitTimer(event.pollTimeMs());
+        requestManagers.commitRequestManager.ifPresent(m -> m.updateAutoCommitTimer(event.pollTimeMs()));
+        requestManagers.heartbeatRequestManager.ifPresent(HeartbeatRequestManager::resetPollTimer);
     }
 
     private void process(final CommitApplicationEvent event) {
@@ -218,8 +218,16 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
     }
 
     private void process(final TopicMetadataApplicationEvent event) {
-        final CompletableFuture<Map<String, List<PartitionInfo>>> future =
-                requestManagers.topicMetadataRequestManager.requestTopicMetadata(Optional.of(event.topic()));
+        final CompletableFuture<Map<String, List<PartitionInfo>>> future;
+
+        long expirationTimeMs =
+            (event.getTimeoutMs() == Long.MAX_VALUE) ? Long.MAX_VALUE : System.currentTimeMillis() + event.getTimeoutMs();
+        if (event.isAllTopics()) {
+            future = requestManagers.topicMetadataRequestManager.requestAllTopicsMetadata(expirationTimeMs);
+        } else {
+            future = requestManagers.topicMetadataRequestManager.requestTopicMetadata(event.topic(), expirationTimeMs);
+        }
+
         event.chain(future);
     }
 

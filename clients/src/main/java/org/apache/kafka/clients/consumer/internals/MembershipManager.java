@@ -16,11 +16,12 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
-import org.apache.kafka.common.TopicIdPartition;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatResponseData;
 
+import java.util.Map;
 import java.util.Optional;
-import java.util.Set;
+import java.util.SortedSet;
 import java.util.concurrent.CompletableFuture;
 
 /**
@@ -61,6 +62,11 @@ public interface MembershipManager {
     MemberState state();
 
     /**
+     * @return True if the member is staled due to expired poll timer.
+     */
+    boolean isStaled();
+
+    /**
      * Update member info and transition member state based on a successful heartbeat response.
      *
      * @param response Heartbeat response to extract member info and errors from.
@@ -88,9 +94,10 @@ public interface MembershipManager {
     Optional<String> serverAssignor();
 
     /**
-     * @return Current assignment for the member.
+     * @return Current assignment for the member as received from the broker (topic IDs and
+     * partitions). This is the last assignment that the member has successfully reconciled.
      */
-    Set<TopicIdPartition> currentAssignment();
+    Map<Uuid, SortedSet<Integer>> currentAssignment();
 
     /**
      * Transition the member to the FENCED state, where the member will release the assignment by
@@ -137,4 +144,15 @@ public interface MembershipManager {
      * Note that list of topics of the subscription is taken from the shared subscription state.
      */
     void onSubscriptionUpdated();
+
+    /**
+     * Transition to the {@link MemberState#JOINING} state to attempt joining a group.
+     */
+    void transitionToJoining();
+
+    /**
+     * When the user stops polling the consumer and the <code>max.poll.interval.ms</code> timer expires, we transition
+     * the member to STALE.
+     */
+    void transitionToStaled();
 }

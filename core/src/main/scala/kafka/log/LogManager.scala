@@ -25,7 +25,7 @@ import kafka.server.checkpoints.OffsetCheckpointFile
 import kafka.server.metadata.ConfigRepository
 import kafka.server._
 import kafka.utils._
-import org.apache.kafka.common.{KafkaException, TopicPartition, Uuid}
+import org.apache.kafka.common.{DirectoryId, KafkaException, TopicPartition, Uuid}
 import org.apache.kafka.common.utils.{KafkaThread, Time, Utils}
 import org.apache.kafka.common.errors.{InconsistentTopicIdException, KafkaStorageException, LogDirNotFoundException}
 
@@ -123,7 +123,9 @@ class LogManager(logDirs: Seq[File],
   }
 
   private val dirLocks = lockLogDirs(liveLogDirs)
-  val directoryIds: Map[String, Uuid] = loadDirectoryIds(liveLogDirs)
+  private val directoryIds: mutable.Map[String, Uuid] = loadDirectoryIds(liveLogDirs)
+  def directoryIdsSet: Predef.Set[Uuid] = directoryIds.values.toSet
+
   @volatile private var recoveryPointCheckpoints = liveLogDirs.map(dir =>
     (dir, new OffsetCheckpointFile(new File(dir, RecoveryPointCheckpointFile), logDirFailureChannel))).toMap
   @volatile private var logStartOffsetCheckpoints = liveLogDirs.map(dir =>
@@ -216,6 +218,7 @@ class LogManager(logDirs: Seq[File],
     warn(s"Stopping serving logs in dir $dir")
     logCreationOrDeletionLock synchronized {
       _liveLogDirs.remove(new File(dir))
+      directoryIds.remove(dir)
       if (_liveLogDirs.isEmpty) {
         fatal(s"Shutdown broker because all log dirs in ${logDirs.mkString(", ")} have failed")
         Exit.halt(1)
@@ -278,7 +281,7 @@ class LogManager(logDirs: Seq[File],
    * If meta.properties does not include a directory ID, one is generated and persisted back to meta.properties.
    * Directories without a meta.properties don't get a directory ID assigned.
    */
-  private def loadDirectoryIds(logDirs: Seq[File]): Map[String, Uuid] = {
+  private def loadDirectoryIds(logDirs: Seq[File]): mutable.Map[String, Uuid] = {
     val result = mutable.HashMap[String, Uuid]()
     logDirs.foreach(logDir => {
       try {
@@ -991,10 +994,14 @@ class LogManager(logDirs: Seq[File],
    * @param isNew Whether the replica should have existed on the broker or not
    * @param isFuture True if the future log of the specified partition should be returned or created
    * @param topicId The topic ID of the partition's topic
+   * @param targetLogDirectoryId The directory Id that should host the the partition's topic.
+   *                             The next selected directory will be picked up if it None or equal {@link DirectoryId.UNASSIGNED}.
+   *                             The method assumes provided Id belong to online directory.
    * @throws KafkaStorageException if isNew=false, log is not found in the cache and there is offline log directory on the broker
    * @throws InconsistentTopicIdException if the topic ID in the log does not match the topic ID provided
    */
-  def getOrCreateLog(topicPartition: TopicPartition, isNew: Boolean = false, isFuture: Boolean = false, topicId: Option[Uuid]): UnifiedLog = {
+  def getOrCreateLog(topicPartition: TopicPartition, isNew: Boolean = false, isFuture: Boolean = false,
+                     topicId: Option[Uuid], targetLogDirectoryId: Option[Uuid] = Option.empty): UnifiedLog = {
     logCreationOrDeletionLock synchronized {
       val log = getLog(topicPartition, isFuture).getOrElse {
         // create the log if it has not already been created in another thread
@@ -1002,7 +1009,14 @@ class LogManager(logDirs: Seq[File],
           throw new KafkaStorageException(s"Can not create log for $topicPartition because log directories ${offlineLogDirs.mkString(",")} are offline")
 
         val logDirs: List[File] = {
-          val preferredLogDir = preferredLogDirs.get(topicPartition)
+          val preferredLogDir = targetLogDirectoryId.filterNot(Seq(DirectoryId.UNASSIGNED,DirectoryId.LOST).contains) match {
+            case Some(targetId) if !preferredLogDirs.containsKey(topicPartition) =>
+              // If partition is configured with both targetLogDirectoryId and preferredLogDirs, then
+              // preferredLogDirs will be respected, otherwise targetLogDirectoryId will be respected
+              directoryIds.find(_._2 == targetId).map(_._1).getOrElse(null)
+            case _ =>
+              preferredLogDirs.get(topicPartition)
+          }
 
           if (isFuture) {
             if (preferredLogDir == null)

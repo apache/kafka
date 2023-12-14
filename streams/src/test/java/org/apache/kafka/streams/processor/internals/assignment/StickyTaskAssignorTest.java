@@ -74,6 +74,7 @@ import static org.apache.kafka.streams.processor.internals.assignment.Assignment
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.UUID_4;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.UUID_5;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.UUID_6;
+import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.assertBalancedTasks;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.assertValidAssignment;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.copyClientStateMap;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.getClusterForAllTopics;
@@ -953,10 +954,13 @@ public class StickyTaskAssignorTest {
             new StringBuilder()
         );
         verifyTaskPlacementWithRackAwareAssignor(rackAwareTaskAssignor, taskIds, clientStateMap, true, enableRackAwareTaskAssignor);
+        if (rackAwareStrategy.equals(StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_BALANCE_SUBTOPOLOGY)) {
+            assertBalancedTasks(clientStateMap, 4);
+        }
     }
 
     @Test
-    public void shouldRemainOriginalAssignmentWithoutTrafficCost() {
+    public void shouldRemainOriginalAssignmentWithoutTrafficCostForMinCostStrategy() {
         // This test tests that if the traffic cost is 0, we should have same assignment with or without
         // rack aware assignor enabled
         final int nodeSize = 50;
@@ -997,9 +1001,9 @@ public class StickyTaskAssignorTest {
         final SortedSet<TaskId> taskIds = (SortedSet<TaskId>) taskTopicPartitionMap.keySet();
         final List<Set<TaskId>> statefulAndStatelessTasks = getRandomSubset(taskIds, 2);
         final Set<TaskId> statefulTasks = statefulAndStatelessTasks.get(0);
+        final Set<TaskId> statelessTasks = statefulAndStatelessTasks.get(1);
         final SortedMap<UUID, ClientState> clientStateMap = getRandomClientState(clientSize,
             tpSize, partitionSize, maxCapacity, false, statefulTasks);
-        final SortedMap<UUID, ClientState> clientStateMapCopy = copyClientStateMap(clientStateMap);
 
         new StickyTaskAssignor().assign(
             clientStateMap,
@@ -1009,6 +1013,18 @@ public class StickyTaskAssignorTest {
             configs
         );
 
+        assertValidAssignment(1, statefulTasks, statelessTasks, clientStateMap, new StringBuilder());
+        if (rackAwareStrategy.equals(StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_NONE)) {
+            return;
+        }
+        if (rackAwareStrategy.equals(StreamsConfig.RACK_AWARE_ASSIGNMENT_STRATEGY_BALANCE_SUBTOPOLOGY)) {
+            // Original assignment won't be maintained because we calculate the assignment using max flow first
+            // in balance subtopology strategy
+            assertBalancedTasks(clientStateMap, 4);
+            return;
+        }
+
+        final SortedMap<UUID, ClientState> clientStateMapCopy = copyClientStateMap(clientStateMap);
         configs = new AssignorConfiguration.AssignmentConfigs(
             0L,
             1,

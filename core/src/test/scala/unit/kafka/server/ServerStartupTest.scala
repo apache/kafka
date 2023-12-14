@@ -149,7 +149,7 @@ class ServerStartupTest extends QuorumTestHarness {
    }
    server = new KafkaServer(KafkaConfig.fromProps(props))
    server.startup()
-   assertEquals(!migrationEnabled, server.logManager.directoryIds.isEmpty)
+   assertEquals(!migrationEnabled, server.logManager.directoryIdsSet.isEmpty)
    server.shutdown()
  }
 

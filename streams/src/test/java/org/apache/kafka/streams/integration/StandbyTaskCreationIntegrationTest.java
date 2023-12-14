@@ -65,7 +65,7 @@ public class StandbyTaskCreationIntegrationTest {
 
     @BeforeEach
     public void setUp(final TestInfo testInfo) {
-        safeTestName = safeUniqueTestName(getClass(), testInfo);
+        safeTestName = safeUniqueTestName(testInfo);
     }
 
     @AfterAll

@@ -24,9 +24,11 @@ import org.apache.kafka.clients.admin.RemoveMembersFromConsumerGroupOptions;
 import org.apache.kafka.clients.admin.RemoveMembersFromConsumerGroupResult;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.producer.KafkaProducer;
+import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.annotation.InterfaceStability.Evolving;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.metrics.KafkaMetricsContext;
@@ -39,6 +41,7 @@ import org.apache.kafka.common.metrics.Sensor.RecordingLevel;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.Timer;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.errors.InvalidStateStorePartitionException;
 import org.apache.kafka.streams.errors.ProcessorStateException;
@@ -101,6 +104,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 import static org.apache.kafka.streams.errors.StreamsUncaughtExceptionHandler.StreamThreadExceptionResponse.SHUTDOWN_CLIENT;
@@ -1881,7 +1885,7 @@ public class KafkaStreams implements AutoCloseable {
      * @throws TimeoutException Indicates that a request timed out.
      * @throws StreamsException For any other error that might occur.
      */
-    public ClientInstanceIds clientInstanceIds(final Duration timeout) {
+    public synchronized ClientInstanceIds clientInstanceIds(final Duration timeout) {
         if (timeout.isNegative()) {
             throw new IllegalArgumentException("The timeout cannot be negative.");
         }
@@ -1892,17 +1896,31 @@ public class KafkaStreams implements AutoCloseable {
             throw new IllegalStateException("KafkaStreams has been stopped (" + state + ").");
         }
 
+        final Timer remainingTime = time.timer(timeout.toMillis());
         final ClientInstanceIdsImpl clientInstanceIds = new ClientInstanceIdsImpl();
 
         // (1) fan-out calls to threads
 
         // StreamThread for main/restore consumers and producer(s)
+        final Map<String, KafkaFuture<Uuid>> consumerFutures = new HashMap<>();
+        final Map<String, KafkaFuture<Map<String, KafkaFuture<Uuid>>>> producerFutures = new HashMap<>();
+        synchronized (changeThreadCount) {
+            for (final StreamThread streamThread : threads) {
+                consumerFutures.putAll(streamThread.consumerClientInstanceIds(timeout));
+                producerFutures.put(streamThread.getName(), streamThread.producersClientInstanceIds(timeout));
+            }
+        }
 
         // GlobalThread
+        KafkaFuture<Uuid> globalThreadFuture = null;
+        if (globalStreamThread != null) {
+            globalThreadFuture = globalStreamThread.globalConsumerInstanceId(timeout);
+        }
 
         // (2) get admin client instance id in a blocking fashion, while Stream/GlobalThreads work in parallel
         try {
             clientInstanceIds.setAdminInstanceId(adminClient.clientInstanceId(timeout));
+            remainingTime.update(time.milliseconds());
         } catch (final IllegalStateException telemetryDisabledError) {
             // swallow
             log.debug("Telemetry is disabled on the admin client.");
@@ -1915,12 +1933,106 @@ public class KafkaStreams implements AutoCloseable {
         // (3) collect client instance ids from threads
 
         // (3a) collect consumers from StreamsThread
+        for (final Map.Entry<String, KafkaFuture<Uuid>> consumerFuture : consumerFutures.entrySet()) {
+            final Uuid instanceId = getOrThrowException(
+                consumerFuture.getValue(),
+                remainingTime.remainingMs(),
+                () -> String.format(
+                    "Could not retrieve consumer instance id for %s.",
+                    consumerFuture.getKey()
+                )
+            );
+            remainingTime.update(time.milliseconds());
+
+            // could be `null` if telemetry is disabled on the consumer itself
+            if (instanceId != null) {
+                clientInstanceIds.addConsumerInstanceId(
+                    consumerFuture.getKey(),
+                    instanceId
+                );
+            } else {
+                log.debug(String.format("Telemetry is disabled for %s.", consumerFuture.getKey()));
+            }
+        }
 
         // (3b) collect producers from StreamsThread
+        for (final Map.Entry<String, KafkaFuture<Map<String, KafkaFuture<Uuid>>>> threadProducerFuture : producerFutures.entrySet()) {
+            final Map<String, KafkaFuture<Uuid>> streamThreadProducerFutures = getOrThrowException(
+                threadProducerFuture.getValue(),
+                remainingTime.remainingMs(),
+                () -> String.format(
+                    "Could not retrieve producer instance id for %s.",
+                    threadProducerFuture.getKey()
+                )
+            );
+            remainingTime.update(time.milliseconds());
+
+            for (final Map.Entry<String, KafkaFuture<Uuid>> producerFuture : streamThreadProducerFutures.entrySet()) {
+                final Uuid instanceId = getOrThrowException(
+                    producerFuture.getValue(),
+                    remainingTime.remainingMs(),
+                    () -> String.format(
+                        "Could not retrieve producer instance id for %s.",
+                        producerFuture.getKey()
+                    )
+                );
+                remainingTime.update(time.milliseconds());
+
+                // could be `null` if telemetry is disabled on the producer itself
+                if (instanceId != null) {
+                    clientInstanceIds.addProducerInstanceId(
+                        producerFuture.getKey(),
+                        instanceId
+                    );
+                } else {
+                    log.debug(String.format("Telemetry is disabled for %s.", producerFuture.getKey()));
+                }
+            }
+        }
 
         // (3c) collect from GlobalThread
+        if (globalThreadFuture != null) {
+            final Uuid instanceId = getOrThrowException(
+                globalThreadFuture,
+                remainingTime.remainingMs(),
+                () -> "Could not retrieve global consumer client instance id."
+            );
+            remainingTime.update(time.milliseconds());
+
+            // could be `null` if telemetry is disabled on the client itself
+            if (instanceId != null) {
+                clientInstanceIds.addConsumerInstanceId(
+                    globalStreamThread.getName(),
+                    instanceId
+                );
+            } else {
+                log.debug("Telemetry is disabled for the global consumer.");
+            }
+        }
 
         return clientInstanceIds;
+    }
+
+    private <T> T getOrThrowException(
+        final KafkaFuture<T> future,
+        final long timeoutMs,
+        final Supplier<String> errorMessage) {
+        final Throwable cause;
+
+        try {
+            return future.get(timeoutMs, TimeUnit.MILLISECONDS);
+        } catch (final java.util.concurrent.TimeoutException timeout) {
+            throw new TimeoutException(errorMessage.get(), timeout);
+        } catch (final ExecutionException exception) {
+            cause = exception.getCause();
+            if (cause instanceof TimeoutException) {
+                throw (TimeoutException) cause;
+            }
+        } catch (final InterruptedException error) {
+            cause = error;
+        }
+
+        throw new StreamsException(errorMessage.get(), cause);
     }
 
     /**

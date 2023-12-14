@@ -73,7 +73,7 @@ public class MetricsReporterIntegrationTest {
     public void before(final TestInfo testInfo) throws InterruptedException {
         builder = new StreamsBuilder();
 
-        final String safeTestName = safeUniqueTestName(getClass(), testInfo);
+        final String safeTestName = safeUniqueTestName(testInfo);
         final String appId = "app-" + safeTestName;
 
         streamsConfiguration = new Properties();

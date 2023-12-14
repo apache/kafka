@@ -51,6 +51,7 @@ import org.apache.kafka.clients.consumer.internals.events.ListOffsetsApplication
 import org.apache.kafka.clients.consumer.internals.events.NewTopicsMetadataUpdateRequestEvent;
 import org.apache.kafka.clients.consumer.internals.events.ResetPositionsApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.SubscriptionChangeApplicationEvent;
+import org.apache.kafka.clients.consumer.internals.events.TopicMetadataApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.UnsubscribeApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.ValidatePositionsApplicationEvent;
 import org.apache.kafka.common.Cluster;
@@ -314,7 +315,8 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                     groupRebalanceConfig,
                     apiVersions,
                     fetchMetricsManager,
-                    networkClientDelegateSupplier);
+                    networkClientDelegateSupplier,
+                    clientTelemetryReporter);
             final Supplier<ApplicationEventProcessor> applicationEventProcessorSupplier = ApplicationEventProcessor.supplier(logContext,
                     metadata,
                     applicationEventQueue,
@@ -464,7 +466,8 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             groupRebalanceConfig,
             apiVersions,
             fetchMetricsManager,
-            networkClientDelegateSupplier
+            networkClientDelegateSupplier,
+            clientTelemetryReporter
         );
         Supplier<ApplicationEventProcessor> applicationEventProcessorSupplier = ApplicationEventProcessor.supplier(
                 logContext,
@@ -809,7 +812,31 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
 
     @Override
     public List<PartitionInfo> partitionsFor(String topic, Duration timeout) {
-        throw new KafkaException("method not implemented");
+        acquireAndEnsureOpen();
+        try {
+            Cluster cluster = this.metadata.fetch();
+            List<PartitionInfo> parts = cluster.partitionsForTopic(topic);
+            if (!parts.isEmpty())
+                return parts;
+
+            if (timeout.toMillis() == 0L) {
+                throw new TimeoutException();
+            }
+
+            final TopicMetadataApplicationEvent topicMetadataApplicationEvent =
+                    new TopicMetadataApplicationEvent(topic, timeout.toMillis());
+            wakeupTrigger.setActiveTask(topicMetadataApplicationEvent.future());
+            try {
+                Map<String, List<PartitionInfo>> topicMetadata =
+                        applicationEventHandler.addAndGet(topicMetadataApplicationEvent, time.timer(timeout));
+
+                return topicMetadata.getOrDefault(topic, Collections.emptyList());
+            } finally {
+                wakeupTrigger.clearTask();
+            }
+        } finally {
+            release();
+        }
     }
 
     @Override
@@ -819,7 +846,23 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
 
     @Override
     public Map<String, List<PartitionInfo>> listTopics(Duration timeout) {
-        throw new KafkaException("method not implemented");
+        acquireAndEnsureOpen();
+        try {
+            if (timeout.toMillis() == 0L) {
+                throw new TimeoutException();
+            }
+
+            final TopicMetadataApplicationEvent topicMetadataApplicationEvent =
+                    new TopicMetadataApplicationEvent(timeout.toMillis());
+            wakeupTrigger.setActiveTask(topicMetadataApplicationEvent.future());
+            try {
+                return applicationEventHandler.addAndGet(topicMetadataApplicationEvent, time.timer(timeout));
+            } finally {
+                wakeupTrigger.clearTask();
+            }
+        } finally {
+            release();
+        }
     }
 
     @Override
@@ -1282,13 +1325,9 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
      */
     private boolean updateFetchPositions(final Timer timer) {
         try {
-            cachedSubscriptionHasAllFetchPositions = subscriptions.hasAllFetchPositions();
-            if (cachedSubscriptionHasAllFetchPositions) return true;
-
             // Validate positions using the partition leader end offsets, to detect if any partition
             // has been truncated due to a leader change. This will trigger an OffsetForLeaderEpoch
             // request, retrieve the partition end offsets, and validate the current position against it.
-            // If the timer is not expired, wait for the validation, otherwise, just request it.
             applicationEventHandler.addAndGet(new ValidatePositionsApplicationEvent(), timer);
 
             cachedSubscriptionHasAllFetchPositions = subscriptions.hasAllFetchPositions();
@@ -1312,7 +1351,6 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             // which are awaiting reset. This will trigger a ListOffset request, retrieve the
             // partition offsets according to the strategy (ex. earliest, latest), and update the
             // positions.
-            // If the timer is not expired, wait for the reset, otherwise, just request it.
             applicationEventHandler.addAndGet(new ResetPositionsApplicationEvent(), timer);
             return true;
         } catch (TimeoutException e) {

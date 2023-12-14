@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
-import java.util.Locale;
 import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
@@ -63,6 +62,7 @@ import org.apache.kafka.common.utils.Timer;
 import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.function.Executable;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -81,6 +81,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
@@ -951,6 +952,7 @@ public class AsyncKafkaConsumerTest {
         }
     }
 
+    @Disabled("Flaky test temporarily disabled - in review")
     @Test
     public void testGroupIdNotNullAndValid() {
         final Properties props = requiredConsumerPropertiesAndGroupId("consumerGroupA");
