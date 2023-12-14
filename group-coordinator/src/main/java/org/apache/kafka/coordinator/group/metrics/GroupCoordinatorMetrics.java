@@ -62,10 +62,10 @@ public class GroupCoordinatorMetrics extends CoordinatorMetrics implements AutoC
     public final static com.yammer.metrics.core.MetricName NUM_GENERIC_GROUPS_EMPTY = getMetricName(
         "GroupMetadataManager", "NumGroupsEmpty");
 
-    public final static String GROUPS_COUNT_METRIC_NAME = "groups-count";
-    public final static String GROUPS_COUNT_TYPE_TAG = "type";
-    public final static String CONSUMER_GROUPS_COUNT_METRIC_NAME = "consumer-groups-count";
-    public final static String CONSUMER_GROUPS_COUNT_STATE_TAG = "state";
+    public final static String GROUP_COUNT_METRIC_NAME = "group-count";
+    public final static String GROUP_COUNT_TYPE_TAG = "type";
+    public final static String CONSUMER_GROUP_COUNT_METRIC_NAME = "consumer-group-count";
+    public final static String CONSUMER_GROUP_COUNT_STATE_TAG = "state";
 
     public static final String OFFSET_COMMITS_SENSOR_NAME = "OffsetCommits";
     public static final String OFFSET_EXPIRED_SENSOR_NAME = "OffsetExpired";
@@ -74,13 +74,13 @@ public class GroupCoordinatorMetrics extends CoordinatorMetrics implements AutoC
     public static final String GENERIC_GROUP_REBALANCES_SENSOR_NAME = "GenericGroupRebalances";
     public static final String CONSUMER_GROUP_REBALANCES_SENSOR_NAME = "ConsumerGroupRebalances";
 
-    private final MetricName genericGroupsCountMetricName;
-    private final MetricName consumerGroupsCountMetricName;
-    private final MetricName consumerGroupsCountEmptyMetricName;
-    private final MetricName consumerGroupsCountAssigningMetricName;
-    private final MetricName consumerGroupsCountReconcilingMetricName;
-    private final MetricName consumerGroupsCountStableMetricName;
-    private final MetricName consumerGroupsCountDeadMetricName;
+    private final MetricName genericGroupCountMetricName;
+    private final MetricName consumerGroupCountMetricName;
+    private final MetricName consumerGroupCountEmptyMetricName;
+    private final MetricName consumerGroupCountAssigningMetricName;
+    private final MetricName consumerGroupCountReconcilingMetricName;
+    private final MetricName consumerGroupCountStableMetricName;
+    private final MetricName consumerGroupCountDeadMetricName;
 
     private final MetricsRegistry registry;
     private final Metrics metrics;
@@ -99,53 +99,53 @@ public class GroupCoordinatorMetrics extends CoordinatorMetrics implements AutoC
         this.registry = Objects.requireNonNull(registry);
         this.metrics = Objects.requireNonNull(metrics);
 
-        genericGroupsCountMetricName = metrics.metricName(
-            GROUPS_COUNT_METRIC_NAME,
+        genericGroupCountMetricName = metrics.metricName(
+            GROUP_COUNT_METRIC_NAME,
             METRICS_GROUP,
-            "The total number of generic groups.",
-            Collections.singletonMap(GROUPS_COUNT_TYPE_TAG, Group.GroupType.GENERIC.toString())
+            "The total number of groups using the generic rebalance protocol.",
+            Collections.singletonMap(GROUP_COUNT_TYPE_TAG, Group.GroupType.GENERIC.toString())
         );
 
-        consumerGroupsCountMetricName = metrics.metricName(
-            GROUPS_COUNT_METRIC_NAME,
+        consumerGroupCountMetricName = metrics.metricName(
+            GROUP_COUNT_METRIC_NAME,
             METRICS_GROUP,
-            "The total number of consumer groups.",
-            Collections.singletonMap(GROUPS_COUNT_TYPE_TAG, Group.GroupType.CONSUMER.toString())
+            "The total number of groups using the consumer rebalance protocol.",
+            Collections.singletonMap(GROUP_COUNT_TYPE_TAG, Group.GroupType.CONSUMER.toString())
         );
 
-        consumerGroupsCountEmptyMetricName = metrics.metricName(
-            CONSUMER_GROUPS_COUNT_METRIC_NAME,
+        consumerGroupCountEmptyMetricName = metrics.metricName(
+            CONSUMER_GROUP_COUNT_METRIC_NAME,
             METRICS_GROUP,
             "The number of consumer groups in empty state.",
-            Collections.singletonMap(CONSUMER_GROUPS_COUNT_STATE_TAG, ConsumerGroupState.EMPTY.toString())
+            Collections.singletonMap(CONSUMER_GROUP_COUNT_STATE_TAG, ConsumerGroupState.EMPTY.toString())
         );
 
-        consumerGroupsCountAssigningMetricName = metrics.metricName(
-            CONSUMER_GROUPS_COUNT_METRIC_NAME,
+        consumerGroupCountAssigningMetricName = metrics.metricName(
+            CONSUMER_GROUP_COUNT_METRIC_NAME,
             METRICS_GROUP,
             "The number of consumer groups in assigning state.",
-            Collections.singletonMap(CONSUMER_GROUPS_COUNT_STATE_TAG, ConsumerGroupState.ASSIGNING.toString())
+            Collections.singletonMap(CONSUMER_GROUP_COUNT_STATE_TAG, ConsumerGroupState.ASSIGNING.toString())
         );
 
-        consumerGroupsCountReconcilingMetricName = metrics.metricName(
-            CONSUMER_GROUPS_COUNT_METRIC_NAME,
+        consumerGroupCountReconcilingMetricName = metrics.metricName(
+            CONSUMER_GROUP_COUNT_METRIC_NAME,
             METRICS_GROUP,
             "The number of consumer groups in reconciling state.",
-            Collections.singletonMap(CONSUMER_GROUPS_COUNT_STATE_TAG, ConsumerGroupState.RECONCILING.toString())
+            Collections.singletonMap(CONSUMER_GROUP_COUNT_STATE_TAG, ConsumerGroupState.RECONCILING.toString())
         );
 
-        consumerGroupsCountStableMetricName = metrics.metricName(
-            CONSUMER_GROUPS_COUNT_METRIC_NAME,
+        consumerGroupCountStableMetricName = metrics.metricName(
+            CONSUMER_GROUP_COUNT_METRIC_NAME,
             METRICS_GROUP,
             "The number of consumer groups in stable state.",
-            Collections.singletonMap(CONSUMER_GROUPS_COUNT_STATE_TAG, ConsumerGroupState.STABLE.toString())
+            Collections.singletonMap(CONSUMER_GROUP_COUNT_STATE_TAG, ConsumerGroupState.STABLE.toString())
         );
 
-        consumerGroupsCountDeadMetricName = metrics.metricName(
-            CONSUMER_GROUPS_COUNT_METRIC_NAME,
+        consumerGroupCountDeadMetricName = metrics.metricName(
+            CONSUMER_GROUP_COUNT_METRIC_NAME,
             METRICS_GROUP,
             "The number of consumer groups in dead state.",
-            Collections.singletonMap(CONSUMER_GROUPS_COUNT_STATE_TAG, ConsumerGroupState.DEAD.toString())
+            Collections.singletonMap(CONSUMER_GROUP_COUNT_STATE_TAG, ConsumerGroupState.DEAD.toString())
         );
 
         registerGauges();
@@ -247,13 +247,13 @@ public class GroupCoordinatorMetrics extends CoordinatorMetrics implements AutoC
         ).forEach(registry::removeMetric);
 
         Arrays.asList(
-            genericGroupsCountMetricName,
-            consumerGroupsCountMetricName,
-            consumerGroupsCountEmptyMetricName,
-            consumerGroupsCountAssigningMetricName,
-            consumerGroupsCountReconcilingMetricName,
-            consumerGroupsCountStableMetricName,
-            consumerGroupsCountDeadMetricName
+            genericGroupCountMetricName,
+            consumerGroupCountMetricName,
+            consumerGroupCountEmptyMetricName,
+            consumerGroupCountAssigningMetricName,
+            consumerGroupCountReconcilingMetricName,
+            consumerGroupCountStableMetricName,
+            consumerGroupCountDeadMetricName
         ).forEach(metrics::removeMetric);
 
         Arrays.asList(
@@ -352,37 +352,37 @@ public class GroupCoordinatorMetrics extends CoordinatorMetrics implements AutoC
         });
 
         metrics.addMetric(
-            genericGroupsCountMetricName,
+            genericGroupCountMetricName,
             (Gauge<Long>) (config, now) -> numGenericGroups()
         );
 
         metrics.addMetric(
-            consumerGroupsCountMetricName,
+            consumerGroupCountMetricName,
             (Gauge<Long>) (config, now) -> numConsumerGroups()
         );
 
         metrics.addMetric(
-            consumerGroupsCountEmptyMetricName,
+            consumerGroupCountEmptyMetricName,
             (Gauge<Long>) (config, now) -> numConsumerGroups(ConsumerGroupState.EMPTY)
         );
 
         metrics.addMetric(
-            consumerGroupsCountAssigningMetricName,
+            consumerGroupCountAssigningMetricName,
             (Gauge<Long>) (config, now) -> numConsumerGroups(ConsumerGroupState.ASSIGNING)
         );
 
         metrics.addMetric(
-            consumerGroupsCountReconcilingMetricName,
+            consumerGroupCountReconcilingMetricName,
             (Gauge<Long>) (config, now) -> numConsumerGroups(ConsumerGroupState.RECONCILING)
         );
 
         metrics.addMetric(
-            consumerGroupsCountStableMetricName,
+            consumerGroupCountStableMetricName,
             (Gauge<Long>) (config, now) -> numConsumerGroups(ConsumerGroupState.STABLE)
         );
 
         metrics.addMetric(
-            consumerGroupsCountDeadMetricName,
+            consumerGroupCountDeadMetricName,
             (Gauge<Long>) (config, now) -> numConsumerGroups(ConsumerGroupState.DEAD)
         );
     }

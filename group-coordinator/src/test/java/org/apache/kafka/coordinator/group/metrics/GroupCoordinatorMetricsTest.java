@@ -67,31 +67,31 @@ public class GroupCoordinatorMetricsTest {
             metrics.metricName("consumer-group-rebalance-rate", GroupCoordinatorMetrics.METRICS_GROUP),
             metrics.metricName("consumer-group-rebalance-count", GroupCoordinatorMetrics.METRICS_GROUP),
             metrics.metricName(
-                "groups-count",
+                "group-count",
                 GroupCoordinatorMetrics.METRICS_GROUP,
                 Collections.singletonMap("type", "generic")),
             metrics.metricName(
-                "groups-count",
+                "group-count",
                 GroupCoordinatorMetrics.METRICS_GROUP,
                 Collections.singletonMap("type", "consumer")),
             metrics.metricName(
-                "consumer-groups-count",
+                "consumer-group-count",
                 GroupCoordinatorMetrics.METRICS_GROUP,
                 Collections.singletonMap("state", "empty")),
             metrics.metricName(
-                "consumer-groups-count",
+                "consumer-group-count",
                 GroupCoordinatorMetrics.METRICS_GROUP,
                 Collections.singletonMap("state", "assigning")),
             metrics.metricName(
-                "consumer-groups-count",
+                "consumer-group-count",
                 GroupCoordinatorMetrics.METRICS_GROUP,
                 Collections.singletonMap("state", "reconciling")),
             metrics.metricName(
-                "consumer-groups-count",
+                "consumer-group-count",
                 GroupCoordinatorMetrics.METRICS_GROUP,
                 Collections.singletonMap("state", "stable")),
             metrics.metricName(
-                "consumer-groups-count",
+                "consumer-group-count",
                 GroupCoordinatorMetrics.METRICS_GROUP,
                 Collections.singletonMap("state", "dead"))
         ));
@@ -151,7 +151,7 @@ public class GroupCoordinatorMetricsTest {
         assertGaugeValue(registry, metricName("GroupMetadataManager", "NumGroups"), 9);
         assertGaugeValue(
             metrics,
-            metrics.metricName("groups-count", METRICS_GROUP, Collections.singletonMap("type", "generic")),
+            metrics.metricName("group-count", METRICS_GROUP, Collections.singletonMap("type", "generic")),
             9
         );
 
@@ -166,7 +166,7 @@ public class GroupCoordinatorMetricsTest {
         assertEquals(1, shard1.numOffsets());
         assertGaugeValue(
             metrics,
-            metrics.metricName("groups-count", METRICS_GROUP, Collections.singletonMap("type", "consumer")),
+            metrics.metricName("group-count", METRICS_GROUP, Collections.singletonMap("type", "consumer")),
             7
         );
         assertGaugeValue(registry, metricName("GroupMetadataManager", "NumOffsets"), 7);
