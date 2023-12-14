@@ -78,9 +78,8 @@ abstract class BaseConsumerTest extends AbstractConsumerTest {
     assertNotEquals(0, BaseConsumerTest.updateConsumerCount.get())
   }
 
-  // TODO: enable this test for the consumer group protocol when partitionsFor is implemented.
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersGenericGroupProtocolOnly"))
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
   def testCoordinatorFailover(quorum: String, groupProtocol: String): Unit = {
     val listener = new TestConsumerReassignmentListener()
     this.consumerConfig.setProperty(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, "5001")
