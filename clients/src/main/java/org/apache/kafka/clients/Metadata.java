@@ -430,7 +430,7 @@ public class Metadata implements Closeable {
         this.cache = cache.mergeWith(cache.clusterResource().clusterId(), newNodes,
                     updatePartitionMetadata, Collections.emptySet(), Collections.emptySet(),
                     Collections.emptySet(), cache.cluster().controller(), topicIdsForUpdatedTopics,
-                    (topic, isInternal) -> !updatedTopics.contains(topic));
+                    (topic, isInternal) -> true /* existing topics should be retained post merge */);
         clusterResourceListeners.onUpdate(cache.clusterResource());
 
         return updatePartitionMetadata.stream()
