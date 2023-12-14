@@ -155,18 +155,25 @@ class DelayedRemoteFetchTest {
       fetchResultOpt = Some(responses.head._2)
     }
 
-    val future: CompletableFuture[RemoteLogReadResult] = new CompletableFuture[RemoteLogReadResult]()
-    val fetchInfo: RemoteStorageFetchInfo = new RemoteStorageFetchInfo(0, false, topicIdPartition.topicPartition(), null, null, false)
+    val replicaId = -1
     val highWatermark = 100
     val leaderLogStartOffset = 10
-    val logReadInfo = buildReadResult(Errors.NONE, highWatermark, leaderLogStartOffset)
+
     val remoteFetchTask = mock(classOf[Future[Void]])
+    val future: CompletableFuture[RemoteLogReadResult] = new CompletableFuture[RemoteLogReadResult]()
+    val fetchInfo: RemoteStorageFetchInfo = new RemoteStorageFetchInfo(0, false, topicIdPartition.topicPartition(), null, null, false)
+    val fetchParams = buildFollowerFetchParams(replicaId, maxWaitMs = 500)
+    val logReadInfo = buildReadResult(Errors.NONE, highWatermark, leaderLogStartOffset)
 
     val delayedRemoteFetch = new DelayedRemoteFetch(remoteFetchTask, future, fetchInfo, Seq(topicIdPartition -> fetchStatus), fetchParams,
       Seq(topicIdPartition -> logReadInfo), replicaManager, callback)
 
     when(replicaManager.getPartitionOrException(topicIdPartition.topicPartition))
       .thenReturn(mock(classOf[Partition]))
+
+    // Verify that the ExpiresPerSec metric is zero before fetching
+    val metrics = KafkaYammerMetrics.defaultRegistry.allMetrics
+    assertEquals(0, metrics.keySet.asScala.count(_.getMBeanName == "kafka.server:type=DelayedRemoteFetchMetrics,name=ExpiresPerSec"))
 
     // Force the delayed remote fetch to expire
     delayedRemoteFetch.run()
@@ -175,8 +182,7 @@ class DelayedRemoteFetchTest {
     verify(remoteFetchTask).cancel(true)
     assertTrue(delayedRemoteFetch.isCompleted)
 
-    // Check that the ExpiresPerSec metric was incremented.
-    val metrics = KafkaYammerMetrics.defaultRegistry.allMetrics
+    // Check that the ExpiresPerSec metric was incremented
     assertEquals(1, metrics.keySet.asScala.count(_.getMBeanName == "kafka.server:type=DelayedRemoteFetchMetrics,name=ExpiresPerSec"))
 
     // Fetch results should still include local read results
