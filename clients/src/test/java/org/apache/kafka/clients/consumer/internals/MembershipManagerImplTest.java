@@ -17,7 +17,6 @@
 
 package org.apache.kafka.clients.consumer.internals;
 
-import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
@@ -75,8 +74,7 @@ public class MembershipManagerImplTest {
 
     @BeforeEach
     public void setup() {
-        // The SubscriptionState cannot be mocked, but needs to stay as a spy as the test relies on its logic.
-        subscriptionState = spy(new SubscriptionState(logContext, OffsetResetStrategy.EARLIEST));
+        subscriptionState = mock(SubscriptionState.class);
         metadata = mock(ConsumerMetadata.class);
         commitRequestManager = mock(CommitRequestManager.class);
     }
@@ -93,7 +91,16 @@ public class MembershipManagerImplTest {
                                                                       String serverAssignor) {
         MembershipManagerImpl manager = new MembershipManagerImpl(
                 GROUP_ID, Optional.ofNullable(groupInstanceId), Optional.ofNullable(serverAssignor),
-                subscriptionState, commitRequestManager, metadata, logContext);
+                subscriptionState, commitRequestManager, metadata, logContext, Optional.empty());
+        manager.transitionToJoining();
+        return manager;
+    }
+
+    private MembershipManagerImpl createMembershipManagerJoiningGroup(String groupInstanceId) {
+        MembershipManagerImpl manager = spy(new MembershipManagerImpl(
+                GROUP_ID, Optional.ofNullable(groupInstanceId), Optional.empty(),
+                subscriptionState, commitRequestManager, metadata, logContext,
+                Optional.empty()));
         manager.transitionToJoining();
         return manager;
     }
@@ -118,7 +125,7 @@ public class MembershipManagerImplTest {
         // First join should register to get metadata updates
         MembershipManagerImpl manager = new MembershipManagerImpl(
                 GROUP_ID, Optional.empty(), Optional.empty(), subscriptionState, commitRequestManager,
-                metadata, logContext);
+                metadata, logContext, Optional.empty());
         manager.transitionToJoining();
         verify(metadata).addClusterUpdateListener(manager);
         clearInvocations(metadata);
@@ -196,7 +203,7 @@ public class MembershipManagerImplTest {
     public void testTransitionToFailedWhenTryingToJoin() {
         MembershipManagerImpl membershipManager = new MembershipManagerImpl(
                 GROUP_ID, Optional.empty(), Optional.empty(), subscriptionState, commitRequestManager, metadata,
-                logContext);
+                logContext, Optional.empty());
         assertEquals(MemberState.UNSUBSCRIBED, membershipManager.state());
         membershipManager.transitionToJoining();
 
