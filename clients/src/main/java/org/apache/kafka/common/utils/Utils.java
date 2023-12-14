@@ -33,7 +33,7 @@ import org.slf4j.LoggerFactory;
 import org.slf4j.event.Level;
 
 import java.io.Closeable;
-import java.io.DataOutput;
+import java.io.DataOutputStream;
 import java.io.EOFException;
 import java.io.File;
 import java.io.IOException;
@@ -43,6 +43,7 @@ import java.io.StringWriter;
 import java.lang.reflect.Constructor;
 import java.lang.reflect.InvocationTargetException;
 import java.nio.ByteBuffer;
+import java.nio.channels.Channels;
 import java.nio.channels.FileChannel;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.FileVisitResult;
@@ -1358,16 +1359,13 @@ public final class Utils {
      * in the buffer.
      * @param out The output to write to
      * @param buffer The buffer to write from
-     * @param length The number of bytes to write
      * @throws IOException For any errors writing to the output
      */
-    public static void writeTo(DataOutput out, ByteBuffer buffer, int length) throws IOException {
+    public static void writeTo(DataOutputStream out, ByteBuffer buffer) throws IOException {
         if (buffer.hasArray()) {
-            out.write(buffer.array(), buffer.position() + buffer.arrayOffset(), length);
+            out.write(buffer.array(), buffer.position() + buffer.arrayOffset(), buffer.remaining());
         } else {
-            int pos = buffer.position();
-            for (int i = pos; i < length + pos; i++)
-                out.writeByte(buffer.get(i));
+            Channels.newChannel(out).write(buffer.asReadOnlyBuffer());
         }
     }
 
