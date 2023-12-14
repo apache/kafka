@@ -648,10 +648,10 @@ public class KRaftMigrationDriver implements MetadataPublisher {
         }
     }
 
-    private BufferingBatchConsumer buildMigrationBatchConsumer(
+    private BufferingBatchConsumer<ApiMessageAndVersion> buildMigrationBatchConsumer(
         MigrationManifest.Builder manifestBuilder
     ) {
-        return new BufferingBatchConsumer<ApiMessageAndVersion>(batch -> {
+        return new BufferingBatchConsumer<>(batch -> {
             try {
                 if (log.isTraceEnabled()) {
                     batch.forEach(apiMessageAndVersion ->
@@ -690,7 +690,7 @@ public class KRaftMigrationDriver implements MetadataPublisher {
                 super.handleException(t);
             }
             try {
-                BufferingBatchConsumer migrationBatchConsumer = buildMigrationBatchConsumer(manifestBuilder);
+                BufferingBatchConsumer<ApiMessageAndVersion> migrationBatchConsumer = buildMigrationBatchConsumer(manifestBuilder);
                 zkMigrationClient.readAllMetadata(
                     migrationBatchConsumer,
                     brokersInMetadata::add
