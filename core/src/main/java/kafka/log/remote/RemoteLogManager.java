@@ -738,6 +738,7 @@ public class RemoteLogManager implements Closeable {
                     segmentLeaderEpochs);
 
             remoteLogMetadataManager.addRemoteLogSegmentMetadata(copySegmentStartedRlsm).get();
+            brokerTopicStats.topicStats(topicIdPartition.topic()).recordRemoteLogMetadataCount();
 
             ByteBuffer leaderEpochsIndex = getLeaderEpochCheckpoint(log, -1, nextSegmentBaseOffset).readAsByteBuffer();
             LogSegmentData segmentData = new LogSegmentData(logFile.toPath(), toPathIfExists(segment.offsetIndex().file()),

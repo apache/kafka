@@ -22,7 +22,7 @@ import kafka.utils._
 import kafka.server.KafkaRequestHandler.{threadCurrentRequest, threadRequestChannel}
 
 import java.util.concurrent.{ConcurrentHashMap, CountDownLatch, TimeUnit}
-import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.atomic.{AtomicInteger, AtomicLong}
 import com.yammer.metrics.core.{Gauge, Meter}
 import org.apache.kafka.common.internals.FatalExitError
 import org.apache.kafka.common.utils.{KafkaThread, Time}
@@ -308,6 +308,8 @@ class BrokerTopicMetrics(name: Option[String], configOpt: java.util.Optional[Kaf
   // an internal map for "lazy initialization" of certain metrics
   private val metricTypeMap = new Pool[String, MeterWrapper]()
   private val metricGaugeTypeMap = new Pool[String, GaugeWrapper]()
+  private val metricCustomGaugeTypeMap = new Pool[String, Gauge[Long]]()
+  private val remoteLogMetadataCountValue = new AtomicLong()
   metricTypeMap.putAll(Map(
     BrokerTopicStats.MessagesInPerSec -> MeterWrapper(BrokerTopicStats.MessagesInPerSec, "messages"),
     BrokerTopicStats.BytesInPerSec -> MeterWrapper(BrokerTopicStats.BytesInPerSec, "bytes"),
@@ -344,6 +346,9 @@ class BrokerTopicMetrics(name: Option[String], configOpt: java.util.Optional[Kaf
       ).asJava)
       metricGaugeTypeMap.putAll(Map(
         RemoteStorageMetrics.REMOTE_COPY_LOG_BYTES_METRIC.getName -> GaugeWrapper(RemoteStorageMetrics.REMOTE_COPY_LOG_BYTES_METRIC.getName, new BrokerTopicAggregatedMetric)
+      ).asJava)
+      metricCustomGaugeTypeMap.putAll(Map(
+        RemoteStorageMetrics.REMOTE_LOG_METADATA_COUNT_METRIC.getName -> metricsGroup.newGauge(RemoteStorageMetrics.REMOTE_LOG_METADATA_COUNT_METRIC.getName, () => remoteLogMetadataCountValue.get())
       ).asJava)
     })
 
@@ -407,6 +412,12 @@ class BrokerTopicMetrics(name: Option[String], configOpt: java.util.Optional[Kaf
   }
 
   def remoteCopyBytesLag: Long = metricGaugeTypeMap.get(RemoteStorageMetrics.REMOTE_COPY_LOG_BYTES_METRIC.getName).brokerTopicAggregatedMetric.value()
+
+  def recordRemoteLogMetadataCount(): Unit = {
+    remoteLogMetadataCountValue.incrementAndGet()
+  }
+
+  def remoteLogMetadataCount: Long = remoteLogMetadataCountValue.get()
 
   def remoteCopyBytesRate: Meter = metricTypeMap.get(RemoteStorageMetrics.REMOTE_COPY_BYTES_PER_SEC_METRIC.getName).meter()
 
