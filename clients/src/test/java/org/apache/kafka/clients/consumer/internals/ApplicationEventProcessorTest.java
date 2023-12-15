@@ -89,6 +89,7 @@ public class ApplicationEventProcessorTest {
     @Test
     public void testPrepClosingLeaveGroupEvent() {
         LeaveOnCloseApplicationEvent event = new LeaveOnCloseApplicationEvent();
+        when(heartbeatRequestManager.membershipManager()).thenReturn(membershipManager);
         when(membershipManager.leaveGroup()).thenReturn(CompletableFuture.completedFuture(null));
         processor.process(event);
         verify(membershipManager).leaveGroup();

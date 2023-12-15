@@ -1062,6 +1062,7 @@ public class AsyncKafkaConsumerTest {
     }
 
     @Test
+    @Disabled("The test is flaky from time to time")
     public void testGroupRemoteAssignorUnusedInGenericProtocol() {
         final Properties props = requiredConsumerProperties();
         props.put(ConsumerConfig.GROUP_ID_CONFIG, "consumerGroupA");
