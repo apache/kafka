@@ -138,7 +138,7 @@ public class GroupCoordinatorMetricsShardTest {
 
         assertGaugeValue(
             metrics,
-            metrics.metricName("groups-count", "group-coordinator-metrics", Collections.singletonMap("type", "generic")),
+            metrics.metricName("group-count", "group-coordinator-metrics", Collections.singletonMap("type", "generic")),
             4
         );
         assertGaugeValue(registry, metricName("GroupMetadataManager", "NumGroups"), 4);
@@ -224,17 +224,17 @@ public class GroupCoordinatorMetricsShardTest {
         assertEquals(1, shard.numConsumerGroups(ConsumerGroup.ConsumerGroupState.RECONCILING));
         assertEquals(2, shard.numConsumerGroups(ConsumerGroup.ConsumerGroupState.STABLE));
 
-        assertGaugeValue(metrics, metrics.metricName("groups-count", "group-coordinator-metrics",
+        assertGaugeValue(metrics, metrics.metricName("group-count", "group-coordinator-metrics",
             Collections.singletonMap("type", "consumer")), 4);
-        assertGaugeValue(metrics, metrics.metricName("consumer-groups-count", "group-coordinator-metrics",
+        assertGaugeValue(metrics, metrics.metricName("consumer-group-count", "group-coordinator-metrics",
             Collections.singletonMap("state", "empty")), 0);
-        assertGaugeValue(metrics, metrics.metricName("consumer-groups-count", "group-coordinator-metrics",
+        assertGaugeValue(metrics, metrics.metricName("consumer-group-count", "group-coordinator-metrics",
             Collections.singletonMap("state", "assigning")), 1);
-        assertGaugeValue(metrics, metrics.metricName("consumer-groups-count", "group-coordinator-metrics",
+        assertGaugeValue(metrics, metrics.metricName("consumer-group-count", "group-coordinator-metrics",
             Collections.singletonMap("state", "reconciling")), 1);
-        assertGaugeValue(metrics, metrics.metricName("consumer-groups-count", "group-coordinator-metrics",
+        assertGaugeValue(metrics, metrics.metricName("consumer-group-count", "group-coordinator-metrics",
             Collections.singletonMap("state", "stable")), 2);
-        assertGaugeValue(metrics, metrics.metricName("consumer-groups-count", "group-coordinator-metrics",
+        assertGaugeValue(metrics, metrics.metricName("consumer-group-count", "group-coordinator-metrics",
             Collections.singletonMap("state", "dead")), 0);
     }
 }
