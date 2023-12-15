@@ -1079,11 +1079,9 @@ object TestUtils extends Logging {
   def pollUntilTrue(consumer: Consumer[_, _],
                     action: () => Boolean,
                     msg: => String,
-                    waitTimeMs: Long = JTestUtils.DEFAULT_MAX_WAIT_MS,
-                    commitOffset: Boolean = false): Unit = {
+                    waitTimeMs: Long = JTestUtils.DEFAULT_MAX_WAIT_MS): Unit = {
     waitUntilTrue(() => {
       consumer.poll(Duration.ofMillis(100))
-      if (commitOffset) consumer.commitSync()
       action()
     }, msg = msg, pause = 0L, waitTimeMs = waitTimeMs)
   }
@@ -1091,11 +1089,9 @@ object TestUtils extends Logging {
   def pollRecordsUntilTrue[K, V](consumer: Consumer[K, V],
                                  action: ConsumerRecords[K, V] => Boolean,
                                  msg: => String,
-                                 waitTimeMs: Long = JTestUtils.DEFAULT_MAX_WAIT_MS,
-                                 commitOffset: Boolean = false): Unit = {
+                                 waitTimeMs: Long = JTestUtils.DEFAULT_MAX_WAIT_MS): Unit = {
     waitUntilTrue(() => {
       val records = consumer.poll(Duration.ofMillis(100))
-      if (commitOffset) consumer.commitSync()
       action(records)
     }, msg = msg, pause = 0L, waitTimeMs = waitTimeMs)
   }
@@ -1855,8 +1851,7 @@ object TestUtils extends Logging {
 
   def pollUntilAtLeastNumRecords[K, V](consumer: Consumer[K, V],
                                        numRecords: Int,
-                                       waitTimeMs: Long = JTestUtils.DEFAULT_MAX_WAIT_MS,
-                                       commitOffset: Boolean = false): Seq[ConsumerRecord[K, V]] = {
+                                       waitTimeMs: Long = JTestUtils.DEFAULT_MAX_WAIT_MS): Seq[ConsumerRecord[K, V]] = {
     val records = new ArrayBuffer[ConsumerRecord[K, V]]()
     def pollAction(polledRecords: ConsumerRecords[K, V]): Boolean = {
       records ++= polledRecords.asScala
@@ -1864,8 +1859,7 @@ object TestUtils extends Logging {
     }
     pollRecordsUntilTrue(consumer, pollAction,
       waitTimeMs = waitTimeMs,
-      msg = s"Consumed ${records.size} records before timeout instead of the expected $numRecords records",
-      commitOffset = commitOffset)
+      msg = s"Consumed ${records.size} records before timeout instead of the expected $numRecords records")
     records
   }
 
