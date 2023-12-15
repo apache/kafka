@@ -26,7 +26,7 @@ import java.util.function.Consumer;
  * by buffering the records into an array that is later flushed to a downstream consumer. Batches consumed
  * by this class will not be broken apart, only combined with other batches to reach the minimum batch size.
  * </p>
- * Note that {@link #close()} must be called after the last batch has been accepted in order to flush any
+ * Note that {@link #flush()} must be called after the last batch has been accepted in order to flush any
  * buffered records.
  */
 public class BufferingBatchConsumer<T> implements Consumer<List<T>> {
@@ -50,7 +50,7 @@ public class BufferingBatchConsumer<T> implements Consumer<List<T>> {
         }
     }
 
-    public void close() {
+    public void flush() {
         if (!bufferedBatch.isEmpty()) {
             delegateConsumer.accept(new ArrayList<>(bufferedBatch));
             bufferedBatch.clear();

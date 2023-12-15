@@ -35,7 +35,7 @@ public class BufferingBatchConsumerTest {
         consumer.accept(Collections.emptyList());
         consumer.accept(Collections.emptyList());
         assertEquals(batches.size(), 0);
-        consumer.close();
+        consumer.flush();
         assertEquals(batches.size(), 0);
     }
 
@@ -46,7 +46,7 @@ public class BufferingBatchConsumerTest {
         consumer.accept(Arrays.asList(1, 2, 3, 4));
         assertEquals(batches.size(), 1);
         assertEquals(batches.get(0), Arrays.asList(1, 2, 3, 4));
-        consumer.close();
+        consumer.flush();
         assertEquals(batches.size(), 1);
         assertEquals(batches.get(0), Arrays.asList(1, 2, 3, 4));
     }
@@ -57,7 +57,7 @@ public class BufferingBatchConsumerTest {
         BufferingBatchConsumer<Integer> consumer = new BufferingBatchConsumer<>(batches::add, 4);
         consumer.accept(Arrays.asList(1, 2, 3));
         assertEquals(batches.size(), 0);
-        consumer.close();
+        consumer.flush();
         assertEquals(batches.size(), 1);
         assertEquals(batches.get(0), Arrays.asList(1, 2, 3));
     }
@@ -69,7 +69,7 @@ public class BufferingBatchConsumerTest {
         consumer.accept(Arrays.asList(1, 2, 3, 4, 5));
         assertEquals(batches.size(), 1);
         assertEquals(batches.get(0), Arrays.asList(1, 2, 3, 4, 5));
-        consumer.close();
+        consumer.flush();
         assertEquals(batches.size(), 1);
         assertEquals(batches.get(0), Arrays.asList(1, 2, 3, 4, 5));
     }
@@ -83,7 +83,7 @@ public class BufferingBatchConsumerTest {
         consumer.accept(Arrays.asList(5, 6));
         assertEquals(batches.size(), 1);
         assertEquals(batches.get(0), Arrays.asList(1, 2, 3, 4, 5, 6));
-        consumer.close();
+        consumer.flush();
         assertEquals(batches.size(), 1);
         assertEquals(batches.get(0), Arrays.asList(1, 2, 3, 4, 5, 6));
     }
@@ -96,7 +96,7 @@ public class BufferingBatchConsumerTest {
         consumer.accept(Arrays.asList(3, 4));
         consumer.accept(Collections.singletonList(5));
         assertEquals(batches.size(), 0);
-        consumer.close();
+        consumer.flush();
         assertEquals(batches.size(), 1);
         assertEquals(batches.get(0), Arrays.asList(1, 2, 3, 4, 5));
     }
@@ -112,7 +112,7 @@ public class BufferingBatchConsumerTest {
         consumer.accept(Arrays.asList(9, 10));
         assertEquals(batches.size(), 1);
         assertEquals(batches.get(0), Arrays.asList(1, 2, 3, 4, 5, 6));
-        consumer.close();
+        consumer.flush();
         assertEquals(batches.size(), 2);
         assertEquals(batches.get(0), Arrays.asList(1, 2, 3, 4, 5, 6));
         assertEquals(batches.get(1), Arrays.asList(7, 8, 9, 10));

@@ -695,7 +695,7 @@ public class KRaftMigrationDriver implements MetadataPublisher {
                     migrationBatchConsumer,
                     brokersInMetadata::add
                 );
-                migrationBatchConsumer.close();
+                migrationBatchConsumer.flush();
                 CompletableFuture<OffsetAndEpoch> completeMigrationFuture = zkRecordConsumer.completeMigration();
                 OffsetAndEpoch offsetAndEpochAfterMigration = FutureUtils.waitWithLogging(
                     KRaftMigrationDriver.this.log, "",
