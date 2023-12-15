@@ -38,7 +38,7 @@ public class MigrationManifestTest {
         MigrationManifest manifest = manifestBuilder.build();
         assertEquals(0L, manifest.durationMs());
         assertEquals(
-            "0 records were generated in 0 ms across 0 batches. The average batch size was -1.00 and the average batch commit duration was -1.00 ms. The record types were {}",
+            "0 records were generated in 0 ms across 0 batches. The average time spent waiting on a batch was -1.00 ms. The record types were {}",
             manifest.toString());
     }
 
@@ -65,7 +65,7 @@ public class MigrationManifestTest {
         MigrationManifest manifest = manifestBuilder.build();
         assertEquals(10L, manifest.durationMs());
         assertEquals(
-            "13 records were generated in 10 ms across 1 batches. The average batch size was 13.00 and the average batch commit duration was 0.00 ms. The record types were {TOPIC_RECORD=2, PARTITION_RECORD=9, CONFIG_RECORD=2}",
+            "13 records were generated in 10 ms across 1 batches. The average time spent waiting on a batch was 0.00 ms. The record types were {TOPIC_RECORD=2, PARTITION_RECORD=9, CONFIG_RECORD=2}",
             manifest.toString()
         );
     }
@@ -97,8 +97,8 @@ public class MigrationManifestTest {
         MigrationManifest manifest = manifestBuilder.build();
         assertEquals(60L, manifest.durationMs());
         assertEquals(
-            "13 records were generated in 60 ms across 3 batches. The average batch size was 4.33 and " +
-            "the average batch commit duration was 15.00 ms. The record types were {TOPIC_RECORD=2, PARTITION_RECORD=9, CONFIG_RECORD=2}",
+            "13 records were generated in 60 ms across 3 batches. The average time spent waiting on a " +
+            "batch was 15.00 ms. The record types were {TOPIC_RECORD=2, PARTITION_RECORD=9, CONFIG_RECORD=2}",
             manifest.toString()
         );
     }

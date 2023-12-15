@@ -42,7 +42,6 @@ public class MigrationManifest {
         private int batches = 0;
         private int total = 0;
         private long batchDurationsNs = 0;
-        private long batchSizes = 0;
         private long endTimeNanos = 0;
 
         Builder(Time time) {
@@ -53,7 +52,6 @@ public class MigrationManifest {
         public void acceptBatch(List<ApiMessageAndVersion> recordBatch, long durationNs) {
             batches++;
             batchDurationsNs += durationNs;
-            batchSizes += recordBatch.size();
             recordBatch.forEach(apiMessageAndVersion -> {
                 MetadataRecordType type = MetadataRecordType.fromId(apiMessageAndVersion.message().apiKey());
                 counts.merge(type, 1, Integer::sum);
@@ -66,14 +64,13 @@ public class MigrationManifest {
                 endTimeNanos = time.nanoseconds();
             }
             Map<MetadataRecordType, Integer> orderedCounts = new TreeMap<>(counts);
-            return new MigrationManifest(total, batches, batchDurationsNs, batchSizes, endTimeNanos - startTimeNanos, orderedCounts);
+            return new MigrationManifest(total, batches, batchDurationsNs, endTimeNanos - startTimeNanos, orderedCounts);
         }
     }
 
     private final int totalRecords;
     private final int totalBatches;
     private final long totalBatchDurationsNs;
-    private final long totalBatchSizes;
     private final long durationNanos;
     private final Map<MetadataRecordType, Integer> recordTypeCounts;
 
@@ -81,14 +78,12 @@ public class MigrationManifest {
         int totalRecords,
         int totalBatches,
         long totalBatchDurationsNs,
-        long totalBatchSizes,
         long durationNanos,
         Map<MetadataRecordType, Integer> recordTypeCounts
     ) {
         this.totalRecords = totalRecords;
         this.totalBatches = totalBatches;
         this.totalBatchDurationsNs = totalBatchDurationsNs;
-        this.totalBatchSizes = totalBatchSizes;
         this.durationNanos = durationNanos;
         this.recordTypeCounts = Collections.unmodifiableMap(recordTypeCounts);
     }
@@ -108,13 +103,6 @@ public class MigrationManifest {
         return 1.0 * TimeUnit.NANOSECONDS.toMillis(totalBatchDurationsNs) / totalBatches;
     }
 
-    public double avgBatchSize() {
-        if (totalBatches == 0) {
-            return -1;
-        }
-        return 1.0 * totalBatchSizes / totalBatches;
-    }
-
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
@@ -123,20 +111,19 @@ public class MigrationManifest {
         return totalRecords == that.totalRecords &&
             totalBatches == that.totalBatches &&
             totalBatchDurationsNs == that.totalBatchDurationsNs &&
-            totalBatchSizes == that.totalBatchSizes &&
             durationNanos == that.durationNanos &&
             recordTypeCounts.equals(that.recordTypeCounts);
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(totalRecords, totalBatches, totalBatchDurationsNs, totalBatchSizes, durationNanos, recordTypeCounts);
+        return Objects.hash(totalRecords, totalBatches, totalBatchDurationsNs, durationNanos, recordTypeCounts);
     }
 
     public String toString() {
         return String.format(
-            "%d records were generated in %d ms across %d batches. The average batch size was %.2f " +
-            "and the average batch commit duration was %.2f ms. The record types were %s",
-            totalRecords, durationMs(), totalBatches, avgBatchSize(), avgBatchDurationMs(), recordTypeCounts);
+            "%d records were generated in %d ms across %d batches. The average time spent waiting on a " +
+            "batch was %.2f ms. The record types were %s",
+            totalRecords, durationMs(), totalBatches, avgBatchDurationMs(), recordTypeCounts);
     }
 }
