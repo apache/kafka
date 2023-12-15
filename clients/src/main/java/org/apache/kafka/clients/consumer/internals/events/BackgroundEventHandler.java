@@ -46,7 +46,7 @@ public class BackgroundEventHandler {
      */
     public void add(BackgroundEvent event) {
         Objects.requireNonNull(event, "BackgroundEvent provided to add must be non-null");
-        log.trace("Enqueued event: {}", event);
         backgroundEventQueue.add(event);
+        log.trace("Enqueued event: {}", event);
     }
 }

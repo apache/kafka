@@ -62,15 +62,15 @@ public class ApplicationEventHandler implements Closeable {
     }
 
     /**
-     * Add an {@link ApplicationEvent} to the handler and then internally invoke {@link #wakeupNetworkThread}
+     * Add an {@link ApplicationEvent} to the handler and then internally invoke {@link #wakeupNetworkThread()}
      * to alert the network I/O thread that it has something to process.
      *
      * @param event An {@link ApplicationEvent} created by the application thread
      */
     public void add(final ApplicationEvent event) {
         Objects.requireNonNull(event, "ApplicationEvent provided to add must be non-null");
-        log.trace("Enqueued event: {}", event);
         applicationEventQueue.add(event);
+        log.trace("Enqueued event: {}", event);
         wakeupNetworkThread();
     }
 
