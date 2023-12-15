@@ -708,7 +708,7 @@ public class RemoteLogManagerTest {
     }
 
     @Test
-    void testRemoteLogManagerRemoteCopyLagBytes() throws Exception {
+    void testRemoteLogManagerRemoteMetrics() throws Exception {
         long oldestSegmentStartOffset = 0L;
         long olderSegmentStartOffset = 75L;
         long nextSegmentStartOffset = 150L;
@@ -752,6 +752,11 @@ public class RemoteLogManagerTest {
         when(mockLog.producerStateManager()).thenReturn(mockStateManager);
         when(mockStateManager.fetchSnapshot(anyLong())).thenReturn(Optional.of(mockProducerSnapshotIndex));
         when(mockLog.lastStableOffset()).thenReturn(250L);
+        Map<String, Long> logProps = new HashMap<>();
+        logProps.put("retention.bytes", 1000000L);
+        logProps.put("retention.ms", -1L);
+        LogConfig logConfig = new LogConfig(logProps);
+        when(mockLog.config()).thenReturn(logConfig);
 
         OffsetIndex oldestIdx = LazyIndex.forOffset(LogFileUtils.offsetIndexFile(tempDir, oldestSegmentStartOffset, ""), oldestSegmentStartOffset, 1000).get();
         TimeIndex oldestTimeIdx = LazyIndex.forTime(LogFileUtils.timeIndexFile(tempDir, oldestSegmentStartOffset, ""), oldestSegmentStartOffset, 1500).get();
@@ -775,6 +780,15 @@ public class RemoteLogManagerTest {
         dummyFuture.complete(null);
         when(remoteLogMetadataManager.addRemoteLogSegmentMetadata(any(RemoteLogSegmentMetadata.class))).thenReturn(dummyFuture);
         when(remoteLogMetadataManager.updateRemoteLogSegmentMetadata(any(RemoteLogSegmentMetadataUpdate.class))).thenReturn(dummyFuture);
+        Iterator<RemoteLogSegmentMetadata> iterator = listRemoteLogSegmentMetadata(leaderTopicIdPartition, 5, 100, 1024, RemoteLogSegmentState.COPY_SEGMENT_FINISHED).iterator();
+        when(remoteLogMetadataManager.listRemoteLogSegments(leaderTopicIdPartition)).thenReturn(iterator);
+        when(remoteLogMetadataManager.listRemoteLogSegments(leaderTopicIdPartition, 2)).thenReturn(iterator);
+        when(remoteLogMetadataManager.listRemoteLogSegments(leaderTopicIdPartition, 1)).thenReturn(iterator);
+        when(remoteLogMetadataManager.listRemoteLogSegments(leaderTopicIdPartition, 0)).thenAnswer(ans -> {
+            // advance the mock timer 1000ms to add value for RemoteLogSizeComputationTime metric
+            time.sleep(1000);
+            return iterator;
+        });
 
         CountDownLatch latch = new CountDownLatch(1);
         doAnswer(ans -> Optional.empty()).doAnswer(ans -> {
@@ -782,6 +796,7 @@ public class RemoteLogManagerTest {
             latch.await();
             return Optional.empty();
         }).when(remoteStorageManager).copyLogSegmentData(any(RemoteLogSegmentMetadata.class), any(LogSegmentData.class));
+
         Partition mockLeaderPartition = mockPartition(leaderTopicIdPartition);
 
         when(mockLog.onlyLocalLogSegmentsSize()).thenReturn(175L, 100L);
@@ -795,6 +810,10 @@ public class RemoteLogManagerTest {
                 String.format("Expected to find 75 for RemoteCopyLagBytes metric value, but found %d", safeLongYammerMetricValue("RemoteCopyLagBytes")));
         // unlock copyLogSegmentData
         latch.countDown();
+
+        TestUtils.waitForCondition(
+                () -> safeLongYammerMetricValue("RemoteLogSizeComputationTime") >= 1000,
+                String.format("Expected to find 1000 for RemoteLogSizeComputationTime metric value, but found %d", safeLongYammerMetricValue("RemoteLogSizeComputationTime")));
     }
 
     private Object yammerMetricValue(String name) {
