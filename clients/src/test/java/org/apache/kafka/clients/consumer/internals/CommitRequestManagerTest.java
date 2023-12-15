@@ -17,6 +17,7 @@
 package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.ClientResponse;
+import org.apache.kafka.clients.consumer.CommitFailedException;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
@@ -264,6 +265,31 @@ public class CommitRequestManagerTest {
         // We expect that request should have been retried on this sync commit.
         assertExceptionHandling(commitRequestManger, error, true);
         assertCoordinatorDisconnect(error);
+    }
+
+    @Test
+    public void testOffsetCommitFailsWithCommitFailedExceptionIfUnknownMemberId() {
+        long commitInterval = retryBackoffMs * 2;
+        CommitRequestManager commitRequestManger = create(true, commitInterval);
+        TopicPartition tp = new TopicPartition("topic", 1);
+        subscriptionState.assignFromUser(Collections.singleton(tp));
+        subscriptionState.seek(tp, 100);
+        when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(mockedNode));
+        time.sleep(commitInterval);
+        commitRequestManger.updateAutoCommitTimer(time.milliseconds());
+
+        // Auto-commit all consume sync (ex. triggered when the consumer is closed).
+        long expirationTimeMs = time.milliseconds() + defaultApiTimeoutMs;
+        CompletableFuture<Void> commitResult =
+            commitRequestManger.maybeAutoCommitAllConsumedNow(Optional.of(expirationTimeMs));
+
+        completeOffsetCommitRequestWithError(commitRequestManger, Errors.UNKNOWN_MEMBER_ID);
+        NetworkClientDelegate.PollResult res = commitRequestManger.poll(time.milliseconds());
+        assertEquals(0, res.unsentRequests.size());
+        // Commit should fail with CommitFailedException
+        assertTrue(commitResult.isDone());
+        Throwable t = assertThrows(ExecutionException.class, () -> commitResult.get());
+        assertEquals(CommitFailedException.class, t.getCause().getClass());
     }
 
     @Test

@@ -17,6 +17,7 @@
 package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.ClientResponse;
+import org.apache.kafka.clients.consumer.CommitFailedException;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.RetriableCommitFailedException;
@@ -510,7 +511,8 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
                     } else if (error == Errors.UNKNOWN_MEMBER_ID) {
                         log.error("OffsetCommit failed with {} on partition {} for offset {}",
                             error, tp, offset);
-                        future.completeExceptionally(error.exception());
+                        future.completeExceptionally(new CommitFailedException("OffsetCommit " +
+                            "failed with unknown member ID. " + error.message()));
                         return;
                     } else if (error == Errors.STALE_MEMBER_EPOCH) {
                         boolean retried = maybeRetryWithNewMemberEpoch(currentTimeMs, error);
