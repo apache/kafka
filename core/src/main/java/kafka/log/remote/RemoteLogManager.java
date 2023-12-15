@@ -1063,9 +1063,8 @@ public class RemoteLogManager implements Closeable {
             // If the follower HAS NOT picked up the changes, and they become the leader then they will go through this process
             // again and delete them with the original deletion reason i.e. size, time or log start offset breach.
             List<String> undeletedSegments = new ArrayList<>();
-            String topicName = log.topicPartition().topic();
             for (RemoteLogSegmentMetadata segmentMetadata : segmentsToDelete) {
-                if (!remoteLogRetentionHandler.deleteRemoteLogSegment(topicName, segmentMetadata, x -> !isCancelled() && isLeader())) {
+                if (!remoteLogRetentionHandler.deleteRemoteLogSegment(topicIdPartition.topic(), segmentMetadata, x -> !isCancelled() && isLeader())) {
                     undeletedSegments.add(segmentMetadata.remoteLogSegmentId().toString());
                 }
             }
@@ -1091,7 +1090,7 @@ public class RemoteLogManager implements Closeable {
                             return;
                         }
                         // No need to update the log-start-offset even though the segment is deleted as these epochs/offsets are earlier to that value.
-                        remoteLogRetentionHandler.deleteLogSegmentsDueToLeaderEpochCacheTruncation(topicName, earliestEpochEntry, segmentsToBeCleaned.next());
+                        remoteLogRetentionHandler.deleteLogSegmentsDueToLeaderEpochCacheTruncation(topicIdPartition.topic(), earliestEpochEntry, segmentsToBeCleaned.next());
                     }
                 }
             }

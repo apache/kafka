@@ -59,7 +59,7 @@ import org.apache.kafka.metadata.LeaderConstants.NO_LEADER
 import org.apache.kafka.metadata.LeaderRecoveryState
 import org.apache.kafka.server.common.{DirectoryEventHandler, OffsetAndEpoch}
 import org.apache.kafka.server.common.MetadataVersion.IBP_2_6_IV0
-import org.apache.kafka.server.log.remote.storage.{RemoteLogSegmentMetadata, RemoteStorageManager}
+import org.apache.kafka.server.log.remote.storage.{NoOpRemoteLogMetadataManager, NoOpRemoteStorageManager, RemoteLogManagerConfig, RemoteLogSegmentMetadata, RemoteStorageException, RemoteStorageManager}
 import org.apache.kafka.server.metrics.{KafkaMetricsGroup, KafkaYammerMetrics}
 import org.apache.kafka.server.util.{MockScheduler, MockTime}
 import org.apache.kafka.storage.internals.log.{AppendOrigin, FetchDataInfo, FetchIsolation, FetchParams, FetchPartitionData, LogConfig, LogDirFailureChannel, LogOffsetMetadata, LogSegments, LogStartOffsetIncrementReason, ProducerStateManager, ProducerStateManagerConfig, RemoteStorageFetchInfo, VerificationGuard}
@@ -72,7 +72,6 @@ import kafka.log.remote.RemoteLogManager
 import org.apache.kafka.common.config.{AbstractConfig, TopicConfig}
 import org.apache.kafka.metadata.properties.{MetaProperties, MetaPropertiesEnsemble, MetaPropertiesVersion, PropertiesUtils}
 import org.apache.kafka.raft.RaftConfig
-import org.apache.kafka.server.log.remote.storage.{NoOpRemoteLogMetadataManager, NoOpRemoteStorageManager, RemoteLogManagerConfig}
 import org.apache.kafka.server.util.timer.MockTimer
 import org.apache.kafka.storage.internals.checkpoint.PartitionMetadataFile
 import org.mockito.invocation.InvocationOnMock
@@ -3306,51 +3305,51 @@ class ReplicaManagerTest {
         threadNamePrefix: Option[String],
         quotaManager: ReplicationQuotaManager
       ): ReplicaFetcherManager = {
-          mockReplicaFetcherManager.getOrElse {
-            if (buildRemoteLogAuxState) {
-              super.createReplicaFetcherManager(
-                metrics,
-                time,
-                threadNamePrefix,
-                quotaManager
-              )
-              val config = this.config
-              val metadataCache = this.metadataCache
-              new ReplicaFetcherManager(config, this, metrics, time, threadNamePrefix, quotaManager, () => metadataCache.metadataVersion(), () => 1) {
-                override def createFetcherThread(fetcherId: Int, sourceBroker: BrokerEndPoint): ReplicaFetcherThread = {
-                  val prefix = threadNamePrefix.map(tp => s"$tp:").getOrElse("")
-                  val threadName = s"${prefix}ReplicaFetcherThread-$fetcherId-${sourceBroker.id}"
+        mockReplicaFetcherManager.getOrElse {
+          if (buildRemoteLogAuxState) {
+            super.createReplicaFetcherManager(
+              metrics,
+              time,
+              threadNamePrefix,
+              quotaManager
+            )
+            val config = this.config
+            val metadataCache = this.metadataCache
+            new ReplicaFetcherManager(config, this, metrics, time, threadNamePrefix, quotaManager, () => metadataCache.metadataVersion(), () => 1) {
+              override def createFetcherThread(fetcherId: Int, sourceBroker: BrokerEndPoint): ReplicaFetcherThread = {
+                val prefix = threadNamePrefix.map(tp => s"$tp:").getOrElse("")
+                val threadName = s"${prefix}ReplicaFetcherThread-$fetcherId-${sourceBroker.id}"
 
-                  val tp = new TopicPartition(topic, 0)
-                  val leader = new MockLeaderEndPoint() {
-                    override def fetch(fetchRequest: FetchRequest.Builder): Map[TopicPartition, FetchData] = {
-                      Map(tp -> new FetchData().setErrorCode(Errors.OFFSET_MOVED_TO_TIERED_STORAGE.code))
-                    }
+                val tp = new TopicPartition(topic, 0)
+                val leader = new MockLeaderEndPoint() {
+                  override def fetch(fetchRequest: FetchRequest.Builder): Map[TopicPartition, FetchData] = {
+                    Map(tp -> new FetchData().setErrorCode(Errors.OFFSET_MOVED_TO_TIERED_STORAGE.code))
                   }
-                  leader.setLeaderState(tp, PartitionState(leaderEpoch = 0))
-                  leader.setReplicaPartitionStateCallback(tp => PartitionState(leaderEpoch = 0))
-
-                  val fetcher = new ReplicaFetcherThread(threadName, leader, config, failedPartitions, replicaManager,
-                    quotaManager, "", () => config.interBrokerProtocolVersion)
-
-                  val initialFetchState = InitialFetchState(
-                    topicId = Some(Uuid.randomUuid()),
-                    leader = leader.brokerEndPoint(),
-                    currentLeaderEpoch = 0,
-                    initOffset = 0)
-
-                  fetcher.addPartitions(Map(tp -> initialFetchState))
-
-                  fetcher
                 }
+                leader.setLeaderState(tp, PartitionState(leaderEpoch = 0))
+                leader.setReplicaPartitionStateCallback(tp => PartitionState(leaderEpoch = 0))
+
+                val fetcher = new ReplicaFetcherThread(threadName, leader, config, failedPartitions, replicaManager,
+                  quotaManager, "", () => config.interBrokerProtocolVersion)
+
+                val initialFetchState = InitialFetchState(
+                  topicId = Some(Uuid.randomUuid()),
+                  leader = leader.brokerEndPoint(),
+                  currentLeaderEpoch = 0,
+                  initOffset = 0)
+
+                fetcher.addPartitions(Map(tp -> initialFetchState))
+
+                fetcher
               }
-            } else {
-              super.createReplicaFetcherManager(
-                metrics,
-                time,
-                threadNamePrefix,
-                quotaManager
-              )
+            }
+          } else {
+            super.createReplicaFetcherManager(
+              metrics,
+              time,
+              threadNamePrefix,
+              quotaManager
+            )
           }
         }
       }
@@ -4091,7 +4090,6 @@ class ReplicaManagerTest {
 
     val replicaManager = setupReplicaManagerWithMockedPurgatories(new MockTimer(time), aliveBrokerIds = Seq(0, 1, 2), enableRemoteStorage = true, shouldMockLog = true, remoteLogManager = Some(remoteLogManager), buildRemoteLogAuxState = true)
     try {
-
       val offsetCheckpoints = new LazyOffsetCheckpoints(replicaManager.highWatermarkCheckpoints)
       replicaManager.createPartition(tp0).createLogIfNotExists(isNew = false, isFutureReplica = false, offsetCheckpoints, None)
       val partition0Replicas = Seq[Integer](0, 1).asJava
@@ -4124,11 +4122,65 @@ class ReplicaManagerTest {
       // Replicas fetch from the leader periodically, therefore we check that the metric value is increasing
       // We expect failedBuildRemoteLogAuxStateRate to increase because there is no remoteLogSegmentMetadata
       // when attempting to build log aux state
-      assertEquals(0, brokerTopicStats.topicStats(tp0.topic()).buildRemoteLogAuxStateRequestRate.count)
+      assertTrue(brokerTopicStats.topicStats(tp0.topic()).buildRemoteLogAuxStateRequestRate.count > 0)
       assertTrue(brokerTopicStats.topicStats(tp0.topic()).failedBuildRemoteLogAuxStateRate.count > 0)
       // Verify aggregate metrics
-      assertEquals(0, brokerTopicStats.allTopicsStats.buildRemoteLogAuxStateRequestRate.count)
+      assertTrue(brokerTopicStats.allTopicsStats.buildRemoteLogAuxStateRequestRate.count > 0)
       assertTrue( brokerTopicStats.allTopicsStats.failedBuildRemoteLogAuxStateRate.count > 0)
+    } finally {
+      replicaManager.shutdown(checkpointHW = false)
+    }
+  }
+
+  @Test
+  def testBuildRemoteLogAuxStateMetricsThrowsException(): Unit = {
+    val tp0 = new TopicPartition(topic, 0)
+
+    val remoteLogManager = mock(classOf[RemoteLogManager])
+    when(remoteLogManager.fetchRemoteLogSegmentMetadata(any(), anyInt(), anyLong())).thenThrow(new RemoteStorageException("Failed to build remote log aux"))
+
+    val storageManager = mock(classOf[RemoteStorageManager])
+    when(storageManager.fetchIndex(any(), any())).thenReturn(new ByteArrayInputStream("0".getBytes()))
+    when(remoteLogManager.storageManager()).thenReturn(storageManager)
+
+    val replicaManager = setupReplicaManagerWithMockedPurgatories(new MockTimer(time), aliveBrokerIds = Seq(0, 1, 2), enableRemoteStorage = true, shouldMockLog = true, remoteLogManager = Some(remoteLogManager), buildRemoteLogAuxState = true)
+    try {
+      val offsetCheckpoints = new LazyOffsetCheckpoints(replicaManager.highWatermarkCheckpoints)
+      replicaManager.createPartition(tp0).createLogIfNotExists(isNew = false, isFutureReplica = false, offsetCheckpoints, None)
+      val partition0Replicas = Seq[Integer](0, 1).asJava
+      val topicIds = Map(tp0.topic -> topicId).asJava
+      val leaderAndIsrRequest = new LeaderAndIsrRequest.Builder(ApiKeys.LEADER_AND_ISR.latestVersion, 0, 0, brokerEpoch,
+        Seq(
+          new LeaderAndIsrPartitionState()
+            .setTopicName(tp0.topic)
+            .setPartitionIndex(tp0.partition)
+            .setControllerEpoch(0)
+            .setLeader(1)
+            .setLeaderEpoch(0)
+            .setIsr(partition0Replicas)
+            .setPartitionEpoch(0)
+            .setReplicas(partition0Replicas)
+            .setIsNew(true)
+        ).asJava,
+        topicIds,
+        Set(new Node(0, "host1", 0), new Node(1, "host2", 1)).asJava).build()
+
+      // Verify the metrics for build remote log state and for failures is zero before replicas start to fetch
+      assertEquals(0, brokerTopicStats.topicStats(tp0.topic()).buildRemoteLogAuxStateRequestRate.count)
+      assertEquals(0, brokerTopicStats.topicStats(tp0.topic()).failedBuildRemoteLogAuxStateRate.count)
+      // Verify aggregate metrics
+      assertEquals(0, brokerTopicStats.allTopicsStats.buildRemoteLogAuxStateRequestRate.count)
+      assertEquals(0, brokerTopicStats.allTopicsStats.failedBuildRemoteLogAuxStateRate.count)
+
+      replicaManager.becomeLeaderOrFollower(0, leaderAndIsrRequest, (_, _) => ())
+
+      // Replicas fetch from the leader periodically, therefore we check that the metric value is increasing
+      // We expect failedBuildRemoteLogAuxStateRate to increase because fetchRemoteLogSegmentMetadata returns RemoteStorageException
+      assertTrue(brokerTopicStats.topicStats(tp0.topic()).buildRemoteLogAuxStateRequestRate.count > 0)
+      assertTrue(brokerTopicStats.topicStats(tp0.topic()).failedBuildRemoteLogAuxStateRate.count > 0)
+      // Verify aggregate metrics
+      assertTrue(brokerTopicStats.allTopicsStats.buildRemoteLogAuxStateRequestRate.count > 0)
+      assertTrue(brokerTopicStats.allTopicsStats.failedBuildRemoteLogAuxStateRate.count > 0)
     } finally {
       replicaManager.shutdown(checkpointHW = false)
     }
