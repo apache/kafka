@@ -943,7 +943,7 @@ public class OffsetsApiIntegrationTest {
                         );
                         boolean canBeRetried = message.contains("If the connector is in a stopped state, this operation can be safely retried");
 
-                        boolean retriable = internalServerError && failedToResetConsumerOffsets && canBeRetried;
+                        boolean retriable = internalServerError && failedToModifyConsumerOffsets && canBeRetried;
                         if (retriable) {
                             return false;
                         } else {
