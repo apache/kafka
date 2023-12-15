@@ -22,15 +22,16 @@ import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.record.MemoryRecords
 import org.apache.kafka.common.requests.FetchRequest
 import org.apache.kafka.common.{TopicIdPartition, Uuid}
+import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.apache.kafka.storage.internals.log._
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
-import org.mockito.Mockito.{mock, when}
+import org.mockito.Mockito.{mock, verify, when}
 
 import java.util.Optional
-import java.util.concurrent.CompletableFuture
-
+import java.util.concurrent.{CompletableFuture, Future}
 import scala.collection._
+import scala.jdk.CollectionConverters._
 
 class DelayedRemoteFetchTest {
   private val maxBytes = 1024
@@ -141,6 +142,58 @@ class DelayedRemoteFetchTest {
     assertEquals(topicIdPartition, actualTopicPartition.get)
     assertTrue(fetchResultOpt.isDefined)
     assertEquals(Errors.FENCED_LEADER_EPOCH, fetchResultOpt.get.error)
+  }
+
+  @Test
+  def testRequestExpiry(): Unit = {
+    var actualTopicPartition: Option[TopicIdPartition] = None
+    var fetchResultOpt: Option[FetchPartitionData] = None
+
+    def callback(responses: Seq[(TopicIdPartition, FetchPartitionData)]): Unit = {
+      assertEquals(1, responses.size)
+      actualTopicPartition = Some(responses.head._1)
+      fetchResultOpt = Some(responses.head._2)
+    }
+
+    val replicaId = -1
+    val highWatermark = 100
+    val leaderLogStartOffset = 10
+
+    val remoteFetchTask = mock(classOf[Future[Void]])
+    val future: CompletableFuture[RemoteLogReadResult] = new CompletableFuture[RemoteLogReadResult]()
+    val fetchInfo: RemoteStorageFetchInfo = new RemoteStorageFetchInfo(0, false, topicIdPartition.topicPartition(), null, null, false)
+    val fetchParams = buildFollowerFetchParams(replicaId, maxWaitMs = 500)
+    val logReadInfo = buildReadResult(Errors.NONE, highWatermark, leaderLogStartOffset)
+
+    val delayedRemoteFetch = new DelayedRemoteFetch(remoteFetchTask, future, fetchInfo, Seq(topicIdPartition -> fetchStatus), fetchParams,
+      Seq(topicIdPartition -> logReadInfo), replicaManager, callback)
+
+    when(replicaManager.getPartitionOrException(topicIdPartition.topicPartition))
+      .thenReturn(mock(classOf[Partition]))
+
+    // Verify that the ExpiresPerSec metric is zero before fetching
+    val metrics = KafkaYammerMetrics.defaultRegistry.allMetrics
+    assertEquals(0, metrics.keySet.asScala.count(_.getMBeanName == "kafka.server:type=DelayedRemoteFetchMetrics,name=ExpiresPerSec"))
+
+    // Force the delayed remote fetch to expire
+    delayedRemoteFetch.run()
+
+    // Check that the task was cancelled and force-completed
+    verify(remoteFetchTask).cancel(true)
+    assertTrue(delayedRemoteFetch.isCompleted)
+
+    // Check that the ExpiresPerSec metric was incremented
+    assertEquals(1, metrics.keySet.asScala.count(_.getMBeanName == "kafka.server:type=DelayedRemoteFetchMetrics,name=ExpiresPerSec"))
+
+    // Fetch results should still include local read results
+    assertTrue(actualTopicPartition.isDefined)
+    assertEquals(topicIdPartition, actualTopicPartition.get)
+    assertTrue(fetchResultOpt.isDefined)
+
+    val fetchResult = fetchResultOpt.get
+    assertEquals(Errors.NONE, fetchResult.error)
+    assertEquals(highWatermark, fetchResult.highWatermark)
+    assertEquals(leaderLogStartOffset, fetchResult.logStartOffset)
   }
 
   private def buildFollowerFetchParams(replicaId: Int,

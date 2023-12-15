@@ -19,6 +19,7 @@ package org.apache.kafka.clients.consumer.internals;
 import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
+import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.GroupProtocol;
@@ -31,7 +32,10 @@ import org.apache.kafka.clients.consumer.internals.events.ApplicationEventHandle
 import org.apache.kafka.clients.consumer.internals.events.AssignmentChangeApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
 import org.apache.kafka.clients.consumer.internals.events.CommitApplicationEvent;
+import org.apache.kafka.clients.consumer.internals.events.CompletableBackgroundEvent;
+import org.apache.kafka.clients.consumer.internals.events.ConsumerRebalanceListenerCallbackNeededEvent;
 import org.apache.kafka.clients.consumer.internals.events.ErrorBackgroundEvent;
+import org.apache.kafka.clients.consumer.internals.events.EventProcessor;
 import org.apache.kafka.clients.consumer.internals.events.FetchCommittedOffsetsApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.GroupMetadataUpdateEvent;
 import org.apache.kafka.clients.consumer.internals.events.ListOffsetsApplicationEvent;
@@ -58,6 +62,8 @@ import org.apache.kafka.common.requests.ListOffsetsRequest;
 import org.apache.kafka.common.requests.OffsetCommitResponse;
 import org.apache.kafka.common.requests.RequestHeader;
 import org.apache.kafka.common.serialization.StringDeserializer;
+import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
 import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.AfterEach;
@@ -66,6 +72,7 @@ import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.function.Executable;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.ArgumentMatchers;
@@ -86,18 +93,24 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
+import java.util.SortedSet;
+import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.LinkedBlockingQueue;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static java.util.Arrays.asList;
 import static java.util.Collections.singleton;
 import static java.util.Collections.singletonList;
+import static org.apache.kafka.clients.consumer.internals.ConsumerRebalanceListenerMethodName.ON_PARTITIONS_ASSIGNED;
+import static org.apache.kafka.clients.consumer.internals.ConsumerRebalanceListenerMethodName.ON_PARTITIONS_LOST;
+import static org.apache.kafka.clients.consumer.internals.ConsumerRebalanceListenerMethodName.ON_PARTITIONS_REVOKED;
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.THROW_ON_FETCH_STABLE_OFFSET_UNSUPPORTED;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
@@ -127,6 +140,7 @@ public class AsyncKafkaConsumerTest {
     private ConsumerTestBuilder.AsyncKafkaConsumerTestBuilder testBuilder;
     private ApplicationEventHandler applicationEventHandler;
     private SubscriptionState subscriptions;
+    private BlockingQueue<BackgroundEvent> backgroundEventQueue;
 
     @BeforeEach
     public void setup() {
@@ -140,6 +154,7 @@ public class AsyncKafkaConsumerTest {
         consumer = testBuilder.consumer;
         fetchCollector = testBuilder.fetchCollector;
         subscriptions = testBuilder.subscriptions;
+        backgroundEventQueue = testBuilder.backgroundEventQueue;
     }
 
     @AfterEach
@@ -856,6 +871,78 @@ public class AsyncKafkaConsumerTest {
         }
     }
 
+    /**
+     * Tests that the consumer correctly invokes the callbacks for {@link ConsumerRebalanceListener} that was
+     * specified. We don't go through the full effort to emulate heartbeats and correct group management here. We're
+     * simply exercising the background {@link EventProcessor} does the correct thing when
+     * {@link AsyncKafkaConsumer#poll(Duration)} is called.
+     *
+     * Note that we test {@link ConsumerRebalanceListener} that throws errors in its different callbacks. Failed
+     * callback execution does <em>not</em> immediately errors. Instead, those errors are forwarded to the
+     * application event thread for the {@link MembershipManagerImpl} to handle.
+     */
+    @ParameterizedTest
+    @MethodSource("listenerCallbacksInvokeSource")
+    public void testListenerCallbacksInvoke(List<ConsumerRebalanceListenerMethodName> methodNames,
+                                            Optional<RuntimeException> revokedError,
+                                            Optional<RuntimeException> assignedError,
+                                            Optional<RuntimeException> lostError,
+                                            int expectedRevokedCount,
+                                            int expectedAssignedCount,
+                                            int expectedLostCount) {
+        CounterConsumerRebalanceListener consumerRebalanceListener = new CounterConsumerRebalanceListener(
+                revokedError,
+                assignedError,
+                lostError
+        );
+        consumer.subscribe(Collections.singletonList("topic"), consumerRebalanceListener);
+        SortedSet<TopicPartition> partitions = Collections.emptySortedSet();
+
+        for (ConsumerRebalanceListenerMethodName methodName : methodNames) {
+            CompletableBackgroundEvent<Void> e = new ConsumerRebalanceListenerCallbackNeededEvent(methodName, partitions);
+            backgroundEventQueue.add(e);
+
+            // This will trigger the background event queue to process our background event message.
+            consumer.poll(Duration.ZERO);
+        }
+
+        assertEquals(expectedRevokedCount, consumerRebalanceListener.revokedCount());
+        assertEquals(expectedAssignedCount, consumerRebalanceListener.assignedCount());
+        assertEquals(expectedLostCount, consumerRebalanceListener.lostCount());
+    }
+
+    private static Stream<Arguments> listenerCallbacksInvokeSource() {
+        Optional<RuntimeException> empty = Optional.empty();
+        Optional<RuntimeException> error = Optional.of(new RuntimeException("Intentional error"));
+
+        return Stream.of(
+            // Tests if we don't have an event, the listener doesn't get called.
+            Arguments.of(Collections.emptyList(), empty, empty, empty, 0, 0, 0),
+
+            // Tests if we get an event for a revocation, that we invoke our listener.
+            Arguments.of(Collections.singletonList(ON_PARTITIONS_REVOKED), empty, empty, empty, 1, 0, 0),
+
+            // Tests if we get an event for an assignment, that we invoke our listener.
+            Arguments.of(Collections.singletonList(ON_PARTITIONS_ASSIGNED), empty, empty, empty, 0, 1, 0),
+
+            // Tests that we invoke our listener even if it encounters an exception.
+            Arguments.of(Collections.singletonList(ON_PARTITIONS_LOST), empty, empty, empty, 0, 0, 1),
+
+            // Tests that we invoke our listener even if it encounters an exception.
+            Arguments.of(Collections.singletonList(ON_PARTITIONS_REVOKED), error, empty, empty, 1, 0, 0),
+
+            // Tests that we invoke our listener even if it encounters an exception.
+            Arguments.of(Collections.singletonList(ON_PARTITIONS_ASSIGNED), empty, error, empty, 0, 1, 0),
+
+            // Tests that we invoke our listener even if it encounters an exception.
+            Arguments.of(Collections.singletonList(ON_PARTITIONS_LOST), empty, empty, error, 0, 0, 1),
+
+            // Tests if we get separate events for revocation and then assignment--AND our revocation throws an error--
+            // we still invoke the listeners correctly without throwing the error at the user.
+            Arguments.of(Arrays.asList(ON_PARTITIONS_REVOKED, ON_PARTITIONS_ASSIGNED), error, empty, empty, 1, 1, 0)
+        );
+    }
+
     @Test
     public void testBackgroundError() {
         final String groupId = "consumerGroupA";
@@ -1082,6 +1169,86 @@ public class AsyncKafkaConsumerTest {
 
         assertEquals(singleton(topicName), consumer.subscription());
         assertEquals(singleton(tp), consumer.assignment());
+    }
+
+    /**
+     * Tests {@link AsyncKafkaConsumer#processBackgroundEvents(EventProcessor, Future, Timer) processBackgroundEvents}
+     * handles the case where the {@link Future} takes a bit of time to complete, but does within the timeout.
+     */
+    @Test
+    public void testProcessBackgroundEventsWithInitialDelay() throws Exception {
+        Time time = new MockTime();
+        Timer timer = time.timer(1000);
+        CompletableFuture<?> future = mock(CompletableFuture.class);
+        CountDownLatch latch = new CountDownLatch(3);
+
+        // Mock our call to Future.get(timeout) so that it mimics a delay of 200 milliseconds. Keep in mind that
+        // the incremental timeout inside processBackgroundEvents is 100 seconds for each pass. Our first two passes
+        // will exceed the incremental timeout, but the third will return.
+        doAnswer(invocation -> {
+            latch.countDown();
+
+            if (latch.getCount() > 0) {
+                long timeout = invocation.getArgument(0, Long.class);
+                timer.sleep(timeout);
+                throw new java.util.concurrent.TimeoutException("Intentional timeout");
+            }
+
+            future.complete(null);
+            return null;
+        }).when(future).get(any(Long.class), any(TimeUnit.class));
+
+        try (EventProcessor<?> processor = mock(EventProcessor.class)) {
+            consumer.processBackgroundEvents(processor, future, timer);
+
+            // 800 is the 1000 ms timeout (above) minus the 200 ms delay for the two incremental timeouts/retries.
+            assertEquals(800, timer.remainingMs());
+        }
+    }
+
+    /**
+     * Tests {@link AsyncKafkaConsumer#processBackgroundEvents(EventProcessor, Future, Timer) processBackgroundEvents}
+     * handles the case where the {@link Future} is already complete when invoked, so it doesn't have to wait.
+     */
+    @Test
+    public void testProcessBackgroundEventsWithoutDelay() {
+        Time time = new MockTime();
+        Timer timer = time.timer(1000);
+
+        // Create a future that is already completed.
+        CompletableFuture<?> future = CompletableFuture.completedFuture(null);
+
+        try (EventProcessor<?> processor = mock(EventProcessor.class)) {
+            consumer.processBackgroundEvents(processor, future, timer);
+
+            // Because we didn't need to perform a timed get, we should still have every last millisecond
+            // of our initial timeout.
+            assertEquals(1000, timer.remainingMs());
+        }
+    }
+
+    /**
+     * Tests {@link AsyncKafkaConsumer#processBackgroundEvents(EventProcessor, Future, Timer) processBackgroundEvents}
+     * handles the case where the {@link Future} does not complete within the timeout.
+     */
+    @Test
+    public void testProcessBackgroundEventsTimesOut() throws Exception {
+        Time time = new MockTime();
+        Timer timer = time.timer(1000);
+        CompletableFuture<?> future = mock(CompletableFuture.class);
+
+        doAnswer(invocation -> {
+            long timeout = invocation.getArgument(0, Long.class);
+            timer.sleep(timeout);
+            throw new java.util.concurrent.TimeoutException("Intentional timeout");
+        }).when(future).get(any(Long.class), any(TimeUnit.class));
+
+        try (EventProcessor<?> processor = mock(EventProcessor.class)) {
+            assertThrows(TimeoutException.class, () -> consumer.processBackgroundEvents(processor, future, timer));
+
+            // Because we forced our mocked future to continuously time out, we should have no time remaining.
+            assertEquals(0, timer.remainingMs());
+        }
     }
 
     private void assertNoPendingWakeup(final WakeupTrigger wakeupTrigger) {

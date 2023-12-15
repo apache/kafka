@@ -16,51 +16,53 @@
  */
 package org.apache.kafka.clients.consumer.internals.events;
 
-import java.util.Objects;
+import java.util.concurrent.CompletableFuture;
 
 /**
- * This is the abstract definition of the events created by the KafkaConsumer API
+ * Background event with a result in the form of a future, that can be retrieved within a
+ * timeout based on completion.
+ *
+ * @param <T>
  */
-public abstract class ApplicationEvent {
+public abstract class CompletableBackgroundEvent<T> extends BackgroundEvent implements CompletableEvent<T> {
 
-    public enum Type {
-        COMMIT, POLL, FETCH_COMMITTED_OFFSETS, NEW_TOPICS_METADATA_UPDATE, ASSIGNMENT_CHANGE,
-        LIST_OFFSETS, RESET_POSITIONS, VALIDATE_POSITIONS, TOPIC_METADATA, SUBSCRIPTION_CHANGE,
-        UNSUBSCRIBE, CONSUMER_REBALANCE_LISTENER_CALLBACK_COMPLETED
+    private final CompletableFuture<T> future;
+
+    protected CompletableBackgroundEvent(Type type) {
+        super(type);
+        this.future = new CompletableFuture<>();
     }
 
-    private final Type type;
-
-    protected ApplicationEvent(Type type) {
-        this.type = Objects.requireNonNull(type);
-    }
-
-    public Type type() {
-        return type;
+    public CompletableFuture<T> future() {
+        return future;
     }
 
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
+        if (!super.equals(o)) return false;
 
-        ApplicationEvent that = (ApplicationEvent) o;
+        CompletableBackgroundEvent<?> that = (CompletableBackgroundEvent<?>) o;
 
-        return type == that.type;
+        return future.equals(that.future);
     }
 
     @Override
     public int hashCode() {
-        return type.hashCode();
+        int result = super.hashCode();
+        result = 31 * result + future.hashCode();
+        return result;
     }
 
+    @Override
     protected String toStringBase() {
-        return "type=" + type;
+        return super.toStringBase() + ", future=" + future;
     }
 
     @Override
     public String toString() {
-        return "ApplicationEvent{" +
+        return getClass().getSimpleName() + "{" +
                 toStringBase() +
                 '}';
     }
