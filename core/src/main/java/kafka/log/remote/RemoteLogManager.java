@@ -1103,7 +1103,6 @@ public class RemoteLogManager implements Closeable {
                 while (epochsToClean.hasNext()) {
                     int epoch = epochsToClean.next();
                     List<RemoteLogSegmentMetadata> listOfSegmentsToBeCleaned = new ArrayList<>();
-                    sizeOfDeletableSegmentsBytes = 0L;
                     Iterator<RemoteLogSegmentMetadata> segmentsToBeCleaned = remoteLogMetadataManager.listRemoteLogSegments(topicIdPartition, epoch);
                     while (segmentsToBeCleaned.hasNext()) {
                         if (isCancelled() || !isLeader()) {
@@ -1114,7 +1113,7 @@ public class RemoteLogManager implements Closeable {
                             listOfSegmentsToBeCleaned.add(nextSegmentMetadata);
                         }
                     }
-                    segmentsLeftToDelete = listOfSegmentsToBeCleaned.size();
+                    segmentsLeftToDelete += listOfSegmentsToBeCleaned.size();
                     brokerTopicMetrics.recordRemoteDeleteBytesLag(partition, sizeOfDeletableSegmentsBytes);
                     brokerTopicMetrics.recordRemoteDeleteSegmentsLag(partition, segmentsLeftToDelete);
                     for (RemoteLogSegmentMetadata segmentMetadata : listOfSegmentsToBeCleaned) {

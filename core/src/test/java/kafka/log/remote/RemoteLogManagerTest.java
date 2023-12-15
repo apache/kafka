@@ -1802,14 +1802,12 @@ public class RemoteLogManagerTest {
                 .thenReturn(CompletableFuture.runAsync(() -> { }));
 
         doAnswer(ans -> {
-            // waiting for verification
             assertEquals(2048, safeLongYammerMetricValue("RemoteDeleteLagBytes"),
                 String.format("Expected to find 2048 for RemoteDeleteLagBytes metric value, but found %d", safeLongYammerMetricValue("RemoteDeleteLagBytes")));
             assertEquals(2, safeLongYammerMetricValue("RemoteDeleteLagSegments"),
                 String.format("Expected to find 2 for RemoteDeleteLagSegments metric value, but found %d", safeLongYammerMetricValue("RemoteDeleteLagSegments")));
             return Optional.empty();
         }).doAnswer(ans -> {
-            // waiting for verification
             assertEquals(1024, safeLongYammerMetricValue("RemoteDeleteLagBytes"),
                 String.format("Expected to find 1024 for RemoteDeleteLagBytes metric value, but found %d", safeLongYammerMetricValue("RemoteDeleteLagBytes")));
             assertEquals(1, safeLongYammerMetricValue("RemoteDeleteLagSegments"),
