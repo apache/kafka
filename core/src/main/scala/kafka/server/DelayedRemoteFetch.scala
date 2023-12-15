@@ -17,7 +17,6 @@
 
 package kafka.server
 
-import com.yammer.metrics.core.Meter
 import org.apache.kafka.common.TopicIdPartition
 import org.apache.kafka.common.errors._
 import org.apache.kafka.common.protocol.Errors
@@ -87,9 +86,6 @@ class DelayedRemoteFetch(remoteFetchTask: Future[Void],
     val cancelled = remoteFetchTask.cancel(true)
     if (!cancelled) debug(s"Remote fetch task for RemoteStorageFetchInfo: $remoteFetchInfo could not be cancelled and its isDone value is ${remoteFetchTask.isDone}")
 
-//    if (fetchParams.isFromFollower)
-//      warn(s"The follower should not invoke remote fetch. Fetch params are: $fetchParams")
-//    else
     DelayedRemoteFetchMetrics.expiredRequestMeter.mark()
   }
 
