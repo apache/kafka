@@ -19,6 +19,7 @@ package org.apache.kafka.clients.consumer.internals;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.internals.NetworkClientDelegate.PollResult;
+import org.apache.kafka.clients.consumer.internals.events.ApplicationEventProcessor;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEventHandler;
 import org.apache.kafka.clients.consumer.internals.events.ErrorBackgroundEvent;
 import org.apache.kafka.clients.consumer.internals.events.GroupMetadataUpdateEvent;
@@ -204,6 +205,14 @@ public class HeartbeatRequestManager implements RequestManager {
 
         NetworkClientDelegate.UnsentRequest request = makeHeartbeatRequest(currentTimeMs, false);
         return new NetworkClientDelegate.PollResult(heartbeatRequestState.heartbeatIntervalMs, Collections.singletonList(request));
+    }
+
+    /**
+     * Returns the {@link MembershipManager} that this request manager is using to track the state of the group.
+     * This is provided so that the {@link ApplicationEventProcessor} can access the state for querying or updating.
+     */
+    public MembershipManager membershipManager() {
+        return membershipManager;
     }
 
     /**

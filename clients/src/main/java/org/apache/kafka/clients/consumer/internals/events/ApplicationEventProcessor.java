@@ -61,9 +61,8 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
      * an event generates an error. In such cases, the processor will log an exception, but we do not want those
      * errors to be propagated to the caller.
      */
-    @Override
-    public void process() {
-        process((event, error) -> { });
+    public boolean process() {
+        return process((event, error) -> error.ifPresent(e -> log.warn("Error processing event {}", e.getMessage(), e)));
     }
 
     @Override
@@ -113,14 +112,13 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
                 process((UnsubscribeApplicationEvent) event);
                 return;
 
+            case CONSUMER_REBALANCE_LISTENER_CALLBACK_COMPLETED:
+                process((ConsumerRebalanceListenerCallbackCompletedEvent) event);
+                return;
+
             default:
                 log.warn("Application event type " + event.type() + " was not expected");
         }
-    }
-
-    @Override
-    protected Class<ApplicationEvent> getEventClass() {
-        return ApplicationEvent.class;
     }
 
     private void process(final PollApplicationEvent event) {
@@ -180,12 +178,12 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
      * consumer join the group if it is not part of it yet, or send the updated subscription if
      * it is already a member.
      */
-    private void process(final SubscriptionChangeApplicationEvent event) {
-        if (!requestManagers.membershipManager.isPresent()) {
-            throw new RuntimeException("Group membership manager not present when processing a " +
-                    "subscribe event");
+    private void process(final SubscriptionChangeApplicationEvent ignored) {
+        if (!requestManagers.heartbeatRequestManager.isPresent()) {
+            log.warn("Group membership manager not present when processing a subscribe event");
+            return;
         }
-        MembershipManager membershipManager = requestManagers.membershipManager.get();
+        MembershipManager membershipManager = requestManagers.heartbeatRequestManager.get().membershipManager();
         membershipManager.onSubscriptionUpdated();
     }
 
@@ -198,11 +196,12 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
      *              the group is sent out.
      */
     private void process(final UnsubscribeApplicationEvent event) {
-        if (!requestManagers.membershipManager.isPresent()) {
-            throw new RuntimeException("Group membership manager not present when processing an " +
-                    "unsubscribe event");
+        if (!requestManagers.heartbeatRequestManager.isPresent()) {
+            KafkaException error = new KafkaException("Group membership manager not present when processing an unsubscribe event");
+            event.future().completeExceptionally(error);
+            return;
         }
-        MembershipManager membershipManager = requestManagers.membershipManager.get();
+        MembershipManager membershipManager = requestManagers.heartbeatRequestManager.get().membershipManager();
         CompletableFuture<Void> result = membershipManager.leaveGroup();
         event.chain(result);
     }
@@ -229,6 +228,18 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
         }
 
         event.chain(future);
+    }
+
+    private void process(final ConsumerRebalanceListenerCallbackCompletedEvent event) {
+        if (!requestManagers.heartbeatRequestManager.isPresent()) {
+            log.warn(
+                "An internal error occurred; the group membership manager was not present, so the notification of the {} callback execution could not be sent",
+                event.methodName()
+            );
+            return;
+        }
+        MembershipManager manager = requestManagers.heartbeatRequestManager.get().membershipManager();
+        manager.consumerRebalanceListenerCallbackCompleted(event);
     }
 
     /**

@@ -78,9 +78,8 @@ abstract class BaseConsumerTest extends AbstractConsumerTest {
     assertNotEquals(0, BaseConsumerTest.updateConsumerCount.get())
   }
 
-  // ConsumerRebalanceListener temporarily not supported for consumer group protocol
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersGenericGroupProtocolOnly"))
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
   def testCoordinatorFailover(quorum: String, groupProtocol: String): Unit = {
     val listener = new TestConsumerReassignmentListener()
     this.consumerConfig.setProperty(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, "5001")

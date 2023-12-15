@@ -21,6 +21,11 @@ import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.internals.Utils.TopicIdPartitionComparator;
 import org.apache.kafka.clients.consumer.internals.Utils.TopicPartitionComparator;
+import org.apache.kafka.clients.consumer.internals.events.BackgroundEventHandler;
+import org.apache.kafka.clients.consumer.internals.events.CompletableBackgroundEvent;
+import org.apache.kafka.clients.consumer.internals.events.ConsumerRebalanceListenerCallbackCompletedEvent;
+import org.apache.kafka.clients.consumer.internals.events.ConsumerRebalanceListenerCallbackNeededEvent;
+import org.apache.kafka.clients.consumer.internals.events.ErrorBackgroundEvent;
 import org.apache.kafka.common.ClusterResource;
 import org.apache.kafka.common.ClusterResourceListener;
 import org.apache.kafka.common.KafkaException;
@@ -47,6 +52,10 @@ import java.util.SortedSet;
 import java.util.TreeSet;
 import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
+
+import static org.apache.kafka.clients.consumer.internals.ConsumerRebalanceListenerMethodName.ON_PARTITIONS_ASSIGNED;
+import static org.apache.kafka.clients.consumer.internals.ConsumerRebalanceListenerMethodName.ON_PARTITIONS_LOST;
+import static org.apache.kafka.clients.consumer.internals.ConsumerRebalanceListenerMethodName.ON_PARTITIONS_REVOKED;
 
 /**
  * Group manager for a single consumer that has a group id defined in the config
@@ -245,6 +254,13 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
      */
     private final Optional<ClientTelemetryReporter> clientTelemetryReporter;
 
+    /**
+     * Serves as the conduit by which we can report events to the application thread. This is needed as we send
+     * {@link ConsumerRebalanceListenerCallbackNeededEvent callbacks} and, if needed,
+     * {@link ErrorBackgroundEvent errors} to the application thread.
+     */
+    private final BackgroundEventHandler backgroundEventHandler;
+
     public MembershipManagerImpl(String groupId,
                                  Optional<String> groupInstanceId,
                                  Optional<String> serverAssignor,
@@ -252,7 +268,8 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
                                  CommitRequestManager commitRequestManager,
                                  ConsumerMetadata metadata,
                                  LogContext logContext,
-                                 Optional<ClientTelemetryReporter> clientTelemetryReporter) {
+                                 Optional<ClientTelemetryReporter> clientTelemetryReporter,
+                                 BackgroundEventHandler backgroundEventHandler) {
         this.groupId = groupId;
         this.state = MemberState.UNSUBSCRIBED;
         this.serverAssignor = serverAssignor;
@@ -266,6 +283,7 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
         this.currentAssignment = new HashMap<>();
         this.log = logContext.logger(MembershipManagerImpl.class);
         this.clientTelemetryReporter = clientTelemetryReporter;
+        this.backgroundEventHandler = backgroundEventHandler;
     }
 
     /**
@@ -1089,7 +1107,7 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
         // current behaviour.
         Optional<ConsumerRebalanceListener> listener = subscriptions.rebalanceListener();
         if (!partitionsRevoked.isEmpty() && listener.isPresent()) {
-            throw new UnsupportedOperationException("User-defined callbacks not supported yet");
+            return enqueueConsumerRebalanceListenerCallback(ON_PARTITIONS_REVOKED, partitionsRevoked);
         } else {
             return CompletableFuture.completedFuture(null);
         }
@@ -1100,7 +1118,7 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
         // the current behaviour.
         Optional<ConsumerRebalanceListener> listener = subscriptions.rebalanceListener();
         if (listener.isPresent()) {
-            throw new UnsupportedOperationException("User-defined callbacks not supported yet");
+            return enqueueConsumerRebalanceListenerCallback(ON_PARTITIONS_ASSIGNED, partitionsAssigned);
         } else {
             return CompletableFuture.completedFuture(null);
         }
@@ -1111,9 +1129,58 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
         // behaviour.
         Optional<ConsumerRebalanceListener> listener = subscriptions.rebalanceListener();
         if (!partitionsLost.isEmpty() && listener.isPresent()) {
-            throw new UnsupportedOperationException("User-defined callbacks not supported yet");
+            return enqueueConsumerRebalanceListenerCallback(ON_PARTITIONS_LOST, partitionsLost);
         } else {
             return CompletableFuture.completedFuture(null);
+        }
+    }
+
+    /**
+     * Enqueue a {@link ConsumerRebalanceListenerCallbackNeededEvent} to trigger the execution of the
+     * appropriate {@link ConsumerRebalanceListener} {@link ConsumerRebalanceListenerMethodName method} on the
+     * application thread.
+     *
+     * <p/>
+     *
+     * Because the reconciliation process (run in the background thread) will be blocked by the application thread
+     * until it completes this, we need to provide a {@link CompletableFuture} by which to remember where we left off.
+     *
+     * @param methodName Callback method that needs to be executed on the application thread
+     * @param partitions Partitions to supply to the callback method
+     * @return Future that will be chained within the rest of the reconciliation logic
+     */
+    private CompletableFuture<Void> enqueueConsumerRebalanceListenerCallback(ConsumerRebalanceListenerMethodName methodName,
+                                                                             Set<TopicPartition> partitions) {
+        SortedSet<TopicPartition> sortedPartitions = new TreeSet<>(TOPIC_PARTITION_COMPARATOR);
+        sortedPartitions.addAll(partitions);
+        CompletableBackgroundEvent<Void> event = new ConsumerRebalanceListenerCallbackNeededEvent(methodName, sortedPartitions);
+        backgroundEventHandler.add(event);
+        log.debug("The event to trigger the {} method execution was enqueued successfully", methodName.fullyQualifiedMethodName());
+        return event.future();
+    }
+
+    @Override
+    public void consumerRebalanceListenerCallbackCompleted(ConsumerRebalanceListenerCallbackCompletedEvent event) {
+        ConsumerRebalanceListenerMethodName methodName = event.methodName();
+        Optional<KafkaException> error = event.error();
+        CompletableFuture<Void> future = event.future();
+
+        if (error.isPresent()) {
+            Exception e = error.get();
+            log.warn(
+                "The {} method completed with an error ({}); signaling to continue to the next phase of rebalance",
+                methodName.fullyQualifiedMethodName(),
+                e.getMessage()
+            );
+
+            future.completeExceptionally(e);
+        } else {
+            log.debug(
+                "The {} method completed successfully; signaling to continue to the next phase of rebalance",
+                methodName.fullyQualifiedMethodName()
+            );
+
+            future.complete(null);
         }
     }
 

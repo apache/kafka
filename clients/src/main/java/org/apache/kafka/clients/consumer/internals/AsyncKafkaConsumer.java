@@ -42,7 +42,11 @@ import org.apache.kafka.clients.consumer.internals.events.ApplicationEventHandle
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEventProcessor;
 import org.apache.kafka.clients.consumer.internals.events.AssignmentChangeApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
+import org.apache.kafka.clients.consumer.internals.events.BackgroundEventHandler;
 import org.apache.kafka.clients.consumer.internals.events.CommitApplicationEvent;
+import org.apache.kafka.clients.consumer.internals.events.CompletableApplicationEvent;
+import org.apache.kafka.clients.consumer.internals.events.ConsumerRebalanceListenerCallbackCompletedEvent;
+import org.apache.kafka.clients.consumer.internals.events.ConsumerRebalanceListenerCallbackNeededEvent;
 import org.apache.kafka.clients.consumer.internals.events.ErrorBackgroundEvent;
 import org.apache.kafka.clients.consumer.internals.events.EventProcessor;
 import org.apache.kafka.clients.consumer.internals.events.FetchCommittedOffsetsApplicationEvent;
@@ -94,9 +98,10 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.OptionalLong;
 import java.util.Set;
+import java.util.SortedSet;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutionException;
+import java.util.concurrent.Future;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
@@ -149,11 +154,18 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
      *     <li>{@link ConsumerRebalanceListener} callbacks that are to be executed on the application thread</li>
      * </ul>
      */
-    public class BackgroundEventProcessor extends EventProcessor<BackgroundEvent> {
+    private class BackgroundEventProcessor extends EventProcessor<BackgroundEvent> {
+
+        private final ApplicationEventHandler applicationEventHandler;
+        private final ConsumerRebalanceListenerInvoker rebalanceListenerInvoker;
 
         public BackgroundEventProcessor(final LogContext logContext,
-                                        final BlockingQueue<BackgroundEvent> backgroundEventQueue) {
+                                        final BlockingQueue<BackgroundEvent> backgroundEventQueue,
+                                        final ApplicationEventHandler applicationEventHandler,
+                                        final ConsumerRebalanceListenerInvoker rebalanceListenerInvoker) {
             super(logContext, backgroundEventQueue);
+            this.applicationEventHandler = applicationEventHandler;
+            this.rebalanceListenerInvoker = rebalanceListenerInvoker;
         }
 
         /**
@@ -163,13 +175,25 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
          * error, continue to process the remaining events, and then throw the first error that occurred.
          */
         @Override
-        public void process() {
-            AtomicReference<RuntimeException> firstError = new AtomicReference<>();
-            process((event, error) -> firstError.compareAndSet(null, error));
+        public boolean process() {
+            AtomicReference<KafkaException> firstError = new AtomicReference<>();
 
-            if (firstError.get() != null) {
+            ProcessHandler<BackgroundEvent> processHandler = (event, error) -> {
+                if (error.isPresent()) {
+                    KafkaException e = error.get();
+
+                    if (!firstError.compareAndSet(null, e)) {
+                        log.warn("An error occurred when processing the event: {}", e.getMessage(), e);
+                    }
+                }
+            };
+
+            boolean hadEvents = process(processHandler);
+
+            if (firstError.get() != null)
                 throw firstError.get();
-            }
+
+            return hadEvents;
         }
 
         @Override
@@ -178,18 +202,19 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                 case ERROR:
                     process((ErrorBackgroundEvent) event);
                     break;
+
                 case GROUP_METADATA_UPDATE:
                     process((GroupMetadataUpdateEvent) event);
                     break;
+
+                case CONSUMER_REBALANCE_LISTENER_CALLBACK_NEEDED:
+                    process((ConsumerRebalanceListenerCallbackNeededEvent) event);
+                    break;
+
                 default:
                     throw new IllegalArgumentException("Background event type " + event.type() + " was not expected");
 
             }
-        }
-
-        @Override
-        protected Class<BackgroundEvent> getEventClass() {
-            return BackgroundEvent.class;
         }
 
         private void process(final ErrorBackgroundEvent event) {
@@ -206,6 +231,16 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                     currentGroupMetadata.groupInstanceId()
                 ));
             }
+        }
+
+        private void process(final ConsumerRebalanceListenerCallbackNeededEvent event) {
+            ApplicationEvent invokedEvent = invokeRebalanceCallbacks(
+                rebalanceListenerInvoker,
+                event.methodName(),
+                event.partitions(),
+                event.future()
+            );
+            applicationEventHandler.add(invokedEvent);
         }
     }
 
@@ -294,6 +329,10 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
 
             ApiVersions apiVersions = new ApiVersions();
             final BlockingQueue<ApplicationEvent> applicationEventQueue = new LinkedBlockingQueue<>();
+            final BackgroundEventHandler backgroundEventHandler = new BackgroundEventHandler(
+                    logContext,
+                    backgroundEventQueue
+            );
 
             // This FetchBuffer is shared between the application and network threads.
             this.fetchBuffer = new FetchBuffer(logContext);
@@ -307,7 +346,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                     clientTelemetryReporter.map(ClientTelemetryReporter::telemetrySender).orElse(null));
             final Supplier<RequestManagers> requestManagersSupplier = RequestManagers.supplier(time,
                     logContext,
-                    backgroundEventQueue,
+                    backgroundEventHandler,
                     metadata,
                     subscriptions,
                     fetchBuffer,
@@ -327,7 +366,23 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                     applicationEventProcessorSupplier,
                     networkClientDelegateSupplier,
                     requestManagersSupplier);
-            this.backgroundEventProcessor = new BackgroundEventProcessor(logContext, backgroundEventQueue);
+            ConsumerCoordinatorMetrics coordinatorMetrics = new ConsumerCoordinatorMetrics(
+                    subscriptions,
+                    metrics,
+                    CONSUMER_METRIC_GROUP_PREFIX
+            );
+            ConsumerRebalanceListenerInvoker rebalanceListenerInvoker = new ConsumerRebalanceListenerInvoker(
+                    logContext,
+                    subscriptions,
+                    time,
+                    coordinatorMetrics
+            );
+            this.backgroundEventProcessor = new BackgroundEventProcessor(
+                    logContext,
+                    backgroundEventQueue,
+                    applicationEventHandler,
+                    rebalanceListenerInvoker
+            );
             this.assignors = ConsumerPartitionAssignor.getAssignorInstances(
                     config.getList(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG),
                     config.originals(Collections.singletonMap(ConsumerConfig.CLIENT_ID_CONFIG, clientId))
@@ -374,6 +429,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                        Time time,
                        ApplicationEventHandler applicationEventHandler,
                        BlockingQueue<BackgroundEvent> backgroundEventQueue,
+                       ConsumerRebalanceListenerInvoker rebalanceListenerInvoker,
                        Metrics metrics,
                        SubscriptionState subscriptions,
                        ConsumerMetadata metadata,
@@ -389,7 +445,12 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         this.isolationLevel = IsolationLevel.READ_UNCOMMITTED;
         this.interceptors = Objects.requireNonNull(interceptors);
         this.time = time;
-        this.backgroundEventProcessor = new BackgroundEventProcessor(logContext, backgroundEventQueue);
+        this.backgroundEventProcessor = new BackgroundEventProcessor(
+                logContext,
+                backgroundEventQueue,
+                applicationEventHandler,
+                rebalanceListenerInvoker
+        );
         this.metrics = metrics;
         this.groupMetadata = initializeGroupMetadata(groupId, Optional.empty());
         this.metadata = metadata;
@@ -402,7 +463,6 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         this.clientTelemetryReporter = Optional.empty();
     }
 
-    // Visible for testing
     AsyncKafkaConsumer(LogContext logContext,
                        Time time,
                        ConsumerConfig config,
@@ -443,11 +503,25 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             GroupRebalanceConfig.ProtocolType.CONSUMER
         );
 
+        ConsumerCoordinatorMetrics coordinatorMetrics = new ConsumerCoordinatorMetrics(
+                subscriptions,
+                metrics,
+                CONSUMER_METRIC_GROUP_PREFIX
+        );
         this.groupMetadata = initializeGroupMetadata(config, groupRebalanceConfig);
 
         BlockingQueue<ApplicationEvent> applicationEventQueue = new LinkedBlockingQueue<>();
         BlockingQueue<BackgroundEvent> backgroundEventQueue = new LinkedBlockingQueue<>();
-        this.backgroundEventProcessor = new BackgroundEventProcessor(logContext, backgroundEventQueue);
+        BackgroundEventHandler backgroundEventHandler = new BackgroundEventHandler(
+            logContext,
+            backgroundEventQueue
+        );
+        ConsumerRebalanceListenerInvoker rebalanceListenerInvoker = new ConsumerRebalanceListenerInvoker(
+            logContext,
+            subscriptions,
+            time,
+            coordinatorMetrics
+        );
         ApiVersions apiVersions = new ApiVersions();
         Supplier<NetworkClientDelegate> networkClientDelegateSupplier = () -> new NetworkClientDelegate(
             time,
@@ -458,7 +532,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         Supplier<RequestManagers> requestManagersSupplier = RequestManagers.supplier(
             time,
             logContext,
-            backgroundEventQueue,
+            backgroundEventHandler,
             metadata,
             subscriptions,
             fetchBuffer,
@@ -481,6 +555,12 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                 applicationEventProcessorSupplier,
                 networkClientDelegateSupplier,
                 requestManagersSupplier);
+        this.backgroundEventProcessor = new BackgroundEventProcessor(
+                logContext,
+                backgroundEventQueue,
+                applicationEventHandler,
+                rebalanceListenerInvoker
+        );
     }
 
     private Optional<ConsumerGroupMetadata> initializeGroupMetadata(final ConsumerConfig config,
@@ -1232,11 +1312,14 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             if (groupMetadata.isPresent()) {
                 UnsubscribeApplicationEvent unsubscribeApplicationEvent = new UnsubscribeApplicationEvent();
                 applicationEventHandler.add(unsubscribeApplicationEvent);
+                log.info("Unsubscribing all topics or patterns and assigned partitions");
+                Timer timer = time.timer(Long.MAX_VALUE);
+
                 try {
-                    unsubscribeApplicationEvent.future().get();
+                    processBackgroundEvents(backgroundEventProcessor, unsubscribeApplicationEvent.future(), timer);
                     log.info("Unsubscribed all topics or patterns and assigned partitions");
-                } catch (InterruptedException | ExecutionException e) {
-                    log.error("Failed while waiting for the unsubscribe event to complete", e);
+                } catch (TimeoutException e) {
+                    log.error("Failed while waiting for the unsubscribe event to complete");
                 }
             }
             subscriptions.unsubscribe();
@@ -1303,8 +1386,8 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
      *
      * <p/>
      *
-     * This method will {@link ApplicationEventHandler#wakeupNetworkThread() wake up} the {@link ConsumerNetworkThread} before
-     * retuning. This is done as an optimization so that the <em>next round of data can be pre-fetched</em>.
+     * This method will {@link ConsumerNetworkThread#wakeup() wake up the network thread} before returning. This is
+     * done as an optimization so that the <em>next round of data can be pre-fetched</em>.
      */
     private Fetch<K, V> collectFetch() {
         final Fetch<K, V> fetch = fetchCollector.collectFetch(fetchBuffer);
@@ -1533,6 +1616,115 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         } finally {
             release();
         }
+    }
+
+    /**
+     * This method can be used by cases where the caller has an event that needs to both block for completion but
+     * also process background events. For some events, in order to fully process the associated logic, the
+     * {@link ConsumerNetworkThread background thread} needs assistance from the application thread to complete.
+     * If the application thread simply blocked on the event after submitting it, the processing would deadlock.
+     * The logic herein is basically a loop that performs two tasks in each iteration:
+     *
+     * <ol>
+     *     <li>Process background events, if any</li>
+     *     <li><em>Briefly</em> wait for {@link CompletableApplicationEvent an event} to complete</li>
+     * </ol>
+     *
+     * <p/>
+     *
+     * Each iteration gives the application thread an opportunity to process background events, which may be
+     * necessary to complete the overall processing.
+     *
+     * <p/>
+     *
+     * As an example, take {@link #unsubscribe()}. To start unsubscribing, the application thread enqueues an
+     * {@link UnsubscribeApplicationEvent} on the application event queue. That event will eventually trigger the
+     * rebalancing logic in the background thread. Critically, as part of this rebalancing work, the
+     * {@link ConsumerRebalanceListener#onPartitionsRevoked(Collection)} callback needs to be invoked. However,
+     * this callback must be executed on the application thread. To achieve this, the background thread enqueues a
+     * {@link ConsumerRebalanceListenerCallbackNeededEvent} on its background event queue. That event queue is
+     * periodically queried by the application thread to see if there's work to be done. When the application thread
+     * sees {@link ConsumerRebalanceListenerCallbackNeededEvent}, it is processed, and then a
+     * {@link ConsumerRebalanceListenerCallbackCompletedEvent} is then enqueued by the application thread on the
+     * background event queue. Moments later, the background thread will see that event, process it, and continue
+     * execution of the rebalancing logic. The rebalancing logic cannot complete until the
+     * {@link ConsumerRebalanceListener} callback is performed.
+     *
+     * @param eventProcessor Event processor that contains the queue of events to process
+     * @param future         Event that contains a {@link CompletableFuture}; it is on this future that the
+     *                       application thread will wait for completion
+     * @param timer          Overall timer that bounds how long to wait for the event to complete
+     * @return {@code true} if the event completed within the timeout, {@code false} otherwise
+     */
+    // Visible for testing
+    <T> T processBackgroundEvents(EventProcessor<?> eventProcessor,
+                                  Future<T> future,
+                                  Timer timer) {
+        log.trace("Will wait up to {} ms for future {} to complete", timer.remainingMs(), future);
+
+        do {
+            boolean hadEvents = eventProcessor.process();
+
+            try {
+                if (future.isDone()) {
+                    // If the event is done (either successfully or otherwise), go ahead and attempt to return
+                    // without waiting. We use the ConsumerUtils.getResult() method here to handle the conversion
+                    // of the exception types.
+                    T result = ConsumerUtils.getResult(future);
+                    log.trace("Future {} completed successfully", future);
+                    return result;
+                } else if (!hadEvents) {
+                    // If the above processing yielded no events, then let's sit tight for a bit to allow the
+                    // background thread to either a) finish the task, or b) populate the background event
+                    // queue with things to process in our next loop.
+                    Timer pollInterval = time.timer(100L);
+                    log.trace("Waiting {} ms for future {} to complete", pollInterval.remainingMs(), future);
+                    T result = ConsumerUtils.getResult(future, pollInterval);
+                    log.trace("Future {} completed successfully", future);
+                    return result;
+                }
+            } catch (TimeoutException e) {
+                // Ignore this as we will retry the event until the timeout expires.
+            } finally {
+                timer.update();
+            }
+        } while (timer.notExpired());
+
+        log.trace("Future {} did not complete within timeout", future);
+        throw new TimeoutException("Operation timed out before completion");
+    }
+
+    static ConsumerRebalanceListenerCallbackCompletedEvent invokeRebalanceCallbacks(ConsumerRebalanceListenerInvoker rebalanceListenerInvoker,
+                                                                                    ConsumerRebalanceListenerMethodName methodName,
+                                                                                    SortedSet<TopicPartition> partitions,
+                                                                                    CompletableFuture<Void> future) {
+        final Exception e;
+
+        switch (methodName) {
+            case ON_PARTITIONS_REVOKED:
+                e = rebalanceListenerInvoker.invokePartitionsRevoked(partitions);
+                break;
+
+            case ON_PARTITIONS_ASSIGNED:
+                e = rebalanceListenerInvoker.invokePartitionsAssigned(partitions);
+                break;
+
+            case ON_PARTITIONS_LOST:
+                e = rebalanceListenerInvoker.invokePartitionsLost(partitions);
+                break;
+
+            default:
+                throw new IllegalArgumentException("The method " + methodName.fullyQualifiedMethodName() + " to invoke was not expected");
+        }
+
+        final Optional<KafkaException> error;
+
+        if (e != null)
+            error = Optional.of(ConsumerUtils.maybeWrapAsKafkaException(e, "User rebalance callback throws an error"));
+        else
+            error = Optional.empty();
+
+        return new ConsumerRebalanceListenerCallbackCompletedEvent(methodName, future, error);
     }
 
     @Override
