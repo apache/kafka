@@ -27,6 +27,7 @@ import org.apache.kafka.common.errors.GroupIdNotFoundException;
 import org.apache.kafka.common.errors.GroupMaxSizeReachedException;
 import org.apache.kafka.common.errors.IllegalGenerationException;
 import org.apache.kafka.common.errors.InvalidRequestException;
+import org.apache.kafka.common.errors.NotLeaderOrFollowerException;
 import org.apache.kafka.common.errors.UnknownMemberIdException;
 import org.apache.kafka.common.errors.UnknownServerException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
@@ -4706,12 +4707,33 @@ public class GroupMetadataManagerTest {
         assertTrue(joinResult.joinFuture.isDone());
         assertEquals(Errors.MEMBER_ID_REQUIRED.code(), joinResult.joinFuture.get().errorCode());
 
-        GenericGroup group = context.createGenericGroup("group-id");
+        GenericGroup group = context.groupMetadataManager.getOrMaybeCreateGenericGroup("group-id", false);
 
         assertEquals(
             Collections.singletonList(RecordHelpers.newEmptyGroupMetadataRecord(group, MetadataVersion.latest())),
             joinResult.records
         );
+    }
+
+    @Test
+    public void testGenerateRecordsOnNewGenericGroupFailureTransformsError() throws Exception {
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .build();
+
+        JoinGroupRequestData request = new JoinGroupRequestBuilder()
+            .withGroupId("group-id")
+            .withMemberId(UNKNOWN_MEMBER_ID)
+            .withGroupInstanceId("group-instance-id")
+            .withDefaultProtocolTypeAndProtocols()
+            .build();
+
+        JoinResult joinResult = context.sendGenericGroupJoin(request, true);
+        assertFalse(joinResult.joinFuture.isDone());
+
+        // Simulate a failed write to the log.
+        joinResult.appendFuture.completeExceptionally(new NotLeaderOrFollowerException());
+        assertTrue(joinResult.joinFuture.isDone());
+        assertEquals(Errors.NOT_COORDINATOR.code(), joinResult.joinFuture.get().errorCode());
     }
 
     @ParameterizedTest
@@ -6355,7 +6377,6 @@ public class GroupMetadataManagerTest {
         group.transitionTo(STABLE);
 
         // Static member rejoins with UNKNOWN_MEMBER_ID. The selected protocol changes and triggers a rebalance.
-
         JoinResult joinResult = context.sendGenericGroupJoin(
             request.setProtocols(toProtocols("roundrobin"))
         );
@@ -7435,7 +7456,7 @@ public class GroupMetadataManagerTest {
         assertTrue(group.isInState(STABLE));
         assertEquals(Errors.NONE.code(), leaderSyncResult.syncFuture.get().errorCode());
 
-        // Sync with old member id will also not fail because the member id is not updated because of persistence failure
+        // Sync with old member id will also not fail as the member id is not updated due to persistence failure
         SyncResult oldMemberSyncResult = context.sendGenericGroupSync(
             syncRequest
                 .setGroupInstanceId("follower-instance-id")
@@ -8369,6 +8390,38 @@ public class GroupMetadataManagerTest {
         assertTrue(syncResult.records.isEmpty());
         assertTrue(syncResult.syncFuture.isDone());
         assertEquals(Errors.ILLEGAL_GENERATION.code(), syncResult.syncFuture.get().errorCode());
+    }
+
+    @Test
+    public void testSyncGroupAsLeaderAppendFailureTransformsError() throws Exception {
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .build();
+        context.createGenericGroup("group-id");
+
+        JoinGroupRequestData joinRequest = new JoinGroupRequestBuilder()
+            .withGroupId("group-id")
+            .withGroupInstanceId("leader-instance-id")
+            .withMemberId(UNKNOWN_MEMBER_ID)
+            .withDefaultProtocolTypeAndProtocols()
+            .build();
+
+        JoinGroupResponseData joinResponse = context.joinGenericGroupAndCompleteJoin(joinRequest, true, true);
+
+        // Send the sync group with an invalid generation
+        SyncResult syncResult = context.sendGenericGroupSync(
+            new SyncGroupRequestBuilder()
+                .withGroupId("group-id")
+                .withMemberId(joinResponse.memberId())
+                .withGenerationId(1)
+                .build()
+        );
+
+        assertFalse(syncResult.syncFuture.isDone());
+
+        // Simulate a failed write to the log.
+        syncResult.appendFuture.completeExceptionally(new NotLeaderOrFollowerException());
+        assertTrue(syncResult.syncFuture.isDone());
+        assertEquals(Errors.NOT_COORDINATOR.code(), syncResult.syncFuture.get().errorCode());
     }
 
     @Test

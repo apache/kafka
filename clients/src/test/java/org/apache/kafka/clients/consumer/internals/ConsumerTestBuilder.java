@@ -51,6 +51,7 @@ import static org.apache.kafka.clients.consumer.ConsumerConfig.GROUP_ID_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.GROUP_INSTANCE_ID_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG;
+import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.CONSUMER_METRIC_GROUP_PREFIX;
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.createFetchMetricsManager;
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.createMetrics;
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.createSubscriptionState;
@@ -96,6 +97,7 @@ public class ConsumerTestBuilder implements Closeable {
     final RequestManagers requestManagers;
     public final ApplicationEventProcessor applicationEventProcessor;
     public final BackgroundEventHandler backgroundEventHandler;
+    public final ConsumerRebalanceListenerInvoker rebalanceListenerInvoker;
     final MockClient client;
     final Optional<GroupInformation> groupInfo;
 
@@ -206,7 +208,8 @@ public class ConsumerTestBuilder implements Closeable {
                         commit,
                         metadata,
                         logContext,
-                        Optional.empty()
+                        Optional.empty(),
+                        backgroundEventHandler
                 )
             );
             HeartbeatRequestManager.HeartbeatState heartbeatState = spy(new HeartbeatRequestManager.HeartbeatState(
@@ -261,13 +264,23 @@ public class ConsumerTestBuilder implements Closeable {
                 fetchRequestManager,
                 coordinatorRequestManager,
                 commitRequestManager,
-                heartbeatRequestManager,
-                membershipManager);
+                heartbeatRequestManager);
         this.applicationEventProcessor = spy(new ApplicationEventProcessor(
                 logContext,
                 applicationEventQueue,
                 requestManagers,
                 metadata)
+        );
+        ConsumerCoordinatorMetrics consumerCoordinatorMetrics = new ConsumerCoordinatorMetrics(
+                subscriptions,
+                metrics,
+                CONSUMER_METRIC_GROUP_PREFIX
+        );
+        this.rebalanceListenerInvoker = new ConsumerRebalanceListenerInvoker(
+                logContext,
+                subscriptions,
+                time,
+                consumerCoordinatorMetrics
         );
     }
 
@@ -354,6 +367,7 @@ public class ConsumerTestBuilder implements Closeable {
                     time,
                     applicationEventHandler,
                     backgroundEventQueue,
+                    rebalanceListenerInvoker,
                     metrics,
                     subscriptions,
                     metadata,
