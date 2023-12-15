@@ -42,8 +42,8 @@ public class BufferingBatchConsumer<T> implements Consumer<List<T>> {
     }
 
     @Override
-    public void accept(List<T> apiMessageAndVersions) {
-        bufferedBatch.addAll(apiMessageAndVersions);
+    public void accept(List<T> batch) {
+        bufferedBatch.addAll(batch);
         if (bufferedBatch.size() >= minBatchSize) {
             delegateConsumer.accept(new ArrayList<>(bufferedBatch));
             bufferedBatch.clear();
