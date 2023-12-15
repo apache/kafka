@@ -32,6 +32,7 @@ import org.slf4j.Logger;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Supplier;
@@ -258,12 +259,15 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
     }
 
     private void process(final LeaveOnCloseApplicationEvent event) {
-        if (!requestManagers.membershipManager.isPresent()) {
+        if (!requestManagers.heartbeatRequestManager.isPresent()) {
             event.future().complete(null);
             return;
         }
+        MembershipManager membershipManager =
+            Objects.requireNonNull(requestManagers.heartbeatRequestManager.get().membershipManager(), "Expecting " +
+                "membership manager to be non-null");
         log.debug("Leaving group before closing");
-        CompletableFuture<Void> future = requestManagers.membershipManager.get().leaveGroup();
+        CompletableFuture<Void> future = membershipManager.leaveGroup();
         // The future will be completed on heartbeat sent
         event.chain(future);
     }
