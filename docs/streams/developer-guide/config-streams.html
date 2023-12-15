@@ -312,13 +312,17 @@ streamsSettings.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, 1);</code></pre>
           </tr>
           <tr class="row-even"><td>default.dsl.store</td>
             <td>Low</td>
-            <td colspan="2">(Deprecated) The default state store type used by DSL operators.</td>
+            <td colspan="2">
+              [DEPRECATED] The default state store type used by DSL operators. Deprecated in
+              favor of <code>dsl.store.suppliers.class</code>
+              </td>
             <td><code>ROCKS_DB</code></td>
           </tr>
           <tr class="row-odd"><td>dsl.store.suppliers.class</td>
             <td>Low</td>
             <td colspan="2">
-              Defines which store implementations to plug in to DSL operators. Must implement
+              Defines a default state store implementation to be used by any stateful DSL operator
+              that has not explicitly configured the store implementation type. Must implement
               the <code>org.apache.kafka.streams.state.DslStoreSuppliers</code> interface.
             </td>
             <td><code>BuiltInDslStoreSuppliers.RocksDBDslStoreSuppliers</code></td>
