@@ -32,28 +32,27 @@ import java.util.function.Consumer;
 public class BufferingBatchConsumer<T> implements Consumer<List<T>> {
 
     private final Consumer<List<T>> delegateConsumer;
-    private final List<T> bufferedBatch;
     private final int minBatchSize;
+    private List<T> bufferedBatch;
 
     BufferingBatchConsumer(Consumer<List<T>> delegateConsumer, int minBatchSize) {
         this.delegateConsumer = delegateConsumer;
-        this.bufferedBatch = new ArrayList<>(minBatchSize);
         this.minBatchSize = minBatchSize;
+        this.bufferedBatch = new ArrayList<>(minBatchSize);
     }
 
     @Override
     public void accept(List<T> batch) {
         bufferedBatch.addAll(batch);
         if (bufferedBatch.size() >= minBatchSize) {
-            delegateConsumer.accept(new ArrayList<>(bufferedBatch));
-            bufferedBatch.clear();
+            flush();
         }
     }
 
     public void flush() {
         if (!bufferedBatch.isEmpty()) {
-            delegateConsumer.accept(new ArrayList<>(bufferedBatch));
-            bufferedBatch.clear();
+            delegateConsumer.accept(bufferedBatch);
+            bufferedBatch = new ArrayList<>(minBatchSize);
         }
     }
 }
