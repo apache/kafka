@@ -57,6 +57,7 @@ RUN mkdir kafka; \
         -H:PredefinedClassesConfigurationFiles=/app/native-image-configs/predefined-classes-config.json \
         -H:DynamicProxyConfigurationFiles=/app/native-image-configs/proxy-config.json \
         --verbose \
+        -march=compatibility \
         -cp "libs/*" kafka.KafkaNativeWrapper \
         -o kafka.Kafka
 

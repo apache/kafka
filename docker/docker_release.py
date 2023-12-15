@@ -40,14 +40,15 @@ import argparse
 
 from common import execute, build_image_runner
 
-def build_push_jvm(image, kafka_url):
+def build_push_jvm(image, kafka_url, image_type):
     try:
         create_builder()
         build_image_runner(f"docker buildx build -f $DOCKER_FILE --build-arg kafka_url={kafka_url} --build-arg build_date={date.today()} --push \
-              --platform linux/amd64,linux/arm64 --tag {image} $DOCKER_DIR")
+              --platform linux/amd64,linux/arm64 --tag {image} $DOCKER_DIR", image_type)
     except:
         raise SystemError("Docker image push failed")
     finally:
+        # pass
         remove_builder()
 
 def create_builder():
@@ -63,13 +64,12 @@ if __name__ == "__main__":
           Please ensure you are logged in the docker registry that you are trying to push to.")
     parser = argparse.ArgumentParser()
     parser.add_argument("image", help="Dockerhub image that you want to push to (in the format <registry>/<namespace>/<image_name>:<image_tag>)")
-    parser.add_argument("--image-type", "-type", choices=["jvm"], default="jvm", dest="image_type", help="Image type you want to build")
+    parser.add_argument("--image-type", "-type", choices=["jvm", "native"], default="jvm", dest="image_type", help="Image type you want to build")
     parser.add_argument("--kafka-url", "-u", dest="kafka_url", help="Kafka url to be used to download kafka binary tarball in the docker image")
     args = parser.parse_args()
 
     print(f"Docker image of type {args.image_type} containing kafka downloaded from {args.kafka_url} will be pushed to {args.image}")
 
     print("Building and pushing the image")
-    if args.image_type == "jvm":
-        build_push_jvm(args.image, args.kafka_url)
+    build_push_jvm(args.image, args.kafka_url, args.image_type)
     print(f"Image has been pushed to {args.image}")
