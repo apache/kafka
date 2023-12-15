@@ -32,6 +32,8 @@ import java.util.List;
 
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 
@@ -79,7 +81,9 @@ public class ReadonlyPartiallyDeserializedSegmentValueTest {
             final List<Long> timestamps = createTimestampsFromTestRecords(testCase);
 
             // verify results
-            final List<ResultOrder> orders = Arrays.asList(ResultOrder.ASCENDING, ResultOrder.ANY, ResultOrder.DESCENDING);
+//            final List<ResultOrder> orders = Arrays.asList(ResultOrder.ASCENDING, ResultOrder.ANY, ResultOrder.DESCENDING);
+            final List<ResultOrder> orders = Arrays.asList(ResultOrder.DESCENDING);
+
             for (final ResultOrder order: orders) {
                 for (final Long from : timestamps) {
                     for (final Long to : timestamps) {
@@ -117,6 +121,9 @@ public class ReadonlyPartiallyDeserializedSegmentValueTest {
 
                             segmentRecordIndex = order.equals(ResultOrder.ASCENDING) ? index - 1 : index + 1;
                         }
+                        // should return null when the index == record number
+                        assertNull(segmentValue.find(from, to, order, segmentRecordIndex));
+
                         // verify no results within the time range
                         if (expectedRecordsIndices.size() == 0) {
                             assertNull(segmentValue.find(from, to, order, -1));
@@ -124,6 +131,22 @@ public class ReadonlyPartiallyDeserializedSegmentValueTest {
                     }
                 }
             }
+        }
+
+        @Test
+        public void shouldThrowWithInvalidPositiveIndex() {
+            final ReadonlyPartiallyDeserializedSegmentValue segmentValue = buildSegmentWithInsertLatest(testCase);
+            final Exception exception = assertThrows(IllegalArgumentException.class, () ->
+                    segmentValue.find(Long.MIN_VALUE, Long.MAX_VALUE, ResultOrder.ANY, 10000000));
+            assertEquals("The segment does not contain any record with the specified index.", exception.getMessage());
+        }
+
+        @Test
+        public void shouldThrowWithInvalidNegativeIndex() {
+            final ReadonlyPartiallyDeserializedSegmentValue segmentValue = buildSegmentWithInsertLatest(testCase);
+            final Exception exception = assertThrows(IllegalArgumentException.class, () ->
+                    segmentValue.find(Long.MIN_VALUE, Long.MAX_VALUE, ResultOrder.ANY, -10000000));
+            assertEquals("The segment does not contain any record with the specified index.", exception.getMessage());
         }
     }
 

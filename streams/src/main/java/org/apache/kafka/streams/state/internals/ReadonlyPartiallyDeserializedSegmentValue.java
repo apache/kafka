@@ -77,13 +77,11 @@ final class ReadonlyPartiallyDeserializedSegmentValue {
             findValuesStartingIndex();
             deserIndex = recordNumber;
         }
-
-        long currTimestamp = -1;
-        long currNextTimestamp = -1;
+        long currTimestamp = initializeCurrTimestamp(index, isAscending);
+        long currNextTimestamp = initializeCurrNextTimestamp(index, isAscending);
         int currIndex = initializeCurrentIndex(index, isAscending);
         int cumValueSize = initializeCumValueSize(index, currIndex, isAscending);
         int currValueSize;
-
 
         while (hasStillRecord(currTimestamp, currNextTimestamp, order)) {
             if (hasBeenDeserialized(isAscending, currIndex)) {
@@ -92,8 +90,7 @@ final class ReadonlyPartiallyDeserializedSegmentValue {
                 currTimestamp = curr.timestamp;
                 currValueSize = curr.valueSize;
                 cumValueSize = cumulativeValueSizes.get(currIndex);
-                currNextTimestamp = updateCurrNextTimestamp(currIndex, isAscending);
-
+                currNextTimestamp = updateCurrNextTimestamp(currIndex);
             } else {
                 final int timestampSegmentIndex = getTimestampIndex(order, currIndex);
                 currTimestamp = unpackedTimestampAndValueSizes.containsKey(currIndex) // `findValuesStartingIndex()` stores the timestamps without increasing deserIndex
@@ -126,12 +123,36 @@ final class ReadonlyPartiallyDeserializedSegmentValue {
         return null;
     }
 
-    private long updateCurrNextTimestamp(final int currIndex, final boolean isAscending) {
-        if (isAscending) {
-            return currIndex == recordNumber - 1 ? nextTimestamp : unpackedTimestampAndValueSizes.get(currIndex + 1).timestamp;
+    private long initializeCurrNextTimestamp(final int index, final boolean isAscending) {
+        final long currNextTimestamp;
+        if (index == -1) { // if it is the first record to be retrieved
+            currNextTimestamp = -1;
         } else {
-            return currIndex == 0 ? nextTimestamp : unpackedTimestampAndValueSizes.get(currIndex - 1).timestamp;
+            final int prevIndex = isAscending ? index + 1 : index - 1;
+            if (!unpackedTimestampAndValueSizes.containsKey(prevIndex)) {
+                throw new IllegalArgumentException("The segment does not contain any record with the specified index.");
+            }
+            currNextTimestamp = updateCurrNextTimestamp(prevIndex);
         }
+        return currNextTimestamp;
+    }
+
+    private long initializeCurrTimestamp(final int index, final boolean isAscending) {
+        final long currTimestamp;
+        if (index == -1) { // if it is the first record to be retrieved
+            currTimestamp = -1;
+        } else {
+            final int prevIndex = isAscending ? index + 1 : index - 1;
+            if (!unpackedTimestampAndValueSizes.containsKey(prevIndex)) {
+                throw new IllegalArgumentException("The segment does not contain any record with the specified index.");
+            }
+            currTimestamp = unpackedTimestampAndValueSizes.get(prevIndex).timestamp;
+        }
+        return currTimestamp;
+    }
+
+    private long updateCurrNextTimestamp(final int currIndex) {
+        return currIndex == 0 ? nextTimestamp : unpackedTimestampAndValueSizes.get(currIndex - 1).timestamp;
     }
 
     private int initializeCumValueSize(final int index, final int currIndex, final boolean isAscending) {
