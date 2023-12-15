@@ -1251,7 +1251,7 @@ public class MembershipManagerImplTest {
         if (withAutoCommit) {
             when(commitRequestManager.autoCommitEnabled()).thenReturn(true);
             CompletableFuture<Void> commitResult = new CompletableFuture<>();
-            when(commitRequestManager.maybeAutoCommitAllConsumedNow(any())).thenReturn(commitResult);
+            when(commitRequestManager.maybeAutoCommitAllConsumedNow(any(), anyBoolean())).thenReturn(commitResult);
             return commitResult;
         } else {
             return CompletableFuture.completedFuture(null);
@@ -1437,7 +1437,7 @@ public class MembershipManagerImplTest {
         doNothing().when(subscriptionState).markPendingRevocation(anySet());
         when(commitRequestManager.autoCommitEnabled()).thenReturn(true);
         CompletableFuture<Void> commitResult = new CompletableFuture<>();
-        when(commitRequestManager.maybeAutoCommitAllConsumedNow(any())).thenReturn(commitResult);
+        when(commitRequestManager.maybeAutoCommitAllConsumedNow(any(), anyBoolean())).thenReturn(commitResult);
         return commitResult;
     }
 

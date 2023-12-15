@@ -144,7 +144,7 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
 
         CommitRequestManager manager = requestManagers.commitRequestManager.get();
         Optional<Long> expirationTimeMs = event.retryTimeoutMs().map(this::getExpirationTimeForTimeout);
-        event.chain(manager.addOffsetCommitRequest(event.offsets(), expirationTimeMs));
+        event.chain(manager.addOffsetCommitRequest(event.offsets(), expirationTimeMs, false));
     }
 
     private void process(final FetchCommittedOffsetsApplicationEvent event) {

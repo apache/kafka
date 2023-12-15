@@ -810,11 +810,14 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
         // be retried until it succeeds, fails with non-retriable error, or timer expires.
         CompletableFuture<Void> commitResult;
 
-        // Issue commit request that will be retried until it succeeds, fails with a
-        // non-retriable error, ot the time limit expires. Using the rebalance timeout as it is
-        // the limit enforced by the broker to complete the reconciliation process.
+        // Issue a commit request that will be retried until it succeeds, fails with a
+        // non-retriable error, or the time limit expires. Retry on stale member epoch error, in a
+        // best effort to commit the offsets in the case where the epoch might have changed while
+        // the current reconciliation is in process. Note this is using the rebalance timeout as
+        // it is the limit enforced by the broker to complete the reconciliation process.
         commitResult = commitRequestManager.maybeAutoCommitAllConsumedNow(
-            Optional.of(Long.valueOf(rebalanceTimeoutMs)));
+            Optional.of(Long.valueOf(rebalanceTimeoutMs)),
+            true);
 
         // Execute commit -> onPartitionsRevoked -> onPartitionsAssigned.
         commitResult.whenComplete((commitReqResult, commitReqError) -> {

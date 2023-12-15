@@ -191,7 +191,8 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
      */
     private CompletableFuture<Void> maybeAutoCommit(final Map<TopicPartition, OffsetAndMetadata> offsets,
                                                     final Optional<Long> expirationTimeMs,
-                                                    boolean checkInterval) {
+                                                    boolean checkInterval,
+                                                    boolean retryOnStaleEpoch) {
         if (!autoCommitEnabled()) {
             log.debug("Skipping auto-commit because auto-commit config is not enabled.");
             return CompletableFuture.completedFuture(null);
@@ -202,7 +203,7 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
             return CompletableFuture.completedFuture(null);
         }
 
-        CompletableFuture<Void> result = addOffsetCommitRequest(offsets, expirationTimeMs)
+        CompletableFuture<Void> result = addOffsetCommitRequest(offsets, expirationTimeMs, retryOnStaleEpoch)
             .whenComplete(autoCommitCallback(offsets));
         autocommit.resetTimer();
         autocommit.setInflightCommitStatus(true);
@@ -225,7 +226,7 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
             return CompletableFuture.completedFuture(null);
         }
         Map<TopicPartition, OffsetAndMetadata> offsets = subscriptions.allConsumed();
-        CompletableFuture<Void> result = maybeAutoCommit(offsets, Optional.empty(), true);
+        CompletableFuture<Void> result = maybeAutoCommit(offsets, Optional.empty(), true, true);
         result.whenComplete((__, error) -> {
             if (error != null) {
                 if (error instanceof RetriableCommitFailedException) {
@@ -246,8 +247,10 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
      * Commit consumed offsets if auto-commit is enabled. Retry while the timer is not expired,
      * until the request succeeds or fails with a fatal error.
      */
-    public CompletableFuture<Void> maybeAutoCommitAllConsumedNow(Optional<Long> expirationTimeMs) {
-        return maybeAutoCommit(subscriptions.allConsumed(), expirationTimeMs, false);
+    public CompletableFuture<Void> maybeAutoCommitAllConsumedNow(
+        final Optional<Long> expirationTimeMs,
+        final boolean retryOnStaleEpoch) {
+        return maybeAutoCommit(subscriptions.allConsumed(), expirationTimeMs, false, retryOnStaleEpoch);
     }
 
     boolean canAutoCommit() {
@@ -262,7 +265,8 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
         OffsetCommitRequestState request = pendingRequests.createOffsetCommitRequest(
             offsets,
             jitter,
-            Optional.of(time.milliseconds() + timer.remainingMs()));
+            Optional.of(time.milliseconds() + timer.remainingMs()),
+            false);
         log.debug("Sending synchronous auto-commit of offsets {}", offsets);
         request.future.whenComplete(autoCommitCallback(subscriptions.allConsumed()));
         return request.toUnsentRequest();
@@ -287,12 +291,13 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
      * {@link OffsetCommitRequestState} and enqueue it to send later.
      */
     public CompletableFuture<Void> addOffsetCommitRequest(final Map<TopicPartition, OffsetAndMetadata> offsets,
-                                                          final Optional<Long> expirationTimeMs) {
+                                                          final Optional<Long> expirationTimeMs,
+                                                          final boolean retryOnStaleEpoch) {
         if (offsets.isEmpty()) {
             log.debug("Skipping commit of empty offsets");
             return CompletableFuture.completedFuture(null);
         }
-        return pendingRequests.addOffsetCommitRequest(offsets, expirationTimeMs).future;
+        return pendingRequests.addOffsetCommitRequest(offsets, expirationTimeMs, retryOnStaleEpoch).future;
     }
 
     /**
@@ -393,9 +398,10 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
                                  final Optional<Long> expirationTimeMs,
                                  final long retryBackoffMs,
                                  final long retryBackoffMaxMs,
-                                 final MemberInfo memberInfo) {
+                                 final MemberInfo memberInfo,
+                                 final boolean retryOnStaleEpoch) {
             super(logContext, CommitRequestManager.class.getSimpleName(), retryBackoffMs,
-                retryBackoffMaxMs, memberInfo);
+                retryBackoffMaxMs, memberInfo, retryOnStaleEpoch);
             this.offsets = offsets;
             this.groupId = groupId;
             this.groupInstanceId = groupInstanceId;
@@ -411,9 +417,10 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
                                  final long retryBackoffMs,
                                  final long retryBackoffMaxMs,
                                  final double jitter,
-                                 final MemberInfo memberInfo) {
+                                 final MemberInfo memberInfo,
+                                 final boolean retryOnStaleEpoch) {
             super(logContext, CommitRequestManager.class.getSimpleName(), retryBackoffMs, 2,
-                retryBackoffMaxMs, jitter, memberInfo);
+                retryBackoffMaxMs, jitter, memberInfo, retryOnStaleEpoch);
             this.offsets = offsets;
             this.groupId = groupId;
             this.groupInstanceId = groupInstanceId;
@@ -515,17 +522,12 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
                             "failed with unknown member ID. " + error.message()));
                         return;
                     } else if (error == Errors.STALE_MEMBER_EPOCH) {
-                        boolean retried = maybeRetryWithNewMemberEpoch(currentTimeMs, error);
-                        if (!retried) {
-                            log.error("OffsetCommit failed with {} and the consumer is not part " +
-                                    "of the group anymore (it probably left the group, got fenced" +
-                                    " or failed). The request cannot be retried and will fail", error);
-                            future.completeExceptionally(error.exception());
-                        } else {
-                            log.debug("OffsetCommit failed with {} but the consumer is still part" +
-                                " of the group, so the request will be retried with the latest " +
-                                "member ID and epoch.", error);
+                        if (maybeRetryWithNewMemberEpoch(currentTimeMs, error)) {
+                            log.debug("OffsetCommit failed with {} and will be retried with the " +
+                                "latest member ID and epoch.", error);
+                            return;
                         }
+                        future.completeExceptionally(commitExceptionForStaleMemberEpoch());
                     } else if (error == Errors.TOPIC_AUTHORIZATION_FAILED) {
                         // Collect all unauthorized topics before failing
                         unauthorizedTopics.add(tp.topic());
@@ -609,6 +611,12 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
                 return new RetriableCommitFailedException(throwable);
             return throwable;
         }
+
+        private Throwable commitExceptionForStaleMemberEpoch() {
+            if (retryOnStaleEpoch)
+                return new RetriableCommitFailedException(Errors.STALE_MEMBER_EPOCH.exception());
+            return new CommitFailedException("OffsetCommit failed with stale member epoch." + Errors.STALE_MEMBER_EPOCH.message());
+        }
     }
 
     /**
@@ -622,17 +630,25 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
          */
         final MemberInfo memberInfo;
 
+        /**
+         * True if the request should be retried if it fails with {@link Errors#STALE_MEMBER_EPOCH}.
+         */
+        boolean retryOnStaleEpoch;
+
         RetriableRequestState(LogContext logContext, String owner, long retryBackoffMs,
-                              long retryBackoffMaxMs, MemberInfo memberInfo) {
+                              long retryBackoffMaxMs, MemberInfo memberInfo, boolean retryOnStaleEpoch) {
             super(logContext, owner, retryBackoffMs, retryBackoffMaxMs);
             this.memberInfo = memberInfo;
+            this.retryOnStaleEpoch = retryOnStaleEpoch;
         }
 
         // Visible for testing
         RetriableRequestState(LogContext logContext, String owner, long retryBackoffMs, int retryBackoffExpBase,
-                              long retryBackoffMaxMs, double jitter, MemberInfo memberInfo) {
+                              long retryBackoffMaxMs, double jitter, MemberInfo memberInfo,
+                              boolean retryOnStaleEpoch) {
             super(logContext, owner, retryBackoffMs, retryBackoffExpBase, retryBackoffMaxMs, jitter);
             this.memberInfo = memberInfo;
+            this.retryOnStaleEpoch = retryOnStaleEpoch;
         }
 
         /**
@@ -643,13 +659,11 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
          * and epoch.
          */
         boolean maybeRetryWithNewMemberEpoch(long currentTimeMs, Errors responseError) {
-            if (responseError == Errors.STALE_MEMBER_EPOCH) {
-                if (memberInfo.memberEpoch.isPresent()) {
-                    // Request failed with invalid epoch, but the member has a valid one, so
-                    // retry the request with the latest ID/epoch.
-                    maybeRetry(currentTimeMs, responseError.exception());
-                    return true;
-                }
+            if (retryOnStaleEpoch && memberInfo.memberEpoch.isPresent()) {
+                // Request failed with invalid epoch, but the member has a valid one, so
+                // retry the request with the latest ID/epoch.
+                maybeRetry(currentTimeMs, responseError.exception());
+                return true;
             }
             return false;
         }
@@ -677,7 +691,7 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
                                        final long expirationTimeMs,
                                        final MemberInfo memberInfo) {
             super(logContext, CommitRequestManager.class.getSimpleName(), retryBackoffMs,
-                retryBackoffMaxMs, memberInfo);
+                retryBackoffMaxMs, memberInfo, true);
             this.requestedPartitions = partitions;
             this.future = new CompletableFuture<>();
             this.expirationTimeMs = expirationTimeMs;
@@ -690,7 +704,7 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
                                        final double jitter,
                                        final MemberInfo memberInfo) {
             super(logContext, CommitRequestManager.class.getSimpleName(), retryBackoffMs, 2,
-                retryBackoffMaxMs, jitter, memberInfo);
+                retryBackoffMaxMs, jitter, memberInfo, true);
             this.requestedPartitions = partitions;
             this.future = new CompletableFuture<>();
             this.expirationTimeMs = expirationTimeMs;
@@ -753,17 +767,16 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
                     " anymore.", responseError);
                 future.completeExceptionally(responseError.exception());
             } else if (responseError == Errors.STALE_MEMBER_EPOCH) {
-                boolean retried = maybeRetryWithNewMemberEpoch(currentTimeMs, responseError);
-                if (!retried) {
-                    log.error("OffsetFetch failed with {} and the consumer is not part " +
-                        "of the group anymore (it probably left the group, got fenced" +
-                        " or failed). The request cannot be retried and will fail.", responseError);
-                    future.completeExceptionally(responseError.exception());
-                } else {
+                if (maybeRetryWithNewMemberEpoch(currentTimeMs, responseError)) {
                     log.debug("OffsetFetch failed with {} but the consumer is still part" +
                         " of the group, so the request will be retried with the latest " +
                         "member ID and epoch.", responseError);
+                    return;
                 }
+                log.error("OffsetFetch failed with {} and the consumer is not part " +
+                    "of the group anymore (it probably left the group, got fenced" +
+                    " or failed). The request cannot be retried and will fail.", responseError);
+                future.completeExceptionally(responseError.exception());
             } else if (responseError == Errors.NOT_COORDINATOR) {
                 // re-discover the coordinator and retry
                 coordinatorRequestManager.markCoordinatorUnknown("error response " + responseError.name(), currentTimeMs);
@@ -910,9 +923,15 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
 
         OffsetCommitRequestState addOffsetCommitRequest(
             final Map<TopicPartition, OffsetAndMetadata> offsets,
-            final Optional<Long> expirationTimeMs) {
+            final Optional<Long> expirationTimeMs,
+            final boolean retryOnStaleEpoch) {
             // TODO: Dedupe committing the same offsets to the same partitions
-            return addOffsetCommitRequest(createOffsetCommitRequest(offsets, jitter, expirationTimeMs));
+            OffsetCommitRequestState requestState = createOffsetCommitRequest(
+                offsets,
+                jitter,
+                expirationTimeMs,
+                retryOnStaleEpoch);
+            return addOffsetCommitRequest(requestState);
         }
 
         OffsetCommitRequestState addOffsetCommitRequest(OffsetCommitRequestState request) {
@@ -923,7 +942,8 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
 
         OffsetCommitRequestState createOffsetCommitRequest(final Map<TopicPartition, OffsetAndMetadata> offsets,
                                                            final OptionalDouble jitter,
-                                                           final Optional<Long> expirationTimeMs) {
+                                                           final Optional<Long> expirationTimeMs,
+                                                           final boolean retryOnStaleEpoch) {
             return jitter.isPresent() ?
                 new OffsetCommitRequestState(
                     offsets,
@@ -933,7 +953,8 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
                     retryBackoffMs,
                     retryBackoffMaxMs,
                     jitter.getAsDouble(),
-                    memberInfo) :
+                    memberInfo,
+                    retryOnStaleEpoch) :
                 new OffsetCommitRequestState(
                     offsets,
                     groupId,
@@ -941,7 +962,8 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
                     expirationTimeMs,
                     retryBackoffMs,
                     retryBackoffMaxMs,
-                    memberInfo);
+                    memberInfo,
+                    retryOnStaleEpoch);
         }
 
         /**
