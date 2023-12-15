@@ -44,6 +44,7 @@ import org.apache.kafka.clients.consumer.internals.events.AssignmentChangeApplic
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEventHandler;
 import org.apache.kafka.clients.consumer.internals.events.CommitApplicationEvent;
+import org.apache.kafka.clients.consumer.internals.events.CommitOnCloseApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.CompletableApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.ConsumerRebalanceListenerCallbackCompletedEvent;
 import org.apache.kafka.clients.consumer.internals.events.ConsumerRebalanceListenerCallbackNeededEvent;
@@ -51,6 +52,7 @@ import org.apache.kafka.clients.consumer.internals.events.ErrorBackgroundEvent;
 import org.apache.kafka.clients.consumer.internals.events.EventProcessor;
 import org.apache.kafka.clients.consumer.internals.events.FetchCommittedOffsetsApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.GroupMetadataUpdateEvent;
+import org.apache.kafka.clients.consumer.internals.events.LeaveOnCloseApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.ListOffsetsApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.NewTopicsMetadataUpdateRequestEvent;
 import org.apache.kafka.clients.consumer.internals.events.ResetPositionsApplicationEvent;
