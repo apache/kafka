@@ -1027,7 +1027,8 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
                                         scheduleInternalOperation(
                                             "WriteTimeout(name=" + name + ", tp=" + tp + ")",
                                             tp,
-                                            () -> complete(new TimeoutException("CoordinatorCompleteTransactionEvent " + name + " timed out after " + writeTimeout.toMillis() + "ms"))
+                                            () -> complete(new TimeoutException("CoordinatorCompleteTransactionEvent " + name +
+                                                " timed out after " + writeTimeout.toMillis() + "ms"))
                                         );
                                     }
                                 }
