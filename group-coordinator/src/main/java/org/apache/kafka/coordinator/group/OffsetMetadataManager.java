@@ -863,7 +863,7 @@ public class OffsetMetadataManager {
             }
 
             if (producerId == RecordBatch.NO_PRODUCER_ID) {
-                log.debug("Replaying offset commit with producer id {}, key {}, value {}", producerId, key, value);
+                log.debug("Replaying offset commit with key {}, value {}", key, value);
                 // If the offset is not part of a transaction, it is directly stored
                 // in the offsets store.
                 OffsetAndMetadata previousValue = offsets.put(
@@ -902,7 +902,7 @@ public class OffsetMetadataManager {
      * @param result        The result of the transaction.
      * @throws RuntimeException if the transaction can not be completed.
      */
-    public void completeTransaction(
+    public void replayTransactionEndMarker(
         long producerId,
         TransactionResult result
     ) throws RuntimeException {

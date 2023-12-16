@@ -732,6 +732,6 @@ public class GroupCoordinatorShard implements CoordinatorShard<Record> {
         short producerEpoch,
         TransactionResult result
     ) throws RuntimeException {
-        offsetMetadataManager.completeTransaction(producerId, result);
+        offsetMetadataManager.replayTransactionEndMarker(producerId, result);
     }
 }

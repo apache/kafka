@@ -2434,7 +2434,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         partitionsWithCompatibleMessageFormat.foreach { partition =>
           if (config.isNewGroupCoordinatorEnabled && partition.topic == GROUP_METADATA_TOPIC_NAME) {
             // When the new group coordinator is used, writing the end marker is fully delegated
-            // the group coordinator.
+            // to the group coordinator.
             groupCoordinator.completeTransaction(
               partition,
               marker.producerId,
