@@ -80,6 +80,9 @@ public class ConnectorsResource implements ConnectResource {
     private final boolean isTopicTrackingDisabled;
     private final boolean isTopicTrackingResetDisabled;
 
+    protected static final String TOPIC_TRACKING_DISABLED_MESSAGE = "Topic tracking is disabled.";
+    protected static final String TOPIC_TRACKING_RESET_DISABLED_MESSAGE = "Topic tracking reset is disabled.";
+
     public ConnectorsResource(Herder herder, RestServerConfig config, RestClient restClient) {
         this.herder = herder;
         this.requestHandler = new HerderRequestHandler(restClient, DEFAULT_REST_REQUEST_TIMEOUT_MS);
@@ -111,6 +114,16 @@ public class ConnectorsResource implements ConnectResource {
                                 break;
                             case "info":
                                 connectorExpansions.put("info", herder.connectorInfo(connector));
+                                break;
+                            case "tasks-config":
+                                connectorExpansions.put("tasks-config", herder.taskConfigs(connector));
+                                break;
+                            case "topics":
+                                if (isTopicTrackingDisabled) {
+                                    connectorExpansions.put("topics", TOPIC_TRACKING_DISABLED_MESSAGE);
+                                } else {
+                                    connectorExpansions.put("topics", herder.connectorActiveTopics(connector));
+                                }
                                 break;
                             default:
                                 log.info("Ignoring unknown expansion type {}", expansion);
@@ -195,8 +208,9 @@ public class ConnectorsResource implements ConnectResource {
     @Operation(summary = "Get the list of topics actively used by the specified connector")
     public Response getConnectorActiveTopics(final @PathParam("connector") String connector) {
         if (isTopicTrackingDisabled) {
-            throw new ConnectRestException(Response.Status.FORBIDDEN.getStatusCode(),
-                    "Topic tracking is disabled.");
+            throw new ConnectRestException(
+                Response.Status.FORBIDDEN.getStatusCode(), TOPIC_TRACKING_DISABLED_MESSAGE
+            );
         }
         ActiveTopicsInfo info = herder.connectorActiveTopics(connector);
         return Response.ok(Collections.singletonMap(info.connector(), info)).build();
@@ -207,12 +221,14 @@ public class ConnectorsResource implements ConnectResource {
     @Operation(summary = "Reset the list of topics actively used by the specified connector")
     public Response resetConnectorActiveTopics(final @PathParam("connector") String connector, final @Context HttpHeaders headers) {
         if (isTopicTrackingDisabled) {
-            throw new ConnectRestException(Response.Status.FORBIDDEN.getStatusCode(),
-                    "Topic tracking is disabled.");
+            throw new ConnectRestException(
+                Response.Status.FORBIDDEN.getStatusCode(), TOPIC_TRACKING_DISABLED_MESSAGE
+            );
         }
         if (isTopicTrackingResetDisabled) {
-            throw new ConnectRestException(Response.Status.FORBIDDEN.getStatusCode(),
-                    "Topic tracking reset is disabled.");
+            throw new ConnectRestException(
+                Response.Status.FORBIDDEN.getStatusCode(), TOPIC_TRACKING_RESET_DISABLED_MESSAGE
+            );
         }
         herder.resetConnectorActiveTopics(connector);
         return Response.accepted().build();
