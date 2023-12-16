@@ -289,14 +289,14 @@ class BrokerTopicMetrics(name: Option[String], configOpt: java.util.Optional[Kaf
 
     def gauge(): Gauge[Long] = gaugeLock synchronized {
       if (gaugeObject == null) {
-        gaugeObject = metricsGroup.newGauge(metricType, () => brokerTopicAggregatedMetric.value())
+        gaugeObject = metricsGroup.newGauge(metricType, () => brokerTopicAggregatedMetric.value(), tags)
       }
       return gaugeObject
     }
 
     def close(): Unit = gaugeLock synchronized {
       if (gaugeObject != null) {
-        metricsGroup.removeMetric(metricType)
+        metricsGroup.removeMetric(metricType, tags)
         brokerTopicAggregatedMetric.close()
         gaugeObject = null
       }
@@ -349,7 +349,7 @@ class BrokerTopicMetrics(name: Option[String], configOpt: java.util.Optional[Kaf
       ).asJava)
       metricCustomGaugeTypeMap.putAll(Map(
         RemoteStorageMetrics.REMOTE_LOG_METADATA_COUNT_METRIC.getName -> metricsGroup.newGauge(RemoteStorageMetrics.REMOTE_LOG_METADATA_COUNT_METRIC.getName,
-          () => remoteLogMetadataCountValue.get())
+          () => remoteLogMetadataCountValue.get(), tags)
       ).asJava)
     })
 
@@ -442,14 +442,14 @@ class BrokerTopicMetrics(name: Option[String], configOpt: java.util.Optional[Kaf
     if (gauge != null)
       gauge.close()
     if (metricCustomGaugeTypeMap.get(metricType) != null) {
-      metricsGroup.removeMetric(metricType)
+      metricsGroup.removeMetric(metricType, tags)
     }
   }
 
   def close(): Unit = {
     metricTypeMap.values.foreach(_.close())
     metricGaugeTypeMap.values.foreach(_.close())
-    metricCustomGaugeTypeMap.keys.foreach(name => metricsGroup.removeMetric(name))
+    metricCustomGaugeTypeMap.keys.foreach(name => metricsGroup.removeMetric(name, tags))
   }
 }
 
