@@ -23,7 +23,7 @@ import org.apache.kafka.common.errors.NotCoordinatorException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.RecordBatch;
-import org.apache.kafka.common.requests.WriteTxnMarkersRequest;
+import org.apache.kafka.common.requests.TransactionResult;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
@@ -917,7 +917,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
     /**
      * A coordinator event that applies and writes a transaction end marker.
      */
-    class CoordinatorTransactionEndMarkerEvent implements CoordinatorEvent, DeferredEvent {
+    class CoordinatorCompleteTransactionEvent implements CoordinatorEvent, DeferredEvent {
         /**
          * The topic partition that this write event is applied to.
          */
@@ -929,9 +929,24 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
         final String name;
 
         /**
-         * The marker to be written.
+         * The producer id.
          */
-        final WriteTxnMarkersRequest.TxnMarkerEntry marker;
+        final long producerId;
+
+        /**
+         * The producer epoch.
+         */
+        final short producerEpoch;
+
+        /**
+         * The coordinator epoch of the transaction coordinator.
+         */
+        final int coordinatorEpoch;
+
+        /**
+         * The transaction result.
+         */
+        final TransactionResult result;
 
         /**
          * The future that will be completed with the response
@@ -944,14 +959,20 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
          */
         private final long createdTimeMs;
 
-        CoordinatorTransactionEndMarkerEvent(
+        CoordinatorCompleteTransactionEvent(
             String name,
             TopicPartition tp,
-            WriteTxnMarkersRequest.TxnMarkerEntry marker
+            long producerId,
+            short producerEpoch,
+            int coordinatorEpoch,
+            TransactionResult result
         ) {
             this.name = name;
             this.tp = tp;
-            this.marker = marker;
+            this.producerId = producerId;
+            this.producerEpoch = producerEpoch;
+            this.coordinatorEpoch = coordinatorEpoch;
+            this.result = result;
             this.future = new CompletableFuture<>();
             this.createdTimeMs = time.milliseconds();
         }
@@ -975,15 +996,18 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
                     long prevLastWrittenOffset = context.coordinator.lastWrittenOffset();
 
                     try {
-                        context.coordinator.completeTransaction(
-                            marker.producerId(),
-                            marker.producerEpoch(),
-                            marker.transactionResult()
+                        context.coordinator.replayTransactionEndMarker(
+                            producerId,
+                            producerEpoch,
+                            result
                         );
 
-                        long offset = partitionWriter.completeTransaction(
+                        long offset = partitionWriter.appendTransactionEndMarker(
                             tp,
-                            marker
+                            producerId,
+                            producerEpoch,
+                            coordinatorEpoch,
+                            result
                         );
                         context.coordinator.updateLastWrittenOffset(offset);
 
@@ -1436,26 +1460,36 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
     }
 
     /**
-     * Schedules a transaction end marker.
+     * Schedules the transaction completion.
      *
-     * @param name   The name of the operation.
-     * @param tp     The address of the coordinator (aka its topic-partitions).
-     * @param marker The marker.
+     * @param name              The name of the operation.
+     * @param tp                The address of the coordinator (aka its topic-partitions).
+     * @param producerId        The producer id.
+     * @param producerEpoch     The producer epoch.
+     * @param coordinatorEpoch  The epoch of the transaction coordinator.
+     * @param result            The transaction result.
      *
      * @return A future that will be completed with null when the operation is
      * completed or an exception if the operation failed.
      */
-    public CompletableFuture<Void> scheduleTransactionalEndMarker(
+    public CompletableFuture<Void> scheduleTransactionCompletion(
         String name,
         TopicPartition tp,
-        WriteTxnMarkersRequest.TxnMarkerEntry marker
+        long producerId,
+        short producerEpoch,
+        int coordinatorEpoch,
+        TransactionResult result
     ) {
         throwIfNotRunning();
-        log.debug("Scheduled execution of transaction completion for {} with end marker {}.", tp, marker);
-        CoordinatorTransactionEndMarkerEvent event = new CoordinatorTransactionEndMarkerEvent(
+        log.debug("Scheduled execution of transaction completion for {} with producer id={}, producer epoch={}, " +
+            "coordinator epoch={} and transaction result={}.", tp, producerId, producerEpoch, coordinatorEpoch, result);
+        CoordinatorCompleteTransactionEvent event = new CoordinatorCompleteTransactionEvent(
             name,
             tp,
-            marker
+            producerId,
+            producerEpoch,
+            coordinatorEpoch,
+            result
         );
         enqueue(event);
         return event.future;

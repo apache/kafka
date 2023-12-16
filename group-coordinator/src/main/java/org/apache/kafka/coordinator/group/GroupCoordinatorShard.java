@@ -727,7 +727,7 @@ public class GroupCoordinatorShard implements CoordinatorShard<Record> {
      * @throws RuntimeException if the transaction can not be completed.
      */
     @Override
-    public void completeTransaction(
+    public void replayTransactionEndMarker(
         long producerId,
         short producerEpoch,
         TransactionResult result

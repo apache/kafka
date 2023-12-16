@@ -2435,15 +2435,21 @@ class KafkaApis(val requestChannel: RequestChannel,
           if (config.isNewGroupCoordinatorEnabled && partition.topic == GROUP_METADATA_TOPIC_NAME) {
             // When the new group coordinator is used, writing the end marker is fully delegated
             // the group coordinator.
-            groupCoordinator.completeTransaction(partition, marker).whenComplete { (_, exception) =>
+            groupCoordinator.completeTransaction(
+              partition,
+              marker.producerId,
+              marker.producerEpoch,
+              marker.coordinatorEpoch,
+              marker.transactionResult
+            ).whenComplete { (_, exception) =>
               val error = if (exception == null) {
                 Errors.NONE
               } else {
                 Errors.forException(exception) match {
                   case Errors.COORDINATOR_NOT_AVAILABLE | Errors.COORDINATOR_LOAD_IN_PROGRESS | Errors.NOT_COORDINATOR =>
                     // The transaction coordinator does not expect those errors so we translate them
-                    // to UNKNOWN_TOPIC_OR_PARTITION to signal to it that the coordinator is not ready yet.
-                    Errors.UNKNOWN_TOPIC_OR_PARTITION
+                    // to NOT_LEADER_OR_FOLLOWER to signal to it that the coordinator is not ready yet.
+                    Errors.NOT_LEADER_OR_FOLLOWER
                   case error =>
                     error
                 }

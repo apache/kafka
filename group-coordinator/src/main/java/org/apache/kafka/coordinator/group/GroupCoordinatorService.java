@@ -62,7 +62,6 @@ import org.apache.kafka.common.requests.OffsetCommitRequest;
 import org.apache.kafka.common.requests.RequestContext;
 import org.apache.kafka.common.requests.TransactionResult;
 import org.apache.kafka.common.requests.TxnOffsetCommitRequest;
-import org.apache.kafka.common.requests.WriteTxnMarkersRequest;
 import org.apache.kafka.common.utils.BufferSupplier;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
@@ -950,21 +949,27 @@ public class GroupCoordinatorService implements GroupCoordinator {
     }
 
     /**
-     * See {@link GroupCoordinator#completeTransaction(TopicPartition, WriteTxnMarkersRequest.TxnMarkerEntry)}.
+     * See {@link GroupCoordinator#completeTransaction(TopicPartition, long, short, int, TransactionResult)}.
      */
     @Override
     public CompletableFuture<Void> completeTransaction(
         TopicPartition tp,
-        WriteTxnMarkersRequest.TxnMarkerEntry marker
+        long producerId,
+        short producerEpoch,
+        int coordinatorEpoch,
+        TransactionResult result
     ) {
         if (!isActive.get()) {
             return FutureUtils.failedFuture(Errors.COORDINATOR_NOT_AVAILABLE.exception());
         }
 
-        return runtime.scheduleTransactionalEndMarker(
+        return runtime.scheduleTransactionCompletion(
             "write-txn-marker",
             tp,
-            marker
+            producerId,
+            producerEpoch,
+            coordinatorEpoch,
+            result
         );
     }
 

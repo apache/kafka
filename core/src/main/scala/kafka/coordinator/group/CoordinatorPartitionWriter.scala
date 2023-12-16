@@ -174,24 +174,30 @@ class CoordinatorPartitionWriter[T](
   /**
    * Write the transaction end marker.
    *
-   * @param tp     The partition to write records to.
-   * @param marker The marker.
+   * @param tp                The partition to write records to.
+   * @param producerId        The producer id.
+   * @param producerEpoch     The producer epoch.
+   * @param coordinatorEpoch  The epoch of the transaction coordinator.
+   * @param result            The transaction result.
    * @return The log end offset right after the written records.
    * @throws KafkaException Any KafkaException caught during the write operation.
    */
-  override def completeTransaction(
+  override def appendTransactionEndMarker(
     tp: TopicPartition,
-    marker: WriteTxnMarkersRequest.TxnMarkerEntry
+    producerId: Long,
+    producerEpoch: Short,
+    coordinatorEpoch: Int,
+    result: TransactionResult
   ): Long = {
-    val controlRecordType = marker.transactionResult match {
+    val controlRecordType = result match {
       case TransactionResult.COMMIT => ControlRecordType.COMMIT
       case TransactionResult.ABORT => ControlRecordType.ABORT
     }
 
     internalAppend(tp, MemoryRecords.withEndTransactionMarker(
-      marker.producerId,
-      marker.producerEpoch,
-      new EndTransactionMarker(controlRecordType, marker.coordinatorEpoch)
+      producerId,
+      producerEpoch,
+      new EndTransactionMarker(controlRecordType, coordinatorEpoch)
     ))
   }
 

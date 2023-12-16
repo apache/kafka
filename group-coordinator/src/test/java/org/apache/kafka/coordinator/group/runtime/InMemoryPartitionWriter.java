@@ -18,7 +18,7 @@ package org.apache.kafka.coordinator.group.runtime;
 
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.requests.WriteTxnMarkersRequest;
+import org.apache.kafka.common.requests.TransactionResult;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -104,9 +104,12 @@ public class InMemoryPartitionWriter<T> implements PartitionWriter<T> {
     }
 
     @Override
-    public long completeTransaction(
+    public long appendTransactionEndMarker(
         TopicPartition tp,
-        WriteTxnMarkersRequest.TxnMarkerEntry marker
+        long producerId,
+        short producerEpoch,
+        int coordinatorEpoch,
+        TransactionResult result
     ) throws KafkaException {
         throw new IllegalStateException("Not implemented");
     }

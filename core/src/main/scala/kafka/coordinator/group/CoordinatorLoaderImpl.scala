@@ -139,13 +139,13 @@ class CoordinatorLoaderImpl[T](
                 batch.asScala.foreach { record =>
                   val controlRecord = ControlRecordType.parse(record.key)
                   if (controlRecord == ControlRecordType.COMMIT) {
-                    coordinator.completeTransaction(
+                    coordinator.replayTransactionEndMarker(
                       batch.producerId,
                       batch.producerEpoch,
                       TransactionResult.COMMIT
                     )
                   } else if (controlRecord == ControlRecordType.ABORT) {
-                    coordinator.completeTransaction(
+                    coordinator.replayTransactionEndMarker(
                       batch.producerId,
                       batch.producerEpoch,
                       TransactionResult.ABORT

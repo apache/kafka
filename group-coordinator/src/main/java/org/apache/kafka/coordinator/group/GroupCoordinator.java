@@ -42,7 +42,6 @@ import org.apache.kafka.common.message.TxnOffsetCommitRequestData;
 import org.apache.kafka.common.message.TxnOffsetCommitResponseData;
 import org.apache.kafka.common.requests.RequestContext;
 import org.apache.kafka.common.requests.TransactionResult;
-import org.apache.kafka.common.requests.WriteTxnMarkersRequest;
 import org.apache.kafka.common.utils.BufferSupplier;
 import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
@@ -271,14 +270,20 @@ public interface GroupCoordinator {
      * Complete a transaction. This is called when the WriteTxnMarkers API is called
      * by the Transaction Coordinator in order to write the markers to the log.
      *
-     * @param tp        The topic-partition.
-     * @param marker    The transaction marker.
+     * @param tp                The topic-partition.
+     * @param producerId        The producer id.
+     * @param producerEpoch     The producer epoch.
+     * @param coordinatorEpoch  The epoch of the transaction coordinator.
+     * @param result            The transaction result.
      *
      * @return A future yielding the result.
      */
     CompletableFuture<Void> completeTransaction(
         TopicPartition tp,
-        WriteTxnMarkersRequest.TxnMarkerEntry marker
+        long producerId,
+        short producerEpoch,
+        int coordinatorEpoch,
+        TransactionResult result
     );
 
     /**
