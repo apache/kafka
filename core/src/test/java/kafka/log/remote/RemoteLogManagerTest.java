@@ -640,7 +640,7 @@ public class RemoteLogManagerTest {
     }
 
     @Test
-    void testRemoteLogManagerTasksAvgIdlePercentMetrics() throws Exception {
+    void testRemoteLogManagerTasksAvgIdlePercentAndMetadataCounntMetrics() throws Exception {
         long oldSegmentStartOffset = 0L;
         long nextSegmentStartOffset = 150L;
         when(mockLog.topicPartition()).thenReturn(leaderTopicIdPartition.topicPartition());
@@ -694,6 +694,7 @@ public class RemoteLogManagerTest {
         doAnswer(ans -> {
             // waiting for verification
             latch.await();
+            assertEquals(1, (long) yammerMetricValue("RemoteLogMetadataCount"));
             return null;
         }).when(remoteStorageManager).copyLogSegmentData(any(RemoteLogSegmentMetadata.class), any(LogSegmentData.class));
         Partition mockLeaderPartition = mockPartition(leaderTopicIdPartition);
@@ -701,6 +702,7 @@ public class RemoteLogManagerTest {
 
         // before running tasks, the remote log manager tasks should be all idle
         assertEquals(1.0, (double) yammerMetricValue("RemoteLogManagerTasksAvgIdlePercent"));
+        assertEquals(0, safeLongYammerMetricValue("RemoteLogMetadataCount"));
         remoteLogManager.onLeadershipChange(Collections.singleton(mockLeaderPartition), Collections.singleton(mockFollowerPartition), topicIds);
         assertTrue((double) yammerMetricValue("RemoteLogManagerTasksAvgIdlePercent") < 1.0);
         // unlock copyLogSegmentData

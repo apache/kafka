@@ -194,9 +194,10 @@ class KafkaRequestHandlerTest {
     val brokerTopicStats = new BrokerTopicStats(java.util.Optional.of(KafkaConfig.fromProps(props)))
     brokerTopicStats.topicStats(topic)
     val gaugeMetrics = Set(RemoteStorageMetrics.REMOTE_COPY_LOG_BYTES_METRIC.getName)
+    val customGaugeMetric = RemoteStorageMetrics.REMOTE_LOG_METADATA_COUNT_METRIC.getName
     RemoteStorageMetrics.brokerTopicStatsMetrics.forEach(metric => {
       if (systemRemoteStorageEnabled) {
-        if (!gaugeMetrics.contains(metric.getName)) {
+        if (!gaugeMetrics.contains(metric.getName) && !customGaugeMetric.equals(metric.getName)) {
           assertTrue(brokerTopicStats.topicStats(topic).metricMap.contains(metric.getName))
         } else {
           assertFalse(brokerTopicStats.topicStats(topic).metricMap.contains(metric.getName))
@@ -207,11 +208,16 @@ class KafkaRequestHandlerTest {
     })
     gaugeMetrics.foreach(metricName => {
       if (systemRemoteStorageEnabled) {
-        assertTrue(brokerTopicStats.topicStats(topic).metricGaugeMap.contains(metricName), metricName)
+        assertTrue(brokerTopicStats.topicStats(topic).metricGaugeMap.contains(metricName), "The metric is missing:" + metricName)
       } else {
-        assertFalse(brokerTopicStats.topicStats(topic).metricGaugeMap.contains(metricName), metricName)
+        assertFalse(brokerTopicStats.topicStats(topic).metricGaugeMap.contains(metricName), "The metric should appear:" + metricName)
       }
     })
+    if (systemRemoteStorageEnabled) {
+      assertTrue(brokerTopicStats.topicStats(topic).metricCustomGaugeMap.contains(customGaugeMetric), "The metric is missing:" + customGaugeMetric)
+    } else {
+      assertFalse(brokerTopicStats.topicStats(topic).metricCustomGaugeMap.contains(customGaugeMetric), "The metric should appear:" + customGaugeMetric)
+    }
   }
 
   def makeRequest(time: Time, metrics: RequestChannel.Metrics): RequestChannel.Request = {
@@ -319,4 +325,16 @@ class KafkaRequestHandlerTest {
     assertEquals(0, brokerTopicMetrics.remoteCopyBytesLag)
   }
 
+  @Test
+  def testRemoteLogMetadataCount(): Unit = {
+    val brokerTopicMetrics = setupBrokerTopicMetrics()
+
+    assertEquals(0, brokerTopicMetrics.remoteLogMetadataCount)
+    brokerTopicMetrics.updateRemoteLogMetadataCount()
+    assertEquals(1, brokerTopicMetrics.remoteLogMetadataCount)
+
+    brokerTopicMetrics.updateRemoteLogMetadataCount()
+    brokerTopicMetrics.updateRemoteLogMetadataCount()
+    assertEquals(3, brokerTopicMetrics.remoteLogMetadataCount)
+  }
 }

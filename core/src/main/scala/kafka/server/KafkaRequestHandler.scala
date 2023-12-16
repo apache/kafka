@@ -348,7 +348,8 @@ class BrokerTopicMetrics(name: Option[String], configOpt: java.util.Optional[Kaf
         RemoteStorageMetrics.REMOTE_COPY_LOG_BYTES_METRIC.getName -> GaugeWrapper(RemoteStorageMetrics.REMOTE_COPY_LOG_BYTES_METRIC.getName, new BrokerTopicAggregatedMetric)
       ).asJava)
       metricCustomGaugeTypeMap.putAll(Map(
-        RemoteStorageMetrics.REMOTE_LOG_METADATA_COUNT_METRIC.getName -> metricsGroup.newGauge(RemoteStorageMetrics.REMOTE_LOG_METADATA_COUNT_METRIC.getName, () => remoteLogMetadataCountValue.get())
+        RemoteStorageMetrics.REMOTE_LOG_METADATA_COUNT_METRIC.getName -> metricsGroup.newGauge(RemoteStorageMetrics.REMOTE_LOG_METADATA_COUNT_METRIC.getName,
+          () => remoteLogMetadataCountValue.get())
       ).asJava)
     })
 
@@ -356,6 +357,8 @@ class BrokerTopicMetrics(name: Option[String], configOpt: java.util.Optional[Kaf
   def metricMap: Map[String, MeterWrapper] = metricTypeMap.toMap
 
   def metricGaugeMap: Map[String, GaugeWrapper] = metricGaugeTypeMap.toMap
+
+  def metricCustomGaugeMap: Map[String, Gauge[Long]] = metricCustomGaugeTypeMap.toMap
 
   def messagesInRate: Meter = metricTypeMap.get(BrokerTopicStats.MessagesInPerSec).meter()
 
@@ -413,7 +416,7 @@ class BrokerTopicMetrics(name: Option[String], configOpt: java.util.Optional[Kaf
 
   def remoteCopyBytesLag: Long = metricGaugeTypeMap.get(RemoteStorageMetrics.REMOTE_COPY_LOG_BYTES_METRIC.getName).brokerTopicAggregatedMetric.value()
 
-  def recordRemoteLogMetadataCount(): Unit = {
+  def updateRemoteLogMetadataCount(): Unit = {
     remoteLogMetadataCountValue.incrementAndGet()
   }
 
@@ -438,11 +441,15 @@ class BrokerTopicMetrics(name: Option[String], configOpt: java.util.Optional[Kaf
     val gauge = metricGaugeTypeMap.get(metricType)
     if (gauge != null)
       gauge.close()
+    if (metricCustomGaugeTypeMap.get(metricType) != null) {
+      metricsGroup.removeMetric(metricType)
+    }
   }
 
   def close(): Unit = {
     metricTypeMap.values.foreach(_.close())
     metricGaugeTypeMap.values.foreach(_.close())
+    metricCustomGaugeTypeMap.keys.foreach(name => metricsGroup.removeMetric(name))
   }
 }
 
@@ -536,6 +543,7 @@ class BrokerTopicStats(configOpt: java.util.Optional[KafkaConfig] = java.util.Op
       topicMetrics.closeMetric(RemoteStorageMetrics.FAILED_REMOTE_FETCH_PER_SEC_METRIC.getName)
       topicMetrics.closeMetric(RemoteStorageMetrics.FAILED_REMOTE_COPY_PER_SEC_METRIC.getName)
       topicMetrics.closeMetric(RemoteStorageMetrics.REMOTE_COPY_LOG_BYTES_METRIC.getName)
+      topicMetrics.closeMetric(RemoteStorageMetrics.REMOTE_LOG_METADATA_COUNT_METRIC.getName)
     }
   }
 
