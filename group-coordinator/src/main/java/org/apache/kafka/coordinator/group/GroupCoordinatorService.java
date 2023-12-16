@@ -949,7 +949,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
     }
 
     /**
-     * See {@link GroupCoordinator#completeTransaction(TopicPartition, long, short, int, TransactionResult)}.
+     * See {@link GroupCoordinator#completeTransaction(TopicPartition, long, short, int, TransactionResult, Duration)}.
      */
     @Override
     public CompletableFuture<Void> completeTransaction(
@@ -957,7 +957,8 @@ public class GroupCoordinatorService implements GroupCoordinator {
         long producerId,
         short producerEpoch,
         int coordinatorEpoch,
-        TransactionResult result
+        TransactionResult result,
+        Duration timeout
     ) {
         if (!isActive.get()) {
             return FutureUtils.failedFuture(Errors.COORDINATOR_NOT_AVAILABLE.exception());
@@ -969,7 +970,8 @@ public class GroupCoordinatorService implements GroupCoordinator {
             producerId,
             producerEpoch,
             coordinatorEpoch,
-            result
+            result,
+            timeout
         );
     }
 

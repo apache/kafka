@@ -77,6 +77,7 @@ import org.apache.kafka.storage.internals.log.{AppendOrigin, FetchIsolation, Fet
 
 import java.lang.{Long => JLong}
 import java.nio.ByteBuffer
+import java.time.Duration
 import java.util
 import java.util.concurrent.{CompletableFuture, ConcurrentHashMap}
 import java.util.concurrent.atomic.AtomicInteger
@@ -2440,7 +2441,8 @@ class KafkaApis(val requestChannel: RequestChannel,
               marker.producerId,
               marker.producerEpoch,
               marker.coordinatorEpoch,
-              marker.transactionResult
+              marker.transactionResult,
+              Duration.ofMillis(config.requestTimeoutMs.toLong)
             ).whenComplete { (_, exception) =>
               val error = if (exception == null) {
                 Errors.NONE

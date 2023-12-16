@@ -24,7 +24,7 @@ import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.{CompressionType, ControlRecordType, EndTransactionMarker, MemoryRecords, RecordBatch, TimestampType}
 import org.apache.kafka.common.record.Record.EMPTY_HEADERS
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
-import org.apache.kafka.common.requests.{TransactionResult, WriteTxnMarkersRequest}
+import org.apache.kafka.common.requests.TransactionResult
 import org.apache.kafka.common.utils.{BufferSupplier, Time}
 import org.apache.kafka.coordinator.group.runtime.PartitionWriter
 import org.apache.kafka.storage.internals.log.AppendOrigin

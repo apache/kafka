@@ -46,6 +46,7 @@ import org.apache.kafka.common.utils.BufferSupplier;
 import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
 
+import java.time.Duration;
 import java.util.List;
 import java.util.OptionalInt;
 import java.util.Properties;
@@ -275,6 +276,7 @@ public interface GroupCoordinator {
      * @param producerEpoch     The producer epoch.
      * @param coordinatorEpoch  The epoch of the transaction coordinator.
      * @param result            The transaction result.
+     * @param timeout           The operation timeout.
      *
      * @return A future yielding the result.
      */
@@ -283,7 +285,8 @@ public interface GroupCoordinator {
         long producerId,
         short producerEpoch,
         int coordinatorEpoch,
-        TransactionResult result
+        TransactionResult result,
+        Duration timeout
     );
 
     /**
