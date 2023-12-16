@@ -1194,10 +1194,14 @@ public class MetadataTest {
     /**
      * For testUpdatePartially, validates that updatedMetadata is matching expected part1Metadata, part2Metadata, interalPartMetadata, nodes & more.
      */
-    void validateForUpdatePartitionLeadership(Metadata updatedMetadata, PartitionMetadata part1Metadata, PartitionMetadata part2Metadata, PartitionMetadata part12Metadata,
+    void validateForUpdatePartitionLeadership(Metadata updatedMetadata,
+                                              PartitionMetadata part1Metadata, PartitionMetadata part2Metadata, PartitionMetadata part12Metadata,
                                               PartitionMetadata internalPartMetadata,
-                                              List<Node> expectedNodes, String expectedClusterId, Set<String> expectedUnauthorisedTopics, Set<String> expectedInvalidTopics, Set<String> expectedInternalTopics,
-                                              Node expectedController, Map<String, Uuid> expectedTopicIds) {
+                                              List<Node> expectedNodes,
+                                              String expectedClusterId,
+                                              Set<String> expectedUnauthorisedTopics, Set<String> expectedInvalidTopics, Set<String> expectedInternalTopics,
+                                              Node expectedController,
+                                              Map<String, Uuid> expectedTopicIds) {
         Cluster updatedCluster = updatedMetadata.fetch();
         assertEquals(updatedCluster.clusterResource().clusterId(), expectedClusterId);
         assertEquals(new HashSet<>(expectedNodes), new HashSet<>(updatedCluster.nodes()));
