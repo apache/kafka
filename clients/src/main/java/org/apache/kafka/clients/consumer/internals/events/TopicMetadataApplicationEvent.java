@@ -20,21 +20,44 @@ import org.apache.kafka.common.PartitionInfo;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 public class TopicMetadataApplicationEvent extends CompletableApplicationEvent<Map<String, List<PartitionInfo>>> {
     private final String topic;
-    public TopicMetadataApplicationEvent(final String topic) {
+    private final boolean allTopics;
+    private final long timeoutMs;
+
+    public TopicMetadataApplicationEvent(final long timeoutMs) {
+        super(Type.TOPIC_METADATA);
+        this.topic = null;
+        this.allTopics = true;
+        this.timeoutMs = timeoutMs;
+    }
+
+    public TopicMetadataApplicationEvent(final String topic, final long timeoutMs) {
         super(Type.TOPIC_METADATA);
         this.topic = topic;
+        this.allTopics = false;
+        this.timeoutMs = timeoutMs;
     }
 
     public String topic() {
         return topic;
     }
 
+    public boolean isAllTopics() {
+        return allTopics;
+    }
+
+    public long getTimeoutMs() {
+        return timeoutMs;
+    }
     @Override
     public String toString() {
-        return "TopicMetadataApplicationEvent(topic=" + topic + ")";
+        return getClass().getSimpleName() + " {" + toStringBase() +
+                ", topic=" + topic +
+                ", allTopics=" + allTopics +
+                ", timeoutMs=" + timeoutMs + "}";
     }
 
     @Override
@@ -45,13 +68,11 @@ public class TopicMetadataApplicationEvent extends CompletableApplicationEvent<M
 
         TopicMetadataApplicationEvent that = (TopicMetadataApplicationEvent) o;
 
-        return topic.equals(that.topic);
+        return topic.equals(that.topic) && (allTopics == that.allTopics) && (timeoutMs == that.timeoutMs);
     }
 
     @Override
     public int hashCode() {
-        int result = super.hashCode();
-        result = 31 * result + topic.hashCode();
-        return result;
+        return Objects.hash(super.hashCode(), topic, allTopics, timeoutMs);
     }
 }

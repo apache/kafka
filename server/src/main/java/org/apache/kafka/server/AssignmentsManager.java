@@ -17,6 +17,7 @@
 
 package org.apache.kafka.server;
 
+import com.yammer.metrics.core.Gauge;
 import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.AssignReplicasToDirsRequestData;
@@ -34,6 +35,7 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.queue.EventQueue;
 import org.apache.kafka.queue.KafkaEventQueue;
 import org.apache.kafka.server.common.TopicIdPartition;
+import org.apache.kafka.server.metrics.KafkaMetricsGroup;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -67,15 +69,20 @@ public class AssignmentsManager {
 
     private static final long MAX_BACKOFF_INTERVAL_MS = TimeUnit.SECONDS.toNanos(10);
 
+    // visible for testing.
+    static final String QUEUE_REPLICA_TO_DIR_ASSIGNMENTS_METRIC_NAME = "QueuedReplicaToDirAssignments";
+
     private final Time time;
     private final NodeToControllerChannelManager channelManager;
     private final int brokerId;
     private final Supplier<Long> brokerEpochSupplier;
     private final KafkaEventQueue eventQueue;
+    private final KafkaMetricsGroup metricsGroup = new KafkaMetricsGroup(this.getClass());
 
-    // These variables should only be mutated from the KafkaEventQueue thread
-    private Map<TopicIdPartition, AssignmentEvent> inflight = null;
-    private Map<TopicIdPartition, AssignmentEvent> pending = new HashMap<>();
+    // These variables should only be mutated from the KafkaEventQueue thread,
+    // but `inflight` and `pending` are also read from a Yammer metrics gauge.
+    private volatile Map<TopicIdPartition, AssignmentEvent> inflight = null;
+    private volatile Map<TopicIdPartition, AssignmentEvent> pending = new HashMap<>();
     private final ExponentialBackoff resendExponentialBackoff =
             new ExponentialBackoff(100, 2, MAX_BACKOFF_INTERVAL_MS, 0.02);
     private int failedAttempts = 0;
@@ -93,10 +100,24 @@ public class AssignmentsManager {
                 "broker-" + brokerId + "-directory-assignments-manager-",
                 new ShutdownEvent());
         channelManager.start();
+        this.metricsGroup.newGauge(QUEUE_REPLICA_TO_DIR_ASSIGNMENTS_METRIC_NAME, new Gauge<Integer>() {
+            @Override
+            public Integer value() {
+                return getMapSize(inflight) + getMapSize(pending);
+            }
+
+            private int getMapSize(Map<TopicIdPartition, AssignmentEvent> map) {
+                return map == null ? 0 : map.size();
+            }
+        });
     }
 
     public void close() throws InterruptedException {
-        eventQueue.close();
+        try {
+            eventQueue.close();
+        } finally {
+            metricsGroup.removeMetric(QUEUE_REPLICA_TO_DIR_ASSIGNMENTS_METRIC_NAME);
+        }
     }
 
     public void onAssignment(TopicIdPartition topicPartition, Uuid dirId, Runnable callback) {

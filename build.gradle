@@ -209,7 +209,8 @@ if (repo != null) {
         '**/generated/**',
         'clients/src/test/resources/serializedData/*',
         'docker/resources/utility/go.sum',
-        'docker/test/fixtures/secrets/*'
+        'docker/test/fixtures/secrets/*',
+        'docker/examples/fixtures/secrets/*'
     ])
   }
 } else {
@@ -849,6 +850,7 @@ project(':server') {
   dependencies {
     implementation project(':clients')
     implementation project(':server-common')
+    implementation libs.metrics
 
     implementation libs.slf4jApi
 

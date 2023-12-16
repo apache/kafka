@@ -21,6 +21,11 @@ import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.internals.Utils.TopicIdPartitionComparator;
 import org.apache.kafka.clients.consumer.internals.Utils.TopicPartitionComparator;
+import org.apache.kafka.clients.consumer.internals.events.BackgroundEventHandler;
+import org.apache.kafka.clients.consumer.internals.events.CompletableBackgroundEvent;
+import org.apache.kafka.clients.consumer.internals.events.ConsumerRebalanceListenerCallbackCompletedEvent;
+import org.apache.kafka.clients.consumer.internals.events.ConsumerRebalanceListenerCallbackNeededEvent;
+import org.apache.kafka.clients.consumer.internals.events.ErrorBackgroundEvent;
 import org.apache.kafka.common.ClusterResource;
 import org.apache.kafka.common.ClusterResourceListener;
 import org.apache.kafka.common.KafkaException;
@@ -47,6 +52,10 @@ import java.util.SortedSet;
 import java.util.TreeSet;
 import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
+
+import static org.apache.kafka.clients.consumer.internals.ConsumerRebalanceListenerMethodName.ON_PARTITIONS_ASSIGNED;
+import static org.apache.kafka.clients.consumer.internals.ConsumerRebalanceListenerMethodName.ON_PARTITIONS_LOST;
+import static org.apache.kafka.clients.consumer.internals.ConsumerRebalanceListenerMethodName.ON_PARTITIONS_REVOKED;
 
 /**
  * Group manager for a single consumer that has a group id defined in the config
@@ -228,7 +237,7 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
      * (callbacks executed and heartbeat request to leave is sent out). This will be empty is the
      * member is not leaving.
      */
-    private Optional<CompletableFuture<Void>> leaveGroupInProgress;
+    private Optional<CompletableFuture<Void>> leaveGroupInProgress = Optional.empty();
 
     /**
      * True if the member has registered to be notified when the cluster metadata is updated.
@@ -245,6 +254,13 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
      */
     private final Optional<ClientTelemetryReporter> clientTelemetryReporter;
 
+    /**
+     * Serves as the conduit by which we can report events to the application thread. This is needed as we send
+     * {@link ConsumerRebalanceListenerCallbackNeededEvent callbacks} and, if needed,
+     * {@link ErrorBackgroundEvent errors} to the application thread.
+     */
+    private final BackgroundEventHandler backgroundEventHandler;
+
     public MembershipManagerImpl(String groupId,
                                  Optional<String> groupInstanceId,
                                  Optional<String> serverAssignor,
@@ -252,7 +268,8 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
                                  CommitRequestManager commitRequestManager,
                                  ConsumerMetadata metadata,
                                  LogContext logContext,
-                                 Optional<ClientTelemetryReporter> clientTelemetryReporter) {
+                                 Optional<ClientTelemetryReporter> clientTelemetryReporter,
+                                 BackgroundEventHandler backgroundEventHandler) {
         this.groupId = groupId;
         this.state = MemberState.UNSUBSCRIBED;
         this.serverAssignor = serverAssignor;
@@ -266,6 +283,7 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
         this.currentAssignment = new HashMap<>();
         this.log = logContext.logger(MembershipManagerImpl.class);
         this.clientTelemetryReporter = clientTelemetryReporter;
+        this.backgroundEventHandler = backgroundEventHandler;
     }
 
     /**
@@ -315,6 +333,11 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
         return memberEpoch;
     }
 
+    @Override
+    public boolean isStaled() {
+        return state == MemberState.STALED;
+    }
+
     /**
      * {@inheritDoc}
      */
@@ -343,31 +366,51 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
         ConsumerGroupHeartbeatResponseData.Assignment assignment = response.assignment();
 
         if (assignment != null) {
-            replaceUnresolvedAssignmentWithNewAssignment(assignment);
-            if (!assignmentUnresolved.equals(currentAssignment)) {
-                // Transition the member to RECONCILING when receiving a new target
-                // assignment from the broker, different from the current assignment. Note that the
-                // reconciliation might not be triggered just yet because of missing metadata.
-                transitionTo(MemberState.RECONCILING);
-                assignmentReadyToReconcile.clear();
-                resolveMetadataForUnresolvedAssignment();
-                reconcile();
-            } else {
-                // Same assignment received, nothing to reconcile.
-                log.debug("Target assignment {} received from the broker is equals to the member " +
-                        "current assignment {}. Nothing to reconcile.",
-                    assignmentUnresolved, currentAssignment);
-                // Make sure we transition the member back to STABLE if it was RECONCILING (ex.
-                // member was RECONCILING unresolved assignments that were just removed by the
-                // broker).
-                if (state == MemberState.RECONCILING) {
-                    // This is the case where a member was RECONCILING an unresolved
-                    // assignment that was removed by the broker in a following assignment.
-                    transitionTo(MemberState.STABLE);
-                }
+            if (!state.canHandleNewAssignment()) {
+                // New assignment received but member is in a state where it cannot take new
+                // assignments (ex. preparing to leave the group)
+                log.debug("Ignoring new assignment {} received from server because member is in {} state.",
+                    assignment, state);
+                return;
             }
+            processAssignmentReceived(assignment);
+
         } else if (allPendingAssignmentsReconciled()) {
             transitionTo(MemberState.STABLE);
+        }
+    }
+
+    /**
+     * This will process the assignment received if it is different from the member's current
+     * assignment. If a new assignment is received, this will try to resolve the topic names from
+     * metadata, reconcile the resolved assignment, and keep the unresolved to be reconciled when
+     * metadata is discovered.
+     *
+     * @param assignment Assignment received from the broker.
+     */
+    private void processAssignmentReceived(ConsumerGroupHeartbeatResponseData.Assignment assignment) {
+        replaceUnresolvedAssignmentWithNewAssignment(assignment);
+        if (!assignmentUnresolved.equals(currentAssignment)) {
+            // Transition the member to RECONCILING when receiving a new target
+            // assignment from the broker, different from the current assignment. Note that the
+            // reconciliation might not be triggered just yet because of missing metadata.
+            transitionTo(MemberState.RECONCILING);
+            assignmentReadyToReconcile.clear();
+            resolveMetadataForUnresolvedAssignment();
+            reconcile();
+        } else {
+            // Same assignment received, nothing to reconcile.
+            log.debug("Target assignment {} received from the broker is equals to the member " +
+                    "current assignment {}. Nothing to reconcile.",
+                assignmentUnresolved, currentAssignment);
+            // Make sure we transition the member back to STABLE if it was RECONCILING (ex.
+            // member was RECONCILING unresolved assignments that were just removed by the
+            // broker).
+            if (state == MemberState.RECONCILING) {
+                // This is the case where a member was RECONCILING an unresolved
+                // assignment that was removed by the broker in a following assignment.
+                transitionTo(MemberState.STABLE);
+            }
         }
     }
 
@@ -396,7 +439,18 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
      */
     @Override
     public void transitionToFenced() {
-        if (state == MemberState.PREPARE_LEAVING || state == MemberState.LEAVING) {
+        if (state == MemberState.PREPARE_LEAVING) {
+            log.debug("Member {} with epoch {} got fenced but it is already preparing to leave " +
+                    "the group, so it will stop sending heartbeat and won't attempt to rejoin.",
+                memberId, memberEpoch);
+            // Transition to UNSUBSCRIBED, ensuring that the member (that is not part of the
+            // group anymore from the broker point of view) will stop sending heartbeats while it
+            // completes the ongoing leaving operation.
+            transitionTo(MemberState.UNSUBSCRIBED);
+            return;
+        }
+
+        if (state == MemberState.LEAVING) {
             log.debug("Member {} with epoch {} got fenced but it is already leaving the group " +
                     "with state {}, so it won't attempt to rejoin.", memberId, memberEpoch, state);
             return;
@@ -481,7 +535,8 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
      * the user calls the subscribe API, or when the member wants to rejoin after getting fenced.
      * Visible for testing.
      */
-    void transitionToJoining() {
+    @Override
+    public void transitionToJoining() {
         if (state == MemberState.FATAL) {
             log.warn("No action taken to join the group with the updated subscription because " +
                     "the member is in FATAL state");
@@ -587,6 +642,11 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
                     "FATAL state", memberId, memberEpoch);
             return;
         }
+        if (state == MemberState.UNSUBSCRIBED) {
+            log.warn("Member {} won't send leave group request because it is already out of the group.",
+                memberId);
+            return;
+        }
         memberEpoch = groupInstanceId.isPresent() ?
                 ConsumerGroupHeartbeatRequest.LEAVE_GROUP_STATIC_MEMBER_EPOCH :
                 ConsumerGroupHeartbeatRequest.LEAVE_GROUP_MEMBER_EPOCH;
@@ -601,7 +661,7 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
     @Override
     public boolean shouldHeartbeatNow() {
         MemberState state = state();
-        return state == MemberState.ACKNOWLEDGING || state == MemberState.LEAVING;
+        return state == MemberState.ACKNOWLEDGING || state == MemberState.LEAVING || state == MemberState.JOINING;
     }
 
     /**
@@ -610,6 +670,12 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
     @Override
     public void onHeartbeatRequestSent() {
         MemberState state = state();
+        if (isStaled()) {
+            log.debug("Member {} is staled and is therefore leaving the group.  It will rejoin upon the next poll.", memberEpoch);
+            transitionToJoining();
+            return;
+        }
+
         if (state == MemberState.ACKNOWLEDGING) {
             if (allPendingAssignmentsReconciled()) {
                 transitionTo(MemberState.STABLE);
@@ -653,6 +719,17 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
     public boolean shouldSkipHeartbeat() {
         MemberState state = state();
         return state == MemberState.UNSUBSCRIBED || state == MemberState.FATAL;
+    }
+
+    /**
+     * Sets the epoch to the leave group epoch and clears the assignments. The member will rejoin with
+     * the existing subscriptions on the next time user polls.
+     */
+    @Override
+    public void transitionToStaled() {
+        memberEpoch = ConsumerGroupHeartbeatRequest.LEAVE_GROUP_MEMBER_EPOCH;
+        currentAssignment.clear();
+        transitionTo(MemberState.STALED);
     }
 
     /**
@@ -1030,7 +1107,7 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
         // current behaviour.
         Optional<ConsumerRebalanceListener> listener = subscriptions.rebalanceListener();
         if (!partitionsRevoked.isEmpty() && listener.isPresent()) {
-            throw new UnsupportedOperationException("User-defined callbacks not supported yet");
+            return enqueueConsumerRebalanceListenerCallback(ON_PARTITIONS_REVOKED, partitionsRevoked);
         } else {
             return CompletableFuture.completedFuture(null);
         }
@@ -1041,7 +1118,7 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
         // the current behaviour.
         Optional<ConsumerRebalanceListener> listener = subscriptions.rebalanceListener();
         if (listener.isPresent()) {
-            throw new UnsupportedOperationException("User-defined callbacks not supported yet");
+            return enqueueConsumerRebalanceListenerCallback(ON_PARTITIONS_ASSIGNED, partitionsAssigned);
         } else {
             return CompletableFuture.completedFuture(null);
         }
@@ -1052,9 +1129,58 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
         // behaviour.
         Optional<ConsumerRebalanceListener> listener = subscriptions.rebalanceListener();
         if (!partitionsLost.isEmpty() && listener.isPresent()) {
-            throw new UnsupportedOperationException("User-defined callbacks not supported yet");
+            return enqueueConsumerRebalanceListenerCallback(ON_PARTITIONS_LOST, partitionsLost);
         } else {
             return CompletableFuture.completedFuture(null);
+        }
+    }
+
+    /**
+     * Enqueue a {@link ConsumerRebalanceListenerCallbackNeededEvent} to trigger the execution of the
+     * appropriate {@link ConsumerRebalanceListener} {@link ConsumerRebalanceListenerMethodName method} on the
+     * application thread.
+     *
+     * <p/>
+     *
+     * Because the reconciliation process (run in the background thread) will be blocked by the application thread
+     * until it completes this, we need to provide a {@link CompletableFuture} by which to remember where we left off.
+     *
+     * @param methodName Callback method that needs to be executed on the application thread
+     * @param partitions Partitions to supply to the callback method
+     * @return Future that will be chained within the rest of the reconciliation logic
+     */
+    private CompletableFuture<Void> enqueueConsumerRebalanceListenerCallback(ConsumerRebalanceListenerMethodName methodName,
+                                                                             Set<TopicPartition> partitions) {
+        SortedSet<TopicPartition> sortedPartitions = new TreeSet<>(TOPIC_PARTITION_COMPARATOR);
+        sortedPartitions.addAll(partitions);
+        CompletableBackgroundEvent<Void> event = new ConsumerRebalanceListenerCallbackNeededEvent(methodName, sortedPartitions);
+        backgroundEventHandler.add(event);
+        log.debug("The event to trigger the {} method execution was enqueued successfully", methodName.fullyQualifiedMethodName());
+        return event.future();
+    }
+
+    @Override
+    public void consumerRebalanceListenerCallbackCompleted(ConsumerRebalanceListenerCallbackCompletedEvent event) {
+        ConsumerRebalanceListenerMethodName methodName = event.methodName();
+        Optional<KafkaException> error = event.error();
+        CompletableFuture<Void> future = event.future();
+
+        if (error.isPresent()) {
+            Exception e = error.get();
+            log.warn(
+                "The {} method completed with an error ({}); signaling to continue to the next phase of rebalance",
+                methodName.fullyQualifiedMethodName(),
+                e.getMessage()
+            );
+
+            future.completeExceptionally(e);
+        } else {
+            log.debug(
+                "The {} method completed successfully; signaling to continue to the next phase of rebalance",
+                methodName.fullyQualifiedMethodName()
+            );
+
+            future.complete(null);
         }
     }
 
