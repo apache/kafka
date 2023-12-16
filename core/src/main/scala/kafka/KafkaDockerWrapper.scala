@@ -25,6 +25,7 @@ object KafkaDockerWrapper {
   }
 
   private def formatStorageCmd(configsDir: String): Array[String] = {
+//    format --cluster-id=$CLUSTER_ID -c /opt/kafka/config/server.properties
     Array.empty[String]
   }
 
