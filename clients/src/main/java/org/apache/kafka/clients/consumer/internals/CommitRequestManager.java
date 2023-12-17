@@ -288,7 +288,7 @@ public class CommitRequestManager implements RequestManager {
     }
 
     public void updateAutoCommitTimer(final long currentTimeMs) {
-        this.autoCommitState.ifPresent(t -> t.ack(currentTimeMs));
+        this.autoCommitState.ifPresent(t -> t.updateTimer(currentTimeMs));
     }
 
     // Visible for testing
@@ -830,7 +830,7 @@ public class CommitRequestManager implements RequestManager {
             return this.timer.remainingMs();
         }
 
-        public void ack(final long currentTimeMs) {
+        public void updateTimer(final long currentTimeMs) {
             this.timer.update(currentTimeMs);
         }
 

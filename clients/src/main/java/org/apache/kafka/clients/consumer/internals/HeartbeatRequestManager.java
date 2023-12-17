@@ -195,6 +195,7 @@ public class HeartbeatRequestManager implements RequestManager {
             NetworkClientDelegate.UnsentRequest request = makeHeartbeatRequest(currentTimeMs, true);
             // We can ignore the leave response because we can join before or after receiving the response.
             heartbeatRequestState.reset();
+            heartbeatState.reset();
             return new NetworkClientDelegate.PollResult(heartbeatRequestState.heartbeatIntervalMs, Collections.singletonList(request));
         }
 
