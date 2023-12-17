@@ -30,6 +30,7 @@
   //
   // Version 7 is the same as version 6.
   "validVersions": "0-7",
+  "deprecatedVersions": "0-1",
   "flexibleVersions": "5+",
   "fields": [
     { "name": "Topics", "type": "[]CreatableTopic", "versions": "0+",

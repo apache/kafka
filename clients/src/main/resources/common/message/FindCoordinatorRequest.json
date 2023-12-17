@@ -26,6 +26,7 @@
   //
   // Version 4 adds support for batching via CoordinatorKeys (KIP-699)
   "validVersions": "0-4",
+  "deprecatedVersions": "0",
   "flexibleVersions": "3+",
   "fields": [
     { "name": "Key", "type": "string", "versions": "0-3",
