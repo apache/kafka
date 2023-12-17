@@ -405,8 +405,8 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
                 assignmentUnresolved, currentAssignment);
             // Make sure we transition the member back to STABLE if it was RECONCILING (ex.
             // member was RECONCILING unresolved assignments that were just removed by the
-            // broker).
-            if (state == MemberState.RECONCILING) {
+            // broker), or JOINING (member joining received empty assignment).
+            if (state == MemberState.RECONCILING || state == MemberState.JOINING) {
                 // This is the case where a member was RECONCILING an unresolved
                 // assignment that was removed by the broker in a following assignment.
                 transitionTo(MemberState.STABLE);
