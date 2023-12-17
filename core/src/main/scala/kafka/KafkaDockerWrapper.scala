@@ -18,15 +18,54 @@ package kafka
 
 import kafka.tools.StorageTool
 
+import java.io.FileWriter
+import java.nio.file.{Files, Paths, StandardCopyOption}
+
 object KafkaDockerWrapper {
 
   private def prepareConfigs(defaultConfigsDir: String, realConfigsDir: String): Unit = {
+    prepareServerProperties(defaultConfigsDir, realConfigsDir)
+  }
 
+  private def prepareServerProperties(defaultConfigsDir: String, realConfigsDir: String): Unit = {
+    val exclude = Set("KAFKA_VERSION",
+      "KAFKA_HEAP_OPT",
+      "KAFKA_LOG4J_OPTS",
+      "KAFKA_OPTS",
+      "KAFKA_JMX_OPTS",
+      "KAFKA_JVM_PERFORMANCE_OPTS",
+      "KAFKA_GC_LOG_OPTS",
+      "KAFKA_LOG4J_ROOT_LOGLEVEL",
+      "KAFKA_LOG4J_LOGGERS",
+      "KAFKA_TOOLS_LOG4J_LOGLEVEL")
+    var result = ""
+    for ((key, value) <- sys.env) {
+      if (!exclude.contains(key)) {
+        val final_key = key.replace("KAFKA_", "").toLowerCase().replace("_", ".").replace("...", "-").replace("..", "_")
+        result += "\n" + final_key + "=" + value
+      }
+    }
+    val realFile = realConfigsDir + "/server.properties"
+    val defaultFile = defaultConfigsDir + "/server.properties"
+    val path = Paths.get(realFile)
+    if (!Files.exists(path)) {
+      Files.createFile(path)
+    }
+    val fw = new FileWriter(realFile, true)
+    try {
+      fw.write(result)
+    }
+    finally fw.close()
+
+    val source = scala.io.Source.fromFile(realFile)
+    val data = try source.mkString finally source.close()
+    if (data.trim().isEmpty) {
+      Files.copy(Paths.get(defaultFile), path, StandardCopyOption.REPLACE_EXISTING)
+    }
   }
 
   private def formatStorageCmd(configsDir: String): Array[String] = {
-//    format --cluster-id=$CLUSTER_ID -c /opt/kafka/config/server.properties
-    Array.empty[String]
+    Array("format", "--cluster-id=" + sys.env.get("CLUSTER_ID"), "-c", "/opt/kafka/config/server.properties")
   }
 
   def main(args: Array[String]): Unit = {
