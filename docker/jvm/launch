@@ -14,7 +14,6 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-
 # Override this section from the script to include the com.sun.management.jmxremote.rmi.port property.
 if [ -z "${KAFKA_JMX_OPTS-}" ]; then
     export KAFKA_JMX_OPTS="-Dcom.sun.management.jmxremote=true -Dcom.sun.management.jmxremote.authenticate=false  -Dcom.sun.management.jmxremote.ssl=false "
@@ -35,7 +34,7 @@ if [ "${KAFKA_JMX_PORT-}" ]; then
 fi
 
 # Make a temp env variable to store user provided performance otps
-if [ -z "$KAFKA_JVM_PERFORMANCE_OPTS" ]; then
+if [ -z "${KAFKA_JVM_PERFORMANCE_OPTS-}" ]; then
     export TEMP_KAFKA_JVM_PERFORMANCE_OPTS=""
 else
     export TEMP_KAFKA_JVM_PERFORMANCE_OPTS="$KAFKA_JVM_PERFORMANCE_OPTS"

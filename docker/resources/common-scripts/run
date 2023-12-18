@@ -35,4 +35,4 @@ echo "===> Configuring ..."
 . /etc/kafka/docker/configure
 
 echo "===> Launching ... "
-exec /etc/kafka/docker/launch
+. /etc/kafka/docker/launch
