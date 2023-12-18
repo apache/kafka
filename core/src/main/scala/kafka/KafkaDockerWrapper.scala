@@ -82,18 +82,13 @@ object KafkaDockerWrapper {
   }
 
   private def prepareLog4jConfigs(configsDir: String): Unit = {
-    val kafkaLog4jRootLogLevelOpt = sys.env.get(KafkaLog4jRootLoglevelEnv)
-    val kafkaLog4jRootLogLevelProp = if (kafkaLog4jRootLogLevelOpt.isDefined) {
-      s"log4j.rootLogger=${kafkaLog4jRootLogLevelOpt.get}, stdout"
-    } else {
-      ""
-    }
+    val kafkaLog4jRootLogLevelProp = sys.env.get(KafkaLog4jRootLoglevelEnv)
+      .map(kafkaLog4jRootLogLevel => s"log4j.rootLogger=$kafkaLog4jRootLogLevel, stdout")
+      .getOrElse("")
 
-    val kafkaLog4JLoggersStringOpt = sys.env.get(KafkaLog4JLoggersEnv)
-    val kafkaLog4jLoggersProp = if (kafkaLog4JLoggersStringOpt.isDefined) {
-      val kafkaLog4JLoggersList = kafkaLog4JLoggersStringOpt.get.split(",")
-      kafkaLog4JLoggersList.mkString("\n")
-    }
+    val kafkaLog4jLoggersProp = sys.env.get(KafkaLog4JLoggersEnv)
+      .map(kafkaLog4JLoggersString => kafkaLog4JLoggersString.split(",").mkString("\n"))
+      .getOrElse("")
 
     val propsToAdd = "\n" + kafkaLog4jRootLogLevelProp + "\n" + kafkaLog4jLoggersProp
     val filepath = s"$configsDir/$Log4jPropsFilename"
@@ -101,9 +96,8 @@ object KafkaDockerWrapper {
   }
 
   private def prepareToolsLog4jConfigs(configsDir: String): Unit = {
-    val kafkaToolsLog4jLogLevelOpt = sys.env.get(KafkaToolsLog4jLoglevelEnv)
-    if (kafkaToolsLog4jLogLevelOpt.isDefined) {
-      val propToAdd = s"log4j.rootLogger=${kafkaToolsLog4jLogLevelOpt.get}, stderr"
+    sys.env.get(KafkaToolsLog4jLoglevelEnv).foreach { kafkaToolsLog4jLogLevel =>
+      val propToAdd = "\n" + s"log4j.rootLogger=$kafkaToolsLog4jLogLevel, stderr"
       val filepath = s"$configsDir/$ToolsLog4jFilename"
       appendToFile(propToAdd, filepath)
     }
@@ -125,7 +119,8 @@ private object Constants {
   val KafkaLog4JLoggersEnv = "KAFKA_LOG4J_LOGGERS"
   val KafkaLog4jRootLoglevelEnv = "KAFKA_LOG4J_ROOT_LOGLEVEL"
   val KafkaToolsLog4jLoglevelEnv = "KAFKA_TOOLS_LOG4J_LOGLEVEL"
-  val ExcludeServerPropsEnv: Set[String] = Set("KAFKA_VERSION",
+  val ExcludeServerPropsEnv: Set[String] = Set(
+    "KAFKA_VERSION",
     "KAFKA_HEAP_OPT",
     "KAFKA_LOG4J_OPTS",
     "KAFKA_OPTS",
