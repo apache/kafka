@@ -31,9 +31,9 @@ import org.apache.kafka.clients.consumer.internals.events.ApplicationEventHandle
 import org.apache.kafka.clients.consumer.internals.events.AssignmentChangeApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
 import org.apache.kafka.clients.consumer.internals.events.CommitApplicationEvent;
+import org.apache.kafka.clients.consumer.internals.events.CompletableApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.CompletableBackgroundEvent;
 import org.apache.kafka.clients.consumer.internals.events.ConsumerRebalanceListenerCallbackNeededEvent;
-import org.apache.kafka.clients.consumer.internals.events.CompletableApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.ErrorBackgroundEvent;
 import org.apache.kafka.clients.consumer.internals.events.EventProcessor;
 import org.apache.kafka.clients.consumer.internals.events.FetchCommittedOffsetsApplicationEvent;
@@ -80,11 +80,8 @@ import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
 import java.util.SortedSet;
-import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
@@ -869,11 +866,13 @@ public class AsyncKafkaConsumerTest {
                                             int expectedRevokedCount,
                                             int expectedAssignedCount,
                                             int expectedLostCount) {
+        consumer = newConsumer();
         CounterConsumerRebalanceListener consumerRebalanceListener = new CounterConsumerRebalanceListener(
                 revokedError,
                 assignedError,
                 lostError
         );
+        doReturn(Fetch.empty()).when(fetchCollector).collectFetch(any(FetchBuffer.class));
         consumer.subscribe(Collections.singletonList("topic"), consumerRebalanceListener);
         SortedSet<TopicPartition> partitions = Collections.emptySortedSet();
 
@@ -1135,6 +1134,7 @@ public class AsyncKafkaConsumerTest {
      */
     @Test
     public void testProcessBackgroundEventsWithInitialDelay() throws Exception {
+        consumer = newConsumer();
         Time time = new MockTime();
         Timer timer = time.timer(1000);
         CompletableFuture<?> future = mock(CompletableFuture.class);
@@ -1170,6 +1170,7 @@ public class AsyncKafkaConsumerTest {
      */
     @Test
     public void testProcessBackgroundEventsWithoutDelay() {
+        consumer = newConsumer();
         Time time = new MockTime();
         Timer timer = time.timer(1000);
 
@@ -1191,6 +1192,7 @@ public class AsyncKafkaConsumerTest {
      */
     @Test
     public void testProcessBackgroundEventsTimesOut() throws Exception {
+        consumer = newConsumer();
         Time time = new MockTime();
         Timer timer = time.timer(1000);
         CompletableFuture<?> future = mock(CompletableFuture.class);
@@ -1207,10 +1209,6 @@ public class AsyncKafkaConsumerTest {
             // Because we forced our mocked future to continuously time out, we should have no time remaining.
             assertEquals(0, timer.remainingMs());
         }
-    }
-
-    private void assertNoPendingWakeup(final WakeupTrigger wakeupTrigger) {
-        assertNull(wakeupTrigger.getPendingTask());
     }
 
     private HashMap<TopicPartition, OffsetAndMetadata> mockTopicPartitionOffset() {
