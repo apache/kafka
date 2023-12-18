@@ -40,6 +40,7 @@ import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.anySet;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
@@ -66,7 +67,7 @@ public class MemoryConfigBackingStoreTest {
 
     @Test
     public void testPutConnectorConfig() {
-        configStore.putConnectorConfig(CONNECTOR_IDS.get(0), SAMPLE_CONFIGS.get(0));
+        configStore.putConnectorConfig(CONNECTOR_IDS.get(0), SAMPLE_CONFIGS.get(0), null);
         ClusterConfigState configState = configStore.snapshot();
 
         assertTrue(configState.contains(CONNECTOR_IDS.get(0)));
@@ -79,8 +80,23 @@ public class MemoryConfigBackingStoreTest {
     }
 
     @Test
+    public void testPutConnectorConfigWithTargetState() {
+        configStore.putConnectorConfig(CONNECTOR_IDS.get(0), SAMPLE_CONFIGS.get(0), TargetState.PAUSED);
+        ClusterConfigState configState = configStore.snapshot();
+
+        assertTrue(configState.contains(CONNECTOR_IDS.get(0)));
+        assertEquals(TargetState.PAUSED, configState.targetState(CONNECTOR_IDS.get(0)));
+        assertEquals(SAMPLE_CONFIGS.get(0), configState.connectorConfig(CONNECTOR_IDS.get(0)));
+        assertEquals(1, configState.connectors().size());
+
+        verify(configUpdateListener).onConnectorConfigUpdate(eq(CONNECTOR_IDS.get(0)));
+        // onConnectorTargetStateChange hook shouldn't be called when a connector is created with a specific initial target state
+        verify(configUpdateListener, never()).onConnectorTargetStateChange(eq(CONNECTOR_IDS.get(0)));
+    }
+
+    @Test
     public void testPutConnectorConfigUpdateExisting() {
-        configStore.putConnectorConfig(CONNECTOR_IDS.get(0), SAMPLE_CONFIGS.get(0));
+        configStore.putConnectorConfig(CONNECTOR_IDS.get(0), SAMPLE_CONFIGS.get(0), null);
         ClusterConfigState configState = configStore.snapshot();
 
         assertTrue(configState.contains(CONNECTOR_IDS.get(0)));
@@ -89,7 +105,7 @@ public class MemoryConfigBackingStoreTest {
         assertEquals(SAMPLE_CONFIGS.get(0), configState.connectorConfig(CONNECTOR_IDS.get(0)));
         assertEquals(1, configState.connectors().size());
 
-        configStore.putConnectorConfig(CONNECTOR_IDS.get(0), SAMPLE_CONFIGS.get(1));
+        configStore.putConnectorConfig(CONNECTOR_IDS.get(0), SAMPLE_CONFIGS.get(1), null);
         configState = configStore.snapshot();
         assertEquals(SAMPLE_CONFIGS.get(1), configState.connectorConfig(CONNECTOR_IDS.get(0)));
 
@@ -98,8 +114,8 @@ public class MemoryConfigBackingStoreTest {
 
     @Test
     public void testRemoveConnectorConfig() {
-        configStore.putConnectorConfig(CONNECTOR_IDS.get(0), SAMPLE_CONFIGS.get(0));
-        configStore.putConnectorConfig(CONNECTOR_IDS.get(1), SAMPLE_CONFIGS.get(1));
+        configStore.putConnectorConfig(CONNECTOR_IDS.get(0), SAMPLE_CONFIGS.get(0), null);
+        configStore.putConnectorConfig(CONNECTOR_IDS.get(1), SAMPLE_CONFIGS.get(1), null);
         ClusterConfigState configState = configStore.snapshot();
 
         Set<String> expectedConnectors = new HashSet<>();
@@ -124,7 +140,7 @@ public class MemoryConfigBackingStoreTest {
         assertThrows(IllegalArgumentException.class,
             () -> configStore.putTaskConfigs(CONNECTOR_IDS.get(0), Collections.singletonList(SAMPLE_CONFIGS.get(1))));
 
-        configStore.putConnectorConfig(CONNECTOR_IDS.get(0), SAMPLE_CONFIGS.get(0));
+        configStore.putConnectorConfig(CONNECTOR_IDS.get(0), SAMPLE_CONFIGS.get(0), null);
         configStore.putTaskConfigs(CONNECTOR_IDS.get(0), Collections.singletonList(SAMPLE_CONFIGS.get(1)));
         ClusterConfigState configState = configStore.snapshot();
 
@@ -151,7 +167,7 @@ public class MemoryConfigBackingStoreTest {
             return null;
         }).when(configUpdateListener).onTaskConfigUpdate(anySet());
 
-        configStore.putConnectorConfig(CONNECTOR_IDS.get(0), SAMPLE_CONFIGS.get(0));
+        configStore.putConnectorConfig(CONNECTOR_IDS.get(0), SAMPLE_CONFIGS.get(0), null);
         configStore.putTaskConfigs(CONNECTOR_IDS.get(0), Collections.singletonList(SAMPLE_CONFIGS.get(1)));
         configStore.removeTaskConfigs(CONNECTOR_IDS.get(0));
         ClusterConfigState configState = configStore.snapshot();
@@ -171,7 +187,7 @@ public class MemoryConfigBackingStoreTest {
         // Can't write target state for non-existent connector
         assertThrows(IllegalArgumentException.class, () -> configStore.putTargetState(CONNECTOR_IDS.get(0), TargetState.PAUSED));
 
-        configStore.putConnectorConfig(CONNECTOR_IDS.get(0), SAMPLE_CONFIGS.get(0));
+        configStore.putConnectorConfig(CONNECTOR_IDS.get(0), SAMPLE_CONFIGS.get(0), null);
         configStore.putTargetState(CONNECTOR_IDS.get(0), TargetState.PAUSED);
         // Ensure that ConfigBackingStore.UpdateListener::onConnectorTargetStateChange is called only once if the same state is written twice
         configStore.putTargetState(CONNECTOR_IDS.get(0), TargetState.PAUSED);

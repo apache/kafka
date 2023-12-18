@@ -200,23 +200,23 @@ trait SaslSetup {
 
   def createScramCredentials(zkConnect: String, userName: String, password: String): Unit = {
     val zkClientConfig = new ZKClientConfig()
-    val zkClient = KafkaZkClient(
+    TestUtils.resource(KafkaZkClient(
       zkConnect, JaasUtils.isZkSaslEnabled || KafkaConfig.zkTlsClientAuthEnabled(zkClientConfig), 30000, 30000,
-      Int.MaxValue, Time.SYSTEM, name = "SaslSetup", zkClientConfig = zkClientConfig)
-    val adminZkClient = new AdminZkClient(zkClient)
+      Int.MaxValue, Time.SYSTEM, name = "SaslSetup", zkClientConfig = zkClientConfig)) { zkClient =>
+      val adminZkClient = new AdminZkClient(zkClient)
 
-    val entityType = ConfigType.User
-    val entityName = userName
-    val configs = adminZkClient.fetchEntityConfig(entityType, entityName)
+      val entityType = ConfigType.User
+      val entityName = userName
+      val configs = adminZkClient.fetchEntityConfig(entityType, entityName)
 
-    ScramMechanism.values().foreach(mechanism => {
-      val credential = new ScramFormatter(mechanism).generateCredential(password, 4096)
-      val credentialString = ScramCredentialUtils.credentialToString(credential)
-      configs.setProperty(mechanism.mechanismName, credentialString)
-    })
+      ScramMechanism.values().foreach(mechanism => {
+        val credential = new ScramFormatter(mechanism).generateCredential(password, 4096)
+        val credentialString = ScramCredentialUtils.credentialToString(credential)
+        configs.setProperty(mechanism.mechanismName, credentialString)
+      })
 
-    adminZkClient.changeConfigs(entityType, entityName, configs)
-    zkClient.close()
+      adminZkClient.changeConfigs(entityType, entityName, configs)
+    }
   }
 
 }

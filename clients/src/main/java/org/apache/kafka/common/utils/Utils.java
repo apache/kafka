@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.utils;
 
+import java.lang.reflect.Modifier;
 import java.nio.BufferUnderflowException;
 import java.nio.ByteOrder;
 import java.nio.file.StandardOpenOption;
@@ -1022,6 +1023,17 @@ public final class Utils {
     }
 
     /**
+     * Flushes dirty file with swallowing {@link NoSuchFileException}
+     */
+    public static void flushFileIfExists(Path path) throws IOException {
+        try (FileChannel fileChannel = FileChannel.open(path, StandardOpenOption.READ)) {
+            fileChannel.force(true);
+        } catch (NoSuchFileException e) {
+            log.warn("Failed to flush file {}", path, e);
+        }
+    }
+
+    /**
      * Closes all the provided closeables.
      * @throws IOException if any of the close methods throws an IOException.
      *         The first IOException is thrown with subsequent exceptions
@@ -1095,6 +1107,15 @@ public final class Utils {
     public interface UncheckedCloseable extends AutoCloseable {
         @Override
         void close();
+    }
+
+    /**
+     * Closes {@code maybeCloseable} if it implements the {@link AutoCloseable} interface,
+     * and if an exception is thrown, it is logged at the WARN level.
+     */
+    public static void maybeCloseQuietly(Object maybeCloseable, String name) {
+        if (maybeCloseable instanceof AutoCloseable)
+            closeQuietly((AutoCloseable) maybeCloseable, name);
     }
 
     /**
@@ -1543,7 +1564,7 @@ public final class Utils {
      * Checks if a string is null, empty or whitespace only.
      * @param str a string to be checked
      * @return true if the string is null, empty or whitespace only; otherwise, return false.
-     */    
+     */
     public static boolean isBlank(String str) {
         return str == null || str.trim().isEmpty();
     }
@@ -1563,6 +1584,38 @@ public final class Utils {
         return Stream.of(enumClass.getEnumConstants())
                 .map(Object::toString)
                 .toArray(String[]::new);
+    }
+
+    /**
+     * Ensure that the class is concrete (i.e., not abstract), and that it subclasses a given base class.
+     * If it is abstract or does not subclass the given base class, throw a {@link ConfigException}
+     * with a friendly error message suggesting a list of concrete child subclasses (if any are known).
+     * @param baseClass the expected superclass; may not be null
+     * @param klass the class to check; may not be null
+     * @throws ConfigException if the class is not concrete
+     */
+    public static void ensureConcreteSubclass(Class<?> baseClass, Class<?> klass) {
+        Objects.requireNonNull(baseClass);
+        Objects.requireNonNull(klass);
+
+        if (!baseClass.isAssignableFrom(klass)) {
+            String inheritFrom = baseClass.isInterface() ? "implement" : "extend";
+            String baseClassType = baseClass.isInterface() ? "interface" : "class";
+            throw new ConfigException("Class " + klass + " does not " + inheritFrom + " the " + baseClass.getSimpleName() + " " + baseClassType);
+        }
+
+        if (Modifier.isAbstract(klass.getModifiers())) {
+            String childClassNames = Stream.of(klass.getClasses())
+                    .filter(baseClass::isAssignableFrom)
+                    .filter(c -> !Modifier.isAbstract(c.getModifiers()))
+                    .filter(c -> Modifier.isPublic(c.getModifiers()))
+                    .map(Class::getName)
+                    .collect(Collectors.joining(", "));
+            String message = "This class is abstract and cannot be created.";
+            if (!Utils.isBlank(childClassNames))
+                message += " Did you mean " + childClassNames + "?";
+            throw new ConfigException(message);
+        }
     }
 
     /**

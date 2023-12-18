@@ -141,15 +141,13 @@ public class ActiveTaskCreatorTest {
     }
 
     @Test
-    public void shouldFailOnGetThreadProducerIfEosDisabled() {
+    public void shouldReturnThreadProducerIfAtLeastOnceIsEnabled() {
         createTasks();
 
-        final IllegalStateException thrown = assertThrows(
-            IllegalStateException.class,
-            activeTaskCreator::threadProducer
-        );
+        final StreamsProducer threadProducer = activeTaskCreator.threadProducer();
 
-        assertThat(thrown.getMessage(), is("Expected EXACTLY_ONCE_V2 to be enabled, but the processing mode was AT_LEAST_ONCE"));
+        assertThat(mockClientSupplier.producers.size(), is(1));
+        assertThat(threadProducer.kafkaProducer(), is(mockClientSupplier.producers.get(0)));
     }
 
     @Test
@@ -291,7 +289,7 @@ public class ActiveTaskCreatorTest {
             activeTaskCreator::threadProducer
         );
 
-        assertThat(thrown.getMessage(), is("Expected EXACTLY_ONCE_V2 to be enabled, but the processing mode was EXACTLY_ONCE_ALPHA"));
+        assertThat(thrown.getMessage(), is("Expected AT_LEAST_ONCE or EXACTLY_ONCE_V2 to be enabled, but the processing mode was EXACTLY_ONCE_ALPHA"));
     }
 
     @SuppressWarnings("deprecation")

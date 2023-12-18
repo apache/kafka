@@ -27,7 +27,6 @@ import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig}
 import kafka.server.KafkaConfig
 import kafka.integration.KafkaServerTestHarness
 import org.apache.kafka.clients.admin.{Admin, AdminClientConfig}
-import org.apache.kafka.clients.consumer.internals.PrototypeAsyncConsumer
 import org.apache.kafka.common.network.{ListenerName, Mode}
 import org.apache.kafka.common.serialization.{ByteArrayDeserializer, ByteArraySerializer, Deserializer, Serializer}
 import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo}
@@ -67,6 +66,9 @@ abstract class IntegrationTestHarness extends KafkaServerTestHarness {
     modifyConfigs(cfgs)
     if (isZkMigrationTest()) {
       cfgs.foreach(_.setProperty(KafkaConfig.MigrationEnabledProp, "true"))
+    }
+    if (isNewGroupCoordinatorEnabled()) {
+      cfgs.foreach(_.setProperty(KafkaConfig.NewGroupCoordinatorEnableProp, "true"))
     }
     insertControllerListenersIfNeeded(cfgs)
     cfgs.map(KafkaConfig.fromProps)
@@ -141,6 +143,7 @@ abstract class IntegrationTestHarness extends KafkaServerTestHarness {
     consumerConfig.putIfAbsent(ConsumerConfig.GROUP_ID_CONFIG, "group")
     consumerConfig.putIfAbsent(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, classOf[ByteArrayDeserializer].getName)
     consumerConfig.putIfAbsent(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, classOf[ByteArrayDeserializer].getName)
+    maybeGroupProtocolSpecified(testInfo).map(groupProtocol => consumerConfig.putIfAbsent(ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol.name))
 
     adminClientConfig.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers())
 
@@ -169,19 +172,6 @@ abstract class IntegrationTestHarness extends KafkaServerTestHarness {
     val producer = new KafkaProducer[K, V](props, keySerializer, valueSerializer)
     producers += producer
     producer
-  }
-
-  def createAsyncConsumer[K, V](keyDeserializer: Deserializer[K] = new ByteArrayDeserializer,
-                                valueDeserializer: Deserializer[V] = new ByteArrayDeserializer,
-                                configOverrides: Properties = new Properties,
-                                configsToRemove: List[String] = List()): PrototypeAsyncConsumer[K, V] = {
-    val props = new Properties
-    props ++= consumerConfig
-    props ++= configOverrides
-    configsToRemove.foreach(props.remove(_))
-    val consumer = new PrototypeAsyncConsumer[K, V](props, keyDeserializer, valueDeserializer)
-    consumers += consumer
-    consumer
   }
 
   def createConsumer[K, V](keyDeserializer: Deserializer[K] = new ByteArrayDeserializer,

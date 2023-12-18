@@ -17,8 +17,8 @@
   "apiKey": 3,
   "type": "metadata",
   "name": "PartitionRecord",
-  // Version 1 implements Eligible Leader Replicas and LastKnownELR as described in KIP-966.
-  // Version 2 adds Directories for KIP-858
+  // Version 1 adds Directories for KIP-858
+  // Version 2 implements Eligible Leader Replicas and LastKnownELR as described in KIP-966.
   "validVersions": "0-2",
   "flexibleVersions": "0+",
   "fields": [
@@ -42,13 +42,13 @@
       "about": "The epoch of the partition leader." },
     { "name": "PartitionEpoch", "type": "int32", "versions": "0+", "default": "-1",
       "about": "An epoch that gets incremented each time we change anything in the partition." },
+    { "name": "Directories", "type": "[]uuid", "versions": "1+",
+      "about": "The log directory hosting each replica, sorted in the same exact order as the Replicas field."},
     { "name": "EligibleLeaderReplicas", "type": "[]int32", "default": "null", "entityType": "brokerId",
-      "versions": "1+", "nullableVersions": "1+", "taggedVersions": "1+", "tag": 1,
+      "versions": "2+", "nullableVersions": "2+", "taggedVersions": "2+", "tag": 1,
       "about": "The eligible leader replicas of this partition." },
     { "name": "LastKnownELR", "type": "[]int32", "default": "null", "entityType": "brokerId",
-      "versions": "1+", "nullableVersions": "1+", "taggedVersions": "1+", "tag": 2,
-      "about": "The last known eligible leader replicas of this partition." },
-    { "name": "Directories", "type": "[]uuid", "versions": "2+",
-      "about": "The log directory hosting each replica, sorted in the same exact order as the Replicas field."}
+      "versions": "2+", "nullableVersions": "2+", "taggedVersions": "2+", "tag": 2,
+      "about": "The last known eligible leader replicas of this partition." }
   ]
 }

@@ -1,0 +1,66 @@
+# Licensed to the Apache Software Foundation (ASF) under one or more
+# contributor license agreements.  See the NOTICE file distributed with
+# this work for additional information regarding copyright ownership.
+# The ASF licenses this file to You under the Apache License, Version 2.0
+# (the "License"); you may not use this file except in compliance with
+# the License.  You may obtain a copy of the License at
+#
+#    http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+name: Docker Build Test
+
+on:
+  workflow_dispatch:
+    inputs:
+      image_type:
+        type: choice
+        description: Docker image type to build and test
+        options: 
+          - "jvm"
+      kafka_url:
+        description: Kafka url to be used to build the docker image
+        required: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+    - name: Set up Python 3.10
+      uses: actions/setup-python@v3
+      with:
+        python-version: "3.10"
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r docker/requirements.txt
+    - name: Build image and run tests
+      working-directory: ./docker
+      run: |
+        python docker_build_test.py kafka/test -tag=test -type=${{ github.event.inputs.image_type }} -u=${{ github.event.inputs.kafka_url }}
+    - name: Run CVE scan
+      uses: aquasecurity/trivy-action@master
+      with:
+        image-ref: 'kafka/test:test'
+        format: 'table'
+        severity: 'CRITICAL,HIGH'
+        output: scan_report_${{ github.event.inputs.image_type }}.txt
+        exit-code: '1'
+    - name: Upload test report
+      if: always()
+      uses: actions/upload-artifact@v3
+      with:
+        name: report_${{ github.event.inputs.image_type }}.html
+        path: docker/test/report_${{ github.event.inputs.image_type }}.html
+    - name: Upload CVE scan report
+      if: always()
+      uses: actions/upload-artifact@v3
+      with:
+        name: scan_report_${{ github.event.inputs.image_type }}.txt
+        path: scan_report_${{ github.event.inputs.image_type }}.txt

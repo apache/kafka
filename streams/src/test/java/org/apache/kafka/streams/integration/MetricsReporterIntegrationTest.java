@@ -73,7 +73,7 @@ public class MetricsReporterIntegrationTest {
     public void before(final TestInfo testInfo) throws InterruptedException {
         builder = new StreamsBuilder();
 
-        final String safeTestName = safeUniqueTestName(getClass(), testInfo);
+        final String safeTestName = safeUniqueTestName(testInfo);
         final String appId = "app-" + safeTestName;
 
         streamsConfiguration = new Properties();
@@ -119,12 +119,12 @@ public class MetricsReporterIntegrationTest {
         builder.stream(STREAM_INPUT, Consumed.with(Serdes.Integer(), Serdes.String()))
                 .to(STREAM_OUTPUT, Produced.with(Serdes.Integer(), Serdes.String()));
         final Topology topology = builder.build();
-        final KafkaStreams kafkaStreams = new KafkaStreams(topology, streamsConfiguration);
-
-        kafkaStreams.metrics().keySet().forEach(metricName -> {
-            final Object initialMetricValue = METRIC_NAME_TO_INITIAL_VALUE.get(metricName.name());
-            assertThat(initialMetricValue, notNullValue());
-        });
+        try (KafkaStreams kafkaStreams = new KafkaStreams(topology, streamsConfiguration)) {
+            kafkaStreams.metrics().keySet().forEach(metricName -> {
+                final Object initialMetricValue = METRIC_NAME_TO_INITIAL_VALUE.get(metricName.name());
+                assertThat(initialMetricValue, notNullValue());
+            });
+        }
     }
 
 }
