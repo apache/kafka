@@ -70,30 +70,35 @@ class DeleteTopicTest extends QuorumTestHarness {
     TestUtils.verifyTopicDeletion(zkClientOrNull, topic, 1, brokers)
   }
 
-  @Test
-  def testResumeDeleteTopicWithRecoveredFollower(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testResumeDeleteTopicWithRecoveredFollower(quorum: String): Unit = {
     val topicPartition = new TopicPartition("test", 0)
     val topic = topicPartition.topic
     brokers = createTestTopicAndCluster(topic)
     // shut down one follower replica
-    val leaderIdOpt = zkClient.getLeaderForPartition(new TopicPartition(topic, 0))
-    assertTrue(leaderIdOpt.isDefined, "Leader should exist for partition [test,0]")
-    val follower = brokers.filter(s => s.config.brokerId != leaderIdOpt.get).last
+    val leaderId = TestUtils.waitUntilLeaderIsKnown(brokers, new TopicPartition(topic, 0))
+    val follower = brokers.filter(s => s.config.brokerId != leaderId).last
     follower.shutdown()
     // start topic deletion
-    adminZkClient.deleteTopic(topic)
+    admin.deleteTopics(Collections.singletonList(topic)).all().get()
     // check if all replicas but the one that is shut down has deleted the log
     TestUtils.waitUntilTrue(() =>
       brokers.filter(s => s.config.brokerId != follower.config.brokerId)
         .forall(_.logManager.getLog(topicPartition).isEmpty), "Replicas 0,1 have not deleted log.")
-    // ensure topic deletion is halted
-    TestUtils.waitUntilTrue(() => zkClient.isTopicMarkedForDeletion(topic),
-      "Admin path /admin/delete_topics/test path deleted even when a follower replica is down")
+
+    if (!isKRaftTest()) {
+      // ensure topic deletion is halted
+      TestUtils.waitUntilTrue(() => zkClient.isTopicMarkedForDeletion(topic),
+        "Admin path /admin/delete_topics/test path deleted even when a follower replica is down")
+    }
+
     // restart follower replica
     follower.startup()
-    TestUtils.verifyTopicDeletion(zkClient, topic, 1, brokers)
+    TestUtils.verifyTopicDeletion(zkClientOrNull, topic, 1, brokers)
   }
 
+  // This test is not enabled with KRaft because it doesn't have the same controller failover logic as Zookeeper mode.
   @Test
   def testResumeDeleteTopicOnControllerFailover(): Unit = {
     val topicPartition = new TopicPartition("test", 0)
@@ -181,7 +186,7 @@ class DeleteTopicTest extends QuorumTestHarness {
         getController()
         true
       } catch {
-        case _: Throwable  => false
+        case _: Throwable => false
       }
     }, "Controller should eventually exist")
   }
@@ -192,66 +197,101 @@ class DeleteTopicTest extends QuorumTestHarness {
     }.toSet
   }
 
-  @Test
-  def testIncreasePartitionCountDuringDeleteTopic(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testIncreasePartitionCountDuringDeleteTopic(quorum: String): Unit = {
     val topicPartition = new TopicPartition(topic, 0)
-    val brokerConfigs = TestUtils.createBrokerConfigs(4, zkConnect, false)
-    brokerConfigs.foreach(p => p.setProperty("delete.topic.enable", "true"))
-    // create brokers
-    val allServers = brokerConfigs.map(b => TestUtils.createServer(KafkaConfig.fromProps(b)))
-    this.servers = allServers
-    val servers = allServers.filter(s => expectedReplicaAssignment(0).contains(s.config.brokerId))
-    // create the topic
-    TestUtils.createTopic(zkClient, topic, expectedReplicaAssignment, servers)
-    // wait until replica log is created on every broker
-    TestUtils.waitUntilTrue(() => servers.forall(_.getLogManager.getLog(topicPartition).isDefined),
-      "Replicas for topic test not created.")
-    // shutdown a broker to make sure the following topic deletion will be suspended
-    val leaderIdOpt = zkClient.getLeaderForPartition(topicPartition)
-    assertTrue(leaderIdOpt.isDefined, "Leader should exist for partition [test,0]")
-    val follower = servers.filter(s => s.config.brokerId != leaderIdOpt.get).last
-    follower.shutdown()
-    // start topic deletion
-    adminZkClient.deleteTopic(topic)
 
-    // make sure deletion of all of the topic's replicas have been tried
-    ensureControllerExists()
-    val (controller, controllerId) = getController()
-    val allReplicasForTopic = getAllReplicasFromAssignment(topic, expectedReplicaAssignment)
-    TestUtils.waitUntilTrue(() => {
-      val replicasInDeletionSuccessful = controller.kafkaController.controllerContext.replicasInState(topic, ReplicaDeletionSuccessful)
-      val offlineReplicas = controller.kafkaController.controllerContext.replicasInState(topic, OfflineReplica)
-      allReplicasForTopic == (replicasInDeletionSuccessful union offlineReplicas)
-    }, s"Not all replicas for topic $topic are in states of either ReplicaDeletionSuccessful or OfflineReplica")
+    if (isKRaftTest()) {
+      val topicPartition = new TopicPartition(topic, 0)
+      val allBrokers = createTestTopicAndCluster(topic, 4, deleteTopicEnabled = true)
+      this.brokers = allBrokers
+      val partitionHostingBrokers = allBrokers.filter(b => expectedReplicaAssignment(0).contains(b.config.brokerId))
 
-    // increase the partition count for topic
-    val props = new Properties()
-    props.setProperty(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, TestUtils.plaintextBootstrapServers(servers))
-    TestUtils.resource(Admin.create(props)) { adminClient =>
-      try {
-        adminClient.createPartitions(Map(topic -> NewPartitions.increaseTo(2)).asJava).all().get()
-      } catch {
-        case _: ExecutionException =>
+      // wait until replica log is created on every broker
+      TestUtils.waitUntilTrue(() => partitionHostingBrokers.forall(_.logManager.getLog(topicPartition).isDefined),
+        "Replicas for topic test not created.")
+
+      // shutdown a broker to make sure the following topic deletion will be suspended
+      val leaderIdOpt = TestUtils.waitUntilLeaderIsKnown(partitionHostingBrokers, topicPartition)
+      val follower = partitionHostingBrokers.filter(s => s.config.brokerId != leaderIdOpt).last
+      follower.shutdown()
+      // start topic deletion
+      admin.deleteTopics(Collections.singletonList(topic)).all().get()
+
+      // increase the partition count for topic
+      val props = new Properties()
+      props.setProperty(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, TestUtils.plaintextBootstrapServers(partitionHostingBrokers))
+      TestUtils.resource(Admin.create(props)) { adminClient =>
+        try {
+          adminClient.createPartitions(Map(topic -> NewPartitions.increaseTo(2)).asJava).all().get()
+        } catch {
+          case _: ExecutionException =>
+        }
       }
+
+      // bring back the failed broker
+      follower.startup()
+      TestUtils.verifyTopicDeletion(null, topic, 2, partitionHostingBrokers)
+    } else {
+      val brokerConfigs = TestUtils.createBrokerConfigs(4, zkConnect, false)
+      brokerConfigs.foreach(p => p.setProperty("delete.topic.enable", "true"))
+      // create brokers
+      val allServers = brokerConfigs.map(b => TestUtils.createServer(KafkaConfig.fromProps(b)))
+      this.servers = allServers
+      val partitionHostingServers = allServers.filter(s => expectedReplicaAssignment(0).contains(s.config.brokerId))
+      // create the topic
+      TestUtils.createTopic(zkClient, topic, expectedReplicaAssignment, partitionHostingServers)
+      // wait until replica log is created on every broker
+      TestUtils.waitUntilTrue(() => partitionHostingServers.forall(_.getLogManager.getLog(topicPartition).isDefined),
+        "Replicas for topic test not created.")
+
+      // shutdown a broker to make sure the following topic deletion will be suspended
+      val leaderIdOpt = zkClient.getLeaderForPartition(topicPartition)
+      assertTrue(leaderIdOpt.isDefined, "Leader should exist for partition [test,0]")
+      val follower = partitionHostingServers.filter(s => s.config.brokerId != leaderIdOpt.get).last
+      follower.shutdown()
+      // start topic deletion
+      adminZkClient.deleteTopic(topic)
+
+      // make sure deletion of all of the topic's replicas have been tried
+      ensureControllerExists()
+      val (controller, controllerId) = getController()
+      val allReplicasForTopic = getAllReplicasFromAssignment(topic, expectedReplicaAssignment)
+      TestUtils.waitUntilTrue(() => {
+        val replicasInDeletionSuccessful = controller.kafkaController.controllerContext.replicasInState(topic, ReplicaDeletionSuccessful)
+        val offlineReplicas = controller.kafkaController.controllerContext.replicasInState(topic, OfflineReplica)
+        allReplicasForTopic == (replicasInDeletionSuccessful union offlineReplicas)
+      }, s"Not all replicas for topic $topic are in states of either ReplicaDeletionSuccessful or OfflineReplica")
+
+      // increase the partition count for topic
+      val props = new Properties()
+      props.setProperty(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, TestUtils.plaintextBootstrapServers(partitionHostingServers))
+      TestUtils.resource(Admin.create(props)) { adminClient =>
+        try {
+          adminClient.createPartitions(Map(topic -> NewPartitions.increaseTo(2)).asJava).all().get()
+        } catch {
+          case _: ExecutionException =>
+        }
+      }
+      // trigger a controller switch now
+      val previousControllerId = controllerId
+
+      controller.shutdown()
+
+      ensureControllerExists()
+      // wait until a new controller to show up
+      TestUtils.waitUntilTrue(() => {
+        val (newController, newControllerId) = getController()
+        newControllerId != previousControllerId
+      }, "The new controller should not have the failed controller id")
+
+      // bring back the failed brokers
+      follower.startup()
+      controller.startup()
+      TestUtils.verifyTopicDeletion(zkClient, topic, 2, partitionHostingServers)
     }
-    // trigger a controller switch now
-    val previousControllerId = controllerId
-
-    controller.shutdown()
-
-    ensureControllerExists()
-    // wait until a new controller to show up
-    TestUtils.waitUntilTrue(() => {
-      val (newController, newControllerId) = getController()
-      newControllerId != previousControllerId
-    }, "The new controller should not have the failed controller id")
-
-    // bring back the failed brokers
-    follower.startup()
-    controller.startup()
-    TestUtils.verifyTopicDeletion(zkClient, topic, 2, servers)
   }
-
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
@@ -490,6 +530,7 @@ class DeleteTopicTest extends QuorumTestHarness {
     TestUtils.waitUntilLeaderIsKnown(brokers, topicPartition)
   }
 
+  // This test is not enabled with KRaft, it's not possible to partially delete topics with KRaft
   @Test
   def testDeletingPartiallyDeletedTopic(): Unit = {
     /**
