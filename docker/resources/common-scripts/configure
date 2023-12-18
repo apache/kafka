@@ -30,7 +30,7 @@ path() {
   elif [[ $2 == "existence" ]]; then
     if [[ ! -e "$1" ]]; then
       echo "$1 file does not exist"
-      exit
+      exit 1
     fi
   fi
 }
@@ -133,13 +133,6 @@ fi
 
 cp -R /mnt/shared/config/. /opt/kafka/config/
 
-## Copy the bundled log4j.properties and tools-log4j.properties. This is done to handle property modification during container restart
-#cp /etc/kafka/docker/log4j.properties /opt/kafka/config/log4j.properties
-#cp /etc/kafka/docker/tools-log4j.properties /opt/kafka/config/tools-log4j.properties
-#
-## Copy all the user provided property files through file input
-#cp -R /mnt/shared/config/. /opt/kafka/config/
-#
 ## Check the presence of user provided kafka configs via file input
 #if [ -e "/mnt/shared/config/server.properties" ]
 #then
