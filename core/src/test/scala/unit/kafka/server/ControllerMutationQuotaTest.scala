@@ -17,7 +17,7 @@ import java.util.Properties
 import java.util.concurrent.ExecutionException
 import java.util.concurrent.TimeUnit
 import kafka.server.ClientQuotaManager.DefaultTags
-import kafka.utils.TestUtils
+import kafka.utils.{TestInfoUtils, TestUtils}
 import org.apache.kafka.common.config.internals.QuotaConfigs
 import org.apache.kafka.common.internals.KafkaFutureImpl
 import org.apache.kafka.common.message.CreatePartitionsRequestData
@@ -45,7 +45,9 @@ import org.apache.kafka.test.{TestUtils => JTestUtils}
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Assertions.fail
-import org.junit.jupiter.api.{BeforeEach, Test, TestInfo}
+import org.junit.jupiter.api.{BeforeEach, TestInfo}
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.ValueSource
 
 import scala.jdk.CollectionConverters._
 
@@ -113,8 +115,9 @@ class ControllerMutationQuotaTest extends BaseRequestTest {
     waitUserQuota(ThrottledPrincipal.getName, ControllerMutationRate)
   }
 
-  @Test
-  def testSetUnsetQuota(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testSetUnsetQuota(quorum: String): Unit = {
     val rate = 1.5
     val principal = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "User")
     // Default Value
@@ -129,8 +132,9 @@ class ControllerMutationQuotaTest extends BaseRequestTest {
     waitUserQuota(principal.getName, Long.MaxValue)
   }
 
-  @Test
-  def testQuotaMetric(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testQuotaMetric(quorum: String): Unit = {
     asPrincipal(ThrottledPrincipal) {
       // Metric is lazily created
       assertTrue(quotaMetric(principal.getName).isEmpty)
@@ -139,20 +143,23 @@ class ControllerMutationQuotaTest extends BaseRequestTest {
       val (_, errors) = createTopics(Map("topic" -> 1), StrictDeleteTopicsRequestVersion)
       assertEquals(Set(Errors.NONE), errors.values.toSet)
 
-      // Metric must be there with the correct config
-      waitQuotaMetric(principal.getName, ControllerMutationRate)
+      if (!isKRaftTest()) {
+        // Metric must be there with the correct config
+        waitQuotaMetric(principal.getName, ControllerMutationRate)
 
-      // Update quota
-      defineUserQuota(ThrottledPrincipal.getName, Some(ControllerMutationRate * 2))
-      waitUserQuota(ThrottledPrincipal.getName, ControllerMutationRate * 2)
+        // Update quota
+        defineUserQuota(ThrottledPrincipal.getName, Some(ControllerMutationRate * 2))
+        waitUserQuota(ThrottledPrincipal.getName, ControllerMutationRate * 2)
 
-      // Metric must be there with the updated config
-      waitQuotaMetric(principal.getName, ControllerMutationRate * 2)
+        // Metric must be there with the updated config
+        waitQuotaMetric(principal.getName, ControllerMutationRate * 2)
+      }
     }
   }
 
-  @Test
-  def testStrictCreateTopicsRequest(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testStrictCreateTopicsRequest(quorum: String): Unit = {
     asPrincipal(ThrottledPrincipal) {
       // Create two topics worth of 30 partitions each. As we use a strict quota, we
       // expect one to be created and one to be rejected.
@@ -174,8 +181,9 @@ class ControllerMutationQuotaTest extends BaseRequestTest {
     }
   }
 
-  @Test
-  def testPermissiveCreateTopicsRequest(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testPermissiveCreateTopicsRequest(quorum: String): Unit = {
     asPrincipal(ThrottledPrincipal) {
       // Create two topics worth of 30 partitions each. As we use a permissive quota, we
       // expect both topics to be created.
@@ -187,8 +195,9 @@ class ControllerMutationQuotaTest extends BaseRequestTest {
     }
   }
 
-  @Test
-  def testUnboundedCreateTopicsRequest(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testUnboundedCreateTopicsRequest(quorum: String): Unit = {
     asPrincipal(UnboundedPrincipal) {
       // Create two topics worth of 30 partitions each. As we use an user without quota, we
       // expect both topics to be created. The throttle time should be equal to 0.
@@ -198,8 +207,9 @@ class ControllerMutationQuotaTest extends BaseRequestTest {
     }
   }
 
-  @Test
-  def testStrictDeleteTopicsRequest(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testStrictDeleteTopicsRequest(quorum: String): Unit = {
     asPrincipal(UnboundedPrincipal) {
       createTopics(TopicsWith30Partitions, StrictCreateTopicsRequestVersion)
     }
@@ -225,8 +235,9 @@ class ControllerMutationQuotaTest extends BaseRequestTest {
     }
   }
 
-  @Test
-  def testPermissiveDeleteTopicsRequest(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testPermissiveDeleteTopicsRequest(quorum: String): Unit = {
     asPrincipal(UnboundedPrincipal) {
       createTopics(TopicsWith30Partitions, StrictCreateTopicsRequestVersion)
     }
@@ -242,8 +253,9 @@ class ControllerMutationQuotaTest extends BaseRequestTest {
     }
   }
 
-  @Test
-  def testUnboundedDeleteTopicsRequest(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testUnboundedDeleteTopicsRequest(quorum: String): Unit = {
     asPrincipal(UnboundedPrincipal) {
       createTopics(TopicsWith30Partitions, StrictCreateTopicsRequestVersion)
 
@@ -255,8 +267,9 @@ class ControllerMutationQuotaTest extends BaseRequestTest {
     }
   }
 
-  @Test
-  def testStrictCreatePartitionsRequest(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testStrictCreatePartitionsRequest(quorum: String): Unit = {
     asPrincipal(UnboundedPrincipal) {
       createTopics(TopicsWithOnePartition, StrictCreatePartitionsRequestVersion)
     }
@@ -282,8 +295,9 @@ class ControllerMutationQuotaTest extends BaseRequestTest {
     }
   }
 
-  @Test
-  def testPermissiveCreatePartitionsRequest(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testPermissiveCreatePartitionsRequest(quorum: String): Unit = {
     asPrincipal(UnboundedPrincipal) {
       createTopics(TopicsWithOnePartition, StrictCreatePartitionsRequestVersion)
     }
@@ -299,8 +313,9 @@ class ControllerMutationQuotaTest extends BaseRequestTest {
     }
   }
 
-  @Test
-  def testUnboundedCreatePartitionsRequest(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("zk", "kraft"))
+  def testUnboundedCreatePartitionsRequest(quorum: String): Unit = {
     asPrincipal(UnboundedPrincipal) {
       createTopics(TopicsWithOnePartition, StrictCreatePartitionsRequestVersion)
 
@@ -362,7 +377,7 @@ class ControllerMutationQuotaTest extends BaseRequestTest {
   }
 
   private def waitUserQuota(user: String, expectedQuota: Double): Unit = {
-    val quotaManager = servers.head.quotaManagers.controllerMutation
+    val quotaManager = brokers.head.quotaManagers.controllerMutation
     var actualQuota = Double.MinValue
 
     TestUtils.waitUntilTrue(() => {
@@ -372,13 +387,13 @@ class ControllerMutationQuotaTest extends BaseRequestTest {
   }
 
   private def quotaMetric(user: String): Option[KafkaMetric] = {
-    val metrics = servers.head.metrics
+    val metrics = brokers.head.metrics
     val metricName = metrics.metricName(
       "tokens",
       QuotaType.ControllerMutation.toString,
       "Tracking remaining tokens in the token bucket per user/client-id",
       Map(DefaultTags.User -> user, DefaultTags.ClientId -> "").asJava)
-    Option(servers.head.metrics.metric(metricName))
+    Option(brokers.head.metrics.metric(metricName))
   }
 
   private def waitQuotaMetric(user: String, expectedQuota: Double): Unit = {
@@ -414,6 +429,10 @@ class ControllerMutationQuotaTest extends BaseRequestTest {
 
   private def sendAlterClientQuotasRequest(entries: Iterable[ClientQuotaAlteration]): AlterClientQuotasResponse = {
     val request = new AlterClientQuotasRequest.Builder(entries.asJavaCollection, false).build()
-    connectAndReceive[AlterClientQuotasResponse](request, destination = controllerSocketServer)
+    if (isKRaftTest()) {
+      connectAndReceive[AlterClientQuotasResponse](request)
+    } else {
+      connectAndReceive[AlterClientQuotasResponse](request, destination = controllerSocketServer)
+    }
   }
 }
