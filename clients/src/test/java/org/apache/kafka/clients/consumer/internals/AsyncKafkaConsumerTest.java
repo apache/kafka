@@ -45,6 +45,7 @@ import org.apache.kafka.clients.consumer.internals.events.GroupMetadataUpdateEve
 import org.apache.kafka.clients.consumer.internals.events.LeaveOnCloseApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.ListOffsetsApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.NewTopicsMetadataUpdateRequestEvent;
+import org.apache.kafka.clients.consumer.internals.events.PollApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.ResetPositionsApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.SubscriptionChangeApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.UnsubscribeApplicationEvent;
@@ -1187,6 +1188,13 @@ public class AsyncKafkaConsumerTest {
     @Test
     public void testGroupIdOnlyWhitespaces() {
         testInvalidGroupId("       ");
+    }
+
+    @Test
+    public void testEnsurePollEventSentOnConsumerPoll() {
+        consumer.subscribe(singletonList("topic1"));
+        consumer.poll(Duration.ofMillis(100));
+        verify(testBuilder.applicationEventHandler).add(any(PollApplicationEvent.class));
     }
 
     private void testInvalidGroupId(final String groupId) {
