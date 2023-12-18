@@ -18,7 +18,6 @@ package kafka
 
 import kafka.tools.StorageTool
 
-import java.io.FileWriter
 import java.nio.file.{Files, Paths, StandardCopyOption, StandardOpenOption}
 
 object KafkaDockerWrapper {
@@ -57,40 +56,28 @@ object KafkaDockerWrapper {
   }
 
   private def prepareServerConfigs(defaultConfigsDir: String, realConfigsDir: String): Unit = {
-    val exclude = Set("KAFKA_VERSION",
-      "KAFKA_HEAP_OPT",
-      "KAFKA_LOG4J_OPTS",
-      "KAFKA_OPTS",
-      "KAFKA_JMX_OPTS",
-      "KAFKA_JVM_PERFORMANCE_OPTS",
-      "KAFKA_GC_LOG_OPTS",
-      "KAFKA_LOG4J_ROOT_LOGLEVEL",
-      "KAFKA_LOG4J_LOGGERS",
-      "KAFKA_TOOLS_LOG4J_LOGLEVEL",
-      "KAFKA_JMX_HOSTNAME")
-    var result = ""
-    for ((key, value) <- sys.env) {
-      if (key.startsWith("KAFKA_") && !exclude.contains(key)) {
-        val final_key = key.replace("KAFKA_", "").toLowerCase().replace("_", ".").replace("...", "-").replace("..", "_")
-        result += "\n" + final_key + "=" + value
-      }
-    }
-    val realFile = realConfigsDir + "/server.properties"
-    val defaultFile = defaultConfigsDir + "/server.properties"
-    val path = Paths.get(realFile)
-    if (!Files.exists(path)) {
-      Files.createFile(path)
-    }
-    val fw = new FileWriter(realFile, true)
-    try {
-      fw.write(result)
-    }
-    finally fw.close()
+    val serverPropsList = sys.env.map {
+      case (key, value) =>
+        if (key.startsWith("KAFKA_") && !ExcludeServerPropsEnv.contains(key)) {
+          val final_key = key.replace("KAFKA_", "").toLowerCase()
+            .replace("_", ".")
+            .replace("...", "-")
+            .replace("..", "_")
+          final_key + "=" + value
+        } else {
+          ""
+        }
+    }.toList
+
+    val realFile = s"$realConfigsDir/$ServerPropsFilename"
+    val defaultFile = s"$defaultConfigsDir/$ServerPropsFilename"
+    val propsToAdd = "\n" + serverPropsList.mkString("\n")
+    appendToFile(propsToAdd, realFile)
 
     val source = scala.io.Source.fromFile(realFile)
     val data = try source.mkString finally source.close()
-    if (data.trim().isEmpty) {
-      Files.copy(Paths.get(defaultFile), path, StandardCopyOption.REPLACE_EXISTING)
+    if (data.isBlank) {
+      Files.copy(Paths.get(defaultFile), Paths.get(realFile), StandardCopyOption.REPLACE_EXISTING)
     }
   }
 
@@ -113,14 +100,14 @@ object KafkaDockerWrapper {
     appendToFile(propsToAdd, filepath)
   }
 
-    private def prepareToolsLog4jConfigs(configsDir: String): Unit = {
-      val kafkaToolsLog4jLogLevelOpt = sys.env.get(KafkaToolsLog4jLoglevelEnv)
-      if (kafkaToolsLog4jLogLevelOpt.isDefined) {
-        val propToAdd = s"log4j.rootLogger=${kafkaToolsLog4jLogLevelOpt.get}, stderr"
-        val filepath = s"$configsDir/$ToolsLog4jFilename"
-        appendToFile(propToAdd, filepath)
-      }
+  private def prepareToolsLog4jConfigs(configsDir: String): Unit = {
+    val kafkaToolsLog4jLogLevelOpt = sys.env.get(KafkaToolsLog4jLoglevelEnv)
+    if (kafkaToolsLog4jLogLevelOpt.isDefined) {
+      val propToAdd = s"log4j.rootLogger=${kafkaToolsLog4jLogLevelOpt.get}, stderr"
+      val filepath = s"$configsDir/$ToolsLog4jFilename"
+      appendToFile(propToAdd, filepath)
     }
+  }
 
   private def appendToFile(properties: String, filepath: String): Unit = {
     val path = Paths.get(filepath)
@@ -132,10 +119,21 @@ object KafkaDockerWrapper {
 }
 
 private object Constants {
-//  val ServerPropsFilename = "server.properties"
+  val ServerPropsFilename = "server.properties"
   val Log4jPropsFilename = "log4j.properties"
   val ToolsLog4jFilename = "tools-log4j.properties"
   val KafkaLog4JLoggersEnv = "KAFKA_LOG4J_LOGGERS"
   val KafkaLog4jRootLoglevelEnv = "KAFKA_LOG4J_ROOT_LOGLEVEL"
   val KafkaToolsLog4jLoglevelEnv = "KAFKA_TOOLS_LOG4J_LOGLEVEL"
+  val ExcludeServerPropsEnv: Set[String] = Set("KAFKA_VERSION",
+    "KAFKA_HEAP_OPT",
+    "KAFKA_LOG4J_OPTS",
+    "KAFKA_OPTS",
+    "KAFKA_JMX_OPTS",
+    "KAFKA_JVM_PERFORMANCE_OPTS",
+    "KAFKA_GC_LOG_OPTS",
+    "KAFKA_LOG4J_ROOT_LOGLEVEL",
+    "KAFKA_LOG4J_LOGGERS",
+    "KAFKA_TOOLS_LOG4J_LOGLEVEL",
+    "KAFKA_JMX_HOSTNAME")
 }
