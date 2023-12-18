@@ -343,7 +343,8 @@ class BrokerTopicMetrics(name: Option[String], configOpt: java.util.Optional[Kaf
         RemoteStorageMetrics.FAILED_REMOTE_COPY_PER_SEC_METRIC.getName -> MeterWrapper(RemoteStorageMetrics.FAILED_REMOTE_COPY_PER_SEC_METRIC.getName, "requests")
       ).asJava)
       metricGaugeTypeMap.putAll(Map(
-        RemoteStorageMetrics.REMOTE_COPY_LOG_BYTES_METRIC.getName -> GaugeWrapper(RemoteStorageMetrics.REMOTE_COPY_LOG_BYTES_METRIC.getName, new BrokerTopicAggregatedMetric)
+        RemoteStorageMetrics.REMOTE_COPY_LOG_BYTES_METRIC.getName -> GaugeWrapper(RemoteStorageMetrics.REMOTE_COPY_LOG_BYTES_METRIC.getName, new BrokerTopicAggregatedMetric),
+        RemoteStorageMetrics.REMOTE_LOG_SIZE_COMPUTATION_TIME_METRIC.getName -> GaugeWrapper(RemoteStorageMetrics.REMOTE_LOG_SIZE_COMPUTATION_TIME_METRIC.getName, new BrokerTopicAggregatedMetric),
       ).asJava)
     })
 
@@ -407,6 +408,18 @@ class BrokerTopicMetrics(name: Option[String], configOpt: java.util.Optional[Kaf
   }
 
   def remoteCopyBytesLag: Long = metricGaugeTypeMap.get(RemoteStorageMetrics.REMOTE_COPY_LOG_BYTES_METRIC.getName).brokerTopicAggregatedMetric.value()
+
+  def recordRemoteLogSizeComputationTime(partition: Int, timeSpent: Long): Unit = {
+    val brokerTopicAggregatedMetric = metricGaugeTypeMap.get(RemoteStorageMetrics.REMOTE_LOG_SIZE_COMPUTATION_TIME_METRIC.getName).brokerTopicAggregatedMetric
+    brokerTopicAggregatedMetric.setPartitionMetricValue(partition, timeSpent)
+  }
+
+  def removeRemoteLogSizeComputationTime(partition: Int): Unit = {
+    val brokerTopicAggregatedMetric = metricGaugeTypeMap.get(RemoteStorageMetrics.REMOTE_LOG_SIZE_COMPUTATION_TIME_METRIC.getName).brokerTopicAggregatedMetric
+    brokerTopicAggregatedMetric.removePartition(partition)
+  }
+
+  def remoteLogSizeComputationTime: Long = metricGaugeTypeMap.get(RemoteStorageMetrics.REMOTE_LOG_SIZE_COMPUTATION_TIME_METRIC.getName).brokerTopicAggregatedMetric.value()
 
   def remoteCopyBytesRate: Meter = metricTypeMap.get(RemoteStorageMetrics.REMOTE_COPY_BYTES_PER_SEC_METRIC.getName).meter()
 
@@ -525,6 +538,7 @@ class BrokerTopicStats(configOpt: java.util.Optional[KafkaConfig] = java.util.Op
       topicMetrics.closeMetric(RemoteStorageMetrics.FAILED_REMOTE_FETCH_PER_SEC_METRIC.getName)
       topicMetrics.closeMetric(RemoteStorageMetrics.FAILED_REMOTE_COPY_PER_SEC_METRIC.getName)
       topicMetrics.closeMetric(RemoteStorageMetrics.REMOTE_COPY_LOG_BYTES_METRIC.getName)
+      topicMetrics.closeMetric(RemoteStorageMetrics.REMOTE_LOG_SIZE_COMPUTATION_TIME_METRIC.getName)
     }
   }
 

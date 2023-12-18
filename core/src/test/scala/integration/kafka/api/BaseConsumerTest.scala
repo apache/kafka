@@ -78,9 +78,8 @@ abstract class BaseConsumerTest extends AbstractConsumerTest {
     assertNotEquals(0, BaseConsumerTest.updateConsumerCount.get())
   }
 
-  // ConsumerRebalanceListener temporarily not supported for consumer group protocol
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersGenericGroupProtocolOnly"))
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
   def testCoordinatorFailover(quorum: String, groupProtocol: String): Unit = {
     val listener = new TestConsumerReassignmentListener()
     this.consumerConfig.setProperty(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, "5001")
@@ -116,13 +115,13 @@ object BaseConsumerTest {
   // * ZooKeeper and the generic group protocol
   // * KRaft and the generic group protocol
   // * KRaft with the new group coordinator enabled and the generic group protocol
-  // * KRaft with the new group coordinator enabled and the consumer group protocol (temporarily disabled)
+  // * KRaft with the new group coordinator enabled and the consumer group protocol
   def getTestQuorumAndGroupProtocolParametersAll() : java.util.stream.Stream[Arguments] = {
     java.util.stream.Stream.of(
         Arguments.of("zk", "generic"),
         Arguments.of("kraft", "generic"),
-        Arguments.of("kraft+kip848", "generic"))
-//        Arguments.of("kraft+kip848", "consumer"))
+        Arguments.of("kraft+kip848", "generic"),
+        Arguments.of("kraft+kip848", "consumer"))
   }
 
   // In Scala 2.12, it is necessary to disambiguate the java.util.stream.Stream.of() method call
