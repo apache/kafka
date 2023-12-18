@@ -173,14 +173,24 @@ public class CoordinatorRuntimeTest {
      */
     private static class MockPartitionWriter extends InMemoryPartitionWriter<String> {
         private final int maxRecordsInBatch;
+        private final boolean failEndMarker;
 
         public MockPartitionWriter() {
-            this(Integer.MAX_VALUE);
+            this(Integer.MAX_VALUE, false);
         }
 
         public MockPartitionWriter(int maxRecordsInBatch) {
+            this(maxRecordsInBatch, false);
+        }
+
+        public MockPartitionWriter(boolean failEndMarker) {
+            this(Integer.MAX_VALUE, failEndMarker);
+        }
+
+        public MockPartitionWriter(int maxRecordsInBatch, boolean failEndMarker) {
             super(false);
             this.maxRecordsInBatch = maxRecordsInBatch;
+            this.failEndMarker = failEndMarker;
         }
 
         @Override
@@ -211,6 +221,26 @@ public class CoordinatorRuntimeTest {
                 throw new KafkaException(String.format("Number of records %d greater than the maximum allowed %d.",
                     records.size(), maxRecordsInBatch));
             }
+        }
+
+        @Override
+        public long appendTransactionEndMarker(
+            TopicPartition tp,
+            long producerId,
+            short producerEpoch,
+            int coordinatorEpoch,
+            TransactionResult result
+        ) throws KafkaException {
+            if (failEndMarker) {
+                throw new KafkaException("Can't write end marker.");
+            }
+            return super.appendTransactionEndMarker(
+                tp,
+                producerId,
+                producerEpoch,
+                coordinatorEpoch,
+                result
+            );
         }
     }
 
@@ -1229,6 +1259,204 @@ public class CoordinatorRuntimeTest {
         // The transaction is completed.
         assertTrue(complete1.isDone());
         assertNull(complete1.get(5, TimeUnit.SECONDS));
+    }
+
+    @Test
+    public void testScheduleTransactionCompletionWhenWriteTimesOut() throws InterruptedException {
+        MockTimer timer = new MockTimer();
+        MockPartitionWriter writer = new MockPartitionWriter();
+
+        CoordinatorRuntime<MockCoordinatorShard, String> runtime =
+            new CoordinatorRuntime.Builder<MockCoordinatorShard, String>()
+                .withTime(timer.time())
+                .withTimer(timer)
+                .withDefaultWriteTimeOut(DEFAULT_WRITE_TIMEOUT)
+                .withLoader(new MockCoordinatorLoader())
+                .withEventProcessor(new DirectEventProcessor())
+                .withPartitionWriter(writer)
+                .withCoordinatorShardBuilderSupplier(new MockCoordinatorShardBuilderSupplier())
+                .withCoordinatorRuntimeMetrics(mock(GroupCoordinatorRuntimeMetrics.class))
+                .withCoordinatorMetrics(mock(GroupCoordinatorMetrics.class))
+                .build();
+
+        // Loads the coordinator.
+        runtime.scheduleLoadOperation(TP, 10);
+
+        // Verify the initial state.
+        CoordinatorRuntime<MockCoordinatorShard, String>.CoordinatorContext ctx = runtime.contextOrThrow(TP);
+        assertEquals(0, ctx.coordinator.lastWrittenOffset());
+        assertEquals(0, ctx.coordinator.lastCommittedOffset());
+        assertEquals(Collections.singletonList(0L), ctx.coordinator.snapshotRegistry().epochsList());
+
+        // Complete #1. We should get a TimeoutException because the HWM will not advance.
+        CompletableFuture<Void> timedOutCompletion = runtime.scheduleTransactionCompletion(
+            "complete#1",
+            TP,
+            100L,
+            (short) 5,
+            10,
+            TransactionResult.COMMIT,
+            Duration.ofMillis(3)
+        );
+
+        timer.advanceClock(4);
+
+        assertFutureThrows(timedOutCompletion, org.apache.kafka.common.errors.TimeoutException.class);
+    }
+
+    @Test
+    public void testScheduleTransactionCompletionWhenWriteFails() {
+        MockTimer timer = new MockTimer();
+        // The partition writer accepts records but fails on markers.
+        MockPartitionWriter writer = new MockPartitionWriter(true);
+
+        CoordinatorRuntime<MockCoordinatorShard, String> runtime =
+            new CoordinatorRuntime.Builder<MockCoordinatorShard, String>()
+                .withTime(timer.time())
+                .withTimer(timer)
+                .withDefaultWriteTimeOut(DEFAULT_WRITE_TIMEOUT)
+                .withLoader(new MockCoordinatorLoader())
+                .withEventProcessor(new DirectEventProcessor())
+                .withPartitionWriter(writer)
+                .withCoordinatorShardBuilderSupplier(new MockCoordinatorShardBuilderSupplier())
+                .withCoordinatorRuntimeMetrics(mock(GroupCoordinatorRuntimeMetrics.class))
+                .withCoordinatorMetrics(mock(GroupCoordinatorMetrics.class))
+                .build();
+
+        // Loads the coordinator.
+        runtime.scheduleLoadOperation(TP, 10);
+
+        // Verify the initial state.
+        CoordinatorRuntime<MockCoordinatorShard, String>.CoordinatorContext ctx = runtime.contextOrThrow(TP);
+        assertEquals(0, ctx.coordinator.lastWrittenOffset());
+        assertEquals(0, ctx.coordinator.lastCommittedOffset());
+        assertEquals(Collections.singletonList(0L), ctx.coordinator.snapshotRegistry().epochsList());
+
+        // Write #1. It should succeed and be applied to the coordinator.
+        runtime.scheduleTransactionalWriteOperation(
+            "write#1",
+            TP,
+            "transactional-id",
+            100L,
+            (short) 5,
+            DEFAULT_WRITE_TIMEOUT,
+            state -> new CoordinatorResult<>(Arrays.asList("record1", "record2"), "response1"));
+
+        // Verify that the state has been updated.
+        assertEquals(2L, ctx.coordinator.lastWrittenOffset());
+        assertEquals(0L, ctx.coordinator.lastCommittedOffset());
+        assertEquals(Arrays.asList(0L, 2L), ctx.coordinator.snapshotRegistry().epochsList());
+        assertEquals(mkSet("record1", "record2"), ctx.coordinator.coordinator().pendingRecords(100L));
+        assertEquals(Collections.emptySet(), ctx.coordinator.coordinator().records());
+
+        // Complete transaction #1. It should fail.
+        CompletableFuture<Void> complete1 = runtime.scheduleTransactionCompletion(
+            "complete#1",
+            TP,
+            100L,
+            (short) 5,
+            10,
+            TransactionResult.COMMIT,
+            DEFAULT_WRITE_TIMEOUT
+        );
+        assertFutureThrows(complete1, KafkaException.class);
+
+        // Verify that the state has not changed.
+        assertEquals(2L, ctx.coordinator.lastWrittenOffset());
+        assertEquals(0L, ctx.coordinator.lastCommittedOffset());
+        assertEquals(Arrays.asList(0L, 2L), ctx.coordinator.snapshotRegistry().epochsList());
+        assertEquals(mkSet("record1", "record2"), ctx.coordinator.coordinator().pendingRecords(100L));
+        assertEquals(Collections.emptySet(), ctx.coordinator.coordinator().records());
+    }
+
+    @Test
+    public void testScheduleTransactionCompletionWhenReplayFails() {
+        MockTimer timer = new MockTimer();
+        MockPartitionWriter writer = new MockPartitionWriter();
+        CoordinatorRuntime<MockCoordinatorShard, String> runtime =
+            new CoordinatorRuntime.Builder<MockCoordinatorShard, String>()
+                .withTime(timer.time())
+                .withTimer(timer)
+                .withDefaultWriteTimeOut(DEFAULT_WRITE_TIMEOUT)
+                .withLoader(new MockCoordinatorLoader())
+                .withEventProcessor(new DirectEventProcessor())
+                .withPartitionWriter(writer)
+                .withCoordinatorShardBuilderSupplier(new MockCoordinatorShardBuilderSupplier())
+                .withCoordinatorRuntimeMetrics(mock(GroupCoordinatorRuntimeMetrics.class))
+                .withCoordinatorMetrics(mock(GroupCoordinatorMetrics.class))
+                .build();
+
+        // Loads the coordinator.
+        runtime.scheduleLoadOperation(TP, 10);
+
+        // Verify the initial state.
+        CoordinatorRuntime<MockCoordinatorShard, String>.CoordinatorContext ctx = runtime.contextOrThrow(TP);
+        assertEquals(0L, ctx.coordinator.lastWrittenOffset());
+        assertEquals(0L, ctx.coordinator.lastCommittedOffset());
+        assertEquals(Collections.singletonList(0L), ctx.coordinator.snapshotRegistry().epochsList());
+
+        // Override the coordinator with a coordinator that throws
+        // an exception when replayTransactionEndMarker is called.
+        SnapshotRegistry snapshotRegistry = ctx.coordinator.snapshotRegistry();
+        ctx.coordinator = new SnapshottableCoordinator<>(
+            new LogContext(),
+            snapshotRegistry,
+            new MockCoordinatorShard(snapshotRegistry, ctx.timer) {
+                @Override
+                public void replayTransactionEndMarker(
+                    long producerId,
+                    short producerEpoch,
+                    TransactionResult result
+                ) throws RuntimeException {
+                    throw new IllegalArgumentException("error");
+                }
+            },
+            TP
+        );
+
+        // Write #1. It should succeed and be applied to the coordinator.
+        runtime.scheduleTransactionalWriteOperation(
+            "write#1",
+            TP,
+            "transactional-id",
+            100L,
+            (short) 5,
+            DEFAULT_WRITE_TIMEOUT,
+            state -> new CoordinatorResult<>(Arrays.asList("record1", "record2"), "response1"));
+
+        // Verify that the state has been updated.
+        assertEquals(2L, ctx.coordinator.lastWrittenOffset());
+        assertEquals(0L, ctx.coordinator.lastCommittedOffset());
+        assertEquals(Arrays.asList(0L, 2L), ctx.coordinator.snapshotRegistry().epochsList());
+        assertEquals(mkSet("record1", "record2"), ctx.coordinator.coordinator().pendingRecords(100L));
+        assertEquals(Collections.emptySet(), ctx.coordinator.coordinator().records());
+        assertEquals(Arrays.asList(
+            InMemoryPartitionWriter.LogEntry.value(100L, (short) 5, "record1"),
+            InMemoryPartitionWriter.LogEntry.value(100L, (short) 5, "record2")
+        ), writer.entries(TP));
+
+        // Complete transaction #1. It should fail.
+        CompletableFuture<Void> complete1 = runtime.scheduleTransactionCompletion(
+            "complete#1",
+            TP,
+            100L,
+            (short) 5,
+            10,
+            TransactionResult.COMMIT,
+            DEFAULT_WRITE_TIMEOUT
+        );
+        assertFutureThrows(complete1, IllegalArgumentException.class);
+
+        // Verify that the state has not changed.
+        assertEquals(2L, ctx.coordinator.lastWrittenOffset());
+        assertEquals(0L, ctx.coordinator.lastCommittedOffset());
+        assertEquals(Arrays.asList(0L, 2L), ctx.coordinator.snapshotRegistry().epochsList());
+        assertEquals(mkSet("record1", "record2"), ctx.coordinator.coordinator().pendingRecords(100L));
+        assertEquals(Collections.emptySet(), ctx.coordinator.coordinator().records());
+        assertEquals(Arrays.asList(
+            InMemoryPartitionWriter.LogEntry.value(100L, (short) 5, "record1"),
+            InMemoryPartitionWriter.LogEntry.value(100L, (short) 5, "record2")
+        ), writer.entries(TP));
     }
 
     @Test
