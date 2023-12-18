@@ -231,7 +231,7 @@ public class MemoryRecordsTest {
         builder.append(logAppendTime, "key".getBytes(), "value".getBytes());
         RecordHeaders headers = new RecordHeaders();
         List<Header> headerList = new ArrayList<>();
-        for (int i = 0; i < 10; i++) {
+        for (int i = 0; i < 10; ++i) {
             headerList.add(new RecordHeader("hello", "world.world".getBytes()));
         }
         headers.addAll(headerList);
