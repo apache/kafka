@@ -26,21 +26,31 @@ import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
+import org.apache.kafka.common.serialization.Deserializer;
+import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.LongDeserializer;
 import org.apache.kafka.common.serialization.LongSerializer;
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.common.serialization.StringDeserializer;
+import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.StreamsConfig.InternalConfig;
+import org.apache.kafka.streams.Topology;
+import org.apache.kafka.streams.errors.TaskCorruptedException;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.Transformer;
 import org.apache.kafka.streams.kstream.TransformerSupplier;
 import org.apache.kafka.streams.processor.ProcessorContext;
+import org.apache.kafka.streams.processor.StateRestoreListener;
+import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.api.Processor;
+import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.internals.StreamThread;
 import org.apache.kafka.streams.query.QueryResult;
 import org.apache.kafka.streams.query.RangeQuery;
@@ -60,6 +70,7 @@ import org.junit.BeforeClass;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
+import org.junit.jupiter.api.Assertions;
 import org.junit.rules.Timeout;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
@@ -70,6 +81,7 @@ import org.slf4j.LoggerFactory;
 
 import java.io.File;
 import java.io.IOException;
+import java.nio.file.Paths;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -82,13 +94,19 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
+import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
+import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.purgeLocalStreamsState;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.startApplicationAndWaitUntilRunning;
+import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.waitForApplicationState;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.waitForEmptyConsumerGroup;
 import static org.apache.kafka.streams.query.StateQueryRequest.inStore;
 import static org.apache.kafka.test.TestUtils.consumerConfig;
@@ -789,6 +807,159 @@ public class EosIntegrationTest {
         verifyOffsetsAreInCheckpoint(1);
     }
 
+    @Test
+    public void shouldCheckpointRestoredOffsetsWhenClosingCleanDuringRestoringStateUpdaterEnabled() throws Exception {
+        shouldCheckpointRestoredOffsetsWhenClosingCleanDuringRestoring(true);
+    }
+
+    @Test
+    public void shouldCheckpointRestoredOffsetsWhenClosingCleanDuringRestoringStateUpdaterDisabled() throws Exception {
+        if (!processingThreadsEnabled) {
+            shouldCheckpointRestoredOffsetsWhenClosingCleanDuringRestoring(false);
+        }
+    }
+
+    @SuppressWarnings("deprecation")
+    private void shouldCheckpointRestoredOffsetsWhenClosingCleanDuringRestoring(final boolean stateUpdaterEnabled) throws Exception {
+        if (!eosConfig.equals(StreamsConfig.EXACTLY_ONCE) && !eosConfig.equals(StreamsConfig.EXACTLY_ONCE_V2)) {
+            return;
+        }
+        final Properties streamsConfiguration = new Properties();
+        streamsConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG, applicationId);
+        streamsConfiguration.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
+        streamsConfiguration.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.Integer().getClass());
+        streamsConfiguration.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass());
+        streamsConfiguration.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, eosConfig);
+        streamsConfiguration.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, 1);
+        streamsConfiguration.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
+        streamsConfiguration.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory(applicationId).getPath());
+        streamsConfiguration.put(InternalConfig.PROCESSING_THREADS_ENABLED, processingThreadsEnabled);
+        streamsConfiguration.put(InternalConfig.STATE_UPDATER_ENABLED, stateUpdaterEnabled);
+        final String stateStoreName = "stateStore";
+
+        purgeLocalStreamsState(streamsConfiguration);
+
+        final int startKey = 1;
+        final int endKey = 30001;
+        final int valueSize = 1000;
+        final StringBuilder value1 = new StringBuilder(valueSize);
+        for (int i = 0; i < valueSize; ++i) {
+            value1.append("A");
+        }
+        final String valueStr1 = value1.toString();
+        final List<KeyValue<Integer, String>> recordBatch1 = IntStream.range(startKey, endKey).mapToObj(i -> KeyValue.pair(i, valueStr1)).collect(Collectors.toList());
+        IntegrationTestUtils.produceKeyValuesSynchronously(MULTI_PARTITION_INPUT_TOPIC,
+            recordBatch1,
+            TestUtils.producerConfig(CLUSTER.bootstrapServers(),
+                IntegerSerializer.class,
+                StringSerializer.class),
+            CLUSTER.time);
+
+        final StoreBuilder<KeyValueStore<Integer, String>> stateStore = Stores.keyValueStoreBuilder(
+            Stores.persistentKeyValueStore(stateStoreName),
+            Serdes.Integer(),
+            Serdes.String()).withCachingEnabled();
+
+        final CountDownLatch latch = new CountDownLatch(1);
+        final AtomicBoolean throwException = new AtomicBoolean(false);
+        final TaskId task00 = new TaskId(0, 0);
+        final AtomicLong restoredOffsetsForPartition0 = new AtomicLong(0);
+        final Topology topology = new Topology();
+        topology
+            .addSource("source", MULTI_PARTITION_INPUT_TOPIC)
+            .addProcessor("processor", () -> new Processor<Integer, String, Integer, String>() {
+                KeyValueStore<Integer, String> stateStore;
+                org.apache.kafka.streams.processor.api.ProcessorContext<Integer, String> context;
+
+                @Override
+                public void init(final org.apache.kafka.streams.processor.api.ProcessorContext<Integer, String> context) {
+                    Processor.super.init(context);
+                    this.context = context;
+                    stateStore = context.getStateStore(stateStoreName);
+                }
+
+                @Override
+                public void process(final Record<Integer, String> record) {
+                    context.recordMetadata().ifPresent(recordMetadata -> {
+                        if (recordMetadata.partition() == 0) {
+                            if (throwException.compareAndSet(true, false)) {
+                                throw new TaskCorruptedException(Collections.singleton(task00));
+                            }
+                            stateStore.put(record.key(), record.value());
+                        } else {
+                            stateStore.put(record.key(), record.value());
+                            if (restoredOffsetsForPartition0.get() > 0) {
+                                latch.countDown();
+                            }
+                        }
+                    });
+                }
+
+                @Override
+                public void close() {
+                    Processor.super.close();
+                }
+            }, "source")
+            .addStateStore(stateStore, "processor")
+            .addSink("sink", MULTI_PARTITION_OUTPUT_TOPIC, "processor");
+
+        final KafkaStreams kafkaStreams = new KafkaStreams(topology, streamsConfiguration);
+        kafkaStreams.setGlobalStateRestoreListener(new StateRestoreListener() {
+            @Override
+            public void onRestoreStart(final TopicPartition topicPartition,
+                                       final String storeName,
+                                       final long startingOffset,
+                                       final long endingOffset) {
+                if (topicPartition.partition() == 0) {
+                    System.out.println("Restore listener - Starting offset: " + startingOffset);
+                }
+            }
+            @Override
+            public void onBatchRestored(final TopicPartition topicPartition,
+                                        final String storeName,
+                                        final long batchEndOffset,
+                                        final long numRestored) {
+                if (topicPartition.partition() == 0) {
+                    System.out.println("Restore listener - Batch end offset: " + batchEndOffset);
+                    restoredOffsetsForPartition0.set(batchEndOffset);
+                }
+            }
+            @Override
+            public void onRestoreEnd(final TopicPartition topicPartition,
+                                     final String storeName,
+                                     final long totalRestored) {
+                if (topicPartition.partition() == 0) {
+                    System.out.println("Restore listener - Total restored: " + totalRestored);
+                }
+            }
+        });
+        startApplicationAndWaitUntilRunning(Collections.singletonList(kafkaStreams), Duration.ofSeconds(60));
+        readResult(
+            applicationId + "-" + stateStoreName + "-changelog",
+            2000,
+            StringDeserializer.class,
+            StringDeserializer.class,
+            CONSUMER_GROUP_ID
+        );
+        throwException.set(true);
+        latch.await();
+        kafkaStreams.close();
+
+        waitForApplicationState(Collections.singletonList(kafkaStreams), KafkaStreams.State.NOT_RUNNING, Duration.ofSeconds(60));
+        final File checkpointFile = Paths.get(
+            streamsConfiguration.getProperty(StreamsConfig.STATE_DIR_CONFIG),
+            streamsConfiguration.getProperty(StreamsConfig.APPLICATION_ID_CONFIG),
+            task00.toString(),
+            ".checkpoint"
+        ).toFile();
+        Assertions.assertTrue(checkpointFile.exists());
+        final Map<TopicPartition, Long> checkpoints = new OffsetCheckpoint(checkpointFile).read();
+        Assertions.assertEquals(
+            restoredOffsetsForPartition0.get(),
+            new ArrayList<>(checkpoints.values()).get(0)
+        );
+    }
+
     private void verifyOffsetsAreInCheckpoint(final int partition) throws IOException {
         final String stateStoreDir = stateTmpDir + File.separator + "appDir" + File.separator + applicationId + File.separator + "0_" + partition + File.separator;
 
@@ -989,13 +1160,21 @@ public class EosIntegrationTest {
     private List<KeyValue<Long, Long>> readResult(final String topic,
                                                   final int numberOfRecords,
                                                   final String groupId) throws Exception {
+        return readResult(topic, numberOfRecords, LongDeserializer.class, LongDeserializer.class, groupId);
+    }
+
+    private <K, V> List<KeyValue<K, V>> readResult(final String topic,
+                                                   final int numberOfRecords,
+                                                   final Class<? extends Deserializer<K>> keyDeserializer,
+                                                   final Class<? extends Deserializer<V>> valueDeserializer,
+                                                   final String groupId) throws Exception {
         if (groupId != null) {
             return IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(
                 TestUtils.consumerConfig(
                     CLUSTER.bootstrapServers(),
                     groupId,
-                    LongDeserializer.class,
-                    LongDeserializer.class,
+                    keyDeserializer,
+                    valueDeserializer,
                     Utils.mkProperties(Collections.singletonMap(
                         ConsumerConfig.ISOLATION_LEVEL_CONFIG,
                         IsolationLevel.READ_COMMITTED.name().toLowerCase(Locale.ROOT)))),
@@ -1006,7 +1185,7 @@ public class EosIntegrationTest {
 
         // read uncommitted
         return IntegrationTestUtils.waitUntilMinKeyValueRecordsReceived(
-            TestUtils.consumerConfig(CLUSTER.bootstrapServers(), LongDeserializer.class, LongDeserializer.class),
+            TestUtils.consumerConfig(CLUSTER.bootstrapServers(), keyDeserializer, valueDeserializer),
             topic,
             numberOfRecords
         );
