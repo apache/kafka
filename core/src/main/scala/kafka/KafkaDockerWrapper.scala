@@ -75,7 +75,8 @@ object KafkaDockerWrapper {
       "KAFKA_GC_LOG_OPTS",
       "KAFKA_LOG4J_ROOT_LOGLEVEL",
       "KAFKA_LOG4J_LOGGERS",
-      "KAFKA_TOOLS_LOG4J_LOGLEVEL")
+      "KAFKA_TOOLS_LOG4J_LOGLEVEL",
+      "KAFKA_JMX_HOSTNAME")
     var result = ""
     for ((key, value) <- sys.env) {
       if (key.startsWith("KAFKA_") && !exclude.contains(key)) {
