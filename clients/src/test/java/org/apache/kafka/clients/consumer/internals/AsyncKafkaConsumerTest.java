@@ -84,6 +84,7 @@ import org.opentest4j.AssertionFailedError;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -884,18 +885,11 @@ public class AsyncKafkaConsumerTest {
     @ParameterizedTest
     @MethodSource("listenerCallbacksInvokeSource")
     public void testListenerCallbacksInvoke(List<ConsumerRebalanceListenerMethodName> methodNames,
-                                            Optional<RuntimeException> revokedError,
-                                            Optional<RuntimeException> assignedError,
-                                            Optional<RuntimeException> lostError,
+                                            MockRebalanceListener rebalanceListener,
                                             int expectedRevokedCount,
                                             int expectedAssignedCount,
                                             int expectedLostCount) {
-        CounterConsumerRebalanceListener consumerRebalanceListener = new CounterConsumerRebalanceListener(
-                revokedError,
-                assignedError,
-                lostError
-        );
-        consumer.subscribe(Collections.singletonList("topic"), consumerRebalanceListener);
+        consumer.subscribe(Collections.singletonList("topic"), rebalanceListener);
         SortedSet<TopicPartition> partitions = Collections.emptySortedSet();
 
         for (ConsumerRebalanceListenerMethodName methodName : methodNames) {
@@ -906,40 +900,73 @@ public class AsyncKafkaConsumerTest {
             consumer.poll(Duration.ZERO);
         }
 
-        assertEquals(expectedRevokedCount, consumerRebalanceListener.revokedCount());
-        assertEquals(expectedAssignedCount, consumerRebalanceListener.assignedCount());
-        assertEquals(expectedLostCount, consumerRebalanceListener.lostCount());
+        assertEquals(expectedRevokedCount, rebalanceListener.revokedCount);
+        assertEquals(expectedAssignedCount, rebalanceListener.assignedCount);
+        assertEquals(expectedLostCount, rebalanceListener.lostCount);
     }
 
     private static Stream<Arguments> listenerCallbacksInvokeSource() {
-        Optional<RuntimeException> empty = Optional.empty();
-        Optional<RuntimeException> error = Optional.of(new RuntimeException("Intentional error"));
-
         return Stream.of(
             // Tests if we don't have an event, the listener doesn't get called.
-            Arguments.of(Collections.emptyList(), empty, empty, empty, 0, 0, 0),
+            Arguments.of(Collections.emptyList(), new MockRebalanceListener(), 0, 0, 0),
 
             // Tests if we get an event for a revocation, that we invoke our listener.
-            Arguments.of(Collections.singletonList(ON_PARTITIONS_REVOKED), empty, empty, empty, 1, 0, 0),
+            Arguments.of(Collections.singletonList(ON_PARTITIONS_REVOKED), new MockRebalanceListener(), 1, 0, 0),
 
             // Tests if we get an event for an assignment, that we invoke our listener.
-            Arguments.of(Collections.singletonList(ON_PARTITIONS_ASSIGNED), empty, empty, empty, 0, 1, 0),
+            Arguments.of(Collections.singletonList(ON_PARTITIONS_ASSIGNED), new MockRebalanceListener(), 0, 1, 0),
 
             // Tests that we invoke our listener even if it encounters an exception.
-            Arguments.of(Collections.singletonList(ON_PARTITIONS_LOST), empty, empty, empty, 0, 0, 1),
+            Arguments.of(Collections.singletonList(ON_PARTITIONS_LOST), new MockRebalanceListener(), 0, 0, 1),
 
             // Tests that we invoke our listener even if it encounters an exception.
-            Arguments.of(Collections.singletonList(ON_PARTITIONS_REVOKED), error, empty, empty, 1, 0, 0),
+            Arguments.of(
+                    Collections.singletonList(ON_PARTITIONS_REVOKED),
+                    new MockRebalanceListener() {
+                        @Override
+                        public void onPartitionsRevoked(Collection<TopicPartition> partitions) {
+                            super.onPartitionsRevoked(partitions);
+                            throw new RuntimeException("Intentional error");
+                        }
+                    },
+                    1,
+                    0,
+                    0
+            ),
 
             // Tests that we invoke our listener even if it encounters an exception.
-            Arguments.of(Collections.singletonList(ON_PARTITIONS_ASSIGNED), empty, error, empty, 0, 1, 0),
+            Arguments.of(
+                    Collections.singletonList(ON_PARTITIONS_ASSIGNED),
+                    new MockRebalanceListener() {
+                        @Override
+                        public void onPartitionsAssigned(Collection<TopicPartition> partitions) {
+                            super.onPartitionsAssigned(partitions);
+                            throw new RuntimeException("Intentional error");
+                        }
+                    },
+                    0,
+                    1,
+                    0
+            ),
 
             // Tests that we invoke our listener even if it encounters an exception.
-            Arguments.of(Collections.singletonList(ON_PARTITIONS_LOST), empty, empty, error, 0, 0, 1),
+            Arguments.of(
+                    Collections.singletonList(ON_PARTITIONS_LOST),
+                    new MockRebalanceListener() {
+                        @Override
+                        public void onPartitionsLost(Collection<TopicPartition> partitions) {
+                            super.onPartitionsLost(partitions);
+                            throw new RuntimeException("Intentional error");
+                        }
+                    },
+                    0,
+                    0,
+                    1
+            ),
 
             // Tests if we get separate events for revocation and then assignment--AND our revocation throws an error--
             // we still invoke the listeners correctly without throwing the error at the user.
-            Arguments.of(Arrays.asList(ON_PARTITIONS_REVOKED, ON_PARTITIONS_ASSIGNED), error, empty, empty, 1, 1, 0)
+            Arguments.of(Arrays.asList(ON_PARTITIONS_REVOKED, ON_PARTITIONS_ASSIGNED), new MockRebalanceListener(), 1, 1, 0)
         );
     }
 

@@ -17,7 +17,6 @@
 
 package org.apache.kafka.clients.consumer.internals;
 
-import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEventHandler;
 import org.apache.kafka.clients.consumer.internals.events.ConsumerRebalanceListenerCallbackCompletedEvent;
@@ -38,6 +37,7 @@ import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -96,28 +96,6 @@ public class MembershipManagerImplTest {
         backgroundEventQueue = new LinkedBlockingQueue<>();
         backgroundEventHandler = new BackgroundEventHandler(logContext, backgroundEventQueue);
     }
-//=======
-//    private ConsumerTestBuilder testBuilder;
-//    private BlockingQueue<BackgroundEvent> backgroundEventQueue;
-//    private BackgroundEventHandler backgroundEventHandler;
-//
-//    @BeforeEach
-//    public void setup() {
-//        testBuilder = new ConsumerTestBuilder(ConsumerTestBuilder.createDefaultGroupInformation());
-//        metadata = testBuilder.metadata;
-//        subscriptionState = testBuilder.subscriptions;
-//        commitRequestManager = testBuilder.commitRequestManager.orElseThrow(IllegalStateException::new);
-//        backgroundEventQueue = testBuilder.backgroundEventQueue;
-//        backgroundEventHandler = testBuilder.backgroundEventHandler;
-//    }
-//
-//    @AfterEach
-//    public void tearDown() {
-//        if (testBuilder != null) {
-//            testBuilder.close();
-//        }
-//>>>>>>> trunk
-//    }
 
     private MembershipManagerImpl createMembershipManagerJoiningGroup() {
         MembershipManagerImpl manager = spy(new MembershipManagerImpl(
@@ -1089,7 +1067,7 @@ public class MembershipManagerImplTest {
     public void testListenerCallbacksBasic() {
         // Step 1: set up mocks
         MembershipManagerImpl membershipManager = createMemberInStableState();
-        CounterConsumerRebalanceListener listener = new CounterConsumerRebalanceListener();
+        MockRebalanceListener listener = new MockRebalanceListener();
         ConsumerRebalanceListenerInvoker invoker = consumerRebalanceListenerInvoker();
 
         String topicName = "topic1";
@@ -1106,9 +1084,9 @@ public class MembershipManagerImplTest {
         receiveAssignment(topicId, Arrays.asList(0, 1), membershipManager);
         assertEquals(MemberState.RECONCILING, membershipManager.state());
         assertTrue(membershipManager.reconciliationInProgress());
-        assertEquals(0, listener.revokedCount());
-        assertEquals(0, listener.assignedCount());
-        assertEquals(0, listener.lostCount());
+        assertEquals(0, listener.revokedCount);
+        assertEquals(0, listener.assignedCount);
+        assertEquals(0, listener.lostCount);
 
         assertTrue(membershipManager.reconciliationInProgress());
 
@@ -1127,9 +1105,9 @@ public class MembershipManagerImplTest {
         assertEquals(MemberState.STABLE, membershipManager.state());
         assertEquals(topicIdPartitionsMap(topicId, 0, 1), membershipManager.currentAssignment());
 
-        assertEquals(0, listener.revokedCount());
-        assertEquals(1, listener.assignedCount());
-        assertEquals(0, listener.lostCount());
+        assertEquals(0, listener.revokedCount);
+        assertEquals(1, listener.assignedCount);
+        assertEquals(0, listener.lostCount);
 
         // Step 5: receive an empty assignment, which means we should call revoke
         when(subscriptionState.assignedPartitions()).thenReturn(topicPartitions(topicName, 0, 1));
@@ -1160,9 +1138,9 @@ public class MembershipManagerImplTest {
         assertEquals(MemberState.STABLE, membershipManager.state());
         assertFalse(membershipManager.reconciliationInProgress());
 
-        assertEquals(1, listener.revokedCount());
-        assertEquals(2, listener.assignedCount());
-        assertEquals(0, listener.lostCount());
+        assertEquals(1, listener.revokedCount);
+        assertEquals(2, listener.assignedCount);
+        assertEquals(0, listener.lostCount);
     }
 
     @Test
@@ -1173,11 +1151,13 @@ public class MembershipManagerImplTest {
 
         MembershipManagerImpl membershipManager = createMemberInStableState();
         mockOwnedPartition(membershipManager, topicId, topicName);
-        CounterConsumerRebalanceListener listener = new CounterConsumerRebalanceListener(
-                Optional.of(new IllegalArgumentException("Intentional onPartitionsRevoked() error")),
-                Optional.empty(),
-                Optional.empty()
-        );
+        MockRebalanceListener listener = new MockRebalanceListener() {
+            @Override
+            public void onPartitionsRevoked(Collection<TopicPartition> partitions) {
+                super.onPartitionsRevoked(partitions);
+                throw new IllegalArgumentException("Intentional onPartitionsRevoked() error");
+            }
+        };
         ConsumerRebalanceListenerInvoker invoker = consumerRebalanceListenerInvoker();
 
         when(subscriptionState.rebalanceListener()).thenReturn(Optional.of(listener));
@@ -1188,9 +1168,9 @@ public class MembershipManagerImplTest {
         assertEquals(MemberState.RECONCILING, membershipManager.state());
         assertEquals(topicIdPartitionsMap(topicId, 0), membershipManager.currentAssignment());
         assertTrue(membershipManager.reconciliationInProgress());
-        assertEquals(0, listener.revokedCount());
-        assertEquals(0, listener.assignedCount());
-        assertEquals(0, listener.lostCount());
+        assertEquals(0, listener.revokedCount);
+        assertEquals(0, listener.assignedCount);
+        assertEquals(0, listener.lostCount);
 
         assertTrue(membershipManager.reconciliationInProgress());
 
@@ -1209,9 +1189,9 @@ public class MembershipManagerImplTest {
         membershipManager.onHeartbeatRequestSent();
         assertEquals(MemberState.RECONCILING, membershipManager.state());
 
-        assertEquals(1, listener.revokedCount());
-        assertEquals(0, listener.assignedCount());
-        assertEquals(0, listener.lostCount());
+        assertEquals(1, listener.revokedCount);
+        assertEquals(0, listener.assignedCount);
+        assertEquals(0, listener.lostCount);
     }
 
     @Test
@@ -1221,11 +1201,14 @@ public class MembershipManagerImplTest {
         String topicName = "topic1";
         Uuid topicId = Uuid.randomUuid();
         mockOwnedPartition(membershipManager, topicId, topicName);
-        CounterConsumerRebalanceListener listener = new CounterConsumerRebalanceListener(
-                Optional.empty(),
-                Optional.of(new IllegalArgumentException("Intentional onPartitionsAssigned() error")),
-                Optional.empty()
-        );
+        MockRebalanceListener listener = new MockRebalanceListener() {
+
+            @Override
+            public void onPartitionsAssigned(Collection<TopicPartition> partitions) {
+                super.onPartitionsAssigned(partitions);
+                throw new IllegalArgumentException("Intentional onPartitionsAssigned() error");
+            }
+        };
         ConsumerRebalanceListenerInvoker invoker = consumerRebalanceListenerInvoker();
 
         when(subscriptionState.rebalanceListener()).thenReturn(Optional.of(listener));
@@ -1236,9 +1219,9 @@ public class MembershipManagerImplTest {
         assertEquals(MemberState.RECONCILING, membershipManager.state());
         assertEquals(topicIdPartitionsMap(topicId, 0), membershipManager.currentAssignment());
         assertTrue(membershipManager.reconciliationInProgress());
-        assertEquals(0, listener.revokedCount());
-        assertEquals(0, listener.assignedCount());
-        assertEquals(0, listener.lostCount());
+        assertEquals(0, listener.revokedCount);
+        assertEquals(0, listener.assignedCount);
+        assertEquals(0, listener.lostCount);
 
         assertTrue(membershipManager.reconciliationInProgress());
 
@@ -1267,9 +1250,9 @@ public class MembershipManagerImplTest {
         membershipManager.onHeartbeatRequestSent();
         assertEquals(MemberState.RECONCILING, membershipManager.state());
 
-        assertEquals(1, listener.revokedCount());
-        assertEquals(1, listener.assignedCount());
-        assertEquals(0, listener.lostCount());
+        assertEquals(1, listener.revokedCount);
+        assertEquals(1, listener.assignedCount);
+        assertEquals(0, listener.lostCount);
     }
 
     @Test
@@ -1278,7 +1261,7 @@ public class MembershipManagerImplTest {
         String topicName = "topic1";
         Uuid topicId = Uuid.randomUuid();
         mockOwnedPartition(membershipManager, topicId, topicName);
-        testOnPartitionsLost(Optional.empty());
+        testOnPartitionsLost(new MockRebalanceListener());
     }
 
     @Test
@@ -1287,17 +1270,20 @@ public class MembershipManagerImplTest {
         String topicName = "topic1";
         Uuid topicId = Uuid.randomUuid();
         mockOwnedPartition(membershipManager, topicId, topicName);
-        testOnPartitionsLost(Optional.of(new KafkaException("Intentional error for test")));
+        testOnPartitionsLost(
+            new MockRebalanceListener() {
+                @Override
+                public void onPartitionsRevoked(Collection<TopicPartition> partitions) {
+                    super.onPartitionsRevoked(partitions);
+                    throw new KafkaException("Intentional error for test");
+                }
+            }
+        );
     }
 
-    private void testOnPartitionsLost(Optional<RuntimeException> lostError) {
+    private void testOnPartitionsLost(MockRebalanceListener listener) {
         // Step 1: set up mocks
         MembershipManagerImpl membershipManager = createMemberInStableState();
-        CounterConsumerRebalanceListener listener = new CounterConsumerRebalanceListener(
-                Optional.empty(),
-                Optional.empty(),
-                lostError
-        );
         ConsumerRebalanceListenerInvoker invoker = consumerRebalanceListenerInvoker();
 
         when(subscriptionState.rebalanceListener()).thenReturn(Optional.of(listener));
@@ -1307,9 +1293,9 @@ public class MembershipManagerImplTest {
         membershipManager.transitionToFenced();
         assertEquals(MemberState.FENCED, membershipManager.state());
         assertEquals(Collections.emptyMap(), membershipManager.currentAssignment());
-        assertEquals(0, listener.revokedCount());
-        assertEquals(0, listener.assignedCount());
-        assertEquals(0, listener.lostCount());
+        assertEquals(0, listener.revokedCount);
+        assertEquals(0, listener.assignedCount);
+        assertEquals(0, listener.lostCount);
 
         // Step 3: invoke the callback
         performCallback(
@@ -1323,9 +1309,9 @@ public class MembershipManagerImplTest {
         membershipManager.onHeartbeatRequestSent();
         assertEquals(MemberState.JOINING, membershipManager.state());
 
-        assertEquals(0, listener.revokedCount());
-        assertEquals(0, listener.assignedCount());
-        assertEquals(1, listener.lostCount());
+        assertEquals(0, listener.revokedCount);
+        assertEquals(0, listener.assignedCount);
+        assertEquals(1, listener.lostCount);
     }
 
     private ConsumerRebalanceListenerInvoker consumerRebalanceListenerInvoker() {
