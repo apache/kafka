@@ -172,6 +172,7 @@ public class MembershipManagerImplTest {
 
     @Test
     public void testTransitionToReconcilingOnlyIfAssignmentReceived() {
+        when(subscriptionState.rebalanceListener()).thenReturn(Optional.of(new MockRebalanceListener()));
         MembershipManagerImpl membershipManager = createMembershipManagerJoiningGroup();
         assertEquals(MemberState.JOINING, membershipManager.state());
 
