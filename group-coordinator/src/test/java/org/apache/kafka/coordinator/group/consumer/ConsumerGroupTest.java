@@ -427,7 +427,6 @@ public class ConsumerGroupTest {
             .setSubscribedTopicNames(Collections.emptyList())
             .build();
 
-
         ConsumerGroup consumerGroup = createConsumerGroup("group-foo");
 
         // It should be empty by default.

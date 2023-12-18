@@ -773,10 +773,8 @@ public class ConsumerGroup implements Group {
     ) {
         String memberRegex = member.subscribedTopicRegex();
         List<String> topicNames = member.subscribedTopicNames();
-
-        if (memberRegex == null || memberRegex.isEmpty()) {
-            topicNames.forEach(topicName -> subscribedTopicCount.compute(topicName, valueUpdater));
-        } else {
+        topicNames.forEach(topicName -> subscribedTopicCount.compute(topicName, valueUpdater));
+        if (!(memberRegex == null || memberRegex.isEmpty())) {
             getRegexSubscribedTopics(topicsImage, memberRegex)
                     .forEach(topicName -> subscribedTopicCount.compute(topicName, valueUpdater));
         }

@@ -1683,18 +1683,39 @@ public class GroupMetadataManagerTest {
         );
 
         assertRecordsEquals(expectedRecords, result.records());
+
+        CoordinatorResult<ConsumerGroupHeartbeatResponseData, Record> result1 = context.consumerGroupHeartbeat(
+                new ConsumerGroupHeartbeatRequestData()
+                        .setGroupId(groupId)
+                        .setMemberId(memberId)
+                        .setMemberEpoch(11)
+                        .setSubscribedTopicRegex("^b.*"));
+
+        assertResponseEquals(
+                new ConsumerGroupHeartbeatResponseData()
+                        .setMemberId(memberId)
+                        .setMemberEpoch(12)
+                        .setHeartbeatIntervalMs(5000)
+                        .setAssignment(new ConsumerGroupHeartbeatResponseData.Assignment()
+                                .setTopicPartitions(Arrays.asList(
+                                        new ConsumerGroupHeartbeatResponseData.TopicPartitions()
+                                                .setTopicId(barTopicId)
+                                                .setPartitions(Arrays.asList(0, 1, 2))
+                                ))),
+                result1.response()
+        );
     }
 
     @Test
-    public void testUpdateRegexSubscriptionTriggersNewTargetAssignment() {
+    public void testMemberWithRegexSubscriptionJoinsEmptyConsumerGroup() {
         String groupId = "fooup";
+        // Use a static member id as it makes the test easier.
         String memberId = Uuid.randomUuid().toString();
 
         Uuid fooTopicId = Uuid.randomUuid();
         String fooTopicName = "foo";
         Uuid foodTopicId = Uuid.randomUuid();
         String foodTopicName = "food";
-
 
         MockPartitionAssignor assignor = new MockPartitionAssignor("range");
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
@@ -1716,7 +1737,6 @@ public class GroupMetadataManagerTest {
         assertThrows(GroupIdNotFoundException.class, () ->
                 context.groupMetadataManager.getOrMaybeCreateConsumerGroup(groupId, false));
 
-
         CoordinatorResult<ConsumerGroupHeartbeatResponseData, Record> result = context.consumerGroupHeartbeat(
                 new ConsumerGroupHeartbeatRequestData()
                         .setGroupId(groupId)
@@ -1726,7 +1746,6 @@ public class GroupMetadataManagerTest {
                         .setRebalanceTimeoutMs(5000)
                         .setSubscribedTopicRegex("^foo.*")
                         .setTopicPartitions(Collections.emptyList()));
-
 
         assertResponseEquals(
                 new ConsumerGroupHeartbeatResponseData()
@@ -1763,8 +1782,8 @@ public class GroupMetadataManagerTest {
             RecordHelpers.newMemberSubscriptionRecord(groupId, expectedMember),
             RecordHelpers.newGroupSubscriptionMetadataRecord(groupId, new HashMap<String, TopicMetadata>() {
                 {
-                    put(fooTopicName, new TopicMetadata(fooTopicId, fooTopicName, 6, mkMapOfPartitionRacks(3)));
-                    put(foodTopicName, new TopicMetadata(foodTopicId, foodTopicName, 3, mkMapOfPartitionRacks(6)));
+                    put(foodTopicName, new TopicMetadata(foodTopicId, foodTopicName, 3, mkMapOfPartitionRacks(3)));
+                    put(fooTopicName, new TopicMetadata(fooTopicId, fooTopicName, 6, mkMapOfPartitionRacks(6)));
                 }
             }),
             RecordHelpers.newGroupEpochRecord(groupId, 1),
@@ -1777,7 +1796,6 @@ public class GroupMetadataManagerTest {
         );
 
         assertRecordsEquals(expectedRecords, result.records());
-
     }
 
     @Test
