@@ -739,7 +739,10 @@ public class CoordinatorRuntimeTest {
         // Records have been replayed to the coordinator.
         assertEquals(mkSet("record1", "record2"), ctx.coordinator.coordinator().records());
         // Records have been written to the log.
-        assertEquals(Arrays.asList("record1", "record2"), writer.records(TP));
+        assertEquals(Arrays.asList(
+            InMemoryPartitionWriter.LogEntry.value("record1"),
+            InMemoryPartitionWriter.LogEntry.value("record2")
+        ), writer.entries(TP));
 
         // Write #2.
         CompletableFuture<String> write2 = runtime.scheduleWriteOperation("write#2", TP, DEFAULT_WRITE_TIMEOUT,
@@ -757,7 +760,11 @@ public class CoordinatorRuntimeTest {
         // Records have been replayed to the coordinator.
         assertEquals(mkSet("record1", "record2", "record3"), ctx.coordinator.coordinator().records());
         // Records have been written to the log.
-        assertEquals(Arrays.asList("record1", "record2", "record3"), writer.records(TP));
+        assertEquals(Arrays.asList(
+            InMemoryPartitionWriter.LogEntry.value("record1"),
+            InMemoryPartitionWriter.LogEntry.value("record2"),
+            InMemoryPartitionWriter.LogEntry.value("record3")
+        ), writer.entries(TP));
 
         // Write #3 but without any records.
         CompletableFuture<String> write3 = runtime.scheduleWriteOperation("write#3", TP, DEFAULT_WRITE_TIMEOUT,
@@ -771,7 +778,11 @@ public class CoordinatorRuntimeTest {
         assertEquals(0L, ctx.coordinator.lastCommittedOffset());
         assertEquals(Arrays.asList(0L, 2L, 3L), ctx.coordinator.snapshotRegistry().epochsList());
         assertEquals(mkSet("record1", "record2", "record3"), ctx.coordinator.coordinator().records());
-        assertEquals(Arrays.asList("record1", "record2", "record3"), writer.records(TP));
+        assertEquals(Arrays.asList(
+            InMemoryPartitionWriter.LogEntry.value("record1"),
+            InMemoryPartitionWriter.LogEntry.value("record2"),
+            InMemoryPartitionWriter.LogEntry.value("record3")
+        ), writer.entries(TP));
 
         // Commit write #1.
         writer.commit(TP, 2);
