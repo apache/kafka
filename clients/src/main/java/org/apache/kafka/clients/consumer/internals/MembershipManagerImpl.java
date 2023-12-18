@@ -673,7 +673,11 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
         MemberState state = state();
         if (isStaled()) {
             log.debug("Member {} is staled and is therefore leaving the group.  It will rejoin upon the next poll.", memberEpoch);
-            transitionToJoining();
+            // clear the current assignment and subscription, and trigger rebalance listener on the next poll
+            invokeOnPartitionsRevokedCallback(subscriptions.assignedPartitions()).whenComplete((r, e) -> {
+                updateSubscription(new TreeSet<>(TOPIC_ID_PARTITION_COMPARATOR), true);
+                transitionToJoining();
+            });
             return;
         }
 
@@ -729,7 +733,6 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
     @Override
     public void transitionToStaled() {
         memberEpoch = ConsumerGroupHeartbeatRequest.LEAVE_GROUP_MEMBER_EPOCH;
-        currentAssignment.clear();
         transitionTo(MemberState.STALED);
     }
 

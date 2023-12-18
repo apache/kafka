@@ -169,9 +169,8 @@ class PlaintextConsumerTest extends BaseConsumerTest {
       startingTimestamp = startingTimestamp)
   }
 
-  // TODO: enable this test for the consumer group protocol when KAFKA-16008 has been fixed.
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersGenericGroupProtocolOnly"))
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
   def testMaxPollIntervalMs(quorum: String, groupProtocol: String): Unit = {
     this.consumerConfig.setProperty(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, 1000.toString)
     this.consumerConfig.setProperty(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, 500.toString)
@@ -196,9 +195,8 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     assertEquals(1, listener.callsToRevoked)
   }
 
-  // TODO: enable this test for the consumer group protocol when KAFKA-16009 has been fixed.
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersGenericGroupProtocolOnly"))
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
   def testMaxPollIntervalMsDelayInRevocation(quorum: String, groupProtocol: String): Unit = {
     this.consumerConfig.setProperty(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, 5000.toString)
     this.consumerConfig.setProperty(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, 500.toString)
@@ -1264,16 +1262,14 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     }
   }
 
-  // TODO: enable this test for the consumer group protocol when KAFKA-16010 has been fixed.
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersGenericGroupProtocolOnly"))
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
   def testMultiConsumerSessionTimeoutOnStopPolling(quorum: String, groupProtocol: String): Unit = {
     runMultiConsumerSessionTimeoutTest(false)
   }
 
-  // TODO: enable this test for the consumer group protocol when KAFKA-16011 has been fixed.
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersGenericGroupProtocolOnly"))
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
   def testMultiConsumerSessionTimeoutOnClose(quorum: String, groupProtocol: String): Unit = {
     runMultiConsumerSessionTimeoutTest(true)
   }
