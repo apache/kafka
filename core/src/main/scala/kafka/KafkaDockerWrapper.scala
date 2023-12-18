@@ -76,7 +76,7 @@ object KafkaDockerWrapper {
 
     val source = scala.io.Source.fromFile(realFile)
     val data = try source.mkString finally source.close()
-    if (data.isBlank) {
+    if (data.trim.isEmpty) {
       Files.copy(Paths.get(defaultFile), Paths.get(realFile), StandardCopyOption.REPLACE_EXISTING)
     }
   }
