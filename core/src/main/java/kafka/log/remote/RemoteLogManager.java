@@ -912,10 +912,10 @@ public class RemoteLogManager implements Closeable {
 
             // It removes the segments beyond the current leader's earliest epoch. Those segments are considered as
             // unreferenced because they are not part of the current leader epoch lineage.
-            private boolean deleteLogSegmentsDueToLeaderEpochCacheTruncation(String topicName, EpochEntry earliestEpochEntry,
+            private boolean deleteLogSegmentsDueToLeaderEpochCacheTruncation(EpochEntry earliestEpochEntry,
                                                                              RemoteLogSegmentMetadata metadata)
                     throws RemoteStorageException, ExecutionException, InterruptedException {
-                boolean isSegmentDeleted = deleteRemoteLogSegment(topicName, metadata, ignored ->
+                boolean isSegmentDeleted = deleteRemoteLogSegment(metadata, ignored ->
                         metadata.segmentLeaderEpochs().keySet().stream().allMatch(epoch -> epoch < earliestEpochEntry.epoch));
                 if (isSegmentDeleted) {
                     logger.info("Deleted remote log segment {} due to leader-epoch-cache truncation. " +
@@ -926,10 +926,13 @@ public class RemoteLogManager implements Closeable {
                 return isSegmentDeleted;
             }
 
-            private boolean deleteRemoteLogSegment(String topic, RemoteLogSegmentMetadata segmentMetadata, Predicate<RemoteLogSegmentMetadata> predicate)
+            private boolean deleteRemoteLogSegment(RemoteLogSegmentMetadata segmentMetadata, Predicate<RemoteLogSegmentMetadata> predicate)
                     throws RemoteStorageException, ExecutionException, InterruptedException {
                 if (predicate.test(segmentMetadata)) {
                     logger.debug("Deleting remote log segment {}", segmentMetadata.remoteLogSegmentId());
+
+                    String topic = segmentMetadata.topicIdPartition().topic();
+
                     // Publish delete segment started event.
                     remoteLogMetadataManager.updateRemoteLogSegmentMetadata(
                             new RemoteLogSegmentMetadataUpdate(segmentMetadata.remoteLogSegmentId(), time.milliseconds(),
@@ -1064,7 +1067,7 @@ public class RemoteLogManager implements Closeable {
             // again and delete them with the original deletion reason i.e. size, time or log start offset breach.
             List<String> undeletedSegments = new ArrayList<>();
             for (RemoteLogSegmentMetadata segmentMetadata : segmentsToDelete) {
-                if (!remoteLogRetentionHandler.deleteRemoteLogSegment(topicIdPartition.topic(), segmentMetadata, x -> !isCancelled() && isLeader())) {
+                if (!remoteLogRetentionHandler.deleteRemoteLogSegment(segmentMetadata, x -> !isCancelled() && isLeader())) {
                     undeletedSegments.add(segmentMetadata.remoteLogSegmentId().toString());
                 }
             }
@@ -1090,7 +1093,7 @@ public class RemoteLogManager implements Closeable {
                             return;
                         }
                         // No need to update the log-start-offset even though the segment is deleted as these epochs/offsets are earlier to that value.
-                        remoteLogRetentionHandler.deleteLogSegmentsDueToLeaderEpochCacheTruncation(topicIdPartition.topic(), earliestEpochEntry, segmentsToBeCleaned.next());
+                        remoteLogRetentionHandler.deleteLogSegmentsDueToLeaderEpochCacheTruncation(earliestEpochEntry, segmentsToBeCleaned.next());
                     }
                 }
             }
