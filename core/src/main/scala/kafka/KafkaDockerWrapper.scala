@@ -25,6 +25,44 @@ object KafkaDockerWrapper {
 
   private def prepareConfigs(defaultConfigsDir: String, realConfigsDir: String): Unit = {
     prepareServerProperties(defaultConfigsDir, realConfigsDir)
+    prepareLog4jProperties(realConfigsDir)
+    prepareToolsProperties(realConfigsDir)
+  }
+
+  private def prepareToolsProperties(realConfigsDir: String): Unit = {
+    var result = ""
+    if (sys.env.contains("KAFKA_TOOLS_LOG4J_LOGLEVEL")) {
+      result += "\n" + "log4j.rootLogger=" + sys.env.get("KAFKA_TOOLS_LOG4J_LOGLEVEL") + ", stderr"
+    }
+
+    val realFile = realConfigsDir + "/tools-log4j.properties"
+    val fw = new FileWriter(realFile, true)
+    try {
+      fw.write(result)
+    }
+    finally fw.close()
+  }
+
+  private def prepareLog4jProperties(realConfigsDir: String): Unit = {
+    var result = ""
+    if (sys.env.contains("KAFKA_LOG4J_ROOT_LOGLEVEL")) {
+      result += "\n" + "log4j.rootLogger=" + sys.env.get("KAFKA_LOG4J_ROOT_LOGLEVEL") + ", stdout"
+    }
+    if (sys.env.contains("KAFKA_LOG4J_LOGGERS")) {
+      val loggers = sys.env.getOrElse("KAFKA_LOG4J_LOGGERS", "")
+      if (loggers.nonEmpty) {
+        val arrLoggers =  loggers.split(",")
+        for (i <- 0 until arrLoggers.length) {
+          result += "\n" + arrLoggers(i)
+        }
+      }
+    }
+    val realFile = realConfigsDir + "/log4j.properties"
+    val fw = new FileWriter(realFile, true)
+    try {
+      fw.write(result)
+    }
+    finally fw.close()
   }
 
   private def prepareServerProperties(defaultConfigsDir: String, realConfigsDir: String): Unit = {
@@ -40,7 +78,7 @@ object KafkaDockerWrapper {
       "KAFKA_TOOLS_LOG4J_LOGLEVEL")
     var result = ""
     for ((key, value) <- sys.env) {
-      if (!exclude.contains(key)) {
+      if (key.startsWith("KAFKA_") && !exclude.contains(key)) {
         val final_key = key.replace("KAFKA_", "").toLowerCase().replace("_", ".").replace("...", "-").replace("..", "_")
         result += "\n" + final_key + "=" + value
       }
