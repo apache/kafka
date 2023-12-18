@@ -42,7 +42,7 @@ class DelayedRemoteFetch(remoteFetchTask: Future[Void],
   extends DelayedOperation(fetchParams.maxWaitMs) {
 
   if (fetchParams.isFromFollower) {
-    warn(s"The follower should not invoke remote fetch. Fetch params are: $fetchParams")
+    throw new IllegalStateException(s"The follower should not invoke remote fetch. Fetch params are: $fetchParams")
   }
 
   /**
