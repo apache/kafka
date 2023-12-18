@@ -1099,31 +1099,38 @@ public class RemoteLogManager implements Closeable {
                 Iterator<Integer> epochsToClean = remoteLeaderEpochs.stream()
                         .filter(remoteEpoch -> remoteEpoch < earliestEpochEntry.epoch)
                         .iterator();
+
+                List<RemoteLogSegmentMetadata> listOfSegmentsToBeCleaned = new ArrayList<>();
+
                 while (epochsToClean.hasNext()) {
                     int epoch = epochsToClean.next();
-                    List<RemoteLogSegmentMetadata> listOfSegmentsToBeCleaned = new ArrayList<>();
                     Iterator<RemoteLogSegmentMetadata> segmentsToBeCleaned = remoteLogMetadataManager.listRemoteLogSegments(topicIdPartition, epoch);
                     while (segmentsToBeCleaned.hasNext()) {
-                        if (isCancelled() || !isLeader()) {
-                            return;
+                        if (!isCancelled() && isLeader()) {
+                            RemoteLogSegmentMetadata nextSegmentMetadata = segmentsToBeCleaned.next();
+                            sizeOfDeletableSegmentsBytes += nextSegmentMetadata.segmentSizeInBytes();
+                            listOfSegmentsToBeCleaned.add(nextSegmentMetadata);
                         }
+                    }
+                }
 
-                        RemoteLogSegmentMetadata nextSegmentMetadata = segmentsToBeCleaned.next();
-                        sizeOfDeletableSegmentsBytes += nextSegmentMetadata.segmentSizeInBytes();
-                        listOfSegmentsToBeCleaned.add(nextSegmentMetadata);
-
-                        segmentsLeftToDelete += listOfSegmentsToBeCleaned.size();
+                segmentsLeftToDelete += listOfSegmentsToBeCleaned.size();
+                brokerTopicMetrics.recordRemoteDeleteLagBytes(partition, sizeOfDeletableSegmentsBytes);
+                brokerTopicMetrics.recordRemoteDeleteLagSegments(partition, segmentsLeftToDelete);
+                for (RemoteLogSegmentMetadata segmentMetadata : listOfSegmentsToBeCleaned) {
+                    if (!isCancelled() && isLeader()) {
+                        // No need to update the log-start-offset even though the segment is deleted as these epochs/offsets are earlier to that value.
+                        if (remoteLogRetentionHandler.deleteLogSegmentsDueToLeaderEpochCacheTruncation(earliestEpochEntry, segmentMetadata)) {
+                            sizeOfDeletableSegmentsBytes -= segmentMetadata.segmentSizeInBytes();
+                            segmentsLeftToDelete--;
+                            brokerTopicMetrics.recordRemoteDeleteLagBytes(partition, sizeOfDeletableSegmentsBytes);
+                            brokerTopicMetrics.recordRemoteDeleteLagSegments(partition, segmentsLeftToDelete);
+                        }
+                    } else {
+                        sizeOfDeletableSegmentsBytes -= segmentMetadata.segmentSizeInBytes();
+                        segmentsLeftToDelete--;
                         brokerTopicMetrics.recordRemoteDeleteLagBytes(partition, sizeOfDeletableSegmentsBytes);
                         brokerTopicMetrics.recordRemoteDeleteLagSegments(partition, segmentsLeftToDelete);
-                        for (RemoteLogSegmentMetadata segmentMetadata : listOfSegmentsToBeCleaned) {
-                            // No need to update the log-start-offset even though the segment is deleted as these epochs/offsets are earlier to that value.
-                            if (remoteLogRetentionHandler.deleteLogSegmentsDueToLeaderEpochCacheTruncation(earliestEpochEntry, segmentMetadata)) {
-                                sizeOfDeletableSegmentsBytes -= segmentMetadata.segmentSizeInBytes();
-                                segmentsLeftToDelete--;
-                                brokerTopicMetrics.recordRemoteDeleteLagBytes(partition, sizeOfDeletableSegmentsBytes);
-                                brokerTopicMetrics.recordRemoteDeleteLagSegments(partition, segmentsLeftToDelete);
-                            }
-                        }
                     }
                 }
             }
