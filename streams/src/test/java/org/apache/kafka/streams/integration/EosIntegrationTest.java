@@ -70,7 +70,6 @@ import org.junit.BeforeClass;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.experimental.categories.Category;
-import org.junit.jupiter.api.Assertions;
 import org.junit.rules.Timeout;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
@@ -934,28 +933,27 @@ public class EosIntegrationTest {
             }
         });
         startApplicationAndWaitUntilRunning(Collections.singletonList(kafkaStreams), Duration.ofSeconds(60));
-        readResult(
+        ensureCommittedRecordsInTopic(
             applicationId + "-" + stateStoreName + "-changelog",
             2000,
             StringDeserializer.class,
-            StringDeserializer.class,
-            CONSUMER_GROUP_ID
+            StringDeserializer.class
         );
         throwException.set(true);
         latch.await();
         kafkaStreams.close();
-
         waitForApplicationState(Collections.singletonList(kafkaStreams), KafkaStreams.State.NOT_RUNNING, Duration.ofSeconds(60));
+
         final File checkpointFile = Paths.get(
             streamsConfiguration.getProperty(StreamsConfig.STATE_DIR_CONFIG),
             streamsConfiguration.getProperty(StreamsConfig.APPLICATION_ID_CONFIG),
             task00.toString(),
             ".checkpoint"
         ).toFile();
-        Assertions.assertTrue(checkpointFile.exists());
+        assertTrue(checkpointFile.exists());
         final Map<TopicPartition, Long> checkpoints = new OffsetCheckpoint(checkpointFile).read();
-        Assertions.assertEquals(
-            restoredOffsetsForPartition0.get(),
+        assertEquals(
+            Long.valueOf(restoredOffsetsForPartition0.get()),
             new ArrayList<>(checkpoints.values()).get(0)
         );
     }
@@ -1189,6 +1187,13 @@ public class EosIntegrationTest {
             topic,
             numberOfRecords
         );
+    }
+
+    private <K, V> List<KeyValue<K, V>> ensureCommittedRecordsInTopic(final String topic,
+                                                                      final int numberOfRecords,
+                                                                      final Class<? extends Deserializer<K>> keyDeserializer,
+                                                                      final Class<? extends Deserializer<V>> valueDeserializer) throws Exception {
+        return readResult(topic, numberOfRecords, keyDeserializer, valueDeserializer, CONSUMER_GROUP_ID);
     }
 
     private List<KeyValue<Long, Long>> computeExpectedResult(final List<KeyValue<Long, Long>> input) {
