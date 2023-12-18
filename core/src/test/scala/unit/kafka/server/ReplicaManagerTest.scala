@@ -3218,7 +3218,7 @@ class ReplicaManagerTest {
     val path2 = TestUtils.tempRelativeDir("data2").getAbsolutePath
     if (enableRemoteStorage) {
       props.put("log.dirs", path1)
-      props.put(RemoteLogManagerConfig.REMOTE_LOG_STORAGE_SYSTEM_ENABLE_PROP, enableRemoteStorage)
+      props.put(RemoteLogManagerConfig.REMOTE_LOG_STORAGE_SYSTEM_ENABLE_PROP, enableRemoteStorage.toString)
     } else {
       props.put("log.dirs", path1 + "," + path2)
     }
