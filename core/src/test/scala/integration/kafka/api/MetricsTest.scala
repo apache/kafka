@@ -320,16 +320,28 @@ class MetricsTest extends IntegrationTestHarness with SaslSetup {
     assertTrue(metrics.isEmpty, s"$errorMessage: ${metrics.keys}")
   }
 
+  private def fromNameToBrokerTopicStatsMBean(name: String): String = {
+    s"kafka.server:type=BrokerTopicMetrics,name=$name"
+  }
+
   private def verifyRemoteStorageMetrics(shouldContainMetrics: Boolean): Unit = {
     val metrics = RemoteStorageMetrics.allMetrics().asScala.filter(name =>
       KafkaYammerMetrics.defaultRegistry.allMetrics.asScala.find(metric => {
         metric._1.getMBeanName().equals(name.getMBeanName)
       }).isDefined
     ).toList
+    val aggregatedBrokerTopicStats = Set(RemoteStorageMetrics.REMOTE_COPY_LOG_BYTES_METRIC.getName)
+    val aggregatedBrokerTopicMetrics = aggregatedBrokerTopicStats.filter(name =>
+      KafkaYammerMetrics.defaultRegistry().allMetrics().asScala.find(metric => {
+        metric._1.getMBeanName().equals(fromNameToBrokerTopicStatsMBean(name))
+      }).isDefined
+    ).toList
     if (shouldContainMetrics) {
       assertEquals(RemoteStorageMetrics.allMetrics().size(), metrics.size, s"Only $metrics appear in the metrics")
+      assertEquals(aggregatedBrokerTopicStats.size, aggregatedBrokerTopicMetrics.size, s"Only $aggregatedBrokerTopicMetrics appear in the metrics")
     } else {
       assertEquals(0, metrics.size, s"$metrics should not appear in the metrics")
+      assertEquals(0, aggregatedBrokerTopicMetrics.size, s"$aggregatedBrokerTopicMetrics should not appear in the metrics")
     }
   }
 }

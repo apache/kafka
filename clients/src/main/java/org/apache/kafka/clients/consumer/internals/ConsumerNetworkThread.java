@@ -131,8 +131,9 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
      * </ol>
      */
     void runOnce() {
-        // If there are errors processing any events, the error will be thrown immediately. This will have
-        // the effect of closing the background thread.
+        // Process the events—if any—that were produced by the application thread. It is possible that when processing
+        // an event generates an error. In such cases, the processor will log an exception, but we do not want those
+        // errors to be propagated to the caller.
         applicationEventProcessor.process();
 
         final long currentTimeMs = time.milliseconds();
