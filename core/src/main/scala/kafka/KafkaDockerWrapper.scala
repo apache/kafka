@@ -19,53 +19,44 @@ package kafka
 import kafka.tools.StorageTool
 
 import java.io.FileWriter
-import java.nio.file.{Files, Paths, StandardCopyOption}
+import java.nio.file.{Files, Paths, StandardCopyOption, StandardOpenOption}
 
 object KafkaDockerWrapper {
+  def main(args: Array[String]): Unit = {
+    if (args.length == 0) {
+      throw new RuntimeException(s"Error: No operation input provided. " +
+        s"Please provide a valid operation: 'setup'.")
+    }
+    val operation = args.head
+    val arguments = args.tail
+
+    operation match {
+      case "setup" =>
+        val defaultConfigsDir = arguments(0)
+        val realConfigsDir = arguments(1)
+        prepareConfigs(defaultConfigsDir, realConfigsDir)
+
+        val formatCmd = formatStorageCmd(realConfigsDir)
+        StorageTool.main(formatCmd)
+      case _ =>
+        throw new RuntimeException(s"Unknown operation $operation. " +
+          s"Please provide a valid operation: 'setup'.")
+    }
+  }
+
+  import Constants._
+
+  private def formatStorageCmd(configsDir: String): Array[String] = {
+    Array("format", "--cluster-id=" + sys.env.get("CLUSTER_ID"), "-c", s"$configsDir/server.properties")
+  }
 
   private def prepareConfigs(defaultConfigsDir: String, realConfigsDir: String): Unit = {
-    prepareServerProperties(defaultConfigsDir, realConfigsDir)
-    prepareLog4jProperties(realConfigsDir)
-    prepareToolsProperties(realConfigsDir)
+    prepareServerConfigs(defaultConfigsDir, realConfigsDir)
+    prepareLog4jConfigs(realConfigsDir)
+    prepareToolsLog4jConfigs(realConfigsDir)
   }
 
-  private def prepareToolsProperties(realConfigsDir: String): Unit = {
-    var result = ""
-    if (sys.env.contains("KAFKA_TOOLS_LOG4J_LOGLEVEL")) {
-      result += "\n" + "log4j.rootLogger=" + sys.env.get("KAFKA_TOOLS_LOG4J_LOGLEVEL") + ", stderr"
-    }
-
-    val realFile = realConfigsDir + "/tools-log4j.properties"
-    val fw = new FileWriter(realFile, true)
-    try {
-      fw.write(result)
-    }
-    finally fw.close()
-  }
-
-  private def prepareLog4jProperties(realConfigsDir: String): Unit = {
-    var result = ""
-    if (sys.env.contains("KAFKA_LOG4J_ROOT_LOGLEVEL")) {
-      result += "\n" + "log4j.rootLogger=" + sys.env.get("KAFKA_LOG4J_ROOT_LOGLEVEL") + ", stdout"
-    }
-    if (sys.env.contains("KAFKA_LOG4J_LOGGERS")) {
-      val loggers = sys.env.getOrElse("KAFKA_LOG4J_LOGGERS", "")
-      if (loggers.nonEmpty) {
-        val arrLoggers =  loggers.split(",")
-        for (i <- 0 until arrLoggers.length) {
-          result += "\n" + arrLoggers(i)
-        }
-      }
-    }
-    val realFile = realConfigsDir + "/log4j.properties"
-    val fw = new FileWriter(realFile, true)
-    try {
-      fw.write(result)
-    }
-    finally fw.close()
-  }
-
-  private def prepareServerProperties(defaultConfigsDir: String, realConfigsDir: String): Unit = {
+  private def prepareServerConfigs(defaultConfigsDir: String, realConfigsDir: String): Unit = {
     val exclude = Set("KAFKA_VERSION",
       "KAFKA_HEAP_OPT",
       "KAFKA_LOG4J_OPTS",
@@ -103,29 +94,48 @@ object KafkaDockerWrapper {
     }
   }
 
-  private def formatStorageCmd(configsDir: String): Array[String] = {
-    Array("format", "--cluster-id=" + sys.env.get("CLUSTER_ID"), "-c", "/opt/kafka/config/server.properties")
+  private def prepareLog4jConfigs(configsDir: String): Unit = {
+    val kafkaLog4jRootLogLevelOpt = sys.env.get(KafkaLog4jRootLoglevelEnv)
+    val kafkaLog4jRootLogLevelProp = if (kafkaLog4jRootLogLevelOpt.isDefined) {
+      s"log4j.rootLogger=${kafkaLog4jRootLogLevelOpt.get}, stdout"
+    } else {
+      ""
+    }
+
+    val kafkaLog4JLoggersStringOpt = sys.env.get(KafkaLog4JLoggersEnv)
+    val kafkaLog4jLoggersProp = if (kafkaLog4JLoggersStringOpt.isDefined) {
+      val kafkaLog4JLoggersList = kafkaLog4JLoggersStringOpt.get.split(",")
+      kafkaLog4JLoggersList.mkString("\n")
+    }
+
+    val propsToAdd = "\n" + kafkaLog4jRootLogLevelProp + "\n" + kafkaLog4jLoggersProp
+    val filepath = s"$configsDir/$Log4jPropsFilename"
+    appendToFile(propsToAdd, filepath)
   }
 
-  def main(args: Array[String]): Unit = {
-    if (args.length == 0) {
-      throw new RuntimeException(s"Error: No operation input provided. " +
-        s"Please provide a valid operation: 'setup'.")
+    private def prepareToolsLog4jConfigs(configsDir: String): Unit = {
+      val kafkaToolsLog4jLogLevelOpt = sys.env.get(KafkaToolsLog4jLoglevelEnv)
+      if (kafkaToolsLog4jLogLevelOpt.isDefined) {
+        val propToAdd = s"log4j.rootLogger=${kafkaToolsLog4jLogLevelOpt.get}, stderr"
+        val filepath = s"$configsDir/$ToolsLog4jFilename"
+        appendToFile(propToAdd, filepath)
+      }
     }
-    val operation = args.head
-    val arguments = args.tail
 
-    operation match {
-      case "setup" =>
-        val defaultConfigsDir = arguments(0)
-        val realConfigsDir = arguments(1)
-        prepareConfigs(defaultConfigsDir, realConfigsDir)
-
-        val formatCmd = formatStorageCmd(realConfigsDir)
-        StorageTool.main(formatCmd)
-      case _ =>
-        throw new RuntimeException(s"Unknown operation $operation. " +
-          s"Please provide a valid operation: 'setup'.")
+  private def appendToFile(properties: String, filepath: String): Unit = {
+    val path = Paths.get(filepath)
+    if (!Files.exists(path)) {
+      Files.createFile(path)
     }
+    Files.write(Paths.get(filepath), properties.getBytes, StandardOpenOption.APPEND)
   }
+}
+
+private object Constants {
+//  val ServerPropsFilename = "server.properties"
+  val Log4jPropsFilename = "log4j.properties"
+  val ToolsLog4jFilename = "tools-log4j.properties"
+  val KafkaLog4JLoggersEnv = "KAFKA_LOG4J_LOGGERS"
+  val KafkaLog4jRootLoglevelEnv = "KAFKA_LOG4J_ROOT_LOGLEVEL"
+  val KafkaToolsLog4jLoglevelEnv = "KAFKA_TOOLS_LOG4J_LOGLEVEL"
 }
