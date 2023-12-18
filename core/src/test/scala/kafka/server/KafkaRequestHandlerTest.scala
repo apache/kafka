@@ -193,11 +193,11 @@ class KafkaRequestHandlerTest {
     props.setProperty(RemoteLogManagerConfig.REMOTE_LOG_STORAGE_SYSTEM_ENABLE_PROP, systemRemoteStorageEnabled.toString)
     val brokerTopicStats = new BrokerTopicStats(java.util.Optional.of(KafkaConfig.fromProps(props)))
     brokerTopicStats.topicStats(topic)
-    val gaugeMetrics = Set(RemoteStorageMetrics.REMOTE_COPY_LOG_BYTES_METRIC.getName)
-    val customGaugeMetric = RemoteStorageMetrics.REMOTE_LOG_METADATA_COUNT_METRIC.getName
+    val gaugeMetrics = Set(RemoteStorageMetrics.REMOTE_COPY_LOG_BYTES_METRIC.getName,
+      RemoteStorageMetrics.REMOTE_LOG_METADATA_COUNT_METRIC.getName)
     RemoteStorageMetrics.brokerTopicStatsMetrics.forEach(metric => {
       if (systemRemoteStorageEnabled) {
-        if (!gaugeMetrics.contains(metric.getName) && !customGaugeMetric.equals(metric.getName)) {
+        if (!gaugeMetrics.contains(metric.getName)) {
           assertTrue(brokerTopicStats.topicStats(topic).metricMap.contains(metric.getName))
         } else {
           assertFalse(brokerTopicStats.topicStats(topic).metricMap.contains(metric.getName))
@@ -213,11 +213,6 @@ class KafkaRequestHandlerTest {
         assertFalse(brokerTopicStats.topicStats(topic).metricGaugeMap.contains(metricName), "The metric should appear:" + metricName)
       }
     })
-    if (systemRemoteStorageEnabled) {
-      assertTrue(brokerTopicStats.topicStats(topic).metricCustomGaugeMap.contains(customGaugeMetric), "The metric is missing:" + customGaugeMetric)
-    } else {
-      assertFalse(brokerTopicStats.topicStats(topic).metricCustomGaugeMap.contains(customGaugeMetric), "The metric should appear:" + customGaugeMetric)
-    }
   }
 
   def makeRequest(time: Time, metrics: RequestChannel.Metrics): RequestChannel.Request = {
@@ -330,11 +325,24 @@ class KafkaRequestHandlerTest {
     val brokerTopicMetrics = setupBrokerTopicMetrics()
 
     assertEquals(0, brokerTopicMetrics.remoteLogMetadataCount)
-    brokerTopicMetrics.updateRemoteLogMetadataCount()
+    brokerTopicMetrics.incrementRemoteLogMetadataCount(0)
     assertEquals(1, brokerTopicMetrics.remoteLogMetadataCount)
 
-    brokerTopicMetrics.updateRemoteLogMetadataCount()
-    brokerTopicMetrics.updateRemoteLogMetadataCount()
+    brokerTopicMetrics.incrementRemoteLogMetadataCount(1)
+    brokerTopicMetrics.incrementRemoteLogMetadataCount(2)
     assertEquals(3, brokerTopicMetrics.remoteLogMetadataCount)
+
+    brokerTopicMetrics.decrementRemoteLogMetadataCount(1)
+    brokerTopicMetrics.decrementRemoteLogMetadataCount(2)
+
+    assertEquals(1, brokerTopicMetrics.remoteLogMetadataCount)
+
+    // verify there will be no minus value for a partition
+    brokerTopicMetrics.decrementRemoteLogMetadataCount(1)
+    assertEquals(1, brokerTopicMetrics.remoteLogMetadataCount)
+
+    brokerTopicMetrics.close()
+
+    assertEquals(0, brokerTopicMetrics.remoteLogMetadataCount)
   }
 }

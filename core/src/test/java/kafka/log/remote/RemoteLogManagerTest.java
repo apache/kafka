@@ -640,7 +640,7 @@ public class RemoteLogManagerTest {
     }
 
     @Test
-    void testRemoteLogManagerTasksAvgIdlePercentAndMetadataCounntMetrics() throws Exception {
+    void testRemoteLogManagerTasksAvgIdlePercentAndMetadataCountMetrics() throws Exception {
         long oldSegmentStartOffset = 0L;
         long nextSegmentStartOffset = 150L;
         when(mockLog.topicPartition()).thenReturn(leaderTopicIdPartition.topicPartition());
@@ -675,6 +675,12 @@ public class RemoteLogManagerTest {
         when(mockLog.producerStateManager()).thenReturn(mockStateManager);
         when(mockStateManager.fetchSnapshot(anyLong())).thenReturn(Optional.of(mockProducerSnapshotIndex));
         when(mockLog.lastStableOffset()).thenReturn(250L);
+        when(mockLog.logEndOffset()).thenReturn(500L);
+        Map<String, Long> logProps = new HashMap<>();
+        logProps.put("retention.bytes", 100L);
+        logProps.put("retention.ms", -1L);
+        LogConfig logConfig = new LogConfig(logProps);
+        when(mockLog.config()).thenReturn(logConfig);
 
         OffsetIndex idx = LazyIndex.forOffset(LogFileUtils.offsetIndexFile(tempDir, oldSegmentStartOffset, ""), oldSegmentStartOffset, 1000).get();
         TimeIndex timeIdx = LazyIndex.forTime(LogFileUtils.timeIndexFile(tempDir, oldSegmentStartOffset, ""), oldSegmentStartOffset, 1500).get();
@@ -690,23 +696,47 @@ public class RemoteLogManagerTest {
         when(remoteLogMetadataManager.addRemoteLogSegmentMetadata(any(RemoteLogSegmentMetadata.class))).thenReturn(dummyFuture);
         when(remoteLogMetadataManager.updateRemoteLogSegmentMetadata(any(RemoteLogSegmentMetadataUpdate.class))).thenReturn(dummyFuture);
 
-        CountDownLatch latch = new CountDownLatch(1);
+        CountDownLatch copyLogSegmentLatch = new CountDownLatch(1);
+        CountDownLatch incRemoteLogMetadataCountLatch = new CountDownLatch(1);
         doAnswer(ans -> {
             // waiting for verification
-            latch.await();
-            assertEquals(1, (long) yammerMetricValue("RemoteLogMetadataCount"));
-            return null;
+            copyLogSegmentLatch.await();
+            return Optional.empty();
         }).when(remoteStorageManager).copyLogSegmentData(any(RemoteLogSegmentMetadata.class), any(LogSegmentData.class));
         Partition mockLeaderPartition = mockPartition(leaderTopicIdPartition);
         Partition mockFollowerPartition = mockPartition(followerTopicIdPartition);
+        List<RemoteLogSegmentMetadata> list = listRemoteLogSegmentMetadata(leaderTopicIdPartition, 5, 100, 1024, RemoteLogSegmentState.COPY_SEGMENT_FINISHED);
+        when(remoteLogMetadataManager.listRemoteLogSegments(leaderTopicIdPartition)).thenReturn(list.iterator());
+        when(remoteLogMetadataManager.listRemoteLogSegments(leaderTopicIdPartition, 2)).thenReturn(list.iterator());
+        when(remoteLogMetadataManager.listRemoteLogSegments(leaderTopicIdPartition, 1)).thenReturn(list.iterator());
+        when(remoteLogMetadataManager.listRemoteLogSegments(leaderTopicIdPartition, 0)).thenReturn(list.iterator()).thenReturn(list.iterator());
 
         // before running tasks, the remote log manager tasks should be all idle
         assertEquals(1.0, (double) yammerMetricValue("RemoteLogManagerTasksAvgIdlePercent"));
-        assertEquals(0, safeLongYammerMetricValue("RemoteLogMetadataCount"));
+        assertEquals(0, safeLongYammerMetricValue("RemoteLogMetadataCount,topic=" + leaderTopicIdPartition.topic()));
         remoteLogManager.onLeadershipChange(Collections.singleton(mockLeaderPartition), Collections.singleton(mockFollowerPartition), topicIds);
         assertTrue((double) yammerMetricValue("RemoteLogManagerTasksAvgIdlePercent") < 1.0);
-        // unlock copyLogSegmentData
-        latch.countDown();
+
+        copyLogSegmentLatch.countDown();
+
+        CountDownLatch decRemoteLogMetadataCountLatch = new CountDownLatch(1);
+        doAnswer(ans -> {
+            incRemoteLogMetadataCountLatch.await();
+            return null;
+        }).doAnswer(ans -> {
+            decRemoteLogMetadataCountLatch.countDown();
+            return null;
+        }).when(remoteStorageManager).deleteLogSegmentData(any(RemoteLogSegmentMetadata.class));
+
+        // after copyLogSegment, the `RemoteLogMetadataCount` should get incremented
+        TestUtils.waitForCondition(() -> {
+            return safeLongYammerMetricValue("RemoteLogMetadataCount,topic=" + leaderTopicIdPartition.topic()) == 1;
+        }, "Didn't increment the RemoteLogMetadataCount metric value.");
+        incRemoteLogMetadataCountLatch.countDown();
+
+        // after deleteLogSegment, the `RemoteLogMetadataCount` should get decremented
+        decRemoteLogMetadataCountLatch.await();
+        assertEquals(0, (long) yammerMetricValue("RemoteLogMetadataCount,topic=" + leaderTopicIdPartition.topic()));
     }
 
     @Test

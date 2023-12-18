@@ -342,7 +342,10 @@ public class RemoteLogManager implements Closeable {
             leaderPartitions.forEach(this::cacheTopicPartitionIds);
             followerPartitions.forEach(this::cacheTopicPartitionIds);
             followerPartitions.forEach(
-                    topicIdPartition -> brokerTopicStats.topicStats(topicIdPartition.topic()).removeRemoteCopyBytesLag(topicIdPartition.partition()));
+                    topicIdPartition -> {
+                        brokerTopicStats.topicStats(topicIdPartition.topic()).removeRemoteCopyBytesLag(topicIdPartition.partition());
+                        brokerTopicStats.topicStats(topicIdPartition.topic()).removeRemoteLogMetadataCount(topicIdPartition.partition());
+                    });
 
             remoteLogMetadataManager.onPartitionLeadershipChanges(leaderPartitions, followerPartitions);
             followerPartitions.forEach(topicIdPartition ->
@@ -377,6 +380,7 @@ public class RemoteLogManager implements Closeable {
                     }
 
                     brokerTopicStats.topicStats(tp.topic()).removeRemoteCopyBytesLag(tp.partition());
+                    brokerTopicStats.topicStats(tp.topic()).removeRemoteLogMetadataCount(tp.partition());
 
                     if (stopPartition.deleteRemoteLog()) {
                         LOGGER.info("Deleting the remote log segments task for partition: {}", tpId);
@@ -727,6 +731,7 @@ public class RemoteLogManager implements Closeable {
             RemoteLogSegmentId id = RemoteLogSegmentId.generateNew(topicIdPartition);
 
             long endOffset = nextSegmentBaseOffset - 1;
+
             File producerStateSnapshotFile = log.producerStateManager().fetchSnapshot(nextSegmentBaseOffset).orElse(null);
 
             List<EpochEntry> epochEntries = getLeaderEpochCheckpoint(log, segment.baseOffset(), nextSegmentBaseOffset).read();
@@ -738,7 +743,7 @@ public class RemoteLogManager implements Closeable {
                     segmentLeaderEpochs);
 
             remoteLogMetadataManager.addRemoteLogSegmentMetadata(copySegmentStartedRlsm).get();
-            brokerTopicStats.topicStats(topicIdPartition.topic()).updateRemoteLogMetadataCount();
+            brokerTopicStats.topicStats(topicIdPartition.topic()).incrementRemoteLogMetadataCount(topicIdPartition.partition());
 
             ByteBuffer leaderEpochsIndex = getLeaderEpochCheckpoint(log, -1, nextSegmentBaseOffset).readAsByteBuffer();
             LogSegmentData segmentData = new LogSegmentData(logFile.toPath(), toPathIfExists(segment.offsetIndex().file()),
@@ -941,6 +946,8 @@ public class RemoteLogManager implements Closeable {
                     remoteLogMetadataManager.updateRemoteLogSegmentMetadata(
                             new RemoteLogSegmentMetadataUpdate(segmentMetadata.remoteLogSegmentId(), time.milliseconds(),
                                     segmentMetadata.customMetadata(), RemoteLogSegmentState.DELETE_SEGMENT_FINISHED, brokerId)).get();
+
+                    brokerTopicStats.topicStats(topicIdPartition.topic()).decrementRemoteLogMetadataCount(topicIdPartition.partition());
                     logger.debug("Deleted remote log segment {}", segmentMetadata.remoteLogSegmentId());
                     return true;
                 }
@@ -990,7 +997,6 @@ public class RemoteLogManager implements Closeable {
             LeaderEpochFileCache leaderEpochCache = leaderEpochCacheOption.get();
             // Build the leader epoch map by filtering the epochs that do not have any records.
             NavigableMap<Integer, Long> epochWithOffsets = buildFilteredLeaderEpochMap(leaderEpochCache.epochWithOffsets());
-
             long logStartOffset = log.logStartOffset();
             long logEndOffset = log.logEndOffset();
             Optional<RetentionSizeData> retentionSizeData = buildRetentionSizeData(log.config().retentionSize,
