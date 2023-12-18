@@ -427,7 +427,8 @@ public class Metadata implements Closeable {
             );
         }
 
-        // Always merge the updated partitions with the existing topic metadata
+        // Fetch responses can include partition level leader changes, when this happens, we perform a partial
+        // metadata update, by keeping the unchanged partition and update the changed partitions.
         this.cache = cache.mergeWith(
             cache.clusterResource().clusterId(),
             newNodes,
