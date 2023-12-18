@@ -59,6 +59,7 @@ import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.RequestContext;
 import org.apache.kafka.common.requests.RequestHeader;
+import org.apache.kafka.common.requests.TransactionResult;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.utils.BufferSupplier;
@@ -93,8 +94,10 @@ import java.util.stream.Stream;
 
 import static org.apache.kafka.common.requests.JoinGroupRequest.UNKNOWN_MEMBER_ID;
 import static org.apache.kafka.coordinator.group.TestUtil.requestContext;
+import static org.apache.kafka.test.TestUtils.assertFutureThrows;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
@@ -1904,5 +1907,60 @@ public class GroupCoordinatorServiceTest {
         );
 
         assertEquals(response, future.get());
+    }
+
+    @Test
+    public void testCompleteTransaction() throws ExecutionException, InterruptedException {
+        CoordinatorRuntime<GroupCoordinatorShard, Record> runtime = mockRuntime();
+        GroupCoordinatorService service = new GroupCoordinatorService(
+            new LogContext(),
+            createConfig(),
+            runtime,
+            new GroupCoordinatorMetrics()
+        );
+        service.startup(() -> 1);
+
+        when(runtime.scheduleTransactionCompletion(
+            ArgumentMatchers.eq("write-txn-marker"),
+            ArgumentMatchers.eq(new TopicPartition("__consumer_offsets", 0)),
+            ArgumentMatchers.eq(100L),
+            ArgumentMatchers.eq((short) 5),
+            ArgumentMatchers.eq(10),
+            ArgumentMatchers.eq(TransactionResult.COMMIT),
+            ArgumentMatchers.eq(Duration.ofMillis(100))
+        )).thenReturn(CompletableFuture.completedFuture(null));
+
+        CompletableFuture<Void> future = service.completeTransaction(
+            new TopicPartition("__consumer_offsets", 0),
+            100L,
+            (short) 5,
+            10,
+            TransactionResult.COMMIT,
+            Duration.ofMillis(100)
+        );
+
+        assertNull(future.get());
+    }
+
+    @Test
+    public void testCompleteTransactionWhenNotStarted() throws ExecutionException, InterruptedException {
+        CoordinatorRuntime<GroupCoordinatorShard, Record> runtime = mockRuntime();
+        GroupCoordinatorService service = new GroupCoordinatorService(
+            new LogContext(),
+            createConfig(),
+            runtime,
+            new GroupCoordinatorMetrics()
+        );
+
+        CompletableFuture<Void> future = service.completeTransaction(
+            new TopicPartition("__consumer_offsets", 0),
+            100L,
+            (short) 5,
+            10,
+            TransactionResult.COMMIT,
+            Duration.ofMillis(100)
+        );
+
+        assertFutureThrows(future, CoordinatorNotAvailableException.class);
     }
 }
