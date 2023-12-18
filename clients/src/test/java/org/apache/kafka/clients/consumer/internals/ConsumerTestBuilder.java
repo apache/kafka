@@ -312,7 +312,7 @@ public class ConsumerTestBuilder implements Closeable {
 
         @Override
         public void close() {
-            consumerNetworkThread.close();
+            consumerNetworkThread.close(Duration.ZERO);
         }
     }
 
