@@ -737,12 +737,12 @@ class KafkaController(val config: KafkaConfig,
    * To complete the reassignment, we need to bring the new replicas into sync, so depending on the state
    * of the ISR, we will execute one of the following steps.
    *
-   * Phase A (when TRS != ISR): The reassignment is not yet complete
+   * Phase A (when RS != ISR): The reassignment is not yet complete
    *
    *   A1. Bump the leader epoch for the partition and send LeaderAndIsr updates to RS.
    *   A2. Start new replicas AR by moving replicas in AR to NewReplica state.
    *
-   * Phase B (when TRS = ISR): The reassignment is complete
+   * Phase B (when RS = ISR): The reassignment is complete
    *
    *   B1. Move all replicas in AR to OnlineReplica state.
    *   B2. Set RS = TRS, AR = [], RR = [] in memory.
