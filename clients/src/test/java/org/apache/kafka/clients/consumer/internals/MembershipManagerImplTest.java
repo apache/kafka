@@ -1392,15 +1392,17 @@ public class MembershipManagerImplTest {
         MembershipManager membershipManager = memberJoinWithAssignment("topic", Uuid.randomUuid());
         membershipManager.transitionToStaled();
         assertEquals(LEAVE_GROUP_MEMBER_EPOCH, membershipManager.memberEpoch());
-        assertTrue(membershipManager.currentAssignment().isEmpty());
     }
 
     @Test
     public void testHeartbeatSentOnStaledMember() {
         MembershipManagerImpl membershipManager = createMemberInStableState();
+        subscriptionState.subscribe(Collections.singleton("topic"), Optional.empty());
+        subscriptionState.assignFromSubscribed(Collections.singleton(new TopicPartition("topic", 0)));
         membershipManager.transitionToStaled();
         membershipManager.onHeartbeatRequestSent();
         assertEquals(MemberState.JOINING, membershipManager.state());
+        assertTrue(membershipManager.currentAssignment().isEmpty());
     }
 
     private void dropAssignedPartitions() {
