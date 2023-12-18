@@ -109,7 +109,7 @@ public interface PartitionWriter<T> {
      * @return The log end offset right after the written records.
      * @throws KafkaException Any KafkaException caught during the write operation.
      */
-    long appendTransactionEndMarker(
+    long appendEndTransactionMarker(
         TopicPartition tp,
         long producerId,
         short producerEpoch,

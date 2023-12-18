@@ -996,7 +996,7 @@ public class GroupCoordinatorShardTest {
             result
         );
 
-        verify(offsetMetadataManager, times(1)).replayTransactionEndMarker(
+        verify(offsetMetadataManager, times(1)).replayEndTransactionMarker(
             100L,
             result
         );

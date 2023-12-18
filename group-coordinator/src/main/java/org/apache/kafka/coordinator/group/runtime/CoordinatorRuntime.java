@@ -1009,7 +1009,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
                             result
                         );
 
-                        long offset = partitionWriter.appendTransactionEndMarker(
+                        long offset = partitionWriter.appendEndTransactionMarker(
                             tp,
                             producerId,
                             producerEpoch,

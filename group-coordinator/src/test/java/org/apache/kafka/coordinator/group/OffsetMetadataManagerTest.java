@@ -448,7 +448,7 @@ public class OffsetMetadataManagerTest {
             TransactionResult result
         ) {
             snapshotRegistry.getOrCreateSnapshot(lastWrittenOffset);
-            offsetMetadataManager.replayTransactionEndMarker(producerId, result);
+            offsetMetadataManager.replayEndTransactionMarker(producerId, result);
             lastWrittenOffset++;
         }
 

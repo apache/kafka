@@ -286,7 +286,7 @@ class CoordinatorPartitionWriterTest {
       ))
     })
 
-    assertEquals(11, partitionRecordWriter.appendTransactionEndMarker(
+    assertEquals(11, partitionRecordWriter.appendEndTransactionMarker(
       tp,
       100L,
       50.toShort,

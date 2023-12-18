@@ -902,7 +902,7 @@ public class OffsetMetadataManager {
      * @param result        The result of the transaction.
      * @throws RuntimeException if the transaction can not be completed.
      */
-    public void replayTransactionEndMarker(
+    public void replayEndTransactionMarker(
         long producerId,
         TransactionResult result
     ) throws RuntimeException {

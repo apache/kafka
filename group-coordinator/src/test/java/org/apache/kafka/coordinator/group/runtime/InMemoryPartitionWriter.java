@@ -242,7 +242,7 @@ public class InMemoryPartitionWriter<T> implements PartitionWriter<T> {
     }
 
     @Override
-    public long appendTransactionEndMarker(
+    public long appendEndTransactionMarker(
         TopicPartition tp,
         long producerId,
         short producerEpoch,

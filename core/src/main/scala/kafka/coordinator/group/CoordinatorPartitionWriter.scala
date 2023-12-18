@@ -182,7 +182,7 @@ class CoordinatorPartitionWriter[T](
    * @return The log end offset right after the written records.
    * @throws KafkaException Any KafkaException caught during the write operation.
    */
-  override def appendTransactionEndMarker(
+  override def appendEndTransactionMarker(
     tp: TopicPartition,
     producerId: Long,
     producerEpoch: Short,

@@ -224,7 +224,7 @@ public class CoordinatorRuntimeTest {
         }
 
         @Override
-        public long appendTransactionEndMarker(
+        public long appendEndTransactionMarker(
             TopicPartition tp,
             long producerId,
             short producerEpoch,
@@ -234,7 +234,7 @@ public class CoordinatorRuntimeTest {
             if (failEndMarker) {
                 throw new KafkaException("Can't write end marker.");
             }
-            return super.appendTransactionEndMarker(
+            return super.appendEndTransactionMarker(
                 tp,
                 producerId,
                 producerEpoch,
