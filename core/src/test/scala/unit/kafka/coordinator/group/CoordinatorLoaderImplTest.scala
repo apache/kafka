@@ -592,9 +592,7 @@ class CoordinatorLoaderImplTest {
         minOneMessage = true
       )).thenReturn(readResult2)
 
-      val result = loader.load(tp, coordinator)
-      TestUtils.waitUntilTrue(() => result.isCompletedExceptionally, s"load should complete exceptionally.")
-      result.whenComplete((_, ex) => assertEquals(classOf[NotLeaderOrFollowerException], ex.getClass))
+      assertFutureThrows(loader.load(tp, coordinator), classOf[NotLeaderOrFollowerException])
     }
   }
 
