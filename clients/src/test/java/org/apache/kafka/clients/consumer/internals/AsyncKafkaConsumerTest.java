@@ -944,7 +944,19 @@ public class AsyncKafkaConsumerTest {
 
             // Tests if we get separate events for revocation and then assignment--AND our revocation throws an error--
             // we still invoke the listeners correctly without throwing the error at the user.
-            Arguments.of(Arrays.asList(ON_PARTITIONS_REVOKED, ON_PARTITIONS_ASSIGNED), new MockRebalanceListener(), 1, 1, 0)
+            Arguments.of(
+                    Arrays.asList(ON_PARTITIONS_REVOKED, ON_PARTITIONS_ASSIGNED),
+                    new MockRebalanceListener() {
+                        @Override
+                        public void onPartitionsRevoked(Collection<TopicPartition> partitions) {
+                            super.onPartitionsRevoked(partitions);
+                            throw new RuntimeException("Intentional error");
+                        }
+                    },
+                    1,
+                    1,
+                    0
+            )
         );
     }
 
