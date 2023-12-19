@@ -451,6 +451,7 @@ public class MetadataLoader implements RaftClient.Listener<ApiMessageAndVersion>
                         publisher.name(), e);
                 }
             }
+            metrics.setCurrentControllerId(leaderAndEpoch.leaderId().orElseGet(() -> -1));
         });
     }
 

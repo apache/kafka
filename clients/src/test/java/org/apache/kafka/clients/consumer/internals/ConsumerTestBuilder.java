@@ -21,9 +21,7 @@ import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.GroupRebalanceConfig;
 import org.apache.kafka.clients.MockClient;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
-import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEvent;
-import org.apache.kafka.clients.consumer.internals.events.ApplicationEventHandler;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEventProcessor;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEventHandler;
@@ -35,12 +33,11 @@ import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.Timer;
 
 import java.io.Closeable;
 import java.time.Duration;
-import java.util.Collections;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.concurrent.BlockingQueue;
@@ -50,6 +47,7 @@ import static org.apache.kafka.clients.consumer.ConsumerConfig.GROUP_ID_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.GROUP_INSTANCE_ID_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG;
+import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.CONSUMER_METRIC_GROUP_PREFIX;
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.createFetchMetricsManager;
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.createMetrics;
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.createSubscriptionState;
@@ -80,6 +78,7 @@ public class ConsumerTestBuilder implements Closeable {
     final FetchConfig fetchConfig;
     final FetchBuffer fetchBuffer;
     final Metrics metrics;
+    final Timer pollTimer;
     final FetchMetricsManager metricsManager;
     final NetworkClientDelegate networkClientDelegate;
     final OffsetsRequestManager offsetsRequestManager;
@@ -94,12 +93,9 @@ public class ConsumerTestBuilder implements Closeable {
     final RequestManagers requestManagers;
     public final ApplicationEventProcessor applicationEventProcessor;
     public final BackgroundEventHandler backgroundEventHandler;
+    public final ConsumerRebalanceListenerInvoker rebalanceListenerInvoker;
     final MockClient client;
     final Optional<GroupInformation> groupInfo;
-
-    public ConsumerTestBuilder() {
-        this(Optional.empty());
-    }
 
     public ConsumerTestBuilder(Optional<GroupInformation> groupInfo) {
         this(groupInfo, true, true);
@@ -148,6 +144,7 @@ public class ConsumerTestBuilder implements Closeable {
         this.subscriptions = spy(createSubscriptionState(config, logContext));
         this.metadata = spy(new ConsumerMetadata(config, subscriptions, logContext, new ClusterResourceListeners()));
         this.metricsManager = createFetchMetricsManager(metrics);
+        this.pollTimer = time.timer(groupRebalanceConfig.rebalanceTimeoutMs);
 
         this.client = new MockClient(time, metadata);
         MetadataResponse metadataResponse = RequestTestUtils.metadataUpdateWith(1, new HashMap<String, Integer>() {
@@ -202,7 +199,9 @@ public class ConsumerTestBuilder implements Closeable {
                         subscriptions,
                         commit,
                         metadata,
-                        logContext
+                        logContext,
+                        Optional.empty(),
+                        backgroundEventHandler
                 )
             );
             HeartbeatRequestManager.HeartbeatState heartbeatState = spy(new HeartbeatRequestManager.HeartbeatState(
@@ -218,6 +217,7 @@ public class ConsumerTestBuilder implements Closeable {
                     gi.heartbeatJitterMs));
             HeartbeatRequestManager heartbeat = spy(new HeartbeatRequestManager(
                     logContext,
+                    pollTimer,
                     config,
                     coordinator,
                     mm,
@@ -256,13 +256,24 @@ public class ConsumerTestBuilder implements Closeable {
                 fetchRequestManager,
                 coordinatorRequestManager,
                 commitRequestManager,
-                heartbeatRequestManager,
-                membershipManager);
+                heartbeatRequestManager);
         this.applicationEventProcessor = spy(new ApplicationEventProcessor(
                 logContext,
                 applicationEventQueue,
                 requestManagers,
-                metadata)
+                metadata
+            )
+        );
+        ConsumerCoordinatorMetrics consumerCoordinatorMetrics = new ConsumerCoordinatorMetrics(
+                subscriptions,
+                metrics,
+                CONSUMER_METRIC_GROUP_PREFIX
+        );
+        this.rebalanceListenerInvoker = new ConsumerRebalanceListenerInvoker(
+                logContext,
+                subscriptions,
+                time,
+                consumerCoordinatorMetrics
         );
     }
 
@@ -293,78 +304,7 @@ public class ConsumerTestBuilder implements Closeable {
 
         @Override
         public void close() {
-            consumerNetworkThread.close();
-        }
-    }
-
-    public static class ApplicationEventHandlerTestBuilder extends ConsumerTestBuilder {
-
-        public final ApplicationEventHandler applicationEventHandler;
-
-        public ApplicationEventHandlerTestBuilder(Optional<GroupInformation> groupInfo, boolean enableAutoCommit, boolean enableAutoTick) {
-            super(groupInfo, enableAutoCommit, enableAutoTick);
-            this.applicationEventHandler = spy(new ApplicationEventHandler(
-                    logContext,
-                    time,
-                    applicationEventQueue,
-                    () -> applicationEventProcessor,
-                    () -> networkClientDelegate,
-                    () -> requestManagers));
-        }
-
-        @Override
-        public void close() {
-            closeQuietly(applicationEventHandler, ApplicationEventHandler.class.getSimpleName());
-        }
-    }
-
-    public static class AsyncKafkaConsumerTestBuilder extends ApplicationEventHandlerTestBuilder {
-
-        final AsyncKafkaConsumer<String, String> consumer;
-
-        final FetchCollector<String, String> fetchCollector;
-
-        public AsyncKafkaConsumerTestBuilder(Optional<GroupInformation> groupInfo, boolean enableAutoCommit, boolean enableAutoTick) {
-            super(groupInfo, enableAutoCommit, enableAutoTick);
-            String clientId = config.getString(CommonClientConfigs.CLIENT_ID_CONFIG);
-            List<ConsumerPartitionAssignor> assignors = ConsumerPartitionAssignor.getAssignorInstances(
-                    config.getList(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG),
-                    config.originals(Collections.singletonMap(ConsumerConfig.CLIENT_ID_CONFIG, clientId))
-            );
-            Deserializers<String, String> deserializers = new Deserializers<>(new StringDeserializer(), new StringDeserializer());
-            this.fetchCollector = spy(new FetchCollector<>(logContext,
-                    metadata,
-                    subscriptions,
-                    fetchConfig,
-                    deserializers,
-                    metricsManager,
-                    time));
-            this.consumer = spy(new AsyncKafkaConsumer<>(
-                    logContext,
-                    clientId,
-                    deserializers,
-                    new FetchBuffer(logContext),
-                    fetchCollector,
-                    new ConsumerInterceptors<>(Collections.emptyList()),
-                    time,
-                    applicationEventHandler,
-                    backgroundEventQueue,
-                    metrics,
-                    subscriptions,
-                    metadata,
-                    retryBackoffMs,
-                    60000,
-                    assignors,
-                    groupInfo.map(groupInformation -> groupInformation.groupState.groupId).orElse(null)));
-        }
-
-        @Override
-        public void close() {
-            consumer.close();
-        }
-
-        public void close(final Duration timeout) {
-            consumer.close(timeout);
+            consumerNetworkThread.close(Duration.ZERO);
         }
     }
 
