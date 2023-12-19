@@ -34,7 +34,6 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
@@ -120,8 +119,8 @@ public class MembershipManagerImplTest {
     private MembershipManagerImpl createMembershipManagerJoiningGroup(String groupInstanceId) {
         MembershipManagerImpl manager = spy(new MembershipManagerImpl(
                 GROUP_ID, Optional.ofNullable(groupInstanceId), REBALANCE_TIMEOUT, Optional.empty(),
-                subscriptionState, commitRequestManager, metadata, logContext,
-                Optional.empty(), backgroundEventHandler));
+                subscriptionState, commitRequestManager, metadata, logContext, Optional.empty(),
+                backgroundEventHandler));
         manager.transitionToJoining();
         return manager;
     }
@@ -328,41 +327,35 @@ public class MembershipManagerImplTest {
      * scenarios), and when the PREPARE_LEAVING completes it remains UNSUBSCRIBED (no last
      * heartbeat sent).
      */
-    @Disabled("Temporarily disabled waiting for callbacks for blocking the transition")
     @Test
     public void testFencingWhenStateIsPrepareLeaving() {
         MembershipManagerImpl membershipManager = createMemberInStableState();
-
-        // Start leaving group, blocked waiting for commit of all consumed to complete.
-        CompletableFuture<Void> commitResult = mockPrepareLeavingStuckCommitting();
-        membershipManager.leaveGroup();
+        ConsumerRebalanceListenerInvoker invoker = consumerRebalanceListenerInvoker();
+        ConsumerRebalanceListenerCallbackCompletedEvent callbackEvent =
+            mockPrepareLeavingStuckOnUserCallback(membershipManager, invoker);
         assertEquals(MemberState.PREPARE_LEAVING, membershipManager.state());
 
         // Get fenced while preparing to leave the group. Member should ignore the fence
         // (no callbacks or rejoin) and should transition to UNSUBSCRIBED to
         // effectively stop sending heartbeats.
-        MockRebalanceListener rebalanceListener = new MockRebalanceListener();
-        when(subscriptionState.rebalanceListener()).thenReturn(Optional.of(rebalanceListener));
+        clearInvocations(subscriptionState);
         membershipManager.transitionToFenced();
+        testFenceIsNoOp(membershipManager);
         assertEquals(MemberState.UNSUBSCRIBED, membershipManager.state());
-        testFenceIsNoOp(membershipManager, rebalanceListener);
 
         // When PREPARE_LEAVING completes, the member should remain UNSUBSCRIBED (no last HB sent
         // because member is already out of the group in the broker).
-        when(subscriptionState.rebalanceListener()).thenReturn(Optional.empty());
-        commitResult.complete(null);
+        completeCallback(callbackEvent, membershipManager);
         assertEquals(MemberState.UNSUBSCRIBED, membershipManager.state());
         assertTrue(membershipManager.shouldSkipHeartbeat());
     }
 
-    @Disabled("Temporarily disabled waiting for callbacks for blocking the transition")
     @Test
     public void testNewAssignmentIgnoredWhenStateIsPrepareLeaving() {
         MembershipManagerImpl membershipManager = createMemberInStableState();
-
-        // Start leaving group, blocked waiting for commit of all consumed to complete.
-        CompletableFuture<Void> commitResult = mockPrepareLeavingStuckCommitting();
-        membershipManager.leaveGroup();
+        ConsumerRebalanceListenerInvoker invoker = consumerRebalanceListenerInvoker();
+        ConsumerRebalanceListenerCallbackCompletedEvent callbackEvent =
+            mockPrepareLeavingStuckOnUserCallback(membershipManager, invoker);
         assertEquals(MemberState.PREPARE_LEAVING, membershipManager.state());
 
         // Get new assignment while preparing to leave the group. Member should continue leaving
@@ -376,9 +369,8 @@ public class MembershipManagerImplTest {
         assertTrue(membershipManager.topicsWaitingForMetadata().isEmpty());
         verify(membershipManager, never()).markReconciliationInProgress();
 
-        // When commit completes member should transition to LEAVING.
-        when(subscriptionState.rebalanceListener()).thenReturn(Optional.empty());
-        commitResult.complete(null);
+        // When callback completes member should transition to LEAVING.
+        completeCallback(callbackEvent, membershipManager);
         assertEquals(MemberState.LEAVING, membershipManager.state());
     }
 
@@ -393,10 +385,9 @@ public class MembershipManagerImplTest {
 
         // Get fenced while leaving. Member should not trigger any callback or try to
         // rejoin, and should continue leaving the group as it was before getting fenced.
-        MockRebalanceListener rebalanceListener = new MockRebalanceListener();
-        when(subscriptionState.rebalanceListener()).thenReturn(Optional.of(rebalanceListener));
+        clearInvocations(subscriptionState);
         membershipManager.transitionToFenced();
-        testFenceIsNoOp(membershipManager, rebalanceListener);
+        testFenceIsNoOp(membershipManager);
         assertEquals(MemberState.LEAVING, membershipManager.state());
 
         membershipManager.onHeartbeatRequestSent();
@@ -404,8 +395,9 @@ public class MembershipManagerImplTest {
 
         // Last heartbeat sent is expected to fail, leading to a call to transitionToFenced. That
         // should be no-op because the member already left.
+        clearInvocations(subscriptionState);
         membershipManager.transitionToFenced();
-        testFenceIsNoOp(membershipManager, rebalanceListener);
+        testFenceIsNoOp(membershipManager);
         assertEquals(MemberState.UNSUBSCRIBED, membershipManager.state());
     }
 
@@ -671,20 +663,18 @@ public class MembershipManagerImplTest {
         testStateUpdateOnFatalFailure(membershipManager);
     }
 
-    @Disabled("Temporarily disabled waiting for callbacks for blocking the transition")
     @Test
     public void testFatalFailureWhenStateIsPrepareLeaving() {
         MembershipManagerImpl membershipManager = createMemberInStableState();
-
-        // Start leaving group, blocked waiting for commit of all consumed to complete.
-        CompletableFuture<Void> commitResult = mockPrepareLeavingStuckCommitting();
-        membershipManager.leaveGroup();
+        ConsumerRebalanceListenerInvoker invoker = consumerRebalanceListenerInvoker();
+        ConsumerRebalanceListenerCallbackCompletedEvent callbackEvent =
+            mockPrepareLeavingStuckOnUserCallback(membershipManager, invoker);
         assertEquals(MemberState.PREPARE_LEAVING, membershipManager.state());
 
         testStateUpdateOnFatalFailure(membershipManager);
 
-        // When commit completes member should abort the leave operation and remain in FATAL state.
-        commitResult.complete(null);
+        // When callback completes member should abort the leave operation and remain in FATAL.
+        completeCallback(callbackEvent, membershipManager);
         assertEquals(MemberState.FATAL, membershipManager.state());
     }
 
@@ -1172,7 +1162,8 @@ public class MembershipManagerImplTest {
                 membershipManager,
                 invoker,
                 ConsumerRebalanceListenerMethodName.ON_PARTITIONS_ASSIGNED,
-                topicPartitions(topicName, 0, 1)
+                topicPartitions(topicName, 0, 1),
+                true
         );
 
         assertFalse(membershipManager.reconciliationInProgress());
@@ -1197,7 +1188,8 @@ public class MembershipManagerImplTest {
                 membershipManager,
                 invoker,
                 ConsumerRebalanceListenerMethodName.ON_PARTITIONS_REVOKED,
-                topicPartitions(topicName, 0, 1)
+                topicPartitions(topicName, 0, 1),
+                true
         );
         assertTrue(membershipManager.reconciliationInProgress());
 
@@ -1206,7 +1198,8 @@ public class MembershipManagerImplTest {
                 membershipManager,
                 invoker,
                 ConsumerRebalanceListenerMethodName.ON_PARTITIONS_ASSIGNED,
-                Collections.emptySortedSet()
+                Collections.emptySortedSet(),
+                true
         );
         assertFalse(membershipManager.reconciliationInProgress());
 
@@ -1254,7 +1247,8 @@ public class MembershipManagerImplTest {
                 membershipManager,
                 invoker,
                 ConsumerRebalanceListenerMethodName.ON_PARTITIONS_REVOKED,
-                topicPartitions(topicName, 0)
+                topicPartitions(topicName, 0),
+                true
         );
 
         assertFalse(membershipManager.reconciliationInProgress());
@@ -1302,7 +1296,8 @@ public class MembershipManagerImplTest {
                 membershipManager,
                 invoker,
                 ConsumerRebalanceListenerMethodName.ON_PARTITIONS_REVOKED,
-                topicPartitions("topic1", 0)
+                topicPartitions("topic1", 0),
+                true
         );
 
         assertTrue(membershipManager.reconciliationInProgress());
@@ -1312,7 +1307,8 @@ public class MembershipManagerImplTest {
                 membershipManager,
                 invoker,
                 ConsumerRebalanceListenerMethodName.ON_PARTITIONS_ASSIGNED,
-                Collections.emptySortedSet()
+                Collections.emptySortedSet(),
+                true
         );
 
         assertFalse(membershipManager.reconciliationInProgress());
@@ -1371,7 +1367,8 @@ public class MembershipManagerImplTest {
                 membershipManager,
                 invoker,
                 ConsumerRebalanceListenerMethodName.ON_PARTITIONS_LOST,
-                topicPartitions("topic1", 0)
+                topicPartitions("topic1", 0),
+                true
         );
 
         // Step 4: Receive ack and make sure we're done and our listener was called appropriately
@@ -1427,10 +1424,11 @@ public class MembershipManagerImplTest {
         return Collections.singletonMap(topicId, topicIdPartitions);
     }
 
-    private void performCallback(MembershipManagerImpl membershipManager,
+    private ConsumerRebalanceListenerCallbackCompletedEvent performCallback(MembershipManagerImpl membershipManager,
                                  ConsumerRebalanceListenerInvoker invoker,
                                  ConsumerRebalanceListenerMethodName expectedMethodName,
-                                 SortedSet<TopicPartition> expectedPartitions) {
+                                 SortedSet<TopicPartition> expectedPartitions,
+                                 boolean complete) {
         // We expect only our enqueued event in the background queue.
         assertEquals(1, backgroundEventQueue.size());
         assertNotNull(backgroundEventQueue.peek());
@@ -1446,14 +1444,21 @@ public class MembershipManagerImplTest {
                 neededEvent.partitions(),
                 neededEvent.future()
         );
-        membershipManager.consumerRebalanceListenerCallbackCompleted(invokedEvent);
+
+        if (complete) {
+            completeCallback(invokedEvent, membershipManager);
+        }
+        return invokedEvent;
     }
 
-    private void testFenceIsNoOp(MembershipManagerImpl membershipManager,
-                                 MockRebalanceListener rebalanceListener) {
+    private void completeCallback(ConsumerRebalanceListenerCallbackCompletedEvent callbackCompletedEvent,
+                                  MembershipManagerImpl membershipManager) {
+        membershipManager.consumerRebalanceListenerCallbackCompleted(callbackCompletedEvent);
+    }
+
+    private void testFenceIsNoOp(MembershipManagerImpl membershipManager) {
         assertNotEquals(0, membershipManager.memberEpoch());
-        assertEquals(0, rebalanceListener.lostCount);
-        assertEquals(0, rebalanceListener.revokedCount);
+        verify(subscriptionState, never()).rebalanceListener();
     }
 
     @Test
@@ -1470,12 +1475,6 @@ public class MembershipManagerImplTest {
         membershipManager.transitionToStaled();
         membershipManager.onHeartbeatRequestSent();
         assertEquals(MemberState.JOINING, membershipManager.state());
-    }
-
-    private void dropAssignedPartitions() {
-        SortedSet<TopicPartition> droppedPartitions = new TreeSet<>(MembershipManagerImpl.TOPIC_PARTITION_COMPARATOR);
-        droppedPartitions.addAll(subscriptionState.assignedPartitions());
-        subscriptionState.assignFromSubscribed(Collections.emptySet());
     }
 
     private MembershipManagerImpl mockMemberSuccessfullyReceivesAndAcksAssignment(
@@ -1741,17 +1740,27 @@ public class MembershipManagerImplTest {
         doNothing().when(subscriptionState).markPendingRevocation(anySet());
     }
 
-    private CompletableFuture<Void> mockPrepareLeavingStuckCommitting() {
+    private ConsumerRebalanceListenerCallbackCompletedEvent mockPrepareLeavingStuckOnUserCallback(
+        MembershipManagerImpl membershipManager,
+        ConsumerRebalanceListenerInvoker invoker) {
         String topicName = "topic1";
         TopicPartition ownedPartition = new TopicPartition(topicName, 0);
+
+        // Start leaving group, blocked waiting for callback to complete.
+        CounterConsumerRebalanceListener listener = new CounterConsumerRebalanceListener();
         when(subscriptionState.assignedPartitions()).thenReturn(Collections.singleton(ownedPartition));
         when(subscriptionState.hasAutoAssignedPartitions()).thenReturn(true);
-        when(subscriptionState.rebalanceListener()).thenReturn(Optional.empty());
+        when(subscriptionState.rebalanceListener()).thenReturn(Optional.of(listener));
         doNothing().when(subscriptionState).markPendingRevocation(anySet());
-        when(commitRequestManager.autoCommitEnabled()).thenReturn(true);
-        CompletableFuture<Void> commitResult = new CompletableFuture<>();
-        when(commitRequestManager.maybeAutoCommitAllConsumedNow(any(), anyBoolean())).thenReturn(commitResult);
-        return commitResult;
+        when(commitRequestManager.autoCommitEnabled()).thenReturn(false);
+        membershipManager.leaveGroup();
+        return performCallback(
+            membershipManager,
+            invoker,
+            ConsumerRebalanceListenerMethodName.ON_PARTITIONS_REVOKED,
+            topicPartitions(ownedPartition.topic(), ownedPartition.partition()),
+            false
+        );
     }
 
     private void testStateUpdateOnFatalFailure(MembershipManagerImpl membershipManager) {
