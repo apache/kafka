@@ -59,24 +59,12 @@ object KafkaDockerWrapper {
   private def prepareServerConfigs(defaultConfigsDir: String,
                                    mountedConfigsDir: String,
                                    finalConfigsDir: String): Unit = {
+    val propsToAdd = addNewlinePadding(getServerConfigsFromEnv)
+
     val defaultFilePath = s"$defaultConfigsDir/$ServerPropsFilename"
     val mountedFilePath = s"$mountedConfigsDir/$ServerPropsFilename"
     val finalFilePath = s"$finalConfigsDir/$ServerPropsFilename"
 
-    val serverPropsList = sys.env.map {
-      case (key, value) =>
-        if (key.startsWith("KAFKA_") && !ExcludeServerPropsEnv.contains(key)) {
-          val final_key = key.replace("KAFKA_", "").toLowerCase()
-            .replace("_", ".")
-            .replace("...", "-")
-            .replace("..", "_")
-          final_key + "=" + value
-        } else {
-          ""
-        }
-    }.toList
-
-    val propsToAdd = "\n" + serverPropsList.mkString("\n")
     if (Files.exists(Paths.get(mountedFilePath))) {
       copyFile(mountedFilePath, finalFilePath)
       addToFile(propsToAdd, finalFilePath)
@@ -94,6 +82,8 @@ object KafkaDockerWrapper {
   private def prepareLog4jConfigs(defaultConfigsDir: String,
                                   mountedConfigsDir: String,
                                   finalConfigsDir: String): Unit = {
+    val propsToAdd = getLog4jConfigsFromEnv
+
     val defaultFilePath = s"$defaultConfigsDir/$Log4jPropsFilename"
     val mountedFilePath = s"$mountedConfigsDir/$Log4jPropsFilename"
     val finalFilePath = s"$finalConfigsDir/$Log4jPropsFilename"
@@ -101,21 +91,14 @@ object KafkaDockerWrapper {
     copyFile(defaultFilePath, finalFilePath)
     copyFile(mountedFilePath, finalFilePath)
 
-    val kafkaLog4jRootLogLevelProp = sys.env.get(KafkaLog4jRootLoglevelEnv)
-      .map(kafkaLog4jRootLogLevel => s"log4j.rootLogger=$kafkaLog4jRootLogLevel, stdout")
-      .getOrElse("")
-
-    val kafkaLog4jLoggersProp = sys.env.get(KafkaLog4JLoggersEnv)
-      .map(kafkaLog4JLoggersString => kafkaLog4JLoggersString.split(",").mkString("\n"))
-      .getOrElse("")
-
-    val propsToAdd = "\n" + kafkaLog4jRootLogLevelProp + "\n" + kafkaLog4jLoggersProp
     addToFile(propsToAdd, finalFilePath)
   }
 
   private def prepareToolsLog4jConfigs(defaultConfigsDir: String,
                                        mountedConfigsDir: String,
                                        finalConfigsDir: String): Unit = {
+    val propToAdd = getToolsLog4jConfigsFromEnv
+
     val defaultFilePath = s"$defaultConfigsDir/$ToolsLog4jFilename"
     val mountedFilePath = s"$mountedConfigsDir/$ToolsLog4jFilename"
     val finalFilePath = s"$finalConfigsDir/$ToolsLog4jFilename"
@@ -123,10 +106,42 @@ object KafkaDockerWrapper {
     copyFile(defaultFilePath, finalFilePath)
     copyFile(mountedFilePath, finalFilePath)
 
-    sys.env.get(KafkaToolsLog4jLoglevelEnv).foreach { kafkaToolsLog4jLogLevel =>
-      val propToAdd = "\n" + s"log4j.rootLogger=$kafkaToolsLog4jLogLevel, stderr"
-      addToFile(propToAdd, finalFilePath)
+    addToFile(propToAdd, finalFilePath)
+  }
+
+  private def getServerConfigsFromEnv: String = {
+    sys.env.map {
+      case (key, value) =>
+        if (key.startsWith("KAFKA_") && !ExcludeServerPropsEnv.contains(key)) {
+          val final_key = key.replace("KAFKA_", "").toLowerCase()
+            .replace("_", ".")
+            .replace("...", "-")
+            .replace("..", "_")
+          final_key + "=" + value
+        } else {
+          ""
+        }
     }
+      .toList
+      .mkString(NewlineChar)
+  }
+
+  private def getLog4jConfigsFromEnv: String = {
+    val kafkaLog4jRootLogLevelProp = sys.env.get(KafkaLog4jRootLoglevelEnv)
+      .map(kafkaLog4jRootLogLevel => s"log4j.rootLogger=$kafkaLog4jRootLogLevel, stdout")
+      .getOrElse("")
+
+    val kafkaLog4jLoggersProp = sys.env.get(KafkaLog4JLoggersEnv)
+      .map(kafkaLog4JLoggersString => kafkaLog4JLoggersString.split(",").mkString(NewlineChar))
+      .getOrElse("")
+
+    addNewlinePadding(kafkaLog4jRootLogLevelProp) + addNewlinePadding(kafkaLog4jLoggersProp)
+  }
+
+  private def getToolsLog4jConfigsFromEnv: String = {
+    sys.env.get(KafkaToolsLog4jLoglevelEnv)
+      .map(kafkaToolsLog4jLogLevel => addNewlinePadding(s"log4j.rootLogger=$kafkaToolsLog4jLogLevel, stderr"))
+      .getOrElse("")
   }
 
   private def addToFile(properties: String, filepath: String, option: StandardOpenOption = StandardOpenOption.APPEND): Unit = {
@@ -142,6 +157,8 @@ object KafkaDockerWrapper {
       Files.copy(Paths.get(source), Paths.get(destination), StandardCopyOption.REPLACE_EXISTING)
     }
   }
+
+  private def addNewlinePadding(str: String) : String = NewlineChar + str
 }
 
 private object Constants {
@@ -163,4 +180,5 @@ private object Constants {
     "KAFKA_LOG4J_LOGGERS",
     "KAFKA_TOOLS_LOG4J_LOGLEVEL",
     "KAFKA_JMX_HOSTNAME")
+  val NewlineChar = "\n"
 }
