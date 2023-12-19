@@ -731,7 +731,6 @@ public class RemoteLogManager implements Closeable {
             RemoteLogSegmentId id = RemoteLogSegmentId.generateNew(topicIdPartition);
 
             long endOffset = nextSegmentBaseOffset - 1;
-
             File producerStateSnapshotFile = log.producerStateManager().fetchSnapshot(nextSegmentBaseOffset).orElse(null);
 
             List<EpochEntry> epochEntries = getLeaderEpochCheckpoint(log, segment.baseOffset(), nextSegmentBaseOffset).read();
@@ -959,7 +958,6 @@ public class RemoteLogManager implements Closeable {
                     remoteLogMetadataManager.updateRemoteLogSegmentMetadata(
                             new RemoteLogSegmentMetadataUpdate(segmentMetadata.remoteLogSegmentId(), time.milliseconds(),
                                     segmentMetadata.customMetadata(), RemoteLogSegmentState.DELETE_SEGMENT_FINISHED, brokerId)).get();
-
                     logger.debug("Deleted remote log segment {}", segmentMetadata.remoteLogSegmentId());
                     return true;
                 }
@@ -974,14 +972,6 @@ public class RemoteLogManager implements Closeable {
                 return;
             }
 
-            // Cleanup remote log segments and update the log start offset if applicable.
-            final Iterator<RemoteLogSegmentMetadata> segmentMetadataIter = remoteLogMetadataManager.listRemoteLogSegments(topicIdPartition);
-            if (!segmentMetadataIter.hasNext()) {
-                brokerTopicStats.topicStats(topicIdPartition.topic()).recordRemoteLogMetadataCount(topicIdPartition.partition(), 0);
-                logger.debug("No remote log segments available on remote storage for partition: {}", topicIdPartition);
-                return;
-            }
-
             final Optional<UnifiedLog> logOptional = fetchLog.apply(topicIdPartition.topicPartition());
             if (!logOptional.isPresent()) {
                 logger.debug("No UnifiedLog instance available for partition: {}", topicIdPartition);
@@ -992,6 +982,14 @@ public class RemoteLogManager implements Closeable {
             final Option<LeaderEpochFileCache> leaderEpochCacheOption = log.leaderEpochCache();
             if (leaderEpochCacheOption.isEmpty()) {
                 logger.debug("No leader epoch cache available for partition: {}", topicIdPartition);
+                return;
+            }
+
+            // Cleanup remote log segments and update the log start offset if applicable.
+            final Iterator<RemoteLogSegmentMetadata> segmentMetadataIter = remoteLogMetadataManager.listRemoteLogSegments(topicIdPartition);
+            if (!segmentMetadataIter.hasNext()) {
+                brokerTopicStats.topicStats(topicIdPartition.topic()).recordRemoteLogMetadataCount(topicIdPartition.partition(), 0);
+                logger.debug("No remote log segments available on remote storage for partition: {}", topicIdPartition);
                 return;
             }
 

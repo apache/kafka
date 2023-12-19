@@ -204,6 +204,7 @@ public class RemoteLogManagerTest {
         topicIds.put(followerTopicIdPartition.topicPartition().topic(), followerTopicIdPartition.topicId());
         Properties props = kafka.utils.TestUtils.createDummyBrokerConfig();
         props.setProperty(RemoteLogManagerConfig.REMOTE_LOG_STORAGE_SYSTEM_ENABLE_PROP, "true");
+        props.setProperty(RemoteLogManagerConfig.REMOTE_LOG_MANAGER_TASK_INTERVAL_MS_PROP, "100");
         remoteLogManagerConfig = createRLMConfig(props);
         brokerTopicStats = new BrokerTopicStats(Optional.of(KafkaConfig.fromProps(props)));
 
@@ -707,7 +708,11 @@ public class RemoteLogManagerTest {
         Partition mockLeaderPartition = mockPartition(leaderTopicIdPartition);
         Partition mockFollowerPartition = mockPartition(followerTopicIdPartition);
         List<RemoteLogSegmentMetadata> list = listRemoteLogSegmentMetadata(leaderTopicIdPartition, segmentCount, 100, 1024, RemoteLogSegmentState.COPY_SEGMENT_FINISHED);
-        when(remoteLogMetadataManager.listRemoteLogSegments(leaderTopicIdPartition)).thenReturn(list.iterator());
+        // return 3 metadata and then return 0 to simulate all segments are deleted
+        when(remoteLogMetadataManager.listRemoteLogSegments(leaderTopicIdPartition)).thenReturn(list.iterator()).thenReturn(Collections.emptyIterator());
+        when(remoteLogMetadataManager.listRemoteLogSegments(leaderTopicIdPartition, 0)).thenReturn(list.iterator());
+        when(remoteLogMetadataManager.listRemoteLogSegments(leaderTopicIdPartition, 1)).thenReturn(list.iterator());
+        when(remoteLogMetadataManager.listRemoteLogSegments(leaderTopicIdPartition, 2)).thenReturn(list.iterator());
 
         // before running tasks, the remote log manager tasks should be all idle and the remote log metadata count should be 0
         assertEquals(1.0, (double) yammerMetricValue("RemoteLogManagerTasksAvgIdlePercent"));
@@ -727,6 +732,9 @@ public class RemoteLogManagerTest {
         TestUtils.waitForCondition(() -> safeLongYammerMetricValue("RemoteLogMetadataCount,topic=" + leaderTopicIdPartition.topic()) == segmentCount,
                 "Didn't show the expected RemoteLogMetadataCount metric value.");
         remoteLogMetadataCountLatch.countDown();
+
+        TestUtils.waitForCondition(() -> safeLongYammerMetricValue("RemoteLogMetadataCount,topic=" + leaderTopicIdPartition.topic()) == 0,
+                "Didn't reset to 0 for RemoteLogMetadataCount metric value when no remote log metadata.");
     }
 
     @Test
