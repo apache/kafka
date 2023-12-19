@@ -25,6 +25,7 @@ import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.DisconnectException;
 import org.apache.kafka.common.errors.TimeoutException;
+import org.apache.kafka.common.message.OffsetCommitRequestData;
 import org.apache.kafka.common.message.OffsetCommitResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
@@ -456,6 +457,22 @@ public class CommitRequestManagerTest {
             testRetriable(commitRequestManger, Collections.singletonList(future));
         else
             testNonRetriable(Collections.singletonList(future));
+    }
+
+    @Test
+    public void testSignalClose() {
+        CommitRequestManager commitRequestManger = create(true, 100);
+        when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(mockedNode));
+
+        Map<TopicPartition, OffsetAndMetadata> offsets = Collections.singletonMap(new TopicPartition("topic", 1),
+            new OffsetAndMetadata(0));
+
+        commitRequestManger.addOffsetCommitRequest(offsets);
+        commitRequestManger.signalClose();
+        NetworkClientDelegate.PollResult res = commitRequestManger.poll(time.milliseconds());
+        assertEquals(1, res.unsentRequests.size());
+        OffsetCommitRequestData data = (OffsetCommitRequestData) res.unsentRequests.get(0).requestBuilder().build().data();
+        assertEquals("topic", data.topics().get(0).name());
     }
 
     private static void assertEmptyPendingRequests(CommitRequestManager commitRequestManger) {
