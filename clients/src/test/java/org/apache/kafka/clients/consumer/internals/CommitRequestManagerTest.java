@@ -736,7 +736,9 @@ public class CommitRequestManagerTest {
         futures.forEach(f -> assertTrue(f.isCompletedExceptionally()));
     }
 
-    // Supplies (error, isRetriable)
+    /**
+     * @return {@link Errors} that could be received in OffsetCommit responses.
+     */
     private static Stream<Arguments> offsetCommitExceptionSupplier() {
         return Stream.of(
             Arguments.of(Errors.NOT_COORDINATOR),

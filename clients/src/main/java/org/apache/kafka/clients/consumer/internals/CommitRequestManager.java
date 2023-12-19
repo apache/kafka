@@ -189,10 +189,17 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
      * request if there is no other commit request already in-flight, and if the commit interval
      * has elapsed.
      *
-     * @param offsets Offsets to commit
-     * @param expirationTimeMs Time until which the request will continue to be retried if it fails
-     *                         with a retriable error. If not present, the request will be sent
-     *                         but not retried.
+     * @param offsets           Offsets to commit
+     * @param expirationTimeMs  Time until which the request will continue to be retried if it
+     *                          fails with a retriable error. If not present, the request will be
+     *                          sent but not retried.
+     * @param checkInterval     True if the auto-commit interval expiration should be checked for
+     *                          sending a request. If true, the request will be sent only if the
+     *                          auto-commit interval has expired. Pass false to
+     *                          send the auto-commit request regardless of the interval (ex.
+     *                          auto-commit before rebalance).
+     * @param retryOnStaleEpoch True if the request should be retried in case it fails with
+     *                          {@link Errors#STALE_MEMBER_EPOCH}.
      * @return Future that will complete when a response is received for the request, or a
      * completed future if no request is generated.
      */
