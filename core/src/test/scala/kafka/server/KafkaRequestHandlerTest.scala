@@ -328,21 +328,16 @@ class KafkaRequestHandlerTest {
     val brokerTopicMetrics = setupBrokerTopicMetrics()
 
     assertEquals(0, brokerTopicMetrics.remoteLogMetadataCount)
-    brokerTopicMetrics.incrementRemoteLogMetadataCount(0)
+    brokerTopicMetrics.recordRemoteLogMetadataCount(0, 1)
     assertEquals(1, brokerTopicMetrics.remoteLogMetadataCount)
 
-    brokerTopicMetrics.incrementRemoteLogMetadataCount(1)
-    brokerTopicMetrics.incrementRemoteLogMetadataCount(2)
+    brokerTopicMetrics.recordRemoteLogMetadataCount(1, 2)
+    brokerTopicMetrics.recordRemoteLogMetadataCount(2, 3)
     assertEquals(3, brokerTopicMetrics.remoteLogMetadataCount)
 
-    brokerTopicMetrics.decrementRemoteLogMetadataCount(1)
-    brokerTopicMetrics.decrementRemoteLogMetadataCount(2)
-
-    assertEquals(1, brokerTopicMetrics.remoteLogMetadataCount)
 
     // verify there will be no minus value for a partition
-    brokerTopicMetrics.decrementRemoteLogMetadataCount(1)
-    assertEquals(1, brokerTopicMetrics.remoteLogMetadataCount)
+    assertEquals(5, brokerTopicMetrics.remoteLogMetadataCount)
 
     brokerTopicMetrics.close()
 

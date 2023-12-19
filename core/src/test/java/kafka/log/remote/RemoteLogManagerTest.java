@@ -643,6 +643,7 @@ public class RemoteLogManagerTest {
     void testRemoteLogManagerTasksAvgIdlePercentAndMetadataCountMetrics() throws Exception {
         long oldSegmentStartOffset = 0L;
         long nextSegmentStartOffset = 150L;
+        int segmentCount = 3;
         when(mockLog.topicPartition()).thenReturn(leaderTopicIdPartition.topicPartition());
 
         // leader epoch preparation
@@ -697,21 +698,18 @@ public class RemoteLogManagerTest {
         when(remoteLogMetadataManager.updateRemoteLogSegmentMetadata(any(RemoteLogSegmentMetadataUpdate.class))).thenReturn(dummyFuture);
 
         CountDownLatch copyLogSegmentLatch = new CountDownLatch(1);
-        CountDownLatch incRemoteLogMetadataCountLatch = new CountDownLatch(1);
         doAnswer(ans -> {
             // waiting for verification
             copyLogSegmentLatch.await();
             return Optional.empty();
         }).when(remoteStorageManager).copyLogSegmentData(any(RemoteLogSegmentMetadata.class), any(LogSegmentData.class));
+
         Partition mockLeaderPartition = mockPartition(leaderTopicIdPartition);
         Partition mockFollowerPartition = mockPartition(followerTopicIdPartition);
-        List<RemoteLogSegmentMetadata> list = listRemoteLogSegmentMetadata(leaderTopicIdPartition, 5, 100, 1024, RemoteLogSegmentState.COPY_SEGMENT_FINISHED);
+        List<RemoteLogSegmentMetadata> list = listRemoteLogSegmentMetadata(leaderTopicIdPartition, segmentCount, 100, 1024, RemoteLogSegmentState.COPY_SEGMENT_FINISHED);
         when(remoteLogMetadataManager.listRemoteLogSegments(leaderTopicIdPartition)).thenReturn(list.iterator());
-        when(remoteLogMetadataManager.listRemoteLogSegments(leaderTopicIdPartition, 2)).thenReturn(list.iterator());
-        when(remoteLogMetadataManager.listRemoteLogSegments(leaderTopicIdPartition, 1)).thenReturn(list.iterator());
-        when(remoteLogMetadataManager.listRemoteLogSegments(leaderTopicIdPartition, 0)).thenReturn(list.iterator()).thenReturn(list.iterator());
 
-        // before running tasks, the remote log manager tasks should be all idle
+        // before running tasks, the remote log manager tasks should be all idle and the remote log metadata count should be 0
         assertEquals(1.0, (double) yammerMetricValue("RemoteLogManagerTasksAvgIdlePercent"));
         assertEquals(0, safeLongYammerMetricValue("RemoteLogMetadataCount,topic=" + leaderTopicIdPartition.topic()));
         remoteLogManager.onLeadershipChange(Collections.singleton(mockLeaderPartition), Collections.singleton(mockFollowerPartition), topicIds);
@@ -719,24 +717,16 @@ public class RemoteLogManagerTest {
 
         copyLogSegmentLatch.countDown();
 
-        CountDownLatch decRemoteLogMetadataCountLatch = new CountDownLatch(1);
+        CountDownLatch remoteLogMetadataCountLatch = new CountDownLatch(1);
         doAnswer(ans -> {
-            incRemoteLogMetadataCountLatch.await();
-            return null;
-        }).doAnswer(ans -> {
-            decRemoteLogMetadataCountLatch.countDown();
+            remoteLogMetadataCountLatch.await();
             return null;
         }).when(remoteStorageManager).deleteLogSegmentData(any(RemoteLogSegmentMetadata.class));
 
-        // after copyLogSegment, the `RemoteLogMetadataCount` should get incremented
-        TestUtils.waitForCondition(() -> {
-            return safeLongYammerMetricValue("RemoteLogMetadataCount,topic=" + leaderTopicIdPartition.topic()) == 1;
-        }, "Didn't increment the RemoteLogMetadataCount metric value.");
-        incRemoteLogMetadataCountLatch.countDown();
-
-        // after deleteLogSegment, the `RemoteLogMetadataCount` should get decremented
-        decRemoteLogMetadataCountLatch.await();
-        assertEquals(0, (long) yammerMetricValue("RemoteLogMetadataCount,topic=" + leaderTopicIdPartition.topic()));
+        // Now, the `RemoteLogMetadataCount` should set to the expected value
+        TestUtils.waitForCondition(() -> safeLongYammerMetricValue("RemoteLogMetadataCount,topic=" + leaderTopicIdPartition.topic()) == segmentCount,
+                "Didn't show the expected RemoteLogMetadataCount metric value.");
+        remoteLogMetadataCountLatch.countDown();
     }
 
     @Test

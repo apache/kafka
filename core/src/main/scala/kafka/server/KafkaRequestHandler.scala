@@ -414,14 +414,9 @@ class BrokerTopicMetrics(name: Option[String], configOpt: java.util.Optional[Kaf
 
   def remoteCopyBytesLag: Long = metricGaugeTypeMap.get(RemoteStorageMetrics.REMOTE_COPY_LOG_BYTES_METRIC.getName).brokerTopicAggregatedMetric.value()
 
-  def incrementRemoteLogMetadataCount(partition: Int): Unit = {
+  def recordRemoteLogMetadataCount(partition: Int, count: Long): Unit = {
     val brokerTopicAggregatedMetric = metricGaugeTypeMap.get(RemoteStorageMetrics.REMOTE_LOG_METADATA_COUNT_METRIC.getName).brokerTopicAggregatedMetric
-    brokerTopicAggregatedMetric.incrementPartitionMetricValue(partition)
-  }
-
-  def decrementRemoteLogMetadataCount(partition: Int): Unit = {
-    val brokerTopicAggregatedMetric = metricGaugeTypeMap.get(RemoteStorageMetrics.REMOTE_LOG_METADATA_COUNT_METRIC.getName).brokerTopicAggregatedMetric
-    brokerTopicAggregatedMetric.decrementPartitionMetricValue(partition)
+    brokerTopicAggregatedMetric.setPartitionMetricValue(partition, count)
   }
 
   def removeRemoteLogMetadataCount(partition: Int): Unit = {
@@ -430,6 +425,7 @@ class BrokerTopicMetrics(name: Option[String], configOpt: java.util.Optional[Kaf
   }
 
   def remoteLogMetadataCount: Long = metricGaugeTypeMap.get(RemoteStorageMetrics.REMOTE_LOG_METADATA_COUNT_METRIC.getName).brokerTopicAggregatedMetric.value()
+
   def recordRemoteLogSizeComputationTime(partition: Int, timeSpent: Long): Unit = {
     val brokerTopicAggregatedMetric = metricGaugeTypeMap.get(RemoteStorageMetrics.REMOTE_LOG_SIZE_COMPUTATION_TIME_METRIC.getName).brokerTopicAggregatedMetric
     brokerTopicAggregatedMetric.setPartitionMetricValue(partition, timeSpent)
