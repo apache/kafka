@@ -65,7 +65,6 @@ import static org.apache.kafka.clients.consumer.ConsumerConfig.ENABLE_AUTO_COMMI
 import static org.apache.kafka.clients.consumer.ConsumerConfig.GROUP_ID_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG;
-import static org.apache.kafka.clients.consumer.internals.ConsumerTestBuilder.DEFAULT_GROUP_ID;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -95,7 +94,7 @@ public class CommitRequestManagerTest {
         this.time = new MockTime(0);
         this.subscriptionState = new SubscriptionState(new LogContext(), OffsetResetStrategy.EARLIEST);
         this.coordinatorRequestManager = mock(CoordinatorRequestManager.class);
-        this.groupState = new GroupState(DEFAULT_GROUP_ID, Optional.empty());
+        this.groupState = new GroupState("group-id", Optional.empty());
         this.backgroundEventHandler = spy(new BackgroundEventHandler(logContext, new LinkedBlockingQueue<>()));
         this.props = new Properties();
         this.props.put(ConsumerConfig.AUTO_COMMIT_INTERVAL_MS_CONFIG, 100);
