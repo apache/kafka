@@ -81,7 +81,7 @@ object KafkaDockerWrapper {
     }
   }
 
-  private def prepareLog4jConfigs(defaultConfigsDir: String,
+  private[docker] def prepareLog4jConfigs(defaultConfigsDir: String,
                                   mountedConfigsDir: String,
                                   finalConfigsDir: String,
                                   env: Map[String, String]): Unit = {
