@@ -548,16 +548,22 @@ public class CommitRequestManager implements RequestManager {
                                final Errors responseError) {
             handleCoordinatorDisconnect(responseError.exception(), currentTimeMs);
             log.debug("Offset fetch failed: {}", responseError.message());
-            if (responseError == COORDINATOR_LOAD_IN_PROGRESS) {
-                retry(currentTimeMs);
-            } else if (responseError == Errors.NOT_COORDINATOR) {
-                // re-discover the coordinator and retry
-                coordinatorRequestManager.markCoordinatorUnknown("error response " + responseError.name(), currentTimeMs);
-                retry(currentTimeMs);
-            } else if (responseError == Errors.GROUP_AUTHORIZATION_FAILED) {
-                future.completeExceptionally(GroupAuthorizationException.forGroupId(groupState.groupId));
-            } else {
-                future.completeExceptionally(new KafkaException("Unexpected error in fetch offset response: " + responseError.message()));
+            switch (responseError) {
+                case COORDINATOR_LOAD_IN_PROGRESS:
+                    retry(currentTimeMs);
+                    break;
+                case NOT_COORDINATOR:
+                case COORDINATOR_NOT_AVAILABLE:
+                    // re-discover the coordinator and retry
+                    coordinatorRequestManager.markCoordinatorUnknown("error response " + responseError.name(), currentTimeMs);
+                    retry(currentTimeMs);
+                    break;
+                case GROUP_AUTHORIZATION_FAILED:
+                    future.completeExceptionally(GroupAuthorizationException.forGroupId(groupState.groupId));
+                    break;
+                default:
+                    future.completeExceptionally(new KafkaException("Unexpected error in fetch offset response: " + responseError.message()));
+                    break;
             }
         }
 
