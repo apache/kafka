@@ -36,6 +36,7 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
 
 import java.io.Closeable;
+import java.time.Duration;
 import java.util.HashMap;
 import java.util.Optional;
 import java.util.Properties;
@@ -260,7 +261,8 @@ public class ConsumerTestBuilder implements Closeable {
                 logContext,
                 applicationEventQueue,
                 requestManagers,
-                metadata)
+                metadata
+            )
         );
         ConsumerCoordinatorMetrics consumerCoordinatorMetrics = new ConsumerCoordinatorMetrics(
                 subscriptions,
@@ -302,7 +304,7 @@ public class ConsumerTestBuilder implements Closeable {
 
         @Override
         public void close() {
-            consumerNetworkThread.close();
+            consumerNetworkThread.close(Duration.ZERO);
         }
     }
 

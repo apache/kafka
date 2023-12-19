@@ -77,8 +77,7 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
     private final OptionalDouble jitter;
     private final boolean throwOnFetchStableOffsetUnsupported;
     final PendingRequests pendingRequests;
-
-    private final Time time;
+    private boolean closing = false;
 
     /**
      *  Latest member ID and epoch received via the {@link #onMemberEpochUpdated(Optional, Optional)},
@@ -133,7 +132,6 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
         this.jitter = jitter;
         this.throwOnFetchStableOffsetUnsupported = config.getBoolean(THROW_ON_FETCH_STABLE_OFFSET_UNSUPPORTED);
         this.memberInfo = new MemberInfo();
-        this.time = time;
     }
 
     /**
@@ -146,6 +144,10 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
         if (!coordinatorRequestManager.coordinator().isPresent())
             return EMPTY;
 
+        if (closing) {
+            return drainPendingOffsetCommitRequests();
+        }
+
         maybeAutoCommitAllConsumedAsync();
         if (!pendingRequests.hasUnsentRequests())
             return EMPTY;
@@ -156,6 +158,11 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
             findMinTime(unsentOffsetCommitRequests(), currentTimeMs),
             findMinTime(unsentOffsetFetchRequests(), currentTimeMs));
         return new NetworkClientDelegate.PollResult(timeUntilNextPoll, requests);
+    }
+
+    @Override
+    public void signalClose() {
+        closing = true;
     }
 
     /**
@@ -251,25 +258,6 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
         final Optional<Long> expirationTimeMs,
         final boolean retryOnStaleEpoch) {
         return maybeAutoCommit(subscriptions.allConsumed(), expirationTimeMs, false, retryOnStaleEpoch);
-    }
-
-    boolean canAutoCommit() {
-        return autoCommitState.isPresent() && !subscriptions.allConsumed().isEmpty();
-    }
-
-    /**
-     * Returns an OffsetCommitRequest of all assigned topicPartitions and their current positions.
-     */
-    NetworkClientDelegate.UnsentRequest createCommitAllConsumedRequestSync(Timer timer) {
-        Map<TopicPartition, OffsetAndMetadata> offsets = subscriptions.allConsumed();
-        OffsetCommitRequestState request = pendingRequests.createOffsetCommitRequest(
-            offsets,
-            jitter,
-            Optional.of(time.milliseconds() + timer.remainingMs()),
-            false);
-        log.debug("Sending synchronous auto-commit of offsets {}", offsets);
-        request.future.whenComplete(autoCommitCallback(subscriptions.allConsumed()));
-        return request.toUnsentRequest();
     }
 
     private BiConsumer<? super Void, ? super Throwable> autoCommitCallback(final Map<TopicPartition, OffsetAndMetadata> allConsumedOffsets) {
@@ -369,12 +357,10 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
      * Drains the inflight offsetCommits during shutdown because we want to make sure all pending commits are sent
      * before closing.
      */
-    @Override
-    public NetworkClientDelegate.PollResult pollOnClose() {
-        if (!pendingRequests.hasUnsentRequests() || !coordinatorRequestManager.coordinator().isPresent())
+    public NetworkClientDelegate.PollResult drainPendingOffsetCommitRequests() {
+        if (pendingRequests.unsentOffsetCommits.isEmpty())
             return EMPTY;
-
-        List<NetworkClientDelegate.UnsentRequest> requests = pendingRequests.drainOnClose();
+        List<NetworkClientDelegate.UnsentRequest> requests = pendingRequests.drainPendingCommits();
         return new NetworkClientDelegate.PollResult(Long.MAX_VALUE, requests);
     }
 
@@ -1081,7 +1067,7 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
             unsentOffsetFetches.clear();
         }
 
-        private List<NetworkClientDelegate.UnsentRequest> drainOnClose() {
+        private List<NetworkClientDelegate.UnsentRequest> drainPendingCommits() {
             ArrayList<NetworkClientDelegate.UnsentRequest> res = new ArrayList<>();
             res.addAll(unsentOffsetCommits.stream().map(OffsetCommitRequestState::toUnsentRequest).collect(Collectors.toList()));
             clearAll();

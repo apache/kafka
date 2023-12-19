@@ -809,6 +809,22 @@ public class CommitRequestManagerTest {
             testNonRetriable(Collections.singletonList(future));
     }
 
+    @Test
+    public void testSignalClose() {
+        CommitRequestManager commitRequestManger = create(true, 100);
+        when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(mockedNode));
+
+        Map<TopicPartition, OffsetAndMetadata> offsets = Collections.singletonMap(new TopicPartition("topic", 1),
+            new OffsetAndMetadata(0));
+
+        commitRequestManger.addOffsetCommitRequest(offsets, Optional.empty(), false);
+        commitRequestManger.signalClose();
+        NetworkClientDelegate.PollResult res = commitRequestManger.poll(time.milliseconds());
+        assertEquals(1, res.unsentRequests.size());
+        OffsetCommitRequestData data = (OffsetCommitRequestData) res.unsentRequests.get(0).requestBuilder().build().data();
+        assertEquals("topic", data.topics().get(0).name());
+    }
+
     private static void assertEmptyPendingRequests(CommitRequestManager commitRequestManger) {
         assertTrue(commitRequestManger.pendingRequests.inflightOffsetFetches.isEmpty());
         assertTrue(commitRequestManger.pendingRequests.unsentOffsetFetches.isEmpty());
