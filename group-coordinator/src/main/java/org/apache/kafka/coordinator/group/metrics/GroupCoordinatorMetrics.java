@@ -63,7 +63,7 @@ public class GroupCoordinatorMetrics extends CoordinatorMetrics implements AutoC
         "GroupMetadataManager", "NumGroupsEmpty");
 
     public final static String GROUP_COUNT_METRIC_NAME = "group-count";
-    public final static String GROUP_COUNT_TYPE_TAG = "group-type";
+    public final static String GROUP_COUNT_PROTOCOL_TAG = "protocol";
     public final static String CONSUMER_GROUP_COUNT_METRIC_NAME = "consumer-group-count";
     public final static String CONSUMER_GROUP_COUNT_STATE_TAG = "state";
 
@@ -103,14 +103,14 @@ public class GroupCoordinatorMetrics extends CoordinatorMetrics implements AutoC
             GROUP_COUNT_METRIC_NAME,
             METRICS_GROUP,
             "The total number of groups using the generic rebalance protocol.",
-            Collections.singletonMap(GROUP_COUNT_TYPE_TAG, Group.GroupType.GENERIC.toString())
+            Collections.singletonMap(GROUP_COUNT_PROTOCOL_TAG, Group.GroupType.GENERIC.toString())
         );
 
         consumerGroupCountMetricName = metrics.metricName(
             GROUP_COUNT_METRIC_NAME,
             METRICS_GROUP,
             "The total number of groups using the consumer rebalance protocol.",
-            Collections.singletonMap(GROUP_COUNT_TYPE_TAG, Group.GroupType.CONSUMER.toString())
+            Collections.singletonMap(GROUP_COUNT_PROTOCOL_TAG, Group.GroupType.CONSUMER.toString())
         );
 
         consumerGroupCountEmptyMetricName = metrics.metricName(

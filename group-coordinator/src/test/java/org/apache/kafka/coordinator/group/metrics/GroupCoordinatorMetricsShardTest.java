@@ -138,7 +138,7 @@ public class GroupCoordinatorMetricsShardTest {
 
         assertGaugeValue(
             metrics,
-            metrics.metricName("group-count", "group-coordinator-metrics", Collections.singletonMap("group-type", "generic")),
+            metrics.metricName("group-count", "group-coordinator-metrics", Collections.singletonMap("protocol", "generic")),
             4
         );
         assertGaugeValue(registry, metricName("GroupMetadataManager", "NumGroups"), 4);
@@ -225,7 +225,7 @@ public class GroupCoordinatorMetricsShardTest {
         assertEquals(2, shard.numConsumerGroups(ConsumerGroup.ConsumerGroupState.STABLE));
 
         assertGaugeValue(metrics, metrics.metricName("group-count", "group-coordinator-metrics",
-            Collections.singletonMap("group-type", "consumer")), 4);
+            Collections.singletonMap("protocol", "consumer")), 4);
         assertGaugeValue(metrics, metrics.metricName("consumer-group-count", "group-coordinator-metrics",
             Collections.singletonMap("state", "empty")), 0);
         assertGaugeValue(metrics, metrics.metricName("consumer-group-count", "group-coordinator-metrics",
