@@ -1145,8 +1145,8 @@ public class MetadataTest {
     public void testValidPartitionLeaderUpdate() {
         Time time = new MockTime();
 
-        String clusterId = "kakfa-cluster";
-        String unauthroizedTopics = "unauthorized-topic";
+        String clusterId = "kafka-cluster";
+        String unauthorizedTopics = "unauthorized-topic";
         String invalidTopics = "invalid-topic";
         String topic1 = "topic1";
         // Initialize metadata
@@ -1164,7 +1164,7 @@ public class MetadataTest {
             numNodes,
             time,
             clusterId,
-            singleton(unauthroizedTopics), singleton(invalidTopics),
+            singleton(unauthorizedTopics), singleton(invalidTopics),
             mockListener);
 
         // Remove and re-add the first updated topicPartition in topic1
@@ -1201,7 +1201,7 @@ public class MetadataTest {
             topicToMetadata,
             metadata.fetch().nodes(),
             clusterId,
-            singleton(unauthroizedTopics), singleton(invalidTopics),
+            singleton(unauthorizedTopics), singleton(invalidTopics),
             metadata.fetch().controller());
         // Since cluster metadata is unchanged, listener shouldn't be called.
         verify(mockListener).onUpdate(any());
@@ -1211,8 +1211,8 @@ public class MetadataTest {
     public void testInvalidPartitionLeaderUpdate() {
         Time time = new MockTime();
 
-        String clusterId = "kakfa-cluster";
-        String unauthroizedTopics = "unauthorized-topic";
+        String clusterId = "kafka-cluster";
+        String unauthorizedTopics = "unauthorized-topic";
         String invalidTopics = "invalid-topic";
         String topic1 = "topic1";
         String topic2 = "topic2";
@@ -1231,7 +1231,7 @@ public class MetadataTest {
             numNodes,
             time,
             clusterId,
-            singleton(unauthroizedTopics), singleton(invalidTopics),
+            singleton(unauthorizedTopics), singleton(invalidTopics),
             mockListener);
 
         List<PartitionMetadata> topic1Partitions = topicToMetadata.get(topic1).partitionMetadata;
@@ -1257,7 +1257,7 @@ public class MetadataTest {
             topicToMetadata,
             metadata.fetch().nodes(),
             clusterId,
-            singleton(unauthroizedTopics), singleton(invalidTopics),
+            singleton(unauthorizedTopics), singleton(invalidTopics),
             metadata.fetch().controller());
         // Since cluster metadata is unchanged, listener shouldn't be called.
         verify(mockListener, never()).onUpdate(any());
