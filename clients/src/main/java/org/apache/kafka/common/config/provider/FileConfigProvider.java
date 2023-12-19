@@ -16,8 +16,8 @@
  */
 package org.apache.kafka.common.config.provider;
 
-import java.io.File;
 import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -54,7 +54,7 @@ public class FileConfigProvider implements ConfigProvider {
 
             if (configValue != null && !configValue.isEmpty()) {
                 allowedPaths = new ArrayList<>();
-                Arrays.stream(configValue.split(",")).forEach(b -> allowedPaths.add(new File(b).toPath()));
+                Arrays.stream(configValue.split(",")).forEach(b -> allowedPaths.add(Paths.get(b)));
             }
         } else {
             allowedPaths = null;
@@ -73,7 +73,7 @@ public class FileConfigProvider implements ConfigProvider {
             return new ConfigData(data);
         }
 
-        Path filePath = new File(path).toPath();
+        Path filePath = Paths.get(path);
         if (allowedPaths != null) {
             long allowed = allowedPaths.stream().filter(allowedPath -> filePath.startsWith(allowedPath) || filePath.equals(allowedPath)).count();
             if (allowed == 0) {
@@ -113,9 +113,9 @@ public class FileConfigProvider implements ConfigProvider {
             return new ConfigData(data);
         }
 
-        Path filePath = new File(path).toPath();
+        Path filePath = Paths.get(path);
         if (allowedPaths != null) {
-            long allowed = allowedPaths.stream().filter(allowedPath -> filePath.startsWith(allowedPath) || filePath.equals(allowedPath)).count();
+            long allowed = allowedPaths.stream().filter(allowedPath -> filePath.startsWith(allowedPath)).count();
             if (allowed == 0) {
                 log.warn("The path {} is not allowed to be accessed", path);
                 return new ConfigData(data);

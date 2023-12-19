@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.common.config.provider;
 
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.HashMap;
 import java.util.Map;
 import org.apache.kafka.common.config.ConfigData;
@@ -47,18 +49,17 @@ public class DirectoryConfigProviderTest {
 
     private DirectoryConfigProvider provider;
     private File parent;
-    private File dir;
-    private File bar;
-    private File foo;
-    private File subdir;
-    private File subdirFile;
-    private File siblingDir;
-    private File siblingDirFile;
-    private File siblingFile;
+    private String dir;
+    private final String bar = "bar";
+    private final String foo = "foo";
+    private String subdir;
+    private final String subdirFileName = "subdirFile";
+    private String siblingDir;
+    private final String siblingDirFileName = "siblingDirFile";
+    private final String siblingFileName = "siblingFile";
 
-    private static File writeFile(File file) throws IOException {
-        Files.write(file.toPath(), file.getName().toUpperCase(Locale.ENGLISH).getBytes(StandardCharsets.UTF_8));
-        return file;
+    private static Path writeFile(Path path) throws IOException {
+        return Files.write(path, String.valueOf(path.getFileName()).toUpperCase(Locale.ENGLISH).getBytes(StandardCharsets.UTF_8));
     }
 
     @BeforeEach
@@ -66,17 +67,18 @@ public class DirectoryConfigProviderTest {
         provider = new DirectoryConfigProvider();
         provider.configure(Collections.emptyMap());
         parent = TestUtils.tempDirectory();
-        dir = new File(parent, "dir");
-        dir.mkdir();
-        foo = writeFile(new File(dir, "foo"));
-        bar = writeFile(new File(dir, "bar"));
-        subdir = new File(dir, "subdir");
-        subdir.mkdir();
-        subdirFile = writeFile(new File(subdir, "subdirFile"));
-        siblingDir = new File(parent, "siblingdir");
-        siblingDir.mkdir();
-        siblingDirFile = writeFile(new File(siblingDir, "siblingdirFile"));
-        siblingFile = writeFile(new File(parent, "siblingFile"));
+        
+        dir = String.valueOf(Files.createDirectory(Paths.get(parent.getAbsolutePath(), "dir")));
+        writeFile(Files.createFile(Paths.get(dir, foo)));
+        writeFile(Files.createFile(Paths.get(dir, bar)));
+
+        subdir = String.valueOf(Files.createDirectory(Paths.get(dir, "subdir")));
+        writeFile(Files.createFile(Paths.get(subdir, subdirFileName)));
+
+        siblingDir = String.valueOf(Files.createDirectory(Paths.get(parent.getAbsolutePath(), "siblingDir")));
+        writeFile(Files.createFile(Paths.get(siblingDir, siblingDirFileName)));
+
+        writeFile(Files.createFile(Paths.get(parent.getAbsolutePath(), siblingFileName)));
     }
 
     @AfterEach
@@ -87,27 +89,27 @@ public class DirectoryConfigProviderTest {
 
     @Test
     public void testGetAllKeysAtPath() {
-        ConfigData configData = provider.get(dir.getAbsolutePath());
-        assertEquals(toSet(asList(foo.getName(), bar.getName())), configData.data().keySet());
-        assertEquals("FOO", configData.data().get(foo.getName()));
-        assertEquals("BAR", configData.data().get(bar.getName()));
+        ConfigData configData = provider.get(dir);
+        assertEquals(toSet(asList(foo, bar)), configData.data().keySet());
+        assertEquals("FOO", configData.data().get(foo));
+        assertEquals("BAR", configData.data().get(bar));
         assertNull(configData.ttl());
     }
 
     @Test
     public void testGetSetOfKeysAtPath() {
-        Set<String> keys = toSet(asList(foo.getName(), "baz"));
-        ConfigData configData = provider.get(dir.getAbsolutePath(), keys);
-        assertEquals(Collections.singleton(foo.getName()), configData.data().keySet());
-        assertEquals("FOO", configData.data().get(foo.getName()));
+        Set<String> keys = toSet(asList(foo, "baz"));
+        ConfigData configData = provider.get(dir, keys);
+        assertEquals(Collections.singleton(foo), configData.data().keySet());
+        assertEquals("FOO", configData.data().get(foo));
         assertNull(configData.ttl());
     }
 
     @Test
     public void testNoSubdirs() {
         // Only regular files directly in the path directory are allowed, not in subdirs
-        Set<String> keys = toSet(asList(subdir.getName(), String.join(File.separator, subdir.getName(), subdirFile.getName())));
-        ConfigData configData = provider.get(dir.getAbsolutePath(), keys);
+        Set<String> keys = toSet(asList(subdir, String.join(File.separator, subdir, subdirFileName)));
+        ConfigData configData = provider.get(dir, keys);
         assertTrue(configData.data().isEmpty());
         assertNull(configData.ttl());
     }
@@ -116,10 +118,10 @@ public class DirectoryConfigProviderTest {
     public void testNoTraversal() {
         // Check we can't escape outside the path directory
         Set<String> keys = toSet(asList(
-                String.join(File.separator, "..", siblingFile.getName()),
-                String.join(File.separator, "..", siblingDir.getName()),
-                String.join(File.separator, "..", siblingDir.getName(), siblingDirFile.getName())));
-        ConfigData configData = provider.get(dir.getAbsolutePath(), keys);
+                String.join(File.separator, "..", siblingFileName),
+                String.join(File.separator, "..", siblingDir),
+                String.join(File.separator, "..", siblingDir, siblingDirFileName)));
+        ConfigData configData = provider.get(dir, keys);
         assertTrue(configData.data().isEmpty());
         assertNull(configData.ttl());
     }
@@ -164,37 +166,37 @@ public class DirectoryConfigProviderTest {
         configs.put(ALLOWED_PATHS_CONFIG, parent.getAbsolutePath());
         provider.configure(configs);
 
-        ConfigData configData = provider.get(dir.getAbsolutePath());
-        assertEquals(toSet(asList(foo.getName(), bar.getName())), configData.data().keySet());
-        assertEquals("FOO", configData.data().get(foo.getName()));
-        assertEquals("BAR", configData.data().get(bar.getName()));
+        ConfigData configData = provider.get(dir);
+        assertEquals(toSet(asList(foo, bar)), configData.data().keySet());
+        assertEquals("FOO", configData.data().get(foo));
+        assertEquals("BAR", configData.data().get(bar));
         assertNull(configData.ttl());
     }
 
     @Test
     public void testMultipleAllowedPaths() {
         Map<String, String> configs = new HashMap<>();
-        configs.put(ALLOWED_PATHS_CONFIG, dir.getAbsolutePath() + "," + siblingDir.getAbsolutePath());
+        configs.put(ALLOWED_PATHS_CONFIG, dir + "," + siblingDir);
         provider.configure(configs);
 
-        ConfigData configData = provider.get(subdir.getAbsolutePath());
-        assertEquals(toSet(asList(subdirFile.getName())), configData.data().keySet());
-        assertEquals("SUBDIRFILE", configData.data().get(subdirFile.getName()));
+        ConfigData configData = provider.get(subdir);
+        assertEquals(toSet(asList(subdirFileName)), configData.data().keySet());
+        assertEquals("SUBDIRFILE", configData.data().get(subdirFileName));
         assertNull(configData.ttl());
 
-        configData = provider.get(siblingDir.getAbsolutePath());
-        assertEquals(toSet(asList(siblingDirFile.getName())), configData.data().keySet());
-        assertEquals("SIBLINGDIRFILE", configData.data().get(siblingDirFile.getName()));
+        configData = provider.get(siblingDir);
+        assertEquals(toSet(asList(siblingDirFileName)), configData.data().keySet());
+        assertEquals("SIBLINGDIRFILE", configData.data().get(siblingDirFileName));
         assertNull(configData.ttl());
     }
 
     @Test
     public void testNotAllowedPath() {
         Map<String, String> configs = new HashMap<>();
-        configs.put(ALLOWED_PATHS_CONFIG, dir.getAbsolutePath());
+        configs.put(ALLOWED_PATHS_CONFIG, dir);
         provider.configure(configs);
 
-        ConfigData configData = provider.get(siblingDir.getAbsolutePath());
+        ConfigData configData = provider.get(siblingDir);
         assertTrue(configData.data().isEmpty());
         assertNull(configData.ttl());
     }

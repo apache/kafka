@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.config.provider;
 
+import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -24,7 +25,6 @@ import org.apache.kafka.common.config.ConfigException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.File;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -58,7 +58,7 @@ public class DirectoryConfigProvider implements ConfigProvider {
 
             if (configValue != null && !configValue.isEmpty()) {
                 allowedPaths = new ArrayList<>();
-                Arrays.stream(configValue.split(",")).forEach(b -> allowedPaths.add(new File(b).toPath()));
+                Arrays.stream(configValue.split(",")).forEach(b -> allowedPaths.add(Paths.get(b)));
             }
         } else {
             allowedPaths = null;
@@ -96,7 +96,7 @@ public class DirectoryConfigProvider implements ConfigProvider {
     private ConfigData get(String path, Predicate<Path> fileFilter) {
         Map<String, String> map = emptyMap();
         if (path != null && !path.isEmpty()) {
-            Path dir = new File(path).toPath();
+            Path dir = Paths.get(path);
             if (!Files.isDirectory(dir)) {
                 log.warn("The path {} is not a directory", path);
             } else {

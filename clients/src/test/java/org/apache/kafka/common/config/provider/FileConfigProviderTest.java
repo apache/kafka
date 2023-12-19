@@ -17,7 +17,9 @@
 package org.apache.kafka.common.config.provider;
 
 import java.io.File;
+import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.Paths;
 import org.apache.kafka.common.config.ConfigData;
 import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.BeforeEach;
@@ -41,22 +43,22 @@ public class FileConfigProviderTest {
 
     private FileConfigProvider configProvider;
     private File parent;
-    private File dir;
-    private File dirFile;
-    private File siblingDir;
-    private File siblingDirFile;
+    private String dir;
+    private String dirFile;
+    private String siblingDir;
+    private String siblingDirFile;
 
     @BeforeEach
-    public void setup() {
+    public void setup() throws IOException {
         configProvider = new TestFileConfigProvider();
         configProvider.configure(Collections.emptyMap());
         parent = TestUtils.tempDirectory();
-        dir = new File(parent, "dir");
-        dir.mkdir();
-        dirFile = new File(dir, "subdirFile");
-        siblingDir = new File(parent, "siblingdir");
-        siblingDir.mkdir();
-        siblingDirFile = new File(siblingDir, "siblingdirFile");
+
+        dir = String.valueOf(Files.createDirectory(Paths.get(parent.getAbsolutePath(), "dir")));
+        dirFile = String.valueOf(Files.createFile(Paths.get(dir, "dirFile")));
+
+        siblingDir = String.valueOf(Files.createDirectory(Paths.get(parent.toString(), "siblingdir")));
+        siblingDirFile = String.valueOf(Files.createFile(Paths.get(siblingDir, "siblingDirFile")));
     }
 
     @Test
@@ -123,10 +125,10 @@ public class FileConfigProviderTest {
     @Test
     public void testAllowedDirPath() {
         Map<String, String> configs = new HashMap<>();
-        configs.put(ALLOWED_PATHS_CONFIG, dir.getAbsolutePath());
+        configs.put(ALLOWED_PATHS_CONFIG, dir);
         configProvider.configure(configs);
 
-        ConfigData configData = configProvider.get(dirFile.getAbsolutePath());
+        ConfigData configData = configProvider.get(dirFile);
         Map<String, String> result = new HashMap<>();
         result.put("testKey", "testResult");
         result.put("testKey2", "testResult2");
@@ -137,10 +139,10 @@ public class FileConfigProviderTest {
     @Test
     public void testAllowedFilePath() {
         Map<String, String> configs = new HashMap<>();
-        configs.put(ALLOWED_PATHS_CONFIG, dirFile.getAbsolutePath());
+        configs.put(ALLOWED_PATHS_CONFIG, dirFile);
         configProvider.configure(configs);
 
-        ConfigData configData = configProvider.get(dirFile.getAbsolutePath());
+        ConfigData configData = configProvider.get(dirFile);
         Map<String, String> result = new HashMap<>();
         result.put("testKey", "testResult");
         result.put("testKey2", "testResult2");
@@ -151,18 +153,18 @@ public class FileConfigProviderTest {
     @Test
     public void testMultipleAllowedPaths() {
         Map<String, String> configs = new HashMap<>();
-        configs.put(ALLOWED_PATHS_CONFIG, dir.getAbsolutePath() + "," + siblingDir.getAbsolutePath());
+        configs.put(ALLOWED_PATHS_CONFIG, dir + "," + siblingDir);
         configProvider.configure(configs);
 
         Map<String, String> result = new HashMap<>();
         result.put("testKey", "testResult");
         result.put("testKey2", "testResult2");
 
-        ConfigData configData = configProvider.get(dirFile.getAbsolutePath());
+        ConfigData configData = configProvider.get(dirFile);
         assertEquals(result, configData.data());
         assertNull(configData.ttl());
 
-        configData = configProvider.get(siblingDirFile.getAbsolutePath());
+        configData = configProvider.get(siblingDirFile);
         assertEquals(result, configData.data());
         assertNull(configData.ttl());
     }
@@ -170,23 +172,23 @@ public class FileConfigProviderTest {
     @Test
     public void testNotAllowedDirPath() {
         Map<String, String> configs = new HashMap<>();
-        configs.put(ALLOWED_PATHS_CONFIG, dir.getAbsolutePath());
+        configs.put(ALLOWED_PATHS_CONFIG, dir);
         configProvider.configure(configs);
 
-        ConfigData configData = configProvider.get(siblingDirFile.getAbsolutePath());
+        ConfigData configData = configProvider.get(siblingDirFile);
         assertTrue(configData.data().isEmpty());
         assertNull(configData.ttl());
     }
 
     @Test
-    public void testNotAllowedFilePath() {
+    public void testNotAllowedFilePath() throws IOException {
         Map<String, String> configs = new HashMap<>();
-        configs.put(ALLOWED_PATHS_CONFIG, dirFile.getAbsolutePath());
+        configs.put(ALLOWED_PATHS_CONFIG, dirFile);
         configProvider.configure(configs);
 
         //another file under the same directory
-        File dirFile2 = new File(dir, "dirFile2");
-        ConfigData configData = configProvider.get(dirFile2.getAbsolutePath());
+        Path dirFile2 = Files.createFile(Paths.get(dir, "dirFile2"));
+        ConfigData configData = configProvider.get(dirFile2.toString());
         assertTrue(configData.data().isEmpty());
         assertNull(configData.ttl());
     }
@@ -194,11 +196,11 @@ public class FileConfigProviderTest {
     @Test
     public void testNoTraversal() {
         Map<String, String> configs = new HashMap<>();
-        configs.put(ALLOWED_PATHS_CONFIG, dirFile.getAbsolutePath());
+        configs.put(ALLOWED_PATHS_CONFIG, dirFile);
         configProvider.configure(configs);
 
         // Check we can't escape outside the path directory
-        ConfigData configData = configProvider.get(dir.getAbsolutePath() + "../siblingdir/siblingdirFile");
+        ConfigData configData = configProvider.get(dir + "../siblingdir/siblingdirFile");
         assertTrue(configData.data().isEmpty());
         assertNull(configData.ttl());
     }
