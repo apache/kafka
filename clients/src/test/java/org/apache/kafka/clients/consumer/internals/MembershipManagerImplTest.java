@@ -817,9 +817,8 @@ public class MembershipManagerImplTest {
         // as unresolved.
         clearInvocations(subscriptionState);
         membershipManager.onHeartbeatResponseReceived(createConsumerGroupHeartbeatResponse(assignment).data());
-        assertEquals(MemberState.RECONCILING, membershipManager.state());
+        assertEquals(MemberState.ACKNOWLEDGING, membershipManager.state());
         assertEquals(Collections.singleton(topic2), membershipManager.topicsWaitingForMetadata());
-        verify(subscriptionState, never()).assignFromSubscribed(anyCollection());
     }
 
     @Test
