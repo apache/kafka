@@ -1126,11 +1126,6 @@ public class RemoteLogManager implements Closeable {
                             brokerTopicMetrics.recordRemoteDeleteLagBytes(partition, sizeOfDeletableSegmentsBytes);
                             brokerTopicMetrics.recordRemoteDeleteLagSegments(partition, segmentsLeftToDelete);
                         }
-                    } else {
-                        sizeOfDeletableSegmentsBytes -= segmentMetadata.segmentSizeInBytes();
-                        segmentsLeftToDelete--;
-                        brokerTopicMetrics.recordRemoteDeleteLagBytes(partition, sizeOfDeletableSegmentsBytes);
-                        brokerTopicMetrics.recordRemoteDeleteLagSegments(partition, segmentsLeftToDelete);
                     }
                 }
             }
