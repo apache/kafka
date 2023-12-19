@@ -61,7 +61,7 @@ object KafkaDockerWrapper {
                                    mountedConfigsDir: String,
                                    finalConfigsDir: String,
                                    env: Map[String, String]): Unit = {
-    val propsToAdd = addNewlinePadding(getServerConfigsFromEnv(env))
+    val propsToAdd = addNewlinePadding(getServerConfigsFromEnv(env).mkString(NewlineChar))
 
     val defaultFilePath = s"$defaultConfigsDir/$ServerPropsFilename"
     val mountedFilePath = s"$mountedConfigsDir/$ServerPropsFilename"
@@ -113,7 +113,7 @@ object KafkaDockerWrapper {
     addToFile(propToAdd, finalFilePath, StandardOpenOption.APPEND)
   }
 
-  private def getServerConfigsFromEnv(env: Map[String, String]): String = {
+  private[docker] def getServerConfigsFromEnv(env: Map[String, String]): List[String] = {
     env.map {
       case (key, value) =>
         if (key.startsWith("KAFKA_") && !ExcludeServerPropsEnv.contains(key)) {
@@ -127,7 +127,7 @@ object KafkaDockerWrapper {
         }
     }
       .toList
-      .mkString(NewlineChar)
+      .filterNot(_.trim.isEmpty)
   }
 
   private def getLog4jConfigsFromEnv(env: Map[String, String]): String = {
