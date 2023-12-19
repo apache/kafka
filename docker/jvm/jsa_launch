@@ -15,7 +15,7 @@
 # limitations under the License.
 
 KAFKA_CLUSTER_ID="$(opt/kafka/bin/kafka-storage.sh random-uuid)"
-TOPIC=$KAFKA_CLUSTER_ID
+TOPIC="test-topic"
 
 KAFKA_JVM_PERFORMANCE_OPTS="-XX:ArchiveClassesAtExit=storage.jsa" opt/kafka/bin/kafka-storage.sh format -t $KAFKA_CLUSTER_ID -c opt/kafka/config/kraft/server.properties
 

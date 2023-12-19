@@ -45,7 +45,7 @@ export KAFKA_JVM_PERFORMANCE_OPTS="${KAFKA_JVM_PERFORMANCE_OPTS-} -XX:SharedArch
 
 echo "===> Using provided cluster id $CLUSTER_ID ..."
 # A bit of a hack to not error out if the storage is already formatted. Need storage-tool to support this
-result=$(/opt/kafka/bin/kafka-run-class.sh kafka.KafkaDockerWrapper setup /etc/kafka/docker /opt/kafka/config /mnt/shared/config 2>&1) || \
+result=$(/opt/kafka/bin/kafka-run-class.sh kafka.docker.KafkaDockerWrapper setup /etc/kafka/docker /mnt/shared/config /opt/kafka/config 2>&1) || \
     echo $result | grep -i "already formatted" || \
     { echo $result && (exit 1) }
 
