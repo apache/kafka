@@ -1194,7 +1194,7 @@ public class AsyncKafkaConsumerTest {
     public void testEnsurePollEventSentOnConsumerPoll() {
         consumer.subscribe(singletonList("topic1"));
         consumer.poll(Duration.ofMillis(100));
-        verify(testBuilder.applicationEventHandler).add(any(PollApplicationEvent.class));
+        verify(applicationEventHandler).add(any(PollApplicationEvent.class));
     }
 
     private void testInvalidGroupId(final String groupId) {
