@@ -427,10 +427,34 @@ public class CommitRequestManagerTest {
         assertEquals(0, res.unsentRequests.size());
         assertTrue(commitResult.isDone());
         assertTrue(commitResult.isCompletedExceptionally());
+        if (error.exception() instanceof RetriableException) {
+            assertFutureThrows(commitResult, RetriableCommitFailedException.class);
+        }
 
         // We expect that the request should not have been retried on this async commit.
         assertExceptionHandling(commitRequestManger, error, false);
         assertCoordinatorDisconnect(error);
+    }
+
+
+    @Test
+    public void testAsyncOffsetCommitThrowsRetriableCommitExceptionForUnhandledRetriable() {
+        CommitRequestManager commitRequestManger = create(true, 100);
+        when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(mockedNode));
+
+        Map<TopicPartition, OffsetAndMetadata> offsets = Collections.singletonMap(new TopicPartition("topic", 1),
+            new OffsetAndMetadata(0));
+
+        // Send commit request without expiration (async commit) that fails with retriable
+        // network exception that has no specific handling. Should fail with
+        // RetriableCommitException.
+        CompletableFuture<Void> commitResult = commitRequestManger.addOffsetCommitRequest(offsets, Optional.empty(), false);
+        completeOffsetCommitRequestWithError(commitRequestManger, Errors.NETWORK_EXCEPTION);
+        NetworkClientDelegate.PollResult res = commitRequestManger.poll(time.milliseconds());
+        assertEquals(0, res.unsentRequests.size());
+        assertTrue(commitResult.isDone());
+        assertTrue(commitResult.isCompletedExceptionally());
+        assertFutureThrows(commitResult, RetriableCommitFailedException.class);
     }
 
     @Test

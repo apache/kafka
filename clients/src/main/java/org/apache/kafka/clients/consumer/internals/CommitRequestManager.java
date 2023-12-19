@@ -527,7 +527,7 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
                     } else {
                         log.error("OffsetCommit failed on partition {} for offset {}: {}",
                             tp, offset, error.message());
-                        future.completeExceptionally(error.exception());
+                         future.completeExceptionally(commitExceptionForRetriableError(error.exception()));
                         return;
                     }
                 }
@@ -596,11 +596,11 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
         }
 
         /**
-         * @return A RetriableCommitFailedException if the original Exception was a
-         * RetriableException. Return the original one in any other case.
+         * @return A RetriableCommitFailedException for async commit requests if the original
+         * Exception was a RetriableException. Return the original one in any other case.
          */
         private Throwable commitExceptionForRetriableError(Throwable throwable) {
-            if (throwable instanceof RetriableException)
+            if (!allowsRetries() && throwable instanceof RetriableException)
                 return new RetriableCommitFailedException(throwable);
             return throwable;
         }
