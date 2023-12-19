@@ -69,11 +69,11 @@ public class GroupCoordinatorMetricsTest {
             metrics.metricName(
                 "group-count",
                 GroupCoordinatorMetrics.METRICS_GROUP,
-                Collections.singletonMap("type", "generic")),
+                Collections.singletonMap("group-type", "generic")),
             metrics.metricName(
                 "group-count",
                 GroupCoordinatorMetrics.METRICS_GROUP,
-                Collections.singletonMap("type", "consumer")),
+                Collections.singletonMap("group-type", "consumer")),
             metrics.metricName(
                 "consumer-group-count",
                 GroupCoordinatorMetrics.METRICS_GROUP,
@@ -151,7 +151,7 @@ public class GroupCoordinatorMetricsTest {
         assertGaugeValue(registry, metricName("GroupMetadataManager", "NumGroups"), 9);
         assertGaugeValue(
             metrics,
-            metrics.metricName("group-count", METRICS_GROUP, Collections.singletonMap("type", "generic")),
+            metrics.metricName("group-count", METRICS_GROUP, Collections.singletonMap("group-type", "generic")),
             9
         );
 
@@ -166,7 +166,7 @@ public class GroupCoordinatorMetricsTest {
         assertEquals(1, shard1.numOffsets());
         assertGaugeValue(
             metrics,
-            metrics.metricName("group-count", METRICS_GROUP, Collections.singletonMap("type", "consumer")),
+            metrics.metricName("group-count", METRICS_GROUP, Collections.singletonMap("group-type", "consumer")),
             7
         );
         assertGaugeValue(registry, metricName("GroupMetadataManager", "NumOffsets"), 7);

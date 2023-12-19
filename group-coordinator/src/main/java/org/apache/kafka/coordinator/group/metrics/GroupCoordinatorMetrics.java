@@ -63,7 +63,7 @@ public class GroupCoordinatorMetrics extends CoordinatorMetrics implements AutoC
         "GroupMetadataManager", "NumGroupsEmpty");
 
     public final static String GROUP_COUNT_METRIC_NAME = "group-count";
-    public final static String GROUP_COUNT_TYPE_TAG = "type";
+    public final static String GROUP_COUNT_TYPE_TAG = "group-type";
     public final static String CONSUMER_GROUP_COUNT_METRIC_NAME = "consumer-group-count";
     public final static String CONSUMER_GROUP_COUNT_STATE_TAG = "state";
 
