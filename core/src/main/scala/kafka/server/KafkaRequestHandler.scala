@@ -480,12 +480,6 @@ class BrokerTopicAggregatedMetric() {
     partitionMetricValues.put(partition, partitionValue)
   }
 
-  def incrementPartitionMetricValue(partition: Int): Unit = partitionMetricValues.compute(partition, (_, value) => value + 1)
-
-
-  def decrementPartitionMetricValue(partition: Int): Unit = partitionMetricValues.compute(partition, (_, value) => Math.max(0, value - 1))
-
-
   def removePartition(partition: Int): Option[Long] = {
     Option.apply(partitionMetricValues.remove(partition))
   }
