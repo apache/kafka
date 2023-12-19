@@ -1401,10 +1401,13 @@ public class ReplicationControlManager {
                         "handleDirectoriesOffline[" + brokerId + ":" + newOfflineDir + "]",
                         brokerId, NO_LEADER, records, iterator);
             }
+            List<Uuid> newOnlineDirs = registration.directoryDifference(offlineDirs);
             records.add(new ApiMessageAndVersion(new BrokerRegistrationChangeRecord().
                     setBrokerId(brokerId).setBrokerEpoch(brokerEpoch).
-                    setLogDirs(registration.directoryDifference(offlineDirs)),
+                    setLogDirs(newOnlineDirs),
                     (short) 2));
+            log.warn("Directories {} in broker {} marked offline, remaining directories: {}",
+                    newOfflineDirs, brokerId, newOnlineDirs);
         }
     }
 
@@ -2125,6 +2128,11 @@ public class ReplicationControlManager {
                             partitionChangeRecord.ifPresent(records::add);
                             if (directoryIsOffline) {
                                 leaderAndIsrUpdates.add(new TopicIdPartition(topicId, partitionIndex));
+                            }
+                            if (log.isDebugEnabled()) {
+                                log.debug("Broker {} assigned partition {}:{} to {} dir {}",
+                                    brokerId, topics.get(topicId).name(), partitionIndex,
+                                    directoryIsOffline ? "OFFLINE" : "ONLINE", dirId);
                             }
                         }
                     }
