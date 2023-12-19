@@ -27,6 +27,7 @@ import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.serialization.Deserializer;
+import org.apache.kafka.common.serialization.IntegerDeserializer;
 import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.LongDeserializer;
 import org.apache.kafka.common.serialization.LongSerializer;
@@ -834,6 +835,7 @@ public class EosIntegrationTest {
         streamsConfiguration.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory(applicationId).getPath());
         streamsConfiguration.put(InternalConfig.PROCESSING_THREADS_ENABLED, processingThreadsEnabled);
         streamsConfiguration.put(InternalConfig.STATE_UPDATER_ENABLED, stateUpdaterEnabled);
+        streamsConfiguration.put(StreamsConfig.restoreConsumerPrefix(ConsumerConfig.MAX_POLL_RECORDS_CONFIG), 100);
         final String stateStoreName = "stateStore";
 
         purgeLocalStreamsState(streamsConfiguration);
@@ -887,9 +889,6 @@ public class EosIntegrationTest {
                             stateStore.put(record.key(), record.value());
                         } else {
                             stateStore.put(record.key(), record.value());
-                            if (restoredOffsetsForPartition0.get() > 0) {
-                                latch.countDown();
-                            }
                         }
                     });
                 }
@@ -899,8 +898,7 @@ public class EosIntegrationTest {
                     Processor.super.close();
                 }
             }, "source")
-            .addStateStore(stateStore, "processor")
-            .addSink("sink", MULTI_PARTITION_OUTPUT_TOPIC, "processor");
+            .addStateStore(stateStore, "processor");
 
         final KafkaStreams kafkaStreams = new KafkaStreams(topology, streamsConfiguration);
         kafkaStreams.setGlobalStateRestoreListener(new StateRestoreListener() {
@@ -908,35 +906,29 @@ public class EosIntegrationTest {
             public void onRestoreStart(final TopicPartition topicPartition,
                                        final String storeName,
                                        final long startingOffset,
-                                       final long endingOffset) {
-                if (topicPartition.partition() == 0) {
-                    System.out.println("Restore listener - Starting offset: " + startingOffset);
-                }
-            }
+                                       final long endingOffset) {}
             @Override
             public void onBatchRestored(final TopicPartition topicPartition,
                                         final String storeName,
                                         final long batchEndOffset,
                                         final long numRestored) {
                 if (topicPartition.partition() == 0) {
-                    System.out.println("Restore listener - Batch end offset: " + batchEndOffset);
                     restoredOffsetsForPartition0.set(batchEndOffset);
+                    if (batchEndOffset > 100) {
+                        latch.countDown();
+                    }
                 }
             }
             @Override
             public void onRestoreEnd(final TopicPartition topicPartition,
                                      final String storeName,
-                                     final long totalRestored) {
-                if (topicPartition.partition() == 0) {
-                    System.out.println("Restore listener - Total restored: " + totalRestored);
-                }
-            }
+                                     final long totalRestored) {}
         });
         startApplicationAndWaitUntilRunning(Collections.singletonList(kafkaStreams), Duration.ofSeconds(60));
         ensureCommittedRecordsInTopic(
             applicationId + "-" + stateStoreName + "-changelog",
-            2000,
-            StringDeserializer.class,
+            10000,
+            IntegerDeserializer.class,
             StringDeserializer.class
         );
         throwException.set(true);
