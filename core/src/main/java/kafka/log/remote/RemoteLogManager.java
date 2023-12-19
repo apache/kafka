@@ -936,12 +936,26 @@ public class RemoteLogManager implements Closeable {
                     throws RemoteStorageException, ExecutionException, InterruptedException {
                 if (predicate.test(segmentMetadata)) {
                     logger.debug("Deleting remote log segment {}", segmentMetadata.remoteLogSegmentId());
+
+                    String topic = segmentMetadata.topicIdPartition().topic();
+
                     // Publish delete segment started event.
                     remoteLogMetadataManager.updateRemoteLogSegmentMetadata(
                             new RemoteLogSegmentMetadataUpdate(segmentMetadata.remoteLogSegmentId(), time.milliseconds(),
                                     segmentMetadata.customMetadata(), RemoteLogSegmentState.DELETE_SEGMENT_STARTED, brokerId)).get();
+
+                    brokerTopicStats.topicStats(topic).remoteDeleteRequestRate().mark();
+                    brokerTopicStats.allTopicsStats().remoteDeleteRequestRate().mark();
+
                     // Delete the segment in remote storage.
-                    remoteLogStorageManager.deleteLogSegmentData(segmentMetadata);
+                    try {
+                        remoteLogStorageManager.deleteLogSegmentData(segmentMetadata);
+                    } catch (RemoteStorageException e) {
+                        brokerTopicStats.topicStats(topic).failedRemoteDeleteRequestRate().mark();
+                        brokerTopicStats.allTopicsStats().failedRemoteDeleteRequestRate().mark();
+                        throw e;
+                    }
+
                     // Publish delete segment finished event.
                     remoteLogMetadataManager.updateRemoteLogSegmentMetadata(
                             new RemoteLogSegmentMetadataUpdate(segmentMetadata.remoteLogSegmentId(), time.milliseconds(),
@@ -1103,6 +1117,7 @@ public class RemoteLogManager implements Closeable {
                                                                    long logEndOffset,
                                                                    NavigableMap<Integer, Long> epochEntries) throws RemoteStorageException {
             if (retentionSize > -1) {
+                long startTimeMs = time.milliseconds();
                 long remoteLogSizeBytes = 0L;
                 Set<RemoteLogSegmentId> visitedSegmentIds = new HashSet<>();
                 for (Integer epoch : epochEntries.navigableKeySet()) {
@@ -1120,6 +1135,7 @@ public class RemoteLogManager implements Closeable {
                         }
                     }
                 }
+                brokerTopicStats.topicStats(topicIdPartition.topic()).recordRemoteLogSizeComputationTime(topicIdPartition.partition(), time.milliseconds() - startTimeMs);
 
                 // This is the total size of segments in local log that have their base-offset > local-log-start-offset
                 // and size of the segments in remote storage which have their end-offset < local-log-start-offset.

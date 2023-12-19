@@ -390,12 +390,14 @@ public class BrokerRegistration {
 
     public BrokerRegistration cloneWith(
         Optional<Boolean> fencingChange,
-        Optional<Boolean> inControlledShutdownChange
+        Optional<Boolean> inControlledShutdownChange,
+        Optional<List<Uuid>> directoriesChange
     ) {
         boolean newFenced = fencingChange.orElse(fenced);
         boolean newInControlledShutdownChange = inControlledShutdownChange.orElse(inControlledShutdown);
+        List<Uuid> newDirectories = directoriesChange.orElse(directories);
 
-        if (newFenced == fenced && newInControlledShutdownChange == inControlledShutdown)
+        if (newFenced == fenced && newInControlledShutdownChange == inControlledShutdown && newDirectories.equals(directories))
             return this;
 
         return new BrokerRegistration(
@@ -408,7 +410,7 @@ public class BrokerRegistration {
             newFenced,
             newInControlledShutdownChange,
             isMigratingZkBroker,
-            directories
+            newDirectories
         );
     }
 }
