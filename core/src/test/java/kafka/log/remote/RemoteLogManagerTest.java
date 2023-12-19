@@ -831,6 +831,7 @@ public class RemoteLogManagerTest {
         Partition mockLeaderPartition = mockPartition(leaderTopicIdPartition);
 
         when(mockLog.onlyLocalLogSegmentsSize()).thenReturn(175L, 100L);
+        when(mockLog.onlyRemoteLogSegmentsSize()).thenReturn(75L, 150L);
         when(activeSegment.size()).thenReturn(100);
         when(mockLog.onlyLocalLogSegmentsCount()).thenReturn(1L);
 
@@ -846,6 +847,10 @@ public class RemoteLogManagerTest {
                 String.format("Expected to find 1 for RemoteCopyLagSegments metric value, but found %d", safeLongYammerMetricValue("RemoteCopyLagSegments")));
         // unlock copyLogSegmentData
         latch.countDown();
+
+        TestUtils.waitForCondition(
+                () -> safeLongYammerMetricValue("RemoteLogSizeComputationTime") >= 1000,
+                String.format("Expected to find 1000 for RemoteLogSizeComputationTime metric value, but found %d", safeLongYammerMetricValue("RemoteLogSizeComputationTime")));
     }
 
     private Object yammerMetricValue(String name) {

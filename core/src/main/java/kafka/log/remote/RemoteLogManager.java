@@ -375,6 +375,7 @@ public class RemoteLogManager implements Closeable {
                         LOGGER.info("Cancelling the RLM task for tpId: {}", tpId);
                         task.cancel();
                     }
+
                     removeRemoteTopicPartitionMetrics(tpId);
 
                     if (stopPartition.deleteRemoteLog()) {
@@ -1646,6 +1647,7 @@ public class RemoteLogManager implements Closeable {
         topicMetrics.removeRemoteDeleteLagSegments(partition);
         topicMetrics.removeRemoteLogMetadataCount(partition);
         topicMetrics.removeRemoteLogSizeComputationTime(partition);
+        topicMetrics.removeRemoteLogSizeBytes(partition);
     }
 
     //Visible for testing
