@@ -111,7 +111,7 @@ public class CommitRequestManagerTest {
     }
 
     @Test
-    public void testPoll_SkipIfCoordinatorUnknown() {
+    public void testPollSkipIfCoordinatorUnknown() {
         CommitRequestManager commitRequestManger = create(false, 0);
         assertPoll(false, 0, commitRequestManger);
 
@@ -122,7 +122,7 @@ public class CommitRequestManagerTest {
     }
 
     @Test
-    public void testPoll_EnsureManualCommitSent() {
+    public void testPollEnsureManualCommitSent() {
         CommitRequestManager commitRequestManger = create(false, 0);
         assertPoll(0, commitRequestManger);
 
@@ -133,7 +133,7 @@ public class CommitRequestManagerTest {
     }
 
     @Test
-    public void testPoll_EnsureAutocommitSent() {
+    public void testPollEnsureAutocommitSent() {
         TopicPartition tp = new TopicPartition("t1", 1);
         subscriptionState.assignFromUser(Collections.singleton(tp));
         subscriptionState.seek(tp, 100);
@@ -152,7 +152,7 @@ public class CommitRequestManagerTest {
     }
 
     @Test
-    public void testPoll_EnsureCorrectInflightRequestBufferSize() {
+    public void testPollEnsureCorrectInflightRequestBufferSize() {
         CommitRequestManager commitManager = create(false, 100);
         when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(mockedNode));
 
@@ -190,7 +190,7 @@ public class CommitRequestManagerTest {
     }
 
     @Test
-    public void testPoll_EnsureEmptyPendingRequestAfterPoll() {
+    public void testPollEnsureEmptyPendingRequestAfterPoll() {
         CommitRequestManager commitRequestManger = create(true, 100);
         when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(mockedNode));
         Map<TopicPartition, OffsetAndMetadata> offsets = Collections.singletonMap(
@@ -206,7 +206,7 @@ public class CommitRequestManagerTest {
     // This is the case of the async auto commit sent on calls to assign (async commit that
     // should not be retried).
     @Test
-    public void testAsyncAutocommit_NotRetriedAfterException() {
+    public void testAsyncAutocommitNotRetriedAfterException() {
         long commitInterval = retryBackoffMs * 2;
         CommitRequestManager commitRequestManger = create(true, commitInterval);
         TopicPartition tp = new TopicPartition("topic", 1);
@@ -247,7 +247,7 @@ public class CommitRequestManagerTest {
     // that should be retried until it succeeds, fails, or timer expires).
     @ParameterizedTest
     @MethodSource("offsetCommitExceptionSupplier")
-    public void testSyncAutocommit_RetriedAfterRetriableException(Errors error) {
+    public void testSyncAutocommitRetriedAfterRetriableException(Errors error) {
         long commitInterval = retryBackoffMs * 2;
         CommitRequestManager commitRequestManger = create(true, commitInterval);
         TopicPartition tp = new TopicPartition("topic", 1);
@@ -345,7 +345,7 @@ public class CommitRequestManagerTest {
     }
 
     @Test
-    public void testAutocommit_EnsureOnlyOneInflightRequest() {
+    public void testAutocommitEnsureOnlyOneInflightRequest() {
         TopicPartition t1p = new TopicPartition("topic1", 0);
         subscriptionState.assignFromUser(singleton(t1p));
         subscriptionState.seek(t1p, 100);
@@ -368,7 +368,7 @@ public class CommitRequestManagerTest {
     }
 
     @Test
-    public void testOffsetFetchRequest_EnsureDuplicatedRequestSucceed() {
+    public void testOffsetFetchRequestEnsureDuplicatedRequestSucceed() {
         CommitRequestManager commitRequestManger = create(true, 100);
         when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(mockedNode));
         Set<TopicPartition> partitions = new HashSet<>();
@@ -389,7 +389,7 @@ public class CommitRequestManagerTest {
 
     @ParameterizedTest
     @MethodSource("offsetFetchExceptionSupplier")
-    public void testOffsetFetchRequest_ErroredRequests(final Errors error, final boolean isRetriable) {
+    public void testOffsetFetchRequestErroredRequests(final Errors error, final boolean isRetriable) {
         CommitRequestManager commitRequestManger = create(true, 100);
         when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(mockedNode));
 
@@ -413,7 +413,7 @@ public class CommitRequestManagerTest {
 
     @ParameterizedTest
     @MethodSource("offsetCommitExceptionSupplier")
-    public void testOffsetCommitRequest_ErroredRequestsNotRetriedForAsyncCommit(final Errors error) {
+    public void testOffsetCommitRequestErroredRequestsNotRetriedForAsyncCommit(final Errors error) {
         CommitRequestManager commitRequestManger = create(true, 100);
         when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(mockedNode));
 
@@ -779,7 +779,7 @@ public class CommitRequestManagerTest {
 
     @ParameterizedTest
     @MethodSource("partitionDataErrorSupplier")
-    public void testOffsetFetchRequest_PartitionDataError(final Errors error, final boolean isRetriable) {
+    public void testOffsetFetchRequestPartitionDataError(final Errors error, final boolean isRetriable) {
         CommitRequestManager commitRequestManger = create(true, 100);
         when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(mockedNode));
         Set<TopicPartition> partitions = new HashSet<>();
