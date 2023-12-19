@@ -130,20 +130,26 @@ object KafkaDockerWrapper {
       .filterNot(_.trim.isEmpty)
   }
 
-  private def getLog4jConfigsFromEnv(env: Map[String, String]): String = {
+  private[docker] def getLog4jConfigsFromEnv(env: Map[String, String]): String = {
     val kafkaLog4jRootLogLevelProp = env.get(KafkaLog4jRootLoglevelEnv)
+      .filter(_.nonEmpty)
       .map(kafkaLog4jRootLogLevel => s"log4j.rootLogger=$kafkaLog4jRootLogLevel, stdout")
       .getOrElse("")
 
     val kafkaLog4jLoggersProp = env.get(KafkaLog4JLoggersEnv)
-      .map(kafkaLog4JLoggersString => kafkaLog4JLoggersString.split(",").mkString(NewlineChar))
-      .getOrElse("")
+      .filter(_.nonEmpty)
+      .map {
+      kafkaLog4JLoggersString => kafkaLog4JLoggersString.split(",")
+        .map(kafkaLog4JLogger => s"log4j.logger.$kafkaLog4JLogger")
+        .mkString(NewlineChar)
+    }.getOrElse("")
 
     addNewlinePadding(kafkaLog4jRootLogLevelProp) + addNewlinePadding(kafkaLog4jLoggersProp)
   }
 
   private[docker] def getToolsLog4jConfigsFromEnv(env: Map[String, String]): String = {
     env.get(KafkaToolsLog4jLoglevelEnv)
+      .filter(_.nonEmpty)
       .map(kafkaToolsLog4jLogLevel => addNewlinePadding(s"log4j.rootLogger=$kafkaToolsLog4jLogLevel, stderr"))
       .getOrElse("")
   }
