@@ -57,7 +57,7 @@ object KafkaDockerWrapper {
     prepareToolsLog4jConfigs(defaultConfigsDir, mountedConfigsDir, finalConfigsDir, envVars)
   }
 
-  private def prepareServerConfigs(defaultConfigsDir: String,
+  private[docker] def prepareServerConfigs(defaultConfigsDir: String,
                                    mountedConfigsDir: String,
                                    finalConfigsDir: String,
                                    env: Map[String, String]): Unit = {
@@ -97,7 +97,7 @@ object KafkaDockerWrapper {
     addToFile(propsToAdd, finalFilePath, StandardOpenOption.APPEND)
   }
 
-  private def prepareToolsLog4jConfigs(defaultConfigsDir: String,
+  private[docker] def prepareToolsLog4jConfigs(defaultConfigsDir: String,
                                        mountedConfigsDir: String,
                                        finalConfigsDir: String,
                                        env: Map[String, String]): Unit = {
@@ -162,7 +162,13 @@ object KafkaDockerWrapper {
     }
   }
 
-  private def addNewlinePadding(str: String) : String = NewlineChar + str
+  private def addNewlinePadding(str: String) : String = {
+    if (str.nonEmpty) {
+      NewlineChar + str
+    } else {
+      ""
+    }
+  }
 
   private def envVars: Map[String, String] = sys.env
 }
