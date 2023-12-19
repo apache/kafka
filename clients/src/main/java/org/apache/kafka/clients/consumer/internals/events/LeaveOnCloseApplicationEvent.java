@@ -14,23 +14,17 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+package org.apache.kafka.clients.consumer.internals.events;
 
-package org.apache.kafka.message;
+public class LeaveOnCloseApplicationEvent extends CompletableApplicationEvent<Void> {
+    public LeaveOnCloseApplicationEvent() {
+        super(Type.LEAVE_ON_CLOSE);
+    }
 
-import java.io.BufferedWriter;
-
-public interface MessageClassGenerator {
-    /**
-     * The short name of the converter class we are generating.  For example,
-     * FetchRequestDataJsonConverter.java.
-     */
-    String outputName(MessageSpec spec);
-
-    /**
-     * Generate the converter, and then write it out.
-     *
-     * @param spec      The message to generate a converter for.
-     * @param writer    The writer to write out the state to.
-     */
-    void generateAndWrite(MessageSpec spec, BufferedWriter writer) throws Exception;
+    @Override
+    public String toString() {
+        return "LeaveOnCloseApplicationEvent{" +
+            toStringBase() +
+            '}';
+    }
 }
