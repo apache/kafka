@@ -4039,7 +4039,8 @@ class ReplicaManagerTest {
       // advancing the clock to expire the delayed remote fetch
       timer.advanceClock(2000L)
       // verify the metric is created and has value since the delayed remote fetch is expired
-      assertEquals(1, yammerMetricValue("type=DelayedRemoteFetchMetrics,name=ExpiresPerSec").asInstanceOf[Long])
+      TestUtils.waitUntilTrue(() => 1 == safeYammerMetricValue("type=DelayedRemoteFetchMetrics,name=ExpiresPerSec").asInstanceOf[Long],
+        "The ExpiresPerSec value is not incremented.")
     } finally {
       replicaManager.shutdown(checkpointHW = false)
     }
@@ -4058,6 +4059,20 @@ class ReplicaManagerTest {
       case m: Gauge[_] => m.value
       case m: Meter => m.count()
       case m => fail(s"Unexpected broker metric of class ${m.getClass}")
+    }
+  }
+
+  private def safeYammerMetricValue(name: String): Any = {
+    val allMetrics = KafkaYammerMetrics.defaultRegistry.allMetrics.asScala
+    val opt = allMetrics.find { case (n, _) => n.getMBeanName.endsWith(name) }
+    if (opt.isEmpty)
+      null
+    else {
+      opt.get._2 match {
+        case m: Gauge[_] => m.value
+        case m: Meter => m.count()
+        case m => fail(s"Unexpected broker metric of class ${m.getClass}")
+      }
     }
   }
 
