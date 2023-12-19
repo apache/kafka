@@ -72,6 +72,7 @@ import static org.apache.kafka.clients.consumer.ConsumerConfig.KEY_DESERIALIZER_
 import static org.apache.kafka.clients.consumer.ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG;
 import static org.apache.kafka.clients.consumer.internals.ConsumerTestBuilder.DEFAULT_GROUP_ID;
 import static org.apache.kafka.clients.consumer.internals.ConsumerTestBuilder.DEFAULT_GROUP_INSTANCE_ID;
+import static org.apache.kafka.test.TestUtils.assertFutureThrows;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -288,8 +289,7 @@ public class CommitRequestManagerTest {
         assertEquals(0, res.unsentRequests.size());
         // Commit should fail with CommitFailedException
         assertTrue(commitResult.isDone());
-        Throwable t = assertThrows(ExecutionException.class, () -> commitResult.get());
-        assertEquals(CommitFailedException.class, t.getCause().getClass());
+        assertFutureThrows(commitResult, CommitFailedException.class);
     }
 
     /**
@@ -315,8 +315,7 @@ public class CommitRequestManagerTest {
 
         // Commit should fail with CommitFailedException
         assertTrue(commitResult.isDone());
-        Throwable t = assertThrows(ExecutionException.class, () -> commitResult.get());
-        assertEquals(CommitFailedException.class, t.getCause().getClass());
+        assertFutureThrows(commitResult, CommitFailedException.class);
     }
 
     /**
@@ -342,8 +341,7 @@ public class CommitRequestManagerTest {
 
         // Commit should fail with RetriableCommitFailedException.
         assertTrue(commitResult.isDone());
-        Throwable t = assertThrows(ExecutionException.class, () -> commitResult.get());
-        assertEquals(RetriableCommitFailedException.class, t.getCause().getClass());
+        assertFutureThrows(commitResult, RetriableCommitFailedException.class);
     }
 
     @Test
