@@ -861,13 +861,13 @@ public class AsyncKafkaConsumerTest {
     @ParameterizedTest
     @MethodSource("listenerCallbacksInvokeSource")
     public void testListenerCallbacksInvoke(List<ConsumerRebalanceListenerMethodName> methodNames,
-                                            MockRebalanceListener rebalanceListener,
+                                            MockRebalanceListener consumerRebalanceListener,
                                             int expectedRevokedCount,
                                             int expectedAssignedCount,
                                             int expectedLostCount) {
         consumer = newConsumer();
         doReturn(Fetch.empty()).when(fetchCollector).collectFetch(any(FetchBuffer.class));
-        consumer.subscribe(Collections.singletonList("topic"), rebalanceListener);
+        consumer.subscribe(Collections.singletonList("topic"), consumerRebalanceListener);
         SortedSet<TopicPartition> partitions = Collections.emptySortedSet();
 
         for (ConsumerRebalanceListenerMethodName methodName : methodNames) {
@@ -878,9 +878,9 @@ public class AsyncKafkaConsumerTest {
             consumer.poll(Duration.ZERO);
         }
 
-        assertEquals(expectedRevokedCount, rebalanceListener.revokedCount);
-        assertEquals(expectedAssignedCount, rebalanceListener.assignedCount);
-        assertEquals(expectedLostCount, rebalanceListener.lostCount);
+        assertEquals(expectedRevokedCount, consumerRebalanceListener.revokedCount);
+        assertEquals(expectedAssignedCount, consumerRebalanceListener.assignedCount);
+        assertEquals(expectedLostCount, consumerRebalanceListener.lostCount);
     }
 
     private static Stream<Arguments> listenerCallbacksInvokeSource() {
