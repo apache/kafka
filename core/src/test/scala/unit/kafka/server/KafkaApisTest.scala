@@ -3068,7 +3068,7 @@ class KafkaApisTest {
       ArgumentMatchers.eq(0),
       ArgumentMatchers.eq(TransactionResult.COMMIT),
       ArgumentMatchers.eq(Duration.ofMillis(Defaults.RequestTimeoutMs))
-    )).thenReturn(CompletableFuture.completedFuture(null))
+    )).thenReturn(CompletableFuture.completedFuture[Void](null))
 
     when(groupCoordinator.completeTransaction(
       ArgumentMatchers.eq(offset1),
@@ -3077,7 +3077,7 @@ class KafkaApisTest {
       ArgumentMatchers.eq(0),
       ArgumentMatchers.eq(TransactionResult.ABORT),
       ArgumentMatchers.eq(Duration.ofMillis(Defaults.RequestTimeoutMs))
-    )).thenReturn(CompletableFuture.completedFuture(null))
+    )).thenReturn(CompletableFuture.completedFuture[Void](null))
 
     val entriesPerPartition: ArgumentCaptor[Map[TopicPartition, MemoryRecords]] =
       ArgumentCaptor.forClass(classOf[Map[TopicPartition, MemoryRecords]])
@@ -3187,7 +3187,7 @@ class KafkaApisTest {
       ArgumentMatchers.eq(0),
       ArgumentMatchers.eq(TransactionResult.COMMIT),
       ArgumentMatchers.eq(Duration.ofMillis(Defaults.RequestTimeoutMs))
-    )).thenReturn(FutureUtils.failedFuture(error.exception()))
+    )).thenReturn(FutureUtils.failedFuture[Void](error.exception()))
 
     createKafkaApis(overrideProperties = Map(
       KafkaConfig.NewGroupCoordinatorEnableProp -> "true"
