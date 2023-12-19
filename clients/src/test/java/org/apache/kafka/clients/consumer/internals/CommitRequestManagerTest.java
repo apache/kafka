@@ -604,7 +604,11 @@ public class CommitRequestManagerTest {
                 assertPollDoesNotReturn(commitRequestManger, Long.MAX_VALUE);
                 break;
             default:
-                assertPollDoesNotReturn(commitRequestManger, Long.MAX_VALUE);
+                if (errors.exception() instanceof RetriableException && requestShouldBeRetried) {
+                    assertRetryBackOff(commitRequestManger, remainBackoffMs);
+                } else {
+                    assertPollDoesNotReturn(commitRequestManger, Long.MAX_VALUE);
+                }
         }
     }
 
@@ -776,6 +780,7 @@ public class CommitRequestManagerTest {
             Arguments.of(Errors.REQUEST_TIMED_OUT),
             Arguments.of(Errors.FENCED_INSTANCE_ID),
             Arguments.of(Errors.TOPIC_AUTHORIZATION_FAILED),
+            Arguments.of(Errors.NETWORK_EXCEPTION),
             Arguments.of(Errors.STALE_MEMBER_EPOCH),
             Arguments.of(Errors.UNKNOWN_MEMBER_ID));
     }

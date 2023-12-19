@@ -527,7 +527,11 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
                     } else {
                         log.error("OffsetCommit failed on partition {} for offset {}: {}",
                             tp, offset, error.message());
-                        future.completeExceptionally(commitExceptionForRetriableError(error.exception()));
+                        if (error.exception() instanceof RetriableException) {
+                            maybeRetry(currentTimeMs, error.exception());
+                            return;
+                        }
+                        future.completeExceptionally(error.exception());
                         return;
                     }
                 }
