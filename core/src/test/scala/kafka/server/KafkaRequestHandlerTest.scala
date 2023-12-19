@@ -193,13 +193,15 @@ class KafkaRequestHandlerTest {
     props.setProperty(RemoteLogManagerConfig.REMOTE_LOG_STORAGE_SYSTEM_ENABLE_PROP, systemRemoteStorageEnabled.toString)
     val brokerTopicStats = new BrokerTopicStats(java.util.Optional.of(KafkaConfig.fromProps(props)))
     brokerTopicStats.topicStats(topic)
-    val gaugeMetrics = Set(RemoteStorageMetrics.REMOTE_COPY_LOG_BYTES_METRIC.getName)
+    val gaugeMetrics = Set(
+      RemoteStorageMetrics.REMOTE_COPY_LOG_BYTES_METRIC.getName,
+      RemoteStorageMetrics.REMOTE_LOG_SIZE_COMPUTATION_TIME_METRIC.getName)
     RemoteStorageMetrics.brokerTopicStatsMetrics.forEach(metric => {
       if (systemRemoteStorageEnabled) {
         if (!gaugeMetrics.contains(metric.getName)) {
-          assertTrue(brokerTopicStats.topicStats(topic).metricMap.contains(metric.getName))
+          assertTrue(brokerTopicStats.topicStats(topic).metricMap.contains(metric.getName), "the metric is missing: " + metric.getName)
         } else {
-          assertFalse(brokerTopicStats.topicStats(topic).metricMap.contains(metric.getName))
+          assertFalse(brokerTopicStats.topicStats(topic).metricMap.contains(metric.getName), "the metric should not appear: " + metric.getName)
         }
       } else {
         assertFalse(brokerTopicStats.topicStats(topic).metricMap.contains(metric.getName))

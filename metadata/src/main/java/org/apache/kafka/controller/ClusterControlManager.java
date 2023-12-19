@@ -534,7 +534,8 @@ public class ClusterControlManager {
             record.id(),
             record.epoch(),
             BrokerRegistrationFencingChange.FENCE.asBoolean(),
-            BrokerRegistrationInControlledShutdownChange.NONE.asBoolean()
+            BrokerRegistrationInControlledShutdownChange.NONE.asBoolean(),
+            Optional.empty()
         );
     }
 
@@ -544,7 +545,8 @@ public class ClusterControlManager {
             record.id(),
             record.epoch(),
             BrokerRegistrationFencingChange.UNFENCE.asBoolean(),
-            BrokerRegistrationInControlledShutdownChange.NONE.asBoolean()
+            BrokerRegistrationInControlledShutdownChange.NONE.asBoolean(),
+            Optional.empty()
         );
     }
 
@@ -557,12 +559,14 @@ public class ClusterControlManager {
             BrokerRegistrationInControlledShutdownChange.fromValue(record.inControlledShutdown()).orElseThrow(
                 () -> new IllegalStateException(String.format("Unable to replay %s: unknown " +
                     "value for inControlledShutdown field: %x", record, record.inControlledShutdown())));
+        Optional<List<Uuid>> directoriesChange = Optional.ofNullable(record.logDirs()).filter(list -> !list.isEmpty());
         replayRegistrationChange(
             record,
             record.brokerId(),
             record.brokerEpoch(),
             fencingChange.asBoolean(),
-            inControlledShutdownChange.asBoolean()
+            inControlledShutdownChange.asBoolean(),
+            directoriesChange
         );
     }
 
@@ -571,7 +575,8 @@ public class ClusterControlManager {
         int brokerId,
         long brokerEpoch,
         Optional<Boolean> fencingChange,
-        Optional<Boolean> inControlledShutdownChange
+        Optional<Boolean> inControlledShutdownChange,
+        Optional<List<Uuid>> directoriesChange
     ) {
         BrokerRegistration curRegistration = brokerRegistrations.get(brokerId);
         if (curRegistration == null) {
@@ -583,7 +588,8 @@ public class ClusterControlManager {
         } else {
             BrokerRegistration nextRegistration = curRegistration.cloneWith(
                 fencingChange,
-                inControlledShutdownChange
+                inControlledShutdownChange,
+                directoriesChange
             );
             if (!curRegistration.equals(nextRegistration)) {
                 log.info("Replayed {} modifying the registration for broker {}: {}",
