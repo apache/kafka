@@ -539,7 +539,7 @@ public class HeartbeatRequestManagerTest {
         verify(membershipManager).transitionToStaled();
 
         assertNoHeartbeat(heartbeatRequestManager);
-        heartbeatRequestManager.resetPollTimer();
+        heartbeatRequestManager.resetPollTimer(time.milliseconds());
         assertTrue(pollTimer.notExpired());
         assertHeartbeat(heartbeatRequestManager);
     }
