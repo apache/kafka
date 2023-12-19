@@ -842,18 +842,12 @@ public class EosIntegrationTest {
 
         final int startKey = 1;
         final int endKey = 30001;
-        final int valueSize = 1000;
-        final StringBuilder value1 = new StringBuilder(valueSize);
-        for (int i = 0; i < valueSize; ++i) {
-            value1.append("A");
-        }
-        final String valueStr1 = value1.toString();
-        final List<KeyValue<Integer, String>> recordBatch1 = IntStream.range(startKey, endKey).mapToObj(i -> KeyValue.pair(i, valueStr1)).collect(Collectors.toList());
+        final List<KeyValue<Integer, Integer>> recordBatch1 = IntStream.range(startKey, endKey - 1000).mapToObj(i -> KeyValue.pair(i, 0)).collect(Collectors.toList());
         IntegrationTestUtils.produceKeyValuesSynchronously(MULTI_PARTITION_INPUT_TOPIC,
             recordBatch1,
             TestUtils.producerConfig(CLUSTER.bootstrapServers(),
                 IntegerSerializer.class,
-                StringSerializer.class),
+                IntegerSerializer.class),
             CLUSTER.time);
 
         final StoreBuilder<KeyValueStore<Integer, String>> stateStore = Stores.keyValueStoreBuilder(
@@ -929,9 +923,16 @@ public class EosIntegrationTest {
             applicationId + "-" + stateStoreName + "-changelog",
             10000,
             IntegerDeserializer.class,
-            StringDeserializer.class
+            IntegerDeserializer.class
         );
         throwException.set(true);
+        final List<KeyValue<Integer, Integer>> recordBatch2 = IntStream.range(endKey - 1000, endKey).mapToObj(i -> KeyValue.pair(i, 0)).collect(Collectors.toList());
+        IntegrationTestUtils.produceKeyValuesSynchronously(MULTI_PARTITION_INPUT_TOPIC,
+            recordBatch2,
+            TestUtils.producerConfig(CLUSTER.bootstrapServers(),
+                IntegerSerializer.class,
+                IntegerSerializer.class),
+            CLUSTER.time);
         latch.await();
         kafkaStreams.close();
         waitForApplicationState(Collections.singletonList(kafkaStreams), KafkaStreams.State.NOT_RUNNING, Duration.ofSeconds(60));
