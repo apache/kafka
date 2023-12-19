@@ -19,6 +19,7 @@ package org.apache.kafka.clients.consumer.internals;
 import org.apache.kafka.clients.Metadata.LeaderAndEpoch;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
+import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
@@ -26,11 +27,14 @@ import org.apache.kafka.clients.consumer.GroupProtocol;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetAndTimestamp;
 import org.apache.kafka.clients.consumer.OffsetCommitCallback;
+import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.clients.consumer.RetriableCommitFailedException;
+import org.apache.kafka.clients.consumer.RoundRobinAssignor;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEventHandler;
 import org.apache.kafka.clients.consumer.internals.events.AssignmentChangeApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
 import org.apache.kafka.clients.consumer.internals.events.CommitApplicationEvent;
+import org.apache.kafka.clients.consumer.internals.events.CommitOnCloseApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.CompletableApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.CompletableBackgroundEvent;
 import org.apache.kafka.clients.consumer.internals.events.ConsumerRebalanceListenerCallbackNeededEvent;
@@ -46,6 +50,7 @@ import org.apache.kafka.clients.consumer.internals.events.SubscriptionChangeAppl
 import org.apache.kafka.clients.consumer.internals.events.UnsubscribeApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.ValidatePositionsApplicationEvent;
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
 import org.apache.kafka.common.errors.InvalidGroupIdException;
@@ -53,10 +58,12 @@ import org.apache.kafka.common.errors.NetworkException;
 import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.WakeupException;
+import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.JoinGroupRequest;
 import org.apache.kafka.common.requests.ListOffsetsRequest;
 import org.apache.kafka.common.serialization.StringDeserializer;
+import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
@@ -91,6 +98,7 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static java.util.Arrays.asList;
+import static java.util.Collections.emptySet;
 import static java.util.Collections.singleton;
 import static java.util.Collections.singletonList;
 import static org.apache.kafka.clients.consumer.internals.ConsumerRebalanceListenerMethodName.ON_PARTITIONS_ASSIGNED;
@@ -115,12 +123,15 @@ import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 @SuppressWarnings("unchecked")
 public class AsyncKafkaConsumerTest {
+
+    private long retryBackoffMs = 100L;
+    private int defaultApiTimeoutMs = 1000;
+    private boolean autoCommitEnabled = true;
 
     private AsyncKafkaConsumer<String, String> consumer = null;
 
@@ -134,7 +145,7 @@ public class AsyncKafkaConsumerTest {
     public void resetAll() {
         backgroundEventQueue.clear();
         if (consumer != null) {
-            consumer.close();
+            consumer.close(Duration.ZERO);
         }
         consumer = null;
         Mockito.framework().clearInlineMocks();
@@ -171,6 +182,35 @@ public class AsyncKafkaConsumerTest {
             (a, b, c, d) -> metadata,
             backgroundEventQueue
         );
+    }
+
+    private AsyncKafkaConsumer<String, String> newConsumer(
+        FetchBuffer fetchBuffer,
+        ConsumerInterceptors<String, String> interceptors,
+        ConsumerRebalanceListenerInvoker rebalanceListenerInvoker,
+        SubscriptionState subscriptions,
+        List<ConsumerPartitionAssignor> assignors,
+        String groupId,
+        String clientId) {
+        return new AsyncKafkaConsumer<>(
+            new LogContext(),
+            clientId,
+            new Deserializers<>(new StringDeserializer(), new StringDeserializer()),
+            fetchBuffer,
+            fetchCollector,
+            interceptors,
+            time,
+            applicationEventHandler,
+            backgroundEventQueue,
+            rebalanceListenerInvoker,
+            new Metrics(),
+            subscriptions,
+            metadata,
+            retryBackoffMs,
+            defaultApiTimeoutMs,
+            assignors,
+            groupId,
+            autoCommitEnabled);
     }
 
     @Test
@@ -298,11 +338,12 @@ public class AsyncKafkaConsumerTest {
     public void testCommittedExceptionThrown() {
         consumer = newConsumer();
         Map<TopicPartition, OffsetAndMetadata> offsets = mockTopicPartitionOffset();
-        when(applicationEventHandler.addAndGet(any(), any())).thenAnswer(invocation -> {
-            CompletableApplicationEvent<?> event = invocation.getArgument(0);
-            assertInstanceOf(FetchCommittedOffsetsApplicationEvent.class, event);
-            throw new KafkaException("Test exception");
-        });
+        when(applicationEventHandler.addAndGet(
+            any(FetchCommittedOffsetsApplicationEvent.class), any())).thenAnswer(invocation -> {
+                CompletableApplicationEvent<?> event = invocation.getArgument(0);
+                assertInstanceOf(FetchCommittedOffsetsApplicationEvent.class, event);
+                throw new KafkaException("Test exception");
+            });
 
         assertThrows(KafkaException.class, () -> consumer.committed(offsets.keySet(), Duration.ofMillis(1000)));
     }
@@ -450,18 +491,31 @@ public class AsyncKafkaConsumerTest {
 
     @Test
     public void testCommitAsyncLeaderEpochUpdate() {
-        consumer = newConsumer();
-        MockCommitCallback callback = new MockCommitCallback();
+        SubscriptionState subscriptions = new SubscriptionState(new LogContext(), OffsetResetStrategy.NONE);
+        consumer = newConsumer(
+            mock(FetchBuffer.class),
+            new ConsumerInterceptors<>(Collections.emptyList()),
+            mock(ConsumerRebalanceListenerInvoker.class),
+            subscriptions,
+            singletonList(new RoundRobinAssignor()),
+            "group-id",
+            "client-id");
         final TopicPartition t0 = new TopicPartition("t0", 2);
         final TopicPartition t1 = new TopicPartition("t0", 3);
         HashMap<TopicPartition, OffsetAndMetadata> topicPartitionOffsets = new HashMap<>();
         topicPartitionOffsets.put(t0, new OffsetAndMetadata(10L, Optional.of(2), ""));
         topicPartitionOffsets.put(t1, new OffsetAndMetadata(20L, Optional.of(1), ""));
-
+        when(metadata.currentLeader(t0)).thenReturn(
+            new LeaderAndEpoch(Optional.of(
+                new Node(1, "host", 9000)), Optional.of(1)));
+        when(metadata.currentLeader(t1)).thenReturn(
+            new LeaderAndEpoch(Optional.of(
+                new Node(1, "host", 9000)), Optional.of(1)));
         consumer.assign(Arrays.asList(t0, t1));
         consumer.seek(t0, 10);
         consumer.seek(t1, 20);
 
+        MockCommitCallback callback = new MockCommitCallback();
         assertDoesNotThrow(() -> consumer.commitAsync(topicPartitionOffsets, callback));
 
         verify(metadata).updateLastSeenEpochIfNewer(t0, 2);
@@ -500,20 +554,28 @@ public class AsyncKafkaConsumerTest {
         consumer = newConsumer();
         doReturn(null).when(applicationEventHandler).addAndGet(any(), any());
         consumer.close();
-        verify(applicationEventHandler, times(2)).addAndGet(any(ConsumerCloseApplicationEvent.class), any());
-        verify(applicationEventHandler).add(any(CommitApplicationEvent.class));
+        verify(applicationEventHandler).addAndGet(any(LeaveOnCloseApplicationEvent.class), any());
+        verify(applicationEventHandler).add(any(CommitOnCloseApplicationEvent.class));
     }
 
     @Test
     public void testPartitionRevocationOnClose() {
         MockRebalanceListener listener = new MockRebalanceListener();
+        SubscriptionState subscriptions = new SubscriptionState(new LogContext(), OffsetResetStrategy.NONE);
+        consumer = newConsumer(
+            mock(FetchBuffer.class),
+            mock(ConsumerInterceptors.class),
+            mock(ConsumerRebalanceListenerInvoker.class),
+            subscriptions,
+            singletonList(new RoundRobinAssignor()),
+            "group-id",
+            "client-id");
+
         consumer.subscribe(singleton("topic"), listener);
-        TopicPartition tp = new TopicPartition("topic", 0);
-        subscriptions.assignFromSubscribed(singleton(tp));
+        subscriptions.assignFromSubscribed(singleton(new TopicPartition("topic", 0)));
         consumer.close(Duration.ZERO);
         assertTrue(subscriptions.assignedPartitions().isEmpty());
         assertEquals(1, listener.revokedCount);
-        assertTrue(listener.revoked.contains(tp));
     }
 
     @Test
@@ -521,6 +583,15 @@ public class AsyncKafkaConsumerTest {
         // If rebalance listener failed to execute during close, we will skip sending leave group and proceed with
         // closing the consumer.
         ConsumerRebalanceListener listener = mock(ConsumerRebalanceListener.class);
+        SubscriptionState subscriptions = new SubscriptionState(new LogContext(), OffsetResetStrategy.NONE);
+        consumer = newConsumer(
+            mock(FetchBuffer.class),
+            new ConsumerInterceptors<>(Collections.emptyList()),
+            mock(ConsumerRebalanceListenerInvoker.class),
+            subscriptions,
+            singletonList(new RoundRobinAssignor()),
+            "group-id",
+            "client-id");
         subscriptions.subscribe(singleton("topic"), Optional.of(listener));
         TopicPartition tp = new TopicPartition("topic", 0);
         subscriptions.assignFromSubscribed(singleton(tp));
@@ -528,13 +599,14 @@ public class AsyncKafkaConsumerTest {
         assertThrows(KafkaException.class, () -> consumer.close(Duration.ZERO));
         verify(applicationEventHandler, never()).addAndGet(any(LeaveOnCloseApplicationEvent.class), any());
         verify(listener).onPartitionsRevoked(eq(singleton(tp)));
-        verify(subscriptions).assignFromSubscribed(eq(Collections.emptySet()));
+        assertEquals(emptySet(), subscriptions.assignedPartitions());
     }
 
     @Test
     public void testCompleteQuietly() {
         AtomicReference<Throwable> exception = new AtomicReference<>();
         CompletableFuture<Object> future = CompletableFuture.completedFuture(null);
+        consumer = newConsumer();
         assertDoesNotThrow(() -> consumer.completeQuietly(() -> {
             future.get(0, TimeUnit.MILLISECONDS);
         }, "test", exception));
@@ -548,14 +620,38 @@ public class AsyncKafkaConsumerTest {
 
     @Test
     public void testAutoCommitSyncEnabled() {
-        consumer.maybeAutoCommitSync(true, testBuilder.time.timer(100), null);
-        verify(consumer).completeQuietly(any(), any(), any());
+        SubscriptionState subscriptions = new SubscriptionState(new LogContext(), OffsetResetStrategy.NONE);
+        consumer = newConsumer(
+            mock(FetchBuffer.class),
+            mock(ConsumerInterceptors.class),
+            mock(ConsumerRebalanceListenerInvoker.class),
+            subscriptions,
+            singletonList(new RoundRobinAssignor()),
+            "group-id",
+            "client-id");
+        consumer.subscribe(singleton("topic"), mock(ConsumerRebalanceListener.class));
+        subscriptions.assignFromSubscribed(singleton(new TopicPartition("topic", 0)));
+        subscriptions.seek(new TopicPartition("topic", 0), 100);
+        consumer.maybeAutoCommitSync(true, time.timer(100), null);
+        verify(applicationEventHandler).add(any(CommitApplicationEvent.class));
     }
 
     @Test
     public void testAutoCommitSyncDisabled() {
-        consumer.maybeAutoCommitSync(false, testBuilder.time.timer(100), null);
-        verify(consumer, never()).completeQuietly(any(), any(), any());
+        SubscriptionState subscriptions = new SubscriptionState(new LogContext(), OffsetResetStrategy.NONE);
+        consumer = newConsumer(
+            mock(FetchBuffer.class),
+            mock(ConsumerInterceptors.class),
+            mock(ConsumerRebalanceListenerInvoker.class),
+            subscriptions,
+            singletonList(new RoundRobinAssignor()),
+            "group-id",
+            "client-id");
+        consumer.subscribe(singleton("topic"), mock(ConsumerRebalanceListener.class));
+        subscriptions.assignFromSubscribed(singleton(new TopicPartition("topic", 0)));
+        subscriptions.seek(new TopicPartition("topic", 0), 100);
+        consumer.maybeAutoCommitSync(false, time.timer(100), null);
+        verify(applicationEventHandler, never()).add(any(CommitApplicationEvent.class));
     }
 
     private void assertMockCommitCallbackInvoked(final Executable task,
@@ -651,7 +747,9 @@ public class AsyncKafkaConsumerTest {
         Set<TopicPartition> partitions = mockTopicPartitionOffset().keySet();
         Throwable eventProcessingFailure = new KafkaException("Unexpected failure " +
             "processing List Offsets event");
-        doThrow(eventProcessingFailure).when(applicationEventHandler).addAndGet(any(), any());
+        doThrow(eventProcessingFailure).when(applicationEventHandler).addAndGet(
+            any(ListOffsetsApplicationEvent.class),
+            any());
         Throwable consumerError = assertThrows(KafkaException.class,
             () -> consumer.beginningOffsets(partitions,
                 Duration.ofMillis(1)));
@@ -1034,7 +1132,6 @@ public class AsyncKafkaConsumerTest {
     }
 
     @Test
-    @Disabled("The test is flaky from time to time")
     public void testGroupRemoteAssignorUnusedInGenericProtocol() {
         final Properties props = requiredConsumerProperties();
         props.put(ConsumerConfig.GROUP_ID_CONFIG, "consumerGroupA");

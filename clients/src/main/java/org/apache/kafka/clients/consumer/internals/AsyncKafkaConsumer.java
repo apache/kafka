@@ -1265,12 +1265,15 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                              final AtomicReference<Throwable> firstException) {
         if (!shouldAutoCommit)
             return;
-        completeQuietly(() -> {
-            Map<TopicPartition, OffsetAndMetadata> allConsumed = subscriptions.allConsumed();
-            log.debug("Sending synchronous auto-commit of offsets {} on closing", allConsumed);
+        Map<TopicPartition, OffsetAndMetadata> allConsumed = subscriptions.allConsumed();
+        log.debug("Sending synchronous auto-commit of offsets {} on closing", allConsumed);
+        try {
             commitSync(allConsumed, Duration.ofMillis(timer.remainingMs()));
-            timer.update();
-        }, "Failed autoCommitSync with a timeout(ms)=" + timer.timeoutMs(), firstException);
+        } catch (Exception e) {
+            // consistent with async auto-commit failures, we do not propagate the exception
+            log.warn("Synchronous auto-commit of offsets {} failed: {}", allConsumed, e.getMessage());
+        }
+        timer.update();
     }
 
     // Visible for testing

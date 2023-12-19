@@ -36,6 +36,7 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
 
 import java.io.Closeable;
+import java.time.Duration;
 import java.util.HashMap;
 import java.util.Optional;
 import java.util.Properties;
