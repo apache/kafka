@@ -14,8 +14,18 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package unit.kafka.docker
+package kafka.docker
+
+import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.Assertions.assertEquals
 
 class KafkaDockerWrapperTest {
 
+  @Test
+  def testGetToolsLog4jConfigsFromEnv(): Unit = {
+    val envVars = Map("KAFKA_TOOLS_LOG4J_LOGLEVEL" -> "TRACE")
+    val expected = "\n" + "log4j.rootLogger=TRACE, stderr"
+    val actual = KafkaDockerWrapper.getToolsLog4jConfigsFromEnv(envVars)
+    assertEquals(expected, actual)
+  }
 }
