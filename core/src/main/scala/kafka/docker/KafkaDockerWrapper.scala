@@ -17,6 +17,7 @@
 package kafka.docker
 
 import kafka.tools.StorageTool
+import kafka.utils.Exit
 
 import java.nio.charset.StandardCharsets
 import java.nio.file.{Files, Paths, StandardCopyOption, StandardOpenOption}
@@ -32,10 +33,23 @@ object KafkaDockerWrapper {
 
     operation match {
       case "setup" =>
+        if (arguments.length != 3) {
+          val errMsg = "not enough arguments passed. Usage: " +
+            "setup <default-configs-dir> <mounted-configs-dir>, <final-configs-dir>"
+          System.err.println(errMsg)
+          Exit.exit(1, Some(errMsg))
+        }
         val defaultConfigsDir = arguments(0)
         val mountedConfigsDir = arguments(1)
         val finalConfigsDir = arguments(2)
-        prepareConfigs(defaultConfigsDir, mountedConfigsDir, finalConfigsDir)
+        try {
+          prepareConfigs(defaultConfigsDir, mountedConfigsDir, finalConfigsDir)
+        } catch {
+          case e: Throwable =>
+            val errMsg = s"error while preparing configs: ${e.getMessage}"
+            System.err.println(errMsg)
+            Exit.exit(1, Some(errMsg))
+        }
 
         val formatCmd = formatStorageCmd(finalConfigsDir, envVars)
         StorageTool.main(formatCmd)
@@ -154,12 +168,12 @@ object KafkaDockerWrapper {
       .getOrElse("")
   }
 
-  private def addToFile(properties: String, filepath: String, option: StandardOpenOption): Unit = {
+  private def addToFile(properties: String, filepath: String, mode: StandardOpenOption): Unit = {
     val path = Paths.get(filepath)
     if (!Files.exists(path)) {
       Files.createFile(path)
     }
-    Files.write(Paths.get(filepath), properties.getBytes(StandardCharsets.UTF_8), option)
+    Files.write(Paths.get(filepath), properties.getBytes(StandardCharsets.UTF_8), mode)
   }
 
   private def copyFile(source: String, destination: String) = {
