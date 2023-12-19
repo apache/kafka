@@ -386,6 +386,7 @@ public class AsyncKafkaConsumerTest {
         assertDoesNotThrow(() -> consumer.poll(Duration.ZERO));
     }
 
+    @Test
     public void testWakeupAfterNonEmptyFetch() {
         consumer = newConsumer();
         final String topicName = "foo";
@@ -1192,6 +1193,22 @@ public class AsyncKafkaConsumerTest {
 
     @Test
     public void testEnsurePollEventSentOnConsumerPoll() {
+        SubscriptionState subscriptions = new SubscriptionState(new LogContext(), OffsetResetStrategy.NONE);
+        consumer = newConsumer(
+                mock(FetchBuffer.class),
+                new ConsumerInterceptors<>(Collections.emptyList()),
+                mock(ConsumerRebalanceListenerInvoker.class),
+                subscriptions,
+                singletonList(new RoundRobinAssignor()),
+                "group-id",
+                "client-id");
+        final TopicPartition tp = new TopicPartition("topic", 0);
+        final List<ConsumerRecord<String, String>> records = singletonList(
+                new ConsumerRecord<>("topic", 0, 2, "key1", "value1"));
+        doAnswer(invocation -> Fetch.forPartition(tp, records, true))
+                .when(fetchCollector)
+                .collectFetch(Mockito.any(FetchBuffer.class));
+
         consumer.subscribe(singletonList("topic1"));
         consumer.poll(Duration.ofMillis(100));
         verify(applicationEventHandler).add(any(PollApplicationEvent.class));
