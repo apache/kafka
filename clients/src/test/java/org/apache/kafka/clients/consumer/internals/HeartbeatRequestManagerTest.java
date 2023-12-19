@@ -528,6 +528,7 @@ public class HeartbeatRequestManagerTest {
         heartbeatRequestManager = createHeartbeatRequestManager();
         when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(new Node(1, "localhost", 9999)));
         when(membershipManager.shouldSkipHeartbeat()).thenReturn(false);
+        when(membershipManager.state()).thenReturn(MemberState.STABLE);
 
         time.sleep(maxPollIntervalMs);
         assertLeaveGroup(heartbeatRequestManager);
