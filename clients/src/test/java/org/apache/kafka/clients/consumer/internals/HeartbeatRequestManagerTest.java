@@ -66,9 +66,9 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -84,16 +84,16 @@ public class HeartbeatRequestManagerTest {
     private Time time;
     private Timer pollTimer;
     private ConsumerConfig config;
-    private CoordinatorRequestManager coordinatorRequestManager;
-    private SubscriptionState subscriptions;
+    private CoordinatorRequestManager coordinatorRequestManager = mock(CoordinatorRequestManager.class);
+    private SubscriptionState subscriptions = mock(SubscriptionState.class);
     private Metadata metadata;
     private HeartbeatRequestManager heartbeatRequestManager;
-    private MembershipManager membershipManager;
-    private HeartbeatRequestManager.HeartbeatRequestState heartbeatRequestState;
-    private HeartbeatRequestManager.HeartbeatState heartbeatState;
+    private MembershipManager membershipManager = mock(MembershipManager.class);
+    private HeartbeatRequestManager.HeartbeatRequestState heartbeatRequestState = mock(HeartbeatRequestManager.HeartbeatRequestState.class);
+    private HeartbeatRequestManager.HeartbeatState heartbeatState = mock(HeartbeatRequestManager.HeartbeatState.class);
     private final String memberId = "member-id";
     private final int memberEpoch = 1;
-    private BackgroundEventHandler backgroundEventHandler;
+    private BackgroundEventHandler backgroundEventHandler = mock(BackgroundEventHandler.class);
     private BlockingQueue<BackgroundEvent> backgroundEventQueue;
 
     @BeforeEach
@@ -530,6 +530,7 @@ public class HeartbeatRequestManagerTest {
         when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(new Node(1, "localhost", 9999)));
         when(membershipManager.shouldSkipHeartbeat()).thenReturn(false);
         when(membershipManager.state()).thenReturn(MemberState.STABLE);
+        doNothing().when(membershipManager).transitionToStaled();
 
         time.sleep(maxPollIntervalMs);
         NetworkClientDelegate.PollResult pollResult = heartbeatRequestManager.poll(time.milliseconds());
@@ -655,23 +656,11 @@ public class HeartbeatRequestManagerTest {
 
     private HeartbeatRequestManager createHeartbeatRequestManager() {
         LogContext logContext = new LogContext();
-        coordinatorRequestManager = mock(CoordinatorRequestManager.class);
-        subscriptions = mock(SubscriptionState.class);
-        membershipManager = mock(MembershipManager.class);
-        backgroundEventHandler = mock(BackgroundEventHandler.class);
-        heartbeatState = spy(new HeartbeatRequestManager.HeartbeatState(subscriptions, membershipManager, maxPollIntervalMs));
-        heartbeatRequestState = spy(new HeartbeatRequestManager.HeartbeatRequestState(
-            logContext,
-            time,
-            heartbeatIntervalMs,
-            retryBackoffMs,
-            retryBackoffMaxMs,
-            0));
         pollTimer = time.timer(maxPollIntervalMs);
         return new HeartbeatRequestManager(
             logContext,
             pollTimer,
-            config(),
+            config,
             coordinatorRequestManager,
             membershipManager,
             heartbeatState,

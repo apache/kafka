@@ -232,8 +232,8 @@ public class HeartbeatRequestManager implements RequestManager {
     }
 
     /**
-     * When consumer polls, we need to reset the pollTimer.  If the poll timer has expired, we rejoin only when the
-     * member is in the {@link MemberState#UNSUBSCRIBED} state.
+     * When consumer polls, we need to reset the pollTimer.  If the poll timer has expired, we rejoin when the user
+     * repoll the consumer.
      */
     public void resetPollTimer(final long pollMs) {
         pollTimer.update(pollMs);

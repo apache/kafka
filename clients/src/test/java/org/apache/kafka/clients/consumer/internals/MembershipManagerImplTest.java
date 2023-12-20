@@ -1403,6 +1403,7 @@ public class MembershipManagerImplTest {
         membershipManager.onHeartbeatRequestSent();
         assertEquals(MemberState.JOINING, membershipManager.state());
         assertTrue(membershipManager.currentAssignment().isEmpty());
+        assertTrue(subscriptionState.assignedPartitions().isEmpty());
     }
 
     private MembershipManagerImpl mockMemberSuccessfullyReceivesAndAcksAssignment(
