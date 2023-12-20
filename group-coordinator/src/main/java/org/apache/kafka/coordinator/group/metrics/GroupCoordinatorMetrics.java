@@ -26,7 +26,7 @@ import org.apache.kafka.common.metrics.stats.Meter;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.coordinator.group.Group;
 import org.apache.kafka.coordinator.group.consumer.ConsumerGroup.ConsumerGroupState;
-import org.apache.kafka.coordinator.group.generic.GenericGroupState;
+import org.apache.kafka.coordinator.group.classic.ClassicGroupState;
 import org.apache.kafka.server.metrics.KafkaYammerMetrics;
 import org.apache.kafka.timeline.SnapshotRegistry;
 
@@ -45,7 +45,7 @@ public class GroupCoordinatorMetrics extends CoordinatorMetrics implements AutoC
     public static final String METRICS_GROUP = "group-coordinator-metrics";
 
     /**
-     * Old generic group count metric. To be deprecated.
+     * Old classic group count metric. To be deprecated.
      */
     public final static com.yammer.metrics.core.MetricName NUM_GENERIC_GROUPS = getMetricName(
         "GroupMetadataManager", "NumGroups");
@@ -70,11 +70,11 @@ public class GroupCoordinatorMetrics extends CoordinatorMetrics implements AutoC
     public static final String OFFSET_COMMITS_SENSOR_NAME = "OffsetCommits";
     public static final String OFFSET_EXPIRED_SENSOR_NAME = "OffsetExpired";
     public static final String OFFSET_DELETIONS_SENSOR_NAME = "OffsetDeletions";
-    public static final String GENERIC_GROUP_COMPLETED_REBALANCES_SENSOR_NAME = "CompletedRebalances";
-    public static final String GENERIC_GROUP_REBALANCES_SENSOR_NAME = "GenericGroupRebalances";
+    public static final String CLASSIC_GROUP_COMPLETED_REBALANCES_SENSOR_NAME = "CompletedRebalances";
+    public static final String CLASSIC_GROUP_REBALANCES_SENSOR_NAME = "GenericGroupRebalances";
     public static final String CONSUMER_GROUP_REBALANCES_SENSOR_NAME = "ConsumerGroupRebalances";
 
-    private final MetricName genericGroupCountMetricName;
+    private final MetricName classicGroupCountMetricName;
     private final MetricName consumerGroupCountMetricName;
     private final MetricName consumerGroupCountEmptyMetricName;
     private final MetricName consumerGroupCountAssigningMetricName;
@@ -99,11 +99,11 @@ public class GroupCoordinatorMetrics extends CoordinatorMetrics implements AutoC
         this.registry = Objects.requireNonNull(registry);
         this.metrics = Objects.requireNonNull(metrics);
 
-        genericGroupCountMetricName = metrics.metricName(
+        classicGroupCountMetricName = metrics.metricName(
             GROUP_COUNT_METRIC_NAME,
             METRICS_GROUP,
-            "The total number of groups using the generic rebalance protocol.",
-            Collections.singletonMap(GROUP_COUNT_PROTOCOL_TAG, Group.GroupType.GENERIC.toString())
+            "The total number of groups using the classic rebalance protocol.",
+            Collections.singletonMap(GROUP_COUNT_PROTOCOL_TAG, Group.GroupType.CLASSIC.toString())
         );
 
         consumerGroupCountMetricName = metrics.metricName(
@@ -177,23 +177,23 @@ public class GroupCoordinatorMetrics extends CoordinatorMetrics implements AutoC
                 METRICS_GROUP,
                 "The total number of administrative deleted offsets")));
 
-        Sensor genericGroupCompletedRebalancesSensor = metrics.sensor(GENERIC_GROUP_COMPLETED_REBALANCES_SENSOR_NAME);
-        genericGroupCompletedRebalancesSensor.add(new Meter(
+        Sensor classicGroupCompletedRebalancesSensor = metrics.sensor(CLASSIC_GROUP_COMPLETED_REBALANCES_SENSOR_NAME);
+        classicGroupCompletedRebalancesSensor.add(new Meter(
             metrics.metricName("group-completed-rebalance-rate",
                 METRICS_GROUP,
-                "The rate of generic group completed rebalances"),
+                "The rate of classic group completed rebalances"),
             metrics.metricName("group-completed-rebalance-count",
                 METRICS_GROUP,
-                "The total number of generic group completed rebalances")));
+                "The total number of classic group completed rebalances")));
 
-        Sensor genericGroupPreparingRebalancesSensor = metrics.sensor(GENERIC_GROUP_REBALANCES_SENSOR_NAME);
-        genericGroupPreparingRebalancesSensor.add(new Meter(
+        Sensor classicGroupPreparingRebalancesSensor = metrics.sensor(CLASSIC_GROUP_REBALANCES_SENSOR_NAME);
+        classicGroupPreparingRebalancesSensor.add(new Meter(
             metrics.metricName("group-rebalance-rate",
                 METRICS_GROUP,
-                "The rate of generic group preparing rebalances"),
+                "The rate of classic group preparing rebalances"),
             metrics.metricName("group-rebalance-count",
                 METRICS_GROUP,
-                "The total number of generic group preparing rebalances")));
+                "The total number of classic group preparing rebalances")));
 
         Sensor consumerGroupRebalanceSensor = metrics.sensor(CONSUMER_GROUP_REBALANCES_SENSOR_NAME);
         consumerGroupRebalanceSensor.add(new Meter(
@@ -208,8 +208,8 @@ public class GroupCoordinatorMetrics extends CoordinatorMetrics implements AutoC
             Utils.mkEntry(OFFSET_COMMITS_SENSOR_NAME, offsetCommitsSensor),
             Utils.mkEntry(OFFSET_EXPIRED_SENSOR_NAME, offsetExpiredSensor),
             Utils.mkEntry(OFFSET_DELETIONS_SENSOR_NAME, offsetDeletionsSensor),
-            Utils.mkEntry(GENERIC_GROUP_COMPLETED_REBALANCES_SENSOR_NAME, genericGroupCompletedRebalancesSensor),
-            Utils.mkEntry(GENERIC_GROUP_REBALANCES_SENSOR_NAME, genericGroupPreparingRebalancesSensor),
+            Utils.mkEntry(CLASSIC_GROUP_COMPLETED_REBALANCES_SENSOR_NAME, classicGroupCompletedRebalancesSensor),
+            Utils.mkEntry(CLASSIC_GROUP_REBALANCES_SENSOR_NAME, classicGroupPreparingRebalancesSensor),
             Utils.mkEntry(CONSUMER_GROUP_REBALANCES_SENSOR_NAME, consumerGroupRebalanceSensor)
         ));
     }
@@ -219,11 +219,11 @@ public class GroupCoordinatorMetrics extends CoordinatorMetrics implements AutoC
     }
 
     private Long numGenericGroups() {
-        return shards.values().stream().mapToLong(GroupCoordinatorMetricsShard::numGenericGroups).sum();
+        return shards.values().stream().mapToLong(GroupCoordinatorMetricsShard::numClassicGroups).sum();
     }
 
-    private Long numGenericGroups(GenericGroupState state) {
-        return shards.values().stream().mapToLong(shard -> shard.numGenericGroups(state)).sum();
+    private Long numGenericGroups(ClassicGroupState state) {
+        return shards.values().stream().mapToLong(shard -> shard.numClassicGroups(state)).sum();
     }
 
     private long numConsumerGroups() {
@@ -247,7 +247,7 @@ public class GroupCoordinatorMetrics extends CoordinatorMetrics implements AutoC
         ).forEach(registry::removeMetric);
 
         Arrays.asList(
-            genericGroupCountMetricName,
+            classicGroupCountMetricName,
             consumerGroupCountMetricName,
             consumerGroupCountEmptyMetricName,
             consumerGroupCountAssigningMetricName,
@@ -260,8 +260,8 @@ public class GroupCoordinatorMetrics extends CoordinatorMetrics implements AutoC
             OFFSET_COMMITS_SENSOR_NAME,
             OFFSET_EXPIRED_SENSOR_NAME,
             OFFSET_DELETIONS_SENSOR_NAME,
-            GENERIC_GROUP_COMPLETED_REBALANCES_SENSOR_NAME,
-            GENERIC_GROUP_REBALANCES_SENSOR_NAME,
+            CLASSIC_GROUP_COMPLETED_REBALANCES_SENSOR_NAME,
+            CLASSIC_GROUP_REBALANCES_SENSOR_NAME,
             CONSUMER_GROUP_REBALANCES_SENSOR_NAME
         ).forEach(metrics::removeSensor);
     }
@@ -319,40 +319,40 @@ public class GroupCoordinatorMetrics extends CoordinatorMetrics implements AutoC
         registry.newGauge(NUM_GENERIC_GROUPS_PREPARING_REBALANCE, new com.yammer.metrics.core.Gauge<Long>() {
             @Override
             public Long value() {
-                return numGenericGroups(GenericGroupState.PREPARING_REBALANCE);
+                return numGenericGroups(ClassicGroupState.PREPARING_REBALANCE);
             }
         });
 
         registry.newGauge(NUM_GENERIC_GROUPS_COMPLETING_REBALANCE, new com.yammer.metrics.core.Gauge<Long>() {
             @Override
             public Long value() {
-                return numGenericGroups(GenericGroupState.COMPLETING_REBALANCE);
+                return numGenericGroups(ClassicGroupState.COMPLETING_REBALANCE);
             }
         });
 
         registry.newGauge(NUM_GENERIC_GROUPS_STABLE, new com.yammer.metrics.core.Gauge<Long>() {
             @Override
             public Long value() {
-                return numGenericGroups(GenericGroupState.STABLE);
+                return numGenericGroups(ClassicGroupState.STABLE);
             }
         });
 
         registry.newGauge(NUM_GENERIC_GROUPS_DEAD, new com.yammer.metrics.core.Gauge<Long>() {
             @Override
             public Long value() {
-                return numGenericGroups(GenericGroupState.DEAD);
+                return numGenericGroups(ClassicGroupState.DEAD);
             }
         });
 
         registry.newGauge(NUM_GENERIC_GROUPS_EMPTY, new com.yammer.metrics.core.Gauge<Long>() {
             @Override
             public Long value() {
-                return numGenericGroups(GenericGroupState.EMPTY);
+                return numGenericGroups(ClassicGroupState.EMPTY);
             }
         });
 
         metrics.addMetric(
-            genericGroupCountMetricName,
+            classicGroupCountMetricName,
             (Gauge<Long>) (config, now) -> numGenericGroups()
         );
 

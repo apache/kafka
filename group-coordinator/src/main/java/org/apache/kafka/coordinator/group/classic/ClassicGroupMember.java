@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.coordinator.group.generic;
+package org.apache.kafka.coordinator.group.classic;
 
 import org.apache.kafka.common.message.DescribeGroupsResponseData;
 import org.apache.kafka.common.message.JoinGroupRequestData.JoinGroupRequestProtocol;
@@ -31,7 +31,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 
 /**
- * This class encapsulates a generic group member's metadata.
+ * This class encapsulates a classic group member's metadata.
  *
  * Member metadata contains the following:
  *
@@ -52,7 +52,7 @@ import java.util.stream.Collectors;
  *                            is kept in metadata until the leader provides the group assignment
  *                            and the group transitions to stable
  */
-public class GenericGroupMember {
+public class ClassicGroupMember {
 
     /**
      * An empty assignment.
@@ -119,7 +119,7 @@ public class GenericGroupMember {
      */
     private boolean isNew = false;
 
-    public GenericGroupMember(
+    public ClassicGroupMember(
         String memberId,
         Optional<String> groupInstanceId,
         String clientId,
@@ -142,7 +142,7 @@ public class GenericGroupMember {
         );
     }
 
-    public GenericGroupMember(
+    public ClassicGroupMember(
         String memberId,
         Optional<String> groupInstanceId,
         String clientId,
@@ -420,7 +420,7 @@ public class GenericGroupMember {
 
     @Override
     public String toString() {
-        return "GenericGroupMember(" +
+        return "ClassicGroupMember(" +
             "memberId='" + memberId + '\'' +
             ", groupInstanceId='" + groupInstanceId.orElse("") + '\'' +
             ", clientId='" + clientId + '\'' +

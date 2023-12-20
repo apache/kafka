@@ -14,7 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.coordinator.group.generic;
+package org.apache.kafka.coordinator.group.classic;
 
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor;
 import org.apache.kafka.clients.consumer.internals.ConsumerProtocol;
@@ -51,11 +51,11 @@ import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 
 import static org.apache.kafka.common.utils.Utils.mkSet;
-import static org.apache.kafka.coordinator.group.generic.GenericGroupState.COMPLETING_REBALANCE;
-import static org.apache.kafka.coordinator.group.generic.GenericGroupState.DEAD;
-import static org.apache.kafka.coordinator.group.generic.GenericGroupState.EMPTY;
-import static org.apache.kafka.coordinator.group.generic.GenericGroupState.PREPARING_REBALANCE;
-import static org.apache.kafka.coordinator.group.generic.GenericGroupState.STABLE;
+import static org.apache.kafka.coordinator.group.classic.ClassicGroupState.COMPLETING_REBALANCE;
+import static org.apache.kafka.coordinator.group.classic.ClassicGroupState.DEAD;
+import static org.apache.kafka.coordinator.group.classic.ClassicGroupState.EMPTY;
+import static org.apache.kafka.coordinator.group.classic.ClassicGroupState.PREPARING_REBALANCE;
+import static org.apache.kafka.coordinator.group.classic.ClassicGroupState.STABLE;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -67,7 +67,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
-public class GenericGroupTest {
+public class ClassicGroupTest {
     private final String protocolType = "consumer";
     private final String groupInstanceId = "groupInstanceId";
     private final String memberId = "memberId";
@@ -82,11 +82,11 @@ public class GenericGroupTest {
         new TopicPartition("__consumer_offsets", 0)
     );
 
-    private GenericGroup group = null;
+    private ClassicGroup group = null;
     
     @BeforeEach
     public void initialize() {
-        group = new GenericGroup(logContext, "groupId", EMPTY, Time.SYSTEM, metrics);
+        group = new ClassicGroup(logContext, "groupId", EMPTY, Time.SYSTEM, metrics);
     }
     
     @Test
@@ -242,7 +242,7 @@ public class GenericGroupTest {
             .setName("roundrobin")
             .setMetadata(new byte[0]));
 
-        GenericGroupMember member1 = new GenericGroupMember(
+        ClassicGroupMember member1 = new ClassicGroupMember(
             memberId,
             Optional.empty(),
             clientId,
@@ -263,7 +263,7 @@ public class GenericGroupTest {
             .setName("range")
             .setMetadata(new byte[0]));
 
-        GenericGroupMember member2 = new GenericGroupMember(
+        ClassicGroupMember member2 = new ClassicGroupMember(
             "member2",
             Optional.empty(),
             clientId,
@@ -279,7 +279,7 @@ public class GenericGroupTest {
         assertTrue(group.selectProtocol().equals("range") ||
             group.selectProtocol().equals("roundrobin"));
 
-        GenericGroupMember member3 = new GenericGroupMember(
+        ClassicGroupMember member3 = new ClassicGroupMember(
             "member3",
             Optional.empty(),
             clientId,
@@ -311,7 +311,7 @@ public class GenericGroupTest {
             .setName("roundrobin")
             .setMetadata(new byte[0]));
 
-        GenericGroupMember member1 = new GenericGroupMember(
+        ClassicGroupMember member1 = new ClassicGroupMember(
             memberId,
             Optional.empty(),
             clientId,
@@ -333,7 +333,7 @@ public class GenericGroupTest {
             .setMetadata(new byte[0]));
 
 
-        GenericGroupMember member2 = new GenericGroupMember(
+        ClassicGroupMember member2 = new ClassicGroupMember(
             "member2",
             Optional.empty(),
             clientId,
@@ -359,7 +359,7 @@ public class GenericGroupTest {
             .setName("roundrobin")
             .setMetadata(new byte[0]));
 
-        GenericGroupMember member1 = new GenericGroupMember(
+        ClassicGroupMember member1 = new ClassicGroupMember(
             memberId,
             Optional.empty(),
             clientId,
@@ -394,7 +394,7 @@ public class GenericGroupTest {
                     Collections.singletonList("foo")
                 )).array()));
 
-        GenericGroupMember member = new GenericGroupMember(
+        ClassicGroupMember member = new ClassicGroupMember(
             memberId,
             Optional.empty(),
             clientId,
@@ -425,7 +425,7 @@ public class GenericGroupTest {
             .setName("range")
             .setMetadata(new byte[0]));
 
-        GenericGroupMember memberWithFaultyProtocol = new GenericGroupMember(
+        ClassicGroupMember memberWithFaultyProtocol = new ClassicGroupMember(
             memberId,
             Optional.empty(),
             clientId,
@@ -454,7 +454,7 @@ public class GenericGroupTest {
             .setName("range")
             .setMetadata(new byte[0]));
 
-        GenericGroupMember memberWithNonConsumerProtocol = new GenericGroupMember(
+        ClassicGroupMember memberWithNonConsumerProtocol = new ClassicGroupMember(
             memberId,
             Optional.empty(),
             clientId,
@@ -480,7 +480,7 @@ public class GenericGroupTest {
             .setName("roundrobin")
             .setMetadata(new byte[0]));
 
-        GenericGroupMember member = new GenericGroupMember(
+        ClassicGroupMember member = new ClassicGroupMember(
             memberId,
             Optional.empty(),
             clientId,
@@ -523,7 +523,7 @@ public class GenericGroupTest {
             .setName("roundrobin")
             .setMetadata(new byte[0]));
 
-        GenericGroupMember member = new GenericGroupMember(
+        ClassicGroupMember member = new ClassicGroupMember(
             memberId,
             Optional.empty(),
             clientId,
@@ -568,7 +568,7 @@ public class GenericGroupTest {
             .setName("roundrobin")
             .setMetadata(new byte[0]));
 
-        GenericGroupMember member = new GenericGroupMember(
+        ClassicGroupMember member = new ClassicGroupMember(
             memberId,
             Optional.of(groupInstanceId),
             clientId,
@@ -606,7 +606,7 @@ public class GenericGroupTest {
             .setName("roundrobin")
             .setMetadata(new byte[0]));
 
-        GenericGroupMember member = new GenericGroupMember(
+        ClassicGroupMember member = new ClassicGroupMember(
             memberId,
             Optional.empty(),
             clientId,
@@ -640,7 +640,7 @@ public class GenericGroupTest {
             .setName("roundrobin")
             .setMetadata(new byte[0]));
 
-        GenericGroupMember member = new GenericGroupMember(
+        ClassicGroupMember member = new ClassicGroupMember(
             memberId,
             Optional.empty(),
             clientId,
@@ -670,7 +670,7 @@ public class GenericGroupTest {
             .setName("roundrobin")
             .setMetadata(new byte[0]));
 
-        GenericGroupMember member = new GenericGroupMember(
+        ClassicGroupMember member = new ClassicGroupMember(
             memberId,
             Optional.empty(),
             clientId,
@@ -701,7 +701,7 @@ public class GenericGroupTest {
             .setName("roundrobin")
             .setMetadata(new byte[0]));
 
-        GenericGroupMember member = new GenericGroupMember(
+        ClassicGroupMember member = new ClassicGroupMember(
             memberId,
             Optional.empty(),
             clientId,
@@ -728,7 +728,7 @@ public class GenericGroupTest {
             .setName("roundrobin")
             .setMetadata(new byte[0]));
 
-        GenericGroupMember member = new GenericGroupMember(
+        ClassicGroupMember member = new ClassicGroupMember(
             memberId,
             Optional.empty(),
             clientId,
@@ -754,7 +754,7 @@ public class GenericGroupTest {
         assertFalse(group.hasMemberId(memberId));
         assertTrue(group.isPendingMember(memberId));
 
-        GenericGroupMember member = new GenericGroupMember(
+        ClassicGroupMember member = new ClassicGroupMember(
             memberId,
             Optional.empty(),
             clientId,
@@ -788,7 +788,7 @@ public class GenericGroupTest {
             .setName("roundrobin")
             .setMetadata(new byte[0]));
 
-        GenericGroupMember member = new GenericGroupMember(
+        ClassicGroupMember member = new ClassicGroupMember(
             memberId,
             Optional.of(groupInstanceId),
             clientId,
@@ -826,7 +826,7 @@ public class GenericGroupTest {
             .setName("roundrobin")
             .setMetadata(new byte[0]));
 
-        GenericGroupMember member = new GenericGroupMember(
+        ClassicGroupMember member = new ClassicGroupMember(
             memberId,
             Optional.empty(),
             clientId,
@@ -851,7 +851,7 @@ public class GenericGroupTest {
             .setName("roundrobin")
             .setMetadata(new byte[0]));
 
-        GenericGroupMember member = new GenericGroupMember(
+        ClassicGroupMember member = new ClassicGroupMember(
             memberId,
             Optional.of(groupInstanceId),
             clientId,
@@ -876,7 +876,7 @@ public class GenericGroupTest {
             .setName("roundrobin")
             .setMetadata(new byte[0]));
 
-        GenericGroupMember member = new GenericGroupMember(
+        ClassicGroupMember member = new ClassicGroupMember(
             memberId,
             Optional.empty(),
             clientId,
@@ -902,7 +902,7 @@ public class GenericGroupTest {
             .setName("roundrobin")
             .setMetadata(new byte[0]));
 
-        GenericGroupMember leader = new GenericGroupMember(
+        ClassicGroupMember leader = new ClassicGroupMember(
             memberId,
             Optional.empty(),
             clientId,
@@ -917,7 +917,7 @@ public class GenericGroupTest {
         assertTrue(group.isLeader(memberId));
         assertFalse(leader.isAwaitingJoin());
 
-        GenericGroupMember newLeader = new GenericGroupMember(
+        ClassicGroupMember newLeader = new ClassicGroupMember(
             "new-leader",
             Optional.empty(),
             clientId,
@@ -929,7 +929,7 @@ public class GenericGroupTest {
         );
         group.add(newLeader, new CompletableFuture<>());
 
-        GenericGroupMember newMember = new GenericGroupMember(
+        ClassicGroupMember newMember = new ClassicGroupMember(
             "new-member",
             Optional.empty(),
             clientId,
@@ -952,7 +952,7 @@ public class GenericGroupTest {
             .setName("roundrobin")
             .setMetadata(new byte[0]));
 
-        GenericGroupMember leader = new GenericGroupMember(
+        ClassicGroupMember leader = new ClassicGroupMember(
             memberId,
             Optional.empty(),
             clientId,
@@ -967,7 +967,7 @@ public class GenericGroupTest {
         assertTrue(group.isLeader(memberId));
         assertTrue(leader.isAwaitingJoin());
 
-        GenericGroupMember newMember = new GenericGroupMember(
+        ClassicGroupMember newMember = new ClassicGroupMember(
             "new-member",
             Optional.empty(),
             clientId,
@@ -989,7 +989,7 @@ public class GenericGroupTest {
         group.validateOffsetCommit("", "", -1, false);
 
         // Add a member.
-        group.add(new GenericGroupMember(
+        group.add(new ClassicGroupMember(
             "member-id",
             Optional.of("instance-id"),
             "",
@@ -1066,7 +1066,7 @@ public class GenericGroupTest {
         protocols.add(new JoinGroupRequestProtocol()
             .setName("roundrobin")
             .setMetadata(new byte[0]));
-        GenericGroupMember member = new GenericGroupMember(
+        ClassicGroupMember member = new ClassicGroupMember(
             memberId,
             Optional.of(groupInstanceId),
             clientId,
@@ -1116,7 +1116,7 @@ public class GenericGroupTest {
         OffsetAndMetadata offsetAndMetadata = new OffsetAndMetadata(15000L, OptionalInt.empty(), "", commitTimestamp, OptionalLong.empty());
         MockTime time = new MockTime();
         long currentStateTimestamp = time.milliseconds();
-        GenericGroup group = new GenericGroup(new LogContext(), "groupId", EMPTY, time, mock(GroupCoordinatorMetricsShard.class));
+        ClassicGroup group = new ClassicGroup(new LogContext(), "groupId", EMPTY, time, mock(GroupCoordinatorMetricsShard.class));
 
         // 1. Test no protocol type. Simple consumer case, Base timestamp based off of last commit timestamp.
         Optional<OffsetExpirationCondition> offsetExpirationCondition = group.offsetExpirationCondition();
@@ -1133,7 +1133,7 @@ public class GenericGroupTest {
             .setMetadata(ConsumerProtocol.serializeSubscription(
                 new ConsumerPartitionAssignor.Subscription(Collections.singletonList("topic"))).array()));
 
-        GenericGroupMember memberWithNonConsumerProtocol = new GenericGroupMember(
+        ClassicGroupMember memberWithNonConsumerProtocol = new ClassicGroupMember(
             "memberWithNonConsumerProtocol",
             Optional.empty(),
             clientId,
@@ -1161,7 +1161,7 @@ public class GenericGroupTest {
 
         // 4. Test consumer protocol type + subscribed topics + Stable state. Base timestamp based off of last commit timestamp.
         group.remove("memberWithNonConsumerProtocol");
-        GenericGroupMember memberWithConsumerProtocol = new GenericGroupMember(
+        ClassicGroupMember memberWithConsumerProtocol = new ClassicGroupMember(
             "memberWithConsumerProtocol",
             Optional.empty(),
             clientId,
@@ -1191,7 +1191,7 @@ public class GenericGroupTest {
 
     @Test
     public void testIsSubscribedToTopic() {
-        GenericGroup group = new GenericGroup(new LogContext(), "groupId", EMPTY, Time.SYSTEM, mock(GroupCoordinatorMetricsShard.class));
+        ClassicGroup group = new ClassicGroup(new LogContext(), "groupId", EMPTY, Time.SYSTEM, mock(GroupCoordinatorMetricsShard.class));
 
         // 1. group has no protocol type => not subscribed
         assertFalse(group.isSubscribedToTopic("topic"));
@@ -1203,7 +1203,7 @@ public class GenericGroupTest {
             .setMetadata(ConsumerProtocol.serializeSubscription(
                 new ConsumerPartitionAssignor.Subscription(Collections.singletonList("topic"))).array()));
 
-        GenericGroupMember memberWithNonConsumerProtocol = new GenericGroupMember(
+        ClassicGroupMember memberWithNonConsumerProtocol = new ClassicGroupMember(
             "memberWithNonConsumerProtocol",
             Optional.empty(),
             clientId,
@@ -1223,7 +1223,7 @@ public class GenericGroupTest {
 
         // 3. group uses consumer group protocol type but empty members => not subscribed
         group.remove("memberWithNonConsumerProtocol");
-        GenericGroupMember memberWithConsumerProtocol = new GenericGroupMember(
+        ClassicGroupMember memberWithConsumerProtocol = new ClassicGroupMember(
             "memberWithConsumerProtocol",
             Optional.empty(),
             clientId,
@@ -1258,24 +1258,24 @@ public class GenericGroupTest {
         // Confirm metrics is not updated when a new GenericGroup is created but only when the group transitions
         // its state.
         GroupCoordinatorMetricsShard metrics = mock(GroupCoordinatorMetricsShard.class);
-        GenericGroup group = new GenericGroup(new LogContext(), "groupId", EMPTY, Time.SYSTEM, metrics);
-        verify(metrics, times(0)).onGenericGroupStateTransition(any(), any());
+        ClassicGroup group = new ClassicGroup(new LogContext(), "groupId", EMPTY, Time.SYSTEM, metrics);
+        verify(metrics, times(0)).onClassicGroupStateTransition(any(), any());
 
         group.transitionTo(PREPARING_REBALANCE);
-        verify(metrics, times(1)).onGenericGroupStateTransition(EMPTY, PREPARING_REBALANCE);
+        verify(metrics, times(1)).onClassicGroupStateTransition(EMPTY, PREPARING_REBALANCE);
 
         group.transitionTo(COMPLETING_REBALANCE);
-        verify(metrics, times(1)).onGenericGroupStateTransition(PREPARING_REBALANCE, COMPLETING_REBALANCE);
+        verify(metrics, times(1)).onClassicGroupStateTransition(PREPARING_REBALANCE, COMPLETING_REBALANCE);
 
         group.transitionTo(STABLE);
-        verify(metrics, times(1)).onGenericGroupStateTransition(COMPLETING_REBALANCE, STABLE);
+        verify(metrics, times(1)).onClassicGroupStateTransition(COMPLETING_REBALANCE, STABLE);
 
         group.transitionTo(DEAD);
-        verify(metrics, times(1)).onGenericGroupStateTransition(STABLE, DEAD);
+        verify(metrics, times(1)).onClassicGroupStateTransition(STABLE, DEAD);
     }
 
-    private void assertState(GenericGroup group, GenericGroupState targetState) {
-        Set<GenericGroupState> otherStates = new HashSet<>();
+    private void assertState(ClassicGroup group, ClassicGroupState targetState) {
+        Set<ClassicGroupState> otherStates = new HashSet<>();
         otherStates.add(STABLE);
         otherStates.add(PREPARING_REBALANCE);
         otherStates.add(COMPLETING_REBALANCE);

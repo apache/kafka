@@ -352,7 +352,7 @@ public class GroupCoordinatorServiceTest {
         service.startup(() -> 1);
 
         when(runtime.scheduleWriteOperation(
-            ArgumentMatchers.eq("generic-group-join"),
+            ArgumentMatchers.eq("classic-group-join"),
             ArgumentMatchers.eq(new TopicPartition("__consumer_offsets", 0)),
             ArgumentMatchers.eq(Duration.ofMillis(5000)),
             ArgumentMatchers.any()
@@ -385,7 +385,7 @@ public class GroupCoordinatorServiceTest {
         service.startup(() -> 1);
 
         when(runtime.scheduleWriteOperation(
-            ArgumentMatchers.eq("generic-group-join"),
+            ArgumentMatchers.eq("classic-group-join"),
             ArgumentMatchers.eq(new TopicPartition("__consumer_offsets", 0)),
             ArgumentMatchers.eq(Duration.ofMillis(5000)),
             ArgumentMatchers.any()
@@ -492,7 +492,7 @@ public class GroupCoordinatorServiceTest {
         service.startup(() -> 1);
 
         when(runtime.scheduleWriteOperation(
-            ArgumentMatchers.eq("generic-group-sync"),
+            ArgumentMatchers.eq("classic-group-sync"),
             ArgumentMatchers.eq(new TopicPartition("__consumer_offsets", 0)),
             ArgumentMatchers.eq(Duration.ofMillis(5000)),
             ArgumentMatchers.any()
@@ -525,7 +525,7 @@ public class GroupCoordinatorServiceTest {
         service.startup(() -> 1);
 
         when(runtime.scheduleWriteOperation(
-            ArgumentMatchers.eq("generic-group-sync"),
+            ArgumentMatchers.eq("classic-group-sync"),
             ArgumentMatchers.eq(new TopicPartition("__consumer_offsets", 0)),
             ArgumentMatchers.eq(Duration.ofMillis(5000)),
             ArgumentMatchers.any()
@@ -616,7 +616,7 @@ public class GroupCoordinatorServiceTest {
         service.startup(() -> 1);
 
         when(runtime.scheduleReadOperation(
-            ArgumentMatchers.eq("generic-group-heartbeat"),
+            ArgumentMatchers.eq("classic-group-heartbeat"),
             ArgumentMatchers.eq(new TopicPartition("__consumer_offsets", 0)),
             ArgumentMatchers.any()
         )).thenReturn(CompletableFuture.completedFuture(
@@ -648,7 +648,7 @@ public class GroupCoordinatorServiceTest {
         service.startup(() -> 1);
 
         when(runtime.scheduleReadOperation(
-            ArgumentMatchers.eq("generic-group-heartbeat"),
+            ArgumentMatchers.eq("classic-group-heartbeat"),
             ArgumentMatchers.eq(new TopicPartition("__consumer_offsets", 0)),
             ArgumentMatchers.any()
         )).thenReturn(FutureUtils.failedFuture(
@@ -680,7 +680,7 @@ public class GroupCoordinatorServiceTest {
         service.startup(() -> 1);
 
         when(runtime.scheduleReadOperation(
-            ArgumentMatchers.eq("generic-group-heartbeat"),
+            ArgumentMatchers.eq("classic-group-heartbeat"),
             ArgumentMatchers.eq(new TopicPartition("__consumer_offsets", 0)),
             ArgumentMatchers.any()
         )).thenReturn(FutureUtils.failedFuture(
@@ -1237,7 +1237,7 @@ public class GroupCoordinatorServiceTest {
         service.startup(() -> 1);
 
         when(runtime.scheduleWriteOperation(
-            ArgumentMatchers.eq("generic-group-leave"),
+            ArgumentMatchers.eq("classic-group-leave"),
             ArgumentMatchers.eq(new TopicPartition("__consumer_offsets", 0)),
             ArgumentMatchers.eq(Duration.ofMillis(5000)),
             ArgumentMatchers.any()
@@ -1278,7 +1278,7 @@ public class GroupCoordinatorServiceTest {
         service.startup(() -> 1);
 
         when(runtime.scheduleWriteOperation(
-            ArgumentMatchers.eq("generic-group-leave"),
+            ArgumentMatchers.eq("classic-group-leave"),
             ArgumentMatchers.eq(new TopicPartition("__consumer_offsets", 0)),
             ArgumentMatchers.eq(Duration.ofMillis(5000)),
             ArgumentMatchers.any()
