@@ -530,7 +530,7 @@ class ConsumerBounceTest extends AbstractConsumerTest with Logging {
       if (iter == numIters)
         initiateShutdown()
       else
-        Thread.sleep(1000)
+        Thread.sleep(500)
     }
   }
 
