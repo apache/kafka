@@ -28,6 +28,7 @@ import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.ProducerFencedException;
+import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Time;
@@ -80,6 +81,9 @@ public class MockProducer<K, V> implements Producer<K, V> {
     public RuntimeException flushException = null;
     public RuntimeException partitionsForException = null;
     public RuntimeException closeException = null;
+    private boolean telemetryDisabled = false;
+    private Uuid clientInstanceId;
+    private int injectTimeoutExceptionCounter;
 
     /**
      * Create a mock producer
@@ -388,9 +392,38 @@ public class MockProducer<K, V> implements Producer<K, V> {
         return this.cluster.partitionsForTopic(topic);
     }
 
+    public void disableTelemetry() {
+        telemetryDisabled = true;
+    }
+
+    /**
+     * @param injectTimeoutExceptionCounter use -1 for infinite
+     */
+    public void injectTimeoutException(final int injectTimeoutExceptionCounter) {
+        this.injectTimeoutExceptionCounter = injectTimeoutExceptionCounter;
+    }
+
+    public void setClientInstanceId(final Uuid instanceId) {
+        clientInstanceId = instanceId;
+    }
+
     @Override
     public Uuid clientInstanceId(Duration timeout) {
-        throw new UnsupportedOperationException();
+        if (telemetryDisabled) {
+            throw new IllegalStateException();
+        }
+        if (clientInstanceId == null) {
+            throw new UnsupportedOperationException("clientInstanceId not set");
+        }
+        if (injectTimeoutExceptionCounter != 0) {
+            // -1 is used as "infinite"
+            if (injectTimeoutExceptionCounter > 0) {
+                --injectTimeoutExceptionCounter;
+            }
+            throw new TimeoutException();
+        }
+
+        return clientInstanceId;
     }
 
     public Map<MetricName, Metric> metrics() {

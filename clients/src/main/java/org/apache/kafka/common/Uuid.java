@@ -17,10 +17,12 @@
 package org.apache.kafka.common;
 
 import java.nio.ByteBuffer;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Base64;
 import java.util.Collections;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 
 /**
@@ -47,44 +49,13 @@ public class Uuid implements Comparable<Uuid> {
     public static final Uuid ZERO_UUID = new Uuid(0L, 0L);
 
     /**
-     * A UUID that is used to identify new or unknown dir assignments.
-     */
-    public static final Uuid UNKNOWN_DIR = ZERO_UUID;
-
-    /**
-     * A UUID that is used to represent unspecified offline dirs.
-     */
-    public static final Uuid OFFLINE_DIR = ONE_UUID;
-
-    /**
-     * A UUID that is used to represent and unspecified log directory,
-     * that is expected to have been previously selected to host an
-     * associated replica. This contrasts with {@code UNKNOWN_DIR},
-     * which is associated with (typically new) replicas that may not
-     * yet have been placed in any log directory.
-     */
-    public static final Uuid SELECTED_DIR = new Uuid(0L, 2L);
-
-    /**
      * The set of reserved UUIDs that will never be returned by the randomUuid method.
      */
-    public static final Set<Uuid> RESERVED;
-
-    static {
-        HashSet<Uuid> reserved = new HashSet<>(Arrays.asList(
-                METADATA_TOPIC_ID,
-                ZERO_UUID,
-                ONE_UUID,
-                UNKNOWN_DIR,
-                OFFLINE_DIR,
-                SELECTED_DIR
-        ));
-        // The first 100 UUIDs are reserved for future use.
-        for (long i = 0L; i < 100L; i++) {
-            reserved.add(new Uuid(0L, i));
-        }
-        RESERVED = Collections.unmodifiableSet(reserved);
-    }
+    public static final Set<Uuid> RESERVED = Collections.unmodifiableSet(new HashSet<>(Arrays.asList(
+            METADATA_TOPIC_ID,
+            ZERO_UUID,
+            ONE_UUID
+    )));
 
     private final long mostSignificantBits;
     private final long leastSignificantBits;
@@ -199,5 +170,33 @@ public class Uuid implements Comparable<Uuid> {
         } else {
             return 0;
         }
+    }
+
+    /**
+     * Convert a list of Uuid to an array of Uuid.
+     *
+     * @param list          The input list
+     * @return              The output array
+     */
+    public static Uuid[] toArray(List<Uuid> list) {
+        if (list == null) return null;
+        Uuid[] array = new Uuid[list.size()];
+        for (int i = 0; i < list.size(); i++) {
+            array[i] = list.get(i);
+        }
+        return array;
+    }
+
+    /**
+     * Convert an array of Uuids to a list of Uuid.
+     *
+     * @param array         The input array
+     * @return              The output list
+     */
+    public static List<Uuid> toList(Uuid[] array) {
+        if (array == null) return null;
+        List<Uuid> list = new ArrayList<>(array.length);
+        list.addAll(Arrays.asList(array));
+        return list;
     }
 }

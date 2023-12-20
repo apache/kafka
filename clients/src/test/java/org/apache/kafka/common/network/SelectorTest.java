@@ -408,8 +408,8 @@ public class SelectorTest {
                     @Override
                     public void close() throws IOException {
                         closedChannelsCount.getAndIncrement();
+                        super.close();
                         if (index == 0) throw new RuntimeException("you should fail");
-                        else super.close();
                     }
                 };
             }
@@ -768,7 +768,8 @@ public class SelectorTest {
 
         SelectionKey selectionKey = mock(SelectionKey.class);
         when(kafkaChannel.selectionKey()).thenReturn(selectionKey);
-        when(selectionKey.channel()).thenReturn(SocketChannel.open());
+        SocketChannel socket = SocketChannel.open();
+        when(selectionKey.channel()).thenReturn(socket);
         when(selectionKey.readyOps()).thenReturn(SelectionKey.OP_CONNECT);
         when(selectionKey.attachment()).thenReturn(kafkaChannel);
 
@@ -782,6 +783,7 @@ public class SelectorTest {
         verify(kafkaChannel).disconnect();
         verify(kafkaChannel).close();
         verify(selectionKey).cancel();
+        socket.close();
     }
 
     @Test
@@ -918,6 +920,7 @@ public class SelectorTest {
         Selector selector = new ImmediatelyConnectingSelector(CONNECTION_MAX_IDLE_MS, metrics, time, "MetricGroup", channelBuilder, new LogContext()) {
             @Override
             public void close(String id) {
+                super.close(id);
                 throw new RuntimeException();
             }
         };

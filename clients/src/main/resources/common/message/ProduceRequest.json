@@ -33,7 +33,9 @@
   // Starting in Version 8, response has RecordErrors and ErrorMessage. See KIP-467.
   //
   // Version 9 enables flexible versions.
-  "validVersions": "0-9",
+  //
+  // Version 10 is the same as version 9 (KIP-951).
+  "validVersions": "0-10",
   "flexibleVersions": "9+",
   "fields": [
     { "name": "TransactionalId", "type": "string", "versions": "3+", "nullableVersions": "3+", "default": "null", "entityType": "transactionalId",

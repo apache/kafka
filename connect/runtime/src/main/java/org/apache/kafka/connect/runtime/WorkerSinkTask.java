@@ -19,9 +19,9 @@ package org.apache.kafka.connect.runtime;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
-import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetCommitCallback;
+import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.WakeupException;
@@ -85,7 +85,7 @@ class WorkerSinkTask extends WorkerTask {
     private final TransformationChain<SinkRecord> transformationChain;
     private final SinkTaskMetricsGroup sinkTaskMetricsGroup;
     private final boolean isTopicTrackingEnabled;
-    private final KafkaConsumer<byte[], byte[]> consumer;
+    private final Consumer<byte[], byte[]> consumer;
     private WorkerSinkTaskContext context;
     private final List<SinkRecord> messageBatch;
     private final Map<TopicPartition, OffsetAndMetadata> lastCommittedOffsets;
@@ -114,7 +114,7 @@ class WorkerSinkTask extends WorkerTask {
                           ErrorHandlingMetrics errorMetrics,
                           HeaderConverter headerConverter,
                           TransformationChain<SinkRecord> transformationChain,
-                          KafkaConsumer<byte[], byte[]> consumer,
+                          Consumer<byte[], byte[]> consumer,
                           ClassLoader loader,
                           Time time,
                           RetryWithToleranceOperator retryWithToleranceOperator,
@@ -184,6 +184,14 @@ class WorkerSinkTask extends WorkerTask {
         Utils.closeQuietly(transformationChain, "transformation chain");
         Utils.closeQuietly(retryWithToleranceOperator, "retry operator");
         Utils.closeQuietly(headerConverter, "header converter");
+        /*
+            Setting partition count explicitly to 0 to handle the case,
+            when the task fails, which would cause its consumer to leave the group.
+            This would cause onPartitionsRevoked to be invoked in the rebalance listener, but not onPartitionsAssigned,
+            so the metrics for the task (which are still available for failed tasks until they are explicitly revoked
+            from the worker) would become inaccurate.
+        */
+        sinkTaskMetricsGroup.recordPartitionCount(0);
     }
 
     @Override
@@ -646,7 +654,6 @@ class WorkerSinkTask extends WorkerTask {
     }
 
     private void openPartitions(Collection<TopicPartition> partitions) {
-        updatePartitionCount();
         task.open(partitions);
     }
 
@@ -668,7 +675,6 @@ class WorkerSinkTask extends WorkerTask {
             origOffsets.keySet().removeAll(topicPartitions);
             currentOffsets.keySet().removeAll(topicPartitions);
         }
-        updatePartitionCount();
         lastCommittedOffsets.keySet().removeAll(topicPartitions);
     }
 
@@ -729,7 +735,7 @@ class WorkerSinkTask extends WorkerTask {
                 else if (!context.pausedPartitions().isEmpty())
                     consumer.pause(context.pausedPartitions());
             }
-
+            updatePartitionCount();
             if (partitions.isEmpty()) {
                 return;
             }

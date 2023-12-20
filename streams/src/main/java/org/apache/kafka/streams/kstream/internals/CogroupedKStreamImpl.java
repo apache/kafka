@@ -141,7 +141,7 @@ public class CogroupedKStreamImpl<K, VOut> extends AbstractStream<K, VOut> imple
             groupPatterns,
             initializer,
             named,
-            new KeyValueStoreMaterializer<>(materializedInternal).materialize(),
+            new KeyValueStoreMaterializer<>(materializedInternal),
             materializedInternal.keySerde(),
             materializedInternal.valueSerde(),
             materializedInternal.queryableStoreName(),

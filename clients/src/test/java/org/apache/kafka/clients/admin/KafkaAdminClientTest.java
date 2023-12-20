@@ -33,8 +33,8 @@ import org.apache.kafka.common.ElectionType;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.Node;
-import org.apache.kafka.common.TopicCollection;
 import org.apache.kafka.common.PartitionInfo;
+import org.apache.kafka.common.TopicCollection;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.TopicPartitionReplica;
 import org.apache.kafka.common.Uuid;
@@ -110,13 +110,15 @@ import org.apache.kafka.common.message.ElectLeadersResponseData.PartitionResult;
 import org.apache.kafka.common.message.ElectLeadersResponseData.ReplicaElectionResult;
 import org.apache.kafka.common.message.FindCoordinatorRequestData;
 import org.apache.kafka.common.message.FindCoordinatorResponseData;
+import org.apache.kafka.common.message.GetTelemetrySubscriptionsResponseData;
 import org.apache.kafka.common.message.IncrementalAlterConfigsResponseData;
 import org.apache.kafka.common.message.IncrementalAlterConfigsResponseData.AlterConfigsResourceResponse;
-import org.apache.kafka.common.message.LeaveGroupRequestData;
 import org.apache.kafka.common.message.InitProducerIdResponseData;
+import org.apache.kafka.common.message.LeaveGroupRequestData;
 import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity;
 import org.apache.kafka.common.message.LeaveGroupResponseData;
 import org.apache.kafka.common.message.LeaveGroupResponseData.MemberResponse;
+import org.apache.kafka.common.message.ListClientMetricsResourcesResponseData;
 import org.apache.kafka.common.message.ListGroupsResponseData;
 import org.apache.kafka.common.message.ListOffsetsResponseData;
 import org.apache.kafka.common.message.ListOffsetsResponseData.ListOffsetsTopicResponse;
@@ -176,12 +178,16 @@ import org.apache.kafka.common.requests.DescribeUserScramCredentialsResponse;
 import org.apache.kafka.common.requests.ElectLeadersResponse;
 import org.apache.kafka.common.requests.FindCoordinatorRequest;
 import org.apache.kafka.common.requests.FindCoordinatorResponse;
+import org.apache.kafka.common.requests.GetTelemetrySubscriptionsRequest;
+import org.apache.kafka.common.requests.GetTelemetrySubscriptionsResponse;
 import org.apache.kafka.common.requests.IncrementalAlterConfigsResponse;
 import org.apache.kafka.common.requests.InitProducerIdRequest;
 import org.apache.kafka.common.requests.InitProducerIdResponse;
 import org.apache.kafka.common.requests.JoinGroupRequest;
 import org.apache.kafka.common.requests.LeaveGroupRequest;
 import org.apache.kafka.common.requests.LeaveGroupResponse;
+import org.apache.kafka.common.requests.ListClientMetricsResourcesRequest;
+import org.apache.kafka.common.requests.ListClientMetricsResourcesResponse;
 import org.apache.kafka.common.requests.ListGroupsRequest;
 import org.apache.kafka.common.requests.ListGroupsResponse;
 import org.apache.kafka.common.requests.ListOffsetsRequest;
@@ -222,6 +228,7 @@ import org.slf4j.LoggerFactory;
 
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -1757,6 +1764,29 @@ public class KafkaAdminClientTest {
             assertEquals(new HashSet<>(asList(topic)), result.keySet());
             assertNotNull(result.get(topic).get());
             assertNull(result.get(unrequested));
+        }
+    }
+
+    @Test
+    public void testDescribeClientMetricsConfigs() throws Exception {
+        ConfigResource resource = new ConfigResource(ConfigResource.Type.CLIENT_METRICS, "sub1");
+        ConfigResource resource1 = new ConfigResource(ConfigResource.Type.CLIENT_METRICS, "sub2");
+        try (AdminClientUnitTestEnv env = mockClientEnv()) {
+            env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
+            env.kafkaClient().prepareResponse(new DescribeConfigsResponse(
+                new DescribeConfigsResponseData().setResults(asList(
+                    new DescribeConfigsResponseData.DescribeConfigsResult()
+                    .setResourceName(resource.name()).setResourceType(resource.type().id()).setErrorCode(Errors.NONE.code())
+                    .setConfigs(emptyList()),
+                    new DescribeConfigsResponseData.DescribeConfigsResult()
+                    .setResourceName(resource1.name()).setResourceType(resource1.type().id()).setErrorCode(Errors.NONE.code())
+                    .setConfigs(emptyList())))));
+            Map<ConfigResource, KafkaFuture<Config>> result = env.adminClient().describeConfigs(asList(
+                resource,
+                resource1)).values();
+            assertEquals(new HashSet<>(asList(resource, resource1)), result.keySet());
+            assertNotNull(result.get(resource).get());
+            assertNotNull(result.get(resource1).get());
         }
     }
 
@@ -4071,6 +4101,12 @@ public class KafkaAdminClientTest {
                     .setErrorMessage("authorization error"));
 
             responseData.responses().add(new AlterConfigsResourceResponse()
+                    .setResourceName("metric1")
+                    .setResourceType(ConfigResource.Type.CLIENT_METRICS.id())
+                    .setErrorCode(Errors.INVALID_REQUEST.code())
+                    .setErrorMessage("Subscription is not allowed"));
+
+            responseData.responses().add(new AlterConfigsResourceResponse()
                     .setResourceName("topic1")
                     .setResourceType(ConfigResource.Type.TOPIC.id())
                     .setErrorCode(Errors.INVALID_REQUEST.code())
@@ -4080,6 +4116,7 @@ public class KafkaAdminClientTest {
 
             ConfigResource brokerResource = new ConfigResource(ConfigResource.Type.BROKER, "");
             ConfigResource topicResource = new ConfigResource(ConfigResource.Type.TOPIC, "topic1");
+            ConfigResource metricResource = new ConfigResource(ConfigResource.Type.CLIENT_METRICS, "metric1");
 
             AlterConfigOp alterConfigOp1 = new AlterConfigOp(
                     new ConfigEntry("log.segment.bytes", "1073741"),
@@ -4089,13 +4126,19 @@ public class KafkaAdminClientTest {
                     new ConfigEntry("compression.type", "gzip"),
                     AlterConfigOp.OpType.APPEND);
 
+            AlterConfigOp alterConfigOp3 = new AlterConfigOp(
+                    new ConfigEntry("interval.ms", "1000"),
+                    AlterConfigOp.OpType.APPEND);
+
             final Map<ConfigResource, Collection<AlterConfigOp>> configs = new HashMap<>();
             configs.put(brokerResource, singletonList(alterConfigOp1));
             configs.put(topicResource, singletonList(alterConfigOp2));
+            configs.put(metricResource, singletonList(alterConfigOp3));
 
             AlterConfigsResult result = env.adminClient().incrementalAlterConfigs(configs);
             TestUtils.assertFutureError(result.values().get(brokerResource), ClusterAuthorizationException.class);
             TestUtils.assertFutureError(result.values().get(topicResource), InvalidRequestException.class);
+            TestUtils.assertFutureError(result.values().get(metricResource), InvalidRequestException.class);
 
             // Test a call where there are no errors.
             responseData =  new IncrementalAlterConfigsResponseData();
@@ -4104,9 +4147,18 @@ public class KafkaAdminClientTest {
                     .setResourceType(ConfigResource.Type.BROKER.id())
                     .setErrorCode(Errors.NONE.code())
                     .setErrorMessage(ApiError.NONE.message()));
+            responseData.responses().add(new AlterConfigsResourceResponse()
+                    .setResourceName("metric1")
+                    .setResourceType(ConfigResource.Type.CLIENT_METRICS.id())
+                    .setErrorCode(Errors.NONE.code())
+                    .setErrorMessage(ApiError.NONE.message()));
+
+            final Map<ConfigResource, Collection<AlterConfigOp>> successConfig = new HashMap<>();
+            successConfig.put(brokerResource, singletonList(alterConfigOp1));
+            successConfig.put(metricResource, singletonList(alterConfigOp3));
 
             env.kafkaClient().prepareResponse(new IncrementalAlterConfigsResponse(responseData));
-            env.adminClient().incrementalAlterConfigs(Collections.singletonMap(brokerResource, singletonList(alterConfigOp1))).all().get();
+            env.adminClient().incrementalAlterConfigs(successConfig).all().get();
         }
     }
 
@@ -7015,6 +7067,48 @@ public class KafkaAdminClientTest {
         }
     }
 
+    @Test
+    public void testClientInstanceId() {
+        try (AdminClientUnitTestEnv env = mockClientEnv()) {
+            Uuid expected = Uuid.randomUuid();
+
+            GetTelemetrySubscriptionsResponseData responseData =
+                new GetTelemetrySubscriptionsResponseData().setClientInstanceId(expected).setErrorCode(Errors.NONE.code());
+
+            env.kafkaClient().prepareResponse(
+                request -> request instanceof GetTelemetrySubscriptionsRequest,
+                new GetTelemetrySubscriptionsResponse(responseData));
+
+            Uuid result = env.adminClient().clientInstanceId(Duration.ofMillis(10));
+            assertEquals(expected, result);
+        }
+    }
+
+    @Test
+    public void testClientInstanceIdInvalidTimeout() {
+        Properties props = new Properties();
+        props.setProperty(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
+
+        KafkaAdminClient admin = (KafkaAdminClient) AdminClient.create(props);
+        Exception exception = assertThrows(IllegalArgumentException.class, () -> admin.clientInstanceId(Duration.ofMillis(-1)));
+        assertEquals("The timeout cannot be negative.", exception.getMessage());
+
+        admin.close();
+    }
+
+    @Test
+    public void testClientInstanceIdNoTelemetryReporterRegistered() {
+        Properties props = new Properties();
+        props.setProperty(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
+        props.setProperty(AdminClientConfig.ENABLE_METRICS_PUSH_CONFIG, "false");
+
+        KafkaAdminClient admin = (KafkaAdminClient) AdminClient.create(props);
+        Exception exception = assertThrows(IllegalStateException.class, () -> admin.clientInstanceId(Duration.ofMillis(0)));
+        assertEquals("Telemetry is not enabled. Set config `enable.metrics.push` to `true`.", exception.getMessage());
+
+        admin.close();
+    }
+
     private UnregisterBrokerResponse prepareUnregisterBrokerResponse(Errors error, int throttleTimeMs) {
         return new UnregisterBrokerResponse(new UnregisterBrokerResponseData()
                 .setErrorCode(error.code())
@@ -7043,6 +7137,68 @@ public class KafkaAdminClientTest {
                                      member.clientId(),
                                      member.clientHost(),
                                      assignment);
+    }
+
+    @Test
+    public void testListClientMetricsResources() throws Exception {
+        try (AdminClientUnitTestEnv env = mockClientEnv()) {
+            List<ClientMetricsResourceListing> expected = Arrays.asList(
+                new ClientMetricsResourceListing("one"),
+                new ClientMetricsResourceListing("two")
+            );
+
+            ListClientMetricsResourcesResponseData responseData =
+                new ListClientMetricsResourcesResponseData().setErrorCode(Errors.NONE.code());
+
+            responseData.clientMetricsResources()
+                .add(new ListClientMetricsResourcesResponseData.ClientMetricsResource().setName("one"));
+            responseData.clientMetricsResources()
+                .add((new ListClientMetricsResourcesResponseData.ClientMetricsResource()).setName("two"));
+
+            env.kafkaClient().prepareResponse(
+                request -> request instanceof ListClientMetricsResourcesRequest,
+                new ListClientMetricsResourcesResponse(responseData));
+
+            ListClientMetricsResourcesResult result = env.adminClient().listClientMetricsResources();
+            assertEquals(new HashSet<>(expected), new HashSet<>(result.all().get()));
+        }
+    }
+
+    @Test
+    public void testListClientMetricsResourcesEmpty() throws Exception {
+        try (AdminClientUnitTestEnv env = mockClientEnv()) {
+            List<ClientMetricsResourceListing> expected = Collections.emptyList();
+
+            ListClientMetricsResourcesResponseData responseData =
+                new ListClientMetricsResourcesResponseData().setErrorCode(Errors.NONE.code());
+
+            env.kafkaClient().prepareResponse(
+                request -> request instanceof ListClientMetricsResourcesRequest,
+                new ListClientMetricsResourcesResponse(responseData));
+
+            ListClientMetricsResourcesResult result = env.adminClient().listClientMetricsResources();
+            assertEquals(new HashSet<>(expected), new HashSet<>(result.all().get()));
+        }
+    }
+
+    @Test
+    public void testListClientMetricsResourcesNotSupported() throws Exception {
+        try (AdminClientUnitTestEnv env = mockClientEnv()) {
+            env.kafkaClient().prepareResponse(
+                request -> request instanceof ListClientMetricsResourcesRequest,
+                prepareListClientMetricsResourcesResponse(Errors.UNSUPPORTED_VERSION));
+
+            ListClientMetricsResourcesResult result = env.adminClient().listClientMetricsResources();
+
+            // Validate response
+            assertNotNull(result.all());
+            TestUtils.assertFutureThrows(result.all(), Errors.UNSUPPORTED_VERSION.exception().getClass());
+        }
+    }
+
+    private static ListClientMetricsResourcesResponse prepareListClientMetricsResourcesResponse(Errors error) {
+        return new ListClientMetricsResourcesResponse(new ListClientMetricsResourcesResponseData()
+                .setErrorCode(error.code()));
     }
 
     @SafeVarargs
