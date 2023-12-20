@@ -1405,12 +1405,6 @@ public class MembershipManagerImplTest {
         assertTrue(membershipManager.currentAssignment().isEmpty());
     }
 
-    private void dropAssignedPartitions() {
-        SortedSet<TopicPartition> droppedPartitions = new TreeSet<>(MembershipManagerImpl.TOPIC_PARTITION_COMPARATOR);
-        droppedPartitions.addAll(subscriptionState.assignedPartitions());
-        subscriptionState.assignFromSubscribed(Collections.emptySet());
-    }
-
     private MembershipManagerImpl mockMemberSuccessfullyReceivesAndAcksAssignment(
             Uuid topicId, String topicName, List<Integer> partitions) {
         MembershipManagerImpl membershipManager = createMembershipManagerJoiningGroup();

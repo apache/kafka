@@ -1262,6 +1262,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     }
   }
 
+  // TODO: HeartbeatState needs to be reset upon rejoining. Otherwise GC will treat it as bad request.
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
   @MethodSource(Array("getTestQuorumAndGroupProtocolParametersGenericGroupProtocolOnly"))
   def testMultiConsumerSessionTimeoutOnStopPolling(quorum: String, groupProtocol: String): Unit = {

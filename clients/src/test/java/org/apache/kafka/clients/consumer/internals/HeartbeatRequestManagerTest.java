@@ -544,19 +544,6 @@ public class HeartbeatRequestManagerTest {
         assertHeartbeat(heartbeatRequestManager);
     }
 
-    @Test
-    public void testPollTimerExpirationDuringReconciliation() {
-        heartbeatRequestManager = createHeartbeatRequestManager();
-        when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(new Node(1, "localhost", 9999)));
-        when(membershipManager.shouldSkipHeartbeat()).thenReturn(false);
-        when(membershipManager.state()).thenReturn(MemberState.RECONCILING);
-
-        time.sleep(maxPollIntervalMs);
-        verify(heartbeatRequestState, never()).reset();
-        verify(heartbeatState, never()).reset();
-        verify(membershipManager, never()).transitionToStaled();
-    }
-
     private void assertHeartbeat(HeartbeatRequestManager hrm) {
         NetworkClientDelegate.PollResult pollResult = hrm.poll(time.milliseconds());
         assertEquals(1, pollResult.unsentRequests.size());

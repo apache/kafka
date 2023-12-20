@@ -184,8 +184,6 @@ public class HeartbeatRequestManager implements RequestManager {
             return NetworkClientDelegate.PollResult.EMPTY;
         }
         pollTimer.update(currentTimeMs);
-        // If the poll timer expires during reconciliation, we need to wait till the reconciliation completes before
-        // sending another leave group.
         if (pollTimer.isExpired()) {
             logger.warn("consumer poll timeout has expired. This means the time between subsequent calls to poll() " +
                 "was longer than the configured max.poll.interval.ms, which typically implies that " +
