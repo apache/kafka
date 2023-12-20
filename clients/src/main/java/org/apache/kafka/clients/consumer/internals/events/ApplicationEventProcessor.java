@@ -236,8 +236,7 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
     private void process(final TopicMetadataApplicationEvent event) {
         final CompletableFuture<Map<String, List<PartitionInfo>>> future;
 
-        long expirationTimeMs =
-            (event.getTimeoutMs() == Long.MAX_VALUE) ? Long.MAX_VALUE : System.currentTimeMillis() + event.getTimeoutMs();
+        long expirationTimeMs = getExpirationTimeForTimeout(event.getTimeoutMs());
         if (event.isAllTopics()) {
             future = requestManagers.topicMetadataRequestManager.requestAllTopicsMetadata(expirationTimeMs);
         } else {
