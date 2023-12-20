@@ -590,14 +590,14 @@ class RequestMetrics(name: String) {
     } else None
 
   private def tagsWithVersion(version: Short): java.util.Map[String, String] = {
-    val nameAndVersionTags = new util.HashMap[String, String](tags.size() + 1)
+    val nameAndVersionTags = new util.LinkedHashMap[String, String](math.ceil((tags.size() + 1) / 0.75).toInt) // take load factor into account
     nameAndVersionTags.putAll(tags)
     nameAndVersionTags.put("version", version.toString)
     nameAndVersionTags
   }
 
   private def tagsWithVersionAndClientInfo(version: Short, clientInformation: ClientInformation): java.util.Map[String, String] = {
-    val extendedTags = new util.LinkedHashMap[String, String](math.ceil((tags.size() + 3) / 0.75).toInt)
+    val extendedTags = new util.LinkedHashMap[String, String](math.ceil((tags.size() + 3) / 0.75).toInt) // take load factor into account
     extendedTags.putAll(tags)
     extendedTags.put("version", version.toString)
     extendedTags.put("clientSoftwareName", clientInformation.softwareName)
