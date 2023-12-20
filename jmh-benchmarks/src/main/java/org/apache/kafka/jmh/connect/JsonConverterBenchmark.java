@@ -34,6 +34,7 @@ import org.openjdk.jmh.annotations.Warmup;
 import org.openjdk.jmh.infra.BenchmarkParams;
 import org.openjdk.jmh.infra.Blackhole;
 
+import java.nio.charset.Charset;
 import java.util.Collections;
 import java.util.concurrent.TimeUnit;
 
@@ -65,7 +66,7 @@ public class JsonConverterBenchmark {
                 .put("transaction", buildTransactionStruct());
 
 
-        public final String structJson = "{\n" +
+        public String structJson = "{\n" +
                 "  \"schema\": {\n" +
                 "  \"type\": \"struct\",\n" +
                 "  \"fields\": [\n" +
@@ -430,7 +431,7 @@ public class JsonConverterBenchmark {
     @Benchmark
     public void deserialize(Blackhole blackhole, Data data) {
 
-        blackhole.consume(converter.toConnectData(TOPIC, data.structJson.getBytes()));
+        blackhole.consume(converter.toConnectData(TOPIC, data.structJson.getBytes(Charset.defaultCharset())));
     }
 
     @Benchmark

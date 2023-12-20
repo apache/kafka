@@ -56,7 +56,7 @@ public class JsonDeserializer implements Deserializer<JsonNode> {
         objectMapper.enable(JsonReadFeature.ALLOW_LEADING_ZEROS_FOR_NUMBERS.mappedFeature());
         deserializationFeatures.forEach(objectMapper::enable);
         objectMapper.setNodeFactory(jsonNodeFactory);
-        if(enableModules) {
+        if (enableModules) {
             objectMapper.findAndRegisterModules();
         }
     }
