@@ -62,7 +62,6 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.apache.kafka.common.requests.OffsetFetchResponse.INVALID_OFFSET;
-import static org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetrics.NUM_OFFSETS;
 import static org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetrics.OFFSET_DELETIONS_SENSOR_NAME;
 import static org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetrics.OFFSET_EXPIRED_SENSOR_NAME;
 
@@ -871,7 +870,7 @@ public class OffsetMetadataManager {
                     OffsetAndMetadata.fromRecord(value)
                 );
                 if (previousValue == null) {
-                    metrics.incrementLocalGauge(NUM_OFFSETS);
+                    metrics.incrementNumOffsets();
                 }
             } else {
                 // Otherwise, the transaction offset is stored in the pending transactional
@@ -887,7 +886,7 @@ public class OffsetMetadataManager {
             }
         } else {
             if (offsets.remove(groupId, topic, partition) != null) {
-                metrics.decrementLocalGauge(NUM_OFFSETS);
+                metrics.decrementNumOffsets();
             }
         }
     }
