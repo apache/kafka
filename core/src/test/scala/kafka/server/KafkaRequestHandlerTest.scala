@@ -195,7 +195,9 @@ class KafkaRequestHandlerTest {
     brokerTopicStats.topicStats(topic)
     val gaugeMetrics = Set(
       RemoteStorageMetrics.REMOTE_COPY_LOG_BYTES_METRIC.getName,
-      RemoteStorageMetrics.REMOTE_LOG_SIZE_COMPUTATION_TIME_METRIC.getName)
+      RemoteStorageMetrics.REMOTE_LOG_SIZE_COMPUTATION_TIME_METRIC.getName,
+      RemoteStorageMetrics.REMOTE_LOG_METADATA_COUNT_METRIC.getName)
+
     RemoteStorageMetrics.brokerTopicStatsMetrics.forEach(metric => {
       if (systemRemoteStorageEnabled) {
         if (!gaugeMetrics.contains(metric.getName)) {
@@ -209,9 +211,9 @@ class KafkaRequestHandlerTest {
     })
     gaugeMetrics.foreach(metricName => {
       if (systemRemoteStorageEnabled) {
-        assertTrue(brokerTopicStats.topicStats(topic).metricGaugeMap.contains(metricName), metricName)
+        assertTrue(brokerTopicStats.topicStats(topic).metricGaugeMap.contains(metricName), "The metric is missing:" + metricName)
       } else {
-        assertFalse(brokerTopicStats.topicStats(topic).metricGaugeMap.contains(metricName), metricName)
+        assertFalse(brokerTopicStats.topicStats(topic).metricGaugeMap.contains(metricName), "The metric should appear:" + metricName)
       }
     })
   }
@@ -321,4 +323,20 @@ class KafkaRequestHandlerTest {
     assertEquals(0, brokerTopicMetrics.remoteCopyBytesLag)
   }
 
+  @Test
+  def testRemoteLogMetadataCount(): Unit = {
+    val brokerTopicMetrics = setupBrokerTopicMetrics()
+
+    assertEquals(0, brokerTopicMetrics.remoteLogMetadataCount)
+    brokerTopicMetrics.recordRemoteLogMetadataCount(0, 1)
+    assertEquals(1, brokerTopicMetrics.remoteLogMetadataCount)
+
+    brokerTopicMetrics.recordRemoteLogMetadataCount(1, 2)
+    brokerTopicMetrics.recordRemoteLogMetadataCount(2, 3)
+    assertEquals(6, brokerTopicMetrics.remoteLogMetadataCount)
+
+    brokerTopicMetrics.close()
+
+    assertEquals(0, brokerTopicMetrics.remoteLogMetadataCount)
+  }
 }
