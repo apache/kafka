@@ -302,6 +302,7 @@ class CoordinatorPartitionWriterTest {
     assertEquals(100L, firstBatch.producerId)
     assertEquals(50.toShort, firstBatch.producerEpoch)
     assertTrue(firstBatch.isTransactional)
+    assertTrue(firstBatch.isControlBatch)
 
     val receivedRecords = batch.records.asScala.map { record =>
       ControlRecordType.parse(record.key)
