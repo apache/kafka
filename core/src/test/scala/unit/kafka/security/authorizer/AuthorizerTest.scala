@@ -304,8 +304,9 @@ class AuthorizerTest extends QuorumTestHarness with BaseAuthorizerTest {
     assertFalse(authorize(authorizer1, host1Context, WRITE, resource), "User1 should not have WRITE access from host1")
   }
 
-  @Test
-  def testIPv4SubnetCIDRNotationACL(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array(KRAFT, ZK))
+  def testIPv4SubnetCIDRNotationACL(quorum: String): Unit = {
     val user1 = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, username)
     val cidrBlock = "192.168.1.0/24"
     val host1 = InetAddress.getByName("192.168.1.1")
@@ -316,14 +317,15 @@ class AuthorizerTest extends QuorumTestHarness with BaseAuthorizerTest {
     changeAclAndVerify(Set.empty, Set(acl), Set.empty)
 
     val host1Context = newRequestContext(user1, host1)
-    assertTrue(authorize(aclAuthorizer, host1Context, READ, resource), "User1 should have READ access from host1")
+    assertTrue(authorize(authorizer1, host1Context, READ, resource), "User1 should have READ access from host1")
 
     val host2Context = newRequestContext(user1, host2)
-    assertFalse(authorize(aclAuthorizer, host2Context, READ, resource), "User1 should not have READ access from host2")
+    assertFalse(authorize(authorizer1, host2Context, READ, resource), "User1 should not have READ access from host2")
   }
 
-  @Test
-  def testIPv4RangeNotationACL(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array(KRAFT, ZK))
+  def testIPv4RangeNotationACL(quorum: String): Unit = {
     val user1 = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, username)
     val range = "10.0.0.10-10.0.0.100"
     val host1 = InetAddress.getByName("10.0.0.10")
@@ -334,14 +336,15 @@ class AuthorizerTest extends QuorumTestHarness with BaseAuthorizerTest {
     changeAclAndVerify(Set.empty, Set(acl), Set.empty)
 
     val host1Context = newRequestContext(user1, host1)
-    assertTrue(authorize(aclAuthorizer, host1Context, READ, resource), "User1 should have READ access from host1")
+    assertTrue(authorize(authorizer1, host1Context, READ, resource), "User1 should have READ access from host1")
 
     val host2Context = newRequestContext(user1, host2)
-    assertFalse(authorize(aclAuthorizer, host2Context, READ, resource), "User1 should not have READ access from host2")
+    assertFalse(authorize(authorizer1, host2Context, READ, resource), "User1 should not have READ access from host2")
   }
 
-  @Test
-  def testIPv6SubnetCIDRNotationACL(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array(KRAFT, ZK))
+  def testIPv6SubnetCIDRNotationACL(quorum: String): Unit = {
     val user1 = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, username)
     val cidrBlock = "fd0f:e1a0:99d6:3e44::/64"
     val host1 = InetAddress.getByName("fd0f:e1a0:99d6:3e44:0:0:0:0")
@@ -353,17 +356,18 @@ class AuthorizerTest extends QuorumTestHarness with BaseAuthorizerTest {
     changeAclAndVerify(Set.empty, Set(acl), Set.empty)
 
     val host1Context = newRequestContext(user1, host1)
-    assertTrue(authorize(aclAuthorizer, host1Context, READ, resource), "User1 should have READ access from host1")
+    assertTrue(authorize(authorizer1, host1Context, READ, resource), "User1 should have READ access from host1")
 
     val host2Context = newRequestContext(user1, host2)
-    assertTrue(authorize(aclAuthorizer, host2Context, READ, resource), "User1 should have READ access from host2")
+    assertTrue(authorize(authorizer1, host2Context, READ, resource), "User1 should have READ access from host2")
 
     val host3Context = newRequestContext(user1, host3)
-    assertFalse(authorize(aclAuthorizer, host3Context, READ, resource), "User1 should not have READ access from host3")
+    assertFalse(authorize(authorizer1, host3Context, READ, resource), "User1 should not have READ access from host3")
   }
 
-  @Test
-  def testIPv6RangeNotationACL(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array(KRAFT, ZK))
+  def testIPv6RangeNotationACL(quorum: String): Unit = {
     val user1 = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, username)
     val range = "fd0f:e1a0:99d6:3e44:0:0:0:0-fd0f:e1a0:99d6:3e44:ffff:ffff:ffff:ffff"
     val host1 = InetAddress.getByName("fd0f:e1a0:99d6:3e44:0:0:0:0")
@@ -375,13 +379,13 @@ class AuthorizerTest extends QuorumTestHarness with BaseAuthorizerTest {
     changeAclAndVerify(Set.empty, Set(acl), Set.empty)
 
     val host1Context = newRequestContext(user1, host1)
-    assertTrue(authorize(aclAuthorizer, host1Context, READ, resource), "User1 should have READ access from host1")
+    assertTrue(authorize(authorizer1, host1Context, READ, resource), "User1 should have READ access from host1")
 
     val host2Context = newRequestContext(user1, host2)
-    assertTrue(authorize(aclAuthorizer, host2Context, READ, resource), "User1 should have READ access from host2")
+    assertTrue(authorize(authorizer1, host2Context, READ, resource), "User1 should have READ access from host2")
 
     val host3Context = newRequestContext(user1, host3)
-    assertFalse(authorize(aclAuthorizer, host3Context, READ, resource), "User1 should not have READ access from host3")
+    assertFalse(authorize(authorizer1, host3Context, READ, resource), "User1 should not have READ access from host3")
   }
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
