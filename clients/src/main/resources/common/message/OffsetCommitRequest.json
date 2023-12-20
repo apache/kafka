@@ -35,6 +35,7 @@
   // Version 9 is the first version that can be used with the new consumer group protocol (KIP-848). The
   // request is the same as version 8.
   "validVersions": "0-9",
+  "deprecatedVersions": "0-1",
   "flexibleVersions": "8+",
   "fields": [
     { "name": "GroupId", "type": "string", "versions": "0+", "entityType": "groupId",
