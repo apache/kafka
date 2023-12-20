@@ -335,7 +335,7 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
 
     @Override
     public boolean isStaled() {
-        return state == MemberState.STALED;
+        return state == MemberState.STALE;
     }
 
     /**
@@ -728,9 +728,10 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
      * the existing subscriptions on the next time user polls.
      */
     @Override
-    public void transitionToStaled() {
+    public void transitionToStale() {
         memberEpoch = ConsumerGroupHeartbeatRequest.LEAVE_GROUP_MEMBER_EPOCH;
-        transitionTo(MemberState.STALED);
+        updateSubscription(new TreeSet<>(TOPIC_ID_PARTITION_COMPARATOR), true);
+        transitionTo(MemberState.STALE);
     }
 
     /**

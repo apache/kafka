@@ -66,9 +66,9 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
-import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -84,16 +84,16 @@ public class HeartbeatRequestManagerTest {
     private Time time;
     private Timer pollTimer;
     private ConsumerConfig config;
-    private CoordinatorRequestManager coordinatorRequestManager = mock(CoordinatorRequestManager.class);
-    private SubscriptionState subscriptions = mock(SubscriptionState.class);
+    private CoordinatorRequestManager coordinatorRequestManager;
+    private SubscriptionState subscriptions;
     private Metadata metadata;
     private HeartbeatRequestManager heartbeatRequestManager;
-    private MembershipManager membershipManager = mock(MembershipManager.class);
-    private HeartbeatRequestManager.HeartbeatRequestState heartbeatRequestState = mock(HeartbeatRequestManager.HeartbeatRequestState.class);
-    private HeartbeatRequestManager.HeartbeatState heartbeatState = mock(HeartbeatRequestManager.HeartbeatState.class);
+    private MembershipManager membershipManager;
+    private HeartbeatRequestManager.HeartbeatRequestState heartbeatRequestState;
+    private HeartbeatRequestManager.HeartbeatState heartbeatState;
     private final String memberId = "member-id";
     private final int memberEpoch = 1;
-    private BackgroundEventHandler backgroundEventHandler = mock(BackgroundEventHandler.class);
+    private BackgroundEventHandler backgroundEventHandler;
     private BlockingQueue<BackgroundEvent> backgroundEventQueue;
 
     @BeforeEach
@@ -526,18 +526,34 @@ public class HeartbeatRequestManagerTest {
 
     @Test
     public void testPollTimerExpiration() {
-        heartbeatRequestManager = createHeartbeatRequestManager();
+        coordinatorRequestManager = mock(CoordinatorRequestManager.class);
+        membershipManager = mock(MembershipManager.class);
+        heartbeatState = mock(HeartbeatRequestManager.HeartbeatState.class);
+        heartbeatRequestState = spy(new HeartbeatRequestManager.HeartbeatRequestState(
+                new LogContext(),
+                time,
+                heartbeatIntervalMs,
+                retryBackoffMs,
+                retryBackoffMaxMs,
+                0));
+        backgroundEventHandler = mock(BackgroundEventHandler.class);
+
+        heartbeatRequestManager = createHeartbeatRequestManager(
+                coordinatorRequestManager,
+                membershipManager,
+                heartbeatState,
+                heartbeatRequestState,
+                backgroundEventHandler);
         when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(new Node(1, "localhost", 9999)));
         when(membershipManager.shouldSkipHeartbeat()).thenReturn(false);
         when(membershipManager.state()).thenReturn(MemberState.STABLE);
-        doNothing().when(membershipManager).transitionToStaled();
 
         time.sleep(maxPollIntervalMs);
         NetworkClientDelegate.PollResult pollResult = heartbeatRequestManager.poll(time.milliseconds());
         assertEquals(1, pollResult.unsentRequests.size());
         verify(heartbeatState).reset();
         verify(heartbeatRequestState).reset();
-        verify(membershipManager).transitionToStaled();
+        verify(membershipManager).transitionToStale();
 
         assertNoHeartbeat(heartbeatRequestManager);
         heartbeatRequestManager.resetPollTimer(time.milliseconds());
@@ -660,11 +676,30 @@ public class HeartbeatRequestManagerTest {
         return new HeartbeatRequestManager(
             logContext,
             pollTimer,
-            config,
+            config(),
             coordinatorRequestManager,
             membershipManager,
             heartbeatState,
             heartbeatRequestState,
             backgroundEventHandler);
+    }
+
+    private HeartbeatRequestManager createHeartbeatRequestManager(
+            final CoordinatorRequestManager coordinatorRequestManager,
+            final MembershipManager membershipManager,
+            final HeartbeatRequestManager.HeartbeatState heartbeatState,
+            final HeartbeatRequestManager.HeartbeatRequestState heartbeatRequestState,
+            final BackgroundEventHandler backgroundEventHandler) {
+        LogContext logContext = new LogContext();
+        pollTimer = time.timer(maxPollIntervalMs);
+        return new HeartbeatRequestManager(
+                logContext,
+                pollTimer,
+                config(),
+                coordinatorRequestManager,
+                membershipManager,
+                heartbeatState,
+                heartbeatRequestState,
+                backgroundEventHandler);
     }
 }

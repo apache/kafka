@@ -191,7 +191,7 @@ public class HeartbeatRequestManager implements RequestManager {
                 "either by increasing max.poll.interval.ms or by reducing the maximum size of batches " +
                 "returned in poll() with max.poll.records.");
             // This should trigger a heartbeat with leave group epoch
-            membershipManager.transitionToStaled();
+            membershipManager.transitionToStale();
             NetworkClientDelegate.UnsentRequest request = makeHeartbeatRequest(currentTimeMs, true);
             // We can ignore the leave response because we can join before or after receiving the response.
             heartbeatRequestState.reset();

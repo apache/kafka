@@ -1390,7 +1390,7 @@ public class MembershipManagerImplTest {
     @Test
     public void testTransitionToStaled() {
         MembershipManager membershipManager = memberJoinWithAssignment("topic", Uuid.randomUuid());
-        membershipManager.transitionToStaled();
+        membershipManager.transitionToStale();
         assertEquals(LEAVE_GROUP_MEMBER_EPOCH, membershipManager.memberEpoch());
     }
 
@@ -1399,7 +1399,7 @@ public class MembershipManagerImplTest {
         MembershipManagerImpl membershipManager = createMemberInStableState();
         subscriptionState.subscribe(Collections.singleton("topic"), Optional.empty());
         subscriptionState.assignFromSubscribed(Collections.singleton(new TopicPartition("topic", 0)));
-        membershipManager.transitionToStaled();
+        membershipManager.transitionToStale();
         membershipManager.onHeartbeatRequestSent();
         assertEquals(MemberState.JOINING, membershipManager.state());
         assertTrue(membershipManager.currentAssignment().isEmpty());

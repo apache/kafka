@@ -167,5 +167,5 @@ public interface MembershipManager {
      * When the user stops polling the consumer and the <code>max.poll.interval.ms</code> timer expires, we transition
      * the member to STALE.
      */
-    void transitionToStaled();
+    void transitionToStale();
 }
