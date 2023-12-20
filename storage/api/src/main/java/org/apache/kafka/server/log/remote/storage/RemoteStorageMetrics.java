@@ -120,6 +120,7 @@ public class RemoteStorageMetrics {
         metrics.add(REMOTE_LOG_READER_TASK_QUEUE_SIZE_METRIC);
         metrics.add(REMOTE_LOG_METADATA_COUNT_METRIC);
         metrics.add(REMOTE_LOG_SIZE_COMPUTATION_TIME_METRIC);
+        metrics.add(REMOTE_LOG_SIZE_BYTES_METRIC);
 
         return metrics;
     }
@@ -137,6 +138,7 @@ public class RemoteStorageMetrics {
         metrics.add(FAILED_REMOTE_COPY_PER_SEC_METRIC);
         metrics.add(REMOTE_LOG_METADATA_COUNT_METRIC);
         metrics.add(REMOTE_LOG_SIZE_COMPUTATION_TIME_METRIC);
+        metrics.add(REMOTE_LOG_SIZE_BYTES_METRIC);
         metrics.add(FAILED_REMOTE_DELETE_PER_SEC_METRIC);
         metrics.add(FAILED_BUILD_REMOTE_LOG_AUX_STATE_PER_SEC_METRIC);
         metrics.add(REMOTE_COPY_LAG_BYTES_METRIC);

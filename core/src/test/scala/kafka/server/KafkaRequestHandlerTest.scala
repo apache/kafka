@@ -200,7 +200,8 @@ class KafkaRequestHandlerTest {
       RemoteStorageMetrics.REMOTE_DELETE_LAG_BYTES_METRIC.getName,
       RemoteStorageMetrics.REMOTE_DELETE_LAG_SEGMENTS_METRIC.getName,
       RemoteStorageMetrics.REMOTE_LOG_SIZE_COMPUTATION_TIME_METRIC.getName,
-      RemoteStorageMetrics.REMOTE_LOG_METADATA_COUNT_METRIC.getName)
+      RemoteStorageMetrics.REMOTE_LOG_METADATA_COUNT_METRIC.getName,
+      RemoteStorageMetrics.REMOTE_LOG_SIZE_BYTES_METRIC.getName)
 
     RemoteStorageMetrics.brokerTopicStatsMetrics.forEach(metric => {
       if (systemRemoteStorageEnabled) {

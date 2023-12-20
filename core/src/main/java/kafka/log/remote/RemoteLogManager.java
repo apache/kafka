@@ -987,20 +987,24 @@ public class RemoteLogManager implements Closeable {
             final Iterator<RemoteLogSegmentMetadata> segmentMetadataIter = remoteLogMetadataManager.listRemoteLogSegments(topicIdPartition);
             if (!segmentMetadataIter.hasNext()) {
                 brokerTopicStats.topicStats(topicIdPartition.topic()).recordRemoteLogMetadataCount(topicIdPartition.partition(), 0);
+                brokerTopicStats.topicStats(topicIdPartition.topic()).recordRemoteLogSizeBytes(topicIdPartition.partition(), 0);
                 logger.debug("No remote log segments available on remote storage for partition: {}", topicIdPartition);
                 return;
             }
 
             final Set<Integer> epochsSet = new HashSet<>();
             int metadataCount = 0;
+            long remoteLogSizeBytes = 0;
             // Good to have an API from RLMM to get all the remote leader epochs of all the segments of a partition
             // instead of going through all the segments and building it here.
             while (segmentMetadataIter.hasNext()) {
                 RemoteLogSegmentMetadata segmentMetadata = segmentMetadataIter.next();
                 epochsSet.addAll(segmentMetadata.segmentLeaderEpochs().keySet());
                 metadataCount++;
+                remoteLogSizeBytes += segmentMetadata.segmentSizeInBytes();
             }
             brokerTopicStats.topicStats(topicIdPartition.topic()).recordRemoteLogMetadataCount(topicIdPartition.partition(), metadataCount);
+            brokerTopicStats.topicStats(topicIdPartition.topic()).recordRemoteLogSizeBytes(topicIdPartition.partition(), remoteLogSizeBytes);
 
             // All the leader epochs in sorted order that exists in remote storage
             final List<Integer> remoteLeaderEpochs = new ArrayList<>(epochsSet);
