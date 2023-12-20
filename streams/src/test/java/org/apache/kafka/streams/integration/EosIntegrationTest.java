@@ -102,6 +102,7 @@ import java.util.stream.IntStream;
 
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
+import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.DEFAULT_TIMEOUT;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.purgeLocalStreamsState;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.startApplicationAndWaitUntilRunning;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.waitForApplicationState;
@@ -1188,10 +1189,11 @@ public class EosIntegrationTest {
                                                                final int numberOfRecords,
                                                                final Class<? extends Deserializer<K>> keyDeserializer,
                                                                final Class<? extends Deserializer<V>> valueDeserializer) throws Exception {
-        boolean containsRecordsFromPartition;
-        final int maxTries = 3;
+        final long timeoutMs = 2*DEFAULT_TIMEOUT;
+        final int maxTries = 10;
+        final long deadline = System.currentTimeMillis() + timeoutMs;
         int tries = 0;
-        do {
+        while (true) {
             final List<ConsumerRecord<K, V>> consumerRecords = waitUntilMinRecordsReceived(
                 TestUtils.consumerConfig(
                     CLUSTER.bootstrapServers(),
@@ -1204,11 +1206,23 @@ public class EosIntegrationTest {
                     )
                 ),
                 topic,
-                numberOfRecords
+                numberOfRecords,
+                timeoutMs
             );
             ++tries;
-            containsRecordsFromPartition = consumerRecords.stream().anyMatch(record -> record.partition() == partition);
-        } while (!containsRecordsFromPartition && tries < maxTries);
+            if(consumerRecords.stream().anyMatch(record -> record.partition() == partition)) {
+                return;
+            }
+            if (tries >= maxTries) {
+                throw new AssertionError("No committed records in topic " + topic
+                    + ", partition " + partition + " after " + maxTries + " retries.");
+            }
+            final long now = System.currentTimeMillis();
+            if (now > deadline) {
+                throw new AssertionError("No committed records in topic " + topic
+                    + ", partition " + partition + " after " + timeoutMs + " ms.");
+            }
+        }
     }
 
     private List<KeyValue<Long, Long>> computeExpectedResult(final List<KeyValue<Long, Long>> input) {
