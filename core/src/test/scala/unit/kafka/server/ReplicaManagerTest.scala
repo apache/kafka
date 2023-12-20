@@ -3992,7 +3992,7 @@ class ReplicaManagerTest {
       doAnswer(_ => {
         queueLatch.countDown()
         // wait until verification completed
-        doneLatch.await()
+        doneLatch.await(5000, TimeUnit.MILLISECONDS)
         new FetchDataInfo(new LogOffsetMetadata(startOffset), mock(classOf[Records]))
       }).when(spyRLM).read(any())
 
@@ -4001,7 +4001,7 @@ class ReplicaManagerTest {
         replicaManager.fetchMessages(params, Seq(tidp0 -> new PartitionData(topicId, fetchOffset, 0, 100000, Optional.of[Integer](leaderEpoch), Optional.of[Integer](leaderEpoch))), UnboundedQuota, fetchCallback)
 
       // wait until at least 2 task submitted to use all the available threads
-      queueLatch.await()
+      queueLatch.await(5000, TimeUnit.MILLISECONDS)
       // RemoteLogReader should not be all idle
       assertTrue(yammerMetricValue("RemoteLogReaderAvgIdlePercent").asInstanceOf[Double] < 1.0)
       // RemoteLogReader should queue some tasks

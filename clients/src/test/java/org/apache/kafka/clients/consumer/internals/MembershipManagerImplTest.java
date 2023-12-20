@@ -1403,6 +1403,14 @@ public class MembershipManagerImplTest {
         assertEquals(MemberState.JOINING, membershipManager.state());
     }
 
+    @Test
+    public void testMemberJoiningTransitionsToStableWhenReceivingEmptyAssignment() {
+        MembershipManagerImpl membershipManager = createMembershipManagerJoiningGroup(null);
+        assertEquals(MemberState.JOINING, membershipManager.state());
+        receiveEmptyAssignment(membershipManager);
+        assertEquals(MemberState.STABLE, membershipManager.state());
+    }
+
     private void dropAssignedPartitions() {
         SortedSet<TopicPartition> droppedPartitions = new TreeSet<>(MembershipManagerImpl.TOPIC_PARTITION_COMPARATOR);
         droppedPartitions.addAll(subscriptionState.assignedPartitions());
