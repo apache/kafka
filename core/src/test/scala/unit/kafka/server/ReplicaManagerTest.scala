@@ -4086,14 +4086,23 @@ class ReplicaManagerTest {
         assertEquals(tidp0, responseStatus.toMap.keySet.head)
       }
 
+      val latch = new CountDownLatch(1)
+      doAnswer(_ => {
+        // wait until verification completes
+        latch.await(5000, TimeUnit.MILLISECONDS)
+        mock(classOf[FetchDataInfo])
+      }).when(spyRLM).read(any())
+
       // verify no type=DelayedRemoteFetchMetrics,name=ExpiresPerSec metric is created before fetching
       verifyNoMetricValue("type=DelayedRemoteFetchMetrics,name=ExpiresPerSec")
       replicaManager.fetchMessages(params, Seq(tidp0 -> new PartitionData(topicId, fetchOffset, 0, 100000, Optional.of[Integer](leaderEpoch), Optional.of[Integer](leaderEpoch))), UnboundedQuota, fetchCallback)
       // advancing the clock to expire the delayed remote fetch
       timer.advanceClock(2000L)
+
       // verify the metric is created and has value since the delayed remote fetch is expired
       TestUtils.waitUntilTrue(() => 1 == safeYammerMetricValue("type=DelayedRemoteFetchMetrics,name=ExpiresPerSec").asInstanceOf[Long],
         "The ExpiresPerSec value is not incremented.")
+      latch.countDown()
     } finally {
       replicaManager.shutdown(checkpointHW = false)
     }
@@ -4228,11 +4237,11 @@ class ReplicaManagerTest {
       // Replicas fetch from the leader periodically, therefore we check that the metric value is increasing
       // We expect failedBuildRemoteLogAuxStateRate to increase because there is no remoteLogSegmentMetadata
       // when attempting to build log aux state
-      assertTrue(brokerTopicStats.topicStats(tp0.topic()).buildRemoteLogAuxStateRequestRate.count > 0)
-      assertTrue(brokerTopicStats.topicStats(tp0.topic()).failedBuildRemoteLogAuxStateRate.count > 0)
+      TestUtils.waitUntilTrue(() => brokerTopicStats.topicStats(tp0.topic()).buildRemoteLogAuxStateRequestRate.count > 0, "")
+      TestUtils.waitUntilTrue(() => brokerTopicStats.topicStats(tp0.topic()).failedBuildRemoteLogAuxStateRate.count > 0, "")
       // Verify aggregate metrics
-      assertTrue(brokerTopicStats.allTopicsStats.buildRemoteLogAuxStateRequestRate.count > 0)
-      assertTrue( brokerTopicStats.allTopicsStats.failedBuildRemoteLogAuxStateRate.count > 0)
+      TestUtils.waitUntilTrue(() => brokerTopicStats.allTopicsStats.buildRemoteLogAuxStateRequestRate.count > 0, "")
+      TestUtils.waitUntilTrue(() => brokerTopicStats.allTopicsStats.failedBuildRemoteLogAuxStateRate.count > 0, "")
     } finally {
       replicaManager.shutdown(checkpointHW = false)
     }
@@ -4282,11 +4291,11 @@ class ReplicaManagerTest {
 
       // Replicas fetch from the leader periodically, therefore we check that the metric value is increasing
       // We expect failedBuildRemoteLogAuxStateRate to increase because fetchRemoteLogSegmentMetadata returns RemoteStorageException
-      assertTrue(brokerTopicStats.topicStats(tp0.topic()).buildRemoteLogAuxStateRequestRate.count > 0)
-      assertTrue(brokerTopicStats.topicStats(tp0.topic()).failedBuildRemoteLogAuxStateRate.count > 0)
+      TestUtils.waitUntilTrue(() => brokerTopicStats.topicStats(tp0.topic()).buildRemoteLogAuxStateRequestRate.count > 0, "")
+      TestUtils.waitUntilTrue(() => brokerTopicStats.topicStats(tp0.topic()).failedBuildRemoteLogAuxStateRate.count > 0, "")
       // Verify aggregate metrics
-      assertTrue(brokerTopicStats.allTopicsStats.buildRemoteLogAuxStateRequestRate.count > 0)
-      assertTrue(brokerTopicStats.allTopicsStats.failedBuildRemoteLogAuxStateRate.count > 0)
+      TestUtils.waitUntilTrue(() => brokerTopicStats.allTopicsStats.buildRemoteLogAuxStateRequestRate.count > 0, "")
+      TestUtils.waitUntilTrue(() => brokerTopicStats.allTopicsStats.failedBuildRemoteLogAuxStateRate.count > 0, "")
     } finally {
       replicaManager.shutdown(checkpointHW = false)
     }
