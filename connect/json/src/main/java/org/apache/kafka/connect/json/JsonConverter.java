@@ -235,18 +235,24 @@ public class JsonConverter implements Converter, HeaderConverter, Versioned {
     private final JsonDeserializer deserializer;
 
     public JsonConverter() {
+        this(true);
+    }
+
+    public JsonConverter(boolean enableModules) {
         serializer = new JsonSerializer(
-            mkSet(),
-            JSON_NODE_FACTORY
+                mkSet(),
+                JSON_NODE_FACTORY,
+                enableModules
         );
 
         deserializer = new JsonDeserializer(
-            mkSet(
-                // this ensures that the JsonDeserializer maintains full precision on
-                // floating point numbers that cannot fit into float64
-                DeserializationFeature.USE_BIG_DECIMAL_FOR_FLOATS
-            ),
-            JSON_NODE_FACTORY
+                mkSet(
+                        // this ensures that the JsonDeserializer maintains full precision on
+                        // floating point numbers that cannot fit into float64
+                        DeserializationFeature.USE_BIG_DECIMAL_FOR_FLOATS
+                ),
+                JSON_NODE_FACTORY,
+                enableModules
         );
     }
 
