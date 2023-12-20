@@ -96,6 +96,10 @@ class ConsumerBounceTest extends AbstractConsumerTest with Logging {
     val producer = createProducer()
     producerSend(producer, numRecords)
 
+    this.consumerConfig.setProperty(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, "600000")
+    this.consumerConfig.setProperty(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, "10000")
+    this.consumerConfig.setProperty(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false")
+
     var consumed = 0L
     val consumer = createConsumer()
 
@@ -526,7 +530,7 @@ class ConsumerBounceTest extends AbstractConsumerTest with Logging {
       if (iter == numIters)
         initiateShutdown()
       else
-        Thread.sleep(500)
+        Thread.sleep(1000)
     }
   }
 
