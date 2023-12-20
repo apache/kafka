@@ -291,7 +291,7 @@ class CoordinatorPartitionWriterTest {
       100L,
       50.toShort,
       10,
-      TransactionResult.COMMIT
+      if (controlRecordType == ControlRecordType.COMMIT) TransactionResult.COMMIT else TransactionResult.ABORT
     ))
 
     val batch = recordsCapture.getValue.getOrElse(tp,
@@ -307,7 +307,7 @@ class CoordinatorPartitionWriterTest {
       ControlRecordType.parse(record.key)
     }.toList
 
-    assertEquals(List(ControlRecordType.COMMIT), receivedRecords)
+    assertEquals(List(controlRecordType), receivedRecords)
   }
 
   @Test

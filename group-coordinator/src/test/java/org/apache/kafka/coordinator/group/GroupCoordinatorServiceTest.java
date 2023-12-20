@@ -1943,7 +1943,7 @@ public class GroupCoordinatorServiceTest {
     }
 
     @Test
-    public void testCompleteTransactionWhenNotStarted() throws ExecutionException, InterruptedException {
+    public void testCompleteTransactionWhenNotStarted() {
         CoordinatorRuntime<GroupCoordinatorShard, Record> runtime = mockRuntime();
         GroupCoordinatorService service = new GroupCoordinatorService(
             new LogContext(),
