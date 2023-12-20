@@ -50,6 +50,24 @@ public class QuorumFeaturesTest {
     }
 
     @Test
+    public void testDefaultFeatureMap() {
+        Map<String, VersionRange> expectedFeatures = new HashMap<>(1);
+        expectedFeatures.put(MetadataVersion.FEATURE_NAME, VersionRange.of(
+            MetadataVersion.MINIMUM_KRAFT_VERSION.featureLevel(),
+            MetadataVersion.LATEST_PRODUCTION.featureLevel()));
+        assertEquals(expectedFeatures, QuorumFeatures.defaultFeatureMap(false));
+    }
+
+    @Test
+    public void testDefaultFeatureMapWithUnstable() {
+        Map<String, VersionRange> expectedFeatures = new HashMap<>(1);
+        expectedFeatures.put(MetadataVersion.FEATURE_NAME, VersionRange.of(
+            MetadataVersion.MINIMUM_KRAFT_VERSION.featureLevel(),
+            MetadataVersion.latest().featureLevel()));
+        assertEquals(expectedFeatures, QuorumFeatures.defaultFeatureMap(true));
+    }
+
+    @Test
     public void testLocalSupportedFeature() {
         assertEquals(VersionRange.of(0, 3), QUORUM_FEATURES.localSupportedFeature("foo"));
         assertEquals(VersionRange.of(0, 4), QUORUM_FEATURES.localSupportedFeature("bar"));

@@ -45,6 +45,7 @@ import org.apache.kafka.coordinator.group.generated.OffsetCommitValue;
 import org.apache.kafka.coordinator.group.generic.GenericGroup;
 import org.apache.kafka.coordinator.group.generic.GenericGroupMember;
 import org.apache.kafka.coordinator.group.generic.GenericGroupState;
+import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetricsShard;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.common.MetadataVersion;
 import org.junit.jupiter.api.Test;
@@ -91,6 +92,7 @@ import static org.junit.jupiter.api.AssertionFailureBuilder.assertionFailure;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.fail;
+import static org.mockito.Mockito.mock;
 
 public class RecordHelpersTest {
 
@@ -527,7 +529,8 @@ public class RecordHelpersTest {
             new LogContext(),
             "group-id",
             GenericGroupState.PREPARING_REBALANCE,
-            time
+            time,
+            mock(GroupCoordinatorMetricsShard.class)
         );
 
         Map<String, byte[]> assignment = new HashMap<>();
@@ -597,7 +600,8 @@ public class RecordHelpersTest {
             new LogContext(),
             "group-id",
             GenericGroupState.PREPARING_REBALANCE,
-            time
+            time,
+            mock(GroupCoordinatorMetricsShard.class)
         );
 
         expectedMembers.forEach(member -> {
@@ -648,7 +652,8 @@ public class RecordHelpersTest {
             new LogContext(),
             "group-id",
             GenericGroupState.PREPARING_REBALANCE,
-            time
+            time,
+            mock(GroupCoordinatorMetricsShard.class)
         );
 
         expectedMembers.forEach(member -> {
@@ -707,7 +712,8 @@ public class RecordHelpersTest {
             new LogContext(),
             "group-id",
             GenericGroupState.PREPARING_REBALANCE,
-            time
+            time,
+            mock(GroupCoordinatorMetricsShard.class)
         );
 
         group.initNextGeneration();

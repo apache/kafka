@@ -30,7 +30,6 @@ import org.junit.jupiter.api.extension.ExtendWith
 @Tag("integration")
 class OffsetDeleteRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBaseRequestTest(cluster) {
   @ClusterTest(serverProperties = Array(
-    new ClusterConfigProperty(key = "unstable.api.versions.enable", value = "true"),
     new ClusterConfigProperty(key = "group.coordinator.new.enable", value = "true"),
     new ClusterConfigProperty(key = "group.consumer.max.session.timeout.ms", value = "600000"),
     new ClusterConfigProperty(key = "group.consumer.session.timeout.ms", value = "600000"),
@@ -42,7 +41,6 @@ class OffsetDeleteRequestTest(cluster: ClusterInstance) extends GroupCoordinator
   }
 
   @ClusterTest(serverProperties = Array(
-    new ClusterConfigProperty(key = "unstable.api.versions.enable", value = "true"),
     new ClusterConfigProperty(key = "group.coordinator.new.enable", value = "true"),
     new ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "1"),
     new ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1")
@@ -52,7 +50,6 @@ class OffsetDeleteRequestTest(cluster: ClusterInstance) extends GroupCoordinator
   }
 
   @ClusterTest(clusterType = Type.ALL, serverProperties = Array(
-    new ClusterConfigProperty(key = "unstable.api.versions.enable", value = "false"),
     new ClusterConfigProperty(key = "group.coordinator.new.enable", value = "false"),
     new ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "1"),
     new ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1")
@@ -119,7 +116,8 @@ class OffsetDeleteRequestTest(cluster: ClusterInstance) extends GroupCoordinator
         leaveGroup(
           groupId = "grp",
           memberId = memberId,
-          useNewProtocol = false
+          useNewProtocol = false,
+          version = ApiKeys.LEAVE_GROUP.latestVersion(isUnstableApiEnabled)
         )
       }
 

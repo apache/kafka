@@ -18,6 +18,7 @@ package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.state.DslKeyValueParams;
 import org.apache.kafka.streams.state.KeyValueBytesStoreSupplier;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StoreBuilder;
@@ -43,19 +44,9 @@ public class KeyValueStoreMaterializer<K, V> extends MaterializedStoreFactory<K,
 
     @Override
     public StateStore build() {
-        KeyValueBytesStoreSupplier supplier = (KeyValueBytesStoreSupplier) materialized.storeSupplier();
-        if (supplier == null) {
-            switch (defaultStoreType) {
-                case IN_MEMORY:
-                    supplier = Stores.inMemoryKeyValueStore(materialized.storeName());
-                    break;
-                case ROCKS_DB:
-                    supplier = Stores.persistentTimestampedKeyValueStore(materialized.storeName());
-                    break;
-                default:
-                    throw new IllegalStateException("Unknown store type: " + materialized.storeType());
-            }
-        }
+        final KeyValueBytesStoreSupplier supplier = materialized.storeSupplier() == null
+                ? dslStoreSuppliers().keyValueStore(new DslKeyValueParams(materialized.storeName()))
+                : (KeyValueBytesStoreSupplier) materialized.storeSupplier();
 
         final StoreBuilder<?> builder;
         if (supplier instanceof VersionedBytesStoreSupplier) {

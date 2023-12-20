@@ -149,4 +149,40 @@ public class MetadataCacheTest {
         assertEquals(topic2, cluster.topicName(topic2Id));
     }
 
+    @Test
+    public void testTopicNamesCacheBuiltFromTopicIds() {
+        Map<String, Uuid> topicIds = new HashMap<>();
+        topicIds.put("topic1", Uuid.randomUuid());
+        topicIds.put("topic2", Uuid.randomUuid());
+
+        MetadataCache cache = new MetadataCache("clusterId",
+                Collections.singletonMap(6, new Node(6, "localhost", 2077)),
+                Collections.emptyList(),
+                Collections.emptySet(),
+                Collections.emptySet(),
+                Collections.emptySet(),
+                null,
+                topicIds);
+
+        Map<Uuid, String> expectedNamesCache =
+                topicIds.entrySet().stream().collect(Collectors.toMap(Map.Entry::getValue,
+                        Map.Entry::getKey));
+        assertEquals(expectedNamesCache, cache.topicNames());
+    }
+
+    @Test
+    public void testEmptyTopicNamesCacheBuiltFromTopicIds() {
+        Map<String, Uuid> topicIds = new HashMap<>();
+
+        MetadataCache cache = new MetadataCache("clusterId",
+                Collections.singletonMap(6, new Node(6, "localhost", 2077)),
+                Collections.emptyList(),
+                Collections.emptySet(),
+                Collections.emptySet(),
+                Collections.emptySet(),
+                null,
+                topicIds);
+        assertEquals(Collections.emptyMap(), cache.topicNames());
+    }
+
 }

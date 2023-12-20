@@ -86,6 +86,8 @@ public class InMemoryPartitionWriter<T> implements PartitionWriter<T> {
     @Override
     public long append(
         TopicPartition tp,
+        long producerId,
+        short producerEpoch,
         List<T> records
     ) throws KafkaException {
         PartitionState state = partitionState(tp);

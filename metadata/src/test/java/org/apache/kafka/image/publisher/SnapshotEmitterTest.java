@@ -135,7 +135,7 @@ public class SnapshotEmitterTest {
     }
 
     @Test
-    public void testEmit() throws Exception {
+    public void testEmit() {
         MockRaftClient mockRaftClient = new MockRaftClient();
         MockTime time = new MockTime(0, 10000L, 20000L);
         SnapshotEmitter emitter = new SnapshotEmitter.Builder().
