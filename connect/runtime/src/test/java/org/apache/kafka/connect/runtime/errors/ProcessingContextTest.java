@@ -48,7 +48,7 @@ public class ProcessingContextTest {
         Future<Void> result = context.report();
         fs.forEach(f -> {
             assertFalse(result.isDone());
-            f.complete(new RecordMetadata(new TopicPartition("t", 0), 0, 0, 0, 0L, 0, 0));
+            f.complete(new RecordMetadata(new TopicPartition("t", 0), 0, 0, 0, 0, 0));
         });
         assertTrue(result.isDone());
     }

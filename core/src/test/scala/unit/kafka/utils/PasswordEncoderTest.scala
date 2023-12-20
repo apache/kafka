@@ -30,7 +30,7 @@ class PasswordEncoderTest {
 
   @Test
   def testEncodeDecode(): Unit = {
-    val encoder = new PasswordEncoder(new Password("password-encoder-secret"),
+    val encoder = PasswordEncoder.encrypting(new Password("password-encoder-secret"),
       None,
       Defaults.PasswordEncoderCipherAlgorithm,
       Defaults.PasswordEncoderKeyLength,
@@ -54,7 +54,7 @@ class PasswordEncoderTest {
 
   @Test
   def testEncoderConfigChange(): Unit = {
-    val encoder = new PasswordEncoder(new Password("password-encoder-secret"),
+    val encoder = PasswordEncoder.encrypting(new Password("password-encoder-secret"),
       Some("PBKDF2WithHmacSHA1"),
       "DES/CBC/PKCS5Padding",
       64,
@@ -68,7 +68,7 @@ class PasswordEncoderTest {
     assertEquals("DES/CBC/PKCS5Padding", encodedMap(PasswordEncoder.CipherAlgorithmProp))
 
     // Test that decoding works even if PasswordEncoder algorithm, iterations etc. are altered
-    val decoder = new PasswordEncoder(new Password("password-encoder-secret"),
+    val decoder = PasswordEncoder.encrypting(new Password("password-encoder-secret"),
       Some("PBKDF2WithHmacSHA1"),
       "AES/CBC/PKCS5Padding",
       128,
@@ -76,7 +76,7 @@ class PasswordEncoderTest {
     assertEquals(password, decoder.decode(encoded).value)
 
     // Test that decoding fails if secret is altered
-    val decoder2 = new PasswordEncoder(new Password("secret-2"),
+    val decoder2 = PasswordEncoder.encrypting(new Password("secret-2"),
       Some("PBKDF2WithHmacSHA1"),
       "AES/CBC/PKCS5Padding",
       128,
@@ -92,7 +92,7 @@ class PasswordEncoderTest {
   def testEncodeDecodeAlgorithms(): Unit = {
 
     def verifyEncodeDecode(keyFactoryAlg: Option[String], cipherAlg: String, keyLength: Int): Unit = {
-      val encoder = new PasswordEncoder(new Password("password-encoder-secret"),
+      val encoder = PasswordEncoder.encrypting(new Password("password-encoder-secret"),
         keyFactoryAlg,
         cipherAlg,
         keyLength,
@@ -118,7 +118,7 @@ class PasswordEncoderTest {
     assertEquals(password.length.toString, encodedMap(PasswordEncoder.PasswordLengthProp))
     assertNotNull(encoder.base64Decode(encodedMap("salt")), "Invalid salt")
     assertNotNull(encoder.base64Decode(encodedMap(PasswordEncoder.InitializationVectorProp)), "Invalid encoding parameters")
-    assertNotNull(encoder.base64Decode(encodedMap(PasswordEncoder.EncyrptedPasswordProp)), "Invalid encoded password")
+    assertNotNull(encoder.base64Decode(encodedMap(PasswordEncoder.EncryptedPasswordProp)), "Invalid encoded password")
     assertEquals(password, encoder.decode(encoded).value)
   }
 }

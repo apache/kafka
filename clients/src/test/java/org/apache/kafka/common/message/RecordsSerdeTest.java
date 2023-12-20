@@ -31,7 +31,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 public class RecordsSerdeTest {
 
     @Test
-    public void testSerdeRecords() throws Exception {
+    public void testSerdeRecords() {
         MemoryRecords records = MemoryRecords.withRecords(CompressionType.NONE,
             new SimpleRecord("foo".getBytes()),
             new SimpleRecord("bar".getBytes()));
@@ -44,7 +44,7 @@ public class RecordsSerdeTest {
     }
 
     @Test
-    public void testSerdeNullRecords() throws Exception {
+    public void testSerdeNullRecords() {
         SimpleRecordsMessageData message = new SimpleRecordsMessageData()
             .setTopic("foo");
         assertNull(message.recordSet());
@@ -53,14 +53,14 @@ public class RecordsSerdeTest {
     }
 
     @Test
-    public void testSerdeEmptyRecords() throws Exception {
+    public void testSerdeEmptyRecords() {
         SimpleRecordsMessageData message = new SimpleRecordsMessageData()
             .setTopic("foo")
             .setRecordSet(MemoryRecords.EMPTY);
         testAllRoundTrips(message);
     }
 
-    private void testAllRoundTrips(SimpleRecordsMessageData message) throws Exception {
+    private void testAllRoundTrips(SimpleRecordsMessageData message) {
         for (short version = SimpleRecordsMessageData.LOWEST_SUPPORTED_VERSION;
              version <= SimpleRecordsMessageData.HIGHEST_SUPPORTED_VERSION;
              version++) {

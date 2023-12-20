@@ -17,28 +17,22 @@
  *
  */
 
-def setupGradle() {
-  // Delete gradle cache to workaround cache corruption bugs, see KAFKA-3167
-  dir('.gradle') {
-    deleteDir()
-  }
-  sh './gradlew -version'
-}
-
 def doValidation() {
-  sh '''
-    ./gradlew -PscalaVersion=$SCALA_VERSION clean compileJava compileScala compileTestJava compileTestScala \
-        spotlessScalaCheck checkstyleMain checkstyleTest spotbugsMain rat \
-        --profile --no-daemon --continue -PxmlSpotBugsReport=true
-  '''
+  // Run all the tasks associated with `check` except for `test` - the latter is executed via `doTest`
+  sh """
+    ./retry_zinc ./gradlew -PscalaVersion=$SCALA_VERSION clean check -x test \
+        --profile --continue -PxmlSpotBugsReport=true -PkeepAliveMode="session"
+  """
 }
 
-def doTest(target = "unitTest integrationTest") {
-  sh """
-    ./gradlew -PscalaVersion=$SCALA_VERSION ${target} \
-        --profile --no-daemon --continue -PtestLoggingEvents=started,passed,skipped,failed \
-        -PignoreFailures=true -PmaxParallelForks=2 -PmaxTestRetries=1 -PmaxTestRetryFailures=5
-  """
+def isChangeRequest(env) {
+  env.CHANGE_ID != null && !env.CHANGE_ID.isEmpty()
+}
+
+def doTest(env, target = "test") {
+  sh """./gradlew -PscalaVersion=$SCALA_VERSION ${target} \
+      --profile --continue -PkeepAliveMode="session" -PtestLoggingEvents=started,passed,skipped,failed \
+      -PignoreFailures=true -PmaxParallelForks=2 -PmaxTestRetries=1 -PmaxTestRetryFailures=10"""
   junit '**/build/test-results/**/TEST-*.xml'
 }
 
@@ -95,10 +89,16 @@ def tryStreamsArchetype() {
 
 pipeline {
   agent none
+  
+  options {
+    disableConcurrentBuilds(abortPrevious: isChangeRequest(env))
+  }
+  
   stages {
     stage('Build') {
       parallel {
-        stage('JDK 8') {
+
+        stage('JDK 8 and Scala 2.12') {
           agent { label 'ubuntu' }
           tools {
             jdk 'jdk_1.8_latest'
@@ -112,14 +112,13 @@ pipeline {
             SCALA_VERSION=2.12
           }
           steps {
-            setupGradle()
             doValidation()
-            doTest()
+            doTest(env)
             tryStreamsArchetype()
           }
         }
 
-        stage('JDK 11') {
+        stage('JDK 11 and Scala 2.13') {
           agent { label 'ubuntu' }
           tools {
             jdk 'jdk_11_latest'
@@ -132,17 +131,16 @@ pipeline {
             SCALA_VERSION=2.13
           }
           steps {
-            setupGradle()
             doValidation()
-            doTest()
+            doTest(env)
             echo 'Skipping Kafka Streams archetype test for Java 11'
           }
         }
-       
-        stage('JDK 15') {
+
+        stage('JDK 17 and Scala 2.13') {
           agent { label 'ubuntu' }
           tools {
-            jdk 'jdk_15_latest'
+            jdk 'jdk_17_latest'
           }
           options {
             timeout(time: 8, unit: 'HOURS') 
@@ -152,29 +150,43 @@ pipeline {
             SCALA_VERSION=2.13
           }
           steps {
-            setupGradle()
             doValidation()
-            doTest()
-            echo 'Skipping Kafka Streams archetype test for Java 15'
+            doTest(env)
+            echo 'Skipping Kafka Streams archetype test for Java 17'
           }
         }
 
-        stage('ARM') {
-          agent { label 'arm4' }
+        stage('JDK 21 and Scala 2.13') {
+          agent { label 'ubuntu' }
+          tools {
+            jdk 'jdk_21_latest'
+          }
           options {
-            timeout(time: 2, unit: 'HOURS') 
+            timeout(time: 8, unit: 'HOURS')
             timestamps()
           }
           environment {
-            SCALA_VERSION=2.12
+            SCALA_VERSION=2.13
           }
           steps {
-            setupGradle()
             doValidation()
-            catchError(buildResult: 'SUCCESS', stageResult: 'FAILURE') {
-              doTest('unitTest')
-            }
-            echo 'Skipping Kafka Streams archetype test for ARM build'
+            doTest(env)
+            echo 'Skipping Kafka Streams archetype test for Java 21'
+          }
+        }
+      }
+    }
+  }
+  
+  post {
+    always {
+      script {
+        if (!isChangeRequest(env)) {
+          node('ubuntu') {
+            step([$class: 'Mailer',
+                 notifyEveryUnstableBuild: true,
+                 recipients: "dev@kafka.apache.org",
+                 sendToIndividuals: false])
           }
         }
       }

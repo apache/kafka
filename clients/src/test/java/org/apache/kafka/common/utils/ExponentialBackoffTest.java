@@ -45,4 +45,13 @@ public class ExponentialBackoffTest {
             }
         }
     }
+
+    @Test
+    public void testExponentialBackoffWithoutJitter() {
+        ExponentialBackoff exponentialBackoff = new ExponentialBackoff(100, 2, 400, 0.0);
+        assertEquals(100, exponentialBackoff.backoff(0));
+        assertEquals(200, exponentialBackoff.backoff(1));
+        assertEquals(400, exponentialBackoff.backoff(2));
+        assertEquals(400, exponentialBackoff.backoff(3));
+    }
 }

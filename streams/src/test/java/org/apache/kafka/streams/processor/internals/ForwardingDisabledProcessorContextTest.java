@@ -19,24 +19,19 @@ package org.apache.kafka.streams.processor.internals;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.To;
-import org.easymock.EasyMockRunner;
-import org.easymock.Mock;
-import org.easymock.MockType;
 import org.junit.Before;
 import org.junit.Test;
-import org.junit.runner.RunWith;
 
 import static org.junit.Assert.assertThrows;
+import static org.mockito.Mockito.mock;
 
-@RunWith(EasyMockRunner.class)
 public class ForwardingDisabledProcessorContextTest {
-    @Mock(MockType.NICE)
-    private ProcessorContext delegate;
+
     private ForwardingDisabledProcessorContext context;
 
     @Before
     public void setUp() {
-        context = new ForwardingDisabledProcessorContext(delegate);
+        context = new ForwardingDisabledProcessorContext(mock(ProcessorContext.class));
     }
 
     @Test

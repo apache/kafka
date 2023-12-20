@@ -16,10 +16,11 @@
  */
 package org.apache.kafka.common.requests;
 
+import org.apache.kafka.clients.NodeApiVersions;
 import org.apache.kafka.common.feature.Features;
-import org.apache.kafka.common.feature.FinalizedVersionRange;
 import org.apache.kafka.common.feature.SupportedVersionRange;
 import org.apache.kafka.common.message.ApiMessageType;
+import org.apache.kafka.common.message.ApiMessageType.ListenerType;
 import org.apache.kafka.common.message.ApiVersionsResponseData;
 import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersion;
 import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersionCollection;
@@ -73,8 +74,17 @@ public class ApiVersionsResponse extends AbstractResponse {
     }
 
     @Override
+    public void maybeSetThrottleTimeMs(int throttleTimeMs) {
+        data.setThrottleTimeMs(throttleTimeMs);
+    }
+
+    @Override
     public boolean shouldClientThrottle(short version) {
         return version >= 2;
+    }
+
+    public boolean zkMigrationReady() {
+        return data.zkMigrationReady();
     }
 
     public static ApiVersionsResponse parse(ByteBuffer buffer, short version) {
@@ -95,29 +105,43 @@ public class ApiVersionsResponse extends AbstractResponse {
         }
     }
 
-    public static ApiVersionsResponse defaultApiVersionsResponse(
-        ApiMessageType.ListenerType listenerType
-    ) {
-        return defaultApiVersionsResponse(0, listenerType);
-    }
-
-    public static ApiVersionsResponse defaultApiVersionsResponse(
-        int throttleTimeMs,
-        ApiMessageType.ListenerType listenerType
-    ) {
-        return createApiVersionsResponse(throttleTimeMs, filterApis(RecordVersion.current(), listenerType));
-    }
-
     public static ApiVersionsResponse createApiVersionsResponse(
         int throttleTimeMs,
-        ApiVersionCollection apiVersions
+        RecordVersion minRecordVersion,
+        Features<SupportedVersionRange> latestSupportedFeatures,
+        Map<String, Short> finalizedFeatures,
+        long finalizedFeaturesEpoch,
+        NodeApiVersions controllerApiVersions,
+        ListenerType listenerType,
+        boolean enableUnstableLastVersion,
+        boolean zkMigrationEnabled,
+        boolean clientTelemetryEnabled
     ) {
+        ApiVersionCollection apiKeys;
+        if (controllerApiVersions != null) {
+            apiKeys = intersectForwardableApis(
+                listenerType,
+                minRecordVersion,
+                controllerApiVersions.allSupportedApiVersions(),
+                enableUnstableLastVersion,
+                clientTelemetryEnabled
+            );
+        } else {
+            apiKeys = filterApis(
+                minRecordVersion,
+                listenerType,
+                enableUnstableLastVersion,
+                clientTelemetryEnabled
+            );
+        }
+
         return createApiVersionsResponse(
             throttleTimeMs,
-            apiVersions,
-            Features.emptySupportedFeatures(),
-            Features.emptyFinalizedFeatures(),
-            UNKNOWN_FINALIZED_FEATURES_EPOCH
+            apiKeys,
+            latestSupportedFeatures,
+            finalizedFeatures,
+            finalizedFeaturesEpoch,
+            zkMigrationEnabled
         );
     }
 
@@ -125,8 +149,9 @@ public class ApiVersionsResponse extends AbstractResponse {
         int throttleTimeMs,
         ApiVersionCollection apiVersions,
         Features<SupportedVersionRange> latestSupportedFeatures,
-        Features<FinalizedVersionRange> finalizedFeatures,
-        long finalizedFeaturesEpoch
+        Map<String, Short> finalizedFeatures,
+        long finalizedFeaturesEpoch,
+        boolean zkMigrationEnabled
     ) {
         return new ApiVersionsResponse(
             createApiVersionsResponseData(
@@ -135,7 +160,8 @@ public class ApiVersionsResponse extends AbstractResponse {
                 apiVersions,
                 latestSupportedFeatures,
                 finalizedFeatures,
-                finalizedFeaturesEpoch
+                finalizedFeaturesEpoch,
+                zkMigrationEnabled
             )
         );
     }
@@ -144,19 +170,35 @@ public class ApiVersionsResponse extends AbstractResponse {
         RecordVersion minRecordVersion,
         ApiMessageType.ListenerType listenerType
     ) {
+        return filterApis(minRecordVersion, listenerType, false, false);
+    }
+
+    public static ApiVersionCollection filterApis(
+        RecordVersion minRecordVersion,
+        ApiMessageType.ListenerType listenerType,
+        boolean enableUnstableLastVersion,
+        boolean clientTelemetryEnabled
+    ) {
         ApiVersionCollection apiKeys = new ApiVersionCollection();
         for (ApiKeys apiKey : ApiKeys.apisForListener(listenerType)) {
+            // Skip telemetry APIs if client telemetry is disabled.
+            if ((apiKey == ApiKeys.GET_TELEMETRY_SUBSCRIPTIONS || apiKey == ApiKeys.PUSH_TELEMETRY) && !clientTelemetryEnabled)
+                continue;
+
             if (apiKey.minRequiredInterBrokerMagic <= minRecordVersion.value) {
-                apiKeys.add(ApiVersionsResponse.toApiVersion(apiKey));
+                apiKey.toApiVersion(enableUnstableLastVersion).ifPresent(apiKeys::add);
             }
         }
         return apiKeys;
     }
 
-    public static ApiVersionCollection collectApis(Set<ApiKeys> apiKeys) {
+    public static ApiVersionCollection collectApis(
+        Set<ApiKeys> apiKeys,
+        boolean enableUnstableLastVersion
+    ) {
         ApiVersionCollection res = new ApiVersionCollection();
         for (ApiKeys apiKey : apiKeys) {
-            res.add(ApiVersionsResponse.toApiVersion(apiKey));
+            apiKey.toApiVersion(enableUnstableLastVersion).ifPresent(res::add);
         }
         return res;
     }
@@ -168,24 +210,38 @@ public class ApiVersionsResponse extends AbstractResponse {
      * @param listenerType the listener type which constrains the set of exposed APIs
      * @param minRecordVersion min inter broker magic
      * @param activeControllerApiVersions controller ApiVersions
+     * @param enableUnstableLastVersion whether unstable versions should be advertised or not
+     * @param clientTelemetryEnabled whether client telemetry is enabled or not
      * @return commonly agreed ApiVersion collection
      */
     public static ApiVersionCollection intersectForwardableApis(
         final ApiMessageType.ListenerType listenerType,
         final RecordVersion minRecordVersion,
-        final Map<ApiKeys, ApiVersion> activeControllerApiVersions
+        final Map<ApiKeys, ApiVersion> activeControllerApiVersions,
+        boolean enableUnstableLastVersion,
+        boolean clientTelemetryEnabled
     ) {
         ApiVersionCollection apiKeys = new ApiVersionCollection();
         for (ApiKeys apiKey : ApiKeys.apisForListener(listenerType)) {
             if (apiKey.minRequiredInterBrokerMagic <= minRecordVersion.value) {
-                ApiVersion brokerApiVersion = toApiVersion(apiKey);
+                final Optional<ApiVersion> brokerApiVersion = apiKey.toApiVersion(enableUnstableLastVersion);
+                if (!brokerApiVersion.isPresent()) {
+                    // Broker does not support this API key.
+                    continue;
+                }
+
+                // Skip telemetry APIs if client telemetry is disabled.
+                if ((apiKey == ApiKeys.GET_TELEMETRY_SUBSCRIPTIONS || apiKey == ApiKeys.PUSH_TELEMETRY) && !clientTelemetryEnabled)
+                    continue;
 
                 final ApiVersion finalApiVersion;
                 if (!apiKey.forwardable) {
-                    finalApiVersion = brokerApiVersion;
+                    finalApiVersion = brokerApiVersion.get();
                 } else {
-                    Optional<ApiVersion> intersectVersion = intersect(brokerApiVersion,
-                        activeControllerApiVersions.getOrDefault(apiKey, null));
+                    Optional<ApiVersion> intersectVersion = intersect(
+                        brokerApiVersion.get(),
+                        activeControllerApiVersions.getOrDefault(apiKey, null)
+                    );
                     if (intersectVersion.isPresent()) {
                         finalApiVersion = intersectVersion.get();
                     } else {
@@ -205,8 +261,9 @@ public class ApiVersionsResponse extends AbstractResponse {
         final Errors error,
         final ApiVersionCollection apiKeys,
         final Features<SupportedVersionRange> latestSupportedFeatures,
-        final Features<FinalizedVersionRange> finalizedFeatures,
-        final long finalizedFeaturesEpoch
+        final Map<String, Short> finalizedFeatures,
+        final long finalizedFeaturesEpoch,
+        final boolean zkMigrationEnabled
     ) {
         final ApiVersionsResponseData data = new ApiVersionsResponseData();
         data.setThrottleTimeMs(throttleTimeMs);
@@ -215,6 +272,7 @@ public class ApiVersionsResponse extends AbstractResponse {
         data.setSupportedFeatures(createSupportedFeatureKeys(latestSupportedFeatures));
         data.setFinalizedFeatures(createFinalizedFeatureKeys(finalizedFeatures));
         data.setFinalizedFeaturesEpoch(finalizedFeaturesEpoch);
+        data.setZkMigrationReady(zkMigrationEnabled);
 
         return data;
     }
@@ -235,14 +293,14 @@ public class ApiVersionsResponse extends AbstractResponse {
     }
 
     private static FinalizedFeatureKeyCollection createFinalizedFeatureKeys(
-        Features<FinalizedVersionRange> finalizedFeatures) {
+        Map<String, Short> finalizedFeatures) {
         FinalizedFeatureKeyCollection converted = new FinalizedFeatureKeyCollection();
-        for (Map.Entry<String, FinalizedVersionRange> feature : finalizedFeatures.features().entrySet()) {
+        for (Map.Entry<String, Short> feature : finalizedFeatures.entrySet()) {
             final FinalizedFeatureKey key = new FinalizedFeatureKey();
-            final FinalizedVersionRange versionLevelRange = feature.getValue();
+            final short versionLevel = feature.getValue();
             key.setName(feature.getKey());
-            key.setMinVersionLevel(versionLevelRange.min());
-            key.setMaxVersionLevel(versionLevelRange.max());
+            key.setMinVersionLevel(versionLevel);
+            key.setMaxVersionLevel(versionLevel);
             converted.add(key);
         }
 

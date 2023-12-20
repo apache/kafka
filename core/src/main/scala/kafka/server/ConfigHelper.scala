@@ -17,33 +17,70 @@
 
 package kafka.server
 
-import java.util.{Collections, Properties}
+import kafka.network.RequestChannel
 
-import kafka.log.LogConfig
+import java.util.{Collections, Properties}
 import kafka.server.metadata.ConfigRepository
 import kafka.utils.{Log4jController, Logging}
+import org.apache.kafka.common.acl.AclOperation.DESCRIBE_CONFIGS
 import org.apache.kafka.common.config.{AbstractConfig, ConfigDef, ConfigResource}
 import org.apache.kafka.common.errors.{ApiException, InvalidRequestException}
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.message.DescribeConfigsRequestData.DescribeConfigsResource
 import org.apache.kafka.common.message.DescribeConfigsResponseData
 import org.apache.kafka.common.protocol.Errors
-import org.apache.kafka.common.requests.{ApiError, DescribeConfigsResponse}
+import org.apache.kafka.common.requests.{ApiError, DescribeConfigsRequest, DescribeConfigsResponse}
 import org.apache.kafka.common.requests.DescribeConfigsResponse.ConfigSource
+import org.apache.kafka.common.resource.Resource.CLUSTER_NAME
+import org.apache.kafka.common.resource.ResourceType.{CLUSTER, TOPIC}
+import org.apache.kafka.server.config.ServerTopicConfigSynonyms
+import org.apache.kafka.storage.internals.log.LogConfig
 
+import scala.collection.mutable.ListBuffer
 import scala.collection.{Map, mutable}
+import scala.compat.java8.OptionConverters._
 import scala.jdk.CollectionConverters._
 
 class ConfigHelper(metadataCache: MetadataCache, config: KafkaConfig, configRepository: ConfigRepository) extends Logging {
+
+  def allConfigs(config: AbstractConfig) = {
+    config.originals.asScala.filter(_._2 != null) ++ config.nonInternalValues.asScala
+  }
+
+  def handleDescribeConfigsRequest(
+    request: RequestChannel.Request,
+    authHelper: AuthHelper
+  ): DescribeConfigsResponseData = {
+    val describeConfigsRequest = request.body[DescribeConfigsRequest]
+    val (authorizedResources, unauthorizedResources) = describeConfigsRequest.data.resources.asScala.partition { resource =>
+      ConfigResource.Type.forId(resource.resourceType) match {
+        case ConfigResource.Type.BROKER | ConfigResource.Type.BROKER_LOGGER | ConfigResource.Type.CLIENT_METRICS =>
+          authHelper.authorize(request.context, DESCRIBE_CONFIGS, CLUSTER, CLUSTER_NAME)
+        case ConfigResource.Type.TOPIC =>
+          authHelper.authorize(request.context, DESCRIBE_CONFIGS, TOPIC, resource.resourceName)
+        case rt => throw new InvalidRequestException(s"Unexpected resource type $rt for resource ${resource.resourceName}")
+      }
+    }
+    val authorizedConfigs = describeConfigs(authorizedResources.toList, describeConfigsRequest.data.includeSynonyms, describeConfigsRequest.data.includeDocumentation)
+    val unauthorizedConfigs = unauthorizedResources.map { resource =>
+      val error = ConfigResource.Type.forId(resource.resourceType) match {
+        case ConfigResource.Type.BROKER | ConfigResource.Type.BROKER_LOGGER | ConfigResource.Type.CLIENT_METRICS => Errors.CLUSTER_AUTHORIZATION_FAILED
+        case ConfigResource.Type.TOPIC => Errors.TOPIC_AUTHORIZATION_FAILED
+        case rt => throw new InvalidRequestException(s"Unexpected resource type $rt for resource ${resource.resourceName}")
+      }
+      new DescribeConfigsResponseData.DescribeConfigsResult().setErrorCode(error.code)
+        .setErrorMessage(error.message)
+        .setConfigs(Collections.emptyList[DescribeConfigsResponseData.DescribeConfigsResourceResult])
+        .setResourceName(resource.resourceName)
+        .setResourceType(resource.resourceType)
+    }
+    new DescribeConfigsResponseData().setResults((authorizedConfigs ++ unauthorizedConfigs).asJava)
+  }
 
   def describeConfigs(resourceToConfigNames: List[DescribeConfigsResource],
                       includeSynonyms: Boolean,
                       includeDocumentation: Boolean): List[DescribeConfigsResponseData.DescribeConfigsResult] = {
     resourceToConfigNames.map { case resource =>
-
-      def allConfigs(config: AbstractConfig) = {
-        config.originals.asScala.filter(_._2 != null) ++ config.nonInternalValues.asScala
-      }
 
       def createResponseConfig(configs: Map[String, Any],
                                createConfigEntry: (String, Any) => DescribeConfigsResponseData.DescribeConfigsResourceResult): DescribeConfigsResponseData.DescribeConfigsResult = {
@@ -66,7 +103,7 @@ class ConfigHelper(metadataCache: MetadataCache, config: KafkaConfig, configRepo
             Topic.validate(topic)
             if (metadataCache.contains(topic)) {
               val topicProps = configRepository.topicConfig(topic)
-              val logConfig = LogConfig.fromProps(LogConfig.extractLogConfigMap(config), topicProps)
+              val logConfig = LogConfig.fromProps(config.extractLogConfigMap, topicProps)
               createResponseConfig(allConfigs(logConfig), createTopicConfigEntry(logConfig, topicProps, includeSynonyms, includeDocumentation))
             } else {
               new DescribeConfigsResponseData.DescribeConfigsResult().setErrorCode(Errors.UNKNOWN_TOPIC_OR_PARTITION.code)
@@ -93,6 +130,25 @@ class ConfigHelper(metadataCache: MetadataCache, config: KafkaConfig, configRepo
                 (name, value) => new DescribeConfigsResponseData.DescribeConfigsResourceResult().setName(name)
                   .setValue(value.toString).setConfigSource(ConfigSource.DYNAMIC_BROKER_LOGGER_CONFIG.id)
                   .setIsSensitive(false).setReadOnly(false).setSynonyms(List.empty.asJava))
+
+          case ConfigResource.Type.CLIENT_METRICS =>
+            val subscriptionName = resource.resourceName
+            if (subscriptionName == null || subscriptionName.isEmpty) {
+              throw new InvalidRequestException("Client metrics subscription name must not be empty")
+            } else {
+              val entityProps = configRepository.config(new ConfigResource(ConfigResource.Type.CLIENT_METRICS, subscriptionName))
+              val configEntries = new  ListBuffer[DescribeConfigsResponseData.DescribeConfigsResourceResult]()
+              entityProps.forEach((name, value) => {
+                configEntries += new DescribeConfigsResponseData.DescribeConfigsResourceResult().setName(name.toString)
+                  .setValue(value.toString).setConfigSource(ConfigSource.CLIENT_METRICS_CONFIG.id())
+                  .setIsSensitive(false).setReadOnly(false).setSynonyms(List.empty.asJava)
+              })
+
+              new DescribeConfigsResponseData.DescribeConfigsResult()
+                .setErrorCode(Errors.NONE.code)
+                .setConfigs(configEntries.asJava)
+            }
+
           case resourceType => throw new InvalidRequestException(s"Unsupported resource type: $resourceType")
         }
         configResult.setResourceName(resource.resourceName).setResourceType(resource.resourceType)
@@ -117,11 +173,11 @@ class ConfigHelper(metadataCache: MetadataCache, config: KafkaConfig, configRepo
 
   def createTopicConfigEntry(logConfig: LogConfig, topicProps: Properties, includeSynonyms: Boolean, includeDocumentation: Boolean)
                             (name: String, value: Any): DescribeConfigsResponseData.DescribeConfigsResourceResult = {
-    val configEntryType = LogConfig.configType(name)
+    val configEntryType = LogConfig.configType(name).asScala
     val isSensitive = KafkaConfig.maybeSensitive(configEntryType)
     val valueAsString = if (isSensitive) null else ConfigDef.convertToString(value, configEntryType.orNull)
     val allSynonyms = {
-      val list = LogConfig.TopicConfigSynonyms.get(name)
+      val list = Option(ServerTopicConfigSynonyms.TOPIC_CONFIG_SYNONYMS.get(name))
         .map(s => configSynonyms(s, brokerSynonyms(s), isSensitive))
         .getOrElse(List.empty)
       if (!topicProps.containsKey(name))

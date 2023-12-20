@@ -39,8 +39,8 @@ class StreamsCooperativeRebalanceUpgradeTest(Test):
     processing_message = "Processed [0-9]* records so far"
     stopped_message = "COOPERATIVE-REBALANCE-TEST-CLIENT-CLOSED"
     running_state_msg = "STREAMS in a RUNNING State"
-    cooperative_turned_off_msg = "Eager rebalancing enabled now for upgrade from %s"
-    cooperative_enabled_msg = "Cooperative rebalancing enabled now"
+    cooperative_turned_off_msg = "Eager rebalancing protocol is enabled now for upgrade from %s"
+    cooperative_enabled_msg = "Cooperative rebalancing protocol is enabled now"
     first_bounce_phase = "first_bounce_phase-"
     second_bounce_phase = "second_bounce_phase-"
 

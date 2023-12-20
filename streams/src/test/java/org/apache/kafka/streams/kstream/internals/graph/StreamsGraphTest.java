@@ -53,13 +53,14 @@ import java.util.regex.Pattern;
 import static java.time.Duration.ofMillis;
 import static org.junit.Assert.assertEquals;
 
+@SuppressWarnings("deprecation")
 public class StreamsGraphTest {
 
     private final Pattern repartitionTopicPattern = Pattern.compile("Sink: .*-repartition");
     private Initializer<String> initializer;
     private Aggregator<String, String, String> aggregator;
 
-    // Test builds topology in succesive manner but only graph node not yet processed written to topology
+    // Test builds topology in successive manner but only graph node not yet processed written to topology
 
     @Test
     public void shouldBeAbleToBuildTopologyIncrementally() {
@@ -199,11 +200,11 @@ public class StreamsGraphTest {
     @Test
     public void shouldNotOptimizeWhenAThroughOperationIsDone() {
         final Topology attemptedOptimize = getTopologyWithThroughOperation(StreamsConfig.OPTIMIZE);
-        final Topology noOptimziation = getTopologyWithThroughOperation(StreamsConfig.NO_OPTIMIZATION);
+        final Topology noOptimization = getTopologyWithThroughOperation(StreamsConfig.NO_OPTIMIZATION);
 
-        assertEquals(attemptedOptimize.describe().toString(), noOptimziation.describe().toString());
+        assertEquals(attemptedOptimize.describe().toString(), noOptimization.describe().toString());
         assertEquals(0, getCountOfRepartitionTopicsFound(attemptedOptimize.describe().toString()));
-        assertEquals(0, getCountOfRepartitionTopicsFound(noOptimziation.describe().toString()));
+        assertEquals(0, getCountOfRepartitionTopicsFound(noOptimization.describe().toString()));
 
     }
 
@@ -232,11 +233,11 @@ public class StreamsGraphTest {
     @Test
     public void shouldNotOptimizeWhenRepartitionOperationIsDone() {
         final Topology attemptedOptimize = getTopologyWithRepartitionOperation(StreamsConfig.OPTIMIZE);
-        final Topology noOptimziation = getTopologyWithRepartitionOperation(StreamsConfig.NO_OPTIMIZATION);
+        final Topology noOptimization = getTopologyWithRepartitionOperation(StreamsConfig.NO_OPTIMIZATION);
 
-        assertEquals(attemptedOptimize.describe().toString(), noOptimziation.describe().toString());
+        assertEquals(attemptedOptimize.describe().toString(), noOptimization.describe().toString());
         assertEquals(2, getCountOfRepartitionTopicsFound(attemptedOptimize.describe().toString()));
-        assertEquals(2, getCountOfRepartitionTopicsFound(noOptimziation.describe().toString()));
+        assertEquals(2, getCountOfRepartitionTopicsFound(noOptimization.describe().toString()));
     }
 
     private Topology getTopologyWithChangingValuesAfterChangingKey(final String optimizeConfig) {

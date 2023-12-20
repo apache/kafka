@@ -45,11 +45,11 @@ import java.util.Properties;
  * using general data types (here: JSON; but can also be Avro generic bindings, etc.) for serdes
  * in Kafka Streams.
  *
- * In this example, we join a stream of pageviews (aka clickstreams) that reads from  a topic named "streams-pageview-input"
+ * <p>In this example, we join a stream of pageviews (aka clickstreams) that reads from  a topic named "streams-pageview-input"
  * with a user profile table that reads from a topic named "streams-userprofile-input", where the data format
  * is JSON string representing a record in the stream or table, to compute the number of pageviews per user region.
  *
- * Before running this example you must create the input topics and the output topic (e.g. via
+ * <p>Before running this example you must create the input topics and the output topic (e.g. via
  * bin/kafka-topics.sh --create ...), and write some data to the input topics (e.g. via
  * bin/kafka-console-producer.sh). Otherwise you won't see any data arriving in the output topic.
  */
@@ -60,7 +60,7 @@ public class PageViewUntypedDemo {
         props.put(StreamsConfig.APPLICATION_ID_CONFIG, "streams-pageview-untyped");
         props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9092");
         props.put(StreamsConfig.DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_CONFIG, JsonTimestampExtractor.class);
-        props.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 0);
+        props.put(StreamsConfig.STATESTORE_CACHE_MAX_BYTES_CONFIG, 0);
 
         // setting offset reset to earliest so that we can re-run the demo code with the same pre-loaded data
         props.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
@@ -78,6 +78,8 @@ public class PageViewUntypedDemo {
 
         final KTable<String, String> userRegions = users.mapValues(record -> record.get("region").textValue());
 
+        final Duration duration24Hours = Duration.ofHours(24);
+
         final KStream<JsonNode, JsonNode> regionCount = views
             .leftJoin(userRegions, (view, region) -> {
                 final ObjectNode jNode = JsonNodeFactory.instance.objectNode();
@@ -88,7 +90,7 @@ public class PageViewUntypedDemo {
             })
             .map((user, viewRegion) -> new KeyValue<>(viewRegion.get("region").textValue(), viewRegion))
             .groupByKey(Grouped.with(Serdes.String(), jsonSerde))
-            .windowedBy(TimeWindows.of(Duration.ofDays(7)).advanceBy(Duration.ofSeconds(1)))
+            .windowedBy(TimeWindows.ofSizeAndGrace(Duration.ofDays(7), duration24Hours).advanceBy(Duration.ofSeconds(1)))
             .count()
             .toStream()
             .map((key, value) -> {

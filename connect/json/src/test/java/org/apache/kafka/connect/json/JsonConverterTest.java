@@ -21,6 +21,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ArrayNode;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
+import org.apache.kafka.common.utils.AppInfoParser;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.data.Date;
 import org.apache.kafka.connect.data.Decimal;
@@ -48,6 +49,7 @@ import java.util.GregorianCalendar;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 import java.util.TimeZone;
 
@@ -64,7 +66,7 @@ public class JsonConverterTest {
 
     private final ObjectMapper objectMapper = new ObjectMapper()
         .enable(DeserializationFeature.USE_BIG_DECIMAL_FOR_FLOATS)
-        .setNodeFactory(JsonNodeFactory.withExactBigDecimals(true));
+        .setNodeFactory(new JsonNodeFactory(true));
 
     private final JsonConverter converter = new JsonConverter();
 
@@ -113,6 +115,14 @@ public class JsonConverterTest {
     public void longToConnect() {
         assertEquals(new SchemaAndValue(Schema.INT64_SCHEMA, 12L), converter.toConnectData(TOPIC, "{ \"schema\": { \"type\": \"int64\" }, \"payload\": 12 }".getBytes()));
         assertEquals(new SchemaAndValue(Schema.INT64_SCHEMA, 4398046511104L), converter.toConnectData(TOPIC, "{ \"schema\": { \"type\": \"int64\" }, \"payload\": 4398046511104 }".getBytes()));
+    }
+
+    @Test
+    public void numberWithLeadingZerosToConnect() {
+        assertEquals(new SchemaAndValue(Schema.INT8_SCHEMA, (byte) 12), converter.toConnectData(TOPIC, "{ \"schema\": { \"type\": \"int8\" }, \"payload\": 0012 }".getBytes()));
+        assertEquals(new SchemaAndValue(Schema.INT16_SCHEMA, (short) 123), converter.toConnectData(TOPIC, "{ \"schema\": { \"type\": \"int16\" }, \"payload\": 000123 }".getBytes()));
+        assertEquals(new SchemaAndValue(Schema.INT32_SCHEMA, 12345), converter.toConnectData(TOPIC, "{ \"schema\": { \"type\": \"int32\" }, \"payload\": 000012345 }".getBytes()));
+        assertEquals(new SchemaAndValue(Schema.INT64_SCHEMA, 123456789L), converter.toConnectData(TOPIC, "{ \"schema\": { \"type\": \"int64\" }, \"payload\": 00000123456789 }".getBytes()));
     }
 
     @Test
@@ -860,7 +870,7 @@ public class JsonConverterTest {
 
     @Test
     public void testJsonSchemaCacheSizeFromConfigFile() throws URISyntaxException, IOException {
-        URL url = getClass().getResource("/connect-test.properties");
+        URL url = Objects.requireNonNull(getClass().getResource("/connect-test.properties"));
         File propFile = new File(url.toURI());
         String workerPropsFile = propFile.getAbsolutePath();
         Map<String, String> workerProps = !workerPropsFile.isEmpty() ?
@@ -887,6 +897,84 @@ public class JsonConverterTest {
         assertEquals(new SchemaAndValue(Schema.STRING_SCHEMA, "foo-bar-baz"), converter.toConnectHeader(TOPIC, "headerName", "{ \"schema\": { \"type\": \"string\" }, \"payload\": \"foo-bar-baz\" }".getBytes()));
     }
 
+    @Test
+    public void serializeNullToDefault() {
+        converter.configure(Collections.singletonMap(JsonConverterConfig.REPLACE_NULL_WITH_DEFAULT_CONFIG, true), false);
+        Schema schema = SchemaBuilder.string().optional().defaultValue("default").build();
+        JsonNode converted = parse(converter.fromConnectData(TOPIC, schema, null));
+        JsonNode expected = parse("{\"schema\":{\"type\":\"string\",\"optional\":true,\"default\":\"default\"},\"payload\":\"default\"}");
+        assertEquals(expected, converted);
+    }
+
+    @Test
+    public void serializeNullToNull() {
+        converter.configure(Collections.singletonMap(JsonConverterConfig.REPLACE_NULL_WITH_DEFAULT_CONFIG, false), false);
+        Schema schema = SchemaBuilder.string().optional().defaultValue("default").build();
+        JsonNode converted = parse(converter.fromConnectData(TOPIC, schema, null));
+        JsonNode expected = parse("{\"schema\":{\"type\":\"string\",\"optional\":true,\"default\":\"default\"},\"payload\":null}");
+        assertEquals(expected, converted);
+    }
+
+    @Test
+    public void deserializeNullToDefault() {
+        converter.configure(Collections.singletonMap(JsonConverterConfig.REPLACE_NULL_WITH_DEFAULT_CONFIG, true), false);
+        String value = "{\"schema\":{\"type\":\"string\",\"optional\":true,\"default\":\"default\"},\"payload\":null}";
+        SchemaAndValue sav = converter.toConnectData(TOPIC, null, value.getBytes());
+        assertEquals("default", sav.value());
+    }
+
+    @Test
+    public void deserializeNullToNull() {
+        converter.configure(Collections.singletonMap(JsonConverterConfig.REPLACE_NULL_WITH_DEFAULT_CONFIG, false), false);
+        String value = "{\"schema\":{\"type\":\"string\",\"optional\":true,\"default\":\"default\"},\"payload\":null}";
+        SchemaAndValue sav = converter.toConnectData(TOPIC, null, value.getBytes());
+        assertNull(sav.value());
+    }
+
+    @Test
+    public void serializeFieldNullToDefault() {
+        converter.configure(Collections.singletonMap(JsonConverterConfig.REPLACE_NULL_WITH_DEFAULT_CONFIG, true), false);
+        Schema schema = SchemaBuilder.string().optional().defaultValue("default").build();
+        Schema structSchema = SchemaBuilder.struct().field("field1", schema).build();
+        JsonNode converted = parse(converter.fromConnectData(TOPIC, structSchema, new Struct(structSchema)));
+        JsonNode expected = parse("{\"schema\":{\"type\":\"struct\",\"fields\":[{\"field\":\"field1\",\"type\":\"string\",\"optional\":true,\"default\":\"default\"}],\"optional\":false},\"payload\":{\"field1\":\"default\"}}");
+        assertEquals(expected, converted);
+    }
+
+    @Test
+    public void serializeFieldNullToNull() {
+        converter.configure(Collections.singletonMap(JsonConverterConfig.REPLACE_NULL_WITH_DEFAULT_CONFIG, false), false);
+        Schema schema = SchemaBuilder.string().optional().defaultValue("default").build();
+        Schema structSchema = SchemaBuilder.struct().field("field1", schema).build();
+        JsonNode converted = parse(converter.fromConnectData(TOPIC, structSchema, new Struct(structSchema)));
+        JsonNode expected = parse("{\"schema\":{\"type\":\"struct\",\"fields\":[{\"field\":\"field1\",\"type\":\"string\",\"optional\":true,\"default\":\"default\"}],\"optional\":false},\"payload\":{\"field1\":null}}");
+        assertEquals(expected, converted);
+    }
+
+    @Test
+    public void deserializeFieldNullToDefault() {
+        converter.configure(Collections.singletonMap(JsonConverterConfig.REPLACE_NULL_WITH_DEFAULT_CONFIG, true), false);
+        String value = "{\"schema\":{\"type\":\"struct\",\"fields\":[{\"field\":\"field1\",\"type\":\"string\",\"optional\":true,\"default\":\"default\"}],\"optional\":false},\"payload\":{\"field1\":null}}";
+        SchemaAndValue sav = converter.toConnectData(TOPIC, null, value.getBytes());
+        Schema schema = SchemaBuilder.string().optional().defaultValue("default").build();
+        Schema structSchema = SchemaBuilder.struct().field("field1", schema).build();
+        assertEquals(new Struct(structSchema).put("field1", "default"), sav.value());
+    }
+
+    @Test
+    public void deserializeFieldNullToNull() {
+        converter.configure(Collections.singletonMap(JsonConverterConfig.REPLACE_NULL_WITH_DEFAULT_CONFIG, false), false);
+        String value = "{\"schema\":{\"type\":\"struct\",\"fields\":[{\"field\":\"field1\",\"type\":\"string\",\"optional\":true,\"default\":\"default\"}],\"optional\":false},\"payload\":{\"field1\":null}}";
+        SchemaAndValue sav = converter.toConnectData(TOPIC, null, value.getBytes());
+        Schema schema = SchemaBuilder.string().optional().defaultValue("default").build();
+        Schema structSchema = SchemaBuilder.struct().field("field1", schema).build();
+        assertEquals(new Struct(structSchema), sav.value());
+    }
+
+    @Test
+    public void testVersionRetrievedFromAppInfoParser() {
+        assertEquals(AppInfoParser.getVersion(), converter.version());
+    }
 
     private JsonNode parse(byte[] json) {
         try {

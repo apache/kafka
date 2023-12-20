@@ -26,6 +26,7 @@ import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
@@ -33,16 +34,16 @@ import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.integration.utils.EmbeddedKafkaCluster;
 import org.apache.kafka.streams.integration.utils.IntegrationTestUtils;
-import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.MockMapper;
 import org.apache.kafka.test.TestCondition;
 import org.apache.kafka.test.TestUtils;
-import org.junit.After;
-import org.junit.AfterClass;
-import org.junit.Before;
-import org.junit.BeforeClass;
-import org.junit.Test;
-import org.junit.experimental.categories.Category;
+import org.junit.jupiter.api.AfterAll;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.Timeout;
+import org.junit.jupiter.api.Tag;
 
 import java.io.IOException;
 import java.time.Duration;
@@ -53,9 +54,9 @@ import java.util.List;
 import java.util.Properties;
 import java.util.Set;
 
-@Category({IntegrationTest.class})
+@Timeout(600)
+@Tag("integration")
 public class PurgeRepartitionTopicIntegrationTest {
-
     private static final int NUM_BROKERS = 1;
 
     private static final String INPUT_TOPIC = "input-stream";
@@ -74,19 +75,19 @@ public class PurgeRepartitionTopicIntegrationTest {
         }
     });
 
-    @BeforeClass
+    @BeforeAll
     public static void startCluster() throws IOException, InterruptedException {
         CLUSTER.start();
         CLUSTER.createTopic(INPUT_TOPIC, 1, 1);
     }
 
-    @AfterClass
+    @AfterAll
     public static void closeCluster() {
         CLUSTER.stop();
     }
 
 
-    private final Time time = CLUSTER.time;
+    private final Time time = new MockTime(1);
 
     private class RepartitionTopicCreatedWithExpectedConfigs implements TestCondition {
         @Override
@@ -151,7 +152,7 @@ public class PurgeRepartitionTopicIntegrationTest {
         }
     }
 
-    @Before
+    @BeforeEach
     public void setup() {
         // create admin client for verification
         final Properties adminConfig = new Properties();
@@ -161,6 +162,7 @@ public class PurgeRepartitionTopicIntegrationTest {
         final Properties streamsConfiguration = new Properties();
         streamsConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG, APPLICATION_ID);
         streamsConfiguration.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, PURGE_INTERVAL_MS);
+        streamsConfiguration.put(StreamsConfig.REPARTITION_PURGE_INTERVAL_MS_CONFIG, PURGE_INTERVAL_MS);
         streamsConfiguration.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
         streamsConfiguration.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.Integer().getClass());
         streamsConfiguration.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.Integer().getClass());
@@ -177,8 +179,11 @@ public class PurgeRepartitionTopicIntegrationTest {
         kafkaStreams = new KafkaStreams(builder.build(), streamsConfiguration, time);
     }
 
-    @After
+    @AfterEach
     public void shutdown() {
+        if (adminClient != null) {
+            adminClient.close();
+        }
         if (kafkaStreams != null) {
             kafkaStreams.close(Duration.ofSeconds(30));
         }
@@ -203,17 +208,19 @@ public class PurgeRepartitionTopicIntegrationTest {
         TestUtils.waitForCondition(new RepartitionTopicCreatedWithExpectedConfigs(), 60000,
                 "Repartition topic " + REPARTITION_TOPIC + " not created with the expected configs after 60000 ms.");
 
+        // wait until we received more than 1 segment of data, so that we can confirm the purge succeeds in next verification
         TestUtils.waitForCondition(
-            new RepartitionTopicVerified(currentSize -> currentSize > 0),
+            new RepartitionTopicVerified(currentSize -> currentSize > PURGE_SEGMENT_BYTES),
             60000,
-            "Repartition topic " + REPARTITION_TOPIC + " not received data after 60000 ms."
+            "Repartition topic " + REPARTITION_TOPIC + " not received more than " + PURGE_SEGMENT_BYTES + "B of data after 60000 ms."
         );
 
         // we need long enough timeout to by-pass the log manager's InitialTaskDelayMs, which is hard-coded on server side
+        final long waitForPurgeMs = 60000;
         TestUtils.waitForCondition(
             new RepartitionTopicVerified(currentSize -> currentSize <= PURGE_SEGMENT_BYTES),
-            60000,
-            "Repartition topic " + REPARTITION_TOPIC + " not purged data after 60000 ms."
+            waitForPurgeMs,
+            "Repartition topic " + REPARTITION_TOPIC + " not purged data after " + waitForPurgeMs + " ms."
         );
     }
 }

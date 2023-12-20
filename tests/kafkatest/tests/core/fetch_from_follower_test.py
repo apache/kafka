@@ -47,7 +47,7 @@ class FetchFromFollowerTest(ProduceConsumeValidateTest):
                                           "replication-factor": 3,
                                           "configs": {"min.insync.replicas": 1}},
                                   },
-                                  server_prop_overides=[
+                                  server_prop_overrides=[
                                       ["replica.selector.class", self.RACK_AWARE_REPLICA_SELECTOR]
                                   ],
                                   per_node_server_prop_overrides={
@@ -70,8 +70,15 @@ class FetchFromFollowerTest(ProduceConsumeValidateTest):
         self.kafka.start()
 
     @cluster(num_nodes=9)
-    @matrix(metadata_quorum=quorum.all_non_upgrade)
-    def test_consumer_preferred_read_replica(self, metadata_quorum=quorum.zk):
+    @matrix(
+        metadata_quorum=[quorum.zk],
+        use_new_coordinator=[False]
+    )
+    @matrix(
+        metadata_quorum=[quorum.isolated_kraft],
+        use_new_coordinator=[True, False]
+    )
+    def test_consumer_preferred_read_replica(self, metadata_quorum=quorum.zk, use_new_coordinator=False):
         """
         This test starts up brokers with "broker.rack" and "replica.selector.class" configurations set. The replica
         selector is set to the rack-aware implementation. One of the brokers has a different rack than the other two.

@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.processor.ProcessorContext;
@@ -27,6 +28,8 @@ import org.apache.kafka.streams.state.SessionStore;
 import org.apache.kafka.streams.state.TimestampedKeyValueStore;
 import org.apache.kafka.streams.state.TimestampedWindowStore;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
+import org.apache.kafka.streams.state.VersionedKeyValueStore;
+import org.apache.kafka.streams.state.VersionedRecord;
 import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.WindowStoreIterator;
 import org.apache.kafka.streams.state.internals.WrappedStateStore;
@@ -67,6 +70,8 @@ abstract class AbstractReadOnlyDecorator<T extends StateStore, K, V> extends Wra
     static StateStore getReadOnlyStore(final StateStore global) {
         if (global instanceof TimestampedKeyValueStore) {
             return new TimestampedKeyValueStoreReadOnlyDecorator<>((TimestampedKeyValueStore<?, ?>) global);
+        } else if (global instanceof VersionedKeyValueStore) {
+            return new VersionedKeyValueStoreReadOnlyDecorator<>((VersionedKeyValueStore<?, ?>) global);
         } else if (global instanceof KeyValueStore) {
             return new KeyValueStoreReadOnlyDecorator<>((KeyValueStore<?, ?>) global);
         } else if (global instanceof TimestampedWindowStore) {
@@ -116,6 +121,12 @@ abstract class AbstractReadOnlyDecorator<T extends StateStore, K, V> extends Wra
         }
 
         @Override
+        public <PS extends Serializer<P>, P> KeyValueIterator<K, V> prefixScan(final P prefix,
+                                                                               final PS prefixKeySerializer) {
+            return wrapped().prefixScan(prefix, prefixKeySerializer);
+        }
+
+        @Override
         public long approximateNumEntries() {
             return wrapped().approximateNumEntries();
         }
@@ -152,19 +163,41 @@ abstract class AbstractReadOnlyDecorator<T extends StateStore, K, V> extends Wra
         }
     }
 
+    static class VersionedKeyValueStoreReadOnlyDecorator<K, V>
+        extends AbstractReadOnlyDecorator<VersionedKeyValueStore<K, V>, K, V>
+        implements VersionedKeyValueStore<K, V> {
+
+        private VersionedKeyValueStoreReadOnlyDecorator(final VersionedKeyValueStore<K, V> inner) {
+            super(inner);
+        }
+
+        @Override
+        public long put(final K key, final V value, final long timestamp) {
+            throw new UnsupportedOperationException(ERROR_MESSAGE);
+        }
+
+        @Override
+        public VersionedRecord<V> delete(final K key, final long timestamp) {
+            throw new UnsupportedOperationException(ERROR_MESSAGE);
+        }
+
+        @Override
+        public VersionedRecord<V> get(final K key) {
+            return wrapped().get(key);
+        }
+
+        @Override
+        public VersionedRecord<V> get(final K key, final long asOfTimestamp) {
+            return wrapped().get(key, asOfTimestamp);
+        }
+    }
+
     static class WindowStoreReadOnlyDecorator<K, V>
         extends AbstractReadOnlyDecorator<WindowStore<K, V>, K, V>
         implements WindowStore<K, V> {
 
         private WindowStoreReadOnlyDecorator(final WindowStore<K, V> inner) {
             super(inner);
-        }
-
-        @Deprecated
-        @Override
-        public void put(final K key,
-                        final V value) {
-            throw new UnsupportedOperationException(ERROR_MESSAGE);
         }
 
         @Override
@@ -280,8 +313,8 @@ abstract class AbstractReadOnlyDecorator<T extends StateStore, K, V> extends Wra
         }
 
         @Override
-        public AGG fetchSession(final K key, final long startTime, final long endTime) {
-            return wrapped().fetchSession(key, startTime, endTime);
+        public AGG fetchSession(final K key, final long earliestSessionEndTime, final long latestSessionStartTime) {
+            return wrapped().fetchSession(key, earliestSessionEndTime, latestSessionStartTime);
         }
 
         @Override
@@ -290,9 +323,9 @@ abstract class AbstractReadOnlyDecorator<T extends StateStore, K, V> extends Wra
         }
 
         @Override
-        public KeyValueIterator<Windowed<K>, AGG> fetch(final K from,
-                                                        final K to) {
-            return wrapped().fetch(from, to);
+        public KeyValueIterator<Windowed<K>, AGG> fetch(final K keyFrom,
+                                                        final K keyTo) {
+            return wrapped().fetch(keyFrom, keyTo);
         }
     }
 }

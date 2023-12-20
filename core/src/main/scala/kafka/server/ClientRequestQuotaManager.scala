@@ -17,19 +17,21 @@
 package kafka.server
 
 import java.util.concurrent.TimeUnit
-
 import kafka.network.RequestChannel
 import kafka.utils.QuotaUtils
 import org.apache.kafka.common.MetricName
 import org.apache.kafka.common.metrics._
+import org.apache.kafka.common.metrics.stats.Rate
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.server.quota.ClientQuotaCallback
 
 import scala.jdk.CollectionConverters._
 
 object ClientRequestQuotaManager {
-  val QuotaRequestPercentDefault = Int.MaxValue.toDouble
-  val NanosToPercentagePerSecond = 100.0 / TimeUnit.SECONDS.toNanos(1)
+  val NanosToPercentagePerSecond: Double = 100.0 / TimeUnit.SECONDS.toNanos(1)
+  // Since exemptSensor is for all clients and has a constant name, we do not expire exemptSensor and only
+  // create once.
+  val DefaultInactiveExemptSensorExpirationTimeSeconds: Long = Long.MaxValue
 
   private val ExemptSensorName = "exempt-" + QuotaType.Request
 }
@@ -45,7 +47,9 @@ class ClientRequestQuotaManager(private val config: ClientQuotaManagerConfig,
   private val exemptMetricName = metrics.metricName("exempt-request-time",
     QuotaType.Request.toString, "Tracking exempt-request-time utilization percentage")
 
-  lazy val exemptSensor: Sensor = getOrCreateSensor(ClientRequestQuotaManager.ExemptSensorName, exemptMetricName)
+  val exemptSensor: Sensor = getOrCreateSensor(ClientRequestQuotaManager.ExemptSensorName,
+    ClientRequestQuotaManager.DefaultInactiveExemptSensorExpirationTimeSeconds,
+    sensor => sensor.add(exemptMetricName, new Rate))
 
   def recordExempt(value: Double): Unit = {
     exemptSensor.record(value)

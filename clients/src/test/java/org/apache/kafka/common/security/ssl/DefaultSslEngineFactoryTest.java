@@ -18,7 +18,6 @@ package org.apache.kafka.common.security.ssl;
 
 import org.apache.kafka.common.config.SslConfigs;
 import org.apache.kafka.common.config.types.Password;
-import org.apache.kafka.common.errors.InvalidConfigurationException;
 import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -33,8 +32,8 @@ import java.util.Map;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 
+@SuppressWarnings("this-escape")
 public class DefaultSslEngineFactoryTest {
 
     /*
@@ -196,13 +195,17 @@ public class DefaultSslEngineFactoryTest {
 
     private static final Password KEY_PASSWORD = new Password("key-password");
 
-    private DefaultSslEngineFactory factory = new DefaultSslEngineFactory();
+    private DefaultSslEngineFactory factory = sslEngineFactory();
     Map<String, Object> configs = new HashMap<>();
 
     @BeforeEach
     public void setUp() {
-        factory = new DefaultSslEngineFactory();
+        factory = sslEngineFactory();
         configs.put(SslConfigs.SSL_PROTOCOL_CONFIG, "TLSv1.2");
+    }
+
+    protected DefaultSslEngineFactory sslEngineFactory() {
+        return new DefaultSslEngineFactory();
     }
 
     @Test
@@ -291,7 +294,14 @@ public class DefaultSslEngineFactoryTest {
         configs.put(SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG,
                 pemFilePath(pemAsConfigValue(KEY, CERTCHAIN).value()));
         configs.put(SslConfigs.SSL_KEYSTORE_TYPE_CONFIG, DefaultSslEngineFactory.PEM_TYPE);
-        assertThrows(InvalidConfigurationException.class, () -> factory.configure(configs));
+        configs.put(SslConfigs.SSL_KEY_PASSWORD_CONFIG, null);
+        factory.configure(configs);
+
+        KeyStore keyStore = factory.keystore();
+        List<String> aliases = Collections.list(keyStore.aliases());
+        assertEquals(Collections.singletonList("kafka"), aliases);
+        assertNotNull(keyStore.getCertificate("kafka"), "Certificate not loaded");
+        assertNotNull(keyStore.getKey("kafka", null), "Private key not loaded");
     }
 
     @Test
@@ -313,7 +323,7 @@ public class DefaultSslEngineFactoryTest {
         return TestUtils.tempFile(pem).getAbsolutePath();
     }
 
-    private Password pemAsConfigValue(String... pemValues)  throws Exception {
+    private Password pemAsConfigValue(String... pemValues) {
         StringBuilder builder = new StringBuilder();
         for (String pem : pemValues) {
             builder.append(pem);

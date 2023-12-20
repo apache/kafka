@@ -117,7 +117,7 @@ public class Struct {
     }
 
     /**
-     * Equivalent to calling {@link #get(String)} and casting the result to a Integer.
+     * Equivalent to calling {@link #get(String)} and casting the result to an Integer.
      */
     public Integer getInt32(String fieldName) {
         return (Integer) getCheckType(fieldName, Schema.Type.INT32);
@@ -222,7 +222,7 @@ public class Struct {
     /**
      * Validates that this struct has filled in all the necessary data with valid values. For required fields
      * without defaults, this validates that a value has been set and has matching types/schemas. If any validation
-     * fails, throws a DataException.
+     * fails, throws a {@link DataException}.
      */
     public void validate() {
         for (Field field : schema.fields()) {

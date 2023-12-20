@@ -94,7 +94,7 @@ class AssignmentStateTest extends AbstractPartitionTest {
       .setLeader(brokerId)
       .setLeaderEpoch(6)
       .setIsr(isr.asJava)
-      .setZkVersion(1)
+      .setPartitionEpoch(1)
       .setReplicas(replicas.asJava)
       .setIsNew(false)
     if (adding.nonEmpty)

@@ -72,7 +72,7 @@ public class DeadLetterQueueReporter implements ErrorReporter {
     private final ErrorHandlingMetrics errorHandlingMetrics;
     private final String dlqTopicName;
 
-    private KafkaProducer<byte[], byte[]> kafkaProducer;
+    private final KafkaProducer<byte[], byte[]> kafkaProducer;
 
     public static DeadLetterQueueReporter createAndSetup(Map<String, Object> adminProps,
                                                          ConnectorTaskId id,

@@ -21,6 +21,8 @@ import org.apache.kafka.common.cache.Cache;
 import org.apache.kafka.common.cache.LRUCache;
 import org.apache.kafka.common.cache.SynchronizedCache;
 import org.apache.kafka.common.config.ConfigDef;
+import org.apache.kafka.common.utils.AppInfoParser;
+import org.apache.kafka.connect.components.Versioned;
 import org.apache.kafka.connect.connector.ConnectRecord;
 import org.apache.kafka.connect.data.ConnectSchema;
 import org.apache.kafka.connect.data.Field;
@@ -37,12 +39,12 @@ import java.util.Map;
 import static org.apache.kafka.connect.transforms.util.Requirements.requireMap;
 import static org.apache.kafka.connect.transforms.util.Requirements.requireStructOrNull;
 
-public abstract class Flatten<R extends ConnectRecord<R>> implements Transformation<R> {
+public abstract class Flatten<R extends ConnectRecord<R>> implements Transformation<R>, Versioned {
 
     public static final String OVERVIEW_DOC =
             "Flatten a nested data structure, generating names for each field by concatenating the field names at each "
                     + "level with a configurable delimiter character. Applies to Struct when schema present, or a Map "
-                    + "in the case of schemaless data. The default delimiter is '.'."
+                    + "in the case of schemaless data. Array fields and their contents are not modified. The default delimiter is '.'."
                     + "<p/>Use the concrete transformation type designed for the record key (<code>" + Key.class.getName() + "</code>) "
                     + "or value (<code>" + Value.class.getName() + "</code>).";
 
@@ -76,6 +78,11 @@ public abstract class Flatten<R extends ConnectRecord<R>> implements Transformat
         } else {
             return applyWithSchema(record);
         }
+    }
+
+    @Override
+    public String version() {
+        return AppInfoParser.getVersion();
     }
 
     @Override
@@ -124,6 +131,7 @@ public abstract class Flatten<R extends ConnectRecord<R>> implements Transformat
                 case BOOLEAN:
                 case STRING:
                 case BYTES:
+                case ARRAY:
                     newRecord.put(fieldName(fieldNamePrefix, entry.getKey()), entry.getValue());
                     break;
                 case MAP:
@@ -189,6 +197,7 @@ public abstract class Flatten<R extends ConnectRecord<R>> implements Transformat
                 case BOOLEAN:
                 case STRING:
                 case BYTES:
+                case ARRAY:
                     newSchema.field(fieldName, convertFieldSchema(field.schema(), fieldIsOptional, fieldDefaultValue));
                     break;
                 case STRUCT:
@@ -237,6 +246,7 @@ public abstract class Flatten<R extends ConnectRecord<R>> implements Transformat
                 case BOOLEAN:
                 case STRING:
                 case BYTES:
+                case ARRAY:
                     newRecord.put(fieldName, record.get(field));
                     break;
                 case STRUCT:

@@ -17,32 +17,28 @@
 
 package kafka.server
 
+import java.util.Properties
+import kafka.server.metadata.ZkConfigRepository
+import kafka.utils.TestUtils
 import kafka.zk.{AdminZkClient, KafkaZkClient}
 import org.apache.kafka.common.metrics.Metrics
-import org.easymock.EasyMock
-import kafka.utils.TestUtils
 import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.message.DescribeConfigsRequestData
 import org.apache.kafka.common.message.DescribeConfigsResponseData
 import org.apache.kafka.common.protocol.Errors
 import org.junit.jupiter.api.{AfterEach, Test}
-import org.junit.jupiter.api.Assertions.assertEquals
-import org.junit.jupiter.api.Assertions.assertFalse
-import org.junit.jupiter.api.Assertions.assertNotNull
-import org.junit.jupiter.api.Assertions.assertNotEquals
-import java.util.Properties
-
-import kafka.server.metadata.ZkConfigRepository
+import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertNotEquals, assertNotNull, assertThrows}
+import org.mockito.Mockito.{mock, when}
 
 import scala.jdk.CollectionConverters._
 
 class ZkAdminManagerTest {
 
-  private val zkClient: KafkaZkClient = EasyMock.createNiceMock(classOf[KafkaZkClient])
+  private val zkClient: KafkaZkClient = mock(classOf[KafkaZkClient])
   private val metrics = new Metrics()
   private val brokerId = 1
   private val topic = "topic-1"
-  private val metadataCache: MetadataCache = EasyMock.createNiceMock(classOf[MetadataCache])
+  private val metadataCache: MetadataCache = mock(classOf[MetadataCache])
 
   @AfterEach
   def tearDown(): Unit = {
@@ -55,11 +51,31 @@ class ZkAdminManagerTest {
   }
 
   @Test
-  def testDescribeConfigsWithNullConfigurationKeys(): Unit = {
-    EasyMock.expect(zkClient.getEntityConfigs(ConfigType.Topic, topic)).andReturn(TestUtils.createBrokerConfig(brokerId, "zk"))
-    EasyMock.expect(metadataCache.contains(topic)).andReturn(true)
+  def testClientQuotasToProps(): Unit = {
+    val emptyProps = ZkAdminManager.clientQuotaPropsToDoubleMap(Map.empty)
+    assertEquals(0, emptyProps.size)
 
-    EasyMock.replay(zkClient, metadataCache)
+    val oneProp = ZkAdminManager.clientQuotaPropsToDoubleMap(Map("foo" -> "1234"))
+    assertEquals(1, oneProp.size)
+    assertEquals(1234.0, oneProp("foo"))
+
+    // This is probably not desired, but kept for compatibility with existing usages
+    val emptyKey = ZkAdminManager.clientQuotaPropsToDoubleMap(Map("" -> "-42.1"))
+    assertEquals(1, emptyKey.size)
+    assertEquals(-42.1, emptyKey(""))
+
+    val manyProps = ZkAdminManager.clientQuotaPropsToDoubleMap(Map("foo" -> "1234", "bar" -> "0", "spam" -> "-1234.56"))
+    assertEquals(3, manyProps.size)
+
+    assertThrows(classOf[NullPointerException], () => ZkAdminManager.clientQuotaPropsToDoubleMap(Map("foo" -> null)))
+    assertThrows(classOf[IllegalStateException], () => ZkAdminManager.clientQuotaPropsToDoubleMap(Map("foo" -> "bar")))
+    assertThrows(classOf[IllegalStateException], () => ZkAdminManager.clientQuotaPropsToDoubleMap(Map("foo" -> "")))
+  }
+
+  @Test
+  def testDescribeConfigsWithNullConfigurationKeys(): Unit = {
+    when(zkClient.getEntityConfigs(ConfigType.Topic, topic)).thenReturn(TestUtils.createBrokerConfig(brokerId, "zk"))
+    when(metadataCache.contains(topic)).thenReturn(true)
 
     val resources = List(new DescribeConfigsRequestData.DescribeConfigsResource()
       .setResourceName(topic)
@@ -73,10 +89,8 @@ class ZkAdminManagerTest {
 
   @Test
   def testDescribeConfigsWithEmptyConfigurationKeys(): Unit = {
-    EasyMock.expect(zkClient.getEntityConfigs(ConfigType.Topic, topic)).andReturn(TestUtils.createBrokerConfig(brokerId, "zk"))
-    EasyMock.expect(metadataCache.contains(topic)).andReturn(true)
-
-    EasyMock.replay(zkClient, metadataCache)
+    when(zkClient.getEntityConfigs(ConfigType.Topic, topic)).thenReturn(TestUtils.createBrokerConfig(brokerId, "zk"))
+    when(metadataCache.contains(topic)).thenReturn(true)
 
     val resources = List(new DescribeConfigsRequestData.DescribeConfigsResource()
       .setResourceName(topic)
@@ -89,10 +103,8 @@ class ZkAdminManagerTest {
 
   @Test
   def testDescribeConfigsWithConfigurationKeys(): Unit = {
-    EasyMock.expect(zkClient.getEntityConfigs(ConfigType.Topic, topic)).andReturn(TestUtils.createBrokerConfig(brokerId, "zk"))
-    EasyMock.expect(metadataCache.contains(topic)).andReturn(true)
-
-    EasyMock.replay(zkClient, metadataCache)
+    when(zkClient.getEntityConfigs(ConfigType.Topic, topic)).thenReturn(TestUtils.createBrokerConfig(brokerId, "zk"))
+    when(metadataCache.contains(topic)).thenReturn(true)
 
     val resources = List(new DescribeConfigsRequestData.DescribeConfigsResource()
       .setResourceName(topic)
@@ -108,10 +120,9 @@ class ZkAdminManagerTest {
 
   @Test
   def testDescribeConfigsWithDocumentation(): Unit = {
-    EasyMock.expect(zkClient.getEntityConfigs(ConfigType.Topic, topic)).andReturn(new Properties)
-    EasyMock.expect(zkClient.getEntityConfigs(ConfigType.Broker, brokerId.toString)).andReturn(new Properties)
-    EasyMock.expect(metadataCache.contains(topic)).andReturn(true)
-    EasyMock.replay(zkClient, metadataCache)
+    when(zkClient.getEntityConfigs(ConfigType.Topic, topic)).thenReturn(new Properties)
+    when(zkClient.getEntityConfigs(ConfigType.Broker, brokerId.toString)).thenReturn(new Properties)
+    when(metadataCache.contains(topic)).thenReturn(true)
 
     val configHelper = createConfigHelper(metadataCache, zkClient)
 

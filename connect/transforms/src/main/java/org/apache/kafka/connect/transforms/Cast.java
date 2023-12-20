@@ -22,7 +22,9 @@ import org.apache.kafka.common.cache.LRUCache;
 import org.apache.kafka.common.cache.SynchronizedCache;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.common.utils.AppInfoParser;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.connect.components.Versioned;
 import org.apache.kafka.connect.connector.ConnectRecord;
 import org.apache.kafka.connect.data.ConnectSchema;
 import org.apache.kafka.connect.data.Date;
@@ -52,7 +54,7 @@ import java.util.Set;
 import static org.apache.kafka.connect.transforms.util.Requirements.requireMap;
 import static org.apache.kafka.connect.transforms.util.Requirements.requireStruct;
 
-public abstract class Cast<R extends ConnectRecord<R>> implements Transformation<R> {
+public abstract class Cast<R extends ConnectRecord<R>> implements Transformation<R>, Versioned {
     private static final Logger log = LoggerFactory.getLogger(Cast.class);
 
     // TODO: Currently we only support top-level field casting. Ideally we could use a dotted notation in the spec to
@@ -111,6 +113,11 @@ public abstract class Cast<R extends ConnectRecord<R>> implements Transformation
     private Cache<Schema, Schema> schemaUpdateCache;
 
     @Override
+    public String version() {
+        return AppInfoParser.getVersion();
+    }
+
+    @Override
     public void configure(Map<String, ?> props) {
         final SimpleConfig config = new SimpleConfig(CONFIG_DEF, props);
         casts = parseFieldTypes(config.getList(SPEC_CONFIG));
@@ -120,6 +127,10 @@ public abstract class Cast<R extends ConnectRecord<R>> implements Transformation
 
     @Override
     public R apply(R record) {
+        if (operatingValue(record) == null) {
+            return record;
+        }
+
         if (operatingSchema(record) == null) {
             return applySchemaless(record);
         } else {
@@ -280,7 +291,7 @@ public abstract class Cast<R extends ConnectRecord<R>> implements Transformation
                 case STRING:
                     return castToString(value);
                 default:
-                    throw new DataException(targetType.toString() + " is not supported in the Cast transformation.");
+                    throw new DataException(targetType + " is not supported in the Cast transformation.");
             }
         } catch (NumberFormatException e) {
             throw new DataException("Value (" + value.toString() + ") was out of range for requested data type", e);

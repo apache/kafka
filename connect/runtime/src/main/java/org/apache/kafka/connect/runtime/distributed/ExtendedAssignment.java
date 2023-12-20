@@ -62,7 +62,7 @@ public class ExtendedAssignment extends ConnectProtocol.Assignment {
      * Create an assignment indicating responsibility for the given connector instances and task Ids.
      *
      * @param version Connect protocol version
-     * @param error error code for this assignment; {@code ConnectProtocol.Assignment.NO_ERROR}
+     * @param error error code for this assignment; {@link ConnectProtocol.Assignment#NO_ERROR}
      *              indicates no error during assignment
      * @param leader Connect group's leader Id; may be null only on the empty assignment
      * @param leaderUrl Connect group's leader URL; may be null only on the empty assignment

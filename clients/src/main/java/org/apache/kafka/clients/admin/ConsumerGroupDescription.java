@@ -49,13 +49,13 @@ public class ConsumerGroupDescription {
         this(groupId, isSimpleConsumerGroup, members, partitionAssignor, state, coordinator, Collections.emptySet());
     }
 
-    ConsumerGroupDescription(String groupId,
-                             boolean isSimpleConsumerGroup,
-                             Collection<MemberDescription> members,
-                             String partitionAssignor,
-                             ConsumerGroupState state,
-                             Node coordinator,
-                             Set<AclOperation> authorizedOperations) {
+    public ConsumerGroupDescription(String groupId,
+                                    boolean isSimpleConsumerGroup,
+                                    Collection<MemberDescription> members,
+                                    String partitionAssignor,
+                                    ConsumerGroupState state,
+                                    Node coordinator,
+                                    Set<AclOperation> authorizedOperations) {
         this.groupId = groupId == null ? "" : groupId;
         this.isSimpleConsumerGroup = isSimpleConsumerGroup;
         this.members = members == null ? Collections.emptyList() :

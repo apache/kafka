@@ -19,6 +19,7 @@ package org.apache.kafka.streams.kstream.internals;
 
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.kstream.Aggregator;
+import org.apache.kafka.streams.kstream.EmitStrategy;
 import org.apache.kafka.streams.kstream.Initializer;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Materialized;
@@ -29,12 +30,8 @@ import org.apache.kafka.streams.kstream.SessionWindows;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.WindowedSerdes;
 import org.apache.kafka.streams.kstream.internals.graph.GraphNode;
-import org.apache.kafka.streams.state.SessionBytesStoreSupplier;
 import org.apache.kafka.streams.state.SessionStore;
-import org.apache.kafka.streams.state.StoreBuilder;
-import org.apache.kafka.streams.state.Stores;
 
-import java.time.Duration;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
@@ -95,7 +92,10 @@ public class SessionWindowedCogroupedKStreamImpl<K, V> extends
             groupPatterns,
             initializer,
             new NamedInternal(named),
-            materialize(materializedInternal),
+            new SessionStoreMaterializer<>(
+                    materializedInternal,
+                    sessionWindows,
+                    EmitStrategy.onWindowUpdate()),
             materializedInternal.keySerde() != null ?
                 new WindowedSerdes.SessionWindowedSerde<>(
                     materializedInternal.keySerde()) :
@@ -104,44 +104,6 @@ public class SessionWindowedCogroupedKStreamImpl<K, V> extends
             materializedInternal.queryableStoreName(),
             sessionWindows,
             sessionMerger);
-    }
-
-    private  StoreBuilder<SessionStore<K, V>> materialize(final MaterializedInternal<K, V, SessionStore<Bytes, byte[]>> materialized) {
-        SessionBytesStoreSupplier supplier = (SessionBytesStoreSupplier) materialized.storeSupplier();
-        if (supplier == null) {
-            final long retentionPeriod = materialized.retention() != null ?
-                materialized.retention().toMillis() : sessionWindows.inactivityGap() + sessionWindows.gracePeriodMs();
-
-            if ((sessionWindows.inactivityGap() + sessionWindows.gracePeriodMs()) > retentionPeriod) {
-                throw new IllegalArgumentException("The retention period of the session store "
-                    + materialized.storeName()
-                    + " must be no smaller than the session inactivity gap plus the"
-                    + " grace period."
-                    + " Got gap=[" + sessionWindows.inactivityGap() + "],"
-                    + " grace=[" + sessionWindows.gracePeriodMs() + "],"
-                    + " retention=[" + retentionPeriod + "]");
-            }
-            supplier = Stores.persistentSessionStore(
-                materialized.storeName(),
-                Duration.ofMillis(retentionPeriod)
-            );
-        }
-        final StoreBuilder<SessionStore<K, V>> builder = Stores.sessionStoreBuilder(
-            supplier,
-            materialized.keySerde(),
-            materialized.valueSerde()
-        );
-
-        if (materialized.loggingEnabled()) {
-            builder.withLoggingEnabled(materialized.logConfig());
-        } else {
-            builder.withLoggingDisabled();
-        }
-
-        if (materialized.cachingEnabled()) {
-            builder.withCachingEnabled();
-        }
-        return builder;
     }
 
 }

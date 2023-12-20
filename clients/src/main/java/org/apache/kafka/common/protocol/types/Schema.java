@@ -53,6 +53,7 @@ public class Schema extends Type {
      *
      * @throws SchemaException If the given list have duplicate fields
      */
+    @SuppressWarnings("this-escape")
     public Schema(boolean tolerateMissingFieldsWithDefaults, Field... fs) {
         this.fields = new BoundField[fs.length];
         this.fieldsByName = new HashMap<>();

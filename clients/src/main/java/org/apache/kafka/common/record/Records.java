@@ -20,6 +20,7 @@ import org.apache.kafka.common.utils.AbstractIterator;
 import org.apache.kafka.common.utils.Time;
 
 import java.util.Iterator;
+import java.util.Optional;
 
 
 /**
@@ -48,9 +49,9 @@ public interface Records extends TransferableRecords {
     int SIZE_LENGTH = 4;
     int LOG_OVERHEAD = SIZE_OFFSET + SIZE_LENGTH;
 
-    // the magic offset is at the same offset for all current message formats, but the 4 bytes
+    // The magic offset is at the same offset for all current message formats, but the 4 bytes
     // between the size and the magic is dependent on the version.
-    int MAGIC_OFFSET = 16;
+    int MAGIC_OFFSET = LOG_OVERHEAD + 4;
     int MAGIC_LENGTH = 1;
     int HEADER_SIZE_UP_TO_MAGIC = MAGIC_OFFSET + MAGIC_LENGTH;
 
@@ -71,19 +72,18 @@ public interface Records extends TransferableRecords {
     AbstractIterator<? extends RecordBatch> batchIterator();
 
     /**
+     * Return the last record batch if non-empty or an empty `Optional` otherwise.
+     *
+     * Note that this requires iterating over all the record batches and hence it's expensive.
+     */
+    Optional<RecordBatch> lastBatch();
+
+    /**
      * Check whether all batches in this buffer have a certain magic value.
      * @param magic The magic value to check
      * @return true if all record batches have a matching magic value, false otherwise
      */
     boolean hasMatchingMagic(byte magic);
-
-    /**
-     * Check whether this log buffer has a magic value compatible with a particular value
-     * (i.e. whether all message sets contained in the buffer have a matching or lower magic).
-     * @param magic The magic version to ensure compatibility with
-     * @return true if all batches have compatible magic, false otherwise
-     */
-    boolean hasCompatibleMagic(byte magic);
 
     /**
      * Convert all batches in this buffer to the format passed as a parameter. Note that this requires

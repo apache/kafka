@@ -19,6 +19,7 @@ package org.apache.kafka.streams.kstream.internals.graph;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
+import java.util.Optional;
 import java.util.Set;
 import java.util.regex.Pattern;
 import org.apache.kafka.common.serialization.Serde;
@@ -51,12 +52,12 @@ abstract public class SourceGraphNode<K, V> extends GraphNode {
         this.consumedInternal = consumedInternal;
     }
 
-    public Set<String> topicNames() {
-        return Collections.unmodifiableSet(topicNames);
+    public Optional<Set<String>> topicNames() {
+        return topicNames == null ? Optional.empty() : Optional.of(Collections.unmodifiableSet(topicNames));
     }
 
-    public Pattern topicPattern() {
-        return topicPattern;
+    public Optional<Pattern> topicPattern() {
+        return Optional.ofNullable(topicPattern);
     }
 
     public ConsumedInternal<K, V> consumedInternal() {

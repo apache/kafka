@@ -18,6 +18,7 @@
   "type": "response",
   "name": "BeginQuorumEpochResponse",
   "validVersions": "0",
+  "flexibleVersions": "none",
   "fields": [
     { "name": "ErrorCode", "type": "int16", "versions": "0+",
       "about": "The top level error code."},

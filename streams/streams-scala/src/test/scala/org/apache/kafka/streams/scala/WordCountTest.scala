@@ -154,7 +154,7 @@ class WordCountTest extends WordCountTestData {
     val pattern = Pattern.compile("\\W+", Pattern.UNICODE_CHARACTER_CLASS)
 
     val splits: KStreamJ[String, String] = textLines.flatMapValues { line =>
-      pattern.split(line.toLowerCase).toIterable.asJava
+      pattern.split(line.toLowerCase).toBuffer.asJava
     }
 
     val grouped: KGroupedStreamJ[String, String] = splits.groupBy { (_, v) =>

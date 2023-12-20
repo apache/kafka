@@ -22,7 +22,7 @@ import java.util.Objects;
 import org.apache.kafka.common.utils.Utils;
 
 /**
- * Provides the current status along with identifier for Connect worker and tasks.
+ * Provides the current status for a connector or a task, along with an identifier for its Connect worker
  */
 public abstract class AbstractState {
 
@@ -31,11 +31,11 @@ public abstract class AbstractState {
     private final String workerId;
 
     /**
-     * Construct a state for connector or task.
+     * Construct a state for a connector or task.
      *
-     * @param state  the status of connector or task; may not be null or empty
-     * @param workerId  the workerId associated with the connector or the task; may not be null or empty
-     * @param traceMessage  any error trace message associated with the connector or the task; may be null or empty
+     * @param state the status of a connector or task; may not be null or empty
+     * @param workerId the workerId associated with the connector or the task; may not be null or empty
+     * @param traceMessage any error trace message associated with the connector or the task; may be null or empty
      */
     public AbstractState(String state, String workerId, String traceMessage) {
         if (Utils.isBlank(state)) {

@@ -16,20 +16,28 @@
   */
 package kafka.cluster
 
-import java.io.File
-import java.util.Properties
-import kafka.api.ApiVersion
-import kafka.log.{CleanerConfig, LogConfig, LogManager}
+import kafka.log.LogManager
 import kafka.server.{Defaults, MetadataCache}
 import kafka.server.checkpoints.OffsetCheckpoints
-import kafka.server.metadata.CachedConfigRepository
-import kafka.utils.TestUtils.{MockAlterIsrManager, MockIsrChangeListener}
-import kafka.utils.{MockTime, TestUtils}
+import kafka.server.metadata.MockConfigRepository
+import kafka.utils.TestUtils.{MockAlterPartitionListener, MockAlterPartitionManager}
+import kafka.utils.TestUtils
 import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.common.config.TopicConfig
+import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrPartitionState
 import org.apache.kafka.common.utils.Utils
+import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 import org.junit.jupiter.api.{AfterEach, BeforeEach}
 import org.mockito.ArgumentMatchers
 import org.mockito.Mockito.{mock, when}
+
+import java.io.File
+import java.util.Properties
+import org.apache.kafka.server.common.MetadataVersion
+import org.apache.kafka.server.util.MockTime
+import org.apache.kafka.storage.internals.log.{CleanerConfig, LogConfig}
+
+import scala.jdk.CollectionConverters._
 
 object AbstractPartitionTest {
   val brokerId = 101
@@ -38,16 +46,17 @@ object AbstractPartitionTest {
 class AbstractPartitionTest {
 
   val brokerId = AbstractPartitionTest.brokerId
+  val remoteReplicaId = brokerId + 1
   val topicPartition = new TopicPartition("test-topic", 0)
   val time = new MockTime()
   var tmpDir: File = _
   var logDir1: File = _
   var logDir2: File = _
   var logManager: LogManager = _
-  var alterIsrManager: MockAlterIsrManager = _
-  var isrChangeListener: MockIsrChangeListener = _
+  var alterPartitionManager: MockAlterPartitionManager = _
+  var alterPartitionListener: MockAlterPartitionListener = _
   var logConfig: LogConfig = _
-  var configRepository: CachedConfigRepository = _
+  var configRepository: MockConfigRepository = _
   val delayedOperations: DelayedOperations = mock(classOf[DelayedOperations])
   val metadataCache: MetadataCache = mock(classOf[MetadataCache])
   val offsetCheckpoints: OffsetCheckpoints = mock(classOf[OffsetCheckpoints])
@@ -58,38 +67,41 @@ class AbstractPartitionTest {
     TestUtils.clearYammerMetrics()
 
     val logProps = createLogProperties(Map.empty)
-    logConfig = LogConfig(logProps)
-    configRepository = TestUtils.createConfigRepository(topicPartition.topic(), logProps)
+    logConfig = new LogConfig(logProps)
+    configRepository = MockConfigRepository.forTopic(topicPartition.topic, logProps)
 
     tmpDir = TestUtils.tempDir()
     logDir1 = TestUtils.randomPartitionLogDir(tmpDir)
     logDir2 = TestUtils.randomPartitionLogDir(tmpDir)
     logManager = TestUtils.createLogManager(Seq(logDir1, logDir2), logConfig, configRepository,
-      CleanerConfig(enableCleaner = false), time)
+      new CleanerConfig(false), time, interBrokerProtocolVersion, transactionVerificationEnabled = true)
     logManager.startup(Set.empty)
 
-    alterIsrManager = TestUtils.createAlterIsrManager()
-    isrChangeListener = TestUtils.createIsrChangeListener()
+    alterPartitionManager = TestUtils.createAlterIsrManager()
+    alterPartitionListener = TestUtils.createIsrChangeListener()
     partition = new Partition(topicPartition,
       replicaLagTimeMaxMs = Defaults.ReplicaLagTimeMaxMs,
-      interBrokerProtocolVersion = ApiVersion.latestVersion,
+      interBrokerProtocolVersion = interBrokerProtocolVersion,
       localBrokerId = brokerId,
+      () => defaultBrokerEpoch(brokerId),
       time,
-      isrChangeListener,
+      alterPartitionListener,
       delayedOperations,
       metadataCache,
       logManager,
-      alterIsrManager)
+      alterPartitionManager)
 
     when(offsetCheckpoints.fetch(ArgumentMatchers.anyString, ArgumentMatchers.eq(topicPartition)))
       .thenReturn(None)
   }
 
+  protected def interBrokerProtocolVersion: MetadataVersion = MetadataVersion.latest
+
   def createLogProperties(overrides: Map[String, String]): Properties = {
     val logProps = new Properties()
-    logProps.put(LogConfig.SegmentBytesProp, 512: java.lang.Integer)
-    logProps.put(LogConfig.SegmentIndexBytesProp, 1000: java.lang.Integer)
-    logProps.put(LogConfig.RetentionMsProp, 999: java.lang.Integer)
+    logProps.put(TopicConfig.SEGMENT_BYTES_CONFIG, 512: java.lang.Integer)
+    logProps.put(TopicConfig.SEGMENT_INDEX_BYTES_CONFIG, 1000: java.lang.Integer)
+    logProps.put(TopicConfig.RETENTION_MS_CONFIG, 999: java.lang.Integer)
     overrides.foreach { case (k, v) => logProps.put(k, v) }
     logProps
   }
@@ -101,5 +113,43 @@ class AbstractPartitionTest {
       Utils.delete(tmpDir)
       TestUtils.clearYammerMetrics()
     }
+  }
+
+  protected def setupPartitionWithMocks(leaderEpoch: Int,
+                                        isLeader: Boolean): Partition = {
+    partition.createLogIfNotExists(isNew = false, isFutureReplica = false, offsetCheckpoints, None)
+
+    val controllerEpoch = 0
+    val replicas = List[Integer](brokerId, remoteReplicaId).asJava
+    val isr = replicas
+
+    if (isLeader) {
+      assertTrue(partition.makeLeader(new LeaderAndIsrPartitionState()
+        .setControllerEpoch(controllerEpoch)
+        .setLeader(brokerId)
+        .setLeaderEpoch(leaderEpoch)
+        .setIsr(isr)
+        .setPartitionEpoch(1)
+        .setReplicas(replicas)
+        .setIsNew(true), offsetCheckpoints, None), "Expected become leader transition to succeed")
+      assertEquals(leaderEpoch, partition.getLeaderEpoch)
+    } else {
+      assertTrue(partition.makeFollower(new LeaderAndIsrPartitionState()
+        .setControllerEpoch(controllerEpoch)
+        .setLeader(remoteReplicaId)
+        .setLeaderEpoch(leaderEpoch)
+        .setIsr(isr)
+        .setPartitionEpoch(1)
+        .setReplicas(replicas)
+        .setIsNew(true), offsetCheckpoints, None), "Expected become follower transition to succeed")
+      assertEquals(leaderEpoch, partition.getLeaderEpoch)
+      assertEquals(None, partition.leaderLogIfLocal)
+    }
+
+    partition
+  }
+
+  def defaultBrokerEpoch(brokerId: Int): Long = {
+    brokerId + 1000L
   }
 }

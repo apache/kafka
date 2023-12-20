@@ -50,7 +50,7 @@ public class MeterTest {
         double nextValue = 0.0;
         double expectedTotal = 0.0;
         long now = 0;
-        double intervalMs = 100;
+        int intervalMs = 100;
         double delta = 5.0;
 
         // Record values in multiple windows and verify that rates are reported

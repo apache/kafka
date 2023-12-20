@@ -17,6 +17,7 @@
 
 package org.apache.kafka.connect.transforms;
 
+import org.apache.kafka.common.utils.AppInfoParser;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaBuilder;
 import org.apache.kafka.connect.data.Struct;
@@ -263,11 +264,29 @@ public class FlattenTest {
     }
 
     @Test
-    public void testUnsupportedTypeInMap() {
-        xformValue.configure(Collections.<String, String>emptyMap());
-        Object value = Collections.singletonMap("foo", Arrays.asList("bar", "baz"));
-        assertThrows(DataException.class, () -> xformValue.apply(new SourceRecord(null, null,
-                "topic", 0, null, value)));
+    public void testSchemalessArray() {
+        xformValue.configure(Collections.emptyMap());
+        Object value = Collections.singletonMap("foo", Arrays.asList("bar", Collections.singletonMap("baz", Collections.singletonMap("lfg", "lfg"))));
+        assertEquals(value, xformValue.apply(new SourceRecord(null, null, "topic", null, null, null, value)).value());
+    }
+
+    @Test
+    public void testArrayWithSchema() {
+        xformValue.configure(Collections.emptyMap());
+        Schema nestedStructSchema = SchemaBuilder.struct().field("lfg", Schema.STRING_SCHEMA).build();
+        Schema innerStructSchema = SchemaBuilder.struct().field("baz", nestedStructSchema).build();
+        Schema structSchema = SchemaBuilder.struct()
+            .field("foo", SchemaBuilder.array(innerStructSchema).doc("durk").build())
+            .build();
+        Struct nestedValue = new Struct(nestedStructSchema);
+        nestedValue.put("lfg", "lfg");
+        Struct innerValue = new Struct(innerStructSchema);
+        innerValue.put("baz", nestedValue);
+        Struct value = new Struct(structSchema);
+        value.put("foo", Collections.singletonList(innerValue));
+        SourceRecord transformed = xformValue.apply(new SourceRecord(null, null, "topic", null, null, structSchema, value)); 
+        assertEquals(value, transformed.value());
+        assertEquals(structSchema, transformed.valueSchema());
     }
 
     @Test
@@ -369,5 +388,13 @@ public class FlattenTest {
         final SourceRecord transformedRecord = xformValue.apply(record);
 
         assertEquals(value, transformedRecord.value());
+    }
+
+    @Test
+    public void testFlattenVersionRetrievedFromAppInfoParser() {
+        assertEquals(AppInfoParser.getVersion(), xformKey.version());
+        assertEquals(AppInfoParser.getVersion(), xformValue.version());
+
+        assertEquals(xformKey.version(), xformValue.version());
     }
 }

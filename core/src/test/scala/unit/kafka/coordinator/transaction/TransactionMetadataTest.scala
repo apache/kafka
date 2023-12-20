@@ -16,10 +16,10 @@
  */
 package kafka.coordinator.transaction
 
-import kafka.utils.MockTime
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.RecordBatch
+import org.apache.kafka.server.util.MockTime
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
 
@@ -465,6 +465,12 @@ class TransactionMetadataTest {
     for (state <- TransactionState.AllStates) {
       assertEquals(state, TransactionState.fromId(state.id))
       assertEquals(Some(state), TransactionState.fromName(state.name))
+
+      if (state != Dead) {
+        val clientTransactionState = org.apache.kafka.clients.admin.TransactionState.parse(state.name)
+        assertEquals(state.name, clientTransactionState.toString)
+        assertNotEquals(org.apache.kafka.clients.admin.TransactionState.UNKNOWN, clientTransactionState)
+      }
     }
   }
 

@@ -64,6 +64,11 @@ public class PartitionStates<S> {
         updateSize();
     }
 
+    public void update(TopicPartition topicPartition, S state) {
+        map.put(topicPartition, state);
+        updateSize();
+    }
+
     public void remove(TopicPartition topicPartition) {
         map.remove(topicPartition);
         updateSize();

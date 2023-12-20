@@ -105,13 +105,14 @@ public class ApiMessageTypeTest {
         for (ApiMessageType type : ApiMessageType.values()) {
             assertEquals(0, type.lowestSupportedVersion());
 
-            assertEquals(type.requestSchemas().length, type.responseSchemas().length);
+            assertEquals(type.requestSchemas().length, type.responseSchemas().length,
+                    "request and response schemas must be the same length for " + type.name());
             for (Schema schema : type.requestSchemas())
                 assertNotNull(schema);
             for (Schema schema : type.responseSchemas())
                 assertNotNull(schema);
 
-            assertEquals(type.highestSupportedVersion() + 1, type.requestSchemas().length);
+            assertEquals(type.highestSupportedVersion(true) + 1, type.requestSchemas().length);
         }
     }
 

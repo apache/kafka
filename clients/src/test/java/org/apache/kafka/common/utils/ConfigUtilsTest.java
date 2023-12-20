@@ -17,8 +17,12 @@
 
 package org.apache.kafka.common.utils;
 
+import org.apache.kafka.common.config.ConfigDef;
+import org.apache.kafka.common.config.ConfigDef.Importance;
+import org.apache.kafka.common.config.ConfigDef.Type;
 import org.junit.jupiter.api.Test;
 
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -139,5 +143,55 @@ public class ConfigUtilsTest {
         assertEquals("derp", newConfig.get("foo.bar"));
         assertNull(newConfig.get("foo.bar.deprecated"));
         assertNull(newConfig.get("foo.bar.even.more.deprecated"));
+    }
+
+    private static final ConfigDef CONFIG = new ConfigDef().
+        define("myPassword", Type.PASSWORD, Importance.HIGH, "").
+        define("myString", Type.STRING, Importance.HIGH, "").
+        define("myInt", Type.INT, Importance.HIGH, "").
+        define("myString2", Type.STRING, Importance.HIGH, "");
+
+    @Test
+    public void testConfigMapToRedactedStringForEmptyMap() {
+        assertEquals("{}", ConfigUtils.
+            configMapToRedactedString(Collections.emptyMap(), CONFIG));
+    }
+
+    @Test
+    public void testConfigMapToRedactedStringWithSecrets() {
+        Map<String, Object> testMap1 = new HashMap<>();
+        testMap1.put("myString", "whatever");
+        testMap1.put("myInt", Integer.valueOf(123));
+        testMap1.put("myPassword", "foosecret");
+        testMap1.put("myString2", null);
+        testMap1.put("myUnknown", Integer.valueOf(456));
+        assertEquals("{myInt=123, myPassword=(redacted), myString=\"whatever\", myString2=null, myUnknown=(redacted)}",
+            ConfigUtils.configMapToRedactedString(testMap1, CONFIG));
+    }
+
+    @Test
+    public void testGetBoolean() {
+        String key = "test.key";
+        Boolean defaultValue = true;
+
+        Map<String, Object> config = new HashMap<>();
+        config.put("some.other.key", false);
+        assertEquals(defaultValue, ConfigUtils.getBoolean(config, key, defaultValue));
+
+        config = new HashMap<>();
+        config.put(key, false);
+        assertEquals(false, ConfigUtils.getBoolean(config, key, defaultValue));
+
+        config = new HashMap<>();
+        config.put(key, "false");
+        assertEquals(false, ConfigUtils.getBoolean(config, key, defaultValue));
+
+        config = new HashMap<>();
+        config.put(key, "not-a-boolean");
+        assertEquals(false, ConfigUtils.getBoolean(config, key, defaultValue));
+
+        config = new HashMap<>();
+        config.put(key, 5);
+        assertEquals(defaultValue, ConfigUtils.getBoolean(config, key, defaultValue));
     }
 }

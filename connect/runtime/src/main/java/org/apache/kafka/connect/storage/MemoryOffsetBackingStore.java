@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.connect.storage;
 
-import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.runtime.WorkerConfig;
 import org.apache.kafka.connect.util.Callback;
 import org.apache.kafka.common.utils.ThreadUtils;
@@ -27,6 +26,7 @@ import java.nio.ByteBuffer;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
@@ -37,7 +37,7 @@ import java.util.concurrent.TimeUnit;
  * behaves similarly to a real backing store, operations are executed asynchronously on a
  * background thread.
  */
-public class MemoryOffsetBackingStore implements OffsetBackingStore {
+public abstract class MemoryOffsetBackingStore implements OffsetBackingStore {
     private static final Logger log = LoggerFactory.getLogger(MemoryOffsetBackingStore.class);
 
     protected Map<ByteBuffer, ByteBuffer> data = new HashMap<>();
@@ -60,17 +60,7 @@ public class MemoryOffsetBackingStore implements OffsetBackingStore {
     @Override
     public void stop() {
         if (executor != null) {
-            executor.shutdown();
-            // Best effort wait for any get() and set() tasks (and caller's callbacks) to complete.
-            try {
-                executor.awaitTermination(30, TimeUnit.SECONDS);
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-            }
-            if (!executor.shutdownNow().isEmpty()) {
-                throw new ConnectException("Failed to stop MemoryOffsetBackingStore. Exiting without cleanly " +
-                        "shutting down pending tasks and/or callbacks.");
-            }
+            ThreadUtils.shutdownExecutorServiceQuietly(executor, 30, TimeUnit.SECONDS);
             executor = null;
         }
     }
@@ -90,9 +80,7 @@ public class MemoryOffsetBackingStore implements OffsetBackingStore {
     public Future<Void> set(final Map<ByteBuffer, ByteBuffer> values,
                             final Callback<Void> callback) {
         return executor.submit(() -> {
-            for (Map.Entry<ByteBuffer, ByteBuffer> entry : values.entrySet()) {
-                data.put(entry.getKey(), entry.getValue());
-            }
+            data.putAll(values);
             save();
             if (callback != null)
                 callback.onCompletion(null, null);
@@ -104,4 +92,7 @@ public class MemoryOffsetBackingStore implements OffsetBackingStore {
     protected void save() {
 
     }
+
+    @Override
+    public abstract Set<Map<String, Object>> connectorPartitions(String connectorName);
 }

@@ -45,7 +45,8 @@ public class CreateDelegationTokenRequest extends AbstractRequest {
 
     @Override
     public AbstractResponse getErrorResponse(int throttleTimeMs, Throwable e) {
-        return CreateDelegationTokenResponse.prepareResponse(throttleTimeMs, Errors.forException(e), KafkaPrincipal.ANONYMOUS);
+        return CreateDelegationTokenResponse.prepareResponse(version(), throttleTimeMs, Errors.forException(e),
+            KafkaPrincipal.ANONYMOUS, KafkaPrincipal.ANONYMOUS);
     }
 
     public static class Builder extends AbstractRequest.Builder<CreateDelegationTokenRequest> {

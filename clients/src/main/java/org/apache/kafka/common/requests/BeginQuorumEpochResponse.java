@@ -95,6 +95,11 @@ public class BeginQuorumEpochResponse extends AbstractResponse {
         return DEFAULT_THROTTLE_TIME;
     }
 
+    @Override
+    public void maybeSetThrottleTimeMs(int throttleTimeMs) {
+        // Not supported by the response schema
+    }
+
     public static BeginQuorumEpochResponse parse(ByteBuffer buffer, short version) {
         return new BeginQuorumEpochResponse(new BeginQuorumEpochResponseData(new ByteBufferAccessor(buffer), version));
     }

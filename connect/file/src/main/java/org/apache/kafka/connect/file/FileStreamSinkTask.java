@@ -18,6 +18,7 @@ package org.apache.kafka.connect.file;
 
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.apache.kafka.connect.sink.SinkTask;
@@ -58,8 +59,9 @@ public class FileStreamSinkTask extends SinkTask {
 
     @Override
     public void start(Map<String, String> props) {
-        filename = props.get(FileStreamSinkConnector.FILE_CONFIG);
-        if (filename == null) {
+        AbstractConfig config = new AbstractConfig(FileStreamSinkConnector.CONFIG_DEF, props);
+        filename = config.getString(FileStreamSinkConnector.FILE_CONFIG);
+        if (filename == null || filename.isEmpty()) {
             outputStream = System.out;
         } else {
             try {

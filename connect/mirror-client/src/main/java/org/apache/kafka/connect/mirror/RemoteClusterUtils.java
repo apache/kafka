@@ -26,7 +26,7 @@ import java.util.concurrent.TimeoutException;
 import java.time.Duration;
 
 
-/** Convenience methods for multi-cluster environments. Wraps MirrorClient (@see MirrorClient).
+/** Convenience methods for multi-cluster environments. Wraps {@link MirrorClient}
  *  <p>
  *  Properties passed to these methods are used to construct internal Admin and Consumer clients.
  *  Sub-configs like "admin.xyz" are also supported. For example:
@@ -79,7 +79,7 @@ public final class RemoteClusterUtils {
 
     /** Translate a remote consumer group's offsets into corresponding local offsets. Topics are automatically
      *  renamed according to the ReplicationPolicy.
-     *  @param properties @see MirrorClientConfig
+     *  @param properties {@link MirrorClientConfig} properties to instantiate a {@link MirrorClient}
      *  @param consumerGroupId group ID of remote consumer group
      *  @param remoteClusterAlias alias of remote cluster
      *  @param timeout timeout

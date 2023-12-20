@@ -19,11 +19,14 @@ package kafka.server
 
 import kafka.cluster.BrokerEndPoint
 import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.server.common.DirectoryEventHandler
 
 class ReplicaAlterLogDirsManager(brokerConfig: KafkaConfig,
                                  replicaManager: ReplicaManager,
                                  quotaManager: ReplicationQuotaManager,
-                                 brokerTopicStats: BrokerTopicStats)
+                                 brokerTopicStats: BrokerTopicStats,
+                                 directoryEventHandler: DirectoryEventHandler = DirectoryEventHandler.NOOP
+                                )
   extends AbstractFetcherManager[ReplicaAlterLogDirsThread](
     name = s"ReplicaAlterLogDirsManager on broker ${brokerConfig.brokerId}",
     clientId = "ReplicaAlterLogDirs",
@@ -31,8 +34,9 @@ class ReplicaAlterLogDirsManager(brokerConfig: KafkaConfig,
 
   override def createFetcherThread(fetcherId: Int, sourceBroker: BrokerEndPoint): ReplicaAlterLogDirsThread = {
     val threadName = s"ReplicaAlterLogDirsThread-$fetcherId"
-    new ReplicaAlterLogDirsThread(threadName, sourceBroker, brokerConfig, failedPartitions, replicaManager,
-      quotaManager, brokerTopicStats)
+    val leader = new LocalLeaderEndPoint(sourceBroker, brokerConfig, replicaManager, quotaManager)
+    new ReplicaAlterLogDirsThread(threadName, leader, failedPartitions, replicaManager,
+      quotaManager, brokerTopicStats, brokerConfig.replicaFetchBackoffMs, directoryEventHandler)
   }
 
   override protected def addPartitionsToFetcherThread(fetcherThread: ReplicaAlterLogDirsThread,

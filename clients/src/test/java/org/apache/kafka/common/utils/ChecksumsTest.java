@@ -36,9 +36,9 @@ public class ChecksumsTest {
     private void doTestUpdateByteBuffer(byte[] bytes, ByteBuffer buffer) {
         buffer.put(bytes);
         buffer.flip();
-        Checksum bufferCrc = new Crc32();
+        Checksum bufferCrc = Crc32C.create();
         Checksums.update(bufferCrc, buffer, buffer.remaining());
-        assertEquals(Crc32.crc32(bytes), bufferCrc.getValue());
+        assertEquals(Crc32C.compute(bytes, 0, bytes.length), bufferCrc.getValue());
         assertEquals(0, buffer.position());
     }
 
@@ -70,8 +70,8 @@ public class ChecksumsTest {
         final ByteBuffer buffer = ByteBuffer.allocate(8);
         buffer.putLong(value);
 
-        Checksum crc1 = new Crc32();
-        Checksum crc2 = new Crc32();
+        Checksum crc1 = Crc32C.create();
+        Checksum crc2 = Crc32C.create();
 
         Checksums.updateLong(crc1, value);
         crc2.update(buffer.array(), buffer.arrayOffset(), 8);

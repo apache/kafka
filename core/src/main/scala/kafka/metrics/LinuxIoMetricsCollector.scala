@@ -18,10 +18,10 @@
 package kafka.metrics
 
 import java.nio.file.{Files, Paths}
-
 import org.apache.kafka.common.utils.Time
 import org.slf4j.Logger
 
+import java.nio.charset.StandardCharsets
 import scala.jdk.CollectionConverters._
 
 /**
@@ -68,7 +68,7 @@ class LinuxIoMetricsCollector(procRoot: String, val time: Time, val logger: Logg
     try {
       cachedReadBytes = -1
       cachedWriteBytes = -1
-      val lines = Files.readAllLines(path).asScala
+      val lines = Files.readAllLines(path, StandardCharsets.UTF_8).asScala
       lines.foreach(line => {
         if (line.startsWith(READ_BYTES_PREFIX)) {
           cachedReadBytes = line.substring(READ_BYTES_PREFIX.size).toLong
@@ -87,10 +87,10 @@ class LinuxIoMetricsCollector(procRoot: String, val time: Time, val logger: Logg
   }
 
   def usable(): Boolean = {
-    if (path.toFile().exists()) {
+    if (path.toFile.exists()) {
       updateValues(time.milliseconds())
     } else {
-      logger.debug(s"disabling IO metrics collection because ${path} does not exist.")
+      logger.debug(s"disabling IO metrics collection because $path does not exist.")
       false
     }
   }

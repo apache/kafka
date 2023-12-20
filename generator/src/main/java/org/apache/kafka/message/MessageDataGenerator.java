@@ -409,7 +409,7 @@ public final class MessageDataGenerator implements MessageClassGenerator {
                                      Versions parentVersions) {
         headerGenerator.addImport(MessageGenerator.READABLE_CLASS);
         buffer.printf("@Override%n");
-        buffer.printf("public void read(Readable _readable, short _version) {%n");
+        buffer.printf("public final void read(Readable _readable, short _version) {%n");
         buffer.incrementIndent();
         VersionConditional.forVersions(parentVersions, struct.versions()).
             allowMembershipCheckAlwaysFalse(false).
@@ -463,6 +463,8 @@ public final class MessageDataGenerator implements MessageClassGenerator {
                         } else {
                             callGenerateVariableLengthReader.generate(presentAndUntaggedVersions);
                         }
+                    } else if (field.type().isStruct()) {
+                        generateStructReader(field, presentAndUntaggedVersions, false);
                     } else {
                         buffer.printf("this.%s = %s;%n", field.camelCaseName(),
                             primitiveReadExpression(field.type()));
@@ -502,6 +504,8 @@ public final class MessageDataGenerator implements MessageClassGenerator {
                                         String.format(";%n"),
                                         structRegistry.isStructArrayWithKeys(field),
                                         field.zeroCopy());
+                                } else if (field.type().isStruct()) {
+                                    generateStructReader(field, presentAndTaggedVersions, true);
                                 } else {
                                     buffer.printf("this.%s = %s;%n", field.camelCaseName(),
                                         primitiveReadExpression(field.type()));
@@ -532,6 +536,35 @@ public final class MessageDataGenerator implements MessageClassGenerator {
         buffer.printf("}%n");
     }
 
+    private void generateStructReader(
+        FieldSpec field,
+        Versions supportedVersions,
+        boolean tagged
+    ) {
+        VersionConditional.forVersions(field.nullableVersions(), supportedVersions).
+            ifMember(__ -> {
+                if (tagged) {
+                    buffer.printf("if (_readable.readUnsignedVarint() <= 0) {%n");
+                } else {
+                    buffer.printf("if (_readable.readByte() < 0) {%n");
+                }
+                buffer.incrementIndent();
+                buffer.printf("this.%s = null;%n", field.camelCaseName());
+                buffer.decrementIndent();
+                buffer.printf("} else {%n");
+                buffer.incrementIndent();
+                buffer.printf("this.%s = %s;%n", field.camelCaseName(),
+                    primitiveReadExpression(field.type()));
+                buffer.decrementIndent();
+                buffer.printf("}%n");
+            }).
+            ifNotMember(__ -> {
+                buffer.printf("this.%s = %s;%n", field.camelCaseName(),
+                    primitiveReadExpression(field.type()));
+            }).
+            generate(buffer);
+    }
+
     private String primitiveReadExpression(FieldType type) {
         if (type instanceof FieldType.BoolFieldType) {
             return "_readable.readByte() != 0";
@@ -541,6 +574,8 @@ public final class MessageDataGenerator implements MessageClassGenerator {
             return "_readable.readShort()";
         } else if (type instanceof FieldType.Uint16FieldType) {
             return "_readable.readUnsignedShort()";
+        } else if (type instanceof FieldType.Uint32FieldType) {
+            return "_readable.readUnsignedInt()";
         } else if (type instanceof FieldType.Int32FieldType) {
             return "_readable.readInt()";
         } else if (type instanceof FieldType.Int64FieldType) {
@@ -550,7 +585,7 @@ public final class MessageDataGenerator implements MessageClassGenerator {
         } else if (type instanceof FieldType.Float64FieldType) {
             return "_readable.readDouble()";
         } else if (type.isStruct()) {
-            return String.format("new %s(_readable, _version)", type.toString());
+            return String.format("new %s(_readable, _version)", type);
         } else {
             throw new RuntimeException("Unsupported field type " + type);
         }
@@ -610,8 +645,7 @@ public final class MessageDataGenerator implements MessageClassGenerator {
                 buffer.printf("%s_readable.readByteBuffer(%s)%s",
                     assignmentPrefix, lengthVar, assignmentSuffix);
             } else {
-                buffer.printf("byte[] newBytes = new byte[%s];%n", lengthVar);
-                buffer.printf("_readable.readArray(newBytes);%n");
+                buffer.printf("byte[] newBytes = _readable.readArray(%s);%n", lengthVar);
                 buffer.printf("%snewBytes%s", assignmentPrefix, assignmentSuffix);
             }
         } else if (type.isRecords()) {
@@ -619,6 +653,12 @@ public final class MessageDataGenerator implements MessageClassGenerator {
                 assignmentPrefix, lengthVar, assignmentSuffix);
         } else if (type.isArray()) {
             FieldType.ArrayType arrayType = (FieldType.ArrayType) type;
+            buffer.printf("if (%s > _readable.remaining()) {%n", lengthVar);
+            buffer.incrementIndent();
+            buffer.printf("throw new RuntimeException(\"Tried to allocate a collection of size \" + %s + \", but " +
+                    "there are only \" + _readable.remaining() + \" bytes remaining.\");%n", lengthVar);
+            buffer.decrementIndent();
+            buffer.printf("}%n");
             if (isStructArrayWithKeys) {
                 headerGenerator.addImport(MessageGenerator.IMPLICIT_LINKED_HASH_MULTI_COLLECTION_CLASS);
                 buffer.printf("%s newCollection = new %s(%s);%n",
@@ -706,6 +746,30 @@ public final class MessageDataGenerator implements MessageClassGenerator {
                                 } else {
                                     callGenerateVariableLengthWriter.generate(presentAndUntaggedVersions);
                                 }
+                            } else if (field.type().isStruct()) {
+                                IsNullConditional.forName(field.camelCaseName()).
+                                    possibleVersions(presentAndUntaggedVersions).
+                                    nullableVersions(field.nullableVersions()).
+                                    ifNull(() -> {
+                                        VersionConditional.forVersions(field.nullableVersions(), presentAndUntaggedVersions).
+                                            ifMember(__ -> {
+                                                buffer.printf("_writable.writeByte((byte) -1);%n");
+                                            }).
+                                            ifNotMember(__ -> {
+                                                buffer.printf("throw new NullPointerException();%n");
+                                            }).
+                                            generate(buffer);
+                                    }).
+                                    ifShouldNotBeNull(() -> {
+                                        VersionConditional.forVersions(field.nullableVersions(), presentAndUntaggedVersions).
+                                            ifMember(__ -> {
+                                                buffer.printf("_writable.writeByte((byte) 1);%n");
+                                            }).
+                                            generate(buffer);
+                                        buffer.printf("%s;%n",
+                                            primitiveWriteExpression(field.type(), field.camelCaseName()));
+                                    }).
+                                    generate(buffer);
                             } else {
                                 buffer.printf("%s;%n",
                                     primitiveWriteExpression(field.type(), field.camelCaseName()));
@@ -740,7 +804,7 @@ public final class MessageDataGenerator implements MessageClassGenerator {
             ifNotMember(__ -> {
                 generateCheckForUnsupportedNumTaggedFields("_numTaggedFields > 0");
             }).
-            ifMember(__ -> {
+            ifMember(flexibleVersions -> {
                 buffer.printf("_writable.writeUnsignedVarint(_numTaggedFields);%n");
                 int prevTag = -1;
                 for (FieldSpec field : taggedFields.values()) {
@@ -748,7 +812,7 @@ public final class MessageDataGenerator implements MessageClassGenerator {
                         buffer.printf("_rawWriter.writeRawTags(_writable, %d);%n", field.tag().get());
                     }
                     VersionConditional.
-                        forVersions(field.versions(), field.taggedVersions().intersect(field.versions())).
+                        forVersions(field.taggedVersions().intersect(field.versions()), flexibleVersions).
                         allowMembershipCheckAlwaysFalse(false).
                         ifMember(presentAndTaggedVersions -> {
                             IsNullConditional cond = IsNullConditional.forName(field.camelCaseName()).
@@ -790,10 +854,19 @@ public final class MessageDataGenerator implements MessageClassGenerator {
                                             Versions.NONE,
                                             field.zeroCopy());
                                     } else if (field.type().isStruct()) {
-                                        buffer.printf("_writable.writeUnsignedVarint(this.%s.size(_cache, _version));%n",
-                                                field.camelCaseName());
+                                        VersionConditional.forVersions(field.nullableVersions(), presentAndTaggedVersions).
+                                            ifMember(___ -> {
+                                                buffer.printf("_writable.writeUnsignedVarint(this.%s.size(_cache, _version) + 1);%n",
+                                                    field.camelCaseName());
+                                                buffer.printf("_writable.writeUnsignedVarint(1);%n");
+                                            }).
+                                            ifNotMember(___ -> {
+                                                buffer.printf("_writable.writeUnsignedVarint(this.%s.size(_cache, _version));%n",
+                                                    field.camelCaseName());
+                                            }).
+                                            generate(buffer);
                                         buffer.printf("%s;%n",
-                                                primitiveWriteExpression(field.type(), field.camelCaseName()));
+                                            primitiveWriteExpression(field.type(), field.camelCaseName()));
                                     } else if (field.type().isRecords()) {
                                         throw new RuntimeException("Unsupported attempt to declare field `" +
                                             field.name() + "` with `records` type as a tagged field.");
@@ -848,6 +921,8 @@ public final class MessageDataGenerator implements MessageClassGenerator {
             return String.format("_writable.writeShort(%s)", name);
         } else if (type instanceof FieldType.Uint16FieldType) {
             return String.format("_writable.writeUnsignedShort(%s)", name);
+        } else if (type instanceof FieldType.Uint32FieldType) {
+            return String.format("_writable.writeUnsignedInt(%s)", name);
         } else if (type instanceof FieldType.Int32FieldType) {
             return String.format("_writable.writeInt(%s)", name);
         } else if (type instanceof FieldType.Int64FieldType) {
@@ -1129,6 +1204,8 @@ public final class MessageDataGenerator implements MessageClassGenerator {
                             }
                             if (field.type().isString()) {
                                 buffer.printf("_size.addBytes(2);%n");
+                            } else if (field.type().isStruct()) {
+                                buffer.printf("_size.addBytes(1);%n");
                             } else {
                                 buffer.printf("_size.addBytes(4);%n");
                             }
@@ -1156,7 +1233,8 @@ public final class MessageDataGenerator implements MessageClassGenerator {
                                 buffer.printf("int _stringPrefixSize = " +
                                     "ByteUtils.sizeOfUnsignedVarint(_stringBytes.length + 1);%n");
                                 buffer.printf("_size.addBytes(_stringBytes.length + _stringPrefixSize + " +
-                                    "ByteUtils.sizeOfUnsignedVarint(_stringPrefixSize));%n");
+                                    "ByteUtils.sizeOfUnsignedVarint(_stringPrefixSize + _stringBytes.length));%n");
+
                             } else {
                                 buffer.printf("_size.addBytes(_stringBytes.length + " +
                                     "ByteUtils.sizeOfUnsignedVarint(_stringBytes.length + 1));%n");
@@ -1254,12 +1332,20 @@ public final class MessageDataGenerator implements MessageClassGenerator {
                         }).
                         generate(buffer);
                 } else if (field.type().isStruct()) {
-                    buffer.printf("int _sizeBeforeStruct = _size.totalSize();%n", field.camelCaseName());
-                    buffer.printf("this.%s.addSize(_size, _cache, _version);%n", field.camelCaseName());
-                    buffer.printf("int _structSize = _size.totalSize() - _sizeBeforeStruct;%n", field.camelCaseName());
+                    // Adding a byte if the field is nullable. A byte works for both regular and tagged struct fields.
+                    VersionConditional.forVersions(field.nullableVersions(), possibleVersions).
+                        ifMember(__ -> {
+                            buffer.printf("_size.addBytes(1);%n");
+                        }).
+                        generate(buffer);
 
                     if (tagged) {
+                        buffer.printf("int _sizeBeforeStruct = _size.totalSize();%n", field.camelCaseName());
+                        buffer.printf("this.%s.addSize(_size, _cache, _version);%n", field.camelCaseName());
+                        buffer.printf("int _structSize = _size.totalSize() - _sizeBeforeStruct;%n", field.camelCaseName());
                         buffer.printf("_size.addBytes(ByteUtils.sizeOfUnsignedVarint(_structSize));%n");
+                    } else {
+                        buffer.printf("this.%s.addSize(_size, _cache, _version);%n", field.camelCaseName());
                     }
                 } else {
                     throw new RuntimeException("unhandled type " + field.type());
@@ -1371,7 +1457,8 @@ public final class MessageDataGenerator implements MessageClassGenerator {
                     (field.type() instanceof FieldType.Int32FieldType)) {
             buffer.printf("hashCode = 31 * hashCode + %s;%n",
                 field.camelCaseName());
-        } else if (field.type() instanceof FieldType.Int64FieldType) {
+        } else if (field.type() instanceof FieldType.Int64FieldType ||
+                    (field.type() instanceof FieldType.Uint32FieldType)) {
             buffer.printf("hashCode = 31 * hashCode + ((int) (%s >> 32) ^ (int) %s);%n",
                 field.camelCaseName(), field.camelCaseName());
         } else if (field.type() instanceof FieldType.UUIDFieldType) {
@@ -1426,6 +1513,7 @@ public final class MessageDataGenerator implements MessageClassGenerator {
                 (field.type() instanceof FieldType.Int8FieldType) ||
                 (field.type() instanceof FieldType.Int16FieldType) ||
                 (field.type() instanceof FieldType.Uint16FieldType) ||
+                (field.type() instanceof FieldType.Uint32FieldType) ||
                 (field.type() instanceof FieldType.Int32FieldType) ||
                 (field.type() instanceof FieldType.Int64FieldType) ||
                 (field.type() instanceof FieldType.Float64FieldType) ||
@@ -1513,6 +1601,7 @@ public final class MessageDataGenerator implements MessageClassGenerator {
         } else if ((field.type() instanceof FieldType.Int8FieldType) ||
                 (field.type() instanceof FieldType.Int16FieldType) ||
                 (field.type() instanceof FieldType.Uint16FieldType) ||
+                (field.type() instanceof FieldType.Uint32FieldType) ||
                 (field.type() instanceof FieldType.Int32FieldType) ||
                 (field.type() instanceof FieldType.Int64FieldType) ||
                 (field.type() instanceof FieldType.Float64FieldType)) {
@@ -1533,10 +1622,17 @@ public final class MessageDataGenerator implements MessageClassGenerator {
         } else if (field.type().isRecords()) {
             buffer.printf("+ \"%s%s=\" + %s%n",
                     prefix, field.camelCaseName(), field.camelCaseName());
-        } else if (field.type() instanceof FieldType.UUIDFieldType ||
-                field.type().isStruct()) {
+        } else if (field.type() instanceof FieldType.UUIDFieldType) {
             buffer.printf("+ \"%s%s=\" + %s.toString()%n",
                 prefix, field.camelCaseName(), field.camelCaseName());
+        } else if (field.type().isStruct()) {
+            if (field.nullableVersions().empty()) {
+                buffer.printf("+ \"%s%s=\" + %s.toString()%n",
+                    prefix, field.camelCaseName(), field.camelCaseName());
+            } else {
+                buffer.printf("+ \"%s%s=\" + ((%s == null) ? \"null\" : %s.toString())%n",
+                    prefix, field.camelCaseName(), field.camelCaseName(), field.camelCaseName());
+            }
         } else if (field.type().isArray()) {
             headerGenerator.addImport(MessageGenerator.MESSAGE_UTIL_CLASS);
             if (field.nullableVersions().empty()) {
@@ -1575,10 +1671,18 @@ public final class MessageDataGenerator implements MessageClassGenerator {
             field.fieldAbstractJavaType(headerGenerator, structRegistry));
         buffer.incrementIndent();
         if (field.type() instanceof FieldType.Uint16FieldType) {
-            buffer.printf("if (v < 0 || v > 65535) {%n");
+            buffer.printf("if (v < 0 || v > %d) {%n", MessageGenerator.UNSIGNED_SHORT_MAX);
             buffer.incrementIndent();
             buffer.printf("throw new RuntimeException(\"Invalid value \" + v + " +
                     "\" for unsigned short field.\");%n");
+            buffer.decrementIndent();
+            buffer.printf("}%n");
+        }
+        if (field.type() instanceof FieldType.Uint32FieldType) {
+            buffer.printf("if (v < 0 || v > %dL) {%n", MessageGenerator.UNSIGNED_INT_MAX);
+            buffer.incrementIndent();
+            buffer.printf("throw new RuntimeException(\"Invalid value \" + v + " +
+                    "\" for unsigned int field.\");%n");
             buffer.decrementIndent();
             buffer.printf("}%n");
         }

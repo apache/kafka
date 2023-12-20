@@ -32,8 +32,11 @@ public class OffsetSyncTest {
         byte[] value = offsetSync.recordValue();
         ConsumerRecord<byte[], byte[]> record = new ConsumerRecord<>("any-topic", 6, 7, key, value);
         OffsetSync deserialized = OffsetSync.deserializeRecord(record);
-        assertEquals(offsetSync.topicPartition(), deserialized.topicPartition());
-        assertEquals(offsetSync.upstreamOffset(), deserialized.upstreamOffset());
-        assertEquals(offsetSync.downstreamOffset(), deserialized.downstreamOffset());
+        assertEquals(offsetSync.topicPartition(), deserialized.topicPartition(),
+                "Failure on offset sync topic partition serde");
+        assertEquals(offsetSync.upstreamOffset(), deserialized.upstreamOffset(),
+                "Failure on upstream offset serde");
+        assertEquals(offsetSync.downstreamOffset(), deserialized.downstreamOffset(),
+                "Failure on downstream offset serde");
     }
 }

@@ -20,14 +20,15 @@ package kafka.server
 import java.util.concurrent._
 import java.util.concurrent.atomic._
 import java.util.concurrent.locks.{Lock, ReentrantLock}
-
-import kafka.metrics.KafkaMetricsGroup
 import kafka.utils.CoreUtils.inLock
 import kafka.utils._
-import kafka.utils.timer._
+import org.apache.kafka.server.metrics.KafkaMetricsGroup
+import org.apache.kafka.server.util.ShutdownableThread
+import org.apache.kafka.server.util.timer.{SystemTimer, Timer, TimerTask}
 
 import scala.collection._
 import scala.collection.mutable.ListBuffer
+import scala.jdk.CollectionConverters._
 
 /**
  * An operation whose processing needs to be delayed for at most the given delayMs. For example
@@ -45,9 +46,9 @@ import scala.collection.mutable.ListBuffer
  * Noted that if you add a future delayed operation that calls ReplicaManager.appendRecords() in onComplete()
  * like DelayedJoin, you must be aware that this operation's onExpiration() needs to call actionQueue.tryCompleteAction().
  */
-abstract class DelayedOperation(override val delayMs: Long,
+abstract class DelayedOperation(delayMs: Long,
                                 lockOpt: Option[Lock] = None)
-  extends TimerTask with Logging {
+  extends TimerTask(delayMs) with Logging {
 
   private val completed = new AtomicBoolean(false)
   // Visible for testing
@@ -153,7 +154,9 @@ final class DelayedOperationPurgatory[T <: DelayedOperation](purgatoryName: Stri
                                                              purgeInterval: Int = 1000,
                                                              reaperEnabled: Boolean = true,
                                                              timerEnabled: Boolean = true)
-        extends Logging with KafkaMetricsGroup {
+        extends Logging {
+  private val metricsGroup = new KafkaMetricsGroup(this.getClass)
+
   /* a list of operation watching keys */
   private class WatcherList {
     val watchersByKey = new Pool[Any, Watchers](Some((key: Any) => new Watchers(key)))
@@ -164,7 +167,7 @@ final class DelayedOperationPurgatory[T <: DelayedOperation](purgatoryName: Stri
      * Return all the current watcher lists,
      * note that the returned watchers may be removed from the list by other threads
      */
-    def allWatchers = {
+    def allWatchers: Iterable[Watchers] = {
       watchersByKey.values
     }
   }
@@ -180,9 +183,9 @@ final class DelayedOperationPurgatory[T <: DelayedOperation](purgatoryName: Stri
   /* background thread expiring operations that have timed out */
   private val expirationReaper = new ExpiredOperationReaper()
 
-  private val metricsTags = Map("delayedOperation" -> purgatoryName)
-  newGauge("PurgatorySize", () => watched, metricsTags)
-  newGauge("NumDelayedOperations", () => numDelayed, metricsTags)
+  private val metricsTags = Map("delayedOperation" -> purgatoryName).asJava
+  metricsGroup.newGauge("PurgatorySize", () => watched, metricsTags)
+  metricsGroup.newGauge("NumDelayedOperations", () => numDelayed, metricsTags)
 
   if (reaperEnabled)
     expirationReaper.start()
@@ -262,7 +265,9 @@ final class DelayedOperationPurgatory[T <: DelayedOperation](purgatoryName: Stri
       0
     else
       watchers.tryCompleteWatched()
-    debug(s"Request key $key unblocked $numCompleted $purgatoryName operations")
+    if (numCompleted > 0) {
+      debug(s"Request key $key unblocked $numCompleted $purgatoryName operations")
+    }
     numCompleted
   }
 
@@ -326,11 +331,17 @@ final class DelayedOperationPurgatory[T <: DelayedOperation](purgatoryName: Stri
    * Shutdown the expire reaper thread
    */
   def shutdown(): Unit = {
-    if (reaperEnabled)
-      expirationReaper.shutdown()
-    timeoutTimer.shutdown()
-    removeMetric("PurgatorySize", metricsTags)
-    removeMetric("NumDelayedOperations", metricsTags)
+    if (reaperEnabled) {
+      expirationReaper.initiateShutdown()
+      // improve shutdown time by waking up any ShutdownableThread(s) blocked on poll by sending a no-op
+      timeoutTimer.add(new TimerTask(0) {
+        override def run(): Unit = {}
+      })
+      expirationReaper.awaitShutdown()
+    }
+    timeoutTimer.close()
+    metricsGroup.removeMetric("PurgatorySize", metricsTags)
+    metricsGroup.removeMetric("NumDelayedOperations", metricsTags)
   }
 
   /**

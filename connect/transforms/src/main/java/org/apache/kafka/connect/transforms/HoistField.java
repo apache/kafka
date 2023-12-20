@@ -20,16 +20,18 @@ import org.apache.kafka.common.cache.Cache;
 import org.apache.kafka.common.cache.LRUCache;
 import org.apache.kafka.common.cache.SynchronizedCache;
 import org.apache.kafka.common.config.ConfigDef;
+import org.apache.kafka.common.utils.AppInfoParser;
+import org.apache.kafka.connect.components.Versioned;
 import org.apache.kafka.connect.connector.ConnectRecord;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaBuilder;
 import org.apache.kafka.connect.data.Struct;
 import org.apache.kafka.connect.transforms.util.SimpleConfig;
 
-import java.util.Collections;
+import java.util.HashMap;
 import java.util.Map;
 
-public abstract class HoistField<R extends ConnectRecord<R>> implements Transformation<R> {
+public abstract class HoistField<R extends ConnectRecord<R>> implements Transformation<R>, Versioned {
 
     public static final String OVERVIEW_DOC =
             "Wrap data using the specified field name in a Struct when schema present, or a Map in the case of schemaless data."
@@ -59,7 +61,9 @@ public abstract class HoistField<R extends ConnectRecord<R>> implements Transfor
         final Object value = operatingValue(record);
 
         if (schema == null) {
-            return newRecord(record, null, Collections.singletonMap(fieldName, value));
+            Map<String, Object> updatedValue = new HashMap<>();
+            updatedValue.put(fieldName, value);
+            return newRecord(record, null, updatedValue);
         } else {
             Schema updatedSchema = schemaUpdateCache.get(schema);
             if (updatedSchema == null) {
@@ -71,6 +75,11 @@ public abstract class HoistField<R extends ConnectRecord<R>> implements Transfor
 
             return newRecord(record, updatedSchema, updatedValue);
         }
+    }
+
+    @Override
+    public String version() {
+        return AppInfoParser.getVersion();
     }
 
     @Override

@@ -21,8 +21,11 @@ import java.nio.charset.StandardCharsets
 
 import kafka.server.BaseRequestTest
 import kafka.utils.Exit
+import kafka.utils.TestUtils
+import kafka.utils.TestInfoUtils
 import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.api.Test
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.ValueSource
 
 class UserScramCredentialsCommandTest extends BaseRequestTest {
   override def brokerCount = 1
@@ -40,7 +43,7 @@ class UserScramCredentialsCommandTest extends BaseRequestTest {
       exitStatus = Some(status)
       throw new RuntimeException
     }
-    val commandArgs = Array("--bootstrap-server", brokerList) ++ args
+    val commandArgs = Array("--bootstrap-server", bootstrapServers()) ++ args
     try {
       Console.withOut(printStream) {
         ConfigCommand.main(commandArgs)
@@ -57,22 +60,23 @@ class UserScramCredentialsCommandTest extends BaseRequestTest {
     }
   }
 
-  @Test
-  def testUserScramCredentialsRequests(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("kraft", "zk"))
+  def testUserScramCredentialsRequests(quorum: String): Unit = {
     val user1 = "user1"
     // create and describe a credential
     var result = runConfigCommandViaBroker(Array("--user", user1, "--alter", "--add-config", "SCRAM-SHA-256=[iterations=4096,password=foo-secret]"))
     val alterConfigsUser1Out = s"Completed updating config for user $user1.\n"
     assertEquals(alterConfigsUser1Out, result.stdout)
-    result = runConfigCommandViaBroker(Array("--user", user1, "--describe"))
     val scramCredentialConfigsUser1Out = s"SCRAM credential configs for user-principal '$user1' are SCRAM-SHA-256=iterations=4096\n"
-    assertEquals(scramCredentialConfigsUser1Out, result.stdout)
+    TestUtils.waitUntilTrue(() => runConfigCommandViaBroker(Array("--user", user1, "--describe")).stdout ==
+      scramCredentialConfigsUser1Out, s"Failed to describe SCRAM credential change '$user1'")
     // create a user quota and describe the user again
     result = runConfigCommandViaBroker(Array("--user", user1, "--alter", "--add-config", "consumer_byte_rate=20000"))
     assertEquals(alterConfigsUser1Out, result.stdout)
-    result = runConfigCommandViaBroker(Array("--user", user1, "--describe"))
     val quotaConfigsUser1Out = s"Quota configs for user-principal '$user1' are consumer_byte_rate=20000.0\n"
-    assertEquals(s"$quotaConfigsUser1Out$scramCredentialConfigsUser1Out", result.stdout)
+    TestUtils.waitUntilTrue(() => runConfigCommandViaBroker(Array("--user", user1, "--describe")).stdout ==
+      s"$quotaConfigsUser1Out$scramCredentialConfigsUser1Out", s"Failed to describe Quota change for '$user1'")
 
     // now do the same thing for user2
     val user2 = "user2"
@@ -80,15 +84,15 @@ class UserScramCredentialsCommandTest extends BaseRequestTest {
     result = runConfigCommandViaBroker(Array("--user", user2, "--alter", "--add-config", "SCRAM-SHA-256=[iterations=4096,password=foo-secret]"))
     val alterConfigsUser2Out = s"Completed updating config for user $user2.\n"
     assertEquals(alterConfigsUser2Out, result.stdout)
-    result = runConfigCommandViaBroker(Array("--user", user2, "--describe"))
     val scramCredentialConfigsUser2Out = s"SCRAM credential configs for user-principal '$user2' are SCRAM-SHA-256=iterations=4096\n"
-    assertEquals(scramCredentialConfigsUser2Out, result.stdout)
+    TestUtils.waitUntilTrue(() => runConfigCommandViaBroker(Array("--user", user2, "--describe")).stdout ==
+      scramCredentialConfigsUser2Out, s"Failed to describe SCRAM credential change '$user2'")
     // create a user quota and describe the user again
     result = runConfigCommandViaBroker(Array("--user", user2, "--alter", "--add-config", "consumer_byte_rate=20000"))
     assertEquals(alterConfigsUser2Out, result.stdout)
-    result = runConfigCommandViaBroker(Array("--user", user2, "--describe"))
     val quotaConfigsUser2Out = s"Quota configs for user-principal '$user2' are consumer_byte_rate=20000.0\n"
-    assertEquals(s"$quotaConfigsUser2Out$scramCredentialConfigsUser2Out", result.stdout)
+    TestUtils.waitUntilTrue(() => runConfigCommandViaBroker(Array("--user", user2, "--describe")).stdout ==
+      s"$quotaConfigsUser2Out$scramCredentialConfigsUser2Out", s"Failed to describe Quota change for '$user2'")
 
     // describe both
     result = runConfigCommandViaBroker(Array("--entity-type", "users", "--describe"))
@@ -107,28 +111,30 @@ class UserScramCredentialsCommandTest extends BaseRequestTest {
     assertEquals(alterConfigsUser1Out, result.stdout)
     result = runConfigCommandViaBroker(Array("--user", user2, "--alter", "--delete-config", "SCRAM-SHA-256"))
     assertEquals(alterConfigsUser2Out, result.stdout)
-    result = runConfigCommandViaBroker(Array("--entity-type", "users", "--describe"))
-    assertEquals(s"$quotaConfigsUser2Out$scramCredentialConfigsUser1Out", result.stdout)
+    TestUtils.waitUntilTrue(() => runConfigCommandViaBroker(Array("--entity-type", "users", "--describe")).stdout ==
+      s"$quotaConfigsUser2Out$scramCredentialConfigsUser1Out", s"Failed to describe Quota change for '$user2'")
 
     // now delete the rest of the configs, for user1 and user2, and describe
     result = runConfigCommandViaBroker(Array("--user", user1, "--alter", "--delete-config", "SCRAM-SHA-256"))
     assertEquals(alterConfigsUser1Out, result.stdout)
     result = runConfigCommandViaBroker(Array("--user", user2, "--alter", "--delete-config", "consumer_byte_rate"))
     assertEquals(alterConfigsUser2Out, result.stdout)
-    result = runConfigCommandViaBroker(Array("--entity-type", "users", "--describe"))
-    assertEquals("", result.stdout)
+    TestUtils.waitUntilTrue(() => runConfigCommandViaBroker(Array("--entity-type", "users", "--describe")).stdout == "",
+      s"Failed to describe All users deleted")
   }
 
-  @Test
-  def testAlterWithEmptyPassword(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("kraft", "zk"))
+  def testAlterWithEmptyPassword(quorum: String): Unit = {
     val user1 = "user1"
     val result = runConfigCommandViaBroker(Array("--user", user1, "--alter", "--add-config", "SCRAM-SHA-256=[iterations=4096,password=]"))
     assertTrue(result.exitStatus.isDefined, "Expected System.exit() to be called with an empty password")
     assertEquals(1, result.exitStatus.get, "Expected empty password to cause failure with exit status=1")
   }
 
-  @Test
-  def testDescribeUnknownUser(): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
+  @ValueSource(strings = Array("kraft", "zk"))
+  def testDescribeUnknownUser(quorum: String): Unit = {
     val unknownUser = "unknownUser"
     val result = runConfigCommandViaBroker(Array("--user", unknownUser, "--describe"))
     assertTrue(result.exitStatus.isEmpty, "Expected System.exit() to not be called with an unknown user")

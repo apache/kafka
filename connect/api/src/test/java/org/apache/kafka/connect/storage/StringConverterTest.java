@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.connect.storage;
 
+import org.apache.kafka.common.utils.AppInfoParser;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.data.Schema;
 import org.apache.kafka.connect.data.SchemaAndValue;
@@ -32,7 +33,7 @@ public class StringConverterTest {
     private static final String TOPIC = "topic";
     private static final String SAMPLE_STRING = "a string";
 
-    private StringConverter converter = new StringConverter();
+    private final StringConverter converter = new StringConverter();
 
     @Test
     public void testStringToBytes() {
@@ -98,5 +99,10 @@ public class StringConverterTest {
     @Test
     public void testNullHeaderValueToBytes() {
         assertNull(converter.fromConnectHeader(TOPIC, "hdr", Schema.OPTIONAL_STRING_SCHEMA, null));
+    }
+
+    @Test
+    public void testInheritedVersionRetrievedFromAppInfoParser() {
+        assertEquals(AppInfoParser.getVersion(), converter.version());
     }
 }

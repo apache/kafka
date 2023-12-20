@@ -37,7 +37,7 @@ public class MultiRecordsSend implements Send {
 
     private final Queue<Send> sendQueue;
     private final long size;
-    private Map<TopicPartition, RecordConversionStats> recordConversionStats;
+    private Map<TopicPartition, RecordValidationStats> recordConversionStats;
 
     private long totalWritten = 0;
     private Send current;
@@ -87,7 +87,7 @@ public class MultiRecordsSend implements Send {
         if (completed())
             throw new KafkaException("This operation cannot be invoked on a complete request.");
 
-        int totalWrittenPerCall = 0;
+        long totalWrittenPerCall = 0;
         boolean sendComplete;
         do {
             long written = current.writeTo(channel);
@@ -114,7 +114,7 @@ public class MultiRecordsSend implements Send {
      * Get any statistics that were recorded as part of executing this {@link MultiRecordsSend}.
      * @return Records processing statistics (could be null if no statistics were collected)
      */
-    public Map<TopicPartition, RecordConversionStats> recordConversionStats() {
+    public Map<TopicPartition, RecordValidationStats> recordConversionStats() {
         return recordConversionStats;
     }
 

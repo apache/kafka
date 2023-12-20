@@ -25,6 +25,8 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.errors.LockException;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.errors.StreamsException;
+import org.apache.kafka.streams.errors.TaskCorruptedException;
+import org.apache.kafka.streams.errors.TaskIdFormatException;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.Task.TaskType;
@@ -34,6 +36,7 @@ import org.slf4j.Logger;
 import static org.apache.kafka.streams.state.internals.RecordConverters.identity;
 import static org.apache.kafka.streams.state.internals.RecordConverters.rawValueToTimestampedValue;
 import static org.apache.kafka.streams.state.internals.WrappedStateStore.isTimestamped;
+import static org.apache.kafka.streams.state.internals.WrappedStateStore.isVersioned;
 
 /**
  * Shared functions to handle state store registration and cleanup between
@@ -46,7 +49,9 @@ final class StateManagerUtil {
     private StateManagerUtil() {}
 
     static RecordConverter converterForStore(final StateStore store) {
-        return isTimestamped(store) ? rawValueToTimestampedValue() : identity();
+        // should not prepend timestamp when restoring records for versioned store, as
+        // timestamp is used separately during put() process for restore of versioned stores
+        return (isTimestamped(store) && !isVersioned(store)) ? rawValueToTimestampedValue() : identity();
     }
 
     static boolean checkpointNeeded(final boolean enforceCheckpoint,
@@ -73,6 +78,7 @@ final class StateManagerUtil {
     }
 
     /**
+     * @throws TaskCorruptedException if the state cannot be reused (with EOS) and needs to be reset
      * @throws StreamsException If the store's changelog does not contain the partition
      */
     static void registerStateStores(final Logger log,
@@ -139,6 +145,8 @@ final class StateManagerUtil {
                         stateDirectory.unlock(id);
                     }
                 }
+            } else {
+                log.error("Failed to acquire lock while closing the state store for {} task {}", taskType, id);
             }
         } catch (final IOException e) {
             final ProcessorStateException exception = new ProcessorStateException(
@@ -151,5 +159,35 @@ final class StateManagerUtil {
         if (exception != null) {
             throw exception;
         }
+    }
+
+    /**
+     *  Parse the task directory name (of the form topicGroupId_partition) and construct the TaskId with the
+     *  optional namedTopology (may be null)
+     *
+     *  @throws TaskIdFormatException if the taskIdStr is not a valid {@link TaskId}
+     */
+    static TaskId parseTaskDirectoryName(final String taskIdStr, final String namedTopology) {
+        final int index = taskIdStr.indexOf('_');
+        if (index <= 0 || index + 1 >= taskIdStr.length()) {
+            throw new TaskIdFormatException(taskIdStr);
+        }
+
+        try {
+            final int topicGroupId = Integer.parseInt(taskIdStr.substring(0, index));
+            final int partition = Integer.parseInt(taskIdStr.substring(index + 1));
+
+            return new TaskId(topicGroupId, partition, namedTopology);
+        } catch (final Exception e) {
+            throw new TaskIdFormatException(taskIdStr, e);
+        }
+    }
+
+    /**
+     * @return The string representation of the subtopology and partition metadata, ie the task id string without
+     *         the named topology, which defines the innermost task directory name of this task's state
+     */
+    static String toTaskDirString(final TaskId taskId) {
+        return taskId.subtopology() + "_" + taskId.partition();
     }
 }

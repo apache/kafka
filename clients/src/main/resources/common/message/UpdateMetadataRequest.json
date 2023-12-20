@@ -27,12 +27,20 @@
   // Version 4 adds the offline replica list.
   //
   // Version 5 adds the broker epoch field and normalizes partitions by topic.
+  //
   // Version 7 adds topicId
-  "validVersions": "0-7",
+  //
+  // Version 8 adds KRaft Controller ID field as part of KIP-866
+  "validVersions": "0-8",
   "flexibleVersions": "6+",
   "fields": [
     { "name": "ControllerId", "type": "int32", "versions": "0+", "entityType": "brokerId",
       "about": "The controller id." },
+    { "name": "isKRaftController", "type": "bool", "versions": "8+", "default": "false",
+      "about": "If KRaft controller id is used during migration. See KIP-866" },
+    { "name": "Type", "type": "int8", "versions": "8+",
+      "default": 0, "tag": 0, "taggedVersions": "8+",
+      "about": "Indicates if this request is a Full metadata snapshot (2), Incremental (1), or Unknown (0). Using during ZK migration, see KIP-866"},
     { "name": "ControllerEpoch", "type": "int32", "versions": "0+",
       "about": "The controller epoch." },
     { "name": "BrokerEpoch", "type": "int64", "versions": "5+", "ignorable": true, "default": "-1",

@@ -18,10 +18,10 @@
 package kafka.utils
 
 import java.util.concurrent.TimeUnit
-
 import org.apache.kafka.common.MetricName
 import org.apache.kafka.common.metrics.{KafkaMetric, MetricConfig, Quota, QuotaViolationException}
 import org.apache.kafka.common.metrics.stats.{Rate, Value}
+import org.apache.kafka.server.util.MockTime
 
 import scala.jdk.CollectionConverters._
 import org.junit.jupiter.api.Assertions._

@@ -20,23 +20,21 @@ import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.kstream.Aggregator;
+import org.apache.kafka.streams.kstream.EmitStrategy;
+import org.apache.kafka.streams.kstream.EmitStrategy.StrategyType;
 import org.apache.kafka.streams.kstream.Initializer;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.Named;
 import org.apache.kafka.streams.kstream.Reducer;
 import org.apache.kafka.streams.kstream.TimeWindowedKStream;
+import org.apache.kafka.streams.kstream.UnlimitedWindows;
 import org.apache.kafka.streams.kstream.Window;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.Windows;
 import org.apache.kafka.streams.kstream.internals.graph.GraphNode;
-import org.apache.kafka.streams.state.StoreBuilder;
-import org.apache.kafka.streams.state.Stores;
-import org.apache.kafka.streams.state.TimestampedWindowStore;
-import org.apache.kafka.streams.state.WindowBytesStoreSupplier;
 import org.apache.kafka.streams.state.WindowStore;
 
-import java.time.Duration;
 import java.util.Objects;
 import java.util.Set;
 
@@ -47,6 +45,7 @@ public class TimeWindowedKStreamImpl<K, V, W extends Window> extends AbstractStr
 
     private final Windows<W> windows;
     private final GroupedStreamAggregateBuilder<K, V> aggregateBuilder;
+    private EmitStrategy emitStrategy = EmitStrategy.onWindowUpdate();
 
     TimeWindowedKStreamImpl(final Windows<W> windows,
                             final InternalStreamsBuilder builder,
@@ -105,14 +104,18 @@ public class TimeWindowedKStreamImpl<K, V, W extends Window> extends AbstractStr
         final String aggregateName = new NamedInternal(named).orElseGenerateWithPrefix(builder, AGGREGATE_NAME);
 
         return aggregateBuilder.build(
-                new NamedInternal(aggregateName),
-                materialize(materializedInternal),
-                new KStreamWindowAggregate<>(windows, materializedInternal.storeName(), aggregateBuilder.countInitializer, aggregateBuilder.countAggregator),
-                materializedInternal.queryableStoreName(),
-                materializedInternal.keySerde() != null ? new FullTimeWindowedSerde<>(materializedInternal.keySerde(), windows.size()) : null,
-                materializedInternal.valueSerde());
-
-
+            new NamedInternal(aggregateName),
+            new WindowStoreMaterializer<>(materializedInternal, windows, emitStrategy),
+            new KStreamWindowAggregate<>(
+                windows,
+                materializedInternal.storeName(),
+                emitStrategy,
+                aggregateBuilder.countInitializer,
+                aggregateBuilder.countAggregator),
+            materializedInternal.queryableStoreName(),
+            materializedInternal.keySerde() != null ? new FullTimeWindowedSerde<>(materializedInternal.keySerde(), windows.size()) : null,
+            materializedInternal.valueSerde(),
+            false);
     }
 
     @Override
@@ -153,14 +156,18 @@ public class TimeWindowedKStreamImpl<K, V, W extends Window> extends AbstractStr
         final String aggregateName = new NamedInternal(named).orElseGenerateWithPrefix(builder, AGGREGATE_NAME);
 
         return aggregateBuilder.build(
-                new NamedInternal(aggregateName),
-                materialize(materializedInternal),
-                new KStreamWindowAggregate<>(windows, materializedInternal.storeName(), initializer, aggregator),
-                materializedInternal.queryableStoreName(),
-                materializedInternal.keySerde() != null ? new FullTimeWindowedSerde<>(materializedInternal.keySerde(), windows.size()) : null,
-                materializedInternal.valueSerde());
-
-
+            new NamedInternal(aggregateName),
+            new WindowStoreMaterializer<>(materializedInternal, windows, emitStrategy),
+            new KStreamWindowAggregate<>(
+                windows,
+                materializedInternal.storeName(),
+                emitStrategy,
+                initializer,
+                aggregator),
+            materializedInternal.queryableStoreName(),
+            materializedInternal.keySerde() != null ? new FullTimeWindowedSerde<>(materializedInternal.keySerde(), windows.size()) : null,
+            materializedInternal.valueSerde(),
+            false);
     }
 
     @Override
@@ -200,54 +207,28 @@ public class TimeWindowedKStreamImpl<K, V, W extends Window> extends AbstractStr
         final String reduceName = new NamedInternal(named).orElseGenerateWithPrefix(builder, REDUCE_NAME);
 
         return aggregateBuilder.build(
-                new NamedInternal(reduceName),
-                materialize(materializedInternal),
-                new KStreamWindowAggregate<>(windows, materializedInternal.storeName(), aggregateBuilder.reduceInitializer, aggregatorForReducer(reducer)),
-                materializedInternal.queryableStoreName(),
-                materializedInternal.keySerde() != null ? new FullTimeWindowedSerde<>(materializedInternal.keySerde(), windows.size()) : null,
-                materializedInternal.valueSerde());
-
-
+            new NamedInternal(reduceName),
+            new WindowStoreMaterializer<>(materializedInternal, windows, emitStrategy),
+            new KStreamWindowAggregate<>(
+                windows,
+                materializedInternal.storeName(),
+                emitStrategy,
+                aggregateBuilder.reduceInitializer,
+                aggregatorForReducer(reducer)),
+            materializedInternal.queryableStoreName(),
+            materializedInternal.keySerde() != null ? new FullTimeWindowedSerde<>(materializedInternal.keySerde(), windows.size()) : null,
+            materializedInternal.valueSerde(),
+            false);
     }
 
-    private <VR> StoreBuilder<TimestampedWindowStore<K, VR>> materialize(final MaterializedInternal<K, VR, WindowStore<Bytes, byte[]>> materialized) {
-        WindowBytesStoreSupplier supplier = (WindowBytesStoreSupplier) materialized.storeSupplier();
-        if (supplier == null) {
-            final long retentionPeriod = materialized.retention() != null ?
-                materialized.retention().toMillis() : windows.size() + windows.gracePeriodMs();
-
-            if ((windows.size() + windows.gracePeriodMs()) > retentionPeriod) {
-                throw new IllegalArgumentException("The retention period of the window store "
-                        + name + " must be no smaller than its window size plus the grace period."
-                        + " Got size=[" + windows.size() + "],"
-                        + " grace=[" + windows.gracePeriodMs() + "],"
-                        + " retention=[" + retentionPeriod + "]");
-            }
-
-            supplier = Stores.persistentTimestampedWindowStore(
-                    materialized.storeName(),
-                    Duration.ofMillis(retentionPeriod),
-                    Duration.ofMillis(windows.size()),
-                    false
-            );
+    @Override
+    public TimeWindowedKStream<K, V> emitStrategy(final EmitStrategy emitStrategy) {
+        if (this.windows instanceof UnlimitedWindows
+            && emitStrategy.type() == StrategyType.ON_WINDOW_CLOSE) {
+            throw new IllegalArgumentException("ON_WINDOW_CLOSE emit strategy cannot be used for UnlimitedWindows");
         }
-
-        final StoreBuilder<TimestampedWindowStore<K, VR>> builder = Stores.timestampedWindowStoreBuilder(
-            supplier,
-            materialized.keySerde(),
-            materialized.valueSerde()
-        );
-
-        if (materialized.loggingEnabled()) {
-            builder.withLoggingEnabled(materialized.logConfig());
-        } else {
-            builder.withLoggingDisabled();
-        }
-
-        if (materialized.cachingEnabled()) {
-            builder.withCachingEnabled();
-        }
-        return builder;
+        this.emitStrategy = emitStrategy;
+        return this;
     }
 
     private Aggregator<K, V, V> aggregatorForReducer(final Reducer<V> reducer) {

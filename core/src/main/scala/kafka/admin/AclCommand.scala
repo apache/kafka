@@ -18,7 +18,6 @@
 package kafka.admin
 
 import java.util.Properties
-
 import joptsimple._
 import joptsimple.util.EnumConverter
 import kafka.security.authorizer.{AclAuthorizer, AclEntry, AuthorizerUtils}
@@ -33,6 +32,7 @@ import org.apache.kafka.common.security.JaasUtils
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.utils.{Utils, SecurityUtils => JSecurityUtils}
 import org.apache.kafka.server.authorizer.Authorizer
+import org.apache.kafka.server.util.{CommandDefaultOptions, CommandLineUtils}
 
 import scala.jdk.CollectionConverters._
 import scala.collection.mutable
@@ -40,6 +40,9 @@ import scala.io.StdIn
 
 object AclCommand extends Logging {
 
+  val AuthorizerDeprecationMessage: String = "Warning: support for ACL configuration directly " +
+    "through the authorizer is deprecated and will be removed in a future release. Please use " +
+    "--bootstrap-server instead to set ACLs through the admin client."
   val ClusterResourceFilter = new ResourcePatternFilter(JResourceType.CLUSTER, JResource.CLUSTER_NAME, PatternType.LITERAL)
 
   private val Newline = scala.util.Properties.lineSeparator
@@ -48,7 +51,7 @@ object AclCommand extends Logging {
 
     val opts = new AclCommandOptions(args)
 
-    CommandLineUtils.printHelpAndExitIfNeeded(opts, "This tool helps to manage acls on kafka.")
+    CommandLineUtils.maybePrintHelpOrVersion(opts, "This tool helps to manage acls on kafka.")
 
     opts.checkArgs()
 
@@ -199,8 +202,8 @@ object AclCommand extends Logging {
       val defaultProps = Map(KafkaConfig.ZkEnableSecureAclsProp -> JaasUtils.isZkSaslEnabled)
       val authorizerPropertiesWithoutTls =
         if (opts.options.has(opts.authorizerPropertiesOpt)) {
-          val authorizerProperties = opts.options.valuesOf(opts.authorizerPropertiesOpt).asScala
-          defaultProps ++ CommandLineUtils.parseKeyValueArgs(authorizerProperties, acceptMissingValue = false).asScala
+          val authorizerProperties = opts.options.valuesOf(opts.authorizerPropertiesOpt)
+          defaultProps ++ CommandLineUtils.parseKeyValueArgs(authorizerProperties, false).asScala
         } else {
           defaultProps
         }
@@ -321,7 +324,7 @@ object AclCommand extends Logging {
   private def getResourceToAcls(opts: AclCommandOptions): Map[ResourcePattern, Set[AccessControlEntry]] = {
     val patternType = opts.options.valueOf(opts.resourcePatternType)
     if (!patternType.isSpecific)
-      CommandLineUtils.printUsageAndDie(opts.parser, s"A '--resource-pattern-type' value of '$patternType' is not valid when adding acls.")
+      CommandLineUtils.printUsageAndExit(opts.parser, s"A '--resource-pattern-type' value of '$patternType' is not valid when adding acls.")
 
     val resourceToAcl = getResourceFilterToAcls(opts).map {
       case (filter, acls) =>
@@ -329,7 +332,7 @@ object AclCommand extends Logging {
     }
 
     if (resourceToAcl.values.exists(_.isEmpty))
-      CommandLineUtils.printUsageAndDie(opts.parser, "You must specify one of: --allow-principal, --deny-principal when trying to add ACLs.")
+      CommandLineUtils.printUsageAndExit(opts.parser, "You must specify one of: --allow-principal, --deny-principal when trying to add ACLs.")
 
     resourceToAcl
   }
@@ -427,8 +430,8 @@ object AclCommand extends Logging {
     } yield new AccessControlEntry(principal.toString, host, operation, permissionType)
   }
 
-  private def getHosts(opts: AclCommandOptions, hostOptionSpec: ArgumentAcceptingOptionSpec[String],
-                       principalOptionSpec: ArgumentAcceptingOptionSpec[String]): Set[String] = {
+  private def getHosts(opts: AclCommandOptions, hostOptionSpec: OptionSpec[String],
+                       principalOptionSpec: OptionSpec[String]): Set[String] = {
     if (opts.options.has(hostOptionSpec))
       opts.options.valuesOf(hostOptionSpec).asScala.map(_.trim).toSet
     else if (opts.options.has(principalOptionSpec))
@@ -437,7 +440,7 @@ object AclCommand extends Logging {
       Set.empty[String]
   }
 
-  private def getPrincipals(opts: AclCommandOptions, principalOptionSpec: ArgumentAcceptingOptionSpec[String]): Set[KafkaPrincipal] = {
+  private def getPrincipals(opts: AclCommandOptions, principalOptionSpec: OptionSpec[String]): Set[KafkaPrincipal] = {
     if (opts.options.has(principalOptionSpec))
       opts.options.valuesOf(principalOptionSpec).asScala.map(s => JSecurityUtils.parseKafkaPrincipal(s.trim)).toSet
     else
@@ -464,8 +467,11 @@ object AclCommand extends Logging {
     if (opts.options.has(opts.delegationTokenOpt))
       opts.options.valuesOf(opts.delegationTokenOpt).forEach(token => resourceFilters += new ResourcePatternFilter(JResourceType.DELEGATION_TOKEN, token.trim, patternType))
 
+    if (opts.options.has(opts.userPrincipalOpt))
+      opts.options.valuesOf(opts.userPrincipalOpt).forEach(user => resourceFilters += new ResourcePatternFilter(JResourceType.USER, user.trim, patternType))
+
     if (resourceFilters.isEmpty && dieIfNoResourceFound)
-      CommandLineUtils.printUsageAndDie(opts.parser, "You must provide at least one resource: --topic <topic> or --cluster or --group <group> or --delegation-token <Delegation Token ID>")
+      CommandLineUtils.printUsageAndExit(opts.parser, "You must provide at least one resource: --topic <topic> or --cluster or --group <group> or --delegation-token <Delegation Token ID>")
 
     resourceFilters
   }
@@ -481,7 +487,7 @@ object AclCommand extends Logging {
     for ((resource, acls) <- resourceToAcls) {
       val validOps = AclEntry.supportedOperations(resource.resourceType) + AclOperation.ALL
       if ((acls.map(_.operation) -- validOps).nonEmpty)
-        CommandLineUtils.printUsageAndDie(opts.parser, s"ResourceType ${resource.resourceType} only supports operations ${validOps.mkString(",")}")
+        CommandLineUtils.printUsageAndExit(opts.parser, s"ResourceType ${resource.resourceType} only supports operations ${validOps.map(JSecurityUtils.operationName(_)).mkString(", ")}")
     }
   }
 
@@ -499,32 +505,36 @@ object AclCommand extends Logging {
       .describedAs("command-config")
       .ofType(classOf[String])
 
-    val authorizerOpt = parser.accepts("authorizer", "Fully qualified class name of the authorizer, defaults to kafka.security.authorizer.AclAuthorizer.")
+    val authorizerOpt = parser.accepts("authorizer", "DEPRECATED: Fully qualified class name of " +
+      "the authorizer, which defaults to kafka.security.authorizer.AclAuthorizer if --bootstrap-server is not provided. " +
+      AclCommand.AuthorizerDeprecationMessage)
       .withRequiredArg
       .describedAs("authorizer")
       .ofType(classOf[String])
 
-    val authorizerPropertiesOpt = parser.accepts("authorizer-properties", "REQUIRED: properties required to configure an instance of Authorizer. " +
-      "These are key=val pairs. For the default authorizer the example values are: zookeeper.connect=localhost:2181")
+    val authorizerPropertiesOpt = parser.accepts("authorizer-properties", "DEPRECATED: The " +
+      "properties required to configure an instance of the Authorizer specified by --authorizer. " +
+      "These are key=val pairs. For the default authorizer, example values are: zookeeper.connect=localhost:2181. " +
+      AclCommand.AuthorizerDeprecationMessage)
       .withRequiredArg
       .describedAs("authorizer-properties")
       .ofType(classOf[String])
 
     val topicOpt = parser.accepts("topic", "topic to which ACLs should be added or removed. " +
-      "A value of * indicates ACL should apply to all topics.")
+      "A value of '*' indicates ACL should apply to all topics.")
       .withRequiredArg
       .describedAs("topic")
       .ofType(classOf[String])
 
     val clusterOpt = parser.accepts("cluster", "Add/Remove cluster ACLs.")
     val groupOpt = parser.accepts("group", "Consumer Group to which the ACLs should be added or removed. " +
-      "A value of * indicates the ACLs should apply to all groups.")
+      "A value of '*' indicates the ACLs should apply to all groups.")
       .withRequiredArg
       .describedAs("group")
       .ofType(classOf[String])
 
     val transactionalIdOpt = parser.accepts("transactional-id", "The transactionalId to which ACLs should " +
-      "be added or removed. A value of * indicates the ACLs should apply to all transactionalIds.")
+      "be added or removed. A value of '*' indicates the ACLs should apply to all transactionalIds.")
       .withRequiredArg
       .describedAs("transactional-id")
       .ofType(classOf[String])
@@ -534,7 +544,7 @@ object AclCommand extends Logging {
       "the producer is authorized to a particular transactional-id.")
 
     val delegationTokenOpt = parser.accepts("delegation-token", "Delegation token to which ACLs should be added or removed. " +
-      "A value of * indicates ACL should apply to all tokens.")
+      "A value of '*' indicates ACL should apply to all tokens.")
       .withRequiredArg
       .describedAs("delegation-token")
       .ofType(classOf[String])
@@ -562,7 +572,7 @@ object AclCommand extends Logging {
 
     val allowPrincipalsOpt = parser.accepts("allow-principal", "principal is in principalType:name format." +
       " Note that principalType must be supported by the Authorizer being used." +
-      " For example, User:* is the wild card indicating all users.")
+      " For example, User:'*' is the wild card indicating all users.")
       .withRequiredArg
       .describedAs("allow-principal")
       .ofType(classOf[String])
@@ -572,7 +582,7 @@ object AclCommand extends Logging {
       "You only need to use this option as negation to already allowed set. " +
       "Note that principalType must be supported by the Authorizer being used. " +
       "For example if you wanted to allow access to all users in the system but not test-user you can define an ACL that " +
-      "allows access to User:* and specify --deny-principal=User:test@EXAMPLE.COM. " +
+      "allows access to User:'*' and specify --deny-principal=User:test@EXAMPLE.COM. " +
       "AND PLEASE REMEMBER DENY RULES TAKES PRECEDENCE OVER ALLOW RULES.")
       .withRequiredArg
       .describedAs("deny-principal")
@@ -585,13 +595,13 @@ object AclCommand extends Logging {
       .ofType(classOf[String])
 
     val allowHostsOpt = parser.accepts("allow-host", "Host from which principals listed in --allow-principal will have access. " +
-      "If you have specified --allow-principal then the default for this option will be set to * which allows access from all hosts.")
+      "If you have specified --allow-principal then the default for this option will be set to '*' which allows access from all hosts.")
       .withRequiredArg
       .describedAs("allow-host")
       .ofType(classOf[String])
 
     val denyHostsOpt = parser.accepts("deny-host", "Host from which principals listed in --deny-principal will be denied access. " +
-      "If you have specified --deny-principal then the default for this option will be set to * which denies access from all hosts.")
+      "If you have specified --deny-principal then the default for this option will be set to '*' which denies access from all hosts.")
       .withRequiredArg
       .describedAs("deny-host")
       .ofType(classOf[String])
@@ -605,48 +615,59 @@ object AclCommand extends Logging {
     val forceOpt = parser.accepts("force", "Assume Yes to all queries and do not prompt.")
 
     val zkTlsConfigFile = parser.accepts("zk-tls-config-file",
-      "Identifies the file where ZooKeeper client TLS connectivity properties for the authorizer are defined.  Any properties other than the following (with or without an \"authorizer.\" prefix) are ignored: " +
+      "DEPRECATED: Identifies the file where ZooKeeper client TLS connectivity properties are defined for" +
+        " the default authorizer kafka.security.authorizer.AclAuthorizer." +
+        " Any properties other than the following (with or without an \"authorizer.\" prefix) are ignored: " +
         KafkaConfig.ZkSslConfigToSystemPropertyMap.keys.toList.sorted.mkString(", ") +
         ". Note that if SASL is not configured and zookeeper.set.acl is supposed to be true due to mutual certificate authentication being used" +
-        " then it is necessary to explicitly specify --authorizer-properties zookeeper.set.acl=true")
+        " then it is necessary to explicitly specify --authorizer-properties zookeeper.set.acl=true. " +
+        AclCommand.AuthorizerDeprecationMessage)
       .withRequiredArg().describedAs("Authorizer ZooKeeper TLS configuration").ofType(classOf[String])
+
+    val userPrincipalOpt = parser.accepts("user-principal", "Specifies a user principal as a resource in relation with the operation. For instance " +
+      "one could grant CreateTokens or DescribeTokens permission on a given user principal.")
+      .withRequiredArg()
+      .describedAs("user-principal")
+      .ofType(classOf[String])
 
     options = parser.parse(args: _*)
 
     def checkArgs(): Unit = {
       if (options.has(bootstrapServerOpt) && options.has(authorizerOpt))
-        CommandLineUtils.printUsageAndDie(parser, "Only one of --bootstrap-server or --authorizer must be specified")
+        CommandLineUtils.printUsageAndExit(parser, "Only one of --bootstrap-server or --authorizer must be specified")
 
-      if (!options.has(bootstrapServerOpt))
+      if (!options.has(bootstrapServerOpt)) {
         CommandLineUtils.checkRequiredArgs(parser, options, authorizerPropertiesOpt)
+        System.err.println(AclCommand.AuthorizerDeprecationMessage)
+      }
 
       if (options.has(commandConfigOpt) && !options.has(bootstrapServerOpt))
-        CommandLineUtils.printUsageAndDie(parser, "The --command-config option can only be used with --bootstrap-server option")
+        CommandLineUtils.printUsageAndExit(parser, "The --command-config option can only be used with --bootstrap-server option")
 
       if (options.has(authorizerPropertiesOpt) && options.has(bootstrapServerOpt))
-        CommandLineUtils.printUsageAndDie(parser, "The --authorizer-properties option can only be used with --authorizer option")
+        CommandLineUtils.printUsageAndExit(parser, "The --authorizer-properties option can only be used with --authorizer option")
 
       val actions = Seq(addOpt, removeOpt, listOpt).count(options.has)
       if (actions != 1)
-        CommandLineUtils.printUsageAndDie(parser, "Command must include exactly one action: --list, --add, --remove. ")
+        CommandLineUtils.printUsageAndExit(parser, "Command must include exactly one action: --list, --add, --remove. ")
 
-      CommandLineUtils.checkInvalidArgs(parser, options, listOpt, Set(producerOpt, consumerOpt, allowHostsOpt, allowPrincipalsOpt, denyHostsOpt, denyPrincipalsOpt))
+      CommandLineUtils.checkInvalidArgs(parser, options, listOpt, producerOpt, consumerOpt, allowHostsOpt, allowPrincipalsOpt, denyHostsOpt, denyPrincipalsOpt)
 
       //when --producer or --consumer is specified , user should not specify operations as they are inferred and we also disallow --deny-principals and --deny-hosts.
-      CommandLineUtils.checkInvalidArgs(parser, options, producerOpt, Set(operationsOpt, denyPrincipalsOpt, denyHostsOpt))
-      CommandLineUtils.checkInvalidArgs(parser, options, consumerOpt, Set(operationsOpt, denyPrincipalsOpt, denyHostsOpt))
+      CommandLineUtils.checkInvalidArgs(parser, options, producerOpt, operationsOpt, denyPrincipalsOpt, denyHostsOpt)
+      CommandLineUtils.checkInvalidArgs(parser, options, consumerOpt, operationsOpt, denyPrincipalsOpt, denyHostsOpt)
 
       if (options.has(listPrincipalsOpt) && !options.has(listOpt))
-        CommandLineUtils.printUsageAndDie(parser, "The --principal option is only available if --list is set")
+        CommandLineUtils.printUsageAndExit(parser, "The --principal option is only available if --list is set")
 
       if (options.has(producerOpt) && !options.has(topicOpt))
-        CommandLineUtils.printUsageAndDie(parser, "With --producer you must specify a --topic")
+        CommandLineUtils.printUsageAndExit(parser, "With --producer you must specify a --topic")
 
       if (options.has(idempotentOpt) && !options.has(producerOpt))
-        CommandLineUtils.printUsageAndDie(parser, "The --idempotent option is only available if --producer is set")
+        CommandLineUtils.printUsageAndExit(parser, "The --idempotent option is only available if --producer is set")
 
       if (options.has(consumerOpt) && (!options.has(topicOpt) || !options.has(groupOpt) || (!options.has(producerOpt) && (options.has(clusterOpt) || options.has(transactionalIdOpt)))))
-        CommandLineUtils.printUsageAndDie(parser, "With --consumer you must specify a --topic and a --group and no --cluster or --transactional-id option should be specified.")
+        CommandLineUtils.printUsageAndExit(parser, "With --consumer you must specify a --topic and a --group and no --cluster or --transactional-id option should be specified.")
     }
   }
 }

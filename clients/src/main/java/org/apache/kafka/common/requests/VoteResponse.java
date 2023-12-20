@@ -92,6 +92,11 @@ public class VoteResponse extends AbstractResponse {
         return DEFAULT_THROTTLE_TIME;
     }
 
+    @Override
+    public void maybeSetThrottleTimeMs(int throttleTimeMs) {
+        // Not supported by the response schema
+    }
+
     public static VoteResponse parse(ByteBuffer buffer, short version) {
         return new VoteResponse(new VoteResponseData(new ByteBufferAccessor(buffer), version));
     }

@@ -47,14 +47,23 @@ public class LeaderAndIsrRequest extends AbstractControlRequest {
         private final List<LeaderAndIsrPartitionState> partitionStates;
         private final Map<String, Uuid> topicIds;
         private final Collection<Node> liveLeaders;
+        private final Type updateType;
 
         public Builder(short version, int controllerId, int controllerEpoch, long brokerEpoch,
                        List<LeaderAndIsrPartitionState> partitionStates, Map<String, Uuid> topicIds,
                        Collection<Node> liveLeaders) {
-            super(ApiKeys.LEADER_AND_ISR, version, controllerId, controllerEpoch, brokerEpoch);
+            this(version, controllerId, controllerEpoch, brokerEpoch, partitionStates, topicIds,
+                liveLeaders, false, Type.UNKNOWN);
+        }
+
+        public Builder(short version, int controllerId, int controllerEpoch, long brokerEpoch,
+                       List<LeaderAndIsrPartitionState> partitionStates, Map<String, Uuid> topicIds,
+                       Collection<Node> liveLeaders, boolean kraftController, Type updateType) {
+            super(ApiKeys.LEADER_AND_ISR, version, controllerId, controllerEpoch, brokerEpoch, kraftController);
             this.partitionStates = partitionStates;
             this.topicIds = topicIds;
             this.liveLeaders = liveLeaders;
+            this.updateType = updateType;
         }
 
         @Override
@@ -70,6 +79,14 @@ public class LeaderAndIsrRequest extends AbstractControlRequest {
                 .setControllerEpoch(controllerEpoch)
                 .setBrokerEpoch(brokerEpoch)
                 .setLiveLeaders(leaders);
+
+            if (version >= 7) {
+                data.setIsKRaftController(kraftController);
+            }
+
+            if (version >= 5) {
+                data.setType(updateType.toByte());
+            }
 
             if (version >= 2) {
                 Map<String, LeaderAndIsrTopicState> topicStatesMap = groupByTopic(partitionStates, topicIds);
@@ -169,6 +186,11 @@ public class LeaderAndIsrRequest extends AbstractControlRequest {
     }
 
     @Override
+    public boolean isKRaftController() {
+        return data.isKRaftController();
+    }
+
+    @Override
     public int controllerEpoch() {
         return data.controllerEpoch();
     }
@@ -192,6 +214,10 @@ public class LeaderAndIsrRequest extends AbstractControlRequest {
 
     public List<LeaderAndIsrLiveLeader> liveLeaders() {
         return Collections.unmodifiableList(data.liveLeaders());
+    }
+
+    public Type requestType() {
+        return Type.fromByte(data.type());
     }
 
     @Override

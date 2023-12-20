@@ -164,12 +164,12 @@ public class KerberosLogin extends AbstractLogin {
                     // We should not allow the ticket to expire, but we should take into consideration
                     // minTimeBeforeRelogin. Will not sleep less than minTimeBeforeRelogin, unless doing so
                     // would cause ticket expiration.
-                    if ((nextRefresh > expiry) || (now + minTimeBeforeRelogin > expiry)) {
+                    if ((nextRefresh > expiry) || (minTimeBeforeRelogin > expiry - now)) {
                         // expiry is before next scheduled refresh).
                         log.info("[Principal={}]: Refreshing now because expiry is before next scheduled refresh time.", principal);
                         nextRefresh = now;
                     } else {
-                        if (nextRefresh < (now + minTimeBeforeRelogin)) {
+                        if (nextRefresh - now < minTimeBeforeRelogin) {
                             // next scheduled refresh is sooner than (now + MIN_TIME_BEFORE_LOGIN).
                             Date until = new Date(nextRefresh);
                             Date newUntil = new Date(now + minTimeBeforeRelogin);
@@ -362,14 +362,22 @@ public class KerberosLogin extends AbstractLogin {
             lastLogin = currentElapsedTime();
             //clear up the kerberos state. But the tokens are not cleared! As per
             //the Java kerberos login module code, only the kerberos credentials
-            //are cleared
-            logout();
+            //are cleared. If previous logout succeeded but login failed, we shouldn't
+            //logout again since duplicate logout causes NPE from Java 9 onwards.
+            if (subject != null && !subject.getPrincipals().isEmpty()) {
+                logout();
+            }
             //login and also update the subject field of this instance to
             //have the new credentials (pass it to the LoginContext constructor)
             loginContext = new LoginContext(contextName(), subject, null, configuration());
             log.info("Initiating re-login for {}", principal);
-            loginContext.login();
+            login(loginContext);
         }
+    }
+
+    // Visibility to override for testing
+    protected void login(LoginContext loginContext) throws LoginException {
+        loginContext.login();
     }
 
     // Visibility to override for testing

@@ -74,7 +74,7 @@ import java.util.stream.Stream;
  * will generate two invocations of "someTest" (since ClusterType.Both was given). For each invocation, the test class
  * SomeIntegrationTest will be instantiated, lifecycle methods (before/after) will be run, and "someTest" will be invoked.
  *
- **/
+ */
 public class ClusterTestExtensions implements TestTemplateInvocationContextProvider {
     @Override
     public boolean supportsTestTemplate(ExtensionContext context) {
@@ -98,14 +98,14 @@ public class ClusterTestExtensions implements TestTemplateInvocationContextProvi
         // Process single @ClusterTest annotation
         ClusterTest clusterTestAnnot = context.getRequiredTestMethod().getDeclaredAnnotation(ClusterTest.class);
         if (clusterTestAnnot != null) {
-            processClusterTest(clusterTestAnnot, defaults, generatedContexts::add);
+            processClusterTest(context, clusterTestAnnot, defaults, generatedContexts::add);
         }
 
         // Process multiple @ClusterTest annotation within @ClusterTests
         ClusterTests clusterTestsAnnot = context.getRequiredTestMethod().getDeclaredAnnotation(ClusterTests.class);
         if (clusterTestsAnnot != null) {
             for (ClusterTest annot : clusterTestsAnnot.value()) {
-                processClusterTest(annot, defaults, generatedContexts::add);
+                processClusterTest(context, annot, defaults, generatedContexts::add);
             }
         }
 
@@ -128,7 +128,8 @@ public class ClusterTestExtensions implements TestTemplateInvocationContextProvi
             generatedClusterConfigs.add(ClusterConfig.defaultClusterBuilder().build());
         }
 
-        generatedClusterConfigs.forEach(config -> config.clusterType().invocationContexts(config, testInvocations));
+        String baseDisplayName = context.getRequiredTestMethod().getName();
+        generatedClusterConfigs.forEach(config -> config.clusterType().invocationContexts(baseDisplayName, config, testInvocations));
     }
 
     private void generateClusterConfigurations(ExtensionContext context, String generateClustersMethods, ClusterGenerator generator) {
@@ -137,7 +138,7 @@ public class ClusterTestExtensions implements TestTemplateInvocationContextProvi
         ReflectionUtils.invokeMethod(method, testInstance, generator);
     }
 
-    private void processClusterTest(ClusterTest annot, ClusterTestDefaults defaults,
+    private void processClusterTest(ExtensionContext context, ClusterTest annot, ClusterTestDefaults defaults,
                                     Consumer<TestTemplateInvocationContext> testInvocations) {
         final Type type;
         if (annot.clusterType() == Type.DEFAULT) {
@@ -179,7 +180,8 @@ public class ClusterTestExtensions implements TestTemplateInvocationContextProvi
                 throw new IllegalStateException();
         }
 
-        ClusterConfig.Builder builder = ClusterConfig.clusterBuilder(type, brokers, controllers, autoStart, annot.securityProtocol());
+        ClusterConfig.Builder builder = ClusterConfig.clusterBuilder(type, brokers, controllers, autoStart,
+            annot.securityProtocol(), annot.metadataVersion());
         if (!annot.name().isEmpty()) {
             builder.name(annot.name());
         }
@@ -194,7 +196,7 @@ public class ClusterTestExtensions implements TestTemplateInvocationContextProvi
 
         ClusterConfig config = builder.build();
         config.serverProperties().putAll(properties);
-        type.invocationContexts(config, testInvocations);
+        type.invocationContexts(context.getRequiredTestMethod().getName(), config, testInvocations);
     }
 
     private ClusterTestDefaults getClusterTestDefaults(Class<?> testClass) {

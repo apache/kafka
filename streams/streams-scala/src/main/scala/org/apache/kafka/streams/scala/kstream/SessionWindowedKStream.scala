@@ -49,8 +49,8 @@ class SessionWindowedKStream[K, V](val inner: SessionWindowedKStreamJ[K, V]) {
    *         the latest (rolling) aggregate for each key within a window
    * @see `org.apache.kafka.streams.kstream.SessionWindowedKStream#aggregate`
    */
-  def aggregate[VR](initializer: => VR)(aggregator: (K, V, VR) => VR, merger: (K, VR, VR) => VR)(
-    implicit materialized: Materialized[K, VR, ByteArraySessionStore]
+  def aggregate[VR](initializer: => VR)(aggregator: (K, V, VR) => VR, merger: (K, VR, VR) => VR)(implicit
+    materialized: Materialized[K, VR, ByteArraySessionStore]
   ): KTable[Windowed[K], VR] =
     new KTable(
       inner.aggregate((() => initializer).asInitializer, aggregator.asAggregator, merger.asMerger, materialized)
@@ -68,8 +68,8 @@ class SessionWindowedKStream[K, V](val inner: SessionWindowedKStreamJ[K, V]) {
    *         the latest (rolling) aggregate for each key within a window
    * @see `org.apache.kafka.streams.kstream.SessionWindowedKStream#aggregate`
    */
-  def aggregate[VR](initializer: => VR, named: Named)(aggregator: (K, V, VR) => VR, merger: (K, VR, VR) => VR)(
-    implicit materialized: Materialized[K, VR, ByteArraySessionStore]
+  def aggregate[VR](initializer: => VR, named: Named)(aggregator: (K, V, VR) => VR, merger: (K, VR, VR) => VR)(implicit
+    materialized: Materialized[K, VR, ByteArraySessionStore]
   ): KTable[Windowed[K], VR] =
     new KTable(
       inner.aggregate((() => initializer).asInitializer, aggregator.asAggregator, merger.asMerger, named, materialized)
@@ -127,8 +127,8 @@ class SessionWindowedKStream[K, V](val inner: SessionWindowedKStreamJ[K, V]) {
    *         the latest (rolling) aggregate for each key within a window
    * @see `org.apache.kafka.streams.kstream.SessionWindowedKStream#reduce`
    */
-  def reduce(reducer: (V, V) => V)(
-    implicit materialized: Materialized[K, V, ByteArraySessionStore]
+  def reduce(reducer: (V, V) => V)(implicit
+    materialized: Materialized[K, V, ByteArraySessionStore]
   ): KTable[Windowed[K], V] =
     new KTable(inner.reduce(reducer.asReducer, materialized))
 
@@ -141,8 +141,8 @@ class SessionWindowedKStream[K, V](val inner: SessionWindowedKStreamJ[K, V]) {
    *         the latest (rolling) aggregate for each key within a window
    * @see `org.apache.kafka.streams.kstream.SessionWindowedKStream#reduce`
    */
-  def reduce(reducer: (V, V) => V, named: Named)(
-    implicit materialized: Materialized[K, V, ByteArraySessionStore]
+  def reduce(reducer: (V, V) => V, named: Named)(implicit
+    materialized: Materialized[K, V, ByteArraySessionStore]
   ): KTable[Windowed[K], V] =
     new KTable(inner.reduce(reducer.asReducer, named, materialized))
 }

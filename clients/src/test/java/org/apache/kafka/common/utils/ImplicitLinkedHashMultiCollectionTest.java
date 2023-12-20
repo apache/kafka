@@ -27,6 +27,7 @@ import java.util.Random;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
@@ -97,8 +98,8 @@ public class ImplicitLinkedHashMultiCollectionTest {
             }
             i = i + 1;
         }
-        assertTrue(i == sequence.length, "Iterator yieled " + (i + 1) + " elements, but " +
-            sequence.length + " were expected.");
+        assertEquals(sequence.length, i, "Iterator yieled " + (i + 1) + " elements, but " +
+                sequence.length + " were expected.");
     }
 
     @Test
@@ -160,8 +161,7 @@ public class ImplicitLinkedHashMultiCollectionTest {
             assertTrue(expectedIter.hasNext(),
                 "Iterator yieled " + (i + 1) + " elements, but only " + i + " were expected.");
             TestElement expected = expectedIter.next();
-            assertTrue(expected == element,
-                "Iterator value number " + (i + 1) + " was incorrect.");
+            assertSame(expected, element, "Iterator value number " + (i + 1) + " was incorrect.");
             i = i + 1;
         }
         assertFalse(expectedIter.hasNext(),

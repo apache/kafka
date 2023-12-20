@@ -16,8 +16,6 @@
  */
 package org.apache.kafka.raft;
 
-import java.io.IOException;
-
 /**
  *  Maintain the save and retrieval of quorum state information, so far only supports
  *  read and write of election states.
@@ -31,22 +29,18 @@ public interface QuorumStateStore {
      * Read the latest election state.
      *
      * @return The latest written election state or `null` if there is none
-     * @throws IOException For any error encountered reading from the storage
      */
-    ElectionState readElectionState() throws IOException;
+    ElectionState readElectionState();
 
     /**
      * Persist the updated election state. This must be atomic, both writing the full updated state
      * and replacing the old state.
      * @param latest The latest election state
-     * @throws IOException For any error encountered while writing the updated state
      */
-    void writeElectionState(ElectionState latest) throws IOException;
+    void writeElectionState(ElectionState latest);
 
     /**
      * Clear any state associated to the store for a fresh start
-     *
-     * @throws IOException For any error encountered while cleaning up the state
      */
-    void clear() throws IOException;
+    void clear();
 }

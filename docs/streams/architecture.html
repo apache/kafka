@@ -68,8 +68,8 @@
     <p>
         Slightly simplified, the maximum parallelism at which your application may run is bounded by the maximum number of stream tasks, which itself is determined by
         maximum number of partitions of the input topic(s) the application is reading from. For example, if your input topic has 5 partitions, then you can run up to 5
-        applications instances. These instances will collaboratively process the topic’s data. If you run a larger number of app instances than partitions of the input
-        topic, the “excess” app instances will launch but remain idle; however, if one of the busy instances goes down, one of the idle instances will resume the former’s
+        applications instances. These instances will collaboratively process the topic's data. If you run a larger number of app instances than partitions of the input
+        topic, the "excess" app instances will launch but remain idle; however, if one of the busy instances goes down, one of the idle instances will resume the former's
         work.
     </p>
 
@@ -160,6 +160,19 @@
         the task (re)initialization cost. See <code>num.standby.replicas</code> in the <a href="/{{version}}/documentation/#streamsconfigs"><b>Kafka Streams Configs</b></a> section.
         Starting in 2.6, Kafka Streams will guarantee that a task is only ever assigned to an instance with a fully caught-up local copy of the state, if such an instance
         exists. Standby tasks will increase the likelihood that a caught-up instance exists in the case of a failure.
+    </p>
+    <p>
+        You can also configure standby replicas with rack awareness. When configured, Kafka Streams will attempt to
+        distribute a standby task on a different "rack" than the active one, thus having a faster recovery time when the
+        rack of the active tasks fails. See <code>rack.aware.assignment.tags</code>
+        in the <a href="/{{version}}/documentation/streams/developer-guide/config-streams.html#rack-aware-assignment-tags"><b>Kafka Streams Developer Guide</b></a> section.
+    </p>
+    <p>
+        There is also a client config <code>client.rack</code> which can set the rack for a Kafka consumer. If brokers also have their rack set via <code>broker.rack</code>, then rack aware task
+        assignment can be enabled via <code>rack.aware.assignment.strategy</code> (cf.  <a href="/{{version}}/documentation/streams/developer-guide/config-streams.html#rack-aware-assignment-strategy"><b>Kafka Streams Developer Guide</b></a>) to compute a task assignment which can reduce cross rack traffic by trying to assign tasks to clients with the same rack.
+        Note that <code>client.rack</code> can also be used to distribute standby tasks to different racks from the active ones, which has a similar functionality as <code>rack.aware.assignment.tags</code>.
+        Currently, <code>rack.aware.assignment.tag</code> takes precedence in distributing standby tasks which means if both configs present, <code>rack.aware.assignment.tag</code> will be used for distributing
+        standby tasks on different racks from the active ones because it can configure more tag keys.
     </p>
 
     <div class="pagination">

@@ -1,0 +1,199 @@
+<!DOCTYPE import-control PUBLIC
+        "-//Puppy Crawl//DTD Import Control 1.1//EN"
+        "http://www.puppycrawl.com/dtds/import_control_1_1.dtd">
+<!--
+ Licensed to the Apache Software Foundation (ASF) under one or more
+ contributor license agreements.  See the NOTICE file distributed with
+ this work for additional information regarding copyright ownership.
+ The ASF licenses this file to You under the Apache License, Version 2.0
+ (the "License"); you may not use this file except in compliance with
+ the License.  You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+ Unless required by applicable law or agreed to in writing, software
+ distributed under the License is distributed on an "AS IS" BASIS,
+ WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ See the License for the specific language governing permissions and
+ limitations under the License.
+-->
+
+<import-control pkg="org.apache.kafka">
+
+    <!-- THINK HARD ABOUT THE LAYERING OF THE PROJECT BEFORE CHANGING THIS FILE -->
+
+    <!-- common library dependencies -->
+    <allow pkg="java" />
+    <allow pkg="javax.management" />
+    <allow pkg="org.slf4j" />
+    <allow pkg="org.junit" />
+    <allow pkg="org.mockito" />
+    <allow pkg="java.security" />
+    <allow pkg="javax.net.ssl" />
+    <allow pkg="javax.security" />
+    <allow pkg="javax.crypto" />
+    <allow pkg="net.jqwik.api" />
+
+    <!-- no one depends on the server -->
+    <disallow pkg="kafka" />
+
+    <!-- anyone can use public classes -->
+    <allow pkg="org.apache.kafka.common" exact-match="true" />
+    <allow pkg="org.apache.kafka.common.security" />
+    <allow pkg="org.apache.kafka.common.serialization" />
+    <allow pkg="org.apache.kafka.common.utils" />
+    <allow pkg="org.apache.kafka.common.errors" exact-match="true" />
+    <allow pkg="org.apache.kafka.common.memory" />
+
+    <!-- persistent collection factories/non-library-specific wrappers -->
+    <allow pkg="org.apache.kafka.server.immutable" exact-match="true" />
+
+    <subpackage name="common">
+        <subpackage name="metadata">
+            <allow pkg="com.fasterxml.jackson" />
+            <allow pkg="org.apache.kafka.common.protocol" />
+            <allow pkg="org.apache.kafka.common.protocol.types" />
+            <allow pkg="org.apache.kafka.common.message" />
+            <allow pkg="org.apache.kafka.common.metadata" />
+        </subpackage>
+        <subpackage name="errors">
+            <allow pkg="org.apache.kafka.common.metadata" />
+        </subpackage>
+    </subpackage>
+
+    <subpackage name="controller">
+        <allow pkg="org.apache.kafka.clients" />
+        <allow pkg="org.apache.kafka.clients.admin" />
+        <allow pkg="org.apache.kafka.common.acl" />
+        <allow pkg="org.apache.kafka.common.annotation" />
+        <allow pkg="org.apache.kafka.common.config" />
+        <allow pkg="org.apache.kafka.common.feature" />
+        <allow pkg="org.apache.kafka.common.internals" />
+        <allow pkg="org.apache.kafka.common.message" />
+        <allow pkg="org.apache.kafka.common.metadata" />
+        <allow pkg="org.apache.kafka.common.network" />
+        <allow pkg="org.apache.kafka.common.protocol" />
+        <allow pkg="org.apache.kafka.common.quota" />
+        <allow pkg="org.apache.kafka.common.requests" />
+        <allow pkg="org.apache.kafka.common.resource" />
+        <allow pkg="org.apache.kafka.controller" />
+        <allow pkg="org.apache.kafka.image" />
+        <allow pkg="org.apache.kafka.image.writer" />
+        <allow pkg="org.apache.kafka.metadata" />
+        <allow pkg="org.apache.kafka.metadata.authorizer" />
+        <allow pkg="org.apache.kafka.metadata.migration" />
+        <allow pkg="org.apache.kafka.metalog" />
+        <allow pkg="org.apache.kafka.deferred" />
+        <allow pkg="org.apache.kafka.queue" />
+        <allow pkg="org.apache.kafka.raft" />
+        <allow pkg="org.apache.kafka.server.authorizer" />
+        <allow pkg="org.apache.kafka.server.common" />
+        <allow pkg="org.apache.kafka.server.config" />
+        <allow pkg="org.apache.kafka.server.fault" />
+        <allow pkg="org.apache.kafka.server.mutable" />
+        <allow pkg="org.apache.kafka.server.policy"/>
+        <allow pkg="org.apache.kafka.server.util"/>
+        <allow pkg="org.apache.kafka.snapshot" />
+        <allow pkg="org.apache.kafka.test" />
+        <allow pkg="org.apache.kafka.timeline" />
+        <subpackage name="metrics">
+            <allow pkg="com.yammer.metrics"/>
+            <allow pkg="org.apache.kafka.common.metrics" />
+            <allow pkg="org.apache.kafka.server.metrics" />
+        </subpackage>
+    </subpackage>
+
+    <subpackage name="image">
+        <allow pkg="org.apache.kafka.common.config" />
+        <allow pkg="org.apache.kafka.common.message" />
+        <allow pkg="org.apache.kafka.common.metadata" />
+        <allow pkg="org.apache.kafka.common.protocol" />
+        <allow pkg="org.apache.kafka.common.quota" />
+        <allow pkg="org.apache.kafka.common.record" />
+        <allow pkg="org.apache.kafka.common.requests" />
+        <allow pkg="org.apache.kafka.common.resource" />
+        <allow pkg="org.apache.kafka.image" />
+        <allow pkg="org.apache.kafka.image.writer" />
+        <allow pkg="org.apache.kafka.metadata" />
+        <allow pkg="org.apache.kafka.queue" />
+        <allow pkg="org.apache.kafka.clients.admin" />
+        <allow pkg="org.apache.kafka.raft" />
+        <allow pkg="org.apache.kafka.server.common" />
+        <allow pkg="org.apache.kafka.server.fault" />
+        <allow pkg="org.apache.kafka.server.util" />
+        <allow pkg="org.apache.kafka.snapshot" />
+        <allow pkg="org.apache.kafka.test" />
+        <subpackage name="loader">
+            <subpackage name="metrics">
+                <allow pkg="com.yammer.metrics"/>
+                <allow pkg="org.apache.kafka.common.metrics" />
+                <allow pkg="org.apache.kafka.controller.metrics" />
+                <allow pkg="org.apache.kafka.server.metrics" />
+            </subpackage>
+        </subpackage>
+        <subpackage name="publisher">
+            <subpackage name="metrics">
+                <allow pkg="com.yammer.metrics"/>
+                <allow pkg="org.apache.kafka.common.metrics" />
+                <allow pkg="org.apache.kafka.controller.metrics" />
+                <allow pkg="org.apache.kafka.server.metrics" />
+            </subpackage>
+        </subpackage>
+    </subpackage>
+
+    <subpackage name="metadata">
+        <allow pkg="org.apache.kafka.clients" />
+        <allow pkg="org.apache.kafka.common.acl" />
+        <allow pkg="org.apache.kafka.common.annotation" />
+        <allow pkg="org.apache.kafka.common.config" />
+        <allow pkg="org.apache.kafka.common.message" />
+        <allow pkg="org.apache.kafka.common.metadata" />
+        <allow pkg="org.apache.kafka.common.protocol" />
+        <allow pkg="org.apache.kafka.common.quota" />
+        <allow pkg="org.apache.kafka.common.record" />
+        <allow pkg="org.apache.kafka.common.resource" />
+        <allow pkg="org.apache.kafka.common.requests" />
+        <allow pkg="org.apache.kafka.image" />
+        <allow pkg="org.apache.kafka.metadata" />
+        <allow pkg="org.apache.kafka.metalog" />
+        <allow pkg="org.apache.kafka.queue" />
+        <allow pkg="org.apache.kafka.raft" />
+        <allow pkg="org.apache.kafka.server.authorizer" />
+        <allow pkg="org.apache.kafka.server.common" />
+        <allow pkg="org.apache.kafka.server.fault" />
+        <allow pkg="org.apache.kafka.server.config" />
+        <allow pkg="org.apache.kafka.server.util"/>
+        <allow pkg="org.apache.kafka.test" />
+        <subpackage name="authorizer">
+            <allow pkg="org.apache.kafka.common.acl" />
+            <allow pkg="org.apache.kafka.common.requests" />
+            <allow pkg="org.apache.kafka.common.resource" />
+            <allow pkg="org.apache.kafka.controller" />
+            <allow pkg="org.apache.kafka.metadata" />
+            <allow pkg="org.apache.kafka.common.internals" />
+        </subpackage>
+        <subpackage name="migration">
+            <allow pkg="org.apache.kafka.controller" />
+        </subpackage>
+        <subpackage name="bootstrap">
+            <allow pkg="org.apache.kafka.snapshot" />
+        </subpackage>
+        <subpackage name="fault">
+            <allow pkg="org.apache.kafka.server.fault" />
+        </subpackage>
+    </subpackage>
+
+    <subpackage name="metalog">
+        <allow pkg="org.apache.kafka.common.metadata" />
+        <allow pkg="org.apache.kafka.common.protocol" />
+        <allow pkg="org.apache.kafka.common.record" />
+        <allow pkg="org.apache.kafka.metadata" />
+        <allow pkg="org.apache.kafka.metalog" />
+        <allow pkg="org.apache.kafka.raft" />
+        <allow pkg="org.apache.kafka.snapshot" />
+        <allow pkg="org.apache.kafka.queue" />
+        <allow pkg="org.apache.kafka.server.common" />
+        <allow pkg="org.apache.kafka.test" />
+    </subpackage>
+
+</import-control>

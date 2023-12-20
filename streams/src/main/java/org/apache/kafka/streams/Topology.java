@@ -22,11 +22,11 @@ import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KTable;
 import org.apache.kafka.streams.processor.ConnectedStoreProvider;
-import org.apache.kafka.streams.processor.Processor;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.processor.TimestampExtractor;
 import org.apache.kafka.streams.processor.TopicNameExtractor;
+import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.ProcessorSupplier;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 import org.apache.kafka.streams.processor.internals.ProcessorAdapter;
@@ -34,6 +34,7 @@ import org.apache.kafka.streams.processor.internals.ProcessorNode;
 import org.apache.kafka.streams.processor.internals.ProcessorTopology;
 import org.apache.kafka.streams.processor.internals.SinkNode;
 import org.apache.kafka.streams.processor.internals.SourceNode;
+import org.apache.kafka.streams.processor.internals.StoreBuilderWrapper;
 import org.apache.kafka.streams.state.StoreBuilder;
 
 import java.util.Set;
@@ -54,7 +55,19 @@ import java.util.regex.Pattern;
  */
 public class Topology {
 
-    final InternalTopologyBuilder internalTopologyBuilder = new InternalTopologyBuilder();
+    protected final InternalTopologyBuilder internalTopologyBuilder;
+
+    public Topology() {
+        this(new InternalTopologyBuilder());
+    }
+
+    public Topology(final TopologyConfig topologyConfigs) {
+        this(new InternalTopologyBuilder(topologyConfigs));
+    }
+
+    protected Topology(final InternalTopologyBuilder internalTopologyBuilder) {
+        this.internalTopologyBuilder = internalTopologyBuilder;
+    }
 
     /**
      * Sets the {@code auto.offset.reset} configuration when
@@ -655,7 +668,7 @@ public class Topology {
      * will be added to the topology and connected to this processor automatically.
      *
      * @param name the unique name of the processor node
-     * @param supplier the supplier used to obtain this node's {@link Processor} instance
+     * @param supplier the supplier used to obtain this node's {@link org.apache.kafka.streams.processor.Processor} instance
      * @param parentNames the name of one or more source or processor nodes whose output records this processor should receive
      * and process
      * @return itself
@@ -704,7 +717,7 @@ public class Topology {
         internalTopologyBuilder.addProcessor(name, supplier, parentNames);
         final Set<StoreBuilder<?>> stores = supplier.stores();
         if (stores != null) {
-            for (final StoreBuilder storeBuilder : stores) {
+            for (final StoreBuilder<?> storeBuilder : stores) {
                 internalTopologyBuilder.addStateStore(storeBuilder, name);
             }
         }
@@ -763,7 +776,7 @@ public class Topology {
                                                        final String processorName,
                                                        final org.apache.kafka.streams.processor.ProcessorSupplier<K, V> stateUpdateSupplier) {
         internalTopologyBuilder.addGlobalStore(
-            storeBuilder,
+            new StoreBuilderWrapper(storeBuilder),
             sourceName,
             null,
             keyDeserializer,
@@ -815,7 +828,7 @@ public class Topology {
                                                        final String processorName,
                                                        final org.apache.kafka.streams.processor.ProcessorSupplier<K, V> stateUpdateSupplier) {
         internalTopologyBuilder.addGlobalStore(
-            storeBuilder,
+            new StoreBuilderWrapper(storeBuilder),
             sourceName,
             timestampExtractor,
             keyDeserializer,
@@ -858,7 +871,7 @@ public class Topology {
                                                            final String processorName,
                                                            final ProcessorSupplier<KIn, VIn, Void, Void> stateUpdateSupplier) {
         internalTopologyBuilder.addGlobalStore(
-            storeBuilder,
+            new StoreBuilderWrapper(storeBuilder),
             sourceName,
             null,
             keyDeserializer,
@@ -903,7 +916,7 @@ public class Topology {
                                                            final String processorName,
                                                            final ProcessorSupplier<KIn, VIn, Void, Void> stateUpdateSupplier) {
         internalTopologyBuilder.addGlobalStore(
-            storeBuilder,
+            new StoreBuilderWrapper(storeBuilder),
             sourceName,
             timestampExtractor,
             keyDeserializer,

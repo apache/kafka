@@ -68,7 +68,7 @@ public class DeleteConsumerGroupOffsetsResultTest {
 
     @Test
     public void testPartitionLevelErrorConstructor() throws ExecutionException, InterruptedException {
-        createAndVerifyPartitionLevelErrror();
+        createAndVerifyPartitionLevelError();
     }
 
     @Test
@@ -86,7 +86,7 @@ public class DeleteConsumerGroupOffsetsResultTest {
 
     @Test
     public void testPartitionMissingInRequestErrorConstructor() throws InterruptedException, ExecutionException {
-        DeleteConsumerGroupOffsetsResult partitionLevelErrorResult = createAndVerifyPartitionLevelErrror();
+        DeleteConsumerGroupOffsetsResult partitionLevelErrorResult = createAndVerifyPartitionLevelError();
         assertThrows(IllegalArgumentException.class, () -> partitionLevelErrorResult.partitionResult(new TopicPartition("invalid-topic", 0)));
     }
 
@@ -104,7 +104,7 @@ public class DeleteConsumerGroupOffsetsResultTest {
         assertNull(noErrorResult.partitionResult(tpOne).get());
     }
 
-    private DeleteConsumerGroupOffsetsResult createAndVerifyPartitionLevelErrror() throws InterruptedException, ExecutionException {
+    private DeleteConsumerGroupOffsetsResult createAndVerifyPartitionLevelError() throws InterruptedException, ExecutionException {
         partitionFutures.complete(errorsMap);
         assertFalse(partitionFutures.isCompletedExceptionally());
         DeleteConsumerGroupOffsetsResult partitionLevelErrorResult =

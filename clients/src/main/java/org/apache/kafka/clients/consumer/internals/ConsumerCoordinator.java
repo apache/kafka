@@ -25,32 +25,29 @@ import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.Assignment;
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.GroupSubscription;
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.RebalanceProtocol;
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.Subscription;
-import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetCommitCallback;
 import org.apache.kafka.clients.consumer.RetriableCommitFailedException;
+import org.apache.kafka.clients.consumer.internals.Utils.TopicPartitionComparator;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
+import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.FencedInstanceIdException;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
 import org.apache.kafka.common.errors.InterruptException;
-import org.apache.kafka.common.errors.UnstableOffsetCommitException;
 import org.apache.kafka.common.errors.RebalanceInProgressException;
 import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
+import org.apache.kafka.common.errors.UnstableOffsetCommitException;
 import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.message.JoinGroupRequestData;
 import org.apache.kafka.common.message.JoinGroupResponseData;
 import org.apache.kafka.common.message.OffsetCommitRequestData;
 import org.apache.kafka.common.message.OffsetCommitResponseData;
-import org.apache.kafka.common.metrics.Measurable;
 import org.apache.kafka.common.metrics.Metrics;
-import org.apache.kafka.common.metrics.Sensor;
-import org.apache.kafka.common.metrics.stats.Avg;
-import org.apache.kafka.common.metrics.stats.Max;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.RecordBatch;
@@ -59,6 +56,7 @@ import org.apache.kafka.common.requests.OffsetCommitRequest;
 import org.apache.kafka.common.requests.OffsetCommitResponse;
 import org.apache.kafka.common.requests.OffsetFetchRequest;
 import org.apache.kafka.common.requests.OffsetFetchResponse;
+import org.apache.kafka.common.telemetry.internals.ClientTelemetryReporter;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
@@ -67,6 +65,7 @@ import org.slf4j.Logger;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -75,26 +74,38 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.SortedSet;
+import java.util.TreeSet;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 
+import static org.apache.kafka.clients.consumer.ConsumerConfig.ASSIGN_FROM_SUBSCRIBED_ASSIGNORS;
+import static org.apache.kafka.clients.consumer.CooperativeStickyAssignor.COOPERATIVE_STICKY_ASSIGNOR_NAME;
+import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.refreshCommittedOffsets;
+
 /**
  * This class manages the coordination process with the consumer coordinator.
  */
 public final class ConsumerCoordinator extends AbstractCoordinator {
+    private final static TopicPartitionComparator COMPARATOR = new TopicPartitionComparator();
+
     private final GroupRebalanceConfig rebalanceConfig;
     private final Logger log;
     private final List<ConsumerPartitionAssignor> assignors;
     private final ConsumerMetadata metadata;
-    private final ConsumerCoordinatorMetrics sensors;
+    private final ConsumerCoordinatorMetrics coordinatorMetrics;
     private final SubscriptionState subscriptions;
     private final OffsetCommitCallback defaultOffsetCommitCallback;
     private final boolean autoCommitEnabled;
     private final int autoCommitIntervalMs;
     private final ConsumerInterceptors<?, ?> interceptors;
+    // track number of async commits for which callback must be called
+    // package private for testing
+    final AtomicInteger inFlightAsyncCommits;
+    // track the number of pending async commits waiting on the coordinator lookup to complete
     private final AtomicInteger pendingAsyncCommits;
 
     // this collection must be thread-safe because it is modified from the response handler
@@ -109,6 +120,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
     private AtomicBoolean asyncCommitFenced;
     private ConsumerGroupMetadata groupMetadata;
     private final boolean throwOnFetchStableOffsetsUnsupported;
+    private final Optional<String> rackId;
 
     // hold onto request&future for committed offset requests to enable async calls.
     private PendingCommittedOffsetRequest pendingCommittedOffsetRequest = null;
@@ -132,6 +144,14 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
     }
 
     private final RebalanceProtocol protocol;
+    // Wraps the logic for invoking the ConsumerRebalanceListener methods
+    private final ConsumerRebalanceListenerInvoker rebalanceListenerInvoker;
+    // pending commit offset request in onJoinPrepare
+    private RequestFuture<Void> autoCommitOffsetRequestFuture = null;
+    // a timer for join prepare to know when to stop.
+    // it'll set to rebalance timeout so that the member can join the group successfully
+    // even though offset commit failed.
+    private Timer joinPrepareTimer = null;
 
     /**
      * Initialize the coordination manager.
@@ -148,25 +168,30 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                                boolean autoCommitEnabled,
                                int autoCommitIntervalMs,
                                ConsumerInterceptors<?, ?> interceptors,
-                               boolean throwOnFetchStableOffsetsUnsupported) {
+                               boolean throwOnFetchStableOffsetsUnsupported,
+                               String rackId,
+                               Optional<ClientTelemetryReporter> clientTelemetryReporter) {
         super(rebalanceConfig,
               logContext,
               client,
               metrics,
               metricGrpPrefix,
-              time);
+              time,
+              clientTelemetryReporter);
         this.rebalanceConfig = rebalanceConfig;
         this.log = logContext.logger(ConsumerCoordinator.class);
         this.metadata = metadata;
-        this.metadataSnapshot = new MetadataSnapshot(subscriptions, metadata.fetch(), metadata.updateVersion());
+        this.rackId = rackId == null || rackId.isEmpty() ? Optional.empty() : Optional.of(rackId);
+        this.metadataSnapshot = new MetadataSnapshot(this.rackId, subscriptions, metadata.fetch(), metadata.updateVersion());
         this.subscriptions = subscriptions;
         this.defaultOffsetCommitCallback = new DefaultOffsetCommitCallback();
         this.autoCommitEnabled = autoCommitEnabled;
         this.autoCommitIntervalMs = autoCommitIntervalMs;
         this.assignors = assignors;
         this.completedOffsetCommits = new ConcurrentLinkedQueue<>();
-        this.sensors = new ConsumerCoordinatorMetrics(metrics, metricGrpPrefix);
+        this.coordinatorMetrics = new ConsumerCoordinatorMetrics(subscriptions, metrics, metricGrpPrefix);
         this.interceptors = interceptors;
+        this.inFlightAsyncCommits = new AtomicInteger();
         this.pendingAsyncCommits = new AtomicInteger();
         this.asyncCommitFenced = new AtomicBoolean(false);
         this.groupMetadata = new ConsumerGroupMetadata(rebalanceConfig.groupId,
@@ -202,7 +227,23 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             protocol = null;
         }
 
-        this.metadata.requestUpdate();
+        this.rebalanceListenerInvoker = new ConsumerRebalanceListenerInvoker(
+            logContext,
+            subscriptions,
+            time,
+            coordinatorMetrics
+        );
+        this.metadata.requestUpdate(true);
+    }
+
+    // package private for testing
+    boolean isLeader() {
+        return this.isLeader;
+    }
+
+    // package private for testing
+    SubscriptionState subscriptionState() {
+        return this.subscriptions;
     }
 
     @Override
@@ -220,7 +261,9 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         for (ConsumerPartitionAssignor assignor : assignors) {
             Subscription subscription = new Subscription(topics,
                                                          assignor.subscriptionUserData(joinedSubscription),
-                                                         subscriptions.assignedPartitionsList());
+                                                         subscriptions.assignedPartitionsList(),
+                                                         generation().generationId,
+                                                         rackId);
             ByteBuffer metadata = ConsumerProtocol.serializeSubscription(subscription);
 
             protocolSet.add(new JoinGroupRequestData.JoinGroupRequestProtocol()
@@ -253,7 +296,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             // into the subscriptions as long as they still match the subscribed pattern
 
             Set<String> addedTopics = new HashSet<>();
-            // this is a copy because its handed to listener below
+            // this is a copy because it's handed to listener below
             for (TopicPartition tp : assignedPartitions) {
                 if (!joinedSubscription.contains(tp.topic()))
                     addedTopics.add(tp.topic());
@@ -284,63 +327,6 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         return null;
     }
 
-    private Exception invokePartitionsAssigned(final Set<TopicPartition> assignedPartitions) {
-        log.info("Adding newly assigned partitions: {}", Utils.join(assignedPartitions, ", "));
-
-        ConsumerRebalanceListener listener = subscriptions.rebalanceListener();
-        try {
-            final long startMs = time.milliseconds();
-            listener.onPartitionsAssigned(assignedPartitions);
-            sensors.assignCallbackSensor.record(time.milliseconds() - startMs);
-        } catch (WakeupException | InterruptException e) {
-            throw e;
-        } catch (Exception e) {
-            log.error("User provided listener {} failed on invocation of onPartitionsAssigned for partitions {}",
-                listener.getClass().getName(), assignedPartitions, e);
-            return e;
-        }
-
-        return null;
-    }
-
-    private Exception invokePartitionsRevoked(final Set<TopicPartition> revokedPartitions) {
-        log.info("Revoke previously assigned partitions {}", Utils.join(revokedPartitions, ", "));
-
-        ConsumerRebalanceListener listener = subscriptions.rebalanceListener();
-        try {
-            final long startMs = time.milliseconds();
-            listener.onPartitionsRevoked(revokedPartitions);
-            sensors.revokeCallbackSensor.record(time.milliseconds() - startMs);
-        } catch (WakeupException | InterruptException e) {
-            throw e;
-        } catch (Exception e) {
-            log.error("User provided listener {} failed on invocation of onPartitionsRevoked for partitions {}",
-                listener.getClass().getName(), revokedPartitions, e);
-            return e;
-        }
-
-        return null;
-    }
-
-    private Exception invokePartitionsLost(final Set<TopicPartition> lostPartitions) {
-        log.info("Lost previously assigned partitions {}", Utils.join(lostPartitions, ", "));
-
-        ConsumerRebalanceListener listener = subscriptions.rebalanceListener();
-        try {
-            final long startMs = time.milliseconds();
-            listener.onPartitionsLost(lostPartitions);
-            sensors.loseCallbackSensor.record(time.milliseconds() - startMs);
-        } catch (WakeupException | InterruptException e) {
-            throw e;
-        } catch (Exception e) {
-            log.error("User provided listener {} failed on invocation of onPartitionsLost for partitions {}",
-                listener.getClass().getName(), lostPartitions, e);
-            return e;
-        }
-
-        return null;
-    }
-
     @Override
     protected void onJoinComplete(int generation,
                                   String memberId,
@@ -359,7 +345,8 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         // Give the assignor a chance to update internal state based on the received assignment
         groupMetadata = new ConsumerGroupMetadata(rebalanceConfig.groupId, generation, memberId, rebalanceConfig.groupInstanceId);
 
-        Set<TopicPartition> ownedPartitions = new HashSet<>(subscriptions.assignedPartitions());
+        SortedSet<TopicPartition> ownedPartitions = new TreeSet<>(COMPARATOR);
+        ownedPartitions.addAll(subscriptions.assignedPartitions());
 
         // should at least encode the short version
         if (assignmentBuffer.remaining() < 2)
@@ -370,23 +357,26 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
         Assignment assignment = ConsumerProtocol.deserializeAssignment(assignmentBuffer);
 
-        Set<TopicPartition> assignedPartitions = new HashSet<>(assignment.partitions());
+        SortedSet<TopicPartition> assignedPartitions = new TreeSet<>(COMPARATOR);
+        assignedPartitions.addAll(assignment.partitions());
 
         if (!subscriptions.checkAssignmentMatchedSubscription(assignedPartitions)) {
-            final String reason = String.format("received assignment %s does not match the current subscription %s; " +
+            final String fullReason = String.format("received assignment %s does not match the current subscription %s; " +
                     "it is likely that the subscription has changed since we joined the group, will re-join with current subscription",
                     assignment.partitions(), subscriptions.prettyString());
-            requestRejoin(reason);
+            requestRejoin("received assignment does not match the current subscription", fullReason);
 
             return;
         }
 
         final AtomicReference<Exception> firstException = new AtomicReference<>(null);
-        Set<TopicPartition> addedPartitions = new HashSet<>(assignedPartitions);
+        SortedSet<TopicPartition> addedPartitions = new TreeSet<>(COMPARATOR);
+        addedPartitions.addAll(assignedPartitions);
         addedPartitions.removeAll(ownedPartitions);
 
         if (protocol == RebalanceProtocol.COOPERATIVE) {
-            Set<TopicPartition> revokedPartitions = new HashSet<>(ownedPartitions);
+            SortedSet<TopicPartition> revokedPartitions = new TreeSet<>(COMPARATOR);
+            revokedPartitions.addAll(ownedPartitions);
             revokedPartitions.removeAll(assignedPartitions);
 
             log.info("Updating assignment with\n" +
@@ -404,12 +394,12 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                 // Revoke partitions that were previously owned but no longer assigned;
                 // note that we should only change the assignment (or update the assignor's state)
                 // AFTER we've triggered  the revoke callback
-                firstException.compareAndSet(null, invokePartitionsRevoked(revokedPartitions));
+                firstException.compareAndSet(null, rebalanceListenerInvoker.invokePartitionsRevoked(revokedPartitions));
 
                 // If revoked any partitions, need to re-join the group afterwards
-                final String reason = String.format("need to revoke partitions %s as indicated " +
+                final String fullReason = String.format("need to revoke partitions %s as indicated " +
                         "by the current assignment and re-join", revokedPartitions);
-                requestRejoin(reason);
+                requestRejoin("need to revoke partitions and re-join", fullReason);
             }
         }
 
@@ -427,7 +417,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         subscriptions.assignFromSubscribed(assignedPartitions);
 
         // Add partitions that were not previously owned but are now assigned
-        firstException.compareAndSet(null, invokePartitionsAssigned(addedPartitions));
+        firstException.compareAndSet(null, rebalanceListenerInvoker.invokePartitionsAssigned(addedPartitions));
 
         if (firstException.get() != null) {
             if (firstException.get() instanceof KafkaException) {
@@ -448,8 +438,16 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
             // Update the current snapshot, which will be used to check for subscription
             // changes that would require a rebalance (e.g. new partitions).
-            metadataSnapshot = new MetadataSnapshot(subscriptions, cluster, version);
+            metadataSnapshot = new MetadataSnapshot(rackId, subscriptions, cluster, version);
         }
+    }
+
+    private boolean coordinatorUnknownAndUnreadySync(Timer timer) {
+        return coordinatorUnknown() && !ensureCoordinatorReady(timer);
+    }
+
+    private boolean coordinatorUnknownAndUnreadyAsync() {
+        return coordinatorUnknown() && !ensureCoordinatorReadyAsync();
     }
 
     /**
@@ -477,7 +475,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             // Always update the heartbeat last poll time so that the heartbeat thread does not leave the
             // group proactively due to application inactivity even if (say) the coordinator cannot be found.
             pollHeartbeat(timer.currentTimeMs());
-            if (coordinatorUnknown() && !ensureCoordinatorReady(timer)) {
+            if (coordinatorUnknownAndUnreadySync(timer)) {
                 return false;
             }
 
@@ -494,7 +492,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                     // refresh metadata before re-joining the group as long as the refresh backoff time has
                     // passed.
                     if (this.metadata.timeToAllowUpdate(timer.currentTimeMs()) == 0) {
-                        this.metadata.requestUpdate();
+                        this.metadata.requestUpdate(true);
                     }
 
                     if (!client.ensureFreshMetadata(timer)) {
@@ -514,16 +512,18 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                 }
             }
         } else {
-            // For manually assigned partitions, if there are no ready nodes, await metadata.
+            // For manually assigned partitions, we do not try to pro-actively lookup coordinator;
+            // instead we only try to refresh metadata when necessary.
             // If connections to all nodes fail, wakeups triggered while attempting to send fetch
             // requests result in polls returning immediately, causing a tight loop of polls. Without
             // the wakeup, poll() with no channels would block for the timeout, delaying re-connection.
-            // awaitMetadataUpdate() initiates new connections with configured backoff and avoids the busy loop.
-            // When group management is used, metadata wait is already performed for this scenario as
-            // coordinator is unknown, hence this check is not required.
+            // awaitMetadataUpdate() in ensureCoordinatorReady initiates new connections with configured backoff and avoids the busy loop.
             if (metadata.updateRequested() && !client.hasReadyNodes(timer.currentTimeMs())) {
                 client.awaitMetadataUpdate(timer);
             }
+
+            // if there is pending coordinator requests, ensure they have a chance to be transmitted.
+            client.pollNoWakeup();
         }
 
         maybeAutoCommitOffsetsAsync(timer.currentTimeMs());
@@ -556,13 +556,62 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         maybeUpdateSubscriptionMetadata();
     }
 
+    private boolean isAssignFromSubscribedTopicsAssignor(String name) {
+        return ASSIGN_FROM_SUBSCRIBED_ASSIGNORS.contains(name);
+    }
+
+    /**
+     * user-customized assignor may have created some topics that are not in the subscription list
+     * and assign their partitions to the members; in this case we would like to update the leader's
+     * own metadata with the newly added topics so that it will not trigger a subsequent rebalance
+     * when these topics gets updated from metadata refresh.
+     *
+     * We skip the check for in-product assignors since this will not happen in in-product assignors.
+     *
+     * TODO: this is a hack and not something we want to support long-term unless we push regex into the protocol
+     *       we may need to modify the ConsumerPartitionAssignor API to better support this case.
+     *
+     * @param assignorName          the selected assignor name
+     * @param assignments           the assignments after assignor assigned
+     * @param allSubscribedTopics   all consumers' subscribed topics
+     */
+    private void maybeUpdateGroupSubscription(String assignorName,
+                                              Map<String, Assignment> assignments,
+                                              Set<String> allSubscribedTopics) {
+        if (!isAssignFromSubscribedTopicsAssignor(assignorName)) {
+            Set<String> assignedTopics = new HashSet<>();
+            for (Assignment assigned : assignments.values()) {
+                for (TopicPartition tp : assigned.partitions())
+                    assignedTopics.add(tp.topic());
+            }
+
+            if (!assignedTopics.containsAll(allSubscribedTopics)) {
+                SortedSet<String> notAssignedTopics = new TreeSet<>(allSubscribedTopics);
+                notAssignedTopics.removeAll(assignedTopics);
+                log.warn("The following subscribed topics are not assigned to any members: {} ", notAssignedTopics);
+            }
+
+            if (!allSubscribedTopics.containsAll(assignedTopics)) {
+                SortedSet<String> newlyAddedTopics = new TreeSet<>(assignedTopics);
+                newlyAddedTopics.removeAll(allSubscribedTopics);
+                log.info("The following not-subscribed topics are assigned, and their metadata will be " +
+                    "fetched from the brokers: {}", newlyAddedTopics);
+
+                allSubscribedTopics.addAll(newlyAddedTopics);
+                updateGroupSubscription(allSubscribedTopics);
+            }
+        }
+    }
+
     @Override
-    protected Map<String, ByteBuffer> performAssignment(String leaderId,
-                                                        String assignmentStrategy,
-                                                        List<JoinGroupResponseData.JoinGroupResponseMember> allSubscriptions) {
+    protected Map<String, ByteBuffer> onLeaderElected(String leaderId,
+                                                      String assignmentStrategy,
+                                                      List<JoinGroupResponseData.JoinGroupResponseMember> allSubscriptions,
+                                                      boolean skipAssignment) {
         ConsumerPartitionAssignor assignor = lookupAssignor(assignmentStrategy);
         if (assignor == null)
             throw new IllegalStateException("Coordinator selected invalid assignment protocol: " + assignmentStrategy);
+        String assignorName = assignor.name();
 
         Set<String> allSubscribedTopics = new HashSet<>();
         Map<String, Subscription> subscriptions = new HashMap<>();
@@ -584,43 +633,27 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
         isLeader = true;
 
-        log.debug("Performing assignment using strategy {} with subscriptions {}", assignor.name(), subscriptions);
+        if (skipAssignment) {
+            log.info("Skipped assignment for returning static leader at generation {}. The static leader " +
+                "will continue with its existing assignment.", generation().generationId);
+            assignmentSnapshot = metadataSnapshot;
+            return Collections.emptyMap();
+        }
+
+        log.debug("Performing assignment using strategy {} with subscriptions {}", assignorName, subscriptions);
 
         Map<String, Assignment> assignments = assignor.assign(metadata.fetch(), new GroupSubscription(subscriptions)).groupAssignment();
 
-        if (protocol == RebalanceProtocol.COOPERATIVE) {
+        // skip the validation for built-in cooperative sticky assignor since we've considered
+        // the "generation" of ownedPartition inside the assignor
+        if (protocol == RebalanceProtocol.COOPERATIVE && !assignorName.equals(COOPERATIVE_STICKY_ASSIGNOR_NAME)) {
             validateCooperativeAssignment(ownedPartitions, assignments);
         }
 
-        // user-customized assignor may have created some topics that are not in the subscription list
-        // and assign their partitions to the members; in this case we would like to update the leader's
-        // own metadata with the newly added topics so that it will not trigger a subsequent rebalance
-        // when these topics gets updated from metadata refresh.
-        //
-        // TODO: this is a hack and not something we want to support long-term unless we push regex into the protocol
-        //       we may need to modify the ConsumerPartitionAssignor API to better support this case.
-        Set<String> assignedTopics = new HashSet<>();
-        for (Assignment assigned : assignments.values()) {
-            for (TopicPartition tp : assigned.partitions())
-                assignedTopics.add(tp.topic());
-        }
+        maybeUpdateGroupSubscription(assignorName, assignments, allSubscribedTopics);
 
-        if (!assignedTopics.containsAll(allSubscribedTopics)) {
-            Set<String> notAssignedTopics = new HashSet<>(allSubscribedTopics);
-            notAssignedTopics.removeAll(assignedTopics);
-            log.warn("The following subscribed topics are not assigned to any members: {} ", notAssignedTopics);
-        }
-
-        if (!allSubscribedTopics.containsAll(assignedTopics)) {
-            Set<String> newlyAddedTopics = new HashSet<>(assignedTopics);
-            newlyAddedTopics.removeAll(allSubscribedTopics);
-            log.info("The following not-subscribed topics are assigned, and their metadata will be " +
-                    "fetched from the brokers: {}", newlyAddedTopics);
-
-            allSubscribedTopics.addAll(assignedTopics);
-            updateGroupSubscription(allSubscribedTopics);
-        }
-
+        // metadataSnapshot could be updated when the subscription is updated therefore
+        // we must take the assignment snapshot after.
         assignmentSnapshot = metadataSnapshot;
 
         log.info("Finished assignment for group at generation {}: {}", generation().generationId, assignments);
@@ -645,7 +678,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
     private void validateCooperativeAssignment(final Map<String, List<TopicPartition>> ownedPartitions,
                                                final Map<String, Assignment> assignments) {
         Set<TopicPartition> totalRevokedPartitions = new HashSet<>();
-        Set<TopicPartition> totalAddedPartitions = new HashSet<>();
+        SortedSet<TopicPartition> totalAddedPartitions = new TreeSet<>(COMPARATOR);
         for (final Map.Entry<String, Assignment> entry : assignments.entrySet()) {
             final Assignment assignment = entry.getValue();
             final Set<TopicPartition> addedPartitions = new HashSet<>(assignment.partitions());
@@ -670,10 +703,59 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
     }
 
     @Override
-    protected void onJoinPrepare(int generation, String memberId) {
+    protected boolean onJoinPrepare(Timer timer, int generation, String memberId) {
         log.debug("Executing onJoinPrepare with generation {} and memberId {}", generation, memberId);
-        // commit offsets prior to rebalance if auto-commit enabled
-        maybeAutoCommitOffsetsSync(time.timer(rebalanceConfig.rebalanceTimeoutMs));
+        if (joinPrepareTimer == null) {
+            // We should complete onJoinPrepare before rebalanceTimeoutMs,
+            // and continue to join group to avoid member got kicked out from group
+            joinPrepareTimer = time.timer(rebalanceConfig.rebalanceTimeoutMs);
+        } else {
+            joinPrepareTimer.update();
+        }
+
+        // async commit offsets prior to rebalance if auto-commit enabled
+        // and there is no in-flight offset commit request
+        if (autoCommitEnabled && autoCommitOffsetRequestFuture == null) {
+            maybeMarkPartitionsPendingRevocation();
+            autoCommitOffsetRequestFuture = maybeAutoCommitOffsetsAsync();
+        }
+
+        // wait for commit offset response before timer expired
+        if (autoCommitOffsetRequestFuture != null) {
+            Timer pollTimer = timer.remainingMs() < joinPrepareTimer.remainingMs() ?
+                    timer : joinPrepareTimer;
+            client.poll(autoCommitOffsetRequestFuture, pollTimer);
+            joinPrepareTimer.update();
+
+            // Keep retrying/waiting the offset commit when:
+            // 1. offset commit haven't done (and joinPrepareTimer not expired)
+            // 2. failed with retriable exception (and joinPrepareTimer not expired)
+            // Otherwise, continue to revoke partitions, ex:
+            // 1. if joinPrepareTimer has expired
+            // 2. if offset commit failed with non-retriable exception
+            // 3. if offset commit success
+            boolean onJoinPrepareAsyncCommitCompleted = true;
+            if (joinPrepareTimer.isExpired()) {
+                log.error("Asynchronous auto-commit of offsets failed: joinPrepare timeout. Will continue to join group");
+            } else if (!autoCommitOffsetRequestFuture.isDone()) {
+                onJoinPrepareAsyncCommitCompleted = false;
+            } else if (autoCommitOffsetRequestFuture.failed() && autoCommitOffsetRequestFuture.isRetriable()) {
+                log.debug("Asynchronous auto-commit of offsets failed with retryable error: {}. Will retry it.",
+                        autoCommitOffsetRequestFuture.exception().getMessage());
+                onJoinPrepareAsyncCommitCompleted = false;
+            } else if (autoCommitOffsetRequestFuture.failed() && !autoCommitOffsetRequestFuture.isRetriable()) {
+                log.error("Asynchronous auto-commit of offsets failed: {}. Will continue to join group.",
+                        autoCommitOffsetRequestFuture.exception().getMessage());
+            }
+            if (autoCommitOffsetRequestFuture.isDone()) {
+                autoCommitOffsetRequestFuture = null;
+            }
+            if (!onJoinPrepareAsyncCommitCompleted) {
+                pollTimer.sleep(Math.min(pollTimer.remainingMs(), rebalanceConfig.retryBackoffMs));
+                timer.update();
+                return false;
+            }
+        }
 
         // the generation / member-id can possibly be reset by the heartbeat thread
         // upon getting errors or heartbeat timeouts; in this case whatever is previously
@@ -682,15 +764,15 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         // and in that case we should only change the assignment AFTER the revoke callback is triggered
         // so that users can still access the previously owned partitions to commit offsets etc.
         Exception exception = null;
-        final Set<TopicPartition> revokedPartitions;
-        if (generation == Generation.NO_GENERATION.generationId &&
+        final SortedSet<TopicPartition> revokedPartitions = new TreeSet<>(COMPARATOR);
+        if (generation == Generation.NO_GENERATION.generationId ||
             memberId.equals(Generation.NO_GENERATION.memberId)) {
-            revokedPartitions = new HashSet<>(subscriptions.assignedPartitions());
+            revokedPartitions.addAll(subscriptions.assignedPartitions());
 
             if (!revokedPartitions.isEmpty()) {
-                log.info("Giving away all assigned partitions as lost since generation has been reset," +
-                    "indicating that consumer is no longer part of the group");
-                exception = invokePartitionsLost(revokedPartitions);
+                log.info("Giving away all assigned partitions as lost since generation/memberID has been reset," +
+                    "indicating that consumer is in old state or no longer part of the group");
+                exception = rebalanceListenerInvoker.invokePartitionsLost(revokedPartitions);
 
                 subscriptions.assignFromSubscribed(Collections.emptySet());
             }
@@ -698,22 +780,22 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             switch (protocol) {
                 case EAGER:
                     // revoke all partitions
-                    revokedPartitions = new HashSet<>(subscriptions.assignedPartitions());
-                    exception = invokePartitionsRevoked(revokedPartitions);
+                    revokedPartitions.addAll(subscriptions.assignedPartitions());
+                    exception = rebalanceListenerInvoker.invokePartitionsRevoked(revokedPartitions);
 
                     subscriptions.assignFromSubscribed(Collections.emptySet());
 
                     break;
 
                 case COOPERATIVE:
-                    // only revoke those partitions that are not in the subscription any more.
+                    // only revoke those partitions that are not in the subscription anymore.
                     Set<TopicPartition> ownedPartitions = new HashSet<>(subscriptions.assignedPartitions());
-                    revokedPartitions = ownedPartitions.stream()
+                    revokedPartitions.addAll(ownedPartitions.stream()
                         .filter(tp -> !subscriptions.subscription().contains(tp.topic()))
-                        .collect(Collectors.toSet());
+                        .collect(Collectors.toSet()));
 
                     if (!revokedPartitions.isEmpty()) {
-                        exception = invokePartitionsRevoked(revokedPartitions);
+                        exception = rebalanceListenerInvoker.invokePartitionsRevoked(revokedPartitions);
 
                         ownedPartitions.removeAll(revokedPartitions);
                         subscriptions.assignFromSubscribed(ownedPartitions);
@@ -725,29 +807,51 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
         isLeader = false;
         subscriptions.resetGroupSubscription();
+        joinPrepareTimer = null;
+        autoCommitOffsetRequestFuture = null;
+        timer.update();
 
         if (exception != null) {
             throw new KafkaException("User rebalance callback throws an error", exception);
         }
+        return true;
+    }
+
+    private void maybeMarkPartitionsPendingRevocation() {
+        if (protocol != RebalanceProtocol.EAGER) {
+            return;
+        }
+
+        // When asynchronously committing offsets prior to the revocation of a set of partitions, there will be a
+        // window of time between when the offset commit is sent and when it returns and revocation completes. It is
+        // possible for pending fetches for these partitions to return during this time, which means the application's
+        // position may get ahead of the committed position prior to revocation. This can cause duplicate consumption.
+        // To prevent this, we mark the partitions as "pending revocation," which stops the Fetcher from sending new
+        // fetches or returning data from previous fetches to the user.
+        Set<TopicPartition> partitions = subscriptions.assignedPartitions();
+        log.debug("Marking assigned partitions pending for revocation: {}", partitions);
+        subscriptions.markPendingRevocation(partitions);
     }
 
     @Override
     public void onLeavePrepare() {
-        // Save the current Generation and use that to get the memberId, as the hb thread can change it at any time
+        // Save the current Generation, as the hb thread can change it at any time
         final Generation currentGeneration = generation();
-        final String memberId = currentGeneration.memberId;
 
-        log.debug("Executing onLeavePrepare with generation {} and memberId {}", currentGeneration, memberId);
+        log.debug("Executing onLeavePrepare with generation {}", currentGeneration);
 
         // we should reset assignment and trigger the callback before leaving group
-        Set<TopicPartition> droppedPartitions = new HashSet<>(subscriptions.assignedPartitions());
+        SortedSet<TopicPartition> droppedPartitions = new TreeSet<>(COMPARATOR);
+        droppedPartitions.addAll(subscriptions.assignedPartitions());
 
         if (subscriptions.hasAutoAssignedPartitions() && !droppedPartitions.isEmpty()) {
             final Exception e;
-            if (generation() == Generation.NO_GENERATION || rebalanceInProgress()) {
-                e = invokePartitionsLost(droppedPartitions);
+            if ((currentGeneration.generationId == Generation.NO_GENERATION.generationId ||
+                currentGeneration.memberId.equals(Generation.NO_GENERATION.memberId)) ||
+                rebalanceInProgress()) {
+                e = rebalanceListenerInvoker.invokePartitionsLost(droppedPartitions);
             } else {
-                e = invokePartitionsRevoked(droppedPartitions);
+                e = rebalanceListenerInvoker.invokePartitionsRevoked(droppedPartitions);
             }
 
             subscriptions.assignFromSubscribed(Collections.emptySet());
@@ -769,17 +873,17 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         // we need to rejoin if we performed the assignment and metadata has changed;
         // also for those owned-but-no-longer-existed partitions we should drop them as lost
         if (assignmentSnapshot != null && !assignmentSnapshot.matches(metadataSnapshot)) {
-            final String reason = String.format("cached metadata has changed from %s at the beginning of the rebalance to %s",
+            final String fullReason = String.format("cached metadata has changed from %s at the beginning of the rebalance to %s",
                 assignmentSnapshot, metadataSnapshot);
-            requestRejoin(reason);
+            requestRejoinIfNecessary("cached metadata has changed", fullReason);
             return true;
         }
 
         // we need to join if our subscription has changed since the last join
         if (joinedSubscription != null && !joinedSubscription.equals(subscriptions.subscription())) {
-            final String reason = String.format("subscription has changed from %s at the beginning of the rebalance to %s",
+            final String fullReason = String.format("subscription has changed from %s at the beginning of the rebalance to %s",
                 joinedSubscription, subscriptions.subscription());
-            requestRejoin(reason);
+            requestRejoinIfNecessary("subscription has changed", fullReason);
             return true;
         }
 
@@ -787,41 +891,20 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
     }
 
     /**
-     * Refresh the committed offsets for provided partitions.
+     * Refresh the committed offsets for partitions that require initialization.
      *
      * @param timer Timer bounding how long this method can block
      * @return true iff the operation completed within the timeout
      */
-    public boolean refreshCommittedOffsetsIfNeeded(Timer timer) {
+    public boolean initWithCommittedOffsetsIfNeeded(Timer timer) {
         final Set<TopicPartition> initializingPartitions = subscriptions.initializingPartitions();
-
         final Map<TopicPartition, OffsetAndMetadata> offsets = fetchCommittedOffsets(initializingPartitions, timer);
-        if (offsets == null) return false;
 
-        for (final Map.Entry<TopicPartition, OffsetAndMetadata> entry : offsets.entrySet()) {
-            final TopicPartition tp = entry.getKey();
-            final OffsetAndMetadata offsetAndMetadata = entry.getValue();
-            if (offsetAndMetadata != null) {
-                // first update the epoch if necessary
-                entry.getValue().leaderEpoch().ifPresent(epoch -> this.metadata.updateLastSeenEpochIfNewer(entry.getKey(), epoch));
+        // "offsets" will be null if the offset fetch requests did not receive responses within the given timeout
+        if (offsets == null)
+            return false;
 
-                // it's possible that the partition is no longer assigned when the response is received,
-                // so we need to ignore seeking if that's the case
-                if (this.subscriptions.isAssigned(tp)) {
-                    final ConsumerMetadata.LeaderAndEpoch leaderAndEpoch = metadata.currentLeader(tp);
-                    final SubscriptionState.FetchPosition position = new SubscriptionState.FetchPosition(
-                            offsetAndMetadata.offset(), offsetAndMetadata.leaderEpoch(),
-                            leaderAndEpoch);
-
-                    this.subscriptions.seekUnvalidated(tp, position);
-
-                    log.info("Setting offset for partition {} to the committed offset {}", tp, position);
-                } else {
-                    log.info("Ignoring the returned {} since its partition {} is no longer assigned",
-                        offsetAndMetadata, tp);
-                }
-            }
-        }
+        refreshCommittedOffsets(offsets, this.metadata, this.subscriptions);
         return true;
     }
 
@@ -842,6 +925,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             pendingCommittedOffsetRequest = null;
         }
 
+        long attempts = 0L;
         do {
             if (!ensureCoordinatorReady(timer)) return null;
 
@@ -863,7 +947,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                 } else if (!future.isRetriable()) {
                     throw future.exception();
                 } else {
-                    timer.sleep(rebalanceConfig.retryBackoffMs);
+                    timer.sleep(retryBackoff.backoff(attempts++));
                 }
             } else {
                 return null;
@@ -915,11 +999,25 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         }
     }
 
-    public void commitOffsetsAsync(final Map<TopicPartition, OffsetAndMetadata> offsets, final OffsetCommitCallback callback) {
+    public RequestFuture<Void> commitOffsetsAsync(final Map<TopicPartition, OffsetAndMetadata> offsets, final OffsetCommitCallback callback) {
         invokeCompletedOffsetCommitCallbacks();
 
-        if (!coordinatorUnknown()) {
-            doCommitOffsetsAsync(offsets, callback);
+        RequestFuture<Void> future = null;
+        if (offsets.isEmpty()) {
+            // No need to check coordinator if offsets is empty since commit of empty offsets is completed locally.
+            future = doCommitOffsetsAsync(offsets, callback);
+        } else if (!coordinatorUnknownAndUnreadyAsync()) {
+            // we need to make sure coordinator is ready before committing, since
+            // this is for async committing we do not try to block, but just try once to
+            // clear the previous discover-coordinator future, resend, or get responses;
+            // if the coordinator is not ready yet then we would just proceed and put that into the
+            // pending requests, and future poll calls would still try to complete them.
+            //
+            // the key here though is that we have to try sending the discover-coordinator if
+            // it's not known or ready, since this is the only place we can send such request
+            // under manual assignment (there we would not have heartbeat thread trying to auto-rediscover
+            // the coordinator).
+            future = doCommitOffsetsAsync(offsets, callback);
         } else {
             // we don't know the current coordinator, so try to find it and then send the commit
             // or fail (we don't want recursive retries which can cause offset commits to arrive
@@ -949,14 +1047,18 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         // Note that commits are treated as heartbeats by the coordinator, so there is no need to
         // explicitly allow heartbeats through delayed task execution.
         client.pollNoWakeup();
+        return future;
     }
 
-    private void doCommitOffsetsAsync(final Map<TopicPartition, OffsetAndMetadata> offsets, final OffsetCommitCallback callback) {
+    private RequestFuture<Void> doCommitOffsetsAsync(final Map<TopicPartition, OffsetAndMetadata> offsets, final OffsetCommitCallback callback) {
         RequestFuture<Void> future = sendOffsetCommitRequest(offsets);
+        inFlightAsyncCommits.incrementAndGet();
         final OffsetCommitCallback cb = callback == null ? defaultOffsetCommitCallback : callback;
         future.addListener(new RequestFutureListener<Void>() {
             @Override
             public void onSuccess(Void value) {
+                inFlightAsyncCommits.decrementAndGet();
+
                 if (interceptors != null)
                     interceptors.onCommit(offsets);
                 completedOffsetCommits.add(new OffsetCommitCompletion(cb, offsets, null));
@@ -964,6 +1066,8 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
             @Override
             public void onFailure(RuntimeException e) {
+                inFlightAsyncCommits.decrementAndGet();
+
                 Exception commitException = e;
 
                 if (e instanceof RetriableException) {
@@ -975,6 +1079,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                 }
             }
         });
+        return future;
     }
 
     /**
@@ -991,11 +1096,15 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
     public boolean commitOffsetsSync(Map<TopicPartition, OffsetAndMetadata> offsets, Timer timer) {
         invokeCompletedOffsetCommitCallbacks();
 
-        if (offsets.isEmpty())
-            return true;
+        if (offsets.isEmpty()) {
+            // We guarantee that the callbacks for all commitAsync() will be invoked when
+            // commitSync() completes, even if the user tries to commit empty offsets.
+            return invokePendingAsyncCommits(timer);
+        }
 
+        long attempts = 0L;
         do {
-            if (coordinatorUnknown() && !ensureCoordinatorReady(timer)) {
+            if (coordinatorUnknownAndUnreadySync(timer)) {
                 return false;
             }
 
@@ -1016,39 +1125,10 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             if (future.failed() && !future.isRetriable())
                 throw future.exception();
 
-            timer.sleep(rebalanceConfig.retryBackoffMs);
+            timer.sleep(retryBackoff.backoff(attempts++));
         } while (timer.notExpired());
 
         return false;
-    }
-
-    public void maybeAutoCommitOffsetsAsync(long now) {
-        if (autoCommitEnabled) {
-            nextAutoCommitTimer.update(now);
-            if (nextAutoCommitTimer.isExpired()) {
-                nextAutoCommitTimer.reset(autoCommitIntervalMs);
-                doAutoCommitOffsetsAsync();
-            }
-        }
-    }
-
-    private void doAutoCommitOffsetsAsync() {
-        Map<TopicPartition, OffsetAndMetadata> allConsumedOffsets = subscriptions.allConsumed();
-        log.debug("Sending asynchronous auto-commit of offsets {}", allConsumedOffsets);
-
-        commitOffsetsAsync(allConsumedOffsets, (offsets, exception) -> {
-            if (exception != null) {
-                if (exception instanceof RetriableCommitFailedException) {
-                    log.debug("Asynchronous auto-commit of offsets {} failed due to retriable error: {}", offsets,
-                        exception);
-                    nextAutoCommitTimer.updateAndReset(rebalanceConfig.retryBackoffMs);
-                } else {
-                    log.warn("Asynchronous auto-commit of offsets {} failed: {}", offsets, exception.getMessage());
-                }
-            } else {
-                log.debug("Completed asynchronous auto-commit of offsets {}", offsets);
-            }
-        });
     }
 
     private void maybeAutoCommitOffsetsSync(Timer timer) {
@@ -1067,6 +1147,62 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                 log.warn("Synchronous auto-commit of offsets {} failed: {}", allConsumedOffsets, e.getMessage());
             }
         }
+    }
+
+    public void maybeAutoCommitOffsetsAsync(long now) {
+        if (autoCommitEnabled) {
+            nextAutoCommitTimer.update(now);
+            if (nextAutoCommitTimer.isExpired()) {
+                nextAutoCommitTimer.reset(autoCommitIntervalMs);
+                autoCommitOffsetsAsync();
+            }
+        }
+    }
+
+    private boolean invokePendingAsyncCommits(Timer timer) {
+        if (inFlightAsyncCommits.get() == 0) {
+            return true;
+        }
+
+        long attempts = 0L;
+        do {
+            ensureCoordinatorReady(timer);
+            client.poll(timer);
+            invokeCompletedOffsetCommitCallbacks();
+
+            if (inFlightAsyncCommits.get() == 0) {
+                return true;
+            }
+
+            timer.sleep(retryBackoff.backoff(attempts++));
+        } while (timer.notExpired());
+
+        return false;
+    }
+
+    private RequestFuture<Void> autoCommitOffsetsAsync() {
+        Map<TopicPartition, OffsetAndMetadata> allConsumedOffsets = subscriptions.allConsumed();
+        log.debug("Sending asynchronous auto-commit of offsets {}", allConsumedOffsets);
+
+        return commitOffsetsAsync(allConsumedOffsets, (offsets, exception) -> {
+            if (exception != null) {
+                if (exception instanceof RetriableCommitFailedException) {
+                    log.debug("Asynchronous auto-commit of offsets {} failed due to retriable error.", offsets,
+                        exception);
+                    nextAutoCommitTimer.updateAndReset(rebalanceConfig.retryBackoffMs);
+                } else {
+                    log.warn("Asynchronous auto-commit of offsets {} failed: {}", offsets, exception.getMessage());
+                }
+            } else {
+                log.debug("Completed asynchronous auto-commit of offsets {}", offsets);
+            }
+        });
+    }
+
+    private RequestFuture<Void> maybeAutoCommitOffsetsAsync() {
+        if (autoCommitEnabled)
+            return autoCommitOffsetsAsync();
+        return null;
     }
 
     private class DefaultOffsetCommitCallback implements OffsetCommitCallback {
@@ -1120,8 +1256,10 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         }
 
         final Generation generation;
+        final String groupInstanceId;
         if (subscriptions.hasAutoAssignedPartitions()) {
             generation = generationIfStable();
+            groupInstanceId = rebalanceConfig.groupInstanceId.orElse(null);
             // if the generation is null, we are not part of an active group (and we expect to be).
             // the only thing we can do is fail the commit and let the user rejoin the group in poll().
             if (generation == null) {
@@ -1141,14 +1279,15 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             }
         } else {
             generation = Generation.NO_GENERATION;
+            groupInstanceId = null;
         }
 
         OffsetCommitRequest.Builder builder = new OffsetCommitRequest.Builder(
                 new OffsetCommitRequestData()
                         .setGroupId(this.rebalanceConfig.groupId)
-                        .setGenerationId(generation.generationId)
+                        .setGenerationIdOrMemberEpoch(generation.generationId)
                         .setMemberId(generation.memberId)
-                        .setGroupInstanceId(rebalanceConfig.groupInstanceId.orElse(null))
+                        .setGroupInstanceId(groupInstanceId)
                         .setTopics(new ArrayList<>(requestTopicDataMap.values()))
         );
 
@@ -1168,7 +1307,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
         @Override
         public void handle(OffsetCommitResponse commitResponse, RequestFuture<Void> future) {
-            sensors.commitSensor.record(response.requestLatencyMs());
+            coordinatorMetrics.commitSensor.record(response.requestLatencyMs());
             Set<String> unauthorizedTopics = new HashSet<>();
 
             for (OffsetCommitResponseData.OffsetCommitResponseTopic topic : commitResponse.data().topics()) {
@@ -1216,13 +1355,17 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                             if (generationUnchanged()) {
                                 future.raise(error);
                             } else {
-                                if (ConsumerCoordinator.this.state == MemberState.PREPARING_REBALANCE) {
-                                    future.raise(new RebalanceInProgressException("Offset commit cannot be completed since the " +
-                                        "consumer member's old generation is fenced by its group instance id, it is possible that " +
-                                        "this consumer has already participated another rebalance and got a new generation"));
-                                } else {
-                                    future.raise(new CommitFailedException());
+                                KafkaException exception;
+                                synchronized (ConsumerCoordinator.this) {
+                                    if (ConsumerCoordinator.this.state == MemberState.PREPARING_REBALANCE) {
+                                        exception = new RebalanceInProgressException("Offset commit cannot be completed since the " +
+                                            "consumer member's old generation is fenced by its group instance id, it is possible that " +
+                                            "this consumer has already participated another rebalance and got a new generation");
+                                    } else {
+                                        exception = new CommitFailedException();
+                                    }
                                 }
+                                future.raise(exception);
                             }
                             return;
                         } else if (error == Errors.REBALANCE_IN_PROGRESS) {
@@ -1245,14 +1388,19 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
                             // only need to reset generation and re-join group if generation has not changed or we are not in rebalancing;
                             // otherwise only raise rebalance-in-progress error
-                            if (!generationUnchanged() && ConsumerCoordinator.this.state == MemberState.PREPARING_REBALANCE) {
-                                future.raise(new RebalanceInProgressException("Offset commit cannot be completed since the " +
-                                    "consumer member's generation is already stale, meaning it has already participated another rebalance and " +
-                                    "got a new generation. You can try completing the rebalance by calling poll() and then retry commit again"));
-                            } else {
-                                resetGenerationOnResponseError(ApiKeys.OFFSET_COMMIT, error);
-                                future.raise(new CommitFailedException());
+                            KafkaException exception;
+                            synchronized (ConsumerCoordinator.this) {
+                                if (!generationUnchanged() && ConsumerCoordinator.this.state == MemberState.PREPARING_REBALANCE) {
+                                    exception = new RebalanceInProgressException("Offset commit cannot be completed since the " +
+                                        "consumer member's generation is already stale, meaning it has already participated another rebalance and " +
+                                        "got a new generation. You can try completing the rebalance by calling poll() and then retry commit again");
+                                } else {
+                                    // don't reset generation member ID when ILLEGAL_GENERATION, since the member might be still valid
+                                    resetStateOnResponseError(ApiKeys.OFFSET_COMMIT, error, error != Errors.ILLEGAL_GENERATION);
+                                    exception = new CommitFailedException();
+                                }
                             }
+                            future.raise(exception);
                             return;
                         } else {
                             future.raise(new KafkaException("Unexpected error in commit: " + error.message()));
@@ -1300,29 +1448,31 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
 
         @Override
         public void handle(OffsetFetchResponse response, RequestFuture<Map<TopicPartition, OffsetAndMetadata>> future) {
-            if (response.hasError()) {
-                Errors error = response.error();
-                log.debug("Offset fetch failed: {}", error.message());
+            Errors responseError = response.groupLevelError(rebalanceConfig.groupId);
+            if (responseError != Errors.NONE) {
+                log.debug("Offset fetch failed: {}", responseError.message());
 
-                if (error == Errors.COORDINATOR_LOAD_IN_PROGRESS) {
+                if (responseError == Errors.COORDINATOR_LOAD_IN_PROGRESS) {
                     // just retry
-                    future.raise(error);
-                } else if (error == Errors.NOT_COORDINATOR) {
+                    future.raise(responseError);
+                } else if (responseError == Errors.NOT_COORDINATOR) {
                     // re-discover the coordinator and retry
-                    markCoordinatorUnknown(error);
-                    future.raise(error);
-                } else if (error == Errors.GROUP_AUTHORIZATION_FAILED) {
+                    markCoordinatorUnknown(responseError);
+                    future.raise(responseError);
+                } else if (responseError == Errors.GROUP_AUTHORIZATION_FAILED) {
                     future.raise(GroupAuthorizationException.forGroupId(rebalanceConfig.groupId));
                 } else {
-                    future.raise(new KafkaException("Unexpected error in fetch offset response: " + error.message()));
+                    future.raise(new KafkaException("Unexpected error in fetch offset response: " + responseError.message()));
                 }
                 return;
             }
 
             Set<String> unauthorizedTopics = null;
-            Map<TopicPartition, OffsetAndMetadata> offsets = new HashMap<>(response.responseData().size());
+            Map<TopicPartition, OffsetFetchResponse.PartitionData> responseData =
+                response.partitionDataMap(rebalanceConfig.groupId);
+            Map<TopicPartition, OffsetAndMetadata> offsets = new HashMap<>(responseData.size());
             Set<TopicPartition> unstableTxnOffsetTopicPartitions = new HashSet<>();
-            for (Map.Entry<TopicPartition, OffsetFetchResponse.PartitionData> entry : response.responseData().entrySet()) {
+            for (Map.Entry<TopicPartition, OffsetFetchResponse.PartitionData> entry : responseData.entrySet()) {
                 TopicPartition tp = entry.getKey();
                 OffsetFetchResponse.PartitionData partitionData = entry.getValue();
                 if (partitionData.hasError()) {
@@ -1370,66 +1520,20 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         }
     }
 
-    private class ConsumerCoordinatorMetrics {
-        private final String metricGrpName;
-        private final Sensor commitSensor;
-        private final Sensor revokeCallbackSensor;
-        private final Sensor assignCallbackSensor;
-        private final Sensor loseCallbackSensor;
-
-        private ConsumerCoordinatorMetrics(Metrics metrics, String metricGrpPrefix) {
-            this.metricGrpName = metricGrpPrefix + "-coordinator-metrics";
-
-            this.commitSensor = metrics.sensor("commit-latency");
-            this.commitSensor.add(metrics.metricName("commit-latency-avg",
-                this.metricGrpName,
-                "The average time taken for a commit request"), new Avg());
-            this.commitSensor.add(metrics.metricName("commit-latency-max",
-                this.metricGrpName,
-                "The max time taken for a commit request"), new Max());
-            this.commitSensor.add(createMeter(metrics, metricGrpName, "commit", "commit calls"));
-
-            this.revokeCallbackSensor = metrics.sensor("partition-revoked-latency");
-            this.revokeCallbackSensor.add(metrics.metricName("partition-revoked-latency-avg",
-                this.metricGrpName,
-                "The average time taken for a partition-revoked rebalance listener callback"), new Avg());
-            this.revokeCallbackSensor.add(metrics.metricName("partition-revoked-latency-max",
-                this.metricGrpName,
-                "The max time taken for a partition-revoked rebalance listener callback"), new Max());
-
-            this.assignCallbackSensor = metrics.sensor("partition-assigned-latency");
-            this.assignCallbackSensor.add(metrics.metricName("partition-assigned-latency-avg",
-                this.metricGrpName,
-                "The average time taken for a partition-assigned rebalance listener callback"), new Avg());
-            this.assignCallbackSensor.add(metrics.metricName("partition-assigned-latency-max",
-                this.metricGrpName,
-                "The max time taken for a partition-assigned rebalance listener callback"), new Max());
-
-            this.loseCallbackSensor = metrics.sensor("partition-lost-latency");
-            this.loseCallbackSensor.add(metrics.metricName("partition-lost-latency-avg",
-                this.metricGrpName,
-                "The average time taken for a partition-lost rebalance listener callback"), new Avg());
-            this.loseCallbackSensor.add(metrics.metricName("partition-lost-latency-max",
-                this.metricGrpName,
-                "The max time taken for a partition-lost rebalance listener callback"), new Max());
-
-            Measurable numParts = (config, now) -> subscriptions.numAssignedPartitions();
-            metrics.addMetric(metrics.metricName("assigned-partitions",
-                this.metricGrpName,
-                "The number of partitions currently assigned to this consumer"), numParts);
-        }
-    }
-
     private static class MetadataSnapshot {
         private final int version;
-        private final Map<String, Integer> partitionsPerTopic;
+        private final Map<String, List<PartitionRackInfo>> partitionsPerTopic;
 
-        private MetadataSnapshot(SubscriptionState subscription, Cluster cluster, int version) {
-            Map<String, Integer> partitionsPerTopic = new HashMap<>();
+        private MetadataSnapshot(Optional<String> clientRack, SubscriptionState subscription, Cluster cluster, int version) {
+            Map<String, List<PartitionRackInfo>> partitionsPerTopic = new HashMap<>();
             for (String topic : subscription.metadataTopics()) {
-                Integer numPartitions = cluster.partitionCountForTopic(topic);
-                if (numPartitions != null)
-                    partitionsPerTopic.put(topic, numPartitions);
+                List<PartitionInfo> partitions = cluster.partitionsForTopic(topic);
+                if (partitions != null) {
+                    List<PartitionRackInfo> partitionRacks = partitions.stream()
+                            .map(p -> new PartitionRackInfo(clientRack, p))
+                            .collect(Collectors.toList());
+                    partitionsPerTopic.put(topic, partitionRacks);
+                }
             }
             this.partitionsPerTopic = partitionsPerTopic;
             this.version = version;
@@ -1442,6 +1546,40 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         @Override
         public String toString() {
             return "(version" + version + ": " + partitionsPerTopic + ")";
+        }
+    }
+
+    private static class PartitionRackInfo {
+        private final Set<String> racks;
+
+        PartitionRackInfo(Optional<String> clientRack, PartitionInfo partition) {
+            if (clientRack.isPresent() && partition.replicas() != null) {
+                racks = Arrays.stream(partition.replicas()).map(Node::rack).collect(Collectors.toSet());
+            } else {
+                racks = Collections.emptySet();
+            }
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) {
+                return true;
+            }
+            if (!(o instanceof PartitionRackInfo)) {
+                return false;
+            }
+            PartitionRackInfo rackInfo = (PartitionRackInfo) o;
+            return Objects.equals(racks, rackInfo.racks);
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(racks);
+        }
+
+        @Override
+        public String toString() {
+            return racks.isEmpty() ? "NO_RACKS" : "racks=" + racks;
         }
     }
 

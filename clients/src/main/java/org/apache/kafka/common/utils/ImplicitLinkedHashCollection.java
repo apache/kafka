@@ -320,7 +320,7 @@ public class ImplicitLinkedHashCollection<E extends ImplicitLinkedHashCollection
      * @param key               The element to match.
      * @return                  The match index, or INVALID_INDEX if no match was found.
      */
-    final private int findIndexOfEqualElement(Object key) {
+    private int findIndexOfEqualElement(Object key) {
         if (key == null || size == 0) {
             return INVALID_INDEX;
         }
@@ -553,6 +553,7 @@ public class ImplicitLinkedHashCollection<E extends ImplicitLinkedHashCollection
      * @param iter                  We will add all the elements accessible through this iterator
      *                              to the set.
      */
+    @SuppressWarnings("this-escape")
     public ImplicitLinkedHashCollection(Iterator<E> iter) {
         clear(0);
         while (iter.hasNext()) {

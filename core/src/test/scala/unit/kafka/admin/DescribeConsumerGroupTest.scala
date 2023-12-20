@@ -42,7 +42,7 @@ class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
 
     for (describeType <- describeTypes) {
       // note the group to be queried is a different (non-existing) group
-      val cgcArgs = Array("--bootstrap-server", brokerList, "--describe", "--group", missingGroup) ++ describeType
+      val cgcArgs = Array("--bootstrap-server", bootstrapServers(), "--describe", "--group", missingGroup) ++ describeType
       val service = getConsumerGroupService(cgcArgs)
 
       val output = TestUtils.grabConsoleOutput(service.describeGroups())
@@ -60,7 +60,7 @@ class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
       exitMessage = err
       throw new RuntimeException
     }
-    val cgcArgs = Array("--bootstrap-server", brokerList, "--describe", "--group", group, "--members", "--state")
+    val cgcArgs = Array("--bootstrap-server", bootstrapServers(), "--describe", "--group", group, "--members", "--state")
     try {
       ConsumerGroupCommand.main(cgcArgs)
     } catch {
@@ -81,7 +81,7 @@ class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
       exitMessage = err
       throw new RuntimeException
     }
-    val cgcArgs = Array("--bootstrap-server", brokerList, "--describe", "--all-groups", "--state", "Stable")
+    val cgcArgs = Array("--bootstrap-server", bootstrapServers(), "--describe", "--all-groups", "--state", "Stable")
     try {
       ConsumerGroupCommand.main(cgcArgs)
     } catch {
@@ -101,7 +101,7 @@ class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
     // run one consumer in the group consuming from a single-partition topic
     addConsumerGroupExecutor(numConsumers = 1)
     // note the group to be queried is a different (non-existing) group
-    val cgcArgs = Array("--bootstrap-server", brokerList, "--describe", "--group", group)
+    val cgcArgs = Array("--bootstrap-server", bootstrapServers(), "--describe", "--group", group)
     val service = getConsumerGroupService(cgcArgs)
 
     val (state, assignments) = service.collectGroupOffsets(group)
@@ -117,7 +117,7 @@ class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
     // run one consumer in the group consuming from a single-partition topic
     addConsumerGroupExecutor(numConsumers = 1)
     // note the group to be queried is a different (non-existing) group
-    val cgcArgs = Array("--bootstrap-server", brokerList, "--describe", "--group", group)
+    val cgcArgs = Array("--bootstrap-server", bootstrapServers(), "--describe", "--group", group)
     val service = getConsumerGroupService(cgcArgs)
 
     val (state, assignments) = service.collectGroupMembers(group, false)
@@ -137,7 +137,7 @@ class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
     // run one consumer in the group consuming from a single-partition topic
     addConsumerGroupExecutor(numConsumers = 1)
     // note the group to be queried is a different (non-existing) group
-    val cgcArgs = Array("--bootstrap-server", brokerList, "--describe", "--group", group)
+    val cgcArgs = Array("--bootstrap-server", bootstrapServers(), "--describe", "--group", group)
     val service = getConsumerGroupService(cgcArgs)
 
     val state = service.collectGroupState(group)
@@ -155,7 +155,7 @@ class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
       val group = this.group + describeType.mkString("")
       // run one consumer in the group consuming from a single-partition topic
       addConsumerGroupExecutor(numConsumers = 1, group = group)
-      val cgcArgs = Array("--bootstrap-server", brokerList, "--describe", "--group", group) ++ describeType
+      val cgcArgs = Array("--bootstrap-server", bootstrapServers(), "--describe", "--group", group) ++ describeType
       val service = getConsumerGroupService(cgcArgs)
 
       TestUtils.waitUntilTrue(() => {
@@ -179,12 +179,12 @@ class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
     val expectedNumLines = describeTypes.length * 2
 
     for (describeType <- describeTypes) {
-      val cgcArgs = Array("--bootstrap-server", brokerList, "--describe") ++ groups ++ describeType
+      val cgcArgs = Array("--bootstrap-server", bootstrapServers(), "--describe") ++ groups ++ describeType
       val service = getConsumerGroupService(cgcArgs)
 
       TestUtils.waitUntilTrue(() => {
         val (output, error) = TestUtils.grabConsoleOutputAndError(service.describeGroups())
-        val numLines = output.trim.split("\n").filterNot(line => line.isEmpty).length
+        val numLines = output.trim.split("\n").count(line => line.nonEmpty)
         (numLines == expectedNumLines) && error.isEmpty
       }, s"Expected a data row and no error in describe results with describe type ${describeType.mkString(" ")}.")
     }
@@ -203,12 +203,12 @@ class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
     val expectedNumLines = describeTypes.length * 2
 
     for (describeType <- describeTypes) {
-      val cgcArgs = Array("--bootstrap-server", brokerList, "--describe", "--all-groups") ++ describeType
+      val cgcArgs = Array("--bootstrap-server", bootstrapServers(), "--describe", "--all-groups") ++ describeType
       val service = getConsumerGroupService(cgcArgs)
 
       TestUtils.waitUntilTrue(() => {
         val (output, error) = TestUtils.grabConsoleOutputAndError(service.describeGroups())
-        val numLines = output.trim.split("\n").filterNot(line => line.isEmpty).length
+        val numLines = output.trim.split("\n").count(line => line.nonEmpty)
         (numLines == expectedNumLines) && error.isEmpty
       }, s"Expected a data row and no error in describe results with describe type ${describeType.mkString(" ")}.")
     }
@@ -221,7 +221,7 @@ class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
     // run one consumer in the group consuming from a single-partition topic
     addConsumerGroupExecutor(numConsumers = 1)
 
-    val cgcArgs = Array("--bootstrap-server", brokerList, "--describe", "--group", group)
+    val cgcArgs = Array("--bootstrap-server", bootstrapServers(), "--describe", "--group", group)
     val service = getConsumerGroupService(cgcArgs)
 
     TestUtils.waitUntilTrue(() => {
@@ -241,7 +241,7 @@ class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
 
     // run one consumer in the group consuming from a single-partition topic
     addConsumerGroupExecutor(numConsumers = 1)
-    val cgcArgs = Array("--bootstrap-server", brokerList, "--describe", "--group", group)
+    val cgcArgs = Array("--bootstrap-server", bootstrapServers(), "--describe", "--group", group)
     val service = getConsumerGroupService(cgcArgs)
 
     TestUtils.waitUntilTrue(() => {
@@ -274,7 +274,7 @@ class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
 
     // run one consumer in the group consuming from a single-partition topic
     addConsumerGroupExecutor(numConsumers = 1)
-    val cgcArgs = Array("--bootstrap-server", brokerList, "--describe", "--group", group)
+    val cgcArgs = Array("--bootstrap-server", bootstrapServers(), "--describe", "--group", group)
     val service = getConsumerGroupService(cgcArgs)
 
     TestUtils.waitUntilTrue(() => {
@@ -293,7 +293,7 @@ class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
 
     // run one consumer in the group consuming from a single-partition topic
     addConsumerGroupExecutor(numConsumers = 1, strategy = classOf[RoundRobinAssignor].getName)
-    val cgcArgs = Array("--bootstrap-server", brokerList, "--describe", "--group", group)
+    val cgcArgs = Array("--bootstrap-server", bootstrapServers(), "--describe", "--group", group)
     val service = getConsumerGroupService(cgcArgs)
 
     TestUtils.waitUntilTrue(() => {
@@ -314,7 +314,7 @@ class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
       val group = this.group + describeType.mkString("")
       // run one consumer in the group consuming from a single-partition topic
       val executor = addConsumerGroupExecutor(numConsumers = 1, group = group)
-      val cgcArgs = Array("--bootstrap-server", brokerList, "--describe", "--group", group) ++ describeType
+      val cgcArgs = Array("--bootstrap-server", bootstrapServers(), "--describe", "--group", group) ++ describeType
       val service = getConsumerGroupService(cgcArgs)
 
       TestUtils.waitUntilTrue(() => {
@@ -337,7 +337,7 @@ class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
     // run one consumer in the group consuming from a single-partition topic
     val executor = addConsumerGroupExecutor(numConsumers = 1)
 
-    val cgcArgs = Array("--bootstrap-server", brokerList, "--describe", "--group", group)
+    val cgcArgs = Array("--bootstrap-server", bootstrapServers(), "--describe", "--group", group)
     val service = getConsumerGroupService(cgcArgs)
 
     TestUtils.waitUntilTrue(() => {
@@ -369,7 +369,7 @@ class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
     // run one consumer in the group consuming from a single-partition topic
     val executor = addConsumerGroupExecutor(numConsumers = 1)
 
-    val cgcArgs = Array("--bootstrap-server", brokerList, "--describe", "--group", group)
+    val cgcArgs = Array("--bootstrap-server", bootstrapServers(), "--describe", "--group", group)
     val service = getConsumerGroupService(cgcArgs)
 
     TestUtils.waitUntilTrue(() => {
@@ -393,7 +393,7 @@ class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
     // run one consumer in the group consuming from a single-partition topic
     val executor = addConsumerGroupExecutor(numConsumers = 1)
 
-    val cgcArgs = Array("--bootstrap-server", brokerList, "--describe", "--group", group)
+    val cgcArgs = Array("--bootstrap-server", bootstrapServers(), "--describe", "--group", group)
     val service = getConsumerGroupService(cgcArgs)
 
     TestUtils.waitUntilTrue(() => {
@@ -421,7 +421,7 @@ class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
       val group = this.group + describeType.mkString("")
       // run two consumers in the group consuming from a single-partition topic
       addConsumerGroupExecutor(numConsumers = 2, group = group)
-      val cgcArgs = Array("--bootstrap-server", brokerList, "--describe", "--group", group) ++ describeType
+      val cgcArgs = Array("--bootstrap-server", bootstrapServers(), "--describe", "--group", group) ++ describeType
       val service = getConsumerGroupService(cgcArgs)
 
       TestUtils.waitUntilTrue(() => {
@@ -439,7 +439,7 @@ class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
     // run two consumers in the group consuming from a single-partition topic
     addConsumerGroupExecutor(numConsumers = 2)
 
-    val cgcArgs = Array("--bootstrap-server", brokerList, "--describe", "--group", group)
+    val cgcArgs = Array("--bootstrap-server", bootstrapServers(), "--describe", "--group", group)
     val service = getConsumerGroupService(cgcArgs)
 
     TestUtils.waitUntilTrue(() => {
@@ -458,7 +458,7 @@ class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
     // run two consumers in the group consuming from a single-partition topic
     addConsumerGroupExecutor(numConsumers = 2)
 
-    val cgcArgs = Array("--bootstrap-server", brokerList, "--describe", "--group", group)
+    val cgcArgs = Array("--bootstrap-server", bootstrapServers(), "--describe", "--group", group)
     val service = getConsumerGroupService(cgcArgs)
 
     TestUtils.waitUntilTrue(() => {
@@ -468,7 +468,7 @@ class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
         assignments.get.count(_.group == group) == 2 &&
         assignments.get.count { x => x.group == group && x.numPartitions == 1 } == 1 &&
         assignments.get.count { x => x.group == group && x.numPartitions == 0 } == 1 &&
-        assignments.get.count(_.assignment.nonEmpty) == 0
+        !assignments.get.exists(_.assignment.nonEmpty)
     }, "Expected rows for consumers with no assigned partitions in describe group results")
 
     val (state, assignments) = service.collectGroupMembers(group, true)
@@ -483,7 +483,7 @@ class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
     // run two consumers in the group consuming from a single-partition topic
     addConsumerGroupExecutor(numConsumers = 2)
 
-    val cgcArgs = Array("--bootstrap-server", brokerList, "--describe", "--group", group)
+    val cgcArgs = Array("--bootstrap-server", bootstrapServers(), "--describe", "--group", group)
     val service = getConsumerGroupService(cgcArgs)
 
     TestUtils.waitUntilTrue(() => {
@@ -502,7 +502,7 @@ class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
       val group = this.group + describeType.mkString("")
       // run two consumers in the group consuming from a two-partition topic
       addConsumerGroupExecutor(2, topic2, group = group)
-      val cgcArgs = Array("--bootstrap-server", brokerList, "--describe", "--group", group) ++ describeType
+      val cgcArgs = Array("--bootstrap-server", bootstrapServers(), "--describe", "--group", group) ++ describeType
       val service = getConsumerGroupService(cgcArgs)
 
       TestUtils.waitUntilTrue(() => {
@@ -522,7 +522,7 @@ class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
     // run two consumers in the group consuming from a two-partition topic
     addConsumerGroupExecutor(numConsumers = 2, topic2)
 
-    val cgcArgs = Array("--bootstrap-server", brokerList, "--describe", "--group", group)
+    val cgcArgs = Array("--bootstrap-server", bootstrapServers(), "--describe", "--group", group)
     val service = getConsumerGroupService(cgcArgs)
 
     TestUtils.waitUntilTrue(() => {
@@ -544,7 +544,7 @@ class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
     // run two consumers in the group consuming from a two-partition topic
     addConsumerGroupExecutor(numConsumers = 2, topic2)
 
-    val cgcArgs = Array("--bootstrap-server", brokerList, "--describe", "--group", group)
+    val cgcArgs = Array("--bootstrap-server", bootstrapServers(), "--describe", "--group", group)
     val service = getConsumerGroupService(cgcArgs)
 
     TestUtils.waitUntilTrue(() => {
@@ -570,7 +570,7 @@ class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
     // run two consumers in the group consuming from a two-partition topic
     addConsumerGroupExecutor(numConsumers = 2, topic2)
 
-    val cgcArgs = Array("--bootstrap-server", brokerList, "--describe", "--group", group)
+    val cgcArgs = Array("--bootstrap-server", bootstrapServers(), "--describe", "--group", group)
     val service = getConsumerGroupService(cgcArgs)
 
     TestUtils.waitUntilTrue(() => {
@@ -588,7 +588,7 @@ class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
     createTopic(topic2, 2, 1)
     addSimpleGroupExecutor(Seq(new TopicPartition(topic2, 0), new TopicPartition(topic2, 1)))
 
-    val cgcArgs = Array("--bootstrap-server", brokerList, "--describe", "--group", group)
+    val cgcArgs = Array("--bootstrap-server", bootstrapServers(), "--describe", "--group", group)
     val service = getConsumerGroupService(cgcArgs)
 
     TestUtils.waitUntilTrue(() => {
@@ -607,7 +607,7 @@ class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
     // run one consumer in the group consuming from a single-partition topic
     addConsumerGroupExecutor(numConsumers = 1)
     // set the group initialization timeout too low for the group to stabilize
-    val cgcArgs = Array("--bootstrap-server", brokerList, "--describe", "--timeout", "1", "--group", group) ++ describeType
+    val cgcArgs = Array("--bootstrap-server", bootstrapServers(), "--describe", "--timeout", "1", "--group", group) ++ describeType
     val service = getConsumerGroupService(cgcArgs)
 
     val e = assertThrows(classOf[ExecutionException], () => TestUtils.grabConsoleOutputAndError(service.describeGroups()))
@@ -623,7 +623,7 @@ class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
     addConsumerGroupExecutor(numConsumers = 1)
 
     // set the group initialization timeout too low for the group to stabilize
-    val cgcArgs = Array("--bootstrap-server", brokerList, "--describe", "--group", group, "--timeout", "1")
+    val cgcArgs = Array("--bootstrap-server", bootstrapServers(), "--describe", "--group", group, "--timeout", "1")
     val service = getConsumerGroupService(cgcArgs)
 
     val e = assertThrows(classOf[ExecutionException], () => service.collectGroupOffsets(group))
@@ -639,7 +639,7 @@ class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
     addConsumerGroupExecutor(numConsumers = 1)
 
     // set the group initialization timeout too low for the group to stabilize
-    val cgcArgs = Array("--bootstrap-server", brokerList, "--describe", "--group", group, "--timeout", "1")
+    val cgcArgs = Array("--bootstrap-server", bootstrapServers(), "--describe", "--group", group, "--timeout", "1")
     val service = getConsumerGroupService(cgcArgs)
 
     var e = assertThrows(classOf[ExecutionException], () => service.collectGroupMembers(group, false))
@@ -657,7 +657,7 @@ class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
     addConsumerGroupExecutor(numConsumers = 1)
 
     // set the group initialization timeout too low for the group to stabilize
-    val cgcArgs = Array("--bootstrap-server", brokerList, "--describe", "--group", group, "--timeout", "1")
+    val cgcArgs = Array("--bootstrap-server", bootstrapServers(), "--describe", "--group", group, "--timeout", "1")
     val service = getConsumerGroupService(cgcArgs)
 
     val e = assertThrows(classOf[ExecutionException], () => service.collectGroupState(group))
@@ -666,7 +666,7 @@ class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
 
   @Test
   def testDescribeWithUnrecognizedNewConsumerOption(): Unit = {
-    val cgcArgs = Array("--new-consumer", "--bootstrap-server", brokerList, "--describe", "--group", group)
+    val cgcArgs = Array("--new-consumer", "--bootstrap-server", bootstrapServers(), "--describe", "--group", group)
     assertThrows(classOf[joptsimple.OptionException], () => getConsumerGroupService(cgcArgs))
   }
 
@@ -680,7 +680,7 @@ class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
     // run one consumer in the group consuming from a single-partition topic
     addConsumerGroupExecutor(numConsumers = 1, customPropsOpt = Some(customProps))
 
-    val cgcArgs = Array("--bootstrap-server", brokerList, "--describe", "--group", group)
+    val cgcArgs = Array("--bootstrap-server", bootstrapServers(), "--describe", "--group", group)
     val service = getConsumerGroupService(cgcArgs)
 
     TestUtils.waitUntilTrue(() => {

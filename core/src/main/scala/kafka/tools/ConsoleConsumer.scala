@@ -22,7 +22,7 @@ import java.nio.charset.StandardCharsets
 import java.time.Duration
 import java.util.concurrent.CountDownLatch
 import java.util.regex.Pattern
-import java.util.{Collections, Locale, Map, Properties, Random}
+import java.util.{Collections, Locale, Map, Optional, Properties, Random}
 import com.typesafe.scalalogging.LazyLogging
 import joptsimple._
 import kafka.utils.Implicits._
@@ -33,9 +33,10 @@ import org.apache.kafka.common.errors.{AuthenticationException, TimeoutException
 import org.apache.kafka.common.record.TimestampType
 import org.apache.kafka.common.requests.ListOffsetsRequest
 import org.apache.kafka.common.serialization.{ByteArrayDeserializer, Deserializer}
+import org.apache.kafka.common.utils.Time
 import org.apache.kafka.common.utils.Utils
+import org.apache.kafka.server.util.{CommandDefaultOptions, CommandLineUtils}
 
-import scala.annotation.nowarn
 import scala.jdk.CollectionConverters._
 
 /**
@@ -62,14 +63,14 @@ object ConsoleConsumer extends Logging {
   }
 
   def run(conf: ConsumerConfig): Unit = {
-    val timeoutMs = if (conf.timeoutMs >= 0) conf.timeoutMs else Long.MaxValue
+    val timeoutMs = if (conf.timeoutMs >= 0) conf.timeoutMs.toLong else Long.MaxValue
     val consumer = new KafkaConsumer(consumerProps(conf), new ByteArrayDeserializer, new ByteArrayDeserializer)
 
     val consumerWrapper =
       if (conf.partitionArg.isDefined)
         new ConsumerWrapper(Option(conf.topicArg), conf.partitionArg, Option(conf.offsetArg), None, consumer, timeoutMs)
       else
-        new ConsumerWrapper(Option(conf.topicArg), None, None, Option(conf.whitelistArg), consumer, timeoutMs)
+        new ConsumerWrapper(Option(conf.topicArg), None, None, Option(conf.includedTopicsArg), consumer, timeoutMs)
 
     addShutdownHook(consumerWrapper, conf)
 
@@ -112,8 +113,8 @@ object ConsoleConsumer extends Logging {
       }
       messageCount += 1
       try {
-        formatter.writeTo(new ConsumerRecord(msg.topic, msg.partition, msg.offset, msg.timestamp,
-                                             msg.timestampType, 0, 0, 0, msg.key, msg.value, msg.headers), output)
+        formatter.writeTo(new ConsumerRecord(msg.topic, msg.partition, msg.offset, msg.timestamp, msg.timestampType,
+          0, 0, msg.key, msg.value, msg.headers, Optional.empty[Integer]), output)
       } catch {
         case e: Throwable =>
           if (skipMessageOnError) {
@@ -149,6 +150,8 @@ object ConsoleConsumer extends Logging {
     props ++= config.extraConsumerProps
     setAutoOffsetResetValue(config, props)
     props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, config.bootstrapServer)
+    if (props.getProperty(ConsumerConfig.CLIENT_ID_CONFIG) == null)
+      props.put(ConsumerConfig.CLIENT_ID_CONFIG, "console-consumer")
     CommandLineUtils.maybeMergeOptions(
       props, ConsumerConfig.ISOLATION_LEVEL_CONFIG, config.options, config.isolationLevelOpt)
     props
@@ -188,20 +191,26 @@ object ConsoleConsumer extends Logging {
   }
 
   class ConsumerConfig(args: Array[String]) extends CommandDefaultOptions(args) {
-    val topicIdOpt = parser.accepts("topic", "The topic id to consume on.")
+    val topicOpt = parser.accepts("topic", "The topic to consume on.")
       .withRequiredArg
       .describedAs("topic")
       .ofType(classOf[String])
-    val whitelistOpt = parser.accepts("whitelist", "Regular expression specifying whitelist of topics to include for consumption.")
+    val whitelistOpt = parser.accepts("whitelist",
+      "DEPRECATED, use --include instead; ignored if --include specified. Regular expression specifying list of topics to include for consumption.")
       .withRequiredArg
-      .describedAs("whitelist")
+      .describedAs("Java regex (String)")
+      .ofType(classOf[String])
+    val includeOpt = parser.accepts("include",
+      "Regular expression specifying list of topics to include for consumption.")
+      .withRequiredArg
+      .describedAs("Java regex (String)")
       .ofType(classOf[String])
     val partitionIdOpt = parser.accepts("partition", "The partition to consume from. Consumption " +
       "starts from the end of the partition unless '--offset' is specified.")
       .withRequiredArg
       .describedAs("partition")
       .ofType(classOf[java.lang.Integer])
-    val offsetOpt = parser.accepts("offset", "The offset id to consume from (a non-negative number), or 'earliest' which means from beginning, or 'latest' which means from end")
+    val offsetOpt = parser.accepts("offset", "The offset to consume from (a non-negative number), or 'earliest' which means from beginning, or 'latest' which means from end")
       .withRequiredArg
       .describedAs("consume offset")
       .ofType(classOf[String])
@@ -210,7 +219,7 @@ object ConsoleConsumer extends Logging {
       .withRequiredArg
       .describedAs("consumer_prop")
       .ofType(classOf[String])
-    val consumerConfigOpt = parser.accepts("consumer.config", s"Consumer config properties file. Note that ${consumerPropertyOpt} takes precedence over this config.")
+    val consumerConfigOpt = parser.accepts("consumer.config", s"Consumer config properties file. Note that $consumerPropertyOpt takes precedence over this config.")
       .withRequiredArg
       .describedAs("config file")
       .ofType(classOf[String])
@@ -239,6 +248,10 @@ object ConsoleConsumer extends Logging {
       .stripMargin)
       .withRequiredArg
       .describedAs("prop")
+      .ofType(classOf[String])
+    val messageFormatterConfigOpt = parser.accepts("formatter-config", s"Config properties file to initialize the message formatter. Note that $messageFormatterArgOpt takes precedence over this config.")
+      .withRequiredArg
+      .describedAs("config file")
       .ofType(classOf[String])
     val resetBeginningOpt = parser.accepts("from-beginning", "If the consumer does not already have an established offset to consume from, " +
       "start with the earliest message present in the log rather than the latest message.")
@@ -281,16 +294,15 @@ object ConsoleConsumer extends Logging {
 
     options = tryParse(parser, args)
 
-    CommandLineUtils.printHelpAndExitIfNeeded(this, "This tool helps to read data from Kafka topics and outputs it to standard output.")
+    CommandLineUtils.maybePrintHelpOrVersion(this, "This tool helps to read data from Kafka topics and outputs it to standard output.")
 
     var groupIdPassed = true
     val enableSystestEventsLogging = options.has(enableSystestEventsLoggingOpt)
 
     // topic must be specified.
-    var topicArg: String = null
-    var whitelistArg: String = null
-    var filterSpec: TopicFilter = null
-    val extraConsumerProps = CommandLineUtils.parseKeyValueArgs(options.valuesOf(consumerPropertyOpt).asScala)
+    var topicArg: String = _
+    var includedTopicsArg: String = _
+    val extraConsumerProps = CommandLineUtils.parseKeyValueArgs(options.valuesOf(consumerPropertyOpt))
     val consumerProps = if (options.has(consumerConfigOpt))
       Utils.loadProps(options.valueOf(consumerConfigOpt))
     else
@@ -299,7 +311,11 @@ object ConsoleConsumer extends Logging {
     val partitionArg = if (options.has(partitionIdOpt)) Some(options.valueOf(partitionIdOpt).intValue) else None
     val skipMessageOnError = options.has(skipMessageOnErrorOpt)
     val messageFormatterClass = Class.forName(options.valueOf(messageFormatterOpt))
-    val formatterArgs = CommandLineUtils.parseKeyValueArgs(options.valuesOf(messageFormatterArgOpt).asScala)
+    val formatterArgs = if (options.has(messageFormatterConfigOpt))
+      Utils.loadProps(options.valueOf(messageFormatterConfigOpt))
+    else
+      new Properties()
+    formatterArgs ++= CommandLineUtils.parseKeyValueArgs(options.valuesOf(messageFormatterArgOpt))
     val maxMessages = if (options.has(maxMessagesOpt)) options.valueOf(maxMessagesOpt).intValue else -1
     val timeoutMs = if (options.has(timeoutMsOpt)) options.valueOf(timeoutMsOpt).intValue else -1
     val bootstrapServer = options.valueOf(bootstrapServerOpt)
@@ -307,31 +323,37 @@ object ConsoleConsumer extends Logging {
     val valueDeserializer = options.valueOf(valueDeserializerOpt)
     val formatter: MessageFormatter = messageFormatterClass.getDeclaredConstructor().newInstance().asInstanceOf[MessageFormatter]
 
-    if (keyDeserializer != null && !keyDeserializer.isEmpty) {
+    if (keyDeserializer != null && keyDeserializer.nonEmpty) {
       formatterArgs.setProperty(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, keyDeserializer)
     }
-    if (valueDeserializer != null && !valueDeserializer.isEmpty) {
+    if (valueDeserializer != null && valueDeserializer.nonEmpty) {
       formatterArgs.setProperty(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, valueDeserializer)
     }
 
     formatter.configure(formatterArgs.asScala.asJava)
 
-    val topicOrFilterOpt = List(topicIdOpt, whitelistOpt).filter(options.has)
-    if (topicOrFilterOpt.size != 1)
-      CommandLineUtils.printUsageAndDie(parser, "Exactly one of whitelist/topic is required.")
-    topicArg = options.valueOf(topicIdOpt)
-    whitelistArg = options.valueOf(whitelistOpt)
+    topicArg = options.valueOf(topicOpt)
+    includedTopicsArg = if (options.has(includeOpt))
+      options.valueOf(includeOpt)
+    else
+      options.valueOf(whitelistOpt)
+
+    val topicOrFilterArgs = List(topicArg, includedTopicsArg).filterNot(_ == null)
+    // user need to specify value for either --topic or one of the include filters options (--include or --whitelist)
+    if (topicOrFilterArgs.size != 1)
+      CommandLineUtils.printUsageAndExit(parser, s"Exactly one of --include/--topic is required. " +
+        s"${if (options.has(whitelistOpt)) "--whitelist is DEPRECATED use --include instead; ignored if --include specified."}")
 
     if (partitionArg.isDefined) {
-      if (!options.has(topicIdOpt))
-        CommandLineUtils.printUsageAndDie(parser, "The topic is required when partition is specified.")
+      if (!options.has(topicOpt))
+        CommandLineUtils.printUsageAndExit(parser, "The topic is required when partition is specified.")
       if (fromBeginning && options.has(offsetOpt))
-        CommandLineUtils.printUsageAndDie(parser, "Options from-beginning and offset cannot be specified together.")
+        CommandLineUtils.printUsageAndExit(parser, "Options from-beginning and offset cannot be specified together.")
     } else if (options.has(offsetOpt))
-      CommandLineUtils.printUsageAndDie(parser, "The partition is required when offset is specified.")
+      CommandLineUtils.printUsageAndExit(parser, "The partition is required when offset is specified.")
 
     def invalidOffset(offset: String): Nothing =
-      CommandLineUtils.printUsageAndDie(parser, s"The provided offset value '$offset' is incorrect. Valid values are " +
+      ToolsUtils.printUsageAndExit(parser, s"The provided offset value '$offset' is incorrect. Valid values are " +
         "'earliest', 'latest', or a non-negative long.")
 
     val offsetArg =
@@ -363,7 +385,7 @@ object ConsoleConsumer extends Logging {
     ).flatten
 
     if (groupIdsProvided.size > 1) {
-      CommandLineUtils.printUsageAndDie(parser, "The group ids provided in different places (directly using '--group', "
+      CommandLineUtils.printUsageAndExit(parser, "The group ids provided in different places (directly using '--group', "
         + "via '--consumer-property', or via '--consumer.config') do not match. "
         + s"Detected group ids: ${groupIdsProvided.mkString("'", "', '", "'")}")
     }
@@ -381,25 +403,32 @@ object ConsoleConsumer extends Logging {
     }
 
     if (groupIdPassed && partitionArg.isDefined)
-      CommandLineUtils.printUsageAndDie(parser, "Options group and partition cannot be specified together.")
+      CommandLineUtils.printUsageAndExit(parser, "Options group and partition cannot be specified together.")
 
     def tryParse(parser: OptionParser, args: Array[String]): OptionSet = {
       try
         parser.parse(args: _*)
       catch {
         case e: OptionException =>
-          CommandLineUtils.printUsageAndDie(parser, e.getMessage)
+          ToolsUtils.printUsageAndExit(parser, e.getMessage)
       }
     }
   }
 
-  private[tools] class ConsumerWrapper(topic: Option[String], partitionId: Option[Int], offset: Option[Long], whitelist: Option[String],
-                                       consumer: Consumer[Array[Byte], Array[Byte]], val timeoutMs: Long = Long.MaxValue) {
+  private[tools] class ConsumerWrapper(
+    topic: Option[String],
+    partitionId: Option[Int],
+    offset: Option[Long],
+    includedTopics: Option[String],
+    consumer: Consumer[Array[Byte], Array[Byte]],
+    timeoutMs: Long = Long.MaxValue,
+    time: Time = Time.SYSTEM
+  ) {
     consumerInit()
     var recordIter = Collections.emptyList[ConsumerRecord[Array[Byte], Array[Byte]]]().iterator()
 
     def consumerInit(): Unit = {
-      (topic, partitionId, offset, whitelist) match {
+      (topic, partitionId, offset, includedTopics) match {
         case (Some(topic), Some(partitionId), Some(offset), None) =>
           seek(topic, partitionId, offset)
         case (Some(topic), Some(partitionId), None, None) =>
@@ -407,11 +436,11 @@ object ConsoleConsumer extends Logging {
           seek(topic, partitionId, ListOffsetsRequest.LATEST_TIMESTAMP)
         case (Some(topic), None, None, None) =>
           consumer.subscribe(Collections.singletonList(topic))
-        case (None, None, None, Some(whitelist)) =>
-          consumer.subscribe(Pattern.compile(whitelist))
+        case (None, None, None, Some(include)) =>
+          consumer.subscribe(Pattern.compile(include))
         case _ =>
           throw new IllegalArgumentException("An invalid combination of arguments is provided. " +
-            "Exactly one of 'topic' or 'whitelist' must be provided. " +
+            "Exactly one of 'topic' or 'include' must be provided. " +
             "If 'topic' is provided, an optional 'partition' may also be provided. " +
             "If 'partition' is provided, an optional 'offset' may also be provided, otherwise, consumption starts from the end of the partition.")
       }
@@ -439,10 +468,12 @@ object ConsoleConsumer extends Logging {
     }
 
     def receive(): ConsumerRecord[Array[Byte], Array[Byte]] = {
-      if (!recordIter.hasNext) {
+      val startTimeMs = time.milliseconds
+      while (!recordIter.hasNext) {
         recordIter = consumer.poll(Duration.ofMillis(timeoutMs)).iterator
-        if (!recordIter.hasNext)
+        if (!recordIter.hasNext && (time.milliseconds - startTimeMs > timeoutMs)) {
           throw new TimeoutException()
+        }
       }
 
       recordIter.next
@@ -579,7 +610,7 @@ class DefaultMessageFormatter extends MessageFormatter {
   }
 
   private def getDeserializerProperty(isKey: Boolean)(configs: Map[String, _], propertyName: String): Deserializer[_] = {
-    val deserializer = Class.forName(configs.get(propertyName).asInstanceOf[String]).newInstance().asInstanceOf[Deserializer[_]]
+    val deserializer = Class.forName(configs.get(propertyName).asInstanceOf[String]).getDeclaredConstructor().newInstance().asInstanceOf[Deserializer[_]]
     val deserializerConfig = propertiesWithKeyPrefixStripped(propertyName + ".", configs)
       .asScala
       .asJava
@@ -614,18 +645,3 @@ class NoOpMessageFormatter extends MessageFormatter {
   def writeTo(consumerRecord: ConsumerRecord[Array[Byte], Array[Byte]], output: PrintStream): Unit = {}
 }
 
-class ChecksumMessageFormatter extends MessageFormatter {
-  private var topicStr: String = _
-
-  override def configure(configs: Map[String, _]): Unit = {
-    topicStr = if (configs.containsKey("topic"))
-      configs.get("topic").toString + ":"
-    else
-      ""
-  }
-
-  @nowarn("cat=deprecation")
-  def writeTo(consumerRecord: ConsumerRecord[Array[Byte], Array[Byte]], output: PrintStream): Unit = {
-    output.println(topicStr + "checksum:" + consumerRecord.checksum)
-  }
-}

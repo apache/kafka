@@ -19,7 +19,7 @@ package kafka.tools
 
 import kafka.network.RequestChannel
 import kafka.raft.RaftManager
-import kafka.server.{ApiRequestHandler, ApiVersionManager}
+import kafka.server.{ApiRequestHandler, ApiVersionManager, RequestLocal}
 import kafka.utils.Logging
 import org.apache.kafka.common.internals.FatalExitError
 import org.apache.kafka.common.message.{BeginQuorumEpochResponseData, EndQuorumEpochResponseData, FetchResponseData, FetchSnapshotResponseData, VoteResponseData}
@@ -37,7 +37,7 @@ class TestRaftRequestHandler(
   apiVersionManager: ApiVersionManager
 ) extends ApiRequestHandler with Logging {
 
-  override def handle(request: RequestChannel.Request): Unit = {
+  override def handle(request: RequestChannel.Request, requestLocal: RequestLocal): Unit = {
     try {
       trace(s"Handling request:${request.requestDesc(true)} with context ${request.context}")
       request.header.apiKey match {

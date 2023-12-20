@@ -39,6 +39,7 @@ public abstract class Type {
 
     /**
      * Read the typed object from the buffer
+     * Please remember to do size validation before creating the container (ex: array) for the following data
      *
      * @throws SchemaException If the object is not valid for its type
      */
@@ -688,9 +689,12 @@ public abstract class Type {
             if (size > buffer.remaining())
                 throw new SchemaException("Error reading bytes of size " + size + ", only " + buffer.remaining() + " bytes available");
 
+            int limit = buffer.limit();
+            int newPosition = buffer.position() + size;
+            buffer.limit(newPosition);
             ByteBuffer val = buffer.slice();
-            val.limit(size);
-            buffer.position(buffer.position() + size);
+            buffer.limit(limit);
+            buffer.position(newPosition);
             return val;
         }
 
@@ -738,9 +742,12 @@ public abstract class Type {
             if (size > buffer.remaining())
                 throw new SchemaException("Error reading bytes of size " + size + ", only " + buffer.remaining() + " bytes available");
 
+            int limit = buffer.limit();
+            int newPosition = buffer.position() + size;
+            buffer.limit(newPosition);
             ByteBuffer val = buffer.slice();
-            val.limit(size);
-            buffer.position(buffer.position() + size);
+            buffer.limit(limit);
+            buffer.position(newPosition);
             return val;
         }
 
@@ -799,9 +806,12 @@ public abstract class Type {
             if (size > buffer.remaining())
                 throw new SchemaException("Error reading bytes of size " + size + ", only " + buffer.remaining() + " bytes available");
 
+            int limit = buffer.limit();
+            int newPosition = buffer.position() + size;
+            buffer.limit(newPosition);
             ByteBuffer val = buffer.slice();
-            val.limit(size);
-            buffer.position(buffer.position() + size);
+            buffer.limit(limit);
+            buffer.position(newPosition);
             return val;
         }
 
@@ -864,9 +874,12 @@ public abstract class Type {
             if (size > buffer.remaining())
                 throw new SchemaException("Error reading bytes of size " + size + ", only " + buffer.remaining() + " bytes available");
 
+            int limit = buffer.limit();
+            int newPosition = buffer.position() + size;
+            buffer.limit(newPosition);
             ByteBuffer val = buffer.slice();
-            val.limit(size);
-            buffer.position(buffer.position() + size);
+            buffer.limit(limit);
+            buffer.position(newPosition);
             return val;
         }
 
@@ -1120,7 +1133,7 @@ public abstract class Type {
             b.append("</td>");
             b.append("</tr>\n");
         }
-        b.append("</table>\n");
+        b.append("</tbody></table>\n");
         return b.toString();
     }
 

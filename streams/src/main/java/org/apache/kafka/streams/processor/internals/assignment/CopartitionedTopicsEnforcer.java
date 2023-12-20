@@ -101,8 +101,8 @@ public class CopartitionedTopicsEnforcer {
                 .orElseThrow(emptyNumberOfPartitionsExceptionSupplier(config.name()));
 
             if (numberOfPartitionsOfInternalTopic != numPartitionsToUseForRepartitionTopics) {
-                final String msg = String.format("%sNumber of partitions [%s] of repartition topic [%s] " +
-                                                 "doesn't match number of partitions [%s] of the source topic.",
+                final String msg = String.format("%sNumber of partitions [%d] of repartition topic [%s] " +
+                                                 "doesn't match number of partitions [%d] of the source topic.",
                                                  logPrefix,
                                                  numberOfPartitionsOfInternalTopic,
                                                  config.name(),

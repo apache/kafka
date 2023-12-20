@@ -18,12 +18,18 @@ package org.apache.kafka.tools;
 
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
+import org.apache.kafka.common.utils.Utils;
 
+import java.io.PrintStream;
+import java.util.Arrays;
+import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.TreeMap;
+import java.util.stream.Collectors;
 
 public class ToolsUtils {
-
     /**
      * print out the metrics in alphabetical order
      * @param metrics   the metrics to be printed out
@@ -51,5 +57,87 @@ public class ToolsUtils {
                 System.out.println(String.format(outputFormat, entry.getKey(), entry.getValue()));
             }
         }
+    }
+
+    private static void appendColumnValue(
+        StringBuilder rowBuilder,
+        String value,
+        int length
+    ) {
+        int padLength = length - value.length();
+        rowBuilder.append(value);
+        for (int i = 0; i < padLength; i++)
+            rowBuilder.append(' ');
+    }
+
+    private static void printRow(
+        List<Integer> columnLengths,
+        List<String> row,
+        PrintStream out
+    ) {
+        StringBuilder rowBuilder = new StringBuilder();
+        for (int i = 0; i < row.size(); i++) {
+            Integer columnLength = columnLengths.get(i);
+            String columnValue = row.get(i);
+            appendColumnValue(rowBuilder, columnValue, columnLength);
+            rowBuilder.append('\t');
+        }
+        out.println(rowBuilder);
+    }
+
+    public static void prettyPrintTable(
+        List<String> headers,
+        List<List<String>> rows,
+        PrintStream out
+    ) {
+        List<Integer> columnLengths = headers.stream()
+            .map(String::length)
+            .collect(Collectors.toList());
+
+        for (List<String> row : rows) {
+            for (int i = 0; i < headers.size(); i++) {
+                columnLengths.set(i, Math.max(columnLengths.get(i), row.get(i).length()));
+            }
+        }
+
+        printRow(columnLengths, headers, out);
+        rows.forEach(row -> printRow(columnLengths, row, out));
+    }
+
+    public static void validateBootstrapServer(String hostPort) throws IllegalArgumentException {
+        if (hostPort == null || hostPort.trim().isEmpty()) {
+            throw new IllegalArgumentException("Error while validating the bootstrap address\n");
+        }
+
+        String[] hostPorts;
+
+        if (hostPort.contains(",")) {
+            hostPorts = hostPort.split(",");
+        } else {
+            hostPorts = new String[] {hostPort};
+        }
+
+        String[] validHostPort = Arrays.stream(hostPorts)
+                .filter(hostPortData -> Utils.getPort(hostPortData) != null)
+                .toArray(String[]::new);
+
+        if (validHostPort.length == 0 || validHostPort.length != hostPorts.length) {
+            throw new IllegalArgumentException("Please provide valid host:port like host1:9091,host2:9092\n");
+        }
+    }
+
+    /**
+     * Return all duplicates in a list. A duplicated element will appear only once.
+     */
+    public static <T> Set<T> duplicates(List<T> s) {
+        Set<T> set = new HashSet<>();
+        Set<T> duplicates = new HashSet<>();
+
+        s.forEach(element -> {
+            if (!set.add(element)) {
+                duplicates.add(element);
+            }
+        });
+        return duplicates;
     }
 }

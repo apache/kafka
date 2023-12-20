@@ -21,6 +21,7 @@ import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.errors.PolicyViolationException;
 
 import java.util.Map;
+import java.util.Objects;
 
 /**
  * <p>An interface for enforcing a policy on alter configs requests.
@@ -61,6 +62,19 @@ public interface AlterConfigPolicy extends Configurable, AutoCloseable {
 
         public ConfigResource resource() {
             return resource;
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(resource, configs);
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            if ((o == null) || (!o.getClass().equals(getClass()))) return false;
+            RequestMetadata other = (RequestMetadata) o;
+            return resource.equals(other.resource) &&
+                configs.equals(other.configs);
         }
 
         @Override

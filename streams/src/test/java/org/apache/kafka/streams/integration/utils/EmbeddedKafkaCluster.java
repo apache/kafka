@@ -17,13 +17,13 @@
 package org.apache.kafka.streams.integration.utils;
 
 import kafka.server.ConfigType;
-import kafka.server.KafkaConfig$;
+import kafka.server.KafkaConfig;
 import kafka.server.KafkaServer;
-import kafka.utils.MockTime;
 import kafka.zk.EmbeddedZookeeper;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
+import org.apache.kafka.server.util.MockTime;
 import org.apache.kafka.test.TestCondition;
 import org.apache.kafka.test.TestUtils;
 import org.slf4j.Logger;
@@ -53,6 +53,7 @@ public class EmbeddedKafkaCluster {
     private final KafkaEmbedded[] brokers;
 
     private final Properties brokerConfig;
+    private final List<Properties> brokerConfigOverrides;
     public final MockTime time;
 
     public EmbeddedKafkaCluster(final int numBrokers) {
@@ -67,16 +68,35 @@ public class EmbeddedKafkaCluster {
     public EmbeddedKafkaCluster(final int numBrokers,
                                 final Properties brokerConfig,
                                 final long mockTimeMillisStart) {
-        this(numBrokers, brokerConfig, mockTimeMillisStart, System.nanoTime());
+        this(numBrokers, brokerConfig, Collections.emptyList(), mockTimeMillisStart);
     }
 
     public EmbeddedKafkaCluster(final int numBrokers,
                                 final Properties brokerConfig,
+                                final List<Properties> brokerConfigOverrides) {
+        this(numBrokers, brokerConfig, brokerConfigOverrides, System.currentTimeMillis());
+    }
+
+    public EmbeddedKafkaCluster(final int numBrokers,
+                                final Properties brokerConfig,
+                                final List<Properties> brokerConfigOverrides,
+                                final long mockTimeMillisStart) {
+        this(numBrokers, brokerConfig, brokerConfigOverrides, mockTimeMillisStart, System.nanoTime());
+    }
+
+    public EmbeddedKafkaCluster(final int numBrokers,
+                                final Properties brokerConfig,
+                                final List<Properties> brokerConfigOverrides,
                                 final long mockTimeMillisStart,
                                 final long mockTimeNanoStart) {
+        if (!brokerConfigOverrides.isEmpty() && brokerConfigOverrides.size() != numBrokers) {
+            throw new IllegalArgumentException("Size of brokerConfigOverrides " + brokerConfigOverrides.size()
+                + " must match broker number " + numBrokers);
+        }
         brokers = new KafkaEmbedded[numBrokers];
         this.brokerConfig = brokerConfig;
         time = new MockTime(mockTimeMillisStart, mockTimeNanoStart);
+        this.brokerConfigOverrides = brokerConfigOverrides;
     }
 
     /**
@@ -88,21 +108,27 @@ public class EmbeddedKafkaCluster {
         zookeeper = new EmbeddedZookeeper();
         log.debug("ZooKeeper instance is running at {}", zKConnectString());
 
-        brokerConfig.put(KafkaConfig$.MODULE$.ZkConnectProp(), zKConnectString());
-        brokerConfig.put(KafkaConfig$.MODULE$.PortProp(), DEFAULT_BROKER_PORT);
-        putIfAbsent(brokerConfig, KafkaConfig$.MODULE$.DeleteTopicEnableProp(), true);
-        putIfAbsent(brokerConfig, KafkaConfig$.MODULE$.LogCleanerDedupeBufferSizeProp(), 2 * 1024 * 1024L);
-        putIfAbsent(brokerConfig, KafkaConfig$.MODULE$.GroupMinSessionTimeoutMsProp(), 0);
-        putIfAbsent(brokerConfig, KafkaConfig$.MODULE$.GroupInitialRebalanceDelayMsProp(), 0);
-        putIfAbsent(brokerConfig, KafkaConfig$.MODULE$.OffsetsTopicReplicationFactorProp(), (short) 1);
-        putIfAbsent(brokerConfig, KafkaConfig$.MODULE$.OffsetsTopicPartitionsProp(), 5);
-        putIfAbsent(brokerConfig, KafkaConfig$.MODULE$.TransactionsTopicPartitionsProp(), 5);
-        putIfAbsent(brokerConfig, KafkaConfig$.MODULE$.AutoCreateTopicsEnableProp(), true);
+        brokerConfig.put(KafkaConfig.ZkConnectProp(), zKConnectString());
+        putIfAbsent(brokerConfig, KafkaConfig.ListenersProp(), "PLAINTEXT://localhost:" + DEFAULT_BROKER_PORT);
+        putIfAbsent(brokerConfig, KafkaConfig.DeleteTopicEnableProp(), true);
+        putIfAbsent(brokerConfig, KafkaConfig.LogCleanerDedupeBufferSizeProp(), 2 * 1024 * 1024L);
+        putIfAbsent(brokerConfig, KafkaConfig.GroupMinSessionTimeoutMsProp(), 0);
+        putIfAbsent(brokerConfig, KafkaConfig.GroupInitialRebalanceDelayMsProp(), 0);
+        putIfAbsent(brokerConfig, KafkaConfig.OffsetsTopicReplicationFactorProp(), (short) 1);
+        putIfAbsent(brokerConfig, KafkaConfig.OffsetsTopicPartitionsProp(), 5);
+        putIfAbsent(brokerConfig, KafkaConfig.TransactionsTopicPartitionsProp(), 5);
+        putIfAbsent(brokerConfig, KafkaConfig.AutoCreateTopicsEnableProp(), true);
 
         for (int i = 0; i < brokers.length; i++) {
-            brokerConfig.put(KafkaConfig$.MODULE$.BrokerIdProp(), i);
-            log.debug("Starting a Kafka instance on port {} ...", brokerConfig.get(KafkaConfig$.MODULE$.PortProp()));
-            brokers[i] = new KafkaEmbedded(brokerConfig, time);
+            brokerConfig.put(KafkaConfig.BrokerIdProp(), i);
+            log.debug("Starting a Kafka instance on {} ...", brokerConfig.get(KafkaConfig.ListenersProp()));
+
+            final Properties effectiveConfig = new Properties();
+            effectiveConfig.putAll(brokerConfig);
+            if (brokerConfigOverrides != null && brokerConfigOverrides.size() > i) {
+                effectiveConfig.putAll(brokerConfigOverrides.get(i));
+            }
+            brokers[i] = new KafkaEmbedded(effectiveConfig, time);
 
             log.debug("Kafka instance is running at {}, connected to ZooKeeper at {}",
                 brokers[i].brokerList(), brokers[i].zookeeperConnect());

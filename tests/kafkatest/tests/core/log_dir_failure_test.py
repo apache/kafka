@@ -72,7 +72,7 @@ class LogDirFailureTest(ProduceConsumeValidateTest):
                                   },
                                   # Set log.roll.ms to 3 seconds so that broker will detect disk error sooner when it creates log segment
                                   # Otherwise broker will still be able to read/write the log file even if the log directory is inaccessible.
-                                  server_prop_overides=[
+                                  server_prop_overrides=[
                                       [config_property.OFFSETS_TOPIC_NUM_PARTITIONS, "1"],
                                       [config_property.LOG_FLUSH_INTERVAL_MESSAGE, "5"],
                                       [config_property.REPLICA_HIGHWATERMARK_CHECKPOINT_INTERVAL_MS, "60000"],
