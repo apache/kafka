@@ -333,11 +333,7 @@ class KafkaRequestHandlerTest {
 
     brokerTopicMetrics.recordRemoteLogMetadataCount(1, 2)
     brokerTopicMetrics.recordRemoteLogMetadataCount(2, 3)
-    assertEquals(3, brokerTopicMetrics.remoteLogMetadataCount)
-
-
-    // verify there will be no minus value for a partition
-    assertEquals(5, brokerTopicMetrics.remoteLogMetadataCount)
+    assertEquals(6, brokerTopicMetrics.remoteLogMetadataCount)
 
     brokerTopicMetrics.close()
 

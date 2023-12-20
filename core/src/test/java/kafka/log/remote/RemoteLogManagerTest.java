@@ -110,6 +110,7 @@ import java.util.TreeMap;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.BiConsumer;
 import java.util.function.Supplier;
@@ -701,16 +702,22 @@ public class RemoteLogManagerTest {
         CountDownLatch copyLogSegmentLatch = new CountDownLatch(1);
         doAnswer(ans -> {
             // waiting for verification
-            copyLogSegmentLatch.await();
+            copyLogSegmentLatch.await(5000, TimeUnit.MILLISECONDS);
             return Optional.empty();
         }).when(remoteStorageManager).copyLogSegmentData(any(RemoteLogSegmentMetadata.class), any(LogSegmentData.class));
+
+        CountDownLatch remoteLogMetadataCountLatch = new CountDownLatch(1);
+        doAnswer(ans -> {
+            remoteLogMetadataCountLatch.await(5000, TimeUnit.MILLISECONDS);
+            return null;
+        }).when(remoteStorageManager).deleteLogSegmentData(any(RemoteLogSegmentMetadata.class));
 
         Partition mockLeaderPartition = mockPartition(leaderTopicIdPartition);
         Partition mockFollowerPartition = mockPartition(followerTopicIdPartition);
         List<RemoteLogSegmentMetadata> list = listRemoteLogSegmentMetadata(leaderTopicIdPartition, segmentCount, 100, 1024, RemoteLogSegmentState.COPY_SEGMENT_FINISHED);
         // return 3 metadata and then return 0 to simulate all segments are deleted
         when(remoteLogMetadataManager.listRemoteLogSegments(leaderTopicIdPartition)).thenReturn(list.iterator()).thenReturn(Collections.emptyIterator());
-        when(remoteLogMetadataManager.listRemoteLogSegments(leaderTopicIdPartition, 0)).thenReturn(list.iterator());
+        when(remoteLogMetadataManager.listRemoteLogSegments(leaderTopicIdPartition, 0)).thenReturn(list.iterator()).thenReturn(list.iterator());
         when(remoteLogMetadataManager.listRemoteLogSegments(leaderTopicIdPartition, 1)).thenReturn(list.iterator());
         when(remoteLogMetadataManager.listRemoteLogSegments(leaderTopicIdPartition, 2)).thenReturn(list.iterator());
 
@@ -721,12 +728,6 @@ public class RemoteLogManagerTest {
         assertTrue((double) yammerMetricValue("RemoteLogManagerTasksAvgIdlePercent") < 1.0);
 
         copyLogSegmentLatch.countDown();
-
-        CountDownLatch remoteLogMetadataCountLatch = new CountDownLatch(1);
-        doAnswer(ans -> {
-            remoteLogMetadataCountLatch.await();
-            return null;
-        }).when(remoteStorageManager).deleteLogSegmentData(any(RemoteLogSegmentMetadata.class));
 
         // Now, the `RemoteLogMetadataCount` should set to the expected value
         TestUtils.waitForCondition(() -> safeLongYammerMetricValue("RemoteLogMetadataCount,topic=" + leaderTopicIdPartition.topic()) == segmentCount,
@@ -823,7 +824,7 @@ public class RemoteLogManagerTest {
         CountDownLatch latch = new CountDownLatch(1);
         doAnswer(ans -> Optional.empty()).doAnswer(ans -> {
             // waiting for verification
-            latch.await();
+            latch.await(5000, TimeUnit.MILLISECONDS);
             return Optional.empty();
         }).when(remoteStorageManager).copyLogSegmentData(any(RemoteLogSegmentMetadata.class), any(LogSegmentData.class));
 
