@@ -279,7 +279,7 @@ public class CoordinatorRuntimeTest {
         }
 
         @Override
-        public void replayTransactionEndMarker(
+        public void replayEndTransactionMarker(
             long producerId,
             short producerEpoch,
             TransactionResult result
@@ -1396,14 +1396,14 @@ public class CoordinatorRuntimeTest {
         assertEquals(Collections.singletonList(0L), ctx.coordinator.snapshotRegistry().epochsList());
 
         // Override the coordinator with a coordinator that throws
-        // an exception when replayTransactionEndMarker is called.
+        // an exception when replayEndTransactionMarker is called.
         SnapshotRegistry snapshotRegistry = ctx.coordinator.snapshotRegistry();
         ctx.coordinator = new SnapshottableCoordinator<>(
             new LogContext(),
             snapshotRegistry,
             new MockCoordinatorShard(snapshotRegistry, ctx.timer) {
                 @Override
-                public void replayTransactionEndMarker(
+                public void replayEndTransactionMarker(
                     long producerId,
                     short producerEpoch,
                     TransactionResult result

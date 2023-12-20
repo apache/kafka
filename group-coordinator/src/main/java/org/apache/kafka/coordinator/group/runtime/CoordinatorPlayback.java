@@ -49,7 +49,7 @@ public interface CoordinatorPlayback<U> {
      * @param result        The result of the transaction.
      * @throws RuntimeException if the transaction can not be completed.
      */
-    void replayTransactionEndMarker(
+    void replayEndTransactionMarker(
         long producerId,
         short producerEpoch,
         TransactionResult result

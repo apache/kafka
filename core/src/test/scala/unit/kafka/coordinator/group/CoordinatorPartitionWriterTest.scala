@@ -239,7 +239,7 @@ class CoordinatorPartitionWriterTest {
 
   @ParameterizedTest
   @EnumSource(value = classOf[ControlRecordType], names = Array("COMMIT", "ABORT"))
-  def testWriteTransactionEndMarker(controlRecordType: ControlRecordType): Unit = {
+  def testWriteEndTransactionMarker(controlRecordType: ControlRecordType): Unit = {
     val tp = new TopicPartition("foo", 0)
     val replicaManager = mock(classOf[ReplicaManager])
     val time = new MockTime()

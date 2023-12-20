@@ -974,7 +974,7 @@ public class GroupCoordinatorShardTest {
 
     @ParameterizedTest
     @EnumSource(value = TransactionResult.class)
-    public void testReplayTransactionEndMarker(TransactionResult result) {
+    public void testReplayEndTransactionMarker(TransactionResult result) {
         GroupMetadataManager groupMetadataManager = mock(GroupMetadataManager.class);
         OffsetMetadataManager offsetMetadataManager = mock(OffsetMetadataManager.class);
         CoordinatorMetrics coordinatorMetrics = mock(CoordinatorMetrics.class);
@@ -990,7 +990,7 @@ public class GroupCoordinatorShardTest {
             metricsShard
         );
 
-        coordinator.replayTransactionEndMarker(
+        coordinator.replayEndTransactionMarker(
             100L,
             (short) 5,
             result

@@ -443,7 +443,7 @@ public class OffsetMetadataManagerTest {
             lastWrittenOffset++;
         }
 
-        private void replayTransactionEndMarker(
+        private void replayEndTransactionMarker(
             long producerId,
             TransactionResult result
         ) {
@@ -2447,10 +2447,10 @@ public class OffsetMetadataManagerTest {
         ));
 
         // Replaying an end marker with an unknown producer id should not fail.
-        context.replayTransactionEndMarker(1L, TransactionResult.COMMIT);
+        context.replayEndTransactionMarker(1L, TransactionResult.COMMIT);
 
         // Replaying an end marker to commit transaction of producer id 5.
-        context.replayTransactionEndMarker(5L, TransactionResult.COMMIT);
+        context.replayEndTransactionMarker(5L, TransactionResult.COMMIT);
 
         // The pending offset is removed...
         assertNull(context.offsetMetadataManager.pendingTransactionalOffset(
@@ -2474,7 +2474,7 @@ public class OffsetMetadataManagerTest {
         ));
 
         // Replaying an end marker to abort transaction of producer id 6.
-        context.replayTransactionEndMarker(6L, TransactionResult.ABORT);
+        context.replayEndTransactionMarker(6L, TransactionResult.ABORT);
 
         // The pending offset is removed.
         assertNull(context.offsetMetadataManager.pendingTransactionalOffset(

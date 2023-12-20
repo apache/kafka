@@ -63,14 +63,14 @@ public interface CoordinatorShard<U> {
     ) throws RuntimeException;
 
     /**
-     * Applies the transaction end marker.
+     * Applies the end transaction marker.
      *
      * @param producerId    The producer id.
      * @param producerEpoch The producer epoch.
      * @param result        The result of the transaction.
      * @throws RuntimeException if the transaction can not be completed.
      */
-    default void replayTransactionEndMarker(
+    default void replayEndTransactionMarker(
         long producerId,
         short producerEpoch,
         TransactionResult result

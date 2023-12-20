@@ -1003,7 +1003,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
                     long prevLastWrittenOffset = context.coordinator.lastWrittenOffset();
 
                     try {
-                        context.coordinator.replayTransactionEndMarker(
+                        context.coordinator.replayEndTransactionMarker(
                             producerId,
                             producerEpoch,
                             result
@@ -1068,7 +1068,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
 
         @Override
         public String toString() {
-            return "TransactionEndMarkerEvent(name=" + name + ")";
+            return "CoordinatorCompleteTransactionEvent(name=" + name + ")";
         }
     }
 

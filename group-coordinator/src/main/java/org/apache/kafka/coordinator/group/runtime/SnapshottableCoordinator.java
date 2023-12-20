@@ -113,19 +113,19 @@ class SnapshottableCoordinator<S extends CoordinatorShard<U>, U> implements Coor
     }
 
     /**
-     * Applies the transaction end marker.
+     * Applies the end transaction marker.
      *
      * @param producerId    The producer id.
      * @param producerEpoch The producer epoch.
      * @param result        The result of the transaction.
      */
     @Override
-    public synchronized void replayTransactionEndMarker(
+    public synchronized void replayEndTransactionMarker(
         long producerId,
         short producerEpoch,
         TransactionResult result
     ) {
-        coordinator.replayTransactionEndMarker(producerId, producerEpoch, result);
+        coordinator.replayEndTransactionMarker(producerId, producerEpoch, result);
     }
 
     /**
