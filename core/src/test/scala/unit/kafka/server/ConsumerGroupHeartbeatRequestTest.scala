@@ -50,7 +50,7 @@ class ConsumerGroupHeartbeatRequestTest(cluster: ClusterInstance) {
   }
 
   @ClusterTest(clusterType = Type.KRAFT, serverProperties = Array(
-    new ClusterConfigProperty(key = "group.coordinator.new.enable", value = "true"),
+    new ClusterConfigProperty(key = "group.coordinator.rebalance.protocols", value = "generic,consumer"),
     new ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "1"),
     new ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1")
   ))
@@ -138,7 +138,7 @@ class ConsumerGroupHeartbeatRequestTest(cluster: ClusterInstance) {
   }
 
   @ClusterTest(clusterType = Type.KRAFT, serverProperties = Array(
-    new ClusterConfigProperty(key = "group.coordinator.new.enable", value = "true"),
+    new ClusterConfigProperty(key = "group.coordinator.rebalance.protocols", value = "generic,consumer"),
     new ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "1"),
     new ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1")
   ))
@@ -252,7 +252,7 @@ class ConsumerGroupHeartbeatRequestTest(cluster: ClusterInstance) {
   }
 
   @ClusterTest(clusterType = Type.KRAFT, serverProperties = Array(
-    new ClusterConfigProperty(key = "group.coordinator.new.enable", value = "true"),
+    new ClusterConfigProperty(key = "group.coordinator.rebalance.protocols", value = "generic,consumer"),
     new ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "1"),
     new ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1"),
     new ClusterConfigProperty(key = "group.consumer.session.timeout.ms", value = "5000"),
