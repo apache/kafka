@@ -110,7 +110,7 @@ final class StructRegistry {
                     // Synthesize a StructSpec object out of the fields.
                     StructSpec spec = new StructSpec(typeName,
                         field.versions().toString(),
-                        null, // version deprecations not supported at field level //FIXME Perhaps we should pass `Versions.NONE.toString` instead
+                        Versions.NONE_STRING, // version deprecations not supported at field level
                         field.fields());
                     structs.put(typeName, new StructInfo(spec, parentVersions));
                 }
