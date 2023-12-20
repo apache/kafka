@@ -32,6 +32,7 @@ import org.slf4j.Logger;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Supplier;
@@ -114,6 +115,14 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
 
             case CONSUMER_REBALANCE_LISTENER_CALLBACK_COMPLETED:
                 process((ConsumerRebalanceListenerCallbackCompletedEvent) event);
+                return;
+
+            case COMMIT_ON_CLOSE:
+                process((CommitOnCloseApplicationEvent) event);
+                return;
+
+            case LEAVE_ON_CLOSE:
+                process((LeaveOnCloseApplicationEvent) event);
                 return;
 
             default:
@@ -240,6 +249,27 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
         }
         MembershipManager manager = requestManagers.heartbeatRequestManager.get().membershipManager();
         manager.consumerRebalanceListenerCallbackCompleted(event);
+    }
+
+    private void process(final CommitOnCloseApplicationEvent event) {
+        if (!requestManagers.commitRequestManager.isPresent())
+            return;
+        log.debug("Signal CommitRequestManager closing");
+        requestManagers.commitRequestManager.get().signalClose();
+    }
+
+    private void process(final LeaveOnCloseApplicationEvent event) {
+        if (!requestManagers.heartbeatRequestManager.isPresent()) {
+            event.future().complete(null);
+            return;
+        }
+        MembershipManager membershipManager =
+            Objects.requireNonNull(requestManagers.heartbeatRequestManager.get().membershipManager(), "Expecting " +
+                "membership manager to be non-null");
+        log.debug("Leaving group before closing");
+        CompletableFuture<Void> future = membershipManager.leaveGroup();
+        // The future will be completed on heartbeat sent
+        event.chain(future);
     }
 
     /**

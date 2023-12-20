@@ -14,14 +14,17 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.streams.state.internals;
+package org.apache.kafka.clients.consumer.internals.events;
 
-import org.apache.kafka.streams.KeyValue;
-import org.rocksdb.RocksDBException;
-import org.rocksdb.WriteBatchInterface;
+public class LeaveOnCloseApplicationEvent extends CompletableApplicationEvent<Void> {
+    public LeaveOnCloseApplicationEvent() {
+        super(Type.LEAVE_ON_CLOSE);
+    }
 
-public interface BatchWritingStore {
-    void addToBatch(final KeyValue<byte[], byte[]> record,
-                    final WriteBatchInterface batch) throws RocksDBException;
-    void write(final WriteBatchInterface batch) throws RocksDBException;
+    @Override
+    public String toString() {
+        return "LeaveOnCloseApplicationEvent{" +
+            toStringBase() +
+            '}';
+    }
 }

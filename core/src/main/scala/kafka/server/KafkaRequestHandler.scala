@@ -289,14 +289,14 @@ class BrokerTopicMetrics(name: Option[String], configOpt: java.util.Optional[Kaf
 
     def gauge(): Gauge[Long] = gaugeLock synchronized {
       if (gaugeObject == null) {
-        gaugeObject = metricsGroup.newGauge(metricType, () => brokerTopicAggregatedMetric.value())
+        gaugeObject = metricsGroup.newGauge(metricType, () => brokerTopicAggregatedMetric.value(), tags)
       }
       return gaugeObject
     }
 
     def close(): Unit = gaugeLock synchronized {
       if (gaugeObject != null) {
-        metricsGroup.removeMetric(metricType)
+        metricsGroup.removeMetric(metricType, tags)
         brokerTopicAggregatedMetric.close()
         gaugeObject = null
       }
@@ -351,7 +351,9 @@ class BrokerTopicMetrics(name: Option[String], configOpt: java.util.Optional[Kaf
         RemoteStorageMetrics.REMOTE_COPY_LAG_BYTES_METRIC.getName -> GaugeWrapper(RemoteStorageMetrics.REMOTE_COPY_LAG_BYTES_METRIC.getName, new BrokerTopicAggregatedMetric),
         RemoteStorageMetrics.REMOTE_COPY_LAG_SEGMENTS_METRIC.getName -> GaugeWrapper(RemoteStorageMetrics.REMOTE_COPY_LAG_SEGMENTS_METRIC.getName, new BrokerTopicAggregatedMetric),
         RemoteStorageMetrics.REMOTE_DELETE_LAG_BYTES_METRIC.getName -> GaugeWrapper(RemoteStorageMetrics.REMOTE_DELETE_LAG_BYTES_METRIC.getName, new BrokerTopicAggregatedMetric),
-        RemoteStorageMetrics.REMOTE_DELETE_LAG_SEGMENTS_METRIC.getName -> GaugeWrapper(RemoteStorageMetrics.REMOTE_DELETE_LAG_SEGMENTS_METRIC.getName, new BrokerTopicAggregatedMetric)
+        RemoteStorageMetrics.REMOTE_DELETE_LAG_SEGMENTS_METRIC.getName -> GaugeWrapper(RemoteStorageMetrics.REMOTE_DELETE_LAG_SEGMENTS_METRIC.getName, new BrokerTopicAggregatedMetric),
+        RemoteStorageMetrics.REMOTE_LOG_METADATA_COUNT_METRIC.getName -> GaugeWrapper(RemoteStorageMetrics.REMOTE_LOG_METADATA_COUNT_METRIC.getName, new BrokerTopicAggregatedMetric),
+        RemoteStorageMetrics.REMOTE_LOG_SIZE_COMPUTATION_TIME_METRIC.getName -> GaugeWrapper(RemoteStorageMetrics.REMOTE_LOG_SIZE_COMPUTATION_TIME_METRIC.getName, new BrokerTopicAggregatedMetric)
       ).asJava)
     })
 
@@ -429,6 +431,18 @@ class BrokerTopicMetrics(name: Option[String], configOpt: java.util.Optional[Kaf
 
   // Visible for testing
   def remoteCopyLagSegments: Long = metricGaugeTypeMap.get(RemoteStorageMetrics.REMOTE_COPY_LAG_SEGMENTS_METRIC.getName).brokerTopicAggregatedMetric.value()
+
+  def recordRemoteLogMetadataCount(partition: Int, count: Long): Unit = {
+    val brokerTopicAggregatedMetric = metricGaugeTypeMap.get(RemoteStorageMetrics.REMOTE_LOG_METADATA_COUNT_METRIC.getName).brokerTopicAggregatedMetric
+    brokerTopicAggregatedMetric.setPartitionMetricValue(partition, count)
+  }
+
+  def removeRemoteLogMetadataCount(partition: Int): Unit = {
+    val brokerTopicAggregatedMetric = metricGaugeTypeMap.get(RemoteStorageMetrics.REMOTE_LOG_METADATA_COUNT_METRIC.getName).brokerTopicAggregatedMetric
+    brokerTopicAggregatedMetric.removePartition(partition)
+  }
+
+  def remoteLogMetadataCount: Long = metricGaugeTypeMap.get(RemoteStorageMetrics.REMOTE_LOG_METADATA_COUNT_METRIC.getName).brokerTopicAggregatedMetric.value()
 
   def recordRemoteLogSizeComputationTime(partition: Int, timeSpent: Long): Unit = {
     val brokerTopicAggregatedMetric = metricGaugeTypeMap.get(RemoteStorageMetrics.REMOTE_LOG_SIZE_COMPUTATION_TIME_METRIC.getName).brokerTopicAggregatedMetric
@@ -594,6 +608,8 @@ class BrokerTopicStats(configOpt: java.util.Optional[KafkaConfig] = java.util.Op
       topicMetrics.closeMetric(RemoteStorageMetrics.BUILD_REMOTE_LOG_AUX_STATE_REQUESTS_PER_SEC_METRIC.getName)
       topicMetrics.closeMetric(RemoteStorageMetrics.FAILED_REMOTE_FETCH_PER_SEC_METRIC.getName)
       topicMetrics.closeMetric(RemoteStorageMetrics.FAILED_REMOTE_COPY_PER_SEC_METRIC.getName)
+      topicMetrics.closeMetric(RemoteStorageMetrics.REMOTE_COPY_LAG_BYTES_METRIC.getName)
+      topicMetrics.closeMetric(RemoteStorageMetrics.REMOTE_LOG_METADATA_COUNT_METRIC.getName)
       topicMetrics.closeMetric(RemoteStorageMetrics.REMOTE_LOG_SIZE_COMPUTATION_TIME_METRIC.getName)
       topicMetrics.closeMetric(RemoteStorageMetrics.FAILED_REMOTE_DELETE_PER_SEC_METRIC.getName)
       topicMetrics.closeMetric(RemoteStorageMetrics.FAILED_BUILD_REMOTE_LOG_AUX_STATE_PER_SEC_METRIC.getName)

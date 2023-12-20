@@ -4797,7 +4797,6 @@ public class GroupMetadataManagerTest {
             new GroupCoordinatorMetricsShard(
                 context.snapshotRegistry,
                 Collections.emptyMap(),
-                Collections.emptyMap(),
                 new TopicPartition("__consumer_offsets", 0)
             ),
             1,
