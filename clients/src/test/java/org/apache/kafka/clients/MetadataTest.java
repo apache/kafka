@@ -1068,6 +1068,16 @@ public class MetadataTest {
     }
 
     @Test
+    public void testPartialUpdatePartitionLeadership() {
+
+    }
+
+    @Test
+    public void testCompleteUpdatePartitionLeadership() {
+
+    }
+
+    @Test
     public void testUpdatePartitionLeadership() {
         Time time = new MockTime();
 
