@@ -1189,7 +1189,7 @@ public class EosIntegrationTest {
                                                                final int numberOfRecords,
                                                                final Class<? extends Deserializer<K>> keyDeserializer,
                                                                final Class<? extends Deserializer<V>> valueDeserializer) throws Exception {
-        final long timeoutMs = 2*DEFAULT_TIMEOUT;
+        final long timeoutMs = 2 * DEFAULT_TIMEOUT;
         final int maxTries = 10;
         final long deadline = System.currentTimeMillis() + timeoutMs;
         int tries = 0;
@@ -1210,7 +1210,7 @@ public class EosIntegrationTest {
                 timeoutMs
             );
             ++tries;
-            if(consumerRecords.stream().anyMatch(record -> record.partition() == partition)) {
+            if (consumerRecords.stream().anyMatch(record -> record.partition() == partition)) {
                 return;
             }
             if (tries >= maxTries) {
