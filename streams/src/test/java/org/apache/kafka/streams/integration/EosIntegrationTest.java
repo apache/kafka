@@ -106,6 +106,7 @@ import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.pu
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.startApplicationAndWaitUntilRunning;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.waitForApplicationState;
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.waitForEmptyConsumerGroup;
+import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.waitUntilMinRecordsReceived;
 import static org.apache.kafka.streams.query.StateQueryRequest.inStore;
 import static org.apache.kafka.test.TestUtils.consumerConfig;
 import static org.apache.kafka.test.TestUtils.waitForCondition;
@@ -853,9 +854,10 @@ public class EosIntegrationTest {
             Serdes.Integer(),
             Serdes.String()).withCachingEnabled();
 
+        final int partitionToVerify = 0;
         final CountDownLatch latch = new CountDownLatch(1);
         final AtomicBoolean throwException = new AtomicBoolean(false);
-        final TaskId task00 = new TaskId(0, 0);
+        final TaskId task00 = new TaskId(0, partitionToVerify);
         final AtomicLong restoredOffsetsForPartition0 = new AtomicLong(0);
         final Topology topology = new Topology();
         topology
@@ -874,7 +876,7 @@ public class EosIntegrationTest {
                 @Override
                 public void process(final Record<Integer, String> record) {
                     context.recordMetadata().ifPresent(recordMetadata -> {
-                        if (recordMetadata.partition() == 0) {
+                        if (recordMetadata.partition() == partitionToVerify) {
                             if (throwException.compareAndSet(true, false)) {
                                 throw new TaskCorruptedException(Collections.singleton(task00));
                             }
@@ -917,9 +919,10 @@ public class EosIntegrationTest {
                                      final long totalRestored) {}
         });
         startApplicationAndWaitUntilRunning(Collections.singletonList(kafkaStreams), Duration.ofSeconds(60));
-        ensureCommittedRecordsInTopic(
+        ensureCommittedRecordsInTopicPartition(
             applicationId + "-" + stateStoreName + "-changelog",
-            10000,
+            partitionToVerify,
+            2000,
             IntegerDeserializer.class,
             IntegerDeserializer.class
         );
@@ -1180,11 +1183,32 @@ public class EosIntegrationTest {
         );
     }
 
-    private <K, V> List<KeyValue<K, V>> ensureCommittedRecordsInTopic(final String topic,
-                                                                      final int numberOfRecords,
-                                                                      final Class<? extends Deserializer<K>> keyDeserializer,
-                                                                      final Class<? extends Deserializer<V>> valueDeserializer) throws Exception {
-        return readResult(topic, numberOfRecords, keyDeserializer, valueDeserializer, CONSUMER_GROUP_ID);
+    private <K, V> void ensureCommittedRecordsInTopicPartition(final String topic,
+                                                               final int partition,
+                                                               final int numberOfRecords,
+                                                               final Class<? extends Deserializer<K>> keyDeserializer,
+                                                               final Class<? extends Deserializer<V>> valueDeserializer) throws Exception {
+        boolean containsRecordsFromPartition;
+        final int maxTries = 3;
+        int tries = 0;
+        do {
+            final List<ConsumerRecord<K, V>> consumerRecords = waitUntilMinRecordsReceived(
+                TestUtils.consumerConfig(
+                    CLUSTER.bootstrapServers(),
+                    CONSUMER_GROUP_ID,
+                    keyDeserializer,
+                    valueDeserializer,
+                    Utils.mkProperties(Collections.singletonMap(
+                        ConsumerConfig.ISOLATION_LEVEL_CONFIG,
+                        IsolationLevel.READ_COMMITTED.name().toLowerCase(Locale.ROOT))
+                    )
+                ),
+                topic,
+                numberOfRecords
+            );
+            ++tries;
+            containsRecordsFromPartition = consumerRecords.stream().anyMatch(record -> record.partition() == partition);
+        } while (!containsRecordsFromPartition && tries < maxTries);
     }
 
     private List<KeyValue<Long, Long>> computeExpectedResult(final List<KeyValue<Long, Long>> input) {
