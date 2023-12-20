@@ -79,7 +79,6 @@ public class GenericGroupTest {
     private final GroupCoordinatorMetricsShard metrics = new GroupCoordinatorMetricsShard(
         new SnapshotRegistry(logContext),
         Collections.emptyMap(),
-        Collections.emptyMap(),
         new TopicPartition("__consumer_offsets", 0)
     );
 

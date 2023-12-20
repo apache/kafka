@@ -1406,6 +1406,14 @@ public class MembershipManagerImplTest {
         assertTrue(subscriptionState.assignedPartitions().isEmpty());
     }
 
+    @Test
+    public void testMemberJoiningTransitionsToStableWhenReceivingEmptyAssignment() {
+        MembershipManagerImpl membershipManager = createMembershipManagerJoiningGroup(null);
+        assertEquals(MemberState.JOINING, membershipManager.state());
+        receiveEmptyAssignment(membershipManager);
+        assertEquals(MemberState.STABLE, membershipManager.state());
+    }
+
     private MembershipManagerImpl mockMemberSuccessfullyReceivesAndAcksAssignment(
             Uuid topicId, String topicName, List<Integer> partitions) {
         MembershipManagerImpl membershipManager = createMembershipManagerJoiningGroup();
