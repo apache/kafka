@@ -280,8 +280,17 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
         event.chain(future);
     }
 
-    private long getExpirationTimeForTimeout(final long timeoutMs) {
-        return (timeoutMs == Long.MAX_VALUE) ? Long.MAX_VALUE : System.currentTimeMillis() + timeoutMs;
+    /**
+     * @return Expiration time in milliseconds calculated with the current time plus the given
+     * timeout. Returns Long.MAX_VALUE if the expiration overflows it.
+     * Visible for testing.
+     */
+    long getExpirationTimeForTimeout(final long timeoutMs) {
+        long expiration = System.currentTimeMillis() + timeoutMs;
+        if (expiration < 0) {
+            return Long.MAX_VALUE;
+        }
+        return expiration;
     }
 
     /**
