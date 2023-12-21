@@ -238,6 +238,13 @@ public class JsonConverter implements Converter, HeaderConverter, Versioned {
         this(true);
     }
 
+    /**
+     * Creates a JsonConvert initializing serializer and deserializer.
+     *
+     * @param enableModules permits to enable/disable the registration of additional Jackson modules.
+     * <p>
+     * NOTE: This is visible only for testing
+     */
     public JsonConverter(boolean enableModules) {
         serializer = new JsonSerializer(
             mkSet(),
