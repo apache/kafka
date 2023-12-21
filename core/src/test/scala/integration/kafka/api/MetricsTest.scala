@@ -330,7 +330,11 @@ class MetricsTest extends IntegrationTestHarness with SaslSetup {
         metric._1.getMBeanName().equals(name.getMBeanName)
       }).isDefined
     ).toList
-    val aggregatedBrokerTopicStats = Set(RemoteStorageMetrics.REMOTE_COPY_LOG_BYTES_METRIC.getName)
+    val aggregatedBrokerTopicStats = Set(
+      RemoteStorageMetrics.REMOTE_COPY_LAG_BYTES_METRIC.getName,
+      RemoteStorageMetrics.REMOTE_COPY_LAG_SEGMENTS_METRIC.getName,
+      RemoteStorageMetrics.REMOTE_DELETE_LAG_BYTES_METRIC.getName,
+      RemoteStorageMetrics.REMOTE_DELETE_LAG_SEGMENTS_METRIC.getName)
     val aggregatedBrokerTopicMetrics = aggregatedBrokerTopicStats.filter(name =>
       KafkaYammerMetrics.defaultRegistry().allMetrics().asScala.find(metric => {
         metric._1.getMBeanName().equals(fromNameToBrokerTopicStatsMBean(name))

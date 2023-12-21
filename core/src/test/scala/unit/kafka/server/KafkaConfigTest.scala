@@ -35,6 +35,7 @@ import java.net.InetSocketAddress
 import java.util
 import java.util.{Collections, Properties}
 import org.apache.kafka.common.Node
+import org.apache.kafka.coordinator.group.Group.GroupType
 import org.apache.kafka.server.common.MetadataVersion
 import org.apache.kafka.server.common.MetadataVersion.{IBP_0_8_2, IBP_3_0_IV1}
 import org.apache.kafka.server.config.ServerTopicConfigSynonyms
@@ -1808,6 +1809,26 @@ class KafkaConfigTest {
     assertThrows(classOf[IllegalArgumentException], () => KafkaConfig.fromProps(props))
     props.put(KafkaConfig.ConsumerGroupHeartbeatIntervalMsProp, "25")
     assertThrows(classOf[IllegalArgumentException], () => KafkaConfig.fromProps(props))
+  }
+
+  @Test
+  def testGroupCoordinatorRebalanceProtocols(): Unit = {
+    val props = new Properties()
+    props.putAll(kraftProps())
+
+    // Only generic and consumer are supported.
+    props.put(KafkaConfig.GroupCoordinatorRebalanceProtocolsProp, "foo")
+    assertThrows(classOf[ConfigException], () => KafkaConfig.fromProps(props))
+
+    // generic cannot be disabled.
+    props.put(KafkaConfig.GroupCoordinatorRebalanceProtocolsProp, "consumer")
+    assertThrows(classOf[ConfigException], () => KafkaConfig.fromProps(props))
+
+    // This is OK.
+    props.put(KafkaConfig.GroupCoordinatorRebalanceProtocolsProp, "generic,consumer")
+    val config = KafkaConfig.fromProps(props)
+    assertEquals(Set(GroupType.GENERIC, GroupType.CONSUMER), config.groupCoordinatorRebalanceProtocols)
+    assertTrue(config.isNewGroupCoordinatorEnabled)
   }
 
   @Test

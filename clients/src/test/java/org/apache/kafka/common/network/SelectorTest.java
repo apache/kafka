@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.common.network;
 
-import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.memory.MemoryPool;
 import org.apache.kafka.common.memory.SimpleMemoryPool;
@@ -32,6 +31,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
+import org.mockito.MockedConstruction;
 
 import java.io.ByteArrayOutputStream;
 import java.io.DataOutputStream;
@@ -66,9 +66,13 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.mockConstruction;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -424,20 +428,26 @@ public class SelectorTest {
 
     @Test
     public void registerFailure() throws Exception {
-        ChannelBuilder channelBuilder = new PlaintextChannelBuilder(null) {
-            @Override
-            public KafkaChannel buildChannel(String id, SelectionKey key, int maxReceiveSize,
-                    MemoryPool memoryPool, ChannelMetadataRegistry metadataRegistry) throws KafkaException {
-                throw new RuntimeException("Test exception");
-            }
-        };
-        Selector selector = new Selector(CONNECTION_MAX_IDLE_MS, new Metrics(), new MockTime(), "MetricGroup", channelBuilder, new LogContext());
-        SocketChannel socketChannel = SocketChannel.open();
-        socketChannel.configureBlocking(false);
-        IOException e = assertThrows(IOException.class, () -> selector.register("1", socketChannel));
-        assertTrue(e.getCause().getMessage().contains("Test exception"), "Unexpected exception: " + e);
-        assertFalse(socketChannel.isOpen(), "Socket not closed");
-        selector.close();
+        final String channelId = "1";
+
+        final ChannelBuilder channelBuilder = mock(ChannelBuilder.class);
+
+        when(channelBuilder.buildChannel(eq(channelId), any(SelectionKey.class), anyInt(), any(MemoryPool.class),
+                any(ChannelMetadataRegistry.class))).thenThrow(new RuntimeException("Test exception"));
+
+        try (MockedConstruction<Selector.SelectorChannelMetadataRegistry> mockedMetadataRegistry =
+                     mockConstruction(Selector.SelectorChannelMetadataRegistry.class)) {
+            Selector selector = new Selector(CONNECTION_MAX_IDLE_MS, new Metrics(), new MockTime(), "MetricGroup", channelBuilder, new LogContext());
+            final SocketChannel socketChannel = SocketChannel.open();
+            socketChannel.configureBlocking(false);
+            IOException e = assertThrows(IOException.class, () -> selector.register(channelId, socketChannel));
+            assertTrue(e.getCause().getMessage().contains("Test exception"), "Unexpected exception: " + e);
+            assertFalse(socketChannel.isOpen(), "Socket not closed");
+            // Ideally, metadataRegistry is closed by the KafkaChannel but if the KafkaChannel is not created due to
+            // an error such as in a case like this, the Selector should be closing the metadataRegistry instead.
+            verify(mockedMetadataRegistry.constructed().get(0)).close();
+            selector.close();
+        }
     }
 
     @Test

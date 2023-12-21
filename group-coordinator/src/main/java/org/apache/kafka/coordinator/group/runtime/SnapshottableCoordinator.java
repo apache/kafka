@@ -143,6 +143,11 @@ class SnapshottableCoordinator<S extends CoordinatorShard<U>, U> implements Coor
                 " must be greater than or equal to " + lastCommittedOffset + ".");
         }
 
+        if (offset > lastWrittenOffset) {
+            throw new IllegalStateException("New committed offset " + offset + " of " + tp +
+                "must be less than or equal to " + lastWrittenOffset + ".");
+        }
+
         lastCommittedOffset = offset;
         snapshotRegistry.deleteSnapshotsUpTo(offset);
         log.debug("Updated committed offset of {} to {}.", tp, offset);
