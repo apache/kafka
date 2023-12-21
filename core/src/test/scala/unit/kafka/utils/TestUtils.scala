@@ -2188,13 +2188,15 @@ object TestUtils extends Logging {
   }
 
   def meterCount(metricName: String): Long = {
+    meterCountOpt(metricName).getOrElse(fail(s"Unable to find metric $metricName"))
+  }
+
+  def meterCountOpt(metricName: String): Option[Long] = {
     KafkaYammerMetrics.defaultRegistry.allMetrics.asScala
       .filter { case (k, _) => k.getMBeanName.endsWith(metricName) }
       .values
       .headOption
-      .getOrElse(fail(s"Unable to find metric $metricName"))
-      .asInstanceOf[Meter]
-      .count
+      .map(_.asInstanceOf[Meter].count)
   }
 
   def metersCount(metricName: String): Long = {

@@ -25,6 +25,7 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.coordinator.group.consumer.ConsumerGroup;
 import org.apache.kafka.coordinator.group.consumer.ConsumerGroupMember;
 import org.apache.kafka.coordinator.group.generic.GenericGroup;
+import org.apache.kafka.coordinator.group.generic.GenericGroupState;
 import org.apache.kafka.timeline.SnapshotRegistry;
 import org.junit.jupiter.api.Test;
 
@@ -36,19 +37,6 @@ import static org.apache.kafka.coordinator.group.generic.GenericGroupState.DEAD;
 import static org.apache.kafka.coordinator.group.generic.GenericGroupState.EMPTY;
 import static org.apache.kafka.coordinator.group.generic.GenericGroupState.PREPARING_REBALANCE;
 import static org.apache.kafka.coordinator.group.generic.GenericGroupState.STABLE;
-import static org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetrics.NUM_CONSUMER_GROUPS;
-import static org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetrics.NUM_CONSUMER_GROUPS_ASSIGNING;
-import static org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetrics.NUM_CONSUMER_GROUPS_DEAD;
-import static org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetrics.NUM_CONSUMER_GROUPS_EMPTY;
-import static org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetrics.NUM_CONSUMER_GROUPS_RECONCILING;
-import static org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetrics.NUM_CONSUMER_GROUPS_STABLE;
-import static org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetrics.NUM_GENERIC_GROUPS;
-import static org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetrics.NUM_GENERIC_GROUPS_COMPLETING_REBALANCE;
-import static org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetrics.NUM_GENERIC_GROUPS_DEAD;
-import static org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetrics.NUM_GENERIC_GROUPS_EMPTY;
-import static org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetrics.NUM_GENERIC_GROUPS_PREPARING_REBALANCE;
-import static org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetrics.NUM_GENERIC_GROUPS_STABLE;
-import static org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetrics.NUM_OFFSETS;
 import static org.apache.kafka.coordinator.group.metrics.MetricsTestUtils.assertGaugeValue;
 import static org.apache.kafka.coordinator.group.metrics.MetricsTestUtils.metricName;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -56,7 +44,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 public class GroupCoordinatorMetricsShardTest {
 
     @Test
-    public void testLocalGauges() {
+    public void testTimelineGaugeCounters() {
         MetricsRegistry registry = new MetricsRegistry();
         Metrics metrics = new Metrics();
         SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
@@ -64,65 +52,57 @@ public class GroupCoordinatorMetricsShardTest {
         GroupCoordinatorMetrics coordinatorMetrics = new GroupCoordinatorMetrics(registry, metrics);
         GroupCoordinatorMetricsShard shard = coordinatorMetrics.newMetricsShard(snapshotRegistry, tp);
 
-        shard.incrementLocalGauge(NUM_OFFSETS);
-        shard.incrementLocalGauge(NUM_GENERIC_GROUPS);
-        shard.incrementLocalGauge(NUM_CONSUMER_GROUPS);
-        shard.incrementLocalGauge(NUM_CONSUMER_GROUPS_EMPTY);
-        shard.incrementLocalGauge(NUM_CONSUMER_GROUPS_ASSIGNING);
-        shard.incrementLocalGauge(NUM_CONSUMER_GROUPS_RECONCILING);
-        shard.incrementLocalGauge(NUM_CONSUMER_GROUPS_STABLE);
-        shard.incrementLocalGauge(NUM_CONSUMER_GROUPS_DEAD);
+        shard.incrementNumOffsets();
+        shard.incrementNumConsumerGroups(ConsumerGroup.ConsumerGroupState.EMPTY);
+        shard.incrementNumConsumerGroups(ConsumerGroup.ConsumerGroupState.ASSIGNING);
+        shard.incrementNumConsumerGroups(ConsumerGroup.ConsumerGroupState.RECONCILING);
+        shard.incrementNumConsumerGroups(ConsumerGroup.ConsumerGroupState.STABLE);
+        shard.incrementNumConsumerGroups(ConsumerGroup.ConsumerGroupState.DEAD);
 
         snapshotRegistry.getOrCreateSnapshot(1000);
         // The value should not be updated until the offset has been committed.
-        assertEquals(0, shard.localGaugeValue(NUM_OFFSETS));
-        assertEquals(0, shard.localGaugeValue(NUM_GENERIC_GROUPS));
-        assertEquals(0, shard.localGaugeValue(NUM_CONSUMER_GROUPS));
-        assertEquals(0, shard.localGaugeValue(NUM_CONSUMER_GROUPS_EMPTY));
-        assertEquals(0, shard.localGaugeValue(NUM_CONSUMER_GROUPS_ASSIGNING));
-        assertEquals(0, shard.localGaugeValue(NUM_CONSUMER_GROUPS_RECONCILING));
-        assertEquals(0, shard.localGaugeValue(NUM_CONSUMER_GROUPS_STABLE));
-        assertEquals(0, shard.localGaugeValue(NUM_CONSUMER_GROUPS_DEAD));
+        assertEquals(0, shard.numOffsets());
+        assertEquals(0, shard.numConsumerGroups());
+        assertEquals(0, shard.numConsumerGroups(ConsumerGroup.ConsumerGroupState.EMPTY));
+        assertEquals(0, shard.numConsumerGroups(ConsumerGroup.ConsumerGroupState.ASSIGNING));
+        assertEquals(0, shard.numConsumerGroups(ConsumerGroup.ConsumerGroupState.RECONCILING));
+        assertEquals(0, shard.numConsumerGroups(ConsumerGroup.ConsumerGroupState.STABLE));
+        assertEquals(0, shard.numConsumerGroups(ConsumerGroup.ConsumerGroupState.DEAD));
 
         shard.commitUpTo(1000);
-        assertEquals(1, shard.localGaugeValue(NUM_OFFSETS));
-        assertEquals(1, shard.localGaugeValue(NUM_GENERIC_GROUPS));
-        assertEquals(1, shard.localGaugeValue(NUM_CONSUMER_GROUPS));
-        assertEquals(1, shard.localGaugeValue(NUM_CONSUMER_GROUPS_EMPTY));
-        assertEquals(1, shard.localGaugeValue(NUM_CONSUMER_GROUPS_ASSIGNING));
-        assertEquals(1, shard.localGaugeValue(NUM_CONSUMER_GROUPS_RECONCILING));
-        assertEquals(1, shard.localGaugeValue(NUM_CONSUMER_GROUPS_STABLE));
-        assertEquals(1, shard.localGaugeValue(NUM_CONSUMER_GROUPS_DEAD));
+        assertEquals(1, shard.numOffsets());
+        assertEquals(5, shard.numConsumerGroups());
+        assertEquals(1, shard.numConsumerGroups(ConsumerGroup.ConsumerGroupState.EMPTY));
+        assertEquals(1, shard.numConsumerGroups(ConsumerGroup.ConsumerGroupState.ASSIGNING));
+        assertEquals(1, shard.numConsumerGroups(ConsumerGroup.ConsumerGroupState.RECONCILING));
+        assertEquals(1, shard.numConsumerGroups(ConsumerGroup.ConsumerGroupState.STABLE));
+        assertEquals(1, shard.numConsumerGroups(ConsumerGroup.ConsumerGroupState.DEAD));
 
-        shard.decrementLocalGauge(NUM_OFFSETS);
-        shard.decrementLocalGauge(NUM_GENERIC_GROUPS);
-        shard.decrementLocalGauge(NUM_CONSUMER_GROUPS);
-        shard.decrementLocalGauge(NUM_CONSUMER_GROUPS_EMPTY);
-        shard.decrementLocalGauge(NUM_CONSUMER_GROUPS_ASSIGNING);
-        shard.decrementLocalGauge(NUM_CONSUMER_GROUPS_RECONCILING);
-        shard.decrementLocalGauge(NUM_CONSUMER_GROUPS_STABLE);
-        shard.decrementLocalGauge(NUM_CONSUMER_GROUPS_DEAD);
+        shard.decrementNumOffsets();
+        shard.decrementNumConsumerGroups(ConsumerGroup.ConsumerGroupState.EMPTY);
+        shard.decrementNumConsumerGroups(ConsumerGroup.ConsumerGroupState.ASSIGNING);
+        shard.decrementNumConsumerGroups(ConsumerGroup.ConsumerGroupState.RECONCILING);
+        shard.decrementNumConsumerGroups(ConsumerGroup.ConsumerGroupState.STABLE);
+        shard.decrementNumConsumerGroups(ConsumerGroup.ConsumerGroupState.DEAD);
 
         snapshotRegistry.getOrCreateSnapshot(2000);
         shard.commitUpTo(2000);
-        assertEquals(0, shard.localGaugeValue(NUM_OFFSETS));
-        assertEquals(0, shard.localGaugeValue(NUM_GENERIC_GROUPS));
-        assertEquals(0, shard.localGaugeValue(NUM_CONSUMER_GROUPS));
-        assertEquals(0, shard.localGaugeValue(NUM_CONSUMER_GROUPS_EMPTY));
-        assertEquals(0, shard.localGaugeValue(NUM_CONSUMER_GROUPS_ASSIGNING));
-        assertEquals(0, shard.localGaugeValue(NUM_CONSUMER_GROUPS_RECONCILING));
-        assertEquals(0, shard.localGaugeValue(NUM_CONSUMER_GROUPS_STABLE));
-        assertEquals(0, shard.localGaugeValue(NUM_CONSUMER_GROUPS_DEAD));
+        assertEquals(0, shard.numOffsets());
+        assertEquals(0, shard.numConsumerGroups());
+        assertEquals(0, shard.numConsumerGroups(ConsumerGroup.ConsumerGroupState.EMPTY));
+        assertEquals(0, shard.numConsumerGroups(ConsumerGroup.ConsumerGroupState.ASSIGNING));
+        assertEquals(0, shard.numConsumerGroups(ConsumerGroup.ConsumerGroupState.RECONCILING));
+        assertEquals(0, shard.numConsumerGroups(ConsumerGroup.ConsumerGroupState.STABLE));
+        assertEquals(0, shard.numConsumerGroups(ConsumerGroup.ConsumerGroupState.DEAD));
     }
 
     @Test
     public void testGenericGroupStateTransitionMetrics() {
         MetricsRegistry registry = new MetricsRegistry();
         Metrics metrics = new Metrics();
-        SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
         TopicPartition tp = new TopicPartition("__consumer_offsets", 0);
         GroupCoordinatorMetrics coordinatorMetrics = new GroupCoordinatorMetrics(registry, metrics);
-        GroupCoordinatorMetricsShard shard = coordinatorMetrics.newMetricsShard(snapshotRegistry, tp);
+        GroupCoordinatorMetricsShard shard = coordinatorMetrics.newMetricsShard(new SnapshotRegistry(new LogContext()), tp);
         coordinatorMetrics.activateMetricsShard(shard);
 
         LogContext logContext = new LogContext();
@@ -131,40 +111,36 @@ public class GroupCoordinatorMetricsShardTest {
         GenericGroup group2 = new GenericGroup(logContext, "groupId2", EMPTY, Time.SYSTEM, shard);
         GenericGroup group3 = new GenericGroup(logContext, "groupId3", EMPTY, Time.SYSTEM, shard);
 
-        IntStream.range(0, 4).forEach(__ -> {
-            shard.incrementLocalGauge(NUM_GENERIC_GROUPS);
-            shard.incrementGlobalGauge(NUM_GENERIC_GROUPS_EMPTY);
-        });
+        IntStream.range(0, 4).forEach(__ -> shard.incrementNumGenericGroups(EMPTY));
 
-        snapshotRegistry.getOrCreateSnapshot(1000);
-        shard.commitUpTo(1000);
-        assertEquals(4, shard.localGaugeValue(NUM_GENERIC_GROUPS));
+        assertEquals(4, shard.numGenericGroups());
 
         group0.transitionTo(PREPARING_REBALANCE);
         group0.transitionTo(COMPLETING_REBALANCE);
         group1.transitionTo(PREPARING_REBALANCE);
         group2.transitionTo(DEAD);
 
-        snapshotRegistry.getOrCreateSnapshot(2000);
-        shard.commitUpTo(2000);
-        assertEquals(1, shard.globalGaugeValue(NUM_GENERIC_GROUPS_EMPTY));
-        assertEquals(1, shard.globalGaugeValue(NUM_GENERIC_GROUPS_PREPARING_REBALANCE));
-        assertEquals(1, shard.globalGaugeValue(NUM_GENERIC_GROUPS_COMPLETING_REBALANCE));
-        assertEquals(1, shard.globalGaugeValue(NUM_GENERIC_GROUPS_DEAD));
-        assertEquals(0, shard.globalGaugeValue(NUM_GENERIC_GROUPS_STABLE));
+        assertEquals(1, shard.numGenericGroups(GenericGroupState.EMPTY));
+        assertEquals(1, shard.numGenericGroups(GenericGroupState.PREPARING_REBALANCE));
+        assertEquals(1, shard.numGenericGroups(GenericGroupState.COMPLETING_REBALANCE));
+        assertEquals(1, shard.numGenericGroups(GenericGroupState.DEAD));
+        assertEquals(0, shard.numGenericGroups(GenericGroupState.STABLE));
 
         group0.transitionTo(STABLE);
         group1.transitionTo(COMPLETING_REBALANCE);
         group3.transitionTo(DEAD);
 
-        snapshotRegistry.getOrCreateSnapshot(3000);
-        shard.commitUpTo(3000);
-        assertEquals(0, shard.globalGaugeValue(NUM_GENERIC_GROUPS_EMPTY));
-        assertEquals(0, shard.globalGaugeValue(NUM_GENERIC_GROUPS_PREPARING_REBALANCE));
-        assertEquals(1, shard.globalGaugeValue(NUM_GENERIC_GROUPS_COMPLETING_REBALANCE));
-        assertEquals(2, shard.globalGaugeValue(NUM_GENERIC_GROUPS_DEAD));
-        assertEquals(1, shard.globalGaugeValue(NUM_GENERIC_GROUPS_STABLE));
+        assertEquals(0, shard.numGenericGroups(GenericGroupState.EMPTY));
+        assertEquals(0, shard.numGenericGroups(GenericGroupState.PREPARING_REBALANCE));
+        assertEquals(1, shard.numGenericGroups(GenericGroupState.COMPLETING_REBALANCE));
+        assertEquals(2, shard.numGenericGroups(GenericGroupState.DEAD));
+        assertEquals(1, shard.numGenericGroups(GenericGroupState.STABLE));
 
+        assertGaugeValue(
+            metrics,
+            metrics.metricName("group-count", "group-coordinator-metrics", Collections.singletonMap("protocol", "generic")),
+            4
+        );
         assertGaugeValue(registry, metricName("GroupMetadataManager", "NumGroups"), 4);
         assertGaugeValue(registry, metricName("GroupMetadataManager", "NumGroupsEmpty"), 0);
         assertGaugeValue(registry, metricName("GroupMetadataManager", "NumGroupsPreparingRebalance"), 0);
@@ -204,15 +180,12 @@ public class GroupCoordinatorMetricsShardTest {
             shard
         );
 
-        IntStream.range(0, 4).forEach(__ -> {
-            shard.incrementLocalGauge(NUM_CONSUMER_GROUPS);
-            shard.incrementLocalGauge(NUM_CONSUMER_GROUPS_EMPTY);
-        });
+        IntStream.range(0, 4).forEach(__ -> shard.incrementNumConsumerGroups(ConsumerGroup.ConsumerGroupState.EMPTY));
 
         snapshotRegistry.getOrCreateSnapshot(1000);
         shard.commitUpTo(1000);
-        assertEquals(4, shard.localGaugeValue(NUM_CONSUMER_GROUPS));
-        assertEquals(4, shard.localGaugeValue(NUM_CONSUMER_GROUPS_EMPTY));
+        assertEquals(4, shard.numConsumerGroups());
+        assertEquals(4, shard.numConsumerGroups(ConsumerGroup.ConsumerGroupState.EMPTY));
 
         ConsumerGroupMember member0 = group0.getOrMaybeCreateMember("member-id", true);
         ConsumerGroupMember member1 = group1.getOrMaybeCreateMember("member-id", true);
@@ -225,19 +198,20 @@ public class GroupCoordinatorMetricsShardTest {
 
         snapshotRegistry.getOrCreateSnapshot(2000);
         shard.commitUpTo(2000);
-        assertEquals(0, shard.localGaugeValue(NUM_CONSUMER_GROUPS_EMPTY));
-        assertEquals(4, shard.localGaugeValue(NUM_CONSUMER_GROUPS_STABLE));
+        assertEquals(0, shard.numConsumerGroups(ConsumerGroup.ConsumerGroupState.EMPTY));
+        assertEquals(4, shard.numConsumerGroups(ConsumerGroup.ConsumerGroupState.STABLE));
 
         group2.setGroupEpoch(1);
         group3.setGroupEpoch(1);
 
         snapshotRegistry.getOrCreateSnapshot(3000);
         shard.commitUpTo(3000);
-        assertEquals(0, shard.localGaugeValue(NUM_CONSUMER_GROUPS_EMPTY));
-        assertEquals(2, shard.localGaugeValue(NUM_CONSUMER_GROUPS_ASSIGNING));
-        assertEquals(2, shard.localGaugeValue(NUM_CONSUMER_GROUPS_STABLE));
+        assertEquals(0, shard.numConsumerGroups(ConsumerGroup.ConsumerGroupState.EMPTY));
+        assertEquals(2, shard.numConsumerGroups(ConsumerGroup.ConsumerGroupState.ASSIGNING));
+        assertEquals(2, shard.numConsumerGroups(ConsumerGroup.ConsumerGroupState.STABLE));
 
         group2.setTargetAssignmentEpoch(1);
+
         // Set member2 to ASSIGNING state.
         new ConsumerGroupMember.Builder(member2)
             .setPartitionsPendingAssignment(Collections.singletonMap(Uuid.ZERO_UUID, Collections.singleton(0)))
@@ -245,16 +219,22 @@ public class GroupCoordinatorMetricsShardTest {
 
         snapshotRegistry.getOrCreateSnapshot(4000);
         shard.commitUpTo(4000);
-        assertEquals(0, shard.localGaugeValue(NUM_CONSUMER_GROUPS_EMPTY));
-        assertEquals(1, shard.localGaugeValue(NUM_CONSUMER_GROUPS_ASSIGNING));
-        assertEquals(1, shard.localGaugeValue(NUM_CONSUMER_GROUPS_RECONCILING));
-        assertEquals(2, shard.localGaugeValue(NUM_CONSUMER_GROUPS_STABLE));
+        assertEquals(0, shard.numConsumerGroups(ConsumerGroup.ConsumerGroupState.EMPTY));
+        assertEquals(1, shard.numConsumerGroups(ConsumerGroup.ConsumerGroupState.ASSIGNING));
+        assertEquals(1, shard.numConsumerGroups(ConsumerGroup.ConsumerGroupState.RECONCILING));
+        assertEquals(2, shard.numConsumerGroups(ConsumerGroup.ConsumerGroupState.STABLE));
 
-        assertGaugeValue(registry, metricName("GroupMetadataManager", "NumConsumerGroups"), 4);
-        assertGaugeValue(registry, metricName("GroupMetadataManager", "NumConsumerGroupsEmpty"), 0);
-        assertGaugeValue(registry, metricName("GroupMetadataManager", "NumConsumerGroupsAssigning"), 1);
-        assertGaugeValue(registry, metricName("GroupMetadataManager", "NumConsumerGroupsReconciling"), 1);
-        assertGaugeValue(registry, metricName("GroupMetadataManager", "NumConsumerGroupsStable"), 2);
-        assertGaugeValue(registry, metricName("GroupMetadataManager", "NumConsumerGroupsDead"), 0);
+        assertGaugeValue(metrics, metrics.metricName("group-count", "group-coordinator-metrics",
+            Collections.singletonMap("protocol", "consumer")), 4);
+        assertGaugeValue(metrics, metrics.metricName("consumer-group-count", "group-coordinator-metrics",
+            Collections.singletonMap("state", "empty")), 0);
+        assertGaugeValue(metrics, metrics.metricName("consumer-group-count", "group-coordinator-metrics",
+            Collections.singletonMap("state", "assigning")), 1);
+        assertGaugeValue(metrics, metrics.metricName("consumer-group-count", "group-coordinator-metrics",
+            Collections.singletonMap("state", "reconciling")), 1);
+        assertGaugeValue(metrics, metrics.metricName("consumer-group-count", "group-coordinator-metrics",
+            Collections.singletonMap("state", "stable")), 2);
+        assertGaugeValue(metrics, metrics.metricName("consumer-group-count", "group-coordinator-metrics",
+            Collections.singletonMap("state", "dead")), 0);
     }
 }

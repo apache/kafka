@@ -16,57 +16,56 @@
  */
 package org.apache.kafka.coordinator.group.metrics;
 
-import com.yammer.metrics.core.Gauge;
-import com.yammer.metrics.core.MetricName;
 import com.yammer.metrics.core.MetricsRegistry;
+import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.metrics.Gauge;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.Meter;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.coordinator.group.Group;
+import org.apache.kafka.coordinator.group.consumer.ConsumerGroup.ConsumerGroupState;
+import org.apache.kafka.coordinator.group.generic.GenericGroupState;
 import org.apache.kafka.server.metrics.KafkaYammerMetrics;
 import org.apache.kafka.timeline.SnapshotRegistry;
 
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
-import java.util.concurrent.atomic.AtomicLong;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * These are the metrics which are managed by the {@link org.apache.kafka.coordinator.group.GroupMetadataManager} class.
  * They generally pertain to aspects of group management, such as the number of groups in different states.
  */
 public class GroupCoordinatorMetrics extends CoordinatorMetrics implements AutoCloseable {
+
     public static final String METRICS_GROUP = "group-coordinator-metrics";
 
-    public final static MetricName NUM_OFFSETS = getMetricName(
-        "GroupMetadataManager", "NumOffsets");
-    public final static MetricName NUM_GENERIC_GROUPS = getMetricName(
+    /**
+     * Old generic group count metric. To be deprecated.
+     */
+    public final static com.yammer.metrics.core.MetricName NUM_GENERIC_GROUPS = getMetricName(
         "GroupMetadataManager", "NumGroups");
-    public final static MetricName NUM_GENERIC_GROUPS_PREPARING_REBALANCE = getMetricName(
+    public final static com.yammer.metrics.core.MetricName NUM_OFFSETS = getMetricName(
+        "GroupMetadataManager", "NumOffsets");
+    public final static com.yammer.metrics.core.MetricName NUM_GENERIC_GROUPS_PREPARING_REBALANCE = getMetricName(
         "GroupMetadataManager", "NumGroupsPreparingRebalance");
-    public final static MetricName NUM_GENERIC_GROUPS_COMPLETING_REBALANCE = getMetricName(
+    public final static com.yammer.metrics.core.MetricName NUM_GENERIC_GROUPS_COMPLETING_REBALANCE = getMetricName(
         "GroupMetadataManager", "NumGroupsCompletingRebalance");
-    public final static MetricName NUM_GENERIC_GROUPS_STABLE = getMetricName(
+    public final static com.yammer.metrics.core.MetricName NUM_GENERIC_GROUPS_STABLE = getMetricName(
         "GroupMetadataManager", "NumGroupsStable");
-    public final static MetricName NUM_GENERIC_GROUPS_DEAD = getMetricName(
+    public final static com.yammer.metrics.core.MetricName NUM_GENERIC_GROUPS_DEAD = getMetricName(
         "GroupMetadataManager", "NumGroupsDead");
-    public final static MetricName NUM_GENERIC_GROUPS_EMPTY = getMetricName(
+    public final static com.yammer.metrics.core.MetricName NUM_GENERIC_GROUPS_EMPTY = getMetricName(
         "GroupMetadataManager", "NumGroupsEmpty");
-    public final static MetricName NUM_CONSUMER_GROUPS = getMetricName(
-        "GroupMetadataManager", "NumConsumerGroups");
-    public final static MetricName NUM_CONSUMER_GROUPS_EMPTY = getMetricName(
-        "GroupMetadataManager", "NumConsumerGroupsEmpty");
-    public final static MetricName NUM_CONSUMER_GROUPS_ASSIGNING = getMetricName(
-        "GroupMetadataManager", "NumConsumerGroupsAssigning");
-    public final static MetricName NUM_CONSUMER_GROUPS_RECONCILING = getMetricName(
-        "GroupMetadataManager", "NumConsumerGroupsReconciling");
-    public final static MetricName NUM_CONSUMER_GROUPS_STABLE = getMetricName(
-        "GroupMetadataManager", "NumConsumerGroupsStable");
-    public final static MetricName NUM_CONSUMER_GROUPS_DEAD = getMetricName(
-        "GroupMetadataManager", "NumConsumerGroupsDead");
+
+    public final static String GROUP_COUNT_METRIC_NAME = "group-count";
+    public final static String GROUP_COUNT_PROTOCOL_TAG = "protocol";
+    public final static String CONSUMER_GROUP_COUNT_METRIC_NAME = "consumer-group-count";
+    public final static String CONSUMER_GROUP_COUNT_STATE_TAG = "state";
 
     public static final String OFFSET_COMMITS_SENSOR_NAME = "OffsetCommits";
     public static final String OFFSET_EXPIRED_SENSOR_NAME = "OffsetExpired";
@@ -75,30 +74,22 @@ public class GroupCoordinatorMetrics extends CoordinatorMetrics implements AutoC
     public static final String GENERIC_GROUP_REBALANCES_SENSOR_NAME = "GenericGroupRebalances";
     public static final String CONSUMER_GROUP_REBALANCES_SENSOR_NAME = "ConsumerGroupRebalances";
 
+    private final MetricName genericGroupCountMetricName;
+    private final MetricName consumerGroupCountMetricName;
+    private final MetricName consumerGroupCountEmptyMetricName;
+    private final MetricName consumerGroupCountAssigningMetricName;
+    private final MetricName consumerGroupCountReconcilingMetricName;
+    private final MetricName consumerGroupCountStableMetricName;
+    private final MetricName consumerGroupCountDeadMetricName;
+
     private final MetricsRegistry registry;
     private final Metrics metrics;
-    private final Map<TopicPartition, CoordinatorMetricsShard> shards = new HashMap<>();
-    private static final AtomicLong NUM_GENERIC_GROUPS_PREPARING_REBALANCE_COUNTER = new AtomicLong(0);
-    private static final AtomicLong NUM_GENERIC_GROUPS_COMPLETING_REBALANCE_COUNTER = new AtomicLong(0);
-    private static final AtomicLong NUM_GENERIC_GROUPS_STABLE_COUNTER = new AtomicLong(0);
-    private static final AtomicLong NUM_GENERIC_GROUPS_DEAD_COUNTER = new AtomicLong(0);
-    private static final AtomicLong NUM_GENERIC_GROUPS_EMPTY_COUNTER = new AtomicLong(0);
+    private final Map<TopicPartition, GroupCoordinatorMetricsShard> shards = new ConcurrentHashMap<>();
 
     /**
      * Global sensors. These are shared across all metrics shards.
      */
     public final Map<String, Sensor> globalSensors;
-
-    /**
-     * Global gauge counters. These are shared across all metrics shards.
-     */
-    public static final Map<String, AtomicLong> GLOBAL_GAUGES = Collections.unmodifiableMap(Utils.mkMap(
-        Utils.mkEntry(NUM_GENERIC_GROUPS_PREPARING_REBALANCE.getName(), NUM_GENERIC_GROUPS_PREPARING_REBALANCE_COUNTER),
-        Utils.mkEntry(NUM_GENERIC_GROUPS_COMPLETING_REBALANCE.getName(), NUM_GENERIC_GROUPS_COMPLETING_REBALANCE_COUNTER),
-        Utils.mkEntry(NUM_GENERIC_GROUPS_STABLE.getName(), NUM_GENERIC_GROUPS_STABLE_COUNTER),
-        Utils.mkEntry(NUM_GENERIC_GROUPS_DEAD.getName(), NUM_GENERIC_GROUPS_DEAD_COUNTER),
-        Utils.mkEntry(NUM_GENERIC_GROUPS_EMPTY.getName(), NUM_GENERIC_GROUPS_EMPTY_COUNTER)
-    ));
 
     public GroupCoordinatorMetrics() {
         this(KafkaYammerMetrics.defaultRegistry(), new Metrics());
@@ -107,6 +98,55 @@ public class GroupCoordinatorMetrics extends CoordinatorMetrics implements AutoC
     public GroupCoordinatorMetrics(MetricsRegistry registry, Metrics metrics) {
         this.registry = Objects.requireNonNull(registry);
         this.metrics = Objects.requireNonNull(metrics);
+
+        genericGroupCountMetricName = metrics.metricName(
+            GROUP_COUNT_METRIC_NAME,
+            METRICS_GROUP,
+            "The total number of groups using the generic rebalance protocol.",
+            Collections.singletonMap(GROUP_COUNT_PROTOCOL_TAG, Group.GroupType.GENERIC.toString())
+        );
+
+        consumerGroupCountMetricName = metrics.metricName(
+            GROUP_COUNT_METRIC_NAME,
+            METRICS_GROUP,
+            "The total number of groups using the consumer rebalance protocol.",
+            Collections.singletonMap(GROUP_COUNT_PROTOCOL_TAG, Group.GroupType.CONSUMER.toString())
+        );
+
+        consumerGroupCountEmptyMetricName = metrics.metricName(
+            CONSUMER_GROUP_COUNT_METRIC_NAME,
+            METRICS_GROUP,
+            "The number of consumer groups in empty state.",
+            Collections.singletonMap(CONSUMER_GROUP_COUNT_STATE_TAG, ConsumerGroupState.EMPTY.toString())
+        );
+
+        consumerGroupCountAssigningMetricName = metrics.metricName(
+            CONSUMER_GROUP_COUNT_METRIC_NAME,
+            METRICS_GROUP,
+            "The number of consumer groups in assigning state.",
+            Collections.singletonMap(CONSUMER_GROUP_COUNT_STATE_TAG, ConsumerGroupState.ASSIGNING.toString())
+        );
+
+        consumerGroupCountReconcilingMetricName = metrics.metricName(
+            CONSUMER_GROUP_COUNT_METRIC_NAME,
+            METRICS_GROUP,
+            "The number of consumer groups in reconciling state.",
+            Collections.singletonMap(CONSUMER_GROUP_COUNT_STATE_TAG, ConsumerGroupState.RECONCILING.toString())
+        );
+
+        consumerGroupCountStableMetricName = metrics.metricName(
+            CONSUMER_GROUP_COUNT_METRIC_NAME,
+            METRICS_GROUP,
+            "The number of consumer groups in stable state.",
+            Collections.singletonMap(CONSUMER_GROUP_COUNT_STATE_TAG, ConsumerGroupState.STABLE.toString())
+        );
+
+        consumerGroupCountDeadMetricName = metrics.metricName(
+            CONSUMER_GROUP_COUNT_METRIC_NAME,
+            METRICS_GROUP,
+            "The number of consumer groups in dead state.",
+            Collections.singletonMap(CONSUMER_GROUP_COUNT_STATE_TAG, ConsumerGroupState.DEAD.toString())
+        );
 
         registerGauges();
 
@@ -174,55 +214,24 @@ public class GroupCoordinatorMetrics extends CoordinatorMetrics implements AutoC
         ));
     }
 
-    public Long numOffsets() {
-        return shards.values().stream().mapToLong(shard -> shard.localGaugeValue(NUM_OFFSETS)).sum();
+    private Long numOffsets() {
+        return shards.values().stream().mapToLong(GroupCoordinatorMetricsShard::numOffsets).sum();
     }
 
-    public Long numGenericGroups() {
-        return shards.values().stream().mapToLong(shard -> shard.localGaugeValue(NUM_GENERIC_GROUPS)).sum();
+    private Long numGenericGroups() {
+        return shards.values().stream().mapToLong(GroupCoordinatorMetricsShard::numGenericGroups).sum();
     }
 
-    public Long numGenericGroupsPreparingRebalanceCount() {
-        return NUM_GENERIC_GROUPS_PREPARING_REBALANCE_COUNTER.get();
+    private Long numGenericGroups(GenericGroupState state) {
+        return shards.values().stream().mapToLong(shard -> shard.numGenericGroups(state)).sum();
     }
 
-    public Long numGenericGroupsCompletingRebalanceCount() {
-        return NUM_GENERIC_GROUPS_COMPLETING_REBALANCE_COUNTER.get();
-    }
-    public Long numGenericGroupsStableCount() {
-        return NUM_GENERIC_GROUPS_STABLE_COUNTER.get();
+    private long numConsumerGroups() {
+        return shards.values().stream().mapToLong(GroupCoordinatorMetricsShard::numConsumerGroups).sum();
     }
 
-    public Long numGenericGroupsDeadCount() {
-        return NUM_GENERIC_GROUPS_DEAD_COUNTER.get();
-    }
-
-    public Long numGenericGroupsEmptyCount() {
-        return NUM_GENERIC_GROUPS_EMPTY_COUNTER.get();
-    }
-
-    public long numConsumerGroups() {
-        return shards.values().stream().mapToLong(shard -> shard.localGaugeValue(NUM_CONSUMER_GROUPS)).sum();
-    }
-
-    public long numConsumerGroupsEmpty() {
-        return shards.values().stream().mapToLong(shard -> shard.localGaugeValue(NUM_CONSUMER_GROUPS_EMPTY)).sum();
-    }
-
-    public long numConsumerGroupsAssigning() {
-        return shards.values().stream().mapToLong(shard -> shard.localGaugeValue(NUM_CONSUMER_GROUPS_ASSIGNING)).sum();
-    }
-
-    public long numConsumerGroupsReconciling() {
-        return shards.values().stream().mapToLong(shard -> shard.localGaugeValue(NUM_CONSUMER_GROUPS_RECONCILING)).sum();
-    }
-
-    public long numConsumerGroupsStable() {
-        return shards.values().stream().mapToLong(shard -> shard.localGaugeValue(NUM_CONSUMER_GROUPS_STABLE)).sum();
-    }
-
-    public long numConsumerGroupsDead() {
-        return shards.values().stream().mapToLong(shard -> shard.localGaugeValue(NUM_CONSUMER_GROUPS_DEAD)).sum();
+    private long numConsumerGroups(ConsumerGroupState state) {
+        return shards.values().stream().mapToLong(shard -> shard.numConsumerGroups(state)).sum();
     }
 
     @Override
@@ -234,14 +243,18 @@ public class GroupCoordinatorMetrics extends CoordinatorMetrics implements AutoC
             NUM_GENERIC_GROUPS_COMPLETING_REBALANCE,
             NUM_GENERIC_GROUPS_STABLE,
             NUM_GENERIC_GROUPS_DEAD,
-            NUM_GENERIC_GROUPS_EMPTY,
-            NUM_CONSUMER_GROUPS,
-            NUM_CONSUMER_GROUPS_EMPTY,
-            NUM_CONSUMER_GROUPS_ASSIGNING,
-            NUM_CONSUMER_GROUPS_RECONCILING,
-            NUM_CONSUMER_GROUPS_STABLE,
-            NUM_CONSUMER_GROUPS_DEAD
+            NUM_GENERIC_GROUPS_EMPTY
         ).forEach(registry::removeMetric);
+
+        Arrays.asList(
+            genericGroupCountMetricName,
+            consumerGroupCountMetricName,
+            consumerGroupCountEmptyMetricName,
+            consumerGroupCountAssigningMetricName,
+            consumerGroupCountReconcilingMetricName,
+            consumerGroupCountStableMetricName,
+            consumerGroupCountDeadMetricName
+        ).forEach(metrics::removeMetric);
 
         Arrays.asList(
             OFFSET_COMMITS_SENSOR_NAME,
@@ -255,12 +268,15 @@ public class GroupCoordinatorMetrics extends CoordinatorMetrics implements AutoC
 
     @Override
     public GroupCoordinatorMetricsShard newMetricsShard(SnapshotRegistry snapshotRegistry, TopicPartition tp) {
-        return new GroupCoordinatorMetricsShard(snapshotRegistry, globalSensors, GLOBAL_GAUGES, tp);
+        return new GroupCoordinatorMetricsShard(snapshotRegistry, globalSensors, tp);
     }
 
     @Override
     public void activateMetricsShard(CoordinatorMetricsShard shard) {
-        shards.put(shard.topicPartition(), shard);
+        if (!(shard instanceof GroupCoordinatorMetricsShard)) {
+            throw new IllegalArgumentException("GroupCoordinatorMetrics can only activate GroupCoordinatorMetricShard");
+        }
+        shards.put(shard.topicPartition(), (GroupCoordinatorMetricsShard) shard);
     }
 
     @Override
@@ -281,100 +297,93 @@ public class GroupCoordinatorMetrics extends CoordinatorMetrics implements AutoC
         }
     }
 
-    public static MetricName getMetricName(String type, String name) {
+    public static com.yammer.metrics.core.MetricName getMetricName(String type, String name) {
         return getMetricName("kafka.coordinator.group", type, name);
     }
 
     private void registerGauges() {
-        registry.newGauge(NUM_OFFSETS, new Gauge<Long>() {
+        registry.newGauge(NUM_OFFSETS, new com.yammer.metrics.core.Gauge<Long>() {
             @Override
             public Long value() {
                 return numOffsets();
             }
         });
 
-        registry.newGauge(NUM_GENERIC_GROUPS, new Gauge<Long>() {
+        registry.newGauge(NUM_GENERIC_GROUPS, new com.yammer.metrics.core.Gauge<Long>() {
             @Override
             public Long value() {
                 return numGenericGroups();
             }
         });
 
-        registry.newGauge(NUM_GENERIC_GROUPS_PREPARING_REBALANCE, new Gauge<Long>() {
+        registry.newGauge(NUM_GENERIC_GROUPS_PREPARING_REBALANCE, new com.yammer.metrics.core.Gauge<Long>() {
             @Override
             public Long value() {
-                return numGenericGroupsPreparingRebalanceCount();
+                return numGenericGroups(GenericGroupState.PREPARING_REBALANCE);
             }
         });
 
-        registry.newGauge(NUM_GENERIC_GROUPS_COMPLETING_REBALANCE, new Gauge<Long>() {
+        registry.newGauge(NUM_GENERIC_GROUPS_COMPLETING_REBALANCE, new com.yammer.metrics.core.Gauge<Long>() {
             @Override
             public Long value() {
-                return numGenericGroupsCompletingRebalanceCount();
+                return numGenericGroups(GenericGroupState.COMPLETING_REBALANCE);
             }
         });
 
-        registry.newGauge(NUM_GENERIC_GROUPS_STABLE, new Gauge<Long>() {
+        registry.newGauge(NUM_GENERIC_GROUPS_STABLE, new com.yammer.metrics.core.Gauge<Long>() {
             @Override
             public Long value() {
-                return numGenericGroupsStableCount();
+                return numGenericGroups(GenericGroupState.STABLE);
             }
         });
 
-        registry.newGauge(NUM_GENERIC_GROUPS_DEAD, new Gauge<Long>() {
+        registry.newGauge(NUM_GENERIC_GROUPS_DEAD, new com.yammer.metrics.core.Gauge<Long>() {
             @Override
             public Long value() {
-                return numGenericGroupsDeadCount();
+                return numGenericGroups(GenericGroupState.DEAD);
             }
         });
 
-        registry.newGauge(NUM_GENERIC_GROUPS_EMPTY, new Gauge<Long>() {
+        registry.newGauge(NUM_GENERIC_GROUPS_EMPTY, new com.yammer.metrics.core.Gauge<Long>() {
             @Override
             public Long value() {
-                return numGenericGroupsEmptyCount();
+                return numGenericGroups(GenericGroupState.EMPTY);
             }
         });
 
-        registry.newGauge(NUM_CONSUMER_GROUPS, new Gauge<Long>() {
-            @Override
-            public Long value() {
-                return numConsumerGroups();
-            }
-        });
+        metrics.addMetric(
+            genericGroupCountMetricName,
+            (Gauge<Long>) (config, now) -> numGenericGroups()
+        );
 
-        registry.newGauge(NUM_CONSUMER_GROUPS_EMPTY, new Gauge<Long>() {
-            @Override
-            public Long value() {
-                return numConsumerGroupsEmpty();
-            }
-        });
+        metrics.addMetric(
+            consumerGroupCountMetricName,
+            (Gauge<Long>) (config, now) -> numConsumerGroups()
+        );
 
-        registry.newGauge(NUM_CONSUMER_GROUPS_ASSIGNING, new Gauge<Long>() {
-            @Override
-            public Long value() {
-                return numConsumerGroupsAssigning();
-            }
-        });
+        metrics.addMetric(
+            consumerGroupCountEmptyMetricName,
+            (Gauge<Long>) (config, now) -> numConsumerGroups(ConsumerGroupState.EMPTY)
+        );
 
-        registry.newGauge(NUM_CONSUMER_GROUPS_RECONCILING, new Gauge<Long>() {
-            @Override
-            public Long value() {
-                return numConsumerGroupsReconciling();
-            }
-        });
+        metrics.addMetric(
+            consumerGroupCountAssigningMetricName,
+            (Gauge<Long>) (config, now) -> numConsumerGroups(ConsumerGroupState.ASSIGNING)
+        );
 
-        registry.newGauge(NUM_CONSUMER_GROUPS_STABLE, new Gauge<Long>() {
-            @Override
-            public Long value() {
-                return numConsumerGroupsStable();
-            }
-        });
+        metrics.addMetric(
+            consumerGroupCountReconcilingMetricName,
+            (Gauge<Long>) (config, now) -> numConsumerGroups(ConsumerGroupState.RECONCILING)
+        );
 
-        registry.newGauge(NUM_CONSUMER_GROUPS_DEAD, new Gauge<Long>() {
-            @Override
-            public Long value() {
-                return numConsumerGroupsDead();
-            }
-        });
+        metrics.addMetric(
+            consumerGroupCountStableMetricName,
+            (Gauge<Long>) (config, now) -> numConsumerGroups(ConsumerGroupState.STABLE)
+        );
+
+        metrics.addMetric(
+            consumerGroupCountDeadMetricName,
+            (Gauge<Long>) (config, now) -> numConsumerGroups(ConsumerGroupState.DEAD)
+        );
     }
 }

@@ -342,7 +342,10 @@ public class RemoteLogManager implements Closeable {
             leaderPartitions.forEach(this::cacheTopicPartitionIds);
             followerPartitions.forEach(this::cacheTopicPartitionIds);
             followerPartitions.forEach(
-                    topicIdPartition -> brokerTopicStats.topicStats(topicIdPartition.topic()).removeRemoteCopyBytesLag(topicIdPartition.partition()));
+                    topicIdPartition -> {
+                        brokerTopicStats.topicStats(topicIdPartition.topic()).removeRemoteCopyBytesLag(topicIdPartition.partition());
+                        brokerTopicStats.topicStats(topicIdPartition.topic()).removeRemoteLogMetadataCount(topicIdPartition.partition());
+                    });
 
             remoteLogMetadataManager.onPartitionLeadershipChanges(leaderPartitions, followerPartitions);
             followerPartitions.forEach(topicIdPartition ->
@@ -377,6 +380,7 @@ public class RemoteLogManager implements Closeable {
                     }
 
                     brokerTopicStats.topicStats(tp.topic()).removeRemoteCopyBytesLag(tp.partition());
+                    brokerTopicStats.topicStats(tp.topic()).removeRemoteLogMetadataCount(tp.partition());
 
                     if (stopPartition.deleteRemoteLog()) {
                         LOGGER.info("Deleting the remote log segments task for partition: {}", tpId);
@@ -968,13 +972,6 @@ public class RemoteLogManager implements Closeable {
                 return;
             }
 
-            // Cleanup remote log segments and update the log start offset if applicable.
-            final Iterator<RemoteLogSegmentMetadata> segmentMetadataIter = remoteLogMetadataManager.listRemoteLogSegments(topicIdPartition);
-            if (!segmentMetadataIter.hasNext()) {
-                logger.debug("No remote log segments available on remote storage for partition: {}", topicIdPartition);
-                return;
-            }
-
             final Optional<UnifiedLog> logOptional = fetchLog.apply(topicIdPartition.topicPartition());
             if (!logOptional.isPresent()) {
                 logger.debug("No UnifiedLog instance available for partition: {}", topicIdPartition);
@@ -988,13 +985,24 @@ public class RemoteLogManager implements Closeable {
                 return;
             }
 
+            // Cleanup remote log segments and update the log start offset if applicable.
+            final Iterator<RemoteLogSegmentMetadata> segmentMetadataIter = remoteLogMetadataManager.listRemoteLogSegments(topicIdPartition);
+            if (!segmentMetadataIter.hasNext()) {
+                brokerTopicStats.topicStats(topicIdPartition.topic()).recordRemoteLogMetadataCount(topicIdPartition.partition(), 0);
+                logger.debug("No remote log segments available on remote storage for partition: {}", topicIdPartition);
+                return;
+            }
+
             final Set<Integer> epochsSet = new HashSet<>();
+            int metadataCount = 0;
             // Good to have an API from RLMM to get all the remote leader epochs of all the segments of a partition
             // instead of going through all the segments and building it here.
             while (segmentMetadataIter.hasNext()) {
                 RemoteLogSegmentMetadata segmentMetadata = segmentMetadataIter.next();
                 epochsSet.addAll(segmentMetadata.segmentLeaderEpochs().keySet());
+                metadataCount++;
             }
+            brokerTopicStats.topicStats(topicIdPartition.topic()).recordRemoteLogMetadataCount(topicIdPartition.partition(), metadataCount);
 
             // All the leader epochs in sorted order that exists in remote storage
             final List<Integer> remoteLeaderEpochs = new ArrayList<>(epochsSet);
