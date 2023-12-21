@@ -160,18 +160,23 @@ class CoordinatorLoaderImpl[T](
               val currentHighWatermark = log.highWatermark
               if (currentOffset >= currentHighWatermark) {
                 coordinator.updateLastWrittenOffset(currentOffset)
-              }
 
-              if (currentHighWatermark > previousHighWatermark) {
-                coordinator.updateLastCommittedOffset(currentHighWatermark)
-                previousHighWatermark = currentHighWatermark
+                if (currentHighWatermark > previousHighWatermark) {
+                  coordinator.updateLastCommittedOffset(currentHighWatermark)
+                  previousHighWatermark = currentHighWatermark
+                }
               }
             }
             numBytes = numBytes + memoryRecords.sizeInBytes()
           }
+
           val endTimeMs = time.milliseconds()
 
-          if (isRunning.get) {
+          if (logEndOffset == -1L) {
+            future.completeExceptionally(new NotLeaderOrFollowerException(
+              s"Stopped loading records from $tp because the partition is not online or is no longer the leader."
+            ))
+          } else if (isRunning.get) {
             future.complete(new LoadSummary(startTimeMs, endTimeMs, numRecords, numBytes))
           } else {
             future.completeExceptionally(new RuntimeException("Coordinator loader is closed."))
