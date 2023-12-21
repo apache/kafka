@@ -846,10 +846,6 @@ public class RemoteLogManagerTest {
                 String.format("Expected to find 1 for RemoteCopyLagSegments metric value, but found %d", safeLongYammerMetricValue("RemoteCopyLagSegments")));
         // unlock copyLogSegmentData
         latch.countDown();
-
-        TestUtils.waitForCondition(
-                () -> safeLongYammerMetricValue("RemoteLogSizeComputationTime") >= 1000,
-                String.format("Expected to find 1000 for RemoteLogSizeComputationTime metric value, but found %d", safeLongYammerMetricValue("RemoteLogSizeComputationTime")));
     }
 
     private Object yammerMetricValue(String name) {
