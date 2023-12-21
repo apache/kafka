@@ -71,7 +71,7 @@ public class GroupCoordinatorMetrics extends CoordinatorMetrics implements AutoC
     public static final String OFFSET_EXPIRED_SENSOR_NAME = "OffsetExpired";
     public static final String OFFSET_DELETIONS_SENSOR_NAME = "OffsetDeletions";
     public static final String CLASSIC_GROUP_COMPLETED_REBALANCES_SENSOR_NAME = "CompletedRebalances";
-    public static final String CLASSIC_GROUP_REBALANCES_SENSOR_NAME = "GenericGroupRebalances";
+    public static final String CLASSIC_GROUP_REBALANCES_SENSOR_NAME = "ClassicGroupRebalances";
     public static final String CONSUMER_GROUP_REBALANCES_SENSOR_NAME = "ConsumerGroupRebalances";
 
     private final MetricName classicGroupCountMetricName;
