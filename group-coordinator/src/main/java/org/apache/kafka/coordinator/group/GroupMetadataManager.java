@@ -74,9 +74,9 @@ import org.apache.kafka.coordinator.group.generated.ConsumerGroupTargetAssignmen
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupTargetAssignmentMetadataValue;
 import org.apache.kafka.coordinator.group.generated.GroupMetadataKey;
 import org.apache.kafka.coordinator.group.generated.GroupMetadataValue;
-import org.apache.kafka.coordinator.group.generic.GenericGroup;
-import org.apache.kafka.coordinator.group.generic.GenericGroupMember;
-import org.apache.kafka.coordinator.group.generic.GenericGroupState;
+import org.apache.kafka.coordinator.group.classic.ClassicGroup;
+import org.apache.kafka.coordinator.group.classic.ClassicGroupMember;
+import org.apache.kafka.coordinator.group.classic.ClassicGroupState;
 import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetricsShard;
 import org.apache.kafka.coordinator.group.runtime.CoordinatorResult;
 import org.apache.kafka.coordinator.group.runtime.CoordinatorTimer;
@@ -110,7 +110,7 @@ import static org.apache.kafka.common.requests.ConsumerGroupHeartbeatRequest.LEA
 import static org.apache.kafka.common.requests.ConsumerGroupHeartbeatRequest.LEAVE_GROUP_STATIC_MEMBER_EPOCH;
 import static org.apache.kafka.common.requests.JoinGroupRequest.UNKNOWN_MEMBER_ID;
 import static org.apache.kafka.coordinator.group.Group.GroupType.CONSUMER;
-import static org.apache.kafka.coordinator.group.Group.GroupType.GENERIC;
+import static org.apache.kafka.coordinator.group.Group.GroupType.CLASSIC;
 import static org.apache.kafka.coordinator.group.RecordHelpers.newCurrentAssignmentRecord;
 import static org.apache.kafka.coordinator.group.RecordHelpers.newCurrentAssignmentTombstoneRecord;
 import static org.apache.kafka.coordinator.group.RecordHelpers.newGroupEpochRecord;
@@ -119,18 +119,18 @@ import static org.apache.kafka.coordinator.group.RecordHelpers.newMemberSubscrip
 import static org.apache.kafka.coordinator.group.RecordHelpers.newMemberSubscriptionTombstoneRecord;
 import static org.apache.kafka.coordinator.group.RecordHelpers.newTargetAssignmentTombstoneRecord;
 import static org.apache.kafka.coordinator.group.Utils.ofSentinel;
-import static org.apache.kafka.coordinator.group.generic.GenericGroupMember.EMPTY_ASSIGNMENT;
-import static org.apache.kafka.coordinator.group.generic.GenericGroupState.COMPLETING_REBALANCE;
-import static org.apache.kafka.coordinator.group.generic.GenericGroupState.DEAD;
-import static org.apache.kafka.coordinator.group.generic.GenericGroupState.EMPTY;
-import static org.apache.kafka.coordinator.group.generic.GenericGroupState.PREPARING_REBALANCE;
-import static org.apache.kafka.coordinator.group.generic.GenericGroupState.STABLE;
-import static org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetrics.GENERIC_GROUP_COMPLETED_REBALANCES_SENSOR_NAME;
+import static org.apache.kafka.coordinator.group.classic.ClassicGroupMember.EMPTY_ASSIGNMENT;
+import static org.apache.kafka.coordinator.group.classic.ClassicGroupState.COMPLETING_REBALANCE;
+import static org.apache.kafka.coordinator.group.classic.ClassicGroupState.DEAD;
+import static org.apache.kafka.coordinator.group.classic.ClassicGroupState.EMPTY;
+import static org.apache.kafka.coordinator.group.classic.ClassicGroupState.PREPARING_REBALANCE;
+import static org.apache.kafka.coordinator.group.classic.ClassicGroupState.STABLE;
+import static org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetrics.CLASSIC_GROUP_COMPLETED_REBALANCES_SENSOR_NAME;
 import static org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetrics.CONSUMER_GROUP_REBALANCES_SENSOR_NAME;
-import static org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetrics.GENERIC_GROUP_REBALANCES_SENSOR_NAME;
+import static org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetrics.CLASSIC_GROUP_REBALANCES_SENSOR_NAME;
 
 /**
- * The GroupMetadataManager manages the metadata of all generic and consumer groups. It holds
+ * The GroupMetadataManager manages the metadata of all classic and consumer groups. It holds
  * the hard and the soft state of the groups. This class has two kinds of methods:
  * 1) The request handlers which handle the requests and generate a response and records to
  *    mutate the hard state. Those records will be written by the runtime and applied to the
@@ -151,11 +151,11 @@ public class GroupMetadataManager {
         private int consumerGroupMetadataRefreshIntervalMs = Integer.MAX_VALUE;
         private MetadataImage metadataImage = null;
         private int consumerGroupSessionTimeoutMs = 45000;
-        private int genericGroupMaxSize = Integer.MAX_VALUE;
-        private int genericGroupInitialRebalanceDelayMs = 3000;
-        private int genericGroupNewMemberJoinTimeoutMs = 5 * 60 * 1000;
-        private int genericGroupMinSessionTimeoutMs;
-        private int genericGroupMaxSessionTimeoutMs;
+        private int classicGroupMaxSize = Integer.MAX_VALUE;
+        private int classicGroupInitialRebalanceDelayMs = 3000;
+        private int classicGroupNewMemberJoinTimeoutMs = 5 * 60 * 1000;
+        private int classicGroupMinSessionTimeoutMs;
+        private int classicGroupMaxSessionTimeoutMs;
         private GroupCoordinatorMetricsShard metrics;
 
         Builder withLogContext(LogContext logContext) {
@@ -208,28 +208,28 @@ public class GroupMetadataManager {
             return this;
         }
 
-        Builder withGenericGroupMaxSize(int genericGroupMaxSize) {
-            this.genericGroupMaxSize = genericGroupMaxSize;
+        Builder withClassicGroupMaxSize(int classicGroupMaxSize) {
+            this.classicGroupMaxSize = classicGroupMaxSize;
             return this;
         }
 
-        Builder withGenericGroupInitialRebalanceDelayMs(int genericGroupInitialRebalanceDelayMs) {
-            this.genericGroupInitialRebalanceDelayMs = genericGroupInitialRebalanceDelayMs;
+        Builder withClassicGroupInitialRebalanceDelayMs(int classicGroupInitialRebalanceDelayMs) {
+            this.classicGroupInitialRebalanceDelayMs = classicGroupInitialRebalanceDelayMs;
             return this;
         }
 
-        Builder withGenericGroupNewMemberJoinTimeoutMs(int genericGroupNewMemberJoinTimeoutMs) {
-            this.genericGroupNewMemberJoinTimeoutMs = genericGroupNewMemberJoinTimeoutMs;
+        Builder withClassicGroupNewMemberJoinTimeoutMs(int classicGroupNewMemberJoinTimeoutMs) {
+            this.classicGroupNewMemberJoinTimeoutMs = classicGroupNewMemberJoinTimeoutMs;
             return this;
         }
 
-        Builder withGenericGroupMinSessionTimeoutMs(int genericGroupMinSessionTimeoutMs) {
-            this.genericGroupMinSessionTimeoutMs = genericGroupMinSessionTimeoutMs;
+        Builder withClassicGroupMinSessionTimeoutMs(int classicGroupMinSessionTimeoutMs) {
+            this.classicGroupMinSessionTimeoutMs = classicGroupMinSessionTimeoutMs;
             return this;
         }
 
-        Builder withGenericGroupMaxSessionTimeoutMs(int genericGroupMaxSessionTimeoutMs) {
-            this.genericGroupMaxSessionTimeoutMs = genericGroupMaxSessionTimeoutMs;
+        Builder withClassicGroupMaxSessionTimeoutMs(int classicGroupMaxSessionTimeoutMs) {
+            this.classicGroupMaxSessionTimeoutMs = classicGroupMaxSessionTimeoutMs;
             return this;
         }
 
@@ -263,11 +263,11 @@ public class GroupMetadataManager {
                 consumerGroupSessionTimeoutMs,
                 consumerGroupHeartbeatIntervalMs,
                 consumerGroupMetadataRefreshIntervalMs,
-                genericGroupMaxSize,
-                genericGroupInitialRebalanceDelayMs,
-                genericGroupNewMemberJoinTimeoutMs,
-                genericGroupMinSessionTimeoutMs,
-                genericGroupMaxSessionTimeoutMs
+                classicGroupMaxSize,
+                classicGroupInitialRebalanceDelayMs,
+                classicGroupNewMemberJoinTimeoutMs,
+                classicGroupMinSessionTimeoutMs,
+                classicGroupMaxSessionTimeoutMs
             );
         }
     }
@@ -312,7 +312,7 @@ public class GroupMetadataManager {
     private final PartitionAssignor defaultAssignor;
 
     /**
-     * The generic and consumer groups keyed by their name.
+     * The classic and consumer groups keyed by their name.
      */
     private final TimelineHashMap<String, Group> groups;
 
@@ -356,29 +356,29 @@ public class GroupMetadataManager {
         new CoordinatorResult<>(Collections.emptyList(), CompletableFuture.completedFuture(null));
 
     /**
-     * The maximum number of members allowed in a single generic group.
+     * The maximum number of members allowed in a single classic group.
      */
-    private final int genericGroupMaxSize;
+    private final int classicGroupMaxSize;
 
     /**
-     * Initial rebalance delay for members joining a generic group.
+     * Initial rebalance delay for members joining a classic group.
      */
-    private final int genericGroupInitialRebalanceDelayMs;
+    private final int classicGroupInitialRebalanceDelayMs;
 
     /**
      * The timeout used to wait for a new member in milliseconds.
      */
-    private final int genericGroupNewMemberJoinTimeoutMs;
+    private final int classicGroupNewMemberJoinTimeoutMs;
 
     /**
      * The group minimum session timeout.
      */
-    private final int genericGroupMinSessionTimeoutMs;
+    private final int classicGroupMinSessionTimeoutMs;
 
     /**
      * The group maximum session timeout.
      */
-    private final int genericGroupMaxSessionTimeoutMs;
+    private final int classicGroupMaxSessionTimeoutMs;
 
     private GroupMetadataManager(
         SnapshotRegistry snapshotRegistry,
@@ -392,11 +392,11 @@ public class GroupMetadataManager {
         int consumerGroupSessionTimeoutMs,
         int consumerGroupHeartbeatIntervalMs,
         int consumerGroupMetadataRefreshIntervalMs,
-        int genericGroupMaxSize,
-        int genericGroupInitialRebalanceDelayMs,
-        int genericGroupNewMemberJoinTimeoutMs,
-        int genericGroupMinSessionTimeoutMs,
-        int genericGroupMaxSessionTimeoutMs
+        int classicGroupMaxSize,
+        int classicGroupInitialRebalanceDelayMs,
+        int classicGroupNewMemberJoinTimeoutMs,
+        int classicGroupMinSessionTimeoutMs,
+        int classicGroupMaxSessionTimeoutMs
     ) {
         this.logContext = logContext;
         this.log = logContext.logger(GroupMetadataManager.class);
@@ -413,11 +413,11 @@ public class GroupMetadataManager {
         this.consumerGroupSessionTimeoutMs = consumerGroupSessionTimeoutMs;
         this.consumerGroupHeartbeatIntervalMs = consumerGroupHeartbeatIntervalMs;
         this.consumerGroupMetadataRefreshIntervalMs = consumerGroupMetadataRefreshIntervalMs;
-        this.genericGroupMaxSize = genericGroupMaxSize;
-        this.genericGroupInitialRebalanceDelayMs = genericGroupInitialRebalanceDelayMs;
-        this.genericGroupNewMemberJoinTimeoutMs = genericGroupNewMemberJoinTimeoutMs;
-        this.genericGroupMinSessionTimeoutMs = genericGroupMinSessionTimeoutMs;
-        this.genericGroupMaxSessionTimeoutMs = genericGroupMaxSessionTimeoutMs;
+        this.classicGroupMaxSize = classicGroupMaxSize;
+        this.classicGroupInitialRebalanceDelayMs = classicGroupInitialRebalanceDelayMs;
+        this.classicGroupNewMemberJoinTimeoutMs = classicGroupNewMemberJoinTimeoutMs;
+        this.classicGroupMinSessionTimeoutMs = classicGroupMinSessionTimeoutMs;
+        this.classicGroupMaxSessionTimeoutMs = classicGroupMaxSessionTimeoutMs;
     }
 
     /**
@@ -511,7 +511,7 @@ public class GroupMetadataManager {
         final List<DescribeGroupsResponseData.DescribedGroup> describedGroups = new ArrayList<>();
         groupIds.forEach(groupId -> {
             try {
-                GenericGroup group = genericGroup(groupId, committedOffset);
+                ClassicGroup group = classicGroup(groupId, committedOffset);
 
                 if (group.isInState(STABLE)) {
                     if (!group.protocolName().isPresent()) {
@@ -589,66 +589,66 @@ public class GroupMetadataManager {
     }
 
     /**
-     * Gets or maybe creates a generic group.
+     * Gets or maybe creates a classic group.
      *
      * @param groupId           The group id.
      * @param createIfNotExists A boolean indicating whether the group should be
      *                          created if it does not exist.
      *
-     * @return A GenericGroup.
+     * @return A ClassicGroup.
      * @throws UnknownMemberIdException if the group does not exist and createIfNotExists is false.
-     * @throws GroupIdNotFoundException if the group is not a generic group.
+     * @throws GroupIdNotFoundException if the group is not a classic group.
      *
      * Package private for testing.
      */
-    GenericGroup getOrMaybeCreateGenericGroup(
+    ClassicGroup getOrMaybeCreateClassicGroup(
         String groupId,
         boolean createIfNotExists
     ) throws UnknownMemberIdException, GroupIdNotFoundException {
         Group group = groups.get(groupId);
 
         if (group == null && !createIfNotExists) {
-            throw new UnknownMemberIdException(String.format("Generic group %s not found.", groupId));
+            throw new UnknownMemberIdException(String.format("Classic group %s not found.", groupId));
         }
 
         if (group == null) {
-            GenericGroup genericGroup = new GenericGroup(logContext, groupId, GenericGroupState.EMPTY, time, metrics);
-            groups.put(groupId, genericGroup);
-            metrics.onGenericGroupStateTransition(null, genericGroup.currentState());
-            return genericGroup;
+            ClassicGroup classicGroup = new ClassicGroup(logContext, groupId, ClassicGroupState.EMPTY, time, metrics);
+            groups.put(groupId, classicGroup);
+            metrics.onClassicGroupStateTransition(null, classicGroup.currentState());
+            return classicGroup;
         } else {
-            if (group.type() == GENERIC) {
-                return (GenericGroup) group;
+            if (group.type() == CLASSIC) {
+                return (ClassicGroup) group;
             } else {
                 // We don't support upgrading/downgrading between protocols at the moment so
                 // we throw an exception if a group exists with the wrong type.
-                throw new GroupIdNotFoundException(String.format("Group %s is not a generic group.",
+                throw new GroupIdNotFoundException(String.format("Group %s is not a classic group.",
                     groupId));
             }
         }
     }
 
     /**
-     * Gets a generic group by committed offset.
+     * Gets a classic group by committed offset.
      *
      * @param groupId           The group id.
      * @param committedOffset   A specified committed offset corresponding to this shard.
      *
-     * @return A GenericGroup.
-     * @throws GroupIdNotFoundException if the group does not exist or is not a generic group.
+     * @return A ClassicGroup.
+     * @throws GroupIdNotFoundException if the group does not exist or is not a classic group.
      */
-    public GenericGroup genericGroup(
+    public ClassicGroup classicGroup(
         String groupId,
         long committedOffset
     ) throws GroupIdNotFoundException {
         Group group = group(groupId, committedOffset);
 
-        if (group.type() == GENERIC) {
-            return (GenericGroup) group;
+        if (group.type() == CLASSIC) {
+            return (ClassicGroup) group;
         } else {
             // We don't support upgrading/downgrading between protocols at the moment so
             // we throw an exception if a group exists with the wrong type.
-            throw new GroupIdNotFoundException(String.format("Group %s is not a generic group.",
+            throw new GroupIdNotFoundException(String.format("Group %s is not a classic group.",
                 groupId));
         }
     }
@@ -693,9 +693,9 @@ public class GroupMetadataManager {
                     ConsumerGroup consumerGroup = (ConsumerGroup) group;
                     metrics.onConsumerGroupStateTransition(consumerGroup.state(), null);
                     break;
-                case GENERIC:
-                    GenericGroup genericGroup = (GenericGroup) group;
-                    metrics.onGenericGroupStateTransition(genericGroup.currentState(), null);
+                case CLASSIC:
+                    ClassicGroup classicGroup = (ClassicGroup) group;
+                    metrics.onClassicGroupStateTransition(classicGroup.currentState(), null);
                     break;
             }
         }
@@ -1774,18 +1774,18 @@ public class GroupMetadataManager {
                     });
                     break;
 
-                case GENERIC:
-                    GenericGroup genericGroup = (GenericGroup) group;
-                    log.info("Loaded generic group {} with {} members.", groupId, genericGroup.allMembers().size());
-                    genericGroup.allMembers().forEach(member -> {
-                        log.debug("Loaded member {} in generic group {}.", member.memberId(), groupId);
-                        rescheduleGenericGroupMemberHeartbeat(genericGroup, member);
+                case CLASSIC:
+                    ClassicGroup classicGroup = (ClassicGroup) group;
+                    log.info("Loaded classic group {} with {} members.", groupId, classicGroup.allMembers().size());
+                    classicGroup.allMembers().forEach(member -> {
+                        log.debug("Loaded member {} in classic group {}.", member.memberId(), groupId);
+                        rescheduleClassicGroupMemberHeartbeat(classicGroup, member);
                     });
 
-                    if (genericGroup.size() > genericGroupMaxSize) {
+                    if (classicGroup.size() > classicGroupMaxSize) {
                         // In case the max size config has changed.
-                        prepareRebalance(genericGroup, "Freshly-loaded group " + groupId +
-                            " (size " + genericGroup.size() + ") is over capacity " + genericGroupMaxSize +
+                        prepareRebalance(classicGroup, "Freshly-loaded group " + groupId +
+                            " (size " + classicGroup.size() + ") is over capacity " + classicGroupMaxSize +
                             ". Rebalancing in order to give a chance for consumers to commit offsets");
                     }
                     break;
@@ -1803,7 +1803,7 @@ public class GroupMetadataManager {
 
     /**
      * Replays GroupMetadataKey/Value to update the soft state of
-     * the generic group.
+     * the classic group.
      *
      * @param key   A GroupMetadataKey key.
      * @param value A GroupMetadataValue record.
@@ -1818,7 +1818,7 @@ public class GroupMetadataManager {
             // Tombstone. Group should be removed.
             removeGroup(groupId);
         } else {
-            List<GenericGroupMember> loadedMembers = new ArrayList<>();
+            List<ClassicGroupMember> loadedMembers = new ArrayList<>();
             for (GroupMetadataValue.MemberMetadata member : value.members()) {
                 int rebalanceTimeout = member.rebalanceTimeout() == -1 ?
                     member.sessionTimeout() : member.rebalanceTimeout();
@@ -1828,7 +1828,7 @@ public class GroupMetadataManager {
                     .setName(value.protocol())
                     .setMetadata(member.subscription()));
 
-                GenericGroupMember loadedMember = new GenericGroupMember(
+                ClassicGroupMember loadedMember = new ClassicGroupMember(
                     member.memberId(),
                     Optional.ofNullable(member.groupInstanceId()),
                     member.clientId(),
@@ -1845,7 +1845,7 @@ public class GroupMetadataManager {
 
             String protocolType = value.protocolType();
 
-            GenericGroup genericGroup = new GenericGroup(
+            ClassicGroup classicGroup = new ClassicGroup(
                 this.logContext,
                 groupId,
                 loadedMembers.isEmpty() ? EMPTY : STABLE,
@@ -1858,14 +1858,14 @@ public class GroupMetadataManager {
                 value.currentStateTimestamp() == -1 ? Optional.empty() : Optional.of(value.currentStateTimestamp())
             );
 
-            loadedMembers.forEach(member -> genericGroup.add(member, null));
-            Group prevGroup = groups.put(groupId, genericGroup);
+            loadedMembers.forEach(member -> classicGroup.add(member, null));
+            Group prevGroup = groups.put(groupId, classicGroup);
             if (prevGroup == null) {
-                metrics.onGenericGroupStateTransition(null, genericGroup.currentState());
+                metrics.onClassicGroupStateTransition(null, classicGroup.currentState());
             }
 
-            genericGroup.setSubscribedTopics(
-                genericGroup.computeSubscribedTopics()
+            classicGroup.setSubscribedTopics(
+                classicGroup.computeSubscribedTopics()
             );
         }
     }
@@ -1879,7 +1879,7 @@ public class GroupMetadataManager {
      *
      * @return The result that contains records to append if the join group phase completes.
      */
-    public CoordinatorResult<Void, Record> genericGroupJoin(
+    public CoordinatorResult<Void, Record> classicGroupJoin(
         RequestContext context,
         JoinGroupRequestData request,
         CompletableFuture<JoinGroupResponseData> responseFuture
@@ -1890,8 +1890,8 @@ public class GroupMetadataManager {
         String memberId = request.memberId();
         int sessionTimeoutMs = request.sessionTimeoutMs();
 
-        if (sessionTimeoutMs < genericGroupMinSessionTimeoutMs ||
-            sessionTimeoutMs > genericGroupMaxSessionTimeoutMs
+        if (sessionTimeoutMs < classicGroupMinSessionTimeoutMs ||
+            sessionTimeoutMs > classicGroupMaxSessionTimeoutMs
         ) {
             responseFuture.complete(new JoinGroupResponseData()
                 .setMemberId(memberId)
@@ -1901,10 +1901,10 @@ public class GroupMetadataManager {
             boolean isUnknownMember = memberId.equals(UNKNOWN_MEMBER_ID);
             // Group is created if it does not exist and the member id is UNKNOWN. if member
             // is specified but group does not exist, request is rejected with GROUP_ID_NOT_FOUND
-            GenericGroup group;
+            ClassicGroup group;
             boolean isNewGroup = !groups.containsKey(groupId);
             try {
-                group = getOrMaybeCreateGenericGroup(groupId, isUnknownMember);
+                group = getOrMaybeCreateClassicGroup(groupId, isUnknownMember);
             } catch (Throwable t) {
                 responseFuture.complete(new JoinGroupResponseData()
                     .setMemberId(memberId)
@@ -1920,14 +1920,14 @@ public class GroupMetadataManager {
                     .setErrorCode(Errors.GROUP_MAX_SIZE_REACHED.code())
                 );
             } else if (isUnknownMember) {
-                result = genericGroupJoinNewMember(
+                result = classicGroupJoinNewMember(
                     context,
                     request,
                     group,
                     responseFuture
                 );
             } else {
-                result = genericGroupJoinExistingMember(
+                result = classicGroupJoinExistingMember(
                     context,
                     request,
                     group,
@@ -1968,19 +1968,19 @@ public class GroupMetadataManager {
      *
      * @return The coordinator result that will be appended to the log.
      */
-    private CoordinatorResult<Void, Record> maybeCompleteJoinPhase(GenericGroup group) {
+    private CoordinatorResult<Void, Record> maybeCompleteJoinPhase(ClassicGroup group) {
         if (group.isInState(PREPARING_REBALANCE) &&
             group.hasAllMembersJoined() &&
             group.previousState() != EMPTY
         ) {
-            return completeGenericGroupJoin(group);
+            return completeClassicGroupJoin(group);
         }
 
         return EMPTY_RESULT;
     }
 
     /**
-     * Handle a new member generic group join.
+     * Handle a new member classic group join.
      *
      * @param context         The request context.
      * @param request         The join group request.
@@ -1989,10 +1989,10 @@ public class GroupMetadataManager {
      *
      * @return The coordinator result that will be appended to the log.
      */
-    private CoordinatorResult<Void, Record> genericGroupJoinNewMember(
+    private CoordinatorResult<Void, Record> classicGroupJoinNewMember(
         RequestContext context,
         JoinGroupRequestData request,
-        GenericGroup group,
+        ClassicGroup group,
         CompletableFuture<JoinGroupResponseData> responseFuture
     ) {
         if (group.isInState(DEAD)) {
@@ -2014,7 +2014,7 @@ public class GroupMetadataManager {
             String newMemberId = group.generateMemberId(context.clientId(), groupInstanceId);
 
             if (groupInstanceId.isPresent()) {
-                return genericGroupJoinNewStaticMember(
+                return classicGroupJoinNewStaticMember(
                     context,
                     request,
                     group,
@@ -2022,7 +2022,7 @@ public class GroupMetadataManager {
                     responseFuture
                 );
             } else {
-                return genericGroupJoinNewDynamicMember(
+                return classicGroupJoinNewDynamicMember(
                     context,
                     request,
                     group,
@@ -2047,10 +2047,10 @@ public class GroupMetadataManager {
      *
      * @return The coordinator result that will be appended to the log.
      */
-    private CoordinatorResult<Void, Record> genericGroupJoinNewStaticMember(
+    private CoordinatorResult<Void, Record> classicGroupJoinNewStaticMember(
         RequestContext context,
         JoinGroupRequestData request,
-        GenericGroup group,
+        ClassicGroup group,
         String newMemberId,
         CompletableFuture<JoinGroupResponseData> responseFuture
     ) {
@@ -2093,10 +2093,10 @@ public class GroupMetadataManager {
      *
      * @return The coordinator result that will be appended to the log.
      */
-    private CoordinatorResult<Void, Record> genericGroupJoinNewDynamicMember(
+    private CoordinatorResult<Void, Record> classicGroupJoinNewDynamicMember(
         RequestContext context,
         JoinGroupRequestData request,
-        GenericGroup group,
+        ClassicGroup group,
         String newMemberId,
         CompletableFuture<JoinGroupResponseData> responseFuture
     ) {
@@ -2108,14 +2108,14 @@ public class GroupMetadataManager {
                 group.groupId(), group.currentState(), newMemberId);
 
             group.addPendingMember(newMemberId);
-            String genericGroupHeartbeatKey = genericGroupHeartbeatKey(group.groupId(), newMemberId);
+            String classicGroupHeartbeatKey = classicGroupHeartbeatKey(group.groupId(), newMemberId);
 
             timer.schedule(
-                genericGroupHeartbeatKey,
+                classicGroupHeartbeatKey,
                 request.sessionTimeoutMs(),
                 TimeUnit.MILLISECONDS,
                 false,
-                () -> expireGenericGroupMemberHeartbeat(group, newMemberId)
+                () -> expireClassicGroupMemberHeartbeat(group, newMemberId)
             );
 
             responseFuture.complete(new JoinGroupResponseData()
@@ -2143,10 +2143,10 @@ public class GroupMetadataManager {
      *
      * @return The coordinator result that will be appended to the log.
      */
-    private CoordinatorResult<Void, Record> genericGroupJoinExistingMember(
+    private CoordinatorResult<Void, Record> classicGroupJoinExistingMember(
         RequestContext context,
         JoinGroupRequestData request,
-        GenericGroup group,
+        ClassicGroup group,
         CompletableFuture<JoinGroupResponseData> responseFuture
     ) {
         String memberId = request.memberId();
@@ -2200,7 +2200,7 @@ public class GroupMetadataManager {
                 return EMPTY_RESULT;
             }
 
-            GenericGroupMember member = group.member(memberId);
+            ClassicGroupMember member = group.member(memberId);
             if (group.isInState(PREPARING_REBALANCE)) {
                 return updateMemberThenRebalanceOrCompleteJoin(
                     request,
@@ -2217,7 +2217,7 @@ public class GroupMetadataManager {
                     // for the current generation.
                     responseFuture.complete(new JoinGroupResponseData()
                         .setMembers(group.isLeader(memberId) ?
-                            group.currentGenericGroupMembers() : Collections.emptyList())
+                            group.currentClassicGroupMembers() : Collections.emptyList())
                         .setMemberId(memberId)
                         .setGenerationId(group.generationId())
                         .setProtocolName(group.protocolName().orElse(null))
@@ -2299,13 +2299,13 @@ public class GroupMetadataManager {
      *
      * @return The coordinator result that will be appended to the log.
      */
-    private CoordinatorResult<Void, Record> completeGenericGroupJoin(
-        GenericGroup group
+    private CoordinatorResult<Void, Record> completeClassicGroupJoin(
+        ClassicGroup group
     ) {
-        timer.cancel(genericGroupJoinKey(group.groupId()));
+        timer.cancel(classicGroupJoinKey(group.groupId()));
         String groupId = group.groupId();
 
-        Map<String, GenericGroupMember> notYetRejoinedDynamicMembers =
+        Map<String, ClassicGroupMember> notYetRejoinedDynamicMembers =
             group.notYetRejoinedMembers().entrySet().stream()
                 .filter(entry -> !entry.getValue().isStaticMember())
                 .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
@@ -2313,7 +2313,7 @@ public class GroupMetadataManager {
         if (!notYetRejoinedDynamicMembers.isEmpty()) {
             notYetRejoinedDynamicMembers.values().forEach(failedMember -> {
                 group.remove(failedMember.memberId());
-                timer.cancel(genericGroupHeartbeatKey(group.groupId(), failedMember.memberId()));
+                timer.cancel(classicGroupHeartbeatKey(group.groupId(), failedMember.memberId()));
             });
 
             log.info("Group {} removed dynamic members who haven't joined: {}",
@@ -2329,11 +2329,11 @@ public class GroupMetadataManager {
             log.error("Group {} could not complete rebalance because no members rejoined.", groupId);
 
             timer.schedule(
-                genericGroupJoinKey(groupId),
+                classicGroupJoinKey(groupId),
                 group.rebalanceTimeoutMs(),
                 TimeUnit.MILLISECONDS,
                 false,
-                () -> completeGenericGroupJoin(group)
+                () -> completeClassicGroupJoin(group)
             );
 
             return EMPTY_RESULT;
@@ -2366,7 +2366,7 @@ public class GroupMetadataManager {
                 group.allMembers().forEach(member -> {
                     List<JoinGroupResponseData.JoinGroupResponseMember> members = Collections.emptyList();
                     if (group.isLeader(member.memberId())) {
-                        members = group.currentGenericGroupMembers();
+                        members = group.currentClassicGroupMembers();
                     }
 
                     JoinGroupResponseData response = new JoinGroupResponseData()
@@ -2380,7 +2380,7 @@ public class GroupMetadataManager {
                         .setErrorCode(Errors.NONE.code());
 
                     group.completeJoinFuture(member, response);
-                    rescheduleGenericGroupMemberHeartbeat(group, member);
+                    rescheduleClassicGroupMemberHeartbeat(group, member);
                     member.setIsNew(false);
 
                     group.addPendingSyncMember(member.memberId());
@@ -2398,8 +2398,9 @@ public class GroupMetadataManager {
      *
      * @param group The group.
      */
-    private void schedulePendingSync(GenericGroup group) {
-        timer.schedule(genericGroupSyncKey(group.groupId()),
+    private void schedulePendingSync(ClassicGroup group) {
+        timer.schedule(
+            classicGroupSyncKey(group.groupId()),
             group.rebalanceTimeoutMs(),
             TimeUnit.MILLISECONDS,
             false,
@@ -2415,8 +2416,8 @@ public class GroupMetadataManager {
      *
      * @return The coordinator result that will be appended to the log.
      */
-    private CoordinatorResult<Void, Record> expireGenericGroupMemberHeartbeat(
-        GenericGroup group,
+    private CoordinatorResult<Void, Record> expireClassicGroupMemberHeartbeat(
+        ClassicGroup group,
         String memberId
     ) {
         if (group.isInState(DEAD)) {
@@ -2427,16 +2428,16 @@ public class GroupMetadataManager {
             log.info("Pending member {} in group {} has been removed after session timeout expiration.",
                 memberId, group.groupId());
 
-            return removePendingMemberAndUpdateGenericGroup(group, memberId);
+            return removePendingMemberAndUpdateClassicGroup(group, memberId);
         } else if (!group.hasMemberId(memberId)) {
             log.debug("Member {} has already been removed from the group.", memberId);
         } else {
-            GenericGroupMember member = group.member(memberId);
+            ClassicGroupMember member = group.member(memberId);
             if (!member.hasSatisfiedHeartbeat()) {
                 log.info("Member {} in group {} has failed, removing it from the group.",
                     member.memberId(), group.groupId());
 
-                return removeMemberAndUpdateGenericGroup(
+                return removeMemberAndUpdateClassicGroup(
                     group,
                     member,
                     "removing member " + member.memberId() + " on heartbeat expiration."
@@ -2456,9 +2457,9 @@ public class GroupMetadataManager {
      *
      * @return The coordinator result that will be appended to the log.
      */
-    private CoordinatorResult<Void, Record> removeMemberAndUpdateGenericGroup(
-        GenericGroup group,
-        GenericGroupMember member,
+    private CoordinatorResult<Void, Record> removeMemberAndUpdateClassicGroup(
+        ClassicGroup group,
+        ClassicGroupMember member,
         String reason
     ) {
         // New members may timeout with a pending JoinGroup while the group is still rebalancing, so we have
@@ -2473,7 +2474,7 @@ public class GroupMetadataManager {
         if (group.isInState(STABLE) || group.isInState(COMPLETING_REBALANCE)) {
             return maybePrepareRebalanceOrCompleteJoin(group, reason);
         } else if (group.isInState(PREPARING_REBALANCE) && group.hasAllMembersJoined()) {
-            return completeGenericGroupJoin(group);
+            return completeClassicGroupJoin(group);
         }
 
         return EMPTY_RESULT;
@@ -2487,14 +2488,14 @@ public class GroupMetadataManager {
      *
      * @return The coordinator result that will be appended to the log.
      */
-    private CoordinatorResult<Void, Record> removePendingMemberAndUpdateGenericGroup(
-        GenericGroup group,
+    private CoordinatorResult<Void, Record> removePendingMemberAndUpdateClassicGroup(
+        ClassicGroup group,
         String memberId
     ) {
         group.remove(memberId);
 
         if (group.isInState(PREPARING_REBALANCE) && group.hasAllMembersJoined()) {
-            return completeGenericGroupJoin(group);
+            return completeClassicGroupJoin(group);
         }
 
         return EMPTY_RESULT;
@@ -2513,8 +2514,8 @@ public class GroupMetadataManager {
      */
     private CoordinatorResult<Void, Record> updateMemberThenRebalanceOrCompleteJoin(
         JoinGroupRequestData request,
-        GenericGroup group,
-        GenericGroupMember member,
+        ClassicGroup group,
+        ClassicGroupMember member,
         String joinReason,
         CompletableFuture<JoinGroupResponseData> responseFuture
     ) {
@@ -2543,12 +2544,12 @@ public class GroupMetadataManager {
     private CoordinatorResult<Void, Record> addMemberThenRebalanceOrCompleteJoin(
         RequestContext context,
         JoinGroupRequestData request,
-        GenericGroup group,
+        ClassicGroup group,
         String memberId,
         CompletableFuture<JoinGroupResponseData> responseFuture
     ) {
         Optional<String> groupInstanceId = Optional.ofNullable(request.groupInstanceId());
-        GenericGroupMember member = new GenericGroupMember(
+        ClassicGroupMember member = new ClassicGroupMember(
             memberId,
             groupInstanceId,
             context.clientId(),
@@ -2574,7 +2575,7 @@ public class GroupMetadataManager {
         // timeout during a long rebalance), they may simply retry which will lead to a lot of defunct
         // members in the rebalance. To prevent this going on indefinitely, we time out JoinGroup requests
         // for new members. If the new member is still there, we expect it to retry.
-        rescheduleGenericGroupMemberHeartbeat(group, member, genericGroupNewMemberJoinTimeoutMs);
+        rescheduleClassicGroupMemberHeartbeat(group, member, classicGroupNewMemberJoinTimeoutMs);
 
         return maybePrepareRebalanceOrCompleteJoin(group, "Adding new member " + memberId + " with group instance id " +
             request.groupInstanceId() + "; client reason: " + JoinGroupRequest.joinReason(request));
@@ -2590,7 +2591,7 @@ public class GroupMetadataManager {
      * @return The coordinator result that will be appended to the log.
      */
     private CoordinatorResult<Void, Record> maybePrepareRebalanceOrCompleteJoin(
-        GenericGroup group,
+        ClassicGroup group,
         String reason
     ) {
         if (group.canRebalance()) {
@@ -2611,7 +2612,7 @@ public class GroupMetadataManager {
      * Package private for testing.
      */
     CoordinatorResult<Void, Record> prepareRebalance(
-        GenericGroup group,
+        ClassicGroup group,
         String reason
     ) {
         // If any members are awaiting sync, cancel their request and have them rejoin.
@@ -2625,11 +2626,11 @@ public class GroupMetadataManager {
         boolean isInitialRebalance = group.isInState(EMPTY);
         if (isInitialRebalance) {
             // The group is new. Provide more time for the members to join.
-            int delayMs = genericGroupInitialRebalanceDelayMs;
-            int remainingMs = Math.max(group.rebalanceTimeoutMs() - genericGroupInitialRebalanceDelayMs, 0);
+            int delayMs = classicGroupInitialRebalanceDelayMs;
+            int remainingMs = Math.max(group.rebalanceTimeoutMs() - classicGroupInitialRebalanceDelayMs, 0);
 
             timer.schedule(
-                genericGroupJoinKey(group.groupId()),
+                classicGroupJoinKey(group.groupId()),
                 delayMs,
                 TimeUnit.MILLISECONDS,
                 false,
@@ -2638,7 +2639,7 @@ public class GroupMetadataManager {
         }
 
         group.transitionTo(PREPARING_REBALANCE);
-        metrics.record(GENERIC_GROUP_REBALANCES_SENSOR_NAME);
+        metrics.record(CLASSIC_GROUP_REBALANCES_SENSOR_NAME);
 
         log.info("Preparing to rebalance group {} in state {} with old generation {} (reason: {}).",
             group.groupId(), group.currentState(), group.generationId(), reason);
@@ -2654,19 +2655,19 @@ public class GroupMetadataManager {
      * @return The coordinator result that will be appended to the log.
      */
     private CoordinatorResult<Void, Record> maybeCompleteJoinElseSchedule(
-        GenericGroup group
+        ClassicGroup group
     ) {
-        String genericGroupJoinKey = genericGroupJoinKey(group.groupId());
+        String classicGroupJoinKey = classicGroupJoinKey(group.groupId());
         if (group.hasAllMembersJoined()) {
             // All members have joined. Proceed to sync phase.
-            return completeGenericGroupJoin(group);
+            return completeClassicGroupJoin(group);
         } else {
             timer.schedule(
-                genericGroupJoinKey,
+                classicGroupJoinKey,
                 group.rebalanceTimeoutMs(),
                 TimeUnit.MILLISECONDS,
                 false,
-                () -> completeGenericGroupJoin(group)
+                () -> completeClassicGroupJoin(group)
             );
             return EMPTY_RESULT;
         }
@@ -2681,18 +2682,18 @@ public class GroupMetadataManager {
      * @return The coordinator result that will be appended to the log.
      */
     private CoordinatorResult<Void, Record> tryCompleteInitialRebalanceElseSchedule(
-        GenericGroup group,
+        ClassicGroup group,
         int delayMs,
         int remainingMs
     ) {
         if (group.newMemberAdded() && remainingMs != 0) {
             // A new member was added. Extend the delay.
             group.setNewMemberAdded(false);
-            int newDelayMs = Math.min(genericGroupInitialRebalanceDelayMs, remainingMs);
+            int newDelayMs = Math.min(classicGroupInitialRebalanceDelayMs, remainingMs);
             int newRemainingMs = Math.max(remainingMs - delayMs, 0);
 
             timer.schedule(
-                genericGroupJoinKey(group.groupId()),
+                classicGroupJoinKey(group.groupId()),
                 newDelayMs,
                 TimeUnit.MILLISECONDS,
                 false,
@@ -2700,7 +2701,7 @@ public class GroupMetadataManager {
             );
         } else {
             // No more time remaining. Complete the join phase.
-            return completeGenericGroupJoin(group);
+            return completeClassicGroupJoin(group);
         }
 
         return EMPTY_RESULT;
@@ -2712,7 +2713,7 @@ public class GroupMetadataManager {
      * @param group  The group.
      * @param error  The error to propagate.
      */
-    private void resetAndPropagateAssignmentWithError(GenericGroup group, Errors error) {
+    private void resetAndPropagateAssignmentWithError(ClassicGroup group, Errors error) {
         if (!group.isInState(COMPLETING_REBALANCE)) {
             throw new IllegalStateException("Group " + group.groupId() + " must be in " + COMPLETING_REBALANCE.name() +
                 " state but is in " + group.currentState() + ".");
@@ -2728,7 +2729,7 @@ public class GroupMetadataManager {
      * @param group      The group.
      * @param assignment The assignment for all members.
      */
-    private void setAndPropagateAssignment(GenericGroup group, Map<String, byte[]> assignment) {
+    private void setAndPropagateAssignment(ClassicGroup group, Map<String, byte[]> assignment) {
         if (!group.isInState(COMPLETING_REBALANCE)) {
             throw new IllegalStateException("The group must be in CompletingRebalance state " +
                 "to set and propagate assignment.");
@@ -2746,7 +2747,7 @@ public class GroupMetadataManager {
      * @param group  The group.
      * @param error  The error to propagate.
      */
-    private void propagateAssignment(GenericGroup group, Errors error) {
+    private void propagateAssignment(ClassicGroup group, Errors error) {
         Optional<String> protocolName = Optional.empty();
         Optional<String> protocolType = Optional.empty();
         if (error == Errors.NONE) {
@@ -2754,7 +2755,7 @@ public class GroupMetadataManager {
             protocolType = group.protocolType();
         }
 
-        for (GenericGroupMember member : group.allMembers()) {
+        for (ClassicGroupMember member : group.allMembers()) {
             if (!member.hasAssignment() && error == Errors.NONE) {
                 log.warn("Sending empty assignment to member {} of {} for " + "generation {} with no errors",
                     member.memberId(), group.groupId(), group.generationId());
@@ -2771,7 +2772,7 @@ public class GroupMetadataManager {
                 // This is because if any member's session expired while we were still awaiting either
                 // the leader sync group or the append future, its expiration will be ignored and no
                 // future heartbeat expectations will not be scheduled.
-                rescheduleGenericGroupMemberHeartbeat(group, member);
+                rescheduleClassicGroupMemberHeartbeat(group, member);
             }
         }
     }
@@ -2782,11 +2783,11 @@ public class GroupMetadataManager {
      * @param group    The group.
      * @param member   The member.
      */
-    public void rescheduleGenericGroupMemberHeartbeat(
-        GenericGroup group,
-        GenericGroupMember member
+    public void rescheduleClassicGroupMemberHeartbeat(
+        ClassicGroup group,
+        ClassicGroupMember member
     ) {
-        rescheduleGenericGroupMemberHeartbeat(group, member, member.sessionTimeoutMs());
+        rescheduleClassicGroupMemberHeartbeat(group, member, member.sessionTimeoutMs());
     }
 
     /**
@@ -2796,19 +2797,19 @@ public class GroupMetadataManager {
      * @param member     The member.
      * @param timeoutMs  The timeout for the new heartbeat.
      */
-    private void rescheduleGenericGroupMemberHeartbeat(
-        GenericGroup group,
-        GenericGroupMember member,
+    private void rescheduleClassicGroupMemberHeartbeat(
+        ClassicGroup group,
+        ClassicGroupMember member,
         long timeoutMs
     ) {
-        String genericGroupHeartbeatKey = genericGroupHeartbeatKey(group.groupId(), member.memberId());
+        String classicGroupHeartbeatKey = classicGroupHeartbeatKey(group.groupId(), member.memberId());
 
         // Reschedule the next heartbeat expiration deadline
-        timer.schedule(genericGroupHeartbeatKey,
+        timer.schedule(classicGroupHeartbeatKey,
             timeoutMs,
             TimeUnit.MILLISECONDS,
             false,
-            () -> expireGenericGroupMemberHeartbeat(group, member.memberId()));
+            () -> expireClassicGroupMemberHeartbeat(group, member.memberId()));
     }
 
     /**
@@ -2817,9 +2818,9 @@ public class GroupMetadataManager {
      *
      * @param group  The group.
      */
-    private void removeSyncExpiration(GenericGroup group) {
+    private void removeSyncExpiration(ClassicGroup group) {
         group.clearPendingSyncMembers();
-        timer.cancel(genericGroupSyncKey(group.groupId()));
+        timer.cancel(classicGroupSyncKey(group.groupId()));
     }
 
     /**
@@ -2831,7 +2832,7 @@ public class GroupMetadataManager {
      * @return The coordinator result that will be appended to the log.
      * */
     private CoordinatorResult<Void, Record> expirePendingSync(
-        GenericGroup group,
+        ClassicGroup group,
         int generationId
     ) {
         if (generationId != group.generationId()) {
@@ -2846,7 +2847,7 @@ public class GroupMetadataManager {
                     Set<String> pendingSyncMembers = new HashSet<>(group.allPendingSyncMembers());
                     pendingSyncMembers.forEach(memberId -> {
                         group.remove(memberId);
-                        timer.cancel(genericGroupHeartbeatKey(group.groupId(), memberId));
+                        timer.cancel(classicGroupHeartbeatKey(group.groupId(), memberId));
                     });
 
                     log.debug("Group {} removed members who haven't sent their sync requests: {}",
@@ -2868,7 +2869,7 @@ public class GroupMetadataManager {
      *
      * @return whether the group can accept a joining member.
      */
-    private boolean acceptJoiningMember(GenericGroup group, String memberId) {
+    private boolean acceptJoiningMember(ClassicGroup group, String memberId) {
         switch (group.currentState()) {
             case EMPTY:
             case DEAD:
@@ -2883,13 +2884,13 @@ public class GroupMetadataManager {
                 // 2) using the number of awaiting members allows to kick out the last rejoining
                 //    members of the group.
                 return (group.hasMemberId(memberId) && group.member(memberId).isAwaitingJoin()) ||
-                    group.numAwaitingJoinResponse() < genericGroupMaxSize;
+                    group.numAwaitingJoinResponse() < classicGroupMaxSize;
             case COMPLETING_REBALANCE:
             case STABLE:
                 // An existing member is accepted. New members are accepted up to the max group size.
                 // Note that the group size is used here. When the group transitions to CompletingRebalance,
                 // members who haven't rejoined are removed.
-                return group.hasMemberId(memberId) || group.size() < genericGroupMaxSize;
+                return group.hasMemberId(memberId) || group.size() < classicGroupMaxSize;
             default:
                 throw new IllegalStateException("Unknown group state: " + group.stateAsString());
         }
@@ -2910,17 +2911,17 @@ public class GroupMetadataManager {
     private CoordinatorResult<Void, Record> updateStaticMemberThenRebalanceOrCompleteJoin(
         RequestContext context,
         JoinGroupRequestData request,
-        GenericGroup group,
+        ClassicGroup group,
         String oldMemberId,
         String newMemberId,
         CompletableFuture<JoinGroupResponseData> responseFuture
     ) {
         String currentLeader = group.leaderOrNull();
-        GenericGroupMember newMember = group.replaceStaticMember(request.groupInstanceId(), oldMemberId, newMemberId);
+        ClassicGroupMember newMember = group.replaceStaticMember(request.groupInstanceId(), oldMemberId, newMemberId);
 
         // Heartbeat of old member id will expire without effect since the group no longer contains that member id.
         // New heartbeat shall be scheduled with new member id.
-        rescheduleGenericGroupMemberHeartbeat(group, newMember);
+        rescheduleClassicGroupMemberHeartbeat(group, newMember);
 
         int oldRebalanceTimeoutMs = newMember.rebalanceTimeoutMs();
         int oldSessionTimeoutMs = newMember.sessionTimeoutMs();
@@ -2954,8 +2955,8 @@ public class GroupMetadataManager {
 
                         // Failed to persist the member id of the given static member, revert the update of the static member in the group.
                         group.updateMember(newMember, oldProtocols, oldRebalanceTimeoutMs, oldSessionTimeoutMs, null);
-                        GenericGroupMember oldMember = group.replaceStaticMember(groupInstanceId, newMemberId, oldMemberId);
-                        rescheduleGenericGroupMemberHeartbeat(group, oldMember);
+                        ClassicGroupMember oldMember = group.replaceStaticMember(groupInstanceId, newMemberId, oldMemberId);
+                        rescheduleClassicGroupMemberHeartbeat(group, oldMember);
 
                         responseFuture.complete(
                             new JoinGroupResponseData()
@@ -2972,7 +2973,7 @@ public class GroupMetadataManager {
                         boolean isLeader = group.isLeader(newMemberId);
 
                         group.completeJoinFuture(newMember, new JoinGroupResponseData()
-                            .setMembers(isLeader ? group.currentGenericGroupMembers() : Collections.emptyList())
+                            .setMembers(isLeader ? group.currentClassicGroupMembers() : Collections.emptyList())
                             .setMemberId(newMemberId)
                             .setGenerationId(group.generationId())
                             .setProtocolName(group.protocolName().orElse(null))
@@ -3033,16 +3034,16 @@ public class GroupMetadataManager {
      *
      * @return The result that contains records to append if the group metadata manager received assignments.
      */
-    public CoordinatorResult<Void, Record> genericGroupSync(
+    public CoordinatorResult<Void, Record> classicGroupSync(
         RequestContext context,
         SyncGroupRequestData request,
         CompletableFuture<SyncGroupResponseData> responseFuture
     ) throws UnknownMemberIdException, GroupIdNotFoundException {
         String groupId = request.groupId();
         String memberId = request.memberId();
-        GenericGroup group;
+        ClassicGroup group;
         try {
-            group = getOrMaybeCreateGenericGroup(groupId, false);
+            group = getOrMaybeCreateClassicGroup(groupId, false);
         } catch (Throwable t) {
             responseFuture.complete(new SyncGroupResponseData()
                 .setErrorCode(Errors.forException(t).code())
@@ -3105,7 +3106,7 @@ public class GroupMetadataManager {
                             // Update group's assignment and propagate to all members.
                             setAndPropagateAssignment(group, assignment);
                             group.transitionTo(STABLE);
-                            metrics.record(GENERIC_GROUP_COMPLETED_REBALANCES_SENSOR_NAME);
+                            metrics.record(CLASSIC_GROUP_COMPLETED_REBALANCES_SENSOR_NAME);
                         }
                     }
                 });
@@ -3119,7 +3120,7 @@ public class GroupMetadataManager {
             removePendingSyncMember(group, memberId);
 
             // If the group is stable, we just return the current assignment
-            GenericGroupMember member = group.member(memberId);
+            ClassicGroupMember member = group.member(memberId);
             responseFuture.complete(new SyncGroupResponseData()
                 .setProtocolType(group.protocolType().orElse(null))
                 .setProtocolName(group.protocolName().orElse(null))
@@ -3155,7 +3156,7 @@ public class GroupMetadataManager {
     }
 
     private Optional<Errors> validateSyncGroup(
-        GenericGroup group,
+        ClassicGroup group,
         SyncGroupRequestData request
     ) {
         if (group.isInState(DEAD)) {
@@ -3187,11 +3188,11 @@ public class GroupMetadataManager {
     }
 
     private void removePendingSyncMember(
-        GenericGroup group,
+        ClassicGroup group,
         String memberId
     ) {
         group.removePendingSyncMember(memberId);
-        String syncKey = genericGroupSyncKey(group.groupId());
+        String syncKey = classicGroupSyncKey(group.groupId());
         switch (group.currentState()) {
             case DEAD:
             case EMPTY:
@@ -3210,27 +3211,27 @@ public class GroupMetadataManager {
     }
 
     /**
-     * Handle a generic group HeartbeatRequest.
+     * Handle a classic group HeartbeatRequest.
      *
      * @param context        The request context.
      * @param request        The actual Heartbeat request.
      *
      * @return The Heartbeat response.
      */
-    public HeartbeatResponseData genericGroupHeartbeat(
+    public HeartbeatResponseData classicGroupHeartbeat(
         RequestContext context,
         HeartbeatRequestData request
     ) {
-        GenericGroup group = getOrMaybeCreateGenericGroup(request.groupId(), false);
+        ClassicGroup group = getOrMaybeCreateClassicGroup(request.groupId(), false);
 
-        validateGenericGroupHeartbeat(group, request.memberId(), request.groupInstanceId(), request.generationId());
+        validateClassicGroupHeartbeat(group, request.memberId(), request.groupInstanceId(), request.generationId());
 
         switch (group.currentState()) {
             case EMPTY:
                 return new HeartbeatResponseData().setErrorCode(Errors.UNKNOWN_MEMBER_ID.code());
 
             case PREPARING_REBALANCE:
-                rescheduleGenericGroupMemberHeartbeat(group, group.member(request.memberId()));
+                rescheduleClassicGroupMemberHeartbeat(group, group.member(request.memberId()));
                 return new HeartbeatResponseData().setErrorCode(Errors.REBALANCE_IN_PROGRESS.code());
 
             case COMPLETING_REBALANCE:
@@ -3238,7 +3239,7 @@ public class GroupMetadataManager {
                 // Consumers may start sending heartbeats after join-group response, while the group
                 // is in CompletingRebalance state. In this case, we should treat them as
                 // normal heartbeat requests and reset the timer
-                rescheduleGenericGroupMemberHeartbeat(group, group.member(request.memberId()));
+                rescheduleClassicGroupMemberHeartbeat(group, group.member(request.memberId()));
                 return new HeartbeatResponseData();
 
             default:
@@ -3248,7 +3249,7 @@ public class GroupMetadataManager {
     }
 
     /**
-     * Validates a generic group heartbeat request.
+     * Validates a classic group heartbeat request.
      *
      * @param group              The group.
      * @param memberId           The member id.
@@ -3259,8 +3260,8 @@ public class GroupMetadataManager {
      * @throws IllegalGenerationException       If the generation id in the request and the generation id of the
      *                                          group does not match.
      */
-    private void validateGenericGroupHeartbeat(
-        GenericGroup group,
+    private void validateClassicGroupHeartbeat(
+        ClassicGroup group,
         String memberId,
         String groupInstanceId,
         int generationId
@@ -3281,7 +3282,7 @@ public class GroupMetadataManager {
     }
 
     /**
-     * Handle a generic LeaveGroupRequest.
+     * Handle a classic LeaveGroupRequest.
      *
      * @param context        The request context.
      * @param request        The actual LeaveGroup request.
@@ -3289,11 +3290,11 @@ public class GroupMetadataManager {
      * @return The LeaveGroup response and the GroupMetadata record to append if the group
      *         no longer has any members.
      */
-    public CoordinatorResult<LeaveGroupResponseData, Record> genericGroupLeave(
+    public CoordinatorResult<LeaveGroupResponseData, Record> classicGroupLeave(
         RequestContext context,
         LeaveGroupRequestData request
     ) throws UnknownMemberIdException, GroupIdNotFoundException {
-        GenericGroup group = getOrMaybeCreateGenericGroup(request.groupId(), false);
+        ClassicGroup group = getOrMaybeCreateClassicGroup(request.groupId(), false);
         if (group.isInState(DEAD)) {
             return new CoordinatorResult<>(
                 Collections.emptyList(),
@@ -3310,7 +3311,7 @@ public class GroupMetadataManager {
             // in which case we expect the MemberId to be undefined.
             if (UNKNOWN_MEMBER_ID.equals(member.memberId())) {
                 if (member.groupInstanceId() != null && group.hasStaticMember(member.groupInstanceId())) {
-                    removeCurrentMemberFromGenericGroup(
+                    removeCurrentMemberFromClassicGroup(
                         group,
                         group.staticMemberId(member.groupInstanceId()),
                         reason
@@ -3330,7 +3331,7 @@ public class GroupMetadataManager {
                 }
             } else if (group.isPendingMember(member.memberId())) {
                 group.remove(member.memberId());
-                timer.cancel(genericGroupHeartbeatKey(group.groupId(), member.memberId()));
+                timer.cancel(classicGroupHeartbeatKey(group.groupId(), member.memberId()));
                 log.info("[Group {}] Pending member {} has left group through explicit `LeaveGroup` request; client reason: {}",
                     group.groupId(), member.memberId(), reason);
 
@@ -3342,7 +3343,7 @@ public class GroupMetadataManager {
             } else {
                 try {
                     group.validateMember(member.memberId(), member.groupInstanceId(), "leave-group");
-                    removeCurrentMemberFromGenericGroup(
+                    removeCurrentMemberFromClassicGroup(
                         group,
                         member.memberId(),
                         reason
@@ -3396,18 +3397,18 @@ public class GroupMetadataManager {
      * Remove a member from the group. Cancel member's heartbeat, and prepare rebalance
      * or complete the join phase if necessary.
      * 
-     * @param group     The generic group.
+     * @param group     The classic group.
      * @param memberId  The member id.
      * @param reason    The reason for the LeaveGroup request.
      *
      */
-    private void removeCurrentMemberFromGenericGroup(
-        GenericGroup group,
+    private void removeCurrentMemberFromClassicGroup(
+        ClassicGroup group,
         String memberId,
         String reason
     ) {
-        GenericGroupMember member = group.member(memberId);
-        timer.cancel(genericGroupHeartbeatKey(group.groupId(), memberId));
+        ClassicGroupMember member = group.member(memberId);
+        timer.cancel(classicGroupHeartbeatKey(group.groupId(), memberId));
         log.info("[Group {}] Member {} has left group through explicit `LeaveGroup` request; client reason: {}",
             group.groupId(), memberId, reason);
 
@@ -3488,7 +3489,7 @@ public class GroupMetadataManager {
     }
 
     /**
-     * Generate a generic group heartbeat key for the timer.
+     * Generate a classic group heartbeat key for the timer.
      *
      * Package private for testing.
      *
@@ -3497,12 +3498,12 @@ public class GroupMetadataManager {
      *
      * @return the heartbeat key.
      */
-    static String genericGroupHeartbeatKey(String groupId, String memberId) {
+    static String classicGroupHeartbeatKey(String groupId, String memberId) {
         return "heartbeat-" + groupId + "-" + memberId;
     }
 
     /**
-     * Generate a generic group join key for the timer.
+     * Generate a classic group join key for the timer.
      *
      * Package private for testing.
      *
@@ -3510,12 +3511,12 @@ public class GroupMetadataManager {
      *
      * @return the join key.
      */
-    static String genericGroupJoinKey(String groupId) {
+    static String classicGroupJoinKey(String groupId) {
         return "join-" + groupId;
     }
 
     /**
-     * Generate a generic group sync key for the timer.
+     * Generate a classic group sync key for the timer.
      *
      * Package private for testing.
      *
@@ -3523,7 +3524,7 @@ public class GroupMetadataManager {
      *
      * @return the sync key.
      */
-    static String genericGroupSyncKey(String groupId) {
+    static String classicGroupSyncKey(String groupId) {
         return "sync-" + groupId;
     }
 }

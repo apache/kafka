@@ -22,7 +22,7 @@ import java.nio.charset.StandardCharsets
 import java.util
 import java.util.Arrays.asList
 import java.util.concurrent.{CompletableFuture, TimeUnit}
-import java.util.{Collections, Optional, OptionalInt, OptionalLong, Properties}
+import java.util.{Collections, Comparator, Optional, OptionalInt, OptionalLong, Properties}
 import kafka.api.LeaderAndIsr
 import kafka.cluster.{Broker, Partition}
 import kafka.controller.{ControllerContext, KafkaController}
@@ -84,7 +84,7 @@ import org.apache.kafka.server.authorizer.{Action, AuthorizationResult, Authoriz
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, Test}
 import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.{CsvSource, ValueSource}
+import org.junit.jupiter.params.provider.{CsvSource, EnumSource, ValueSource}
 import org.mockito.ArgumentMatchers.{any, anyBoolean, anyDouble, anyInt, anyLong, anyShort, anyString, argThat, isNotNull}
 import org.mockito.Mockito.{mock, reset, times, verify, when}
 import org.mockito.{ArgumentCaptor, ArgumentMatchers, Mockito}
@@ -100,8 +100,10 @@ import org.apache.kafka.server.ClientMetricsManager
 import org.apache.kafka.server.common.{Features, MetadataVersion}
 import org.apache.kafka.server.common.MetadataVersion.{IBP_0_10_2_IV0, IBP_2_2_IV1}
 import org.apache.kafka.server.metrics.ClientMetricsTestUtils
-import org.apache.kafka.server.util.MockTime
+import org.apache.kafka.server.util.{FutureUtils, MockTime}
 import org.apache.kafka.storage.internals.log.{AppendOrigin, FetchParams, FetchPartitionData, LogConfig}
+
+import java.time.Duration
 
 class KafkaApisTest {
   private val requestChannel: RequestChannel = mock(classOf[RequestChannel])
@@ -3016,6 +3018,223 @@ class KafkaApisTest {
       ArgumentMatchers.eq(requestLocal),
       any(),
       any())
+  }
+
+  @Test
+  def testHandleWriteTxnMarkersRequestWithNewGroupCoordinator(): Unit = {
+    val offset0 = new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, 0)
+    val offset1 = new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, 1)
+    val foo0 = new TopicPartition("foo", 0)
+    val foo1 = new TopicPartition("foo", 1)
+
+    val allPartitions = List(
+      offset0,
+      offset1,
+      foo0,
+      foo1
+    )
+
+    val writeTxnMarkersRequest = new WriteTxnMarkersRequest.Builder(
+      ApiKeys.WRITE_TXN_MARKERS.latestVersion(),
+      List(
+        new TxnMarkerEntry(
+          1L,
+          1.toShort,
+          0,
+          TransactionResult.COMMIT,
+          List(offset0, foo0).asJava
+        ),
+        new TxnMarkerEntry(
+          2L,
+          1.toShort,
+          0,
+          TransactionResult.ABORT,
+          List(offset1, foo1).asJava
+        )
+      ).asJava
+    ).build()
+
+    val requestChannelRequest = buildRequest(writeTxnMarkersRequest)
+
+    allPartitions.foreach { tp =>
+      when(replicaManager.getMagic(tp))
+        .thenReturn(Some(RecordBatch.MAGIC_VALUE_V2))
+    }
+
+    when(groupCoordinator.completeTransaction(
+      ArgumentMatchers.eq(offset0),
+      ArgumentMatchers.eq(1L),
+      ArgumentMatchers.eq(1.toShort),
+      ArgumentMatchers.eq(0),
+      ArgumentMatchers.eq(TransactionResult.COMMIT),
+      ArgumentMatchers.eq(Duration.ofMillis(Defaults.RequestTimeoutMs))
+    )).thenReturn(CompletableFuture.completedFuture[Void](null))
+
+    when(groupCoordinator.completeTransaction(
+      ArgumentMatchers.eq(offset1),
+      ArgumentMatchers.eq(2L),
+      ArgumentMatchers.eq(1.toShort),
+      ArgumentMatchers.eq(0),
+      ArgumentMatchers.eq(TransactionResult.ABORT),
+      ArgumentMatchers.eq(Duration.ofMillis(Defaults.RequestTimeoutMs))
+    )).thenReturn(CompletableFuture.completedFuture[Void](null))
+
+    val entriesPerPartition: ArgumentCaptor[Map[TopicPartition, MemoryRecords]] =
+      ArgumentCaptor.forClass(classOf[Map[TopicPartition, MemoryRecords]])
+    val responseCallback: ArgumentCaptor[Map[TopicPartition, PartitionResponse] => Unit] =
+      ArgumentCaptor.forClass(classOf[Map[TopicPartition, PartitionResponse] => Unit])
+
+    when(replicaManager.appendRecords(
+      ArgumentMatchers.eq(Defaults.RequestTimeoutMs.toLong),
+      ArgumentMatchers.eq(-1),
+      ArgumentMatchers.eq(true),
+      ArgumentMatchers.eq(AppendOrigin.COORDINATOR),
+      entriesPerPartition.capture(),
+      responseCallback.capture(),
+      any(),
+      any(),
+      ArgumentMatchers.eq(RequestLocal.NoCaching),
+      any(),
+      any()
+    )).thenAnswer { _ =>
+      responseCallback.getValue.apply(
+        entriesPerPartition.getValue.keySet.map { tp =>
+          tp -> new PartitionResponse(Errors.NONE)
+        }.toMap
+      )
+    }
+
+    createKafkaApis(overrideProperties = Map(
+      KafkaConfig.NewGroupCoordinatorEnableProp -> "true"
+    )).handleWriteTxnMarkersRequest(requestChannelRequest, RequestLocal.NoCaching)
+
+    val expectedResponse = new WriteTxnMarkersResponseData()
+      .setMarkers(List(
+        new WriteTxnMarkersResponseData.WritableTxnMarkerResult()
+          .setProducerId(1L)
+          .setTopics(List(
+            new WriteTxnMarkersResponseData.WritableTxnMarkerTopicResult()
+              .setName(Topic.GROUP_METADATA_TOPIC_NAME)
+              .setPartitions(List(
+                new WriteTxnMarkersResponseData.WritableTxnMarkerPartitionResult()
+                  .setPartitionIndex(0)
+                  .setErrorCode(Errors.NONE.code)
+              ).asJava),
+            new WriteTxnMarkersResponseData.WritableTxnMarkerTopicResult()
+              .setName("foo")
+              .setPartitions(List(
+                new WriteTxnMarkersResponseData.WritableTxnMarkerPartitionResult()
+                  .setPartitionIndex(0)
+                  .setErrorCode(Errors.NONE.code)
+              ).asJava)
+          ).asJava),
+        new WriteTxnMarkersResponseData.WritableTxnMarkerResult()
+          .setProducerId(2L)
+          .setTopics(List(
+            new WriteTxnMarkersResponseData.WritableTxnMarkerTopicResult()
+              .setName(Topic.GROUP_METADATA_TOPIC_NAME)
+              .setPartitions(List(
+                new WriteTxnMarkersResponseData.WritableTxnMarkerPartitionResult()
+                  .setPartitionIndex(1)
+                  .setErrorCode(Errors.NONE.code)
+              ).asJava),
+            new WriteTxnMarkersResponseData.WritableTxnMarkerTopicResult()
+              .setName("foo")
+              .setPartitions(List(
+                new WriteTxnMarkersResponseData.WritableTxnMarkerPartitionResult()
+                  .setPartitionIndex(1)
+                  .setErrorCode(Errors.NONE.code)
+              ).asJava)
+          ).asJava)
+      ).asJava)
+
+    val response = verifyNoThrottling[WriteTxnMarkersResponse](requestChannelRequest)
+    assertEquals(normalize(expectedResponse), normalize(response.data))
+  }
+
+  @ParameterizedTest
+  @EnumSource(value = classOf[Errors], names = Array(
+    "COORDINATOR_NOT_AVAILABLE",
+    "COORDINATOR_LOAD_IN_PROGRESS",
+    "NOT_COORDINATOR",
+    "REQUEST_TIMED_OUT"
+  ))
+  def testHandleWriteTxnMarkersRequestWithNewGroupCoordinatorErrorTranslation(error: Errors): Unit = {
+    val offset0 = new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, 0)
+
+    val writeTxnMarkersRequest = new WriteTxnMarkersRequest.Builder(
+      ApiKeys.WRITE_TXN_MARKERS.latestVersion(),
+      List(
+        new TxnMarkerEntry(
+          1L,
+          1.toShort,
+          0,
+          TransactionResult.COMMIT,
+          List(offset0).asJava
+        )
+      ).asJava
+    ).build()
+
+    val requestChannelRequest = buildRequest(writeTxnMarkersRequest)
+
+    when(replicaManager.getMagic(offset0))
+      .thenReturn(Some(RecordBatch.MAGIC_VALUE_V2))
+
+    when(groupCoordinator.completeTransaction(
+      ArgumentMatchers.eq(offset0),
+      ArgumentMatchers.eq(1L),
+      ArgumentMatchers.eq(1.toShort),
+      ArgumentMatchers.eq(0),
+      ArgumentMatchers.eq(TransactionResult.COMMIT),
+      ArgumentMatchers.eq(Duration.ofMillis(Defaults.RequestTimeoutMs))
+    )).thenReturn(FutureUtils.failedFuture[Void](error.exception()))
+
+    createKafkaApis(overrideProperties = Map(
+      KafkaConfig.NewGroupCoordinatorEnableProp -> "true"
+    )).handleWriteTxnMarkersRequest(requestChannelRequest, RequestLocal.NoCaching)
+
+    val expectedError = error match {
+      case Errors.COORDINATOR_NOT_AVAILABLE | Errors.COORDINATOR_LOAD_IN_PROGRESS | Errors.NOT_COORDINATOR =>
+        Errors.NOT_LEADER_OR_FOLLOWER
+      case error =>
+        error
+    }
+
+    val expectedResponse = new WriteTxnMarkersResponseData()
+      .setMarkers(List(
+        new WriteTxnMarkersResponseData.WritableTxnMarkerResult()
+          .setProducerId(1L)
+          .setTopics(List(
+            new WriteTxnMarkersResponseData.WritableTxnMarkerTopicResult()
+              .setName(Topic.GROUP_METADATA_TOPIC_NAME)
+              .setPartitions(List(
+                new WriteTxnMarkersResponseData.WritableTxnMarkerPartitionResult()
+                  .setPartitionIndex(0)
+                  .setErrorCode(expectedError.code)
+              ).asJava)
+          ).asJava)
+      ).asJava)
+
+    val response = verifyNoThrottling[WriteTxnMarkersResponse](requestChannelRequest)
+    assertEquals(normalize(expectedResponse), normalize(response.data))
+  }
+
+  private def normalize(
+    response: WriteTxnMarkersResponseData
+  ): WriteTxnMarkersResponseData = {
+    val copy = response.duplicate()
+    copy.markers.sort(
+      Comparator.comparingLong[WriteTxnMarkersResponseData.WritableTxnMarkerResult](_.producerId)
+    )
+    copy.markers.forEach { marker =>
+      marker.topics.sort((t1, t2) => t1.name.compareTo(t2.name))
+      marker.topics.forEach { topic =>
+        topic.partitions.sort(
+          Comparator.comparingInt[WriteTxnMarkersResponseData.WritableTxnMarkerPartitionResult](_.partitionIndex)
+        )
+      }
+    }
+    copy
   }
 
   @Test

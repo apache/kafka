@@ -24,19 +24,19 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.coordinator.group.consumer.ConsumerGroup;
 import org.apache.kafka.coordinator.group.consumer.ConsumerGroupMember;
-import org.apache.kafka.coordinator.group.generic.GenericGroup;
-import org.apache.kafka.coordinator.group.generic.GenericGroupState;
+import org.apache.kafka.coordinator.group.classic.ClassicGroup;
+import org.apache.kafka.coordinator.group.classic.ClassicGroupState;
 import org.apache.kafka.timeline.SnapshotRegistry;
 import org.junit.jupiter.api.Test;
 
 import java.util.Collections;
 import java.util.stream.IntStream;
 
-import static org.apache.kafka.coordinator.group.generic.GenericGroupState.COMPLETING_REBALANCE;
-import static org.apache.kafka.coordinator.group.generic.GenericGroupState.DEAD;
-import static org.apache.kafka.coordinator.group.generic.GenericGroupState.EMPTY;
-import static org.apache.kafka.coordinator.group.generic.GenericGroupState.PREPARING_REBALANCE;
-import static org.apache.kafka.coordinator.group.generic.GenericGroupState.STABLE;
+import static org.apache.kafka.coordinator.group.classic.ClassicGroupState.COMPLETING_REBALANCE;
+import static org.apache.kafka.coordinator.group.classic.ClassicGroupState.DEAD;
+import static org.apache.kafka.coordinator.group.classic.ClassicGroupState.EMPTY;
+import static org.apache.kafka.coordinator.group.classic.ClassicGroupState.PREPARING_REBALANCE;
+import static org.apache.kafka.coordinator.group.classic.ClassicGroupState.STABLE;
 import static org.apache.kafka.coordinator.group.metrics.MetricsTestUtils.assertGaugeValue;
 import static org.apache.kafka.coordinator.group.metrics.MetricsTestUtils.metricName;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -106,39 +106,39 @@ public class GroupCoordinatorMetricsShardTest {
         coordinatorMetrics.activateMetricsShard(shard);
 
         LogContext logContext = new LogContext();
-        GenericGroup group0 = new GenericGroup(logContext, "groupId0", EMPTY, Time.SYSTEM, shard);
-        GenericGroup group1 = new GenericGroup(logContext, "groupId1", EMPTY, Time.SYSTEM, shard);
-        GenericGroup group2 = new GenericGroup(logContext, "groupId2", EMPTY, Time.SYSTEM, shard);
-        GenericGroup group3 = new GenericGroup(logContext, "groupId3", EMPTY, Time.SYSTEM, shard);
+        ClassicGroup group0 = new ClassicGroup(logContext, "groupId0", EMPTY, Time.SYSTEM, shard);
+        ClassicGroup group1 = new ClassicGroup(logContext, "groupId1", EMPTY, Time.SYSTEM, shard);
+        ClassicGroup group2 = new ClassicGroup(logContext, "groupId2", EMPTY, Time.SYSTEM, shard);
+        ClassicGroup group3 = new ClassicGroup(logContext, "groupId3", EMPTY, Time.SYSTEM, shard);
 
-        IntStream.range(0, 4).forEach(__ -> shard.incrementNumGenericGroups(EMPTY));
+        IntStream.range(0, 4).forEach(__ -> shard.incrementNumClassicGroups(EMPTY));
 
-        assertEquals(4, shard.numGenericGroups());
+        assertEquals(4, shard.numClassicGroups());
 
         group0.transitionTo(PREPARING_REBALANCE);
         group0.transitionTo(COMPLETING_REBALANCE);
         group1.transitionTo(PREPARING_REBALANCE);
         group2.transitionTo(DEAD);
 
-        assertEquals(1, shard.numGenericGroups(GenericGroupState.EMPTY));
-        assertEquals(1, shard.numGenericGroups(GenericGroupState.PREPARING_REBALANCE));
-        assertEquals(1, shard.numGenericGroups(GenericGroupState.COMPLETING_REBALANCE));
-        assertEquals(1, shard.numGenericGroups(GenericGroupState.DEAD));
-        assertEquals(0, shard.numGenericGroups(GenericGroupState.STABLE));
+        assertEquals(1, shard.numClassicGroups(ClassicGroupState.EMPTY));
+        assertEquals(1, shard.numClassicGroups(ClassicGroupState.PREPARING_REBALANCE));
+        assertEquals(1, shard.numClassicGroups(ClassicGroupState.COMPLETING_REBALANCE));
+        assertEquals(1, shard.numClassicGroups(ClassicGroupState.DEAD));
+        assertEquals(0, shard.numClassicGroups(ClassicGroupState.STABLE));
 
         group0.transitionTo(STABLE);
         group1.transitionTo(COMPLETING_REBALANCE);
         group3.transitionTo(DEAD);
 
-        assertEquals(0, shard.numGenericGroups(GenericGroupState.EMPTY));
-        assertEquals(0, shard.numGenericGroups(GenericGroupState.PREPARING_REBALANCE));
-        assertEquals(1, shard.numGenericGroups(GenericGroupState.COMPLETING_REBALANCE));
-        assertEquals(2, shard.numGenericGroups(GenericGroupState.DEAD));
-        assertEquals(1, shard.numGenericGroups(GenericGroupState.STABLE));
+        assertEquals(0, shard.numClassicGroups(ClassicGroupState.EMPTY));
+        assertEquals(0, shard.numClassicGroups(ClassicGroupState.PREPARING_REBALANCE));
+        assertEquals(1, shard.numClassicGroups(ClassicGroupState.COMPLETING_REBALANCE));
+        assertEquals(2, shard.numClassicGroups(ClassicGroupState.DEAD));
+        assertEquals(1, shard.numClassicGroups(ClassicGroupState.STABLE));
 
         assertGaugeValue(
             metrics,
-            metrics.metricName("group-count", "group-coordinator-metrics", Collections.singletonMap("protocol", "generic")),
+            metrics.metricName("group-count", "group-coordinator-metrics", Collections.singletonMap("protocol", "classic")),
             4
         );
         assertGaugeValue(registry, metricName("GroupMetadataManager", "NumGroups"), 4);
