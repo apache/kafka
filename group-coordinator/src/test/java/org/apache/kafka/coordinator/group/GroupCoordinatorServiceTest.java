@@ -1943,7 +1943,7 @@ public class GroupCoordinatorServiceTest {
     }
 
     @Test
-    public void testCompleteTransactionWhenNotStarted() {
+    public void testCompleteTransactionWhenNotCoordinatorServiceStarted() {
         CoordinatorRuntime<GroupCoordinatorShard, Record> runtime = mockRuntime();
         GroupCoordinatorService service = new GroupCoordinatorService(
             new LogContext(),
@@ -1953,7 +1953,7 @@ public class GroupCoordinatorServiceTest {
         );
 
         CompletableFuture<Void> future = service.completeTransaction(
-            new TopicPartition("__consumer_offsets", 0),
+            new TopicPartition("foo", 0),
             100L,
             (short) 5,
             10,
@@ -1962,5 +1962,28 @@ public class GroupCoordinatorServiceTest {
         );
 
         assertFutureThrows(future, CoordinatorNotAvailableException.class);
+    }
+
+    @Test
+    public void testCompleteTransactionWithUnexpectedPartition() {
+        CoordinatorRuntime<GroupCoordinatorShard, Record> runtime = mockRuntime();
+        GroupCoordinatorService service = new GroupCoordinatorService(
+            new LogContext(),
+            createConfig(),
+            runtime,
+            new GroupCoordinatorMetrics()
+        );
+        service.startup(() -> 1);
+
+        CompletableFuture<Void> future = service.completeTransaction(
+            new TopicPartition("foo", 0),
+            100L,
+            (short) 5,
+            10,
+            TransactionResult.COMMIT,
+            Duration.ofMillis(100)
+        );
+
+        assertFutureThrows(future, IllegalStateException.class);
     }
 }

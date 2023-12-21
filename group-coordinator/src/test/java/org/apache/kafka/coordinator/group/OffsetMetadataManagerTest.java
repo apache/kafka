@@ -2476,9 +2476,15 @@ public class OffsetMetadataManagerTest {
         // Replaying an end marker to abort transaction of producer id 6.
         context.replayEndTransactionMarker(6L, TransactionResult.ABORT);
 
-        // The pending offset is removed.
+        // The pending offset is removed from the pending offsets and
+        // it is not added to the main offset storage.
         assertNull(context.offsetMetadataManager.pendingTransactionalOffset(
             6L,
+            "foo",
+            "bar",
+            1
+        ));
+        assertNull(context.offsetMetadataManager.offset(
             "foo",
             "bar",
             1

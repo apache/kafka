@@ -269,7 +269,8 @@ public interface GroupCoordinator {
 
     /**
      * Complete a transaction. This is called when the WriteTxnMarkers API is called
-     * by the Transaction Coordinator in order to write the markers to the log.
+     * by the Transaction Coordinator in order to write the markers to the
+     * __consumer_offsets partitions.
      *
      * @param tp                The topic-partition.
      * @param producerId        The producer id.

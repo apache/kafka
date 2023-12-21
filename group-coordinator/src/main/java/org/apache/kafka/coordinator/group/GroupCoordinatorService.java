@@ -964,6 +964,12 @@ public class GroupCoordinatorService implements GroupCoordinator {
             return FutureUtils.failedFuture(Errors.COORDINATOR_NOT_AVAILABLE.exception());
         }
 
+        if (!tp.topic().equals(Topic.GROUP_METADATA_TOPIC_NAME)) {
+            return FutureUtils.failedFuture(new IllegalStateException(
+                "Completing a transaction for " + tp + " is not expected"
+            ));
+        }
+
         return runtime.scheduleTransactionCompletion(
             "write-txn-marker",
             tp,

@@ -1299,9 +1299,21 @@ public class CoordinatorRuntimeTest {
             Duration.ofMillis(3)
         );
 
+        // Verify that the state has been updated.
+        assertEquals(1L, ctx.coordinator.lastWrittenOffset());
+        assertEquals(0L, ctx.coordinator.lastCommittedOffset());
+        assertEquals(Arrays.asList(0L, 1L), ctx.coordinator.snapshotRegistry().epochsList());
+
+        // Advance clock to timeout Complete #1.
         timer.advanceClock(4);
 
         assertFutureThrows(timedOutCompletion, org.apache.kafka.common.errors.TimeoutException.class);
+
+        // Verify that the state is still the same. We don't revert when the
+        // operation timeouts because the record has been written to the log.
+        assertEquals(1L, ctx.coordinator.lastWrittenOffset());
+        assertEquals(0L, ctx.coordinator.lastCommittedOffset());
+        assertEquals(Arrays.asList(0L, 1L), ctx.coordinator.snapshotRegistry().epochsList());
     }
 
     @Test
