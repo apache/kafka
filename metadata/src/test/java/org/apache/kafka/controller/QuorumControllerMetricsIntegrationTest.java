@@ -30,8 +30,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.Map;
 import java.util.Optional;
@@ -46,13 +44,13 @@ import static org.apache.kafka.controller.QuorumControllerIntegrationTestUtils.f
 import static org.apache.kafka.controller.QuorumControllerIntegrationTestUtils.pause;
 import static org.apache.kafka.controller.QuorumControllerIntegrationTestUtils.registerBrokersAndUnfence;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 
 @Timeout(value = 40)
 public class QuorumControllerMetricsIntegrationTest {
-    private final static Logger log = LoggerFactory.getLogger(QuorumControllerMetricsIntegrationTest.class);
 
     static class MockControllerMetrics extends QuorumControllerMetrics {
         final AtomicBoolean closed = new AtomicBoolean(false);
@@ -179,7 +177,7 @@ public class QuorumControllerMetricsIntegrationTest {
             for (QuorumController controller : controlEnv.controllers()) {
                 // Inactive controllers don't set these metrics.
                 if (!controller.isActive()) {
-                    assertEquals(false, controller.controllerMetrics().active());
+                    assertFalse(controller.controllerMetrics().active());
                     assertEquals(0L, controller.controllerMetrics().timedOutHeartbeats());
                     assertEquals(0L, controller.controllerMetrics().operationsTimedOut());
                 }

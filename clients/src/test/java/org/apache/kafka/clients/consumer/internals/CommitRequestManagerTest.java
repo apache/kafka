@@ -19,10 +19,13 @@ package org.apache.kafka.clients.consumer.internals;
 import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
+import org.apache.kafka.clients.consumer.OffsetResetStrategy;
+import org.apache.kafka.clients.consumer.internals.events.BackgroundEventHandler;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.DisconnectException;
 import org.apache.kafka.common.errors.TimeoutException;
+import org.apache.kafka.common.message.OffsetCommitRequestData;
 import org.apache.kafka.common.message.OffsetCommitResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
@@ -35,6 +38,7 @@ import org.apache.kafka.common.requests.RequestHeader;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
+import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -52,11 +56,14 @@ import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.LinkedBlockingQueue;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static java.util.Collections.singleton;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.AUTO_COMMIT_INTERVAL_MS_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG;
+import static org.apache.kafka.clients.consumer.ConsumerConfig.GROUP_ID_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG;
 import static org.apache.kafka.clients.consumer.internals.ConsumerTestBuilder.DEFAULT_GROUP_ID;
@@ -81,15 +88,16 @@ public class CommitRequestManagerTest {
     private MockTime time;
     private CoordinatorRequestManager coordinatorRequestManager;
     private Properties props;
+    private BackgroundEventHandler backgroundEventHandler;
 
     @BeforeEach
     public void setup() {
         this.logContext = new LogContext();
         this.time = new MockTime(0);
-        this.subscriptionState = mock(SubscriptionState.class);
+        this.subscriptionState = new SubscriptionState(new LogContext(), OffsetResetStrategy.EARLIEST);
         this.coordinatorRequestManager = mock(CoordinatorRequestManager.class);
         this.groupState = new GroupState(DEFAULT_GROUP_ID, Optional.empty());
-
+        this.backgroundEventHandler = spy(new BackgroundEventHandler(logContext, new LinkedBlockingQueue<>()));
         this.props = new Properties();
         this.props.put(ConsumerConfig.AUTO_COMMIT_INTERVAL_MS_CONFIG, 100);
         this.props.put(KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
@@ -120,16 +128,23 @@ public class CommitRequestManagerTest {
 
     @Test
     public void testPoll_EnsureAutocommitSent() {
+        TopicPartition tp = new TopicPartition("t1", 1);
+        subscriptionState.assignFromUser(Collections.singleton(tp));
+        subscriptionState.seek(tp, 100);
         CommitRequestManager commitRequestManger = create(true, 100);
         assertPoll(0, commitRequestManger);
 
         Map<TopicPartition, OffsetAndMetadata> offsets = new HashMap<>();
-        offsets.put(new TopicPartition("t1", 0), new OffsetAndMetadata(0));
+        offsets.put(tp, new OffsetAndMetadata(0));
         commitRequestManger.updateAutoCommitTimer(time.milliseconds());
-        when(subscriptionState.allConsumed()).thenReturn(offsets);
         time.sleep(100);
         commitRequestManger.updateAutoCommitTimer(time.milliseconds());
-        assertPoll(1, commitRequestManger);
+        List<NetworkClientDelegate.FutureCompletionHandler> pollResults = assertPoll(1, commitRequestManger);
+        pollResults.forEach(v -> v.onComplete(mockOffsetCommitResponse(
+                "t1",
+                1,
+                (short) 1,
+                Errors.NONE)));
     }
 
     @Test
@@ -183,40 +198,59 @@ public class CommitRequestManagerTest {
     @Test
     public void testAutocommit_ResendAutocommitAfterException() {
         CommitRequestManager commitRequestManger = create(true, 100);
+        TopicPartition tp = new TopicPartition("topic", 1);
+        subscriptionState.assignFromUser(Collections.singleton(tp));
+        subscriptionState.seek(tp, 100);
         time.sleep(100);
         commitRequestManger.updateAutoCommitTimer(time.milliseconds());
-        List<CompletableFuture<ClientResponse>> futures = assertPoll(1, commitRequestManger);
+        List<NetworkClientDelegate.FutureCompletionHandler> futures = assertPoll(1, commitRequestManger);
         time.sleep(99);
-        // complete the autocommit request (exceptionally)
-        futures.get(0).complete(mockOffsetCommitResponse(
+        // complete the autocommit request (exceptionally), and expect an exponential backoff of 100ms
+        futures.get(0).onComplete(mockOffsetCommitResponse(
             "topic",
             1,
             (short) 1,
             Errors.COORDINATOR_LOAD_IN_PROGRESS));
 
-        // we can then autocommit again
+        // Expecting to wait for 100ms but only waited 99ms.  No result is expected here.
+        time.sleep(99);
         commitRequestManger.updateAutoCommitTimer(time.milliseconds());
         assertPoll(0, commitRequestManger);
-        time.sleep(1);
         commitRequestManger.updateAutoCommitTimer(time.milliseconds());
-        assertPoll(1, commitRequestManger);
+
+        // Complete the full backoff of 100ms, and now expecting a result.
+        time.sleep(1);
+        futures = assertPoll(1, commitRequestManger);
         assertEmptyPendingRequests(commitRequestManger);
+        futures.get(0).onComplete(mockOffsetCommitResponse(
+                "topic",
+                1,
+                (short) 1,
+                Errors.NONE));
     }
 
     @Test
     public void testAutocommit_EnsureOnlyOneInflightRequest() {
+        TopicPartition t1p = new TopicPartition("topic1", 0);
+        subscriptionState.assignFromUser(singleton(t1p));
+
         CommitRequestManager commitRequestManger = create(true, 100);
         time.sleep(100);
         commitRequestManger.updateAutoCommitTimer(time.milliseconds());
-        List<CompletableFuture<ClientResponse>> futures = assertPoll(1, commitRequestManger);
-        time.sleep(100);
+        // Nothing consumed therefore no commit request is sent
+        assertPoll(0, commitRequestManger);
+        time.sleep(10);
+        subscriptionState.seekUnvalidated(t1p, new SubscriptionState.FetchPosition(100L));
+        List<NetworkClientDelegate.FutureCompletionHandler> futures = assertPoll(1, commitRequestManger);
+
+        time.sleep(90);
         commitRequestManger.updateAutoCommitTimer(time.milliseconds());
         // We want to make sure we don't resend autocommit if the previous request has not been completed
         assertPoll(0, commitRequestManger);
         assertEmptyPendingRequests(commitRequestManger);
 
         // complete the unsent request and re-poll
-        futures.get(0).complete(buildOffsetCommitClientResponse(new OffsetCommitResponse(0, new HashMap<>()), Errors.NONE));
+        futures.get(0).onComplete(buildOffsetCommitClientResponse(new OffsetCommitResponse(0, new HashMap<>()), Errors.NONE));
         assertPoll(1, commitRequestManger);
     }
 
@@ -351,7 +385,8 @@ public class CommitRequestManagerTest {
                                final List<CompletableFuture<Map<TopicPartition, OffsetAndMetadata>>> futures) {
         futures.forEach(f -> assertFalse(f.isDone()));
 
-        time.sleep(500);
+        // The manager should backoff for 100ms
+        time.sleep(100);
         commitRequestManger.poll(time.milliseconds());
         futures.forEach(f -> assertFalse(f.isDone()));
     }
@@ -371,7 +406,6 @@ public class CommitRequestManagerTest {
             Arguments.of(Errors.INVALID_COMMIT_OFFSET_SIZE, false),
             Arguments.of(Errors.UNKNOWN_TOPIC_OR_PARTITION, true),
             Arguments.of(Errors.COORDINATOR_NOT_AVAILABLE, true),
-            Arguments.of(Errors.NOT_COORDINATOR, true),
             Arguments.of(Errors.REQUEST_TIMED_OUT, true),
             Arguments.of(Errors.FENCED_INSTANCE_ID, false),
             Arguments.of(Errors.TOPIC_AUTHORIZATION_FAILED, false));
@@ -389,7 +423,6 @@ public class CommitRequestManagerTest {
             Arguments.of(Errors.INVALID_COMMIT_OFFSET_SIZE, false),
             Arguments.of(Errors.UNKNOWN_TOPIC_OR_PARTITION, false),
             Arguments.of(Errors.COORDINATOR_NOT_AVAILABLE, false),
-            Arguments.of(Errors.NOT_COORDINATOR, true),
             Arguments.of(Errors.REQUEST_TIMED_OUT, false),
             Arguments.of(Errors.FENCED_INSTANCE_ID, false),
             Arguments.of(Errors.TOPIC_AUTHORIZATION_FAILED, false));
@@ -424,6 +457,22 @@ public class CommitRequestManagerTest {
             testRetriable(commitRequestManger, Collections.singletonList(future));
         else
             testNonRetriable(Collections.singletonList(future));
+    }
+
+    @Test
+    public void testSignalClose() {
+        CommitRequestManager commitRequestManger = create(true, 100);
+        when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(mockedNode));
+
+        Map<TopicPartition, OffsetAndMetadata> offsets = Collections.singletonMap(new TopicPartition("topic", 1),
+            new OffsetAndMetadata(0));
+
+        commitRequestManger.addOffsetCommitRequest(offsets);
+        commitRequestManger.signalClose();
+        NetworkClientDelegate.PollResult res = commitRequestManger.poll(time.milliseconds());
+        assertEquals(1, res.unsentRequests.size());
+        OffsetCommitRequestData data = (OffsetCommitRequestData) res.unsentRequests.get(0).requestBuilder().build().data();
+        assertEquals("topic", data.topics().get(0).name());
     }
 
     private static void assertEmptyPendingRequests(CommitRequestManager commitRequestManger) {
@@ -473,13 +522,13 @@ public class CommitRequestManagerTest {
         assertEquals(0, res.unsentRequests.size());
     }
 
-    private List<CompletableFuture<ClientResponse>> assertPoll(
+    private List<NetworkClientDelegate.FutureCompletionHandler> assertPoll(
         final int numRes,
         final CommitRequestManager manager) {
         return assertPoll(true, numRes, manager);
     }
 
-    private List<CompletableFuture<ClientResponse>> assertPoll(
+    private List<NetworkClientDelegate.FutureCompletionHandler> assertPoll(
         final boolean coordinatorDiscovered,
         final int numRes,
         final CommitRequestManager manager) {
@@ -491,22 +540,27 @@ public class CommitRequestManagerTest {
         NetworkClientDelegate.PollResult res = manager.poll(time.milliseconds());
         assertEquals(numRes, res.unsentRequests.size());
 
-        return res.unsentRequests.stream().map(NetworkClientDelegate.UnsentRequest::future).collect(Collectors.toList());
+        return res.unsentRequests.stream().map(NetworkClientDelegate.UnsentRequest::handler).collect(Collectors.toList());
     }
 
     private CommitRequestManager create(final boolean autoCommitEnabled, final long autoCommitInterval) {
         props.setProperty(AUTO_COMMIT_INTERVAL_MS_CONFIG, String.valueOf(autoCommitInterval));
         props.setProperty(ENABLE_AUTO_COMMIT_CONFIG, String.valueOf(autoCommitEnabled));
+
+        if (autoCommitEnabled)
+            props.setProperty(GROUP_ID_CONFIG, TestUtils.randomString(10));
+
         return spy(new CommitRequestManager(
-            this.time,
-            this.logContext,
-            this.subscriptionState,
-            new ConsumerConfig(props),
-            this.coordinatorRequestManager,
-            this.groupState,
-            retryBackoffMs,
-            retryBackoffMaxMs,
-            0));
+                this.time,
+                this.logContext,
+                this.subscriptionState,
+                new ConsumerConfig(props),
+                this.coordinatorRequestManager,
+                this.backgroundEventHandler,
+                this.groupState,
+                retryBackoffMs,
+                retryBackoffMaxMs,
+                0));
     }
 
     private ClientResponse buildOffsetFetchClientResponse(

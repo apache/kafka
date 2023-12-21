@@ -59,9 +59,17 @@ object StorageTool extends Logging {
         case "format" =>
           val directories = configToLogDirectories(config.get)
           val clusterId = namespace.getString("cluster_id")
-          val metadataVersion = getMetadataVersion(namespace, Option(config.get.interBrokerProtocolVersionString))
+          val metadataVersion = getMetadataVersion(namespace,
+            Option(config.get.originals.get(KafkaConfig.InterBrokerProtocolVersionProp)).map(_.toString))
           if (!metadataVersion.isKRaftSupported) {
             throw new TerseFailure(s"Must specify a valid KRaft metadata version of at least 3.0.")
+          }
+          if (!metadataVersion.isProduction()) {
+            if (config.get.unstableMetadataVersionsEnabled) {
+              System.out.println(s"WARNING: using pre-production metadata version ${metadataVersion}.")
+            } else {
+              throw new TerseFailure(s"Metadata version ${metadataVersion} is not ready for production use yet.")
+            }
           }
           val metaProperties = new MetaProperties.Builder().
             setVersion(MetaPropertiesVersion.V1).
@@ -131,7 +139,7 @@ object StorageTool extends Logging {
       action(storeTrue())
     formatParser.addArgument("--release-version", "-r").
       action(store()).
-      help(s"A KRaft release version to use for the initial metadata version. The minimum is 3.0, the default is ${MetadataVersion.latest().version()}")
+      help(s"A KRaft release version to use for the initial metadata version. The minimum is 3.0, the default is ${MetadataVersion.LATEST_PRODUCTION.version()}")
 
     parser.parseArgsOrFail(args)
   }
@@ -151,7 +159,7 @@ object StorageTool extends Logging {
   ): MetadataVersion = {
     val defaultValue = defaultVersionString match {
       case Some(versionString) => MetadataVersion.fromVersionString(versionString)
-      case None => MetadataVersion.latest()
+      case None => MetadataVersion.LATEST_PRODUCTION
     }
 
     Option(namespace.getString("release_version"))

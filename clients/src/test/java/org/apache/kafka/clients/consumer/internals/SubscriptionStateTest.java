@@ -569,6 +569,11 @@ public class SubscriptionStateTest {
         assertTrue(state.maybeValidatePositionForCurrentLeader(apiVersions, tp0, new Metadata.LeaderAndEpoch(
                 Optional.of(broker1), Optional.of(10))));
         assertFalse(state.hasValidPosition(tp0));
+
+        // tp1 is not part of the subscription, so validation should be skipped.
+        assertFalse(state.maybeValidatePositionForCurrentLeader(apiVersions, tp1, new Metadata.LeaderAndEpoch(
+            Optional.of(broker1), Optional.of(10))));
+        assertFalse(state.assignedPartitions().contains(tp1));
     }
 
     @Test

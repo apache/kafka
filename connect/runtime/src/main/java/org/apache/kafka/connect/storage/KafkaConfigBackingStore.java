@@ -497,26 +497,34 @@ public class KafkaConfigBackingStore extends KafkaTopicBasedBackingStore impleme
     }
 
     /**
-     * Write this connector configuration to persistent storage and wait until it has been acknowledged and read back by
-     * tailing the Kafka log with a consumer. {@link #claimWritePrivileges()} must be successfully invoked before calling
+     * Write this connector configuration (and optionally a target state) to persistent storage and wait until it has been acknowledged and read
+     * back by tailing the Kafka log with a consumer. {@link #claimWritePrivileges()} must be successfully invoked before calling
      * this method if the worker is configured to use a fencable producer for writes to the config topic.
      *
      * @param connector  name of the connector to write data for
      * @param properties the configuration to write
+     * @param targetState the desired target state for the connector; may be {@code null} if no target state change is desired. Note that the default
+     *                    target state is {@link TargetState#STARTED} if no target state exists previously
      * @throws IllegalStateException if {@link #claimWritePrivileges()} is required, but was not successfully invoked before
      * this method was called
      * @throws PrivilegedWriteException if the worker is configured to use a fencable producer for writes to the config topic
      * and the write fails
      */
     @Override
-    public void putConnectorConfig(String connector, Map<String, String> properties) {
+    public void putConnectorConfig(String connector, Map<String, String> properties, TargetState targetState) {
         log.debug("Writing connector configuration for connector '{}'", connector);
         Struct connectConfig = new Struct(CONNECTOR_CONFIGURATION_V0);
         connectConfig.put("properties", properties);
         byte[] serializedConfig = converter.fromConnectData(topic, CONNECTOR_CONFIGURATION_V0, connectConfig);
         try {
             Timer timer = time.timer(READ_WRITE_TOTAL_TIMEOUT_MS);
-            sendPrivileged(CONNECTOR_KEY(connector), serializedConfig, timer);
+            List<ProducerKeyValue> keyValues = new ArrayList<>();
+            if (targetState != null) {
+                log.debug("Writing target state {} for connector {}", targetState, connector);
+                keyValues.add(new ProducerKeyValue(TARGET_STATE_KEY(connector), serializeTargetState(targetState)));
+            }
+            keyValues.add(new ProducerKeyValue(CONNECTOR_KEY(connector), serializedConfig));
+            sendPrivileged(keyValues, timer);
             configLog.readToEnd().get(timer.remainingMs(), TimeUnit.MILLISECONDS);
         } catch (InterruptedException | ExecutionException | TimeoutException e) {
             log.error("Failed to write connector configuration to Kafka: ", e);
@@ -647,18 +655,22 @@ public class KafkaConfigBackingStore extends KafkaTopicBasedBackingStore impleme
      */
     @Override
     public void putTargetState(String connector, TargetState state) {
-        Struct connectTargetState = new Struct(TARGET_STATE_V1);
-        // Older workers don't support the STOPPED state; fall back on PAUSED
-        connectTargetState.put("state", state == STOPPED ? PAUSED.name() : state.name());
-        connectTargetState.put("state.v2", state.name());
-        byte[] serializedTargetState = converter.fromConnectData(topic, TARGET_STATE_V1, connectTargetState);
         log.debug("Writing target state {} for connector {}", state, connector);
         try {
-            configLog.sendWithReceipt(TARGET_STATE_KEY(connector), serializedTargetState).get(READ_WRITE_TOTAL_TIMEOUT_MS, TimeUnit.MILLISECONDS);
+            configLog.sendWithReceipt(TARGET_STATE_KEY(connector), serializeTargetState(state))
+                .get(READ_WRITE_TOTAL_TIMEOUT_MS, TimeUnit.MILLISECONDS);
         } catch (InterruptedException | ExecutionException | TimeoutException e) {
             log.error("Failed to write target state to Kafka", e);
             throw new ConnectException("Error writing target state to Kafka", e);
         }
+    }
+
+    private byte[] serializeTargetState(TargetState state) {
+        Struct connectTargetState = new Struct(TARGET_STATE_V1);
+        // Older workers don't support the STOPPED state; fall back on PAUSED
+        connectTargetState.put("state", state == STOPPED ? PAUSED.name() : state.name());
+        connectTargetState.put("state.v2", state.name());
+        return converter.fromConnectData(topic, TARGET_STATE_V1, connectTargetState);
     }
 
     /**
@@ -985,7 +997,9 @@ public class KafkaConfigBackingStore extends KafkaTopicBasedBackingStore impleme
 
         // Note that we do not notify the update listener if the target state has been removed.
         // Instead we depend on the removal callback of the connector config itself to notify the worker.
-        if (started && !removed && stateChanged)
+        // We also don't notify the update listener if the connector doesn't exist yet - a scenario that can
+        // occur if an explicit initial target state is specified in the connector creation request.
+        if (started && !removed && stateChanged && connectorConfigs.containsKey(connectorName))
             updateListener.onConnectorTargetStateChange(connectorName);
     }
 

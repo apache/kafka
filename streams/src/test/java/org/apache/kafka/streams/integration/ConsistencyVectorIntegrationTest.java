@@ -40,7 +40,6 @@ import org.apache.kafka.streams.query.StateQueryResult;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.QueryableStoreType;
 import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
-import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.test.IntegrationTest;
 import org.apache.kafka.test.TestUtils;
 import org.junit.After;
@@ -116,8 +115,9 @@ public class ConsistencyVectorIntegrationTest {
                .toStream()
                .peek((k, v) -> semaphore.release());
 
-        final KafkaStreams kafkaStreams1 = createKafkaStreams(builder, streamsConfiguration());
-        final KafkaStreams kafkaStreams2 = createKafkaStreams(builder, streamsConfiguration());
+        final String safeTestName = safeUniqueTestName(testName);
+        final KafkaStreams kafkaStreams1 = createKafkaStreams(builder, streamsConfiguration(safeTestName));
+        final KafkaStreams kafkaStreams2 = createKafkaStreams(builder, streamsConfiguration(safeTestName));
         final List<KafkaStreams> kafkaStreamsList = Arrays.asList(kafkaStreams1, kafkaStreams2);
 
         try {
@@ -131,10 +131,10 @@ public class ConsistencyVectorIntegrationTest {
             final QueryableStoreType<ReadOnlyKeyValueStore<Integer, Integer>> queryableStoreType = keyValueStore();
 
             // Assert that both active and standby have the same position bound
-            final StateQueryRequest<ValueAndTimestamp<Integer>> request =
+            final StateQueryRequest<Integer> request =
                 StateQueryRequest
                     .inStore(TABLE_NAME)
-                    .withQuery(KeyQuery.<Integer, ValueAndTimestamp<Integer>>withKey(key))
+                    .withQuery(KeyQuery.<Integer, Integer>withKey(key))
                     .withPositionBound(PositionBound.unbounded());
 
             checkPosition(batch1NumMessages, request, kafkaStreams1);
@@ -146,18 +146,18 @@ public class ConsistencyVectorIntegrationTest {
     }
 
     private void checkPosition(final int batch1NumMessages,
-                               final StateQueryRequest<ValueAndTimestamp<Integer>> request,
+                               final StateQueryRequest<Integer> request,
                                final KafkaStreams kafkaStreams1) throws InterruptedException {
         final long maxWaitMs = TestUtils.DEFAULT_MAX_WAIT_MS;
         final long expectedEnd = System.currentTimeMillis() + maxWaitMs;
 
         while (true) {
-            final StateQueryResult<ValueAndTimestamp<Integer>> stateQueryResult =
+            final StateQueryResult<Integer> stateQueryResult =
                 IntegrationTestUtils.iqv2WaitForResult(
                     kafkaStreams1,
                     request
                 );
-            final QueryResult<ValueAndTimestamp<Integer>> queryResult =
+            final QueryResult<Integer> queryResult =
                 stateQueryResult.getPartitionResults().get(0);
             if (queryResult.isSuccess() && queryResult.getResult() != null) {
                 // invariant: each value is also at the equivalent offset
@@ -166,11 +166,11 @@ public class ConsistencyVectorIntegrationTest {
                     queryResult.getPosition(),
                     is(
                         Position.emptyPosition()
-                                .withComponent(INPUT_TOPIC_NAME, 0, queryResult.getResult().value())
+                                .withComponent(INPUT_TOPIC_NAME, 0, queryResult.getResult())
                     )
                 );
 
-                if (queryResult.getResult().value() == batch1NumMessages - 1) {
+                if (queryResult.getResult() == batch1NumMessages - 1) {
                     // we're at the end of the input.
                     return;
                 }
@@ -210,8 +210,7 @@ public class ConsistencyVectorIntegrationTest {
         );
     }
 
-    private Properties streamsConfiguration() {
-        final String safeTestName = safeUniqueTestName(getClass(), testName);
+    private Properties streamsConfiguration(final String safeTestName) {
         final Properties config = new Properties();
         config.put(StreamsConfig.APPLICATION_ID_CONFIG, "app-" + safeTestName);
         config.put(StreamsConfig.APPLICATION_SERVER_CONFIG, "localhost:" + (++port));

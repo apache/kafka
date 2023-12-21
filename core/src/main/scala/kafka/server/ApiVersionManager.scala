@@ -22,6 +22,7 @@ import org.apache.kafka.common.feature.SupportedVersionRange
 import org.apache.kafka.common.message.ApiMessageType.ListenerType
 import org.apache.kafka.common.protocol.ApiKeys
 import org.apache.kafka.common.requests.ApiVersionsResponse
+import org.apache.kafka.server.ClientMetricsManager
 import org.apache.kafka.server.common.Features
 
 import scala.jdk.CollectionConverters._
@@ -47,7 +48,8 @@ object ApiVersionManager {
     config: KafkaConfig,
     forwardingManager: Option[ForwardingManager],
     supportedFeatures: BrokerFeatures,
-    metadataCache: MetadataCache
+    metadataCache: MetadataCache,
+    clientMetricsManager: Option[ClientMetricsManager]
   ): ApiVersionManager = {
     new DefaultApiVersionManager(
       listenerType,
@@ -55,7 +57,8 @@ object ApiVersionManager {
       supportedFeatures,
       metadataCache,
       config.unstableApiVersionsEnabled,
-      config.migrationEnabled
+      config.migrationEnabled,
+      clientMetricsManager
     )
   }
 }
@@ -123,6 +126,7 @@ class SimpleApiVersionManager(
  * @param metadataCache the metadata cache, used to get the finalized features and the metadata version
  * @param enableUnstableLastVersion whether to enable unstable last version, see [[KafkaConfig.unstableApiVersionsEnabled]]
  * @param zkMigrationEnabled whether to enable zk migration, see [[KafkaConfig.migrationEnabled]]
+ * @param clientMetricsManager the client metrics manager, helps to determine whether client telemetry is enabled
  */
 class DefaultApiVersionManager(
   val listenerType: ListenerType,
@@ -130,7 +134,8 @@ class DefaultApiVersionManager(
   brokerFeatures: BrokerFeatures,
   metadataCache: MetadataCache,
   val enableUnstableLastVersion: Boolean,
-  val zkMigrationEnabled: Boolean = false
+  val zkMigrationEnabled: Boolean = false,
+  val clientMetricsManager: Option[ClientMetricsManager] = None
 ) extends ApiVersionManager {
 
   val enabledApis = ApiKeys.apisForListener(listenerType).asScala
@@ -139,6 +144,10 @@ class DefaultApiVersionManager(
     val supportedFeatures = brokerFeatures.supportedFeatures
     val finalizedFeatures = metadataCache.features()
     val controllerApiVersions = forwardingManager.flatMap(_.controllerApiVersions)
+    val clientTelemetryEnabled = clientMetricsManager match {
+      case Some(manager) => manager.isTelemetryReceiverConfigured
+      case None => false
+    }
 
     ApiVersionsResponse.createApiVersionsResponse(
       throttleTimeMs,
@@ -149,7 +158,8 @@ class DefaultApiVersionManager(
       controllerApiVersions.orNull,
       listenerType,
       enableUnstableLastVersion,
-      zkMigrationEnabled
+      zkMigrationEnabled,
+      clientTelemetryEnabled
     )
   }
 

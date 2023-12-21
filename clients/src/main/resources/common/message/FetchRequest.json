@@ -56,6 +56,7 @@
   //
   // Version 16 is the same as version 15 (KIP-951).
   "validVersions": "0-16",
+  "deprecatedVersions": "0-3",
   "flexibleVersions": "12+",
   "fields": [
     { "name": "ClusterId", "type": "string", "versions": "12+", "nullableVersions": "12+", "default": "null",
