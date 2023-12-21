@@ -46,6 +46,7 @@ import org.apache.kafka.common.utils.BufferSupplier;
 import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
 
+import java.time.Duration;
 import java.util.List;
 import java.util.OptionalInt;
 import java.util.Properties;
@@ -264,6 +265,29 @@ public interface GroupCoordinator {
         RequestContext context,
         OffsetDeleteRequestData request,
         BufferSupplier bufferSupplier
+    );
+
+    /**
+     * Complete a transaction. This is called when the WriteTxnMarkers API is called
+     * by the Transaction Coordinator in order to write the markers to the
+     * __consumer_offsets partitions.
+     *
+     * @param tp                The topic-partition.
+     * @param producerId        The producer id.
+     * @param producerEpoch     The producer epoch.
+     * @param coordinatorEpoch  The epoch of the transaction coordinator.
+     * @param result            The transaction result.
+     * @param timeout           The operation timeout.
+     *
+     * @return A future yielding the result.
+     */
+    CompletableFuture<Void> completeTransaction(
+        TopicPartition tp,
+        long producerId,
+        short producerEpoch,
+        int coordinatorEpoch,
+        TransactionResult result,
+        Duration timeout
     );
 
     /**

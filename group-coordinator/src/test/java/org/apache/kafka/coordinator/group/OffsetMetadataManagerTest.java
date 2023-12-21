@@ -41,6 +41,7 @@ import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.requests.RequestContext;
 import org.apache.kafka.common.requests.RequestHeader;
+import org.apache.kafka.common.requests.TransactionResult;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.utils.LogContext;
@@ -439,6 +440,15 @@ public class OffsetMetadataManagerTest {
                         + " in " + record);
             }
 
+            lastWrittenOffset++;
+        }
+
+        private void replayEndTransactionMarker(
+            long producerId,
+            TransactionResult result
+        ) {
+            snapshotRegistry.getOrCreateSnapshot(lastWrittenOffset);
+            offsetMetadataManager.replayEndTransactionMarker(producerId, result);
             lastWrittenOffset++;
         }
 
@@ -2412,6 +2422,73 @@ public class OffsetMetadataManagerTest {
 
         // Verify that the offset is gone.
         assertNull(context.offsetMetadataManager.offset("foo", "bar", 0));
+    }
+
+    @Test
+    public void testReplayTransactionEndMarkerWithCommit() {
+        OffsetMetadataManagerTestContext context = new OffsetMetadataManagerTestContext.Builder().build();
+
+        // Add pending transactional commit for producer id 5.
+        verifyTransactionalReplay(context, 5L, "foo", "bar", 0, new OffsetAndMetadata(
+            100L,
+            OptionalInt.empty(),
+            "small",
+            context.time.milliseconds(),
+            OptionalLong.empty()
+        ));
+
+        // Add pending transactional commit for producer id 6.
+        verifyTransactionalReplay(context, 6L, "foo", "bar", 1, new OffsetAndMetadata(
+            200L,
+            OptionalInt.empty(),
+            "small",
+            context.time.milliseconds(),
+            OptionalLong.empty()
+        ));
+
+        // Replaying an end marker with an unknown producer id should not fail.
+        context.replayEndTransactionMarker(1L, TransactionResult.COMMIT);
+
+        // Replaying an end marker to commit transaction of producer id 5.
+        context.replayEndTransactionMarker(5L, TransactionResult.COMMIT);
+
+        // The pending offset is removed...
+        assertNull(context.offsetMetadataManager.pendingTransactionalOffset(
+            5L,
+            "foo",
+            "bar",
+            0
+        ));
+
+        // ... and added to the main offset storage.
+        assertEquals(new OffsetAndMetadata(
+            100L,
+            OptionalInt.empty(),
+            "small",
+            context.time.milliseconds(),
+            OptionalLong.empty()
+        ), context.offsetMetadataManager.offset(
+            "foo",
+            "bar",
+            0
+        ));
+
+        // Replaying an end marker to abort transaction of producer id 6.
+        context.replayEndTransactionMarker(6L, TransactionResult.ABORT);
+
+        // The pending offset is removed from the pending offsets and
+        // it is not added to the main offset storage.
+        assertNull(context.offsetMetadataManager.pendingTransactionalOffset(
+            6L,
+            "foo",
+            "bar",
+            1
+        ));
+        assertNull(context.offsetMetadataManager.offset(
+            "foo",
+            "bar",
+            1
+        ));
     }
 
     @Test
