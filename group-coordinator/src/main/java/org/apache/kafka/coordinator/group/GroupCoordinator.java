@@ -73,7 +73,7 @@ public interface GroupCoordinator {
     );
 
     /**
-     * Join a Generic Group.
+     * Join a Classic Group.
      *
      * @param context           The request context.
      * @param request           The JoinGroupRequest data.
@@ -89,7 +89,7 @@ public interface GroupCoordinator {
     );
 
     /**
-     * Sync a Generic Group.
+     * Sync a Classic Group.
      *
      * @param context           The coordinator request context.
      * @param request           The SyncGroupRequest data.
@@ -105,7 +105,7 @@ public interface GroupCoordinator {
     );
 
     /**
-     * Heartbeat to a Generic Group.
+     * Heartbeat to a Classic Group.
      *
      * @param context           The coordinator request context.
      * @param request           The HeartbeatRequest data.
@@ -119,7 +119,7 @@ public interface GroupCoordinator {
     );
 
     /**
-     * Leave a Generic Group.
+     * Leave a Classic Group.
      *
      * @param context           The coordinator request context.
      * @param request           The LeaveGroupRequest data.

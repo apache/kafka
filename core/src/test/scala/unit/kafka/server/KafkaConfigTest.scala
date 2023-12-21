@@ -1816,18 +1816,18 @@ class KafkaConfigTest {
     val props = new Properties()
     props.putAll(kraftProps())
 
-    // Only generic and consumer are supported.
+    // Only classic and consumer are supported.
     props.put(KafkaConfig.GroupCoordinatorRebalanceProtocolsProp, "foo")
     assertThrows(classOf[ConfigException], () => KafkaConfig.fromProps(props))
 
-    // generic cannot be disabled.
+    // classic cannot be disabled.
     props.put(KafkaConfig.GroupCoordinatorRebalanceProtocolsProp, "consumer")
     assertThrows(classOf[ConfigException], () => KafkaConfig.fromProps(props))
 
     // This is OK.
-    props.put(KafkaConfig.GroupCoordinatorRebalanceProtocolsProp, "generic,consumer")
+    props.put(KafkaConfig.GroupCoordinatorRebalanceProtocolsProp, "classic,consumer")
     val config = KafkaConfig.fromProps(props)
-    assertEquals(Set(GroupType.GENERIC, GroupType.CONSUMER), config.groupCoordinatorRebalanceProtocols)
+    assertEquals(Set(GroupType.CLASSIC, GroupType.CONSUMER), config.groupCoordinatorRebalanceProtocols)
     assertTrue(config.isNewGroupCoordinatorEnabled)
   }
 

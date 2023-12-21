@@ -83,7 +83,7 @@ import java.util.concurrent.TimeUnit;
 
 /**
  * The group coordinator shard is a replicated state machine that manages the metadata of all
- * generic and consumer groups. It holds the hard and the soft state of the groups. This class
+ * classic and consumer groups. It holds the hard and the soft state of the groups. This class
  * has two kinds of methods:
  * 1) The request handlers which handle the requests and generate a response and records to
  *    mutate the hard state. Those records will be written by the runtime and applied to the
@@ -182,11 +182,11 @@ public class GroupCoordinatorShard implements CoordinatorShard<Record> {
                 .withConsumerGroupMaxSize(config.consumerGroupMaxSize)
                 .withConsumerGroupSessionTimeout(config.consumerGroupSessionTimeoutMs)
                 .withConsumerGroupHeartbeatInterval(config.consumerGroupHeartbeatIntervalMs)
-                .withGenericGroupMaxSize(config.genericGroupMaxSize)
-                .withGenericGroupInitialRebalanceDelayMs(config.genericGroupInitialRebalanceDelayMs)
-                .withGenericGroupNewMemberJoinTimeoutMs(config.genericGroupNewMemberJoinTimeoutMs)
-                .withGenericGroupMinSessionTimeoutMs(config.genericGroupMinSessionTimeoutMs)
-                .withGenericGroupMaxSessionTimeoutMs(config.genericGroupMaxSessionTimeoutMs)
+                .withClassicGroupMaxSize(config.classicGroupMaxSize)
+                .withClassicGroupInitialRebalanceDelayMs(config.classicGroupInitialRebalanceDelayMs)
+                .withClassicGroupNewMemberJoinTimeoutMs(config.classicGroupNewMemberJoinTimeoutMs)
+                .withClassicGroupMinSessionTimeoutMs(config.classicGroupMinSessionTimeoutMs)
+                .withClassicGroupMaxSessionTimeoutMs(config.classicGroupMaxSessionTimeoutMs)
                 .withGroupCoordinatorMetricsShard(metricsShard)
                 .build();
 
@@ -313,12 +313,12 @@ public class GroupCoordinatorShard implements CoordinatorShard<Record> {
      * @return A Result containing the JoinGroup response and
      *         a list of records to update the state machine.
      */
-    public CoordinatorResult<Void, Record> genericGroupJoin(
+    public CoordinatorResult<Void, Record> classicGroupJoin(
         RequestContext context,
         JoinGroupRequestData request,
         CompletableFuture<JoinGroupResponseData> responseFuture
     ) {
-        return groupMetadataManager.genericGroupJoin(
+        return groupMetadataManager.classicGroupJoin(
             context,
             request,
             responseFuture
@@ -334,12 +334,12 @@ public class GroupCoordinatorShard implements CoordinatorShard<Record> {
      * @return A Result containing the SyncGroup response and
      *         a list of records to update the state machine.
      */
-    public CoordinatorResult<Void, Record> genericGroupSync(
+    public CoordinatorResult<Void, Record> classicGroupSync(
         RequestContext context,
         SyncGroupRequestData request,
         CompletableFuture<SyncGroupResponseData> responseFuture
     ) {
-        return groupMetadataManager.genericGroupSync(
+        return groupMetadataManager.classicGroupSync(
             context,
             request,
             responseFuture
@@ -347,18 +347,18 @@ public class GroupCoordinatorShard implements CoordinatorShard<Record> {
     }
 
     /**
-     * Handles a generic group HeartbeatRequest.
+     * Handles a classic group HeartbeatRequest.
      *
      * @param context The request context.
      * @param request The actual Heartbeat request.
      *
      * @return The HeartbeatResponse.
      */
-    public HeartbeatResponseData genericGroupHeartbeat(
+    public HeartbeatResponseData classicGroupHeartbeat(
         RequestContext context,
         HeartbeatRequestData request
     ) {
-        return groupMetadataManager.genericGroupHeartbeat(
+        return groupMetadataManager.classicGroupHeartbeat(
             context,
             request
         );
@@ -529,11 +529,11 @@ public class GroupCoordinatorShard implements CoordinatorShard<Record> {
      * @return A Result containing the LeaveGroup response and
      *         a list of records to update the state machine.
      */
-    public CoordinatorResult<LeaveGroupResponseData, Record> genericGroupLeave(
+    public CoordinatorResult<LeaveGroupResponseData, Record> classicGroupLeave(
         RequestContext context,
         LeaveGroupRequestData request
     ) throws ApiException {
-        return groupMetadataManager.genericGroupLeave(context, request);
+        return groupMetadataManager.classicGroupLeave(context, request);
     }
 
     /**

@@ -355,10 +355,10 @@ public class GroupCoordinatorService implements GroupCoordinator {
         CompletableFuture<JoinGroupResponseData> responseFuture = new CompletableFuture<>();
 
         runtime.scheduleWriteOperation(
-            "generic-group-join",
+            "classic-group-join",
             topicPartitionFor(request.groupId()),
             Duration.ofMillis(config.offsetCommitTimeoutMs),
-            coordinator -> coordinator.genericGroupJoin(context, request, responseFuture)
+            coordinator -> coordinator.classicGroupJoin(context, request, responseFuture)
         ).exceptionally(exception -> {
             if (!(exception instanceof KafkaException)) {
                 log.error("JoinGroup request {} hit an unexpected exception: {}",
@@ -399,10 +399,10 @@ public class GroupCoordinatorService implements GroupCoordinator {
         CompletableFuture<SyncGroupResponseData> responseFuture = new CompletableFuture<>();
 
         runtime.scheduleWriteOperation(
-            "generic-group-sync",
+            "classic-group-sync",
             topicPartitionFor(request.groupId()),
             Duration.ofMillis(config.offsetCommitTimeoutMs),
-            coordinator -> coordinator.genericGroupSync(context, request, responseFuture)
+            coordinator -> coordinator.classicGroupSync(context, request, responseFuture)
         ).exceptionally(exception -> {
             if (!(exception instanceof KafkaException)) {
                 log.error("SyncGroup request {} hit an unexpected exception: {}",
@@ -441,9 +441,9 @@ public class GroupCoordinatorService implements GroupCoordinator {
 
         // Using a read operation is okay here as we ignore the last committed offset in the snapshot registry.
         // This means we will read whatever is in the latest snapshot, which is how the old coordinator behaves.
-        return runtime.scheduleReadOperation("generic-group-heartbeat",
+        return runtime.scheduleReadOperation("classic-group-heartbeat",
             topicPartitionFor(request.groupId()),
-            (coordinator, __) -> coordinator.genericGroupHeartbeat(context, request)
+            (coordinator, __) -> coordinator.classicGroupHeartbeat(context, request)
         ).exceptionally(exception -> {
             if (!(exception instanceof KafkaException)) {
                 log.error("Heartbeat request {} hit an unexpected exception: {}",
@@ -482,10 +482,10 @@ public class GroupCoordinatorService implements GroupCoordinator {
         }
 
         return runtime.scheduleWriteOperation(
-            "generic-group-leave",
+            "classic-group-leave",
             topicPartitionFor(request.groupId()),
             Duration.ofMillis(config.offsetCommitTimeoutMs),
-            coordinator -> coordinator.genericGroupLeave(context, request)
+            coordinator -> coordinator.classicGroupLeave(context, request)
         ).exceptionally(exception -> {
             if (!(exception instanceof KafkaException)) {
                 log.error("LeaveGroup request {} hit an unexpected exception: {}",

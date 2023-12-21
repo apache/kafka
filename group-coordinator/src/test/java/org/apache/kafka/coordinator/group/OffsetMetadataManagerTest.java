@@ -52,9 +52,9 @@ import org.apache.kafka.coordinator.group.consumer.ConsumerGroup;
 import org.apache.kafka.coordinator.group.consumer.ConsumerGroupMember;
 import org.apache.kafka.coordinator.group.generated.OffsetCommitKey;
 import org.apache.kafka.coordinator.group.generated.OffsetCommitValue;
-import org.apache.kafka.coordinator.group.generic.GenericGroup;
-import org.apache.kafka.coordinator.group.generic.GenericGroupMember;
-import org.apache.kafka.coordinator.group.generic.GenericGroupState;
+import org.apache.kafka.coordinator.group.classic.ClassicGroup;
+import org.apache.kafka.coordinator.group.classic.ClassicGroupMember;
+import org.apache.kafka.coordinator.group.classic.ClassicGroupState;
 import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetricsShard;
 import org.apache.kafka.coordinator.group.runtime.CoordinatorResult;
 import org.apache.kafka.image.MetadataImage;
@@ -547,11 +547,11 @@ public class OffsetMetadataManagerTest {
         OffsetMetadataManagerTestContext context = new OffsetMetadataManagerTestContext.Builder().build();
 
         // Create a dead group.
-        GenericGroup group = context.groupMetadataManager.getOrMaybeCreateGenericGroup(
+        ClassicGroup group = context.groupMetadataManager.getOrMaybeCreateClassicGroup(
             "foo",
             true
         );
-        group.transitionTo(GenericGroupState.DEAD);
+        group.transitionTo(ClassicGroupState.DEAD);
 
         // Verify that the request is rejected with the correct exception.
         assertThrows(CoordinatorNotAvailableException.class, () -> context.commitOffset(
@@ -577,7 +577,7 @@ public class OffsetMetadataManagerTest {
         OffsetMetadataManagerTestContext context = new OffsetMetadataManagerTestContext.Builder().build();
 
         // Create an empty group.
-        context.groupMetadataManager.getOrMaybeCreateGenericGroup(
+        context.groupMetadataManager.getOrMaybeCreateClassicGroup(
             "foo",
             true
         );
@@ -606,7 +606,7 @@ public class OffsetMetadataManagerTest {
         OffsetMetadataManagerTestContext context = new OffsetMetadataManagerTestContext.Builder().build();
 
         // Create an empty group.
-        GenericGroup group = context.groupMetadataManager.getOrMaybeCreateGenericGroup(
+        ClassicGroup group = context.groupMetadataManager.getOrMaybeCreateClassicGroup(
             "foo",
             true
         );
@@ -615,7 +615,7 @@ public class OffsetMetadataManagerTest {
         group.add(mkGenericMember("member", Optional.of("new-instance-id")));
 
         // Transition to next generation.
-        group.transitionTo(GenericGroupState.PREPARING_REBALANCE);
+        group.transitionTo(ClassicGroupState.PREPARING_REBALANCE);
         group.initNextGeneration();
         assertEquals(1, group.generationId());
 
@@ -643,7 +643,7 @@ public class OffsetMetadataManagerTest {
         OffsetMetadataManagerTestContext context = new OffsetMetadataManagerTestContext.Builder().build();
 
         // Create an empty group.
-        GenericGroup group = context.groupMetadataManager.getOrMaybeCreateGenericGroup(
+        ClassicGroup group = context.groupMetadataManager.getOrMaybeCreateClassicGroup(
             "foo",
             true
         );
@@ -676,7 +676,7 @@ public class OffsetMetadataManagerTest {
         OffsetMetadataManagerTestContext context = new OffsetMetadataManagerTestContext.Builder().build();
 
         // Create an empty group.
-        GenericGroup group = context.groupMetadataManager.getOrMaybeCreateGenericGroup(
+        ClassicGroup group = context.groupMetadataManager.getOrMaybeCreateClassicGroup(
             "foo",
             true
         );
@@ -709,7 +709,7 @@ public class OffsetMetadataManagerTest {
         OffsetMetadataManagerTestContext context = new OffsetMetadataManagerTestContext.Builder().build();
 
         // Create an empty group.
-        GenericGroup group = context.groupMetadataManager.getOrMaybeCreateGenericGroup(
+        ClassicGroup group = context.groupMetadataManager.getOrMaybeCreateClassicGroup(
             "foo",
             true
         );
@@ -718,7 +718,7 @@ public class OffsetMetadataManagerTest {
         group.add(mkGenericMember("member", Optional.of("new-instance-id")));
 
         // Transition to next generation.
-        group.transitionTo(GenericGroupState.PREPARING_REBALANCE);
+        group.transitionTo(ClassicGroupState.PREPARING_REBALANCE);
         group.initNextGeneration();
         assertEquals(1, group.generationId());
 
@@ -746,7 +746,7 @@ public class OffsetMetadataManagerTest {
         OffsetMetadataManagerTestContext context = new OffsetMetadataManagerTestContext.Builder().build();
 
         // Create an empty group.
-        GenericGroup group = context.groupMetadataManager.getOrMaybeCreateGenericGroup(
+        ClassicGroup group = context.groupMetadataManager.getOrMaybeCreateClassicGroup(
             "foo",
             true
         );
@@ -755,7 +755,7 @@ public class OffsetMetadataManagerTest {
         group.add(mkGenericMember("member", Optional.of("new-instance-id")));
 
         // Transition to next generation.
-        group.transitionTo(GenericGroupState.PREPARING_REBALANCE);
+        group.transitionTo(ClassicGroupState.PREPARING_REBALANCE);
         group.initNextGeneration();
         assertEquals(1, group.generationId());
 
@@ -781,7 +781,7 @@ public class OffsetMetadataManagerTest {
         OffsetMetadataManagerTestContext context = new OffsetMetadataManagerTestContext.Builder().build();
 
         // Create an empty group.
-        GenericGroup group = context.groupMetadataManager.getOrMaybeCreateGenericGroup(
+        ClassicGroup group = context.groupMetadataManager.getOrMaybeCreateClassicGroup(
             "foo",
             true
         );
@@ -790,10 +790,10 @@ public class OffsetMetadataManagerTest {
         group.add(mkGenericMember("member", Optional.of("new-instance-id")));
 
         // Transition to next generation.
-        group.transitionTo(GenericGroupState.PREPARING_REBALANCE);
+        group.transitionTo(ClassicGroupState.PREPARING_REBALANCE);
         group.initNextGeneration();
         assertEquals(1, group.generationId());
-        group.transitionTo(GenericGroupState.STABLE);
+        group.transitionTo(ClassicGroupState.STABLE);
 
         CoordinatorResult<OffsetCommitResponseData, Record> result = context.commitOffset(
             new OffsetCommitRequestData()
@@ -849,24 +849,24 @@ public class OffsetMetadataManagerTest {
         OffsetMetadataManagerTestContext context = new OffsetMetadataManagerTestContext.Builder().build();
 
         // Create a group.
-        GenericGroup group = context.groupMetadataManager.getOrMaybeCreateGenericGroup(
+        ClassicGroup group = context.groupMetadataManager.getOrMaybeCreateClassicGroup(
             "foo",
             true
         );
 
         // Add member.
-        GenericGroupMember member = mkGenericMember("member", Optional.empty());
+        ClassicGroupMember member = mkGenericMember("member", Optional.empty());
         group.add(member);
 
         // Transition to next generation.
-        group.transitionTo(GenericGroupState.PREPARING_REBALANCE);
+        group.transitionTo(ClassicGroupState.PREPARING_REBALANCE);
         group.initNextGeneration();
         assertEquals(1, group.generationId());
-        group.transitionTo(GenericGroupState.STABLE);
+        group.transitionTo(ClassicGroupState.STABLE);
 
         // Schedule session timeout. This would be normally done when
         // the group transitions to stable.
-        context.groupMetadataManager.rescheduleGenericGroupMemberHeartbeat(group, member);
+        context.groupMetadataManager.rescheduleClassicGroupMemberHeartbeat(group, member);
 
         // Advance time by half of the session timeout. No timeouts are
         // expired.
@@ -952,7 +952,7 @@ public class OffsetMetadataManagerTest {
         );
 
         // A generic should have been created.
-        GenericGroup group = context.groupMetadataManager.getOrMaybeCreateGenericGroup(
+        ClassicGroup group = context.groupMetadataManager.getOrMaybeCreateClassicGroup(
             "foo",
             false
         );
@@ -1492,20 +1492,20 @@ public class OffsetMetadataManagerTest {
         OffsetMetadataManagerTestContext context = new OffsetMetadataManagerTestContext.Builder().build();
 
         // Create a group.
-        GenericGroup group = context.groupMetadataManager.getOrMaybeCreateGenericGroup(
+        ClassicGroup group = context.groupMetadataManager.getOrMaybeCreateClassicGroup(
             "foo",
             true
         );
 
         // Add member.
-        GenericGroupMember member = mkGenericMember("member", Optional.empty());
+        ClassicGroupMember member = mkGenericMember("member", Optional.empty());
         group.add(member);
 
         // Transition to next generation.
-        group.transitionTo(GenericGroupState.PREPARING_REBALANCE);
+        group.transitionTo(ClassicGroupState.PREPARING_REBALANCE);
         group.initNextGeneration();
         assertEquals(1, group.generationId());
-        group.transitionTo(GenericGroupState.STABLE);
+        group.transitionTo(ClassicGroupState.STABLE);
 
         CoordinatorResult<TxnOffsetCommitResponseData, Record> result = context.commitTransactionalOffset(
             new TxnOffsetCommitRequestData()
@@ -1585,7 +1585,7 @@ public class OffsetMetadataManagerTest {
         OffsetMetadataManagerTestContext context = new OffsetMetadataManagerTestContext.Builder().build();
 
         // Create an empty group.
-        context.groupMetadataManager.getOrMaybeCreateGenericGroup(
+        context.groupMetadataManager.getOrMaybeCreateClassicGroup(
             "foo",
             true
         );
@@ -1614,20 +1614,20 @@ public class OffsetMetadataManagerTest {
         OffsetMetadataManagerTestContext context = new OffsetMetadataManagerTestContext.Builder().build();
 
         // Create a group.
-        GenericGroup group = context.groupMetadataManager.getOrMaybeCreateGenericGroup(
+        ClassicGroup group = context.groupMetadataManager.getOrMaybeCreateClassicGroup(
             "foo",
             true
         );
 
         // Add member.
-        GenericGroupMember member = mkGenericMember("member", Optional.empty());
+        ClassicGroupMember member = mkGenericMember("member", Optional.empty());
         group.add(member);
 
         // Transition to next generation.
-        group.transitionTo(GenericGroupState.PREPARING_REBALANCE);
+        group.transitionTo(ClassicGroupState.PREPARING_REBALANCE);
         group.initNextGeneration();
         assertEquals(1, group.generationId());
-        group.transitionTo(GenericGroupState.STABLE);
+        group.transitionTo(ClassicGroupState.STABLE);
 
         assertThrows(IllegalGenerationException.class, () -> context.commitTransactionalOffset(
             new TxnOffsetCommitRequestData()
@@ -1653,11 +1653,11 @@ public class OffsetMetadataManagerTest {
         OffsetMetadataManagerTestContext context = new OffsetMetadataManagerTestContext.Builder().build();
 
         // Create a dead group.
-        GenericGroup group = context.groupMetadataManager.getOrMaybeCreateGenericGroup(
+        ClassicGroup group = context.groupMetadataManager.getOrMaybeCreateClassicGroup(
             "group",
             true
         );
-        group.transitionTo(GenericGroupState.DEAD);
+        group.transitionTo(ClassicGroupState.DEAD);
 
         List<OffsetFetchRequestData.OffsetFetchRequestTopics> request = Arrays.asList(
             new OffsetFetchRequestData.OffsetFetchRequestTopics()
@@ -1861,11 +1861,11 @@ public class OffsetMetadataManagerTest {
         OffsetMetadataManagerTestContext context = new OffsetMetadataManagerTestContext.Builder().build();
 
         // Create a dead group.
-        GenericGroup group = context.groupMetadataManager.getOrMaybeCreateGenericGroup(
+        ClassicGroup group = context.groupMetadataManager.getOrMaybeCreateClassicGroup(
             "group",
             true
         );
-        group.transitionTo(GenericGroupState.DEAD);
+        group.transitionTo(ClassicGroupState.DEAD);
 
         assertEquals(Collections.emptyList(), context.fetchAllOffsets("group", Long.MAX_VALUE));
     }
@@ -2083,7 +2083,7 @@ public class OffsetMetadataManagerTest {
     @Test
     public void testGenericGroupOffsetDelete() {
         OffsetMetadataManagerTestContext context = new OffsetMetadataManagerTestContext.Builder().build();
-        GenericGroup group = context.groupMetadataManager.getOrMaybeCreateGenericGroup(
+        ClassicGroup group = context.groupMetadataManager.getOrMaybeCreateClassicGroup(
             "foo",
             true
         );
@@ -2095,7 +2095,7 @@ public class OffsetMetadataManagerTest {
     @Test
     public void testGenericGroupOffsetDeleteWithErrors() {
         OffsetMetadataManagerTestContext context = new OffsetMetadataManagerTestContext.Builder().build();
-        GenericGroup group = context.groupMetadataManager.getOrMaybeCreateGenericGroup(
+        ClassicGroup group = context.groupMetadataManager.getOrMaybeCreateClassicGroup(
             "foo",
             true
         );
@@ -2155,8 +2155,8 @@ public class OffsetMetadataManagerTest {
     public void testDeleteGroupAllOffsets(Group.GroupType groupType) {
         OffsetMetadataManagerTestContext context = new OffsetMetadataManagerTestContext.Builder().build();
         switch (groupType) {
-            case GENERIC:
-                context.groupMetadataManager.getOrMaybeCreateGenericGroup(
+            case CLASSIC:
+                context.groupMetadataManager.getOrMaybeCreateClassicGroup(
                     "foo",
                     true
                 );
@@ -2496,7 +2496,7 @@ public class OffsetMetadataManagerTest {
         OffsetMetadataManagerTestContext context = new OffsetMetadataManagerTestContext.Builder().build();
 
         // Create an empty group.
-        GenericGroup group = context.groupMetadataManager.getOrMaybeCreateGenericGroup(
+        ClassicGroup group = context.groupMetadataManager.getOrMaybeCreateClassicGroup(
             "foo",
             true
         );
@@ -2505,10 +2505,10 @@ public class OffsetMetadataManagerTest {
         group.add(mkGenericMember("member", Optional.of("new-instance-id")));
 
         // Transition to next generation.
-        group.transitionTo(GenericGroupState.PREPARING_REBALANCE);
+        group.transitionTo(ClassicGroupState.PREPARING_REBALANCE);
         group.initNextGeneration();
         assertEquals(1, group.generationId());
-        group.transitionTo(GenericGroupState.STABLE);
+        group.transitionTo(ClassicGroupState.STABLE);
 
         CoordinatorResult<OffsetCommitResponseData, Record> result = context.commitOffset(
             new OffsetCommitRequestData()
@@ -2588,7 +2588,7 @@ public class OffsetMetadataManagerTest {
     @Test
     public void testOffsetDeletionsSensor() {
         OffsetMetadataManagerTestContext context = new OffsetMetadataManagerTestContext.Builder().build();
-        GenericGroup group = context.groupMetadataManager.getOrMaybeCreateGenericGroup("foo", true);
+        ClassicGroup group = context.groupMetadataManager.getOrMaybeCreateClassicGroup("foo", true);
 
         context.commitOffset("foo", "bar", 0, 100L, 0);
         context.commitOffset("foo", "bar", 1, 150L, 0);
@@ -2659,11 +2659,11 @@ public class OffsetMetadataManagerTest {
         ));
     }
 
-    private GenericGroupMember mkGenericMember(
+    private ClassicGroupMember mkGenericMember(
         String memberId,
         Optional<String> groupInstanceId
     ) {
-        return new GenericGroupMember(
+        return new ClassicGroupMember(
             memberId,
             groupInstanceId,
             "client-id",

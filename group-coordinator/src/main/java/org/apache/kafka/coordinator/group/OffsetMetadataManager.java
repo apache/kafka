@@ -41,8 +41,8 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.coordinator.group.generated.OffsetCommitKey;
 import org.apache.kafka.coordinator.group.generated.OffsetCommitValue;
-import org.apache.kafka.coordinator.group.generic.GenericGroup;
-import org.apache.kafka.coordinator.group.generic.GenericGroupState;
+import org.apache.kafka.coordinator.group.classic.ClassicGroup;
+import org.apache.kafka.coordinator.group.classic.ClassicGroupState;
 import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetricsShard;
 import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetrics;
 import org.apache.kafka.coordinator.group.runtime.CoordinatorResult;
@@ -300,7 +300,7 @@ public class OffsetMetadataManager {
                 // either the admin client or a consumer which does not use the group management
                 // facility. In this case, a so-called simple group is created and the request
                 // is accepted.
-                group = groupMetadataManager.getOrMaybeCreateGenericGroup(request.groupId(), true);
+                group = groupMetadataManager.getOrMaybeCreateClassicGroup(request.groupId(), true);
             } else {
                 if (context.header.apiVersion() >= 9) {
                     // Starting from version 9 of the OffsetCommit API, we return GROUP_ID_NOT_FOUND
@@ -354,7 +354,7 @@ public class OffsetMetadataManager {
                 // either the admin client or a consumer which does not use the group management
                 // facility. In this case, a so-called simple group is created and the request
                 // is accepted.
-                group = groupMetadataManager.getOrMaybeCreateGenericGroup(request.groupId(), true);
+                group = groupMetadataManager.getOrMaybeCreateClassicGroup(request.groupId(), true);
             } else {
                 throw Errors.ILLEGAL_GENERATION.exception();
             }
@@ -450,12 +450,12 @@ public class OffsetMetadataManager {
 
         // In the old consumer group protocol, the offset commits maintain the session if
         // the group is in Stable or PreparingRebalance state.
-        if (group.type() == Group.GroupType.GENERIC) {
-            GenericGroup genericGroup = (GenericGroup) group;
-            if (genericGroup.isInState(GenericGroupState.STABLE) || genericGroup.isInState(GenericGroupState.PREPARING_REBALANCE)) {
-                groupMetadataManager.rescheduleGenericGroupMemberHeartbeat(
-                    genericGroup,
-                    genericGroup.member(request.memberId())
+        if (group.type() == Group.GroupType.CLASSIC) {
+            ClassicGroup classicGroup = (ClassicGroup) group;
+            if (classicGroup.isInState(ClassicGroupState.STABLE) || classicGroup.isInState(ClassicGroupState.PREPARING_REBALANCE)) {
+                groupMetadataManager.rescheduleClassicGroupMemberHeartbeat(
+                    classicGroup,
+                    classicGroup.member(request.memberId())
                 );
             }
         }
@@ -850,15 +850,15 @@ public class OffsetMetadataManager {
         final int partition = key.partition();
 
         if (value != null) {
-            // The generic or consumer group should exist when offsets are committed or
+            // The classic or consumer group should exist when offsets are committed or
             // replayed. However, it won't if the consumer commits offsets but does not
             // use the membership functionality. In this case, we automatically create
-            // a so-called "simple consumer group". This is an empty generic group
+            // a so-called "simple consumer group". This is an empty classic group
             // without a protocol type.
             try {
                 groupMetadataManager.group(groupId);
             } catch (GroupIdNotFoundException ex) {
-                groupMetadataManager.getOrMaybeCreateGenericGroup(groupId, true);
+                groupMetadataManager.getOrMaybeCreateClassicGroup(groupId, true);
             }
 
             if (producerId == RecordBatch.NO_PRODUCER_ID) {
