@@ -194,8 +194,15 @@ public enum MetadataVersion {
     // Add JBOD support for KRaft.
     IBP_3_7_IV2(17, "3.7", "IV2", true),
 
+    // IBP_3_7_IV3 was reserved for ELR support (KIP-966) but has been moved forward to
+    // a later release requiring a new MetadataVersion. MVs are not reused.
+    IBP_3_7_IV3(18, "3.7", "IV3", false),
+
+    // Add new fetch request version for KIP-951
+    IBP_3_7_IV4(19, "3.7", "IV4", false),
+
     // Add ELR related supports (KIP-966).
-    IBP_3_7_IV3(18, "3.7", "IV3", true);
+    IBP_3_8_IV0(20, "3.8", "IV0", true);
 
     // NOTES when adding a new version:
     //   Update the default version in @ClusterTest annotation to point to the latest version
@@ -221,7 +228,7 @@ public enum MetadataVersion {
      * <strong>Think carefully before you update this value. ONCE A METADATA VERSION IS PRODUCTION,
      * IT CANNOT BE CHANGED.</strong>
      */
-    public static final MetadataVersion LATEST_PRODUCTION = IBP_3_7_IV0;
+    public static final MetadataVersion LATEST_PRODUCTION = IBP_3_7_IV4;
 
     /**
      * An array containing all of the MetadataVersion entries.
@@ -316,7 +323,7 @@ public enum MetadataVersion {
     }
 
     public boolean isElrSupported() {
-        return this.isAtLeast(IBP_3_7_IV3);
+        return this.isAtLeast(IBP_3_8_IV0);
     }
 
     public boolean isKRaftSupported() {
@@ -393,7 +400,7 @@ public enum MetadataVersion {
     }
 
     public short fetchRequestVersion() {
-        if (this.isAtLeast(IBP_3_7_IV0)) {
+        if (this.isAtLeast(IBP_3_7_IV4)) {
             return 16;
         } else if (this.isAtLeast(IBP_3_5_IV1)) {
             return 15;

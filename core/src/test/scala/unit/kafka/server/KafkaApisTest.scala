@@ -2709,7 +2709,7 @@ class KafkaApisTest {
       val request = buildRequest(produceRequest)
 
       val kafkaApis = createKafkaApis()
-      
+
       kafkaApis.handleProduceRequest(request, RequestLocal.withThreadConfinedCaching)
       
       verify(replicaManager).appendRecords(anyLong,

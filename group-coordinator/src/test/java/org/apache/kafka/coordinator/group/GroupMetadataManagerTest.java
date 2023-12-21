@@ -27,6 +27,7 @@ import org.apache.kafka.common.errors.GroupIdNotFoundException;
 import org.apache.kafka.common.errors.GroupMaxSizeReachedException;
 import org.apache.kafka.common.errors.IllegalGenerationException;
 import org.apache.kafka.common.errors.InvalidRequestException;
+import org.apache.kafka.common.errors.NotLeaderOrFollowerException;
 import org.apache.kafka.common.errors.UnknownMemberIdException;
 import org.apache.kafka.common.errors.UnknownServerException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
@@ -159,6 +160,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -4705,12 +4707,33 @@ public class GroupMetadataManagerTest {
         assertTrue(joinResult.joinFuture.isDone());
         assertEquals(Errors.MEMBER_ID_REQUIRED.code(), joinResult.joinFuture.get().errorCode());
 
-        GenericGroup group = context.createGenericGroup("group-id");
+        GenericGroup group = context.groupMetadataManager.getOrMaybeCreateGenericGroup("group-id", false);
 
         assertEquals(
             Collections.singletonList(RecordHelpers.newEmptyGroupMetadataRecord(group, MetadataVersion.latest())),
             joinResult.records
         );
+    }
+
+    @Test
+    public void testGenerateRecordsOnNewGenericGroupFailureTransformsError() throws Exception {
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .build();
+
+        JoinGroupRequestData request = new JoinGroupRequestBuilder()
+            .withGroupId("group-id")
+            .withMemberId(UNKNOWN_MEMBER_ID)
+            .withGroupInstanceId("group-instance-id")
+            .withDefaultProtocolTypeAndProtocols()
+            .build();
+
+        JoinResult joinResult = context.sendGenericGroupJoin(request, true);
+        assertFalse(joinResult.joinFuture.isDone());
+
+        // Simulate a failed write to the log.
+        joinResult.appendFuture.completeExceptionally(new NotLeaderOrFollowerException());
+        assertTrue(joinResult.joinFuture.isDone());
+        assertEquals(Errors.NOT_COORDINATOR.code(), joinResult.joinFuture.get().errorCode());
     }
 
     @ParameterizedTest
@@ -4773,7 +4796,6 @@ public class GroupMetadataManagerTest {
             context.time,
             new GroupCoordinatorMetricsShard(
                 context.snapshotRegistry,
-                Collections.emptyMap(),
                 Collections.emptyMap(),
                 new TopicPartition("__consumer_offsets", 0)
             ),
@@ -6354,7 +6376,6 @@ public class GroupMetadataManagerTest {
         group.transitionTo(STABLE);
 
         // Static member rejoins with UNKNOWN_MEMBER_ID. The selected protocol changes and triggers a rebalance.
-
         JoinResult joinResult = context.sendGenericGroupJoin(
             request.setProtocols(toProtocols("roundrobin"))
         );
@@ -6556,6 +6577,7 @@ public class GroupMetadataManagerTest {
     public void testJoinGroupAppendErrorConversion() {
         assertEquals(Errors.COORDINATOR_NOT_AVAILABLE, appendGroupMetadataErrorToResponseError(Errors.UNKNOWN_TOPIC_OR_PARTITION));
         assertEquals(Errors.COORDINATOR_NOT_AVAILABLE, appendGroupMetadataErrorToResponseError(Errors.NOT_ENOUGH_REPLICAS));
+        assertEquals(Errors.COORDINATOR_NOT_AVAILABLE, appendGroupMetadataErrorToResponseError(Errors.REQUEST_TIMED_OUT));
 
         assertEquals(Errors.NOT_COORDINATOR, appendGroupMetadataErrorToResponseError(Errors.NOT_LEADER_OR_FOLLOWER));
         assertEquals(Errors.NOT_COORDINATOR, appendGroupMetadataErrorToResponseError(Errors.KAFKA_STORAGE_ERROR));
@@ -7433,7 +7455,7 @@ public class GroupMetadataManagerTest {
         assertTrue(group.isInState(STABLE));
         assertEquals(Errors.NONE.code(), leaderSyncResult.syncFuture.get().errorCode());
 
-        // Sync with old member id will also not fail because the member id is not updated because of persistence failure
+        // Sync with old member id will also not fail as the member id is not updated due to persistence failure
         SyncResult oldMemberSyncResult = context.sendGenericGroupSync(
             syncRequest
                 .setGroupInstanceId("follower-instance-id")
@@ -8367,6 +8389,38 @@ public class GroupMetadataManagerTest {
         assertTrue(syncResult.records.isEmpty());
         assertTrue(syncResult.syncFuture.isDone());
         assertEquals(Errors.ILLEGAL_GENERATION.code(), syncResult.syncFuture.get().errorCode());
+    }
+
+    @Test
+    public void testSyncGroupAsLeaderAppendFailureTransformsError() throws Exception {
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .build();
+        context.createGenericGroup("group-id");
+
+        JoinGroupRequestData joinRequest = new JoinGroupRequestBuilder()
+            .withGroupId("group-id")
+            .withGroupInstanceId("leader-instance-id")
+            .withMemberId(UNKNOWN_MEMBER_ID)
+            .withDefaultProtocolTypeAndProtocols()
+            .build();
+
+        JoinGroupResponseData joinResponse = context.joinGenericGroupAndCompleteJoin(joinRequest, true, true);
+
+        // Send the sync group with an invalid generation
+        SyncResult syncResult = context.sendGenericGroupSync(
+            new SyncGroupRequestBuilder()
+                .withGroupId("group-id")
+                .withMemberId(joinResponse.memberId())
+                .withGenerationId(1)
+                .build()
+        );
+
+        assertFalse(syncResult.syncFuture.isDone());
+
+        // Simulate a failed write to the log.
+        syncResult.appendFuture.completeExceptionally(new NotLeaderOrFollowerException());
+        assertTrue(syncResult.syncFuture.isDone());
+        assertEquals(Errors.NOT_COORDINATOR.code(), syncResult.syncFuture.get().errorCode());
     }
 
     @Test
@@ -10680,6 +10734,103 @@ public class GroupMetadataManagerTest {
                 .setTopicPartitions(Collections.emptyList()));
 
         verify(context.metrics).record(CONSUMER_GROUP_REBALANCES_SENSOR_NAME);
+    }
+
+    @Test
+    public void testOnGenericGroupStateTransition() {
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .build();
+
+        // Creating a generic group should increment metric.
+        GenericGroup group = context.createGenericGroup("group-id");
+        verify(context.metrics, times(1)).onGenericGroupStateTransition(null, EMPTY);
+
+        // Replaying a new group should not increment metric as the group was already created.
+        context.replay(RecordHelpers.newGroupMetadataRecord(group, Collections.emptyMap(), MetadataVersion.LATEST_PRODUCTION));
+        verify(context.metrics, times(1)).onGenericGroupStateTransition(null, EMPTY);
+
+        // Loading a tombstone should remove group and decrement metric.
+        context.createGenericGroup("group-id");
+        context.replay(RecordHelpers.newGroupMetadataTombstoneRecord("group-id"));
+        verify(context.metrics, times(1)).onGenericGroupStateTransition(EMPTY, null);
+        assertThrows(GroupIdNotFoundException.class, () -> context.groupMetadataManager.group("group-id"));
+
+        // Replaying a tombstone for a group that has already been deleted should not decrement metric.
+        context.replay(RecordHelpers.newGroupMetadataTombstoneRecord("group-id"));
+        verify(context.metrics, times(1)).onGenericGroupStateTransition(EMPTY, null);
+    }
+
+    @Test
+    public void testOnGenericGroupStateTransitionOnLoading() {
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .build();
+
+        GenericGroup group = new GenericGroup(
+            new LogContext(),
+            "group-id",
+            EMPTY,
+            context.time,
+            context.metrics
+        );
+
+        // Even if there are more group metadata records loaded than tombstone records, the last replayed record
+        // (tombstone in this test) is the latest state of the group. Hence, the overall metric count should be 0.
+        IntStream.range(0, 5).forEach(__ -> {
+            context.replay(RecordHelpers.newGroupMetadataRecord(group, Collections.emptyMap(), MetadataVersion.LATEST_PRODUCTION));
+        });
+        IntStream.range(0, 4).forEach(__ -> {
+            context.replay(RecordHelpers.newGroupMetadataTombstoneRecord("group-id"));
+        });
+
+        verify(context.metrics, times(1)).onGenericGroupStateTransition(null, EMPTY);
+        verify(context.metrics, times(1)).onGenericGroupStateTransition(EMPTY, null);
+    }
+
+    @Test
+    public void testOnConsumerGroupStateTransition() {
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .build();
+
+        // Replaying a consumer group epoch record should increment metric.
+        context.replay(RecordHelpers.newGroupEpochRecord("group-id", 1));
+        verify(context.metrics, times(1)).onConsumerGroupStateTransition(null, ConsumerGroup.ConsumerGroupState.EMPTY);
+
+        // Replaying a consumer group epoch record for a group that has already been created should not increment metric.
+        context.replay(RecordHelpers.newGroupEpochRecord("group-id", 1));
+        verify(context.metrics, times(1)).onConsumerGroupStateTransition(null, ConsumerGroup.ConsumerGroupState.EMPTY);
+
+        // Creating and replaying tombstones for a group should remove group and decrement metric.
+        List<Record> tombstones = new ArrayList<>();
+        Group group = context.groupMetadataManager.group("group-id");
+        group.createGroupTombstoneRecords(tombstones);
+        tombstones.forEach(context::replay);
+        assertThrows(GroupIdNotFoundException.class, () -> context.groupMetadataManager.group("group-id"));
+        verify(context.metrics, times(1)).onConsumerGroupStateTransition(ConsumerGroup.ConsumerGroupState.EMPTY, null);
+
+        // Replaying a tombstone for a group that has already been removed should not decrement metric.
+        tombstones.forEach(tombstone -> assertThrows(GroupIdNotFoundException.class, () -> context.replay(tombstone)));
+        verify(context.metrics, times(1)).onConsumerGroupStateTransition(ConsumerGroup.ConsumerGroupState.EMPTY, null);
+    }
+
+    @Test
+    public void testOnConsumerGroupStateTransitionOnLoading() {
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .build();
+
+        // Even if there are more group epoch records loaded than tombstone records, the last replayed record
+        // (tombstone in this test) is the latest state of the group. Hence, the overall metric count should be 0.
+        IntStream.range(0, 5).forEach(__ -> {
+            context.replay(RecordHelpers.newGroupEpochRecord("group-id", 0));
+        });
+        context.replay(RecordHelpers.newTargetAssignmentEpochTombstoneRecord("group-id"));
+        context.replay(RecordHelpers.newGroupEpochTombstoneRecord("group-id"));
+        IntStream.range(0, 3).forEach(__ -> {
+            assertThrows(GroupIdNotFoundException.class, () -> context.replay(RecordHelpers.newTargetAssignmentEpochTombstoneRecord("group-id")));
+            assertThrows(GroupIdNotFoundException.class, () -> context.replay(RecordHelpers.newGroupEpochTombstoneRecord("group-id")));
+        });
+
+        verify(context.metrics, times(1)).onConsumerGroupStateTransition(null, ConsumerGroup.ConsumerGroupState.EMPTY);
+        verify(context.metrics, times(1)).onConsumerGroupStateTransition(ConsumerGroup.ConsumerGroupState.EMPTY, null);
     }
 
     private static void assertNoOrEmptyResult(List<ExpiredTimeout<Void, Record>> timeouts) {
