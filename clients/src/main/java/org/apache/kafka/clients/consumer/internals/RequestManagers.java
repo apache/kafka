@@ -154,23 +154,24 @@ public class RequestManagers implements Closeable {
 
                 if (groupRebalanceConfig != null && groupRebalanceConfig.groupId != null) {
                     Optional<String> serverAssignor = Optional.ofNullable(config.getString(ConsumerConfig.GROUP_REMOTE_ASSIGNOR_CONFIG));
-                    final GroupState groupState = new GroupState(groupRebalanceConfig);
                     coordinator = new CoordinatorRequestManager(time,
                             logContext,
                             retryBackoffMs,
                             retryBackoffMaxMs,
                             backgroundEventHandler,
-                            groupState.groupId);
-                    commit = new CommitRequestManager(time,
+                            groupRebalanceConfig.groupId);
+                    commit = new CommitRequestManager(
+                            time,
                             logContext,
                             subscriptions,
                             config,
                             coordinator,
-                            backgroundEventHandler,
-                            groupState);
+                            groupRebalanceConfig.groupId,
+                            groupRebalanceConfig.groupInstanceId);
                     membershipManager = new MembershipManagerImpl(
-                            groupState.groupId,
-                            groupState.groupInstanceId,
+                            groupRebalanceConfig.groupId,
+                            groupRebalanceConfig.groupInstanceId,
+                            groupRebalanceConfig.rebalanceTimeoutMs,
                             serverAssignor,
                             subscriptions,
                             commit,
@@ -178,6 +179,7 @@ public class RequestManagers implements Closeable {
                             logContext,
                             clientTelemetryReporter,
                             backgroundEventHandler);
+                    membershipManager.registerStateListener(commit);
                     heartbeatRequestManager = new HeartbeatRequestManager(
                             logContext,
                             time,
