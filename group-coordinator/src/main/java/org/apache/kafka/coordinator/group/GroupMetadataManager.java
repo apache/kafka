@@ -575,6 +575,7 @@ public class GroupMetadataManager {
         if (group == null) {
             ConsumerGroup consumerGroup = new ConsumerGroup(snapshotRegistry, groupId, metrics);
             groups.put(groupId, consumerGroup);
+            metrics.onConsumerGroupStateTransition(null, consumerGroup.state());
             return consumerGroup;
         } else {
             if (group.type() == CONSUMER) {
@@ -613,6 +614,7 @@ public class GroupMetadataManager {
         if (group == null) {
             GenericGroup genericGroup = new GenericGroup(logContext, groupId, GenericGroupState.EMPTY, time, metrics);
             groups.put(groupId, genericGroup);
+            metrics.onGenericGroupStateTransition(null, genericGroup.currentState());
             return genericGroup;
         } else {
             if (group.type() == GENERIC) {
@@ -684,7 +686,19 @@ public class GroupMetadataManager {
     private void removeGroup(
         String groupId
     ) {
-        groups.remove(groupId);
+        Group group = groups.remove(groupId);
+        if (group != null) {
+            switch (group.type()) {
+                case CONSUMER:
+                    ConsumerGroup consumerGroup = (ConsumerGroup) group;
+                    metrics.onConsumerGroupStateTransition(consumerGroup.state(), null);
+                    break;
+                case GENERIC:
+                    GenericGroup genericGroup = (GenericGroup) group;
+                    metrics.onGenericGroupStateTransition(genericGroup.currentState(), null);
+                    break;
+            }
+        }
     }
 
     /**
@@ -1594,7 +1608,6 @@ public class GroupMetadataManager {
                     + " but did not receive ConsumerGroupTargetAssignmentMetadataValue tombstone.");
             }
             removeGroup(groupId);
-            metrics.onConsumerGroupStateTransition(consumerGroup.state(), null);
         }
 
     }
@@ -1803,11 +1816,6 @@ public class GroupMetadataManager {
 
         if (value == null)  {
             // Tombstone. Group should be removed.
-            Group group = groups.get(groupId);
-            if (group != null && group.type() == GENERIC) {
-                GenericGroup genericGroup = (GenericGroup) group;
-                metrics.onGenericGroupStateTransition(genericGroup.currentState(), null);
-            }
             removeGroup(groupId);
         } else {
             List<GenericGroupMember> loadedMembers = new ArrayList<>();
@@ -1851,7 +1859,10 @@ public class GroupMetadataManager {
             );
 
             loadedMembers.forEach(member -> genericGroup.add(member, null));
-            groups.put(groupId, genericGroup);
+            Group prevGroup = groups.put(groupId, genericGroup);
+            if (prevGroup == null) {
+                metrics.onGenericGroupStateTransition(null, genericGroup.currentState());
+            }
 
             genericGroup.setSubscribedTopics(
                 genericGroup.computeSubscribedTopics()
@@ -2337,7 +2348,8 @@ public class GroupMetadataManager {
                         // We failed to write the empty group metadata. If the broker fails before another rebalance,
                         // the previous generation written to the log will become active again (and most likely timeout).
                         // This should be safe since there are no active members in an empty generation, so we just warn.
-                        log.warn("Failed to write empty metadata for group {}: {}", group.groupId(), t.getMessage());
+                        Errors error = appendGroupMetadataErrorToResponseError(Errors.forException(t));
+                        log.warn("Failed to write empty metadata for group {}: {}", group.groupId(), error.message());
                     }
                 });
 
@@ -3085,7 +3097,7 @@ public class GroupMetadataManager {
                     // when it gets invoked. if we have transitioned to another state, then do nothing
                     if (group.isInState(COMPLETING_REBALANCE) && request.generationId() == group.generationId()) {
                         if (t != null) {
-                            Errors error = Errors.forException(t);
+                            Errors error = appendGroupMetadataErrorToResponseError(Errors.forException(t));
                             resetAndPropagateAssignmentWithError(group, error);
                             maybePrepareRebalanceOrCompleteJoin(group, "Error " + error + " when storing group assignment" +
                                 "during SyncGroup (member: " + memberId + ").");
@@ -3125,6 +3137,7 @@ public class GroupMetadataManager {
         switch (appendError) {
             case UNKNOWN_TOPIC_OR_PARTITION:
             case NOT_ENOUGH_REPLICAS:
+            case REQUEST_TIMED_OUT:
                 return COORDINATOR_NOT_AVAILABLE;
 
             case NOT_LEADER_OR_FOLLOWER:

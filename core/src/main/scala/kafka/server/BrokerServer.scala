@@ -566,7 +566,8 @@ class BrokerServer(
         config.groupMinSessionTimeoutMs,
         config.groupMaxSessionTimeoutMs,
         config.offsetsRetentionCheckIntervalMs,
-        config.offsetsRetentionMinutes * 60 * 1000L
+        config.offsetsRetentionMinutes * 60 * 1000L,
+        config.offsetCommitTimeoutMs
       )
       val timer = new SystemTimerReaper(
         "group-coordinator-reaper",

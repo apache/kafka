@@ -62,7 +62,7 @@
               "about": "The client ID." },
             { "name": "ClientHost", "type": "string", "versions": "0+",
               "about": "The client host." },
-            { "name": "SubscribedTopicNames", "type": "[]string", "versions": "0+",
+            { "name": "SubscribedTopicNames", "type": "[]string", "versions": "0+", "entityType": "topicName",
               "about": "The subscribed topic names." },
             { "name": "SubscribedTopicRegex", "type": "string", "versions": "0+", "nullableVersions": "0+", "default": "null",
               "about": "the subscribed topic regex otherwise or null of not provided." },
@@ -80,7 +80,7 @@
     { "name": "TopicPartitions", "versions": "0+", "fields": [
       { "name": "TopicId", "type": "uuid", "versions": "0+",
         "about": "The topic ID." },
-      { "name": "TopicName", "type": "string", "versions": "0+",
+      { "name": "TopicName", "type": "string", "versions": "0+", "entityType": "topicName",
         "about": "The topic name." },
       { "name": "Partitions", "type": "[]int32", "versions": "0+",
         "about": "The partitions." }
