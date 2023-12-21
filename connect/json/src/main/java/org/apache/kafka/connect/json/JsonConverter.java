@@ -240,19 +240,19 @@ public class JsonConverter implements Converter, HeaderConverter, Versioned {
 
     public JsonConverter(boolean enableModules) {
         serializer = new JsonSerializer(
-                mkSet(),
-                JSON_NODE_FACTORY,
-                enableModules
+            mkSet(),
+            JSON_NODE_FACTORY,
+            enableModules
         );
 
         deserializer = new JsonDeserializer(
-                mkSet(
-                        // this ensures that the JsonDeserializer maintains full precision on
-                        // floating point numbers that cannot fit into float64
-                        DeserializationFeature.USE_BIG_DECIMAL_FOR_FLOATS
-                ),
-                JSON_NODE_FACTORY,
-                enableModules
+            mkSet(
+                    // this ensures that the JsonDeserializer maintains full precision on
+                    // floating point numbers that cannot fit into float64
+                    DeserializationFeature.USE_BIG_DECIMAL_FOR_FLOATS
+            ),
+            JSON_NODE_FACTORY,
+            enableModules
         );
     }
 
