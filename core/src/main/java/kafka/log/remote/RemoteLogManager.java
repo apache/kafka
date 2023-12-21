@@ -1289,15 +1289,21 @@ public class RemoteLogManager implements Closeable {
         }
 
         RemoteLogSegmentMetadata remoteLogSegmentMetadata = rlsMetadataOptional.get();
-        int startPos = lookupPositionForOffset(remoteLogSegmentMetadata, offset);
         InputStream remoteSegInputStream = null;
         try {
-            // Search forward for the position of the last offset that is greater than or equal to the target offset
-            remoteSegInputStream = remoteLogStorageManager.fetchLogSegment(remoteLogSegmentMetadata, startPos);
-            RemoteLogInputStream remoteLogInputStream = new RemoteLogInputStream(remoteSegInputStream);
-
-            RecordBatch firstBatch = findFirstBatch(remoteLogInputStream, offset);
-
+            int startPos = 0;
+            RecordBatch firstBatch = null;
+            while (firstBatch == null && rlsMetadataOptional.isPresent()) {
+                remoteLogSegmentMetadata = rlsMetadataOptional.get();
+                // Search forward for the position of the last offset that is greater than or equal to the target offset
+                startPos = lookupPositionForOffset(remoteLogSegmentMetadata, offset);
+                remoteSegInputStream = remoteLogStorageManager.fetchLogSegment(remoteLogSegmentMetadata, startPos);
+                RemoteLogInputStream remoteLogInputStream = getRemoteLogInputStream(remoteSegInputStream);
+                firstBatch = findFirstBatch(remoteLogInputStream, offset);
+                if (firstBatch == null) {
+                    rlsMetadataOptional = findNextSegmentMetadata(rlsMetadataOptional.get(), logOptional.get().leaderEpochCache());
+                }
+            }
             if (firstBatch == null)
                 return new FetchDataInfo(new LogOffsetMetadata(offset), MemoryRecords.EMPTY, false,
                         includeAbortedTxns ? Optional.of(Collections.emptyList()) : Optional.empty());
@@ -1339,6 +1345,10 @@ public class RemoteLogManager implements Closeable {
         } finally {
             Utils.closeQuietly(remoteSegInputStream, "RemoteLogSegmentInputStream");
         }
+    }
+    // for testing
+    public RemoteLogInputStream getRemoteLogInputStream(InputStream in) {
+        return new RemoteLogInputStream(in);
     }
 
     // Visible for testing
@@ -1412,8 +1422,8 @@ public class RemoteLogManager implements Closeable {
             }
         }
     }
-
-    private Optional<RemoteLogSegmentMetadata> findNextSegmentMetadata(RemoteLogSegmentMetadata segmentMetadata,
+    // visible for testing.
+    Optional<RemoteLogSegmentMetadata> findNextSegmentMetadata(RemoteLogSegmentMetadata segmentMetadata,
                                                                        Option<LeaderEpochFileCache> leaderEpochFileCacheOption) throws RemoteStorageException {
         if (leaderEpochFileCacheOption.isEmpty()) {
             return Optional.empty();
