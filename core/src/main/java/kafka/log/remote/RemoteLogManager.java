@@ -964,6 +964,20 @@ public class RemoteLogManager implements Closeable {
 
         }
 
+        private void updateMetadataCountAndLogSizeWith(int metadataCount, long remoteLogSizeBytes) {
+            BrokerTopicMetrics brokerTopicMetrics = brokerTopicStats.topicStats(topicIdPartition.topic());
+            int partition = topicIdPartition.partition();
+            brokerTopicMetrics.recordRemoteLogMetadataCount(partition, metadataCount);
+            brokerTopicMetrics.recordRemoteLogSizeBytes(partition, remoteLogSizeBytes);
+        }
+
+        private void updateRemoteDeleteLagWith(int segmentsLeftToDelete, long sizeOfDeletableSegmentsBytes) {
+            BrokerTopicMetrics brokerTopicMetrics = brokerTopicStats.topicStats(topicIdPartition.topic());
+            int partition = topicIdPartition.partition();
+            brokerTopicMetrics.recordRemoteDeleteLagSegments(partition, segmentsLeftToDelete);
+            brokerTopicMetrics.recordRemoteDeleteLagBytes(partition, sizeOfDeletableSegmentsBytes);
+        }
+
         void cleanupExpiredRemoteLogSegments() throws RemoteStorageException, ExecutionException, InterruptedException {
             if (isCancelled() || !isLeader()) {
                 logger.info("Returning from remote log segments cleanup as the task state is changed");
@@ -986,8 +1000,7 @@ public class RemoteLogManager implements Closeable {
             // Cleanup remote log segments and update the log start offset if applicable.
             final Iterator<RemoteLogSegmentMetadata> segmentMetadataIter = remoteLogMetadataManager.listRemoteLogSegments(topicIdPartition);
             if (!segmentMetadataIter.hasNext()) {
-                brokerTopicStats.topicStats(topicIdPartition.topic()).recordRemoteLogMetadataCount(topicIdPartition.partition(), 0);
-                brokerTopicStats.topicStats(topicIdPartition.topic()).recordRemoteLogSizeBytes(topicIdPartition.partition(), 0);
+                updateMetadataCountAndLogSizeWith(0, 0);
                 logger.debug("No remote log segments available on remote storage for partition: {}", topicIdPartition);
                 return;
             }
@@ -1003,8 +1016,8 @@ public class RemoteLogManager implements Closeable {
                 metadataCount++;
                 remoteLogSizeBytes += segmentMetadata.segmentSizeInBytes();
             }
-            brokerTopicStats.topicStats(topicIdPartition.topic()).recordRemoteLogMetadataCount(topicIdPartition.partition(), metadataCount);
-            brokerTopicStats.topicStats(topicIdPartition.topic()).recordRemoteLogSizeBytes(topicIdPartition.partition(), remoteLogSizeBytes);
+
+            updateMetadataCountAndLogSizeWith(metadataCount, remoteLogSizeBytes);
 
             // All the leader epochs in sorted order that exists in remote storage
             final List<Integer> remoteLeaderEpochs = new ArrayList<>(epochsSet);
@@ -1077,11 +1090,8 @@ public class RemoteLogManager implements Closeable {
             // and delete them accordingly.
             // If the follower HAS NOT picked up the changes, and they become the leader then they will go through this process
             // again and delete them with the original deletion reason i.e. size, time or log start offset breach.
-            BrokerTopicMetrics brokerTopicMetrics = brokerTopicStats.topicStats(topicIdPartition.topic());
-            int partition = topicIdPartition.partition();
             int segmentsLeftToDelete = segmentsToDelete.size();
-            brokerTopicMetrics.recordRemoteDeleteLagBytes(partition, sizeOfDeletableSegmentsBytes);
-            brokerTopicMetrics.recordRemoteDeleteLagSegments(partition, segmentsLeftToDelete);
+            updateRemoteDeleteLagWith(segmentsLeftToDelete, sizeOfDeletableSegmentsBytes);
             List<String> undeletedSegments = new ArrayList<>();
             for (RemoteLogSegmentMetadata segmentMetadata : segmentsToDelete) {
                 if (!remoteLogRetentionHandler.deleteRemoteLogSegment(segmentMetadata, x -> !isCancelled() && isLeader())) {
@@ -1089,8 +1099,7 @@ public class RemoteLogManager implements Closeable {
                 } else {
                     sizeOfDeletableSegmentsBytes -= segmentMetadata.segmentSizeInBytes();
                     segmentsLeftToDelete--;
-                    brokerTopicMetrics.recordRemoteDeleteLagBytes(partition, sizeOfDeletableSegmentsBytes);
-                    brokerTopicMetrics.recordRemoteDeleteLagSegments(partition, segmentsLeftToDelete);
+                    updateRemoteDeleteLagWith(segmentsLeftToDelete, sizeOfDeletableSegmentsBytes);
                 }
             }
             if (!undeletedSegments.isEmpty()) {
@@ -1123,16 +1132,14 @@ public class RemoteLogManager implements Closeable {
                 }
 
                 segmentsLeftToDelete += listOfSegmentsToBeCleaned.size();
-                brokerTopicMetrics.recordRemoteDeleteLagBytes(partition, sizeOfDeletableSegmentsBytes);
-                brokerTopicMetrics.recordRemoteDeleteLagSegments(partition, segmentsLeftToDelete);
+                updateRemoteDeleteLagWith(segmentsLeftToDelete, sizeOfDeletableSegmentsBytes);
                 for (RemoteLogSegmentMetadata segmentMetadata : listOfSegmentsToBeCleaned) {
                     if (!isCancelled() && isLeader()) {
                         // No need to update the log-start-offset even though the segment is deleted as these epochs/offsets are earlier to that value.
                         if (remoteLogRetentionHandler.deleteLogSegmentsDueToLeaderEpochCacheTruncation(earliestEpochEntry, segmentMetadata)) {
                             sizeOfDeletableSegmentsBytes -= segmentMetadata.segmentSizeInBytes();
                             segmentsLeftToDelete--;
-                            brokerTopicMetrics.recordRemoteDeleteLagBytes(partition, sizeOfDeletableSegmentsBytes);
-                            brokerTopicMetrics.recordRemoteDeleteLagSegments(partition, segmentsLeftToDelete);
+                            updateRemoteDeleteLagWith(segmentsLeftToDelete, sizeOfDeletableSegmentsBytes);
                         }
                     }
                 }
