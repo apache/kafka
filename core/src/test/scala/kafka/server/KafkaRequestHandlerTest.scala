@@ -194,7 +194,11 @@ class KafkaRequestHandlerTest {
     val brokerTopicStats = new BrokerTopicStats(java.util.Optional.of(KafkaConfig.fromProps(props)))
     brokerTopicStats.topicStats(topic)
     val gaugeMetrics = Set(
-      RemoteStorageMetrics.REMOTE_COPY_LOG_BYTES_METRIC.getName,
+      RemoteStorageMetrics.REMOTE_LOG_SIZE_COMPUTATION_TIME_METRIC.getName,
+      RemoteStorageMetrics.REMOTE_COPY_LAG_BYTES_METRIC.getName,
+      RemoteStorageMetrics.REMOTE_COPY_LAG_SEGMENTS_METRIC.getName,
+      RemoteStorageMetrics.REMOTE_DELETE_LAG_BYTES_METRIC.getName,
+      RemoteStorageMetrics.REMOTE_DELETE_LAG_SEGMENTS_METRIC.getName,
       RemoteStorageMetrics.REMOTE_LOG_SIZE_COMPUTATION_TIME_METRIC.getName,
       RemoteStorageMetrics.REMOTE_LOG_METADATA_COUNT_METRIC.getName)
 
@@ -243,12 +247,12 @@ class KafkaRequestHandlerTest {
     val brokerTopicMetrics = setupBrokerTopicMetrics(systemRemoteStorageEnabled)
 
     if (systemRemoteStorageEnabled) {
-      brokerTopicMetrics.recordRemoteCopyBytesLag(0, 100);
-      brokerTopicMetrics.recordRemoteCopyBytesLag(1, 150);
-      brokerTopicMetrics.recordRemoteCopyBytesLag(2, 250);
-      assertEquals(500, brokerTopicMetrics.remoteCopyBytesLag)
+      brokerTopicMetrics.recordRemoteCopyLagBytes(0, 100);
+      brokerTopicMetrics.recordRemoteCopyLagBytes(1, 150);
+      brokerTopicMetrics.recordRemoteCopyLagBytes(2, 250);
+      assertEquals(500, brokerTopicMetrics.remoteCopyLagBytes)
     } else {
-      assertEquals(None, brokerTopicMetrics.metricGaugeMap.get(RemoteStorageMetrics.REMOTE_COPY_LOG_BYTES_METRIC.getName))
+      assertEquals(None, brokerTopicMetrics.metricGaugeMap.get(RemoteStorageMetrics.REMOTE_COPY_LAG_BYTES_METRIC.getName))
     }
   }
 
@@ -256,71 +260,284 @@ class KafkaRequestHandlerTest {
   def testMultipleCopyLagBytesMetrics(): Unit = {
     val brokerTopicMetrics = setupBrokerTopicMetrics()
 
-    brokerTopicMetrics.recordRemoteCopyBytesLag(0, 1);
-    brokerTopicMetrics.recordRemoteCopyBytesLag(1, 2);
-    brokerTopicMetrics.recordRemoteCopyBytesLag(2, 3);
+    brokerTopicMetrics.recordRemoteCopyLagBytes(0, 1);
+    brokerTopicMetrics.recordRemoteCopyLagBytes(1, 2);
+    brokerTopicMetrics.recordRemoteCopyLagBytes(2, 3);
 
-    brokerTopicMetrics.recordRemoteCopyBytesLag(0, 4);
-    brokerTopicMetrics.recordRemoteCopyBytesLag(1, 5);
-    brokerTopicMetrics.recordRemoteCopyBytesLag(2, 6);
+    brokerTopicMetrics.recordRemoteCopyLagBytes(0, 4);
+    brokerTopicMetrics.recordRemoteCopyLagBytes(1, 5);
+    brokerTopicMetrics.recordRemoteCopyLagBytes(2, 6);
 
-    assertEquals(15, brokerTopicMetrics.remoteCopyBytesLag)
+    assertEquals(15, brokerTopicMetrics.remoteCopyLagBytes)
   }
 
   @Test
   def testCopyLagBytesMetricWithPartitionExpansion(): Unit = {
     val brokerTopicMetrics = setupBrokerTopicMetrics()
 
-    brokerTopicMetrics.recordRemoteCopyBytesLag(0, 1);
-    brokerTopicMetrics.recordRemoteCopyBytesLag(1, 2);
+    brokerTopicMetrics.recordRemoteCopyLagBytes(0, 1);
+    brokerTopicMetrics.recordRemoteCopyLagBytes(1, 2);
 
-    assertEquals(3, brokerTopicMetrics.remoteCopyBytesLag)
+    assertEquals(3, brokerTopicMetrics.remoteCopyLagBytes)
 
-    brokerTopicMetrics.recordRemoteCopyBytesLag(2, 3);
+    brokerTopicMetrics.recordRemoteCopyLagBytes(2, 3);
 
-    assertEquals(6, brokerTopicMetrics.remoteCopyBytesLag)
+    assertEquals(6, brokerTopicMetrics.remoteCopyLagBytes)
   }
 
   @Test
   def testCopyLagBytesMetricWithPartitionShrinking(): Unit = {
     val brokerTopicMetrics = setupBrokerTopicMetrics()
 
-    brokerTopicMetrics.recordRemoteCopyBytesLag(0, 1);
-    brokerTopicMetrics.recordRemoteCopyBytesLag(1, 2);
+    brokerTopicMetrics.recordRemoteCopyLagBytes(0, 1);
+    brokerTopicMetrics.recordRemoteCopyLagBytes(1, 2);
 
-    assertEquals(3, brokerTopicMetrics.remoteCopyBytesLag)
+    assertEquals(3, brokerTopicMetrics.remoteCopyLagBytes)
 
-    brokerTopicMetrics.removeRemoteCopyBytesLag(1);
+    brokerTopicMetrics.removeRemoteCopyLagBytes(1);
 
-    assertEquals(1, brokerTopicMetrics.remoteCopyBytesLag)
+    assertEquals(1, brokerTopicMetrics.remoteCopyLagBytes)
   }
 
   @Test
   def testCopyLagBytesMetricWithRemovingNonexistentPartitions(): Unit = {
     val brokerTopicMetrics = setupBrokerTopicMetrics()
 
-    brokerTopicMetrics.recordRemoteCopyBytesLag(0, 1);
-    brokerTopicMetrics.recordRemoteCopyBytesLag(1, 2);
+    brokerTopicMetrics.recordRemoteCopyLagBytes(0, 1);
+    brokerTopicMetrics.recordRemoteCopyLagBytes(1, 2);
 
-    assertEquals(3, brokerTopicMetrics.remoteCopyBytesLag)
+    assertEquals(3, brokerTopicMetrics.remoteCopyLagBytes)
 
-    brokerTopicMetrics.removeRemoteCopyBytesLag(3);
+    brokerTopicMetrics.removeRemoteCopyLagBytes(3);
 
-    assertEquals(3, brokerTopicMetrics.remoteCopyBytesLag)
+    assertEquals(3, brokerTopicMetrics.remoteCopyLagBytes)
   }
 
   @Test
   def testCopyLagBytesMetricClear(): Unit = {
     val brokerTopicMetrics = setupBrokerTopicMetrics()
 
-    brokerTopicMetrics.recordRemoteCopyBytesLag(0, 1);
-    brokerTopicMetrics.recordRemoteCopyBytesLag(1, 2);
+    brokerTopicMetrics.recordRemoteCopyLagBytes(0, 1);
+    brokerTopicMetrics.recordRemoteCopyLagBytes(1, 2);
 
-    assertEquals(3, brokerTopicMetrics.remoteCopyBytesLag)
+    assertEquals(3, brokerTopicMetrics.remoteCopyLagBytes)
 
     brokerTopicMetrics.close()
 
-    assertEquals(0, brokerTopicMetrics.remoteCopyBytesLag)
+    assertEquals(0, brokerTopicMetrics.remoteCopyLagBytes)
+  }
+
+  @Test
+  def testMultipleCopyLagSegmentsMetrics(): Unit = {
+    val brokerTopicMetrics = setupBrokerTopicMetrics()
+
+    brokerTopicMetrics.recordRemoteCopyLagSegments(0, 1);
+    brokerTopicMetrics.recordRemoteCopyLagSegments(1, 2);
+    brokerTopicMetrics.recordRemoteCopyLagSegments(2, 3);
+
+    brokerTopicMetrics.recordRemoteCopyLagSegments(0, 4);
+    brokerTopicMetrics.recordRemoteCopyLagSegments(1, 5);
+    brokerTopicMetrics.recordRemoteCopyLagSegments(2, 6);
+
+    assertEquals(15, brokerTopicMetrics.remoteCopyLagSegments)
+  }
+
+  @Test
+  def testCopyLagSegmentsMetricWithPartitionExpansion(): Unit = {
+    val brokerTopicMetrics = setupBrokerTopicMetrics()
+
+    brokerTopicMetrics.recordRemoteCopyLagSegments(0, 1);
+    brokerTopicMetrics.recordRemoteCopyLagSegments(1, 2);
+
+    assertEquals(3, brokerTopicMetrics.remoteCopyLagSegments)
+
+    brokerTopicMetrics.recordRemoteCopyLagSegments(2, 3);
+
+    assertEquals(6, brokerTopicMetrics.remoteCopyLagSegments)
+  }
+
+  @Test
+  def testCopyLagSegmentsMetricWithPartitionShrinking(): Unit = {
+    val brokerTopicMetrics = setupBrokerTopicMetrics()
+
+    brokerTopicMetrics.recordRemoteCopyLagSegments(0, 1);
+    brokerTopicMetrics.recordRemoteCopyLagSegments(1, 2);
+
+    assertEquals(3, brokerTopicMetrics.remoteCopyLagSegments)
+
+    brokerTopicMetrics.removeRemoteCopyLagSegments(1);
+
+    assertEquals(1, brokerTopicMetrics.remoteCopyLagSegments)
+  }
+
+  @Test
+  def testCopyLagSegmentsMetricWithRemovingNonexistentPartitions(): Unit = {
+    val brokerTopicMetrics = setupBrokerTopicMetrics()
+
+    brokerTopicMetrics.recordRemoteCopyLagSegments(0, 1);
+    brokerTopicMetrics.recordRemoteCopyLagSegments(1, 2);
+
+    assertEquals(3, brokerTopicMetrics.remoteCopyLagSegments)
+
+    brokerTopicMetrics.removeRemoteCopyLagSegments(3);
+
+    assertEquals(3, brokerTopicMetrics.remoteCopyLagSegments)
+  }
+
+  @Test
+  def testCopyLagSegmentsMetricClear(): Unit = {
+    val brokerTopicMetrics = setupBrokerTopicMetrics()
+
+    brokerTopicMetrics.recordRemoteCopyLagSegments(0, 1);
+    brokerTopicMetrics.recordRemoteCopyLagSegments(1, 2);
+
+    assertEquals(3, brokerTopicMetrics.remoteCopyLagSegments)
+
+    brokerTopicMetrics.close()
+
+    assertEquals(0, brokerTopicMetrics.remoteCopyLagSegments)
+  }
+
+  @Test
+  def testMultipleDeleteLagBytesMetrics(): Unit = {
+    val brokerTopicMetrics = setupBrokerTopicMetrics()
+
+    brokerTopicMetrics.recordRemoteDeleteLagBytes(0, 1);
+    brokerTopicMetrics.recordRemoteDeleteLagBytes(1, 2);
+    brokerTopicMetrics.recordRemoteDeleteLagBytes(2, 3);
+
+    brokerTopicMetrics.recordRemoteDeleteLagBytes(0, 4);
+    brokerTopicMetrics.recordRemoteDeleteLagBytes(1, 5);
+    brokerTopicMetrics.recordRemoteDeleteLagBytes(2, 6);
+
+    assertEquals(15, brokerTopicMetrics.remoteDeleteLagBytes)
+  }
+
+  @Test
+  def testDeleteLagBytesMetricWithPartitionExpansion(): Unit = {
+    val brokerTopicMetrics = setupBrokerTopicMetrics()
+
+    brokerTopicMetrics.recordRemoteDeleteLagBytes(0, 1);
+    brokerTopicMetrics.recordRemoteDeleteLagBytes(1, 2);
+
+    assertEquals(3, brokerTopicMetrics.remoteDeleteLagBytes)
+
+    brokerTopicMetrics.recordRemoteDeleteLagBytes(2, 3);
+
+    assertEquals(6, brokerTopicMetrics.remoteDeleteLagBytes)
+  }
+
+  @Test
+  def testDeleteLagBytesMetricWithPartitionShrinking(): Unit = {
+    val brokerTopicMetrics = setupBrokerTopicMetrics()
+
+    brokerTopicMetrics.recordRemoteDeleteLagBytes(0, 1);
+    brokerTopicMetrics.recordRemoteDeleteLagBytes(1, 2);
+
+    assertEquals(3, brokerTopicMetrics.remoteDeleteLagBytes)
+
+    brokerTopicMetrics.removeRemoteDeleteLagBytes(1);
+
+    assertEquals(1, brokerTopicMetrics.remoteDeleteLagBytes)
+  }
+
+  @Test
+  def testDeleteLagBytesMetricWithRemovingNonexistentPartitions(): Unit = {
+    val brokerTopicMetrics = setupBrokerTopicMetrics()
+
+    brokerTopicMetrics.recordRemoteDeleteLagBytes(0, 1);
+    brokerTopicMetrics.recordRemoteDeleteLagBytes(1, 2);
+
+    assertEquals(3, brokerTopicMetrics.remoteDeleteLagBytes)
+
+    brokerTopicMetrics.removeRemoteDeleteLagBytes(3);
+
+    assertEquals(3, brokerTopicMetrics.remoteDeleteLagBytes)
+  }
+
+  @Test
+  def testDeleteLagBytesMetricClear(): Unit = {
+    val brokerTopicMetrics = setupBrokerTopicMetrics()
+
+    brokerTopicMetrics.recordRemoteDeleteLagBytes(0, 1);
+    brokerTopicMetrics.recordRemoteDeleteLagBytes(1, 2);
+
+    assertEquals(3, brokerTopicMetrics.remoteDeleteLagBytes)
+
+    brokerTopicMetrics.close()
+
+    assertEquals(0, brokerTopicMetrics.remoteDeleteLagBytes)
+  }
+
+  @Test
+  def testMultipleDeleteLagSegmentsMetrics(): Unit = {
+    val brokerTopicMetrics = setupBrokerTopicMetrics()
+
+    brokerTopicMetrics.recordRemoteDeleteLagSegments(0, 1);
+    brokerTopicMetrics.recordRemoteDeleteLagSegments(1, 2);
+    brokerTopicMetrics.recordRemoteDeleteLagSegments(2, 3);
+
+    brokerTopicMetrics.recordRemoteDeleteLagSegments(0, 4);
+    brokerTopicMetrics.recordRemoteDeleteLagSegments(1, 5);
+    brokerTopicMetrics.recordRemoteDeleteLagSegments(2, 6);
+
+    assertEquals(15, brokerTopicMetrics.remoteDeleteLagSegments)
+  }
+
+  @Test
+  def testDeleteLagSegmentsMetricWithPartitionExpansion(): Unit = {
+    val brokerTopicMetrics = setupBrokerTopicMetrics()
+
+    brokerTopicMetrics.recordRemoteDeleteLagSegments(0, 1);
+    brokerTopicMetrics.recordRemoteDeleteLagSegments(1, 2);
+
+    assertEquals(3, brokerTopicMetrics.remoteDeleteLagSegments)
+
+    brokerTopicMetrics.recordRemoteDeleteLagSegments(2, 3);
+
+    assertEquals(6, brokerTopicMetrics.remoteDeleteLagSegments)
+  }
+
+  @Test
+  def testDeleteLagSegmentsMetricWithPartitionShrinking(): Unit = {
+    val brokerTopicMetrics = setupBrokerTopicMetrics()
+
+    brokerTopicMetrics.recordRemoteDeleteLagSegments(0, 1);
+    brokerTopicMetrics.recordRemoteDeleteLagSegments(1, 2);
+
+    assertEquals(3, brokerTopicMetrics.remoteDeleteLagSegments)
+
+    brokerTopicMetrics.removeRemoteDeleteLagSegments(1);
+
+    assertEquals(1, brokerTopicMetrics.remoteDeleteLagSegments)
+  }
+
+  @Test
+  def testDeleteLagSegmentsMetricWithRemovingNonexistentPartitions(): Unit = {
+    val brokerTopicMetrics = setupBrokerTopicMetrics()
+
+    brokerTopicMetrics.recordRemoteDeleteLagSegments(0, 1);
+    brokerTopicMetrics.recordRemoteDeleteLagSegments(1, 2);
+
+    assertEquals(3, brokerTopicMetrics.remoteDeleteLagSegments)
+
+    brokerTopicMetrics.removeRemoteDeleteLagSegments(3);
+
+    assertEquals(3, brokerTopicMetrics.remoteDeleteLagSegments)
+  }
+
+  @Test
+  def testDeleteLagSegmentsMetricClear(): Unit = {
+    val brokerTopicMetrics = setupBrokerTopicMetrics()
+
+    brokerTopicMetrics.recordRemoteDeleteLagSegments(0, 1);
+    brokerTopicMetrics.recordRemoteDeleteLagSegments(1, 2);
+
+    assertEquals(3, brokerTopicMetrics.remoteDeleteLagSegments)
+
+    brokerTopicMetrics.close()
+
+    assertEquals(0, brokerTopicMetrics.remoteDeleteLagSegments)
   }
 
   @Test
