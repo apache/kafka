@@ -43,6 +43,7 @@ import org.apache.kafka.common.message.TxnOffsetCommitResponseData;
 import org.apache.kafka.common.protocol.ApiMessage;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.RequestContext;
+import org.apache.kafka.common.requests.TransactionResult;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupCurrentMemberAssignmentKey;
@@ -715,5 +716,22 @@ public class GroupCoordinatorShard implements CoordinatorShard<Record> {
                 throw new IllegalStateException("Received an unknown record type " + key.version()
                     + " in " + record);
         }
+    }
+
+    /**
+     * Applies the given transaction marker.
+     *
+     * @param producerId    The producer id.
+     * @param producerEpoch The producer epoch.
+     * @param result        The result of the transaction.
+     * @throws RuntimeException if the transaction can not be completed.
+     */
+    @Override
+    public void replayEndTransactionMarker(
+        long producerId,
+        short producerEpoch,
+        TransactionResult result
+    ) throws RuntimeException {
+        offsetMetadataManager.replayEndTransactionMarker(producerId, result);
     }
 }

@@ -29,6 +29,7 @@ import org.apache.kafka.common.utils.{BufferSupplier, Time}
 import org.apache.kafka.image.{MetadataDelta, MetadataImage}
 import org.apache.kafka.server.util.FutureUtils
 
+import java.time.Duration
 import java.util
 import java.util.{Optional, OptionalInt, Properties}
 import java.util.concurrent.CompletableFuture
@@ -544,6 +545,19 @@ private[group] class GroupCoordinatorAdapter(
     }
 
     future
+  }
+
+  override def completeTransaction(
+    tp: TopicPartition,
+    producerId: Long,
+    producerEpoch: Short,
+    coordinatorEpoch: Int,
+    result: TransactionResult,
+    timeout: Duration
+  ): CompletableFuture[Void] = {
+    FutureUtils.failedFuture(new IllegalStateException(
+      s"The old group coordinator does not support `completeTransaction` API."
+    ))
   }
 
   override def partitionFor(groupId: String): Int = {
