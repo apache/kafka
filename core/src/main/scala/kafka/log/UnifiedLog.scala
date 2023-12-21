@@ -972,7 +972,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
     }
   }
 
-  private def maybeIncrementLocalLogStartOffset(newLocalLogStartOffset: Long, reason: LogStartOffsetIncrementReason): Unit = {
+  def maybeIncrementLocalLogStartOffset(newLocalLogStartOffset: Long, reason: LogStartOffsetIncrementReason): Unit = {
     lock synchronized {
       if (newLocalLogStartOffset > localLogStartOffset()) {
         _localLogStartOffset = newLocalLogStartOffset
@@ -1586,6 +1586,12 @@ class UnifiedLog(@volatile var logStartOffset: Long,
     UnifiedLog.sizeInBytes(logSegments.stream.filter(_.baseOffset >= highestOffsetInRemoteStorage).collect(Collectors.toList[LogSegment]))
 
   /**
+   * The number of segments that are only in local log but not yet in remote log.
+   */
+  def onlyLocalLogSegmentsCount: Long =
+    logSegments.stream().filter(_.baseOffset >= highestOffsetInRemoteStorage).count()
+
+  /**
    * The offset of the next message that will be appended to the log
    */
   def logEndOffset: Long =  localLog.logEndOffset
@@ -1815,6 +1821,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
         leaderEpochCache.foreach(_.clearAndFlush())
         producerStateManager.truncateFullyAndStartAt(newOffset)
         logStartOffset = logStartOffsetOpt.getOrElse(newOffset)
+        if (remoteLogEnabled()) _localLogStartOffset = newOffset
         rebuildProducerState(newOffset, producerStateManager)
         updateHighWatermark(localLog.logEndOffsetMetadata)
       }

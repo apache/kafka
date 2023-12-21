@@ -115,8 +115,9 @@ public class ConsistencyVectorIntegrationTest {
                .toStream()
                .peek((k, v) -> semaphore.release());
 
-        final KafkaStreams kafkaStreams1 = createKafkaStreams(builder, streamsConfiguration());
-        final KafkaStreams kafkaStreams2 = createKafkaStreams(builder, streamsConfiguration());
+        final String safeTestName = safeUniqueTestName(testName);
+        final KafkaStreams kafkaStreams1 = createKafkaStreams(builder, streamsConfiguration(safeTestName));
+        final KafkaStreams kafkaStreams2 = createKafkaStreams(builder, streamsConfiguration(safeTestName));
         final List<KafkaStreams> kafkaStreamsList = Arrays.asList(kafkaStreams1, kafkaStreams2);
 
         try {
@@ -209,8 +210,7 @@ public class ConsistencyVectorIntegrationTest {
         );
     }
 
-    private Properties streamsConfiguration() {
-        final String safeTestName = safeUniqueTestName(getClass(), testName);
+    private Properties streamsConfiguration(final String safeTestName) {
         final Properties config = new Properties();
         config.put(StreamsConfig.APPLICATION_ID_CONFIG, "app-" + safeTestName);
         config.put(StreamsConfig.APPLICATION_SERVER_CONFIG, "localhost:" + (++port));

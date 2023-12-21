@@ -3895,7 +3895,16 @@ controller.listener.names=CONTROLLER</pre>
   <h3>Reverting to ZooKeeper mode During the Migration</h3>
     While the cluster is still in migration mode, it is possible to revert to ZK mode. In order to do this:
     <ol>
-      <li>One by one, take each KRaft broker down. Remove the __cluster_metadata directory on the broker. Then, restart the broker in ZooKeeper mode.</li>
+      <li>
+        For each KRaft broker:
+        <ul>
+          <li>Stop the broker.</li>
+          <li>Remove the __cluster_metadata directory on the broker.</li>
+          <li>Remove the <code>zookeeper.metadata.migration.enable</code> configuration and the KRaft controllers related configurations like <code>controller.quorum.voters</code>
+            and <code>controller.listener.names</code> from the broker configuration properties file.</li>
+          <li>Restart the broker in ZooKeeper mode.</li>
+        </ul>
+      </li>
       <li>Take down the KRaft quorum.</li>
       <li>Using ZooKeeper shell, delete the controller node using <code>rmr /controller</code>, so that a ZooKeeper-based broker can become the next controller.</li>
     </ol>
