@@ -444,9 +444,9 @@ class BrokerTopicMetrics(name: Option[String], configOpt: java.util.Optional[Kaf
 
   def remoteLogMetadataCount: Long = metricGaugeTypeMap.get(RemoteStorageMetrics.REMOTE_LOG_METADATA_COUNT_METRIC.getName).brokerTopicAggregatedMetric.value()
 
-  def recordRemoteLogSizeBytes(partition: Int, bytesLag: Long): Unit = {
+  def recordRemoteLogSizeBytes(partition: Int, size: Long): Unit = {
     val brokerTopicAggregatedMetric = metricGaugeTypeMap.get(RemoteStorageMetrics.REMOTE_LOG_SIZE_BYTES_METRIC.getName).brokerTopicAggregatedMetric
-    brokerTopicAggregatedMetric.setPartitionMetricValue(partition, bytesLag)
+    brokerTopicAggregatedMetric.setPartitionMetricValue(partition, size)
   }
 
   def removeRemoteLogSizeBytes(partition: Int): Unit = {

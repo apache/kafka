@@ -569,7 +569,7 @@ class KafkaRequestHandlerTest {
       brokerTopicMetrics.recordRemoteLogSizeBytes(2, 250);
       assertEquals(500, brokerTopicMetrics.remoteLogSizeBytes)
     } else {
-      assertEquals(None, brokerTopicMetrics.metricGaugeMap.get(RemoteStorageMetrics.REMOTE_COPY_LOG_BYTES_METRIC.getName))
+      assertEquals(None, brokerTopicMetrics.metricGaugeMap.get(RemoteStorageMetrics.REMOTE_LOG_SIZE_BYTES_METRIC.getName))
     }
   }
 
