@@ -47,19 +47,19 @@ public class GroupCoordinatorMetrics extends CoordinatorMetrics implements AutoC
     /**
      * Old classic group count metric. To be deprecated.
      */
-    public final static com.yammer.metrics.core.MetricName NUM_GENERIC_GROUPS = getMetricName(
+    public final static com.yammer.metrics.core.MetricName NUM_CLASSIC_GROUPS = getMetricName(
         "GroupMetadataManager", "NumGroups");
     public final static com.yammer.metrics.core.MetricName NUM_OFFSETS = getMetricName(
         "GroupMetadataManager", "NumOffsets");
-    public final static com.yammer.metrics.core.MetricName NUM_GENERIC_GROUPS_PREPARING_REBALANCE = getMetricName(
+    public final static com.yammer.metrics.core.MetricName NUM_CLASSIC_GROUPS_PREPARING_REBALANCE = getMetricName(
         "GroupMetadataManager", "NumGroupsPreparingRebalance");
-    public final static com.yammer.metrics.core.MetricName NUM_GENERIC_GROUPS_COMPLETING_REBALANCE = getMetricName(
+    public final static com.yammer.metrics.core.MetricName NUM_CLASSIC_GROUPS_COMPLETING_REBALANCE = getMetricName(
         "GroupMetadataManager", "NumGroupsCompletingRebalance");
-    public final static com.yammer.metrics.core.MetricName NUM_GENERIC_GROUPS_STABLE = getMetricName(
+    public final static com.yammer.metrics.core.MetricName NUM_CLASSIC_GROUPS_STABLE = getMetricName(
         "GroupMetadataManager", "NumGroupsStable");
-    public final static com.yammer.metrics.core.MetricName NUM_GENERIC_GROUPS_DEAD = getMetricName(
+    public final static com.yammer.metrics.core.MetricName NUM_CLASSIC_GROUPS_DEAD = getMetricName(
         "GroupMetadataManager", "NumGroupsDead");
-    public final static com.yammer.metrics.core.MetricName NUM_GENERIC_GROUPS_EMPTY = getMetricName(
+    public final static com.yammer.metrics.core.MetricName NUM_CLASSIC_GROUPS_EMPTY = getMetricName(
         "GroupMetadataManager", "NumGroupsEmpty");
 
     public final static String GROUP_COUNT_METRIC_NAME = "group-count";
@@ -218,11 +218,11 @@ public class GroupCoordinatorMetrics extends CoordinatorMetrics implements AutoC
         return shards.values().stream().mapToLong(GroupCoordinatorMetricsShard::numOffsets).sum();
     }
 
-    private Long numGenericGroups() {
+    private Long numClassicGroups() {
         return shards.values().stream().mapToLong(GroupCoordinatorMetricsShard::numClassicGroups).sum();
     }
 
-    private Long numGenericGroups(ClassicGroupState state) {
+    private Long numClassicGroups(ClassicGroupState state) {
         return shards.values().stream().mapToLong(shard -> shard.numClassicGroups(state)).sum();
     }
 
@@ -238,12 +238,12 @@ public class GroupCoordinatorMetrics extends CoordinatorMetrics implements AutoC
     public void close() {
         Arrays.asList(
             NUM_OFFSETS,
-            NUM_GENERIC_GROUPS,
-            NUM_GENERIC_GROUPS_PREPARING_REBALANCE,
-            NUM_GENERIC_GROUPS_COMPLETING_REBALANCE,
-            NUM_GENERIC_GROUPS_STABLE,
-            NUM_GENERIC_GROUPS_DEAD,
-            NUM_GENERIC_GROUPS_EMPTY
+            NUM_CLASSIC_GROUPS,
+            NUM_CLASSIC_GROUPS_PREPARING_REBALANCE,
+            NUM_CLASSIC_GROUPS_COMPLETING_REBALANCE,
+            NUM_CLASSIC_GROUPS_STABLE,
+            NUM_CLASSIC_GROUPS_DEAD,
+            NUM_CLASSIC_GROUPS_EMPTY
         ).forEach(registry::removeMetric);
 
         Arrays.asList(
@@ -309,51 +309,51 @@ public class GroupCoordinatorMetrics extends CoordinatorMetrics implements AutoC
             }
         });
 
-        registry.newGauge(NUM_GENERIC_GROUPS, new com.yammer.metrics.core.Gauge<Long>() {
+        registry.newGauge(NUM_CLASSIC_GROUPS, new com.yammer.metrics.core.Gauge<Long>() {
             @Override
             public Long value() {
-                return numGenericGroups();
+                return numClassicGroups();
             }
         });
 
-        registry.newGauge(NUM_GENERIC_GROUPS_PREPARING_REBALANCE, new com.yammer.metrics.core.Gauge<Long>() {
+        registry.newGauge(NUM_CLASSIC_GROUPS_PREPARING_REBALANCE, new com.yammer.metrics.core.Gauge<Long>() {
             @Override
             public Long value() {
-                return numGenericGroups(ClassicGroupState.PREPARING_REBALANCE);
+                return numClassicGroups(ClassicGroupState.PREPARING_REBALANCE);
             }
         });
 
-        registry.newGauge(NUM_GENERIC_GROUPS_COMPLETING_REBALANCE, new com.yammer.metrics.core.Gauge<Long>() {
+        registry.newGauge(NUM_CLASSIC_GROUPS_COMPLETING_REBALANCE, new com.yammer.metrics.core.Gauge<Long>() {
             @Override
             public Long value() {
-                return numGenericGroups(ClassicGroupState.COMPLETING_REBALANCE);
+                return numClassicGroups(ClassicGroupState.COMPLETING_REBALANCE);
             }
         });
 
-        registry.newGauge(NUM_GENERIC_GROUPS_STABLE, new com.yammer.metrics.core.Gauge<Long>() {
+        registry.newGauge(NUM_CLASSIC_GROUPS_STABLE, new com.yammer.metrics.core.Gauge<Long>() {
             @Override
             public Long value() {
-                return numGenericGroups(ClassicGroupState.STABLE);
+                return numClassicGroups(ClassicGroupState.STABLE);
             }
         });
 
-        registry.newGauge(NUM_GENERIC_GROUPS_DEAD, new com.yammer.metrics.core.Gauge<Long>() {
+        registry.newGauge(NUM_CLASSIC_GROUPS_DEAD, new com.yammer.metrics.core.Gauge<Long>() {
             @Override
             public Long value() {
-                return numGenericGroups(ClassicGroupState.DEAD);
+                return numClassicGroups(ClassicGroupState.DEAD);
             }
         });
 
-        registry.newGauge(NUM_GENERIC_GROUPS_EMPTY, new com.yammer.metrics.core.Gauge<Long>() {
+        registry.newGauge(NUM_CLASSIC_GROUPS_EMPTY, new com.yammer.metrics.core.Gauge<Long>() {
             @Override
             public Long value() {
-                return numGenericGroups(ClassicGroupState.EMPTY);
+                return numClassicGroups(ClassicGroupState.EMPTY);
             }
         });
 
         metrics.addMetric(
             classicGroupCountMetricName,
-            (Gauge<Long>) (config, now) -> numGenericGroups()
+            (Gauge<Long>) (config, now) -> numClassicGroups()
         );
 
         metrics.addMetric(
