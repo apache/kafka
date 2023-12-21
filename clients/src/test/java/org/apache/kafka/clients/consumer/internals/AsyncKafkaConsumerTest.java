@@ -1129,7 +1129,7 @@ public class AsyncKafkaConsumerTest {
     public void testGroupRemoteAssignorUnusedInGenericProtocol() {
         final Properties props = requiredConsumerProperties();
         props.put(ConsumerConfig.GROUP_ID_CONFIG, "consumerGroupA");
-        props.put(ConsumerConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.GENERIC.name().toLowerCase(Locale.ROOT));
+        props.put(ConsumerConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.CLASSIC.name().toLowerCase(Locale.ROOT));
         props.put(ConsumerConfig.GROUP_REMOTE_ASSIGNOR_CONFIG, "someAssignor");
         final ConsumerConfig config = new ConsumerConfig(props);
         consumer = newConsumer(config);

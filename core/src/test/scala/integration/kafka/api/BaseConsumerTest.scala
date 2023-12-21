@@ -112,15 +112,15 @@ abstract class BaseConsumerTest extends AbstractConsumerTest {
 
 object BaseConsumerTest {
   // We want to test the following combinations:
-  // * ZooKeeper and the generic group protocol
-  // * KRaft and the generic group protocol
-  // * KRaft with the new group coordinator enabled and the generic group protocol
+  // * ZooKeeper and the classic group protocol
+  // * KRaft and the classic group protocol
+  // * KRaft with the new group coordinator enabled and the classic group protocol
   // * KRaft with the new group coordinator enabled and the consumer group protocol
   def getTestQuorumAndGroupProtocolParametersAll() : java.util.stream.Stream[Arguments] = {
     java.util.stream.Stream.of(
-        Arguments.of("zk", "generic"),
-        Arguments.of("kraft", "generic"),
-        Arguments.of("kraft+kip848", "generic"),
+        Arguments.of("zk", "classic"),
+        Arguments.of("kraft", "classic"),
+        Arguments.of("kraft+kip848", "classic"),
         Arguments.of("kraft+kip848", "consumer"))
   }
 
@@ -130,18 +130,18 @@ object BaseConsumerTest {
   // single combination are written using @CsvSource rather than the more elegant @MethodSource. 
   // def getTestQuorumAndGroupProtocolParametersZkOnly() : java.util.stream.Stream[Arguments] = {
   //   java.util.stream.Stream.of(
-  //       Arguments.of("zk", "generic"))
+  //       Arguments.of("zk", "classic"))
   // }
 
-  // For tests that only work with the generic group protocol, we want to test the following combinations:
-  // * ZooKeeper and the generic group protocol
-  // * KRaft and the generic group protocol
-  // * KRaft with the new group coordinator enabled and the generic group protocol
-  def getTestQuorumAndGroupProtocolParametersGenericGroupProtocolOnly() : java.util.stream.Stream[Arguments] = {
+  // For tests that only work with the classic group protocol, we want to test the following combinations:
+  // * ZooKeeper and the classic group protocol
+  // * KRaft and the classic group protocol
+  // * KRaft with the new group coordinator enabled and the classic group protocol
+  def getTestQuorumAndGroupProtocolParametersClassicGroupProtocolOnly() : java.util.stream.Stream[Arguments] = {
     java.util.stream.Stream.of(
-        Arguments.of("zk", "generic"),
-        Arguments.of("kraft", "generic"),
-        Arguments.of("kraft+kip848", "generic"))
+        Arguments.of("zk", "classic"),
+        Arguments.of("kraft", "classic"),
+        Arguments.of("kraft+kip848", "classic"))
   }
 
   val updateProducerCount = new AtomicInteger()
