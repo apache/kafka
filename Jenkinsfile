@@ -21,7 +21,7 @@ def doValidation() {
   // Run all the tasks associated with `check` except for `test` - the latter is executed via `doTest`
   sh """
     ./retry_zinc ./gradlew -PscalaVersion=$SCALA_VERSION clean check -x test \
-        --profile --continue -PxmlSpotBugsReport=true -PkeepAliveMode="session"
+        --no-daemon --profile --continue -PxmlSpotBugsReport=true -PkeepAliveMode="session"
   """
 }
 
@@ -31,7 +31,7 @@ def isChangeRequest(env) {
 
 def doTest(env, target = "test") {
   sh """./gradlew -PscalaVersion=$SCALA_VERSION ${target} \
-      --profile --continue -PkeepAliveMode="session" -PtestLoggingEvents=started,passed,skipped,failed \
+      --no-daemon --profile --continue -PkeepAliveMode="session" -PtestLoggingEvents=started,passed,skipped,failed \
       -PignoreFailures=true -PmaxParallelForks=2 -PmaxTestRetries=1 -PmaxTestRetryFailures=10"""
   junit '**/build/test-results/**/TEST-*.xml'
 }
