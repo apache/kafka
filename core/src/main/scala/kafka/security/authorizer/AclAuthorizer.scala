@@ -581,7 +581,6 @@ class AclAuthorizer extends Authorizer with Logging {
 
     try {
       val range =  IpRange.parse(acl.host)
-
       return range.contains(parse(host))
     } catch {
       case e: IllegalArgumentException => return false

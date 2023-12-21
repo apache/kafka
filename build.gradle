@@ -927,7 +927,6 @@ project(':core') {
 
     implementation project(':server-common')
     implementation project(':group-coordinator')
-    implementation group: 'net.ripe.ipresource', name: 'ipresource', version: '1.47'
     implementation project(':metadata')
     implementation project(':storage:storage-api')
     implementation project(':tools:tools-api')
@@ -937,6 +936,7 @@ project(':core') {
 
     implementation libs.argparse4j
     implementation libs.commonsValidator
+    implementation libs.ipresource
     implementation libs.jacksonDatabind
     implementation libs.jacksonModuleScala
     implementation libs.jacksonDataformatCsv
@@ -1248,7 +1248,7 @@ project(':metadata') {
     implementation project(':server-common')
     implementation project(':clients')
     implementation project(':raft')
-    implementation libs.jacksonDatabind
+    implementation libs.ipresource
     implementation libs.jacksonJDK8Datatypes
     implementation libs.metrics
     compileOnly libs.log4j

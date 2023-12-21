@@ -510,6 +510,57 @@ public class StandardAuthorizerTest {
             newRequestContext("bob", host2), actions));
     }
 
+    @Test
+    public void testHostAddressRangeAclValidation() throws Exception {
+        InetAddress host1 = InetAddress.getByName("192.168.1.3");
+        InetAddress host2 = InetAddress.getByName("192.168.1.25");
+        InetAddress host3 = InetAddress.getByName("192.168.10.2");
+        InetAddress host4 = InetAddress.getByName("fd0f:e1a0:99d6:3e44:0:0:0:1");
+        InetAddress host5 = InetAddress.getByName("fd0f:e1a0:99d6:3e44:0:0:1:0");
+        InetAddress host6 = InetAddress.getByName("fd0f:e1a0:99d6:3e45:0:0:1:0");
+        String cidr1BlockIPv4 = "192.168.1.0/24";
+        String cidr2BlockIPv4 = "192.168.1.1-192.168.1.10";
+        String cidr1BlockIPv6 = "fd0f:e1a0:99d6:3e44::/64";
+        String cidr2BlockIPv6 = "fd0f:e1a0:99d6:3e44:0:0:0:0-fd0f:e1a0:99d6:3e44:0:0:0:ffff";
+
+        StandardAuthorizer authorizer = createAndInitializeStandardAuthorizer();
+        List<StandardAcl> acls = Arrays.asList(
+                new StandardAcl(TOPIC, "foo", LITERAL, "User:alice", cidr1BlockIPv4, ALL, ALLOW),
+                new StandardAcl(TOPIC, "bar", LITERAL, "User:alice", cidr2BlockIPv4, ALL, ALLOW),
+                new StandardAcl(TOPIC, "foo", LITERAL, "User:bob", cidr1BlockIPv6, ALL, ALLOW),
+                new StandardAcl(TOPIC, "bar", LITERAL, "User:bob", cidr2BlockIPv6, ALL, ALLOW)
+        );
+
+        acls.forEach(acl -> {
+            StandardAclWithId aclWithId = withId(acl);
+            authorizer.addAcl(aclWithId.id(), aclWithId.acl());
+        });
+
+        List<Action> actions = Arrays.asList(
+                newAction(READ, TOPIC, "foo"),
+                newAction(WRITE, TOPIC, "bar")
+        );
+
+        assertEquals(Arrays.asList(ALLOWED, ALLOWED), authorizer.authorize(
+                newRequestContext("alice", host1), actions));
+
+        assertEquals(Arrays.asList(ALLOWED, DENIED), authorizer.authorize(
+                newRequestContext("alice", host2), actions));
+
+        assertEquals(Arrays.asList(DENIED, DENIED), authorizer.authorize(
+                newRequestContext("alice", host3), actions));
+
+        assertEquals(Arrays.asList(ALLOWED, ALLOWED), authorizer.authorize(
+                newRequestContext("bob", host4), actions));
+
+        assertEquals(Arrays.asList(ALLOWED, DENIED), authorizer.authorize(
+                newRequestContext("bob", host5), actions));
+
+        assertEquals(Arrays.asList(DENIED, DENIED), authorizer.authorize(
+                newRequestContext("bob", host6), actions));
+
+    }
+
     private AuthorizableRequestContext newRequestContext(String principal, InetAddress clientAddress) throws Exception {
         return new MockAuthorizableRequestContext.Builder()
             .setPrincipal(new KafkaPrincipal(USER_TYPE, principal))
