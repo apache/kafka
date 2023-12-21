@@ -54,7 +54,6 @@ import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
 import org.apache.kafka.common.errors.InvalidGroupIdException;
-import org.apache.kafka.common.errors.NetworkException;
 import org.apache.kafka.common.errors.RetriableException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.WakeupException;
@@ -447,18 +446,13 @@ public class AsyncKafkaConsumerTest {
     @Test
     public void testEnsureCommitSyncExecutedCommitAsyncCallbacks() {
         consumer = newConsumer();
-        final HashMap<TopicPartition, OffsetAndMetadata> offsets = mockTopicPartitionOffset();
-        MockCommitCallback callback = new MockCommitCallback();
-        assertDoesNotThrow(() -> consumer.commitAsync(offsets, callback));
+        KafkaException callbackException = new KafkaException("Async commit callback failed");
+        OffsetCommitCallback callback = (offsets, exception) -> {
+            throw callbackException;
+        };
 
-        final ArgumentCaptor<CommitApplicationEvent> commitEventCaptor = ArgumentCaptor.forClass(CommitApplicationEvent.class);
-        verify(applicationEventHandler).add(commitEventCaptor.capture());
-        final CommitApplicationEvent commitEvent = commitEventCaptor.getValue();
-        commitEvent.future().completeExceptionally(new NetworkException("Test exception"));
-
-        assertMockCommitCallbackInvoked(() -> consumer.commitSync(),
-            callback,
-            Errors.NETWORK_EXCEPTION);
+        assertDoesNotThrow(() -> consumer.commitAsync(new HashMap<>(), callback));
+        assertThrows(callbackException.getClass(), () -> consumer.commitSync());
     }
 
     @Test

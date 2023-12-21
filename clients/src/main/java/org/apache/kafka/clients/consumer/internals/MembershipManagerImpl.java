@@ -41,10 +41,12 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -114,15 +116,13 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
     /**
      * TopicPartition comparator based on topic name and partition id.
      */
-    final static TopicPartitionComparator TOPIC_PARTITION_COMPARATOR =
-            new TopicPartitionComparator();
+    final static TopicPartitionComparator TOPIC_PARTITION_COMPARATOR = new TopicPartitionComparator();
 
     /**
      * TopicIdPartition comparator based on topic name and partition id (ignoring ID while sorting,
      * as this is sorted mainly for logging purposes).
      */
-    final static TopicIdPartitionComparator TOPIC_ID_PARTITION_COMPARATOR =
-            new TopicIdPartitionComparator();
+    final static TopicIdPartitionComparator TOPIC_ID_PARTITION_COMPARATOR = new TopicIdPartitionComparator();
 
     /**
      * Group ID of the consumer group the member will be part of, provided when creating the current
@@ -134,6 +134,13 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
      * Group instance ID to be used by the member, provided when creating the current membership manager.
      */
     private final Optional<String> groupInstanceId;
+
+    /**
+     * Rebalance timeout. To be used as time limit for the commit request issued
+     * when a new assignment is received, that is retried until it succeeds, fails with a
+     * non-retriable error, it the time limit expires.
+     */
+    private final int rebalanceTimeoutMs;
 
     /**
      * Member ID assigned by the server to the member, received in a heartbeat response when
@@ -248,6 +255,13 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
     private boolean isRegisteredForMetadataUpdates;
 
     /**
+     * Registered listeners that will be notified whenever the memberID/epoch gets updated (valid
+     * values received from the broker, or values cleared due to member leaving the group, getting
+     * fenced or failing).
+     */
+    private final List<MemberStateListener> stateUpdatesListeners;
+
+    /**
      * Optional client telemetry reporter which sends client telemetry data to the broker. This
      * will be empty if the client telemetry feature is not enabled. This is provided to update
      * the group member id label when the member joins the group.
@@ -263,6 +277,7 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
 
     public MembershipManagerImpl(String groupId,
                                  Optional<String> groupInstanceId,
+                                 int rebalanceTimeoutMs,
                                  Optional<String> serverAssignor,
                                  SubscriptionState subscriptions,
                                  CommitRequestManager commitRequestManager,
@@ -282,7 +297,9 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
         this.assignmentReadyToReconcile = new TreeSet<>(TOPIC_ID_PARTITION_COMPARATOR);
         this.currentAssignment = new HashMap<>();
         this.log = logContext.logger(MembershipManagerImpl.class);
+        this.stateUpdatesListeners = new ArrayList<>();
         this.clientTelemetryReporter = clientTelemetryReporter;
+        this.rebalanceTimeoutMs = rebalanceTimeoutMs;
         this.backgroundEventHandler = backgroundEventHandler;
     }
 
@@ -361,8 +378,8 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
         }
 
         this.memberId = response.memberId();
-        this.memberEpoch = response.memberEpoch();
-        commitRequestManager.updateMemberInformation(this.memberId, this.memberEpoch);
+        updateMemberEpoch(response.memberEpoch());
+
         ConsumerGroupHeartbeatResponseData.Assignment assignment = response.assignment();
 
         if (assignment != null) {
@@ -483,6 +500,7 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
         MemberState previousState = state;
         transitionTo(MemberState.FATAL);
         log.error("Member {} with epoch {} transitioned to {} state", memberId, memberEpoch, MemberState.FATAL);
+        notifyEpochChange(Optional.empty(), Optional.empty());
 
         if (previousState == MemberState.UNSUBSCRIBED) {
             log.debug("Member {} with epoch {} got fatal error from the broker but it already " +
@@ -646,12 +664,21 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
                 memberId);
             return;
         }
-        memberEpoch = groupInstanceId.isPresent() ?
+        int leaveEpoch = groupInstanceId.isPresent() ?
                 ConsumerGroupHeartbeatRequest.LEAVE_GROUP_STATIC_MEMBER_EPOCH :
                 ConsumerGroupHeartbeatRequest.LEAVE_GROUP_MEMBER_EPOCH;
-        commitRequestManager.updateMemberInformation(this.memberId, this.memberEpoch);
+        updateMemberEpoch(leaveEpoch);
         currentAssignment = new HashMap<>();
         transitionTo(MemberState.LEAVING);
+    }
+
+    /**
+     * Call all listeners that are registered to get notified when the member epoch is updated.
+     * This also includes the latest member ID in the notification. If the member fails or leaves
+     * the group, this will be invoked with empty epoch and member ID.
+     */
+    private void notifyEpochChange(Optional<Integer> epoch, Optional<String> memberId) {
+        stateUpdatesListeners.forEach(stateListener -> stateListener.onMemberEpochUpdated(epoch, memberId));
     }
 
     /**
@@ -794,36 +821,76 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
                 revokedPartitions
         );
 
+        // Commit offsets if auto-commit enabled before reconciling a new assignment. Request will
+        // be retried until it succeeds, fails with non-retriable error, or timer expires.
+        CompletableFuture<Void> commitResult;
+
+        // Issue a commit request that will be retried until it succeeds, fails with a
+        // non-retriable error, or the time limit expires. Retry on stale member epoch error, in a
+        // best effort to commit the offsets in the case where the epoch might have changed while
+        // the current reconciliation is in process. Note this is using the rebalance timeout as
+        // it is the limit enforced by the broker to complete the reconciliation process.
+        commitResult = commitRequestManager.maybeAutoCommitAllConsumedNow(
+            Optional.of((long) rebalanceTimeoutMs),
+            true);
+
+        // Execute commit -> onPartitionsRevoked -> onPartitionsAssigned.
+        commitResult.whenComplete((commitReqResult, commitReqError) -> {
+            if (commitReqError != null) {
+                // The call to commit, that includes retry logic for retriable errors, failed to
+                // complete within the time boundaries (fatal error or retriable that did not
+                // recover). Proceed with the revocation.
+                log.error("Auto-commit request before reconciling new assignment failed. " +
+                    "Will proceed with the reconciliation anyway.", commitReqError);
+            } else {
+                log.debug("Auto-commit before reconciling new assignment completed successfully.");
+            }
+
+            revokeAndAssign(assignedTopicIdPartitions, revokedPartitions, addedPartitions);
+        });
+
+        return true;
+    }
+
+    /**
+     * Trigger onPartitionsRevoked callbacks if any partitions where revoked. If it succeeds,
+     * proceed to trigger the onPartitionsAssigned (even if no new partitions were added), and
+     * then complete the reconciliation by updating the assignment and making the appropriate state
+     * transition. Note that if any of the 2 callbacks fails, the reconciliation should fail.
+     */
+    private void revokeAndAssign(SortedSet<TopicIdPartition> assignedTopicIdPartitions,
+                                 SortedSet<TopicPartition> revokedPartitions,
+                                 SortedSet<TopicPartition> addedPartitions) {
         CompletableFuture<Void> revocationResult;
         if (!revokedPartitions.isEmpty()) {
             revocationResult = revokePartitions(revokedPartitions);
         } else {
             revocationResult = CompletableFuture.completedFuture(null);
-            // Reschedule the auto commit starting from now (new assignment received without any
-            // revocation).
-            commitRequestManager.resetAutoCommitTimer();
         }
 
         // Future that will complete when the full reconciliation process completes (revocation
         // and assignment, executed sequentially).
         CompletableFuture<Void> reconciliationResult =
-                revocationResult.thenCompose(__ -> {
-                    boolean memberHasRejoined = memberEpochOnReconciliationStart != memberEpoch;
-                    if (state == MemberState.RECONCILING && !memberHasRejoined) {
-                        // Apply assignment
-                        return assignPartitions(assignedTopicIdPartitions, addedPartitions);
-                    } else {
-                        log.debug("Revocation callback completed but the member already " +
-                                "transitioned out of the reconciling state for epoch {} into " +
-                                "{} state with epoch {}. Interrupting reconciliation as it's " +
-                                "not relevant anymore,", memberEpochOnReconciliationStart, state, memberEpoch);
-                        String reason = interruptedReconciliationErrorMessage();
-                        CompletableFuture<Void> res = new CompletableFuture<>();
-                        res.completeExceptionally(new KafkaException("Interrupting reconciliation" +
-                                " after revocation. " + reason));
-                        return res;
-                    }
-                });
+            revocationResult.thenCompose(__ -> {
+                boolean memberHasRejoined = memberEpochOnReconciliationStart != memberEpoch;
+                if (state == MemberState.RECONCILING && !memberHasRejoined) {
+                    // Reschedule the auto commit starting from now that member has a new assignment.
+                    commitRequestManager.resetAutoCommitTimer();
+
+                    // Apply assignment
+                    return assignPartitions(assignedTopicIdPartitions, addedPartitions);
+                } else {
+                    log.debug("Revocation callback completed but the member already " +
+                        "transitioned out of the reconciling state for epoch {} into " +
+                        "{} state with epoch {}. Interrupting reconciliation as it's " +
+                        "not relevant anymore,", memberEpochOnReconciliationStart, state, memberEpoch);
+                    String reason = interruptedReconciliationErrorMessage();
+                    CompletableFuture<Void> res = new CompletableFuture<>();
+                    res.completeExceptionally(new KafkaException("Interrupting reconciliation" +
+                        " after revocation. " + reason));
+                    return res;
+                }
+            });
 
         reconciliationResult.whenComplete((result, error) -> {
             markReconciliationCompleted();
@@ -846,12 +913,10 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
                 } else {
                     String reason = interruptedReconciliationErrorMessage();
                     log.error("Interrupting reconciliation after partitions assigned callback " +
-                            "completed. " + reason);
+                        "completed. " + reason);
                 }
             }
         });
-
-        return true;
     }
 
     // Visible for testing.
@@ -1007,47 +1072,29 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
         // request and user callback execution).
         CompletableFuture<Void> revocationResult = new CompletableFuture<>();
 
-        // Commit offsets if auto-commit enabled.
-        CompletableFuture<Void> commitResult;
-        if (commitRequestManager.autoCommitEnabled()) {
-            commitResult = commitRequestManager.maybeAutoCommitAllConsumed();
-        } else {
-            commitResult = CompletableFuture.completedFuture(null);
+        // At this point we expect to be in a middle of a revocation triggered from RECONCILING
+        // or PREPARE_LEAVING, but it could be the case that the member received a fatal error
+        // while waiting for the commit to complete. Check if that's the case and abort the
+        // revocation.
+        if (state == MemberState.FATAL) {
+            String errorMsg = String.format("Member %s with epoch %s received a fatal error " +
+                "while waiting for a revocation commit to complete. Will abort revocation " +
+                "without triggering user callback.", memberId, memberEpoch);
+            log.debug(errorMsg);
+            revocationResult.completeExceptionally(new KafkaException(errorMsg));
+            return revocationResult;
         }
 
-        commitResult.whenComplete((result, error) -> {
-            if (error != null) {
-                // Commit request failed (commit request manager internally retries on
-                // retriable errors, so at this point we assume this is non-retriable, but
-                // proceed with the revocation anyway).
-                log.error("Commit request before revocation failed with non-retriable error. Will" +
-                    " proceed with the revocation anyway.", error);
+        CompletableFuture<Void> userCallbackResult = invokeOnPartitionsRevokedCallback(revokedPartitions);
+        userCallbackResult.whenComplete((callbackResult, callbackError) -> {
+            if (callbackError != null) {
+                log.error("onPartitionsRevoked callback invocation failed for partitions {}",
+                    revokedPartitions, callbackError);
+                revocationResult.completeExceptionally(callbackError);
+            } else {
+                revocationResult.complete(null);
             }
 
-            // At this point we expect to be in a middle of a revocation triggered from RECONCILING
-            // or PREPARE_LEAVING, but it could be the case that the member received a fatal error
-            // while waiting for the commit to complete. Check if that's the case and abort the
-            // revocation.
-            if (state == MemberState.FATAL) {
-                String errorMsg = String.format("Member %s with epoch %s received a fatal error " +
-                        "while waiting for a revocation commit to complete. Will abort revocation " +
-                        "without triggering user callback.", memberId, memberEpoch);
-                log.debug(errorMsg);
-                revocationResult.completeExceptionally(new KafkaException(errorMsg));
-                return;
-            }
-
-            CompletableFuture<Void> userCallbackResult = invokeOnPartitionsRevokedCallback(revokedPartitions);
-            userCallbackResult.whenComplete((callbackResult, callbackError) -> {
-                if (callbackError != null) {
-                    log.error("onPartitionsRevoked callback invocation failed for partitions {}",
-                        revokedPartitions, callbackError);
-                    revocationResult.completeExceptionally(callbackError);
-                } else {
-                    revocationResult.complete(null);
-                }
-
-            });
         });
         return revocationResult;
     }
@@ -1208,8 +1255,21 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
     }
 
     private void resetEpoch() {
-        this.memberEpoch = ConsumerGroupHeartbeatRequest.JOIN_GROUP_MEMBER_EPOCH;
-        commitRequestManager.updateMemberInformation(this.memberId, this.memberEpoch);
+        updateMemberEpoch(ConsumerGroupHeartbeatRequest.JOIN_GROUP_MEMBER_EPOCH);
+    }
+
+    private void updateMemberEpoch(int newEpoch) {
+        boolean newEpochReceived = this.memberEpoch != newEpoch;
+        this.memberEpoch = newEpoch;
+        // Simply notify based on epoch change only, given that the member will never receive a
+        // new member ID without an epoch (member ID is only assigned when it joins the group).
+        if (newEpochReceived) {
+            if (memberEpoch > 0) {
+                notifyEpochChange(Optional.of(memberEpoch), Optional.ofNullable(memberId));
+            } else {
+                notifyEpochChange(Optional.empty(), Optional.empty());
+            }
+        }
     }
 
     /**
@@ -1277,5 +1337,19 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
         if (!assignmentReadyToReconcile.isEmpty()) {
             reconcile();
         }
+    }
+
+    /**
+     * Register a new listener that will be invoked whenever the member state changes, or a new
+     * member ID or epoch is received.
+     *
+     * @param listener Listener to invoke.
+     */
+    @Override
+    public void registerStateListener(MemberStateListener listener) {
+        if (listener == null) {
+            throw new IllegalArgumentException("State updates listener cannot be null");
+        }
+        this.stateUpdatesListeners.add(listener);
     }
 }

@@ -33,6 +33,7 @@ import org.slf4j.Logger;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Supplier;
@@ -149,7 +150,8 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
         }
 
         CommitRequestManager manager = requestManagers.commitRequestManager.get();
-        event.chain(manager.addOffsetCommitRequest(event.offsets()));
+        Optional<Long> expirationTimeMs = event.retryTimeoutMs().map(this::getExpirationTimeForTimeout);
+        event.chain(manager.addOffsetCommitRequest(event.offsets(), expirationTimeMs, false));
     }
 
     private void process(final FetchCommittedOffsetsApplicationEvent event) {
@@ -159,20 +161,26 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
             return;
         }
         CommitRequestManager manager = requestManagers.commitRequestManager.get();
-        event.chain(manager.addOffsetFetchRequest(event.partitions()));
+        long expirationTimeMs = getExpirationTimeForTimeout(event.timeout());
+        event.chain(manager.addOffsetFetchRequest(event.partitions(), expirationTimeMs));
     }
 
     private void process(final NewTopicsMetadataUpdateRequestEvent ignored) {
         metadata.requestUpdateForNewTopics();
     }
 
+
+    /**
+     * Commit all consumed if auto-commit is enabled. Note this will trigger an async commit,
+     * that will not be retried if the commit request fails.
+     */
     private void process(final AssignmentChangeApplicationEvent event) {
         if (!requestManagers.commitRequestManager.isPresent()) {
             return;
         }
         CommitRequestManager manager = requestManagers.commitRequestManager.get();
         manager.updateAutoCommitTimer(event.currentTimeMs());
-        manager.maybeAutoCommit(event.offsets());
+        manager.maybeAutoCommitAllConsumedAsync();
     }
 
     private void process(final ListOffsetsApplicationEvent event) {
@@ -228,8 +236,7 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
     private void process(final TopicMetadataApplicationEvent event) {
         final CompletableFuture<Map<String, List<PartitionInfo>>> future;
 
-        long expirationTimeMs =
-            (event.getTimeoutMs() == Long.MAX_VALUE) ? Long.MAX_VALUE : System.currentTimeMillis() + event.getTimeoutMs();
+        long expirationTimeMs = getExpirationTimeForTimeout(event.getTimeoutMs());
         if (event.isAllTopics()) {
             future = requestManagers.topicMetadataRequestManager.requestAllTopicsMetadata(expirationTimeMs);
         } else {
@@ -270,6 +277,19 @@ public class ApplicationEventProcessor extends EventProcessor<ApplicationEvent> 
         CompletableFuture<Void> future = membershipManager.leaveGroup();
         // The future will be completed on heartbeat sent
         event.chain(future);
+    }
+
+    /**
+     * @return Expiration time in milliseconds calculated with the current time plus the given
+     * timeout. Returns Long.MAX_VALUE if the expiration overflows it.
+     * Visible for testing.
+     */
+    long getExpirationTimeForTimeout(final long timeoutMs) {
+        long expiration = System.currentTimeMillis() + timeoutMs;
+        if (expiration < 0) {
+            return Long.MAX_VALUE;
+        }
+        return expiration;
     }
 
     /**
