@@ -31,7 +31,7 @@ import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.memory.MemoryPool
 import org.apache.kafka.common.message.ApiMessageType.ListenerType
 import org.apache.kafka.common.message.EnvelopeResponseData
-import org.apache.kafka.common.network.Send
+import org.apache.kafka.common.network.{ClientInformation, Send}
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.security.auth.KafkaPrincipal
@@ -254,6 +254,7 @@ object RequestChannel extends Logging {
       overrideMetricNames.foreach { metricName =>
         val m = metrics(metricName)
         m.requestRate(header.apiVersion).mark()
+        m.deprecatedRequestRate(header.apiKey, header.apiVersion, context.clientInformation).foreach(_.mark())
         m.requestQueueTimeHist.update(Math.round(requestQueueTimeMs))
         m.localTimeHist.update(Math.round(apiLocalTimeMs))
         m.remoteTimeHist.update(Math.round(apiRemoteTimeMs))
@@ -521,6 +522,7 @@ object RequestMetrics {
   val verifyPartitionsInTxnMetricName = ApiKeys.ADD_PARTITIONS_TO_TXN.name + "Verification"
 
   val RequestsPerSec = "RequestsPerSec"
+  val DeprecatedRequestsPerSec = "DeprecatedRequestsPerSec"
   val RequestQueueTimeMs = "RequestQueueTimeMs"
   val LocalTimeMs = "LocalTimeMs"
   val RemoteTimeMs = "RemoteTimeMs"
@@ -534,6 +536,8 @@ object RequestMetrics {
   val ErrorsPerSec = "ErrorsPerSec"
 }
 
+private case class DeprecatedRequestRateKey(version: Short, clientInformation: ClientInformation)
+
 class RequestMetrics(name: String) {
 
   import RequestMetrics._
@@ -542,6 +546,7 @@ class RequestMetrics(name: String) {
 
   val tags = Map("request" -> name).asJava
   val requestRateInternal = new Pool[Short, Meter]()
+  private val deprecatedRequestRateInternal = new Pool[DeprecatedRequestRateKey, Meter]()
   // time a request spent in a request queue
   val requestQueueTimeHist = metricsGroup.newHistogram(RequestQueueTimeMs, true, tags)
   // time a request takes to be processed at the local broker
@@ -578,11 +583,26 @@ class RequestMetrics(name: String) {
   def requestRate(version: Short): Meter =
     requestRateInternal.getAndMaybePut(version, metricsGroup.newMeter(RequestsPerSec, "requests", TimeUnit.SECONDS, tagsWithVersion(version)))
 
+  def deprecatedRequestRate(apiKey: ApiKeys, version: Short, clientInformation: ClientInformation): Option[Meter] =
+    if (apiKey.isVersionDeprecated(version)) {
+      Some(deprecatedRequestRateInternal.getAndMaybePut(DeprecatedRequestRateKey(version, clientInformation),
+        metricsGroup.newMeter(DeprecatedRequestsPerSec, "requests", TimeUnit.SECONDS, tagsWithVersionAndClientInfo(version, clientInformation))))
+    } else None
+
   private def tagsWithVersion(version: Short): java.util.Map[String, String] = {
-    val nameAndVersionTags = new util.HashMap[String, String](tags.size() + 1)
+    val nameAndVersionTags = new util.LinkedHashMap[String, String](math.ceil((tags.size() + 1) / 0.75).toInt) // take load factor into account
     nameAndVersionTags.putAll(tags)
     nameAndVersionTags.put("version", version.toString)
     nameAndVersionTags
+  }
+
+  private def tagsWithVersionAndClientInfo(version: Short, clientInformation: ClientInformation): java.util.Map[String, String] = {
+    val extendedTags = new util.LinkedHashMap[String, String](math.ceil((tags.size() + 3) / 0.75).toInt) // take load factor into account
+    extendedTags.putAll(tags)
+    extendedTags.put("version", version.toString)
+    extendedTags.put("clientSoftwareName", clientInformation.softwareName)
+    extendedTags.put("clientSoftwareVersion", clientInformation.softwareVersion)
+    extendedTags
   }
 
   class ErrorMeter(name: String, error: Errors) {
@@ -617,9 +637,10 @@ class RequestMetrics(name: String) {
   }
 
   def removeMetrics(): Unit = {
-    for (version <- requestRateInternal.keys) {
+    for (version <- requestRateInternal.keys)
       metricsGroup.removeMetric(RequestsPerSec, tagsWithVersion(version))
-    }
+    for (key <- deprecatedRequestRateInternal.keys)
+      metricsGroup.removeMetric(DeprecatedRequestsPerSec, tagsWithVersionAndClientInfo(key.version, key.clientInformation))
     metricsGroup.removeMetric(RequestQueueTimeMs, tags)
     metricsGroup.removeMetric(LocalTimeMs, tags)
     metricsGroup.removeMetric(RemoteTimeMs, tags)

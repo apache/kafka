@@ -31,6 +31,8 @@ public final class StructSpec {
 
     private final Versions versions;
 
+    private final Versions deprecatedVersions;
+
     private final List<FieldSpec> fields;
 
     private final boolean hasKeys;
@@ -38,6 +40,7 @@ public final class StructSpec {
     @JsonCreator
     public StructSpec(@JsonProperty("name") String name,
                       @JsonProperty("versions") String versions,
+                      @JsonProperty("deprecatedVersions") String deprecatedVersions,
                       @JsonProperty("fields") List<FieldSpec> fields) {
         this.name = Objects.requireNonNull(name);
         this.versions = Versions.parse(versions, null);
@@ -45,6 +48,7 @@ public final class StructSpec {
             throw new RuntimeException("You must specify the version of the " +
                     name + " structure.");
         }
+        this.deprecatedVersions = Versions.parse(deprecatedVersions, Versions.NONE);
         ArrayList<FieldSpec> newFields = new ArrayList<>();
         if (fields != null) {
             // Each field should have a unique tag ID (if the field has a tag ID).
@@ -86,6 +90,10 @@ public final class StructSpec {
     @JsonProperty
     public String versionsString() {
         return versions.toString();
+    }
+
+    public Versions deprecatedVersions() {
+        return deprecatedVersions;
     }
 
     @JsonProperty

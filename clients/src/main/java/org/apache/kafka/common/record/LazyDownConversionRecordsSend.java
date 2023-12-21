@@ -36,14 +36,14 @@ public final class LazyDownConversionRecordsSend extends RecordsSend<LazyDownCon
     private static final int MAX_READ_SIZE = 128 * 1024;
     static final int MIN_OVERFLOW_MESSAGE_LENGTH = Records.LOG_OVERHEAD;
 
-    private RecordConversionStats recordConversionStats;
+    private RecordValidationStats recordValidationStats;
     private RecordsSend convertedRecordsWriter;
     private Iterator<ConvertedRecords<?>> convertedRecordsIterator;
 
     public LazyDownConversionRecordsSend(LazyDownConversionRecords records) {
         super(records, records.sizeInBytes());
         convertedRecordsWriter = null;
-        recordConversionStats = new RecordConversionStats();
+        recordValidationStats = new RecordValidationStats();
         convertedRecordsIterator = records().iterator(MAX_READ_SIZE);
     }
 
@@ -77,7 +77,7 @@ public final class LazyDownConversionRecordsSend extends RecordsSend<LazyDownCon
                     // Get next chunk of down-converted messages
                     ConvertedRecords<?> recordsAndStats = convertedRecordsIterator.next();
                     convertedRecords = (MemoryRecords) recordsAndStats.records();
-                    recordConversionStats.add(recordsAndStats.recordConversionStats());
+                    recordValidationStats.add(recordsAndStats.recordConversionStats());
                     log.debug("Down-converted records for partition {} with length={}", topicPartition(), convertedRecords.sizeInBytes());
                 } else {
                     convertedRecords = buildOverflowBatch(remaining);
@@ -97,8 +97,8 @@ public final class LazyDownConversionRecordsSend extends RecordsSend<LazyDownCon
         return (int) convertedRecordsWriter.writeTo(channel);
     }
 
-    public RecordConversionStats recordConversionStats() {
-        return recordConversionStats;
+    public RecordValidationStats recordConversionStats() {
+        return recordValidationStats;
     }
 
     public TopicPartition topicPartition() {

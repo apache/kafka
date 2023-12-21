@@ -801,7 +801,7 @@ public class MemoryRecordsBuilderTest {
         }
     }
 
-    private void verifyRecordsProcessingStats(CompressionType compressionType, RecordConversionStats processingStats,
+    private void verifyRecordsProcessingStats(CompressionType compressionType, RecordValidationStats processingStats,
                                               int numRecords, int numRecordsConverted, long finalBytes,
                                               long preConvertedBytes) {
         assertNotNull(processingStats, "Records processing info is null");

@@ -17,6 +17,7 @@
 
 package org.apache.kafka.image;
 
+import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.metadata.PartitionChangeRecord;
@@ -131,6 +132,7 @@ public final class TopicDelta {
         Map<TopicPartition, LocalReplicaChanges.PartitionInfo> leaders = new HashMap<>();
         Map<TopicPartition, LocalReplicaChanges.PartitionInfo> followers = new HashMap<>();
         Map<String, Uuid> topicIds = new HashMap<>();
+        Map<TopicIdPartition, Uuid> directoryIds = new HashMap<>();
 
         for (Entry<Integer, PartitionRegistration> entry : partitionChanges.entrySet()) {
             if (!Replicas.contains(entry.getValue().replicas, brokerId)) {
@@ -160,9 +162,25 @@ public final class TopicDelta {
                     topicIds.putIfAbsent(name(), id());
                 }
             }
+
+            try {
+                PartitionRegistration prevPartition = image.partitions().get(entry.getKey());
+                if (
+                        prevPartition == null ||
+                        prevPartition.directories == null ||
+                        prevPartition.directory(brokerId) != entry.getValue().directory(brokerId)
+                ) {
+                    directoryIds.put(
+                        new TopicIdPartition(id(), new TopicPartition(name(), entry.getKey())),
+                        entry.getValue().directory(brokerId)
+                    );
+                }
+            } catch (IllegalArgumentException e) {
+                // Do nothing if broker isn't part of the replica set.
+            }
         }
 
-        return new LocalReplicaChanges(deletes, leaders, followers, topicIds);
+        return new LocalReplicaChanges(deletes, leaders, followers, topicIds, directoryIds);
     }
 
     @Override
