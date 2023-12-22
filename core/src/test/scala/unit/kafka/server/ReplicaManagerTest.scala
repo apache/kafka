@@ -62,9 +62,9 @@ import org.apache.kafka.server.common.MetadataVersion.IBP_2_6_IV0
 import org.apache.kafka.server.log.remote.storage.{NoOpRemoteLogMetadataManager, NoOpRemoteStorageManager, RemoteLogManagerConfig, RemoteLogSegmentMetadata, RemoteStorageException, RemoteStorageManager}
 import org.apache.kafka.server.metrics.{KafkaMetricsGroup, KafkaYammerMetrics}
 import org.apache.kafka.server.util.{MockScheduler, MockTime}
-import org.apache.kafka.storage.internals.log.{AppendOrigin, FetchDataInfo, FetchIsolation, FetchParams, FetchPartitionData, LogConfig, LogDirFailureChannel, LogOffsetMetadata, LogSegments, LogStartOffsetIncrementReason, ProducerStateManager, ProducerStateManagerConfig, RemoteStorageFetchInfo, VerificationGuard}
+import org.apache.kafka.storage.internals.log.{AppendOrigin, FetchDataInfo, FetchIsolation, FetchParams, FetchPartitionData, LogConfig, LogDirFailureChannel, LogOffsetMetadata, LogOffsetSnapshot, LogSegments, LogStartOffsetIncrementReason, ProducerStateManager, ProducerStateManagerConfig, RemoteStorageFetchInfo, VerificationGuard}
 import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
+import org.junit.jupiter.api.{AfterAll, AfterEach, BeforeEach, Test}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{EnumSource, ValueSource}
 import com.yammer.metrics.core.{Gauge, Meter}
@@ -77,12 +77,19 @@ import org.apache.kafka.storage.internals.checkpoint.PartitionMetadataFile
 import org.mockito.invocation.InvocationOnMock
 import org.mockito.stubbing.Answer
 import org.mockito.{ArgumentCaptor, ArgumentMatchers}
-import org.mockito.ArgumentMatchers.{any, anyInt, anyLong, anyMap, anySet, anyString}
+import org.mockito.ArgumentMatchers.{any, anyBoolean, anyInt, anyLong, anyMap, anySet, anyString}
 import org.mockito.Mockito.{atLeastOnce, doAnswer, doReturn, mock, mockConstruction, never, reset, spy, times, verify, verifyNoInteractions, verifyNoMoreInteractions, when}
 
 import scala.collection.{Map, Seq, mutable}
 import scala.compat.java8.OptionConverters.RichOptionForJava8
 import scala.jdk.CollectionConverters._
+
+object ReplicaManagerTest {
+  @AfterAll
+  def tearDownClass(): Unit = {
+    TestUtils.clearYammerMetrics()
+  }
+}
 
 class ReplicaManagerTest {
 
@@ -109,6 +116,9 @@ class ReplicaManagerTest {
   private val controllerEpoch = 0
   private val brokerEpoch = 0L
 
+  // These metrics are static and once we remove them after each test, they won't be created and verified anymore
+  private val metricsToBeDeletedInTheEnd = Set("kafka.server:type=DelayedRemoteFetchMetrics,name=ExpiresPerSec")
+
   @BeforeEach
   def setUp(): Unit = {
     val props = TestUtils.createBrokerConfig(1, TestUtils.MockZkConnect)
@@ -127,7 +137,7 @@ class ReplicaManagerTest {
 
   @AfterEach
   def tearDown(): Unit = {
-    TestUtils.clearYammerMetrics()
+    TestUtils.clearYammerMetricsExcept(metricsToBeDeletedInTheEnd)
     Option(quotaManager).foreach(_.shutdown())
     metrics.close()
     // validate that the shutdown is working correctly by ensuring no lingering threads.
@@ -4010,6 +4020,116 @@ class ReplicaManagerTest {
       doneLatch.countDown()
     } finally {
       replicaManager.shutdown(checkpointHW = false)
+    }
+  }
+
+  @Test
+  def testRemoteFetchExpiresPerSecMetric(): Unit = {
+    val replicaId = -1
+    val tp0 = new TopicPartition(topic, 0)
+    val tidp0 = new TopicIdPartition(topicId, tp0)
+
+    val props = new Properties()
+    props.put("zookeeper.connect", "test")
+    props.put(RemoteLogManagerConfig.REMOTE_LOG_STORAGE_SYSTEM_ENABLE_PROP, true.toString)
+    props.put(RemoteLogManagerConfig.REMOTE_STORAGE_MANAGER_CLASS_NAME_PROP, classOf[NoOpRemoteStorageManager].getName)
+    props.put(RemoteLogManagerConfig.REMOTE_LOG_METADATA_MANAGER_CLASS_NAME_PROP, classOf[NoOpRemoteLogMetadataManager].getName)
+    val config = new AbstractConfig(RemoteLogManagerConfig.CONFIG_DEF, props)
+    val remoteLogManagerConfig = new RemoteLogManagerConfig(config)
+    val dummyLog = mock(classOf[UnifiedLog])
+    val brokerTopicStats = new BrokerTopicStats(java.util.Optional.of(KafkaConfig.fromProps(props)))
+    val remoteLogManager = new RemoteLogManager(
+      remoteLogManagerConfig,
+      0,
+      TestUtils.tempRelativeDir("data").getAbsolutePath,
+      "clusterId",
+      time,
+      _ => Optional.of(dummyLog),
+      (TopicPartition, Long) => {},
+      brokerTopicStats)
+    val spyRLM = spy(remoteLogManager)
+    val timer = new MockTimer(time)
+
+    val replicaManager = setupReplicaManagerWithMockedPurgatories(timer, aliveBrokerIds = Seq(0, 1, 2), enableRemoteStorage = true, shouldMockLog = true, remoteLogManager = Some(spyRLM))
+
+    try {
+      val offsetCheckpoints = new LazyOffsetCheckpoints(replicaManager.highWatermarkCheckpoints)
+      replicaManager.createPartition(tp0).createLogIfNotExists(isNew = false, isFutureReplica = false, offsetCheckpoints, None)
+      val partition0Replicas = Seq[Integer](0, 1).asJava
+      val topicIds = Map(tp0.topic -> topicId).asJava
+      val leaderEpoch = 0
+      val leaderAndIsrRequest = new LeaderAndIsrRequest.Builder(ApiKeys.LEADER_AND_ISR.latestVersion, 0, 0, brokerEpoch,
+        Seq(
+          new LeaderAndIsrPartitionState()
+            .setTopicName(tp0.topic)
+            .setPartitionIndex(tp0.partition)
+            .setControllerEpoch(0)
+            .setLeader(leaderEpoch)
+            .setLeaderEpoch(0)
+            .setIsr(partition0Replicas)
+            .setPartitionEpoch(0)
+            .setReplicas(partition0Replicas)
+            .setIsNew(true)
+        ).asJava,
+        topicIds,
+        Set(new Node(0, "host1", 0), new Node(1, "host2", 1)).asJava).build()
+      replicaManager.becomeLeaderOrFollower(0, leaderAndIsrRequest, (_, _) => ())
+
+      val mockLog = replicaManager.getPartitionOrException(tp0).log.get
+      when(mockLog.endOffsetForEpoch(anyInt())).thenReturn(Some(new OffsetAndEpoch(1, 1)))
+      when(mockLog.read(anyLong(), anyInt(), any(), anyBoolean())).thenReturn(new FetchDataInfo(
+        new LogOffsetMetadata(0L, 0L, 0),
+        MemoryRecords.EMPTY
+      ))
+      val endOffsetMetadata = new LogOffsetMetadata(100L, 0L, 500)
+      when(mockLog.fetchOffsetSnapshot).thenReturn(new LogOffsetSnapshot(
+        0L,
+        endOffsetMetadata,
+        endOffsetMetadata,
+        endOffsetMetadata))
+
+      val params = new FetchParams(ApiKeys.FETCH.latestVersion, replicaId, 1, 1000, 10, 100, FetchIsolation.LOG_END, None.asJava)
+      val fetchOffset = 1
+
+      def fetchCallback(responseStatus: Seq[(TopicIdPartition, FetchPartitionData)]): Unit = {
+        assertEquals(1, responseStatus.size)
+        assertEquals(tidp0, responseStatus.toMap.keySet.head)
+      }
+
+      val latch = new CountDownLatch(1)
+      doAnswer(_ => {
+        // wait until verification completes
+        latch.await(5000, TimeUnit.MILLISECONDS)
+        mock(classOf[FetchDataInfo])
+      }).when(spyRLM).read(any())
+
+      // Get the current type=DelayedRemoteFetchMetrics,name=ExpiresPerSec metric value before fetching
+      val curExpiresPerSec = safeYammerMetricValue("type=DelayedRemoteFetchMetrics,name=ExpiresPerSec").asInstanceOf[Long]
+      replicaManager.fetchMessages(params, Seq(tidp0 -> new PartitionData(topicId, fetchOffset, 0, 100000, Optional.of[Integer](leaderEpoch), Optional.of[Integer](leaderEpoch))), UnboundedQuota, fetchCallback)
+      // advancing the clock to expire the delayed remote fetch
+      timer.advanceClock(2000L)
+
+      // verify the metric value is incremented since the delayed remote fetch is expired
+      TestUtils.waitUntilTrue(() => curExpiresPerSec + 1 == safeYammerMetricValue("type=DelayedRemoteFetchMetrics,name=ExpiresPerSec").asInstanceOf[Long],
+        "The ExpiresPerSec value is not incremented. Current value is: " +
+          safeYammerMetricValue("type=DelayedRemoteFetchMetrics,name=ExpiresPerSec").asInstanceOf[Long])
+      latch.countDown()
+    } finally {
+      replicaManager.shutdown(checkpointHW = false)
+    }
+  }
+
+  private def safeYammerMetricValue(name: String): Any = {
+    val allMetrics = KafkaYammerMetrics.defaultRegistry.allMetrics.asScala
+    val opt = allMetrics.find { case (n, _) => n.getMBeanName.endsWith(name) }
+    if (opt.isEmpty)
+      0L
+    else {
+      opt.get._2 match {
+        case m: Gauge[_] => m.value
+        case m: Meter => m.count()
+        case m => fail(s"Unexpected broker metric of class ${m.getClass}")
+      }
     }
   }
 
