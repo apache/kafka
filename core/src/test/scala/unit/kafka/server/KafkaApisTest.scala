@@ -99,6 +99,7 @@ import org.apache.kafka.coordinator.group.GroupCoordinator
 import org.apache.kafka.server.ClientMetricsManager
 import org.apache.kafka.server.common.{Features, MetadataVersion}
 import org.apache.kafka.server.common.MetadataVersion.{IBP_0_10_2_IV0, IBP_2_2_IV1}
+import org.apache.kafka.server.config.ConfigType
 import org.apache.kafka.server.metrics.ClientMetricsTestUtils
 import org.apache.kafka.server.util.{FutureUtils, MockTime}
 import org.apache.kafka.storage.internals.log.{AppendOrigin, FetchParams, FetchPartitionData, LogConfig}
@@ -3958,7 +3959,7 @@ class KafkaApisTest {
     // Specific mock on zkClient for this use case
     // Expect it's never called to do auto topic creation
     when(zkClient.setOrCreateEntityConfigs(
-      ArgumentMatchers.eq(ConfigType.Topic),
+      ArgumentMatchers.eq(ConfigType.TOPIC),
       anyString,
       any[Properties]
     )).thenAnswer(_ => {
