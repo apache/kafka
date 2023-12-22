@@ -254,9 +254,9 @@ public class JsonConverter implements Converter, HeaderConverter, Versioned {
 
         deserializer = new JsonDeserializer(
             mkSet(
-                    // this ensures that the JsonDeserializer maintains full precision on
-                    // floating point numbers that cannot fit into float64
-                    DeserializationFeature.USE_BIG_DECIMAL_FOR_FLOATS
+                // this ensures that the JsonDeserializer maintains full precision on
+                // floating point numbers that cannot fit into float64
+                DeserializationFeature.USE_BIG_DECIMAL_FOR_FLOATS
             ),
             JSON_NODE_FACTORY,
             enableModules
