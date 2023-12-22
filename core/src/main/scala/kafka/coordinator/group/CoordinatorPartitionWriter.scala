@@ -21,9 +21,10 @@ import kafka.server.{ActionQueue, ReplicaManager}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.RecordTooLargeException
 import org.apache.kafka.common.protocol.Errors
-import org.apache.kafka.common.record.{CompressionType, MemoryRecords, RecordBatch, TimestampType}
+import org.apache.kafka.common.record.{CompressionType, ControlRecordType, EndTransactionMarker, MemoryRecords, RecordBatch, TimestampType}
 import org.apache.kafka.common.record.Record.EMPTY_HEADERS
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
+import org.apache.kafka.common.requests.TransactionResult
 import org.apache.kafka.common.utils.{BufferSupplier, Time}
 import org.apache.kafka.coordinator.group.runtime.PartitionWriter
 import org.apache.kafka.storage.internals.log.AppendOrigin
@@ -160,28 +161,7 @@ class CoordinatorPartitionWriter[T](
               s"in append to partition $tp which exceeds the maximum configured size of $maxBatchSize.")
           }
 
-          var appendResults: Map[TopicPartition, PartitionResponse] = Map.empty
-          replicaManager.appendRecords(
-            timeout = 0L,
-            requiredAcks = 1,
-            internalTopicsAllowed = true,
-            origin = AppendOrigin.COORDINATOR,
-            entriesPerPartition = Map(tp -> recordsBuilder.build()),
-            responseCallback = results => appendResults = results,
-            // We can directly complete the purgatories here because we don't hold
-            // any conflicting locks.
-            actionQueue = directActionQueue
-          )
-
-          val partitionResult = appendResults.getOrElse(tp,
-            throw new IllegalStateException(s"Append status $appendResults should have partition $tp."))
-
-          if (partitionResult.error != Errors.NONE) {
-            throw partitionResult.error.exception()
-          }
-
-          // Required offset.
-          partitionResult.lastOffset + 1
+          internalAppend(tp, recordsBuilder.build())
         } finally {
           bufferSupplier.release(buffer)
         }
@@ -189,5 +169,63 @@ class CoordinatorPartitionWriter[T](
       case None =>
         throw Errors.NOT_LEADER_OR_FOLLOWER.exception()
     }
+  }
+
+  /**
+   * Write the transaction end marker.
+   *
+   * @param tp                The partition to write records to.
+   * @param producerId        The producer id.
+   * @param producerEpoch     The producer epoch.
+   * @param coordinatorEpoch  The epoch of the transaction coordinator.
+   * @param result            The transaction result.
+   * @return The log end offset right after the written records.
+   * @throws KafkaException Any KafkaException caught during the write operation.
+   */
+  override def appendEndTransactionMarker(
+    tp: TopicPartition,
+    producerId: Long,
+    producerEpoch: Short,
+    coordinatorEpoch: Int,
+    result: TransactionResult
+  ): Long = {
+    val controlRecordType = result match {
+      case TransactionResult.COMMIT => ControlRecordType.COMMIT
+      case TransactionResult.ABORT => ControlRecordType.ABORT
+    }
+
+    internalAppend(tp, MemoryRecords.withEndTransactionMarker(
+      producerId,
+      producerEpoch,
+      new EndTransactionMarker(controlRecordType, coordinatorEpoch)
+    ))
+  }
+
+  private def internalAppend(
+    tp: TopicPartition,
+    memoryRecords: MemoryRecords
+  ): Long = {
+    var appendResults: Map[TopicPartition, PartitionResponse] = Map.empty
+    replicaManager.appendRecords(
+      timeout = 0L,
+      requiredAcks = 1,
+      internalTopicsAllowed = true,
+      origin = AppendOrigin.COORDINATOR,
+      entriesPerPartition = Map(tp -> memoryRecords),
+      responseCallback = results => appendResults = results,
+      // We can directly complete the purgatories here because we don't hold
+      // any conflicting locks.
+      actionQueue = directActionQueue
+    )
+
+    val partitionResult = appendResults.getOrElse(tp,
+      throw new IllegalStateException(s"Append status $appendResults should have partition $tp."))
+
+    if (partitionResult.error != Errors.NONE) {
+      throw partitionResult.error.exception()
+    }
+
+    // Required offset.
+    partitionResult.lastOffset + 1
   }
 }

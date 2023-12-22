@@ -1313,7 +1313,6 @@ public class IntegrationTestUtils {
                                                                  final int maxMessages) {
         final List<ConsumerRecord<K, V>> consumerRecords;
         consumer.subscribe(singletonList(topic));
-        System.out.println("Got assignment:" + consumer.assignment());
         final int pollIntervalMs = 100;
         consumerRecords = new ArrayList<>();
         int totalPollTimeMs = 0;

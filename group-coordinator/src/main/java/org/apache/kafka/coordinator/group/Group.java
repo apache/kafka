@@ -28,7 +28,7 @@ import java.util.Optional;
 public interface Group {
     enum GroupType {
         CONSUMER("consumer"),
-        GENERIC("generic");
+        CLASSIC("classic");
 
         private final String name;
 
