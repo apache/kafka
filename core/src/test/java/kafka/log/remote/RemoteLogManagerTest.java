@@ -724,6 +724,7 @@ public class RemoteLogManagerTest {
         // before running tasks, the remote log manager tasks should be all idle and the remote log metadata count should be 0
         assertEquals(1.0, (double) yammerMetricValue("RemoteLogManagerTasksAvgIdlePercent"));
         assertEquals(0, safeLongYammerMetricValue("RemoteLogMetadataCount,topic=" + leaderTopicIdPartition.topic()));
+        assertEquals(0, safeLongYammerMetricValue("RemoteLogSizeBytes,topic=" + leaderTopicIdPartition.topic()));
         remoteLogManager.onLeadershipChange(Collections.singleton(mockLeaderPartition), Collections.singleton(mockFollowerPartition), topicIds);
         assertTrue((double) yammerMetricValue("RemoteLogManagerTasksAvgIdlePercent") < 1.0);
 
@@ -732,10 +733,19 @@ public class RemoteLogManagerTest {
         // Now, the `RemoteLogMetadataCount` should set to the expected value
         TestUtils.waitForCondition(() -> safeLongYammerMetricValue("RemoteLogMetadataCount,topic=" + leaderTopicIdPartition.topic()) == segmentCount,
                 "Didn't show the expected RemoteLogMetadataCount metric value.");
+
+        TestUtils.waitForCondition(
+                () -> 3072 == safeLongYammerMetricValue("RemoteLogSizeBytes,topic=" + leaderTopicIdPartition.topic()),
+                String.format("Expected to find 3072 for RemoteLogSizeBytes metric value, but found %d", safeLongYammerMetricValue("RemoteLogSizeBytes,topic=" + leaderTopicIdPartition.topic())));
+
         remoteLogMetadataCountLatch.countDown();
 
         TestUtils.waitForCondition(() -> safeLongYammerMetricValue("RemoteLogMetadataCount,topic=" + leaderTopicIdPartition.topic()) == 0,
                 "Didn't reset to 0 for RemoteLogMetadataCount metric value when no remote log metadata.");
+
+        TestUtils.waitForCondition(
+                () -> 0 == safeLongYammerMetricValue("RemoteLogSizeBytes,topic=" + leaderTopicIdPartition.topic()),
+                String.format("Didn't reset to 0 for RemoteLogSizeBytes metric value when no remote log metadata - %d.", safeLongYammerMetricValue("RemoteLogSizeBytes,topic=" + leaderTopicIdPartition.topic())));
     }
 
     @Test
