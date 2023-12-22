@@ -352,7 +352,7 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
 
     @Override
     public boolean isStaled() {
-        return state == MemberState.STALED;
+        return state == MemberState.STALE;
     }
 
     /**
@@ -698,6 +698,7 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
         MemberState state = state();
         if (isStaled()) {
             log.debug("Member {} is staled and is therefore leaving the group.  It will rejoin upon the next poll.", memberEpoch);
+            // TODO: Integrate partition revocation/loss callback
             transitionToJoining();
             return;
         }
@@ -752,10 +753,11 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
      * the existing subscriptions on the next time user polls.
      */
     @Override
-    public void transitionToStaled() {
+    public void transitionToStale() {
         memberEpoch = ConsumerGroupHeartbeatRequest.LEAVE_GROUP_MEMBER_EPOCH;
-        currentAssignment.clear();
-        transitionTo(MemberState.STALED);
+        // Clear the current assignment and subscribed partitions before member sending the leave group
+        updateSubscription(new TreeSet<>(TOPIC_ID_PARTITION_COMPARATOR), true);
+        transitionTo(MemberState.STALE);
     }
 
     /**
