@@ -168,4 +168,10 @@ public interface MembershipManager {
      * the member to STALE.
      */
     void transitionToStaled();
+
+    /**
+     * Register a listener that will be called whenever the member state changes due to
+     * transitions of new data received from the server, as defined in {@link MemberStateListener}.
+     */
+    void registerStateListener(MemberStateListener listener);
 }

@@ -121,7 +121,8 @@ public class HeartbeatRequestManagerTest {
         cleanup();
 
         ConsumerTestBuilder.GroupInformation gi = new ConsumerTestBuilder.GroupInformation(
-                new GroupState(DEFAULT_GROUP_ID, groupInstanceId),
+                DEFAULT_GROUP_ID,
+                groupInstanceId,
                 0,
                 0.0,
                 Optional.of(DEFAULT_REMOTE_ASSIGNOR)

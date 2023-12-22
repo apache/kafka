@@ -14,30 +14,24 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.clients.consumer;
 
-import java.util.Locale;
+package org.apache.kafka.clients.consumer.internals;
 
-public enum GroupProtocol {
-    /** Classic group protocol.  */
-    CLASSIC("CLASSIC"),
+import java.util.Optional;
 
-    /** Consumer group protocol */
-    CONSUMER("CONSUMER");
-
-    /**
-     * String representation of the group protocol.
-     */
-    public final String name;
-
-    GroupProtocol(final String name) {
-        this.name = name;
-    }
+/**
+ * Listener for getting notified of member ID and epoch changes.
+ */
+public interface MemberStateListener {
 
     /**
-     * Case-insensitive group protocol lookup by string name.
+     * Called whenever member ID or epoch change with new values received from the broker or
+     * cleared if the member is not part of the group anymore (when it gets fenced, leaves the
+     * group or fails).
+     *
+     * @param memberEpoch New member epoch received from the broker. Empty if the member is
+     *                    not part of the group anymore.
+     * @param memberId    Current member ID. Empty if the member is not part of the group.
      */
-    public static GroupProtocol of(final String name) {
-        return GroupProtocol.valueOf(name.toUpperCase(Locale.ROOT));
-    }
+    void onMemberEpochUpdated(Optional<Integer> memberEpoch, Optional<String> memberId);
 }

@@ -724,6 +724,7 @@ public class RemoteLogManagerTest {
         // before running tasks, the remote log manager tasks should be all idle and the remote log metadata count should be 0
         assertEquals(1.0, (double) yammerMetricValue("RemoteLogManagerTasksAvgIdlePercent"));
         assertEquals(0, safeLongYammerMetricValue("RemoteLogMetadataCount,topic=" + leaderTopicIdPartition.topic()));
+        assertEquals(0, safeLongYammerMetricValue("RemoteLogSizeBytes,topic=" + leaderTopicIdPartition.topic()));
         remoteLogManager.onLeadershipChange(Collections.singleton(mockLeaderPartition), Collections.singleton(mockFollowerPartition), topicIds);
         assertTrue((double) yammerMetricValue("RemoteLogManagerTasksAvgIdlePercent") < 1.0);
 
@@ -732,10 +733,19 @@ public class RemoteLogManagerTest {
         // Now, the `RemoteLogMetadataCount` should set to the expected value
         TestUtils.waitForCondition(() -> safeLongYammerMetricValue("RemoteLogMetadataCount,topic=" + leaderTopicIdPartition.topic()) == segmentCount,
                 "Didn't show the expected RemoteLogMetadataCount metric value.");
+
+        TestUtils.waitForCondition(
+                () -> 3072 == safeLongYammerMetricValue("RemoteLogSizeBytes,topic=" + leaderTopicIdPartition.topic()),
+                String.format("Expected to find 3072 for RemoteLogSizeBytes metric value, but found %d", safeLongYammerMetricValue("RemoteLogSizeBytes,topic=" + leaderTopicIdPartition.topic())));
+
         remoteLogMetadataCountLatch.countDown();
 
         TestUtils.waitForCondition(() -> safeLongYammerMetricValue("RemoteLogMetadataCount,topic=" + leaderTopicIdPartition.topic()) == 0,
                 "Didn't reset to 0 for RemoteLogMetadataCount metric value when no remote log metadata.");
+
+        TestUtils.waitForCondition(
+                () -> 0 == safeLongYammerMetricValue("RemoteLogSizeBytes,topic=" + leaderTopicIdPartition.topic()),
+                String.format("Didn't reset to 0 for RemoteLogSizeBytes metric value when no remote log metadata - %d.", safeLongYammerMetricValue("RemoteLogSizeBytes,topic=" + leaderTopicIdPartition.topic())));
     }
 
     @Test
@@ -815,10 +825,16 @@ public class RemoteLogManagerTest {
         when(remoteLogMetadataManager.listRemoteLogSegments(leaderTopicIdPartition)).thenReturn(iterator);
         when(remoteLogMetadataManager.listRemoteLogSegments(leaderTopicIdPartition, 2)).thenReturn(iterator);
         when(remoteLogMetadataManager.listRemoteLogSegments(leaderTopicIdPartition, 1)).thenReturn(iterator);
+
+        CountDownLatch remoteLogSizeComputationTimeLatch = new CountDownLatch(1);
         when(remoteLogMetadataManager.listRemoteLogSegments(leaderTopicIdPartition, 0)).thenAnswer(ans -> {
             // advance the mock timer 1000ms to add value for RemoteLogSizeComputationTime metric
             time.sleep(1000);
             return iterator;
+        }).thenAnswer(ans -> {
+            // wait for verifying RemoteLogSizeComputationTime metric value.
+            remoteLogSizeComputationTimeLatch.await(5000, TimeUnit.MILLISECONDS);
+            return Collections.emptyIterator();
         });
 
         CountDownLatch latch = new CountDownLatch(1);
@@ -832,19 +848,26 @@ public class RemoteLogManagerTest {
 
         when(mockLog.onlyLocalLogSegmentsSize()).thenReturn(175L, 100L);
         when(activeSegment.size()).thenReturn(100);
+        when(mockLog.onlyLocalLogSegmentsCount()).thenReturn(1L);
 
         // before running tasks, the metric should not be registered
         assertThrows(NoSuchElementException.class, () -> yammerMetricValue("RemoteCopyLagBytes"));
+        assertThrows(NoSuchElementException.class, () -> yammerMetricValue("RemoteCopyLagSegments"));
+        assertThrows(NoSuchElementException.class, () -> yammerMetricValue("RemoteLogSizeComputationTime"));
         remoteLogManager.onLeadershipChange(Collections.singleton(mockLeaderPartition), Collections.emptySet(), topicIds);
         TestUtils.waitForCondition(
                 () -> 75 == safeLongYammerMetricValue("RemoteCopyLagBytes"),
                 String.format("Expected to find 75 for RemoteCopyLagBytes metric value, but found %d", safeLongYammerMetricValue("RemoteCopyLagBytes")));
+        TestUtils.waitForCondition(
+                () -> 1 == safeLongYammerMetricValue("RemoteCopyLagSegments"),
+                String.format("Expected to find 1 for RemoteCopyLagSegments metric value, but found %d", safeLongYammerMetricValue("RemoteCopyLagSegments")));
         // unlock copyLogSegmentData
         latch.countDown();
 
         TestUtils.waitForCondition(
                 () -> safeLongYammerMetricValue("RemoteLogSizeComputationTime") >= 1000,
                 String.format("Expected to find 1000 for RemoteLogSizeComputationTime metric value, but found %d", safeLongYammerMetricValue("RemoteLogSizeComputationTime")));
+        remoteLogSizeComputationTimeLatch.countDown();
     }
 
     private Object yammerMetricValue(String name) {
@@ -1797,6 +1820,61 @@ public class RemoteLogManagerTest {
         // Verify aggregate metrics
         assertEquals(2, brokerTopicStats.allTopicsStats().remoteDeleteRequestRate().count());
         assertEquals(0, brokerTopicStats.allTopicsStats().failedRemoteDeleteRequestRate().count());
+    }
+
+    @ParameterizedTest(name = "testRemoteDeleteLagsOnRetentionBreachedSegments retentionSize={0} retentionMs={1}")
+    @CsvSource(value = {"0, -1", "-1, 0"})
+    public void testRemoteDeleteLagsOnRetentionBreachedSegments(long retentionSize,
+                                                                long retentionMs)
+            throws RemoteStorageException, ExecutionException, InterruptedException {
+        Map<String, Long> logProps = new HashMap<>();
+        logProps.put("retention.bytes", retentionSize);
+        logProps.put("retention.ms", retentionMs);
+        LogConfig mockLogConfig = new LogConfig(logProps);
+        when(mockLog.config()).thenReturn(mockLogConfig);
+
+        List<EpochEntry> epochEntries = Collections.singletonList(epochEntry0);
+        checkpoint.write(epochEntries);
+        LeaderEpochFileCache cache = new LeaderEpochFileCache(tp, checkpoint);
+        when(mockLog.leaderEpochCache()).thenReturn(Option.apply(cache));
+
+        when(mockLog.topicPartition()).thenReturn(leaderTopicIdPartition.topicPartition());
+        when(mockLog.logEndOffset()).thenReturn(200L);
+
+        List<RemoteLogSegmentMetadata> metadataList =
+                listRemoteLogSegmentMetadata(leaderTopicIdPartition, 2, 100, 1024, epochEntries, RemoteLogSegmentState.COPY_SEGMENT_FINISHED);
+        when(remoteLogMetadataManager.listRemoteLogSegments(leaderTopicIdPartition))
+                .thenReturn(metadataList.iterator());
+        when(remoteLogMetadataManager.listRemoteLogSegments(leaderTopicIdPartition, 0))
+                .thenAnswer(ans -> metadataList.iterator());
+        when(remoteLogMetadataManager.updateRemoteLogSegmentMetadata(any(RemoteLogSegmentMetadataUpdate.class)))
+                .thenReturn(CompletableFuture.runAsync(() -> { }));
+
+        doAnswer(ans -> {
+            assertEquals(2048, safeLongYammerMetricValue("RemoteDeleteLagBytes"),
+                String.format("Expected to find 2048 for RemoteDeleteLagBytes metric value, but found %d", safeLongYammerMetricValue("RemoteDeleteLagBytes")));
+            assertEquals(2, safeLongYammerMetricValue("RemoteDeleteLagSegments"),
+                String.format("Expected to find 2 for RemoteDeleteLagSegments metric value, but found %d", safeLongYammerMetricValue("RemoteDeleteLagSegments")));
+            return Optional.empty();
+        }).doAnswer(ans -> {
+            assertEquals(1024, safeLongYammerMetricValue("RemoteDeleteLagBytes"),
+                String.format("Expected to find 1024 for RemoteDeleteLagBytes metric value, but found %d", safeLongYammerMetricValue("RemoteDeleteLagBytes")));
+            assertEquals(1, safeLongYammerMetricValue("RemoteDeleteLagSegments"),
+                String.format("Expected to find 1 for RemoteDeleteLagSegments metric value, but found %d", safeLongYammerMetricValue("RemoteDeleteLagSegments")));
+            return Optional.empty();
+        }).when(remoteStorageManager).deleteLogSegmentData(any(RemoteLogSegmentMetadata.class));
+
+        RemoteLogManager.RLMTask task = remoteLogManager.new RLMTask(leaderTopicIdPartition, 128);
+
+        assertThrows(NoSuchElementException.class, () -> yammerMetricValue("RemoteDeleteLagBytes"));
+        assertThrows(NoSuchElementException.class, () -> yammerMetricValue("RemoteDeleteLagSegments"));
+
+        task.convertToLeader(0);
+        task.cleanupExpiredRemoteLogSegments();
+
+        assertEquals(200L, currentLogStartOffset.get());
+        verify(remoteStorageManager).deleteLogSegmentData(metadataList.get(0));
+        verify(remoteStorageManager).deleteLogSegmentData(metadataList.get(1));
     }
 
     @Test

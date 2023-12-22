@@ -25,7 +25,7 @@ import org.apache.kafka.clients.consumer.internals.ConsumerProtocol
 import org.apache.kafka.common.message.JoinGroupResponseData.JoinGroupResponseMember
 import org.apache.kafka.common.message.{JoinGroupResponseData, SyncGroupRequestData}
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
-import org.apache.kafka.coordinator.group.generic.GenericGroupState
+import org.apache.kafka.coordinator.group.classic.ClassicGroupState
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.{Tag, Timeout}
 import org.junit.jupiter.api.extension.ExtendWith
@@ -190,7 +190,7 @@ class JoinGroupRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBas
 
       TestUtils.waitUntilTrue(() => {
         val described = describeGroups(groupIds = List("grp"))
-        GenericGroupState.PREPARING_REBALANCE.toString == described.head.groupState
+        ClassicGroupState.PREPARING_REBALANCE.toString == described.head.groupState
       }, msg = s"The group is not in PREPARING_REBALANCE state.")
 
       // The leader rejoins.
@@ -316,7 +316,7 @@ class JoinGroupRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBas
 
     TestUtils.waitUntilTrue(() => {
       val described = describeGroups(groupIds = List("grp"))
-      GenericGroupState.PREPARING_REBALANCE.toString == described.head.groupState
+      ClassicGroupState.PREPARING_REBALANCE.toString == described.head.groupState
     }, msg = s"The group is not in PREPARING_REBALANCE state.")
 
     // A new follower with duplicated group instance id joins.
@@ -329,7 +329,7 @@ class JoinGroupRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBas
 
     TestUtils.waitUntilTrue(() => {
       val described = describeGroups(groupIds = List("grp"))
-      GenericGroupState.COMPLETING_REBALANCE.toString == described.head.groupState
+      ClassicGroupState.COMPLETING_REBALANCE.toString == described.head.groupState
     }, msg = s"The group is not in COMPLETING_REBALANCE state.")
 
     // The old follower rejoin request should be fenced.
