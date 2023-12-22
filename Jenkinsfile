@@ -33,6 +33,10 @@ def doTest(env, target = "test") {
   sh """./gradlew -PscalaVersion=$SCALA_VERSION ${target} \
       --profile --continue -PkeepAliveMode="session" -PtestLoggingEvents=started,passed,skipped,failed \
       -PignoreFailures=true -PmaxParallelForks=2 -PmaxTestRetries=1 -PmaxTestRetryFailures=10"""
+}
+
+def doPost() {
+  archiveArtifacts artifacts: '**/*.hprof', allowEmptyArchive: true
   junit '**/build/test-results/**/TEST-*.xml'
 }
 
@@ -116,6 +120,11 @@ pipeline {
             doTest(env)
             tryStreamsArchetype()
           }
+          post {
+            always {
+              doPost()
+            }
+          }
         }
 
         stage('JDK 11 and Scala 2.13') {
@@ -134,6 +143,11 @@ pipeline {
             doValidation()
             doTest(env)
             echo 'Skipping Kafka Streams archetype test for Java 11'
+          }
+          post {
+            always {
+              doPost()
+            }
           }
         }
 
@@ -154,6 +168,11 @@ pipeline {
             doTest(env)
             echo 'Skipping Kafka Streams archetype test for Java 17'
           }
+          post {
+            always {
+              doPost()
+            }
+          }
         }
 
         stage('JDK 21 and Scala 2.13') {
@@ -172,6 +191,11 @@ pipeline {
             doValidation()
             doTest(env)
             echo 'Skipping Kafka Streams archetype test for Java 21'
+          }
+          post {
+            always {
+              doPost()
+            }
           }
         }
       }
