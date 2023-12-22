@@ -18,16 +18,18 @@
 package kafka.server
 
 import java.util.Properties
-import kafka.server.metadata.ZkConfigRepository
+import kafka.server.metadata.{ZkConfigRepository, ZkMetadataCache}
 import kafka.utils.TestUtils
 import kafka.zk.{AdminZkClient, KafkaZkClient}
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.config.ConfigResource
+import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopic
 import org.apache.kafka.common.message.DescribeConfigsRequestData
 import org.apache.kafka.common.message.DescribeConfigsResponseData
 import org.apache.kafka.common.protocol.Errors
+import org.apache.kafka.common.requests.ApiError
 import org.junit.jupiter.api.{AfterEach, Test}
-import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertNotEquals, assertNotNull, assertThrows}
+import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertNotEquals, assertNotNull, assertThrows, assertTrue}
 import org.mockito.Mockito.{mock, when}
 
 import scala.jdk.CollectionConverters._
@@ -38,7 +40,7 @@ class ZkAdminManagerTest {
   private val metrics = new Metrics()
   private val brokerId = 1
   private val topic = "topic-1"
-  private val metadataCache: MetadataCache = mock(classOf[MetadataCache])
+  private val metadataCache: MetadataCache = mock(classOf[ZkMetadataCache])
 
   @AfterEach
   def tearDown(): Unit = {
@@ -144,5 +146,24 @@ class ZkAdminManagerTest {
         assertNotEquals(s"Config ${c.name} should have non blank documentation", "", c.documentation.trim)
       })
     })
+  }
+
+  @Test
+  def testUnknownPartitionsWhenCacheUninitialized(): Unit = {
+    when(metadataCache.asInstanceOf[ZkMetadataCache].isInitialized()).thenReturn(false)
+
+    val zkAdminManager = new ZkAdminManager(mock(classOf[KafkaConfig]), mock(classOf[Metrics]), metadataCache, zkClient)
+
+    val topicName = "testTopic"
+    val creatableTopic = new CreatableTopic()
+      .setName(topicName)
+      .setNumPartitions(1)
+      .setReplicationFactor(1)
+
+    def responseCallback = (results: scala.collection.Map[String, ApiError]) =>
+      results.values.foreach(v => assertTrue(v.is(Errors.UNKNOWN_TOPIC_OR_PARTITION)))
+
+    zkAdminManager.createTopics(1000, false, Map("testTopic" -> creatableTopic), Map(),
+      mock(classOf[ControllerMutationQuota]), responseCallback)
   }
 }

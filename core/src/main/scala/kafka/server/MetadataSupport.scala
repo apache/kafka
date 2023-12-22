@@ -69,6 +69,8 @@ sealed trait MetadataSupport {
       handler(request)
     }
   }
+
+  def canControllerHandle(): Boolean
 }
 
 case class ZkSupport(adminManager: ZkAdminManager,
@@ -89,6 +91,8 @@ case class ZkSupport(adminManager: ZkAdminManager,
 
   override def canForward(): Boolean = forwardingManager.isDefined && (!controller.isActive)
 
+  override def canControllerHandle(): Boolean = controller.isActive && metadataCache.isInitialized()
+
   def isBrokerEpochStale(brokerEpochInRequest: Long, isKRaftControllerRequest: Boolean): Boolean = {
     brokerEpochManager.isBrokerEpochStale(brokerEpochInRequest, isKRaftControllerRequest)
   }
@@ -108,4 +112,6 @@ case class RaftSupport(fwdMgr: ForwardingManager,
   }
 
   override def canForward(): Boolean = true
+
+  override def canControllerHandle(): Boolean = true
 }
