@@ -88,6 +88,7 @@ public class StreamJoinedStoreFactory<K, V1, V2> extends AbstractConfigurableSto
                         Duration.ofMillis(windows.size()),
                         true,
                         EmitStrategy.onWindowUpdate(),
+                        false,
                         false
                 ))
                 : storeSupplier;

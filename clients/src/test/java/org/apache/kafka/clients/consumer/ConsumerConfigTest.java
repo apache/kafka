@@ -173,7 +173,7 @@ public class ConsumerConfigTest {
         configs.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, keyDeserializerClass);
         configs.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, valueDeserializerClass);
         final ConsumerConfig consumerConfig = new ConsumerConfig(configs);
-        assertEquals("generic", consumerConfig.getString(ConsumerConfig.GROUP_PROTOCOL_CONFIG));
+        assertEquals("classic", consumerConfig.getString(ConsumerConfig.GROUP_PROTOCOL_CONFIG));
         assertNull(consumerConfig.getString(ConsumerConfig.GROUP_REMOTE_ASSIGNOR_CONFIG));
     }
 
@@ -192,7 +192,7 @@ public class ConsumerConfigTest {
     }
 
     @ParameterizedTest
-    @CsvSource({"consumer, true", "generic, true", "Consumer, true", "Generic, true", "invalid, false"})
+    @CsvSource({"consumer, true", "classic, true", "Consumer, true", "Classic, true", "invalid, false"})
     public void testProtocolConfigValidation(String protocol, boolean isValid) {
         final Map<String, Object> configs = new HashMap<>();
         configs.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, keyDeserializerClass);

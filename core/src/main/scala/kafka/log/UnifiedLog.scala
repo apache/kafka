@@ -1586,6 +1586,12 @@ class UnifiedLog(@volatile var logStartOffset: Long,
     UnifiedLog.sizeInBytes(logSegments.stream.filter(_.baseOffset >= highestOffsetInRemoteStorage).collect(Collectors.toList[LogSegment]))
 
   /**
+   * The number of segments that are only in local log but not yet in remote log.
+   */
+  def onlyLocalLogSegmentsCount: Long =
+    logSegments.stream().filter(_.baseOffset >= highestOffsetInRemoteStorage).count()
+
+  /**
    * The offset of the next message that will be appended to the log
    */
   def logEndOffset: Long =  localLog.logEndOffset

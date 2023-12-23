@@ -23,7 +23,7 @@ import kafka.cluster.Broker
 import kafka.controller.{KafkaController, LeaderIsrAndControllerEpoch, ReplicaAssignment}
 import kafka.security.authorizer.AclAuthorizer.{NoAcls, VersionedAcls}
 import kafka.security.authorizer.AclEntry
-import kafka.server.{ConfigType, KafkaConfig}
+import kafka.server.KafkaConfig
 import kafka.utils.Logging
 import kafka.zk.TopicZNode.TopicIdReplicaAssignment
 import kafka.zookeeper._
@@ -34,6 +34,7 @@ import org.apache.kafka.common.security.token.delegation.{DelegationToken, Token
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.common.{KafkaException, TopicPartition, Uuid}
 import org.apache.kafka.metadata.migration.ZkMigrationLeadershipState
+import org.apache.kafka.server.config.ConfigType
 import org.apache.kafka.server.metrics.KafkaMetricsGroup
 import org.apache.kafka.storage.internals.log.LogConfig
 import org.apache.zookeeper.KeeperException.{Code, NodeExistsException}
@@ -1278,7 +1279,7 @@ class KafkaZkClient private[zk] (zooKeeperClient: ZooKeeperClient, isSecure: Boo
    * @param expectedControllerEpochZkVersion expected controller epoch zkVersion.
    */
   def deleteTopicConfigs(topics: Seq[String], expectedControllerEpochZkVersion: Int): Unit = {
-    val deleteRequests = topics.map(topic => DeleteRequest(ConfigEntityZNode.path(ConfigType.Topic, topic),
+    val deleteRequests = topics.map(topic => DeleteRequest(ConfigEntityZNode.path(ConfigType.TOPIC, topic),
       ZkVersion.MatchAnyVersion))
     retryRequestsUntilConnected(deleteRequests, expectedControllerEpochZkVersion)
   }
@@ -1902,7 +1903,7 @@ class KafkaZkClient private[zk] (zooKeeperClient: ZooKeeperClient, isSecure: Boo
 
   private def getTopicConfigs(topics: Set[String]): Seq[GetDataResponse] = {
     val getDataRequests: Seq[GetDataRequest] = topics.iterator.map { topic =>
-      GetDataRequest(ConfigEntityZNode.path(ConfigType.Topic, topic), ctx = Some(topic))
+      GetDataRequest(ConfigEntityZNode.path(ConfigType.TOPIC, topic), ctx = Some(topic))
     }.toBuffer
 
     retryRequestsUntilConnected(getDataRequests)

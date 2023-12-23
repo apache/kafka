@@ -108,15 +108,14 @@ public class ConsumerTestBuilder implements Closeable {
         this.backgroundEventQueue = new LinkedBlockingQueue<>();
         this.backgroundEventHandler = spy(new BackgroundEventHandler(logContext, backgroundEventQueue));
         GroupRebalanceConfig groupRebalanceConfig = new GroupRebalanceConfig(
-                100,
-                DEFAULT_MAX_POLL_INTERVAL_MS,
-                DEFAULT_HEARTBEAT_INTERVAL_MS,
-                groupInfo.map(gi -> gi.groupState.groupId).orElse(null),
-                groupInfo.flatMap(gi -> gi.groupState.groupInstanceId),
-                DEFAULT_RETRY_BACKOFF_MS,
-                DEFAULT_RETRY_BACKOFF_MAX_MS,
-                true);
-        GroupState groupState = new GroupState(groupRebalanceConfig);
+            100,
+            DEFAULT_MAX_POLL_INTERVAL_MS,
+            DEFAULT_HEARTBEAT_INTERVAL_MS,
+            groupInfo.map(gi -> gi.groupId).orElse(null),
+            groupInfo.flatMap(gi -> gi.groupInstanceId),
+            DEFAULT_RETRY_BACKOFF_MS,
+            DEFAULT_RETRY_BACKOFF_MAX_MS,
+            true);
         ApiVersions apiVersions = new ApiVersions();
 
         Properties properties = new Properties();
@@ -130,8 +129,8 @@ public class ConsumerTestBuilder implements Closeable {
             properties.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false");
 
         groupInfo.ifPresent(gi -> {
-            properties.put(GROUP_ID_CONFIG, gi.groupState.groupId);
-            gi.groupState.groupInstanceId.ifPresent(groupInstanceId -> properties.put(GROUP_INSTANCE_ID_CONFIG, groupInstanceId));
+            properties.put(GROUP_ID_CONFIG, gi.groupId);
+            gi.groupInstanceId.ifPresent(groupInstanceId -> properties.put(GROUP_INSTANCE_ID_CONFIG, groupInstanceId));
         });
 
         this.config = new ConsumerConfig(properties);
@@ -182,19 +181,20 @@ public class ConsumerTestBuilder implements Closeable {
                     DEFAULT_RETRY_BACKOFF_MS,
                     DEFAULT_RETRY_BACKOFF_MAX_MS,
                     backgroundEventHandler,
-                    gi.groupState.groupId
+                    gi.groupId
             ));
             CommitRequestManager commit = spy(new CommitRequestManager(time,
                     logContext,
                     subscriptions,
                     config,
                     coordinator,
-                    backgroundEventHandler,
-                    groupState));
+                    gi.groupId,
+                    gi.groupInstanceId));
             MembershipManager mm = spy(
                     new MembershipManagerImpl(
-                        gi.groupState.groupId,
-                        gi.groupState.groupInstanceId,
+                        gi.groupId,
+                        gi.groupInstanceId,
+                        groupRebalanceConfig.rebalanceTimeoutMs,
                         gi.serverAssignor,
                         subscriptions,
                         commit,
@@ -309,25 +309,27 @@ public class ConsumerTestBuilder implements Closeable {
     }
 
     public static class GroupInformation {
-
-        final GroupState groupState;
+        final String groupId;
+        final Optional<String> groupInstanceId;
         final int heartbeatIntervalMs;
         final double heartbeatJitterMs;
         final Optional<String> serverAssignor;
 
-        public GroupInformation(GroupState groupState) {
-            this(groupState, DEFAULT_HEARTBEAT_INTERVAL_MS, DEFAULT_HEARTBEAT_JITTER_MS, Optional.of(DEFAULT_REMOTE_ASSIGNOR));
+        public GroupInformation(String groupId, Optional<String> groupInstanceId) {
+            this(groupId, groupInstanceId, DEFAULT_HEARTBEAT_INTERVAL_MS, DEFAULT_HEARTBEAT_JITTER_MS,
+                Optional.of(DEFAULT_REMOTE_ASSIGNOR));
         }
 
-        public GroupInformation(GroupState groupState, int heartbeatIntervalMs, double heartbeatJitterMs, Optional<String> serverAssignor) {
-            this.groupState = groupState;
+        public GroupInformation(String groupId, Optional<String> groupInstanceId, int heartbeatIntervalMs, double heartbeatJitterMs, Optional<String> serverAssignor) {
             this.heartbeatIntervalMs = heartbeatIntervalMs;
             this.heartbeatJitterMs = heartbeatJitterMs;
             this.serverAssignor = serverAssignor;
+            this.groupId = groupId;
+            this.groupInstanceId = groupInstanceId;
         }
     }
 
     static Optional<GroupInformation> createDefaultGroupInformation() {
-        return Optional.of(new GroupInformation(new GroupState(DEFAULT_GROUP_ID, Optional.empty())));
+        return Optional.of(new GroupInformation(DEFAULT_GROUP_ID, Optional.empty()));
     }
 }
