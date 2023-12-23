@@ -65,6 +65,7 @@ public class SlidingWindowStoreMaterializer<K, V> extends MaterializedStoreFacto
                         Duration.ofMillis(windows.timeDifferenceMs()),
                         false,
                         emitStrategy,
+                        true,
                         true
                 ))
                 : (WindowBytesStoreSupplier) materialized.storeSupplier();

@@ -167,7 +167,7 @@ object Defaults {
 
   /** New group coordinator configs */
   val NewGroupCoordinatorEnable = false
-  val GroupCoordinatorRebalanceProtocols = List(GroupType.GENERIC.toString).asJava
+  val GroupCoordinatorRebalanceProtocols = List(GroupType.CLASSIC.toString).asJava
   val GroupCoordinatorNumThreads = 1
 
   /** Consumer group configs */
@@ -2013,8 +2013,8 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
   val groupCoordinatorRebalanceProtocols = {
     val protocols = getList(KafkaConfig.GroupCoordinatorRebalanceProtocolsProp)
       .asScala.map(_.toUpperCase).map(GroupType.valueOf).toSet
-    if (!protocols.contains(GroupType.GENERIC)) {
-      throw new ConfigException(s"Disabling the '${GroupType.GENERIC}' protocol is not supported.")
+    if (!protocols.contains(GroupType.CLASSIC)) {
+      throw new ConfigException(s"Disabling the '${GroupType.CLASSIC}' protocol is not supported.")
     }
     if (protocols.contains(GroupType.CONSUMER)) {
       warn(s"The new '${GroupType.CONSUMER}' rebalance protocol is enabled along with the new group coordinator. " +

@@ -54,6 +54,7 @@ import org.apache.kafka.clients.consumer.internals.events.GroupMetadataUpdateEve
 import org.apache.kafka.clients.consumer.internals.events.LeaveOnCloseApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.ListOffsetsApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.NewTopicsMetadataUpdateRequestEvent;
+import org.apache.kafka.clients.consumer.internals.events.PollApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.ResetPositionsApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.SubscriptionChangeApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.TopicMetadataApplicationEvent;
@@ -698,6 +699,8 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             if (subscriptions.hasNoSubscriptionOrUserAssignment()) {
                 throw new IllegalStateException("Consumer is not subscribed to any topics or assigned any partitions");
             }
+
+            applicationEventHandler.add(new PollApplicationEvent(timer.currentTimeMs()));
 
             do {
                 // We must not allow wake-ups between polling for fetches and returning the records.

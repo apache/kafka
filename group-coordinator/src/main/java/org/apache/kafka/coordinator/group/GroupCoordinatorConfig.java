@@ -28,7 +28,7 @@ public class GroupCoordinatorConfig {
     /**
      * The timeout used to wait for a new member in milliseconds.
      */
-    public static final int GENERIC_GROUP_NEW_MEMBER_JOIN_TIMEOUT_MS = 5 * 60 * 1000;
+    public static final int CLASSIC_GROUP_NEW_MEMBER_JOIN_TIMEOUT_MS = 5 * 60 * 1000;
 
     /**
      * The number of threads or event loops running.
@@ -67,29 +67,29 @@ public class GroupCoordinatorConfig {
     public final int offsetMetadataMaxSize;
 
     /**
-     * The generic group maximum size.
+     * The classic group maximum size.
      */
-    public final int genericGroupMaxSize;
+    public final int classicGroupMaxSize;
 
     /**
-     * The delay in milliseconds introduced for the first rebalance of a generic group.
+     * The delay in milliseconds introduced for the first rebalance of a classic group.
      */
-    public final int genericGroupInitialRebalanceDelayMs;
+    public final int classicGroupInitialRebalanceDelayMs;
 
     /**
      * The timeout used to wait for a new member in milliseconds.
      */
-    public final int genericGroupNewMemberJoinTimeoutMs;
+    public final int classicGroupNewMemberJoinTimeoutMs;
 
     /**
-     * The generic group minimum session timeout.
+     * The classic group minimum session timeout.
      */
-    public final int genericGroupMinSessionTimeoutMs;
+    public final int classicGroupMinSessionTimeoutMs;
 
     /**
-     * The generic group maximum session timeout.
+     * The classic group maximum session timeout.
      */
-    public final int genericGroupMaxSessionTimeoutMs;
+    public final int classicGroupMaxSessionTimeoutMs;
 
     /**
      * Frequency at which to check for expired offsets.
@@ -126,11 +126,11 @@ public class GroupCoordinatorConfig {
         List<PartitionAssignor> consumerGroupAssignors,
         int offsetsTopicSegmentBytes,
         int offsetMetadataMaxSize,
-        int genericGroupMaxSize,
-        int genericGroupInitialRebalanceDelayMs,
-        int genericGroupNewMemberJoinTimeoutMs,
-        int genericGroupMinSessionTimeoutMs,
-        int genericGroupMaxSessionTimeoutMs,
+        int classicGroupMaxSize,
+        int classicGroupInitialRebalanceDelayMs,
+        int classicGroupNewMemberJoinTimeoutMs,
+        int classicGroupMinSessionTimeoutMs,
+        int classicGroupMaxSessionTimeoutMs,
         long offsetsRetentionCheckIntervalMs,
         long offsetsRetentionMs,
         int offsetCommitTimeoutMs
@@ -142,11 +142,11 @@ public class GroupCoordinatorConfig {
         this.consumerGroupAssignors = consumerGroupAssignors;
         this.offsetsTopicSegmentBytes = offsetsTopicSegmentBytes;
         this.offsetMetadataMaxSize = offsetMetadataMaxSize;
-        this.genericGroupMaxSize = genericGroupMaxSize;
-        this.genericGroupInitialRebalanceDelayMs = genericGroupInitialRebalanceDelayMs;
-        this.genericGroupNewMemberJoinTimeoutMs = genericGroupNewMemberJoinTimeoutMs;
-        this.genericGroupMinSessionTimeoutMs = genericGroupMinSessionTimeoutMs;
-        this.genericGroupMaxSessionTimeoutMs = genericGroupMaxSessionTimeoutMs;
+        this.classicGroupMaxSize = classicGroupMaxSize;
+        this.classicGroupInitialRebalanceDelayMs = classicGroupInitialRebalanceDelayMs;
+        this.classicGroupNewMemberJoinTimeoutMs = classicGroupNewMemberJoinTimeoutMs;
+        this.classicGroupMinSessionTimeoutMs = classicGroupMinSessionTimeoutMs;
+        this.classicGroupMaxSessionTimeoutMs = classicGroupMaxSessionTimeoutMs;
         this.offsetsRetentionCheckIntervalMs = offsetsRetentionCheckIntervalMs;
         this.offsetsRetentionMs = offsetsRetentionMs;
         this.offsetCommitTimeoutMs = offsetCommitTimeoutMs;

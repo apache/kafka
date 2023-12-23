@@ -14,30 +14,22 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.clients.consumer;
+package org.apache.kafka.server.config;
 
-import java.util.Locale;
+import java.util.Arrays;
+import java.util.List;
 
-public enum GroupProtocol {
-    /** Classic group protocol.  */
-    CLASSIC("CLASSIC"),
+/**
+ * Represents all the entities that can be configured via ZK
+ */
+public class ConfigType {
+    public static final String TOPIC = "topics";
+    public static final String CLIENT = "clients";
+    public static final String USER = "users";
+    public static final String BROKER = "brokers";
+    public static final String IP = "ips";
+    public static final String CLIENT_METRICS = "client-metrics";
 
-    /** Consumer group protocol */
-    CONSUMER("CONSUMER");
-
-    /**
-     * String representation of the group protocol.
-     */
-    public final String name;
-
-    GroupProtocol(final String name) {
-        this.name = name;
-    }
-
-    /**
-     * Case-insensitive group protocol lookup by string name.
-     */
-    public static GroupProtocol of(final String name) {
-        return GroupProtocol.valueOf(name.toUpperCase(Locale.ROOT));
-    }
+    // Do not include ClientMetrics in `all` as ClientMetrics is not supported on ZK.
+    public static final List<String> ALL = Arrays.asList(TOPIC, CLIENT, USER, BROKER, IP);
 }
