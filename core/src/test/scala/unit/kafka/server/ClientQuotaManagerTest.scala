@@ -17,12 +17,14 @@
 package kafka.server
 
 import java.net.InetAddress
+
 import kafka.network.RequestChannel.Session
 import kafka.server.QuotaType._
 import org.apache.kafka.common.metrics.Quota
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.utils.Sanitizer
 import org.apache.kafka.server.config.ConfigEntityName
+
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
 

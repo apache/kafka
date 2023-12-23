@@ -61,8 +61,8 @@ object TestInfoUtils {
   }
 
   def maybeGroupProtocolSpecified(testInfo: TestInfo): Option[GroupProtocol] = {
-    if (testInfo.getDisplayName().contains("groupProtocol=generic"))
-      Some(GroupProtocol.GENERIC)
+    if (testInfo.getDisplayName().contains("groupProtocol=classic"))
+      Some(GroupProtocol.CLASSIC)
     else if (testInfo.getDisplayName().contains("groupProtocol=consumer"))
       Some(GroupProtocol.CONSUMER)
     else

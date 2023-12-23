@@ -79,8 +79,7 @@ object ConfigCommand extends Logging {
 
   val BrokerDefaultEntityName = ""
   val BrokerLoggerConfigType = "broker-loggers"
-  @nowarn("cat=deprecation")
-  val BrokerSupportedConfigTypes = JavaConverters.asScalaIteratorConverter(ConfigType.ALL.iterator()).asScala.toSeq :+ BrokerLoggerConfigType :+ ConfigType.CLIENT_METRICS
+  val BrokerSupportedConfigTypes = ConfigType.ALL.asScala :+ BrokerLoggerConfigType :+ ConfigType.CLIENT_METRICS
   val ZkSupportedConfigTypes = Seq(ConfigType.USER, ConfigType.BROKER)
   val DefaultScramIterations = 4096
 
