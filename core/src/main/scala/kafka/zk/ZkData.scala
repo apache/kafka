@@ -47,10 +47,9 @@ import org.apache.kafka.server.config.ConfigType
 import org.apache.zookeeper.ZooDefs
 import org.apache.zookeeper.data.{ACL, Stat}
 
-import scala.annotation.nowarn
 import scala.beans.BeanProperty
 import scala.collection.mutable.ArrayBuffer
-import scala.collection.{JavaConverters, Map, Seq, immutable, mutable}
+import scala.collection.{Map, Seq, immutable, mutable}
 import scala.jdk.CollectionConverters._
 import scala.util.{Failure, Success, Try}
 
@@ -1094,7 +1093,6 @@ object ZkData {
     FeatureZNode.path) ++ ZkAclStore.securePaths
 
   // These are persistent ZK paths that should exist on kafka broker startup.
-  @nowarn("cat=deprecation")
   val PersistentZkPaths = Seq(
     ConsumerPathZNode.path, // old consumer path
     BrokerIdsZNode.path,
