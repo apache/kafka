@@ -141,5 +141,6 @@ public class SnapshottableCoordinatorTest {
         assertEquals(100L, coordinator.lastCommittedOffset());
         assertThrows(IllegalStateException.class, () -> coordinator.updateLastCommittedOffset(99L));
         assertEquals(100L, coordinator.lastCommittedOffset());
+        assertThrows(IllegalStateException.class, () -> coordinator.updateLastCommittedOffset(101L));
     }
 }
