@@ -2979,6 +2979,8 @@ public class ReplicationControlManagerTest {
             sortPartitionChangeRecords(filter(records, PartitionChangeRecord.class))
         );
         assertEquals(3, records.size());
+        ctx.replay(records);
+        assertEquals(Collections.singletonList(dir2b1), ctx.clusterControl.registration(b1).directories());
     }
 
     /**

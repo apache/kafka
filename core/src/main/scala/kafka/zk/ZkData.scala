@@ -1105,7 +1105,7 @@ object ZkData {
     IsrChangeNotificationZNode.path,
     ProducerIdBlockZNode.path,
     LogDirEventNotificationZNode.path
-  ) ++ JavaConverters.asScalaIteratorConverter(ConfigType.ALL.iterator()).asScala.map(ConfigEntityTypeZNode.path)
+  ) ++ ConfigType.ALL.asScala.map(ConfigEntityTypeZNode.path)
 
   val SensitiveRootPaths = Seq(
     ConfigEntityTypeZNode.path(ConfigType.USER),

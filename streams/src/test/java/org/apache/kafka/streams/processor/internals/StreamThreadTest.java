@@ -1494,6 +1494,7 @@ public class StreamThreadTest {
             changelogReader,
             null,
             taskManager,
+            null,
             streamsMetrics,
             new TopologyMetadata(internalTopologyBuilder, config),
             CLIENT_ID,
@@ -2686,6 +2687,7 @@ public class StreamThreadTest {
             changelogReader,
             null,
             taskManager,
+            null,
             streamsMetrics,
             topologyMetadata,
             CLIENT_ID,
@@ -2742,6 +2744,7 @@ public class StreamThreadTest {
             changelogReader,
             null,
             taskManager,
+            null,
             streamsMetrics,
             topologyMetadata,
             CLIENT_ID,
@@ -2807,6 +2810,7 @@ public class StreamThreadTest {
             changelogReader,
             null,
             taskManager,
+            null,
             streamsMetrics,
             topologyMetadata,
             CLIENT_ID,
@@ -2868,6 +2872,7 @@ public class StreamThreadTest {
             changelogReader,
             null,
             taskManager,
+            null,
             streamsMetrics,
             topologyMetadata,
             CLIENT_ID,
@@ -2926,6 +2931,7 @@ public class StreamThreadTest {
             changelogReader,
             null,
             taskManager,
+            null,
             streamsMetrics,
             topologyMetadata,
             CLIENT_ID,
@@ -3130,6 +3136,7 @@ public class StreamThreadTest {
             changelogReader,
             null,
             taskManager,
+            null,
             streamsMetrics,
             topologyMetadata,
             CLIENT_ID,
@@ -3183,6 +3190,7 @@ public class StreamThreadTest {
             changelogReader,
             null,
             taskManager,
+            null,
             streamsMetrics,
             topologyMetadata,
             CLIENT_ID,
@@ -3309,20 +3317,25 @@ public class StreamThreadTest {
     }
 
     @Test
-    public void shouldGetMainConsumerInstanceId() throws Exception {
-        getMainConsumerInstanceId(false);
+    public void shouldGetMainAndRestoreConsumerInstanceId() throws Exception {
+        getMainAndRestoreConsumerInstanceId(false);
     }
 
     @Test
-    public void shouldGetMainConsumerInstanceIdWithInternalTimeout() throws Exception {
-        getMainConsumerInstanceId(true);
+    public void shouldGetMainAndRestoreConsumerInstanceIdWithInternalTimeout() throws Exception {
+        getMainAndRestoreConsumerInstanceId(true);
     }
 
-    private void getMainConsumerInstanceId(final boolean injectTimeException) throws Exception {
+    private void getMainAndRestoreConsumerInstanceId(final boolean injectTimeException) throws Exception {
         final Uuid consumerInstanceId = Uuid.randomUuid();
         clientSupplier.consumer.setClientInstanceId(consumerInstanceId);
         if (injectTimeException) {
             clientSupplier.consumer.injectTimeoutException(1);
+        }
+        final Uuid restoreInstanceId = Uuid.randomUuid();
+        clientSupplier.restoreConsumer.setClientInstanceId(restoreInstanceId);
+        if (injectTimeException) {
+            clientSupplier.restoreConsumer.injectTimeoutException(1);
         }
 
         thread = createStreamThread("clientId");
@@ -3336,6 +3349,10 @@ public class StreamThreadTest {
         final KafkaFuture<Uuid> mainConsumerFuture = consumerInstanceIdFutures.get("clientId-StreamThread-1-consumer");
         final Uuid mainConsumerUuid = mainConsumerFuture.get();
         assertThat(mainConsumerUuid, equalTo(consumerInstanceId));
+
+        final KafkaFuture<Uuid> restoreConsumerFuture = consumerInstanceIdFutures.get("clientId-StreamThread-1-restore-consumer");
+        final Uuid restoreConsumerUuid = restoreConsumerFuture.get();
+        assertThat(restoreConsumerUuid, equalTo(restoreInstanceId));
     }
 
     @Test
@@ -3387,6 +3404,21 @@ public class StreamThreadTest {
     }
 
     @Test
+    public void shouldReturnErrorIfRestoreConsumerInstanceIdNotInitialized() {
+        thread = createStreamThread("clientId");
+        thread.setState(State.STARTING);
+
+        final Map<String, KafkaFuture<Uuid>> consumerFutures = thread.consumerClientInstanceIds(Duration.ZERO);
+
+        thread.maybeGetClientInstanceIds();
+
+        final KafkaFuture<Uuid> future = consumerFutures.get("clientId-StreamThread-1-restore-consumer");
+        final ExecutionException error = assertThrows(ExecutionException.class, future::get);
+        assertThat(error.getCause(), instanceOf(UnsupportedOperationException.class));
+        assertThat(error.getCause().getMessage(), equalTo("clientInstanceId not set"));
+    }
+
+    @Test
     public void shouldReturnErrorIfProducerInstanceIdNotInitialized() throws Exception {
         thread = createStreamThread("clientId");
         thread.setState(State.STARTING);
@@ -3412,6 +3444,22 @@ public class StreamThreadTest {
         thread.maybeGetClientInstanceIds();
 
         final KafkaFuture<Uuid> future = consumerFutures.get("clientId-StreamThread-1-consumer");
+        final Uuid clientInstanceId = future.get();
+        assertThat(clientInstanceId, equalTo(null));
+    }
+
+    @Test
+    public void shouldReturnNullIfRestoreConsumerTelemetryDisabled() throws Exception {
+        clientSupplier.restoreConsumer.disableTelemetry();
+
+        thread = createStreamThread("clientId");
+        thread.setState(State.STARTING);
+
+        final Map<String, KafkaFuture<Uuid>> consumerFutures = thread.consumerClientInstanceIds(Duration.ZERO);
+
+        thread.maybeGetClientInstanceIds();
+
+        final KafkaFuture<Uuid> future = consumerFutures.get("clientId-StreamThread-1-restore-consumer");
         final Uuid clientInstanceId = future.get();
         assertThat(clientInstanceId, equalTo(null));
     }
@@ -3453,6 +3501,30 @@ public class StreamThreadTest {
         assertThat(
             error.getCause().getMessage(),
             equalTo("Could not retrieve main consumer client instance id.")
+        );
+    }
+
+
+    @Test
+    public void shouldTimeOutOnRestoreConsumerInstanceId() {
+        clientSupplier.restoreConsumer.setClientInstanceId(Uuid.randomUuid());
+        clientSupplier.restoreConsumer.injectTimeoutException(-1);
+        thread = createStreamThread("clientId");
+        thread.setState(State.STARTING);
+
+        final Map<String, KafkaFuture<Uuid>> consumerFutures = thread.consumerClientInstanceIds(Duration.ZERO);
+
+        mockTime.sleep(1L);
+
+        thread.maybeGetClientInstanceIds();
+
+        final KafkaFuture<Uuid> future = consumerFutures.get("clientId-StreamThread-1-restore-consumer");
+
+        final ExecutionException error = assertThrows(ExecutionException.class, future::get);
+        assertThat(error.getCause(), instanceOf(TimeoutException.class));
+        assertThat(
+            error.getCause().getMessage(),
+            equalTo("Could not retrieve restore consumer client instance id.")
         );
     }
 
@@ -3500,6 +3572,7 @@ public class StreamThreadTest {
             changelogReader,
             "",
             taskManager,
+            null,
             new StreamsMetricsImpl(metrics, CLIENT_ID, StreamsConfig.METRICS_LATEST, mockTime),
             topologyMetadata,
             "thread-id",
@@ -3620,6 +3693,7 @@ public class StreamThreadTest {
             changelogReader,
             null,
             taskManager,
+            null,
             streamsMetrics,
             topologyMetadata,
             CLIENT_ID,

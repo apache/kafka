@@ -78,9 +78,8 @@ abstract class BaseConsumerTest extends AbstractConsumerTest {
     assertNotEquals(0, BaseConsumerTest.updateConsumerCount.get())
   }
 
-  // ConsumerRebalanceListener temporarily not supported for consumer group protocol
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersGenericGroupProtocolOnly"))
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
   def testCoordinatorFailover(quorum: String, groupProtocol: String): Unit = {
     val listener = new TestConsumerReassignmentListener()
     this.consumerConfig.setProperty(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, "5001")
@@ -113,16 +112,16 @@ abstract class BaseConsumerTest extends AbstractConsumerTest {
 
 object BaseConsumerTest {
   // We want to test the following combinations:
-  // * ZooKeeper and the generic group protocol
-  // * KRaft and the generic group protocol
-  // * KRaft with the new group coordinator enabled and the generic group protocol
-  // * KRaft with the new group coordinator enabled and the consumer group protocol (temporarily disabled)
+  // * ZooKeeper and the classic group protocol
+  // * KRaft and the classic group protocol
+  // * KRaft with the new group coordinator enabled and the classic group protocol
+  // * KRaft with the new group coordinator enabled and the consumer group protocol
   def getTestQuorumAndGroupProtocolParametersAll() : java.util.stream.Stream[Arguments] = {
     java.util.stream.Stream.of(
-        Arguments.of("zk", "generic"),
-        Arguments.of("kraft", "generic"),
-        Arguments.of("kraft+kip848", "generic"))
-//        Arguments.of("kraft+kip848", "consumer"))
+        Arguments.of("zk", "classic"),
+        Arguments.of("kraft", "classic"),
+        Arguments.of("kraft+kip848", "classic"),
+        Arguments.of("kraft+kip848", "consumer"))
   }
 
   // In Scala 2.12, it is necessary to disambiguate the java.util.stream.Stream.of() method call
@@ -131,18 +130,18 @@ object BaseConsumerTest {
   // single combination are written using @CsvSource rather than the more elegant @MethodSource. 
   // def getTestQuorumAndGroupProtocolParametersZkOnly() : java.util.stream.Stream[Arguments] = {
   //   java.util.stream.Stream.of(
-  //       Arguments.of("zk", "generic"))
+  //       Arguments.of("zk", "classic"))
   // }
 
-  // For tests that only work with the generic group protocol, we want to test the following combinations:
-  // * ZooKeeper and the generic group protocol
-  // * KRaft and the generic group protocol
-  // * KRaft with the new group coordinator enabled and the generic group protocol
-  def getTestQuorumAndGroupProtocolParametersGenericGroupProtocolOnly() : java.util.stream.Stream[Arguments] = {
+  // For tests that only work with the classic group protocol, we want to test the following combinations:
+  // * ZooKeeper and the classic group protocol
+  // * KRaft and the classic group protocol
+  // * KRaft with the new group coordinator enabled and the classic group protocol
+  def getTestQuorumAndGroupProtocolParametersClassicGroupProtocolOnly() : java.util.stream.Stream[Arguments] = {
     java.util.stream.Stream.of(
-        Arguments.of("zk", "generic"),
-        Arguments.of("kraft", "generic"),
-        Arguments.of("kraft+kip848", "generic"))
+        Arguments.of("zk", "classic"),
+        Arguments.of("kraft", "classic"),
+        Arguments.of("kraft+kip848", "classic"))
   }
 
   val updateProducerCount = new AtomicInteger()

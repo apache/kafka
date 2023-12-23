@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.coordinator.group.generic;
+package org.apache.kafka.coordinator.group.classic;
 
 import org.apache.kafka.common.message.DescribeGroupsResponseData;
 import org.apache.kafka.common.message.JoinGroupRequestData.JoinGroupRequestProtocol;
@@ -28,14 +28,14 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 
-import static org.apache.kafka.coordinator.group.generic.GenericGroupMember.EMPTY_ASSIGNMENT;
+import static org.apache.kafka.coordinator.group.classic.ClassicGroupMember.EMPTY_ASSIGNMENT;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-public class GenericGroupMemberTest {
+public class ClassicGroupMemberTest {
 
     @Test
     public void testMatchesSupportedProtocols() {
@@ -44,7 +44,7 @@ public class GenericGroupMemberTest {
             .setName("range")
             .setMetadata(new byte[]{0}));
 
-        GenericGroupMember member = new GenericGroupMember(
+        ClassicGroupMember member = new ClassicGroupMember(
             "member",
             Optional.of("group-instance-id"),
             "client-id",
@@ -101,7 +101,7 @@ public class GenericGroupMemberTest {
             .setName("roundrobin")
             .setMetadata(new byte[0]));
 
-        GenericGroupMember member = new GenericGroupMember(
+        ClassicGroupMember member = new ClassicGroupMember(
             "member",
             Optional.of("group-instance-id"),
             "client-id",
@@ -135,7 +135,7 @@ public class GenericGroupMemberTest {
             .setName("roundrobin")
             .setMetadata(new byte[]{1}));
 
-        GenericGroupMember member = new GenericGroupMember(
+        ClassicGroupMember member = new ClassicGroupMember(
             "member",
             Optional.of("group-instance-id"),
             "client-id",
@@ -153,7 +153,7 @@ public class GenericGroupMemberTest {
 
     @Test
     public void testMetadataRaisesOnUnsupportedProtocol() {
-        GenericGroupMember member = new GenericGroupMember(
+        ClassicGroupMember member = new ClassicGroupMember(
             "member",
             Optional.of("group-instance-id"),
             "client-id",
@@ -180,7 +180,7 @@ public class GenericGroupMemberTest {
             .setName("roundrobin")
             .setMetadata(new byte[]{1}));
 
-        GenericGroupMember member = new GenericGroupMember(
+        ClassicGroupMember member = new ClassicGroupMember(
             "member",
             Optional.of("group-instance-id"),
             "client-id",
@@ -199,7 +199,7 @@ public class GenericGroupMemberTest {
 
     @Test
     public void testHasValidGroupInstanceId() {
-        GenericGroupMember member = new GenericGroupMember(
+        ClassicGroupMember member = new ClassicGroupMember(
             "member",
             Optional.of("group-instance-id"),
             "client-id",
@@ -229,12 +229,12 @@ public class GenericGroupMemberTest {
         expectedProtocolNames.add("range");
         expectedProtocolNames.add("roundrobin");
 
-        assertEquals(expectedProtocolNames, GenericGroupMember.plainProtocolSet(protocolCollection));
+        assertEquals(expectedProtocolNames, ClassicGroupMember.plainProtocolSet(protocolCollection));
     }
 
     @Test
     public void testHasHeartbeatSatisfied() {
-        GenericGroupMember member = new GenericGroupMember(
+        ClassicGroupMember member = new ClassicGroupMember(
             "member",
             Optional.of("group-instance-id"),
             "client-id",
@@ -262,7 +262,7 @@ public class GenericGroupMemberTest {
 
     @Test
     public void testDescribeNoMetadata() {
-        GenericGroupMember member = new GenericGroupMember(
+        ClassicGroupMember member = new ClassicGroupMember(
             "member",
             Optional.of("group-instance-id"),
             "client-id",
@@ -295,7 +295,7 @@ public class GenericGroupMemberTest {
                 .setMetadata(new byte[]{0})
         ).iterator());
 
-        GenericGroupMember member = new GenericGroupMember(
+        ClassicGroupMember member = new ClassicGroupMember(
             "member",
             Optional.of("group-instance-id"),
             "client-id",

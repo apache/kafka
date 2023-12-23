@@ -18,6 +18,7 @@
 package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.common.protocol.Errors;
+
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -99,14 +100,21 @@ public enum MemberState {
      * unrecoverable state where the member won't send any requests to the broker and cannot
      * perform any other transition.
      */
-    FATAL;
+    FATAL,
+
+    /**
+     * An intermediate state indicating the consumer is staled because the user has not polled the consumer
+     * within the <code>max.poll.interval.ms</code> time bound; therefore causing the member to leave the
+     * group. The member rejoins on the next poll.
+     */
+    STALE;
 
     // Valid state transitions
     static {
 
         STABLE.previousValidStates = Arrays.asList(JOINING, ACKNOWLEDGING, RECONCILING);
 
-        RECONCILING.previousValidStates = Arrays.asList(STABLE, JOINING, ACKNOWLEDGING);
+        RECONCILING.previousValidStates = Arrays.asList(STABLE, JOINING, ACKNOWLEDGING, RECONCILING);
 
         ACKNOWLEDGING.previousValidStates = Arrays.asList(RECONCILING);
 
@@ -116,14 +124,16 @@ public enum MemberState {
         FENCED.previousValidStates = Arrays.asList(JOINING, STABLE, RECONCILING, ACKNOWLEDGING,
                 PREPARE_LEAVING, LEAVING);
 
-        JOINING.previousValidStates = Arrays.asList(FENCED, UNSUBSCRIBED);
+        JOINING.previousValidStates = Arrays.asList(FENCED, UNSUBSCRIBED, STALE);
 
         PREPARE_LEAVING.previousValidStates = Arrays.asList(JOINING, STABLE, RECONCILING,
                 ACKNOWLEDGING, UNSUBSCRIBED, FENCED);
 
         LEAVING.previousValidStates = Arrays.asList(PREPARE_LEAVING);
 
-        UNSUBSCRIBED.previousValidStates = Arrays.asList(LEAVING);
+        UNSUBSCRIBED.previousValidStates = Arrays.asList(PREPARE_LEAVING, LEAVING);
+
+        STALE.previousValidStates = Arrays.asList(JOINING, RECONCILING, ACKNOWLEDGING, STABLE);
     }
 
     private List<MemberState> previousValidStates;
@@ -134,5 +144,14 @@ public enum MemberState {
 
     public List<MemberState> getPreviousValidStates() {
         return this.previousValidStates;
+    }
+
+    /**
+     * @return True if the member is in a state where it should reconcile the new assignment.
+     * Expected to be true whenever the member is part of the group and intends of staying in it
+     * (ex. false when the member is preparing to leave the group).
+     */
+    public boolean canHandleNewAssignment() {
+        return MemberState.RECONCILING.getPreviousValidStates().contains(this);
     }
 }

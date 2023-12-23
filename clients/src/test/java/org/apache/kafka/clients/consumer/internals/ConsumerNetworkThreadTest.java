@@ -55,8 +55,6 @@ import java.util.Optional;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CompletableFuture;
 
-import static java.util.Collections.singleton;
-import static java.util.Collections.singletonMap;
 import static org.apache.kafka.clients.consumer.internals.ConsumerTestBuilder.DEFAULT_HEARTBEAT_INTERVAL_MS;
 import static org.apache.kafka.clients.consumer.internals.ConsumerTestBuilder.DEFAULT_REQUEST_TIMEOUT_MS;
 import static org.apache.kafka.test.TestUtils.DEFAULT_MAX_WAIT_MS;
@@ -85,6 +83,8 @@ public class ConsumerNetworkThreadTest {
     private OffsetsRequestManager offsetsRequestManager;
     private CommitRequestManager commitRequestManager;
     private CoordinatorRequestManager coordinatorRequestManager;
+    private HeartbeatRequestManager heartbeatRequestManager;
+    private MembershipManager memberhipsManager;
     private ConsumerNetworkThread consumerNetworkThread;
     private MockClient client;
     private SubscriptionState subscriptions;
@@ -101,6 +101,8 @@ public class ConsumerNetworkThreadTest {
         commitRequestManager = testBuilder.commitRequestManager.orElseThrow(IllegalStateException::new);
         offsetsRequestManager = testBuilder.offsetsRequestManager;
         coordinatorRequestManager = testBuilder.coordinatorRequestManager.orElseThrow(IllegalStateException::new);
+        heartbeatRequestManager = testBuilder.heartbeatRequestManager.orElseThrow(IllegalStateException::new);
+        memberhipsManager = testBuilder.membershipManager.orElseThrow(IllegalStateException::new);
         consumerNetworkThread = testBuilder.consumerNetworkThread;
         subscriptions = testBuilder.subscriptions;
         consumerNetworkThread.initializeResources();
@@ -125,7 +127,6 @@ public class ConsumerNetworkThreadTest {
         TestUtils.waitForCondition(isStarted,
                 "The consumer network thread did not start within " + DEFAULT_MAX_WAIT_MS + " ms");
 
-        prepareTearDown();
         consumerNetworkThread.close(Duration.ofMillis(DEFAULT_MAX_WAIT_MS));
 
         TestUtils.waitForCondition(isClosed,
@@ -134,7 +135,7 @@ public class ConsumerNetworkThreadTest {
 
     @Test
     public void testApplicationEvent() {
-        ApplicationEvent e = new CommitApplicationEvent(new HashMap<>());
+        ApplicationEvent e = new CommitApplicationEvent(new HashMap<>(), Optional.empty());
         applicationEventsQueue.add(e);
         consumerNetworkThread.runOnce();
         verify(applicationEventProcessor, times(1)).process(e);
@@ -150,7 +151,7 @@ public class ConsumerNetworkThreadTest {
 
     @Test
     public void testCommitEvent() {
-        ApplicationEvent e = new CommitApplicationEvent(new HashMap<>());
+        ApplicationEvent e = new CommitApplicationEvent(new HashMap<>(), Optional.empty());
         applicationEventsQueue.add(e);
         consumerNetworkThread.runOnce();
         verify(applicationEventProcessor).process(any(CommitApplicationEvent.class));
@@ -207,12 +208,13 @@ public class ConsumerNetworkThreadTest {
         verify(applicationEventProcessor).process(any(AssignmentChangeApplicationEvent.class));
         verify(networkClient, times(1)).poll(anyLong(), anyLong());
         verify(commitRequestManager, times(1)).updateAutoCommitTimer(currentTimeMs);
-        verify(commitRequestManager, times(1)).maybeAutoCommit(offset);
+        // Assignment change should generate an async commit (not retried).
+        verify(commitRequestManager, times(1)).maybeAutoCommitAllConsumedAsync();
     }
 
     @Test
     void testFetchTopicMetadata() {
-        applicationEventsQueue.add(new TopicMetadataApplicationEvent("topic"));
+        applicationEventsQueue.add(new TopicMetadataApplicationEvent("topic", Long.MAX_VALUE));
         consumerNetworkThread.runOnce();
         verify(applicationEventProcessor).process(any(TopicMetadataApplicationEvent.class));
     }
@@ -271,8 +273,8 @@ public class ConsumerNetworkThreadTest {
         coordinatorRequestManager.markCoordinatorUnknown("test", time.milliseconds());
         client.prepareResponse(FindCoordinatorResponse.prepareResponse(Errors.NONE, "group-id", node));
         prepareOffsetCommitRequest(new HashMap<>(), Errors.NONE, false);
-        CompletableApplicationEvent<Void> event1 = spy(new CommitApplicationEvent(Collections.emptyMap()));
-        ApplicationEvent event2 = new CommitApplicationEvent(Collections.emptyMap());
+        CompletableApplicationEvent<Void> event1 = spy(new CommitApplicationEvent(Collections.emptyMap(), Optional.empty()));
+        ApplicationEvent event2 = new CommitApplicationEvent(Collections.emptyMap(), Optional.empty());
         CompletableFuture<Void> future = new CompletableFuture<>();
         when(event1.future()).thenReturn(future);
         applicationEventsQueue.add(event1);
@@ -283,44 +285,6 @@ public class ConsumerNetworkThreadTest {
         consumerNetworkThread.cleanup();
         assertTrue(future.isCompletedExceptionally());
         assertTrue(applicationEventsQueue.isEmpty());
-    }
-
-    @Test
-    void testCoordinatorConnectionOnClose() {
-        TopicPartition tp = new TopicPartition("topic", 0);
-        subscriptions.assignFromUser(singleton(new TopicPartition("topic", 0)));
-        subscriptions.seekUnvalidated(tp, new SubscriptionState.FetchPosition(100));
-        Node node = metadata.fetch().nodes().get(0);
-        coordinatorRequestManager.markCoordinatorUnknown("test", time.milliseconds());
-        client.prepareResponse(FindCoordinatorResponse.prepareResponse(Errors.NONE, "group-id", node));
-        prepareOffsetCommitRequest(singletonMap(tp, 100L), Errors.NONE, false);
-        consumerNetworkThread.cleanup();
-        assertTrue(coordinatorRequestManager.coordinator().isPresent());
-        assertFalse(client.hasPendingResponses());
-        assertFalse(client.hasInFlightRequests());
-    }
-
-    @Test
-    void testAutoCommitOnClose() {
-        TopicPartition tp = new TopicPartition("topic", 0);
-        Node node = metadata.fetch().nodes().get(0);
-        subscriptions.assignFromUser(singleton(tp));
-        subscriptions.seek(tp, 100);
-        coordinatorRequestManager.markCoordinatorUnknown("test", time.milliseconds());
-        client.prepareResponse(FindCoordinatorResponse.prepareResponse(Errors.NONE, "group-id", node));
-        prepareOffsetCommitRequest(singletonMap(tp, 100L), Errors.NONE, false);
-        consumerNetworkThread.maybeAutocommitOnClose(time.timer(1000));
-        assertTrue(coordinatorRequestManager.coordinator().isPresent());
-        verify(commitRequestManager).createCommitAllConsumedRequest();
-
-        assertFalse(client.hasPendingResponses());
-        assertFalse(client.hasInFlightRequests());
-    }
-
-    private void prepareTearDown() {
-        Node node = metadata.fetch().nodes().get(0);
-        client.prepareResponse(FindCoordinatorResponse.prepareResponse(Errors.NONE, "group-id", node));
-        prepareOffsetCommitRequest(new HashMap<>(), Errors.NONE, false);
     }
 
     private void prepareOffsetCommitRequest(final Map<TopicPartition, Long> expectedOffsets,

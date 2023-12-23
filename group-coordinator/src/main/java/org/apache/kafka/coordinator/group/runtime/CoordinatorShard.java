@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.coordinator.group.runtime;
 
+import org.apache.kafka.common.requests.TransactionResult;
 import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
 
@@ -51,11 +52,27 @@ public interface CoordinatorShard<U> {
     /**
      * Replay a record to update the state machine.
      *
-     * @param record The record to replay.
+     * @param producerId    The producer id.
+     * @param producerEpoch The producer epoch.
+     * @param record        The record to replay.
      */
     void replay(
         long producerId,
         short producerEpoch,
         U record
     ) throws RuntimeException;
+
+    /**
+     * Applies the end transaction marker.
+     *
+     * @param producerId    The producer id.
+     * @param producerEpoch The producer epoch.
+     * @param result        The result of the transaction.
+     * @throws RuntimeException if the transaction can not be completed.
+     */
+    default void replayEndTransactionMarker(
+        long producerId,
+        short producerEpoch,
+        TransactionResult result
+    ) throws RuntimeException {}
 }

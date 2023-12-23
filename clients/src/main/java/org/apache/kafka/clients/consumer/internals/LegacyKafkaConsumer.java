@@ -96,13 +96,13 @@ import static org.apache.kafka.common.utils.Utils.join;
 import static org.apache.kafka.common.utils.Utils.swallow;
 
 /**
- * A client that consumes records from a Kafka cluster using the {@link GroupProtocol#GENERIC generic group protocol}.
+ * A client that consumes records from a Kafka cluster using the {@link GroupProtocol#CLASSIC classic group protocol}.
  * In this implementation, all network I/O happens in the thread of the application making the call.
  *
  * <p/>
  *
  * <em>Note:</em> per its name, this implementation is left for backward compatibility purposes. The updated consumer
- * group protocol (from KIP-848) introduces allows users continue using the legacy "generic" group protocol.
+ * group protocol (from KIP-848) introduces allows users continue using the legacy "classic" group protocol.
  * This class should not be invoked directly; users should instead create a {@link KafkaConsumer} as before.
  */
 public class LegacyKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {

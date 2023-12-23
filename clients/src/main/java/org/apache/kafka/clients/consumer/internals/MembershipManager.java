@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
+import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
+import org.apache.kafka.clients.consumer.internals.events.ConsumerRebalanceListenerCallbackCompletedEvent;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatResponseData;
 
@@ -60,6 +62,11 @@ public interface MembershipManager {
      * {@link MemberState}.
      */
     MemberState state();
+
+    /**
+     * @return True if the member is staled due to expired poll timer.
+     */
+    boolean isStaled();
 
     /**
      * Update member info and transition member state based on a successful heartbeat response.
@@ -139,4 +146,32 @@ public interface MembershipManager {
      * Note that list of topics of the subscription is taken from the shared subscription state.
      */
     void onSubscriptionUpdated();
+
+    /**
+     * Signals that a {@link ConsumerRebalanceListener} callback has completed. This is invoked when the
+     * application thread has completed the callback and has submitted a
+     * {@link ConsumerRebalanceListenerCallbackCompletedEvent} to the network I/O thread. At this point, we
+     * notify the state machine that it's complete so that it can move to the next appropriate step of the
+     * rebalance process.
+     *
+     * @param event Event with details about the callback that was executed
+     */
+    void consumerRebalanceListenerCallbackCompleted(ConsumerRebalanceListenerCallbackCompletedEvent event);
+
+    /**
+     * Transition to the {@link MemberState#JOINING} state to attempt joining a group.
+     */
+    void transitionToJoining();
+
+    /**
+     * When the user stops polling the consumer and the <code>max.poll.interval.ms</code> timer expires, we transition
+     * the member to STALE.
+     */
+    void transitionToStale();
+
+    /**
+     * Register a listener that will be called whenever the member state changes due to
+     * transitions of new data received from the server, as defined in {@link MemberStateListener}.
+     */
+    void registerStateListener(MemberStateListener listener);
 }
