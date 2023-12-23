@@ -50,11 +50,19 @@ public class BuiltInDslStoreSuppliers {
                         params.isSlidingWindow());
             }
 
-            return Stores.persistentTimestampedWindowStore(
-                    params.name(),
-                    params.retentionPeriod(),
-                    params.windowSize(),
-                    params.retainDuplicates());
+            if (params.isTimestamped()) {
+                return Stores.persistentTimestampedWindowStore(
+                        params.name(),
+                        params.retentionPeriod(),
+                        params.windowSize(),
+                        params.retainDuplicates());
+            } else {
+                return Stores.persistentWindowStore(
+                        params.name(),
+                        params.retentionPeriod(),
+                        params.windowSize(),
+                        params.retainDuplicates());
+            }
         }
 
         @Override

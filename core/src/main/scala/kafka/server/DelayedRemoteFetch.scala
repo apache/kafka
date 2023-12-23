@@ -41,6 +41,10 @@ class DelayedRemoteFetch(remoteFetchTask: Future[Void],
                          responseCallback: Seq[(TopicIdPartition, FetchPartitionData)] => Unit)
   extends DelayedOperation(fetchParams.maxWaitMs) {
 
+  if (fetchParams.isFromFollower) {
+    throw new IllegalStateException(s"The follower should not invoke remote fetch. Fetch params are: $fetchParams")
+  }
+
   /**
    * The operation can be completed if:
    *
@@ -82,10 +86,7 @@ class DelayedRemoteFetch(remoteFetchTask: Future[Void],
     val cancelled = remoteFetchTask.cancel(true)
     if (!cancelled) debug(s"Remote fetch task for RemoteStorageFetchInfo: $remoteFetchInfo could not be cancelled and its isDone value is ${remoteFetchTask.isDone}")
 
-    if (fetchParams.isFromFollower)
-      warn(s"The follower should not invoke remote fetch. Fetch params are: $fetchParams")
-    else
-      DelayedRemoteFetchMetrics.expiredRequestMeter.mark()
+    DelayedRemoteFetchMetrics.expiredRequestMeter.mark()
   }
 
   /**
