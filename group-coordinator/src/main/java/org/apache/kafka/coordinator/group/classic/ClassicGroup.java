@@ -14,7 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.coordinator.group.generic;
+package org.apache.kafka.coordinator.group.classic;
 
 import org.apache.kafka.clients.consumer.internals.ConsumerProtocol;
 import org.apache.kafka.common.errors.ApiException;
@@ -56,20 +56,20 @@ import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
 
-import static org.apache.kafka.coordinator.group.generic.GenericGroupState.COMPLETING_REBALANCE;
-import static org.apache.kafka.coordinator.group.generic.GenericGroupState.DEAD;
-import static org.apache.kafka.coordinator.group.generic.GenericGroupState.EMPTY;
-import static org.apache.kafka.coordinator.group.generic.GenericGroupState.PREPARING_REBALANCE;
-import static org.apache.kafka.coordinator.group.generic.GenericGroupState.STABLE;
+import static org.apache.kafka.coordinator.group.classic.ClassicGroupState.COMPLETING_REBALANCE;
+import static org.apache.kafka.coordinator.group.classic.ClassicGroupState.DEAD;
+import static org.apache.kafka.coordinator.group.classic.ClassicGroupState.EMPTY;
+import static org.apache.kafka.coordinator.group.classic.ClassicGroupState.PREPARING_REBALANCE;
+import static org.apache.kafka.coordinator.group.classic.ClassicGroupState.STABLE;
 
 /**
- * This class holds metadata for a generic group where the
+ * This class holds metadata for a classic group where the
  * member assignment is driven solely from the client side.
  *
  * The APIs members use to make changes to the group membership
  * consist of JoinGroup, SyncGroup, and LeaveGroup.
  */
-public class GenericGroup implements Group {
+public class ClassicGroup implements Group {
 
     /**
      * Empty generation.
@@ -110,12 +110,12 @@ public class GenericGroup implements Group {
     /**
      * The current group state.
      */
-    private GenericGroupState state;
+    private ClassicGroupState state;
 
     /**
      * The previous group state.
      */
-    private GenericGroupState previousState;
+    private ClassicGroupState previousState;
 
     /**
      * The timestamp of when the group transitioned
@@ -146,7 +146,7 @@ public class GenericGroup implements Group {
     /**
      * The members of the group.
      */
-    private final Map<String, GenericGroupMember> members = new HashMap<>();
+    private final Map<String, ClassicGroupMember> members = new HashMap<>();
 
     /**
      * The static members of the group.
@@ -191,10 +191,10 @@ public class GenericGroup implements Group {
      */
     private final GroupCoordinatorMetricsShard metrics;
 
-    public GenericGroup(
+    public ClassicGroup(
         LogContext logContext,
         String groupId,
-        GenericGroupState initialState,
+        ClassicGroupState initialState,
         Time time,
         GroupCoordinatorMetricsShard metrics
     ) {
@@ -212,10 +212,10 @@ public class GenericGroup implements Group {
         );
     }
 
-    public GenericGroup(
+    public ClassicGroup(
         LogContext logContext,
         String groupId,
-        GenericGroupState initialState,
+        ClassicGroupState initialState,
         Time time,
         GroupCoordinatorMetricsShard metrics,
         int generationId,
@@ -225,7 +225,7 @@ public class GenericGroup implements Group {
         Optional<Long> currentStateTimestamp
     ) {
         Objects.requireNonNull(logContext);
-        this.log = logContext.logger(GenericGroup.class);
+        this.log = logContext.logger(ClassicGroup.class);
         this.groupId = Objects.requireNonNull(groupId);
         this.state = Objects.requireNonNull(initialState);
         this.previousState = DEAD;
@@ -241,11 +241,11 @@ public class GenericGroup implements Group {
     /**
      * The type of this group.
      *
-     * @return The group type (Generic).
+     * @return The group type (Classic).
      */
     @Override
     public GroupType type() {
-        return GroupType.GENERIC;
+        return GroupType.CLASSIC;
     }
 
     /**
@@ -299,11 +299,11 @@ public class GenericGroup implements Group {
     /**
      * @return the current group state.
      */
-    public GenericGroupState currentState() {
+    public ClassicGroupState currentState() {
         return this.state;
     }
 
-    public GenericGroupState previousState() {
+    public ClassicGroupState previousState() {
         return this.previousState;
     }
 
@@ -320,7 +320,7 @@ public class GenericGroup implements Group {
      * @param groupState the state to match against.
      * @return true if the state matches, false otherwise.
      */
-    public boolean isInState(GenericGroupState groupState) {
+    public boolean isInState(ClassicGroupState groupState) {
         return this.state == groupState;
     }
 
@@ -340,7 +340,7 @@ public class GenericGroup implements Group {
      * @param memberId the member id.
      * @return the member metadata if it exists, null otherwise.
      */
-    public GenericGroupMember member(String memberId) {
+    public ClassicGroupMember member(String memberId) {
         return members.get(memberId);
     }
 
@@ -407,7 +407,7 @@ public class GenericGroup implements Group {
      *
      * @param member  the member to add.
      */
-    public void add(GenericGroupMember member) {
+    public void add(ClassicGroupMember member) {
         add(member, null);
     }
 
@@ -417,7 +417,7 @@ public class GenericGroup implements Group {
      * @param member  the member to add.
      * @param future  the future to complete once the join group phase completes.
      */
-    public void add(GenericGroupMember member, CompletableFuture<JoinGroupResponseData> future) {
+    public void add(ClassicGroupMember member, CompletableFuture<JoinGroupResponseData> future) {
         member.groupInstanceId().ifPresent(instanceId -> {
             if (staticMembers.containsKey(instanceId)) {
                 throw new IllegalStateException("Static member with groupInstanceId=" +
@@ -460,7 +460,7 @@ public class GenericGroup implements Group {
      * @param memberId the member id to remove.
      */
     public void remove(String memberId) {
-        GenericGroupMember removedMember = members.remove(memberId);
+        ClassicGroupMember removedMember = members.remove(memberId);
         if (removedMember != null) {
             decrementSupportedProtocols(removedMember);
             if (removedMember.isAwaitingJoin()) {
@@ -493,9 +493,9 @@ public class GenericGroup implements Group {
      */
     public boolean maybeElectNewJoinedLeader() {
         if (leaderId.isPresent()) {
-            GenericGroupMember currentLeader = member(leaderId.get());
+            ClassicGroupMember currentLeader = member(leaderId.get());
             if (!currentLeader.isAwaitingJoin()) {
-                for (GenericGroupMember member : members.values()) {
+                for (ClassicGroupMember member : members.values()) {
                     if (member.isAwaitingJoin()) {
                         leaderId = Optional.of(member.memberId());
                         log.info("Group leader [memberId: {}, groupInstanceId: {}] " +
@@ -531,12 +531,12 @@ public class GenericGroup implements Group {
      * @param newMemberId      the new member id that will replace the old member id.
      * @return the member with the new id.
      */
-    public GenericGroupMember replaceStaticMember(
+    public ClassicGroupMember replaceStaticMember(
         String groupInstanceId,
         String oldMemberId,
         String newMemberId
     ) {
-        GenericGroupMember removedMember = members.remove(oldMemberId);
+        ClassicGroupMember removedMember = members.remove(oldMemberId);
         if (removedMember == null) {
             throw new IllegalArgumentException("Cannot replace non-existing member id " + oldMemberId);
         }
@@ -560,7 +560,7 @@ public class GenericGroup implements Group {
             .setErrorCode(Errors.FENCED_INSTANCE_ID.code());
         completeSyncFuture(removedMember, syncGroupResponse);
 
-        GenericGroupMember newMember = new GenericGroupMember(
+        ClassicGroupMember newMember = new ClassicGroupMember(
             newMemberId,
             removedMember.groupInstanceId(),
             removedMember.clientId(),
@@ -693,8 +693,8 @@ public class GenericGroup implements Group {
      * @return members who have yet to rejoin during the
      *         join group phase.
      */
-    public Map<String, GenericGroupMember> notYetRejoinedMembers() {
-        Map<String, GenericGroupMember> notYetRejoinedMembers = new HashMap<>();
+    public Map<String, ClassicGroupMember> notYetRejoinedMembers() {
+        Map<String, ClassicGroupMember> notYetRejoinedMembers = new HashMap<>();
         members.values().forEach(member -> {
             if (!member.isAwaitingJoin()) {
                 notYetRejoinedMembers.put(member.memberId(), member);
@@ -741,7 +741,7 @@ public class GenericGroup implements Group {
     /**
      * @return all members.
      */
-    public Collection<GenericGroupMember> allMembers() {
+    public Collection<ClassicGroupMember> allMembers() {
         return members.values();
     }
 
@@ -751,7 +751,7 @@ public class GenericGroup implements Group {
      */
     public int rebalanceTimeoutMs() {
         int maxRebalanceTimeoutMs = 0;
-        for (GenericGroupMember member : members.values()) {
+        for (ClassicGroupMember member : members.values()) {
             maxRebalanceTimeoutMs = Math.max(maxRebalanceTimeoutMs, member.rebalanceTimeoutMs());
         }
         return maxRebalanceTimeoutMs;
@@ -856,8 +856,8 @@ public class GenericGroup implements Group {
     /**
      * Validates the OffsetFetch request.
      *
-     * @param memberId              The member id. This is not provided for generic groups.
-     * @param memberEpoch           The member epoch for consumer groups. This is not provided for generic groups.
+     * @param memberId              The member id. This is not provided for classic groups.
+     * @param memberEpoch           The member epoch for consumer groups. This is not provided for classic groups.
      * @param lastCommittedOffset   The last committed offsets in the timeline.
      */
     @Override
@@ -984,12 +984,12 @@ public class GenericGroup implements Group {
      * Transition to a group state.
      * @param groupState the group state.
      */
-    public void transitionTo(GenericGroupState groupState) {
+    public void transitionTo(ClassicGroupState groupState) {
         assertValidTransition(groupState);
         previousState = state;
         state = groupState;
         currentStateTimestamp = Optional.of(time.milliseconds());
-        metrics.onGenericGroupStateTransition(previousState, state);
+        metrics.onClassicGroupStateTransition(previousState, state);
     }
 
     /**
@@ -1028,7 +1028,7 @@ public class GenericGroup implements Group {
      *
      * @param member the member.
      */
-    private void incrementSupportedProtocols(GenericGroupMember member) {
+    private void incrementSupportedProtocols(ClassicGroupMember member) {
         member.supportedProtocols().forEach(protocol -> {
             int count = supportedProtocols.getOrDefault(protocol.name(), 0);
             supportedProtocols.put(protocol.name(), count + 1);
@@ -1041,7 +1041,7 @@ public class GenericGroup implements Group {
      *
      * @param member the member.
      */
-    private void decrementSupportedProtocols(GenericGroupMember member) {
+    private void decrementSupportedProtocols(ClassicGroupMember member) {
         member.supportedProtocols().forEach(protocol -> {
             int count = supportedProtocols.getOrDefault(protocol.name(), 0);
             supportedProtocols.put(protocol.name(), count - 1);
@@ -1069,10 +1069,10 @@ public class GenericGroup implements Group {
      *
      * @return a boolean based on the condition mentioned above.
      */
-    public boolean supportsProtocols(GenericGroupMember member) {
+    public boolean supportsProtocols(ClassicGroupMember member) {
         return supportsProtocols(
             member.protocolType(),
-            GenericGroupMember.plainProtocolSet(member.supportedProtocols())
+            ClassicGroupMember.plainProtocolSet(member.supportedProtocols())
         );
     }
 
@@ -1091,7 +1091,7 @@ public class GenericGroup implements Group {
     ) {
         return supportsProtocols(
             memberProtocolType,
-            GenericGroupMember.plainProtocolSet(memberProtocols)
+            ClassicGroupMember.plainProtocolSet(memberProtocols)
         );
     }
 
@@ -1122,7 +1122,7 @@ public class GenericGroup implements Group {
     }
 
     /**
-     * Returns true if the generic group is actively subscribed to the topic. When the generic group does not know,
+     * Returns true if the classic group is actively subscribed to the topic. When the classic group does not know,
      * because the information is not available yet or because it has failed to parse the Consumer Protocol, we
      * consider the group not subscribed to the topic if the group is not using any protocol or not using the
      * consumer group protocol.
@@ -1191,7 +1191,7 @@ public class GenericGroup implements Group {
      * @param future              the future that is invoked once the join phase is complete.
      */
     public void updateMember(
-        GenericGroupMember member,
+        ClassicGroupMember member,
         JoinGroupRequestProtocolCollection protocols,
         int rebalanceTimeoutMs,
         int sessionTimeoutMs,
@@ -1219,7 +1219,7 @@ public class GenericGroup implements Group {
      * @return true if a join future actually completes.
      */
     public boolean completeJoinFuture(
-        GenericGroupMember member,
+        ClassicGroupMember member,
         JoinGroupResponseData response
     ) {
         if (member.isAwaitingJoin()) {
@@ -1239,7 +1239,7 @@ public class GenericGroup implements Group {
      * @return true if a sync future actually completes.
      */
     public boolean completeSyncFuture(
-        GenericGroupMember member,
+        ClassicGroupMember member,
         SyncGroupResponseData response
     ) {
         if (member.isAwaitingSync()) {
@@ -1272,9 +1272,9 @@ public class GenericGroup implements Group {
      *
      * @return the members.
      */
-    public List<JoinGroupResponseMember> currentGenericGroupMembers() {
+    public List<JoinGroupResponseMember> currentClassicGroupMembers() {
         if (isInState(DEAD) || isInState(PREPARING_REBALANCE)) {
-            throw new IllegalStateException("Cannot obtain generic member metadata for group " +
+            throw new IllegalStateException("Cannot obtain classic member metadata for group " +
                 groupId + " in state " + state);
         }
 
@@ -1301,7 +1301,7 @@ public class GenericGroup implements Group {
      */
     public Map<String, byte[]> groupAssignment() {
         return allMembers().stream().collect(Collectors.toMap(
-            GenericGroupMember::memberId, GenericGroupMember::assignment
+            ClassicGroupMember::memberId, ClassicGroupMember::assignment
         ));
     }
 
@@ -1310,7 +1310,7 @@ public class GenericGroup implements Group {
      *
      * @param targetState the target state to transition to.
      */
-    private void assertValidTransition(GenericGroupState targetState) {
+    private void assertValidTransition(ClassicGroupState targetState) {
         if (!targetState.validPreviousStates().contains(state)) {
             throw new IllegalStateException("Group " + groupId + " should be in one of " +
                 targetState.validPreviousStates() + " states before moving to " + targetState +
@@ -1320,7 +1320,7 @@ public class GenericGroup implements Group {
 
     @Override
     public String toString() {
-        return "GenericGroupMetadata(" +
+        return "ClassicGroupMetadata(" +
             "groupId=" + groupId + ", " +
             "generation=" + generationId + ", " +
             "protocolType=" + protocolType + ", " +

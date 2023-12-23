@@ -200,7 +200,8 @@ class KafkaRequestHandlerTest {
       RemoteStorageMetrics.REMOTE_DELETE_LAG_BYTES_METRIC.getName,
       RemoteStorageMetrics.REMOTE_DELETE_LAG_SEGMENTS_METRIC.getName,
       RemoteStorageMetrics.REMOTE_LOG_SIZE_COMPUTATION_TIME_METRIC.getName,
-      RemoteStorageMetrics.REMOTE_LOG_METADATA_COUNT_METRIC.getName)
+      RemoteStorageMetrics.REMOTE_LOG_METADATA_COUNT_METRIC.getName,
+      RemoteStorageMetrics.REMOTE_LOG_SIZE_BYTES_METRIC.getName)
 
     RemoteStorageMetrics.brokerTopicStatsMetrics.forEach(metric => {
       if (systemRemoteStorageEnabled) {
@@ -556,4 +557,91 @@ class KafkaRequestHandlerTest {
 
     assertEquals(0, brokerTopicMetrics.remoteLogMetadataCount)
   }
+
+  @ParameterizedTest
+  @ValueSource(booleans = Array(true, false))
+  def testSingularLogSizeBytesMetric(systemRemoteStorageEnabled: Boolean): Unit = {
+    val brokerTopicMetrics = setupBrokerTopicMetrics(systemRemoteStorageEnabled)
+
+    if (systemRemoteStorageEnabled) {
+      brokerTopicMetrics.recordRemoteLogSizeBytes(0, 100);
+      brokerTopicMetrics.recordRemoteLogSizeBytes(1, 150);
+      brokerTopicMetrics.recordRemoteLogSizeBytes(2, 250);
+      assertEquals(500, brokerTopicMetrics.remoteLogSizeBytes)
+    } else {
+      assertEquals(None, brokerTopicMetrics.metricGaugeMap.get(RemoteStorageMetrics.REMOTE_LOG_SIZE_BYTES_METRIC.getName))
+    }
+  }
+
+  @Test
+  def testMultipleLogSizeBytesMetrics(): Unit = {
+    val brokerTopicMetrics = setupBrokerTopicMetrics()
+
+    brokerTopicMetrics.recordRemoteLogSizeBytes(0, 1);
+    brokerTopicMetrics.recordRemoteLogSizeBytes(1, 2);
+    brokerTopicMetrics.recordRemoteLogSizeBytes(2, 3);
+
+    brokerTopicMetrics.recordRemoteLogSizeBytes(0, 4);
+    brokerTopicMetrics.recordRemoteLogSizeBytes(1, 5);
+    brokerTopicMetrics.recordRemoteLogSizeBytes(2, 6);
+
+    assertEquals(15, brokerTopicMetrics.remoteLogSizeBytes)
+  }
+
+  @Test
+  def testLogSizeBytesMetricWithPartitionExpansion(): Unit = {
+    val brokerTopicMetrics = setupBrokerTopicMetrics()
+
+    brokerTopicMetrics.recordRemoteLogSizeBytes(0, 1);
+    brokerTopicMetrics.recordRemoteLogSizeBytes(1, 2);
+
+    assertEquals(3, brokerTopicMetrics.remoteLogSizeBytes)
+
+    brokerTopicMetrics.recordRemoteLogSizeBytes(2, 3);
+
+    assertEquals(6, brokerTopicMetrics.remoteLogSizeBytes)
+  }
+
+  @Test
+  def testLogSizeBytesMetricWithPartitionShrinking(): Unit = {
+    val brokerTopicMetrics = setupBrokerTopicMetrics()
+
+    brokerTopicMetrics.recordRemoteLogSizeBytes(0, 1);
+    brokerTopicMetrics.recordRemoteLogSizeBytes(1, 2);
+
+    assertEquals(3, brokerTopicMetrics.remoteLogSizeBytes)
+
+    brokerTopicMetrics.removeRemoteLogSizeBytes(1);
+
+    assertEquals(1, brokerTopicMetrics.remoteLogSizeBytes)
+  }
+
+  @Test
+  def testLogSizeBytesMetricWithRemovingNonexistentPartitions(): Unit = {
+    val brokerTopicMetrics = setupBrokerTopicMetrics()
+
+    brokerTopicMetrics.recordRemoteLogSizeBytes(0, 1);
+    brokerTopicMetrics.recordRemoteLogSizeBytes(1, 2);
+
+    assertEquals(3, brokerTopicMetrics.remoteLogSizeBytes)
+
+    brokerTopicMetrics.removeRemoteLogSizeBytes(3);
+
+    assertEquals(3, brokerTopicMetrics.remoteLogSizeBytes)
+  }
+
+  @Test
+  def testLogSizeBytesMetricClear(): Unit = {
+    val brokerTopicMetrics = setupBrokerTopicMetrics()
+
+    brokerTopicMetrics.recordRemoteLogSizeBytes(0, 1);
+    brokerTopicMetrics.recordRemoteLogSizeBytes(1, 2);
+
+    assertEquals(3, brokerTopicMetrics.remoteLogSizeBytes)
+
+    brokerTopicMetrics.close()
+
+    assertEquals(0, brokerTopicMetrics.remoteLogSizeBytes)
+  }
+
 }

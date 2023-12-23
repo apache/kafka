@@ -20,7 +20,8 @@ import kafka.server.ReplicaManager
 import kafka.utils.Logging
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.NotLeaderOrFollowerException
-import org.apache.kafka.common.record.{FileRecords, MemoryRecords}
+import org.apache.kafka.common.record.{ControlRecordType, FileRecords, MemoryRecords}
+import org.apache.kafka.common.requests.TransactionResult
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.coordinator.group.runtime.CoordinatorLoader.{Deserializer, LoadSummary, UnknownRecordTypeException}
 import org.apache.kafka.coordinator.group.runtime.{CoordinatorLoader, CoordinatorPlayback}
@@ -135,7 +136,22 @@ class CoordinatorLoaderImpl[T](
 
             memoryRecords.batches.forEach { batch =>
               if (batch.isControlBatch) {
-                throw new IllegalStateException("Control batches are not supported yet.")
+                batch.asScala.foreach { record =>
+                  val controlRecord = ControlRecordType.parse(record.key)
+                  if (controlRecord == ControlRecordType.COMMIT) {
+                    coordinator.replayEndTransactionMarker(
+                      batch.producerId,
+                      batch.producerEpoch,
+                      TransactionResult.COMMIT
+                    )
+                  } else if (controlRecord == ControlRecordType.ABORT) {
+                    coordinator.replayEndTransactionMarker(
+                      batch.producerId,
+                      batch.producerEpoch,
+                      TransactionResult.ABORT
+                    )
+                  }
+                }
               } else {
                 batch.asScala.foreach { record =>
                   numRecords = numRecords + 1
