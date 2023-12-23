@@ -2191,7 +2191,6 @@ public class RemoteLogManagerTest {
         );
 
         when(rsmManager.fetchLogSegment(any(), anyInt())).thenReturn(fileInputStream);
-        when(remoteLogMetadataManager.remoteLogSegmentMetadata(any(), anyInt(), anyLong())).thenReturn(Optional.of(segmentMetadata), Optional.of(segmentMetadata));
         when(segmentMetadata.topicIdPartition()).thenReturn(new TopicIdPartition(Uuid.randomUuid(), tp));
         // Fetching first time  FirstBatch return null because of log compaction.
         // Fetching second time  FirstBatch return data.

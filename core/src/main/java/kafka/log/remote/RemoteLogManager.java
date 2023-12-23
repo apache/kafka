@@ -1422,9 +1422,10 @@ public class RemoteLogManager implements Closeable {
             }
         }
     }
+
     // visible for testing.
     Optional<RemoteLogSegmentMetadata> findNextSegmentMetadata(RemoteLogSegmentMetadata segmentMetadata,
-                                                                       Option<LeaderEpochFileCache> leaderEpochFileCacheOption) throws RemoteStorageException {
+                                                               Option<LeaderEpochFileCache> leaderEpochFileCacheOption) throws RemoteStorageException {
         if (leaderEpochFileCacheOption.isEmpty()) {
             return Optional.empty();
         }
