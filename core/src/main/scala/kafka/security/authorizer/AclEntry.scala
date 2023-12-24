@@ -99,7 +99,7 @@ object AclEntry {
   def supportedOperations(resourceType: ResourceType): Set[AclOperation] = {
     resourceType match {
       case ResourceType.TOPIC => Set(READ, WRITE, CREATE, DESCRIBE, DELETE, ALTER, DESCRIBE_CONFIGS, ALTER_CONFIGS)
-      case ResourceType.GROUP => Set(READ, DESCRIBE, DELETE)
+      case ResourceType.GROUP => Set(READ, DESCRIBE, DELETE, ALTER_CONFIGS)
       case ResourceType.CLUSTER => Set(CREATE, CLUSTER_ACTION, DESCRIBE_CONFIGS, ALTER_CONFIGS, IDEMPOTENT_WRITE, ALTER, DESCRIBE)
       case ResourceType.TRANSACTIONAL_ID => Set(DESCRIBE, WRITE)
       case ResourceType.DELEGATION_TOKEN => Set(DESCRIBE)

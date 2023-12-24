@@ -46,6 +46,7 @@ import org.apache.kafka.common.requests.RequestContext;
 import org.apache.kafka.common.requests.TransactionResult;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.coordinator.group.consumer.ConsumerGroupConfigManager;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupCurrentMemberAssignmentKey;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupCurrentMemberAssignmentValue;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupMemberMetadataKey;
@@ -99,6 +100,7 @@ public class GroupCoordinatorShard implements CoordinatorShard<Record> {
         private SnapshotRegistry snapshotRegistry;
         private Time time;
         private CoordinatorTimer<Void, Record> timer;
+        private ConsumerGroupConfigManager consumerGroupConfigManager;
         private CoordinatorMetrics coordinatorMetrics;
         private TopicPartition topicPartition;
 
@@ -129,6 +131,13 @@ public class GroupCoordinatorShard implements CoordinatorShard<Record> {
             CoordinatorTimer<Void, Record> timer
         ) {
             this.timer = timer;
+            return this;
+        }
+
+        public CoordinatorShardBuilder<GroupCoordinatorShard, Record> withConsumerGroupConfigManager(
+            ConsumerGroupConfigManager consumerGroupConfigManager
+        ) {
+            this.consumerGroupConfigManager = consumerGroupConfigManager;
             return this;
         }
 
@@ -169,6 +178,8 @@ public class GroupCoordinatorShard implements CoordinatorShard<Record> {
                 throw new IllegalArgumentException("CoordinatorMetrics must be set and be of type GroupCoordinatorMetrics.");
             if (topicPartition == null)
                 throw new IllegalArgumentException("TopicPartition must be set.");
+            if (consumerGroupConfigManager == null)
+                throw new IllegalArgumentException("ConsumerGroupConfigManager must be set.");
 
             GroupCoordinatorMetricsShard metricsShard = ((GroupCoordinatorMetrics) coordinatorMetrics)
                 .newMetricsShard(snapshotRegistry, topicPartition);
@@ -178,6 +189,7 @@ public class GroupCoordinatorShard implements CoordinatorShard<Record> {
                 .withSnapshotRegistry(snapshotRegistry)
                 .withTime(time)
                 .withTimer(timer)
+                .withConsumerGroupConfigManager(consumerGroupConfigManager)
                 .withConsumerGroupAssignors(config.consumerGroupAssignors)
                 .withConsumerGroupMaxSize(config.consumerGroupMaxSize)
                 .withConsumerGroupSessionTimeout(config.consumerGroupSessionTimeoutMs)

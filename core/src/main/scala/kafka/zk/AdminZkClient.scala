@@ -27,6 +27,7 @@ import org.apache.kafka.admin.{AdminUtils, BrokerMetadata}
 import org.apache.kafka.common.{TopicPartition, Uuid}
 import org.apache.kafka.common.errors._
 import org.apache.kafka.common.internals.Topic
+import org.apache.kafka.coordinator.group.consumer.ConsumerGroupConfig
 import org.apache.kafka.server.common.AdminOperationException
 import org.apache.kafka.server.config.ConfigType
 import org.apache.kafka.storage.internals.log.LogConfig
@@ -370,6 +371,7 @@ class AdminZkClient(zkClient: KafkaZkClient,
       case ConfigType.USER => changeUserOrUserClientIdConfig(entityName, configs, isUserClientId)
       case ConfigType.BROKER => changeBrokerConfig(parseBroker(entityName), configs)
       case ConfigType.IP => changeIpConfig(entityName, configs)
+      case ConfigType.GROUP => changeGroupConfig(entityName, configs)
       case _ => throw new IllegalArgumentException(s"$entityType is not a known entityType. Should be one of ${ConfigType.ALL}")
     }
   }
@@ -530,6 +532,20 @@ class AdminZkClient(zkClient: KafkaZkClient,
     */
   def validateBrokerConfig(configs: Properties): Unit = {
     DynamicConfig.Broker.validate(configs)
+  }
+
+  /**
+   * validates the group configs
+   * @param groupId group id for which configs are being validated
+   * @param configs properties to validate for the group
+   */
+  def validateGroupConfig(groupId: String, configs: Properties): Unit = {
+    ConsumerGroupConfig.validate(configs)
+  }
+
+  def changeGroupConfig(groupId: String, configs: Properties): Unit = {
+    validateGroupConfig(groupId, configs)
+    changeEntityConfig(ConfigType.GROUP, groupId, configs)
   }
 
   private def changeEntityConfig(rootEntityType: String, fullSanitizedEntityName: String, configs: Properties, isUserClientId: Boolean = false): Unit = {

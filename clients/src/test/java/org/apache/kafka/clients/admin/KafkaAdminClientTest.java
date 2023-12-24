@@ -1093,7 +1093,7 @@ public class KafkaAdminClientTest {
             future = env.adminClient().deleteTopics(singletonList("myTopic"),
                 new DeleteTopicsOptions()).all();
             TestUtils.assertFutureError(future, UnknownTopicOrPartitionException.class);
-            
+
             // With topic IDs
             Uuid topicId = Uuid.randomUuid();
 
@@ -1119,7 +1119,7 @@ public class KafkaAdminClientTest {
             TestUtils.assertFutureError(future, UnknownTopicIdException.class);
         }
     }
-    
+
 
     @Test
     public void testDeleteTopicsPartialResponse() throws Exception {
@@ -1136,7 +1136,7 @@ public class KafkaAdminClientTest {
 
             result.topicNameValues().get("myTopic").get();
             TestUtils.assertFutureThrows(result.topicNameValues().get("myOtherTopic"), ApiException.class);
-            
+
             // With topic IDs
             Uuid topicId1 = Uuid.randomUuid();
             Uuid topicId2 = Uuid.randomUuid();
@@ -1182,12 +1182,12 @@ public class KafkaAdminClientTest {
             assertNull(result.topicNameValues().get("topic1").get());
             assertNull(result.topicNameValues().get("topic2").get());
             TestUtils.assertFutureThrows(result.topicNameValues().get("topic3"), TopicExistsException.class);
-            
+
             // With topic IDs
             Uuid topicId1 = Uuid.randomUuid();
             Uuid topicId2 = Uuid.randomUuid();
             Uuid topicId3 = Uuid.randomUuid();
-            
+
             env.kafkaClient().prepareResponse(
                     expectDeleteTopicsRequestWithTopicIds(topicId1, topicId2, topicId3),
                     prepareDeleteTopicsResponse(1000,
@@ -1257,7 +1257,7 @@ public class KafkaAdminClientTest {
                 ThrottlingQuotaExceededException.class);
             assertEquals(0, e.throttleTimeMs());
             TestUtils.assertFutureThrows(result.topicNameValues().get("topic3"), TopicExistsException.class);
-            
+
             // With topic IDs
             Uuid topicId1 = Uuid.randomUuid();
             Uuid topicId2 = Uuid.randomUuid();
@@ -4112,11 +4112,18 @@ public class KafkaAdminClientTest {
                     .setErrorCode(Errors.INVALID_REQUEST.code())
                     .setErrorMessage("Config value append is not allowed for config"));
 
+            responseData.responses().add(new AlterConfigsResourceResponse()
+                    .setResourceName("")
+                    .setResourceType(ConfigResource.Type.GROUP.id())
+                    .setErrorCode(Errors.INVALID_REQUEST.code())
+                    .setErrorMessage("Default group resources are not allowed."));
+
             env.kafkaClient().prepareResponse(new IncrementalAlterConfigsResponse(responseData));
 
             ConfigResource brokerResource = new ConfigResource(ConfigResource.Type.BROKER, "");
             ConfigResource topicResource = new ConfigResource(ConfigResource.Type.TOPIC, "topic1");
             ConfigResource metricResource = new ConfigResource(ConfigResource.Type.CLIENT_METRICS, "metric1");
+            ConfigResource groupResource = new ConfigResource(ConfigResource.Type.GROUP, "");
 
             AlterConfigOp alterConfigOp1 = new AlterConfigOp(
                     new ConfigEntry("log.segment.bytes", "1073741"),
@@ -4130,15 +4137,21 @@ public class KafkaAdminClientTest {
                     new ConfigEntry("interval.ms", "1000"),
                     AlterConfigOp.OpType.APPEND);
 
+            AlterConfigOp alterConfigOp4 = new AlterConfigOp(
+                    new ConfigEntry("consumer.session.timeout.ms", "1000"),
+                    AlterConfigOp.OpType.SET);
+
             final Map<ConfigResource, Collection<AlterConfigOp>> configs = new HashMap<>();
             configs.put(brokerResource, singletonList(alterConfigOp1));
             configs.put(topicResource, singletonList(alterConfigOp2));
             configs.put(metricResource, singletonList(alterConfigOp3));
+            configs.put(groupResource, singletonList(alterConfigOp4));
 
             AlterConfigsResult result = env.adminClient().incrementalAlterConfigs(configs);
             TestUtils.assertFutureError(result.values().get(brokerResource), ClusterAuthorizationException.class);
             TestUtils.assertFutureError(result.values().get(topicResource), InvalidRequestException.class);
             TestUtils.assertFutureError(result.values().get(metricResource), InvalidRequestException.class);
+            TestUtils.assertFutureError(result.values().get(groupResource), InvalidRequestException.class);
 
             // Test a call where there are no errors.
             responseData =  new IncrementalAlterConfigsResponseData();
@@ -4152,10 +4165,17 @@ public class KafkaAdminClientTest {
                     .setResourceType(ConfigResource.Type.CLIENT_METRICS.id())
                     .setErrorCode(Errors.NONE.code())
                     .setErrorMessage(ApiError.NONE.message()));
+            responseData.responses().add(new AlterConfigsResourceResponse()
+                    .setResourceName("group")
+                    .setResourceType(ConfigResource.Type.GROUP.id())
+                    .setErrorCode(Errors.NONE.code())
+                    .setErrorMessage(ApiError.NONE.message()));
 
+            groupResource = new ConfigResource(ConfigResource.Type.GROUP, "group");
             final Map<ConfigResource, Collection<AlterConfigOp>> successConfig = new HashMap<>();
             successConfig.put(brokerResource, singletonList(alterConfigOp1));
             successConfig.put(metricResource, singletonList(alterConfigOp3));
+            successConfig.put(groupResource, singletonList(alterConfigOp4));
 
             env.kafkaClient().prepareResponse(new IncrementalAlterConfigsResponse(responseData));
             env.adminClient().incrementalAlterConfigs(successConfig).all().get();

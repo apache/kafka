@@ -475,6 +475,13 @@ class ControllerApisTest {
           setConfigs(new AlterableConfigCollection(util.Arrays.asList(new AlterableConfig().
             setName("interval.ms").
             setValue("100000").
+            setConfigOperation(AlterConfigOp.OpType.SET.id())).iterator())),
+        new AlterConfigsResource().
+          setResourceName("group-foo").
+          setResourceType(ConfigResource.Type.GROUP.id()).
+          setConfigs(new AlterableConfigCollection(util.Arrays.asList(new AlterableConfig().
+            setName("consumer.session.timeout.ms").
+            setValue("50000").
             setConfigOperation(AlterConfigOp.OpType.SET.id())).iterator()))
         ).iterator()))
     val request = buildRequest(new IncrementalAlterConfigsRequest.Builder(requestData).build(0))
@@ -502,7 +509,12 @@ class ControllerApisTest {
         setErrorCode(CLUSTER_AUTHORIZATION_FAILED.code()).
         setErrorMessage(CLUSTER_AUTHORIZATION_FAILED.message()).
         setResourceName("sub").
-        setResourceType(ConfigResource.Type.CLIENT_METRICS.id())),
+        setResourceType(ConfigResource.Type.CLIENT_METRICS.id()),
+      new AlterConfigsResourceResponse().
+        setErrorCode(GROUP_AUTHORIZATION_FAILED.code()).
+        setErrorMessage(GROUP_AUTHORIZATION_FAILED.message()).
+        setResourceName("group-foo").
+        setResourceType(ConfigResource.Type.GROUP.id())),
       response.data().responses().asScala.toSet)
   }
 
@@ -559,6 +571,27 @@ class ControllerApisTest {
           setConfigs(new AlterableConfigCollection(util.Arrays.asList(new AlterableConfig().
             setName("interval.ms").
             setValue("1").
+            setConfigOperation(AlterConfigOp.OpType.SET.id())).iterator())),
+        new AlterConfigsResource().
+          setResourceName("group-foo").
+          setResourceType(ConfigResource.Type.GROUP.id()).
+          setConfigs(new AlterableConfigCollection(util.Arrays.asList(new AlterableConfig().
+            setName("consumer.session.timeout.ms").
+            setValue("50000").
+            setConfigOperation(AlterConfigOp.OpType.SET.id())).iterator())),
+        new AlterConfigsResource().
+          setResourceName("group-foo1").
+          setResourceType(ConfigResource.Type.GROUP.id()).
+          setConfigs(new AlterableConfigCollection(util.Arrays.asList(new AlterableConfig().
+            setName("consumer.session.timeout.ms").
+            setValue("50000").
+            setConfigOperation(AlterConfigOp.OpType.SET.id())).iterator())),
+        new AlterConfigsResource().
+          setResourceName("group-foo1").
+          setResourceType(ConfigResource.Type.GROUP.id()).
+          setConfigs(new AlterableConfigCollection(util.Arrays.asList(new AlterableConfig().
+            setName("consumer.session.timeout.ms").
+            setValue("50000").
             setConfigOperation(AlterConfigOp.OpType.SET.id())).iterator()))
         ).iterator()))
     val request = buildRequest(new IncrementalAlterConfigsRequest.Builder(requestData).build(0))
@@ -602,7 +635,17 @@ class ControllerApisTest {
         setErrorCode(INVALID_REQUEST.code()).
         setErrorMessage("Duplicate resource.").
         setResourceName("sub1").
-        setResourceType(ConfigResource.Type.CLIENT_METRICS.id())),
+        setResourceType(ConfigResource.Type.CLIENT_METRICS.id()),
+      new AlterConfigsResourceResponse().
+        setErrorCode(if (denyAllAuthorizer) GROUP_AUTHORIZATION_FAILED.code() else NONE.code()).
+        setErrorMessage(if (denyAllAuthorizer) GROUP_AUTHORIZATION_FAILED.message() else null).
+        setResourceName("group-foo").
+        setResourceType(ConfigResource.Type.GROUP.id()),
+      new AlterConfigsResourceResponse().
+        setErrorCode(INVALID_REQUEST.code()).
+        setErrorMessage("Duplicate resource.").
+        setResourceName("group-foo1").
+        setResourceType(ConfigResource.Type.GROUP.id())),
       response.data().responses().asScala.toSet)
   }
 

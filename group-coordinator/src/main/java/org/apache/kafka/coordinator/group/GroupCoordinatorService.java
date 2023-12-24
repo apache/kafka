@@ -66,6 +66,7 @@ import org.apache.kafka.common.utils.BufferSupplier;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.coordinator.group.consumer.ConsumerGroupConfigManager;
 import org.apache.kafka.coordinator.group.metrics.CoordinatorRuntimeMetrics;
 import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetrics;
 import org.apache.kafka.coordinator.group.runtime.CoordinatorShardBuilderSupplier;
@@ -111,6 +112,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
         private Timer timer;
         private CoordinatorRuntimeMetrics coordinatorRuntimeMetrics;
         private GroupCoordinatorMetrics groupCoordinatorMetrics;
+        private ConsumerGroupConfigManager consumerGroupConfigManager;
 
         public Builder(
             int nodeId,
@@ -150,6 +152,11 @@ public class GroupCoordinatorService implements GroupCoordinator {
             return this;
         }
 
+        public Builder withConsumerGroupConfigManager(ConsumerGroupConfigManager consumerGroupConfigManager) {
+            this.consumerGroupConfigManager = consumerGroupConfigManager;
+            return this;
+        }
+
         public GroupCoordinatorService build() {
             if (config == null)
                 throw new IllegalArgumentException("Config must be set.");
@@ -165,6 +172,9 @@ public class GroupCoordinatorService implements GroupCoordinator {
                 throw new IllegalArgumentException("CoordinatorRuntimeMetrics must be set.");
             if (groupCoordinatorMetrics == null)
                 throw new IllegalArgumentException("GroupCoordinatorMetrics must be set.");
+            if (consumerGroupConfigManager == null) {
+                throw new IllegalArgumentException("ConsumerGroupConfigManager must be set.");
+            }
 
             String logPrefix = String.format("GroupCoordinator id=%d", nodeId);
             LogContext logContext = new LogContext(String.format("[%s] ", logPrefix));
@@ -194,6 +204,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
                     .withDefaultWriteTimeOut(Duration.ofMillis(config.offsetCommitTimeoutMs))
                     .withCoordinatorRuntimeMetrics(coordinatorRuntimeMetrics)
                     .withCoordinatorMetrics(groupCoordinatorMetrics)
+                    .withConsumerGroupConfigManager(consumerGroupConfigManager)
                     .build();
 
             return new GroupCoordinatorService(
@@ -364,7 +375,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
                 log.error("JoinGroup request {} hit an unexpected exception: {}",
                     request, exception.getMessage());
             }
-            
+
             if (!responseFuture.isDone()) {
                 responseFuture.complete(new JoinGroupResponseData()
                     .setErrorCode(Errors.forException(exception).code()));

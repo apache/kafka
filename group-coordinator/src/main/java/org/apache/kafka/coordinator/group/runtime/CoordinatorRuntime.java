@@ -27,6 +27,7 @@ import org.apache.kafka.common.requests.TransactionResult;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.coordinator.group.consumer.ConsumerGroupConfigManager;
 import org.apache.kafka.coordinator.group.metrics.CoordinatorRuntimeMetrics;
 import org.apache.kafka.coordinator.group.metrics.CoordinatorMetrics;
 import org.apache.kafka.deferred.DeferredEvent;
@@ -98,6 +99,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
         private Duration defaultWriteTimeout;
         private CoordinatorRuntimeMetrics runtimeMetrics;
         private CoordinatorMetrics coordinatorMetrics;
+        private ConsumerGroupConfigManager consumerGroupConfigManager;
 
         public Builder<S, U> withLogPrefix(String logPrefix) {
             this.logPrefix = logPrefix;
@@ -154,6 +156,11 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
             return this;
         }
 
+        public Builder<S, U> withConsumerGroupConfigManager(ConsumerGroupConfigManager consumerGroupConfigManager) {
+            this.consumerGroupConfigManager = consumerGroupConfigManager;
+            return this;
+        }
+
         public CoordinatorRuntime<S, U> build() {
             if (logPrefix == null)
                 logPrefix = "";
@@ -175,6 +182,8 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
                 throw new IllegalArgumentException("CoordinatorRuntimeMetrics must be set.");
             if (coordinatorMetrics == null)
                 throw new IllegalArgumentException("CoordinatorMetrics must be set.");
+            if (consumerGroupConfigManager == null)
+                throw new IllegalArgumentException("ConsumerGroupManager must be set.");
 
             return new CoordinatorRuntime<>(
                 logPrefix,
@@ -187,7 +196,8 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
                 timer,
                 defaultWriteTimeout,
                 runtimeMetrics,
-                coordinatorMetrics
+                coordinatorMetrics,
+                consumerGroupConfigManager
             );
         }
     }
@@ -486,11 +496,11 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
                             .withTimer(timer)
                             .withCoordinatorMetrics(coordinatorMetrics)
                             .withTopicPartition(tp)
+                            .withConsumerGroupConfigManager(consumerGroupConfigManager)
                             .build(),
                         tp
                     );
                     break;
-
                 case ACTIVE:
                     state = CoordinatorState.ACTIVE;
                     partitionWriter.registerListener(tp, highWatermarklistener);
@@ -1258,6 +1268,11 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
     private final CoordinatorMetrics coordinatorMetrics;
 
     /**
+     * The consumer group config manager.
+     */
+    private final ConsumerGroupConfigManager consumerGroupConfigManager;
+
+    /**
      * Atomic boolean indicating whether the runtime is running.
      */
     private final AtomicBoolean isRunning = new AtomicBoolean(true);
@@ -1291,7 +1306,8 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
         Timer timer,
         Duration defaultWriteTimeout,
         CoordinatorRuntimeMetrics runtimeMetrics,
-        CoordinatorMetrics coordinatorMetrics
+        CoordinatorMetrics coordinatorMetrics,
+        ConsumerGroupConfigManager consumerGroupConfigManager
     ) {
         this.logPrefix = logPrefix;
         this.logContext = logContext;
@@ -1307,6 +1323,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
         this.coordinatorShardBuilderSupplier = coordinatorShardBuilderSupplier;
         this.runtimeMetrics = runtimeMetrics;
         this.coordinatorMetrics = coordinatorMetrics;
+        this.consumerGroupConfigManager = consumerGroupConfigManager;
     }
 
     /**

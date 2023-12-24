@@ -21,7 +21,7 @@ import java.util.Properties
 import kafka.server.ConfigAdminManager.toLoggableProps
 import kafka.server.{ConfigEntityName, ConfigHandler, KafkaConfig}
 import kafka.utils.Logging
-import org.apache.kafka.common.config.ConfigResource.Type.{BROKER, CLIENT_METRICS, TOPIC}
+import org.apache.kafka.common.config.ConfigResource.Type.{BROKER, CLIENT_METRICS, GROUP, TOPIC}
 import org.apache.kafka.image.loader.LoaderManifest
 import org.apache.kafka.image.{MetadataDelta, MetadataImage}
 import org.apache.kafka.server.config.ConfigType
@@ -111,6 +111,18 @@ class DynamicConfigPublisher(
                   metricsConfigHandler.processConfigChanges(resource.name(), props)
                 } catch {
                   case t: Throwable => faultHandler.handleFault("Error updating client metrics" +
+                    s"${resource.name()} with new configuration: ${toLoggableProps(resource, props).mkString(",")} " +
+                    s"in $deltaName", t)
+                })
+            case GROUP =>
+              // Apply changes to a group's dynamic configuration.
+              dynamicConfigHandlers.get(ConfigType.GROUP).foreach(consumerGroupConfigHandler =>
+                try {
+                  info(s"Updating consumer group ${resource.name()} with new configuration : " +
+                    toLoggableProps(resource, props).mkString(","))
+                  consumerGroupConfigHandler.processConfigChanges(resource.name(), props)
+                } catch {
+                  case t: Throwable => faultHandler.handleFault("Error updating consumer group " +
                     s"${resource.name()} with new configuration: ${toLoggableProps(resource, props).mkString(",")} " +
                     s"in $deltaName", t)
                 })
