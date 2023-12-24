@@ -135,7 +135,7 @@ public class ClientMetricsConfigs extends AbstractConfig {
         if (properties.containsKey(PUSH_INTERVAL_MS)) {
             int pushIntervalMs = Integer.parseInt(properties.getProperty(PUSH_INTERVAL_MS));
             if (pushIntervalMs < MIN_INTERVAL_MS || pushIntervalMs > MAX_INTERVAL_MS) {
-                String msg = String.format("Invalid value %s for %s, interval must be between 100 and 3600000 (1 hour)",
+                String msg = String.format("Invalid value %d for %s, interval must be between 100 and 3600000 (1 hour)",
                     pushIntervalMs, PUSH_INTERVAL_MS);
                 throw new InvalidRequestException(msg);
             }

@@ -63,23 +63,24 @@ public class ConsumerPerformance {
             if (!options.hideHeader())
                 printHeader(options.showDetailedStats());
 
-            KafkaConsumer<byte[], byte[]> consumer = new KafkaConsumer<>(options.props());
-            long bytesRead = 0L;
-            long messagesRead = 0L;
-            long lastBytesRead = 0L;
-            long lastMessagesRead = 0L;
-            long currentTimeMs = System.currentTimeMillis();
-            long joinStartMs = currentTimeMs;
-            long startMs = currentTimeMs;
-            consume(consumer, options, totalMessagesRead, totalBytesRead, joinTimeMs,
-                bytesRead, messagesRead, lastBytesRead, lastMessagesRead,
-                joinStartMs, joinTimeMsInSingleRound);
-            long endMs = System.currentTimeMillis();
-
+            long joinStartMs, startMs, endMs;
             Map<MetricName, ? extends Metric> metrics = null;
-            if (options.printMetrics())
-                metrics = consumer.metrics();
-            consumer.close();
+            try (KafkaConsumer<byte[], byte[]> consumer = new KafkaConsumer<>(options.props())) {
+                long bytesRead = 0L;
+                long messagesRead = 0L;
+                long lastBytesRead = 0L;
+                long lastMessagesRead = 0L;
+                long currentTimeMs = System.currentTimeMillis();
+                joinStartMs = currentTimeMs;
+                startMs = currentTimeMs;
+                consume(consumer, options, totalMessagesRead, totalBytesRead, joinTimeMs,
+                    bytesRead, messagesRead, lastBytesRead, lastMessagesRead,
+                    joinStartMs, joinTimeMsInSingleRound);
+                endMs = System.currentTimeMillis();
+
+                if (options.printMetrics())
+                    metrics = consumer.metrics();
+            }
 
             // print final stats
             double elapsedSec = (endMs - startMs) / 1_000.0;
@@ -219,8 +220,8 @@ public class ConsumerPerformance {
     }
 
     public static class ConsumerPerfRebListener implements ConsumerRebalanceListener {
-        private AtomicLong joinTimeMs;
-        private AtomicLong joinTimeMsInSingleRound;
+        private final AtomicLong joinTimeMs;
+        private final AtomicLong joinTimeMsInSingleRound;
         private long joinStartMs;
 
         public ConsumerPerfRebListener(AtomicLong joinTimeMs, long joinStartMs, AtomicLong joinTimeMsInSingleRound) {

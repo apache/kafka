@@ -368,8 +368,9 @@ public class RemoteLogManager implements Closeable {
         for (StopPartition stopPartition: stopPartitions) {
             TopicPartition tp = stopPartition.topicPartition();
             try {
-                if (topicIdByPartitionMap.containsKey(tp)) {
-                    TopicIdPartition tpId = new TopicIdPartition(topicIdByPartitionMap.get(tp), tp);
+                final Uuid topicId = topicIdByPartitionMap.get(tp);
+                if (topicId != null) {
+                    TopicIdPartition tpId = new TopicIdPartition(topicId, tp);
                     RLMTaskWithFuture task = leaderOrFollowerTasks.remove(tpId);
                     if (task != null) {
                         LOGGER.info("Cancelling the RLM task for tpId: {}", tpId);

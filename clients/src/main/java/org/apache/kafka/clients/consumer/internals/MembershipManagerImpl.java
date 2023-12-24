@@ -1079,7 +1079,7 @@ public class MembershipManagerImpl implements MembershipManager, ClusterResource
         // while waiting for the commit to complete. Check if that's the case and abort the
         // revocation.
         if (state == MemberState.FATAL) {
-            String errorMsg = String.format("Member %s with epoch %s received a fatal error " +
+            String errorMsg = String.format("Member %s with epoch %d received a fatal error " +
                 "while waiting for a revocation commit to complete. Will abort revocation " +
                 "without triggering user callback.", memberId, memberEpoch);
             log.debug(errorMsg);
