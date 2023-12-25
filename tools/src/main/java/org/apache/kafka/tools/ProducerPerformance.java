@@ -336,10 +336,10 @@ public class ProducerPerformance {
 
     // Visible for testing
     static class Stats {
-        private long start;
+        private final long start;
         private long windowStart;
-        private int[] latencies;
-        private long sampling;
+        private final int[] latencies;
+        private final long sampling;
         private long iteration;
         private int index;
         private long count;
@@ -350,7 +350,7 @@ public class ProducerPerformance {
         private int windowMaxLatency;
         private long windowTotalLatency;
         private long windowBytes;
-        private long reportingInterval;
+        private final long reportingInterval;
 
         public Stats(long numRecords, int reportingInterval) {
             this.start = System.currentTimeMillis();

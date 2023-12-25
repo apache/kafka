@@ -117,7 +117,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
     private MetadataSnapshot metadataSnapshot;
     private MetadataSnapshot assignmentSnapshot;
     private Timer nextAutoCommitTimer;
-    private AtomicBoolean asyncCommitFenced;
+    private final AtomicBoolean asyncCommitFenced;
     private ConsumerGroupMetadata groupMetadata;
     private final boolean throwOnFetchStableOffsetsUnsupported;
     private final Optional<String> rackId;

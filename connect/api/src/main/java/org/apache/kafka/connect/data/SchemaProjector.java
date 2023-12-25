@@ -37,7 +37,7 @@ import java.util.Set;
 
 public class SchemaProjector {
 
-    private static Set<AbstractMap.SimpleImmutableEntry<Type, Type>> promotable = new HashSet<>();
+    private static final Set<AbstractMap.SimpleImmutableEntry<Type, Type>> promotable = new HashSet<>();
 
     static {
         Type[] promotableTypes = {Type.INT8, Type.INT16, Type.INT32, Type.INT64, Type.FLOAT32, Type.FLOAT64};

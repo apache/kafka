@@ -59,7 +59,7 @@ public class ClientState {
     private final ClientStateTask revokingActiveTasks = new ClientStateTask(null, new TreeMap<>());
 
     private int capacity;
-    private UUID processId;
+    private final UUID processId;
 
     public ClientState() {
         this(null, 0);

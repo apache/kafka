@@ -396,8 +396,8 @@ public enum Errors {
 
     private static final Logger log = LoggerFactory.getLogger(Errors.class);
 
-    private static Map<Class<?>, Errors> classToError = new HashMap<>();
-    private static Map<Short, Errors> codeToError = new HashMap<>();
+    private static final Map<Class<?>, Errors> classToError = new HashMap<>();
+    private static final Map<Short, Errors> codeToError = new HashMap<>();
 
     static {
         for (Errors error : Errors.values()) {

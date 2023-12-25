@@ -66,7 +66,7 @@ public class StandardAuthorizerUpdateBenchmark {
     private StandardAuthorizer authorizer;
     private final Set<Uuid> ids = new HashSet<>();
 
-    private List<StandardAclWithId> aclsToAdd = prepareAcls();
+    private final List<StandardAclWithId> aclsToAdd = prepareAcls();
 
     int index = 0;
     private static final Random RANDOM = new Random(System.currentTimeMillis());

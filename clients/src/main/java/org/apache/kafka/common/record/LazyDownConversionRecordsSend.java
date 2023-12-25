@@ -36,9 +36,9 @@ public final class LazyDownConversionRecordsSend extends RecordsSend<LazyDownCon
     private static final int MAX_READ_SIZE = 128 * 1024;
     static final int MIN_OVERFLOW_MESSAGE_LENGTH = Records.LOG_OVERHEAD;
 
-    private RecordValidationStats recordValidationStats;
+    private final RecordValidationStats recordValidationStats;
     private RecordsSend convertedRecordsWriter;
-    private Iterator<ConvertedRecords<?>> convertedRecordsIterator;
+    private final Iterator<ConvertedRecords<?>> convertedRecordsIterator;
 
     public LazyDownConversionRecordsSend(LazyDownConversionRecords records) {
         super(records, records.sizeInBytes());

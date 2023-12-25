@@ -104,7 +104,7 @@ public abstract class HeaderFrom<R extends ConnectRecord<R>> implements Transfor
 
     private Operation operation;
 
-    private Cache<Schema, Schema> moveSchemaCache = new SynchronizedCache<>(new LRUCache<>(16));
+    private final Cache<Schema, Schema> moveSchemaCache = new SynchronizedCache<>(new LRUCache<>(16));
 
     @Override
     public R apply(R record) {

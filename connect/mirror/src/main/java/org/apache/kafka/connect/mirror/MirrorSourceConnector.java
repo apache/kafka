@@ -105,7 +105,7 @@ public class MirrorSourceConnector extends SourceConnector {
     private Admin targetAdminClient;
     private Admin offsetSyncsAdminClient;
     private volatile boolean useIncrementalAlterConfigs;
-    private AtomicBoolean noAclAuthorizer = new AtomicBoolean(false);
+    private final AtomicBoolean noAclAuthorizer = new AtomicBoolean(false);
 
     public MirrorSourceConnector() {
         // nop

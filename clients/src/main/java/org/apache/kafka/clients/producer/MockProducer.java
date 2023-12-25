@@ -61,7 +61,7 @@ public class MockProducer<K, V> implements Producer<K, V> {
     private Map<String, Map<TopicPartition, OffsetAndMetadata>> uncommittedConsumerGroupOffsets;
     private final Serializer<K> keySerializer;
     private final Serializer<V> valueSerializer;
-    private boolean autoComplete;
+    private final boolean autoComplete;
     private boolean closed;
     private boolean transactionInitialized;
     private boolean transactionInFlight;

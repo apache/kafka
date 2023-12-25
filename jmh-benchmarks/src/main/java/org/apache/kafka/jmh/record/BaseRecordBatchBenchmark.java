@@ -56,19 +56,19 @@ public abstract class BaseRecordBatchBenchmark {
     }
 
     @Param(value = {"1", "2", "10", "50", "200", "500"})
-    private int maxBatchSize = 200;
+    private final int maxBatchSize = 200;
 
     @Param(value = {"1", "2"})
     byte messageVersion = CURRENT_MAGIC_VALUE;
 
     @Param(value = {"100", "1000", "10000", "100000"})
-    private int messageSize = 1000;
+    private final int messageSize = 1000;
 
     @Param(value = {"RANDOM", "ONES"})
-    private Bytes bytes = Bytes.RANDOM;
+    private final Bytes bytes = Bytes.RANDOM;
 
     @Param(value = {"NO_CACHING", "CREATE"})
-    private String bufferSupplierStr = "NO_CACHING";
+    private final String bufferSupplierStr = "NO_CACHING";
 
     // zero starting offset is much faster for v1 batches, but that will almost never happen
     int startingOffset;

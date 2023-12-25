@@ -96,8 +96,8 @@ public class PartitionChangeBuilder {
     private LeaderRecoveryState targetLeaderRecoveryState;
     private boolean zkMigrationEnabled;
     private boolean eligibleLeaderReplicasEnabled;
-    private int minISR;
-    private Map<Integer, Uuid> targetDirectories;
+    private final int minISR;
+    private final Map<Integer, Uuid> targetDirectories;
     private DefaultDirProvider defaultDirProvider;
 
     // Whether allow electing last known leader in a Balanced recovery. Note, the last known leader will be stored in the

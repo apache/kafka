@@ -80,7 +80,7 @@ public class MemoryRecordsBuilder implements AutoCloseable {
     private int numRecords = 0;
     private float actualCompressionRatio = 1;
     private long maxTimestamp = RecordBatch.NO_TIMESTAMP;
-    private long deleteHorizonMs;
+    private final long deleteHorizonMs;
     private long offsetOfMaxTimestamp = -1;
     private Long lastOffset = null;
     private Long baseTimestamp = null;

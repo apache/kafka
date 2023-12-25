@@ -115,13 +115,13 @@ public class ReplicaFetcherThreadBenchmark {
 
     private ReplicaFetcherBenchThread fetcher;
     private LogManager logManager;
-    private File logDir = new File(System.getProperty("java.io.tmpdir"), UUID.randomUUID().toString());
-    private KafkaScheduler scheduler = new KafkaScheduler(1, true, "scheduler");
-    private Pool<TopicPartition, Partition> pool = new Pool<TopicPartition, Partition>(Option.empty());
-    private Metrics metrics = new Metrics();
+    private final File logDir = new File(System.getProperty("java.io.tmpdir"), UUID.randomUUID().toString());
+    private final KafkaScheduler scheduler = new KafkaScheduler(1, true, "scheduler");
+    private final Pool<TopicPartition, Partition> pool = new Pool<TopicPartition, Partition>(Option.empty());
+    private final Metrics metrics = new Metrics();
     private ReplicaManager replicaManager;
     private ReplicaQuota replicaQuota;
-    private Option<Uuid> topicId = Option.apply(Uuid.randomUuid());
+    private final Option<Uuid> topicId = Option.apply(Uuid.randomUuid());
 
     @Setup(Level.Trial)
     public void setup() throws IOException {

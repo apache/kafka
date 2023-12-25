@@ -166,7 +166,7 @@ public class ProcessorStateManager implements StateManager {
     private static final String STATE_CHANGELOG_TOPIC_SUFFIX = "-changelog";
 
     private Logger log;
-    private String logPrefix;
+    private final String logPrefix;
 
     private final TaskId taskId;
     private Task.State taskState;

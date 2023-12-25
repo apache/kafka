@@ -44,7 +44,7 @@ public class SslChannelBuilder implements ChannelBuilder, ListenerReconfigurable
     private final ListenerName listenerName;
     private final boolean isInterBrokerListener;
     private SslFactory sslFactory;
-    private Mode mode;
+    private final Mode mode;
     private Map<String, ?> configs;
     private SslPrincipalMapper sslPrincipalMapper;
     private final Logger log;

@@ -43,7 +43,7 @@ import static org.apache.kafka.streams.StreamsConfig.InternalConfig.IQ_CONSISTEN
 public class MemoryLRUCache implements KeyValueStore<Bytes, byte[]> {
 
     protected StateStoreContext context;
-    private Position position = Position.emptyPosition();
+    private final Position position = Position.emptyPosition();
 
     public interface EldestEntryRemovalListener {
         void apply(Bytes key, byte[] value);

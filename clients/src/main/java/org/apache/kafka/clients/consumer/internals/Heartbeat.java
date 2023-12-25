@@ -40,7 +40,7 @@ public final class Heartbeat {
     private volatile long lastHeartbeatSend = 0L;
     private volatile boolean heartbeatInFlight = false;
     private volatile long heartbeatAttempts = 0L;
-    private ExponentialBackoff retryBackoff;
+    private final ExponentialBackoff retryBackoff;
 
     public Heartbeat(GroupRebalanceConfig config,
                      Time time) {

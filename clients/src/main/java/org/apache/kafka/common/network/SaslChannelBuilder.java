@@ -93,8 +93,8 @@ public class SaslChannelBuilder implements ChannelBuilder, ListenerReconfigurabl
     private final String sslClientAuthOverride;
 
     private KerberosShortNamer kerberosShortNamer;
-    private Map<String, AuthenticateCallbackHandler> saslCallbackHandlers;
-    private Map<String, Long> connectionsMaxReauthMsByMechanism;
+    private final Map<String, AuthenticateCallbackHandler> saslCallbackHandlers;
+    private final Map<String, Long> connectionsMaxReauthMsByMechanism;
     private final Time time;
     private final LogContext logContext;
     private final Logger log;

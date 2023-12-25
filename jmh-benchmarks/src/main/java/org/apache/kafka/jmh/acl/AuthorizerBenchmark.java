@@ -81,7 +81,7 @@ public class AuthorizerBenchmark {
         ACL(AclAuthorizer::new),
         KRAFT(StandardAuthorizer::new);
 
-        private Supplier<Authorizer> supplier;
+        private final Supplier<Authorizer> supplier;
 
         AuthorizerType(Supplier<Authorizer> supplier) {
             this.supplier = supplier;
@@ -111,9 +111,9 @@ public class AuthorizerBenchmark {
     private List<Action> actions = new ArrayList<>();
     private RequestContext authorizeContext;
     private RequestContext authorizeByResourceTypeContext;
-    private String authorizeByResourceTypeHostName = "127.0.0.2";
+    private final String authorizeByResourceTypeHostName = "127.0.0.2";
 
-    private HashMap<ResourcePattern, AclAuthorizer.VersionedAcls> aclToUpdate = new HashMap<>();
+    private final HashMap<ResourcePattern, AclAuthorizer.VersionedAcls> aclToUpdate = new HashMap<>();
 
     Random rand = new Random(System.currentTimeMillis());
     double eps = 1e-9;

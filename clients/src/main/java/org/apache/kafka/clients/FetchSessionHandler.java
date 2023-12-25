@@ -242,7 +242,7 @@ public class FetchSessionHandler {
          * incremental fetch requests (see below).
          */
         private LinkedHashMap<TopicPartition, PartitionData> next;
-        private Map<Uuid, String> topicNames;
+        private final Map<Uuid, String> topicNames;
         private final boolean copySessionPartitions;
         private int partitionsWithoutTopicIds = 0;
 
