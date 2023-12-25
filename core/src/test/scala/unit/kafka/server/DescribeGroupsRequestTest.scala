@@ -21,7 +21,7 @@ import kafka.test.annotation.{ClusterConfigProperty, ClusterTest, ClusterTestDef
 import kafka.test.junit.ClusterTestExtensions
 import org.apache.kafka.common.message.DescribeGroupsResponseData.{DescribedGroup, DescribedGroupMember}
 import org.apache.kafka.common.protocol.ApiKeys
-import org.apache.kafka.coordinator.group.generic.GenericGroupState
+import org.apache.kafka.coordinator.group.classic.ClassicGroupState
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.{Tag, Timeout}
 import org.junit.jupiter.api.extension.ExtendWith
@@ -80,7 +80,7 @@ class DescribeGroupsRequestTest(cluster: ClusterInstance) extends GroupCoordinat
         List(
           new DescribedGroup()
             .setGroupId("grp-1")
-            .setGroupState(GenericGroupState.STABLE.toString)
+            .setGroupState(ClassicGroupState.STABLE.toString)
             .setProtocolType("consumer")
             .setProtocolData("consumer-range")
             .setMembers(List(
@@ -94,7 +94,7 @@ class DescribeGroupsRequestTest(cluster: ClusterInstance) extends GroupCoordinat
             ).asJava),
           new DescribedGroup()
             .setGroupId("grp-2")
-            .setGroupState(GenericGroupState.COMPLETING_REBALANCE.toString)
+            .setGroupState(ClassicGroupState.COMPLETING_REBALANCE.toString)
             .setProtocolType("consumer")
             .setMembers(List(
               new DescribedGroupMember()
@@ -107,7 +107,7 @@ class DescribeGroupsRequestTest(cluster: ClusterInstance) extends GroupCoordinat
             ).asJava),
           new DescribedGroup()
             .setGroupId("grp-unknown")
-            .setGroupState(GenericGroupState.DEAD.toString) // Return DEAD group when the group does not exist.
+            .setGroupState(ClassicGroupState.DEAD.toString) // Return DEAD group when the group does not exist.
         ),
         describeGroups(
           groupIds = List("grp-1", "grp-2", "grp-unknown"),

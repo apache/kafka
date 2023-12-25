@@ -32,7 +32,7 @@ import org.apache.kafka.common.record.{MemoryRecords, RecordBatch, RecordValidat
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.server.util.timer.MockTimer
 import org.apache.kafka.server.util.{MockScheduler, MockTime}
-import org.apache.kafka.storage.internals.log.{AppendOrigin, LogConfig}
+import org.apache.kafka.storage.internals.log.{AppendOrigin, LogConfig, VerificationGuard}
 import org.junit.jupiter.api.{AfterEach, BeforeEach}
 import org.mockito.Mockito.{CALLS_REAL_METHODS, mock, withSettings}
 
@@ -168,7 +168,31 @@ object AbstractCoordinatorConcurrencyTest {
       watchKeys = Collections.newSetFromMap(new ConcurrentHashMap[TopicPartitionOperationKey, java.lang.Boolean]()).asScala
     }
 
+    override def maybeStartTransactionVerificationForPartition(
+      topicPartition: TopicPartition,
+      transactionalId: String,
+      producerId: Long,
+      producerEpoch: Short,
+      baseSequence: Int,
+      requestLocal: RequestLocal,
+      callback: (Errors, RequestLocal, VerificationGuard) => Unit
+    ): Unit = {
+      // Skip verification
+      callback(Errors.NONE, requestLocal, VerificationGuard.SENTINEL)
+    }
+
     override def tryCompleteActions(): Unit = watchKeys.map(producePurgatory.checkAndComplete)
+
+    override def appendForGroup(timeout: Long,
+                                requiredAcks: Short,
+                                entriesPerPartition: Map[TopicPartition, MemoryRecords],
+                                responseCallback: Map[TopicPartition, PartitionResponse] => Unit,
+                                delayedProduceLock: Option[Lock] = None,
+                                requestLocal: RequestLocal = RequestLocal.NoCaching,
+                                verificationGuards: Map[TopicPartition, VerificationGuard] = Map.empty): Unit = {
+      appendRecords(timeout, requiredAcks, true, AppendOrigin.COORDINATOR, entriesPerPartition, responseCallback,
+        delayedProduceLock, requestLocal = requestLocal)
+    }
 
     override def appendRecords(timeout: Long,
                                requiredAcks: Short,

@@ -404,7 +404,7 @@ class LogSegmentTest {
     val checkpoint: LeaderEpochCheckpoint = new LeaderEpochCheckpoint {
       private var epochs = Seq.empty[EpochEntry]
 
-      override def write(epochs: util.Collection[EpochEntry]): Unit = {
+      override def write(epochs: util.Collection[EpochEntry], ignored: Boolean): Unit = {
         this.epochs = epochs.asScala.toSeq
       }
 

@@ -18,6 +18,7 @@ package org.apache.kafka.coordinator.group.runtime;
 
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.requests.TransactionResult;
 
 import java.util.List;
 
@@ -83,13 +84,36 @@ public interface PartitionWriter<T> {
      * Write records to the partitions. Records are written in one batch so
      * atomicity is guaranteed.
      *
-     * @param tp        The partition to write records to.
-     * @param records   The list of records. The records are written in a single batch.
+     * @param tp            The partition to write records to.
+     * @param producerId    The producer id.
+     * @param producerEpoch The producer epoch.
+     * @param records       The list of records. The records are written in a single batch.
      * @return The log end offset right after the written records.
      * @throws KafkaException Any KafkaException caught during the write operation.
      */
     long append(
         TopicPartition tp,
+        long producerId,
+        short producerEpoch,
         List<T> records
+    ) throws KafkaException;
+
+    /**
+     * Write the transaction end marker.
+     *
+     * @param tp                The partition to write records to.
+     * @param producerId        The producer id.
+     * @param producerEpoch     The producer epoch.
+     * @param coordinatorEpoch  The epoch of the transaction coordinator.
+     * @param result            The transaction result.
+     * @return The log end offset right after the written records.
+     * @throws KafkaException Any KafkaException caught during the write operation.
+     */
+    long appendEndTransactionMarker(
+        TopicPartition tp,
+        long producerId,
+        short producerEpoch,
+        int coordinatorEpoch,
+        TransactionResult result
     ) throws KafkaException;
 }

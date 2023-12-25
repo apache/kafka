@@ -21,7 +21,7 @@ import kafka.test.annotation.{ClusterConfigProperty, ClusterTest, ClusterTestDef
 import kafka.test.junit.ClusterTestExtensions
 import org.apache.kafka.common.message.DescribeGroupsResponseData.DescribedGroup
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
-import org.apache.kafka.coordinator.group.generic.GenericGroupState
+import org.apache.kafka.coordinator.group.classic.ClassicGroupState
 import org.junit.jupiter.api.Assertions.{assertEquals, fail}
 import org.junit.jupiter.api.{Tag, Timeout}
 import org.junit.jupiter.api.extension.ExtendWith
@@ -120,7 +120,7 @@ class DeleteGroupsRequestTest(cluster: ClusterInstance) extends GroupCoordinator
         assertEquals(
           List(new DescribedGroup()
             .setGroupId("grp")
-            .setGroupState(GenericGroupState.DEAD.toString)
+            .setGroupState(ClassicGroupState.DEAD.toString)
           ),
           describeGroups(List("grp"))
         )

@@ -100,7 +100,7 @@ public class LagFetchIntegrationTest {
 
     @BeforeEach
     public void before(final TestInfo testInfo) {
-        final String safeTestName = safeUniqueTestName(getClass(), testInfo);
+        final String safeTestName = safeUniqueTestName(testInfo);
         inputTopicName = "input-topic-" + safeTestName;
         outputTopicName = "output-topic-" + safeTestName;
         stateStoreName = "lagfetch-test-store" + safeTestName;

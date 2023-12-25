@@ -22,7 +22,7 @@ import java.nio.charset.StandardCharsets
 import java.util
 import java.util.Arrays.asList
 import java.util.concurrent.{CompletableFuture, TimeUnit}
-import java.util.{Collections, Optional, OptionalInt, OptionalLong, Properties}
+import java.util.{Collections, Comparator, Optional, OptionalInt, OptionalLong, Properties}
 import kafka.api.LeaderAndIsr
 import kafka.cluster.{Broker, Partition}
 import kafka.controller.{ControllerContext, KafkaController}
@@ -84,7 +84,7 @@ import org.apache.kafka.server.authorizer.{Action, AuthorizationResult, Authoriz
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, Test}
 import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.{CsvSource, ValueSource}
+import org.junit.jupiter.params.provider.{CsvSource, EnumSource, ValueSource}
 import org.mockito.ArgumentMatchers.{any, anyBoolean, anyDouble, anyInt, anyLong, anyShort, anyString, argThat, isNotNull}
 import org.mockito.Mockito.{mock, reset, times, verify, when}
 import org.mockito.{ArgumentCaptor, ArgumentMatchers, Mockito}
@@ -93,14 +93,18 @@ import scala.collection.{Map, Seq, mutable}
 import scala.jdk.CollectionConverters._
 import org.apache.kafka.common.message.CreatePartitionsRequestData.CreatePartitionsTopic
 import org.apache.kafka.common.message.CreateTopicsResponseData.CreatableTopicResult
+import org.apache.kafka.common.message.ListClientMetricsResourcesResponseData.ClientMetricsResource
 import org.apache.kafka.common.message.OffsetDeleteResponseData.{OffsetDeleteResponsePartition, OffsetDeleteResponsePartitionCollection, OffsetDeleteResponseTopic, OffsetDeleteResponseTopicCollection}
 import org.apache.kafka.coordinator.group.GroupCoordinator
+import org.apache.kafka.server.ClientMetricsManager
 import org.apache.kafka.server.common.{Features, MetadataVersion}
 import org.apache.kafka.server.common.MetadataVersion.{IBP_0_10_2_IV0, IBP_2_2_IV1}
 import org.apache.kafka.server.config.ConfigType
 import org.apache.kafka.server.metrics.ClientMetricsTestUtils
-import org.apache.kafka.server.util.MockTime
+import org.apache.kafka.server.util.{FutureUtils, MockTime}
 import org.apache.kafka.storage.internals.log.{AppendOrigin, FetchParams, FetchPartitionData, LogConfig}
+
+import java.time.Duration
 
 class KafkaApisTest {
   private val requestChannel: RequestChannel = mock(classOf[RequestChannel])
@@ -130,6 +134,7 @@ class KafkaApisTest {
   private val quotas = QuotaManagers(clientQuotaManager, clientQuotaManager, clientRequestQuotaManager,
     clientControllerQuotaManager, replicaQuotaManager, replicaQuotaManager, replicaQuotaManager, None)
   private val fetchManager: FetchManager = mock(classOf[FetchManager])
+  private val clientMetricsManager: ClientMetricsManager = mock(classOf[ClientMetricsManager])
   private val brokerTopicStats = new BrokerTopicStats
   private val clusterId = "clusterId"
   private val time = new MockTime
@@ -197,6 +202,8 @@ class KafkaApisTest {
       false,
       () => new Features(MetadataVersion.latest(), Collections.emptyMap[String, java.lang.Short], 0, raftSupport))
 
+    val clientMetricsManagerOpt = if (raftSupport) Some(clientMetricsManager) else None
+
     new KafkaApis(
       requestChannel = requestChannel,
       metadataSupport = metadataSupport,
@@ -217,7 +224,7 @@ class KafkaApisTest {
       time = time,
       tokenManager = null,
       apiVersionManager = apiVersionManager,
-      clientMetricsManager = null)
+      clientMetricsManager = clientMetricsManagerOpt)
   }
 
   @Test
@@ -2705,7 +2712,7 @@ class KafkaApisTest {
       val request = buildRequest(produceRequest)
 
       val kafkaApis = createKafkaApis()
-      
+
       kafkaApis.handleProduceRequest(request, RequestLocal.withThreadConfinedCaching)
       
       verify(replicaManager).appendRecords(anyLong,
@@ -3012,6 +3019,223 @@ class KafkaApisTest {
       ArgumentMatchers.eq(requestLocal),
       any(),
       any())
+  }
+
+  @Test
+  def testHandleWriteTxnMarkersRequestWithNewGroupCoordinator(): Unit = {
+    val offset0 = new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, 0)
+    val offset1 = new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, 1)
+    val foo0 = new TopicPartition("foo", 0)
+    val foo1 = new TopicPartition("foo", 1)
+
+    val allPartitions = List(
+      offset0,
+      offset1,
+      foo0,
+      foo1
+    )
+
+    val writeTxnMarkersRequest = new WriteTxnMarkersRequest.Builder(
+      ApiKeys.WRITE_TXN_MARKERS.latestVersion(),
+      List(
+        new TxnMarkerEntry(
+          1L,
+          1.toShort,
+          0,
+          TransactionResult.COMMIT,
+          List(offset0, foo0).asJava
+        ),
+        new TxnMarkerEntry(
+          2L,
+          1.toShort,
+          0,
+          TransactionResult.ABORT,
+          List(offset1, foo1).asJava
+        )
+      ).asJava
+    ).build()
+
+    val requestChannelRequest = buildRequest(writeTxnMarkersRequest)
+
+    allPartitions.foreach { tp =>
+      when(replicaManager.getMagic(tp))
+        .thenReturn(Some(RecordBatch.MAGIC_VALUE_V2))
+    }
+
+    when(groupCoordinator.completeTransaction(
+      ArgumentMatchers.eq(offset0),
+      ArgumentMatchers.eq(1L),
+      ArgumentMatchers.eq(1.toShort),
+      ArgumentMatchers.eq(0),
+      ArgumentMatchers.eq(TransactionResult.COMMIT),
+      ArgumentMatchers.eq(Duration.ofMillis(Defaults.RequestTimeoutMs))
+    )).thenReturn(CompletableFuture.completedFuture[Void](null))
+
+    when(groupCoordinator.completeTransaction(
+      ArgumentMatchers.eq(offset1),
+      ArgumentMatchers.eq(2L),
+      ArgumentMatchers.eq(1.toShort),
+      ArgumentMatchers.eq(0),
+      ArgumentMatchers.eq(TransactionResult.ABORT),
+      ArgumentMatchers.eq(Duration.ofMillis(Defaults.RequestTimeoutMs))
+    )).thenReturn(CompletableFuture.completedFuture[Void](null))
+
+    val entriesPerPartition: ArgumentCaptor[Map[TopicPartition, MemoryRecords]] =
+      ArgumentCaptor.forClass(classOf[Map[TopicPartition, MemoryRecords]])
+    val responseCallback: ArgumentCaptor[Map[TopicPartition, PartitionResponse] => Unit] =
+      ArgumentCaptor.forClass(classOf[Map[TopicPartition, PartitionResponse] => Unit])
+
+    when(replicaManager.appendRecords(
+      ArgumentMatchers.eq(Defaults.RequestTimeoutMs.toLong),
+      ArgumentMatchers.eq(-1),
+      ArgumentMatchers.eq(true),
+      ArgumentMatchers.eq(AppendOrigin.COORDINATOR),
+      entriesPerPartition.capture(),
+      responseCallback.capture(),
+      any(),
+      any(),
+      ArgumentMatchers.eq(RequestLocal.NoCaching),
+      any(),
+      any()
+    )).thenAnswer { _ =>
+      responseCallback.getValue.apply(
+        entriesPerPartition.getValue.keySet.map { tp =>
+          tp -> new PartitionResponse(Errors.NONE)
+        }.toMap
+      )
+    }
+
+    createKafkaApis(overrideProperties = Map(
+      KafkaConfig.NewGroupCoordinatorEnableProp -> "true"
+    )).handleWriteTxnMarkersRequest(requestChannelRequest, RequestLocal.NoCaching)
+
+    val expectedResponse = new WriteTxnMarkersResponseData()
+      .setMarkers(List(
+        new WriteTxnMarkersResponseData.WritableTxnMarkerResult()
+          .setProducerId(1L)
+          .setTopics(List(
+            new WriteTxnMarkersResponseData.WritableTxnMarkerTopicResult()
+              .setName(Topic.GROUP_METADATA_TOPIC_NAME)
+              .setPartitions(List(
+                new WriteTxnMarkersResponseData.WritableTxnMarkerPartitionResult()
+                  .setPartitionIndex(0)
+                  .setErrorCode(Errors.NONE.code)
+              ).asJava),
+            new WriteTxnMarkersResponseData.WritableTxnMarkerTopicResult()
+              .setName("foo")
+              .setPartitions(List(
+                new WriteTxnMarkersResponseData.WritableTxnMarkerPartitionResult()
+                  .setPartitionIndex(0)
+                  .setErrorCode(Errors.NONE.code)
+              ).asJava)
+          ).asJava),
+        new WriteTxnMarkersResponseData.WritableTxnMarkerResult()
+          .setProducerId(2L)
+          .setTopics(List(
+            new WriteTxnMarkersResponseData.WritableTxnMarkerTopicResult()
+              .setName(Topic.GROUP_METADATA_TOPIC_NAME)
+              .setPartitions(List(
+                new WriteTxnMarkersResponseData.WritableTxnMarkerPartitionResult()
+                  .setPartitionIndex(1)
+                  .setErrorCode(Errors.NONE.code)
+              ).asJava),
+            new WriteTxnMarkersResponseData.WritableTxnMarkerTopicResult()
+              .setName("foo")
+              .setPartitions(List(
+                new WriteTxnMarkersResponseData.WritableTxnMarkerPartitionResult()
+                  .setPartitionIndex(1)
+                  .setErrorCode(Errors.NONE.code)
+              ).asJava)
+          ).asJava)
+      ).asJava)
+
+    val response = verifyNoThrottling[WriteTxnMarkersResponse](requestChannelRequest)
+    assertEquals(normalize(expectedResponse), normalize(response.data))
+  }
+
+  @ParameterizedTest
+  @EnumSource(value = classOf[Errors], names = Array(
+    "COORDINATOR_NOT_AVAILABLE",
+    "COORDINATOR_LOAD_IN_PROGRESS",
+    "NOT_COORDINATOR",
+    "REQUEST_TIMED_OUT"
+  ))
+  def testHandleWriteTxnMarkersRequestWithNewGroupCoordinatorErrorTranslation(error: Errors): Unit = {
+    val offset0 = new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, 0)
+
+    val writeTxnMarkersRequest = new WriteTxnMarkersRequest.Builder(
+      ApiKeys.WRITE_TXN_MARKERS.latestVersion(),
+      List(
+        new TxnMarkerEntry(
+          1L,
+          1.toShort,
+          0,
+          TransactionResult.COMMIT,
+          List(offset0).asJava
+        )
+      ).asJava
+    ).build()
+
+    val requestChannelRequest = buildRequest(writeTxnMarkersRequest)
+
+    when(replicaManager.getMagic(offset0))
+      .thenReturn(Some(RecordBatch.MAGIC_VALUE_V2))
+
+    when(groupCoordinator.completeTransaction(
+      ArgumentMatchers.eq(offset0),
+      ArgumentMatchers.eq(1L),
+      ArgumentMatchers.eq(1.toShort),
+      ArgumentMatchers.eq(0),
+      ArgumentMatchers.eq(TransactionResult.COMMIT),
+      ArgumentMatchers.eq(Duration.ofMillis(Defaults.RequestTimeoutMs))
+    )).thenReturn(FutureUtils.failedFuture[Void](error.exception()))
+
+    createKafkaApis(overrideProperties = Map(
+      KafkaConfig.NewGroupCoordinatorEnableProp -> "true"
+    )).handleWriteTxnMarkersRequest(requestChannelRequest, RequestLocal.NoCaching)
+
+    val expectedError = error match {
+      case Errors.COORDINATOR_NOT_AVAILABLE | Errors.COORDINATOR_LOAD_IN_PROGRESS | Errors.NOT_COORDINATOR =>
+        Errors.NOT_LEADER_OR_FOLLOWER
+      case error =>
+        error
+    }
+
+    val expectedResponse = new WriteTxnMarkersResponseData()
+      .setMarkers(List(
+        new WriteTxnMarkersResponseData.WritableTxnMarkerResult()
+          .setProducerId(1L)
+          .setTopics(List(
+            new WriteTxnMarkersResponseData.WritableTxnMarkerTopicResult()
+              .setName(Topic.GROUP_METADATA_TOPIC_NAME)
+              .setPartitions(List(
+                new WriteTxnMarkersResponseData.WritableTxnMarkerPartitionResult()
+                  .setPartitionIndex(0)
+                  .setErrorCode(expectedError.code)
+              ).asJava)
+          ).asJava)
+      ).asJava)
+
+    val response = verifyNoThrottling[WriteTxnMarkersResponse](requestChannelRequest)
+    assertEquals(normalize(expectedResponse), normalize(response.data))
+  }
+
+  private def normalize(
+    response: WriteTxnMarkersResponseData
+  ): WriteTxnMarkersResponseData = {
+    val copy = response.duplicate()
+    copy.markers.sort(
+      Comparator.comparingLong[WriteTxnMarkersResponseData.WritableTxnMarkerResult](_.producerId)
+    )
+    copy.markers.forEach { marker =>
+      marker.topics.sort((t1, t2) => t1.name.compareTo(t2.name))
+      marker.topics.forEach { topic =>
+        topic.partitions.sort(
+          Comparator.comparingInt[WriteTxnMarkersResponseData.WritableTxnMarkerPartitionResult](_.partitionIndex)
+        )
+      }
+    }
+    copy
   }
 
   @Test
@@ -6733,11 +6957,44 @@ class KafkaApisTest {
   }
 
   @Test
+  def testConsumerGroupDescribe(): Unit = {
+    val groupIds = List("group-id-0", "group-id-1", "group-id-2").asJava
+    val consumerGroupDescribeRequestData = new ConsumerGroupDescribeRequestData()
+    consumerGroupDescribeRequestData.groupIds.addAll(groupIds)
+    val requestChannelRequest = buildRequest(new ConsumerGroupDescribeRequest.Builder(consumerGroupDescribeRequestData, true).build())
+
+    val future = new CompletableFuture[util.List[ConsumerGroupDescribeResponseData.DescribedGroup]]()
+    when(groupCoordinator.consumerGroupDescribe(
+      any[RequestContext],
+      any[util.List[String]]
+    )).thenReturn(future)
+
+    createKafkaApis(
+      overrideProperties = Map(KafkaConfig.NewGroupCoordinatorEnableProp -> "true")
+    ).handle(requestChannelRequest, RequestLocal.NoCaching)
+
+    val describedGroups = List(
+      new DescribedGroup().setGroupId(groupIds.get(0)),
+      new DescribedGroup().setGroupId(groupIds.get(1)),
+      new DescribedGroup().setGroupId(groupIds.get(2))
+    ).asJava
+
+    future.complete(describedGroups)
+    val expectedConsumerGroupDescribeResponseData = new ConsumerGroupDescribeResponseData()
+      .setGroups(describedGroups)
+
+    val response = verifyNoThrottling[ConsumerGroupDescribeResponse](requestChannelRequest)
+
+    assertEquals(expectedConsumerGroupDescribeResponseData, response.data)
+  }
+
+  @Test
   def testConsumerGroupDescribeReturnsUnsupportedVersion(): Unit = {
     val groupId = "group0"
     val consumerGroupDescribeRequestData = new ConsumerGroupDescribeRequestData()
     consumerGroupDescribeRequestData.groupIds.add(groupId)
     val requestChannelRequest = buildRequest(new ConsumerGroupDescribeRequest.Builder(consumerGroupDescribeRequestData, true).build())
+
     val errorCode = Errors.UNSUPPORTED_VERSION.code
     val expectedDescribedGroup = new DescribedGroup().setGroupId(groupId).setErrorCode(errorCode)
     val expectedResponse = new ConsumerGroupDescribeResponseData()
@@ -6747,6 +7004,53 @@ class KafkaApisTest {
     val response = verifyNoThrottling[ConsumerGroupDescribeResponse](requestChannelRequest)
 
     assertEquals(expectedResponse, response.data)
+  }
+
+  @Test
+  def testConsumerGroupDescribeAuthorizationFailed(): Unit = {
+    val consumerGroupDescribeRequestData = new ConsumerGroupDescribeRequestData()
+    consumerGroupDescribeRequestData.groupIds.add("group-id")
+    val requestChannelRequest = buildRequest(new ConsumerGroupDescribeRequest.Builder(consumerGroupDescribeRequestData, true).build())
+
+    val authorizer: Authorizer = mock(classOf[Authorizer])
+    when(authorizer.authorize(any[RequestContext], any[util.List[Action]]))
+      .thenReturn(Seq(AuthorizationResult.DENIED).asJava)
+
+    val future = new CompletableFuture[util.List[ConsumerGroupDescribeResponseData.DescribedGroup]]()
+    when(groupCoordinator.consumerGroupDescribe(
+      any[RequestContext],
+      any[util.List[String]]
+    )).thenReturn(future)
+    future.complete(List().asJava)
+
+    createKafkaApis(
+      authorizer = Some(authorizer),
+      overrideProperties = Map(KafkaConfig.NewGroupCoordinatorEnableProp -> "true")
+    ).handle(requestChannelRequest, RequestLocal.NoCaching)
+
+    val response = verifyNoThrottling[ConsumerGroupDescribeResponse](requestChannelRequest)
+    assertEquals(Errors.GROUP_AUTHORIZATION_FAILED.code, response.data.groups.get(0).errorCode)
+  }
+
+  @Test
+  def testConsumerGroupDescribeFutureFailed(): Unit = {
+    val consumerGroupDescribeRequestData = new ConsumerGroupDescribeRequestData()
+    consumerGroupDescribeRequestData.groupIds.add("group-id")
+    val requestChannelRequest = buildRequest(new ConsumerGroupDescribeRequest.Builder(consumerGroupDescribeRequestData, true).build())
+
+    val future = new CompletableFuture[util.List[ConsumerGroupDescribeResponseData.DescribedGroup]]()
+    when(groupCoordinator.consumerGroupDescribe(
+      any[RequestContext],
+      any[util.List[String]]
+    )).thenReturn(future)
+
+    createKafkaApis(overrideProperties = Map(
+      KafkaConfig.NewGroupCoordinatorEnableProp -> "true"
+    )).handle(requestChannelRequest, RequestLocal.NoCaching)
+
+    future.completeExceptionally(Errors.FENCED_MEMBER_EPOCH.exception)
+    val response = verifyNoThrottling[ConsumerGroupDescribeResponse](requestChannelRequest)
+    assertEquals(Errors.FENCED_MEMBER_EPOCH.code, response.data.groups.get(0).errorCode)
   }
 
   @Test
@@ -6761,18 +7065,39 @@ class KafkaApisTest {
   }
 
   @Test
-  def testGetTelemetrySubscriptionsUnsupportedVersionForKRaftClusters(): Unit = {
-    val data = new GetTelemetrySubscriptionsRequestData()
+  def testGetTelemetrySubscriptions(): Unit = {
+    val request = buildRequest(new GetTelemetrySubscriptionsRequest.Builder(
+      new GetTelemetrySubscriptionsRequestData(), true).build())
 
-    val request = buildRequest(new GetTelemetrySubscriptionsRequest.Builder(data, true).build())
-    val errorCode = Errors.UNSUPPORTED_VERSION.code
-    val expectedResponse = new GetTelemetrySubscriptionsResponseData()
-    expectedResponse.setErrorCode(errorCode)
+    when(clientMetricsManager.isTelemetryReceiverConfigured).thenReturn(true)
+    when(clientMetricsManager.processGetTelemetrySubscriptionRequest(any[GetTelemetrySubscriptionsRequest](),
+      any[RequestContext]())).thenReturn(new GetTelemetrySubscriptionsResponse(
+      new GetTelemetrySubscriptionsResponseData()))
 
     metadataCache = MetadataCache.kRaftMetadataCache(brokerId)
     createKafkaApis(raftSupport = true).handle(request, RequestLocal.NoCaching)
+
     val response = verifyNoThrottling[GetTelemetrySubscriptionsResponse](request)
 
+    val expectedResponse = new GetTelemetrySubscriptionsResponseData()
+    assertEquals(expectedResponse, response.data)
+  }
+
+  @Test
+  def testGetTelemetrySubscriptionsWithException(): Unit = {
+    val request = buildRequest(new GetTelemetrySubscriptionsRequest.Builder(
+      new GetTelemetrySubscriptionsRequestData(), true).build())
+
+    when(clientMetricsManager.isTelemetryReceiverConfigured).thenReturn(true)
+    when(clientMetricsManager.processGetTelemetrySubscriptionRequest(any[GetTelemetrySubscriptionsRequest](),
+      any[RequestContext]())).thenThrow(new RuntimeException("test"))
+
+    metadataCache = MetadataCache.kRaftMetadataCache(brokerId)
+    createKafkaApis(raftSupport = true).handle(request, RequestLocal.NoCaching)
+
+    val response = verifyNoThrottling[GetTelemetrySubscriptionsResponse](request)
+
+    val expectedResponse = new GetTelemetrySubscriptionsResponseData().setErrorCode(Errors.INVALID_REQUEST.code)
     assertEquals(expectedResponse, response.data)
   }
 
@@ -6788,18 +7113,88 @@ class KafkaApisTest {
   }
 
   @Test
-  def testPushTelemetryUnsupportedVersionForKRaftClusters(): Unit = {
-    val data = new PushTelemetryRequestData()
+  def testPushTelemetry(): Unit = {
+    val request = buildRequest(new PushTelemetryRequest.Builder(new PushTelemetryRequestData(), true).build())
 
-    val request = buildRequest(new PushTelemetryRequest.Builder(data, true).build())
-    val errorCode = Errors.UNSUPPORTED_VERSION.code
-    val expectedResponse = new PushTelemetryResponseData()
-    expectedResponse.setErrorCode(errorCode)
+    when(clientMetricsManager.isTelemetryReceiverConfigured).thenReturn(true)
+    when(clientMetricsManager.processPushTelemetryRequest(any[PushTelemetryRequest](), any[RequestContext]()))
+      .thenReturn(new PushTelemetryResponse(new PushTelemetryResponseData()))
 
     metadataCache = MetadataCache.kRaftMetadataCache(brokerId)
     createKafkaApis(raftSupport = true).handle(request, RequestLocal.NoCaching)
     val response = verifyNoThrottling[PushTelemetryResponse](request)
 
+    val expectedResponse = new PushTelemetryResponseData().setErrorCode(Errors.NONE.code)
+    assertEquals(expectedResponse, response.data)
+  }
+
+  @Test
+  def testPushTelemetryWithException(): Unit = {
+    val request = buildRequest(new PushTelemetryRequest.Builder(new PushTelemetryRequestData(), true).build())
+
+    when(clientMetricsManager.isTelemetryReceiverConfigured()).thenReturn(true)
+    when(clientMetricsManager.processPushTelemetryRequest(any[PushTelemetryRequest](), any[RequestContext]()))
+      .thenThrow(new RuntimeException("test"))
+
+    metadataCache = MetadataCache.kRaftMetadataCache(brokerId)
+    createKafkaApis(raftSupport = true).handle(request, RequestLocal.NoCaching)
+    val response = verifyNoThrottling[PushTelemetryResponse](request)
+
+    val expectedResponse = new PushTelemetryResponseData().setErrorCode(Errors.INVALID_REQUEST.code)
+    assertEquals(expectedResponse, response.data)
+  }
+
+  @Test
+  def testListClientMetricsResourcesNotAllowedForZkClusters(): Unit = {
+    val request = buildRequest(new ListClientMetricsResourcesRequest.Builder(new ListClientMetricsResourcesRequestData()).build())
+    createKafkaApis(enableForwarding = true).handle(request, RequestLocal.NoCaching)
+
+    val response = verifyNoThrottling[ListClientMetricsResourcesResponse](request)
+    assertEquals(Errors.UNKNOWN_SERVER_ERROR, Errors.forCode(response.data.errorCode))
+  }
+
+  @Test
+  def testListClientMetricsResources(): Unit = {
+    val request = buildRequest(new ListClientMetricsResourcesRequest.Builder(new ListClientMetricsResourcesRequestData()).build())
+    metadataCache = MetadataCache.kRaftMetadataCache(brokerId)
+
+    val resources = new mutable.HashSet[String]
+    resources.add("test1")
+    resources.add("test2")
+    when(clientMetricsManager.listClientMetricsResources).thenReturn(resources.asJava)
+
+    createKafkaApis(raftSupport = true).handle(request, RequestLocal.NoCaching)
+    val response = verifyNoThrottling[ListClientMetricsResourcesResponse](request)
+    val expectedResponse = new ListClientMetricsResourcesResponseData().setClientMetricsResources(
+      resources.map(resource => new ClientMetricsResource().setName(resource)).toBuffer.asJava)
+    assertEquals(expectedResponse, response.data)
+  }
+
+  @Test
+  def testListClientMetricsResourcesEmptyResponse(): Unit = {
+    val request = buildRequest(new ListClientMetricsResourcesRequest.Builder(new ListClientMetricsResourcesRequestData()).build())
+    metadataCache = MetadataCache.kRaftMetadataCache(brokerId)
+
+    val resources = new mutable.HashSet[String]
+    when(clientMetricsManager.listClientMetricsResources).thenReturn(resources.asJava)
+
+    createKafkaApis(raftSupport = true).handle(request, RequestLocal.NoCaching)
+    val response = verifyNoThrottling[ListClientMetricsResourcesResponse](request)
+    val expectedResponse = new ListClientMetricsResourcesResponseData()
+    assertEquals(expectedResponse, response.data)
+  }
+
+  @Test
+  def testListClientMetricsResourcesWithException(): Unit = {
+    val request = buildRequest(new ListClientMetricsResourcesRequest.Builder(new ListClientMetricsResourcesRequestData()).build())
+    metadataCache = MetadataCache.kRaftMetadataCache(brokerId)
+
+    when(clientMetricsManager.listClientMetricsResources).thenThrow(new RuntimeException("test"))
+
+    createKafkaApis(raftSupport = true).handle(request, RequestLocal.NoCaching)
+    val response = verifyNoThrottling[ListClientMetricsResourcesResponse](request)
+
+    val expectedResponse = new ListClientMetricsResourcesResponseData().setErrorCode(Errors.UNKNOWN_SERVER_ERROR.code)
     assertEquals(expectedResponse, response.data)
   }
 }

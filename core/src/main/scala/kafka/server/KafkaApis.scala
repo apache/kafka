@@ -44,6 +44,7 @@ import org.apache.kafka.common.message.CreateTopicsResponseData.{CreatableTopicR
 import org.apache.kafka.common.message.DeleteRecordsResponseData.{DeleteRecordsPartitionResult, DeleteRecordsTopicResult}
 import org.apache.kafka.common.message.DeleteTopicsResponseData.{DeletableTopicResult, DeletableTopicResultCollection}
 import org.apache.kafka.common.message.ElectLeadersResponseData.{PartitionResult, ReplicaElectionResult}
+import org.apache.kafka.common.message.ListClientMetricsResourcesResponseData.ClientMetricsResource
 import org.apache.kafka.common.message.ListOffsetsRequestData.ListOffsetsPartition
 import org.apache.kafka.common.message.ListOffsetsResponseData.{ListOffsetsPartitionResponse, ListOffsetsTopicResponse}
 import org.apache.kafka.common.message.MetadataResponseData.{MetadataResponsePartition, MetadataResponseTopic}
@@ -76,6 +77,7 @@ import org.apache.kafka.storage.internals.log.{AppendOrigin, FetchIsolation, Fet
 
 import java.lang.{Long => JLong}
 import java.nio.ByteBuffer
+import java.time.Duration
 import java.util
 import java.util.concurrent.{CompletableFuture, ConcurrentHashMap}
 import java.util.concurrent.atomic.AtomicInteger
@@ -247,6 +249,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         case ApiKeys.CONSUMER_GROUP_DESCRIBE => handleConsumerGroupDescribe(request).exceptionally(handleError)
         case ApiKeys.GET_TELEMETRY_SUBSCRIPTIONS => handleGetTelemetrySubscriptionsRequest(request)
         case ApiKeys.PUSH_TELEMETRY => handlePushTelemetryRequest(request)
+        case ApiKeys.LIST_CLIENT_METRICS_RESOURCES => handleListClientMetricsResources(request)
         case _ => throw new IllegalStateException(s"No handler for request api key ${request.header.apiKey}")
       }
     } catch {
@@ -1941,16 +1944,12 @@ class KafkaApis(val requestChannel: RequestChannel,
     val controllerMutationQuota = quotas.controllerMutation.newQuotaFor(request, strictSinceVersion = 6)
 
     def sendResponseCallback(results: CreatableTopicResultCollection): Unit = {
-      def createResponse(requestThrottleMs: Int): AbstractResponse = {
-        val responseData = new CreateTopicsResponseData()
-          .setThrottleTimeMs(requestThrottleMs)
-          .setTopics(results)
-        val responseBody = new CreateTopicsResponse(responseData)
-        trace(s"Sending create topics response $responseData for correlation id " +
-          s"${request.header.correlationId} to client ${request.header.clientId}.")
-        responseBody
-      }
-      requestHelper.sendResponseMaybeThrottleWithControllerQuota(controllerMutationQuota, request, createResponse)
+      val responseData = new CreateTopicsResponseData()
+        .setTopics(results)
+      val response = new CreateTopicsResponse(responseData)
+      trace(s"Sending create topics response $responseData for correlation id " +
+        s"${request.header.correlationId} to client ${request.header.clientId}.")
+      requestHelper.sendResponseMaybeThrottleWithControllerQuota(controllerMutationQuota, request, response)
     }
 
     val createTopicsRequest = request.body[CreateTopicsRequest]
@@ -2047,21 +2046,17 @@ class KafkaApis(val requestChannel: RequestChannel,
     val controllerMutationQuota = quotas.controllerMutation.newQuotaFor(request, strictSinceVersion = 3)
 
     def sendResponseCallback(results: Map[String, ApiError]): Unit = {
-      def createResponse(requestThrottleMs: Int): AbstractResponse = {
-        val createPartitionsResults = results.map {
-          case (topic, error) => new CreatePartitionsTopicResult()
-            .setName(topic)
-            .setErrorCode(error.error.code)
-            .setErrorMessage(error.message)
-        }.toSeq
-        val responseBody = new CreatePartitionsResponse(new CreatePartitionsResponseData()
-          .setThrottleTimeMs(requestThrottleMs)
-          .setResults(createPartitionsResults.asJava))
-        trace(s"Sending create partitions response $responseBody for correlation id ${request.header.correlationId} to " +
-          s"client ${request.header.clientId}.")
-        responseBody
-      }
-      requestHelper.sendResponseMaybeThrottleWithControllerQuota(controllerMutationQuota, request, createResponse)
+      val createPartitionsResults = results.map {
+        case (topic, error) => new CreatePartitionsTopicResult()
+          .setName(topic)
+          .setErrorCode(error.error.code)
+          .setErrorMessage(error.message)
+      }.toSeq
+      val response = new CreatePartitionsResponse(new CreatePartitionsResponseData()
+        .setResults(createPartitionsResults.asJava))
+      trace(s"Sending create partitions response $response for correlation id ${request.header.correlationId} to " +
+        s"client ${request.header.clientId}.")
+      requestHelper.sendResponseMaybeThrottleWithControllerQuota(controllerMutationQuota, request, response)
     }
 
     if (!zkSupport.controller.isActive) {
@@ -2101,15 +2096,11 @@ class KafkaApis(val requestChannel: RequestChannel,
     val controllerMutationQuota = quotas.controllerMutation.newQuotaFor(request, strictSinceVersion = 5)
 
     def sendResponseCallback(results: DeletableTopicResultCollection): Unit = {
-      def createResponse(requestThrottleMs: Int): AbstractResponse = {
-        val responseData = new DeleteTopicsResponseData()
-          .setThrottleTimeMs(requestThrottleMs)
-          .setResponses(results)
-        val responseBody = new DeleteTopicsResponse(responseData)
-        trace(s"Sending delete topics response $responseBody for correlation id ${request.header.correlationId} to client ${request.header.clientId}.")
-        responseBody
-      }
-      requestHelper.sendResponseMaybeThrottleWithControllerQuota(controllerMutationQuota, request, createResponse)
+      val responseData = new DeleteTopicsResponseData()
+        .setResponses(results)
+      val response = new DeleteTopicsResponse(responseData)
+      trace(s"Sending delete topics response $response for correlation id ${request.header.correlationId} to client ${request.header.clientId}.")
+      requestHelper.sendResponseMaybeThrottleWithControllerQuota(controllerMutationQuota, request, response)
     }
 
     val deleteTopicRequest = request.body[DeleteTopicsRequest]
@@ -2371,25 +2362,27 @@ class KafkaApis(val requestChannel: RequestChannel,
       * request, so there could be multiple appends of markers to the log. The final response will be sent only
       * after all appends have returned.
       */
-    def maybeSendResponseCallback(producerId: Long, result: TransactionResult)(responseStatus: Map[TopicPartition, PartitionResponse]): Unit = {
-      trace(s"End transaction marker append for producer id $producerId completed with status: $responseStatus")
-      val currentErrors = new ConcurrentHashMap[TopicPartition, Errors](responseStatus.map { case (k, v) => k -> v.error }.asJava)
+    def maybeSendResponseCallback(producerId: Long, result: TransactionResult, currentErrors: ConcurrentHashMap[TopicPartition, Errors]): Unit = {
+      trace(s"End transaction marker append for producer id $producerId completed with status: $currentErrors")
       updateErrors(producerId, currentErrors)
-      val successfulOffsetsPartitions = responseStatus.filter { case (topicPartition, partitionResponse) =>
-        topicPartition.topic == GROUP_METADATA_TOPIC_NAME && partitionResponse.error == Errors.NONE
-      }.keys
 
-      if (successfulOffsetsPartitions.nonEmpty) {
-        // as soon as the end transaction marker has been written for a transactional offset commit,
-        // call to the group coordinator to materialize the offsets into the cache
-        try {
-          groupCoordinator.onTransactionCompleted(producerId, successfulOffsetsPartitions.asJava, result)
-        } catch {
-          case e: Exception =>
-            error(s"Received an exception while trying to update the offsets cache on transaction marker append", e)
-            val updatedErrors = new ConcurrentHashMap[TopicPartition, Errors]()
-            successfulOffsetsPartitions.foreach(updatedErrors.put(_, Errors.UNKNOWN_SERVER_ERROR))
-            updateErrors(producerId, updatedErrors)
+      if (!config.isNewGroupCoordinatorEnabled) {
+        val successfulOffsetsPartitions = currentErrors.asScala.filter { case (topicPartition, error) =>
+          topicPartition.topic == GROUP_METADATA_TOPIC_NAME && error == Errors.NONE
+        }.keys
+
+        if (successfulOffsetsPartitions.nonEmpty) {
+          // as soon as the end transaction marker has been written for a transactional offset commit,
+          // call to the group coordinator to materialize the offsets into the cache
+          try {
+            groupCoordinator.onTransactionCompleted(producerId, successfulOffsetsPartitions.asJava, result)
+          } catch {
+            case e: Exception =>
+              error(s"Received an exception while trying to update the offsets cache on transaction marker append", e)
+              val updatedErrors = new ConcurrentHashMap[TopicPartition, Errors]()
+              successfulOffsetsPartitions.foreach(updatedErrors.put(_, Errors.UNKNOWN_SERVER_ERROR))
+              updateErrors(producerId, updatedErrors)
+          }
         }
       }
 
@@ -2426,14 +2419,56 @@ class KafkaApis(val requestChannel: RequestChannel,
         numAppends.decrementAndGet()
         skippedMarkers += 1
       } else {
-        val controlRecords = partitionsWithCompatibleMessageFormat.map { partition =>
-          val controlRecordType = marker.transactionResult match {
-            case TransactionResult.COMMIT => ControlRecordType.COMMIT
-            case TransactionResult.ABORT => ControlRecordType.ABORT
+        val controlRecordType = marker.transactionResult match {
+          case TransactionResult.COMMIT => ControlRecordType.COMMIT
+          case TransactionResult.ABORT => ControlRecordType.ABORT
+        }
+
+        val markerResults = new ConcurrentHashMap[TopicPartition, Errors]()
+        def maybeComplete(): Unit = {
+          if (partitionsWithCompatibleMessageFormat.size == markerResults.size) {
+            maybeSendResponseCallback(producerId, marker.transactionResult, markerResults)
           }
-          val endTxnMarker = new EndTransactionMarker(controlRecordType, marker.coordinatorEpoch)
-          partition -> MemoryRecords.withEndTransactionMarker(producerId, marker.producerEpoch, endTxnMarker)
-        }.toMap
+        }
+
+        val controlRecords = mutable.Map.empty[TopicPartition, MemoryRecords]
+        partitionsWithCompatibleMessageFormat.foreach { partition =>
+          if (config.isNewGroupCoordinatorEnabled && partition.topic == GROUP_METADATA_TOPIC_NAME) {
+            // When the new group coordinator is used, writing the end marker is fully delegated
+            // to the group coordinator.
+            groupCoordinator.completeTransaction(
+              partition,
+              marker.producerId,
+              marker.producerEpoch,
+              marker.coordinatorEpoch,
+              marker.transactionResult,
+              Duration.ofMillis(config.requestTimeoutMs.toLong)
+            ).whenComplete { (_, exception) =>
+              val error = if (exception == null) {
+                Errors.NONE
+              } else {
+                Errors.forException(exception) match {
+                  case Errors.COORDINATOR_NOT_AVAILABLE | Errors.COORDINATOR_LOAD_IN_PROGRESS | Errors.NOT_COORDINATOR =>
+                    // The transaction coordinator does not expect those errors so we translate them
+                    // to NOT_LEADER_OR_FOLLOWER to signal to it that the coordinator is not ready yet.
+                    Errors.NOT_LEADER_OR_FOLLOWER
+                  case error =>
+                    error
+                }
+              }
+              markerResults.put(partition, error)
+              maybeComplete()
+            }
+          } else {
+            // Otherwise, the regular appendRecords path is used for all the non __consumer_offsets
+            // partitions or for all partitions when the new group coordinator is disabled.
+            controlRecords += partition -> MemoryRecords.withEndTransactionMarker(
+              producerId,
+              marker.producerEpoch,
+              new EndTransactionMarker(controlRecordType, marker.coordinatorEpoch)
+            )
+          }
+        }
 
         replicaManager.appendRecords(
           timeout = config.requestTimeoutMs.toLong,
@@ -2442,7 +2477,13 @@ class KafkaApis(val requestChannel: RequestChannel,
           origin = AppendOrigin.COORDINATOR,
           entriesPerPartition = controlRecords,
           requestLocal = requestLocal,
-          responseCallback = maybeSendResponseCallback(producerId, marker.transactionResult))
+          responseCallback = errors => {
+            errors.forKeyValue { (tp, partitionResponse) =>
+              markerResults.put(tp, partitionResponse.error)
+            }
+            maybeComplete()
+          }
+        )
       }
     }
 
@@ -2456,6 +2497,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     if (config.interBrokerProtocolVersion.isLessThan(version))
       throw new UnsupportedVersionException(s"inter.broker.protocol.version: ${config.interBrokerProtocolVersion.version} is less than the required version: ${version.version}")
   }
+
   def handleAddPartitionsToTxnRequest(request: RequestChannel.Request, requestLocal: RequestLocal): Unit = {
     ensureInterBrokerVersion(IBP_0_11_0_IV0)
     val addPartitionsToTxnRequest =
@@ -3743,20 +3785,103 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   def handleConsumerGroupDescribe(request: RequestChannel.Request): CompletableFuture[Unit] = {
-    requestHelper.sendMaybeThrottle(request, request.body[ConsumerGroupDescribeRequest].getErrorResponse(Errors.UNSUPPORTED_VERSION.exception))
-    CompletableFuture.completedFuture[Unit](())
+    val consumerGroupDescribeRequest = request.body[ConsumerGroupDescribeRequest]
+
+    if (!config.isNewGroupCoordinatorEnabled) {
+      // The API is not supported by the "old" group coordinator (the default). If the
+      // new one is not enabled, we fail directly here.
+      requestHelper.sendMaybeThrottle(request, request.body[ConsumerGroupDescribeRequest].getErrorResponse(Errors.UNSUPPORTED_VERSION.exception))
+      CompletableFuture.completedFuture[Unit](())
+    } else {
+      val response = new ConsumerGroupDescribeResponseData()
+
+      val authorizedGroups = new ArrayBuffer[String]()
+      consumerGroupDescribeRequest.data.groupIds.forEach { groupId =>
+        if (!authHelper.authorize(request.context, DESCRIBE, GROUP, groupId)) {
+          response.groups.add(new ConsumerGroupDescribeResponseData.DescribedGroup()
+            .setGroupId(groupId)
+            .setErrorCode(Errors.GROUP_AUTHORIZATION_FAILED.code)
+          )
+        } else {
+          authorizedGroups += groupId
+        }
+      }
+
+      groupCoordinator.consumerGroupDescribe(
+        request.context,
+        authorizedGroups.asJava
+      ).handle[Unit] { (results, exception) =>
+        if (exception != null) {
+          requestHelper.sendMaybeThrottle(request, consumerGroupDescribeRequest.getErrorResponse(exception))
+        } else {
+          if (response.groups.isEmpty) {
+            // If the response is empty, we can directly reuse the results.
+            response.setGroups(results)
+          } else {
+            // Otherwise, we have to copy the results into the existing ones.
+            response.groups.addAll(results)
+          }
+
+          requestHelper.sendMaybeThrottle(request, new ConsumerGroupDescribeResponse(response))
+        }
+      }
+    }
+
   }
 
-  // Just a place holder for now.
   def handleGetTelemetrySubscriptionsRequest(request: RequestChannel.Request): Unit = {
-    requestHelper.sendMaybeThrottle(request, request.body[GetTelemetrySubscriptionsRequest].getErrorResponse(Errors.UNSUPPORTED_VERSION.exception))
-    CompletableFuture.completedFuture[Unit](())
+    val subscriptionRequest = request.body[GetTelemetrySubscriptionsRequest]
+
+    clientMetricsManager match {
+      case Some(metricsManager) =>
+        try {
+          requestHelper.sendMaybeThrottle(request, metricsManager.processGetTelemetrySubscriptionRequest(subscriptionRequest, request.context))
+        } catch {
+          case _: Exception =>
+            requestHelper.sendMaybeThrottle(request, subscriptionRequest.getErrorResponse(Errors.INVALID_REQUEST.exception))
+        }
+      case None =>
+        info("Received get telemetry client request for zookeeper based cluster")
+        requestHelper.sendMaybeThrottle(request, subscriptionRequest.getErrorResponse(Errors.UNSUPPORTED_VERSION.exception))
+    }
   }
 
-  // Just a place holder for now.
   def handlePushTelemetryRequest(request: RequestChannel.Request): Unit = {
-    requestHelper.sendMaybeThrottle(request, request.body[PushTelemetryRequest].getErrorResponse(Errors.UNSUPPORTED_VERSION.exception))
-    CompletableFuture.completedFuture[Unit](())
+    val pushTelemetryRequest = request.body[PushTelemetryRequest]
+
+    clientMetricsManager match {
+      case Some(metricsManager) =>
+        try {
+          requestHelper.sendMaybeThrottle(request, metricsManager.processPushTelemetryRequest(pushTelemetryRequest, request.context))
+        } catch {
+          case _: Exception =>
+            requestHelper.sendMaybeThrottle(request, pushTelemetryRequest.getErrorResponse(Errors.INVALID_REQUEST.exception))
+        }
+      case None =>
+        info("Received push telemetry client request for zookeeper based cluster")
+        requestHelper.sendMaybeThrottle(request, pushTelemetryRequest.getErrorResponse(Errors.UNSUPPORTED_VERSION.exception))
+    }
+  }
+
+  def handleListClientMetricsResources(request: RequestChannel.Request): Unit = {
+    val listClientMetricsResourcesRequest = request.body[ListClientMetricsResourcesRequest]
+
+    if (!authHelper.authorize(request.context, DESCRIBE_CONFIGS, CLUSTER, CLUSTER_NAME)) {
+      requestHelper.sendMaybeThrottle(request, listClientMetricsResourcesRequest.getErrorResponse(Errors.CLUSTER_AUTHORIZATION_FAILED.exception))
+    } else {
+      clientMetricsManager match {
+        case Some(metricsManager) =>
+          val data = new ListClientMetricsResourcesResponseData().setClientMetricsResources(
+            metricsManager.listClientMetricsResources.asScala.map(
+              name => new ClientMetricsResource().setName(name)).toList.asJava)
+          requestHelper.sendMaybeThrottle(request, new ListClientMetricsResourcesResponse(data))
+        case None =>
+          // This should never happen as ZK based cluster calls should get rejected earlier itself,
+          // but we should handle it gracefully.
+          info("Received list client metrics resources request for zookeeper based cluster")
+          requestHelper.sendMaybeThrottle(request, listClientMetricsResourcesRequest.getErrorResponse(Errors.UNSUPPORTED_VERSION.exception))
+      }
+    }
   }
 
   private def updateRecordConversionStats(request: RequestChannel.Request,

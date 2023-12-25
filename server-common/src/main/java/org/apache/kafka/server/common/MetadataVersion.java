@@ -188,8 +188,21 @@ public enum MetadataVersion {
     // Implement KIP-919 controller registration.
     IBP_3_7_IV0(15, "3.7", "IV0", true),
 
+    // Reserved
+    IBP_3_7_IV1(16, "3.7", "IV1", false),
+
+    // Add JBOD support for KRaft.
+    IBP_3_7_IV2(17, "3.7", "IV2", true),
+
+    // IBP_3_7_IV3 was reserved for ELR support (KIP-966) but has been moved forward to
+    // a later release requiring a new MetadataVersion. MVs are not reused.
+    IBP_3_7_IV3(18, "3.7", "IV3", false),
+
+    // Add new fetch request version for KIP-951
+    IBP_3_7_IV4(19, "3.7", "IV4", false),
+
     // Add ELR related supports (KIP-966).
-    IBP_3_7_IV1(16, "3.7", "IV1", true);
+    IBP_3_8_IV0(20, "3.8", "IV0", true);
 
     // NOTES when adding a new version:
     //   Update the default version in @ClusterTest annotation to point to the latest version
@@ -207,6 +220,22 @@ public enum MetadataVersion {
      */
     public static final MetadataVersion MINIMUM_BOOTSTRAP_VERSION = IBP_3_3_IV0;
 
+    /**
+     * The latest production-ready MetadataVersion. This is the latest version that is stable
+     * and cannot be changed. MetadataVersions later than this can be tested via junit, but
+     * not deployed in production.
+     *
+     * <strong>Think carefully before you update this value. ONCE A METADATA VERSION IS PRODUCTION,
+     * IT CANNOT BE CHANGED.</strong>
+     */
+    public static final MetadataVersion LATEST_PRODUCTION = IBP_3_7_IV4;
+
+    /**
+     * An array containing all of the MetadataVersion entries.
+     *
+     * This is essentially a cached copy of MetadataVersion.values. Unlike that function, it doesn't
+     * allocate a new array each time.
+     */
     public static final MetadataVersion[] VERSIONS;
 
     private final short featureLevel;
@@ -289,12 +318,12 @@ public enum MetadataVersion {
         return this.isAtLeast(IBP_3_6_IV2);
     }
 
-    public boolean isElrSupported() {
-        return this.isAtLeast(IBP_3_7_IV1);
+    public boolean isDirectoryAssignmentSupported() {
+        return this.isAtLeast(IBP_3_7_IV2);
     }
 
-    public boolean isDirectoryAssignmentSupported() {
-        return false; // TODO: Bump IBP for JBOD support in KRaft
+    public boolean isElrSupported() {
+        return this.isAtLeast(IBP_3_8_IV0);
     }
 
     public boolean isKRaftSupported() {
@@ -351,9 +380,9 @@ public enum MetadataVersion {
     }
 
     public short partitionChangeRecordVersion() {
-        if (isDirectoryAssignmentSupported()) {
+        if (isElrSupported()) {
             return (short) 2;
-        } else if (isElrSupported()) {
+        } else if (isDirectoryAssignmentSupported()) {
             return (short) 1;
         } else {
             return (short) 0;
@@ -361,9 +390,9 @@ public enum MetadataVersion {
     }
 
     public short partitionRecordVersion() {
-        if (isDirectoryAssignmentSupported()) {
+        if (isElrSupported()) {
             return (short) 2;
-        } else if (isElrSupported()) {
+        } else if (isDirectoryAssignmentSupported()) {
             return (short) 1;
         } else {
             return (short) 0;
@@ -371,7 +400,7 @@ public enum MetadataVersion {
     }
 
     public short fetchRequestVersion() {
-        if (this.isAtLeast(IBP_3_7_IV0)) {
+        if (this.isAtLeast(IBP_3_7_IV4)) {
             return 16;
         } else if (this.isAtLeast(IBP_3_5_IV1)) {
             return 15;
@@ -467,19 +496,24 @@ public enum MetadataVersion {
     }
 
     private static final Map<String, MetadataVersion> IBP_VERSIONS;
-    static {
-        {
-            MetadataVersion[] enumValues = MetadataVersion.values();
-            VERSIONS = Arrays.copyOf(enumValues, enumValues.length);
 
-            IBP_VERSIONS = new HashMap<>();
-            Map<String, MetadataVersion> maxInterVersion = new HashMap<>();
-            for (MetadataVersion metadataVersion : VERSIONS) {
+    static {
+        MetadataVersion[] enumValues = MetadataVersion.values();
+        VERSIONS = Arrays.copyOf(enumValues, enumValues.length);
+
+        IBP_VERSIONS = new HashMap<>();
+        Map<String, MetadataVersion> maxInterVersion = new HashMap<>();
+        for (MetadataVersion metadataVersion : VERSIONS) {
+            if (metadataVersion.isProduction()) {
                 maxInterVersion.put(metadataVersion.release, metadataVersion);
-                IBP_VERSIONS.put(metadataVersion.ibpVersion, metadataVersion);
             }
-            IBP_VERSIONS.putAll(maxInterVersion);
+            IBP_VERSIONS.put(metadataVersion.ibpVersion, metadataVersion);
         }
+        IBP_VERSIONS.putAll(maxInterVersion);
+    }
+
+    public boolean isProduction() {
+        return this.compareTo(MetadataVersion.LATEST_PRODUCTION) <= 0;
     }
 
     public String shortVersion() {

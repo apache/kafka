@@ -317,6 +317,7 @@ abstract class QuorumTestHarness extends Logging {
     val props = propsList(0)
     props.setProperty(KafkaConfig.ServerMaxStartupTimeMsProp, TimeUnit.MINUTES.toMillis(10).toString)
     props.setProperty(KafkaConfig.ProcessRolesProp, "controller")
+    props.setProperty(KafkaConfig.UnstableMetadataVersionsEnableProp, "true")
     if (props.getProperty(KafkaConfig.NodeIdProp) == null) {
       props.setProperty(KafkaConfig.NodeIdProp, "1000")
     }
@@ -425,11 +426,11 @@ abstract class QuorumTestHarness extends Logging {
 
   @AfterEach
   def tearDown(): Unit = {
-    Exit.resetExitProcedure()
-    Exit.resetHaltProcedure()
     if (implementation != null) {
       implementation.shutdown()
     }
+    Exit.resetExitProcedure()
+    Exit.resetHaltProcedure()
     TestUtils.clearYammerMetrics()
     System.clearProperty(JaasUtils.JAVA_LOGIN_CONFIG_PARAM)
     Configuration.setConfiguration(null)

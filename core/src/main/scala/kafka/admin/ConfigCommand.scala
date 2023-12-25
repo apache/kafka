@@ -29,7 +29,7 @@ import kafka.zk.{AdminZkClient, KafkaZkClient}
 import org.apache.kafka.clients.admin.{Admin, AlterClientQuotasOptions, AlterConfigOp, AlterConfigsOptions, ConfigEntry, DescribeClusterOptions, DescribeConfigsOptions, ListTopicsOptions, ScramCredentialInfo, UserScramCredentialDeletion, UserScramCredentialUpsertion, Config => JConfig, ScramMechanism => PublicScramMechanism}
 import org.apache.kafka.common.config.{ConfigResource, TopicConfig}
 import org.apache.kafka.common.config.types.Password
-import org.apache.kafka.common.errors.{InvalidConfigurationException, InvalidRequestException}
+import org.apache.kafka.common.errors.InvalidConfigurationException
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.quota.{ClientQuotaAlteration, ClientQuotaEntity, ClientQuotaFilter, ClientQuotaFilterComponent}
 import org.apache.kafka.common.security.JaasUtils
@@ -78,8 +78,7 @@ object ConfigCommand extends Logging {
 
   val BrokerDefaultEntityName = ""
   val BrokerLoggerConfigType = "broker-loggers"
-  @nowarn("cat=deprecation")
-  val BrokerSupportedConfigTypes = JavaConverters.asScala(ConfigType.ALL) :+ BrokerLoggerConfigType :+ ConfigType.CLIENT_METRICS
+  val BrokerSupportedConfigTypes = ConfigType.ALL.asScala :+ BrokerLoggerConfigType :+ ConfigType.CLIENT_METRICS
   val ZkSupportedConfigTypes = Seq(ConfigType.USER, ConfigType.BROKER)
   val DefaultScramIterations = 4096
 
@@ -555,7 +554,7 @@ object ConfigCommand extends Logging {
         case ConfigType.BROKER | BrokerLoggerConfigType =>
           adminClient.describeCluster(new DescribeClusterOptions()).nodes().get().asScala.map(_.idString).toSeq :+ BrokerDefaultEntityName
         case ConfigType.CLIENT_METRICS =>
-          throw new InvalidRequestException("Client metrics entity-name is required")
+          adminClient.listClientMetricsResources().all().get().asScala.map(_.name).toSeq
         case entityType => throw new IllegalArgumentException(s"Invalid entity type: $entityType")
       })
 
@@ -962,8 +961,7 @@ object ConfigCommand extends Logging {
         }
       }
 
-      if (options.has(describeOpt) && (entityTypeVals.contains(BrokerLoggerConfigType) ||
-        entityTypeVals.contains(ConfigType.CLIENT_METRICS)) && !hasEntityName)
+      if (options.has(describeOpt) && entityTypeVals.contains(BrokerLoggerConfigType) && !hasEntityName)
         throw new IllegalArgumentException(s"an entity name must be specified with --describe of ${entityTypeVals.mkString(",")}")
 
       if (options.has(alterOpt)) {

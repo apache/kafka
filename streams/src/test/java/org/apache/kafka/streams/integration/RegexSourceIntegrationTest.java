@@ -137,7 +137,7 @@ public class RegexSourceIntegrationTest {
         properties.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, 10000);
 
         streamsConfiguration = StreamsTestUtils.getStreamsConfig(
-            IntegrationTestUtils.safeUniqueTestName(RegexSourceIntegrationTest.class, testInfo),
+            IntegrationTestUtils.safeUniqueTestName(testInfo),
             CLUSTER.bootstrapServers(),
             STRING_SERDE_CLASSNAME,
             STRING_SERDE_CLASSNAME,
@@ -289,7 +289,7 @@ public class RegexSourceIntegrationTest {
             streams.start();
             TestUtils.waitForCondition(() -> assignedTopics.equals(expectedFirstAssignment), STREAM_TASKS_NOT_UPDATED);
         } finally {
-            CLUSTER.deleteTopic("TEST-TOPIC-A");
+            CLUSTER.deleteTopicAndWait("TEST-TOPIC-A");
         }
 
         TestUtils.waitForCondition(() -> assignedTopics.equals(expectedSecondAssignment), STREAM_TASKS_NOT_UPDATED);
