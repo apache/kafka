@@ -39,7 +39,7 @@ import org.openjdk.jmh.infra.Blackhole;
 public class RecordBatchIterationBenchmark extends BaseRecordBatchBenchmark {
 
     @Param(value = {"LZ4", "SNAPPY", "GZIP", "ZSTD", "NONE"})
-    private final CompressionType compressionType = CompressionType.NONE;
+    private CompressionType compressionType = CompressionType.NONE;
 
     @Override
     CompressionType compressionType() {
