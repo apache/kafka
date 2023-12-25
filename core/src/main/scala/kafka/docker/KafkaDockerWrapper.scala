@@ -62,7 +62,7 @@ object KafkaDockerWrapper {
   import Constants._
 
   private def formatStorageCmd(configsDir: String, env: Map[String, String]): Array[String] = {
-    Array("format", "--cluster-id=" + env.get("CLUSTER_ID"), "-c", s"$configsDir/server.properties")
+    Array("format", "--cluster-id=" + env.get("CLUSTER_ID"), "-c", s"$configsDir/server.properties", "--ignore-formatted")
   }
 
   private def prepareConfigs(defaultConfigsDir: String, mountedConfigsDir: String, finalConfigsDir: String): Unit = {
