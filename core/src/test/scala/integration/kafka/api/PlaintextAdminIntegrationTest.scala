@@ -28,7 +28,7 @@ import java.{time, util}
 import kafka.integration.KafkaServerTestHarness
 import kafka.security.authorizer.AclEntry
 import kafka.server.metadata.KRaftMetadataCache
-import kafka.server.{Defaults, DynamicConfig, KafkaConfig}
+import kafka.server.{Defaults, KafkaConfig}
 import kafka.utils.TestUtils._
 import kafka.utils.{Log4jController, TestInfoUtils, TestUtils}
 import org.apache.kafka.clients.HostResolver
@@ -44,6 +44,7 @@ import org.apache.kafka.common.resource.{PatternType, ResourcePattern, ResourceT
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.common.{ConsumerGroupState, ElectionType, TopicCollection, TopicPartition, TopicPartitionInfo, TopicPartitionReplica, Uuid}
 import org.apache.kafka.controller.ControllerRequestContextUtil.ANONYMOUS_CONTEXT
+import org.apache.kafka.server.DynamicConfig
 import org.apache.kafka.storage.internals.log.LogConfig
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Disabled, TestInfo}
@@ -1984,31 +1985,31 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     client = Admin.create(createConfig)
     val broker0Resource = new ConfigResource(ConfigResource.Type.BROKER, "0")
     client.incrementalAlterConfigs(Map(broker0Resource ->
-      Seq(new AlterConfigOp(new ConfigEntry(DynamicConfig.Broker.LeaderReplicationThrottledRateProp, "123"),
+      Seq(new AlterConfigOp(new ConfigEntry(DynamicConfig.Broker.LEADER_REPLICATION_THROTTLED_RATE_PROP, "123"),
           AlterConfigOp.OpType.SET),
-        new AlterConfigOp(new ConfigEntry(DynamicConfig.Broker.FollowerReplicationThrottledRateProp, "456"),
+        new AlterConfigOp(new ConfigEntry(DynamicConfig.Broker.FOLLOWER_REPLICATION_THROTTLED_RATE_PROP, "456"),
           AlterConfigOp.OpType.SET)
       ).asJavaCollection).asJava).all().get()
     TestUtils.waitUntilTrue(() => {
       val broker0Configs = client.describeConfigs(Seq(broker0Resource).asJava).
         all().get().get(broker0Resource).entries().asScala.map(entry => (entry.name, entry.value)).toMap
-      ("123".equals(broker0Configs.getOrElse(DynamicConfig.Broker.LeaderReplicationThrottledRateProp, "")) &&
-        "456".equals(broker0Configs.getOrElse(DynamicConfig.Broker.FollowerReplicationThrottledRateProp, "")))
+      ("123".equals(broker0Configs.getOrElse(DynamicConfig.Broker.LEADER_REPLICATION_THROTTLED_RATE_PROP, "")) &&
+        "456".equals(broker0Configs.getOrElse(DynamicConfig.Broker.FOLLOWER_REPLICATION_THROTTLED_RATE_PROP, "")))
     }, "Expected to see the broker properties we just set", pause=25)
     client.incrementalAlterConfigs(Map(broker0Resource ->
-      Seq(new AlterConfigOp(new ConfigEntry(DynamicConfig.Broker.LeaderReplicationThrottledRateProp, ""),
+      Seq(new AlterConfigOp(new ConfigEntry(DynamicConfig.Broker.LEADER_REPLICATION_THROTTLED_RATE_PROP, ""),
         AlterConfigOp.OpType.DELETE),
-        new AlterConfigOp(new ConfigEntry(DynamicConfig.Broker.FollowerReplicationThrottledRateProp, "654"),
+        new AlterConfigOp(new ConfigEntry(DynamicConfig.Broker.FOLLOWER_REPLICATION_THROTTLED_RATE_PROP, "654"),
           AlterConfigOp.OpType.SET),
-        new AlterConfigOp(new ConfigEntry(DynamicConfig.Broker.ReplicaAlterLogDirsIoMaxBytesPerSecondProp, "987"),
+        new AlterConfigOp(new ConfigEntry(DynamicConfig.Broker.REPLICA_ALTER_LOG_DIRS_IO_MAX_BYTES_PER_SECOND_PROP, "987"),
           AlterConfigOp.OpType.SET)
       ).asJavaCollection).asJava).all().get()
     TestUtils.waitUntilTrue(() => {
       val broker0Configs = client.describeConfigs(Seq(broker0Resource).asJava).
         all().get().get(broker0Resource).entries().asScala.map(entry => (entry.name, entry.value)).toMap
-      ("".equals(broker0Configs.getOrElse(DynamicConfig.Broker.LeaderReplicationThrottledRateProp, "")) &&
-        "654".equals(broker0Configs.getOrElse(DynamicConfig.Broker.FollowerReplicationThrottledRateProp, "")) &&
-        "987".equals(broker0Configs.getOrElse(DynamicConfig.Broker.ReplicaAlterLogDirsIoMaxBytesPerSecondProp, "")))
+      ("".equals(broker0Configs.getOrElse(DynamicConfig.Broker.LEADER_REPLICATION_THROTTLED_RATE_PROP, "")) &&
+        "654".equals(broker0Configs.getOrElse(DynamicConfig.Broker.FOLLOWER_REPLICATION_THROTTLED_RATE_PROP, "")) &&
+        "987".equals(broker0Configs.getOrElse(DynamicConfig.Broker.REPLICA_ALTER_LOG_DIRS_IO_MAX_BYTES_PER_SECOND_PROP, "")))
     }, "Expected to see the broker properties we just modified", pause=25)
   }
 
@@ -2018,34 +2019,34 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     client = Admin.create(createConfig)
     val broker0Resource = new ConfigResource(ConfigResource.Type.BROKER, "0")
     client.incrementalAlterConfigs(Map(broker0Resource ->
-      Seq(new AlterConfigOp(new ConfigEntry(DynamicConfig.Broker.LeaderReplicationThrottledRateProp, "123"),
+      Seq(new AlterConfigOp(new ConfigEntry(DynamicConfig.Broker.LEADER_REPLICATION_THROTTLED_RATE_PROP, "123"),
         AlterConfigOp.OpType.SET),
-        new AlterConfigOp(new ConfigEntry(DynamicConfig.Broker.FollowerReplicationThrottledRateProp, "456"),
+        new AlterConfigOp(new ConfigEntry(DynamicConfig.Broker.FOLLOWER_REPLICATION_THROTTLED_RATE_PROP, "456"),
           AlterConfigOp.OpType.SET),
-        new AlterConfigOp(new ConfigEntry(DynamicConfig.Broker.ReplicaAlterLogDirsIoMaxBytesPerSecondProp, "789"),
+        new AlterConfigOp(new ConfigEntry(DynamicConfig.Broker.REPLICA_ALTER_LOG_DIRS_IO_MAX_BYTES_PER_SECOND_PROP, "789"),
           AlterConfigOp.OpType.SET)
       ).asJavaCollection).asJava).all().get()
     TestUtils.waitUntilTrue(() => {
       val broker0Configs = client.describeConfigs(Seq(broker0Resource).asJava).
         all().get().get(broker0Resource).entries().asScala.map(entry => (entry.name, entry.value)).toMap
-      ("123".equals(broker0Configs.getOrElse(DynamicConfig.Broker.LeaderReplicationThrottledRateProp, "")) &&
-        "456".equals(broker0Configs.getOrElse(DynamicConfig.Broker.FollowerReplicationThrottledRateProp, "")) &&
-        "789".equals(broker0Configs.getOrElse(DynamicConfig.Broker.ReplicaAlterLogDirsIoMaxBytesPerSecondProp, "")))
+      ("123".equals(broker0Configs.getOrElse(DynamicConfig.Broker.LEADER_REPLICATION_THROTTLED_RATE_PROP, "")) &&
+        "456".equals(broker0Configs.getOrElse(DynamicConfig.Broker.FOLLOWER_REPLICATION_THROTTLED_RATE_PROP, "")) &&
+        "789".equals(broker0Configs.getOrElse(DynamicConfig.Broker.REPLICA_ALTER_LOG_DIRS_IO_MAX_BYTES_PER_SECOND_PROP, "")))
     }, "Expected to see the broker properties we just set", pause=25)
     client.incrementalAlterConfigs(Map(broker0Resource ->
-      Seq(new AlterConfigOp(new ConfigEntry(DynamicConfig.Broker.LeaderReplicationThrottledRateProp, ""),
+      Seq(new AlterConfigOp(new ConfigEntry(DynamicConfig.Broker.LEADER_REPLICATION_THROTTLED_RATE_PROP, ""),
         AlterConfigOp.OpType.DELETE),
-        new AlterConfigOp(new ConfigEntry(DynamicConfig.Broker.FollowerReplicationThrottledRateProp, ""),
+        new AlterConfigOp(new ConfigEntry(DynamicConfig.Broker.FOLLOWER_REPLICATION_THROTTLED_RATE_PROP, ""),
           AlterConfigOp.OpType.DELETE),
-        new AlterConfigOp(new ConfigEntry(DynamicConfig.Broker.ReplicaAlterLogDirsIoMaxBytesPerSecondProp, ""),
+        new AlterConfigOp(new ConfigEntry(DynamicConfig.Broker.REPLICA_ALTER_LOG_DIRS_IO_MAX_BYTES_PER_SECOND_PROP, ""),
           AlterConfigOp.OpType.DELETE)
       ).asJavaCollection).asJava).all().get()
     TestUtils.waitUntilTrue(() => {
       val broker0Configs = client.describeConfigs(Seq(broker0Resource).asJava).
         all().get().get(broker0Resource).entries().asScala.map(entry => (entry.name, entry.value)).toMap
-      ("".equals(broker0Configs.getOrElse(DynamicConfig.Broker.LeaderReplicationThrottledRateProp, "")) &&
-        "".equals(broker0Configs.getOrElse(DynamicConfig.Broker.FollowerReplicationThrottledRateProp, "")) &&
-        "".equals(broker0Configs.getOrElse(DynamicConfig.Broker.ReplicaAlterLogDirsIoMaxBytesPerSecondProp, "")))
+      ("".equals(broker0Configs.getOrElse(DynamicConfig.Broker.LEADER_REPLICATION_THROTTLED_RATE_PROP, "")) &&
+        "".equals(broker0Configs.getOrElse(DynamicConfig.Broker.FOLLOWER_REPLICATION_THROTTLED_RATE_PROP, "")) &&
+        "".equals(broker0Configs.getOrElse(DynamicConfig.Broker.REPLICA_ALTER_LOG_DIRS_IO_MAX_BYTES_PER_SECOND_PROP, "")))
     }, "Expected to see the broker properties we just removed to be deleted", pause=25)
   }
 

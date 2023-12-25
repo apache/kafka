@@ -40,6 +40,7 @@ import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.server.DynamicConfig;
 import org.apache.kafka.server.common.AdminCommandFailedException;
 import org.apache.kafka.server.common.AdminOperationException;
 import org.apache.kafka.server.util.CommandLineUtils;
@@ -96,12 +97,9 @@ public class ReassignPartitionsCommand {
     static final int EARLIEST_TOPICS_JSON_VERSION = 1;
 
     // Throttles that are set at the level of an individual broker.
-    //DynamicConfig.Broker.LeaderReplicationThrottledRateProp
-    static final String BROKER_LEVEL_LEADER_THROTTLE = "leader.replication.throttled.rate";
-    //DynamicConfig.Broker.FollowerReplicationThrottledRateProp
-    static final String BROKER_LEVEL_FOLLOWER_THROTTLE = "follower.replication.throttled.rate";
-    //DynamicConfig.Broker.ReplicaAlterLogDirsIoMaxBytesPerSecondProp
-    static final String BROKER_LEVEL_LOG_DIR_THROTTLE = "replica.alter.log.dirs.io.max.bytes.per.second";
+    static final String BROKER_LEVEL_LEADER_THROTTLE = DynamicConfig.Broker.LEADER_REPLICATION_THROTTLED_RATE_PROP;
+    static final String BROKER_LEVEL_FOLLOWER_THROTTLE = DynamicConfig.Broker.FOLLOWER_REPLICATION_THROTTLED_RATE_PROP;
+    static final String BROKER_LEVEL_LOG_DIR_THROTTLE = DynamicConfig.Broker.REPLICA_ALTER_LOG_DIRS_IO_MAX_BYTES_PER_SECOND_PROP;
     static final List<String> BROKER_LEVEL_THROTTLES = Arrays.asList(
         BROKER_LEVEL_LEADER_THROTTLE,
         BROKER_LEVEL_FOLLOWER_THROTTLE,

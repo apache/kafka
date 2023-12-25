@@ -20,7 +20,7 @@ import java.util.{Collections, Optional, Properties}
 import kafka.admin.RackAwareMode
 import kafka.common.TopicAlreadyMarkedForDeletionException
 import kafka.controller.ReplicaAssignment
-import kafka.server.{ConfigEntityName, DynamicConfig, KafkaConfig}
+import kafka.server.{DynamicConfig, KafkaConfig}
 import kafka.utils._
 import kafka.utils.Implicits._
 import org.apache.kafka.admin.{AdminUtils, BrokerMetadata}
@@ -28,7 +28,7 @@ import org.apache.kafka.common.{TopicPartition, Uuid}
 import org.apache.kafka.common.errors._
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.server.common.AdminOperationException
-import org.apache.kafka.server.config.ConfigType
+import org.apache.kafka.server.config.{ConfigEntityName, ConfigType}
 import org.apache.kafka.storage.internals.log.LogConfig
 import org.apache.zookeeper.KeeperException.NodeExistsException
 
@@ -345,7 +345,7 @@ class AdminZkClient(zkClient: KafkaZkClient,
    */
   def parseBroker(broker: String): Option[Int] = {
     broker match {
-      case ConfigEntityName.Default => None
+      case ConfigEntityName.DEFAULT => None
       case _ =>
         try Some(broker.toInt)
         catch {
@@ -440,7 +440,7 @@ class AdminZkClient(zkClient: KafkaZkClient,
    *
    */
   def changeUserOrUserClientIdConfig(sanitizedEntityName: String, configs: Properties, isUserClientId: Boolean = false): Unit = {
-    if (sanitizedEntityName == ConfigEntityName.Default || sanitizedEntityName.contains("/clients"))
+    if (sanitizedEntityName == ConfigEntityName.DEFAULT || sanitizedEntityName.contains("/clients"))
       DynamicConfig.Client.validate(configs)
     else
       DynamicConfig.User.validate(configs)
@@ -453,7 +453,7 @@ class AdminZkClient(zkClient: KafkaZkClient,
    * @param configs properties to validate for the IP
    */
   def validateIpConfig(ip: String, configs: Properties): Unit = {
-    if (!DynamicConfig.Ip.isValidIpEntity(ip))
+    if (!org.apache.kafka.server.DynamicConfig.Ip.isValidIpEntity(ip))
       throw new AdminOperationException(s"$ip is not a valid IP or resolvable host.")
     DynamicConfig.Ip.validate(configs)
   }
@@ -520,7 +520,7 @@ class AdminZkClient(zkClient: KafkaZkClient,
     */
   def changeBrokerConfig(broker: Option[Int], configs: Properties): Unit = {
     validateBrokerConfig(configs)
-    changeEntityConfig(ConfigType.BROKER, broker.map(_.toString).getOrElse(ConfigEntityName.Default), configs)
+    changeEntityConfig(ConfigType.BROKER, broker.map(_.toString).getOrElse(ConfigEntityName.DEFAULT), configs)
   }
 
   /**

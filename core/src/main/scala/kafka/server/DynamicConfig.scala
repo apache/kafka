@@ -17,15 +17,13 @@
 
 package kafka.server
 
-import java.net.{InetAddress, UnknownHostException}
 import java.util.Properties
 import org.apache.kafka.common.config.ConfigDef
-import org.apache.kafka.common.config.ConfigDef.Importance._
-import org.apache.kafka.common.config.ConfigDef.Range._
-import org.apache.kafka.common.config.ConfigDef.Type._
-import org.apache.kafka.storage.internals.log.LogConfig
+import org.apache.kafka.server.DynamicConfig.Broker._
+import org.apache.kafka.server.DynamicConfig.Client._
+import org.apache.kafka.server.DynamicConfig.User._
+import org.apache.kafka.server.DynamicConfig.Ip._
 
-import java.util
 import scala.jdk.CollectionConverters._
 
 /**
@@ -35,87 +33,22 @@ import scala.jdk.CollectionConverters._
 object DynamicConfig {
 
   object Broker {
-    // Properties
-    val LeaderReplicationThrottledRateProp = "leader.replication.throttled.rate"
-    val FollowerReplicationThrottledRateProp = "follower.replication.throttled.rate"
-    val ReplicaAlterLogDirsIoMaxBytesPerSecondProp = "replica.alter.log.dirs.io.max.bytes.per.second"
+    DynamicBrokerConfig.addDynamicConfigs(BROKER_CONFIG_DEF)
+    val nonDynamicProps = KafkaConfig.configNames.toSet -- BROKER_CONFIG_DEF.names.asScala
 
-    // Defaults
-    val DefaultReplicationThrottledRate = ReplicationQuotaManagerConfig.QuotaBytesPerSecondDefault
-
-    // Documentation
-    val LeaderReplicationThrottledRateDoc = "A long representing the upper bound (bytes/sec) on replication traffic for leaders enumerated in the " +
-      s"property ${LogConfig.LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG} (for each topic). This property can be only set dynamically. It is suggested that the " +
-      s"limit be kept above 1MB/s for accurate behaviour."
-    val FollowerReplicationThrottledRateDoc = "A long representing the upper bound (bytes/sec) on replication traffic for followers enumerated in the " +
-      s"property ${LogConfig.FOLLOWER_REPLICATION_THROTTLED_REPLICAS_CONFIG} (for each topic). This property can be only set dynamically. It is suggested that the " +
-      s"limit be kept above 1MB/s for accurate behaviour."
-    val ReplicaAlterLogDirsIoMaxBytesPerSecondDoc = "A long representing the upper bound (bytes/sec) on disk IO used for moving replica between log directories on the same broker. " +
-      s"This property can be only set dynamically. It is suggested that the limit be kept above 1MB/s for accurate behaviour."
-
-    // Definitions
-    val brokerConfigDef = new ConfigDef()
-      // Round minimum value down, to make it easier for users.
-      .define(LeaderReplicationThrottledRateProp, LONG, DefaultReplicationThrottledRate, atLeast(0), MEDIUM, LeaderReplicationThrottledRateDoc)
-      .define(FollowerReplicationThrottledRateProp, LONG, DefaultReplicationThrottledRate, atLeast(0), MEDIUM, FollowerReplicationThrottledRateDoc)
-      .define(ReplicaAlterLogDirsIoMaxBytesPerSecondProp, LONG, DefaultReplicationThrottledRate, atLeast(0), MEDIUM, ReplicaAlterLogDirsIoMaxBytesPerSecondDoc)
-    DynamicBrokerConfig.addDynamicConfigs(brokerConfigDef)
-    val nonDynamicProps = KafkaConfig.configNames.toSet -- brokerConfigDef.names.asScala
-
-    def names = brokerConfigDef.names
-
-    def validate(props: Properties) = DynamicConfig.validate(brokerConfigDef, props, customPropsAllowed = true)
-  }
-
-  object QuotaConfigs {
-    def isClientOrUserQuotaConfig(name: String): Boolean = org.apache.kafka.common.config.internals.QuotaConfigs.isClientOrUserConfig(name)
+    def validate(props: Properties) = DynamicConfig.validate(BROKER_CONFIG_DEF, props, customPropsAllowed = true)
   }
 
   object Client {
-    private val clientConfigs = org.apache.kafka.common.config.internals.QuotaConfigs.userAndClientQuotaConfigs()
-
-    def configKeys = clientConfigs.configKeys
-
-    def names = clientConfigs.names
-
-    def validate(props: Properties) = DynamicConfig.validate(clientConfigs, props, customPropsAllowed = false)
+    def validate(props: Properties) = DynamicConfig.validate(CLIENT_CONFIGS, props, customPropsAllowed = false)
   }
 
   object User {
-    private val userConfigs = org.apache.kafka.common.config.internals.QuotaConfigs.scramMechanismsPlusUserAndClientQuotaConfigs()
-
-    def configKeys = userConfigs.configKeys
-
-    def names = userConfigs.names
-
-    def validate(props: Properties) = DynamicConfig.validate(userConfigs, props, customPropsAllowed = false)
+    def validate(props: Properties) = DynamicConfig.validate(USER_CONFIGS, props, customPropsAllowed = false)
   }
 
   object Ip {
-    private val ipConfigs = org.apache.kafka.common.config.internals.QuotaConfigs.ipConfigs()
-
-    def configKeys = ipConfigs.configKeys
-
-    def names = ipConfigs.names
-
-    def validate(props: Properties) = DynamicConfig.validate(ipConfigs, props, customPropsAllowed = false)
-
-    def isValidIpEntity(ip: String): Boolean = {
-      if (ip != ConfigEntityName.Default) {
-        try {
-          InetAddress.getByName(ip)
-        } catch {
-          case _: UnknownHostException => return false
-        }
-      }
-      true
-    }
-  }
-
-  object ClientMetrics {
-    private val clientConfigs = org.apache.kafka.server.metrics.ClientMetricsConfigs.configDef()
-
-    def names: util.Set[String] = clientConfigs.names
+    def validate(props: Properties) = DynamicConfig.validate(IP_CONFIGS, props, customPropsAllowed = false)
   }
 
   private def validate(configDef: ConfigDef, props: Properties, customPropsAllowed: Boolean) = {

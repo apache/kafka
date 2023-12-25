@@ -71,6 +71,7 @@ import org.apache.kafka.common.utils.Utils._
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.controller.QuorumController
 import org.apache.kafka.metadata.properties.MetaProperties
+import org.apache.kafka.server.DynamicConfig
 import org.apache.kafka.server.ControllerRequestCompletionHandler
 import org.apache.kafka.server.authorizer.{AuthorizableRequestContext, Authorizer => JAuthorizer}
 import org.apache.kafka.server.common.{ApiMessageAndVersion, MetadataVersion}
@@ -2266,8 +2267,8 @@ object TestUtils extends Logging {
     */
   def throttleAllBrokersReplication(adminClient: Admin, brokerIds: Seq[Int], throttleBytes: Int): Unit = {
     val throttleConfigs = Seq(
-      new AlterConfigOp(new ConfigEntry(DynamicConfig.Broker.LeaderReplicationThrottledRateProp, throttleBytes.toString), AlterConfigOp.OpType.SET),
-      new AlterConfigOp(new ConfigEntry(DynamicConfig.Broker.FollowerReplicationThrottledRateProp, throttleBytes.toString), AlterConfigOp.OpType.SET)
+      new AlterConfigOp(new ConfigEntry(DynamicConfig.Broker.LEADER_REPLICATION_THROTTLED_RATE_PROP, throttleBytes.toString), AlterConfigOp.OpType.SET),
+      new AlterConfigOp(new ConfigEntry(DynamicConfig.Broker.FOLLOWER_REPLICATION_THROTTLED_RATE_PROP, throttleBytes.toString), AlterConfigOp.OpType.SET)
     ).asJavaCollection
 
     adminClient.incrementalAlterConfigs(

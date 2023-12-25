@@ -20,7 +20,6 @@ import java.util
 import java.util.Properties
 import kafka.common.TopicAlreadyMarkedForDeletionException
 import kafka.server.ConfigAdminManager.{prepareIncrementalConfigs, toLoggableProps}
-import kafka.server.DynamicConfig.QuotaConfigs
 import kafka.server.metadata.ZkConfigRepository
 import kafka.utils._
 import kafka.utils.Implicits._
@@ -47,8 +46,9 @@ import org.apache.kafka.common.requests.CreateTopicsRequest._
 import org.apache.kafka.common.requests.{AlterConfigsRequest, ApiError}
 import org.apache.kafka.common.security.scram.internals.{ScramCredentialUtils, ScramFormatter}
 import org.apache.kafka.common.utils.Sanitizer
+import org.apache.kafka.server.{DynamicConfig => JDynamicConfig}
 import org.apache.kafka.server.common.AdminOperationException
-import org.apache.kafka.server.config.ConfigType
+import org.apache.kafka.server.config.{ConfigEntityName, ConfigType}
 import org.apache.kafka.storage.internals.log.LogConfig
 
 import scala.collection.{Map, mutable, _}
@@ -518,7 +518,7 @@ class ZkAdminManager(val config: KafkaConfig,
             val perBrokerConfig = brokerId.nonEmpty
 
             val persistentProps = if (perBrokerConfig) adminZkClient.fetchEntityConfig(ConfigType.BROKER, brokerId.get.toString)
-            else adminZkClient.fetchEntityConfig(ConfigType.BROKER, ConfigEntityName.Default)
+            else adminZkClient.fetchEntityConfig(ConfigType.BROKER, ConfigEntityName.DEFAULT)
 
             val configProps = this.config.dynamicConfig.fromPersistentProps(persistentProps, perBrokerConfig)
             prepareIncrementalConfigs(alterConfigOps, configProps, KafkaConfig.configKeys)
@@ -559,13 +559,13 @@ class ZkAdminManager(val config: KafkaConfig,
 
   private def sanitizeEntityName(entityName: String): String =
     Option(entityName) match {
-      case None => ConfigEntityName.Default
+      case None => ConfigEntityName.DEFAULT
       case Some(name) => Sanitizer.sanitize(name)
     }
 
   private def desanitizeEntityName(sanitizedEntityName: String): String =
     sanitizedEntityName match {
-      case ConfigEntityName.Default => null
+      case ConfigEntityName.DEFAULT => null
       case name => Sanitizer.desanitize(name)
     }
 
@@ -707,7 +707,7 @@ class ZkAdminManager(val config: KafkaConfig,
     }
 
     (userEntries ++ clientIdEntries ++ bothEntries).flatMap { case ((u, c), p) =>
-      val quotaProps = p.asScala.filter { case (key, _) => QuotaConfigs.isClientOrUserQuotaConfig(key) }
+      val quotaProps = p.asScala.filter { case (key, _) => JDynamicConfig.QuotaConfigs.isClientOrUserQuotaConfig(key) }
       if (quotaProps.nonEmpty && matches(userComponent, u) && matches(clientIdComponent, c))
         Some(userClientIdToEntity(u, c) -> ZkAdminManager.clientQuotaPropsToDoubleMap(quotaProps))
       else
@@ -733,7 +733,7 @@ class ZkAdminManager(val config: KafkaConfig,
     }
 
     ipEntries.flatMap { case (ip, props) =>
-      val ipQuotaProps = props.asScala.filter { case (key, _) => DynamicConfig.Ip.names.contains(key) }
+      val ipQuotaProps = props.asScala.filter { case (key, _) => JDynamicConfig.Ip.NAMES.contains(key) }
       if (ipQuotaProps.nonEmpty)
         Some(ipToQuotaEntity(ip) -> ZkAdminManager.clientQuotaPropsToDoubleMap(ipQuotaProps))
       else
@@ -744,13 +744,13 @@ class ZkAdminManager(val config: KafkaConfig,
   def alterClientQuotas(entries: Seq[ClientQuotaAlteration], validateOnly: Boolean): Map[ClientQuotaEntity, ApiError] = {
     def alterEntityQuotas(entity: ClientQuotaEntity, ops: Iterable[ClientQuotaAlteration.Op]): Unit = {
       val (path, configType, configKeys, isUserClientId) = parseAndSanitizeQuotaEntity(entity) match {
-        case (Some(user), Some(clientId), None) => (user + "/clients/" + clientId, ConfigType.USER, DynamicConfig.User.configKeys, true)
-        case (Some(user), None, None) => (user, ConfigType.USER, DynamicConfig.User.configKeys, false)
-        case (None, Some(clientId), None) => (clientId, ConfigType.CLIENT, DynamicConfig.Client.configKeys, false)
+        case (Some(user), Some(clientId), None) => (user + "/clients/" + clientId, ConfigType.USER, JDynamicConfig.User.CONFIG_KEYS, true)
+        case (Some(user), None, None) => (user, ConfigType.USER, JDynamicConfig.User.CONFIG_KEYS, false)
+        case (None, Some(clientId), None) => (clientId, ConfigType.CLIENT, JDynamicConfig.Client.CONFIG_KEYS, false)
         case (None, None, Some(ip)) =>
-          if (!DynamicConfig.Ip.isValidIpEntity(ip))
+          if (!JDynamicConfig.Ip.isValidIpEntity(ip))
             throw new InvalidRequestException(s"$ip is not a valid IP or resolvable host.")
-          (ip, ConfigType.IP, DynamicConfig.Ip.configKeys, false)
+          (ip, ConfigType.IP, JDynamicConfig.Ip.CONFIG_KEYS, false)
         case (_, _, Some(_)) => throw new InvalidRequestException(s"Invalid quota entity combination, " +
           s"IP entity should not be used with user/client ID entity.")
         case _ => throw new InvalidRequestException("Invalid client quota entity")
