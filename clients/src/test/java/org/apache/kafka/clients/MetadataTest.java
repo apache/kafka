@@ -1156,7 +1156,6 @@ public class MetadataTest {
         String unauthorizedTopics = "unauthorized-topic";
         String invalidTopics = "invalid-topic";
         String topic1 = "topic1";
-        String topic2 = "topic2";
 
         // Initialize metadata
         int numNodes = 5;
@@ -1174,38 +1173,40 @@ public class MetadataTest {
                 numNodes,
                 time,
                 clusterId,
-                Collections.singleton(unauthorizedTopics), Collections.singleton(invalidTopics),
+                Collections.singleton(unauthorizedTopics),
+                Collections.singleton(invalidTopics),
                 mockListener);
 
 
-        PartitionMetadata oldPart1Metadata = topicToMetadata.get(topic1).partitionMetadata.remove(0);
-        PartitionMetadata newPart1Metadata = topicToMetadata.get(topic1).partitionMetadata.get(0);
+        PartitionMetadata part1Metadata = topicToMetadata.get(topic1).partitionMetadata.remove(0);
+        PartitionMetadata part12Metadata = topicToMetadata.get(topic1).partitionMetadata.get(0);
 
         //updatePartitionLeadership with leadership-updates, where some updates should be ignored as in TEST1, update to partition1's leadership are to be applied, and no update to partition2(so remains at it is).
         // Following updates to Nodes should happen, rest all nodes should remain unchanged.
         // 1. New Node with id=999 is added.
         // 2. Existing node with id=0 has host, port changed, so is updated.
-        Integer part1NewLeaderId = newPart1Metadata.leaderId.get() + 1;
-        Integer part1NewLeaderEpoch = newPart1Metadata.leaderEpoch.get() + 1;
+        Integer newLeaderId = part12Metadata.leaderId.get() + 1;
+        Integer newLeaderEpoch = part12Metadata.leaderEpoch.get() + 1;
 
         Map<TopicPartition, Metadata.LeaderIdAndEpoch> updates = new HashMap<>();
 
-        updates.put(oldPart1Metadata.topicPartition,
+        updates.put(part1Metadata.topicPartition,
                 new Metadata.LeaderIdAndEpoch(
-                        Optional.of(part1NewLeaderId),
-                        Optional.of(part1NewLeaderEpoch)
+                        Optional.of(newLeaderId),
+                        Optional.of(newLeaderEpoch)
                 ));
 
-        PartitionMetadata updatedPart1Metadata = new PartitionMetadata(
-                oldPart1Metadata.error,
-                oldPart1Metadata.topicPartition,
-                Optional.of(part1NewLeaderId),
-                Optional.of(part1NewLeaderEpoch),
-                oldPart1Metadata.replicaIds,
-                oldPart1Metadata.inSyncReplicaIds,
-                oldPart1Metadata.offlineReplicaIds);
 
-        topicToMetadata.get(topic1).addPartition(updatedPart1Metadata.topicPartition, updatedPart1Metadata);
+        PartitionMetadata updatedPart1Metadata = new PartitionMetadata(
+                part1Metadata.error,
+                part1Metadata.topicPartition,
+                Optional.of(newLeaderId),
+                Optional.of(newLeaderEpoch),
+                part1Metadata.replicaIds,
+                part1Metadata.inSyncReplicaIds,
+                part1Metadata.offlineReplicaIds);
+
+        topicToMetadata.get(topic1).addPartitionMetadata(updatedPart1Metadata);
 
         List<Node> nodes = new ArrayList<>(metadata.fetch().nodes());
 
@@ -1221,7 +1222,7 @@ public class MetadataTest {
         Set<TopicPartition> updatedTps = metadata.updatePartitionLeadership(updates, nodes);
 
         assertEquals(1, updatedTps.size());
-        assertEquals(oldPart1Metadata.topicPartition, updatedTps.toArray()[0]);
+        assertEquals(part1Metadata.topicPartition, updatedTps.toArray()[0]);
 
         // Validate metadata is changed for partition1, hosts are updated, everything else remains unchanged.
         validateForUpdatePartitionLeadership(
@@ -1232,7 +1233,6 @@ public class MetadataTest {
                 Collections.singleton(unauthorizedTopics),
                 Collections.singleton(invalidTopics),
                 metadata.fetch().controller());
-
         // Since cluster metadata was updated, listener should be called.
         verify(mockListener, times(1)).onUpdate(any());
         Mockito.reset(mockListener);
@@ -1293,6 +1293,7 @@ public class MetadataTest {
                 unauthorizedTopics,
                 invalidTopics,
                 controller);
+
         // Since cluster metadata was updated, listener should be called.
         verify(mockListener).onUpdate(any());
         Mockito.reset(mockListener);
@@ -1311,29 +1312,28 @@ public class MetadataTest {
         PartitionMetadata part12Metadata = new PartitionMetadata(Errors.NONE, tp12, Optional.of(2), Optional.of(200), Arrays.asList(2, 3), Arrays.asList(2, 3), Arrays.asList(1));
 
         TestTopicMetadata tm1 = new TestTopicMetadata(topic1);
-        tm1.addPartition(tp11, part1Metadata);
-        tm1.addPartition(tp12, part12Metadata);
+        tm1.addPartitionMetadata(part1Metadata);
+        tm1.addPartitionMetadata(part12Metadata);
         topicToMetadata.put(topic1, tm1);
 
         String topic2 = "topic2";
         TopicPartition tp21 = new TopicPartition(topic2, 0);
         PartitionMetadata part2Metadata = new PartitionMetadata(Errors.NONE, tp21, Optional.of(2), Optional.of(200), Arrays.asList(2, 3), Arrays.asList(2, 3), Arrays.asList(1));
         TestTopicMetadata tm2 = new TestTopicMetadata(topic2);
-        tm2.addPartition(tp21, part2Metadata);
+        tm2.addPartitionMetadata(part2Metadata);
         topicToMetadata.put(topic2, tm2);
 
         Set<String> internalTopics = Collections.singleton(Topic.GROUP_METADATA_TOPIC_NAME);
         TopicPartition internalPart = new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, 0);
         PartitionMetadata internalTopicMetadata = new PartitionMetadata(Errors.NONE, internalPart, Optional.of(2), Optional.of(200), Arrays.asList(2, 3), Arrays.asList(2, 3), Arrays.asList(1));
         TestTopicMetadata internaltm = new TestTopicMetadata(internalTopics.iterator().next());
-        internaltm.addPartition(internalPart, internalTopicMetadata);
+        internaltm.addPartitionMetadata(internalTopicMetadata);
         topicToMetadata.put(Topic.GROUP_METADATA_TOPIC_NAME, internaltm);
 
         return topicToMetadata;
     }
     static RequestTestUtils.PartitionMetadataSupplier createMetadataSupplier(Map<String, TestTopicMetadata> metadataMap) {
         return (error, partition, leaderId, leaderEpoch, replicas, isr, offlineReplicas) -> {
-
             for (PartitionMetadata partitionMetadata : metadataMap
                     .values()
                     .stream()
@@ -1343,8 +1343,8 @@ public class MetadataTest {
                     return partitionMetadata;
                 }
             }
-            return null; //Shouldn't happen, better way to handle?
-        };   
+            throw new RuntimeException("Unexpected partition " + partition);
+        };
     }
 
     /**
@@ -1396,22 +1396,20 @@ public class MetadataTest {
             assertEquals(partitionMetadata.inSyncReplicaIds, updatedPartMetadata.inSyncReplicaIds);
             assertEquals(partitionMetadata.offlineReplicaIds, partitionMetadata.offlineReplicaIds);
         }
+
     }
 
     static class TestTopicMetadata {
         String topic;
         Uuid topicId;
-        List<TopicPartition> topicPartitions;
         List<PartitionMetadata> partitionMetadata;
         public TestTopicMetadata(String topic) {
             this.topic = topic;
             this.topicId = Uuid.randomUuid();
-            this.topicPartitions = new ArrayList<>();
             this.partitionMetadata = new ArrayList<>();
         }
 
-        public void addPartition(TopicPartition topicPartition, PartitionMetadata partitionMetadata) {
-            this.topicPartitions.add(topicPartition);
+        public void addPartitionMetadata(PartitionMetadata partitionMetadata) {
             this.partitionMetadata.add(partitionMetadata);
         }
     }
