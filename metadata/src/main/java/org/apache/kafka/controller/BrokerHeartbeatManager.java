@@ -131,13 +131,7 @@ public class BrokerHeartbeatManager {
                 return -1;
             } else if (a.metadataOffset > b.metadataOffset) {
                 return 1;
-            } else if (a.id < b.id) {
-                return -1;
-            } else if (a.id > b.id) {
-                return 1;
-            } else {
-                return 0;
-            }
+            } else return Integer.compare(a.id, b.id);
         }
     }
 

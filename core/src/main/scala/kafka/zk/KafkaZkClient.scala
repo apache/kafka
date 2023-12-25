@@ -235,7 +235,7 @@ class KafkaZkClient private[zk] (zooKeeperClient: ZooKeeperClient, isSecure: Boo
           case Code.OK =>
             info(s"Successfully registered KRaft controller $kraftControllerId with ZK epoch $newControllerEpoch")
             // First op is always SetData on /controller_epoch
-            val setDataResult = response.zkOpResults(0).rawOpResult.asInstanceOf[SetDataResult]
+            val setDataResult = response.zkOpResults.head.rawOpResult.asInstanceOf[SetDataResult]
             SuccessfulRegistrationResult(newControllerEpoch, setDataResult.getStat.getVersion)
           case Code.BADVERSION =>
             info(s"The ZK controller epoch changed $failureSuffix")

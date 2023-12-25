@@ -92,7 +92,7 @@ public class DelegationTokenCommand {
 
     public static DelegationToken createToken(Admin adminClient, DelegationTokenCommandOptions opts) throws ExecutionException, InterruptedException {
         List<KafkaPrincipal> renewerPrincipals = getPrincipals(opts, opts.renewPrincipalsOpt);
-        Long maxLifeTimeMs = opts.maxLifeTime();
+        long maxLifeTimeMs = opts.maxLifeTime();
 
         System.out.println("Calling create token operation with renewers :" + renewerPrincipals + " , max-life-time-period :" + maxLifeTimeMs);
         CreateDelegationTokenOptions createDelegationTokenOptions = new CreateDelegationTokenOptions().maxlifeTimeMs(maxLifeTimeMs).renewers(renewerPrincipals);
@@ -140,7 +140,7 @@ public class DelegationTokenCommand {
 
     public static Long renewToken(Admin adminClient, DelegationTokenCommandOptions opts) throws ExecutionException, InterruptedException {
         String hmac = opts.hmac();
-        Long renewTimePeriodMs = opts.renewTimePeriod();
+        long renewTimePeriodMs = opts.renewTimePeriod();
 
         System.out.println("Calling renew token operation with hmac :" + hmac + " , renew-time-period :" + renewTimePeriodMs);
         RenewDelegationTokenResult renewResult = adminClient.renewDelegationToken(Base64.getDecoder().decode(hmac), new RenewDelegationTokenOptions().renewTimePeriodMs(renewTimePeriodMs));
@@ -152,7 +152,7 @@ public class DelegationTokenCommand {
 
     public static void expireToken(Admin adminClient, DelegationTokenCommandOptions opts) throws ExecutionException, InterruptedException {
         String hmac = opts.hmac();
-        Long expiryTimePeriodMs = opts.expiryTimePeriod();
+        long expiryTimePeriodMs = opts.expiryTimePeriod();
 
         System.out.println("Calling expire token operation with hmac :" + hmac + " , expire-time-period :" + expiryTimePeriodMs);
         ExpireDelegationTokenResult renewResult = adminClient.expireDelegationToken(Base64.getDecoder().decode(hmac), new ExpireDelegationTokenOptions().expiryTimePeriodMs(expiryTimePeriodMs));

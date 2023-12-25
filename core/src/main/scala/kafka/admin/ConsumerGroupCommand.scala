@@ -986,7 +986,7 @@ object ConsumerGroupCommand extends Logging {
     val ListDoc = "List all consumer groups."
     val DescribeDoc = "Describe consumer group and list offset lag (number of messages not yet processed) related to given group."
     val AllGroupsDoc = "Apply to all consumer groups."
-    val nl = System.getProperty("line.separator")
+    val nl = java.lang.System.lineSeparator()
     val DeleteDoc = "Pass in groups to delete topic partition offsets and ownership information " +
       "over the entire consumer group. For instance --group g1 --group g2"
     val TimeoutMsDoc = "The timeout that can be set for some use cases. For example, it can be used when describing the group " +

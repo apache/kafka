@@ -103,7 +103,7 @@ abstract public class Shell {
                     String line = errReader.readLine();
                     while ((line != null) && !Thread.currentThread().isInterrupted()) {
                         errMsg.append(line);
-                        errMsg.append(System.getProperty("line.separator"));
+                        errMsg.append(System.lineSeparator());
                         line = errReader.readLine();
                     }
                 } catch (IOException ioe) {

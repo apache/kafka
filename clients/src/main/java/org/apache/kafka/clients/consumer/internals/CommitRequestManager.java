@@ -1018,7 +1018,6 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
          * backoff on failed attempt. See {@link RequestState}.
          */
         List<NetworkClientDelegate.UnsentRequest> drain(final long currentTimeMs) {
-            List<NetworkClientDelegate.UnsentRequest> unsentRequests = new ArrayList<>();
 
             // not ready to sent request
             List<OffsetCommitRequestState> unreadyCommitRequests = unsentOffsetCommits.stream()
@@ -1028,12 +1027,11 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
             failAndRemoveExpiredCommitRequests(currentTimeMs);
 
             // Add all unsent offset commit requests to the unsentRequests list
-            unsentRequests.addAll(
-                    unsentOffsetCommits.stream()
-                        .filter(request -> request.canSendRequest(currentTimeMs))
-                        .peek(request -> request.onSendAttempt(currentTimeMs))
-                        .map(OffsetCommitRequestState::toUnsentRequest)
-                        .collect(Collectors.toList()));
+            List<NetworkClientDelegate.UnsentRequest> unsentRequests = new ArrayList<>(unsentOffsetCommits.stream()
+                .filter(request -> request.canSendRequest(currentTimeMs))
+                .peek(request -> request.onSendAttempt(currentTimeMs))
+                .map(OffsetCommitRequestState::toUnsentRequest)
+                .collect(Collectors.toList()));
 
             // Partition the unsent offset fetch requests into sendable and non-sendable lists
             Map<Boolean, List<OffsetFetchRequestState>> partitionedBySendability =
@@ -1079,8 +1077,7 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
         }
 
         private List<NetworkClientDelegate.UnsentRequest> drainPendingCommits() {
-            ArrayList<NetworkClientDelegate.UnsentRequest> res = new ArrayList<>();
-            res.addAll(unsentOffsetCommits.stream().map(OffsetCommitRequestState::toUnsentRequest).collect(Collectors.toList()));
+            ArrayList<NetworkClientDelegate.UnsentRequest> res = new ArrayList<>(unsentOffsetCommits.stream().map(OffsetCommitRequestState::toUnsentRequest).collect(Collectors.toList()));
             clearAll();
             return res;
         }

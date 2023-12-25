@@ -1802,7 +1802,7 @@ class Partition(val topicPartition: TopicPartition,
       } else {
         val replica = remoteReplicasMap.get(brokerId)
         val brokerEpoch = if (replica == null) Option.empty else replica.stateSnapshot.brokerEpoch
-        if (!brokerEpoch.isDefined) {
+        if (brokerEpoch.isEmpty) {
           // There are two cases where the broker epoch can be missing:
           // 1. During ISR expansion, we already held lock for the partition and did the broker epoch check, so the new
           //   ISR replica should have a valid broker epoch. Then, the missing broker epoch can only happen to the

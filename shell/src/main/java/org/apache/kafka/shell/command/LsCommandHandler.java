@@ -115,8 +115,7 @@ public final class LsCommandHandler implements Commands.Handler {
                     MetadataNodeInfo info = entryOption.get();
                     MetadataNode node = info.node();
                     if (node.isDirectory()) {
-                        List<String> children = new ArrayList<>();
-                        children.addAll(node.childNames());
+                        List<String> children = new ArrayList<>(node.childNames());
                         children.sort(String::compareTo);
                         targetDirectories.add(
                             new TargetDirectory(info.lastPathComponent(), children));

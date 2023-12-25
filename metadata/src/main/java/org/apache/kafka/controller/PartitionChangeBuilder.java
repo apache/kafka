@@ -492,7 +492,7 @@ public class PartitionChangeBuilder {
         if (record.isr() != null && record.isr().isEmpty() && (partition.lastKnownElr.length != 1 ||
             partition.lastKnownElr[0] != partition.leader)) {
             // Only update the last known leader when the first time the partition becomes leaderless.
-            record.setLastKnownELR(Arrays.asList(partition.leader));
+            record.setLastKnownELR(Collections.singletonList(partition.leader));
         }
     }
 
@@ -548,7 +548,7 @@ public class PartitionChangeBuilder {
 
         // Calculate the new last known ELR. Includes any ISR members since the ISR size drops below min ISR.
         // In order to reduce the metadata usage, the last known ELR excludes the members in ELR and current ISR.
-        targetLastKnownElr.forEach(ii -> candidateSet.add(ii));
+        candidateSet.addAll(targetLastKnownElr);
         targetLastKnownElr = candidateSet.stream()
             .filter(replica -> !targetIsrSet.contains(replica))
             .filter(replica -> !targetElr.contains(replica))

@@ -152,14 +152,14 @@ public class Histogram {
         }
         // Verify that the percentiles array is sorted and positive.
         float prev = 0f;
-        for (int i = 0; i < percentiles.length; i++) {
-            if (percentiles[i] < prev) {
+        for (float percentile : percentiles) {
+            if (percentile < prev) {
                 throw new RuntimeException("Invalid percentiles fraction array.  Bad element " +
-                    percentiles[i] + ".  The array must be sorted and non-negative.");
+                    percentile + ".  The array must be sorted and non-negative.");
             }
-            if (percentiles[i] > 1.0f) {
+            if (percentile > 1.0f) {
                 throw new RuntimeException("Invalid percentiles fraction array.  Bad element " +
-                    percentiles[i] + ".  Elements must be less than or equal to 1.");
+                    percentile + ".  Elements must be less than or equal to 1.");
             }
         }
         // Find out how many total samples we have, and what the average is.

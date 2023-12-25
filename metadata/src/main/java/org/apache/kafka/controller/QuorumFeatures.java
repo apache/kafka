@@ -141,7 +141,7 @@ public final class QuorumFeatures {
     @Override
     public String toString() {
         List<String> features = new ArrayList<>();
-        localSupportedFeatures.entrySet().forEach(f -> features.add(f.getKey() + ": " + f.getValue()));
+        localSupportedFeatures.forEach((key, value) -> features.add(key + ": " + value));
         features.sort(String::compareTo);
         List<String> nodeIds = new ArrayList<>();
         quorumNodeIds.forEach(id -> nodeIds.add("" + id));

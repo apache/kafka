@@ -136,7 +136,7 @@ public class Protocol {
         for (ApiKeys key : ApiKeys.clientApis()) {
             // Key
             b.append("<h5>");
-            b.append("<a name=\"The_Messages_" + key.name + "\">");
+            b.append("<a name=\"The_Messages_").append(key.name).append("\">");
             b.append(key.name);
             b.append(" API (Key: ");
             b.append(key.id);

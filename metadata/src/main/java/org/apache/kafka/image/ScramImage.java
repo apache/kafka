@@ -61,12 +61,12 @@ public final class ScramImage {
             }
         } else {
             boolean isEmpty = true;
-            StringBuffer scramImageString = new StringBuffer("ScramImage({");
+            StringBuilder scramImageString = new StringBuilder("ScramImage({");
             for (Entry<ScramMechanism, Map<String, ScramCredentialData>> mechanismEntry : mechanisms.entrySet()) {
                 if (!mechanismEntry.getValue().isEmpty()) {
-                    scramImageString.append(mechanismEntry.getKey() + ":");
+                    scramImageString.append(mechanismEntry.getKey()).append(":");
                     List<String> users = new ArrayList<>(mechanismEntry.getValue().keySet());
-                    scramImageString.append(users.stream().collect(Collectors.joining(", ")));
+                    scramImageString.append(String.join(", ", users));
                     scramImageString.append("},{");
                     isEmpty = false;
                 }

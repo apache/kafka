@@ -52,7 +52,7 @@ public class StickyPartitionCache {
         if (oldPart == null || oldPart == prevPartition) {
             List<PartitionInfo> availablePartitions = cluster.availablePartitionsForTopic(topic);
             if (availablePartitions.size() < 1) {
-                Integer random = Utils.toPositive(ThreadLocalRandom.current().nextInt());
+                int random = Utils.toPositive(ThreadLocalRandom.current().nextInt());
                 newPart = random % partitions.size();
             } else if (availablePartitions.size() == 1) {
                 newPart = availablePartitions.get(0).partition();

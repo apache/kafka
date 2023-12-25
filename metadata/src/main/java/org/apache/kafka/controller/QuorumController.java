@@ -1410,7 +1410,7 @@ public final class QuorumController implements Controller {
                     maybeScheduleNextWriteNoOpRecord();
 
                     return ControllerResult.of(
-                        Arrays.asList(new ApiMessageAndVersion(new NoOpRecord(), (short) 0)),
+                        Collections.singletonList(new ApiMessageAndVersion(new NoOpRecord(), (short) 0)),
                         null
                     );
                 },

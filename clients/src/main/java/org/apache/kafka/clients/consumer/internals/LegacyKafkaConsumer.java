@@ -518,7 +518,7 @@ public class LegacyKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
      */
     private void subscribeInternal(Pattern pattern, Optional<ConsumerRebalanceListener> listener) {
         maybeThrowInvalidGroupIdException();
-        if (pattern == null || pattern.toString().equals(""))
+        if (pattern == null || pattern.toString().isEmpty())
             throw new IllegalArgumentException("Topic pattern to subscribe to cannot be " + (pattern == null ?
                     "null" : "empty"));
 

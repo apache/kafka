@@ -54,8 +54,8 @@ public final class DelegationTokenImage {
         } else {
             if (!tokens.isEmpty()) {
                 List<String> tokenIds = new ArrayList<>(tokens.keySet());
-                StringBuffer delegationTokenImageString = new StringBuffer("DelegationTokenImage(");
-                delegationTokenImageString.append(tokenIds.stream().collect(Collectors.joining(", ")));
+                StringBuilder delegationTokenImageString = new StringBuilder("DelegationTokenImage(");
+                delegationTokenImageString.append(String.join(", ", tokenIds));
                 delegationTokenImageString.append(")");
                 options.handleLoss(delegationTokenImageString.toString());
             } 

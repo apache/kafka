@@ -63,14 +63,18 @@ public class ClientQuotasImageNode implements MetadataNode {
         String ip = null;
         String user = null;
         for (Map.Entry<String, String> entry : entity.entries().entrySet()) {
-            if (entry.getKey().equals(CLIENT_ID)) {
-                clientId = entry.getValue();
-            } else if (entry.getKey().equals(IP)) {
-                ip = entry.getValue();
-            } else if (entry.getKey().equals(USER)) {
-                user = entry.getValue();
-            } else {
-                throw new RuntimeException("Invalid entity type " + entry.getKey());
+            switch (entry.getKey()) {
+                case CLIENT_ID:
+                    clientId = entry.getValue();
+                    break;
+                case IP:
+                    ip = entry.getValue();
+                    break;
+                case USER:
+                    user = entry.getValue();
+                    break;
+                default:
+                    throw new RuntimeException("Invalid entity type " + entry.getKey());
             }
         }
         StringBuilder bld = new StringBuilder();
@@ -106,7 +110,7 @@ public class ClientQuotasImageNode implements MetadataNode {
     static ClientQuotaEntity decodeEntity(String input) {
         Map<String, String> entries = new HashMap<>();
         String type = null;
-        String value = "";
+        StringBuilder value = new StringBuilder();
         boolean escaping = false;
         int i = 0;
         while (true) {
@@ -127,20 +131,20 @@ public class ClientQuotasImageNode implements MetadataNode {
             } else {
                 char c = input.charAt(i++);
                 if (escaping) {
-                    value += c;
+                    value.append(c);
                     escaping = false;
                 } else {
                     switch (c) {
                         case ')':
-                            entries.put(type, value);
+                            entries.put(type, value.toString());
                             type = null;
-                            value = "";
+                            value = new StringBuilder();
                             break;
                         case '\\':
                             escaping = true;
                             break;
                         default:
-                            value += c;
+                            value.append(c);
                             break;
                     }
                 }

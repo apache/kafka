@@ -168,10 +168,10 @@ public class LeaderElectionCommand {
         if (!failed.isEmpty()) {
             AdminCommandFailedException rootException =
                 new AdminCommandFailedException(String.format("%d replica(s) could not be elected", failed.size()));
-            failed.entrySet().forEach(entry -> {
+            failed.forEach((key, value) -> {
                 System.out.println(String.format("Error completing leader election (%s) for partition: %s: %s",
-                    electionType, entry.getKey(), entry.getValue()));
-                rootException.addSuppressed(entry.getValue());
+                    electionType, key, value));
+                rootException.addSuppressed(value);
             });
             throw rootException;
         }

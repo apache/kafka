@@ -112,23 +112,23 @@ public final class ServerTopicConfigSynonyms {
     }
 
     private static Entry<String, List<ConfigSynonym>> sameName(String configName) {
-        return Utils.mkEntry(configName, asList(new ConfigSynonym(configName)));
+        return Utils.mkEntry(configName, Collections.singletonList(new ConfigSynonym(configName)));
     }
 
     private static Entry<String, List<ConfigSynonym>> sameNameWithLogPrefix(String configName) {
-        return Utils.mkEntry(configName, asList(new ConfigSynonym(LOG_PREFIX + configName)));
+        return Utils.mkEntry(configName, Collections.singletonList(new ConfigSynonym(LOG_PREFIX + configName)));
     }
 
     private static Entry<String, List<ConfigSynonym>> sameNameWithLogCleanerPrefix(String configName) {
-        return Utils.mkEntry(configName, asList(new ConfigSynonym(LOG_CLEANER_PREFIX + configName)));
+        return Utils.mkEntry(configName, Collections.singletonList(new ConfigSynonym(LOG_CLEANER_PREFIX + configName)));
     }
 
     private static Entry<String, List<ConfigSynonym>> singleWithLogPrefix(String topicConfigName, String brokerConfigName) {
-        return Utils.mkEntry(topicConfigName, asList(new ConfigSynonym(LOG_PREFIX + brokerConfigName)));
+        return Utils.mkEntry(topicConfigName, Collections.singletonList(new ConfigSynonym(LOG_PREFIX + brokerConfigName)));
     }
 
     private static Entry<String, List<ConfigSynonym>> singleWithLogCleanerPrefix(String topicConfigName, String brokerConfigName) {
-        return Utils.mkEntry(topicConfigName, asList(new ConfigSynonym(LOG_CLEANER_PREFIX + brokerConfigName)));
+        return Utils.mkEntry(topicConfigName, Collections.singletonList(new ConfigSynonym(LOG_CLEANER_PREFIX + brokerConfigName)));
     }
 
     private static Entry<String, List<ConfigSynonym>> listWithLogPrefix(String topicConfigName, ConfigSynonym... synonyms) {
@@ -139,6 +139,6 @@ public final class ServerTopicConfigSynonyms {
     }
 
     private static Entry<String, List<ConfigSynonym>> single(String topicConfigName, String brokerConfigName) {
-        return Utils.mkEntry(topicConfigName, asList(new ConfigSynonym(brokerConfigName)));
+        return Utils.mkEntry(topicConfigName, Collections.singletonList(new ConfigSynonym(brokerConfigName)));
     }
 }

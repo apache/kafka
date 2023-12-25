@@ -145,7 +145,7 @@ public class RemoteLogMetadataSnapshotFile {
             return Optional.empty();
         }
 
-        try (ReadableByteChannel channel = Channels.newChannel(new FileInputStream(metadataStoreFile))) {
+        try (ReadableByteChannel channel = Channels.newChannel(Files.newInputStream(metadataStoreFile.toPath()))) {
 
             // header: <version:short><metadata-partition:int><metadata-partition-offset:long>
             // Read header
