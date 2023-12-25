@@ -129,6 +129,21 @@ public class SerializationTest {
         }
     }
 
+
+    @Test
+    public void stringSerdeConfigureThrowsOnUnknownEncoding() {
+        String encoding = "encoding-does-not-exist";
+        try (Serde<String> serDeser = Serdes.String()) {
+            Map<String, Object> serializerConfigs = new HashMap<>();
+            serializerConfigs.put("key.serializer.encoding", encoding);
+            assertThrows(SerializationException.class, () -> serDeser.serializer().configure(serializerConfigs, true));
+
+            Map<String, Object> deserializerConfigs = new HashMap<>();
+            deserializerConfigs.put("key.deserializer.encoding", encoding);
+            assertThrows(SerializationException.class, () -> serDeser.deserializer().configure(deserializerConfigs, true));
+        }
+    }
+
     @SuppressWarnings("unchecked")
     @Test
     public void listSerdeShouldReturnEmptyCollection() {
