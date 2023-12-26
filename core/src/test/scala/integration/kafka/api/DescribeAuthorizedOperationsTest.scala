@@ -14,7 +14,6 @@ package kafka.api
 
 import java.util
 import java.util.Properties
-
 import kafka.security.authorizer.{AclAuthorizer, AclEntry}
 import kafka.server.KafkaConfig
 import kafka.utils.{CoreUtils, JaasTestUtils, TestUtils}
@@ -22,6 +21,7 @@ import org.apache.kafka.clients.admin._
 import org.apache.kafka.common.acl.AclOperation.{ALL, ALTER, CLUSTER_ACTION, DELETE, DESCRIBE}
 import org.apache.kafka.common.acl.AclPermissionType.ALLOW
 import org.apache.kafka.common.acl._
+import org.apache.kafka.common.config.ZkConfig
 import org.apache.kafka.common.resource.{PatternType, Resource, ResourcePattern, ResourceType}
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
 import org.apache.kafka.common.utils.Utils
@@ -75,7 +75,7 @@ class DescribeAuthorizedOperationsTest extends IntegrationTestHarness with SaslS
   import DescribeAuthorizedOperationsTest._
 
   override val brokerCount = 1
-  this.serverConfig.setProperty(KafkaConfig.ZkEnableSecureAclsProp, "true")
+  this.serverConfig.setProperty(ZkConfig.ZK_ENABLE_SECURE_ACLS_CONFIG, "true")
   this.serverConfig.setProperty(KafkaConfig.AuthorizerClassNameProp, classOf[AclAuthorizer].getName)
 
   var client: Admin = _

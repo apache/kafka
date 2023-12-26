@@ -27,6 +27,7 @@ import org.apache.kafka.clients.admin.{Admin, AdminClientConfig}
 import org.apache.kafka.common.acl._
 import org.apache.kafka.common.acl.AclOperation._
 import org.apache.kafka.common.acl.AclPermissionType.{ALLOW, DENY}
+import org.apache.kafka.common.config.ZkConfig
 import org.apache.kafka.common.resource.{PatternType, ResourcePattern, ResourcePatternFilter, Resource => JResource, ResourceType => JResourceType}
 import org.apache.kafka.common.security.JaasUtils
 import org.apache.kafka.common.security.auth.KafkaPrincipal
@@ -199,7 +200,7 @@ object AclCommand extends Logging {
       // We will default the value of zookeeper.set.acl to true or false based on whether SASL is configured,
       // but if SASL is not configured and zookeeper.set.acl is supposed to be true due to mutual certificate authentication
       // then it will be up to the user to explicitly specify zookeeper.set.acl=true in the authorizer-properties.
-      val defaultProps = Map(KafkaConfig.ZkEnableSecureAclsProp -> JaasUtils.isZkSaslEnabled)
+      val defaultProps = Map(ZkConfig.ZK_ENABLE_SECURE_ACLS_CONFIG -> JaasUtils.isZkSaslEnabled)
       val authorizerPropertiesWithoutTls =
         if (opts.options.has(opts.authorizerPropertiesOpt)) {
           val authorizerProperties = opts.options.valuesOf(opts.authorizerPropertiesOpt)

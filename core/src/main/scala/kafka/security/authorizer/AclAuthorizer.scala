@@ -18,7 +18,6 @@ package kafka.security.authorizer
 
 import java.{lang, util}
 import java.util.concurrent.{CompletableFuture, CompletionStage}
-
 import com.typesafe.scalalogging.Logger
 import kafka.security.authorizer.AclEntry.ResourceSeparator
 import kafka.server.{KafkaConfig, KafkaServer}
@@ -29,6 +28,7 @@ import org.apache.kafka.common.Endpoint
 import org.apache.kafka.common.acl._
 import org.apache.kafka.common.acl.AclOperation._
 import org.apache.kafka.common.acl.AclPermissionType.{ALLOW, DENY}
+import org.apache.kafka.common.config.ZkConfig
 import org.apache.kafka.common.errors.{ApiException, InvalidRequestException, UnsupportedVersionException}
 import org.apache.kafka.common.protocol.ApiKeys
 import org.apache.kafka.common.resource._
@@ -96,7 +96,7 @@ object AclAuthorizer {
   }
 
   private[authorizer] def zkClientConfigFromKafkaConfigAndMap(kafkaConfig: KafkaConfig, configMap: mutable.Map[String, _<:Any]): ZKClientConfig = {
-    val zkSslClientEnable = configMap.get(AclAuthorizer.configPrefix + KafkaConfig.ZkSslClientEnableProp).
+    val zkSslClientEnable = configMap.get(AclAuthorizer.configPrefix + ZkConfig.ZK_SSL_CLIENT_ENABLE_CONFIG).
       map(_.toString.trim).getOrElse(kafkaConfig.zkSslClientEnable.toString).toBoolean
     if (!zkSslClientEnable)
       new ZKClientConfig
@@ -108,7 +108,7 @@ object AclAuthorizer {
       KafkaConfig.ZkSslConfigToSystemPropertyMap.forKeyValue { (kafkaProp, sysProp) =>
         configMap.get(AclAuthorizer.configPrefix + kafkaProp).foreach { prefixedValue =>
           zkClientConfig.setProperty(sysProp,
-            if (kafkaProp == KafkaConfig.ZkSslEndpointIdentificationAlgorithmProp)
+            if (kafkaProp == ZkConfig.ZK_SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG)
               (prefixedValue.toString.trim.toUpperCase == "HTTPS").toString
             else
               prefixedValue.toString.trim)

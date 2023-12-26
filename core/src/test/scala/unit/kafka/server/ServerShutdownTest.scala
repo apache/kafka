@@ -30,6 +30,7 @@ import kafka.zookeeper.ZooKeeperClientTimeoutException
 import org.apache.kafka.clients.consumer.Consumer
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
 import org.apache.kafka.common.Uuid
+import org.apache.kafka.common.config.ZkConfig
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.ApiKeys
@@ -150,8 +151,8 @@ class ServerShutdownTest extends KafkaServerTestHarness {
       shutdownKRaftController()
       verifyCleanShutdownAfterFailedStartup[CancellationException]
     } else {
-      propsToChangeUponRestart.setProperty(KafkaConfig.ZkConnectionTimeoutMsProp, "50")
-      propsToChangeUponRestart.setProperty(KafkaConfig.ZkConnectProp, "some.invalid.hostname.foo.bar.local:65535")
+      propsToChangeUponRestart.setProperty(ZkConfig.ZK_CONNECTION_TIMEOUT_MS_CONFIG, "50")
+      propsToChangeUponRestart.setProperty(ZkConfig.ZK_CONNECT_CONFIG, "some.invalid.hostname.foo.bar.local:65535")
       verifyCleanShutdownAfterFailedStartup[ZooKeeperClientTimeoutException]
     }
   }

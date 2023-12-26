@@ -21,6 +21,7 @@ import kafka.api.LeaderAndIsr
 import kafka.cluster.{Broker, EndPoint}
 import kafka.server.KafkaConfig
 import kafka.utils.TestUtils
+import org.apache.kafka.common.config.ZkConfig
 import org.apache.kafka.common.message.LeaderAndIsrResponseData.LeaderAndIsrPartitionError
 import org.apache.kafka.common.message.LeaderAndIsrResponseData.LeaderAndIsrTopicError
 import org.apache.kafka.common.message.StopReplicaRequestData.StopReplicaPartitionState
@@ -895,7 +896,7 @@ class ControllerChannelManagerTest {
   private def createConfig(interBrokerVersion: MetadataVersion): KafkaConfig = {
     val props = new Properties()
     props.put(KafkaConfig.BrokerIdProp, controllerId.toString)
-    props.put(KafkaConfig.ZkConnectProp, "zkConnect")
+    props.put(ZkConfig.ZK_CONNECT_CONFIG, "zkConnect")
     TestUtils.setIbpAndMessageFormatVersions(props, interBrokerVersion)
     KafkaConfig.fromProps(props)
   }

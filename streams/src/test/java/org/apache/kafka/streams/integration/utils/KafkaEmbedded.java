@@ -25,6 +25,7 @@ import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.common.config.SslConfigs;
+import org.apache.kafka.common.config.ZkConfig;
 import org.apache.kafka.common.config.types.Password;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.utils.Utils;
@@ -90,7 +91,7 @@ public class KafkaEmbedded {
         effectiveConfig.put(KafkaConfig.AutoCreateTopicsEnableProp(), true);
         effectiveConfig.put(KafkaConfig.MessageMaxBytesProp(), 1000000);
         effectiveConfig.put(KafkaConfig.ControlledShutdownEnableProp(), true);
-        effectiveConfig.put(KafkaConfig.ZkSessionTimeoutMsProp(), 10000);
+        effectiveConfig.put(ZkConfig.ZK_SESSION_TIMEOUT_MS_CONFIG, 10000);
 
         effectiveConfig.putAll(initialConfig);
         effectiveConfig.setProperty(KafkaConfig.LogDirProp(), logDir.getAbsolutePath());

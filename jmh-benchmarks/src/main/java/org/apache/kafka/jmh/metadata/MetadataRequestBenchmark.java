@@ -43,6 +43,7 @@ import kafka.server.builders.KafkaApisBuilder;
 import kafka.server.metadata.MockConfigRepository;
 import kafka.server.metadata.ZkMetadataCache;
 import kafka.zk.KafkaZkClient;
+import org.apache.kafka.common.config.ZkConfig;
 import org.apache.kafka.common.memory.MemoryPool;
 import org.apache.kafka.common.message.ApiMessageType;
 import org.apache.kafka.common.message.UpdateMetadataRequestData.UpdateMetadataBroker;
@@ -177,7 +178,7 @@ public class MetadataRequestBenchmark {
 
     private KafkaApis createKafkaApis() {
         Properties kafkaProps =  new Properties();
-        kafkaProps.put(KafkaConfig$.MODULE$.ZkConnectProp(), "zk");
+        kafkaProps.put(ZkConfig.ZK_CONNECT_CONFIG, "zk");
         kafkaProps.put(KafkaConfig$.MODULE$.BrokerIdProp(), brokerId + "");
         KafkaConfig config = new KafkaConfig(kafkaProps);
         return new KafkaApisBuilder().

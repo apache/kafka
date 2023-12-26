@@ -19,7 +19,7 @@ import com.yammer.metrics.core.{Gauge, Histogram, Meter}
 import org.apache.kafka.clients.consumer.Consumer
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord}
 import org.apache.kafka.common.{Metric, MetricName, TopicPartition}
-import org.apache.kafka.common.config.{SaslConfigs, TopicConfig}
+import org.apache.kafka.common.config.{SaslConfigs, TopicConfig, ZkConfig}
 import org.apache.kafka.common.errors.{InvalidTopicException, UnknownTopicOrPartitionException}
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.security.auth.SecurityProtocol
@@ -43,7 +43,7 @@ class MetricsTest extends IntegrationTestHarness with SaslSetup {
   private val kafkaServerSaslMechanisms = List(kafkaClientSaslMechanism)
   private val kafkaServerJaasEntryName =
     s"${listenerName.value.toLowerCase(Locale.ROOT)}.${JaasTestUtils.KafkaServerContextName}"
-  this.serverConfig.setProperty(KafkaConfig.ZkEnableSecureAclsProp, "false")
+  this.serverConfig.setProperty(ZkConfig.ZK_ENABLE_SECURE_ACLS_CONFIG, "false")
   this.serverConfig.setProperty(KafkaConfig.AutoCreateTopicsEnableProp, "false")
   this.serverConfig.setProperty(KafkaConfig.InterBrokerProtocolVersionProp, "2.8")
   this.producerConfig.setProperty(ProducerConfig.LINGER_MS_CONFIG, "10")

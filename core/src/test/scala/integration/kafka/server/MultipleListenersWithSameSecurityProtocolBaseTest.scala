@@ -20,7 +20,6 @@ package kafka.server
 
 import java.util.{Collections, Objects, Properties}
 import java.util.concurrent.TimeUnit
-
 import kafka.api.SaslSetup
 import kafka.coordinator.group.OffsetConfig
 import kafka.utils.JaasTestUtils.JaasSection
@@ -28,7 +27,7 @@ import kafka.utils.{JaasTestUtils, TestUtils}
 import kafka.utils.Implicits._
 import org.apache.kafka.clients.consumer.Consumer
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
-import org.apache.kafka.common.config.SslConfigs
+import org.apache.kafka.common.config.{SslConfigs, ZkConfig}
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.network.{ListenerName, Mode}
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -80,7 +79,7 @@ abstract class MultipleListenersWithSameSecurityProtocolBaseTest extends QuorumT
       props.put(KafkaConfig.ListenerSecurityProtocolMapProp, s"$Internal:PLAINTEXT, $SecureInternal:SASL_SSL," +
         s"$External:PLAINTEXT, $SecureExternal:SASL_SSL")
       props.put(KafkaConfig.InterBrokerListenerNameProp, Internal)
-      props.put(KafkaConfig.ZkEnableSecureAclsProp, "true")
+      props.put(ZkConfig.ZK_ENABLE_SECURE_ACLS_CONFIG, "true")
       props.put(KafkaConfig.SaslMechanismInterBrokerProtocolProp, kafkaClientSaslMechanism)
       props.put(s"${new ListenerName(SecureInternal).configPrefix}${KafkaConfig.SaslEnabledMechanismsProp}",
         kafkaServerSaslMechanisms(SecureInternal).mkString(","))

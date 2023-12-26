@@ -44,7 +44,7 @@ import org.apache.kafka.clients.admin._
 import org.apache.kafka.clients.consumer.{Consumer, ConsumerConfig, ConsumerRecord, ConsumerRecords, KafkaConsumer}
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord}
 import org.apache.kafka.common.{ClusterResource, ClusterResourceListener, Reconfigurable, TopicPartition, TopicPartitionInfo}
-import org.apache.kafka.common.config.{ConfigException, ConfigResource}
+import org.apache.kafka.common.config.{ConfigException, ConfigResource, ZkConfig}
 import org.apache.kafka.common.config.SslConfigs._
 import org.apache.kafka.common.config.types.Password
 import org.apache.kafka.common.config.provider.FileConfigProvider
@@ -121,7 +121,7 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
         properties
       } else {
         val properties = TestUtils.createBrokerConfig(brokerId, zkConnect)
-        properties.put(KafkaConfig.ZkEnableSecureAclsProp, "true")
+        properties.put(ZkConfig.ZK_ENABLE_SECURE_ACLS_CONFIG, "true")
         properties
       }
       props ++= securityProps(sslProperties1, TRUSTSTORE_PROPS)
