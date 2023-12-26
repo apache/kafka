@@ -1684,26 +1684,11 @@ public class GroupMetadataManagerTest {
 
         assertRecordsEquals(expectedRecords, result.records());
 
-        CoordinatorResult<ConsumerGroupHeartbeatResponseData, Record> result1 = context.consumerGroupHeartbeat(
-                new ConsumerGroupHeartbeatRequestData()
-                        .setGroupId(groupId)
-                        .setMemberId(memberId)
-                        .setMemberEpoch(11)
-                        .setSubscribedTopicRegex("^b.*"));
-
-        assertResponseEquals(
-                new ConsumerGroupHeartbeatResponseData()
-                        .setMemberId(memberId)
-                        .setMemberEpoch(12)
-                        .setHeartbeatIntervalMs(5000)
-                        .setAssignment(new ConsumerGroupHeartbeatResponseData.Assignment()
-                                .setTopicPartitions(Arrays.asList(
-                                        new ConsumerGroupHeartbeatResponseData.TopicPartitions()
-                                                .setTopicId(barTopicId)
-                                                .setPartitions(Arrays.asList(0, 1, 2))
-                                ))),
-                result1.response()
-        );
+        assignor.prepareGroupAssignment(new GroupAssignment(
+                Collections.singletonMap(memberId, new MemberAssignment(mkAssignment(
+                        mkTopicAssignment(barTopicId, 0, 1, 2)
+                )))
+        ));
     }
 
     @Test
@@ -1721,16 +1706,16 @@ public class GroupMetadataManagerTest {
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
                 .withAssignors(Collections.singletonList(assignor))
                 .withMetadataImage(new MetadataImageBuilder()
-                        .addTopic(fooTopicId, fooTopicName, 6)
-                        .addTopic(foodTopicId, foodTopicName, 3)
+                        .addTopic(foodTopicId, fooTopicName, 6)
+                        .addTopic(fooTopicId, foodTopicName, 3)
                         .addRacks()
                         .build())
                 .build();
 
         assignor.prepareGroupAssignment(new GroupAssignment(
                 Collections.singletonMap(memberId, new MemberAssignment(mkAssignment(
-                        mkTopicAssignment(fooTopicId, 0, 1, 2, 3, 4, 5),
-                        mkTopicAssignment(foodTopicId, 0, 1, 2)
+                        mkTopicAssignment(foodTopicId, 0, 1, 2, 3, 4, 5),
+                        mkTopicAssignment(fooTopicId, 0, 1, 2)
                 )))
         ));
 
@@ -1755,10 +1740,10 @@ public class GroupMetadataManagerTest {
                         .setAssignment(new ConsumerGroupHeartbeatResponseData.Assignment()
                                 .setTopicPartitions(Arrays.asList(
                                         new ConsumerGroupHeartbeatResponseData.TopicPartitions()
-                                                .setTopicId(fooTopicId)
+                                                .setTopicId(foodTopicId)
                                                 .setPartitions(Arrays.asList(0, 1, 2, 3, 4, 5)),
                                         new ConsumerGroupHeartbeatResponseData.TopicPartitions()
-                                                .setTopicId(foodTopicId)
+                                                .setTopicId(fooTopicId)
                                                 .setPartitions(Arrays.asList(0, 1, 2))
                                 ))),
                 result.response()
@@ -1774,28 +1759,145 @@ public class GroupMetadataManagerTest {
                 .setSubscribedTopicRegex("^foo.*")
                 .setServerAssignorName("range")
                 .setAssignedPartitions(mkAssignment(
-                        mkTopicAssignment(fooTopicId, 0, 1, 2, 3, 4, 5),
-                        mkTopicAssignment(foodTopicId, 0, 1, 2)))
+                        mkTopicAssignment(foodTopicId, 0, 1, 2, 3, 4, 5),
+                        mkTopicAssignment(fooTopicId, 0, 1, 2)))
                 .build();
 
         List<Record> expectedRecords = Arrays.asList(
             RecordHelpers.newMemberSubscriptionRecord(groupId, expectedMember),
             RecordHelpers.newGroupSubscriptionMetadataRecord(groupId, new HashMap<String, TopicMetadata>() {
                 {
-                    put(foodTopicName, new TopicMetadata(foodTopicId, foodTopicName, 3, mkMapOfPartitionRacks(3)));
-                    put(fooTopicName, new TopicMetadata(fooTopicId, fooTopicName, 6, mkMapOfPartitionRacks(6)));
+                    put(foodTopicName, new TopicMetadata(foodTopicId, fooTopicName, 6, mkMapOfPartitionRacks(6)));
+                    put(fooTopicName, new TopicMetadata(fooTopicId, foodTopicName, 3, mkMapOfPartitionRacks(3)));
                 }
             }),
             RecordHelpers.newGroupEpochRecord(groupId, 1),
             RecordHelpers.newTargetAssignmentRecord(groupId, memberId, mkAssignment(
-                    mkTopicAssignment(fooTopicId, 0, 1, 2, 3, 4, 5),
-                    mkTopicAssignment(foodTopicId, 0, 1, 2)
+                    mkTopicAssignment(foodTopicId, 0, 1, 2, 3, 4, 5),
+                    mkTopicAssignment(fooTopicId, 0, 1, 2)
             )),
             RecordHelpers.newTargetAssignmentEpochRecord(groupId, 1),
             RecordHelpers.newCurrentAssignmentRecord(groupId, expectedMember)
         );
 
         assertRecordsEquals(expectedRecords, result.records());
+    }
+
+    @Test
+    public void testMemberWithRegexSubscriptionTriggersNewTargetAssignment() {
+        String groupId = "fooup";
+        // Use a static member id as it makes the test easier.
+        String memberId = Uuid.randomUuid().toString();
+
+        Uuid fooTopicId = Uuid.randomUuid();
+        String fooTopicName = "foo";
+        Uuid foodTopicId = Uuid.randomUuid();
+        String foodTopicName = "food";
+
+        MockPartitionAssignor assignor = new MockPartitionAssignor("range");
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+                .withAssignors(Collections.singletonList(assignor))
+                .withMetadataImage(new MetadataImageBuilder()
+                        .addTopic(fooTopicId, fooTopicName, 6)
+                        .addTopic(foodTopicId, foodTopicName, 3)
+                        .addRacks()
+                        .build())
+                .withConsumerGroup(new ConsumerGroupBuilder(groupId, 10)
+                        .withMember(new ConsumerGroupMember.Builder(memberId)
+                                .setMemberEpoch(10)
+                                .setPreviousMemberEpoch(9)
+                                .setTargetMemberEpoch(10)
+                                .setClientId("client")
+                                .setClientHost("localhost/127.0.0.1")
+                                .setSubscribedTopicRegex("^food.*")
+                                .setServerAssignorName("range")
+                                .setAssignedPartitions(mkAssignment(
+                                        mkTopicAssignment(fooTopicId, 0, 1, 2, 3, 4, 5),
+                                        mkTopicAssignment(foodTopicId, 0, 1, 2)))
+                                .build())
+                        .withAssignment(memberId, mkAssignment(
+                                mkTopicAssignment(fooTopicId, 0, 1, 2, 3, 4, 5)))
+                        .withAssignmentEpoch(10))
+                .build();
+
+        assignor.prepareGroupAssignment(new GroupAssignment(
+                Collections.singletonMap(memberId, new MemberAssignment(mkAssignment(
+                        mkTopicAssignment(fooTopicId, 0, 1, 2, 3, 4, 5),
+                        mkTopicAssignment(foodTopicId, 0, 1, 2)
+                )))
+        ));
+
+        CoordinatorResult<ConsumerGroupHeartbeatResponseData, Record> result = context.consumerGroupHeartbeat(
+                new ConsumerGroupHeartbeatRequestData()
+                        .setGroupId(groupId)
+                        .setMemberId(memberId)
+                        .setMemberEpoch(10)
+                        .setSubscribedTopicRegex("^b.*"));
+
+        assertEquals(ConsumerGroupMember.MemberState.REVOKING, context.consumerGroupMemberState(groupId, memberId));
+        assertEquals(ConsumerGroup.ConsumerGroupState.RECONCILING, context.consumerGroupState(groupId));
+
+
+        result = context.consumerGroupHeartbeat(new ConsumerGroupHeartbeatRequestData()
+                .setGroupId(groupId)
+                .setMemberId(memberId)
+                .setMemberEpoch(10));
+
+
+        result = context.consumerGroupHeartbeat(new ConsumerGroupHeartbeatRequestData()
+                .setGroupId(groupId)
+                .setMemberId(memberId)
+                .setMemberEpoch(10)
+                .setTopicPartitions(Arrays.asList(
+                        new ConsumerGroupHeartbeatRequestData.TopicPartitions()
+                                .setTopicId(barTopicId)
+                                .setPartitions(Arrays.asList(0, 1, 2))
+                ))
+                .setSubscribedTopicRegex("^b.*"));
+
+        assertResponseEquals(
+                new ConsumerGroupHeartbeatResponseData()
+                        .setMemberId(memberId)
+                        .setMemberEpoch(11)
+                        .setHeartbeatIntervalMs(5000)
+                        .setAssignment(new ConsumerGroupHeartbeatResponseData.Assignment()
+                                .setTopicPartitions(Arrays.asList(
+                                        new ConsumerGroupHeartbeatResponseData.TopicPartitions()
+                                                .setTopicId(barTopicId)
+                                                .setPartitions(Arrays.asList(0, 1, 2))
+                                ))),
+                result.response()
+        );
+
+        ConsumerGroupMember expectedMember = new ConsumerGroupMember.Builder(memberId)
+                .setMemberEpoch(11)
+                .setPreviousMemberEpoch(10)
+                .setTargetMemberEpoch(11)
+                .setClientId("client")
+                .setClientHost("localhost/127.0.0.1")
+                .setSubscribedTopicRegex("^b.*")
+                .setServerAssignorName("range")
+                .setAssignedPartitions(mkAssignment(
+                        mkTopicAssignment(barTopicId, 0, 1, 2)))
+                .build();
+
+        List<Record> expectedRecords = Arrays.asList(
+                RecordHelpers.newMemberSubscriptionRecord(groupId, expectedMember),
+                RecordHelpers.newGroupSubscriptionMetadataRecord(groupId, new HashMap<String, TopicMetadata>() {
+                    {
+                        put(barTopicName, new TopicMetadata(barTopicId, barTopicName, 3, mkMapOfPartitionRacks(3)));
+                    }
+                }),
+                RecordHelpers.newGroupEpochRecord(groupId, 11),
+                RecordHelpers.newTargetAssignmentRecord(groupId, memberId, mkAssignment(
+                        mkTopicAssignment(barTopicId, 0, 1, 2)
+                )),
+                RecordHelpers.newTargetAssignmentEpochRecord(groupId, 11),
+                RecordHelpers.newCurrentAssignmentRecord(groupId, expectedMember)
+        );
+
+        assertRecordsEquals(expectedRecords, result.records());
+
     }
 
     @Test
