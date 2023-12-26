@@ -17,6 +17,7 @@
 package kafka.server
 
 import java.util.Properties
+
 import org.apache.kafka.common.Uuid
 import org.apache.kafka.common.config.ZkConfig
 import org.apache.kafka.common.metrics.MetricsContext

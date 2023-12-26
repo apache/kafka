@@ -18,6 +18,7 @@ package kafka.security.authorizer
 
 import java.{lang, util}
 import java.util.concurrent.{CompletableFuture, CompletionStage}
+
 import com.typesafe.scalalogging.Logger
 import kafka.security.authorizer.AclEntry.ResourceSeparator
 import kafka.server.{KafkaConfig, KafkaServer}

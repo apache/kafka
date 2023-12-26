@@ -14,6 +14,7 @@ package kafka.api
 
 import java.util
 import java.util.Properties
+
 import kafka.security.authorizer.{AclAuthorizer, AclEntry}
 import kafka.server.KafkaConfig
 import kafka.utils.{CoreUtils, JaasTestUtils, TestUtils}

@@ -20,6 +20,7 @@ package kafka.server
 
 import java.util.{Collections, Objects, Properties}
 import java.util.concurrent.TimeUnit
+
 import kafka.api.SaslSetup
 import kafka.coordinator.group.OffsetConfig
 import kafka.utils.JaasTestUtils.JaasSection

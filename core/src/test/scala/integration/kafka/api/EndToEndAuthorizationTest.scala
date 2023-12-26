@@ -18,9 +18,9 @@
 package kafka.api
 
 import com.yammer.metrics.core.Gauge
-
 import java.util.{Collections, Properties}
 import java.util.concurrent.ExecutionException
+
 import kafka.security.authorizer.AclAuthorizer
 import kafka.security.authorizer.AclEntry.WildcardHost
 import org.apache.kafka.metadata.authorizer.StandardAuthorizer

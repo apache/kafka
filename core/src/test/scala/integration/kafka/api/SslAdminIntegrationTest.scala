@@ -14,6 +14,7 @@ package kafka.api
 
 import java.util
 import java.util.concurrent._
+
 import com.yammer.metrics.core.Gauge
 import kafka.security.authorizer.AclAuthorizer
 import kafka.utils.TestUtils
