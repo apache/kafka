@@ -31,7 +31,7 @@ import kafka.utils.{CoreUtils, Logging}
 import kafka.utils.Implicits._
 import org.apache.kafka.clients.CommonClientConfigs
 import org.apache.kafka.common.Reconfigurable
-import org.apache.kafka.common.config.{AbstractConfig, ConfigDef, ConfigException, ConfigResource, SaslConfigs, SecurityConfig, SslClientAuth, SslConfigs, TopicConfig, ZkConfig}
+import org.apache.kafka.common.config.{AbstractConfig, ConfigDef, ConfigException, ConfigResource, SaslConfigs, SecurityConfig, SslClientAuth, SslConfigs, TopicConfig}
 import org.apache.kafka.common.config.ConfigDef.{ConfigKey, ValidList}
 import org.apache.kafka.common.config.ZkConfig.{ZK_CLIENT_CNXN_SOCKET_CONFIG, ZK_CONNECTION_TIMEOUT_MS_CONFIG, ZK_CONNECT_CONFIG, ZK_ENABLE_SECURE_ACLS_CONFIG, ZK_MAX_IN_FLIGHT_REQUESTS_CONFIG, ZK_SESSION_TIMEOUT_MS_CONFIG, ZK_SSL_CIPHER_SUITES_CONFIG, ZK_SSL_CLIENT_ENABLE_CONFIG, ZK_SSL_CRL_ENABLE_CONFIG, ZK_SSL_ENABLED_PROTOCOLS_CONFIG, ZK_SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG, ZK_SSL_KEY_STORE_LOCATION_CONFIG, ZK_SSL_KEY_STORE_PASSWORD_CONFIG, ZK_SSL_KEY_STORE_TYPE_CONFIG, ZK_SSL_OCSP_ENABLE_CONFIG, ZK_SSL_PROTOCOL_CONFIG, ZK_SSL_TRUST_STORE_LOCATION_CONFIG, ZK_SSL_TRUST_STORE_PASSWORD_CONFIG, ZK_SSL_TRUST_STORE_TYPE_CONFIG, ZK_SSL_CONFIG_TO_SYSTEM_PROPERTY_MAP}
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs
@@ -306,11 +306,11 @@ object KafkaConfig {
   }
 
   private[kafka] def zooKeeperClientProperty(clientConfig: ZKClientConfig, kafkaPropName: String): Option[String] = {
-    Option(clientConfig.getProperty(ZK_SSL_CONFIG_TO_SYSTEM_PROPERTY_MAP(kafkaPropName)))
+    Option(clientConfig.getProperty(ZK_SSL_CONFIG_TO_SYSTEM_PROPERTY_MAP.get(kafkaPropName)))
   }
 
   private[kafka] def setZooKeeperClientProperty(clientConfig: ZKClientConfig, kafkaPropName: String, kafkaPropValue: Any): Unit = {
-    clientConfig.setProperty(ZK_SSL_CONFIG_TO_SYSTEM_PROPERTY_MAP(kafkaPropName),
+    clientConfig.setProperty(ZK_SSL_CONFIG_TO_SYSTEM_PROPERTY_MAP.get(kafkaPropName),
       kafkaPropName match {
         case ZK_SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG => (kafkaPropValue.toString.toUpperCase == "HTTPS").toString
         case ZK_SSL_ENABLED_PROTOCOLS_CONFIG | ZK_SSL_CIPHER_SUITES_CONFIG => kafkaPropValue match {

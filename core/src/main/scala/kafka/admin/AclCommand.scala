@@ -21,7 +21,6 @@ import java.util.Properties
 import joptsimple._
 import joptsimple.util.EnumConverter
 import kafka.security.authorizer.{AclAuthorizer, AclEntry, AuthorizerUtils}
-import kafka.server.KafkaConfig
 import kafka.utils._
 import org.apache.kafka.clients.admin.{Admin, AdminClientConfig}
 import org.apache.kafka.common.acl._
