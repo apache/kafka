@@ -62,16 +62,6 @@ import scala.jdk.CollectionConverters._
 import scala.collection.{Map, Seq}
 
 object Defaults {
-  /** ********* Zookeeper Configuration ***********/
-  val ZkSessionTimeoutMs = 18000
-  val ZkEnableSecureAcls = false
-  val ZkMaxInFlightRequests = 10
-  val ZkSslClientEnable = false
-  val ZkSslProtocol = "TLSv1.2"
-  val ZkSslEndpointIdentificationAlgorithm = "HTTPS"
-  val ZkSslCrlEnable = false
-  val ZkSslOcspEnable = false
-
   /** ********* General Configuration ***********/
   val BrokerIdGenerationEnable = true
   val MaxReservedBrokerId = 1000
@@ -1122,11 +1112,11 @@ object KafkaConfig {
 
       /** ********* Zookeeper Configuration ***********/
       .define(ZK_CONNECT_CONFIG, STRING, null, HIGH, ZK_CONNECT_DOC)
-      .define(ZK_SESSION_TIMEOUT_MS_CONFIG, INT, Defaults.ZkSessionTimeoutMs, HIGH, ZK_SESSION_TIMEOUT_MS_DOC)
+      .define(ZK_SESSION_TIMEOUT_MS_CONFIG, INT, ZK_SESSION_TIMEOUT_MS, HIGH, ZK_SESSION_TIMEOUT_MS_DOC)
       .define(ZK_CONNECTION_TIMEOUT_MS_CONFIG, INT, null, HIGH, ZK_CONNECTION_TIMEOUT_MS_DOC)
-      .define(ZK_ENABLE_SECURE_ACLS_CONFIG, BOOLEAN, Defaults.ZkEnableSecureAcls, HIGH, ZK_ENABLE_SECURE_ACLS_DOC)
-      .define(ZK_MAX_IN_FLIGHT_REQUESTS_CONFIG, INT, Defaults.ZkMaxInFlightRequests, atLeast(1), HIGH, ZK_MAX_IN_FLIGHT_REQUESTS_DOC)
-      .define(ZK_SSL_CLIENT_ENABLE_CONFIG, BOOLEAN, Defaults.ZkSslClientEnable, MEDIUM, ZK_SSL_CLIENT_ENABLE_DOC)
+      .define(ZK_ENABLE_SECURE_ACLS_CONFIG, BOOLEAN, ZK_ENABLE_SECURE_ACLS, HIGH, ZK_ENABLE_SECURE_ACLS_DOC)
+      .define(ZK_MAX_IN_FLIGHT_REQUESTS_CONFIG, INT, ZK_MAX_IN_FLIGHT_REQUESTS, atLeast(1), HIGH, ZK_MAX_IN_FLIGHT_REQUESTS_DOC)
+      .define(ZK_SSL_CLIENT_ENABLE_CONFIG, BOOLEAN, ZK_SSL_CLIENT_ENABLE, MEDIUM, ZK_SSL_CLIENT_ENABLE_DOC)
       .define(ZK_CLIENT_CNXN_SOCKET_CONFIG, STRING, null, MEDIUM, ZK_CLIENT_CNXN_SOCKET_DOC)
       .define(ZK_SSL_KEY_STORE_LOCATION_CONFIG, STRING, null, MEDIUM, ZK_SSL_KEY_STORE_LOCATION_DOC)
       .define(ZK_SSL_KEY_STORE_PASSWORD_CONFIG, PASSWORD, null, MEDIUM, ZK_SSL_KEY_STORE_PASSWORD_DOC)
@@ -1134,12 +1124,12 @@ object KafkaConfig {
       .define(ZK_SSL_TRUST_STORE_LOCATION_CONFIG, STRING, null, MEDIUM, ZK_SSL_TRUST_STORE_LOCATION_DOC)
       .define(ZK_SSL_TRUST_STORE_PASSWORD_CONFIG, PASSWORD, null, MEDIUM, ZK_SSL_TRUST_STORE_PASSWORD_DOC)
       .define(ZK_SSL_TRUST_STORE_TYPE_CONFIG, STRING, null, MEDIUM, ZK_SSL_TRUST_STORE_TYPE_DOC)
-      .define(ZK_SSL_PROTOCOL_CONFIG, STRING, Defaults.ZkSslProtocol, LOW, ZK_SSL_PROTOCOL_DOC)
+      .define(ZK_SSL_PROTOCOL_CONFIG, STRING, ZK_SSL_PROTOCOL, LOW, ZK_SSL_PROTOCOL_DOC)
       .define(ZK_SSL_ENABLED_PROTOCOLS_CONFIG, LIST, null, LOW, ZK_SSL_ENABLED_PROTOCOLS_DOC)
       .define(ZK_SSL_CIPHER_SUITES_CONFIG, LIST, null, LOW, ZK_SSL_CIPHER_SUITES_DOC)
-      .define(ZK_SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG, STRING, Defaults.ZkSslEndpointIdentificationAlgorithm, LOW, ZK_SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_DOC)
-      .define(ZK_SSL_CRL_ENABLE_CONFIG, BOOLEAN, Defaults.ZkSslCrlEnable, LOW, ZK_SSL_CRL_ENABLE_DOC)
-      .define(ZK_SSL_OCSP_ENABLE_CONFIG, BOOLEAN, Defaults.ZkSslOcspEnable, LOW, ZK_SSL_OCSP_ENABLE_DOC)
+      .define(ZK_SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG, STRING, ZK_SSL_ENDPOINT_IDENTIFICATION_ALGORITHM, LOW, ZK_SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_DOC)
+      .define(ZK_SSL_CRL_ENABLE_CONFIG, BOOLEAN, ZK_SSL_CRL_ENABLE, LOW, ZK_SSL_CRL_ENABLE_DOC)
+      .define(ZK_SSL_OCSP_ENABLE_CONFIG, BOOLEAN, ZK_SSL_OCSP_ENABLE, LOW, ZK_SSL_OCSP_ENABLE_DOC)
 
       /** ********* General Configuration ***********/
       .define(BrokerIdGenerationEnableProp, BOOLEAN, Defaults.BrokerIdGenerationEnable, MEDIUM, BrokerIdGenerationEnableDoc)
