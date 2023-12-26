@@ -342,7 +342,7 @@ class LogCleaner(initialConfig: CleanerConfig,
    */
   private[log] class CleanerThread(threadId: Int)
     extends ShutdownableThread(s"kafka-log-cleaner-thread-$threadId", false) with Logging {
-    protected override def loggerName = classOf[LogCleaner].getName
+    protected override def loggerName: String = classOf[LogCleaner].getName
 
     this.logIdent = logPrefix
 
@@ -498,7 +498,7 @@ class LogCleaner(initialConfig: CleanerConfig,
 }
 
 object LogCleaner {
-  val ReconfigurableConfigs = Set(
+  val ReconfigurableConfigs: Set[String] = Set(
     KafkaConfig.LogCleanerThreadsProp,
     KafkaConfig.LogCleanerDedupeBufferSizeProp,
     KafkaConfig.LogCleanerDedupeBufferLoadFactorProp,
@@ -554,7 +554,7 @@ private[log] class Cleaner(val id: Int,
                            time: Time,
                            checkDone: TopicPartition => Unit) extends Logging {
 
-  protected override def loggerName = classOf[LogCleaner].getName
+  protected override def loggerName: String = classOf[LogCleaner].getName
 
   this.logIdent = s"Cleaner $id: "
 
@@ -1216,10 +1216,10 @@ private case class LogToClean(topicPartition: TopicPartition,
                               firstDirtyOffset: Long,
                               uncleanableOffset: Long,
                               needCompactionNow: Boolean = false) extends Ordered[LogToClean] {
-  val cleanBytes = log.logSegments(-1, firstDirtyOffset).map(_.size.toLong).sum
+  val cleanBytes: Long = log.logSegments(-1, firstDirtyOffset).map(_.size.toLong).sum
   val (firstUncleanableOffset, cleanableBytes) = LogCleanerManager.calculateCleanableBytes(log, firstDirtyOffset, uncleanableOffset)
-  val totalBytes = cleanBytes + cleanableBytes
-  val cleanableRatio = cleanableBytes / totalBytes.toDouble
+  val totalBytes: Long = cleanBytes + cleanableBytes
+  val cleanableRatio: Double = cleanableBytes / totalBytes.toDouble
   override def compare(that: LogToClean): Int = math.signum(this.cleanableRatio - that.cleanableRatio).toInt
 }
 
