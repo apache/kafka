@@ -1831,9 +1831,11 @@ public class GroupMetadataManagerTest {
                         .setGroupId(groupId)
                         .setMemberId(memberId)
                         .setMemberEpoch(10)
-                        .setSubscribedTopicRegex("^f.*")
-                        .setTopicPartitions());
-
+                        .setRebalanceTimeoutMs(5000)
+                        .setSubscribedTopicRegex("^food.*")
+                        .setTopicPartitions(Collections.singletonList(new ConsumerGroupHeartbeatRequestData.TopicPartitions()
+                                .setTopicId(foodTopicId)
+                                .setPartitions(Arrays.asList(0, 1, 2, 3, 4, 5)))));
 
         assertResponseEquals(
                 new ConsumerGroupHeartbeatResponseData()
