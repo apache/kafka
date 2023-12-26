@@ -16,11 +16,7 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
-import java.util.HashSet;
 import java.util.Map;
-import java.util.Set;
-import org.apache.kafka.streams.StreamsConfig;
-import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.internals.StoreFactory;
 
@@ -28,30 +24,12 @@ import org.apache.kafka.streams.processor.internals.StoreFactory;
  * {@code MaterializedStoreFactory} is the base class for any {@link StoreFactory} that
  * wraps a {@link MaterializedInternal} instance.
  */
-public abstract class MaterializedStoreFactory<K, V, S extends StateStore> implements StoreFactory {
+public abstract class MaterializedStoreFactory<K, V, S extends StateStore> extends AbstractConfigurableStoreFactory {
     protected final MaterializedInternal<K, V, S> materialized;
-    private final Set<String> connectedProcessorNames = new HashSet<>();
-    protected Materialized.StoreType defaultStoreType
-            = MaterializedInternal.parse(StreamsConfig.DEFAULT_DSL_STORE);
 
     public MaterializedStoreFactory(final MaterializedInternal<K, V, S> materialized) {
+        super(materialized.dslStoreSuppliers().orElse(null));
         this.materialized = materialized;
-
-        // this condition will never be false; in the next PR we will
-        // remove the initialization of storeType from MaterializedInternal
-        if (materialized.storeType() != null) {
-            defaultStoreType = materialized.storeType;
-        }
-    }
-
-    @Override
-    public void configure(final StreamsConfig config) {
-        // in a follow-up PR, this will set the defaultStoreType to the configured value
-    }
-
-    @Override
-    public Set<String> connectedProcessorNames() {
-        return connectedProcessorNames;
     }
 
     @Override
@@ -86,4 +64,5 @@ public abstract class MaterializedStoreFactory<K, V, S extends StateStore> imple
         return (storeFactory instanceof MaterializedStoreFactory)
                 && ((MaterializedStoreFactory<?, ?, ?>) storeFactory).materialized.equals(materialized);
     }
+
 }

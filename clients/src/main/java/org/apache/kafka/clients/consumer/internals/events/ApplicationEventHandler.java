@@ -62,15 +62,15 @@ public class ApplicationEventHandler implements Closeable {
     }
 
     /**
-     * Add an {@link ApplicationEvent} to the handler and then internally invoke {@link #wakeupNetworkThread}
+     * Add an {@link ApplicationEvent} to the handler and then internally invoke {@link #wakeupNetworkThread()}
      * to alert the network I/O thread that it has something to process.
      *
      * @param event An {@link ApplicationEvent} created by the application thread
      */
     public void add(final ApplicationEvent event) {
         Objects.requireNonNull(event, "ApplicationEvent provided to add must be non-null");
-        log.trace("Enqueued event: {}", event);
         applicationEventQueue.add(event);
+        log.trace("Enqueued event: {}", event);
         wakeupNetworkThread();
     }
 
@@ -79,6 +79,18 @@ public class ApplicationEventHandler implements Closeable {
      */
     public void wakeupNetworkThread() {
         networkThread.wakeup();
+    }
+
+    /**
+     * Returns the delay for which the application thread can safely wait before it should be responsive
+     * to results from the request managers. For example, the subscription state can change when heartbeats
+     * are sent, so blocking for longer than the heartbeat interval might mean the application thread is not
+     * responsive to changes.
+     *
+     * @return The maximum delay in milliseconds
+     */
+    public long maximumTimeToWait() {
+        return networkThread.maximumTimeToWait();
     }
 
     /**

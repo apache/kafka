@@ -21,9 +21,13 @@ import org.apache.kafka.common.message.ConsumerGroupHeartbeatResponseData;
 import org.apache.kafka.common.message.DeleteGroupsResponseData;
 import org.apache.kafka.common.message.OffsetCommitRequestData;
 import org.apache.kafka.common.message.OffsetCommitResponseData;
+import org.apache.kafka.common.message.TxnOffsetCommitRequestData;
+import org.apache.kafka.common.message.TxnOffsetCommitResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.requests.RequestContext;
+import org.apache.kafka.common.requests.TransactionResult;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
@@ -43,10 +47,14 @@ import org.apache.kafka.coordinator.group.generated.GroupMetadataKey;
 import org.apache.kafka.coordinator.group.generated.GroupMetadataValue;
 import org.apache.kafka.coordinator.group.generated.OffsetCommitKey;
 import org.apache.kafka.coordinator.group.generated.OffsetCommitValue;
+import org.apache.kafka.coordinator.group.metrics.CoordinatorMetrics;
+import org.apache.kafka.coordinator.group.metrics.CoordinatorMetricsShard;
 import org.apache.kafka.coordinator.group.runtime.CoordinatorResult;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.ArgumentMatchers;
 
@@ -80,12 +88,17 @@ public class GroupCoordinatorShardTest {
     public void testConsumerGroupHeartbeat() {
         GroupMetadataManager groupMetadataManager = mock(GroupMetadataManager.class);
         OffsetMetadataManager offsetMetadataManager = mock(OffsetMetadataManager.class);
+        CoordinatorMetrics coordinatorMetrics = mock(CoordinatorMetrics.class);
+        CoordinatorMetricsShard metricsShard = mock(CoordinatorMetricsShard.class);
         GroupCoordinatorShard coordinator = new GroupCoordinatorShard(
             new LogContext(),
             groupMetadataManager,
             offsetMetadataManager,
-            new MockCoordinatorTimer<>(new MockTime()),
-            mock(GroupCoordinatorConfig.class)
+            Time.SYSTEM,
+            new MockCoordinatorTimer<>(Time.SYSTEM),
+            mock(GroupCoordinatorConfig.class),
+            coordinatorMetrics,
+            metricsShard
         );
 
         RequestContext context = requestContext(ApiKeys.CONSUMER_GROUP_HEARTBEAT);
@@ -107,12 +120,17 @@ public class GroupCoordinatorShardTest {
     public void testCommitOffset() {
         GroupMetadataManager groupMetadataManager = mock(GroupMetadataManager.class);
         OffsetMetadataManager offsetMetadataManager = mock(OffsetMetadataManager.class);
+        CoordinatorMetrics coordinatorMetrics = mock(CoordinatorMetrics.class);
+        CoordinatorMetricsShard metricsShard = mock(CoordinatorMetricsShard.class);
         GroupCoordinatorShard coordinator = new GroupCoordinatorShard(
             new LogContext(),
             groupMetadataManager,
             offsetMetadataManager,
-            new MockCoordinatorTimer<>(new MockTime()),
-            mock(GroupCoordinatorConfig.class)
+            Time.SYSTEM,
+            new MockCoordinatorTimer<>(Time.SYSTEM),
+            mock(GroupCoordinatorConfig.class),
+            coordinatorMetrics,
+            metricsShard
         );
 
         RequestContext context = requestContext(ApiKeys.OFFSET_COMMIT);
@@ -131,6 +149,38 @@ public class GroupCoordinatorShardTest {
     }
 
     @Test
+    public void testCommitTransactionalOffset() {
+        GroupMetadataManager groupMetadataManager = mock(GroupMetadataManager.class);
+        OffsetMetadataManager offsetMetadataManager = mock(OffsetMetadataManager.class);
+        CoordinatorMetrics coordinatorMetrics = mock(CoordinatorMetrics.class);
+        CoordinatorMetricsShard metricsShard = mock(CoordinatorMetricsShard.class);
+        GroupCoordinatorShard coordinator = new GroupCoordinatorShard(
+            new LogContext(),
+            groupMetadataManager,
+            offsetMetadataManager,
+            Time.SYSTEM,
+            new MockCoordinatorTimer<>(new MockTime()),
+            mock(GroupCoordinatorConfig.class),
+            coordinatorMetrics,
+            metricsShard
+        );
+
+        RequestContext context = requestContext(ApiKeys.TXN_OFFSET_COMMIT);
+        TxnOffsetCommitRequestData request = new TxnOffsetCommitRequestData();
+        CoordinatorResult<TxnOffsetCommitResponseData, Record> result = new CoordinatorResult<>(
+            Collections.emptyList(),
+            new TxnOffsetCommitResponseData()
+        );
+
+        when(offsetMetadataManager.commitTransactionalOffset(
+            context,
+            request
+        )).thenReturn(result);
+
+        assertEquals(result, coordinator.commitTransactionalOffset(context, request));
+    }
+
+    @Test
     public void testDeleteGroups() {
         GroupMetadataManager groupMetadataManager = mock(GroupMetadataManager.class);
         OffsetMetadataManager offsetMetadataManager = mock(OffsetMetadataManager.class);
@@ -138,8 +188,11 @@ public class GroupCoordinatorShardTest {
             new LogContext(),
             groupMetadataManager,
             offsetMetadataManager,
-            new MockCoordinatorTimer<>(new MockTime()),
-            mock(GroupCoordinatorConfig.class)
+            Time.SYSTEM,
+            new MockCoordinatorTimer<>(Time.SYSTEM),
+            mock(GroupCoordinatorConfig.class),
+            mock(CoordinatorMetrics.class),
+            mock(CoordinatorMetricsShard.class)
         );
 
         RequestContext context = requestContext(ApiKeys.DELETE_GROUPS);
@@ -192,8 +245,11 @@ public class GroupCoordinatorShardTest {
             new LogContext(),
             groupMetadataManager,
             offsetMetadataManager,
-            new MockCoordinatorTimer<>(new MockTime()),
-            mock(GroupCoordinatorConfig.class)
+            Time.SYSTEM,
+            new MockCoordinatorTimer<>(Time.SYSTEM),
+            mock(GroupCoordinatorConfig.class),
+            mock(CoordinatorMetrics.class),
+            mock(CoordinatorMetricsShard.class)
         );
 
         RequestContext context = requestContext(ApiKeys.DELETE_GROUPS);
@@ -253,73 +309,139 @@ public class GroupCoordinatorShardTest {
     public void testReplayOffsetCommit() {
         GroupMetadataManager groupMetadataManager = mock(GroupMetadataManager.class);
         OffsetMetadataManager offsetMetadataManager = mock(OffsetMetadataManager.class);
+        CoordinatorMetrics coordinatorMetrics = mock(CoordinatorMetrics.class);
+        CoordinatorMetricsShard metricsShard = mock(CoordinatorMetricsShard.class);
         GroupCoordinatorShard coordinator = new GroupCoordinatorShard(
             new LogContext(),
             groupMetadataManager,
             offsetMetadataManager,
-            new MockCoordinatorTimer<>(new MockTime()),
-            mock(GroupCoordinatorConfig.class)
+            Time.SYSTEM,
+            new MockCoordinatorTimer<>(Time.SYSTEM),
+            mock(GroupCoordinatorConfig.class),
+            coordinatorMetrics,
+            metricsShard
         );
 
         OffsetCommitKey key = new OffsetCommitKey();
         OffsetCommitValue value = new OffsetCommitValue();
 
-        coordinator.replay(new Record(
+        coordinator.replay(RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, new Record(
             new ApiMessageAndVersion(key, (short) 0),
             new ApiMessageAndVersion(value, (short) 0)
         ));
 
-        coordinator.replay(new Record(
+        coordinator.replay(RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, new Record(
             new ApiMessageAndVersion(key, (short) 1),
             new ApiMessageAndVersion(value, (short) 0)
         ));
 
-        verify(offsetMetadataManager, times(2)).replay(key, value);
+        verify(offsetMetadataManager, times(2)).replay(
+            RecordBatch.NO_PRODUCER_ID,
+            key,
+            value
+        );
+    }
+
+    @Test
+    public void testReplayTransactionalOffsetCommit() {
+        GroupMetadataManager groupMetadataManager = mock(GroupMetadataManager.class);
+        OffsetMetadataManager offsetMetadataManager = mock(OffsetMetadataManager.class);
+        CoordinatorMetrics coordinatorMetrics = mock(CoordinatorMetrics.class);
+        CoordinatorMetricsShard metricsShard = mock(CoordinatorMetricsShard.class);
+        GroupCoordinatorShard coordinator = new GroupCoordinatorShard(
+            new LogContext(),
+            groupMetadataManager,
+            offsetMetadataManager,
+            Time.SYSTEM,
+            new MockCoordinatorTimer<>(new MockTime()),
+            mock(GroupCoordinatorConfig.class),
+            coordinatorMetrics,
+            metricsShard
+        );
+
+        OffsetCommitKey key = new OffsetCommitKey();
+        OffsetCommitValue value = new OffsetCommitValue();
+
+        coordinator.replay(100L, (short) 0, new Record(
+            new ApiMessageAndVersion(key, (short) 0),
+            new ApiMessageAndVersion(value, (short) 0)
+        ));
+
+        coordinator.replay(101L, (short) 1, new Record(
+            new ApiMessageAndVersion(key, (short) 1),
+            new ApiMessageAndVersion(value, (short) 0)
+        ));
+
+        verify(offsetMetadataManager, times(1)).replay(
+            100L,
+            key,
+            value
+        );
+
+        verify(offsetMetadataManager, times(1)).replay(
+            101L,
+            key,
+            value
+        );
     }
 
     @Test
     public void testReplayOffsetCommitWithNullValue() {
         GroupMetadataManager groupMetadataManager = mock(GroupMetadataManager.class);
         OffsetMetadataManager offsetMetadataManager = mock(OffsetMetadataManager.class);
+        CoordinatorMetrics coordinatorMetrics = mock(CoordinatorMetrics.class);
+        CoordinatorMetricsShard metricsShard = mock(CoordinatorMetricsShard.class);
         GroupCoordinatorShard coordinator = new GroupCoordinatorShard(
             new LogContext(),
             groupMetadataManager,
             offsetMetadataManager,
-            new MockCoordinatorTimer<>(new MockTime()),
-            mock(GroupCoordinatorConfig.class)
+            Time.SYSTEM,
+            new MockCoordinatorTimer<>(Time.SYSTEM),
+            mock(GroupCoordinatorConfig.class),
+            coordinatorMetrics,
+            metricsShard
         );
 
         OffsetCommitKey key = new OffsetCommitKey();
 
-        coordinator.replay(new Record(
+        coordinator.replay(RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, new Record(
             new ApiMessageAndVersion(key, (short) 0),
             null
         ));
 
-        coordinator.replay(new Record(
+        coordinator.replay(RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, new Record(
             new ApiMessageAndVersion(key, (short) 1),
             null
         ));
 
-        verify(offsetMetadataManager, times(2)).replay(key, null);
+        verify(offsetMetadataManager, times(2)).replay(
+            RecordBatch.NO_PRODUCER_ID,
+            key,
+            null
+        );
     }
 
     @Test
     public void testReplayConsumerGroupMetadata() {
         GroupMetadataManager groupMetadataManager = mock(GroupMetadataManager.class);
         OffsetMetadataManager offsetMetadataManager = mock(OffsetMetadataManager.class);
+        CoordinatorMetrics coordinatorMetrics = mock(CoordinatorMetrics.class);
+        CoordinatorMetricsShard metricsShard = mock(CoordinatorMetricsShard.class);
         GroupCoordinatorShard coordinator = new GroupCoordinatorShard(
             new LogContext(),
             groupMetadataManager,
             offsetMetadataManager,
-            new MockCoordinatorTimer<>(new MockTime()),
-            mock(GroupCoordinatorConfig.class)
+            Time.SYSTEM,
+            new MockCoordinatorTimer<>(Time.SYSTEM),
+            mock(GroupCoordinatorConfig.class),
+            coordinatorMetrics,
+            metricsShard
         );
 
         ConsumerGroupMetadataKey key = new ConsumerGroupMetadataKey();
         ConsumerGroupMetadataValue value = new ConsumerGroupMetadataValue();
 
-        coordinator.replay(new Record(
+        coordinator.replay(RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, new Record(
             new ApiMessageAndVersion(key, (short) 3),
             new ApiMessageAndVersion(value, (short) 0)
         ));
@@ -331,17 +453,22 @@ public class GroupCoordinatorShardTest {
     public void testReplayConsumerGroupMetadataWithNullValue() {
         GroupMetadataManager groupMetadataManager = mock(GroupMetadataManager.class);
         OffsetMetadataManager offsetMetadataManager = mock(OffsetMetadataManager.class);
+        CoordinatorMetrics coordinatorMetrics = mock(CoordinatorMetrics.class);
+        CoordinatorMetricsShard metricsShard = mock(CoordinatorMetricsShard.class);
         GroupCoordinatorShard coordinator = new GroupCoordinatorShard(
             new LogContext(),
             groupMetadataManager,
             offsetMetadataManager,
-            new MockCoordinatorTimer<>(new MockTime()),
-            mock(GroupCoordinatorConfig.class)
+            Time.SYSTEM,
+            new MockCoordinatorTimer<>(Time.SYSTEM),
+            mock(GroupCoordinatorConfig.class),
+            coordinatorMetrics,
+            metricsShard
         );
 
         ConsumerGroupMetadataKey key = new ConsumerGroupMetadataKey();
 
-        coordinator.replay(new Record(
+        coordinator.replay(RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, new Record(
             new ApiMessageAndVersion(key, (short) 3),
             null
         ));
@@ -353,18 +480,23 @@ public class GroupCoordinatorShardTest {
     public void testReplayConsumerGroupPartitionMetadata() {
         GroupMetadataManager groupMetadataManager = mock(GroupMetadataManager.class);
         OffsetMetadataManager offsetMetadataManager = mock(OffsetMetadataManager.class);
+        CoordinatorMetrics coordinatorMetrics = mock(CoordinatorMetrics.class);
+        CoordinatorMetricsShard metricsShard = mock(CoordinatorMetricsShard.class);
         GroupCoordinatorShard coordinator = new GroupCoordinatorShard(
             new LogContext(),
             groupMetadataManager,
             offsetMetadataManager,
-            new MockCoordinatorTimer<>(new MockTime()),
-            mock(GroupCoordinatorConfig.class)
+            Time.SYSTEM,
+            new MockCoordinatorTimer<>(Time.SYSTEM),
+            mock(GroupCoordinatorConfig.class),
+            coordinatorMetrics,
+            metricsShard
         );
 
         ConsumerGroupPartitionMetadataKey key = new ConsumerGroupPartitionMetadataKey();
         ConsumerGroupPartitionMetadataValue value = new ConsumerGroupPartitionMetadataValue();
 
-        coordinator.replay(new Record(
+        coordinator.replay(RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, new Record(
             new ApiMessageAndVersion(key, (short) 4),
             new ApiMessageAndVersion(value, (short) 0)
         ));
@@ -376,17 +508,22 @@ public class GroupCoordinatorShardTest {
     public void testReplayConsumerGroupPartitionMetadataWithNullValue() {
         GroupMetadataManager groupMetadataManager = mock(GroupMetadataManager.class);
         OffsetMetadataManager offsetMetadataManager = mock(OffsetMetadataManager.class);
+        CoordinatorMetrics coordinatorMetrics = mock(CoordinatorMetrics.class);
+        CoordinatorMetricsShard metricsShard = mock(CoordinatorMetricsShard.class);
         GroupCoordinatorShard coordinator = new GroupCoordinatorShard(
             new LogContext(),
             groupMetadataManager,
             offsetMetadataManager,
-            new MockCoordinatorTimer<>(new MockTime()),
-            mock(GroupCoordinatorConfig.class)
+            Time.SYSTEM,
+            new MockCoordinatorTimer<>(Time.SYSTEM),
+            mock(GroupCoordinatorConfig.class),
+            coordinatorMetrics,
+            metricsShard
         );
 
         ConsumerGroupPartitionMetadataKey key = new ConsumerGroupPartitionMetadataKey();
 
-        coordinator.replay(new Record(
+        coordinator.replay(RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, new Record(
             new ApiMessageAndVersion(key, (short) 4),
             null
         ));
@@ -398,18 +535,23 @@ public class GroupCoordinatorShardTest {
     public void testReplayConsumerGroupMemberMetadata() {
         GroupMetadataManager groupMetadataManager = mock(GroupMetadataManager.class);
         OffsetMetadataManager offsetMetadataManager = mock(OffsetMetadataManager.class);
+        CoordinatorMetrics coordinatorMetrics = mock(CoordinatorMetrics.class);
+        CoordinatorMetricsShard metricsShard = mock(CoordinatorMetricsShard.class);
         GroupCoordinatorShard coordinator = new GroupCoordinatorShard(
             new LogContext(),
             groupMetadataManager,
             offsetMetadataManager,
-            new MockCoordinatorTimer<>(new MockTime()),
-            mock(GroupCoordinatorConfig.class)
+            Time.SYSTEM,
+            new MockCoordinatorTimer<>(Time.SYSTEM),
+            mock(GroupCoordinatorConfig.class),
+            coordinatorMetrics,
+            metricsShard
         );
 
         ConsumerGroupMemberMetadataKey key = new ConsumerGroupMemberMetadataKey();
         ConsumerGroupMemberMetadataValue value = new ConsumerGroupMemberMetadataValue();
 
-        coordinator.replay(new Record(
+        coordinator.replay(RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, new Record(
             new ApiMessageAndVersion(key, (short) 5),
             new ApiMessageAndVersion(value, (short) 0)
         ));
@@ -421,17 +563,22 @@ public class GroupCoordinatorShardTest {
     public void testReplayConsumerGroupMemberMetadataWithNullValue() {
         GroupMetadataManager groupMetadataManager = mock(GroupMetadataManager.class);
         OffsetMetadataManager offsetMetadataManager = mock(OffsetMetadataManager.class);
+        CoordinatorMetrics coordinatorMetrics = mock(CoordinatorMetrics.class);
+        CoordinatorMetricsShard metricsShard = mock(CoordinatorMetricsShard.class);
         GroupCoordinatorShard coordinator = new GroupCoordinatorShard(
             new LogContext(),
             groupMetadataManager,
             offsetMetadataManager,
-            new MockCoordinatorTimer<>(new MockTime()),
-            mock(GroupCoordinatorConfig.class)
+            Time.SYSTEM,
+            new MockCoordinatorTimer<>(Time.SYSTEM),
+            mock(GroupCoordinatorConfig.class),
+            coordinatorMetrics,
+            metricsShard
         );
 
         ConsumerGroupMemberMetadataKey key = new ConsumerGroupMemberMetadataKey();
 
-        coordinator.replay(new Record(
+        coordinator.replay(RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, new Record(
             new ApiMessageAndVersion(key, (short) 5),
             null
         ));
@@ -443,18 +590,23 @@ public class GroupCoordinatorShardTest {
     public void testReplayConsumerGroupTargetAssignmentMetadata() {
         GroupMetadataManager groupMetadataManager = mock(GroupMetadataManager.class);
         OffsetMetadataManager offsetMetadataManager = mock(OffsetMetadataManager.class);
+        CoordinatorMetrics coordinatorMetrics = mock(CoordinatorMetrics.class);
+        CoordinatorMetricsShard metricsShard = mock(CoordinatorMetricsShard.class);
         GroupCoordinatorShard coordinator = new GroupCoordinatorShard(
             new LogContext(),
             groupMetadataManager,
             offsetMetadataManager,
-            new MockCoordinatorTimer<>(new MockTime()),
-            mock(GroupCoordinatorConfig.class)
+            Time.SYSTEM,
+            new MockCoordinatorTimer<>(Time.SYSTEM),
+            mock(GroupCoordinatorConfig.class),
+            coordinatorMetrics,
+            metricsShard
         );
 
         ConsumerGroupTargetAssignmentMetadataKey key = new ConsumerGroupTargetAssignmentMetadataKey();
         ConsumerGroupTargetAssignmentMetadataValue value = new ConsumerGroupTargetAssignmentMetadataValue();
 
-        coordinator.replay(new Record(
+        coordinator.replay(RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, new Record(
             new ApiMessageAndVersion(key, (short) 6),
             new ApiMessageAndVersion(value, (short) 0)
         ));
@@ -466,17 +618,22 @@ public class GroupCoordinatorShardTest {
     public void testReplayConsumerGroupTargetAssignmentMetadataWithNullValue() {
         GroupMetadataManager groupMetadataManager = mock(GroupMetadataManager.class);
         OffsetMetadataManager offsetMetadataManager = mock(OffsetMetadataManager.class);
+        CoordinatorMetrics coordinatorMetrics = mock(CoordinatorMetrics.class);
+        CoordinatorMetricsShard metricsShard = mock(CoordinatorMetricsShard.class);
         GroupCoordinatorShard coordinator = new GroupCoordinatorShard(
             new LogContext(),
             groupMetadataManager,
             offsetMetadataManager,
-            new MockCoordinatorTimer<>(new MockTime()),
-            mock(GroupCoordinatorConfig.class)
+            Time.SYSTEM,
+            new MockCoordinatorTimer<>(Time.SYSTEM),
+            mock(GroupCoordinatorConfig.class),
+            coordinatorMetrics,
+            metricsShard
         );
 
         ConsumerGroupTargetAssignmentMetadataKey key = new ConsumerGroupTargetAssignmentMetadataKey();
 
-        coordinator.replay(new Record(
+        coordinator.replay(RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, new Record(
             new ApiMessageAndVersion(key, (short) 6),
             null
         ));
@@ -488,18 +645,23 @@ public class GroupCoordinatorShardTest {
     public void testReplayConsumerGroupTargetAssignmentMember() {
         GroupMetadataManager groupMetadataManager = mock(GroupMetadataManager.class);
         OffsetMetadataManager offsetMetadataManager = mock(OffsetMetadataManager.class);
+        CoordinatorMetrics coordinatorMetrics = mock(CoordinatorMetrics.class);
+        CoordinatorMetricsShard metricsShard = mock(CoordinatorMetricsShard.class);
         GroupCoordinatorShard coordinator = new GroupCoordinatorShard(
             new LogContext(),
             groupMetadataManager,
             offsetMetadataManager,
-            new MockCoordinatorTimer<>(new MockTime()),
-            mock(GroupCoordinatorConfig.class)
+            Time.SYSTEM,
+            new MockCoordinatorTimer<>(Time.SYSTEM),
+            mock(GroupCoordinatorConfig.class),
+            coordinatorMetrics,
+            metricsShard
         );
 
         ConsumerGroupTargetAssignmentMemberKey key = new ConsumerGroupTargetAssignmentMemberKey();
         ConsumerGroupTargetAssignmentMemberValue value = new ConsumerGroupTargetAssignmentMemberValue();
 
-        coordinator.replay(new Record(
+        coordinator.replay(RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, new Record(
             new ApiMessageAndVersion(key, (short) 7),
             new ApiMessageAndVersion(value, (short) 0)
         ));
@@ -511,17 +673,22 @@ public class GroupCoordinatorShardTest {
     public void testReplayConsumerGroupTargetAssignmentMemberKeyWithNullValue() {
         GroupMetadataManager groupMetadataManager = mock(GroupMetadataManager.class);
         OffsetMetadataManager offsetMetadataManager = mock(OffsetMetadataManager.class);
+        CoordinatorMetrics coordinatorMetrics = mock(CoordinatorMetrics.class);
+        CoordinatorMetricsShard metricsShard = mock(CoordinatorMetricsShard.class);
         GroupCoordinatorShard coordinator = new GroupCoordinatorShard(
             new LogContext(),
             groupMetadataManager,
             offsetMetadataManager,
-            new MockCoordinatorTimer<>(new MockTime()),
-            mock(GroupCoordinatorConfig.class)
+            Time.SYSTEM,
+            new MockCoordinatorTimer<>(Time.SYSTEM),
+            mock(GroupCoordinatorConfig.class),
+            coordinatorMetrics,
+            metricsShard
         );
 
         ConsumerGroupTargetAssignmentMemberKey key = new ConsumerGroupTargetAssignmentMemberKey();
 
-        coordinator.replay(new Record(
+        coordinator.replay(RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, new Record(
             new ApiMessageAndVersion(key, (short) 7),
             null
         ));
@@ -533,18 +700,23 @@ public class GroupCoordinatorShardTest {
     public void testReplayConsumerGroupCurrentMemberAssignment() {
         GroupMetadataManager groupMetadataManager = mock(GroupMetadataManager.class);
         OffsetMetadataManager offsetMetadataManager = mock(OffsetMetadataManager.class);
+        CoordinatorMetrics coordinatorMetrics = mock(CoordinatorMetrics.class);
+        CoordinatorMetricsShard metricsShard = mock(CoordinatorMetricsShard.class);
         GroupCoordinatorShard coordinator = new GroupCoordinatorShard(
             new LogContext(),
             groupMetadataManager,
             offsetMetadataManager,
-            new MockCoordinatorTimer<>(new MockTime()),
-            mock(GroupCoordinatorConfig.class)
+            Time.SYSTEM,
+            new MockCoordinatorTimer<>(Time.SYSTEM),
+            mock(GroupCoordinatorConfig.class),
+            coordinatorMetrics,
+            metricsShard
         );
 
         ConsumerGroupCurrentMemberAssignmentKey key = new ConsumerGroupCurrentMemberAssignmentKey();
         ConsumerGroupCurrentMemberAssignmentValue value = new ConsumerGroupCurrentMemberAssignmentValue();
 
-        coordinator.replay(new Record(
+        coordinator.replay(RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, new Record(
             new ApiMessageAndVersion(key, (short) 8),
             new ApiMessageAndVersion(value, (short) 0)
         ));
@@ -556,17 +728,22 @@ public class GroupCoordinatorShardTest {
     public void testReplayConsumerGroupCurrentMemberAssignmentWithNullValue() {
         GroupMetadataManager groupMetadataManager = mock(GroupMetadataManager.class);
         OffsetMetadataManager offsetMetadataManager = mock(OffsetMetadataManager.class);
+        CoordinatorMetrics coordinatorMetrics = mock(CoordinatorMetrics.class);
+        CoordinatorMetricsShard metricsShard = mock(CoordinatorMetricsShard.class);
         GroupCoordinatorShard coordinator = new GroupCoordinatorShard(
             new LogContext(),
             groupMetadataManager,
             offsetMetadataManager,
-            new MockCoordinatorTimer<>(new MockTime()),
-            mock(GroupCoordinatorConfig.class)
+            Time.SYSTEM,
+            new MockCoordinatorTimer<>(Time.SYSTEM),
+            mock(GroupCoordinatorConfig.class),
+            coordinatorMetrics,
+            metricsShard
         );
 
         ConsumerGroupCurrentMemberAssignmentKey key = new ConsumerGroupCurrentMemberAssignmentKey();
 
-        coordinator.replay(new Record(
+        coordinator.replay(RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, new Record(
             new ApiMessageAndVersion(key, (short) 8),
             null
         ));
@@ -578,36 +755,53 @@ public class GroupCoordinatorShardTest {
     public void testReplayKeyCannotBeNull() {
         GroupMetadataManager groupMetadataManager = mock(GroupMetadataManager.class);
         OffsetMetadataManager offsetMetadataManager = mock(OffsetMetadataManager.class);
+        CoordinatorMetrics coordinatorMetrics = mock(CoordinatorMetrics.class);
+        CoordinatorMetricsShard metricsShard = mock(CoordinatorMetricsShard.class);
         GroupCoordinatorShard coordinator = new GroupCoordinatorShard(
             new LogContext(),
             groupMetadataManager,
             offsetMetadataManager,
-            new MockCoordinatorTimer<>(new MockTime()),
-            mock(GroupCoordinatorConfig.class)
+            Time.SYSTEM,
+            new MockCoordinatorTimer<>(Time.SYSTEM),
+            mock(GroupCoordinatorConfig.class),
+            coordinatorMetrics,
+            metricsShard
         );
 
-        assertThrows(NullPointerException.class, () -> coordinator.replay(new Record(null, null)));
+        assertThrows(NullPointerException.class, () ->
+            coordinator.replay(
+                RecordBatch.NO_PRODUCER_ID,
+                RecordBatch.NO_PRODUCER_EPOCH,
+                new Record(null, null))
+        );
     }
 
     @Test
     public void testReplayWithUnsupportedVersion() {
         GroupMetadataManager groupMetadataManager = mock(GroupMetadataManager.class);
         OffsetMetadataManager offsetMetadataManager = mock(OffsetMetadataManager.class);
+        CoordinatorMetrics coordinatorMetrics = mock(CoordinatorMetrics.class);
+        CoordinatorMetricsShard metricsShard = mock(CoordinatorMetricsShard.class);
         GroupCoordinatorShard coordinator = new GroupCoordinatorShard(
             new LogContext(),
             groupMetadataManager,
             offsetMetadataManager,
-            new MockCoordinatorTimer<>(new MockTime()),
-            mock(GroupCoordinatorConfig.class)
+            Time.SYSTEM,
+            new MockCoordinatorTimer<>(Time.SYSTEM),
+            mock(GroupCoordinatorConfig.class),
+            coordinatorMetrics,
+            metricsShard
         );
 
         ConsumerGroupCurrentMemberAssignmentKey key = new ConsumerGroupCurrentMemberAssignmentKey();
         ConsumerGroupCurrentMemberAssignmentValue value = new ConsumerGroupCurrentMemberAssignmentValue();
 
-        assertThrows(IllegalStateException.class, () -> coordinator.replay(new Record(
-            new ApiMessageAndVersion(key, (short) 255),
-            new ApiMessageAndVersion(value, (short) 0)
-        )));
+        assertThrows(IllegalStateException.class, () ->
+            coordinator.replay(RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, new Record(
+                new ApiMessageAndVersion(key, (short) 255),
+                new ApiMessageAndVersion(value, (short) 0)
+            ))
+        );
     }
 
     @Test
@@ -615,12 +809,17 @@ public class GroupCoordinatorShardTest {
         MetadataImage image = MetadataImage.EMPTY;
         GroupMetadataManager groupMetadataManager = mock(GroupMetadataManager.class);
         OffsetMetadataManager offsetMetadataManager = mock(OffsetMetadataManager.class);
+        CoordinatorMetrics coordinatorMetrics = mock(CoordinatorMetrics.class);
+        CoordinatorMetricsShard metricsShard = mock(CoordinatorMetricsShard.class);
         GroupCoordinatorShard coordinator = new GroupCoordinatorShard(
             new LogContext(),
             groupMetadataManager,
             offsetMetadataManager,
-            new MockCoordinatorTimer<>(new MockTime()),
-            mock(GroupCoordinatorConfig.class)
+            Time.SYSTEM,
+            new MockCoordinatorTimer<>(Time.SYSTEM),
+            mock(GroupCoordinatorConfig.class),
+            coordinatorMetrics,
+            metricsShard
         );
 
         coordinator.onLoaded(image);
@@ -637,18 +836,23 @@ public class GroupCoordinatorShardTest {
     public void testReplayGroupMetadata() {
         GroupMetadataManager groupMetadataManager = mock(GroupMetadataManager.class);
         OffsetMetadataManager offsetMetadataManager = mock(OffsetMetadataManager.class);
+        CoordinatorMetrics coordinatorMetrics = mock(CoordinatorMetrics.class);
+        CoordinatorMetricsShard metricsShard = mock(CoordinatorMetricsShard.class);
         GroupCoordinatorShard coordinator = new GroupCoordinatorShard(
             new LogContext(),
             groupMetadataManager,
             offsetMetadataManager,
-            new MockCoordinatorTimer<>(new MockTime()),
-            mock(GroupCoordinatorConfig.class)
+            Time.SYSTEM,
+            new MockCoordinatorTimer<>(Time.SYSTEM),
+            mock(GroupCoordinatorConfig.class),
+            coordinatorMetrics,
+            metricsShard
         );
 
         GroupMetadataKey key = new GroupMetadataKey();
         GroupMetadataValue value = new GroupMetadataValue();
 
-        coordinator.replay(new Record(
+        coordinator.replay(RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, new Record(
             new ApiMessageAndVersion(key, (short) 2),
             new ApiMessageAndVersion(value, (short) 4)
         ));
@@ -660,17 +864,22 @@ public class GroupCoordinatorShardTest {
     public void testReplayGroupMetadataWithNullValue() {
         GroupMetadataManager groupMetadataManager = mock(GroupMetadataManager.class);
         OffsetMetadataManager offsetMetadataManager = mock(OffsetMetadataManager.class);
+        CoordinatorMetrics coordinatorMetrics = mock(CoordinatorMetrics.class);
+        CoordinatorMetricsShard metricsShard = mock(CoordinatorMetricsShard.class);
         GroupCoordinatorShard coordinator = new GroupCoordinatorShard(
             new LogContext(),
             groupMetadataManager,
             offsetMetadataManager,
-            new MockCoordinatorTimer<>(new MockTime()),
-            mock(GroupCoordinatorConfig.class)
+            Time.SYSTEM,
+            new MockCoordinatorTimer<>(Time.SYSTEM),
+            mock(GroupCoordinatorConfig.class),
+            coordinatorMetrics,
+            metricsShard
         );
 
         GroupMetadataKey key = new GroupMetadataKey();
 
-        coordinator.replay(new Record(
+        coordinator.replay(RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, new Record(
             new ApiMessageAndVersion(key, (short) 2),
             null
         ));
@@ -688,8 +897,11 @@ public class GroupCoordinatorShardTest {
             new LogContext(),
             groupMetadataManager,
             offsetMetadataManager,
+            mockTime,
             timer,
-            GroupCoordinatorConfigTest.createGroupCoordinatorConfig(4096, 1000L, 24 * 60)
+            GroupCoordinatorConfigTest.createGroupCoordinatorConfig(4096, 1000L, 24 * 60),
+            mock(CoordinatorMetrics.class),
+            mock(CoordinatorMetricsShard.class)
         );
         MetadataImage image = MetadataImage.EMPTY;
 
@@ -711,13 +923,17 @@ public class GroupCoordinatorShardTest {
     public void testCleanupGroupMetadata() {
         GroupMetadataManager groupMetadataManager = mock(GroupMetadataManager.class);
         OffsetMetadataManager offsetMetadataManager = mock(OffsetMetadataManager.class);
-        MockCoordinatorTimer<Void, Record> timer = new MockCoordinatorTimer<>(new MockTime());
+        Time mockTime = new MockTime();
+        MockCoordinatorTimer<Void, Record> timer = new MockCoordinatorTimer<>(mockTime);
         GroupCoordinatorShard coordinator = new GroupCoordinatorShard(
             new LogContext(),
             groupMetadataManager,
             offsetMetadataManager,
+            mockTime,
             timer,
-            mock(GroupCoordinatorConfig.class)
+            mock(GroupCoordinatorConfig.class),
+            mock(CoordinatorMetrics.class),
+            mock(CoordinatorMetricsShard.class)
         );
 
         Record offsetCommitTombstone = RecordHelpers.newOffsetCommitTombstoneRecord("group-id", "topic", 0);
@@ -754,5 +970,35 @@ public class GroupCoordinatorShardTest {
         verify(offsetMetadataManager, times(1)).cleanupExpiredOffsets(eq("other-group-id"), any());
         verify(groupMetadataManager, times(1)).maybeDeleteGroup(eq("group-id"), any());
         verify(groupMetadataManager, times(0)).maybeDeleteGroup(eq("other-group-id"), any());
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = TransactionResult.class)
+    public void testReplayEndTransactionMarker(TransactionResult result) {
+        GroupMetadataManager groupMetadataManager = mock(GroupMetadataManager.class);
+        OffsetMetadataManager offsetMetadataManager = mock(OffsetMetadataManager.class);
+        CoordinatorMetrics coordinatorMetrics = mock(CoordinatorMetrics.class);
+        CoordinatorMetricsShard metricsShard = mock(CoordinatorMetricsShard.class);
+        GroupCoordinatorShard coordinator = new GroupCoordinatorShard(
+            new LogContext(),
+            groupMetadataManager,
+            offsetMetadataManager,
+            Time.SYSTEM,
+            new MockCoordinatorTimer<>(Time.SYSTEM),
+            mock(GroupCoordinatorConfig.class),
+            coordinatorMetrics,
+            metricsShard
+        );
+
+        coordinator.replayEndTransactionMarker(
+            100L,
+            (short) 5,
+            result
+        );
+
+        verify(offsetMetadataManager, times(1)).replayEndTransactionMarker(
+            100L,
+            result
+        );
     }
 }

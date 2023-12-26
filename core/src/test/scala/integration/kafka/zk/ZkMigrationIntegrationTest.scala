@@ -17,7 +17,7 @@
 package kafka.zk
 
 import kafka.security.authorizer.AclEntry.{WildcardHost, WildcardPrincipalString}
-import kafka.server.{ConfigType, ControllerRequestCompletionHandler, KafkaConfig}
+import kafka.server.KafkaConfig
 import kafka.test.{ClusterConfig, ClusterGenerator, ClusterInstance}
 import kafka.test.annotation.{AutoStart, ClusterConfigProperty, ClusterTemplate, ClusterTest, Type}
 import kafka.test.junit.ClusterTestExtensions
@@ -45,7 +45,9 @@ import org.apache.kafka.image.{MetadataDelta, MetadataImage, MetadataProvenance}
 import org.apache.kafka.metadata.authorizer.StandardAcl
 import org.apache.kafka.metadata.migration.ZkMigrationLeadershipState
 import org.apache.kafka.raft.RaftConfig
+import org.apache.kafka.server.ControllerRequestCompletionHandler
 import org.apache.kafka.server.common.{ApiMessageAndVersion, MetadataVersion, ProducerIdsBlock}
+import org.apache.kafka.server.config.ConfigType
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertNotEquals, assertNotNull, assertTrue, fail}
 import org.junit.jupiter.api.{Assumptions, Timeout}
 import org.junit.jupiter.api.extension.ExtendWith
@@ -71,7 +73,10 @@ object ZkMigrationIntegrationTest {
       MetadataVersion.IBP_3_5_IV2,
       MetadataVersion.IBP_3_6_IV2,
       MetadataVersion.IBP_3_7_IV0,
-      MetadataVersion.IBP_3_7_IV1
+      MetadataVersion.IBP_3_7_IV1,
+      MetadataVersion.IBP_3_7_IV2,
+      MetadataVersion.IBP_3_7_IV4,
+      MetadataVersion.IBP_3_8_IV0
     ).foreach { mv =>
       val clusterConfig = ClusterConfig.defaultClusterBuilder()
         .metadataVersion(mv)
@@ -478,7 +483,7 @@ class ZkMigrationIntegrationTest {
 
     // Verify the configs exist in ZK
     val zkClient = zkCluster.asInstanceOf[ZkClusterInstance].getUnderlying().zkClient
-    val propsBefore = zkClient.getEntityConfigs(ConfigType.Topic, "test")
+    val propsBefore = zkClient.getEntityConfigs(ConfigType.TOPIC, "test")
     assertEquals("102400", propsBefore.getProperty(TopicConfig.SEGMENT_BYTES_CONFIG))
     assertEquals("300000", propsBefore.getProperty(TopicConfig.SEGMENT_MS_CONFIG))
 
@@ -764,7 +769,7 @@ class ZkMigrationIntegrationTest {
 
   def verifyTopicConfigs(zkClient: KafkaZkClient): Unit = {
     TestUtils.retry(10000) {
-      val propsAfter = zkClient.getEntityConfigs(ConfigType.Topic, "test")
+      val propsAfter = zkClient.getEntityConfigs(ConfigType.TOPIC, "test")
       assertEquals("204800", propsAfter.getProperty(TopicConfig.SEGMENT_BYTES_CONFIG))
       assertFalse(propsAfter.containsKey(TopicConfig.SEGMENT_MS_CONFIG))
     }
@@ -772,20 +777,20 @@ class ZkMigrationIntegrationTest {
 
   def verifyClientQuotas(zkClient: KafkaZkClient): Unit = {
     TestUtils.retry(10000) {
-      assertEquals("1000", zkClient.getEntityConfigs(ConfigType.User, "user1").getProperty("consumer_byte_rate"))
+      assertEquals("1000", zkClient.getEntityConfigs(ConfigType.USER, "user1").getProperty("consumer_byte_rate"))
       assertEquals("800", zkClient.getEntityConfigs("users/user1/clients", "clientA").getProperty("consumer_byte_rate"))
       assertEquals("100", zkClient.getEntityConfigs("users/user1/clients", "clientA").getProperty("producer_byte_rate"))
-      assertEquals("10", zkClient.getEntityConfigs(ConfigType.Ip, "8.8.8.8").getProperty("connection_creation_rate"))
+      assertEquals("10", zkClient.getEntityConfigs(ConfigType.IP, "8.8.8.8").getProperty("connection_creation_rate"))
     }
   }
 
   def verifyUserScramCredentials(zkClient: KafkaZkClient): Unit = {
     TestUtils.retry(10000) {
-      val propertyValue1 = zkClient.getEntityConfigs(ConfigType.User, "user1").getProperty("SCRAM-SHA-256")
+      val propertyValue1 = zkClient.getEntityConfigs(ConfigType.USER, "user1").getProperty("SCRAM-SHA-256")
       val scramCredentials1 = ScramCredentialUtils.credentialFromString(propertyValue1)
       assertEquals(8191, scramCredentials1.iterations)
 
-      val propertyValue2 = zkClient.getEntityConfigs(ConfigType.User, "user2").getProperty("SCRAM-SHA-256")
+      val propertyValue2 = zkClient.getEntityConfigs(ConfigType.USER, "user2").getProperty("SCRAM-SHA-256")
       assertNotNull(propertyValue2)
       val scramCredentials2 = ScramCredentialUtils.credentialFromString(propertyValue2)
       assertEquals(8192, scramCredentials2.iterations)

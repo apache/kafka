@@ -205,16 +205,14 @@ class ControllerApis(
       names => authHelper.filterByAuthorized(request.context, DESCRIBE, TOPIC, names)(n => n),
       names => authHelper.filterByAuthorized(request.context, DELETE, TOPIC, names)(n => n))
     future.handle[Unit] { (results, exception) =>
-      requestHelper.sendResponseMaybeThrottleWithControllerQuota(controllerMutationQuota, request, throttleTimeMs => {
-        if (exception != null) {
-          deleteTopicsRequest.getErrorResponse(throttleTimeMs, exception)
-        } else {
-          val responseData = new DeleteTopicsResponseData().
-            setResponses(new DeletableTopicResultCollection(results.iterator)).
-            setThrottleTimeMs(throttleTimeMs)
-          new DeleteTopicsResponse(responseData)
-        }
-      })
+      val response = if (exception != null) {
+        deleteTopicsRequest.getErrorResponse(exception)
+      } else {
+        val responseData = new DeleteTopicsResponseData()
+          .setResponses(new DeletableTopicResultCollection(results.iterator))
+        new DeleteTopicsResponse(responseData)
+      }
+      requestHelper.sendResponseMaybeThrottleWithControllerQuota(controllerMutationQuota, request, response)
     }
   }
 
@@ -371,14 +369,12 @@ class ControllerApis(
         names => authHelper.filterByAuthorized(request.context, DESCRIBE_CONFIGS, TOPIC,
             names, logIfDenied = false)(identity))
     future.handle[Unit] { (result, exception) =>
-      requestHelper.sendResponseMaybeThrottleWithControllerQuota(controllerMutationQuota, request, throttleTimeMs => {
-        if (exception != null) {
-          createTopicsRequest.getErrorResponse(throttleTimeMs, exception)
-        } else {
-          result.setThrottleTimeMs(throttleTimeMs)
-          new CreateTopicsResponse(result)
-        }
-      })
+      val response = if (exception != null) {
+        createTopicsRequest.getErrorResponse(exception)
+      } else {
+        new CreateTopicsResponse(result)
+      }
+      requestHelper.sendResponseMaybeThrottleWithControllerQuota(controllerMutationQuota, request, response)
     }
   }
 
@@ -802,16 +798,13 @@ class ControllerApis(
       createPartitionsRequest.data(),
       filterAlterAuthorizedTopics)
     future.handle[Unit] { (responses, exception) =>
-      if (exception != null) {
-        requestHelper.handleError(request, exception)
+      val response = if (exception != null) {
+        createPartitionsRequest.getErrorResponse(exception)
       } else {
-        requestHelper.sendResponseMaybeThrottleWithControllerQuota(controllerMutationQuota, request, requestThrottleMs => {
-          val responseData = new CreatePartitionsResponseData().
-            setResults(responses).
-            setThrottleTimeMs(requestThrottleMs)
-          new CreatePartitionsResponse(responseData)
-        })
+        val responseData = new CreatePartitionsResponseData().setResults(responses)
+        new CreatePartitionsResponse(responseData)
       }
+      requestHelper.sendResponseMaybeThrottleWithControllerQuota(controllerMutationQuota, request, response)
     }
   }
 
@@ -1057,12 +1050,14 @@ class ControllerApis(
   }
 
   def handleDescribeCluster(request: RequestChannel.Request): CompletableFuture[Unit] = {
-    // Unlike on the broker, DESCRIBE_CLUSTER on the controller requires a high level of
-    // permissions (ALTER on CLUSTER).
+    // Nearly all RPCs should check MetadataVersion inside the QuorumController. However, this
+    // RPC is consulting a cache which lives outside the QC. So we check MetadataVersion here.
     if (!apiVersionManager.features.metadataVersion().isControllerRegistrationSupported()) {
       throw new UnsupportedVersionException("Direct-to-controller communication is not " +
         "supported with the current MetadataVersion.")
     }
+    // Unlike on the broker, DESCRIBE_CLUSTER on the controller requires a high level of
+    // permissions (ALTER on CLUSTER).
     authHelper.authorizeClusterOperation(request, ALTER)
     val response = authHelper.computeDescribeClusterResponse(
       request,
@@ -1077,11 +1072,13 @@ class ControllerApis(
   }
 
   def handleAssignReplicasToDirs(request: RequestChannel.Request): CompletableFuture[Unit] = {
+    authHelper.authorizeClusterOperation(request, CLUSTER_ACTION)
     val assignReplicasToDirsRequest = request.body[AssignReplicasToDirsRequest]
-
-    // TODO KAFKA-15426
-    requestHelper.sendMaybeThrottle(request,
-      assignReplicasToDirsRequest.getErrorResponse(Errors.UNSUPPORTED_VERSION.exception))
-    CompletableFuture.completedFuture[Unit](())
+    val context = new ControllerRequestContext(request.context.header.data, request.context.principal,
+      OptionalLong.empty())
+    controller.assignReplicasToDirs(context, assignReplicasToDirsRequest.data).thenApply { reply =>
+      requestHelper.sendResponseMaybeThrottle(request,
+        requestThrottleMs => new AssignReplicasToDirsResponse(reply.setThrottleTimeMs(requestThrottleMs)))
+    }
   }
 }

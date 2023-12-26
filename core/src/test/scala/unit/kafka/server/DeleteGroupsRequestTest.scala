@@ -21,7 +21,7 @@ import kafka.test.annotation.{ClusterConfigProperty, ClusterTest, ClusterTestDef
 import kafka.test.junit.ClusterTestExtensions
 import org.apache.kafka.common.message.DescribeGroupsResponseData.DescribedGroup
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
-import org.apache.kafka.coordinator.group.generic.GenericGroupState
+import org.apache.kafka.coordinator.group.classic.ClassicGroupState
 import org.junit.jupiter.api.Assertions.{assertEquals, fail}
 import org.junit.jupiter.api.{Tag, Timeout}
 import org.junit.jupiter.api.extension.ExtendWith
@@ -32,7 +32,6 @@ import org.junit.jupiter.api.extension.ExtendWith
 @Tag("integration")
 class DeleteGroupsRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBaseRequestTest(cluster) {
   @ClusterTest(serverProperties = Array(
-    new ClusterConfigProperty(key = "unstable.api.versions.enable", value = "true"),
     new ClusterConfigProperty(key = "group.coordinator.new.enable", value = "true"),
     new ClusterConfigProperty(key = "group.consumer.max.session.timeout.ms", value = "600000"),
     new ClusterConfigProperty(key = "group.consumer.session.timeout.ms", value = "600000"),
@@ -44,7 +43,6 @@ class DeleteGroupsRequestTest(cluster: ClusterInstance) extends GroupCoordinator
   }
 
   @ClusterTest(serverProperties = Array(
-    new ClusterConfigProperty(key = "unstable.api.versions.enable", value = "true"),
     new ClusterConfigProperty(key = "group.coordinator.new.enable", value = "true"),
     new ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "1"),
     new ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1")
@@ -54,7 +52,6 @@ class DeleteGroupsRequestTest(cluster: ClusterInstance) extends GroupCoordinator
   }
 
   @ClusterTest(clusterType = Type.ALL, serverProperties = Array(
-    new ClusterConfigProperty(key = "unstable.api.versions.enable", value = "false"),
     new ClusterConfigProperty(key = "group.coordinator.new.enable", value = "false"),
     new ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "1"),
     new ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1")
@@ -98,7 +95,8 @@ class DeleteGroupsRequestTest(cluster: ClusterInstance) extends GroupCoordinator
       leaveGroup(
         groupId = "grp",
         memberId = memberId,
-        useNewProtocol = useNewProtocol
+        useNewProtocol = useNewProtocol,
+        version = ApiKeys.LEAVE_GROUP.latestVersion(isUnstableApiEnabled)
       )
 
       deleteGroups(
@@ -122,12 +120,9 @@ class DeleteGroupsRequestTest(cluster: ClusterInstance) extends GroupCoordinator
         assertEquals(
           List(new DescribedGroup()
             .setGroupId("grp")
-            .setGroupState(GenericGroupState.DEAD.toString)
+            .setGroupState(ClassicGroupState.DEAD.toString)
           ),
-          describeGroups(
-            groupIds = List("grp"),
-            version = ApiKeys.DESCRIBE_GROUPS.latestVersion(isUnstableApiEnabled)
-          )
+          describeGroups(List("grp"))
         )
       }
     }

@@ -713,6 +713,7 @@ streamsConfiguration.put(StreamsConfig.DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_CONFIG,
             <ul class="simple">
               <li><code class="docutils literal"><span class="pre">none</span></code>. This is the default value which means rack aware task assignment will be disabled.</li>
               <li><code class="docutils literal"><span class="pre">min_traffic</span></code>. This settings means that the rack aware task assigner will compute an assignment which tries to minimize cross rack traffic.</li>
+              <li><code class="docutils literal"><span class="pre">balance_subtopology</span></code>. This settings means that the rack aware task assigner will compute an assignment which will try to balance tasks from same subtopology to different clients and minimize cross rack traffic on top of that.</li>
             </ul>
             <p>
               This config can be used together with <a class="reference internal" href="#rack-aware-assignment-non-overlap-cost">rack.aware.assignment.non_overlap_cost</a> and

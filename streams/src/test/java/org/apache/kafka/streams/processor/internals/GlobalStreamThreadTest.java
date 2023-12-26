@@ -19,9 +19,12 @@ package org.apache.kafka.streams.processor.internals;
 import org.apache.kafka.clients.consumer.InvalidOffsetException;
 import org.apache.kafka.clients.consumer.MockConsumer;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
+import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
@@ -44,10 +47,12 @@ import org.junit.Before;
 import org.junit.Test;
 
 import java.io.File;
+import java.time.Duration;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.ExecutionException;
 
 import static org.apache.kafka.streams.processor.internals.GlobalStreamThread.State.DEAD;
 import static org.apache.kafka.streams.processor.internals.GlobalStreamThread.State.RUNNING;
@@ -58,6 +63,7 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.core.IsInstanceOf.instanceOf;
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.junit.Assert.fail;
 
@@ -294,6 +300,104 @@ public class GlobalStreamThreadTest {
 
         assertThat(globalStore.isOpen(), is(false));
         assertFalse(new File(baseDirectoryName + File.separator + "testAppId" + File.separator + "global").exists());
+    }
+
+    @Test
+    public void shouldGetGlobalConsumerClientInstanceId() throws Exception {
+        initializeConsumer();
+        startAndSwallowError();
+
+        final Uuid instanceId = Uuid.randomUuid();
+        mockConsumer.setClientInstanceId(instanceId);
+
+        try {
+            final KafkaFuture<Uuid> future = globalStreamThread.globalConsumerInstanceId(Duration.ZERO);
+            final Uuid result = future.get();
+
+            assertThat(result, equalTo(instanceId));
+        } finally {
+            globalStreamThread.shutdown();
+            globalStreamThread.join();
+        }
+    }
+
+    @Test
+    public void shouldGetGlobalConsumerClientInstanceIdWithInternalTimeoutException() throws Exception {
+        initializeConsumer();
+        startAndSwallowError();
+
+        final Uuid instanceId = Uuid.randomUuid();
+        mockConsumer.setClientInstanceId(instanceId);
+        mockConsumer.injectTimeoutException(5);
+
+        try {
+            final KafkaFuture<Uuid> future = globalStreamThread.globalConsumerInstanceId(Duration.ZERO);
+            final Uuid result = future.get();
+
+            assertThat(result, equalTo(instanceId));
+        } finally {
+            globalStreamThread.shutdown();
+            globalStreamThread.join();
+        }
+    }
+
+    @Test
+    public void shouldReturnNullIfTelemetryDisabled() throws Exception {
+        initializeConsumer();
+        mockConsumer.disableTelemetry();
+        startAndSwallowError();
+
+        try {
+            final KafkaFuture<Uuid> future = globalStreamThread.globalConsumerInstanceId(Duration.ZERO);
+            final Uuid result = future.get();
+
+            assertThat(result, equalTo(null));
+        } finally {
+            globalStreamThread.shutdown();
+            globalStreamThread.join();
+        }
+    }
+
+    @Test
+    public void shouldReturnErrorIfInstanceIdNotInitialized() throws Exception {
+        initializeConsumer();
+        startAndSwallowError();
+
+        try {
+            final KafkaFuture<Uuid> future = globalStreamThread.globalConsumerInstanceId(Duration.ZERO);
+
+            final ExecutionException error = assertThrows(ExecutionException.class, future::get);
+            assertThat(error.getCause(), instanceOf(UnsupportedOperationException.class));
+            assertThat(error.getCause().getMessage(), equalTo("clientInstanceId not set"));
+        } finally {
+            globalStreamThread.shutdown();
+            globalStreamThread.join();
+        }
+    }
+
+    @Test
+    public void shouldTimeOutOnGlobalConsumerInstanceId() throws Exception {
+        initializeConsumer();
+        startAndSwallowError();
+
+        final Uuid instanceId = Uuid.randomUuid();
+        mockConsumer.setClientInstanceId(instanceId);
+        mockConsumer.injectTimeoutException(-1);
+
+        try {
+            final KafkaFuture<Uuid> future = globalStreamThread.globalConsumerInstanceId(Duration.ZERO);
+            time.sleep(1L);
+
+            final ExecutionException error = assertThrows(ExecutionException.class, future::get);
+            assertThat(error.getCause(), instanceOf(TimeoutException.class));
+            assertThat(
+                error.getCause().getMessage(),
+                equalTo("Could not retrieve global consumer client instance id.")
+            );
+        } finally {
+            globalStreamThread.shutdown();
+            globalStreamThread.join();
+        }
     }
 
     private void initializeConsumer() {

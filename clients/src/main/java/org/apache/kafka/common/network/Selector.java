@@ -334,9 +334,10 @@ public class Selector implements Selectable, AutoCloseable {
     }
 
     private KafkaChannel buildAndAttachKafkaChannel(SocketChannel socketChannel, String id, SelectionKey key) throws IOException {
+        ChannelMetadataRegistry metadataRegistry = null;
         try {
-            KafkaChannel channel = channelBuilder.buildChannel(id, key, maxReceiveSize, memoryPool,
-                new SelectorChannelMetadataRegistry());
+            metadataRegistry = new SelectorChannelMetadataRegistry();
+            KafkaChannel channel = channelBuilder.buildChannel(id, key, maxReceiveSize, memoryPool, metadataRegistry);
             key.attach(channel);
             return channel;
         } catch (Exception e) {
@@ -345,6 +346,9 @@ public class Selector implements Selectable, AutoCloseable {
             } finally {
                 key.cancel();
             }
+            // Ideally, these resources are closed by the KafkaChannel but if the KafkaChannel is not created to an
+            // error, this builder should close the resources it has created instead.
+            Utils.closeQuietly(metadataRegistry, "metadataRegistry");
             throw new IOException("Channel could not be created for socket " + socketChannel, e);
         }
     }
