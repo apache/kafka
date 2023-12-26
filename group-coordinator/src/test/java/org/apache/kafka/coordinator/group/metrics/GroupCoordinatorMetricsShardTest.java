@@ -26,6 +26,7 @@ import org.apache.kafka.coordinator.group.consumer.ConsumerGroup;
 import org.apache.kafka.coordinator.group.consumer.ConsumerGroupMember;
 import org.apache.kafka.coordinator.group.classic.ClassicGroup;
 import org.apache.kafka.coordinator.group.classic.ClassicGroupState;
+import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.timeline.SnapshotRegistry;
 import org.junit.jupiter.api.Test;
 
@@ -42,6 +43,8 @@ import static org.apache.kafka.coordinator.group.metrics.MetricsTestUtils.metric
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class GroupCoordinatorMetricsShardTest {
+
+    private MetadataImage metadataImage = MetadataImage.EMPTY;
 
     @Test
     public void testTimelineGaugeCounters() {
@@ -191,10 +194,10 @@ public class GroupCoordinatorMetricsShardTest {
         ConsumerGroupMember member1 = group1.getOrMaybeCreateMember("member-id", true);
         ConsumerGroupMember member2 = group2.getOrMaybeCreateMember("member-id", true);
         ConsumerGroupMember member3 = group3.getOrMaybeCreateMember("member-id", true);
-        group0.updateMember(member0);
-        group1.updateMember(member1);
-        group2.updateMember(member2);
-        group3.updateMember(member3);
+        group0.updateMember(member0, metadataImage.topics());
+        group1.updateMember(member1, metadataImage.topics());
+        group2.updateMember(member2, metadataImage.topics());
+        group3.updateMember(member3, metadataImage.topics());
 
         snapshotRegistry.getOrCreateSnapshot(2000);
         shard.commitUpTo(2000);

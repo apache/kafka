@@ -977,6 +977,7 @@ public class GroupMetadataManager {
         String clientId,
         String clientHost,
         List<String> subscribedTopicNames,
+        String subscribedTopicRegex,
         String assignorName,
         List<ConsumerGroupHeartbeatRequestData.TopicPartitions> ownedTopicPartitions
     ) throws ApiException {
@@ -1043,6 +1044,7 @@ public class GroupMetadataManager {
             .maybeUpdateRebalanceTimeoutMs(ofSentinel(rebalanceTimeoutMs))
             .maybeUpdateServerAssignorName(Optional.ofNullable(assignorName))
             .maybeUpdateSubscribedTopicNames(Optional.ofNullable(subscribedTopicNames))
+            .maybeUpdateSubscribedTopicRegex(Optional.ofNullable(subscribedTopicRegex))
             .setClientId(clientId)
             .setClientHost(clientHost)
             .build();
@@ -1460,6 +1462,7 @@ public class GroupMetadataManager {
                 context.clientId(),
                 context.clientAddress.toString(),
                 request.subscribedTopicNames(),
+                request.subscribedTopicRegex(),
                 request.serverAssignor(),
                 request.topicPartitions()
             );

@@ -123,7 +123,7 @@ public class ConsumerGroupTest {
             .setInstanceId("instance")
             .build();
 
-        consumerGroup.updateMember(member);
+        consumerGroup.updateMember(member, metadataImage.topics());
 
         assertEquals(member, consumerGroup.staticMember("instance"));
         assertEquals(member, consumerGroup.getOrMaybeCreateMember("member", false));
@@ -155,9 +155,9 @@ public class ConsumerGroupTest {
             .setInstanceId("instance")
             .build();
 
-        consumerGroup.updateMember(member);
+        consumerGroup.updateMember(member, metadataImage.topics());
 
-        consumerGroup.removeMember("member");
+        consumerGroup.removeMember("member",  metadataImage.topics());
         assertFalse(consumerGroup.hasMember("member"));
         assertNull(consumerGroup.staticMember("instance"));
         assertNull(consumerGroup.staticMemberId("instance"));
@@ -959,9 +959,9 @@ public class ConsumerGroupTest {
         group.updateMember(new ConsumerGroupMember.Builder("member1")
                 .setSubscribedTopicNames(Collections.singletonList("foo"))
                 .setServerAssignorName("assignorName")
-                .build());
+                .build(), metadataImage.topics());
         group.updateMember(new ConsumerGroupMember.Builder("member2")
-                .build());
+                .build(), metadataImage.topics());
         snapshotRegistry.getOrCreateSnapshot(1);
 
         ConsumerGroupDescribeResponseData.DescribedGroup expected = new ConsumerGroupDescribeResponseData.DescribedGroup()
@@ -1003,7 +1003,7 @@ public class ConsumerGroupTest {
             .setTargetMemberEpoch(1)
             .build();
 
-        consumerGroup.updateMember(member);
+        consumerGroup.updateMember(member, metadataImage.topics());
 
         assertEquals(ConsumerGroup.ConsumerGroupState.RECONCILING, consumerGroup.state());
         verify(metrics, times(1)).onConsumerGroupStateTransition(ConsumerGroup.ConsumerGroupState.EMPTY, ConsumerGroup.ConsumerGroupState.RECONCILING);
@@ -1018,7 +1018,7 @@ public class ConsumerGroupTest {
         assertEquals(ConsumerGroup.ConsumerGroupState.STABLE, consumerGroup.state());
         verify(metrics, times(1)).onConsumerGroupStateTransition(ConsumerGroup.ConsumerGroupState.ASSIGNING, ConsumerGroup.ConsumerGroupState.STABLE);
 
-        consumerGroup.removeMember("member");
+        consumerGroup.removeMember("member", metadataImage.topics());
 
         assertEquals(ConsumerGroup.ConsumerGroupState.EMPTY, consumerGroup.state());
         verify(metrics, times(1)).onConsumerGroupStateTransition(ConsumerGroup.ConsumerGroupState.STABLE, ConsumerGroup.ConsumerGroupState.EMPTY);

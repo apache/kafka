@@ -90,6 +90,8 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 public class OffsetMetadataManagerTest {
+    private MetadataImage metadataImage = MetadataImage.EMPTY;
+
     static class OffsetMetadataManagerTestContext {
         public static class Builder {
             private final MockTime time = new MockTime();
@@ -1341,8 +1343,7 @@ public class OffsetMetadataManagerTest {
             .setMemberEpoch(10)
             .setTargetMemberEpoch(10)
             .setPreviousMemberEpoch(10)
-            .build()
-        );
+            .build(), metadataImage.topics());
 
         CoordinatorResult<TxnOffsetCommitResponseData, Record> result = context.commitTransactionalOffset(
             new TxnOffsetCommitRequestData()
@@ -1461,8 +1462,7 @@ public class OffsetMetadataManagerTest {
             .setMemberEpoch(10)
             .setTargetMemberEpoch(10)
             .setPreviousMemberEpoch(10)
-            .build()
-        );
+            .build(), metadataImage.topics());
 
         assertThrows(IllegalGenerationException.class, () -> context.commitTransactionalOffset(
             new TxnOffsetCommitRequestData()
