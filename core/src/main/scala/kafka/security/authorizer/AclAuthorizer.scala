@@ -106,7 +106,7 @@ object AclAuthorizer {
       // be sure to force creation since the zkSslClientEnable property in the kafkaConfig could be false
       val zkClientConfig = KafkaServer.zkClientConfigFromKafkaConfig(kafkaConfig, true)
       // add in any prefixed overlays
-      KafkaConfig.ZkSslConfigToSystemPropertyMap.forKeyValue { (kafkaProp, sysProp) =>
+      ZkConfig.ZK_SSL_CONFIG_TO_SYSTEM_PROPERTY_MAP.asScala.forKeyValue { (kafkaProp, sysProp) =>
         configMap.get(AclAuthorizer.configPrefix + kafkaProp).foreach { prefixedValue =>
           zkClientConfig.setProperty(sysProp,
             if (kafkaProp == ZkConfig.ZK_SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_CONFIG)

@@ -126,7 +126,7 @@ object ZkSecurityMigrator extends Logging {
   }
 
   def createZkClientConfigFromFile(filename: String) : ZKClientConfig = {
-    val zkTlsConfigFileProps = Utils.loadProps(filename, KafkaConfig.ZkSslConfigToSystemPropertyMap.keys.toList.asJava)
+    val zkTlsConfigFileProps = Utils.loadProps(filename, ZkConfig.ZK_SSL_CONFIG_TO_SYSTEM_PROPERTY_MAP.asScala.keys.toList.asJava)
     val zkClientConfig = new ZKClientConfig() // Initializes based on any system properties that have been set
     // Now override any set system properties with explicitly-provided values from the config file
     // Emit INFO logs due to camel-case property names encouraging mistakes -- help people see mistakes they make
@@ -158,7 +158,7 @@ object ZkSecurityMigrator extends Logging {
       "before migration. If not, exit the command.")
     val zkTlsConfigFile = parser.accepts(tlsConfigFileOption,
       "Identifies the file where ZooKeeper client TLS connectivity properties are defined.  Any properties other than " +
-        KafkaConfig.ZkSslConfigToSystemPropertyMap.keys.mkString(", ") + " are ignored.")
+        ZkConfig.ZK_SSL_CONFIG_TO_SYSTEM_PROPERTY_MAP.asScala.keys.mkString(", ") + " are ignored.")
       .withRequiredArg().describedAs("ZooKeeper TLS configuration").ofType(classOf[String])
     options = parser.parse(args : _*)
   }
