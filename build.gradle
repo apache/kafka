@@ -2706,6 +2706,7 @@ project(':jmh-benchmarks') {
     implementation project(':core')
     implementation project(':connect:api')
     implementation project(':connect:transforms')
+    implementation project(':connect:json')
     implementation project(':clients').sourceSets.test.output
     implementation project(':core').sourceSets.test.output
     implementation project(':server-common').sourceSets.test.output
@@ -2852,6 +2853,7 @@ project(':connect:json') {
 
     api libs.jacksonDatabind
     api libs.jacksonJDK8Datatypes
+    api libs.jacksonAfterburner
 
     implementation libs.slf4jApi
 
