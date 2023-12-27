@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
+import java.util.concurrent.atomic.AtomicReference;
 import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringSerializer;
@@ -53,6 +54,7 @@ import org.apache.kafka.streams.state.internals.WindowStoreBuilder;
 import org.apache.kafka.streams.state.internals.LeftOrRightValueSerde;
 import org.apache.kafka.streams.state.internals.LeftOrRightValue;
 import org.apache.kafka.streams.state.internals.InMemoryWindowBytesStoreSupplier;
+import org.apache.kafka.streams.state.internals.WrappedStateStore;
 import org.apache.kafka.test.MockApiProcessor;
 import org.apache.kafka.test.MockApiProcessorSupplier;
 import org.apache.kafka.test.MockValueJoiner;
@@ -420,6 +422,32 @@ public class KStreamKStreamJoinTest {
         // neither side is supplied explicitly, so we call the dsl supplier twice
         runJoin(streamJoined, joinWindows);
         assertThat(TrackingDslStoreSuppliers.NUM_CALLS.get(), is(2));
+    }
+
+    public static class CapturingStoreSuppliers extends BuiltInDslStoreSuppliers.RocksDBDslStoreSuppliers {
+
+        final AtomicReference<WindowBytesStoreSupplier> capture = new AtomicReference<>();
+
+        @Override
+        public WindowBytesStoreSupplier windowStore(final DslWindowParams params) {
+            final WindowBytesStoreSupplier store = super.windowStore(params);
+            capture.set(store);
+            return store;
+        }
+    }
+
+    @Test
+    public void shouldJoinWithNonTimestampedStore() {
+        final JoinWindows joinWindows = JoinWindows.ofTimeDifferenceWithNoGrace(ofMillis(100L));
+
+        final CapturingStoreSuppliers storeSuppliers = new CapturingStoreSuppliers();
+        final StreamJoined<String, Integer, Integer> streamJoined =
+                StreamJoined.with(Serdes.String(), Serdes.Integer(), Serdes.Integer())
+                        .withDslStoreSuppliers(storeSuppliers);
+
+        runJoin(streamJoined, joinWindows);
+        assertThat("Expected stream joined to supply builders that create non-timestamped stores",
+                !WrappedStateStore.isTimestamped(storeSuppliers.capture.get().get()));
     }
 
     @Test

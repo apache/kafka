@@ -42,9 +42,9 @@ import org.apache.kafka.coordinator.group.generated.GroupMetadataKey;
 import org.apache.kafka.coordinator.group.generated.GroupMetadataValue;
 import org.apache.kafka.coordinator.group.generated.OffsetCommitKey;
 import org.apache.kafka.coordinator.group.generated.OffsetCommitValue;
-import org.apache.kafka.coordinator.group.generic.GenericGroup;
-import org.apache.kafka.coordinator.group.generic.GenericGroupMember;
-import org.apache.kafka.coordinator.group.generic.GenericGroupState;
+import org.apache.kafka.coordinator.group.classic.ClassicGroup;
+import org.apache.kafka.coordinator.group.classic.ClassicGroupMember;
+import org.apache.kafka.coordinator.group.classic.ClassicGroupState;
 import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetricsShard;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.common.MetadataVersion;
@@ -525,10 +525,10 @@ public class RecordHelpersTest {
                     .setMembers(expectedMembers),
                 expectedGroupMetadataValueVersion));
 
-        GenericGroup group = new GenericGroup(
+        ClassicGroup group = new ClassicGroup(
             new LogContext(),
             "group-id",
-            GenericGroupState.PREPARING_REBALANCE,
+            ClassicGroupState.PREPARING_REBALANCE,
             time,
             mock(GroupCoordinatorMetricsShard.class)
         );
@@ -541,7 +541,7 @@ public class RecordHelpersTest {
                 .setName("range")
                 .setMetadata(member.subscription()));
 
-            group.add(new GenericGroupMember(
+            group.add(new ClassicGroupMember(
                 member.memberId(),
                 Optional.of(member.groupInstanceId()),
                 member.clientId(),
@@ -550,7 +550,7 @@ public class RecordHelpersTest {
                 member.sessionTimeout(),
                 "consumer",
                 protocols,
-                GenericGroupMember.EMPTY_ASSIGNMENT
+                ClassicGroupMember.EMPTY_ASSIGNMENT
             ));
 
             assignment.put(member.memberId(), member.assignment());
@@ -596,10 +596,10 @@ public class RecordHelpersTest {
                 .setAssignment(new byte[]{1, 2})
         );
 
-        GenericGroup group = new GenericGroup(
+        ClassicGroup group = new ClassicGroup(
             new LogContext(),
             "group-id",
-            GenericGroupState.PREPARING_REBALANCE,
+            ClassicGroupState.PREPARING_REBALANCE,
             time,
             mock(GroupCoordinatorMetricsShard.class)
         );
@@ -610,7 +610,7 @@ public class RecordHelpersTest {
                 .setName("range")
                 .setMetadata(null));
 
-            group.add(new GenericGroupMember(
+            group.add(new ClassicGroupMember(
                 member.memberId(),
                 Optional.of(member.groupInstanceId()),
                 member.clientId(),
@@ -648,10 +648,10 @@ public class RecordHelpersTest {
                 .setAssignment(null)
         );
 
-        GenericGroup group = new GenericGroup(
+        ClassicGroup group = new ClassicGroup(
             new LogContext(),
             "group-id",
-            GenericGroupState.PREPARING_REBALANCE,
+            ClassicGroupState.PREPARING_REBALANCE,
             time,
             mock(GroupCoordinatorMetricsShard.class)
         );
@@ -662,7 +662,7 @@ public class RecordHelpersTest {
                 .setName("range")
                 .setMetadata(member.subscription()));
 
-            group.add(new GenericGroupMember(
+            group.add(new ClassicGroupMember(
                 member.memberId(),
                 Optional.of(member.groupInstanceId()),
                 member.clientId(),
@@ -708,10 +708,10 @@ public class RecordHelpersTest {
                     .setMembers(expectedMembers),
                 expectedGroupMetadataValueVersion));
 
-        GenericGroup group = new GenericGroup(
+        ClassicGroup group = new ClassicGroup(
             new LogContext(),
             "group-id",
-            GenericGroupState.PREPARING_REBALANCE,
+            ClassicGroupState.PREPARING_REBALANCE,
             time,
             mock(GroupCoordinatorMetricsShard.class)
         );

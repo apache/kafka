@@ -14,11 +14,18 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.clients.consumer.internals;
+package org.apache.kafka.clients.consumer.internals.events;
 
-import org.apache.kafka.clients.consumer.internals.events.ApplicationEventProcessor;
-import org.apache.kafka.clients.consumer.internals.events.CommitOnCloseApplicationEvent;
-import org.apache.kafka.clients.consumer.internals.events.LeaveOnCloseApplicationEvent;
+import org.apache.kafka.clients.consumer.internals.CommitRequestManager;
+import org.apache.kafka.clients.consumer.internals.ConsumerMetadata;
+import org.apache.kafka.clients.consumer.internals.CoordinatorRequestManager;
+import org.apache.kafka.clients.consumer.internals.FetchRequestManager;
+import org.apache.kafka.clients.consumer.internals.HeartbeatRequestManager;
+import org.apache.kafka.clients.consumer.internals.MembershipManager;
+import org.apache.kafka.clients.consumer.internals.NetworkClientDelegate;
+import org.apache.kafka.clients.consumer.internals.OffsetsRequestManager;
+import org.apache.kafka.clients.consumer.internals.RequestManagers;
+import org.apache.kafka.clients.consumer.internals.TopicMetadataRequestManager;
 import org.apache.kafka.common.utils.LogContext;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -29,6 +36,7 @@ import java.util.Optional;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CompletableFuture;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
@@ -84,6 +92,15 @@ public class ApplicationEventProcessorTest {
         doReturn(new NetworkClientDelegate.PollResult(100, results)).when(commitRequestManager).pollOnClose();
         processor.process(new CommitOnCloseApplicationEvent());
         verify(commitRequestManager).signalClose();
+    }
+
+    @Test
+    public void testExpirationCalculation() {
+        assertEquals(Long.MAX_VALUE, processor.getExpirationTimeForTimeout(Long.MAX_VALUE));
+        assertEquals(Long.MAX_VALUE, processor.getExpirationTimeForTimeout(Long.MAX_VALUE - 1));
+        long timeout = processor.getExpirationTimeForTimeout(1000);
+        assertTrue(timeout > 0);
+        assertTrue(timeout < Long.MAX_VALUE);
     }
 
     @Test
