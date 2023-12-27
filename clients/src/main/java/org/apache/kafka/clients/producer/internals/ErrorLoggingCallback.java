@@ -27,10 +27,9 @@ public class ErrorLoggingCallback implements Callback {
     private static final Logger log = LoggerFactory.getLogger(ErrorLoggingCallback.class);
     private final String topic;
     private final byte[] key;
-    private byte[] value;
     private final int valueLength;
     private final boolean logAsString;
-
+    private byte[] value;
     public ErrorLoggingCallback(String topic, byte[] key, byte[] value, boolean logAsString) {
         this.topic = topic;
         this.key = key;

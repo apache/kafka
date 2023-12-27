@@ -95,9 +95,8 @@ public class VerifiableConsumer implements Closeable, OffsetCommitCallback, Cons
     private final boolean useAsyncCommit;
     private final boolean verbose;
     private final int maxMessages;
-    private int consumedMessages = 0;
-
     private final CountDownLatch shutdownLatch = new CountDownLatch(1);
+    private int consumedMessages = 0;
 
     public VerifiableConsumer(KafkaConsumer<String, String> consumer,
                               PrintStream out,

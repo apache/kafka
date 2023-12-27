@@ -173,11 +173,11 @@ public final class MetaPropertiesEnsemble {
         };
 
         private final MetaPropertiesEnsemble prev;
-        private Random random = new Random();
         private final Set<String> emptyLogDirs;
         private final Set<String> errorLogDirs;
         private final Map<String, MetaProperties> logDirProps;
         private Optional<String> metaLogDir;
+        private Random random = new Random();
 
         private PreWriteHandler preWriteHandler = (logDir, isNew, metaProperties) -> {
             LOG.info("Writing out {} {}{}meta.properties file containing {}",

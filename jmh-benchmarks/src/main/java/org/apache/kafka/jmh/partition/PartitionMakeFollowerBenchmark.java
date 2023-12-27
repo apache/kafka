@@ -76,7 +76,6 @@ import scala.compat.java8.OptionConverters;
 @BenchmarkMode(Mode.AverageTime)
 @OutputTimeUnit(TimeUnit.NANOSECONDS)
 public class PartitionMakeFollowerBenchmark {
-    private LogManager logManager;
     private final File logDir = new File(System.getProperty("java.io.tmpdir"), UUID.randomUUID().toString());
     private final KafkaScheduler scheduler = new KafkaScheduler(1, true, "scheduler");
     private Partition partition;
@@ -85,6 +84,7 @@ public class PartitionMakeFollowerBenchmark {
     private final DelayedOperations delayedOperations  = Mockito.mock(DelayedOperations.class);
     private final ExecutorService executorService = Executors.newSingleThreadExecutor();
     private Option<Uuid> topicId;
+    private LogManager logManager;
 
     @Setup(Level.Trial)
     public void setup() throws IOException {

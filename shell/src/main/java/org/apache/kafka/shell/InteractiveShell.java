@@ -145,8 +145,8 @@ public final class InteractiveShell implements AutoCloseable {
     }
 
     public class HistoryIterator implements  Iterator<Entry<Integer, String>> {
-        private int index;
         private final int last;
+        private int index;
 
         HistoryIterator(int index, int last) {
             this.index = index;

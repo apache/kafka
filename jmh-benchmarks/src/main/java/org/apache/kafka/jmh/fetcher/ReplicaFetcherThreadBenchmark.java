@@ -110,18 +110,17 @@ import scala.collection.Map;
 @BenchmarkMode(Mode.AverageTime)
 @OutputTimeUnit(TimeUnit.NANOSECONDS)
 public class ReplicaFetcherThreadBenchmark {
-    @Param({"100", "500", "1000", "5000"})
-    private int partitionCount;
-
-    private ReplicaFetcherBenchThread fetcher;
-    private LogManager logManager;
     private final File logDir = new File(System.getProperty("java.io.tmpdir"), UUID.randomUUID().toString());
     private final KafkaScheduler scheduler = new KafkaScheduler(1, true, "scheduler");
     private final Pool<TopicPartition, Partition> pool = new Pool<TopicPartition, Partition>(Option.empty());
     private final Metrics metrics = new Metrics();
+    private final Option<Uuid> topicId = Option.apply(Uuid.randomUuid());
+    @Param({"100", "500", "1000", "5000"})
+    private int partitionCount;
+    private ReplicaFetcherBenchThread fetcher;
+    private LogManager logManager;
     private ReplicaManager replicaManager;
     private ReplicaQuota replicaQuota;
-    private final Option<Uuid> topicId = Option.apply(Uuid.randomUuid());
 
     @Setup(Level.Trial)
     public void setup() throws IOException {

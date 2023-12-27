@@ -94,11 +94,6 @@ import java.util.stream.IntStream;
 @OutputTimeUnit(TimeUnit.NANOSECONDS)
 
 public class KRaftMetadataRequestBenchmark {
-    @Param({"500", "1000",  "5000"})
-    private int topicCount;
-    @Param({"10", "20", "50"})
-    private int partitionCount;
-
     private final RequestChannel requestChannel = Mockito.mock(RequestChannel.class, Mockito.withSettings().stubOnly());
     private final RequestChannel.Metrics requestChannelMetrics = Mockito.mock(RequestChannel.Metrics.class);
     private final ReplicaManager replicaManager = Mockito.mock(ReplicaManager.class);
@@ -119,6 +114,10 @@ public class KRaftMetadataRequestBenchmark {
     private final FetchManager fetchManager = Mockito.mock(FetchManager.class);
     private final BrokerTopicStats brokerTopicStats = new BrokerTopicStats(Optional.empty());
     private final KafkaPrincipal principal = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "test-user");
+    @Param({"500", "1000",  "5000"})
+    private int topicCount;
+    @Param({"10", "20", "50"})
+    private int partitionCount;
     private KafkaApis kafkaApis;
     private RequestChannel.Request allTopicMetadataRequest;
 

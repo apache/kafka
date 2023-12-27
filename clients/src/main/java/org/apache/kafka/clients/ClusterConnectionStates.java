@@ -464,6 +464,9 @@ final class ClusterConnectionStates {
      * The state of our connection to a node.
      */
     private static class NodeConnectionState {
+        private final String host;
+        private final HostResolver hostResolver;
+        private final Logger log;
 
         ConnectionState state;
         AuthenticationException authenticationException;
@@ -476,10 +479,7 @@ final class ClusterConnectionStates {
         long throttleUntilTimeMs;
         private List<InetAddress> addresses;
         private int addressIndex;
-        private final String host;
-        private final HostResolver hostResolver;
         private InetAddress lastAttemptedAddress;
-        private final Logger log;
 
         private NodeConnectionState(ConnectionState state, long lastConnectAttemptMs, long reconnectBackoffMs,
                 long connectionSetupTimeoutMs, String host, HostResolver hostResolver, Logger log) {
