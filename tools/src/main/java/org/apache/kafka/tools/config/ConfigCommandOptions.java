@@ -1,12 +1,12 @@
 /*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * the License. You may obtain a copy of the License at
  *
- *      http://www.apache.org/licenses/LICENSE-2.0
+ *    http://www.apache.org/licenses/LICENSE-2.0
  *
  * Unless required by applicable law or agreed to in writing, software
  * distributed under the License is distributed on an "AS IS" BASIS,
@@ -40,22 +40,11 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static org.apache.kafka.common.utils.Utils.NL;
+import static org.apache.kafka.tools.config.ConfigCommand.BROKER_LOGGER_CONFIG_TYPE;
+import static org.apache.kafka.tools.config.ConfigCommand.BROKER_SUPPORTED_CONFIG_TYPES;
+import static org.apache.kafka.tools.config.ConfigCommand.ZK_SUPPORTED_CONFIG_TYPES;
 
 public class ConfigCommandOptions extends CommandDefaultOptions {
-    public static final String BROKER_LOGGER_CONFIG_TYPE = "broker-loggers";
-    public static final List<String> BROKER_SUPPORTED_CONFIG_TYPES;
-    public static final List<String> ZK_SUPPORTED_CONFIG_TYPES = Arrays.asList(ConfigType.USER, ConfigType.BROKER);
-    
-    static {
-        List<String> brokerSupportedConfigTypes = new ArrayList<>();
-
-        brokerSupportedConfigTypes.addAll(ConfigType.ALL);
-        brokerSupportedConfigTypes.add(BROKER_LOGGER_CONFIG_TYPE);
-        brokerSupportedConfigTypes.add(ConfigType.CLIENT_METRICS);
-
-        BROKER_SUPPORTED_CONFIG_TYPES = Collections.unmodifiableList(brokerSupportedConfigTypes);
-    }
-
     final OptionSpec<String> zkConnectOpt;
     final OptionSpec<String> bootstrapServerOpt;
     final OptionSpec<String> bootstrapControllerOpt;
