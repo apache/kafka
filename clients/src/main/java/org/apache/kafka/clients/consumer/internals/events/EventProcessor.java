@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.clients.consumer.internals.events;
 
+import org.apache.kafka.clients.consumer.internals.ConsumerUtils;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.internals.IdempotentCloser;
 import org.apache.kafka.common.utils.LogContext;
@@ -25,6 +26,7 @@ import java.io.Closeable;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.concurrent.BlockingQueue;
 
 /**
@@ -46,56 +48,53 @@ public abstract class EventProcessor<T> implements Closeable {
         this.closer = new IdempotentCloser();
     }
 
-    public abstract void process();
+    public abstract boolean process();
 
-    public abstract void process(T event);
+    protected abstract void process(T event);
 
     @Override
     public void close() {
         closer.close(this::closeInternal, () -> log.warn("The event processor was already closed"));
     }
 
-    protected abstract Class<T> getEventClass();
+    protected interface ProcessHandler<T> {
 
-    protected interface ProcessErrorHandler<T> {
-
-        void onError(T event, KafkaException error);
+        void onProcess(T event, Optional<KafkaException> error);
     }
 
     /**
      * Drains all available events from the queue, and then processes them in order. If any errors are thrown while
-     * processing the individual events, these are submitted to the given {@link ProcessErrorHandler}.
+     * processing the individual events, these are submitted to the given {@link ProcessHandler}.
      */
-    protected void process(ProcessErrorHandler<T> processErrorHandler) {
-        String eventClassName = getEventClass().getSimpleName();
-        closer.assertOpen(() -> String.format("The processor was previously closed, so no further %s processing can occur", eventClassName));
+    protected boolean process(ProcessHandler<T> processHandler) {
+        closer.assertOpen("The processor was previously closed, so no further processing can occur");
 
         List<T> events = drain();
 
+        if (events.isEmpty()) {
+            log.trace("No events to process");
+            return false;
+        }
+
         try {
-            log.debug("Starting processing of {} {}(s)", events.size(), eventClassName);
+            log.trace("Starting processing of {} event{}", events.size(), events.size() == 1 ? "" : "s");
 
             for (T event : events) {
                 try {
-                    Objects.requireNonNull(event, () -> String.format("Attempted to process a null %s", eventClassName));
-                    log.debug("Consuming {}: {}", eventClassName, event);
+                    Objects.requireNonNull(event, "Attempted to process a null event");
+                    log.trace("Processing event: {}", event);
                     process(event);
+                    processHandler.onProcess(event, Optional.empty());
                 } catch (Throwable t) {
-                    log.warn("An error occurred when processing the {}: {}", eventClassName, t.getMessage(), t);
-
-                    KafkaException error;
-
-                    if (t instanceof KafkaException)
-                        error = (KafkaException) t;
-                    else
-                        error = new KafkaException(t);
-
-                    processErrorHandler.onError(event, error);
+                    KafkaException error = ConsumerUtils.maybeWrapAsKafkaException(t);
+                    processHandler.onProcess(event, Optional.of(error));
                 }
             }
         } finally {
-            log.debug("Completed processing of {} {}(s)", events.size(), eventClassName);
+            log.trace("Completed processing");
         }
+
+        return true;
     }
 
     /**
@@ -103,8 +102,7 @@ public abstract class EventProcessor<T> implements Closeable {
      * this case, we need to throw an exception to notify the user the consumer is closed.
      */
     private void closeInternal() {
-        String eventClassName = getEventClass().getSimpleName();
-        log.trace("Closing event processor for {}", eventClassName);
+        log.trace("Closing event processor");
         List<T> incompleteEvents = drain();
 
         if (incompleteEvents.isEmpty())
@@ -123,7 +121,7 @@ public abstract class EventProcessor<T> implements Closeable {
                     f.completeExceptionally(exception);
                 });
 
-        log.debug("Discarding {} {}s because the consumer is closing", incompleteEvents.size(), eventClassName);
+        log.debug("Discarding {} events because the consumer is closing", incompleteEvents.size());
     }
 
     /**

@@ -36,12 +36,13 @@ import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.requests.OffsetCommitRequest;
 import org.apache.kafka.common.requests.RequestContext;
+import org.apache.kafka.common.requests.TransactionResult;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.coordinator.group.generated.OffsetCommitKey;
 import org.apache.kafka.coordinator.group.generated.OffsetCommitValue;
-import org.apache.kafka.coordinator.group.generic.GenericGroup;
-import org.apache.kafka.coordinator.group.generic.GenericGroupState;
+import org.apache.kafka.coordinator.group.classic.ClassicGroup;
+import org.apache.kafka.coordinator.group.classic.ClassicGroupState;
 import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetricsShard;
 import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetrics;
 import org.apache.kafka.coordinator.group.runtime.CoordinatorResult;
@@ -62,7 +63,6 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.apache.kafka.common.requests.OffsetFetchResponse.INVALID_OFFSET;
-import static org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetrics.NUM_OFFSETS;
 import static org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetrics.OFFSET_DELETIONS_SENSOR_NAME;
 import static org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetrics.OFFSET_EXPIRED_SENSOR_NAME;
 
@@ -300,7 +300,7 @@ public class OffsetMetadataManager {
                 // either the admin client or a consumer which does not use the group management
                 // facility. In this case, a so-called simple group is created and the request
                 // is accepted.
-                group = groupMetadataManager.getOrMaybeCreateGenericGroup(request.groupId(), true);
+                group = groupMetadataManager.getOrMaybeCreateClassicGroup(request.groupId(), true);
             } else {
                 if (context.header.apiVersion() >= 9) {
                     // Starting from version 9 of the OffsetCommit API, we return GROUP_ID_NOT_FOUND
@@ -354,7 +354,7 @@ public class OffsetMetadataManager {
                 // either the admin client or a consumer which does not use the group management
                 // facility. In this case, a so-called simple group is created and the request
                 // is accepted.
-                group = groupMetadataManager.getOrMaybeCreateGenericGroup(request.groupId(), true);
+                group = groupMetadataManager.getOrMaybeCreateClassicGroup(request.groupId(), true);
             } else {
                 throw Errors.ILLEGAL_GENERATION.exception();
             }
@@ -450,12 +450,12 @@ public class OffsetMetadataManager {
 
         // In the old consumer group protocol, the offset commits maintain the session if
         // the group is in Stable or PreparingRebalance state.
-        if (group.type() == Group.GroupType.GENERIC) {
-            GenericGroup genericGroup = (GenericGroup) group;
-            if (genericGroup.isInState(GenericGroupState.STABLE) || genericGroup.isInState(GenericGroupState.PREPARING_REBALANCE)) {
-                groupMetadataManager.rescheduleGenericGroupMemberHeartbeat(
-                    genericGroup,
-                    genericGroup.member(request.memberId())
+        if (group.type() == Group.GroupType.CLASSIC) {
+            ClassicGroup classicGroup = (ClassicGroup) group;
+            if (classicGroup.isInState(ClassicGroupState.STABLE) || classicGroup.isInState(ClassicGroupState.PREPARING_REBALANCE)) {
+                groupMetadataManager.rescheduleClassicGroupMemberHeartbeat(
+                    classicGroup,
+                    classicGroup.member(request.memberId())
                 );
             }
         }
@@ -850,18 +850,19 @@ public class OffsetMetadataManager {
         final int partition = key.partition();
 
         if (value != null) {
-            // The generic or consumer group should exist when offsets are committed or
+            // The classic or consumer group should exist when offsets are committed or
             // replayed. However, it won't if the consumer commits offsets but does not
             // use the membership functionality. In this case, we automatically create
-            // a so-called "simple consumer group". This is an empty generic group
+            // a so-called "simple consumer group". This is an empty classic group
             // without a protocol type.
             try {
                 groupMetadataManager.group(groupId);
             } catch (GroupIdNotFoundException ex) {
-                groupMetadataManager.getOrMaybeCreateGenericGroup(groupId, true);
+                groupMetadataManager.getOrMaybeCreateClassicGroup(groupId, true);
             }
 
             if (producerId == RecordBatch.NO_PRODUCER_ID) {
+                log.debug("Replaying offset commit with key {}, value {}", key, value);
                 // If the offset is not part of a transaction, it is directly stored
                 // in the offsets store.
                 OffsetAndMetadata previousValue = offsets.put(
@@ -871,9 +872,10 @@ public class OffsetMetadataManager {
                     OffsetAndMetadata.fromRecord(value)
                 );
                 if (previousValue == null) {
-                    metrics.incrementLocalGauge(NUM_OFFSETS);
+                    metrics.incrementNumOffsets();
                 }
             } else {
+                log.debug("Replaying transactional offset commit with producer id {}, key {}, value {}", producerId, key, value);
                 // Otherwise, the transaction offset is stored in the pending transactional
                 // offsets store. Pending offsets there are moved to the main store when
                 // the transaction is committed; or removed when the transaction is aborted.
@@ -887,8 +889,45 @@ public class OffsetMetadataManager {
             }
         } else {
             if (offsets.remove(groupId, topic, partition) != null) {
-                metrics.decrementLocalGauge(NUM_OFFSETS);
+                metrics.decrementNumOffsets();
             }
+        }
+    }
+
+    /**
+     * Applies the given transaction marker.
+     *
+     * @param producerId    The producer id.
+     * @param result        The result of the transaction.
+     * @throws RuntimeException if the transaction can not be completed.
+     */
+    public void replayEndTransactionMarker(
+        long producerId,
+        TransactionResult result
+    ) throws RuntimeException {
+        Offsets pendingOffsets = pendingTransactionalOffsets.remove(producerId);
+
+        if (result == TransactionResult.COMMIT) {
+            log.debug("Committed transactional offset commits for producer id {}.", producerId);
+            if (pendingOffsets == null) return;
+
+            pendingOffsets.offsetsByGroup.forEach((groupId, topicOffsets) -> {
+                topicOffsets.forEach((topicName, partitionOffsets) -> {
+                    partitionOffsets.forEach((partitionId, offsetAndMetadata) -> {
+                        log.debug("Committed transaction offset commit for producer id {} in group {} " +
+                            "with topic {}, partition {}, and offset {}.",
+                            producerId, groupId, topicName, partitionId, offsetAndMetadata);
+                        offsets.put(
+                            groupId,
+                            topicName,
+                            partitionId,
+                            offsetAndMetadata
+                        );
+                    });
+                });
+            });
+        } else {
+            log.debug("Aborted transactional offset commits for producer id {}.", producerId);
         }
     }
 

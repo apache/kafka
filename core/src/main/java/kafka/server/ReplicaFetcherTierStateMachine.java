@@ -99,7 +99,17 @@ public class ReplicaFetcherTierStateMachine implements TierStateMachine {
         int epoch = epochAndLeaderLocalStartOffset.leaderEpoch();
         long leaderLocalStartOffset = epochAndLeaderLocalStartOffset.offset();
 
-        long offsetToFetch = buildRemoteLogAuxState(topicPartition, currentFetchState.currentLeaderEpoch(), leaderLocalStartOffset, epoch, fetchPartitionData.logStartOffset());
+        long offsetToFetch = 0;
+        replicaMgr.brokerTopicStats().topicStats(topicPartition.topic()).buildRemoteLogAuxStateRequestRate().mark();
+        replicaMgr.brokerTopicStats().allTopicsStats().buildRemoteLogAuxStateRequestRate().mark();
+
+        try {
+            offsetToFetch = buildRemoteLogAuxState(topicPartition, currentFetchState.currentLeaderEpoch(), leaderLocalStartOffset, epoch, fetchPartitionData.logStartOffset());
+        } catch (RemoteStorageException e) {
+            replicaMgr.brokerTopicStats().topicStats(topicPartition.topic()).failedBuildRemoteLogAuxStateRate().mark();
+            replicaMgr.brokerTopicStats().allTopicsStats().failedBuildRemoteLogAuxStateRate().mark();
+            throw e;
+        }
 
         OffsetAndEpoch fetchLatestOffsetResult = leader.fetchLatestOffset(topicPartition, currentFetchState.currentLeaderEpoch());
         long leaderEndOffset = fetchLatestOffsetResult.offset();
