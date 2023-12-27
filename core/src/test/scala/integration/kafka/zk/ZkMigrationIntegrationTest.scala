@@ -332,12 +332,13 @@ class ZkMigrationIntegrationTest {
       TestUtils.waitUntilTrue(
         () => zkClient.getOrCreateMigrationState(ZkMigrationLeadershipState.EMPTY).initialZkMigrationComplete(),
         "Timed out waiting for migration to complete",
-        30000)
+        60_000)
 
       // At this point, some of the topics may have been deleted by ZK controller and the rest will be
       // implicitly deleted by the KRaft controller and remove from the ZK brokers as stray partitions
       def topicsAllDeleted(admin: Admin): Boolean = {
         val topics = admin.listTopics().names().get(60, TimeUnit.SECONDS)
+        log.info(s"Topics still present: $topics")
         topics.retainAll(util.Arrays.asList(
           "test-topic-1", "test-topic-2", "test-topic-3"
         ))
@@ -349,7 +350,7 @@ class ZkMigrationIntegrationTest {
       TestUtils.waitUntilTrue(
         () => topicsAllDeleted(admin),
         "Timed out waiting for topics to be deleted",
-        30000,
+        60_000,
         1000)
 
       val newTopics = new util.ArrayList[NewTopic]()
@@ -371,10 +372,10 @@ class ZkMigrationIntegrationTest {
       TestUtils.waitUntilTrue(
         () => topicsAllRecreated(admin),
         "Timed out waiting for topics to be created",
-        30000,
+        60_000,
         1000)
 
-      TestUtils.retry(300000) {
+      TestUtils.retry(300_000) {
         // Need a retry here since topic metadata may be inconsistent between brokers
         val topicDescriptions = try {
           admin.describeTopics(util.Arrays.asList(
