@@ -2639,7 +2639,7 @@ class ReplicaManagerTest {
       time = time,
       scheduler = time.scheduler,
       logManager = logManager,
-      quotaManagers = QuotaFactory.instantiate(config, metrics, time, ""),
+      quotaManagers = quotaManager,
       metadataCache = MetadataCache.zkMetadataCache(config.brokerId, config.interBrokerProtocolVersion),
       logDirFailureChannel = new LogDirFailureChannel(config.logDirs.size),
       alterPartitionManager = alterPartitionManager,
@@ -2693,6 +2693,9 @@ class ReplicaManagerTest {
     } else {
       assertTrue(stray0.isInstanceOf[HostedPartition.Online])
     }
+
+    replicaManager.shutdown()
+    logManager.shutdown()
   }
 
   @Test
@@ -2704,7 +2707,7 @@ class ReplicaManagerTest {
       time = time,
       scheduler = time.scheduler,
       logManager = logManager,
-      quotaManagers = QuotaFactory.instantiate(config, metrics, time, ""),
+      quotaManagers = quotaManager,
       metadataCache = MetadataCache.zkMetadataCache(config.brokerId, config.interBrokerProtocolVersion),
       logDirFailureChannel = new LogDirFailureChannel(config.logDirs.size),
       alterPartitionManager = alterPartitionManager,
@@ -2878,6 +2881,8 @@ class ReplicaManagerTest {
       purgatoryName = "DeleteRecords", timer, reaperEnabled = false)
     val mockElectLeaderPurgatory = new DelayedOperationPurgatory[DelayedElectLeader](
       purgatoryName = "ElectLeader", timer, reaperEnabled = false)
+    val mockRemoteFetchPurgatory = new DelayedOperationPurgatory[DelayedRemoteFetch](
+      purgatoryName = "RemoteFetch", timer, reaperEnabled = false)
 
     // Mock network client to show leader offset of 5
     val blockingSend = new MockBlockingSender(
@@ -2902,6 +2907,7 @@ class ReplicaManagerTest {
       delayedFetchPurgatoryParam = Some(mockFetchPurgatory),
       delayedDeleteRecordsPurgatoryParam = Some(mockDeleteRecordsPurgatory),
       delayedElectLeaderPurgatoryParam = Some(mockElectLeaderPurgatory),
+      delayedRemoteFetchPurgatoryParam = Some(mockRemoteFetchPurgatory),
       threadNamePrefix = Option(this.getClass.getName)) {
 
       override protected def createReplicaFetcherManager(metrics: Metrics,
@@ -4020,6 +4026,7 @@ class ReplicaManagerTest {
       doneLatch.countDown()
     } finally {
       replicaManager.shutdown(checkpointHW = false)
+      remoteLogManager.close()
     }
   }
 
@@ -4116,6 +4123,7 @@ class ReplicaManagerTest {
       latch.countDown()
     } finally {
       replicaManager.shutdown(checkpointHW = false)
+      remoteLogManager.close()
     }
   }
 
