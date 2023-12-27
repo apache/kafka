@@ -35,14 +35,16 @@ import static java.util.Collections.singletonList;
 import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import org.apache.kafka.clients.admin.FenceProducersOptions;
 
 public class FenceProducersHandlerTest {
     private final LogContext logContext = new LogContext();
     private final Node node = new Node(1, "host", 1234);
+    private final FenceProducersOptions options = new FenceProducersOptions().timeoutMs(10000);
 
     @Test
     public void testBuildRequest() {
-        FenceProducersHandler handler = new FenceProducersHandler(logContext);
+        FenceProducersHandler handler = new FenceProducersHandler(options, logContext);
         mkSet("foo", "bar", "baz").forEach(transactionalId -> assertLookup(handler, transactionalId));
     }
 
@@ -51,7 +53,7 @@ public class FenceProducersHandlerTest {
         String transactionalId = "foo";
         CoordinatorKey key = CoordinatorKey.byTransactionalId(transactionalId);
 
-        FenceProducersHandler handler = new FenceProducersHandler(logContext);
+        FenceProducersHandler handler = new FenceProducersHandler(options, logContext);
 
         short epoch = 57;
         long producerId = 7;
@@ -73,7 +75,7 @@ public class FenceProducersHandlerTest {
     @Test
     public void testHandleErrorResponse() {
         String transactionalId = "foo";
-        FenceProducersHandler handler = new FenceProducersHandler(logContext);
+        FenceProducersHandler handler = new FenceProducersHandler(options, logContext);
         assertFatalError(handler, transactionalId, Errors.TRANSACTIONAL_ID_AUTHORIZATION_FAILED);
         assertFatalError(handler, transactionalId, Errors.CLUSTER_AUTHORIZATION_FAILED);
         assertFatalError(handler, transactionalId, Errors.UNKNOWN_SERVER_ERROR);
@@ -142,6 +144,6 @@ public class FenceProducersHandlerTest {
         CoordinatorKey key = CoordinatorKey.byTransactionalId(transactionalId);
         InitProducerIdRequest.Builder request = handler.buildSingleRequest(1, key);
         assertEquals(transactionalId, request.data.transactionalId());
-        assertEquals(1, request.data.transactionTimeoutMs());
+        assertEquals(this.options.timeoutMs(), request.data.transactionTimeoutMs());
     }
 }

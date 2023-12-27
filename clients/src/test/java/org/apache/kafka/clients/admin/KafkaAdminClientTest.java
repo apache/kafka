@@ -7031,6 +7031,7 @@ public class KafkaAdminClientTest {
         try (AdminClientUnitTestEnv env = mockClientEnv()) {
             String transactionalId = "copyCat";
             Node transactionCoordinator = env.cluster().nodes().iterator().next();
+            final FenceProducersOptions options = new FenceProducersOptions().timeoutMs(10000);
 
             // fail to find the coordinator at first with a retriable error
             env.kafkaClient().prepareResponse(prepareFindCoordinatorResponse(Errors.COORDINATOR_NOT_AVAILABLE, transactionalId, transactionCoordinator));
@@ -7060,7 +7061,7 @@ public class KafkaAdminClientTest {
                     transactionCoordinator
             );
 
-            FenceProducersResult result = env.adminClient().fenceProducers(Collections.singleton(transactionalId));
+            FenceProducersResult result = env.adminClient().fenceProducers(Collections.singleton(transactionalId), options);
             assertNull(result.all().get());
             assertEquals(4761, result.producerId(transactionalId).get());
             assertEquals((short) 489, result.epochId(transactionalId).get());
