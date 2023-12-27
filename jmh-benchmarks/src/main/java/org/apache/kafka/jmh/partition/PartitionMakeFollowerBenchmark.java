@@ -78,12 +78,12 @@ import scala.compat.java8.OptionConverters;
 public class PartitionMakeFollowerBenchmark {
     private final File logDir = new File(System.getProperty("java.io.tmpdir"), UUID.randomUUID().toString());
     private final KafkaScheduler scheduler = new KafkaScheduler(1, true, "scheduler");
-    private Partition partition;
     private final List<Integer> replicas = Arrays.asList(0, 1, 2);
     private final OffsetCheckpoints offsetCheckpoints = Mockito.mock(OffsetCheckpoints.class);
     private final DelayedOperations delayedOperations  = Mockito.mock(DelayedOperations.class);
     private final ExecutorService executorService = Executors.newSingleThreadExecutor();
     private Option<Uuid> topicId;
+    private Partition partition;
     private LogManager logManager;
 
     @Setup(Level.Trial)
