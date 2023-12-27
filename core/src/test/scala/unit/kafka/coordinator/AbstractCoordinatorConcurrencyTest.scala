@@ -34,6 +34,7 @@ import org.apache.kafka.server.util.timer.MockTimer
 import org.apache.kafka.server.util.{MockScheduler, MockTime}
 import org.apache.kafka.storage.internals.log.{AppendOrigin, LogConfig, VerificationGuard}
 import org.junit.jupiter.api.{AfterEach, BeforeEach}
+import org.mockito.Mockito
 import org.mockito.Mockito.{CALLS_REAL_METHODS, mock, withSettings}
 
 import scala.collection._
@@ -65,6 +66,7 @@ abstract class AbstractCoordinatorConcurrencyTest[M <: CoordinatorMember] {
   def tearDown(): Unit = {
     if (executor != null)
       executor.shutdownNow()
+    Mockito.framework().clearInlineMocks()
   }
 
   /**
