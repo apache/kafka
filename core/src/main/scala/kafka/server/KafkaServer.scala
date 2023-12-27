@@ -188,7 +188,7 @@ class KafkaServer(
   // Visible for testing
   private[kafka] def zkClient = _zkClient
 
-  override def brokerTopicStats = _brokerTopicStats
+  override def brokerTopicStats: BrokerTopicStats = _brokerTopicStats
 
   private[kafka] def featureChangeListener = _featureChangeListener
 
@@ -234,7 +234,7 @@ class KafkaServer(
         /* load metadata */
         val initialMetaPropsEnsemble = {
           val loader = new MetaPropertiesEnsemble.Loader()
-          config.logDirs.foreach(loader.addLogDir(_))
+          config.logDirs.foreach(loader.addLogDir)
           loader.load()
         }
 
@@ -285,7 +285,7 @@ class KafkaServer(
             val builder = new MetaProperties.Builder(e.getValue).
               setClusterId(_clusterId).
               setNodeId(config.brokerId)
-            if (!builder.directoryId().isPresent()) {
+            if (!builder.directoryId().isPresent) {
               if (config.migrationEnabled) {
                 builder.setDirectoryId(copier.generateValidDirectoryId())
               }
@@ -294,7 +294,7 @@ class KafkaServer(
           })
           copier.emptyLogDirs().clear()
           copier.setPreWriteHandler((logDir, _, _) => {
-            info(s"Rewriting ${logDir}${File.separator}meta.properties")
+            info(s"Rewriting $logDir${File.separator}meta.properties")
             Files.createDirectories(Paths.get(logDir))
           })
           copier.setWriteErrorHandler((logDir, e) => {
@@ -664,7 +664,7 @@ class KafkaServer(
   protected def createRemoteLogManager(): Option[RemoteLogManager] = {
     if (config.remoteLogManagerConfig.enableRemoteStorageSystem()) {
       if(config.logDirs.size > 1) {
-        throw new KafkaException("Tiered storage is not supported with multiple log dirs.");
+        throw new KafkaException("Tiered storage is not supported with multiple log dirs.")
       }
 
       Some(new RemoteLogManager(config.remoteLogManagerConfig, config.brokerId, config.logDirs.head, clusterId, time,
@@ -674,7 +674,7 @@ class KafkaServer(
             log.updateLogStartOffsetFromRemoteTier(remoteLogStartOffset)
           }
       },
-        brokerTopicStats));
+        brokerTopicStats))
     } else {
       None
     }
@@ -1088,7 +1088,7 @@ class KafkaServer(
     if (config.brokerId >= 0) {
       config.brokerId
     } else if (metaPropsEnsemble.nodeId().isPresent) {
-      metaPropsEnsemble.nodeId().getAsInt()
+      metaPropsEnsemble.nodeId().getAsInt
     } else if (config.brokerIdGenerationEnable) {
       generateBrokerId()
     } else
