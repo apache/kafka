@@ -19,7 +19,7 @@ package kafka.zk.migration
 import kafka.api.LeaderAndIsr
 import kafka.controller.{LeaderIsrAndControllerEpoch, ReplicaAssignment}
 import kafka.coordinator.transaction.{ProducerIdManager, ZkProducerIdManager}
-import kafka.server.{ConfigType, KafkaConfig}
+import kafka.server.KafkaConfig
 import org.apache.kafka.common.config.{ConfigResource, TopicConfig}
 import org.apache.kafka.common.errors.ControllerMovedException
 import org.apache.kafka.common.metadata.{ConfigRecord, MetadataRecordType, PartitionRecord, ProducerIdsRecord, TopicRecord}
@@ -28,6 +28,7 @@ import org.apache.kafka.image.{MetadataDelta, MetadataImage, MetadataProvenance}
 import org.apache.kafka.metadata.migration.{KRaftMigrationZkWriter, ZkMigrationLeadershipState}
 import org.apache.kafka.metadata.{LeaderRecoveryState, PartitionRegistration}
 import org.apache.kafka.server.common.ApiMessageAndVersion
+import org.apache.kafka.server.config.ConfigType
 import org.junit.jupiter.api.Assertions.{assertEquals, assertThrows, assertTrue, fail}
 import org.junit.jupiter.api.Test
 
@@ -396,8 +397,8 @@ class ZkMigrationClientTest extends ZkMigrationTestHarness {
     }
 
     // Verify the broker and topic configs (including sensitive configs).
-    val brokerProps = zkClient.getEntityConfigs(ConfigType.Broker, brokerId)
-    val topicProps = zkClient.getEntityConfigs(ConfigType.Topic, topicName)
+    val brokerProps = zkClient.getEntityConfigs(ConfigType.BROKER, brokerId)
+    val topicProps = zkClient.getEntityConfigs(ConfigType.TOPIC, topicName)
     assertEquals(2, brokerProps.size())
 
     brokerProps.asScala.foreach { case (key, value) =>

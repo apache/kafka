@@ -625,7 +625,7 @@ object LocalLog extends Logging {
   private[log] def logDirNameWithSuffixCappedLength(topicPartition: TopicPartition, suffix: String): String = {
     val uniqueId = java.util.UUID.randomUUID.toString.replaceAll("-", "")
     val fullSuffix = s"-${topicPartition.partition()}.$uniqueId$suffix"
-    val prefixLength = Math.min(topicPartition.topic().size, 255 - fullSuffix.size)
+    val prefixLength = Math.min(topicPartition.topic().length, 255 - fullSuffix.length)
     s"${topicPartition.topic().substring(0, prefixLength)}$fullSuffix"
   }
 
