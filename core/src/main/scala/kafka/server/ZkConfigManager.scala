@@ -18,30 +18,16 @@
 package kafka.server
 
 import java.nio.charset.StandardCharsets
-
 import kafka.common.{NotificationHandler, ZkNodeChangeNotificationListener}
 import kafka.utils.{Json, Logging}
 import kafka.utils.json.JsonObject
 import kafka.zk.{AdminZkClient, ConfigEntityChangeNotificationSequenceZNode, ConfigEntityChangeNotificationZNode, KafkaZkClient}
 import org.apache.kafka.common.config.types.Password
 import org.apache.kafka.common.security.scram.internals.ScramMechanism
+import org.apache.kafka.server.config.ConfigType
 
 import scala.jdk.CollectionConverters._
 import scala.collection._
-
-/**
- * Represents all the entities that can be configured via ZK
- */
-object ConfigType {
-  val Topic = "topics"
-  val Client = "clients"
-  val User = "users"
-  val Broker = "brokers"
-  val Ip = "ips"
-  val ClientMetrics = "client-metrics"
-  // Do not include ClientMetrics in `all` as ClientMetrics is not supported on ZK.
-  val all = Seq(Topic, Client, User, Broker, Ip)
-}
 
 object ConfigEntityName {
   val Default = "<default>"
@@ -111,7 +97,7 @@ class ZkConfigManager(
     }
 
     private def processEntityConfigChangeVersion1(jsonBytes: Array[Byte], js: JsonObject): Unit = {
-      val validConfigTypes = Set(ConfigType.Topic, ConfigType.Client)
+      val validConfigTypes = Set(ConfigType.TOPIC, ConfigType.CLIENT)
       val entityType = js.get("entity_type").flatMap(_.to[Option[String]]).filter(validConfigTypes).getOrElse {
         throw new IllegalArgumentException("Version 1 config change notification must have 'entity_type' set to " +
           s"'clients' or 'topics'. Received: ${new String(jsonBytes, StandardCharsets.UTF_8)}")
@@ -165,11 +151,11 @@ class ZkConfigManager(
 
     // Apply all existing client/user configs to the ClientIdConfigHandler/UserConfigHandler to bootstrap the overrides
     configHandlers.foreach {
-      case (ConfigType.User, handler) =>
-        adminZkClient.fetchAllEntityConfigs(ConfigType.User).foreach {
+      case (ConfigType.USER, handler) =>
+        adminZkClient.fetchAllEntityConfigs(ConfigType.USER).foreach {
           case (sanitizedUser, properties) => handler.processConfigChanges(sanitizedUser, properties)
         }
-        adminZkClient.fetchAllChildEntityConfigs(ConfigType.User, ConfigType.Client).foreach {
+        adminZkClient.fetchAllChildEntityConfigs(ConfigType.USER, ConfigType.CLIENT).foreach {
           case (sanitizedUserClientId, properties) => handler.processConfigChanges(sanitizedUserClientId, properties)
         }
       case (configType, handler) =>
