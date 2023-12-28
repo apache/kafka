@@ -24,6 +24,7 @@ import kafka.test.annotation.Type;
 import kafka.test.junit.ClusterTestExtensions;
 import kafka.utils.TestUtils;
 import org.apache.kafka.clients.admin.Admin;
+import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.admin.CreateTopicsResult;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.common.TopicPartition;
@@ -37,8 +38,7 @@ import scala.collection.JavaConverters;
 import org.mockito.MockedStatic;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mockito;
-import org.apache.kafka.clients.admin.AdminClientConfig;
-import static org.junit.jupiter.api.Assertions.assertEquals;
+
 import java.util.Properties;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -52,6 +52,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ExecutionException;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
