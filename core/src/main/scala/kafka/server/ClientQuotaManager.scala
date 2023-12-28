@@ -24,7 +24,7 @@ import kafka.network.RequestChannel
 import kafka.network.RequestChannel._
 import kafka.server.ClientQuotaManager._
 import kafka.utils.{Logging, QuotaUtils}
-import org.apache.kafka.common.{Cluster, MetricName}
+import org.apache.kafka.common.{Cluster, MetricName, TopicPartition}
 import org.apache.kafka.common.metrics._
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.metrics.stats.{Avg, CumulativeSum, Rate}
@@ -124,6 +124,8 @@ object ClientQuotaManager {
   object DefaultTags {
     val User = "user"
     val ClientId = "client-id"
+    val TopicName = "topic-name"
+    val PartitionId = "partition-id"
   }
 }
 
@@ -213,21 +215,54 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
 
   /**
    * See {recordAndGetThrottleTimeMs}.
+   * This signiture used in KafkaApis
    */
-  def maybeRecordAndGetThrottleTimeMs(request: RequestChannel.Request, value: Double, timeMs: Long): Int = {
+  def maybeRecordAndGetThrottleTimeMs(request: RequestChannel.Request, value: Double,
+                                      individualPartitionValues: Map[TopicPartition, Integer], timeMs: Long): Int = {
+
+    if (individualPartitionValues.nonEmpty) {
+      // KAFKA-16044 to use the return value of this to thrtottle based on topic-partiton quota if needed
+      maybeRecordAndGetThrottleTimeMs(request.session, request.header.clientId, individualPartitionValues, timeMs)
+    }
     maybeRecordAndGetThrottleTimeMs(request.session, request.header.clientId, value, timeMs)
   }
 
   /**
    * See {recordAndGetThrottleTimeMs}.
+   * This signiture is for user/client quota/throttle
    */
   def maybeRecordAndGetThrottleTimeMs(session: Session, clientId: String, value: Double, timeMs: Long): Int = {
     // Record metrics only if quotas are enabled.
     if (quotasEnabled) {
-      recordAndGetThrottleTimeMs(session, clientId, value, timeMs)
+      recordAndGetThrottleTimeMs(session, clientId, None, value, timeMs)
     } else {
       0
     }
+  }
+
+  /**
+   * See {recordAndGetThrottleTimeMs}.
+   * This implemenatation for topic/partition quota/throttle
+   */
+  def maybeRecordAndGetThrottleTimeMs(session: Session, clientId: String, topicPartitions: Map[TopicPartition, Integer], timeMs: Long): Int = {
+    // call the recordAndGetThrottleTimeMs for each TopicPartition and its size
+    val throttleTimesMap = topicPartitions.map { case (tp, value) =>
+      (tp, recordAndGetThrottleTimeMs(session, clientId, Some(tp), value.toDouble, timeMs))
+    }
+
+    // record the throttleTime metric with topic partitions tags, where the throttleTimeMS is bigger than zero
+    // similar recording will happen in `throttle` method later with user/client tags, but to avoid passing around individual
+    // topic-partition throttle time, we record those metrics here.
+    throttleTimesMap
+      .filter { case (_, throttleTimeMs) => throttleTimeMs > 0 }
+      .foreach { case (tp, throttleTimeMs) =>
+        val clientSensors = getOrCreateQuotaSensors(session, clientId, Some(tp))
+        clientSensors.throttleTimeSensor.record(throttleTimeMs)
+      }
+
+    // return the maximum throttle time to throttle the user/client
+    throttleTimesMap.values.max
+
   }
 
   /**
@@ -241,8 +276,9 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
    * @return The throttle time in milliseconds defines as the time to wait until the average
    *         rate gets back to the defined quota
    */
-  def recordAndGetThrottleTimeMs(session: Session, clientId: String, value: Double, timeMs: Long): Int = {
-    val clientSensors = getOrCreateQuotaSensors(session, clientId)
+  def recordAndGetThrottleTimeMs(session: Session, clientId: String,
+                                 topicPartition: Option[TopicPartition], value: Double, timeMs: Long): Int = {
+    val clientSensors = getOrCreateQuotaSensors(session, clientId, topicPartition)
     try {
       clientSensors.quotaSensor.record(value, timeMs, true)
       0
@@ -274,9 +310,18 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
    * in case of throttling. Rate keeps the sum of values that fall in each time window, so this should bring the
    * overall sum back to the previous value.
    */
-  def unrecordQuotaSensor(request: RequestChannel.Request, value: Double, timeMs: Long): Unit = {
+  def unrecordQuotaSensor(request: RequestChannel.Request, value: Double,
+                          individualPartitionValues: Map[TopicPartition, Integer], timeMs: Long): Unit = {
     val clientSensors = getOrCreateQuotaSensors(request.session, request.header.clientId)
     clientSensors.quotaSensor.record(value * (-1), timeMs, false)
+    if (individualPartitionValues.nonEmpty) {
+      // call the quotaSensor for each TopicPartition and its negative size
+      individualPartitionValues.keySet.toList
+        .foreach(tp => {
+          val clientSensors = getOrCreateQuotaSensors(request.session, request.header.clientId, Some(tp))
+          clientSensors.quotaSensor.record(value * (-1), timeMs, false)
+        })
+    }
   }
 
   /**
@@ -355,11 +400,16 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
    * This function either returns the sensors for a given client id or creates them if they don't exist
    * First sensor of the tuple is the quota enforcement sensor. Second one is the throttle time sensor
    */
-  def getOrCreateQuotaSensors(session: Session, clientId: String): ClientSensors = {
+  def getOrCreateQuotaSensors(session: Session, clientId: String, topicPartition: Option[TopicPartition] = None): ClientSensors = {
     // Use cached sanitized principal if using default callback
     val metricTags = quotaCallback match {
-      case callback: DefaultQuotaCallback => callback.quotaMetricTags(session.sanitizedUser, clientId)
-      case _ => quotaCallback.quotaMetricTags(clientQuotaType, session.principal, clientId).asScala.toMap
+      case callback: DefaultQuotaCallback => callback.quotaMetricTags(session.sanitizedUser, clientId, topicPartition.orNull)
+      case _ => quotaCallback.quotaMetricTags(
+        clientQuotaType,
+        session.principal,
+        clientId,
+        topicPartition.orNull
+      ).asScala.toMap
     }
     // Names of the sensors to access
     val sensors = ClientSensors(
@@ -556,7 +606,10 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
     override def configure(configs: util.Map[String, _]): Unit = {}
 
     override def quotaMetricTags(quotaType: ClientQuotaType, principal: KafkaPrincipal, clientId: String): util.Map[String, String] = {
-      quotaMetricTags(Sanitizer.sanitize(principal.getName), clientId).asJava
+      quotaMetricTags(Sanitizer.sanitize(principal.getName), clientId, null).asJava
+    }
+    override def quotaMetricTags(quotaType: ClientQuotaType, principal: KafkaPrincipal, clientId: String, topicPartition: TopicPartition): util.Map[String, String] = {
+      quotaMetricTags(Sanitizer.sanitize(principal.getName), clientId, topicPartition).asJava
     }
 
     override def quotaLimit(quotaType: ClientQuotaType, metricTags: util.Map[String, String]): lang.Double = {
@@ -620,48 +673,56 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
 
     override def quotaResetRequired(quotaType: ClientQuotaType): Boolean = false
 
-    def quotaMetricTags(sanitizedUser: String, clientId: String) : Map[String, String] = {
-      val (userTag, clientIdTag) = quotaTypesEnabled match {
-        case QuotaTypes.NoQuotas | QuotaTypes.ClientIdQuotaEnabled =>
-          ("", clientId)
-        case QuotaTypes.UserQuotaEnabled =>
-          (sanitizedUser, "")
-        case QuotaTypes.UserClientIdQuotaEnabled =>
-          (sanitizedUser, clientId)
-        case _ =>
-          val userEntity = Some(UserEntity(sanitizedUser))
-          val clientIdEntity = Some(ClientIdEntity(clientId))
+    def quotaMetricTags(sanitizedUser: String, clientId: String, topicPartition: TopicPartition = null) : Map[String, String] = {
+      // If topicPartition exists, we return the topic/partition metric tags
+      if (topicPartition != null) {
+        Map(
+          DefaultTags.TopicName -> topicPartition.topic(),
+          DefaultTags.PartitionId ->  topicPartition.partition().toString()
+        )
+      } else {
+        val (userTag, clientIdTag) = quotaTypesEnabled match {
+          case QuotaTypes.NoQuotas | QuotaTypes.ClientIdQuotaEnabled =>
+            ("", clientId)
+          case QuotaTypes.UserQuotaEnabled =>
+            (sanitizedUser, "")
+          case QuotaTypes.UserClientIdQuotaEnabled =>
+            (sanitizedUser, clientId)
+          case _ =>
+            val userEntity = Some(UserEntity(sanitizedUser))
+            val clientIdEntity = Some(ClientIdEntity(clientId))
 
-          var metricTags = (sanitizedUser, clientId)
-          // 1) /config/users/<user>/clients/<client-id>
-          if (!overriddenQuotas.containsKey(KafkaQuotaEntity(userEntity, clientIdEntity))) {
-            // 2) /config/users/<user>/clients/<default>
-            metricTags = (sanitizedUser, clientId)
-            if (!overriddenQuotas.containsKey(KafkaQuotaEntity(userEntity, Some(DefaultClientIdEntity)))) {
-              // 3) /config/users/<user>
-              metricTags = (sanitizedUser, "")
-              if (!overriddenQuotas.containsKey(KafkaQuotaEntity(userEntity, None))) {
-                // 4) /config/users/<default>/clients/<client-id>
-                metricTags = (sanitizedUser, clientId)
-                if (!overriddenQuotas.containsKey(KafkaQuotaEntity(Some(DefaultUserEntity), clientIdEntity))) {
-                  // 5) /config/users/<default>/clients/<default>
+            var metricTags = (sanitizedUser, clientId)
+            // 1) /config/users/<user>/clients/<client-id>
+            if (!overriddenQuotas.containsKey(KafkaQuotaEntity(userEntity, clientIdEntity))) {
+              // 2) /config/users/<user>/clients/<default>
+              metricTags = (sanitizedUser, clientId)
+              if (!overriddenQuotas.containsKey(KafkaQuotaEntity(userEntity, Some(DefaultClientIdEntity)))) {
+                // 3) /config/users/<user>
+                metricTags = (sanitizedUser, "")
+                if (!overriddenQuotas.containsKey(KafkaQuotaEntity(userEntity, None))) {
+                  // 4) /config/users/<default>/clients/<client-id>
                   metricTags = (sanitizedUser, clientId)
-                  if (!overriddenQuotas.containsKey(DefaultUserClientIdQuotaEntity)) {
-                    // 6) /config/users/<default>
-                    metricTags = (sanitizedUser, "")
-                    if (!overriddenQuotas.containsKey(DefaultUserQuotaEntity)) {
-                      // 7) /config/clients/<client-id>
-                      // 8) /config/clients/<default>
-                      metricTags = ("", clientId)
+                  if (!overriddenQuotas.containsKey(KafkaQuotaEntity(Some(DefaultUserEntity), clientIdEntity))) {
+                    // 5) /config/users/<default>/clients/<default>
+                    metricTags = (sanitizedUser, clientId)
+                    if (!overriddenQuotas.containsKey(DefaultUserClientIdQuotaEntity)) {
+                      // 6) /config/users/<default>
+                      metricTags = (sanitizedUser, "")
+                      if (!overriddenQuotas.containsKey(DefaultUserQuotaEntity)) {
+                        // 7) /config/clients/<client-id>
+                        // 8) /config/clients/<default>
+                        metricTags = ("", clientId)
+                      }
                     }
                   }
                 }
               }
             }
-          }
-          metricTags
+            metricTags
+        }
+        Map(DefaultTags.User -> userTag, DefaultTags.ClientId -> clientIdTag)
       }
-      Map(DefaultTags.User -> userTag, DefaultTags.ClientId -> clientIdTag)
     }
 
     override def close(): Unit = {}

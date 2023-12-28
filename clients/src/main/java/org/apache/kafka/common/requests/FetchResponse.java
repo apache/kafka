@@ -24,6 +24,7 @@ import org.apache.kafka.common.message.FetchResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.protocol.MessageSizeAccumulator;
 import org.apache.kafka.common.protocol.ObjectSerializationCache;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.Records;
@@ -69,7 +70,6 @@ import static org.apache.kafka.common.requests.FetchMetadata.INVALID_SESSION_ID;
 public class FetchResponse extends AbstractResponse {
     public static final long INVALID_HIGH_WATERMARK = -1L;
     public static final long INVALID_LAST_STABLE_OFFSET = -1L;
-    public static final long INVALID_LOG_START_OFFSET = -1L;
     public static final int INVALID_PREFERRED_REPLICA_ID = -1;
 
     private final FetchResponseData data;
@@ -250,6 +250,18 @@ public class FetchResponse extends AbstractResponse {
                                    LinkedHashMap<TopicIdPartition, FetchResponseData.PartitionData> responseData,
                                    List<Node> nodeEndpoints) {
         return new FetchResponse(toMessage(error, throttleTimeMs, sessionId, responseData.entrySet().iterator(), nodeEndpoints));
+    }
+
+    public static Map<TopicPartition, Integer> partitionSizes(LinkedHashMap<TopicIdPartition, FetchResponseData.PartitionData> partitions, short versionId) {
+        // Convert a Map of TopicPartition -> PartitionData to a Map of TopicPartition -> size of the PartitionData
+        return partitions.entrySet().stream().collect(Collectors.toMap(
+            entry -> entry.getKey().topicPartition(),
+            entry -> {
+                MessageSizeAccumulator sizeAccumulator = new MessageSizeAccumulator();
+                entry.getValue().addSize(sizeAccumulator, new ObjectSerializationCache(), versionId);
+                return sizeAccumulator.totalSize();
+            })
+        );
     }
 
     private static boolean matchingTopic(FetchResponseData.FetchableTopicResponse previousTopic, TopicIdPartition currentTopic) {

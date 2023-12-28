@@ -65,7 +65,7 @@ class ClientRequestQuotaManager(private val config: ClientQuotaManagerConfig,
     if (quotasEnabled) {
       request.recordNetworkThreadTimeCallback = Some(timeNanos => recordNoThrottle(
         request.session, request.header.clientId, nanosToPercentage(timeNanos)))
-      recordAndGetThrottleTimeMs(request.session, request.header.clientId,
+      recordAndGetThrottleTimeMs(request.session, request.header.clientId, None,
         nanosToPercentage(request.requestThreadTimeNanos), timeMs)
     } else {
       0

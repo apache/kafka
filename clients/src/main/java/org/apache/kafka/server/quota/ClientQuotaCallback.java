@@ -18,6 +18,7 @@ package org.apache.kafka.server.quota;
 
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.Configurable;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
 
 import java.util.Map;
@@ -38,6 +39,22 @@ public interface ClientQuotaCallback extends Configurable {
      * @return quota metric tags that indicate which other clients share this quota
      */
     Map<String, String> quotaMetricTags(ClientQuotaType quotaType, KafkaPrincipal principal, String clientId);
+
+    /**
+     * Quota callback invoked to determine the quota metric tags to be applied an individual topic partition of a request
+     * Quota limits are associated with quota metrics and all clients which use the same
+     * metric tags share the quota limit.
+     *
+     * @param quotaType Type of quota requested
+     * @param principal The user principal of the connection for which quota is requested
+     * @param clientId  The client id associated with the request
+     * @param ignoredTopicPartition topicPartition for the topic-partition based quota
+     * @return quota metric tags that indicate which other clients share this quota
+     */
+    default Map<String, String> quotaMetricTags(ClientQuotaType quotaType, KafkaPrincipal principal, String clientId, TopicPartition ignoredTopicPartition) {
+        // the default implementation of this method signature is using the original implementation for backward compatibility
+        return quotaMetricTags(quotaType, principal, clientId);
+    }
 
     /**
      * Returns the quota limit associated with the provided metric tags. These tags were returned from
