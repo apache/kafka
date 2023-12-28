@@ -44,7 +44,8 @@ fi
 export KAFKA_JVM_PERFORMANCE_OPTS="${KAFKA_JVM_PERFORMANCE_OPTS-} -XX:SharedArchiveFile=/opt/kafka/storage.jsa"
 
 echo "===> Using provided cluster id $CLUSTER_ID ..."
-# A bit of a hack to not error out if the storage is already formatted. Need storage-tool to support this
+
+# Invoke the docker wrapper to setup property files and format storage
 /opt/kafka/bin/kafka-run-class.sh kafka.docker.KafkaDockerWrapper setup /etc/kafka/docker /mnt/shared/config /opt/kafka/config
 
 # Using temp env variable to get rid of storage CDS command
