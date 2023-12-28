@@ -137,7 +137,7 @@ public class RegexSourceIntegrationTest {
         properties.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, 10000);
 
         streamsConfiguration = StreamsTestUtils.getStreamsConfig(
-            IntegrationTestUtils.safeUniqueTestName(RegexSourceIntegrationTest.class, testInfo),
+            IntegrationTestUtils.safeUniqueTestName(testInfo),
             CLUSTER.bootstrapServers(),
             STRING_SERDE_CLASSNAME,
             STRING_SERDE_CLASSNAME,

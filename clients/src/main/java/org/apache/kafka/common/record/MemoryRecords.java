@@ -194,25 +194,24 @@ public class MemoryRecords extends AbstractRecords {
                     batch.writeTo(bufferOutputStream);
                     filterResult.updateRetainedBatchMetadata(batch, retainedRecords.size(), false);
                 } else {
-                    final MemoryRecordsBuilder builder;
                     long deleteHorizonMs;
                     if (needToSetDeleteHorizon)
                         deleteHorizonMs = filter.currentTime + filter.deleteRetentionMs;
                     else
                         deleteHorizonMs = batch.deleteHorizonMs().orElse(RecordBatch.NO_TIMESTAMP);
-                    builder = buildRetainedRecordsInto(batch, retainedRecords, bufferOutputStream, deleteHorizonMs);
-
-                    MemoryRecords records = builder.build();
-                    int filteredBatchSize = records.sizeInBytes();
-                    if (filteredBatchSize > batch.sizeInBytes() && filteredBatchSize > maxRecordBatchSize)
-                        log.warn("Record batch from {} with last offset {} exceeded max record batch size {} after cleaning " +
-                                        "(new size is {}). Consumers with version earlier than 0.10.1.0 may need to " +
-                                        "increase their fetch sizes.",
+                    try (final MemoryRecordsBuilder builder = buildRetainedRecordsInto(batch, retainedRecords, bufferOutputStream, deleteHorizonMs)) {
+                        MemoryRecords records = builder.build();
+                        int filteredBatchSize = records.sizeInBytes();
+                        if (filteredBatchSize > batch.sizeInBytes() && filteredBatchSize > maxRecordBatchSize)
+                            log.warn("Record batch from {} with last offset {} exceeded max record batch size {} after cleaning " +
+                                    "(new size is {}). Consumers with version earlier than 0.10.1.0 may need to " +
+                                    "increase their fetch sizes.",
                                 partition, batch.lastOffset(), maxRecordBatchSize, filteredBatchSize);
 
-                    MemoryRecordsBuilder.RecordsInfo info = builder.info();
-                    filterResult.updateRetainedBatchMetadata(info.maxTimestamp, info.shallowOffsetOfMaxTimestamp,
+                        MemoryRecordsBuilder.RecordsInfo info = builder.info();
+                        filterResult.updateRetainedBatchMetadata(info.maxTimestamp, info.shallowOffsetOfMaxTimestamp,
                             maxOffset, retainedRecords.size(), filteredBatchSize);
+                    }
                 }
             } else if (batchRetention == BatchRetention.RETAIN_EMPTY) {
                 if (batchMagic < RecordBatch.MAGIC_VALUE_V2)
@@ -677,12 +676,13 @@ public class MemoryRecords extends AbstractRecords {
         long logAppendTime = RecordBatch.NO_TIMESTAMP;
         if (timestampType == TimestampType.LOG_APPEND_TIME)
             logAppendTime = System.currentTimeMillis();
-        MemoryRecordsBuilder builder = new MemoryRecordsBuilder(bufferStream, magic, compressionType, timestampType,
+        try (final MemoryRecordsBuilder builder = new MemoryRecordsBuilder(bufferStream, magic, compressionType, timestampType,
                 initialOffset, logAppendTime, producerId, producerEpoch, baseSequence, isTransactional, false,
-                partitionLeaderEpoch, sizeEstimate);
-        for (SimpleRecord record : records)
-            builder.append(record);
-        return builder.build();
+                partitionLeaderEpoch, sizeEstimate)) {
+            for (SimpleRecord record : records)
+                builder.append(record);
+            return builder.build();
+        }
     }
 
     public static MemoryRecords withEndTransactionMarker(long producerId, short producerEpoch, EndTransactionMarker marker) {

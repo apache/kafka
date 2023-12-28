@@ -23,7 +23,7 @@ import kafka.api.LeaderAndIsr
 import kafka.cluster.{Broker, EndPoint}
 import kafka.controller.{LeaderIsrAndControllerEpoch, ReplicaAssignment}
 import kafka.security.authorizer.AclEntry
-import kafka.server.{ConfigType, KafkaConfig, QuorumTestHarness}
+import kafka.server.{KafkaConfig, QuorumTestHarness}
 import kafka.utils.CoreUtils
 import kafka.zk.KafkaZkClient.UpdateLeaderAndIsrResult
 import kafka.zookeeper._
@@ -44,6 +44,7 @@ import org.apache.kafka.common.{TopicPartition, Uuid}
 import org.apache.kafka.metadata.LeaderRecoveryState
 import org.apache.kafka.metadata.migration.ZkMigrationLeadershipState
 import org.apache.kafka.server.common.MetadataVersion
+import org.apache.kafka.server.config.ConfigType
 import org.apache.kafka.storage.internals.log.LogConfig
 import org.apache.zookeeper.KeeperException.{Code, NoAuthException, NoNodeException, NodeExistsException}
 import org.apache.zookeeper.{CreateMode, ZooDefs}
@@ -731,20 +732,20 @@ class KafkaZkClientTest extends QuorumTestHarness {
 
   @Test
   def testEntityConfigManagementMethods(): Unit = {
-    assertTrue(zkClient.getEntityConfigs(ConfigType.Topic, topic1).isEmpty)
+    assertTrue(zkClient.getEntityConfigs(ConfigType.TOPIC, topic1).isEmpty)
 
-    zkClient.setOrCreateEntityConfigs(ConfigType.Topic, topic1, logProps)
-    assertEquals(logProps, zkClient.getEntityConfigs(ConfigType.Topic, topic1))
+    zkClient.setOrCreateEntityConfigs(ConfigType.TOPIC, topic1, logProps)
+    assertEquals(logProps, zkClient.getEntityConfigs(ConfigType.TOPIC, topic1))
 
     logProps.remove(TopicConfig.CLEANUP_POLICY_CONFIG)
-    zkClient.setOrCreateEntityConfigs(ConfigType.Topic, topic1, logProps)
-    assertEquals(logProps, zkClient.getEntityConfigs(ConfigType.Topic, topic1))
+    zkClient.setOrCreateEntityConfigs(ConfigType.TOPIC, topic1, logProps)
+    assertEquals(logProps, zkClient.getEntityConfigs(ConfigType.TOPIC, topic1))
 
-    zkClient.setOrCreateEntityConfigs(ConfigType.Topic, topic2, logProps)
-    assertEquals(Set(topic1, topic2), zkClient.getAllEntitiesWithConfig(ConfigType.Topic).toSet)
+    zkClient.setOrCreateEntityConfigs(ConfigType.TOPIC, topic2, logProps)
+    assertEquals(Set(topic1, topic2), zkClient.getAllEntitiesWithConfig(ConfigType.TOPIC).toSet)
 
     zkClient.deleteTopicConfigs(Seq(topic1, topic2), controllerEpochZkVersion)
-    assertTrue(zkClient.getEntityConfigs(ConfigType.Topic, topic1).isEmpty)
+    assertTrue(zkClient.getEntityConfigs(ConfigType.TOPIC, topic1).isEmpty)
   }
 
   @Test
@@ -752,13 +753,13 @@ class KafkaZkClientTest extends QuorumTestHarness {
     assertFalse(zkClient.pathExists(ConfigEntityChangeNotificationZNode.path))
 
     // The parent path is created if needed
-    zkClient.createConfigChangeNotification(ConfigEntityZNode.path(ConfigType.Topic, topic1))
+    zkClient.createConfigChangeNotification(ConfigEntityZNode.path(ConfigType.TOPIC, topic1))
     assertPathExistenceAndData(
       "/config/changes/config_change_0000000000",
       """{"version":2,"entity_path":"/config/topics/topic1"}""")
 
     // Creation does not fail if the parent path exists
-    zkClient.createConfigChangeNotification(ConfigEntityZNode.path(ConfigType.Topic, topic2))
+    zkClient.createConfigChangeNotification(ConfigEntityZNode.path(ConfigType.TOPIC, topic2))
     assertPathExistenceAndData(
       "/config/changes/config_change_0000000001",
       """{"version":2,"entity_path":"/config/topics/topic2"}""")
@@ -783,12 +784,12 @@ class KafkaZkClientTest extends QuorumTestHarness {
 
     val logProps2 = createLogProps(2048)
 
-    zkClient.setOrCreateEntityConfigs(ConfigType.Topic, topic1, logProps)
+    zkClient.setOrCreateEntityConfigs(ConfigType.TOPIC, topic1, logProps)
     assertEquals((Map(topic1 -> new LogConfig(logProps), topic2 -> emptyConfig), Map.empty),
       zkClient.getLogConfigs(Set(topic1, topic2), Collections.emptyMap()),
       "One existing and one non-existent topic")
 
-    zkClient.setOrCreateEntityConfigs(ConfigType.Topic, topic2, logProps2)
+    zkClient.setOrCreateEntityConfigs(ConfigType.TOPIC, topic2, logProps2)
     assertEquals((Map(topic1 -> new LogConfig(logProps), topic2 -> new LogConfig(logProps2)), Map.empty),
       zkClient.getLogConfigs(Set(topic1, topic2), Collections.emptyMap()),
       "Two existing topics")

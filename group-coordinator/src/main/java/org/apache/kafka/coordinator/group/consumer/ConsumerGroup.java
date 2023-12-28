@@ -190,8 +190,6 @@ public class ConsumerGroup implements Group {
         this.targetAssignment = new TimelineHashMap<>(snapshotRegistry, 0);
         this.currentPartitionEpoch = new TimelineHashMap<>(snapshotRegistry, 0);
         this.metrics = Objects.requireNonNull(metrics);
-
-        metrics.onConsumerGroupStateTransition(null, this.state.get());
     }
 
     /**
