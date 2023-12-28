@@ -33,7 +33,7 @@ import kafka.log._
 import kafka.server.QuotaFactory.{QuotaManagers, UnboundedQuota}
 import kafka.server.checkpoints.{LazyOffsetCheckpoints, OffsetCheckpointFile}
 import kafka.server.epoch.util.MockBlockingSender
-import kafka.utils.{Pool, TestInfoUtils, TestUtils}
+import kafka.utils.{CoreUtils, Logging, Pool, TestInfoUtils, TestUtils}
 import org.apache.kafka.clients.FetchSessionHandler
 import org.apache.kafka.common.errors.{InvalidPidMappingException, KafkaStorageException}
 import org.apache.kafka.common.message.LeaderAndIsrRequestData
@@ -91,7 +91,7 @@ object ReplicaManagerTest {
   }
 }
 
-class ReplicaManagerTest {
+class ReplicaManagerTest extends Logging {
 
   private val topic = "test-topic"
   private val topicId = Uuid.randomUuid()
@@ -2633,6 +2633,7 @@ class ReplicaManagerTest {
     }
 
     val logManager = TestUtils.createLogManager(config.logDirs.map(new File(_)), defaultConfig = new LogConfig(new Properties()), time = time)
+    val quotaManager = QuotaFactory.instantiate(config, metrics, time, "")
     val replicaManager = new ReplicaManager(
       metrics = metrics,
       config = config,
@@ -2696,14 +2697,16 @@ class ReplicaManagerTest {
         assertTrue(stray0.isInstanceOf[HostedPartition.Online])
       }
     } finally {
-      replicaManager.shutdown()
-      logManager.shutdown()
+      CoreUtils.swallow(replicaManager.shutdown(checkpointHW = false), this)
+      CoreUtils.swallow(logManager.shutdown(), this)
+      CoreUtils.swallow(quotaManager.shutdown(), this)
     }
   }
 
   @Test
   def testUpdateStrayLogs(): Unit = {
     val logManager = TestUtils.createLogManager(config.logDirs.map(new File(_)), defaultConfig = new LogConfig(new Properties()), time = time)
+    val quotaManager = QuotaFactory.instantiate(config, metrics, time, "")
     val replicaManager = new ReplicaManager(
       metrics = metrics,
       config = config,
@@ -2731,8 +2734,9 @@ class ReplicaManagerTest {
       assertEquals(validLogs, logManager.allLogs.toSet)
       assertEquals(validLogs.size, replicaManager.partitionCount.value)
     } finally {
-      replicaManager.shutdown()
-      logManager.shutdown()
+      CoreUtils.swallow(replicaManager.shutdown(checkpointHW = false), this)
+      CoreUtils.swallow(logManager.shutdown(), this)
+      CoreUtils.swallow(quotaManager.shutdown(), this)
     }
   }
 
@@ -3469,8 +3473,8 @@ class ReplicaManagerTest {
       rm0.becomeLeaderOrFollower(correlationId, leaderAndIsrRequest2, (_, _) => ())
       rm1.becomeLeaderOrFollower(correlationId, leaderAndIsrRequest2, (_, _) => ())
     } finally {
-      rm0.shutdown(checkpointHW = false)
-      rm1.shutdown(checkpointHW = false)
+      CoreUtils.swallow(rm0.shutdown(checkpointHW = false), this)
+      CoreUtils.swallow(rm1.shutdown(checkpointHW = false), this)
     }
 
     // verify that broker 1 did remove its metrics when no longer being the leader of partition 1
@@ -3557,8 +3561,8 @@ class ReplicaManagerTest {
       rm0.becomeLeaderOrFollower(correlationId, leaderAndIsrRequest2, (_, _) => ())
       rm1.becomeLeaderOrFollower(correlationId, leaderAndIsrRequest2, (_, _) => ())
     } finally {
-      rm0.shutdown(checkpointHW = false)
-      rm1.shutdown(checkpointHW = false)
+      CoreUtils.swallow(rm0.shutdown(checkpointHW = false), this)
+      CoreUtils.swallow(rm1.shutdown(checkpointHW = false), this)
     }
 
     // verify that broker 1 did remove its metrics when no longer being the leader of partition 1
@@ -4030,8 +4034,8 @@ class ReplicaManagerTest {
       // unlock all tasks
       doneLatch.countDown()
     } finally {
-      replicaManager.shutdown(checkpointHW = false)
-      remoteLogManager.close()
+      CoreUtils.swallow(replicaManager.shutdown(checkpointHW = false), this)
+      CoreUtils.swallow(remoteLogManager.close(), this)
     }
   }
 
@@ -4127,8 +4131,8 @@ class ReplicaManagerTest {
           safeYammerMetricValue("type=DelayedRemoteFetchMetrics,name=ExpiresPerSec").asInstanceOf[Long])
       latch.countDown()
     } finally {
-      replicaManager.shutdown(checkpointHW = false)
-      remoteLogManager.close()
+      CoreUtils.swallow(replicaManager.shutdown(checkpointHW = false), this)
+      CoreUtils.swallow(remoteLogManager.close(), this)
     }
   }
 
