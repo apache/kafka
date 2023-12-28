@@ -32,7 +32,7 @@ def isChangeRequest(env) {
 def doTest(env, target = ":core:test") {
   sh """./gradlew -PscalaVersion=$SCALA_VERSION ${target} \
       --profile --continue -PkeepAliveMode="session" -PtestLoggingEvents=started,passed,skipped,failed \
-      -PignoreFailures=true -PmaxParallelForks=2 -PmaxTestRetries=1 -PmaxTestRetryFailures=10 --tests kafka.zk.ZkMigrationIntegrationTest"""
+      -PignoreFailures=true -PmaxParallelForks=2 -PmaxTestRetries=1 -PmaxTestRetryFailures=10"""
   junit '**/build/test-results/**/TEST-*.xml'
 }
 
