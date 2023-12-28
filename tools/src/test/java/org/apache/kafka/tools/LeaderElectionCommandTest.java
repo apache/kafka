@@ -39,7 +39,6 @@ import org.mockito.MockedStatic;
 import org.mockito.ArgumentCaptor;
 import org.mockito.Mockito;
 
-import java.util.Properties;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -50,6 +49,7 @@ import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.properties;
 import java.util.concurrent.ExecutionException;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
