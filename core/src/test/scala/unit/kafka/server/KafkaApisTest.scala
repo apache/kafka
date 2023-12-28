@@ -2454,14 +2454,13 @@ class KafkaApisTest {
         .build(version.toShort)
       val request = buildRequest(produceRequest)
 
-      when(replicaManager.appendRecords(anyLong,
+      when(replicaManager.handleProduceAppend(anyLong,
         anyShort,
         ArgumentMatchers.eq(false),
         ArgumentMatchers.eq(AppendOrigin.CLIENT),
         any(),
+        any(),
         responseCallback.capture(),
-        any(),
-        any(),
         any(),
         any(),
         any()
@@ -2513,14 +2512,13 @@ class KafkaApisTest {
         .build(version.toShort)
       val request = buildRequest(produceRequest)
 
-      when(replicaManager.appendRecords(anyLong,
+      when(replicaManager.handleProduceAppend(anyLong,
         anyShort,
         ArgumentMatchers.eq(false),
         ArgumentMatchers.eq(AppendOrigin.CLIENT),
         any(),
+        any(),
         responseCallback.capture(),
-        any(),
-        any(),
         any(),
         any(),
         any())
@@ -2579,14 +2577,13 @@ class KafkaApisTest {
         .build(version.toShort)
       val request = buildRequest(produceRequest)
 
-      when(replicaManager.appendRecords(anyLong,
+      when(replicaManager.handleProduceAppend(anyLong,
         anyShort,
         ArgumentMatchers.eq(false),
         ArgumentMatchers.eq(AppendOrigin.CLIENT),
         any(),
+        any(),
         responseCallback.capture(),
-        any(),
-        any(),
         any(),
         any(),
         any())
@@ -2644,14 +2641,13 @@ class KafkaApisTest {
         .build(version.toShort)
       val request = buildRequest(produceRequest)
 
-      when(replicaManager.appendRecords(anyLong,
+      when(replicaManager.handleProduceAppend(anyLong,
         anyShort,
         ArgumentMatchers.eq(false),
         ArgumentMatchers.eq(AppendOrigin.CLIENT),
         any(),
+        any(),
         responseCallback.capture(),
-        any(),
-        any(),
         any(),
         any(),
         any())
@@ -2693,8 +2689,6 @@ class KafkaApisTest {
 
       reset(replicaManager, clientQuotaManager, clientRequestQuotaManager, requestChannel, txnCoordinator)
 
-      val responseCallback: ArgumentCaptor[Map[TopicPartition, PartitionResponse] => Unit] = ArgumentCaptor.forClass(classOf[Map[TopicPartition, PartitionResponse] => Unit])
-
       val tp = new TopicPartition("topic", 0)
 
       val produceRequest = ProduceRequest.forCurrentMagic(new ProduceRequestData()
@@ -2713,18 +2707,19 @@ class KafkaApisTest {
 
       val kafkaApis = createKafkaApis()
 
-      kafkaApis.handleProduceRequest(request, RequestLocal.withThreadConfinedCaching)
+      val requestLocal = RequestLocal.withThreadConfinedCaching
+
+      kafkaApis.handleProduceRequest(request, requestLocal)
       
-      verify(replicaManager).appendRecords(anyLong,
+      verify(replicaManager).handleProduceAppend(anyLong,
         anyShort,
         ArgumentMatchers.eq(false),
         ArgumentMatchers.eq(AppendOrigin.CLIENT),
-        any(),
-        responseCallback.capture(),
-        any(),
-        any(),
-        any(),
         ArgumentMatchers.eq(transactionalId),
+        any(),
+        any(),
+        any(),
+        any(),
         any())
     }
   }
@@ -2851,6 +2846,7 @@ class KafkaApisTest {
       any(),
       any(),
       ArgumentMatchers.eq(requestLocal),
+      any(),
       any(),
       any()
     )).thenAnswer(_ => responseCallback.getValue.apply(Map(tp2 -> new PartitionResponse(Errors.NONE))))
@@ -2984,6 +2980,7 @@ class KafkaApisTest {
       any(),
       ArgumentMatchers.eq(requestLocal),
       any(),
+      any(),
       any()
     )).thenAnswer(_ => responseCallback.getValue.apply(Map(tp2 -> new PartitionResponse(Errors.NONE))))
 
@@ -3017,6 +3014,7 @@ class KafkaApisTest {
       any(),
       any(),
       ArgumentMatchers.eq(requestLocal),
+      any(),
       any(),
       any())
   }

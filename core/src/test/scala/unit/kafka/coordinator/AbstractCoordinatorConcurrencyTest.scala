@@ -203,8 +203,9 @@ object AbstractCoordinatorConcurrencyTest {
                                delayedProduceLock: Option[Lock] = None,
                                processingStatsCallback: Map[TopicPartition, RecordValidationStats] => Unit = _ => (),
                                requestLocal: RequestLocal = RequestLocal.NoCaching,
-                               transactionalId: String = null,
-                               actionQueue: ActionQueue = null): Unit = {
+                               actionQueue: ActionQueue = null,
+                               verificationGuards: Map[TopicPartition, VerificationGuard] = Map.empty,
+                               preAppendErrors: Map[TopicPartition, LogAppendResult] = Map.empty): Unit = {
 
       if (entriesPerPartition.isEmpty)
         return
