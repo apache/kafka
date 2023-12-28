@@ -22,7 +22,8 @@ import java.util.{Collections, Random}
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.locks.Lock
 import kafka.coordinator.AbstractCoordinatorConcurrencyTest._
-import kafka.log.UnifiedLog
+import kafka.log.{LogManager, UnifiedLog}
+import kafka.server.QuotaFactory.QuotaManagers
 import kafka.server._
 import kafka.utils._
 import kafka.zk.KafkaZkClient
@@ -34,7 +35,7 @@ import org.apache.kafka.server.util.timer.MockTimer
 import org.apache.kafka.server.util.{MockScheduler, MockTime}
 import org.apache.kafka.storage.internals.log.{AppendOrigin, LogConfig, VerificationGuard}
 import org.junit.jupiter.api.{AfterEach, BeforeEach}
-import org.mockito.Mockito.{CALLS_REAL_METHODS, mock, withSettings}
+import org.mockito.Mockito.{mock, when}
 
 import scala.collection._
 import scala.jdk.CollectionConverters._
@@ -55,7 +56,7 @@ abstract class AbstractCoordinatorConcurrencyTest[M <: CoordinatorMember] {
   @BeforeEach
   def setUp(): Unit = {
 
-    replicaManager = mock(classOf[TestReplicaManager], withSettings().defaultAnswer(CALLS_REAL_METHODS))
+    replicaManager = new TestReplicaManager()
     replicaManager.createDelayedProducePurgatory(timer)
 
     zkClient = mock(classOf[KafkaZkClient])
@@ -156,8 +157,11 @@ object AbstractCoordinatorConcurrencyTest {
   trait CoordinatorMember {
   }
 
+  val props = TestUtils.createBrokerConfig(1, TestUtils.MockZkConnect)
+  val mockLogMger = mock(classOf[LogManager])
+  when(mockLogMger.liveLogDirs).thenReturn(Seq.empty)
   class TestReplicaManager extends ReplicaManager(
-    null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, None, null) {
+    config = KafkaConfig.fromProps(props), null, null, null, mockLogMger, null, mock(classOf[QuotaManagers]), null, null, null, null, null, null) {
 
     @volatile var logs: mutable.Map[TopicPartition, (UnifiedLog, Long)] = _
     var producePurgatory: DelayedOperationPurgatory[DelayedProduce] = _
