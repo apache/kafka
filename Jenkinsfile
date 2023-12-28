@@ -29,10 +29,10 @@ def isChangeRequest(env) {
   env.CHANGE_ID != null && !env.CHANGE_ID.isEmpty()
 }
 
-def doTest(env, target = "test") {
+def doTest(env, target = ":core:test") {
   sh """./gradlew -PscalaVersion=$SCALA_VERSION ${target} \
       --profile --continue -PkeepAliveMode="session" -PtestLoggingEvents=started,passed,skipped,failed \
-      -PignoreFailures=true -PmaxParallelForks=2 -PmaxTestRetries=1 -PmaxTestRetryFailures=10"""
+      -PignoreFailures=true -PmaxParallelForks=2 -PmaxTestRetries=1 -PmaxTestRetryFailures=10 --tests kafka.zk.ZkMigrationIntegrationTest"""
   junit '**/build/test-results/**/TEST-*.xml'
 }
 
