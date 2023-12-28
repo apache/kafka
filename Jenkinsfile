@@ -114,6 +114,15 @@ pipeline {
           steps {
             doValidation()
             doTest(env)
+            doTest(env)
+            doTest(env)
+            doTest(env)
+            doTest(env)
+            doTest(env)
+            doTest(env)
+            doTest(env)
+            doTest(env)
+            doTest(env)
             tryStreamsArchetype()
           }
         }
@@ -133,6 +142,15 @@ pipeline {
           steps {
             doValidation()
             doTest(env)
+            doTest(env)
+            doTest(env)
+            doTest(env)
+            doTest(env)
+            doTest(env)
+            doTest(env)
+            doTest(env)
+            doTest(env)
+            doTest(env)
             echo 'Skipping Kafka Streams archetype test for Java 11'
           }
         }
@@ -151,6 +169,15 @@ pipeline {
           }
           steps {
             doValidation()
+            doTest(env)
+            doTest(env)
+            doTest(env)
+            doTest(env)
+            doTest(env)
+            doTest(env)
+            doTest(env)
+            doTest(env)
+            doTest(env)
             doTest(env)
             echo 'Skipping Kafka Streams archetype test for Java 17'
           }
