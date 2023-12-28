@@ -3094,6 +3094,7 @@ class KafkaApisTest {
       any(),
       ArgumentMatchers.eq(RequestLocal.NoCaching),
       any(),
+      any(),
       any()
     )).thenAnswer { _ =>
       responseCallback.getValue.apply(

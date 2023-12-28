@@ -2561,41 +2561,6 @@ class ReplicaManagerTest {
     }
   }
 
-  @ParameterizedTest
-  @EnumSource(value = classOf[Errors], names = Array("NOT_COORDINATOR", "CONCURRENT_TRANSACTIONS", "COORDINATOR_LOAD_IN_PROGRESS", "COORDINATOR_NOT_AVAILABLE"))
-  def testMaybeVerificationErrorConversions(error: Errors): Unit = {
-    val tp0 = new TopicPartition(topic, 0)
-    val transactionalId = "txn-id"
-    val producerId = 24L
-    val producerEpoch = 0.toShort
-    val addPartitionsToTxnManager = mock(classOf[AddPartitionsToTxnManager])
-
-    val replicaManager = setUpReplicaManagerWithMockedAddPartitionsToTxnManager(addPartitionsToTxnManager, List(tp0))
-    try {
-      replicaManager.becomeLeaderOrFollower(1,
-        makeLeaderAndIsrRequest(topicIds(tp0.topic), tp0, Seq(0, 1), LeaderAndIsr(1, List(0, 1))),
-        (_, _) => ())
-
-      // Start verification and return the coordinator related errors.
-      val result = maybeStartTransactionVerificationForPartition(replicaManager, tp0, transactionalId, producerId, producerEpoch)
-      val appendCallback = ArgumentCaptor.forClass(classOf[AddPartitionsToTxnManager.AppendCallback])
-      verify(addPartitionsToTxnManager, times(1)).verifyTransaction(
-        ArgumentMatchers.eq(transactionalId),
-        ArgumentMatchers.eq(producerId),
-        ArgumentMatchers.eq(producerEpoch),
-        ArgumentMatchers.eq(Seq(tp0)),
-        appendCallback.capture()
-      )
-
-      // Confirm we did not write to the log and instead returned the converted error with the correct error message.
-      val callback: AddPartitionsToTxnManager.AppendCallback = appendCallback.getValue()
-      callback(Map(tp0 -> error).toMap)
-      assertEquals(Errors.NOT_ENOUGH_REPLICAS, result.assertFired.left.getOrElse(Errors.NONE))
-    } finally {
-      replicaManager.shutdown(checkpointHW = false)
-    }
-  }
-
   @Test
   def testPreVerificationError(): Unit = {
     val tp0 = new TopicPartition(topic, 0)

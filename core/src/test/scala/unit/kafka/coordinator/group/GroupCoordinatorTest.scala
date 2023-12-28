@@ -38,7 +38,7 @@ import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity
 import org.apache.kafka.server.util.timer.MockTimer
 import org.apache.kafka.server.util.{KafkaScheduler, MockTime}
-import org.apache.kafka.storage.internals.log.VerificationGuard
+import org.apache.kafka.storage.internals.log.{AppendOrigin, VerificationGuard}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.junit.jupiter.params.ParameterizedTest
@@ -3898,8 +3898,8 @@ class GroupCoordinatorTest {
 
     when(replicaManager.appendRecords(anyLong,
       anyShort(),
-      any(),
-      any(),
+      internalTopicsAllowed = ArgumentMatchers.eq(true),
+      origin = ArgumentMatchers.eq(AppendOrigin.COORDINATOR),
       any[Map[TopicPartition, MemoryRecords]],
       capturedArgument.capture(),
       any[Option[ReentrantLock]],
@@ -3935,13 +3935,13 @@ class GroupCoordinatorTest {
 
     when(replicaManager.appendRecords(anyLong,
       anyShort(),
-      any(),
-      any(),
+      internalTopicsAllowed = ArgumentMatchers.eq(true),
+      origin = ArgumentMatchers.eq(AppendOrigin.COORDINATOR),
       any[Map[TopicPartition, MemoryRecords]],
       capturedArgument.capture(),
       any[Option[ReentrantLock]],
       any(),
-      any(), 
+      any(),
       any(),
       any(),
       any())).thenAnswer(_ => {
@@ -4082,8 +4082,8 @@ class GroupCoordinatorTest {
 
     when(replicaManager.appendRecords(anyLong,
       anyShort(),
-      any(),
-      any(),
+      internalTopicsAllowed = ArgumentMatchers.eq(true),
+      origin = ArgumentMatchers.eq(AppendOrigin.COORDINATOR),
       any[Map[TopicPartition, MemoryRecords]],
       capturedArgument.capture(),
       any[Option[ReentrantLock]],
@@ -4129,8 +4129,8 @@ class GroupCoordinatorTest {
     )
     when(replicaManager.appendRecords(anyLong,
       anyShort(),
-      any(),
-      any(),
+      internalTopicsAllowed = ArgumentMatchers.eq(true),
+      origin = ArgumentMatchers.eq(AppendOrigin.COORDINATOR),
       any[Map[TopicPartition, MemoryRecords]],
       capturedArgument.capture(),
       any[Option[ReentrantLock]],

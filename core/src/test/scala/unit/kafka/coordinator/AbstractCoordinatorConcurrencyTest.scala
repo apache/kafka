@@ -183,17 +183,6 @@ object AbstractCoordinatorConcurrencyTest {
 
     override def tryCompleteActions(): Unit = watchKeys.map(producePurgatory.checkAndComplete)
 
-    override def appendForGroup(timeout: Long,
-                                requiredAcks: Short,
-                                entriesPerPartition: Map[TopicPartition, MemoryRecords],
-                                responseCallback: Map[TopicPartition, PartitionResponse] => Unit,
-                                delayedProduceLock: Option[Lock] = None,
-                                requestLocal: RequestLocal = RequestLocal.NoCaching,
-                                verificationGuards: Map[TopicPartition, VerificationGuard] = Map.empty): Unit = {
-      appendRecords(timeout, requiredAcks, true, AppendOrigin.COORDINATOR, entriesPerPartition, responseCallback,
-        delayedProduceLock, requestLocal = requestLocal)
-    }
-
     override def appendRecords(timeout: Long,
                                requiredAcks: Short,
                                internalTopicsAllowed: Boolean,
