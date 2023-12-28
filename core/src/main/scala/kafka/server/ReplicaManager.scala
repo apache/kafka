@@ -807,14 +807,13 @@ class ReplicaManager(val config: KafkaConfig,
    * @param requiredAcks                  number of replicas who must acknowledge the append before sending the response
    * @param internalTopicsAllowed         boolean indicating whether internal topics can be appended to
    * @param origin                        source of the append request (ie, client, replication, coordinator)
+   * @param transactionalId               the transactional ID for the produce request or null if there is none.
    * @param entriesPerPartition           the records per partition to be appended
    * @param responseCallback              callback for sending the response
-   * @param delayedProduceLock            lock for the delayed actions
    * @param recordValidationStatsCallback callback for updating stats on record conversions
    * @param requestLocal                  container for the stateful instances scoped to this request -- this must correspond to the
    *                                      thread calling this method
    * @param actionQueue                   the action queue to use. ReplicaManager#defaultActionQueue is used by default.
-   * @param verificationGuards            the mapping from topic partition to verification guards if transaction verification is used
    */
   def handleProduceAppend(timeout: Long,
                           requiredAcks: Short,
@@ -983,7 +982,7 @@ class ReplicaManager(val config: KafkaConfig,
    *
    * When the verification returns, the callback will be supplied the error if it exists or Errors.NONE.
    * If the verification guard exists, it will also be supplied. Otherwise the SENTINEL verification guard will be returned.
-   * This guard can not be used for verification and any appends that attenpt to use it will fail.
+   * This guard can not be used for verification and any appends that attempt to use it will fail.
    */
   def maybeStartTransactionVerificationForPartition(
     topicPartition: TopicPartition,
@@ -1030,7 +1029,7 @@ class ReplicaManager(val config: KafkaConfig,
    * is scheduled on a request handler thread. There, it should be called with that request handler thread's thread local and
    * not the one supplied to this method.
    */
-  def maybeStartTransactionVerificationForPartitions(
+  private def maybeStartTransactionVerificationForPartitions(
     topicPartitionBatchInfo: Map[TopicPartition, Int],
     transactionalId: String,
     producerId: Long,
@@ -1084,13 +1083,13 @@ class ReplicaManager(val config: KafkaConfig,
       requestLocal
     )
 
-    addPartitionsToTxnManager.get.verifyTransaction(
+    addPartitionsToTxnManager.foreach(_.verifyTransaction(
       transactionalId = transactionalId,
       producerId = producerId,
       producerEpoch = producerEpoch,
       topicPartitions = verificationGuards.keys.toSeq,
       callback = verificationCallback
-    )
+    ))
 
   }
 
