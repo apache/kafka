@@ -1,0 +1,2 @@
+default.api.timeout.ms=120000
+request.timeout.ms=60000

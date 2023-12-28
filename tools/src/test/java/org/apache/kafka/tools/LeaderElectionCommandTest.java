@@ -34,6 +34,12 @@ import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.extension.ExtendWith;
 import scala.collection.JavaConverters;
 
+import org.mockito.MockedStatic;
+import org.mockito.ArgumentCaptor;
+import org.mockito.Mockito;
+import org.apache.kafka.clients.admin.AdminClientConfig;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import java.util.Properties;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -104,6 +110,29 @@ public class LeaderElectionCommandTest {
         );
 
         TestUtils.assertLeader(client, topicPartition, broker3);
+    }
+
+    @ClusterTest
+    public void testAdminConfigCustomTimeouts() throws Exception {
+        String defaultApiTimeoutMs = String.valueOf(110000);
+        String requestTimeoutMs = String.valueOf(55000);
+        Path adminConfigPath = tempAdminConfig(defaultApiTimeoutMs, requestTimeoutMs);
+
+        try (final MockedStatic<Admin> mockedAdmin = Mockito.mockStatic(Admin.class)) {
+            LeaderElectionCommand.main(
+                "--bootstrap-server", cluster.bootstrapServers(),
+                "--election-type", "unclean", "--all-topic-partitions",
+                "--admin.config", adminConfigPath.toString()
+            );
+
+            ArgumentCaptor<Properties> argumentCaptor = ArgumentCaptor.forClass(Properties.class);
+            mockedAdmin.verify(() -> Admin.create(argumentCaptor.capture()));
+
+            // verify that properties provided to admin client are the overridden properties
+            final Properties actualProps = argumentCaptor.getValue();
+            assertEquals(actualProps.get(AdminClientConfig.REQUEST_TIMEOUT_MS_CONFIG), requestTimeoutMs);
+            assertEquals(actualProps.get(AdminClientConfig.DEFAULT_API_TIMEOUT_MS_CONFIG), defaultApiTimeoutMs);
+        }
     }
 
     @ClusterTest
@@ -293,6 +322,12 @@ public class LeaderElectionCommandTest {
 
         Files.write(file.toPath(), jsonString.getBytes(StandardCharsets.UTF_8));
 
+        return file.toPath();
+    }
+    private static Path tempAdminConfig(String defaultApiTimeoutMs, String requestTimeoutMs) throws Exception {
+        String content = "default.api.timeout.ms=" + defaultApiTimeoutMs + "\nrequest.timeout.ms=" + requestTimeoutMs;
+        java.io.File file = TestUtils.tempFile("admin-config", ".properties");
+        Files.write(file.toPath(), content.getBytes(StandardCharsets.UTF_8));
         return file.toPath();
     }
 }
