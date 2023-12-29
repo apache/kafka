@@ -58,6 +58,7 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
 public class DefaultRecordBatchTest {
@@ -483,15 +484,15 @@ public class DefaultRecordBatchTest {
             Arguments.of(CompressionType.GZIP, 1, largeRecordValue),
             Arguments.of(CompressionType.SNAPPY, 1, smallRecordValue),
             Arguments.of(CompressionType.SNAPPY, 1, largeRecordValue),
+            Arguments.of(CompressionType.ZSTD, 1, smallRecordValue),
+            Arguments.of(CompressionType.ZSTD, 1, largeRecordValue),
             /*
              * 1 allocation per batch (i.e. per iterator instance) for buffer holding compressed data
              * 1 allocation per batch (i.e. per iterator instance) for buffer holding uncompressed data
              * = 2 buffer allocations
              */
             Arguments.of(CompressionType.LZ4, 2, smallRecordValue),
-            Arguments.of(CompressionType.LZ4, 2, largeRecordValue),
-            Arguments.of(CompressionType.ZSTD, 2, smallRecordValue),
-            Arguments.of(CompressionType.ZSTD, 2, largeRecordValue)
+            Arguments.of(CompressionType.LZ4, 2, largeRecordValue)
         );
     }
 
@@ -515,7 +516,7 @@ public class DefaultRecordBatchTest {
         recordsBuffer.position(RECORDS_OFFSET);
 
         try (final BufferSupplier bufferSupplier = BufferSupplier.create();
-             final InputStream zstdStream = spy(ZstdFactory.wrapForInput(recordsBuffer, batch.magic(), bufferSupplier));
+             final InputStream zstdStream = spy(ZstdFactory.wrapForInput(recordsBuffer, bufferSupplier));
              final InputStream chunkedStream = new ChunkedBytesStream(zstdStream, bufferSupplier, 16 * 1024, false)) {
 
             when(mockCompression.wrapForInput(any(ByteBuffer.class), anyByte(), any(BufferSupplier.class))).thenReturn(chunkedStream);
@@ -530,6 +531,10 @@ public class DefaultRecordBatchTest {
                 // during skip.
                 verify(zstdStream, never()).skip(anyLong());
             }
+            // verify that the stream is properly closed when record iterator is closed
+            verify(zstdStream).close();
+            // verify that there were no calls to other methods invocations of zstdStream
+            verifyNoMoreInteractions(zstdStream);
         }
     }
 
