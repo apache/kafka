@@ -622,7 +622,7 @@ class KafkaApisTest extends Logging {
     when(clientRequestQuotaManager.maybeRecordAndGetThrottleTimeMs(any[RequestChannel.Request](),
       any[Long])).thenReturn(0)
     kafkaApis = createKafkaApis(enableForwarding = true)
-kafkaApis.handle(request, RequestLocal.withThreadConfinedCaching)
+    kafkaApis.handle(request, RequestLocal.withThreadConfinedCaching)
 
     val response = verifyNoThrottling[DescribeQuorumResponse](request)
     assertEquals(Errors.UNKNOWN_SERVER_ERROR, Errors.forCode(response.data.errorCode))
@@ -680,7 +680,7 @@ kafkaApis.handle(request, RequestLocal.withThreadConfinedCaching)
       any[Long])).thenReturn(0)
     val forwardCallback: ArgumentCaptor[Option[AbstractResponse] => Unit] = ArgumentCaptor.forClass(classOf[Option[AbstractResponse] => Unit])
 
-        kafkaApis.handle(request, RequestLocal.withThreadConfinedCaching)
+    kafkaApis.handle(request, RequestLocal.withThreadConfinedCaching)
     verify(forwardingManager).forwardRequest(
       ArgumentMatchers.eq(request),
       forwardCallback.capture()
@@ -937,7 +937,7 @@ kafkaApis.handle(request, RequestLocal.withThreadConfinedCaching)
     when(clientRequestQuotaManager.maybeRecordAndGetThrottleTimeMs(request, time.milliseconds()))
       .thenReturn(requestThrottleTimeMs)
 
-        kafkaApis.handle(request, RequestLocal.withThreadConfinedCaching)
+    kafkaApis.handle(request, RequestLocal.withThreadConfinedCaching)
 
     verify(forwardingManager).forwardRequest(
       ArgumentMatchers.eq(request),
@@ -1013,7 +1013,7 @@ kafkaApis.handle(request, RequestLocal.withThreadConfinedCaching)
       callback.apply(Map("foo" -> ApiError.NONE))
     }
 
-        kafkaApis.handle(request, RequestLocal.withThreadConfinedCaching)
+    kafkaApis.handle(request, RequestLocal.withThreadConfinedCaching)
 
     val response = verifyNoThrottling[CreatePartitionsResponse](request)
     val results = response.data.results.asScala
