@@ -17,62 +17,54 @@
 
 package kafka.coordinator
 
-import java.util.concurrent.{ConcurrentHashMap, ExecutorService, Executors}
+import java.util.concurrent.{ConcurrentHashMap, Executors}
 import java.util.{Collections, Random}
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.locks.Lock
 import kafka.coordinator.AbstractCoordinatorConcurrencyTest._
-import kafka.log.{LogManager, UnifiedLog}
-import kafka.server.QuotaFactory.QuotaManagers
-import kafka.server.{DelayedOperationPurgatory, KafkaConfig, _}
+import kafka.log.UnifiedLog
+import kafka.server._
 import kafka.utils._
 import kafka.zk.KafkaZkClient
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.{MemoryRecords, RecordBatch, RecordValidationStats}
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
-import org.apache.kafka.common.utils.Time
 import org.apache.kafka.server.util.timer.MockTimer
-import org.apache.kafka.server.util.{MockScheduler, MockTime, Scheduler}
+import org.apache.kafka.server.util.{MockScheduler, MockTime}
 import org.apache.kafka.storage.internals.log.{AppendOrigin, LogConfig, VerificationGuard}
 import org.junit.jupiter.api.{AfterEach, BeforeEach}
-import org.mockito.Mockito.{mock, when, withSettings}
+import org.mockito.Mockito.{CALLS_REAL_METHODS, mock, withSettings}
 
 import scala.collection._
 import scala.jdk.CollectionConverters._
 
-abstract class AbstractCoordinatorConcurrencyTest[M <: CoordinatorMember] extends Logging {
+abstract class AbstractCoordinatorConcurrencyTest[M <: CoordinatorMember] {
+
   val nThreads = 5
-  val serverProps = TestUtils.createBrokerConfig(nodeId = 0, zkConnect = "")
-  val random = new Random
+
+  val time = new MockTime
+  val timer = new MockTimer
+  val executor = Executors.newFixedThreadPool(nThreads)
+  val scheduler = new MockScheduler(time)
   var replicaManager: TestReplicaManager = _
   var zkClient: KafkaZkClient = _
-  var time: MockTime = _
-  var timer: MockTimer = _
-  var executor: ExecutorService = _
-  var scheduler: MockScheduler = _
+  val serverProps = TestUtils.createBrokerConfig(nodeId = 0, zkConnect = "")
+  val random = new Random
 
   @BeforeEach
   def setUp(): Unit = {
-    time = new MockTime
-    timer = new MockTimer(time)
-    scheduler = new MockScheduler(time)
-    executor = Executors.newFixedThreadPool(nThreads)
-    val mockLogMger = mock(classOf[LogManager])
-    when(mockLogMger.liveLogDirs).thenReturn(Seq.empty)
-    val producePurgatory = new DelayedOperationPurgatory[DelayedProduce]("Produce", timer, 1, reaperEnabled = false)
-    val watchKeys = Collections.newSetFromMap(new ConcurrentHashMap[TopicPartitionOperationKey, java.lang.Boolean]()).asScala
-    replicaManager = TestReplicaManager(KafkaConfig.fromProps(serverProps), time, scheduler, mockLogMger, mock(classOf[QuotaManagers], withSettings().stubOnly()), producePurgatory, watchKeys)
-    zkClient = mock(classOf[KafkaZkClient], withSettings().stubOnly())
+
+    replicaManager = mock(classOf[TestReplicaManager], withSettings().defaultAnswer(CALLS_REAL_METHODS))
+    replicaManager.createDelayedProducePurgatory(timer)
+
+    zkClient = mock(classOf[KafkaZkClient])
   }
 
   @AfterEach
   def tearDown(): Unit = {
-    CoreUtils.swallow(replicaManager.shutdown(false), this)
-    CoreUtils.swallow(executor.shutdownNow(), this)
-    CoreUtils.swallow(timer.close(), this)
-    CoreUtils.swallow(scheduler.shutdown(), this)
-    CoreUtils.swallow(time.scheduler.shutdown(), this)
+    if (executor != null)
+      executor.shutdownNow()
   }
 
   /**
@@ -156,6 +148,7 @@ abstract class AbstractCoordinatorConcurrencyTest[M <: CoordinatorMember] extend
 }
 
 object AbstractCoordinatorConcurrencyTest {
+
   trait Action extends Runnable {
     def await(): Unit
   }
@@ -163,27 +156,17 @@ object AbstractCoordinatorConcurrencyTest {
   trait CoordinatorMember {
   }
 
-  class TestReplicaManager(config: KafkaConfig,
-                           mtime: Time,
-                           scheduler: Scheduler,
-                           logManager: LogManager,
-                           quotaManagers: QuotaManagers,
-                           val watchKeys: mutable.Set[TopicPartitionOperationKey],
-                           val producePurgatory: DelayedOperationPurgatory[DelayedProduce])
-    extends ReplicaManager(
-      config,
-      metrics = null,
-      mtime,
-      scheduler,
-      logManager,
-      None,
-      quotaManagers,
-      null,
-      null,
-      null,
-      delayedProducePurgatoryParam = Some(producePurgatory)) {
+  class TestReplicaManager extends ReplicaManager(
+    null, null, null, null, null, null, null, null, null, null, null, null, null, null, null, None, null) {
 
     @volatile var logs: mutable.Map[TopicPartition, (UnifiedLog, Long)] = _
+    var producePurgatory: DelayedOperationPurgatory[DelayedProduce] = _
+    var watchKeys: mutable.Set[TopicPartitionOperationKey] = _
+
+    def createDelayedProducePurgatory(timer: MockTimer): Unit = {
+      producePurgatory = new DelayedOperationPurgatory[DelayedProduce]("Produce", timer, 1, reaperEnabled = false)
+      watchKeys = Collections.newSetFromMap(new ConcurrentHashMap[TopicPartitionOperationKey, java.lang.Boolean]()).asScala
+    }
 
     override def maybeStartTransactionVerificationForPartition(
       topicPartition: TopicPartition,
@@ -273,17 +256,5 @@ object AbstractCoordinatorConcurrencyTest {
 
     override def getLogEndOffset(topicPartition: TopicPartition): Option[Long] =
       getOrCreateLogs().get(topicPartition).map(l => l._2)
-  }
-
-  object TestReplicaManager {
-    def apply(config: KafkaConfig,
-              time: Time,
-              scheduler: Scheduler,
-              logManager: LogManager,
-              quotaManagers: QuotaManagers,
-              producePurgatory: DelayedOperationPurgatory[DelayedProduce],
-              watchKeys: mutable.Set[TopicPartitionOperationKey]): TestReplicaManager = {
-      new TestReplicaManager(config, time, scheduler, logManager, quotaManagers, watchKeys, producePurgatory)
-    }
   }
 }
