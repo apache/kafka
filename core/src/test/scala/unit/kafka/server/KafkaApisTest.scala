@@ -6755,7 +6755,8 @@ kafkaApis.handle(request, RequestLocal.withThreadConfinedCaching)
     metadataCache = MetadataCache.kRaftMetadataCache(brokerId)
     when(clientRequestQuotaManager.maybeRecordAndGetThrottleTimeMs(any[RequestChannel.Request](),
       any[Long])).thenReturn(0)
-    kafkaApis = createKafkaApis(raftSupport = true).handleAlterConfigsRequest(request)
+    kafkaApis = createKafkaApis(raftSupport = true)
+    kafkaApis.handleAlterConfigsRequest(request)
     val response = verifyNoThrottling[AlterConfigsResponse](request)
     assertEquals(new AlterConfigsResponseData(), response.data())
   }
@@ -6774,7 +6775,8 @@ kafkaApis.handle(request, RequestLocal.withThreadConfinedCaching)
     metadataCache = MetadataCache.kRaftMetadataCache(brokerId)
     when(clientRequestQuotaManager.maybeRecordAndGetThrottleTimeMs(any[RequestChannel.Request](),
       any[Long])).thenReturn(0)
-    kafkaApis = createKafkaApis(raftSupport = true).handleAlterConfigsRequest(request)
+    kafkaApis = createKafkaApis(raftSupport = true)
+    kafkaApis.handleAlterConfigsRequest(request)
     val response = verifyNoThrottling[AlterConfigsResponse](request)
     assertEquals(new AlterConfigsResponseData().setResponses(asList(
       new LAlterConfigsResourceResponse().
@@ -6797,7 +6799,8 @@ kafkaApis.handle(request, RequestLocal.withThreadConfinedCaching)
     metadataCache = MetadataCache.kRaftMetadataCache(brokerId)
     when(clientRequestQuotaManager.maybeRecordAndGetThrottleTimeMs(any[RequestChannel.Request](),
       any[Long])).thenReturn(0)
-    kafkaApis = createKafkaApis(raftSupport = true).handleIncrementalAlterConfigsRequest(request)
+    kafkaApis = createKafkaApis(raftSupport = true)
+    kafkaApis.handleIncrementalAlterConfigsRequest(request)
     val response = verifyNoThrottling[IncrementalAlterConfigsResponse](request)
     assertEquals(new IncrementalAlterConfigsResponseData(), response.data())
   }
@@ -6816,7 +6819,8 @@ kafkaApis.handle(request, RequestLocal.withThreadConfinedCaching)
     metadataCache = MetadataCache.kRaftMetadataCache(brokerId)
     when(clientRequestQuotaManager.maybeRecordAndGetThrottleTimeMs(any[RequestChannel.Request](),
       any[Long])).thenReturn(0)
-    kafkaApis = createKafkaApis(raftSupport = true).handleIncrementalAlterConfigsRequest(request)
+    kafkaApis = createKafkaApis(raftSupport = true)
+    kafkaApis.handleIncrementalAlterConfigsRequest(request)
     val response = verifyNoThrottling[IncrementalAlterConfigsResponse](request)
     assertEquals(new IncrementalAlterConfigsResponseData().setResponses(asList(
       new IAlterConfigsResourceResponse().
@@ -6908,7 +6912,8 @@ kafkaApis.handle(request, RequestLocal.withThreadConfinedCaching)
     )).thenReturn(future)
     kafkaApis = createKafkaApis(overrideProperties = Map(
       KafkaConfig.NewGroupCoordinatorEnableProp -> "true"
-    )).handle(requestChannelRequest, RequestLocal.NoCaching)
+    ))
+    kafkaApis.handle(requestChannelRequest, RequestLocal.NoCaching)
 
     val consumerGroupHeartbeatResponse = new ConsumerGroupHeartbeatResponseData()
       .setMemberId("member")
@@ -6931,7 +6936,8 @@ kafkaApis.handle(request, RequestLocal.withThreadConfinedCaching)
     )).thenReturn(future)
     kafkaApis = createKafkaApis(overrideProperties = Map(
       KafkaConfig.NewGroupCoordinatorEnableProp -> "true"
-    )).handle(requestChannelRequest, RequestLocal.NoCaching)
+    ))
+    kafkaApis.handle(requestChannelRequest, RequestLocal.NoCaching)
 
     future.completeExceptionally(Errors.FENCED_MEMBER_EPOCH.exception)
     val response = verifyNoThrottling[ConsumerGroupHeartbeatResponse](requestChannelRequest)
@@ -6950,7 +6956,8 @@ kafkaApis.handle(request, RequestLocal.withThreadConfinedCaching)
     kafkaApis = createKafkaApis(
       authorizer = Some(authorizer),
       overrideProperties = Map(KafkaConfig.NewGroupCoordinatorEnableProp -> "true")
-    ).handle(requestChannelRequest, RequestLocal.NoCaching)
+    )
+    kafkaApis.handle(requestChannelRequest, RequestLocal.NoCaching)
 
     val response = verifyNoThrottling[ConsumerGroupHeartbeatResponse](requestChannelRequest)
     assertEquals(Errors.GROUP_AUTHORIZATION_FAILED.code, response.data.errorCode)
@@ -6970,7 +6977,8 @@ kafkaApis.handle(request, RequestLocal.withThreadConfinedCaching)
     )).thenReturn(future)
     kafkaApis = createKafkaApis(
       overrideProperties = Map(KafkaConfig.NewGroupCoordinatorEnableProp -> "true")
-    ).handle(requestChannelRequest, RequestLocal.NoCaching)
+    )
+    kafkaApis.handle(requestChannelRequest, RequestLocal.NoCaching)
 
     val describedGroups = List(
       new DescribedGroup().setGroupId(groupIds.get(0)),
@@ -7024,7 +7032,8 @@ kafkaApis.handle(request, RequestLocal.withThreadConfinedCaching)
     kafkaApis = createKafkaApis(
       authorizer = Some(authorizer),
       overrideProperties = Map(KafkaConfig.NewGroupCoordinatorEnableProp -> "true")
-    ).handle(requestChannelRequest, RequestLocal.NoCaching)
+    )
+    kafkaApis.handle(requestChannelRequest, RequestLocal.NoCaching)
 
     val response = verifyNoThrottling[ConsumerGroupDescribeResponse](requestChannelRequest)
     assertEquals(Errors.GROUP_AUTHORIZATION_FAILED.code, response.data.groups.get(0).errorCode)
@@ -7043,7 +7052,8 @@ kafkaApis.handle(request, RequestLocal.withThreadConfinedCaching)
     )).thenReturn(future)
     kafkaApis = createKafkaApis(overrideProperties = Map(
       KafkaConfig.NewGroupCoordinatorEnableProp -> "true"
-    )).handle(requestChannelRequest, RequestLocal.NoCaching)
+    ))
+    kafkaApis.handle(requestChannelRequest, RequestLocal.NoCaching)
 
     future.completeExceptionally(Errors.FENCED_MEMBER_EPOCH.exception)
     val response = verifyNoThrottling[ConsumerGroupDescribeResponse](requestChannelRequest)
@@ -7056,7 +7066,7 @@ kafkaApis.handle(request, RequestLocal.withThreadConfinedCaching)
 
     val request = buildRequest(new GetTelemetrySubscriptionsRequest.Builder(data, true).build())
     kafkaApis = createKafkaApis(enableForwarding = true)
-kafkaApis.handle(request, RequestLocal.NoCaching)
+    kafkaApis.handle(request, RequestLocal.NoCaching)
 
     val response = verifyNoThrottling[GetTelemetrySubscriptionsResponse](request)
     assertEquals(Errors.UNKNOWN_SERVER_ERROR, Errors.forCode(response.data.errorCode))
@@ -7073,7 +7083,8 @@ kafkaApis.handle(request, RequestLocal.NoCaching)
       new GetTelemetrySubscriptionsResponseData()))
 
     metadataCache = MetadataCache.kRaftMetadataCache(brokerId)
-    kafkaApis = createKafkaApis(raftSupport = true).handle(request, RequestLocal.NoCaching)
+    kafkaApis = createKafkaApis(raftSupport = true)
+    kafkaApis.handle(request, RequestLocal.NoCaching)
 
     val response = verifyNoThrottling[GetTelemetrySubscriptionsResponse](request)
 
@@ -7091,7 +7102,8 @@ kafkaApis.handle(request, RequestLocal.NoCaching)
       any[RequestContext]())).thenThrow(new RuntimeException("test"))
 
     metadataCache = MetadataCache.kRaftMetadataCache(brokerId)
-    kafkaApis = createKafkaApis(raftSupport = true).handle(request, RequestLocal.NoCaching)
+    kafkaApis = createKafkaApis(raftSupport = true)
+    kafkaApis.handle(request, RequestLocal.NoCaching)
 
     val response = verifyNoThrottling[GetTelemetrySubscriptionsResponse](request)
 
@@ -7105,7 +7117,7 @@ kafkaApis.handle(request, RequestLocal.NoCaching)
 
     val request = buildRequest(new PushTelemetryRequest.Builder(data, true).build())
     kafkaApis = createKafkaApis(enableForwarding = true)
-kafkaApis.handle(request, RequestLocal.NoCaching)
+    kafkaApis.handle(request, RequestLocal.NoCaching)
 
     val response = verifyNoThrottling[PushTelemetryResponse](request)
     assertEquals(Errors.UNKNOWN_SERVER_ERROR, Errors.forCode(response.data.errorCode))
@@ -7120,7 +7132,8 @@ kafkaApis.handle(request, RequestLocal.NoCaching)
       .thenReturn(new PushTelemetryResponse(new PushTelemetryResponseData()))
 
     metadataCache = MetadataCache.kRaftMetadataCache(brokerId)
-    kafkaApis = createKafkaApis(raftSupport = true).handle(request, RequestLocal.NoCaching)
+    kafkaApis = createKafkaApis(raftSupport = true)
+    kafkaApis.handle(request, RequestLocal.NoCaching)
     val response = verifyNoThrottling[PushTelemetryResponse](request)
 
     val expectedResponse = new PushTelemetryResponseData().setErrorCode(Errors.NONE.code)
@@ -7148,7 +7161,7 @@ kafkaApis.handle(request, RequestLocal.NoCaching)
   def testListClientMetricsResourcesNotAllowedForZkClusters(): Unit = {
     val request = buildRequest(new ListClientMetricsResourcesRequest.Builder(new ListClientMetricsResourcesRequestData()).build())
     kafkaApis = createKafkaApis(enableForwarding = true)
-kafkaApis.handle(request, RequestLocal.NoCaching)
+    kafkaApis.handle(request, RequestLocal.NoCaching)
 
     val response = verifyNoThrottling[ListClientMetricsResourcesResponse](request)
     assertEquals(Errors.UNKNOWN_SERVER_ERROR, Errors.forCode(response.data.errorCode))
