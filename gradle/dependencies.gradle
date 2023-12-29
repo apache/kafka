@@ -53,7 +53,7 @@ if ( !versions.scala.contains('-') ) {
   versions["baseScala"] = versions.scala
 }
 
-// mockito 5.5 is required for Java 21 and mockito 5.x requires at least Java 11
+// mockito >= 5.5 is required for Java 21 and mockito 5.x requires at least Java 11
 // mockito 4.9 is required for Scala 2.12 as a workaround for compiler errors due to ambiguous reference to `Mockito.spy`
 // since Scala 2.12 support is going away soon, this is simpler than adjusting the code.
 // mockito 4.11 is used with Java 8 and Scala 2.13
@@ -61,7 +61,7 @@ String mockitoVersion
 if (scalaVersion == "2.12")
   mockitoVersion = "4.9.0"
 else if (JavaVersion.current().isCompatibleWith(JavaVersion.VERSION_11))
-  mockitoVersion = "5.5.0"
+  mockitoVersion = "5.8.0"
 else
   mockitoVersion = "4.11.0"
 
