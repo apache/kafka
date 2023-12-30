@@ -32,7 +32,7 @@ import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.{MemoryRecords, RecordBatch, RecordValidationStats}
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.utils.Time
-import org.apache.kafka.server.util.timer.MockTimer
+import org.apache.kafka.server.util.timer.{MockTimer, Timer}
 import org.apache.kafka.server.util.{MockScheduler, MockTime, Scheduler}
 import org.apache.kafka.storage.internals.log.{AppendOrigin, LogConfig, VerificationGuard}
 import org.junit.jupiter.api.{AfterEach, BeforeEach}
@@ -62,7 +62,7 @@ abstract class AbstractCoordinatorConcurrencyTest[M <: CoordinatorMember] extend
     when(mockLogMger.liveLogDirs).thenReturn(Seq.empty)
     val producePurgatory = new DelayedOperationPurgatory[DelayedProduce]("Produce", timer, 1, reaperEnabled = false)
     val watchKeys = Collections.newSetFromMap(new ConcurrentHashMap[TopicPartitionOperationKey, java.lang.Boolean]()).asScala
-    replicaManager = TestReplicaManager(KafkaConfig.fromProps(serverProps), time, scheduler, mockLogMger, mock(classOf[QuotaManagers], withSettings().stubOnly()), producePurgatory, watchKeys)
+    replicaManager = TestReplicaManager(KafkaConfig.fromProps(serverProps), time, scheduler, timer, mockLogMger, mock(classOf[QuotaManagers], withSettings().stubOnly()), producePurgatory, watchKeys)
     zkClient = mock(classOf[KafkaZkClient], withSettings().stubOnly())
   }
 
@@ -169,7 +169,11 @@ object AbstractCoordinatorConcurrencyTest {
                            logManager: LogManager,
                            quotaManagers: QuotaManagers,
                            val watchKeys: mutable.Set[TopicPartitionOperationKey],
-                           val producePurgatory: DelayedOperationPurgatory[DelayedProduce])
+                           val producePurgatory: DelayedOperationPurgatory[DelayedProduce],
+                           val delayedFetchPurgatoryParam: DelayedOperationPurgatory[DelayedFetch],
+                           val delayedDeleteRecordsPurgatoryParam: DelayedOperationPurgatory[DelayedDeleteRecords],
+                           val delayedElectLeaderPurgatoryParam: DelayedOperationPurgatory[DelayedElectLeader],
+                           val delayedRemoteFetchPurgatoryParam: DelayedOperationPurgatory[DelayedRemoteFetch])
     extends ReplicaManager(
       config,
       metrics = null,
@@ -181,7 +185,12 @@ object AbstractCoordinatorConcurrencyTest {
       null,
       null,
       null,
-      delayedProducePurgatoryParam = Some(producePurgatory)) {
+      delayedProducePurgatoryParam = Some(producePurgatory),
+      delayedFetchPurgatoryParam = Some(delayedFetchPurgatoryParam),
+      delayedDeleteRecordsPurgatoryParam = Some(delayedDeleteRecordsPurgatoryParam),
+      delayedElectLeaderPurgatoryParam = Some(delayedElectLeaderPurgatoryParam),
+      delayedRemoteFetchPurgatoryParam = Some(delayedRemoteFetchPurgatoryParam),
+      threadNamePrefix = Option(this.getClass.getName)) {
 
     @volatile var logs: mutable.Map[TopicPartition, (UnifiedLog, Long)] = _
 
@@ -279,11 +288,21 @@ object AbstractCoordinatorConcurrencyTest {
     def apply(config: KafkaConfig,
               time: Time,
               scheduler: Scheduler,
+              timer: Timer,
               logManager: LogManager,
               quotaManagers: QuotaManagers,
               producePurgatory: DelayedOperationPurgatory[DelayedProduce],
               watchKeys: mutable.Set[TopicPartitionOperationKey]): TestReplicaManager = {
-      new TestReplicaManager(config, time, scheduler, logManager, quotaManagers, watchKeys, producePurgatory)
+      val mockRemoteFetchPurgatory = new DelayedOperationPurgatory[DelayedRemoteFetch](
+        purgatoryName = "RemoteFetch", timer, reaperEnabled = false)
+      val mockFetchPurgatory = new DelayedOperationPurgatory[DelayedFetch](
+        purgatoryName = "Fetch", timer, reaperEnabled = false)
+      val mockDeleteRecordsPurgatory = new DelayedOperationPurgatory[DelayedDeleteRecords](
+        purgatoryName = "DeleteRecords", timer, reaperEnabled = false)
+      val mockElectLeaderPurgatory = new DelayedOperationPurgatory[DelayedElectLeader](
+        purgatoryName = "ElectLeader", timer, reaperEnabled = false)
+      new TestReplicaManager(config, time, scheduler, logManager, quotaManagers, watchKeys, producePurgatory,
+        mockFetchPurgatory, mockDeleteRecordsPurgatory, mockElectLeaderPurgatory, mockRemoteFetchPurgatory)
     }
   }
 }
