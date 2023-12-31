@@ -2191,6 +2191,7 @@ public class GroupMetadataManagerTest {
             .setMemberEpoch(-2)
             .build();
 
+        assertEquals(1, result.records().size());
         assertRecordEquals(result.records().get(0), RecordHelpers.newCurrentAssignmentRecord(groupId, member2UpdatedEpoch));
 
         // Member 2 rejoins the group with the same instance id.
@@ -2340,6 +2341,7 @@ public class GroupMetadataManagerTest {
             .setMemberEpoch(LEAVE_GROUP_STATIC_MEMBER_EPOCH)
             .build();
 
+        assertEquals(1, result.records().size());
         assertRecordEquals(result.records().get(0), RecordHelpers.newCurrentAssignmentRecord(groupId, member2UpdatedEpoch));
     }
 
