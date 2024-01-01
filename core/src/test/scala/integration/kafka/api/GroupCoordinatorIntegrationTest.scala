@@ -47,7 +47,7 @@ class GroupCoordinatorIntegrationTest extends KafkaServerTestHarness {
     ).asJava
     consumer.commitSync(offsetMap)
     val logManager =
-      if ("kraft".equals(quorum)) brokers.head.logManager
+      if (isKRaftTest()) brokers.head.logManager
       else servers.head.getLogManager
     def getGroupMetadataLogOpt: Option[UnifiedLog] =
       logManager.getLog(new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, 0))
