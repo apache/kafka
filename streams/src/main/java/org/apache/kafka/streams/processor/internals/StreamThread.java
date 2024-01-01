@@ -1604,7 +1604,9 @@ public class StreamThread extends Thread implements ProcessingThread {
         }
 
         if (processingMode.equals(StreamsConfigUtils.ProcessingMode.EXACTLY_ONCE_ALPHA)) {
-            throw new UnsupportedOperationException("not yet implemented");
+            log.warn("EOS v1 enabled: Producer client instance IDs are not collected." +
+                " Enable producer logging to retrieve the IDs from the producer logs.");
+            producerInstanceIdFuture.complete(Collections.emptyMap());
         } else {
             if (threadProducerInstanceIdFuture.isDone()) {
                 if (threadProducerInstanceIdFuture.isCompletedExceptionally()) {
