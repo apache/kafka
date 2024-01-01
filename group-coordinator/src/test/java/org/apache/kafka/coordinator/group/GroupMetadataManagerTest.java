@@ -4024,9 +4024,22 @@ public class GroupMetadataManagerTest {
         String groupId1 = "group1";
         String groupId2 = "group2";
 
+        Uuid fooTopicId = Uuid.randomUuid();
+        String fooTopicName = "foo";
+        Uuid barTopicId = Uuid.randomUuid();
+        String barTopicName = "bar";
+        Uuid zarTopicId = Uuid.randomUuid();
+        String zarTopicName = "zar";
+
         MockPartitionAssignor assignor = new MockPartitionAssignor("range");
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
             .withAssignors(Collections.singletonList(assignor))
+            .withMetadataImage(new MetadataImageBuilder()
+                    .addTopic(fooTopicId, fooTopicName, 6)
+                    .addTopic(barTopicId, barTopicName, 3)
+                    .addTopic(zarTopicId, zarTopicName, 1)
+                    .addRacks()
+                    .build())
             .build();
 
         assertEquals(Collections.emptySet(), context.groupMetadataManager.groupsSubscribedToTopic("foo"));
@@ -4118,6 +4131,34 @@ public class GroupMetadataManagerTest {
                 .build()));
 
         assertEquals(Collections.emptySet(), context.groupMetadataManager.groupsSubscribedToTopic("foo"));
+        assertEquals(Collections.emptySet(), context.groupMetadataManager.groupsSubscribedToTopic("bar"));
+        assertEquals(Collections.emptySet(), context.groupMetadataManager.groupsSubscribedToTopic("zar"));
+
+        // M2 in group 1 subscribes to bar and zar with regex subscription.
+        context.replay(RecordHelpers.newMemberSubscriptionRecord(groupId1,
+                new ConsumerGroupMember.Builder("group1-m2")
+                        .setSubscribedTopicRegex(".*ar$")
+                        .build()));
+
+        assertEquals(Collections.emptySet(), context.groupMetadataManager.groupsSubscribedToTopic("foo"));
+        assertEquals(mkSet(groupId1), context.groupMetadataManager.groupsSubscribedToTopic("bar"));
+        assertEquals(mkSet(groupId1), context.groupMetadataManager.groupsSubscribedToTopic("zar"));
+
+        // M1 in group 2 subscribes to foo with regex subscription.
+        context.replay(RecordHelpers.newMemberSubscriptionRecord(groupId2,
+                new ConsumerGroupMember.Builder("group2-m1")
+                        .setSubscribedTopicRegex("^foo.*")
+                        .build()));
+
+        assertEquals(mkSet(groupId2), context.groupMetadataManager.groupsSubscribedToTopic("foo"));
+        assertEquals(mkSet(groupId1), context.groupMetadataManager.groupsSubscribedToTopic("bar"));
+        assertEquals(mkSet(groupId1), context.groupMetadataManager.groupsSubscribedToTopic("zar"));
+
+        // M2 in group 1 is removed
+        context.replay(RecordHelpers.newCurrentAssignmentTombstoneRecord(groupId1, "group1-m2"));
+        context.replay(RecordHelpers.newMemberSubscriptionTombstoneRecord(groupId1, "group1-m2"));
+
+        assertEquals(mkSet(groupId2), context.groupMetadataManager.groupsSubscribedToTopic("foo"));
         assertEquals(Collections.emptySet(), context.groupMetadataManager.groupsSubscribedToTopic("bar"));
         assertEquals(Collections.emptySet(), context.groupMetadataManager.groupsSubscribedToTopic("zar"));
     }

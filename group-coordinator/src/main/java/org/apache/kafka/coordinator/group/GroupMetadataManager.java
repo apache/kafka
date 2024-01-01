@@ -99,6 +99,7 @@ import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -322,6 +323,11 @@ public class GroupMetadataManager {
     private final TimelineHashMap<String, TimelineHashSet<String>> groupsByTopics;
 
     /**
+     * The group ids keyed by regex expression
+     */
+    private final TimelineHashMap<String, TimelineHashSet<String>> groupsByRegex;
+
+    /**
      * The maximum number of members allowed in a single consumer group.
      */
     private final int consumerGroupMaxSize;
@@ -409,6 +415,7 @@ public class GroupMetadataManager {
         this.defaultAssignor = assignors.get(0);
         this.groups = new TimelineHashMap<>(snapshotRegistry, 0);
         this.groupsByTopics = new TimelineHashMap<>(snapshotRegistry, 0);
+        this.groupsByRegex = new TimelineHashMap<>(snapshotRegistry, 0);
         this.consumerGroupMaxSize = consumerGroupMaxSize;
         this.consumerGroupSessionTimeoutMs = consumerGroupSessionTimeoutMs;
         this.consumerGroupHeartbeatIntervalMs = consumerGroupHeartbeatIntervalMs;
@@ -1486,6 +1493,7 @@ public class GroupMetadataManager {
 
         ConsumerGroup consumerGroup = getOrMaybeCreateConsumerGroup(groupId, value != null);
         Set<String> oldSubscribedTopicNames = new HashSet<>(consumerGroup.subscribedTopicNames());
+        Set<String> oldSubscribedTopicRegex = new HashSet<>(consumerGroup.subscribedTopicRegex());
 
         if (value != null) {
             ConsumerGroupMember oldMember = consumerGroup.getOrMaybeCreateMember(memberId, true);
@@ -1505,7 +1513,7 @@ public class GroupMetadataManager {
             consumerGroup.removeMember(memberId, metadataImage.topics());
         }
 
-        updateGroupsByTopics(groupId, oldSubscribedTopicNames, consumerGroup.subscribedTopicNames());
+        updateGroupsByTopics(groupId, oldSubscribedTopicNames, oldSubscribedTopicRegex, consumerGroup.subscribedTopicNames(), consumerGroup.subscribedTopicRegex());
     }
 
     /**
@@ -1557,7 +1565,9 @@ public class GroupMetadataManager {
     private void updateGroupsByTopics(
         String groupId,
         Set<String> oldSubscribedTopics,
-        Set<String> newSubscribedTopics
+        Set<String> oldSubscribedTopicRegex,
+        Set<String> newSubscribedTopics,
+        Set<String> newSubscribedTopicRegex
     ) {
         if (oldSubscribedTopics.isEmpty()) {
             newSubscribedTopics.forEach(topicName ->
@@ -1576,6 +1586,33 @@ public class GroupMetadataManager {
             newSubscribedTopics.forEach(topicName -> {
                 if (!oldSubscribedTopics.contains(topicName)) {
                     subscribeGroupToTopic(groupId, topicName);
+                }
+            });
+        }
+        if (!oldSubscribedTopicRegex.isEmpty()) {
+            oldSubscribedTopicRegex.forEach(regex -> {
+                groupsByRegex.computeIfPresent(regex, (__, groupIds) -> {
+                    groupIds.remove(groupId);
+                    return groupIds.isEmpty() ? null : groupIds;
+                });
+                Pattern pattern = Pattern.compile(regex);
+                for (String topicName : metadataImage.topics().topicsByName().keySet()) {
+                    if (pattern.matcher(topicName).matches()) {
+                        unsubscribeGroupFromTopic(groupId, topicName);
+                    }
+                }
+            });
+        }
+        if (!newSubscribedTopicRegex.isEmpty()) {
+            newSubscribedTopicRegex.forEach(regex -> {
+                groupsByRegex
+                        .computeIfAbsent(regex, __ -> new TimelineHashSet<>(snapshotRegistry, 1))
+                        .add(groupId);
+                Pattern pattern = Pattern.compile(regex);
+                for (String topicName : metadataImage.topics().topicsByName().keySet()) {
+                    if (pattern.matcher(topicName).matches()) {
+                        subscribeGroupToTopic(groupId, topicName);
+                    }
                 }
             });
         }
