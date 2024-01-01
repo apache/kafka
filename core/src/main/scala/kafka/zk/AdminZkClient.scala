@@ -20,7 +20,7 @@ import java.util.{Collections, Optional, Properties}
 import kafka.admin.RackAwareMode
 import kafka.common.TopicAlreadyMarkedForDeletionException
 import kafka.controller.ReplicaAssignment
-import kafka.server.{ConfigEntityName, DynamicConfig, KafkaConfig}
+import kafka.server.{ConfigEntityName, DynamicConfig}
 import kafka.utils._
 import kafka.utils.Implicits._
 import org.apache.kafka.admin.{AdminUtils, BrokerMetadata}
@@ -29,6 +29,7 @@ import org.apache.kafka.common.errors._
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.server.common.AdminOperationException
 import org.apache.kafka.server.config.ConfigType
+import org.apache.kafka.server.config.KafkaConfig
 import org.apache.kafka.storage.internals.log.LogConfig
 import org.apache.zookeeper.KeeperException.NodeExistsException
 

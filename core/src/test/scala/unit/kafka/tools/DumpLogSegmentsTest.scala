@@ -23,7 +23,7 @@ import java.util
 import java.util.Properties
 import kafka.log.{LogTestUtils, UnifiedLog}
 import kafka.raft.{KafkaMetadataLog, MetadataLogConfig}
-import kafka.server.{BrokerTopicStats, KafkaRaftServer}
+import kafka.server.BrokerTopicStats
 import kafka.tools.DumpLogSegments.TimeIndexDumpErrors
 import kafka.utils.TestUtils
 import org.apache.kafka.common.Uuid
@@ -35,7 +35,9 @@ import org.apache.kafka.common.record.{CompressionType, ControlRecordType, EndTr
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.metadata.MetadataRecordSerde
 import org.apache.kafka.raft.{KafkaRaftClient, OffsetAndEpoch}
+import org.apache.kafka.server.{KafkaRaftServer, config}
 import org.apache.kafka.server.common.ApiMessageAndVersion
+import org.apache.kafka.server.config.Defaults
 import org.apache.kafka.server.util.MockTime
 import org.apache.kafka.snapshot.RecordsSnapshotWriter
 import org.apache.kafka.storage.internals.log.{AppendOrigin, FetchIsolation, LogConfig, LogDirFailureChannel, ProducerStateManagerConfig}
@@ -76,8 +78,8 @@ class DumpLogSegmentsTest {
       time = time,
       brokerTopicStats = new BrokerTopicStats,
       maxTransactionTimeoutMs = 5 * 60 * 1000,
-      producerStateManagerConfig = new ProducerStateManagerConfig(kafka.server.Defaults.ProducerIdExpirationMs, false),
-      producerIdExpirationCheckIntervalMs = kafka.server.Defaults.ProducerIdExpirationCheckIntervalMs,
+      producerStateManagerConfig = new ProducerStateManagerConfig(Defaults.PRODUCER_ID_EXPIRATION_MS, false),
+      producerIdExpirationCheckIntervalMs = config.Defaults.PRODUCER_ID_EXPIRATION_CHECK_INTERVAL_MS,
       logDirFailureChannel = new LogDirFailureChannel(10),
       topicId = None,
       keepPartitionMetadataFile = true
@@ -301,8 +303,8 @@ class DumpLogSegmentsTest {
     )
 
     val metadataLog = KafkaMetadataLog(
-      KafkaRaftServer.MetadataPartition,
-      KafkaRaftServer.MetadataTopicId,
+      KafkaRaftServer.METADATA_PARTITION,
+      KafkaRaftServer.METADATA_TOPIC_ID,
       logDir,
       time,
       time.scheduler,

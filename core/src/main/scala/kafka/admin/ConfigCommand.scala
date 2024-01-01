@@ -21,9 +21,8 @@ import java.nio.charset.StandardCharsets
 import java.util.concurrent.TimeUnit
 import java.util.{Collections, Properties}
 import joptsimple._
-import kafka.server.DynamicConfig.QuotaConfigs
-import kafka.server.{ConfigEntityName, Defaults, DynamicBrokerConfig, DynamicConfig, KafkaConfig}
-import kafka.utils.{Exit, Logging, PasswordEncoder}
+import kafka.server.ConfigEntityName
+import kafka.utils.{Exit, Logging}
 import kafka.utils.Implicits._
 import kafka.zk.{AdminZkClient, KafkaZkClient}
 import org.apache.kafka.clients.admin.{Admin, AlterClientQuotasOptions, AlterConfigOp, AlterConfigsOptions, ConfigEntry, DescribeClusterOptions, DescribeConfigsOptions, ListTopicsOptions, ScramCredentialInfo, UserScramCredentialDeletion, UserScramCredentialUpsertion, Config => JConfig, ScramMechanism => PublicScramMechanism}
@@ -35,9 +34,12 @@ import org.apache.kafka.common.quota.{ClientQuotaAlteration, ClientQuotaEntity, 
 import org.apache.kafka.common.security.JaasUtils
 import org.apache.kafka.common.security.scram.internals.{ScramCredentialUtils, ScramFormatter, ScramMechanism}
 import org.apache.kafka.common.utils.{Sanitizer, Time, Utils}
-import org.apache.kafka.server.config.ConfigType
+import org.apache.kafka.server.config.{ConfigType, DynamicBrokerConfigBaseManager}
+import org.apache.kafka.server.config.DynamicConfig.QuotaConfigs
+import org.apache.kafka.server.config.{Defaults, DynamicConfig, KafkaConfig}
 import org.apache.kafka.server.util.{CommandDefaultOptions, CommandLineUtils}
 import org.apache.kafka.storage.internals.log.LogConfig
+import org.apache.kafka.utils.PasswordEncoder
 import org.apache.zookeeper.client.ZKClientConfig
 
 import scala.annotation.nowarn
@@ -211,14 +213,14 @@ object ConfigCommand extends Logging {
   }
 
   private[admin] def createPasswordEncoder(encoderConfigs: Map[String, String]): PasswordEncoder = {
-    encoderConfigs.get(KafkaConfig.PasswordEncoderSecretProp)
-    val encoderSecret = encoderConfigs.getOrElse(KafkaConfig.PasswordEncoderSecretProp,
+    encoderConfigs.get(KafkaConfig.PASSWORD_ENCODER_SECRET_PROP)
+    val encoderSecret = encoderConfigs.getOrElse(KafkaConfig.PASSWORD_ENCODER_SECRET_PROP,
       throw new IllegalArgumentException("Password encoder secret not specified"))
     PasswordEncoder.encrypting(new Password(encoderSecret),
-      None,
-      encoderConfigs.getOrElse(KafkaConfig.PasswordEncoderCipherAlgorithmProp, Defaults.PasswordEncoderCipherAlgorithm),
-      encoderConfigs.get(KafkaConfig.PasswordEncoderKeyLengthProp).map(_.toInt).getOrElse(Defaults.PasswordEncoderKeyLength),
-      encoderConfigs.get(KafkaConfig.PasswordEncoderIterationsProp).map(_.toInt).getOrElse(Defaults.PasswordEncoderIterations))
+      null,
+      encoderConfigs.getOrElse(KafkaConfig.PASSWORD_ENCODER_CIPHER_ALGORITHM_PROP, Defaults.PASSWORD_ENCODER_CIPHER_ALGORITHM),
+      encoderConfigs.get(KafkaConfig.PASSWORD_ENCODER_KEY_LENGTH_PROP).map(_.toInt).getOrElse(Defaults.PASSWORD_ENCODER_KEY_LENGTH),
+      encoderConfigs.get(KafkaConfig.PASSWORD_ENCODER_ITERATIONS_PROP).map(_.toInt).getOrElse(Defaults.PASSWORD_ENCODER_ITERATIONS))
   }
 
   /**
@@ -235,11 +237,11 @@ object ConfigCommand extends Logging {
       passwordEncoderConfigs.asScala.keySet.foreach(configsToBeAdded.remove)
     }
 
-    DynamicBrokerConfig.validateConfigs(configsToBeAdded, perBrokerConfig)
-    val passwordConfigs = configsToBeAdded.asScala.keySet.filter(DynamicBrokerConfig.isPasswordConfig)
+    DynamicBrokerConfigBaseManager.validateConfigs(configsToBeAdded, perBrokerConfig)
+    val passwordConfigs = configsToBeAdded.asScala.keySet.filter(DynamicBrokerConfigBaseManager.isPasswordConfig)
     if (passwordConfigs.nonEmpty) {
-      require(passwordEncoderConfigs.containsKey(KafkaConfig.PasswordEncoderSecretProp),
-        s"${KafkaConfig.PasswordEncoderSecretProp} must be specified to update $passwordConfigs." +
+      require(passwordEncoderConfigs.containsKey(KafkaConfig.PASSWORD_ENCODER_SECRET_PROP),
+        s"${KafkaConfig.PASSWORD_ENCODER_SECRET_PROP} must be specified to update $passwordConfigs." +
           " Other password encoder configs like cipher algorithm and iterations may also be specified" +
           " to override the default encoding parameters. Password encoder configs will not be persisted" +
           " in ZooKeeper."
@@ -443,7 +445,7 @@ object ConfigCommand extends Logging {
           alterUserScramCredentialConfigs(adminClient, entityNames.head, scramConfigsToAddMap, scramConfigsToDelete)
         }
       case ConfigType.IP =>
-        val unknownConfigs = (configsToBeAdded.keys ++ configsToBeDeleted).filterNot(key => DynamicConfig.Ip.names.contains(key))
+        val unknownConfigs = (configsToBeAdded.keys ++ configsToBeDeleted).filterNot(key => DynamicConfig.Ip.names().contains(key))
         if (unknownConfigs.nonEmpty)
           throw new IllegalArgumentException(s"Only connection quota configs can be added for '${ConfigType.IP}' using --bootstrap-server. Unexpected config names: ${unknownConfigs.mkString(",")}")
         alterQuotaConfigs(adminClient, entityTypes, entityNames, configsToBeAddedMap, configsToBeDeleted)
@@ -863,7 +865,7 @@ object ConfigCommand extends Logging {
       .ofType(classOf[String])
     val zkTlsConfigFile = parser.accepts("zk-tls-config-file",
       "Identifies the file where ZooKeeper client TLS connectivity properties are defined.  Any properties other than " +
-        KafkaConfig.ZkSslConfigToSystemPropertyMap.keys.toList.sorted.mkString(", ") + " are ignored.")
+        KafkaConfig.zkSslConfigToSystemPropertyMap().keySet().asScala.toList.sorted.mkString(", ") + " are ignored.")
       .withRequiredArg().describedAs("ZooKeeper TLS configuration").ofType(classOf[String])
     options = parser.parse(args : _*)
 

@@ -17,6 +17,7 @@
 
 package kafka.server
 
+import kafka.cluster.EndPoint
 import org.apache.kafka.clients.{Metadata, MockClient, NodeApiVersions}
 import org.apache.kafka.common.config.SaslConfigs
 import org.apache.kafka.common.Node
@@ -49,7 +50,7 @@ class SimpleControllerNodeProvider extends ControllerNodeProvider {
 class RegistrationTestContext(
   properties: Properties
 ) {
-  val config = new KafkaConfig(properties)
+  val config = KafkaConfigProvider.fromProps(properties)
   val time = new MockTime(1, 1)
   val highestMetadataOffset = new AtomicLong(0)
   val metadata = new Metadata(1000, 1000, 1000, new LogContext(), new ClusterResourceListeners())
@@ -64,7 +65,8 @@ class RegistrationTestContext(
   val clusterId = "x4AJGXQSRnephtTZzujw4w"
   val advertisedListeners = new ListenerCollection()
   val controllerEpoch = new AtomicInteger(123)
-  config.effectiveAdvertisedListeners.foreach { ep =>
+  config.effectiveAdvertisedListeners.asScala.foreach { e =>
+    val ep = EndPoint.fromJava(e)
     advertisedListeners.add(new Listener().setHost(ep.host).
       setName(ep.listenerName.value()).
       setPort(ep.port.shortValue()).

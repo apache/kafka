@@ -17,12 +17,10 @@
 package kafka.server.epoch
 
 import kafka.cluster.BrokerEndPoint
-import kafka.server.KafkaConfig._
-import kafka.server.{BlockingSend, KafkaServer, BrokerBlockingSender}
+import kafka.server.{BlockingSend, BrokerBlockingSender, KafkaConfigProvider, KafkaServer, QuorumTestHarness}
 import kafka.utils.Implicits._
 import kafka.utils.TestUtils._
 import kafka.utils.{Logging, TestUtils}
-import kafka.server.QuorumTestHarness
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.Errors._
@@ -65,7 +63,7 @@ class LeaderEpochIntegrationTest extends QuorumTestHarness with Logging {
 
   @Test
   def shouldAddCurrentLeaderEpochToMessagesAsTheyAreWrittenToLeader(): Unit = {
-    brokers ++= (0 to 1).map { id => createServer(fromProps(createBrokerConfig(id, zkConnect))) }
+    brokers ++= (0 to 1).map { id => createServer(KafkaConfigProvider.fromProps(createBrokerConfig(id, zkConnect))) }
 
     // Given two topics with replication of a single partition
     for (topic <- List(topic1, topic2)) {
@@ -99,7 +97,7 @@ class LeaderEpochIntegrationTest extends QuorumTestHarness with Logging {
   def shouldSendLeaderEpochRequestAndGetAResponse(): Unit = {
 
     //3 brokers, put partition on 100/101 and then pretend to be 102
-    brokers ++= (100 to 102).map { id => createServer(fromProps(createBrokerConfig(id, zkConnect))) }
+    brokers ++= (100 to 102).map { id => createServer(KafkaConfigProvider.fromProps(createBrokerConfig(id, zkConnect))) }
 
     val assignment1 = Map(0 -> Seq(100), 1 -> Seq(101))
     TestUtils.createTopic(zkClient, topic1, assignment1, brokers)
@@ -143,10 +141,10 @@ class LeaderEpochIntegrationTest extends QuorumTestHarness with Logging {
   @Test
   def shouldIncreaseLeaderEpochBetweenLeaderRestarts(): Unit = {
     //Setup: we are only interested in the single partition on broker 101
-    brokers += createServer(fromProps(createBrokerConfig(100, zkConnect)))
+    brokers += createServer(KafkaConfigProvider.fromProps(createBrokerConfig(100, zkConnect)))
     assertEquals(100, TestUtils.waitUntilControllerElected(zkClient))
 
-    brokers += createServer(fromProps(createBrokerConfig(101, zkConnect)))
+    brokers += createServer(KafkaConfigProvider.fromProps(createBrokerConfig(101, zkConnect)))
 
     def leo() = brokers(1).replicaManager.localLog(tp).get.logEndOffset
 

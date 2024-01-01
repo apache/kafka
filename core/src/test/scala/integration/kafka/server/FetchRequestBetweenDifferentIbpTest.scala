@@ -25,6 +25,7 @@ import org.apache.kafka.clients.producer.ProducerRecord
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.server.common.MetadataVersion
 import org.apache.kafka.server.common.MetadataVersion.{IBP_2_7_IV0, IBP_2_8_IV1, IBP_3_1_IV0}
+import org.apache.kafka.server.config.KafkaConfig
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
 
@@ -146,8 +147,8 @@ class FetchRequestBetweenDifferentIbpTest extends BaseRequestTest {
 
   private def createConfig(nodeId: Int, interBrokerVersion: MetadataVersion): KafkaConfig = {
     val props = TestUtils.createBrokerConfig(nodeId, zkConnect)
-    props.put(KafkaConfig.InterBrokerProtocolVersionProp, interBrokerVersion.version)
-    KafkaConfig.fromProps(props)
+    props.put(KafkaConfig.INTER_BROKER_PROTOCOL_VERSION_PROP, interBrokerVersion.version)
+    KafkaConfigProvider.fromProps(props)
   }
 
 }

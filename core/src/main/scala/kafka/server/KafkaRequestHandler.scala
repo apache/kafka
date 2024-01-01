@@ -26,6 +26,7 @@ import java.util.concurrent.atomic.AtomicInteger
 import com.yammer.metrics.core.{Gauge, Meter}
 import org.apache.kafka.common.internals.FatalExitError
 import org.apache.kafka.common.utils.{KafkaThread, Time}
+import org.apache.kafka.server.config.KafkaConfig
 import org.apache.kafka.server.log.remote.storage.RemoteStorageMetrics
 import org.apache.kafka.server.metrics.KafkaMetricsGroup
 

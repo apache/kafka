@@ -23,7 +23,7 @@ import kafka.coordinator.AbstractCoordinatorConcurrencyTest
 import kafka.coordinator.AbstractCoordinatorConcurrencyTest._
 import kafka.coordinator.transaction.TransactionCoordinatorConcurrencyTest._
 import kafka.log.UnifiedLog
-import kafka.server.{KafkaConfig, MetadataCache, RequestLocal}
+import kafka.server.{KafkaConfigProvider, MetadataCache, RequestLocal}
 import kafka.utils.{Pool, TestUtils}
 import org.apache.kafka.clients.{ClientResponse, NetworkClient}
 import org.apache.kafka.common.internals.Topic.TRANSACTION_STATE_TOPIC_NAME
@@ -97,7 +97,7 @@ class TransactionCoordinatorConcurrencyTest extends AbstractCoordinatorConcurren
     ).thenReturn(Some(brokerNode))
     val networkClient: NetworkClient = mock(classOf[NetworkClient])
     txnMarkerChannelManager = new TransactionMarkerChannelManager(
-      KafkaConfig.fromProps(serverProps),
+      KafkaConfigProvider.fromProps(serverProps),
       metadataCache,
       networkClient,
       txnStateManager,

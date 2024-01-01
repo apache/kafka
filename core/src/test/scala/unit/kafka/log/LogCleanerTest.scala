@@ -18,13 +18,14 @@
 package kafka.log
 
 import kafka.common._
-import kafka.server.{BrokerTopicStats, KafkaConfig}
+import kafka.server.{BrokerTopicStats, KafkaConfigProvider}
 import kafka.utils._
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.errors.CorruptRecordException
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.utils.Utils
+import org.apache.kafka.server.config.{Defaults, KafkaConfig, LogCleanerConfig}
 import org.apache.kafka.server.metrics.KafkaMetricsGroup
 import org.apache.kafka.server.util.MockTime
 import org.apache.kafka.storage.internals.log.{AbortedTxn, AppendOrigin, CleanerConfig, LogAppendInfo, LogConfig, LogDirFailureChannel, LogFileUtils, LogSegment, LogSegments, LogStartOffsetIncrementReason, OffsetMap, ProducerStateManager, ProducerStateManagerConfig}
@@ -60,7 +61,7 @@ class LogCleanerTest extends Logging {
   val throttler = new Throttler(desiredRatePerSec = Double.MaxValue, checkIntervalMs = Long.MaxValue, time = time)
   val tombstoneRetentionMs = 86400000
   val largeTimestamp = Long.MaxValue - tombstoneRetentionMs - 1
-  val producerStateManagerConfig = new ProducerStateManagerConfig(kafka.server.Defaults.ProducerIdExpirationMs, false)
+  val producerStateManagerConfig = new ProducerStateManagerConfig(Defaults.PRODUCER_ID_EXPIRATION_MS, false)
 
   @AfterEach
   def teardown(): Unit = {
@@ -88,11 +89,11 @@ class LogCleanerTest extends Logging {
       logCleaner.shutdown()
 
       val mockMetricsGroup = mockMetricsGroupCtor.constructed.get(0)
-      val numMetricsRegistered = LogCleaner.MetricNames.size
+      val numMetricsRegistered = LogCleanerConfig.METRIC_NAMES.size
       verify(mockMetricsGroup, times(numMetricsRegistered)).newGauge(anyString(), any())
       
       // verify that each metric in `LogCleaner` is removed
-      LogCleaner.MetricNames.foreach(verify(mockMetricsGroup).removeMetric(_))
+      LogCleanerConfig.METRIC_NAMES.asScala.foreach(verify(mockMetricsGroup).removeMetric(_))
 
       // verify that each metric in `LogCleanerManager` is removed
       val mockLogCleanerManagerMetricsGroup = mockMetricsGroupCtor.constructed.get(1)
@@ -163,7 +164,7 @@ class LogCleanerTest extends Logging {
     val topicPartition = UnifiedLog.parseTopicPartitionName(dir)
     val logDirFailureChannel = new LogDirFailureChannel(10)
     val maxTransactionTimeoutMs = 5 * 60 * 1000
-    val producerIdExpirationCheckIntervalMs = kafka.server.Defaults.ProducerIdExpirationCheckIntervalMs
+    val producerIdExpirationCheckIntervalMs = Defaults.PRODUCER_ID_EXPIRATION_CHECK_INTERVAL_MS
     val logSegments = new LogSegments(topicPartition)
     val leaderEpochCache = UnifiedLog.maybeCreateLeaderEpochCache(dir, topicPartition, logDirFailureChannel, config.recordVersion, "")
     val producerStateManager = new ProducerStateManager(topicPartition, dir,
@@ -1958,9 +1959,9 @@ class LogCleanerTest extends Logging {
   @Test
   def testReconfigureLogCleanerIoMaxBytesPerSecond(): Unit = {
     val oldKafkaProps = TestUtils.createBrokerConfig(1, "localhost:2181")
-    oldKafkaProps.setProperty(KafkaConfig.LogCleanerIoMaxBytesPerSecondProp, "10000000")
+    oldKafkaProps.setProperty(KafkaConfig.LOG_CLEANER_IO_MAX_BYTES_PER_SECOND_PROP, "10000000")
 
-    val logCleaner = new LogCleaner(LogCleaner.cleanerConfig(new KafkaConfig(oldKafkaProps)),
+    val logCleaner = new LogCleaner(LogCleanerConfig.cleanerConfig(KafkaConfigProvider.fromProps(oldKafkaProps)),
       logDirs = Array(TestUtils.tempDir()),
       logs = new Pool[TopicPartition, UnifiedLog](),
       logDirFailureChannel = new LogDirFailureChannel(1),
@@ -1972,14 +1973,14 @@ class LogCleanerTest extends Logging {
     }
 
     try {
-      assertEquals(10000000, logCleaner.throttler.desiredRatePerSec, s"Throttler.desiredRatePerSec should be initialized from initial `${KafkaConfig.LogCleanerIoMaxBytesPerSecondProp}` config.")
+      assertEquals(10000000, logCleaner.throttler.desiredRatePerSec, s"Throttler.desiredRatePerSec should be initialized from initial `${KafkaConfig.LOG_CLEANER_IO_MAX_BYTES_PER_SECOND_PROP}` config.")
 
       val newKafkaProps = TestUtils.createBrokerConfig(1, "localhost:2181")
-      newKafkaProps.setProperty(KafkaConfig.LogCleanerIoMaxBytesPerSecondProp, "20000000")
+      newKafkaProps.setProperty(KafkaConfig.LOG_CLEANER_IO_MAX_BYTES_PER_SECOND_PROP, "20000000")
 
-      logCleaner.reconfigure(new KafkaConfig(oldKafkaProps), new KafkaConfig(newKafkaProps))
+      logCleaner.reconfigure(KafkaConfigProvider.fromProps(oldKafkaProps), KafkaConfigProvider.fromProps(newKafkaProps))
 
-      assertEquals(20000000, logCleaner.throttler.desiredRatePerSec, s"Throttler.desiredRatePerSec should be updated with new `${KafkaConfig.LogCleanerIoMaxBytesPerSecondProp}` config.")
+      assertEquals(20000000, logCleaner.throttler.desiredRatePerSec, s"Throttler.desiredRatePerSec should be updated with new `${KafkaConfig.LOG_CLEANER_IO_MAX_BYTES_PER_SECOND_PROP}` config.")
     } finally {
       logCleaner.shutdown()
     }
@@ -2031,7 +2032,7 @@ class LogCleanerTest extends Logging {
       brokerTopicStats = new BrokerTopicStats,
       maxTransactionTimeoutMs = 5 * 60 * 1000,
       producerStateManagerConfig = producerStateManagerConfig,
-      producerIdExpirationCheckIntervalMs = kafka.server.Defaults.ProducerIdExpirationCheckIntervalMs,
+      producerIdExpirationCheckIntervalMs = Defaults.PRODUCER_ID_EXPIRATION_CHECK_INTERVAL_MS,
       logDirFailureChannel = new LogDirFailureChannel(10),
       topicId = None,
       keepPartitionMetadataFile = true

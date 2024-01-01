@@ -22,8 +22,6 @@ import java.nio._
 import java.util.Date
 import java.util.concurrent.TimeUnit
 import kafka.common._
-import kafka.log.LogCleaner.{CleanerRecopyPercentMetricName, DeadThreadCountMetricName, MaxBufferUtilizationPercentMetricName, MaxCleanTimeMetricName, MaxCompactionDelayMetricsName}
-import kafka.server.{BrokerReconfigurable, KafkaConfig}
 import kafka.utils._
 import org.apache.kafka.common.{KafkaException, TopicPartition}
 import org.apache.kafka.common.config.ConfigException
@@ -32,13 +30,16 @@ import org.apache.kafka.common.record.MemoryRecords.RecordFilter
 import org.apache.kafka.common.record.MemoryRecords.RecordFilter.BatchRetention
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.utils.{BufferSupplier, Time}
+import org.apache.kafka.server.config.DynamicBrokerConfigManager.BrokerReconfigurable
+import org.apache.kafka.server.config.{KafkaConfig, LogCleanerConfig}
 import org.apache.kafka.server.metrics.KafkaMetricsGroup
 import org.apache.kafka.server.util.ShutdownableThread
 import org.apache.kafka.storage.internals.log.{AbortedTxn, CleanerConfig, LastRecord, LogDirFailureChannel, LogSegment, LogSegmentOffsetOverflowException, OffsetMap, SkimpyOffsetMap, TransactionIndex}
 
+import java.util
 import scala.jdk.CollectionConverters._
 import scala.collection.mutable.ListBuffer
-import scala.collection.{Iterable, Seq, Set, mutable}
+import scala.collection.{Iterable, Seq, mutable}
 import scala.util.control.ControlThrowable
 
 /**
@@ -127,25 +128,25 @@ class LogCleaner(initialConfig: CleanerConfig,
     cleaners.foldLeft(0.0d)((max: Double, thread: CleanerThread) => math.max(max, f(thread))).toInt
 
   /* a metric to track the maximum utilization of any thread's buffer in the last cleaning */
-  metricsGroup.newGauge(MaxBufferUtilizationPercentMetricName,
+  metricsGroup.newGauge(LogCleanerConfig.MAX_BUFFER_UTILIZATION_PERCENT_METRIC_NAME,
     () => maxOverCleanerThreads(_.lastStats.bufferUtilization) * 100)
 
   /* a metric to track the recopy rate of each thread's last cleaning */
-  metricsGroup.newGauge(CleanerRecopyPercentMetricName, () => {
+  metricsGroup.newGauge(LogCleanerConfig.CLEANER_RECOPY_PERCENT_METRIC_NAME, () => {
     val stats = cleaners.map(_.lastStats)
     val recopyRate = stats.iterator.map(_.bytesWritten).sum.toDouble / math.max(stats.iterator.map(_.bytesRead).sum, 1)
     (100 * recopyRate).toInt
   })
 
   /* a metric to track the maximum cleaning time for the last cleaning from each thread */
-  metricsGroup.newGauge(MaxCleanTimeMetricName, () => maxOverCleanerThreads(_.lastStats.elapsedSecs))
+  metricsGroup.newGauge(LogCleanerConfig.MAX_CLEAN_TIME_METRIC_NAME, () => maxOverCleanerThreads(_.lastStats.elapsedSecs))
 
   // a metric to track delay between the time when a log is required to be compacted
   // as determined by max compaction lag and the time of last cleaner run.
-  metricsGroup.newGauge(MaxCompactionDelayMetricsName,
+  metricsGroup.newGauge(LogCleanerConfig.MAX_COMPACTION_DELAY_METRICS_NAME,
     () => maxOverCleanerThreads(_.lastPreCleanStats.maxCompactionDelayMs.toDouble) / 1000)
 
-  metricsGroup.newGauge(DeadThreadCountMetricName, () => deadThreadCount)
+  metricsGroup.newGauge(LogCleanerConfig.DEAD_THREAD_COUNT_METRIC_NAME, () => deadThreadCount)
 
   private[log] def deadThreadCount: Int = cleaners.count(_.isThreadFailed)
 
@@ -178,15 +179,15 @@ class LogCleaner(initialConfig: CleanerConfig,
    * Remove metrics
    */
   def removeMetrics(): Unit = {
-    LogCleaner.MetricNames.foreach(metricsGroup.removeMetric)
+    LogCleanerConfig.METRIC_NAMES.asScala.foreach(metricsGroup.removeMetric)
     cleanerManager.removeMetrics()
   }
 
   /**
    * @return A set of configs that is reconfigurable in LogCleaner
    */
-  override def reconfigurableConfigs: Set[String] = {
-    LogCleaner.ReconfigurableConfigs
+  override def reconfigurableConfigs: util.Set[String] = {
+    LogCleanerConfig.RECONFIGURABLE_CONFIGS
   }
 
   /**
@@ -195,7 +196,7 @@ class LogCleaner(initialConfig: CleanerConfig,
    * @param newConfig A submitted new KafkaConfig instance that contains new cleaner config
    */
   override def validateReconfiguration(newConfig: KafkaConfig): Unit = {
-    val numThreads = LogCleaner.cleanerConfig(newConfig).numThreads
+    val numThreads = LogCleanerConfig.cleanerConfig(newConfig).numThreads
     val currentThreads = config.numThreads
     if (numThreads < 1)
       throw new ConfigException(s"Log cleaner threads should be at least 1")
@@ -216,7 +217,7 @@ class LogCleaner(initialConfig: CleanerConfig,
    * @param newConfig the new log cleaner config reconfigured
    */
   override def reconfigure(oldConfig: KafkaConfig, newConfig: KafkaConfig): Unit = {
-    config = LogCleaner.cleanerConfig(newConfig)
+    config = LogCleanerConfig.cleanerConfig(newConfig)
 
     val maxIoBytesPerSecond = config.maxIoBytesPerSecond
     if (maxIoBytesPerSecond != oldConfig.logCleanerIoMaxBytesPerSecond) {
@@ -495,43 +496,6 @@ class LogCleaner(initialConfig: CleanerConfig,
     }
 
   }
-}
-
-object LogCleaner {
-  val ReconfigurableConfigs: Set[String] = Set(
-    KafkaConfig.LogCleanerThreadsProp,
-    KafkaConfig.LogCleanerDedupeBufferSizeProp,
-    KafkaConfig.LogCleanerDedupeBufferLoadFactorProp,
-    KafkaConfig.LogCleanerIoBufferSizeProp,
-    KafkaConfig.MessageMaxBytesProp,
-    KafkaConfig.LogCleanerIoMaxBytesPerSecondProp,
-    KafkaConfig.LogCleanerBackoffMsProp
-  )
-
-  def cleanerConfig(config: KafkaConfig): CleanerConfig = {
-    new CleanerConfig(config.logCleanerThreads,
-      config.logCleanerDedupeBufferSize,
-      config.logCleanerDedupeBufferLoadFactor,
-      config.logCleanerIoBufferSize,
-      config.messageMaxBytes,
-      config.logCleanerIoMaxBytesPerSecond,
-      config.logCleanerBackoffMs,
-      config.logCleanerEnable)
-
-  }
-
-  private val MaxBufferUtilizationPercentMetricName = "max-buffer-utilization-percent"
-  private val CleanerRecopyPercentMetricName = "cleaner-recopy-percent"
-  private val MaxCleanTimeMetricName = "max-clean-time-secs"
-  private val MaxCompactionDelayMetricsName = "max-compaction-delay-secs"
-  private val DeadThreadCountMetricName = "DeadThreadCount"
-  // package private for testing
-  private[log] val MetricNames = Set(
-    MaxBufferUtilizationPercentMetricName,
-    CleanerRecopyPercentMetricName,
-    MaxCleanTimeMetricName,
-    MaxCompactionDelayMetricsName,
-    DeadThreadCountMetricName)
 }
 
 /**

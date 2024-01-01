@@ -20,7 +20,7 @@ import java.util.Properties
 import java.util.concurrent.atomic.AtomicBoolean
 import scala.collection.Seq
 import kafka.integration.KafkaServerTestHarness
-import kafka.server.KafkaConfig
+import kafka.server.KafkaConfigProvider
 import kafka.tools.MirrorMaker.{ConsumerWrapper, MirrorMakerProducer, NoRecordsException}
 import kafka.utils.{TestInfoUtils, TestUtils}
 import org.apache.kafka.clients.consumer.{ConsumerConfig, KafkaConsumer}
@@ -29,6 +29,7 @@ import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.TimeoutException
 import org.apache.kafka.common.serialization.{ByteArrayDeserializer, ByteArraySerializer}
 import org.apache.kafka.common.utils.Exit
+import org.apache.kafka.server.config.KafkaConfig
 import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.params.ParameterizedTest
@@ -38,7 +39,7 @@ import org.junit.jupiter.params.provider.ValueSource
 class MirrorMakerIntegrationTest extends KafkaServerTestHarness {
 
   override def generateConfigs: Seq[KafkaConfig] =
-    TestUtils.createBrokerConfigs(1, zkConnectOrNull).map(KafkaConfig.fromProps(_, new Properties()))
+    TestUtils.createBrokerConfigs(1, zkConnectOrNull).map(KafkaConfigProvider.fromProps(_, new Properties()))
 
   val exited = new AtomicBoolean(false)
 

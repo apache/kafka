@@ -20,6 +20,7 @@ import kafka.network.SocketServer
 import org.apache.kafka.common.message.DescribeUserScramCredentialsRequestData
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{DescribeUserScramCredentialsRequest, DescribeUserScramCredentialsResponse}
+import org.apache.kafka.server.config.KafkaConfig
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
 
@@ -30,9 +31,9 @@ import java.util.Properties
  */
 class DescribeUserScramCredentialsRequestNotAuthorizedTest extends BaseRequestTest {
   override def brokerPropertyOverrides(properties: Properties): Unit = {
-    properties.put(KafkaConfig.ControlledShutdownEnableProp, "false")
-    properties.put(KafkaConfig.AuthorizerClassNameProp, classOf[DescribeCredentialsTest.TestAuthorizer].getName)
-    properties.put(KafkaConfig.PrincipalBuilderClassProp, classOf[DescribeCredentialsTest.TestPrincipalBuilderReturningUnauthorized].getName)
+    properties.put(KafkaConfig.CONTROLLED_SHUTDOWN_ENABLE_PROP, "false")
+    properties.put(KafkaConfig.AUTHORIZER_CLASS_NAME_PROP, classOf[DescribeCredentialsTest.TestAuthorizer].getName)
+    properties.put(KafkaConfig.PRINCIPAL_BUILDER_CLASS_PROP, classOf[DescribeCredentialsTest.TestPrincipalBuilderReturningUnauthorized].getName)
   }
 
   @Test

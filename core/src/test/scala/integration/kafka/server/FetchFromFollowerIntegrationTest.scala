@@ -16,7 +16,7 @@
  */
 package integration.kafka.server
 
-import kafka.server.{BaseFetchRequestTest, KafkaConfig}
+import kafka.server.{BaseFetchRequestTest, KafkaConfigProvider}
 import kafka.utils.{TestInfoUtils, TestUtils}
 import org.apache.kafka.clients.admin.NewPartitionReassignment
 import org.apache.kafka.clients.consumer.{ConsumerConfig, KafkaConsumer, RangeAssignor}
@@ -25,6 +25,7 @@ import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests.FetchResponse
 import org.apache.kafka.common.serialization.ByteArrayDeserializer
+import org.apache.kafka.server.config.KafkaConfig
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 import org.junit.jupiter.api.{Disabled, Timeout}
 import org.junit.jupiter.params.ParameterizedTest
@@ -45,14 +46,14 @@ class FetchFromFollowerIntegrationTest extends BaseFetchRequestTest {
 
   def overridingProps: Properties = {
     val props = new Properties
-    props.put(KafkaConfig.NumPartitionsProp, numParts.toString)
-    props.put(KafkaConfig.OffsetsTopicReplicationFactorProp, numNodes.toString)
+    props.put(KafkaConfig.NUM_PARTITIONS_PROP, numParts.toString)
+    props.put(KafkaConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_PROP, numNodes.toString)
     props
   }
 
   override def generateConfigs: collection.Seq[KafkaConfig] = {
     TestUtils.createBrokerConfigs(numNodes, zkConnectOrNull, enableControlledShutdown = false, enableFetchFromFollower = true)
-      .map(KafkaConfig.fromProps(_, overridingProps))
+      .map(KafkaConfigProvider.fromProps(_, overridingProps))
   }
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
@@ -196,7 +197,7 @@ class FetchFromFollowerIntegrationTest extends BaseFetchRequestTest {
     consumerConfig.setProperty(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG, classOf[RangeAssignor].getName)
     val consumers = brokers.map { server =>
       consumerConfig.setProperty(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest")
-      consumerConfig.setProperty(ConsumerConfig.CLIENT_RACK_CONFIG, server.config.rack.orNull)
+      consumerConfig.setProperty(ConsumerConfig.CLIENT_RACK_CONFIG, server.config.rack.orElse(null))
       consumerConfig.setProperty(ConsumerConfig.GROUP_INSTANCE_ID_CONFIG, s"instance-${server.config.brokerId}")
       consumerConfig.setProperty(ConsumerConfig.METADATA_MAX_AGE_CONFIG, "1000")
       createConsumer()

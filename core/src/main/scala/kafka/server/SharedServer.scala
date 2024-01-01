@@ -18,7 +18,6 @@
 package kafka.server
 
 import kafka.raft.KafkaRaftManager
-import kafka.server.KafkaRaftServer.{BrokerRole, ControllerRole}
 import kafka.server.Server.MetricsPrefix
 import kafka.server.metadata.BrokerServerMetrics
 import kafka.utils.{CoreUtils, Logging}
@@ -33,7 +32,10 @@ import org.apache.kafka.image.publisher.metrics.SnapshotEmitterMetrics
 import org.apache.kafka.metadata.MetadataRecordSerde
 import org.apache.kafka.metadata.properties.MetaPropertiesEnsemble
 import org.apache.kafka.raft.RaftConfig.AddressSpec
+import org.apache.kafka.server.KafkaRaftServer.ProcessRole.{ControllerRole, BrokerRole}
+import org.apache.kafka.server.{KafkaRaftServer => JKafkaRaftServer}
 import org.apache.kafka.server.common.ApiMessageAndVersion
+import org.apache.kafka.server.config.KafkaConfig
 import org.apache.kafka.server.fault.{FaultHandler, LoggingFaultHandler, ProcessTerminatingFaultHandler}
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
 
@@ -100,8 +102,8 @@ class SharedServer(
   private var started = false
   private var usedByBroker: Boolean = false
   private var usedByController: Boolean = false
-  val brokerConfig = new KafkaConfig(sharedServerConfig.props, false, None)
-  val controllerConfig = new KafkaConfig(sharedServerConfig.props, false, None)
+  val brokerConfig = KafkaConfigProvider.fromProps(sharedServerConfig.props, false)
+  val controllerConfig = KafkaConfigProvider.fromProps(sharedServerConfig.props, false)
   @volatile var metrics: Metrics = _metrics
   @volatile var raftManager: KafkaRaftManager[ApiMessageAndVersion] = _
   @volatile var brokerMetrics: BrokerServerMetrics = _
@@ -245,7 +247,7 @@ class SharedServer(
           // This is only done in tests.
           metrics = new Metrics()
         }
-        sharedServerConfig.dynamicConfig.initialize(zkClientOpt = None, clientMetricsReceiverPluginOpt = None)
+        sharedServerConfig.dynamicConfig().initialize(Optional.empty(), Optional.empty())
 
         if (sharedServerConfig.processRoles.contains(BrokerRole)) {
           brokerMetrics = BrokerServerMetrics(metrics)
@@ -257,8 +259,8 @@ class SharedServer(
           clusterId,
           sharedServerConfig,
           new MetadataRecordSerde,
-          KafkaRaftServer.MetadataPartition,
-          KafkaRaftServer.MetadataTopicId,
+          JKafkaRaftServer.METADATA_PARTITION,
+          JKafkaRaftServer.METADATA_TOPIC_ID,
           time,
           metrics,
           Some(s"kafka-${sharedServerConfig.nodeId}-raft"), // No dash expected at the end

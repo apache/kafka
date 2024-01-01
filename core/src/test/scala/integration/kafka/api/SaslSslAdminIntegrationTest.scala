@@ -15,7 +15,6 @@ package kafka.api
 import java.util
 import kafka.security.authorizer.AclAuthorizer
 import kafka.security.authorizer.AclEntry.{WildcardHost, WildcardPrincipalString}
-import kafka.server.KafkaConfig
 import kafka.utils.{CoreUtils, JaasTestUtils, TestUtils}
 import kafka.utils.TestUtils._
 import org.apache.kafka.clients.admin._
@@ -30,6 +29,7 @@ import org.apache.kafka.common.resource.ResourceType.{GROUP, TOPIC}
 import org.apache.kafka.common.resource.{PatternType, Resource, ResourcePattern, ResourcePatternFilter, ResourceType}
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
 import org.apache.kafka.server.authorizer.Authorizer
+import org.apache.kafka.server.config.KafkaConfig
 import org.apache.kafka.storage.internals.log.LogConfig
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, TestInfo}
@@ -46,13 +46,13 @@ class SaslSslAdminIntegrationTest extends BaseAdminIntegrationTest with SaslSetu
 
   val authorizationAdmin = new AclAuthorizationAdmin(classOf[AclAuthorizer], classOf[AclAuthorizer])
 
-  this.serverConfig.setProperty(KafkaConfig.ZkEnableSecureAclsProp, "true")
+  this.serverConfig.setProperty(KafkaConfig.ZK_ENABLE_SECURE_ACLS_PROP, "true")
 
   override protected def securityProtocol = SecurityProtocol.SASL_SSL
   override protected lazy val trustStoreFile = Some(TestUtils.tempFile("truststore", ".jks"))
 
   override def generateConfigs: Seq[KafkaConfig] = {
-    this.serverConfig.setProperty(KafkaConfig.AuthorizerClassNameProp, authorizationAdmin.authorizerClassName)
+    this.serverConfig.setProperty(KafkaConfig.AUTHORIZER_CLASS_NAME_PROP, authorizationAdmin.authorizerClassName)
     super.generateConfigs
   }
 

@@ -41,6 +41,7 @@ import org.apache.kafka.common.requests.DeleteTopicsResponse
 import org.apache.kafka.common.security.auth.AuthenticationContext
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.security.authenticator.DefaultKafkaPrincipalBuilder
+import org.apache.kafka.server.config.KafkaConfig
 import org.apache.kafka.test.{TestUtils => JTestUtils}
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertTrue
@@ -94,14 +95,14 @@ class ControllerMutationQuotaTest extends BaseRequestTest {
   override def brokerCount: Int = 1
 
   override def brokerPropertyOverrides(properties: Properties): Unit = {
-    properties.put(KafkaConfig.ControlledShutdownEnableProp, "false")
-    properties.put(KafkaConfig.OffsetsTopicReplicationFactorProp, "1")
-    properties.put(KafkaConfig.OffsetsTopicPartitionsProp, "1")
-    properties.put(KafkaConfig.PrincipalBuilderClassProp,
+    properties.put(KafkaConfig.CONTROLLED_SHUTDOWN_ENABLE_PROP, "false")
+    properties.put(KafkaConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_PROP, "1")
+    properties.put(KafkaConfig.OFFSETS_TOPIC_PARTITIONS_PROP, "1")
+    properties.put(KafkaConfig.PRINCIPAL_BUILDER_CLASS_PROP,
       classOf[ControllerMutationQuotaTest.TestPrincipalBuilder].getName)
     // Specify number of samples and window size.
-    properties.put(KafkaConfig.NumControllerQuotaSamplesProp, ControllerQuotaSamples.toString)
-    properties.put(KafkaConfig.ControllerQuotaWindowSizeSecondsProp, ControllerQuotaWindowSizeSeconds.toString)
+    properties.put(KafkaConfig.NUM_CONTROLLER_QUOTA_SAMPLES_PROP, ControllerQuotaSamples.toString)
+    properties.put(KafkaConfig.CONTROLLER_QUOTA_WINDOW_SIZE_SECONDS_PROP, ControllerQuotaWindowSizeSeconds.toString)
   }
 
   @BeforeEach

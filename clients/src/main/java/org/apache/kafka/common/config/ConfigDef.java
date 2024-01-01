@@ -1243,10 +1243,6 @@ public class ConfigDef {
         public boolean hasDefault() {
             return !NO_DEFAULT_VALUE.equals(this.defaultValue);
         }
-
-        public Type type() {
-            return type;
-        }
     }
 
     protected List<String> headers() {

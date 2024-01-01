@@ -23,11 +23,13 @@ import scala.concurrent.duration._
 import ExecutionContext.Implicits._
 import kafka.utils.TestUtils
 import org.apache.kafka.metadata.properties.{MetaProperties, MetaPropertiesEnsemble, MetaPropertiesVersion, PropertiesUtils}
+import org.apache.kafka.server.config.KafkaConfig
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, TestInfo}
 import org.apache.kafka.test.TestUtils.isValidClusterId
 
 import java.util.Optional
+import scala.jdk.CollectionConverters._
 
 
 class ServerGenerateClusterIdTest extends QuorumTestHarness {
@@ -39,9 +41,9 @@ class ServerGenerateClusterIdTest extends QuorumTestHarness {
   @BeforeEach
   override def setUp(testInfo: TestInfo): Unit = {
     super.setUp(testInfo)
-    config1 = KafkaConfig.fromProps(TestUtils.createBrokerConfig(1, zkConnect))
-    config2 = KafkaConfig.fromProps(TestUtils.createBrokerConfig(2, zkConnect))
-    config3 = KafkaConfig.fromProps(TestUtils.createBrokerConfig(3, zkConnect))
+    config1 = KafkaConfigProvider.fromProps(TestUtils.createBrokerConfig(1, zkConnect))
+    config2 = KafkaConfigProvider.fromProps(TestUtils.createBrokerConfig(2, zkConnect))
+    config3 = KafkaConfigProvider.fromProps(TestUtils.createBrokerConfig(3, zkConnect))
   }
 
   @AfterEach
@@ -148,7 +150,7 @@ class ServerGenerateClusterIdTest extends QuorumTestHarness {
     val server = TestUtils.createServer(config1, threadNamePrefix = Option(this.getClass.getName))
     val clusterId = server.clusterId
 
-    assertTrue(verifyBrokerMetadata(server.config.logDirs, clusterId))
+    assertTrue(verifyBrokerMetadata(server.config.logDirs.asScala, clusterId))
 
     server.shutdown()
 
@@ -156,7 +158,7 @@ class ServerGenerateClusterIdTest extends QuorumTestHarness {
     server.startup()
 
     assertEquals(clusterId, server.clusterId)
-    assertTrue(verifyBrokerMetadata(server.config.logDirs, server.clusterId))
+    assertTrue(verifyBrokerMetadata(server.config.logDirs.asScala, server.clusterId))
 
     server.shutdown()
 
@@ -165,7 +167,7 @@ class ServerGenerateClusterIdTest extends QuorumTestHarness {
 
   @Test
   def testInconsistentClusterIdFromZookeeperAndFromMetaProps() = {
-    forgeBrokerMetadata(config1.logDirs, config1.brokerId, "aclusterid")
+    forgeBrokerMetadata(config1.logDirs.asScala, config1.brokerId, "aclusterid")
 
     val server = new KafkaServer(config1, threadNamePrefix = Option(this.getClass.getName))
 
@@ -189,7 +191,7 @@ class ServerGenerateClusterIdTest extends QuorumTestHarness {
 
     val props = TestUtils.createBrokerConfig(1, zkConnect)
     props.setProperty("log.dir", logDirs)
-    val config = KafkaConfig.fromProps(props)
+    val config = KafkaConfigProvider.fromProps(props)
 
     val server = new KafkaServer(config, threadNamePrefix = Option(this.getClass.getName))
 

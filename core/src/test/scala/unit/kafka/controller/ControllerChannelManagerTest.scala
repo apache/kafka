@@ -19,7 +19,7 @@ package kafka.controller
 import java.util.Properties
 import kafka.api.LeaderAndIsr
 import kafka.cluster.{Broker, EndPoint}
-import kafka.server.KafkaConfig
+import kafka.server.KafkaConfigProvider
 import kafka.utils.TestUtils
 import org.apache.kafka.common.message.LeaderAndIsrResponseData.LeaderAndIsrPartitionError
 import org.apache.kafka.common.message.LeaderAndIsrResponseData.LeaderAndIsrTopicError
@@ -34,6 +34,7 @@ import org.apache.kafka.common.{TopicPartition, Uuid}
 import org.apache.kafka.metadata.LeaderRecoveryState
 import org.apache.kafka.server.common.MetadataVersion
 import org.apache.kafka.server.common.MetadataVersion.{IBP_0_10_0_IV1, IBP_0_10_2_IV0, IBP_0_9_0, IBP_1_0_IV0, IBP_2_2_IV0, IBP_2_4_IV0, IBP_2_4_IV1, IBP_2_6_IV0, IBP_2_8_IV1, IBP_3_2_IV0, IBP_3_4_IV0}
+import org.apache.kafka.server.config.KafkaConfig
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
 
@@ -44,7 +45,7 @@ import scala.jdk.CollectionConverters._
 class ControllerChannelManagerTest {
   private val controllerId = 1
   private val controllerEpoch = 1
-  private val config = KafkaConfig.fromProps(TestUtils.createBrokerConfig(controllerId, "zkConnect"))
+  private val config = KafkaConfigProvider.fromProps(TestUtils.createBrokerConfig(controllerId, "zkConnect"))
   private val logger = new StateChangeLogger(controllerId, true, None)
 
   type ControlRequest = AbstractControlRequest.Builder[_ <: AbstractControlRequest]
@@ -894,10 +895,10 @@ class ControllerChannelManagerTest {
 
   private def createConfig(interBrokerVersion: MetadataVersion): KafkaConfig = {
     val props = new Properties()
-    props.put(KafkaConfig.BrokerIdProp, controllerId.toString)
-    props.put(KafkaConfig.ZkConnectProp, "zkConnect")
+    props.put(KafkaConfig.BROKER_ID_PROP, controllerId.toString)
+    props.put(KafkaConfig.ZK_CONNECT_PROP, "zkConnect")
     TestUtils.setIbpAndMessageFormatVersions(props, interBrokerVersion)
-    KafkaConfig.fromProps(props)
+    KafkaConfigProvider.fromProps(props)
   }
 
   private def replicaAssignment(replicas: Seq[Int]): ReplicaAssignment = ReplicaAssignment(replicas, Seq(), Seq())

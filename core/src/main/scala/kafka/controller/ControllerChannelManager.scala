@@ -19,7 +19,6 @@ package kafka.controller
 import com.yammer.metrics.core.{Gauge, Timer}
 import kafka.api._
 import kafka.cluster.Broker
-import kafka.server.KafkaConfig
 import kafka.utils.Implicits._
 import kafka.utils._
 import org.apache.kafka.clients._
@@ -36,12 +35,14 @@ import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.utils.{LogContext, Time}
 import org.apache.kafka.server.common.MetadataVersion
 import org.apache.kafka.server.common.MetadataVersion._
+import org.apache.kafka.server.config.KafkaConfig
 import org.apache.kafka.server.metrics.KafkaMetricsGroup
 import org.apache.kafka.server.util.ShutdownableThread
 
 import java.net.SocketTimeoutException
 import java.util.concurrent.{BlockingQueue, LinkedBlockingQueue, TimeUnit}
 import scala.collection.{Seq, Set, mutable}
+import scala.compat.java8.OptionConverters.RichOptionalGeneric
 import scala.jdk.CollectionConverters._
 
 object ControllerChannelManager {
@@ -117,8 +118,8 @@ class ControllerChannelManager(controllerEpoch: () => Int,
   private def addNewBroker(broker: Broker): Unit = {
     val messageQueue = new LinkedBlockingQueue[QueueItem]
     debug(s"Controller ${config.brokerId} trying to connect to broker ${broker.id}")
-    val controllerToBrokerListenerName = config.controlPlaneListenerName.getOrElse(config.interBrokerListenerName)
-    val controllerToBrokerSecurityProtocol = config.controlPlaneSecurityProtocol.getOrElse(config.interBrokerSecurityProtocol)
+    val controllerToBrokerListenerName = config.controlPlaneListenerName.asScala.getOrElse(config.interBrokerListenerName)
+    val controllerToBrokerSecurityProtocol = config.controlPlaneSecurityProtocol.asScala.getOrElse(config.interBrokerSecurityProtocol)
     val brokerNode = broker.node(controllerToBrokerListenerName)
     val logContext = new LogContext(s"[Controller id=${config.brokerId}, targetBrokerId=${brokerNode.idString}] ")
     val (networkClient, reconfigurableChannelBuilder) = {

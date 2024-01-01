@@ -261,7 +261,7 @@ public class ClientQuotaControlManager {
         }
 
         // Ensure the quota value is valid
-        switch (configKey.type()) {
+        switch (configKey.type) {
             case DOUBLE:
                 return ApiError.NONE;
             case SHORT:
@@ -285,7 +285,7 @@ public class ClientQuotaControlManager {
             }
             default:
                 return new ApiError(Errors.UNKNOWN_SERVER_ERROR,
-                        "Unexpected config type " + configKey.type() + " should be Long or Double");
+                        "Unexpected config type " + configKey.type + " should be Long or Double");
         }
     }
 

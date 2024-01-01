@@ -19,7 +19,7 @@ package org.apache.kafka.tiered.storage;
 import kafka.api.IntegrationTestHarness;
 import kafka.log.remote.RemoteLogManager;
 import kafka.server.KafkaBroker;
-import kafka.server.KafkaConfig;
+import org.apache.kafka.server.config.KafkaConfig;
 import org.apache.kafka.common.replica.ReplicaSelector;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemoteLogMetadataManager;
@@ -82,7 +82,7 @@ public abstract class TieredStorageTestHarness extends IntegrationTestHarness {
         Properties overridingProps = createPropsForRemoteStorage(testClassName, storageDirPath, brokerCount(),
                 numRemoteLogMetadataPartitions(), new Properties());
         readReplicaSelectorClass()
-                .ifPresent(c -> overridingProps.put(KafkaConfig.ReplicaSelectorClassProp(), c.getName()));
+                .ifPresent(c -> overridingProps.put(KafkaConfig.REPLICA_SELECTOR_CLASS_PROP, c.getName()));
         return overridingProps;
     }
 
@@ -155,7 +155,7 @@ public abstract class TieredStorageTestHarness extends IntegrationTestHarness {
     @SuppressWarnings("deprecation")
     public static List<BrokerLocalStorage> localStorages(Seq<KafkaBroker> brokers) {
         return JavaConverters.seqAsJavaList(brokers).stream()
-                .map(b -> new BrokerLocalStorage(b.config().brokerId(), b.config().logDirs().head(),
+                .map(b -> new BrokerLocalStorage(b.config().brokerId(), b.config().logDirs().stream().findFirst().get(),
                         STORAGE_WAIT_TIMEOUT_SEC))
                 .collect(Collectors.toList());
     }

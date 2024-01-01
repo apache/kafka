@@ -30,7 +30,7 @@ import java.util.Collections.emptyMap
 import java.util.TreeMap
 
 class ControllerConfigurationValidatorTest {
-  val config = new KafkaConfig(TestUtils.createDummyBrokerConfig())
+  val config = KafkaConfigProvider.fromProps(TestUtils.createDummyBrokerConfig())
   val validator = new ControllerConfigurationValidator(config)
 
   @Test

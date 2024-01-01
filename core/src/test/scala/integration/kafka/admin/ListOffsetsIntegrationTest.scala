@@ -18,12 +18,13 @@
 package kafka.admin
 
 import kafka.integration.KafkaServerTestHarness
-import kafka.server.KafkaConfig
+import kafka.server.KafkaConfigProvider
 import kafka.utils.{TestInfoUtils, TestUtils}
 import org.apache.kafka.clients.admin._
 import org.apache.kafka.clients.producer.ProducerRecord
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.utils.Utils
+import org.apache.kafka.server.config.KafkaConfig
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo}
 import org.junit.jupiter.params.ParameterizedTest
@@ -95,6 +96,6 @@ class ListOffsetsIntegrationTest extends KafkaServerTestHarness {
   }
 
   def generateConfigs: Seq[KafkaConfig] =
-    TestUtils.createBrokerConfigs(1, zkConnectOrNull).map(KafkaConfig.fromProps)
+    TestUtils.createBrokerConfigs(1, zkConnectOrNull).map(KafkaConfigProvider.fromProps)
 }
 

@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.streams.integration;
 
-import kafka.server.KafkaConfig;
+import org.apache.kafka.server.config.KafkaConfig;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
@@ -84,7 +84,7 @@ public class KafkaStreamsCloseOptionsIntegrationTest {
 
     static {
         final Properties brokerProps = new Properties();
-        brokerProps.setProperty(KafkaConfig.GroupMaxSessionTimeoutMsProp(), Integer.toString(Integer.MAX_VALUE));
+        brokerProps.setProperty(KafkaConfig.GROUP_MAX_SESSION_TIMEOUT_MS_PROP, Integer.toString(Integer.MAX_VALUE));
         CLUSTER = new EmbeddedKafkaCluster(1, brokerProps);
     }
 

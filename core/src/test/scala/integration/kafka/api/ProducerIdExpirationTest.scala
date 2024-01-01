@@ -19,17 +19,17 @@ package kafka.api
 
 import java.util
 import java.util.{Collections, List, Map, Properties}
-
 import kafka.integration.KafkaServerTestHarness
-import kafka.server.KafkaConfig
+import kafka.server.KafkaConfigProvider
 import kafka.utils.{TestInfoUtils, TestUtils}
 import kafka.utils.TestUtils.{consumeRecords, createAdminClient}
-import org.apache.kafka.clients.admin.{Admin,AlterConfigOp, ConfigEntry, ProducerState}
+import org.apache.kafka.clients.admin.{Admin, AlterConfigOp, ConfigEntry, ProducerState}
 import org.apache.kafka.clients.consumer.Consumer
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.errors.{InvalidPidMappingException, TransactionalIdNotFoundException}
+import org.apache.kafka.server.config.KafkaConfig
 import org.apache.kafka.test.{TestUtils => JTestUtils}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertThrows}
 import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo}
@@ -51,7 +51,7 @@ class ProducerIdExpirationTest extends KafkaServerTestHarness {
   var admin: Admin = _
 
   override def generateConfigs: Seq[KafkaConfig] = {
-    TestUtils.createBrokerConfigs(3, zkConnectOrNull).map(KafkaConfig.fromProps(_, serverProps()))
+    TestUtils.createBrokerConfigs(3, zkConnectOrNull).map(KafkaConfigProvider.fromProps(_, serverProps()))
   }
 
   @BeforeEach
@@ -202,7 +202,7 @@ class ProducerIdExpirationTest extends KafkaServerTestHarness {
   }
 
   private def producerIdExpirationConfig(configValue: String): Map[ConfigResource, util.Collection[AlterConfigOp]] = {
-    val producerIdCfg = new ConfigEntry(KafkaConfig.ProducerIdExpirationMsProp, configValue)
+    val producerIdCfg = new ConfigEntry(KafkaConfig.PRODUCER_ID_EXPIRATION_MS_PROP, configValue)
     val configs = Collections.singletonList(new AlterConfigOp(producerIdCfg, AlterConfigOp.OpType.SET))
     Collections.singletonMap(configResource, configs)
   }
@@ -224,22 +224,22 @@ class ProducerIdExpirationTest extends KafkaServerTestHarness {
 
   private def serverProps(): Properties = {
     val serverProps = new Properties()
-    serverProps.put(KafkaConfig.AutoCreateTopicsEnableProp, false.toString)
+    serverProps.put(KafkaConfig.AUTO_CREATE_TOPICS_ENABLE_PROP, false.toString)
     // Set a smaller value for the number of partitions for the __consumer_offsets topic
     // so that the creation of that topic/partition(s) and subsequent leader assignment doesn't take relatively long.
-    serverProps.put(KafkaConfig.OffsetsTopicPartitionsProp, 1.toString)
-    serverProps.put(KafkaConfig.TransactionsTopicPartitionsProp, 3.toString)
-    serverProps.put(KafkaConfig.TransactionsTopicReplicationFactorProp, 2.toString)
-    serverProps.put(KafkaConfig.TransactionsTopicMinISRProp, 2.toString)
-    serverProps.put(KafkaConfig.ControlledShutdownEnableProp, true.toString)
-    serverProps.put(KafkaConfig.UncleanLeaderElectionEnableProp, false.toString)
-    serverProps.put(KafkaConfig.AutoLeaderRebalanceEnableProp, false.toString)
-    serverProps.put(KafkaConfig.GroupInitialRebalanceDelayMsProp, "0")
-    serverProps.put(KafkaConfig.TransactionsAbortTimedOutTransactionCleanupIntervalMsProp, "200")
-    serverProps.put(KafkaConfig.TransactionalIdExpirationMsProp, "5000")
-    serverProps.put(KafkaConfig.TransactionsRemoveExpiredTransactionalIdCleanupIntervalMsProp, "500")
-    serverProps.put(KafkaConfig.ProducerIdExpirationMsProp, "10000")
-    serverProps.put(KafkaConfig.ProducerIdExpirationCheckIntervalMsProp, "500")
+    serverProps.put(KafkaConfig.OFFSETS_TOPIC_PARTITIONS_PROP, 1.toString)
+    serverProps.put(KafkaConfig.TRANSACTIONS_TOPIC_PARTITIONS_PROP, 3.toString)
+    serverProps.put(KafkaConfig.TRANSACTIONS_TOPIC_REPLICATION_FACTOR_PROP, 2.toString)
+    serverProps.put(KafkaConfig.TRANSACTIONS_TOPIC_MIN_ISR_PROP, 2.toString)
+    serverProps.put(KafkaConfig.CONTROLLED_SHUTDOWN_ENABLE_PROP, true.toString)
+    serverProps.put(KafkaConfig.UNCLEAN_LEADER_ELECTION_ENABLE_PROP, false.toString)
+    serverProps.put(KafkaConfig.AUTO_LEADER_REBALANCE_ENABLE_PROP, false.toString)
+    serverProps.put(KafkaConfig.GROUP_INITIAL_REBALANCE_DELAY_MS_PROP, "0")
+    serverProps.put(KafkaConfig.TRANSACTIONS_ABORT_TIMED_OUT_TRANSACTION_CLEANUP_INTERVAL_MS_PROP, "200")
+    serverProps.put(KafkaConfig.TRANSACTIONAL_ID_EXPIRATION_MS_PROP, "5000")
+    serverProps.put(KafkaConfig.TRANSACTIONS_REMOVE_EXPIRED_TRANSACTIONAL_ID_CLEANUP_INTERVAL_MS_PROP, "500")
+    serverProps.put(KafkaConfig.PRODUCER_ID_EXPIRATION_MS_PROP, "10000")
+    serverProps.put(KafkaConfig.PRODUCER_ID_EXPIRATION_CHECK_INTERVAL_MS_PROP, "500")
     serverProps
   }
 }

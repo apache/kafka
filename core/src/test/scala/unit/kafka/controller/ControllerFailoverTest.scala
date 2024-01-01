@@ -20,12 +20,12 @@ package kafka.controller
 import java.util.Properties
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.atomic.AtomicReference
-
 import kafka.integration.KafkaServerTestHarness
-import kafka.server.KafkaConfig
+import kafka.server.KafkaConfigProvider
 import kafka.utils._
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.metrics.Metrics
+import org.apache.kafka.server.config.KafkaConfig
 import org.apache.log4j.Logger
 import org.junit.jupiter.api.{AfterEach, Test}
 import org.junit.jupiter.api.Assertions._
@@ -38,10 +38,10 @@ class ControllerFailoverTest extends KafkaServerTestHarness with Logging {
   val topic = "topic1"
   val overridingProps = new Properties()
   val metrics = new Metrics()
-  overridingProps.put(KafkaConfig.NumPartitionsProp, numParts.toString)
+  overridingProps.put(KafkaConfig.NUM_PARTITIONS_PROP, numParts.toString)
 
   override def generateConfigs = TestUtils.createBrokerConfigs(numNodes, zkConnect)
-    .map(KafkaConfig.fromProps(_, overridingProps))
+    .map(KafkaConfigProvider.fromProps(_, overridingProps))
 
   @AfterEach
   override def tearDown(): Unit = {

@@ -25,7 +25,8 @@ import kafka.server.checkpoints.OffsetCheckpointFile
 import kafka.server.metadata.ConfigRepository
 import kafka.server._
 import kafka.utils._
-import org.apache.kafka.common.{DirectoryId, KafkaException, TopicPartition, Uuid}
+import org.apache.kafka.common.{KafkaException, TopicPartition, Uuid}
+import org.apache.kafka.common.DirectoryId
 import org.apache.kafka.common.utils.{KafkaThread, Time, Utils}
 import org.apache.kafka.common.errors.{InconsistentTopicIdException, KafkaStorageException, LogDirNotFoundException}
 
@@ -39,6 +40,7 @@ import org.apache.kafka.metadata.properties.{MetaProperties, MetaPropertiesEnsem
 
 import java.util.{OptionalLong, Properties}
 import org.apache.kafka.server.common.MetadataVersion
+import org.apache.kafka.server.config.{KafkaConfig, LogCleanerConfig}
 import org.apache.kafka.storage.internals.log.LogConfig.MessageFormatVersion
 import org.apache.kafka.server.metrics.KafkaMetricsGroup
 import org.apache.kafka.server.util.Scheduler
@@ -450,7 +452,7 @@ class LogManager(logDirs: Seq[File],
             // Ignore remote-log-index-cache directory as that is index cache maintained by tiered storage subsystem
             // but not any topic-partition dir.
             !logDir.getName.equals(RemoteIndexCache.DIR_NAME) &&
-            UnifiedLog.parseTopicPartitionName(logDir).topic != KafkaRaftServer.MetadataTopic)
+            UnifiedLog.parseTopicPartitionName(logDir).topic != org.apache.kafka.server.KafkaRaftServer.METADATA_TOPIC)
         numTotalLogs += logsToLoad.length
         numRemainingLogs.put(logDirAbsolutePath, logsToLoad.length)
         loadLogsCompletedFlags.put(logDirAbsolutePath, logsToLoad.isEmpty)
@@ -1498,9 +1500,9 @@ object LogManager {
     LogConfig.validateBrokerLogConfigValues(defaultProps, config.isRemoteLogStorageSystemEnabled)
     val defaultLogConfig = new LogConfig(defaultProps)
 
-    val cleanerConfig = LogCleaner.cleanerConfig(config)
+    val cleanerConfig = LogCleanerConfig.cleanerConfig(config)
 
-    new LogManager(logDirs = config.logDirs.map(new File(_).getAbsoluteFile),
+    new LogManager(logDirs = config.logDirs.asScala.map(new File(_).getAbsoluteFile),
       initialOfflineDirs = initialOfflineDirs.map(new File(_).getAbsoluteFile),
       configRepository = configRepository,
       initialDefaultConfig = defaultLogConfig,

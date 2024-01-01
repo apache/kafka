@@ -17,7 +17,6 @@
 package kafka.server
 
 import java.net.SocketTimeoutException
-
 import kafka.cluster.BrokerEndPoint
 import org.apache.kafka.clients._
 import org.apache.kafka.common.metrics.Metrics
@@ -28,6 +27,7 @@ import org.apache.kafka.common.utils.{LogContext, Time}
 import org.apache.kafka.clients.{ApiVersions, ClientResponse, ManualMetadataUpdater, NetworkClient}
 import org.apache.kafka.common.{Node, Reconfigurable}
 import org.apache.kafka.common.requests.AbstractRequest.Builder
+import org.apache.kafka.server.config.KafkaConfig
 
 import scala.jdk.CollectionConverters._
 

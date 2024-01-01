@@ -27,7 +27,8 @@ import kafka.server.DelayedFetch;
 import kafka.server.DelayedOperationPurgatory;
 import kafka.server.DelayedProduce;
 import kafka.server.DelayedRemoteFetch;
-import kafka.server.KafkaConfig;
+import kafka.server.KafkaConfigProvider;
+import org.apache.kafka.server.config.KafkaConfig;
 import kafka.server.MetadataCache;
 import kafka.server.QuotaFactory.QuotaManagers;
 import kafka.server.ReplicaManager;
@@ -180,7 +181,7 @@ public class ReplicaManagerBuilder {
     }
 
     public ReplicaManager build() {
-        if (config == null) config = new KafkaConfig(Collections.emptyMap());
+        if (config == null) config = KafkaConfigProvider.fromProps(Collections.emptyMap());
         if (logManager == null) throw new RuntimeException("You must set logManager");
         if (metadataCache == null) throw new RuntimeException("You must set metadataCache");
         if (logDirFailureChannel == null) throw new RuntimeException("You must set logDirFailureChannel");

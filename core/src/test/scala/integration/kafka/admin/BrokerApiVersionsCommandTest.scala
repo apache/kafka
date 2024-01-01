@@ -18,12 +18,13 @@
 package kafka.admin
 
 import kafka.integration.KafkaServerTestHarness
-import kafka.server.KafkaConfig
+import kafka.server.KafkaConfigProvider
 import kafka.utils.{TestInfoUtils, TestUtils}
 import org.apache.kafka.clients.NodeApiVersions
 import org.apache.kafka.common.message.ApiMessageType
 import org.apache.kafka.common.protocol.ApiKeys
 import org.apache.kafka.common.requests.ApiVersionsResponse
+import org.apache.kafka.server.config.KafkaConfig
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertNotNull, assertTrue}
 import org.junit.jupiter.api.Timeout
 import org.junit.jupiter.params.ParameterizedTest
@@ -42,20 +43,20 @@ class BrokerApiVersionsCommandTest extends KafkaServerTestHarness {
       TestUtils.createBrokerConfigs(1, null).map(props => {
         // Enable unstable api versions to be compatible with the new APIs under development,
         // maybe we can remove this after the new APIs is complete.
-        props.setProperty(KafkaConfig.UnstableApiVersionsEnableProp, "true")
+        props.setProperty(KafkaConfig.UNSTABLE_API_VERSIONS_ENABLE_PROP, "true")
         props
-      }).map(KafkaConfig.fromProps)
+      }).map(KafkaConfigProvider.fromProps)
     } else {
       TestUtils.createBrokerConfigs(1, zkConnect).map(props => {
         // Configure control plane listener to make sure we have separate listeners from client,
         // in order to avoid returning Envelope API version.
-        props.setProperty(KafkaConfig.ControlPlaneListenerNameProp, "CONTROLLER")
-        props.setProperty(KafkaConfig.ListenerSecurityProtocolMapProp, "CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT")
+        props.setProperty(KafkaConfig.CONTROL_PLANE_LISTENER_NAME_PROP, "CONTROLLER")
+        props.setProperty(KafkaConfig.LISTENER_SECURITY_PROTOCOL_MAP_PROP, "CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT")
         props.setProperty("listeners", "PLAINTEXT://localhost:0,CONTROLLER://localhost:0")
-        props.setProperty(KafkaConfig.AdvertisedListenersProp, "PLAINTEXT://localhost:0,CONTROLLER://localhost:0")
-        props.setProperty(KafkaConfig.UnstableApiVersionsEnableProp, "true")
+        props.setProperty(KafkaConfig.ADVERTISED_LISTENERS_PROP, "PLAINTEXT://localhost:0,CONTROLLER://localhost:0")
+        props.setProperty(KafkaConfig.UNSTABLE_API_VERSIONS_ENABLE_PROP, "true")
         props
-      }).map(KafkaConfig.fromProps)
+      }).map(KafkaConfigProvider.fromProps)
     }
 
   @Timeout(120)

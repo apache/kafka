@@ -18,7 +18,6 @@
 package kafka.server
 
 import java.util.Collections
-
 import kafka.utils._
 import org.apache.kafka.common.message.DeleteTopicsRequestData
 import org.apache.kafka.common.protocol.Errors
@@ -36,7 +35,7 @@ class DeleteTopicsRequestWithDeletionDisabledTest extends BaseRequestTest {
       interBrokerSecurityProtocol = Some(securityProtocol),
       trustStoreFile = trustStoreFile, saslProperties = serverSaslProperties, logDirCount = logDirCount)
     props.foreach(brokerPropertyOverrides)
-    props.map(KafkaConfig.fromProps)
+    props.map(KafkaConfigProvider.fromProps)
   }
 
   @Test

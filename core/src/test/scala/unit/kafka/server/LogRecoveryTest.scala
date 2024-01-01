@@ -17,20 +17,21 @@
 package kafka.server
 
 import java.util.Properties
-
 import scala.collection.Seq
-
 import kafka.utils.TestUtils
 import TestUtils._
 import kafka.server.QuorumTestHarness
-import java.io.File
 
+import java.io.File
 import kafka.server.checkpoints.OffsetCheckpointFile
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.serialization.{IntegerSerializer, StringSerializer}
+import org.apache.kafka.server.config.KafkaConfig
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, TestInfo}
 import org.junit.jupiter.api.Assertions._
+
+import scala.jdk.CollectionConverters._
 
 class LogRecoveryTest extends QuorumTestHarness {
 
@@ -40,9 +41,9 @@ class LogRecoveryTest extends QuorumTestHarness {
   val replicaFetchMinBytes = 20
 
   val overridingProps = new Properties()
-  overridingProps.put(KafkaConfig.ReplicaLagTimeMaxMsProp, replicaLagTimeMaxMs.toString)
-  overridingProps.put(KafkaConfig.ReplicaFetchWaitMaxMsProp, replicaFetchWaitMaxMs.toString)
-  overridingProps.put(KafkaConfig.ReplicaFetchMinBytesProp, replicaFetchMinBytes.toString)
+  overridingProps.put(KafkaConfig.REPLICA_LAG_TIME_MAX_MS_PROP, replicaLagTimeMaxMs.toString)
+  overridingProps.put(KafkaConfig.REPLICA_FETCH_WAIT_MAX_MS_PROP, replicaFetchWaitMaxMs.toString)
+  overridingProps.put(KafkaConfig.REPLICA_FETCH_MIN_BYTES_PROP, replicaFetchMinBytes.toString)
 
   var configs: Seq[KafkaConfig] = _
   val topic = "new-topic"
@@ -58,8 +59,8 @@ class LogRecoveryTest extends QuorumTestHarness {
   val message = "hello"
 
   var producer: KafkaProducer[Integer, String] = _
-  def hwFile1 = new OffsetCheckpointFile(new File(configProps1.logDirs.head, ReplicaManager.HighWatermarkFilename))
-  def hwFile2 = new OffsetCheckpointFile(new File(configProps2.logDirs.head, ReplicaManager.HighWatermarkFilename))
+  def hwFile1 = new OffsetCheckpointFile(new File(configProps1.logDirs.asScala.head, ReplicaManager.HighWatermarkFilename))
+  def hwFile2 = new OffsetCheckpointFile(new File(configProps2.logDirs.asScala.head, ReplicaManager.HighWatermarkFilename))
   var servers = Seq.empty[KafkaServer]
 
   // Some tests restart the brokers then produce more data. But since test brokers use random ports, we need
@@ -78,7 +79,7 @@ class LogRecoveryTest extends QuorumTestHarness {
   override def setUp(testInfo: TestInfo): Unit = {
     super.setUp(testInfo)
 
-    configs = TestUtils.createBrokerConfigs(2, zkConnect, enableControlledShutdown = false).map(KafkaConfig.fromProps(_, overridingProps))
+    configs = TestUtils.createBrokerConfigs(2, zkConnect, enableControlledShutdown = false).map(KafkaConfigProvider.fromProps(_, overridingProps))
 
     // start both servers
     server1 = TestUtils.createServer(configProps1)

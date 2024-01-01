@@ -24,6 +24,7 @@ import org.apache.kafka.common.protocol.ApiKeys
 import org.apache.kafka.common.requests.ApiVersionsResponse
 import org.apache.kafka.server.ClientMetricsManager
 import org.apache.kafka.server.common.Features
+import org.apache.kafka.server.config.KafkaConfig
 
 import scala.jdk.CollectionConverters._
 

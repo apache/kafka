@@ -17,13 +17,14 @@
 
 package kafka.tools
 
+import kafka.server.KafkaConfigProvider
+
 import java.io.{ByteArrayOutputStream, PrintStream}
 import java.nio.charset.StandardCharsets
 import java.nio.file.{Files, Paths}
 import java.util
 import java.util.Properties
 import org.apache.kafka.common.{DirectoryId, KafkaException}
-import kafka.server.KafkaConfig
 import kafka.utils.Exit
 import kafka.utils.TestUtils
 import org.apache.commons.io.output.NullOutputStream
@@ -31,6 +32,7 @@ import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.server.common.MetadataVersion
 import org.apache.kafka.common.metadata.UserScramCredentialRecord
 import org.apache.kafka.metadata.properties.{MetaProperties, MetaPropertiesEnsemble, MetaPropertiesVersion, PropertiesUtils}
+import org.apache.kafka.server.config.KafkaConfig
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertThrows, assertTrue}
 import org.junit.jupiter.api.{Test, Timeout}
 import org.junit.jupiter.params.ParameterizedTest
@@ -44,25 +46,25 @@ class StorageToolTest {
 
   private def newSelfManagedProperties() = {
     val properties = new Properties()
-    properties.setProperty(KafkaConfig.LogDirsProp, "/tmp/foo,/tmp/bar")
-    properties.setProperty(KafkaConfig.ProcessRolesProp, "controller")
-    properties.setProperty(KafkaConfig.NodeIdProp, "2")
-    properties.setProperty(KafkaConfig.QuorumVotersProp, s"2@localhost:9092")
-    properties.setProperty(KafkaConfig.ControllerListenerNamesProp, "PLAINTEXT")
+    properties.setProperty(KafkaConfig.LOG_DIRS_PROP, "/tmp/foo,/tmp/bar")
+    properties.setProperty(KafkaConfig.PROCESS_ROLES_PROP, "controller")
+    properties.setProperty(KafkaConfig.NODE_ID_PROP, "2")
+    properties.setProperty(KafkaConfig.QUORUM_VOTERS_PROP, s"2@localhost:9092")
+    properties.setProperty(KafkaConfig.CONTROLLER_LISTENER_NAMES_PROP, "PLAINTEXT")
     properties
   }
 
   @Test
   def testConfigToLogDirectories(): Unit = {
-    val config = new KafkaConfig(newSelfManagedProperties())
+    val config = KafkaConfigProvider.fromProps(newSelfManagedProperties())
     assertEquals(Seq("/tmp/bar", "/tmp/foo"), StorageTool.configToLogDirectories(config))
   }
 
   @Test
   def testConfigToLogDirectoriesWithMetaLogDir(): Unit = {
     val properties = newSelfManagedProperties()
-    properties.setProperty(KafkaConfig.MetadataLogDirProp, "/tmp/baz")
-    val config = new KafkaConfig(properties)
+    properties.setProperty(KafkaConfig.METADATA_LOG_DIR_PROP, "/tmp/baz")
+    val config = KafkaConfigProvider.fromProps(properties)
     assertEquals(Seq("/tmp/bar", "/tmp/baz", "/tmp/foo"),
       StorageTool.configToLogDirectories(config))
   }
@@ -194,7 +196,7 @@ Found problem:
 
   @Test
   def testFormatWithInvalidClusterId(): Unit = {
-    val config = new KafkaConfig(newSelfManagedProperties())
+    val config = KafkaConfigProvider.fromProps(newSelfManagedProperties())
     assertEquals("Cluster ID string invalid does not appear to be a valid UUID: " +
       "Input string `invalid` decoded as 5 bytes, which is not equal to the expected " +
         "16 bytes of a base64-encoded UUID", assertThrows(classOf[TerseFailure],
@@ -354,7 +356,7 @@ Found problem:
     val propsFile = TestUtils.tempFile()
     val propsStream = Files.newOutputStream(propsFile.toPath)
     // This test does format the directory specified so use a tempdir
-    properties.setProperty(KafkaConfig.LogDirsProp, TestUtils.tempDir().toString)
+    properties.setProperty(KafkaConfig.LOG_DIRS_PROP, TestUtils.tempDir().toString)
     properties.store(propsStream, "config.props")
     propsStream.close()
 
@@ -408,8 +410,8 @@ Found problem:
     val propsFile = TestUtils.tempFile()
     val propsStream = Files.newOutputStream(propsFile.toPath)
     try {
-      properties.setProperty(KafkaConfig.LogDirsProp, TestUtils.tempDir().toString)
-      properties.setProperty(KafkaConfig.UnstableMetadataVersionsEnableProp, enableUnstable.toString)
+      properties.setProperty(KafkaConfig.LOG_DIRS_PROP, TestUtils.tempDir().toString)
+      properties.setProperty(KafkaConfig.UNSTABLE_METADATA_VERSIONS_ENABLE_PROP, enableUnstable.toString)
       properties.store(propsStream, "config.props")
     } finally {
       propsStream.close()

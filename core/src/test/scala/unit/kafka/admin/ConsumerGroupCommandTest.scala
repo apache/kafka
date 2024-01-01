@@ -20,10 +20,9 @@ package kafka.admin
 import java.time.Duration
 import java.util.concurrent.{ExecutorService, Executors, TimeUnit}
 import java.util.{Collections, Properties}
-
 import kafka.admin.ConsumerGroupCommand.{ConsumerGroupCommandOptions, ConsumerGroupService}
 import kafka.integration.KafkaServerTestHarness
-import kafka.server.KafkaConfig
+import kafka.server.KafkaConfigProvider
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.admin.AdminClientConfig
 import org.apache.kafka.clients.consumer.{Consumer, KafkaConsumer, RangeAssignor}
@@ -47,7 +46,7 @@ class ConsumerGroupCommandTest extends KafkaServerTestHarness {
   // configure the servers and clients
   override def generateConfigs = {
     TestUtils.createBrokerConfigs(1, zkConnectOrNull, enableControlledShutdown = false).map { props =>
-      KafkaConfig.fromProps(props)
+      KafkaConfigProvider.fromProps(props)
     }
   }
 

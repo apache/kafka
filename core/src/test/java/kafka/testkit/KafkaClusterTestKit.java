@@ -21,9 +21,8 @@ import kafka.raft.KafkaRaftManager;
 import kafka.server.BrokerServer;
 import kafka.server.ControllerServer;
 import kafka.server.FaultHandlerFactory;
+import kafka.server.KafkaConfigProvider;
 import kafka.server.SharedServer;
-import kafka.server.KafkaConfig;
-import kafka.server.KafkaConfig$;
 import kafka.server.KafkaRaftServer;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.admin.AdminClientConfig;
@@ -38,6 +37,7 @@ import org.apache.kafka.metadata.bootstrap.BootstrapDirectory;
 import org.apache.kafka.metadata.properties.MetaProperties;
 import org.apache.kafka.metadata.properties.MetaPropertiesEnsemble;
 import org.apache.kafka.raft.RaftConfig;
+import org.apache.kafka.server.config.KafkaConfig;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.fault.FaultHandler;
 import org.apache.kafka.server.fault.MockFaultHandler;
@@ -45,7 +45,6 @@ import org.apache.kafka.test.TestUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.slf4j.event.Level;
-import scala.Option;
 
 import java.io.File;
 import java.net.InetSocketAddress;
@@ -154,34 +153,34 @@ public class KafkaClusterTestKit implements AutoCloseable {
             ControllerNode controllerNode = nodes.controllerNodes().get(node.id());
 
             Map<String, String> props = new HashMap<>(configProps);
-            props.put(KafkaConfig$.MODULE$.ServerMaxStartupTimeMsProp(),
+            props.put(KafkaConfig.SERVER_MAX_STARTUP_TIME_MS_PROP,
                     Long.toString(TimeUnit.MINUTES.toMillis(10)));
-            props.put(KafkaConfig$.MODULE$.ProcessRolesProp(), roles(node.id()));
-            props.put(KafkaConfig$.MODULE$.NodeIdProp(),
+            props.put(KafkaConfig.PROCESS_ROLES_PROP, roles(node.id()));
+            props.put(KafkaConfig.NODE_ID_PROP,
                     Integer.toString(node.id()));
             // In combined mode, always prefer the metadata log directory of the controller node.
             if (controllerNode != null) {
-                props.put(KafkaConfig$.MODULE$.MetadataLogDirProp(),
+                props.put(KafkaConfig.METADATA_LOG_DIR_PROP,
                         controllerNode.metadataDirectory());
             } else {
-                props.put(KafkaConfig$.MODULE$.MetadataLogDirProp(),
+                props.put(KafkaConfig.METADATA_LOG_DIR_PROP,
                         node.metadataDirectory());
             }
             if (brokerNode != null) {
                 // Set the log.dirs according to the broker node setting (if there is a broker node)
-                props.put(KafkaConfig$.MODULE$.LogDirsProp(),
+                props.put(KafkaConfig.LOG_DIRS_PROP,
                         String.join(",", brokerNode.logDataDirectories()));
             } else {
                 // Set log.dirs equal to the metadata directory if there is just a controller.
-                props.put(KafkaConfig$.MODULE$.LogDirsProp(),
+                props.put(KafkaConfig.LOG_DIRS_PROP,
                     controllerNode.metadataDirectory());
             }
-            props.put(KafkaConfig$.MODULE$.ListenerSecurityProtocolMapProp(),
+            props.put(KafkaConfig.LISTENER_SECURITY_PROTOCOL_MAP_PROP,
                     "EXTERNAL:PLAINTEXT,CONTROLLER:PLAINTEXT");
-            props.put(KafkaConfig$.MODULE$.ListenersProp(), listeners(node.id()));
-            props.put(KafkaConfig$.MODULE$.InterBrokerListenerNameProp(),
+            props.put(KafkaConfig.LISTENERS_PROP, listeners(node.id()));
+            props.put(KafkaConfig.INTER_BROKER_LISTENER_NAME_PROP,
                     nodes.interBrokerListenerName().value());
-            props.put(KafkaConfig$.MODULE$.ControllerListenerNamesProp(),
+            props.put(KafkaConfig.CONTROLLER_LISTENER_NAMES_PROP,
                     "CONTROLLER");
             // Note: we can't accurately set controller.quorum.voters yet, since we don't
             // yet know what ports each controller will pick.  Set it to a dummy string
@@ -192,14 +191,15 @@ public class KafkaClusterTestKit implements AutoCloseable {
             props.put(RaftConfig.QUORUM_VOTERS_CONFIG, uninitializedQuorumVotersString);
 
             // reduce log cleaner offset map memory usage
-            props.put(KafkaConfig$.MODULE$.LogCleanerDedupeBufferSizeProp(), "2097152");
+            props.put(KafkaConfig.LOG_CLEANER_DEDUPE_BUFFER_SIZE_PROP, "2097152");
 
             // Add associated broker node property overrides
             if (brokerNode != null) {
                 props.putAll(brokerNode.propertyOverrides());
             }
-            props.putIfAbsent(KafkaConfig$.MODULE$.UnstableMetadataVersionsEnableProp(), "true");
-            return new KafkaConfig(props, false, Option.empty());
+            props.putIfAbsent(KafkaConfig.UNSTABLE_METADATA_VERSIONS_ENABLE_PROP, "true");
+
+            return KafkaConfigProvider.fromProps(props, false);
         }
 
         public KafkaClusterTestKit build() throws Exception {

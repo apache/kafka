@@ -18,7 +18,7 @@ package kafka.coordinator.transaction
 
 import java.util.Properties
 import java.util.concurrent.atomic.AtomicBoolean
-import kafka.server.{KafkaConfig, MetadataCache, ReplicaManager, RequestLocal}
+import kafka.server.{MetadataCache, ReplicaManager, RequestLocal}
 import kafka.utils.Logging
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.internals.Topic
@@ -29,6 +29,7 @@ import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.RecordBatch
 import org.apache.kafka.common.requests.{AddPartitionsToTxnResponse, TransactionResult}
 import org.apache.kafka.common.utils.{LogContext, ProducerIdAndEpoch, Time}
+import org.apache.kafka.server.config.KafkaConfig
 import org.apache.kafka.server.util.Scheduler
 
 import scala.jdk.CollectionConverters._

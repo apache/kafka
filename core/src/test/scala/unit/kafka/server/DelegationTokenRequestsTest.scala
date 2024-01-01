@@ -18,12 +18,13 @@ package kafka.server
 
 import kafka.api.IntegrationTestHarness
 import kafka.api.{KafkaSasl, SaslSetup}
-import kafka.utils.{JaasTestUtils, TestUtils, TestInfoUtils}
+import kafka.utils.{JaasTestUtils, TestInfoUtils, TestUtils}
 import org.apache.kafka.clients.admin.{Admin, AdminClientConfig, CreateDelegationTokenOptions, DescribeDelegationTokenOptions}
 import org.apache.kafka.common.errors.InvalidPrincipalTypeException
 import org.apache.kafka.common.errors.DelegationTokenNotFoundException
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.utils.SecurityUtils
+import org.apache.kafka.server.config.KafkaConfig
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
@@ -43,11 +44,11 @@ class DelegationTokenRequestsTest extends IntegrationTestHarness with SaslSetup 
 
   override def brokerCount = 1
 
-  this.serverConfig.setProperty(KafkaConfig.DelegationTokenSecretKeyProp, "testKey")
-  this.controllerConfig.setProperty(KafkaConfig.DelegationTokenSecretKeyProp, "testKey")
+  this.serverConfig.setProperty(KafkaConfig.DELEGATION_TOKEN_SECRET_KEY_PROP, "testKey")
+  this.controllerConfig.setProperty(KafkaConfig.DELEGATION_TOKEN_SECRET_KEY_PROP, "testKey")
   // Remove expired tokens every minute.
-  this.serverConfig.setProperty(KafkaConfig.DelegationTokenExpiryCheckIntervalMsProp, "60000")
-  this.controllerConfig.setProperty(KafkaConfig.DelegationTokenExpiryCheckIntervalMsProp, "60000")
+  this.serverConfig.setProperty(KafkaConfig.DELEGATION_TOKEN_EXPIRY_CHECK_INTERVAL_MS_PROP, "60000")
+  this.controllerConfig.setProperty(KafkaConfig.DELEGATION_TOKEN_EXPIRY_CHECK_INTERVAL_MS_PROP, "60000")
 
   @BeforeEach
   override def setUp(testInfo: TestInfo): Unit = {

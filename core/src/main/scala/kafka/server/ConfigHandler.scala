@@ -34,12 +34,12 @@ import org.apache.kafka.common.metrics.Quota
 import org.apache.kafka.common.metrics.Quota._
 import org.apache.kafka.common.utils.Sanitizer
 import org.apache.kafka.server.ClientMetricsManager
+import org.apache.kafka.server.config.KafkaConfig
 import org.apache.kafka.storage.internals.log.{LogConfig, ThrottledReplicaListValidator}
 import org.apache.kafka.storage.internals.log.LogConfig.MessageFormatVersion
 
 import scala.annotation.nowarn
 import scala.jdk.CollectionConverters._
-import scala.collection.Seq
 import scala.util.Try
 
 /**
@@ -72,7 +72,7 @@ class TopicConfigHandler(private val replicaManager: ReplicaManager,
     val wasRemoteLogEnabledBeforeUpdate = logs.exists(_.remoteLogEnabled())
 
     logManager.updateTopicConfig(topic, props, kafkaConfig.isRemoteLogStorageSystemEnabled)
-    maybeBootstrapRemoteLogComponents(topic, logs, wasRemoteLogEnabledBeforeUpdate)
+    maybeBootstrapRemoteLogComponents(topic, logs.toSeq, wasRemoteLogEnabledBeforeUpdate)
   }
 
   private[server] def maybeBootstrapRemoteLogComponents(topic: String,
@@ -107,7 +107,7 @@ class TopicConfigHandler(private val replicaManager: ReplicaManager,
     updateThrottledList(LogConfig.LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG, quotas.leader)
     updateThrottledList(LogConfig.FOLLOWER_REPLICATION_THROTTLED_REPLICAS_CONFIG, quotas.follower)
 
-    if (Try(topicConfig.getProperty(KafkaConfig.UncleanLeaderElectionEnableProp).toBoolean).getOrElse(false)) {
+    if (Try(topicConfig.getProperty(KafkaConfig.UNCLEAN_LEADER_ELECTION_ENABLE_PROP).toBoolean).getOrElse(false)) {
       kafkaController.foreach(_.enableTopicUncleanLeaderElection(topic))
     }
   }
@@ -246,9 +246,9 @@ class BrokerConfigHandler(private val brokerConfig: KafkaConfig,
         DefaultReplicationThrottledRate
     }
     if (brokerId == ConfigEntityName.Default)
-      brokerConfig.dynamicConfig.updateDefaultConfig(properties)
+      brokerConfig.dynamicConfig.updateDefaultConfig(properties, true)
     else if (brokerConfig.brokerId == brokerId.trim.toInt) {
-      brokerConfig.dynamicConfig.updateBrokerConfig(brokerConfig.brokerId, properties)
+      brokerConfig.dynamicConfig.updateBrokerConfig(brokerConfig.brokerId, properties, true)
       quotaManagers.leader.updateQuota(upperBound(getOrDefault(LeaderReplicationThrottledRateProp).toDouble))
       quotaManagers.follower.updateQuota(upperBound(getOrDefault(FollowerReplicationThrottledRateProp).toDouble))
       quotaManagers.alterLogDirs.updateQuota(upperBound(getOrDefault(ReplicaAlterLogDirsIoMaxBytesPerSecondProp).toDouble))

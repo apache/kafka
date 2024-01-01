@@ -13,15 +13,15 @@
 package kafka.admin
 
 import java.io.{BufferedWriter, FileWriter}
-import java.text.{SimpleDateFormat}
+import java.text.SimpleDateFormat
 import java.util.{Calendar, Date, Properties}
-
 import joptsimple.OptionException
 import kafka.admin.ConsumerGroupCommand.ConsumerGroupService
-import kafka.server.KafkaConfig
+import kafka.server.KafkaConfigProvider
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.producer.ProducerRecord
 import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.server.config.KafkaConfig
 import org.apache.kafka.test
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
@@ -49,7 +49,7 @@ class ResetConsumerGroupOffsetTest extends ConsumerGroupCommandTest {
 
   override def generateConfigs: Seq[KafkaConfig] = {
     TestUtils.createBrokerConfigs(1, zkConnect, enableControlledShutdown = false)
-      .map(KafkaConfig.fromProps(_, overridingProps))
+      .map(KafkaConfigProvider.fromProps(_, overridingProps))
   }
 
   private def basicArgs: Array[String] = {

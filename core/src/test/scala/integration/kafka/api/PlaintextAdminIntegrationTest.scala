@@ -28,7 +28,7 @@ import java.{time, util}
 import kafka.integration.KafkaServerTestHarness
 import kafka.security.authorizer.AclEntry
 import kafka.server.metadata.KRaftMetadataCache
-import kafka.server.{Defaults, DynamicConfig, KafkaConfig}
+import kafka.server.DynamicConfig
 import kafka.utils.TestUtils._
 import kafka.utils.{Log4jController, TestInfoUtils, TestUtils}
 import org.apache.kafka.clients.HostResolver
@@ -44,6 +44,7 @@ import org.apache.kafka.common.resource.{PatternType, ResourcePattern, ResourceT
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.common.{ConsumerGroupState, ElectionType, TopicCollection, TopicPartition, TopicPartitionInfo, TopicPartitionReplica, Uuid}
 import org.apache.kafka.controller.ControllerRequestContextUtil.ANONYMOUS_CONTEXT
+import org.apache.kafka.server.config.{Defaults, KafkaConfig}
 import org.apache.kafka.storage.internals.log.LogConfig
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Disabled, TestInfo}
@@ -288,11 +289,11 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
 
     // Generate two mutually exclusive replicaAssignment
     val firstReplicaAssignment = brokers.map { server =>
-      val logDir = new File(server.config.logDirs(randomNums(server))).getAbsolutePath
+      val logDir = new File(server.config.logDirs.get(randomNums(server))).getAbsolutePath
       new TopicPartitionReplica(topic, 0, server.config.brokerId) -> logDir
     }.toMap
     val secondReplicaAssignment = brokers.map { server =>
-      val logDir = new File(server.config.logDirs(1 - randomNums(server))).getAbsolutePath
+      val logDir = new File(server.config.logDirs.get(1 - randomNums(server))).getAbsolutePath
       new TopicPartitionReplica(topic, 0, server.config.brokerId) -> logDir
     }.toMap
 
@@ -415,38 +416,38 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     // These will appear when we describe the broker configuration. Other internal configs,
     // that we have not set, will not appear there.
     val numInternalConfigsSet = brokers.head.config.originals.keySet().asScala.count(k => {
-      Option(KafkaConfig.configDef.configKeys().get(k)) match {
+      Option(KafkaConfig.configDef().configKeys().get(k)) match {
         case None => false
         case Some(configDef) => configDef.internalConfig
       }
     })
     assertEquals(brokers(1).config.nonInternalValues.size + numInternalConfigsSet,
       configs.get(brokerResource1).entries.size)
-    assertEquals(brokers(1).config.brokerId.toString, configs.get(brokerResource1).get(KafkaConfig.BrokerIdProp).value)
-    val listenerSecurityProtocolMap = configs.get(brokerResource1).get(KafkaConfig.ListenerSecurityProtocolMapProp)
-    assertEquals(brokers(1).config.getString(KafkaConfig.ListenerSecurityProtocolMapProp), listenerSecurityProtocolMap.value)
-    assertEquals(KafkaConfig.ListenerSecurityProtocolMapProp, listenerSecurityProtocolMap.name)
+    assertEquals(brokers(1).config.brokerId.toString, configs.get(brokerResource1).get(KafkaConfig.BROKER_ID_PROP).value)
+    val listenerSecurityProtocolMap = configs.get(brokerResource1).get(KafkaConfig.LISTENER_SECURITY_PROTOCOL_MAP_PROP)
+    assertEquals(brokers(1).config.getString(KafkaConfig.LISTENER_SECURITY_PROTOCOL_MAP_PROP), listenerSecurityProtocolMap.value)
+    assertEquals(KafkaConfig.LISTENER_SECURITY_PROTOCOL_MAP_PROP, listenerSecurityProtocolMap.name)
     assertFalse(listenerSecurityProtocolMap.isDefault)
     assertFalse(listenerSecurityProtocolMap.isSensitive)
     assertFalse(listenerSecurityProtocolMap.isReadOnly)
-    val truststorePassword = configs.get(brokerResource1).get(KafkaConfig.SslTruststorePasswordProp)
-    assertEquals(KafkaConfig.SslTruststorePasswordProp, truststorePassword.name)
+    val truststorePassword = configs.get(brokerResource1).get(KafkaConfig.SSL_TRUSTSTORE_PASSWORD_PROP)
+    assertEquals(KafkaConfig.SSL_TRUSTSTORE_PASSWORD_PROP, truststorePassword.name)
     assertNull(truststorePassword.value)
     assertFalse(truststorePassword.isDefault)
     assertTrue(truststorePassword.isSensitive)
     assertFalse(truststorePassword.isReadOnly)
-    val compressionType = configs.get(brokerResource1).get(KafkaConfig.CompressionTypeProp)
+    val compressionType = configs.get(brokerResource1).get(KafkaConfig.COMPRESSION_TYPE_PROP)
     assertEquals(brokers(1).config.compressionType, compressionType.value)
-    assertEquals(KafkaConfig.CompressionTypeProp, compressionType.name)
+    assertEquals(KafkaConfig.COMPRESSION_TYPE_PROP, compressionType.name)
     assertTrue(compressionType.isDefault)
     assertFalse(compressionType.isSensitive)
     assertFalse(compressionType.isReadOnly)
 
     assertEquals(brokers(2).config.nonInternalValues.size + numInternalConfigsSet,
       configs.get(brokerResource2).entries.size)
-    assertEquals(brokers(2).config.brokerId.toString, configs.get(brokerResource2).get(KafkaConfig.BrokerIdProp).value)
+    assertEquals(brokers(2).config.brokerId.toString, configs.get(brokerResource2).get(KafkaConfig.BROKER_ID_PROP).value)
     assertEquals(brokers(2).config.logCleanerThreads.toString,
-      configs.get(brokerResource2).get(KafkaConfig.LogCleanerThreadsProp).value)
+      configs.get(brokerResource2).get(KafkaConfig.LOG_CLEANER_DELETE_RETENTION_MS_PROP).value)
 
     checkValidAlterConfigs(client, this, topicResource1, topicResource2)
   }
@@ -881,7 +882,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     }
 
     // we will create another dir just for one server
-    val futureLogDir = brokers(0).config.logDirs(1)
+    val futureLogDir = brokers(0).config.logDirs.get(1)
     val futureReplica = new TopicPartitionReplica(topic, 0, brokers(0).config.brokerId)
 
     // Verify that replica can be moved to the specified log directory
@@ -1352,7 +1353,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       newConsumerConfig.setProperty(ConsumerConfig.CLIENT_ID_CONFIG, testClientId)
       // Increase timeouts to avoid having a rebalance during the test
       newConsumerConfig.setProperty(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, Integer.MAX_VALUE.toString)
-      newConsumerConfig.setProperty(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, Defaults.GroupMaxSessionTimeoutMs.toString)
+      newConsumerConfig.setProperty(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, Defaults.GROUP_MAX_SESSION_TIMEOUT_MS.toString)
       val consumer = createConsumer(configOverrides = newConsumerConfig)
 
       try {
@@ -2199,7 +2200,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     assertTrue(results.containsKey(invalidTopicName))
     assertFutureExceptionTypeEquals(results.get(invalidTopicName), classOf[InvalidTopicException])
     assertFutureExceptionTypeEquals(client.alterReplicaLogDirs(
-      Map(new TopicPartitionReplica(longTopicName, 0, 0) -> brokers(0).config.logDirs(0)).asJava).all(),
+      Map(new TopicPartitionReplica(longTopicName, 0, 0) -> brokers(0).config.logDirs.get(0)).asJava).all(),
       classOf[InvalidTopicException])
     client.close()
   }
@@ -2526,12 +2527,12 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     client = Admin.create(super.createConfig)
 
     val newLogRetentionProperties = new Properties
-    newLogRetentionProperties.put(KafkaConfig.LogRetentionTimeMillisProp, "10800000")
+    newLogRetentionProperties.put(KafkaConfig.LOG_RETENTION_TIME_MILLIS_PROP, "10800000")
     TestUtils.incrementalAlterConfigs(null, client, newLogRetentionProperties, perBrokerConfig = false)
       .all().get(15, TimeUnit.SECONDS)
 
     val newLogCleanerDeleteRetention = new Properties
-    newLogCleanerDeleteRetention.put(KafkaConfig.LogCleanerDeleteRetentionMsProp, "34")
+    newLogCleanerDeleteRetention.put(KafkaConfig.LOG_CLEANER_DELETE_RETENTION_MS_PROP, "34")
     TestUtils.incrementalAlterConfigs(brokers, client, newLogCleanerDeleteRetention, perBrokerConfig = true)
       .all().get(15, TimeUnit.SECONDS)
 
@@ -2542,19 +2543,19 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
         controllerServer.config.nodeId.toString)
       controllerServer.controller.incrementalAlterConfigs(ANONYMOUS_CONTEXT,
         Collections.singletonMap(controllerNodeResource,
-          Collections.singletonMap(KafkaConfig.LogCleanerDeleteRetentionMsProp,
+          Collections.singletonMap(KafkaConfig.LOG_CLEANER_DELETE_RETENTION_MS_PROP,
             new SimpleImmutableEntry(AlterConfigOp.OpType.SET, "34"))), false).get()
       ensureConsistentKRaftMetadata()
     }
 
     waitUntilTrue(() => brokers.forall(_.config.originals.getOrDefault(
-      KafkaConfig.LogCleanerDeleteRetentionMsProp, "").toString.equals("34")),
-      s"Timed out waiting for change to ${KafkaConfig.LogCleanerDeleteRetentionMsProp}",
+      KafkaConfig.LOG_CLEANER_DELETE_RETENTION_MS_PROP, "").toString.equals("34")),
+      s"Timed out waiting for change to ${KafkaConfig.LOG_CLEANER_DELETE_RETENTION_MS_PROP}",
       waitTimeMs = 60000L)
 
     waitUntilTrue(() => brokers.forall(_.config.originals.getOrDefault(
-      KafkaConfig.LogRetentionTimeMillisProp, "").toString.equals("10800000")),
-      s"Timed out waiting for change to ${KafkaConfig.LogRetentionTimeMillisProp}",
+      KafkaConfig.LOG_RETENTION_TIME_MILLIS_PROP, "").toString.equals("10800000")),
+      s"Timed out waiting for change to ${KafkaConfig.LOG_RETENTION_TIME_MILLIS_PROP}",
       waitTimeMs = 60000L)
 
     val newTopics = Seq(new NewTopic("foo", Map((0: Integer) -> Seq[Integer](1, 2).asJava,
@@ -2706,7 +2707,7 @@ object PlaintextAdminIntegrationTest {
     var topicConfigEntries2 = Seq(new ConfigEntry(TopicConfig.COMPRESSION_TYPE_CONFIG, "snappy")).asJava
 
     val brokerResource = new ConfigResource(ConfigResource.Type.BROKER, test.brokers.head.config.brokerId.toString)
-    val brokerConfigEntries = Seq(new ConfigEntry(KafkaConfig.ZkConnectProp, "localhost:2181")).asJava
+    val brokerConfigEntries = Seq(new ConfigEntry(KafkaConfig.ZK_CONNECT_PROP, "localhost:2181")).asJava
 
     // Alter configs: first and third are invalid, second is valid
     var alterResult = admin.alterConfigs(Map(
@@ -2733,7 +2734,7 @@ object PlaintextAdminIntegrationTest {
 
     assertEquals("snappy", configs.get(topicResource2).get(TopicConfig.COMPRESSION_TYPE_CONFIG).value)
 
-    assertEquals(LogConfig.DEFAULT_COMPRESSION_TYPE, configs.get(brokerResource).get(KafkaConfig.CompressionTypeProp).value)
+    assertEquals(LogConfig.DEFAULT_COMPRESSION_TYPE, configs.get(brokerResource).get(KafkaConfig.COMPRESSION_TYPE_PROP).value)
 
     // Alter configs with validateOnly = true: first and third are invalid, second is valid
     topicConfigEntries2 = Seq(new ConfigEntry(TopicConfig.COMPRESSION_TYPE_CONFIG, "gzip")).asJava
@@ -2762,6 +2763,6 @@ object PlaintextAdminIntegrationTest {
 
     assertEquals("snappy", configs.get(topicResource2).get(TopicConfig.COMPRESSION_TYPE_CONFIG).value)
 
-    assertEquals(LogConfig.DEFAULT_COMPRESSION_TYPE, configs.get(brokerResource).get(KafkaConfig.CompressionTypeProp).value)
+    assertEquals(LogConfig.DEFAULT_COMPRESSION_TYPE, configs.get(brokerResource).get(KafkaConfig.COMPRESSION_TYPE_PROP).value)
   }
 }

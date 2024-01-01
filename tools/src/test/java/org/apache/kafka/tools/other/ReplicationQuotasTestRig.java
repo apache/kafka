@@ -17,7 +17,7 @@
 package org.apache.kafka.tools.other;
 
 import kafka.log.UnifiedLog;
-import kafka.server.KafkaConfig;
+import kafka.server.KafkaConfigProvider;
 import kafka.server.KafkaServer;
 import kafka.server.QuorumTestHarness;
 import kafka.server.QuotaType;
@@ -167,7 +167,7 @@ public class ReplicationQuotasTestRig {
         void startBrokers(List<Integer> brokerIds) {
             System.out.println("Starting Brokers");
             servers = brokerIds.stream().map(i -> createBrokerConfig(i, zkConnect()))
-                .map(c -> TestUtils.createServer(KafkaConfig.fromProps(c), Time.SYSTEM))
+                .map(c -> TestUtils.createServer(KafkaConfigProvider.fromProps(c), Time.SYSTEM))
                 .collect(Collectors.toList());
 
             TestUtils.waitUntilBrokerMetadataIsPropagated(seq(servers), DEFAULT_MAX_WAIT_MS);

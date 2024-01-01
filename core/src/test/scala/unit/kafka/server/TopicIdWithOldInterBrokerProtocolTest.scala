@@ -18,7 +18,6 @@
 package kafka.server
 
 import java.util.{Arrays, LinkedHashMap, Optional, Properties}
-
 import kafka.network.SocketServer
 import kafka.utils.TestUtils
 import org.apache.kafka.common.{TopicIdPartition, TopicPartition, Uuid}
@@ -26,7 +25,8 @@ import org.apache.kafka.common.message.DeleteTopicsRequestData
 import org.apache.kafka.common.message.DeleteTopicsRequestData.DeleteTopicState
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests.{DeleteTopicsRequest, DeleteTopicsResponse, FetchRequest, FetchResponse, MetadataRequest, MetadataResponse}
-import org.apache.kafka.server.common.MetadataVersion.{IBP_2_7_IV0}
+import org.apache.kafka.server.common.MetadataVersion.IBP_2_7_IV0
+import org.apache.kafka.server.config.KafkaConfig
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 import org.junit.jupiter.api.{BeforeEach, Test, TestInfo}
 
@@ -36,10 +36,10 @@ import scala.jdk.CollectionConverters._
 class TopicIdWithOldInterBrokerProtocolTest extends BaseRequestTest {
 
   override def brokerPropertyOverrides(properties: Properties): Unit = {
-    properties.setProperty(KafkaConfig.InterBrokerProtocolVersionProp, IBP_2_7_IV0.toString)
-    properties.setProperty(KafkaConfig.OffsetsTopicPartitionsProp, "1")
-    properties.setProperty(KafkaConfig.DefaultReplicationFactorProp, "2")
-    properties.setProperty(KafkaConfig.RackProp, s"rack/${properties.getProperty(KafkaConfig.BrokerIdProp)}")
+    properties.setProperty(KafkaConfig.INTER_BROKER_PROTOCOL_VERSION_PROP, IBP_2_7_IV0.toString)
+    properties.setProperty(KafkaConfig.OFFSETS_TOPIC_PARTITIONS_PROP, "1")
+    properties.setProperty(KafkaConfig.DEFAULT_REPLICATION_FACTOR_PROP, "2")
+    properties.setProperty(KafkaConfig.RACK_PROP, s"rack/${properties.getProperty(KafkaConfig.BROKER_ID_PROP)}")
   }
 
   @BeforeEach

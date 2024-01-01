@@ -19,10 +19,11 @@ package kafka
 
 import java.util.Properties
 import joptsimple.OptionParser
-import kafka.server.{KafkaConfig, KafkaRaftServer, KafkaServer, Server}
+import kafka.server.{KafkaConfigProvider, KafkaRaftServer, KafkaServer, Server}
 import kafka.utils.Implicits._
 import kafka.utils.{Exit, Logging}
 import org.apache.kafka.common.utils.{Java, LoggingSignalHandler, OperatingSystem, Time, Utils}
+import org.apache.kafka.server.config.KafkaConfig
 import org.apache.kafka.server.util.CommandLineUtils
 
 object Kafka extends Logging {
@@ -68,7 +69,7 @@ object Kafka extends Logging {
     config.migrationEnabled && config.interBrokerProtocolVersion.isApiForwardingEnabled
 
   private def buildServer(props: Properties): Server = {
-    val config = KafkaConfig.fromProps(props, false)
+    val config: KafkaConfig = KafkaConfigProvider.fromProps(props, false)
     if (config.requiresZookeeper) {
       new KafkaServer(
         config,

@@ -17,14 +17,15 @@
 package kafka.api
 
 import java.util.Properties
-
 import kafka.admin.{RackAwareMode, RackAwareTest}
 import kafka.integration.KafkaServerTestHarness
-import kafka.server.KafkaConfig
+import kafka.server.KafkaConfigProvider
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.producer.ProducerRecord
+import org.apache.kafka.server.config.KafkaConfig
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
+
 import scala.collection.Map
 
 class RackAwareAutoTopicCreationTest extends KafkaServerTestHarness with RackAwareTest {
@@ -32,13 +33,13 @@ class RackAwareAutoTopicCreationTest extends KafkaServerTestHarness with RackAwa
   val numPartitions = 8
   val replicationFactor = 2
   val overridingProps = new Properties()
-  overridingProps.put(KafkaConfig.NumPartitionsProp, numPartitions.toString)
-  overridingProps.put(KafkaConfig.DefaultReplicationFactorProp, replicationFactor.toString)
+  overridingProps.put(KafkaConfig.NUM_PARTITIONS_PROP, numPartitions.toString)
+  overridingProps.put(KafkaConfig.DEFAULT_REPLICATION_FACTOR_PROP, replicationFactor.toString)
 
   def generateConfigs =
     (0 until numServers) map { node =>
       TestUtils.createBrokerConfig(node, zkConnect, enableControlledShutdown = false, rack = Some((node / 2).toString))
-    } map (KafkaConfig.fromProps(_, overridingProps))
+    } map (KafkaConfigProvider.fromProps(_, overridingProps))
 
   private val topic = "topic"
 

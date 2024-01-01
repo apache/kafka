@@ -18,9 +18,8 @@ package kafka.security.authorizer
 
 import java.util.concurrent.CompletionStage
 import java.{lang, util}
-import kafka.server.KafkaConfig
 import kafka.utils.TestUtils
-import kafka.server.QuorumTestHarness
+import kafka.server.{KafkaConfigProvider, QuorumTestHarness}
 import kafka.zookeeper.ZooKeeperClient
 import org.apache.kafka.common.Endpoint
 import org.apache.kafka.common.acl._
@@ -45,7 +44,7 @@ class AuthorizerInterfaceDefaultTest extends QuorumTestHarness with BaseAuthoriz
     val props = TestUtils.createBrokerConfig(0, zkConnect)
     props.put(AclAuthorizer.SuperUsersProp, superUsers)
 
-    config = KafkaConfig.fromProps(props)
+    config = KafkaConfigProvider.fromProps(props)
     interfaceDefaultAuthorizer.authorizer.configure(config.originals)
 
     zooKeeperClient = new ZooKeeperClient(zkConnect, zkSessionTimeout, zkConnectionTimeout, zkMaxInFlightRequests,

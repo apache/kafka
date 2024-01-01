@@ -20,8 +20,7 @@ package kafka.admin
 import java.util.Properties
 import joptsimple._
 import joptsimple.util.EnumConverter
-import kafka.security.authorizer.{AclAuthorizer, AclEntry, AuthorizerUtils}
-import kafka.server.KafkaConfig
+import kafka.security.authorizer.{AclAuthorizer, AclEntry}
 import kafka.utils._
 import org.apache.kafka.clients.admin.{Admin, AdminClientConfig}
 import org.apache.kafka.common.acl._
@@ -31,7 +30,9 @@ import org.apache.kafka.common.resource.{PatternType, ResourcePattern, ResourceP
 import org.apache.kafka.common.security.JaasUtils
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.utils.{Utils, SecurityUtils => JSecurityUtils}
+import org.apache.kafka.security.utils.AuthorizerUtils
 import org.apache.kafka.server.authorizer.Authorizer
+import org.apache.kafka.server.config.KafkaConfig
 import org.apache.kafka.server.util.{CommandDefaultOptions, CommandLineUtils}
 
 import scala.jdk.CollectionConverters._
@@ -199,7 +200,7 @@ object AclCommand extends Logging {
       // We will default the value of zookeeper.set.acl to true or false based on whether SASL is configured,
       // but if SASL is not configured and zookeeper.set.acl is supposed to be true due to mutual certificate authentication
       // then it will be up to the user to explicitly specify zookeeper.set.acl=true in the authorizer-properties.
-      val defaultProps = Map(KafkaConfig.ZkEnableSecureAclsProp -> JaasUtils.isZkSaslEnabled)
+      val defaultProps = Map(KafkaConfig.ZK_ENABLE_SECURE_ACLS_PROP -> JaasUtils.isZkSaslEnabled)
       val authorizerPropertiesWithoutTls =
         if (opts.options.has(opts.authorizerPropertiesOpt)) {
           val authorizerProperties = opts.options.valuesOf(opts.authorizerPropertiesOpt)
@@ -210,7 +211,7 @@ object AclCommand extends Logging {
       val authorizerProperties =
         if (opts.options.has(opts.zkTlsConfigFile)) {
           // load in TLS configs both with and without the "authorizer." prefix
-          val validKeys = (KafkaConfig.ZkSslConfigToSystemPropertyMap.keys.toList ++ KafkaConfig.ZkSslConfigToSystemPropertyMap.keys.map("authorizer." + _).toList).asJava
+          val validKeys = (KafkaConfig.zkSslConfigToSystemPropertyMap().keySet().asScala.toList ++ KafkaConfig.zkSslConfigToSystemPropertyMap().keySet().asScala.map("authorizer." + _).toList).asJava
           authorizerPropertiesWithoutTls ++ Utils.loadProps(opts.options.valueOf(opts.zkTlsConfigFile), validKeys).asInstanceOf[java.util.Map[String, Any]].asScala
         }
         else
@@ -618,7 +619,7 @@ object AclCommand extends Logging {
       "DEPRECATED: Identifies the file where ZooKeeper client TLS connectivity properties are defined for" +
         " the default authorizer kafka.security.authorizer.AclAuthorizer." +
         " Any properties other than the following (with or without an \"authorizer.\" prefix) are ignored: " +
-        KafkaConfig.ZkSslConfigToSystemPropertyMap.keys.toList.sorted.mkString(", ") +
+        KafkaConfig.zkSslConfigToSystemPropertyMap().keySet().asScala.toList.sorted.mkString(", ") +
         ". Note that if SASL is not configured and zookeeper.set.acl is supposed to be true due to mutual certificate authentication being used" +
         " then it is necessary to explicitly specify --authorizer-properties zookeeper.set.acl=true. " +
         AclCommand.AuthorizerDeprecationMessage)

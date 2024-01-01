@@ -17,14 +17,15 @@
 
 package kafka.api
 
-import java.util.Properties
+import kafka.server.KafkaConfigProvider
 
-import kafka.server.KafkaConfig
+import java.util.Properties
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.consumer.{Consumer, ConsumerConfig}
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig}
 import org.apache.kafka.clients.producer.internals.ErrorLoggingCallback
 import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.server.config.KafkaConfig
 import org.apache.kafka.server.util.ShutdownableThread
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
@@ -42,20 +43,20 @@ class TransactionsBounceTest extends IntegrationTestHarness {
   private val inputTopic = "input-topic"
 
   val overridingProps = new Properties()
-  overridingProps.put(KafkaConfig.AutoCreateTopicsEnableProp, false.toString)
-  overridingProps.put(KafkaConfig.MessageMaxBytesProp, serverMessageMaxBytes.toString)
+  overridingProps.put(KafkaConfig.AUTO_CREATE_TOPICS_ENABLE_PROP, false.toString)
+  overridingProps.put(KafkaConfig.MESSAGE_MAX_BYTES_PROP, serverMessageMaxBytes.toString)
   // Set a smaller value for the number of partitions for the offset commit topic (__consumer_offset topic)
   // so that the creation of that topic/partition(s) and subsequent leader assignment doesn't take relatively long
-  overridingProps.put(KafkaConfig.ControlledShutdownEnableProp, true.toString)
-  overridingProps.put(KafkaConfig.UncleanLeaderElectionEnableProp, false.toString)
-  overridingProps.put(KafkaConfig.AutoLeaderRebalanceEnableProp, false.toString)
-  overridingProps.put(KafkaConfig.OffsetsTopicPartitionsProp, 1.toString)
-  overridingProps.put(KafkaConfig.OffsetsTopicReplicationFactorProp, 3.toString)
-  overridingProps.put(KafkaConfig.MinInSyncReplicasProp, 2.toString)
-  overridingProps.put(KafkaConfig.TransactionsTopicPartitionsProp, 1.toString)
-  overridingProps.put(KafkaConfig.TransactionsTopicReplicationFactorProp, 3.toString)
-  overridingProps.put(KafkaConfig.GroupMinSessionTimeoutMsProp, "10") // set small enough session timeout
-  overridingProps.put(KafkaConfig.GroupInitialRebalanceDelayMsProp, "0")
+  overridingProps.put(KafkaConfig.CONTROLLED_SHUTDOWN_ENABLE_PROP, true.toString)
+  overridingProps.put(KafkaConfig.UNCLEAN_LEADER_ELECTION_ENABLE_PROP, false.toString)
+  overridingProps.put(KafkaConfig.AUTO_LEADER_REBALANCE_ENABLE_PROP, false.toString)
+  overridingProps.put(KafkaConfig.OFFSETS_TOPIC_PARTITIONS_PROP, 1.toString)
+  overridingProps.put(KafkaConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_PROP, 3.toString)
+  overridingProps.put(KafkaConfig.MIN_IN_SYNC_REPLICAS_PROP, 2.toString)
+  overridingProps.put(KafkaConfig.TRANSACTIONS_TOPIC_PARTITIONS_PROP, 1.toString)
+  overridingProps.put(KafkaConfig.TRANSACTIONS_TOPIC_REPLICATION_FACTOR_PROP, 3.toString)
+  overridingProps.put(KafkaConfig.GROUP_MIN_SESSION_TIMEOUT_MS_PROP, "10") // set small enough session timeout
+  overridingProps.put(KafkaConfig.GROUP_INITIAL_REBALANCE_DELAY_MS_PROP, "0")
 
   // This is the one of the few tests we currently allow to preallocate ports, despite the fact that this can result in transient
   // failures due to ports getting reused. We can't use random ports because of bad behavior that can result from bouncing
@@ -68,7 +69,7 @@ class TransactionsBounceTest extends IntegrationTestHarness {
   // a small risk of hitting errors due to port conflicts. Hopefully this is infrequent enough to not cause problems.
   override def generateConfigs = {
     FixedPortTestUtils.createBrokerConfigs(brokerCount, zkConnect, enableControlledShutdown = true)
-      .map(KafkaConfig.fromProps(_, overridingProps))
+      .map(KafkaConfigProvider.fromProps(_, overridingProps))
   }
 
   override protected def brokerCount: Int = 4
@@ -182,7 +183,7 @@ class TransactionsBounceTest extends IntegrationTestHarness {
 
   private def createTopics() =  {
     val topicConfig = new Properties()
-    topicConfig.put(KafkaConfig.MinInSyncReplicasProp, 2.toString)
+    topicConfig.put(KafkaConfig.MIN_IN_SYNC_REPLICAS_PROP, 2.toString)
     createTopic(inputTopic, numPartitions, 3, topicConfig)
     createTopic(outputTopic, numPartitions, 3, topicConfig)
   }

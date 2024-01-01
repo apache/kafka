@@ -57,6 +57,7 @@ import org.apache.kafka.metadata.LeaderConstants.NO_LEADER
 import org.apache.kafka.server.common
 import org.apache.kafka.server.common.DirectoryEventHandler
 import org.apache.kafka.server.common.MetadataVersion._
+import org.apache.kafka.server.config.KafkaConfig
 import org.apache.kafka.server.metrics.KafkaMetricsGroup
 import org.apache.kafka.server.util.{Scheduler, ShutdownableThread}
 import org.apache.kafka.storage.internals.log.{AppendOrigin, FetchDataInfo, FetchParams, FetchPartitionData, LeaderHwChange, LogAppendInfo, LogConfig, LogDirFailureChannel, LogOffsetMetadata, LogReadInfo, RecordValidationException, RemoteLogReadResult, RemoteStorageFetchInfo, VerificationGuard}
@@ -1360,7 +1361,7 @@ class ReplicaManager(val config: KafkaConfig,
   def describeLogDirs(partitions: Set[TopicPartition]): List[DescribeLogDirsResponseData.DescribeLogDirsResult] = {
     val logsByDir = logManager.allLogs.groupBy(log => log.parentDir)
 
-    config.logDirs.toSet.map { logDir: String =>
+    config.logDirs.asScala.toSet.map { logDir: String =>
       val file = Paths.get(logDir)
       val absolutePath = file.toAbsolutePath.toString
       try {
@@ -2654,7 +2655,7 @@ class ReplicaManager(val config: KafkaConfig,
   }
 
   protected def createReplicaSelector(): Option[ReplicaSelector] = {
-    config.replicaSelectorClassName.map { className =>
+    config.replicaSelectorClassName.asScala.map { className =>
       val tmpReplicaSelector: ReplicaSelector = CoreUtils.createObject[ReplicaSelector](className)
       tmpReplicaSelector.configure(config.originals())
       tmpReplicaSelector

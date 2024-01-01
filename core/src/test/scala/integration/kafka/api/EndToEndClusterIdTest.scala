@@ -21,12 +21,13 @@ import java.util.concurrent.ExecutionException
 import java.util.concurrent.atomic.AtomicReference
 import java.util.Properties
 import kafka.integration.KafkaServerTestHarness
-import kafka.server._
+import kafka.server.KafkaConfigProvider
 import kafka.utils._
 import kafka.utils.Implicits._
 import org.apache.kafka.clients.consumer._
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord}
 import org.apache.kafka.common.{ClusterResource, ClusterResourceListener, TopicPartition}
+import org.apache.kafka.server.config.KafkaConfig
 import org.apache.kafka.test.{TestUtils => _, _}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{BeforeEach, TestInfo}
@@ -98,13 +99,13 @@ class EndToEndClusterIdTest extends KafkaServerTestHarness {
   val topic = "e2etopic"
   val part = 0
   val tp = new TopicPartition(topic, part)
-  this.serverConfig.setProperty(KafkaConfig.MetricReporterClassesProp, classOf[MockBrokerMetricsReporter].getName)
+  this.serverConfig.setProperty(KafkaConfig.METRIC_REPORTER_CLASSES_PROP, classOf[MockBrokerMetricsReporter].getName)
 
   override def generateConfigs = {
     val cfgs = TestUtils.createBrokerConfigs(serverCount, zkConnectOrNull, interBrokerSecurityProtocol = Some(securityProtocol),
       trustStoreFile = trustStoreFile, saslProperties = serverSaslProperties)
     cfgs.foreach(_ ++= serverConfig)
-    cfgs.map(KafkaConfig.fromProps)
+    cfgs.map(KafkaConfigProvider.fromProps)
   }
 
   @BeforeEach

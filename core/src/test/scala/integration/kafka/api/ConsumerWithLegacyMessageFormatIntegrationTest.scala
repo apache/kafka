@@ -16,10 +16,10 @@
  */
 package kafka.api
 
-import kafka.server.KafkaConfig
 import org.apache.kafka.clients.producer.ProducerConfig
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.config.TopicConfig
+import org.apache.kafka.server.config.KafkaConfig
 import org.junit.jupiter.api.Assertions.{assertEquals, assertNull, assertThrows}
 import org.junit.jupiter.api.Test
 
@@ -32,7 +32,7 @@ class ConsumerWithLegacyMessageFormatIntegrationTest extends AbstractConsumerTes
 
   override protected def brokerPropertyOverrides(properties: Properties): Unit = {
     // legacy message formats are only supported with IBP < 3.0
-    properties.put(KafkaConfig.InterBrokerProtocolVersionProp, "2.8")
+    properties.put(KafkaConfig.INTER_BROKER_PROTOCOL_VERSION_PROP, "2.8")
   }
 
   @nowarn("cat=deprecation")

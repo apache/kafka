@@ -14,7 +14,7 @@ package kafka.api
 
 import kafka.integration.KafkaServerTestHarness
 import kafka.log.UnifiedLog
-import kafka.server.KafkaConfig
+import kafka.server.KafkaConfigProvider
 import kafka.utils.{TestInfoUtils, TestUtils}
 import org.apache.kafka.clients.consumer.OffsetAndMetadata
 import org.apache.kafka.common.TopicPartition
@@ -27,15 +27,16 @@ import java.util.Properties
 
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.record.CompressionType
+import org.apache.kafka.server.config.KafkaConfig
 
 class GroupCoordinatorIntegrationTest extends KafkaServerTestHarness {
   val offsetsTopicCompressionCodec = CompressionType.GZIP
   val overridingProps = new Properties()
-  overridingProps.put(KafkaConfig.OffsetsTopicPartitionsProp, "1")
-  overridingProps.put(KafkaConfig.OffsetsTopicCompressionCodecProp, offsetsTopicCompressionCodec.id.toString)
+  overridingProps.put(KafkaConfig.OFFSETS_TOPIC_PARTITIONS_PROP, "1")
+  overridingProps.put(KafkaConfig.OFFSETS_TOPIC_COMPRESSION_CODEC_PROP, offsetsTopicCompressionCodec.id.toString)
 
   override def generateConfigs = TestUtils.createBrokerConfigs(1, zkConnectOrNull, enableControlledShutdown = false).map {
-    KafkaConfig.fromProps(_, overridingProps)
+    KafkaConfigProvider.fromProps(_, overridingProps)
   }
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)

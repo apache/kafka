@@ -31,6 +31,7 @@ import org.apache.kafka.common.security.scram.ScramCredential
 import org.apache.kafka.common.security.token.delegation.internals.DelegationTokenCache
 import org.apache.kafka.common.security.token.delegation.{DelegationToken, TokenInformation}
 import org.apache.kafka.common.utils.Time
+import org.apache.kafka.server.config.KafkaConfig
 
 import scala.jdk.CollectionConverters._
 import scala.collection.mutable

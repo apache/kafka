@@ -59,7 +59,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.locks.ReentrantLock
 import java.util.concurrent.{CompletableFuture, ExecutionException, TimeUnit, TimeoutException}
 import scala.collection.Map
-import scala.compat.java8.OptionConverters.RichOptionForJava8
+import scala.compat.java8.OptionConverters.{RichOptionForJava8, RichOptionalGeneric}
 import scala.jdk.CollectionConverters._
 
 
@@ -177,9 +177,9 @@ class BrokerServer(
       sharedServer.startForBroker()
 
       info("Starting broker")
-
       val clientMetricsReceiverPlugin = new ClientMetricsReceiverPlugin()
-      config.dynamicConfig.initialize(zkClientOpt = None, Some(clientMetricsReceiverPlugin))
+
+      config.dynamicConfig.initialize(Optional.empty(), Optional.of(clientMetricsReceiverPlugin))
 
       /* start scheduler */
       kafkaScheduler = new KafkaScheduler(config.backgroundThreads)
@@ -255,7 +255,7 @@ class BrokerServer(
       clientQuotaMetadataManager = new ClientQuotaMetadataManager(quotaManagers, socketServer.connectionQuotas)
 
       val listenerInfo = ListenerInfo.create(Optional.of(config.interBrokerListenerName.value()),
-          config.effectiveAdvertisedListeners.map(_.toJava).asJava).
+          config.effectiveAdvertisedListeners).
             withWildcardHostnamesResolved().
             withEphemeralPortsCorrected(name => socketServer.boundPort(new ListenerName(name)))
 
@@ -384,7 +384,7 @@ class BrokerServer(
       })
 
       // Create and initialize an authorizer if one is configured.
-      authorizer = config.createNewAuthorizer()
+      authorizer = config.createNewAuthorizer().asScala
       authorizer.foreach(_.configure(config.originals))
 
       val fetchManager = new FetchManager(Time.SYSTEM,
@@ -485,7 +485,7 @@ class BrokerServer(
       // configuration.  Keep in mind that KafkaConfig.originals is a mutable field that gets set
       // by the dynamic configuration publisher. Ironically, KafkaConfig.originals does not
       // contain the original configuration values.
-      new KafkaConfig(config.originals(), true)
+      KafkaConfigProvider.fromProps(config.originals())
 
       // Start RemoteLogManager before broker start serving the requests.
       remoteLogManagerOpt.foreach { rlm =>
@@ -520,7 +520,7 @@ class BrokerServer(
             config.nodeId,
             listenerInfo.listeners().values(),
             listenerInfo.firstListener(),
-            config.earlyStartListeners.map(_.value()).asJava))
+            config.earlyStartListeners.asScala.map(_.value()).asJava))
       }
       val authorizerFutures = endpointReadyFutures.futures().asScala.toMap
       val enableRequestProcessingFuture = socketServer.enableRequestProcessing(authorizerFutures)
@@ -609,7 +609,7 @@ class BrokerServer(
         throw new KafkaException("Tiered storage is not supported with multiple log dirs.");
       }
 
-      Some(new RemoteLogManager(config.remoteLogManagerConfig, config.brokerId, config.logDirs.head, clusterId, time,
+      Some(new RemoteLogManager(config.remoteLogManagerConfig, config.brokerId, config.logDirs.asScala.head, clusterId, time,
         (tp: TopicPartition) => logManager.getLog(tp).asJava,
         (tp: TopicPartition, remoteLogStartOffset: java.lang.Long) => {
           logManager.getLog(tp).foreach { log =>

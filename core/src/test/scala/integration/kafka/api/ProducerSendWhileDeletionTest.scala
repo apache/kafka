@@ -16,11 +16,11 @@
   */
 package kafka.api
 
-import kafka.server.KafkaConfig
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.producer.{ProducerConfig, ProducerRecord}
 
 import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.server.config.KafkaConfig
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
 
@@ -31,9 +31,9 @@ class ProducerSendWhileDeletionTest extends IntegrationTestHarness {
     val producerCount: Int = 1
     val brokerCount: Int = 2
 
-    serverConfig.put(KafkaConfig.NumPartitionsProp, 2.toString)
-    serverConfig.put(KafkaConfig.DefaultReplicationFactorProp, 2.toString)
-    serverConfig.put(KafkaConfig.AutoLeaderRebalanceEnableProp, false.toString)
+    serverConfig.put(KafkaConfig.NUM_PARTITIONS_PROP, 2.toString)
+    serverConfig.put(KafkaConfig.DEFAULT_REPLICATION_FACTOR_PROP, 2.toString)
+    serverConfig.put(KafkaConfig.AUTO_LEADER_REBALANCE_ENABLE_PROP, false.toString)
 
     producerConfig.put(ProducerConfig.MAX_BLOCK_MS_CONFIG, 5000L.toString)
     producerConfig.put(ProducerConfig.REQUEST_TIMEOUT_MS_CONFIG, 10000.toString)

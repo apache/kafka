@@ -37,6 +37,7 @@ import org.apache.kafka.metadata.properties.MetaPropertiesEnsemble.VerificationF
 import org.apache.kafka.metadata.properties.{MetaProperties, MetaPropertiesEnsemble, MetaPropertiesVersion}
 import org.apache.kafka.raft.RaftConfig.{AddressSpec, InetAddressSpec}
 import org.apache.kafka.server.common.{ApiMessageAndVersion, MetadataVersion}
+import org.apache.kafka.server.config.KafkaConfig
 import org.apache.kafka.server.fault.{FaultHandler, MockFaultHandler}
 import org.apache.zookeeper.client.ZKClientConfig
 import org.apache.zookeeper.{WatchedEvent, Watcher, ZooKeeper}
@@ -44,6 +45,7 @@ import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterAll, AfterEach, BeforeAll, BeforeEach, Tag, TestInfo}
 
 import java.nio.file.{Files, Paths}
+import scala.jdk.CollectionConverters._
 import scala.collection.mutable.ArrayBuffer
 import scala.collection.mutable.ListBuffer
 import scala.collection.{Seq, immutable}
@@ -101,7 +103,7 @@ class KRaftQuorumImplementation(
   ): KafkaBroker = {
     val metaPropertiesEnsemble = {
       val loader = new MetaPropertiesEnsemble.Loader()
-      config.logDirs.foreach(loader.addLogDir(_))
+      config.logDirs.asScala.foreach(loader.addLogDir(_))
       loader.addMetadataLogDir(config.metadataLogDir)
       val ensemble = loader.load()
       val copier = new MetaPropertiesEnsemble.Copier(ensemble)
@@ -315,13 +317,13 @@ abstract class QuorumTestHarness extends Logging {
       throw new RuntimeException("Only one KRaft controller is supported for now.")
     }
     val props = propsList(0)
-    props.setProperty(KafkaConfig.ServerMaxStartupTimeMsProp, TimeUnit.MINUTES.toMillis(10).toString)
-    props.setProperty(KafkaConfig.ProcessRolesProp, "controller")
-    props.setProperty(KafkaConfig.UnstableMetadataVersionsEnableProp, "true")
-    if (props.getProperty(KafkaConfig.NodeIdProp) == null) {
-      props.setProperty(KafkaConfig.NodeIdProp, "1000")
+    props.setProperty(KafkaConfig.SERVER_MAX_STARTUP_TIME_MS_PROP, TimeUnit.MINUTES.toMillis(10).toString)
+    props.setProperty(KafkaConfig.PROCESS_ROLES_PROP, "controller")
+    props.setProperty(KafkaConfig.UNSTABLE_METADATA_VERSIONS_ENABLE_PROP, "true")
+    if (props.getProperty(KafkaConfig.NODE_ID_PROP) == null) {
+      props.setProperty(KafkaConfig.NODE_ID_PROP, "1000")
     }
-    val nodeId = Integer.parseInt(props.getProperty(KafkaConfig.NodeIdProp))
+    val nodeId = Integer.parseInt(props.getProperty(KafkaConfig.NODE_ID_PROP))
     val metadataDir = TestUtils.tempDir()
     val metaProperties = new MetaProperties.Builder().
       setVersion(MetaPropertiesVersion.V1).
@@ -341,13 +343,13 @@ abstract class QuorumTestHarness extends Logging {
 
     val bootstrapMetadata = BootstrapMetadata.fromRecords(metadataRecords, "test harness")
 
-    props.setProperty(KafkaConfig.MetadataLogDirProp, metadataDir.getAbsolutePath)
+    props.setProperty(KafkaConfig.METADATA_LOG_DIR_PROP, metadataDir.getAbsolutePath)
     val proto = controllerListenerSecurityProtocol.toString
-    props.setProperty(KafkaConfig.ListenerSecurityProtocolMapProp, s"CONTROLLER:${proto}")
-    props.setProperty(KafkaConfig.ListenersProp, s"CONTROLLER://localhost:0")
-    props.setProperty(KafkaConfig.ControllerListenerNamesProp, "CONTROLLER")
-    props.setProperty(KafkaConfig.QuorumVotersProp, s"${nodeId}@localhost:0")
-    val config = new KafkaConfig(props)
+    props.setProperty(KafkaConfig.LISTENER_SECURITY_PROTOCOL_MAP_PROP, s"CONTROLLER:${proto}")
+    props.setProperty(KafkaConfig.LISTENERS_PROP, s"CONTROLLER://localhost:0")
+    props.setProperty(KafkaConfig.CONTROLLER_LISTENER_NAMES_PROP, "CONTROLLER")
+    props.setProperty(KafkaConfig.QUORUM_VOTERS_PROP, s"${nodeId}@localhost:0")
+    val config = KafkaConfigProvider.fromProps(props, false)
     val controllerQuorumVotersFuture = new CompletableFuture[util.Map[Integer, AddressSpec]]
     val metaPropertiesEnsemble = new MetaPropertiesEnsemble.Loader().
       addMetadataLogDir(metadataDir.getAbsolutePath).

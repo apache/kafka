@@ -18,7 +18,7 @@ package kafka.controller
 
 import kafka.api.LeaderAndIsr
 import kafka.cluster.{Broker, EndPoint}
-import kafka.server.KafkaConfig
+import kafka.server.KafkaConfigProvider
 import kafka.utils.TestUtils
 import kafka.zk.KafkaZkClient.UpdateLeaderAndIsrResult
 import kafka.zk.{KafkaZkClient, TopicPartitionStateZNode}
@@ -41,7 +41,7 @@ class ReplicaStateMachineTest {
   private var replicaStateMachine: ReplicaStateMachine = _
 
   private val brokerId = 5
-  private val config = KafkaConfig.fromProps(TestUtils.createBrokerConfig(brokerId, "zkConnect"))
+  private val config = KafkaConfigProvider.fromProps(TestUtils.createBrokerConfig(brokerId, "zkConnect"))
   private val controllerEpoch = 50
   private val partition = new TopicPartition("t", 0)
   private val partitions = Seq(partition)

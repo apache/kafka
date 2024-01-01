@@ -74,6 +74,7 @@ import org.apache.kafka.metadata.properties.MetaProperties
 import org.apache.kafka.server.ControllerRequestCompletionHandler
 import org.apache.kafka.server.authorizer.{AuthorizableRequestContext, Authorizer => JAuthorizer}
 import org.apache.kafka.server.common.{ApiMessageAndVersion, MetadataVersion}
+import org.apache.kafka.server.config.{Defaults, KafkaConfig}
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.apache.kafka.server.util.MockTime
 import org.apache.kafka.storage.internals.log.{CleanerConfig, LogConfig, LogDirFailureChannel, ProducerStateManagerConfig}
@@ -88,6 +89,7 @@ import org.mockito.Mockito
 import scala.annotation.nowarn
 import scala.collection.mutable.{ArrayBuffer, ListBuffer}
 import scala.collection.{Map, Seq, immutable, mutable}
+import scala.compat.java8.OptionConverters.RichOptionalGeneric
 import scala.concurrent.duration.FiniteDuration
 import scala.concurrent.{Await, ExecutionContext, Future}
 import scala.jdk.CollectionConverters._
@@ -264,8 +266,9 @@ object TestUtils extends Logging {
     listenerName: ListenerName
   ): String = {
     brokers.map { s =>
-      val listener = s.config.effectiveAdvertisedListeners.find(_.listenerName == listenerName).getOrElse(
-        sys.error(s"Could not find listener with name ${listenerName.value}"))
+      val listener = s.config.effectiveAdvertisedListeners.asScala.find(_.listenerName.asScala.contains(listenerName.value()))
+        .getOrElse(
+          sys.error(s"Could not find listener with name ${listenerName.value}"))
       formatAddress(listener.host, s.boundPort(listenerName))
     }.mkString(",")
   }
@@ -278,7 +281,7 @@ object TestUtils extends Logging {
     val future = Future.traverse(brokers) { s =>
       Future {
         s.shutdown()
-        if (deleteLogDirs) CoreUtils.delete(s.config.logDirs)
+        if (deleteLogDirs) CoreUtils.delete(s.config.logDirs.asScala)
       }
     }
     Await.result(future, FiniteDuration(5, TimeUnit.MINUTES))
@@ -331,19 +334,19 @@ object TestUtils extends Logging {
     }.mkString(",")
 
     val props = new Properties
-    props.put(KafkaConfig.UnstableMetadataVersionsEnableProp, "true")
+    props.put(KafkaConfig.UNSTABLE_METADATA_VERSIONS_ENABLE_PROP, "true")
     if (zkConnect == null) {
-      props.setProperty(KafkaConfig.ServerMaxStartupTimeMsProp, TimeUnit.MINUTES.toMillis(10).toString)
-      props.put(KafkaConfig.NodeIdProp, nodeId.toString)
-      props.put(KafkaConfig.BrokerIdProp, nodeId.toString)
-      props.put(KafkaConfig.AdvertisedListenersProp, listeners)
-      props.put(KafkaConfig.ListenersProp, listeners)
-      props.put(KafkaConfig.ControllerListenerNamesProp, "CONTROLLER")
-      props.put(KafkaConfig.ListenerSecurityProtocolMapProp, protocolAndPorts.
+      props.setProperty(KafkaConfig.SERVER_MAX_STARTUP_TIME_MS_PROP, TimeUnit.MINUTES.toMillis(10).toString)
+      props.put(KafkaConfig.NODE_ID_PROP, nodeId.toString)
+      props.put(KafkaConfig.BROKER_ID_PROP, nodeId.toString)
+      props.put(KafkaConfig.ADVERTISED_LISTENERS_PROP, listeners)
+      props.put(KafkaConfig.LISTENERS_PROP, listeners)
+      props.put(KafkaConfig.CONTROLLER_LISTENER_NAMES_PROP, "CONTROLLER")
+      props.put(KafkaConfig.LISTENER_SECURITY_PROTOCOL_MAP_PROP, protocolAndPorts.
         map(p => "%s:%s".format(p._1, p._1)).mkString(",") + ",CONTROLLER:PLAINTEXT")
     } else {
-      if (nodeId >= 0) props.put(KafkaConfig.BrokerIdProp, nodeId.toString)
-      props.put(KafkaConfig.ListenersProp, listeners)
+      if (nodeId >= 0) props.put(KafkaConfig.BROKER_ID_PROP, nodeId.toString)
+      props.put(KafkaConfig.LISTENERS_PROP, listeners)
     }
     if (logDirCount > 1) {
       val logDirs = (1 to logDirCount).toList.map(i =>
@@ -351,37 +354,37 @@ object TestUtils extends Logging {
         // We can verify this by using a mixture of relative path and absolute path as log directories in the test
         if (i % 2 == 0) tempDir().getAbsolutePath else tempRelativeDir("data")
       ).mkString(",")
-      props.put(KafkaConfig.LogDirsProp, logDirs)
+      props.put(KafkaConfig.LOG_DIRS_PROP, logDirs)
     } else {
-      props.put(KafkaConfig.LogDirProp, tempDir().getAbsolutePath)
+      props.put(KafkaConfig.LOG_DIR_PROP, tempDir().getAbsolutePath)
     }
     if (zkConnect == null) {
-      props.put(KafkaConfig.ProcessRolesProp, "broker")
+      props.put(KafkaConfig.PROCESS_ROLES_PROP, "broker")
       // Note: this is just a placeholder value for controller.quorum.voters. JUnit
       // tests use random port assignment, so the controller ports are not known ahead of
       // time. Therefore, we ignore controller.quorum.voters and use
       // controllerQuorumVotersFuture instead.
-      props.put(KafkaConfig.QuorumVotersProp, "1000@localhost:0")
+      props.put(KafkaConfig.QUORUM_VOTERS_PROP, "1000@localhost:0")
     } else {
-      props.put(KafkaConfig.ZkConnectProp, zkConnect)
-      props.put(KafkaConfig.ZkConnectionTimeoutMsProp, "10000")
+      props.put(KafkaConfig.ZK_CONNECT_PROP, zkConnect)
+      props.put(KafkaConfig.ZK_CONNECTION_TIMEOUT_MS_PROP, "10000")
     }
-    props.put(KafkaConfig.ReplicaSocketTimeoutMsProp, "1500")
-    props.put(KafkaConfig.ControllerSocketTimeoutMsProp, "1500")
-    props.put(KafkaConfig.ControlledShutdownEnableProp, enableControlledShutdown.toString)
-    props.put(KafkaConfig.DeleteTopicEnableProp, enableDeleteTopic.toString)
-    props.put(KafkaConfig.LogDeleteDelayMsProp, "1000")
-    props.put(KafkaConfig.ControlledShutdownRetryBackoffMsProp, "100")
-    props.put(KafkaConfig.LogCleanerDedupeBufferSizeProp, "2097152")
-    props.put(KafkaConfig.OffsetsTopicReplicationFactorProp, "1")
-    if (!props.containsKey(KafkaConfig.OffsetsTopicPartitionsProp))
-      props.put(KafkaConfig.OffsetsTopicPartitionsProp, "5")
-    if (!props.containsKey(KafkaConfig.GroupInitialRebalanceDelayMsProp))
-      props.put(KafkaConfig.GroupInitialRebalanceDelayMsProp, "0")
-    rack.foreach(props.put(KafkaConfig.RackProp, _))
+    props.put(KafkaConfig.REPLICA_SOCKET_TIMEOUT_MS_PROP, "1500")
+    props.put(KafkaConfig.CONTROLLER_SOCKET_TIMEOUT_MS_PROP, "1500")
+    props.put(KafkaConfig.CONTROLLED_SHUTDOWN_ENABLE_PROP, enableControlledShutdown.toString)
+    props.put(KafkaConfig.DELETE_TOPIC_ENABLE_PROP, enableDeleteTopic.toString)
+    props.put(KafkaConfig.LOG_DELETE_DELAY_MS_PROP, "1000")
+    props.put(KafkaConfig.CONTROLLED_SHUTDOWN_RETRY_BACKOFF_MS_PROP, "100")
+    props.put(KafkaConfig.LOG_CLEANER_DEDUPE_BUFFER_SIZE_PROP, "2097152")
+    props.put(KafkaConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_PROP, "1")
+    if (!props.containsKey(KafkaConfig.OFFSETS_TOPIC_PARTITIONS_PROP))
+      props.put(KafkaConfig.OFFSETS_TOPIC_PARTITIONS_PROP, "5")
+    if (!props.containsKey(KafkaConfig.GROUP_INITIAL_REBALANCE_DELAY_MS_PROP))
+      props.put(KafkaConfig.GROUP_INITIAL_REBALANCE_DELAY_MS_PROP, "0")
+    rack.foreach(props.put(KafkaConfig.RACK_PROP, _))
     // Reduce number of threads per broker
-    props.put(KafkaConfig.NumNetworkThreadsProp, "2")
-    props.put(KafkaConfig.BackgroundThreadsProp, "2")
+    props.put(KafkaConfig.NUM_NETWORK_THREADS_PROP, "2")
+    props.put(KafkaConfig.BACKGROUND_THREADS_PROP, "2")
 
     if (protocolAndPorts.exists { case (protocol, _) => usesSslTransportLayer(protocol) })
       props ++= sslConfigs(Mode.SERVER, false, trustStoreFile, s"server$nodeId")
@@ -390,28 +393,28 @@ object TestUtils extends Logging {
       props ++= JaasTestUtils.saslConfigs(saslProperties)
 
     interBrokerSecurityProtocol.foreach { protocol =>
-      props.put(KafkaConfig.InterBrokerSecurityProtocolProp, protocol.name)
+      props.put(KafkaConfig.INTER_BROKER_SECURITY_PROTOCOL_PROP, protocol.name)
     }
 
     if (enableToken)
-      props.put(KafkaConfig.DelegationTokenSecretKeyProp, "secretkey")
+      props.put(KafkaConfig.DELEGATION_TOKEN_SECRET_KEY_PROP, "secretkey")
 
-    props.put(KafkaConfig.NumPartitionsProp, numPartitions.toString)
-    props.put(KafkaConfig.DefaultReplicationFactorProp, defaultReplicationFactor.toString)
+    props.put(KafkaConfig.NUM_PARTITIONS_PROP, numPartitions.toString)
+    props.put(KafkaConfig.DEFAULT_REPLICATION_FACTOR_PROP, defaultReplicationFactor.toString)
 
     if (enableFetchFromFollower) {
-      props.put(KafkaConfig.RackProp, nodeId.toString)
-      props.put(KafkaConfig.ReplicaSelectorClassProp, "org.apache.kafka.common.replica.RackAwareReplicaSelector")
+      props.put(KafkaConfig.RACK_PROP, nodeId.toString)
+      props.put(KafkaConfig.REPLICA_SELECTOR_CLASS_PROP, "org.apache.kafka.common.replica.RackAwareReplicaSelector")
     }
     props
   }
 
   @nowarn("cat=deprecation")
   def setIbpAndMessageFormatVersions(config: Properties, version: MetadataVersion): Unit = {
-    config.setProperty(KafkaConfig.InterBrokerProtocolVersionProp, version.version)
+    config.setProperty(KafkaConfig.INTER_BROKER_PROTOCOL_VERSION_PROP, version.version)
     // for clarity, only set the log message format version if it's not ignored
     if (!LogConfig.shouldIgnoreMessageFormatVersion(version))
-      config.setProperty(KafkaConfig.LogMessageFormatVersionProp, version.version)
+      config.setProperty(KafkaConfig.LOG_MESSAGE_FORMAT_VERSION_PROP, version.version)
   }
 
   def createAdminClient[B <: KafkaBroker](
@@ -534,8 +537,8 @@ object TestUtils extends Logging {
     createTopicWithAdmin(
       admin = admin,
       topic = Topic.GROUP_METADATA_TOPIC_NAME,
-      numPartitions = broker.config.getInt(KafkaConfig.OffsetsTopicPartitionsProp),
-      replicationFactor = broker.config.getShort(KafkaConfig.OffsetsTopicReplicationFactorProp).toInt,
+      numPartitions = broker.config.getInt(KafkaConfig.OFFSETS_TOPIC_PARTITIONS_PROP),
+      replicationFactor = broker.config.getShort(KafkaConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_PROP).toInt,
       brokers = brokers,
       controllers = controllers,
       topicConfig = broker.groupCoordinator.groupMetadataTopicConfigs,
@@ -1459,8 +1462,8 @@ object TestUtils extends Logging {
                    flushStartOffsetCheckpointMs = 10000L,
                    retentionCheckMs = 1000L,
                    maxTransactionTimeoutMs = 5 * 60 * 1000,
-                   producerStateManagerConfig = new ProducerStateManagerConfig(kafka.server.Defaults.ProducerIdExpirationMs, transactionVerificationEnabled),
-                   producerIdExpirationCheckIntervalMs = kafka.server.Defaults.ProducerIdExpirationCheckIntervalMs,
+                   producerStateManagerConfig = new ProducerStateManagerConfig(Defaults.PRODUCER_ID_EXPIRATION_MS, transactionVerificationEnabled),
+                   producerIdExpirationCheckIntervalMs = Defaults.PRODUCER_ID_EXPIRATION_CHECK_INTERVAL_MS,
                    scheduler = time.scheduler,
                    time = time,
                    brokerTopicStats = new BrokerTopicStats,
@@ -1622,14 +1625,14 @@ object TestUtils extends Logging {
       checkpoints.forall(checkpointsPerLogDir => !checkpointsPerLogDir.contains(tp))
     }), "Cleaner offset for deleted partition should have been removed")
     waitUntilTrue(() => brokers.forall(broker =>
-      broker.config.logDirs.forall { logDir =>
+      broker.config.logDirs.asScala.forall { logDir =>
         topicPartitions.forall { tp =>
           !new File(logDir, tp.topic + "-" + tp.partition).exists()
         }
       }
     ), "Failed to soft-delete the data to a delete directory")
     waitUntilTrue(() => brokers.forall(broker =>
-      broker.config.logDirs.forall { logDir =>
+      broker.config.logDirs.asScala.forall { logDir =>
         topicPartitions.forall { tp =>
           !Arrays.asList(new File(logDir).list()).asScala.exists { partitionDirectoryName =>
             partitionDirectoryName.startsWith(tp.topic + "-" + tp.partition) &&
@@ -2156,7 +2159,7 @@ object TestUtils extends Logging {
 
   def assertBadConfigContainingMessage(props: Properties, expectedExceptionContainsText: String): Unit = {
     try {
-      KafkaConfig.fromProps(props)
+      KafkaConfigProvider.fromProps(props)
       fail("Expected illegal configuration but instead it was legal")
     } catch {
       case caught @ (_: ConfigException | _: IllegalArgumentException) =>

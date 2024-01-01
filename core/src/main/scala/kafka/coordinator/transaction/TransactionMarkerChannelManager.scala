@@ -21,7 +21,7 @@ import kafka.coordinator.transaction.TransactionMarkerChannelManager.{LogAppendR
 
 import java.util
 import java.util.concurrent.{BlockingQueue, ConcurrentHashMap, LinkedBlockingQueue}
-import kafka.server.{KafkaConfig, MetadataCache, RequestLocal}
+import kafka.server.{MetadataCache, RequestLocal}
 import kafka.utils.Implicits._
 import kafka.utils.{CoreUtils, Logging}
 import org.apache.kafka.clients._
@@ -34,6 +34,7 @@ import org.apache.kafka.common.security.JaasContext
 import org.apache.kafka.common.utils.{LogContext, Time}
 import org.apache.kafka.common.{Node, Reconfigurable, TopicPartition}
 import org.apache.kafka.server.common.MetadataVersion.IBP_2_8_IV0
+import org.apache.kafka.server.config.KafkaConfig
 import org.apache.kafka.server.metrics.KafkaMetricsGroup
 import org.apache.kafka.server.util.{InterBrokerSendThread, RequestAndCompletionHandler}
 

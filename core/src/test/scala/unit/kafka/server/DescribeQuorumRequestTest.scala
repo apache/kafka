@@ -24,6 +24,7 @@ import kafka.utils.NotNothing
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests.DescribeQuorumRequest.singletonRequest
 import org.apache.kafka.common.requests.{AbstractRequest, AbstractResponse, ApiVersionsRequest, ApiVersionsResponse, DescribeQuorumRequest, DescribeQuorumResponse}
+import org.apache.kafka.server.KafkaRaftServer
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{Tag, Timeout}
 import org.junit.jupiter.api.extension.ExtendWith
@@ -44,7 +45,7 @@ class DescribeQuorumRequestTest(cluster: ClusterInstance) {
     assertNull(apiResponse.apiVersion(ApiKeys.DESCRIBE_QUORUM.id))
 
     val describeQuorumRequest = new DescribeQuorumRequest.Builder(
-      singletonRequest(KafkaRaftServer.MetadataPartition)
+      singletonRequest(KafkaRaftServer.METADATA_PARTITION)
     ).build()
 
     assertThrows(classOf[IOException], () => {
@@ -56,7 +57,7 @@ class DescribeQuorumRequestTest(cluster: ClusterInstance) {
   def testDescribeQuorum(): Unit = {
     for (version <- ApiKeys.DESCRIBE_QUORUM.allVersions.asScala) {
       val request = new DescribeQuorumRequest.Builder(
-        singletonRequest(KafkaRaftServer.MetadataPartition)
+        singletonRequest(KafkaRaftServer.METADATA_PARTITION)
       ).build(version.toShort)
       val response = connectAndReceive[DescribeQuorumResponse](request)
 
@@ -64,11 +65,11 @@ class DescribeQuorumRequestTest(cluster: ClusterInstance) {
       assertEquals(1, response.data.topics.size)
 
       val topicData = response.data.topics.get(0)
-      assertEquals(KafkaRaftServer.MetadataTopic, topicData.topicName)
+      assertEquals(KafkaRaftServer.METADATA_TOPIC, topicData.topicName)
       assertEquals(1, topicData.partitions.size)
 
       val partitionData = topicData.partitions.get(0)
-      assertEquals(KafkaRaftServer.MetadataPartition.partition, partitionData.partitionIndex)
+      assertEquals(KafkaRaftServer.METADATA_PARTITION.partition, partitionData.partitionIndex)
       assertEquals(Errors.NONE, Errors.forCode(partitionData.errorCode))
       assertTrue(partitionData.leaderEpoch > 0)
 

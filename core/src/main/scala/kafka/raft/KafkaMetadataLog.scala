@@ -17,8 +17,7 @@
 package kafka.raft
 
 import kafka.log.UnifiedLog
-import kafka.server.KafkaConfig.{MetadataLogSegmentBytesProp, MetadataLogSegmentMinBytesProp}
-import kafka.server.{BrokerTopicStats, KafkaConfig, RequestLocal}
+import kafka.server.{BrokerTopicStats, RequestLocal}
 import kafka.utils.{CoreUtils, Logging}
 import org.apache.kafka.common.config.{AbstractConfig, TopicConfig}
 import org.apache.kafka.common.errors.InvalidConfigurationException
@@ -26,6 +25,7 @@ import org.apache.kafka.common.record.{MemoryRecords, Records}
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.common.{KafkaException, TopicPartition, Uuid}
 import org.apache.kafka.raft.{Isolation, KafkaRaftClient, LogAppendInfo, LogFetchInfo, LogOffsetMetadata, OffsetAndEpoch, OffsetMetadata, ReplicatedLog, ValidOffsetAndEpoch}
+import org.apache.kafka.server.config.KafkaConfig
 import org.apache.kafka.server.util.Scheduler
 import org.apache.kafka.snapshot.{FileRawSnapshotReader, FileRawSnapshotWriter, RawSnapshotReader, RawSnapshotWriter, SnapshotPath, Snapshots}
 import org.apache.kafka.storage.internals
@@ -519,15 +519,15 @@ final class KafkaMetadataLog private (
 object MetadataLogConfig {
   def apply(config: AbstractConfig, maxBatchSizeInBytes: Int, maxFetchSizeInBytes: Int): MetadataLogConfig = {
     new MetadataLogConfig(
-      config.getInt(KafkaConfig.MetadataLogSegmentBytesProp),
-      config.getInt(KafkaConfig.MetadataLogSegmentMinBytesProp),
-      config.getLong(KafkaConfig.MetadataLogSegmentMillisProp),
-      config.getLong(KafkaConfig.MetadataMaxRetentionBytesProp),
-      config.getLong(KafkaConfig.MetadataMaxRetentionMillisProp),
+      config.getInt(KafkaConfig.METADATA_LOG_SEGMENT_BYTES_PROP),
+      config.getInt(KafkaConfig.METADATA_LOG_SEGMENT_MIN_BYTES_PROP),
+      config.getLong(KafkaConfig.METADATA_LOG_SEGMENT_MILLIS_PROP),
+      config.getLong(KafkaConfig.METADATA_MAX_RETENTION_BYTES_PROP),
+      config.getLong(KafkaConfig.METADATA_MAX_RETENTION_MILLIS_PROP),
       maxBatchSizeInBytes,
       maxFetchSizeInBytes,
       LogConfig.DEFAULT_FILE_DELETE_DELAY_MS,
-      config.getInt(KafkaConfig.NodeIdProp)
+      config.getInt(KafkaConfig.NODE_ID_PROP)
     )
   }
 }
@@ -565,7 +565,7 @@ object KafkaMetadataLog extends Logging {
 
     if (config.logSegmentBytes < config.logSegmentMinBytes) {
       throw new InvalidConfigurationException(
-        s"Cannot set $MetadataLogSegmentBytesProp below ${config.logSegmentMinBytes}: ${config.logSegmentBytes}"
+        s"Cannot set ${KafkaConfig.METADATA_LOG_SEGMENT_BYTES_PROP} below ${config.logSegmentMinBytes}: ${config.logSegmentBytes}"
       )
     } else if (defaultLogConfig.retentionMs >= 0) {
       throw new InvalidConfigurationException(
@@ -605,7 +605,7 @@ object KafkaMetadataLog extends Logging {
 
     // Print a warning if users have overridden the internal config
     if (config.logSegmentMinBytes != KafkaRaftClient.MAX_BATCH_SIZE_BYTES) {
-      metadataLog.error(s"Overriding $MetadataLogSegmentMinBytesProp is only supported for testing. Setting " +
+      metadataLog.error(s"Overriding ${KafkaConfig.METADATA_LOG_SEGMENT_MIN_BYTES_PROP} is only supported for testing. Setting " +
         s"this value too low may lead to an inability to write batches of metadata records.")
     }
 

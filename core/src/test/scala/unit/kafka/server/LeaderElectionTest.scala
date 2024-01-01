@@ -18,7 +18,6 @@
 package kafka.server
 
 import java.util.Collections
-
 import org.apache.kafka.common.{TopicPartition, Uuid}
 
 import scala.jdk.CollectionConverters._
@@ -57,8 +56,8 @@ class LeaderElectionTest extends QuorumTestHarness {
     configProps2.put("unclean.leader.election.enable", "true")
 
     // start both servers
-    val server1 = TestUtils.createServer(KafkaConfig.fromProps(configProps1))
-    val server2 = TestUtils.createServer(KafkaConfig.fromProps(configProps2))
+    val server1 = TestUtils.createServer(KafkaConfigProvider.fromProps(configProps1))
+    val server2 = TestUtils.createServer(KafkaConfigProvider.fromProps(configProps2))
     servers ++= List(server1, server2)
   }
 
@@ -128,7 +127,7 @@ class LeaderElectionTest extends QuorumTestHarness {
     // start another controller
     val controllerId = 2
 
-    val controllerConfig = KafkaConfig.fromProps(TestUtils.createBrokerConfig(controllerId, zkConnect))
+    val controllerConfig = KafkaConfigProvider.fromProps(TestUtils.createBrokerConfig(controllerId, zkConnect))
     val securityProtocol = SecurityProtocol.PLAINTEXT
     val listenerName = ListenerName.forSecurityProtocol(securityProtocol)
     val brokerAndEpochs = servers.map(s =>

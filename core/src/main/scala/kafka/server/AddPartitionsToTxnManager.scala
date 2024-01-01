@@ -27,12 +27,13 @@ import org.apache.kafka.common.message.AddPartitionsToTxnRequestData.{AddPartiti
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{AddPartitionsToTxnRequest, AddPartitionsToTxnResponse, MetadataResponse}
 import org.apache.kafka.common.utils.Time
+import org.apache.kafka.server.config.KafkaConfig
 import org.apache.kafka.server.metrics.KafkaMetricsGroup
 import org.apache.kafka.server.util.{InterBrokerSendThread, RequestAndCompletionHandler}
 
 import java.util
 import java.util.concurrent.TimeUnit
-import scala.collection.{Set, Seq, mutable}
+import scala.collection.{Seq, Set, mutable}
 import scala.jdk.CollectionConverters._
 
 object AddPartitionsToTxnManager {

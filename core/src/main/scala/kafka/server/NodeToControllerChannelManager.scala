@@ -33,6 +33,7 @@ import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.utils.{LogContext, Time}
 import org.apache.kafka.server.{ControllerRequestCompletionHandler, NodeToControllerChannelManager}
 import org.apache.kafka.server.common.ApiMessageAndVersion
+import org.apache.kafka.server.config.KafkaConfig
 import org.apache.kafka.server.util.{InterBrokerSendThread, RequestAndCompletionHandler}
 
 import java.util
@@ -58,14 +59,14 @@ class MetadataCacheControllerNodeProvider(
   val config: KafkaConfig
 ) extends ControllerNodeProvider {
 
-  private val zkControllerListenerName = config.controlPlaneListenerName.getOrElse(config.interBrokerListenerName)
-  private val zkControllerSecurityProtocol = config.controlPlaneSecurityProtocol.getOrElse(config.interBrokerSecurityProtocol)
+  private val zkControllerListenerName = config.controlPlaneListenerName.asScala.getOrElse(config.interBrokerListenerName)
+  private val zkControllerSecurityProtocol = config.controlPlaneSecurityProtocol.asScala.getOrElse(config.interBrokerSecurityProtocol)
   private val zkControllerSaslMechanism = config.saslMechanismInterBrokerProtocol
 
-  private val kraftControllerListenerName = if (config.controllerListenerNames.nonEmpty)
-    new ListenerName(config.controllerListenerNames.head) else null
+  private val kraftControllerListenerName = if (config.controllerListenerNames.asScala.nonEmpty)
+    new ListenerName(config.controllerListenerNames.asScala.head) else null
   private val kraftControllerSecurityProtocol = Option(kraftControllerListenerName)
-    .map( listener => config.effectiveListenerSecurityProtocolMap.getOrElse(
+    .map( listener => config.effectiveListenerSecurityProtocolMap.asScala.getOrElse(
       listener, SecurityProtocol.forName(kraftControllerListenerName.value())))
     .orNull
   private val kraftControllerSaslMechanism = config.saslMechanismControllerProtocol
@@ -101,8 +102,8 @@ object RaftControllerNodeProvider {
     config: KafkaConfig,
     controllerQuorumVoterNodes: Seq[Node]
   ): RaftControllerNodeProvider = {
-    val controllerListenerName = new ListenerName(config.controllerListenerNames.head)
-    val controllerSecurityProtocol = config.effectiveListenerSecurityProtocolMap.getOrElse(controllerListenerName, SecurityProtocol.forName(controllerListenerName.value()))
+    val controllerListenerName = new ListenerName(config.controllerListenerNames.asScala.head)
+    val controllerSecurityProtocol = config.effectiveListenerSecurityProtocolMap.asScala.getOrElse(controllerListenerName, SecurityProtocol.forName(controllerListenerName.value()))
     val controllerSaslMechanism = config.saslMechanismControllerProtocol
     new RaftControllerNodeProvider(
       raftManager,

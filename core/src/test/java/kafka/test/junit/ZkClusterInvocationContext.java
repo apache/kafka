@@ -20,7 +20,7 @@ package kafka.test.junit;
 import kafka.api.IntegrationTestHarness;
 import kafka.network.SocketServer;
 import kafka.server.BrokerFeatures;
-import kafka.server.KafkaConfig;
+import org.apache.kafka.server.config.KafkaConfig;
 import kafka.server.KafkaServer;
 import kafka.test.ClusterConfig;
 import kafka.test.ClusterInstance;
@@ -112,7 +112,7 @@ public class ZkClusterInvocationContext implements TestTemplateInvocationContext
                     @Override
                     public Properties serverConfig() {
                         Properties props = clusterConfig.serverProperties();
-                        props.put(KafkaConfig.InterBrokerProtocolVersionProp(), clusterConfig.metadataVersion().version());
+                        props.put(KafkaConfig.INTER_BROKER_PROTOCOL_VERSION_PROP, clusterConfig.metadataVersion().version());
                         return props;
                     }
 
@@ -220,7 +220,7 @@ public class ZkClusterInvocationContext implements TestTemplateInvocationContext
 
         @Override
         public Optional<ListenerName> controlPlaneListenerName() {
-            return OptionConverters.toJava(clusterReference.get().servers().head().config().controlPlaneListenerName());
+            return clusterReference.get().servers().head().config().controlPlaneListenerName();
         }
 
         @Override

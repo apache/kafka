@@ -30,6 +30,7 @@ import org.apache.kafka.metadata.{BrokerState, VersionRange}
 import org.apache.kafka.queue.EventQueue.DeadlineFunction
 import org.apache.kafka.common.utils.{ExponentialBackoff, LogContext, Time}
 import org.apache.kafka.queue.{EventQueue, KafkaEventQueue}
+import org.apache.kafka.server.config.KafkaConfig
 import org.apache.kafka.server.{ControllerRequestCompletionHandler, NodeToControllerChannelManager}
 
 import java.util.{Comparator, OptionalLong}
@@ -356,7 +357,7 @@ class BrokerLifecycleManager(
         setFeatures(features).
         setIncarnationId(incarnationId).
         setListeners(_advertisedListeners).
-        setRack(rack.orNull).
+        setRack(rack.orElse(null)).
         setPreviousBrokerEpoch(previousBrokerEpoch.orElse(-1L)).
         setLogDirs(sortedLogDirs)
     if (isDebugEnabled) {

@@ -57,6 +57,8 @@ import org.apache.kafka.server.NodeToControllerChannelManager
 import org.apache.kafka.server.authorizer.Authorizer
 import org.apache.kafka.server.common.MetadataVersion._
 import org.apache.kafka.server.common.{ApiMessageAndVersion, MetadataVersion}
+import org.apache.kafka.server.config.KafkaConfig
+import org.apache.kafka.server.{KafkaRaftServer => JKafkaRaftServer}
 import org.apache.kafka.server.config.ConfigType
 import org.apache.kafka.server.fault.LoggingFaultHandler
 import org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig
@@ -73,27 +75,27 @@ import java.util.{Optional, OptionalInt, OptionalLong}
 import java.util.concurrent._
 import java.util.concurrent.atomic.{AtomicBoolean, AtomicInteger}
 import scala.collection.{Map, Seq}
-import scala.compat.java8.OptionConverters.RichOptionForJava8
+import scala.compat.java8.OptionConverters.{RichOptionForJava8, RichOptionalGeneric}
 import scala.jdk.CollectionConverters._
 
 object KafkaServer {
   def zkClientConfigFromKafkaConfig(config: KafkaConfig, forceZkSslClientEnable: Boolean = false): ZKClientConfig = {
     val clientConfig = new ZKClientConfig
     if (config.zkSslClientEnable || forceZkSslClientEnable) {
-      KafkaConfig.setZooKeeperClientProperty(clientConfig, KafkaConfig.ZkSslClientEnableProp, "true")
-      config.zkClientCnxnSocketClassName.foreach(KafkaConfig.setZooKeeperClientProperty(clientConfig, KafkaConfig.ZkClientCnxnSocketProp, _))
-      config.zkSslKeyStoreLocation.foreach(KafkaConfig.setZooKeeperClientProperty(clientConfig, KafkaConfig.ZkSslKeyStoreLocationProp, _))
-      config.zkSslKeyStorePassword.foreach(x => KafkaConfig.setZooKeeperClientProperty(clientConfig, KafkaConfig.ZkSslKeyStorePasswordProp, x.value))
-      config.zkSslKeyStoreType.foreach(KafkaConfig.setZooKeeperClientProperty(clientConfig, KafkaConfig.ZkSslKeyStoreTypeProp, _))
-      config.zkSslTrustStoreLocation.foreach(KafkaConfig.setZooKeeperClientProperty(clientConfig, KafkaConfig.ZkSslTrustStoreLocationProp, _))
-      config.zkSslTrustStorePassword.foreach(x => KafkaConfig.setZooKeeperClientProperty(clientConfig, KafkaConfig.ZkSslTrustStorePasswordProp, x.value))
-      config.zkSslTrustStoreType.foreach(KafkaConfig.setZooKeeperClientProperty(clientConfig, KafkaConfig.ZkSslTrustStoreTypeProp, _))
-      KafkaConfig.setZooKeeperClientProperty(clientConfig, KafkaConfig.ZkSslProtocolProp, config.ZkSslProtocol)
-      config.ZkSslEnabledProtocols.foreach(KafkaConfig.setZooKeeperClientProperty(clientConfig, KafkaConfig.ZkSslEnabledProtocolsProp, _))
-      config.ZkSslCipherSuites.foreach(KafkaConfig.setZooKeeperClientProperty(clientConfig, KafkaConfig.ZkSslCipherSuitesProp, _))
-      KafkaConfig.setZooKeeperClientProperty(clientConfig, KafkaConfig.ZkSslEndpointIdentificationAlgorithmProp, config.ZkSslEndpointIdentificationAlgorithm)
-      KafkaConfig.setZooKeeperClientProperty(clientConfig, KafkaConfig.ZkSslCrlEnableProp, config.ZkSslCrlEnable.toString)
-      KafkaConfig.setZooKeeperClientProperty(clientConfig, KafkaConfig.ZkSslOcspEnableProp, config.ZkSslOcspEnable.toString)
+      KafkaConfig.setZooKeeperClientProperty(clientConfig, KafkaConfig.ZK_SSL_CLIENT_ENABLE_PROP, "true")
+      config.zkClientCnxnSocketClassName.asScala.foreach(KafkaConfig.setZooKeeperClientProperty(clientConfig, KafkaConfig.ZK_CLIENT_CNXN_SOCKET_PROP, _))
+      config.zkSslKeyStoreLocation.asScala.foreach(KafkaConfig.setZooKeeperClientProperty(clientConfig, KafkaConfig.ZK_SSL_KEY_STORE_LOCATION_PROP, _))
+      config.zkSslKeyStorePassword.asScala.foreach(x => KafkaConfig.setZooKeeperClientProperty(clientConfig, KafkaConfig.ZK_SSL_KEY_STORE_PASSWORD_PROP, x.value))
+      config.zkSslKeyStoreType.asScala.foreach(KafkaConfig.setZooKeeperClientProperty(clientConfig, KafkaConfig.ZK_SSL_KEY_STORE_TYPE_PROP, _))
+      config.zkSslTrustStoreLocation.asScala.foreach(KafkaConfig.setZooKeeperClientProperty(clientConfig, KafkaConfig.ZK_SSL_TRUST_STORE_LOCATION_PROP, _))
+      config.zkSslTrustStorePassword.asScala.foreach(x => KafkaConfig.setZooKeeperClientProperty(clientConfig, KafkaConfig.ZK_SSL_TRUST_STORE_PASSWORD_PROP, x.value))
+      config.zkSslTrustStoreType.asScala.foreach(KafkaConfig.setZooKeeperClientProperty(clientConfig, KafkaConfig.ZK_SSL_TRUST_STORE_TYPE_PROP, _))
+      KafkaConfig.setZooKeeperClientProperty(clientConfig, KafkaConfig.ZK_SSL_PROTOCOL_PROP, config.zkSslProtocol)
+      config.zkSslEnabledProtocols.asScala.foreach(KafkaConfig.setZooKeeperClientProperty(clientConfig, KafkaConfig.ZK_SSL_ENABLED_PROTOCOLS_PROP, _))
+      config.zkSslCipherSuites.asScala.foreach(KafkaConfig.setZooKeeperClientProperty(clientConfig, KafkaConfig.ZK_SSL_CIPHER_SUITES_PROP, _))
+      KafkaConfig.setZooKeeperClientProperty(clientConfig, KafkaConfig.ZK_SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_PROP, config.zkSslEndpointIdentificationAlgorithm)
+      KafkaConfig.setZooKeeperClientProperty(clientConfig, KafkaConfig.ZK_SSL_CRL_ENABLE_PROP, config.zkSslCrlEnable.toString)
+      KafkaConfig.setZooKeeperClientProperty(clientConfig, KafkaConfig.ZK_SSL_OCSP_ENABLE_PROP, config.zkSslOcspEnable.toString)
     }
     // The zk sasl is enabled by default so it can produce false error when broker does not intend to use SASL.
     if (!JaasUtils.isZkSaslEnabled) clientConfig.setProperty(JaasUtils.ZK_SASL_CLIENT, "false")
@@ -234,7 +236,7 @@ class KafkaServer(
         /* load metadata */
         val initialMetaPropsEnsemble = {
           val loader = new MetaPropertiesEnsemble.Loader()
-          config.logDirs.foreach(loader.addLogDir)
+          config.logDirs.asScala.foreach(loader.addLogDir)
           loader.load()
         }
 
@@ -251,13 +253,13 @@ class KafkaServer(
         initialMetaPropsEnsemble.verify(Optional.of(_clusterId), verificationId, verificationFlags)
 
         /* generate brokerId */
-        config.brokerId = getOrGenerateBrokerId(initialMetaPropsEnsemble)
+        config.brokerId(getOrGenerateBrokerId(initialMetaPropsEnsemble))
         logContext = new LogContext(s"[KafkaServer id=${config.brokerId}] ")
         this.logIdent = logContext.logPrefix
 
         // initialize dynamic broker configs from ZooKeeper. Any updates made after this will be
         // applied after ZkConfigManager starts.
-        config.dynamicConfig.initialize(Some(zkClient), clientMetricsReceiverPluginOpt = None)
+        config.dynamicConfig.initialize(Optional.of(zkClient), Optional.empty())
 
         /* start scheduler */
         kafkaScheduler = new KafkaScheduler(config.backgroundThreads)
@@ -427,8 +429,8 @@ class KafkaServer(
             metaPropsEnsemble.clusterId().get(),
             config,
             new MetadataRecordSerde,
-            KafkaRaftServer.MetadataPartition,
-            KafkaRaftServer.MetadataTopicId,
+            JKafkaRaftServer.METADATA_PARTITION,
+            JKafkaRaftServer.METADATA_TOPIC_ID,
             time,
             metrics,
             threadNamePrefix,
@@ -452,11 +454,11 @@ class KafkaServer(
           raftManager.startup()
 
           val networkListeners = new ListenerCollection()
-          config.effectiveAdvertisedListeners.foreach { ep =>
+          config.effectiveAdvertisedListeners.asScala.foreach { ep =>
             networkListeners.add(new Listener().
               setHost(if (Utils.isBlank(ep.host)) InetAddress.getLocalHost.getCanonicalHostName else ep.host).
-              setName(ep.listenerName.value()).
-              setPort(if (ep.port == 0) socketServer.boundPort(ep.listenerName) else ep.port).
+              setName(ep.listenerName.get()).
+              setPort(if (ep.port == 0) socketServer.boundPort(ListenerName.normalised(ep.listenerName.get())) else ep.port).
               setSecurityProtocol(ep.securityProtocol.id))
           }
 
@@ -524,7 +526,7 @@ class KafkaServer(
         )
 
         /* Get the authorizer and initialize it if one is specified.*/
-        authorizer = config.createNewAuthorizer()
+        authorizer = config.createNewAuthorizer().asScala
         authorizer.foreach(_.configure(config.originals))
         val authorizerFutures: Map[Endpoint, CompletableFuture[Void]] = authorizer match {
           case Some(authZ) =>
@@ -667,7 +669,7 @@ class KafkaServer(
         throw new KafkaException("Tiered storage is not supported with multiple log dirs.")
       }
 
-      Some(new RemoteLogManager(config.remoteLogManagerConfig, config.brokerId, config.logDirs.head, clusterId, time,
+      Some(new RemoteLogManager(config.remoteLogManagerConfig, config.brokerId, config.logDirs.asScala.head, clusterId, time,
         (tp: TopicPartition) => logManager.getLog(tp).asJava,
         (tp: TopicPartition, remoteLogStartOffset: java.lang.Long) => {
           logManager.getLog(tp).foreach { log =>
@@ -724,14 +726,15 @@ class KafkaServer(
   }
 
   def createBrokerInfo: BrokerInfo = {
-    val endPoints = config.effectiveAdvertisedListeners.map(e => s"${e.host}:${e.port}")
+    val endPoints = config.effectiveAdvertisedListeners.asScala.map(e => s"${e.host}:${e.port}")
     zkClient.getAllBrokersInCluster.filter(_.id != config.brokerId).foreach { broker =>
       val commonEndPoints = broker.endPoints.map(e => s"${e.host}:${e.port}").intersect(endPoints)
       require(commonEndPoints.isEmpty, s"Configured end points ${commonEndPoints.mkString(",")} in" +
         s" advertised listeners are already registered by broker ${broker.id}")
     }
 
-    val listeners = config.effectiveAdvertisedListeners.map { endpoint =>
+    val listeners = config.effectiveAdvertisedListeners.asScala.map { e =>
+      val endpoint = EndPoint.fromJava(e)
       if (endpoint.port == 0)
         endpoint.copy(port = socketServer.boundPort(endpoint.listenerName))
       else
@@ -748,7 +751,7 @@ class KafkaServer(
     val jmxPort = System.getProperty("com.sun.management.jmxremote.port", "-1").toInt
 
     BrokerInfo(
-      Broker(config.brokerId, updatedEndpoints, config.rack, brokerFeatures.supportedFeatures),
+      Broker(config.brokerId, updatedEndpoints, config.rack.asScala, brokerFeatures.supportedFeatures),
       config.interBrokerProtocolVersion,
       jmxPort)
   }
@@ -1069,7 +1072,8 @@ class KafkaServer(
 
   /** Return advertised listeners with the bound port (this may differ from the configured port if the latter is `0`). */
   def advertisedListeners: Seq[EndPoint] = {
-    config.effectiveAdvertisedListeners.map { endPoint =>
+    config.effectiveAdvertisedListeners.asScala.map { e =>
+      val endPoint = EndPoint.fromJava(e)
       endPoint.copy(port = boundPort(endPoint.listenerName))
     }
   }

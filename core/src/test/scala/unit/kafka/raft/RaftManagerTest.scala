@@ -23,10 +23,7 @@ import java.nio.file.StandardOpenOption
 import java.util.Properties
 import java.util.concurrent.CompletableFuture
 import kafka.log.LogManager
-import kafka.server.KafkaConfig
-import kafka.server.KafkaRaftServer.BrokerRole
-import kafka.server.KafkaRaftServer.ControllerRole
-import kafka.server.KafkaRaftServer.ProcessRole
+import kafka.server.KafkaConfigProvider
 import kafka.utils.TestUtils
 import kafka.tools.TestRaftServer.ByteArraySerde
 import org.apache.kafka.common.TopicPartition
@@ -34,6 +31,8 @@ import org.apache.kafka.common.Uuid
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.raft.RaftConfig
+import org.apache.kafka.server.KafkaRaftServer.ProcessRole
+import org.apache.kafka.server.config.KafkaConfig
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.ParameterizedTest
@@ -50,29 +49,29 @@ class RaftManagerTest {
   ): KafkaConfig = {
     val props = new Properties
     logDir.foreach { value =>
-      props.setProperty(KafkaConfig.LogDirProp, value.toString)
+      props.setProperty(KafkaConfig.LOG_DIR_PROP, value.toString)
     }
     metadataDir.foreach { value =>
-      props.setProperty(KafkaConfig.MetadataLogDirProp, value.toString)
+      props.setProperty(KafkaConfig.METADATA_LOG_DIR_PROP, value.toString)
     }
-    props.setProperty(KafkaConfig.ProcessRolesProp, processRoles.mkString(","))
-    props.setProperty(KafkaConfig.NodeIdProp, nodeId.toString)
-    props.setProperty(KafkaConfig.ControllerListenerNamesProp, "SSL")
-    if (processRoles.contains(BrokerRole)) {
-      props.setProperty(KafkaConfig.InterBrokerListenerNameProp, "PLAINTEXT")
-      if (processRoles.contains(ControllerRole)) { // co-located
-        props.setProperty(KafkaConfig.ListenersProp, "PLAINTEXT://localhost:9092,SSL://localhost:9093")
-        props.setProperty(KafkaConfig.QuorumVotersProp, s"${nodeId}@localhost:9093")
+    props.setProperty(KafkaConfig.PROCESS_ROLES_PROP, processRoles.mkString(","))
+    props.setProperty(KafkaConfig.NODE_ID_PROP, nodeId.toString)
+    props.setProperty(KafkaConfig.CONTROLLER_LISTENER_NAMES_PROP, "SSL")
+    if (processRoles.contains(ProcessRole.BrokerRole)) {
+      props.setProperty(KafkaConfig.INTER_BROKER_LISTENER_NAME_PROP, "PLAINTEXT")
+      if (processRoles.contains(ProcessRole.ControllerRole)) { // co-located
+        props.setProperty(KafkaConfig.LISTENERS_PROP, "PLAINTEXT://localhost:9092,SSL://localhost:9093")
+        props.setProperty(KafkaConfig.QUORUM_VOTERS_PROP, s"${nodeId}@localhost:9093")
       } else { // broker-only
         val voterId = nodeId + 1
-        props.setProperty(KafkaConfig.QuorumVotersProp, s"${voterId}@localhost:9093")
+        props.setProperty(KafkaConfig.QUORUM_VOTERS_PROP, s"${voterId}@localhost:9093")
       }
-    } else if (processRoles.contains(ControllerRole)) { // controller-only
-      props.setProperty(KafkaConfig.ListenersProp, "SSL://localhost:9093")
-      props.setProperty(KafkaConfig.QuorumVotersProp, s"${nodeId}@localhost:9093")
+    } else if (processRoles.contains(ProcessRole.ControllerRole)) { // controller-only
+      props.setProperty(KafkaConfig.LISTENERS_PROP, "SSL://localhost:9093")
+      props.setProperty(KafkaConfig.QUORUM_VOTERS_PROP, s"${nodeId}@localhost:9093")
     }
 
-    new KafkaConfig(props)
+    KafkaConfigProvider.fromProps(props)
   }
 
   private def createRaftManager(
@@ -100,10 +99,10 @@ class RaftManagerTest {
   def testNodeIdPresent(processRoles: String): Unit = {
     var processRolesSet = Set.empty[ProcessRole]
     if (processRoles.contains("broker")) {
-      processRolesSet = processRolesSet ++ Set(BrokerRole)
+      processRolesSet = processRolesSet ++ Set(ProcessRole.BrokerRole)
     }
     if (processRoles.contains("controller")) {
-      processRolesSet = processRolesSet ++ Set(ControllerRole)
+      processRolesSet = processRolesSet ++ Set(ProcessRole.ControllerRole)
     }
 
     val logDir = TestUtils.tempDir()
@@ -140,7 +139,7 @@ class RaftManagerTest {
     val raftManager = createRaftManager(
       new TopicPartition("__raft_id_test", 0),
       createConfig(
-        Set(ControllerRole),
+        Set(ProcessRole.ControllerRole),
         nodeId,
         logDir,
         metadataDir
@@ -164,7 +163,7 @@ class RaftManagerTest {
     val raftManager = createRaftManager(
       new TopicPartition("__raft_id_test", 0),
       createConfig(
-        Set(BrokerRole),
+        Set(ProcessRole.BrokerRole),
         nodeId,
         logDir,
         metadataDir

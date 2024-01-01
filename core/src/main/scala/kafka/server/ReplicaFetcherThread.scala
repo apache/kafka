@@ -21,6 +21,7 @@ import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.record.MemoryRecords
 import org.apache.kafka.common.requests.FetchResponse
 import org.apache.kafka.server.common.{MetadataVersion, OffsetAndEpoch}
+import org.apache.kafka.server.config.KafkaConfig
 import org.apache.kafka.storage.internals.log.{LogAppendInfo, LogStartOffsetIncrementReason}
 
 import scala.collection.mutable

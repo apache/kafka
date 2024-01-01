@@ -16,10 +16,10 @@
  */
 package kafka.controller
 
-import kafka.server.KafkaConfig
 import kafka.utils.Logging
 import kafka.zk.KafkaZkClient
 import org.apache.kafka.common.TopicPartition
+import org.apache.kafka.server.config.KafkaConfig
 
 import scala.collection.Set
 import scala.collection.mutable

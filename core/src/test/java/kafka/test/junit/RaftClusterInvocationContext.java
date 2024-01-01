@@ -34,7 +34,6 @@ import org.junit.jupiter.api.extension.AfterTestExecutionCallback;
 import org.junit.jupiter.api.extension.BeforeTestExecutionCallback;
 import org.junit.jupiter.api.extension.Extension;
 import org.junit.jupiter.api.extension.TestTemplateInvocationContext;
-import scala.compat.java8.OptionConverters;
 
 import java.util.Arrays;
 import java.util.Collection;
@@ -166,7 +165,7 @@ public class RaftClusterInvocationContext implements TestTemplateInvocationConte
 
         @Override
         public Optional<ListenerName> controllerListenerName() {
-            return OptionConverters.toJava(controllers().findAny().get().config().controllerListenerNames().headOption().map(ListenerName::new));
+            return controllers().findAny().get().config().controllerListenerNames().stream().findFirst().map(ListenerName::new);
         }
 
         @Override

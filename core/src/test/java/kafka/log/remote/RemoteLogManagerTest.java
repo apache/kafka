@@ -21,7 +21,8 @@ import kafka.cluster.EndPoint;
 import kafka.cluster.Partition;
 import kafka.log.UnifiedLog;
 import kafka.server.BrokerTopicStats;
-import kafka.server.KafkaConfig;
+import kafka.server.KafkaConfigProvider;
+import org.apache.kafka.server.config.KafkaConfig;
 import kafka.server.StopPartition;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicIdPartition;
@@ -208,7 +209,7 @@ public class RemoteLogManagerTest {
         props.setProperty(RemoteLogManagerConfig.REMOTE_LOG_STORAGE_SYSTEM_ENABLE_PROP, "true");
         props.setProperty(RemoteLogManagerConfig.REMOTE_LOG_MANAGER_TASK_INTERVAL_MS_PROP, "100");
         remoteLogManagerConfig = createRLMConfig(props);
-        brokerTopicStats = new BrokerTopicStats(Optional.of(KafkaConfig.fromProps(props)));
+        brokerTopicStats = new BrokerTopicStats(Optional.of(KafkaConfigProvider.fromProps(props)));
 
         kafka.utils.TestUtils.clearYammerMetrics();
         remoteLogManager = new RemoteLogManager(remoteLogManagerConfig, brokerId, logDir, clusterId, time,
@@ -352,7 +353,7 @@ public class RemoteLogManagerTest {
         assertEquals(host + ":" + port, capture.getValue().get(REMOTE_LOG_METADATA_COMMON_CLIENT_PREFIX + "bootstrap.servers"));
         assertEquals(securityProtocol, capture.getValue().get(REMOTE_LOG_METADATA_COMMON_CLIENT_PREFIX + "security.protocol"));
         assertEquals(clusterId, capture.getValue().get("cluster.id"));
-        assertEquals(brokerId, capture.getValue().get(KafkaConfig.BrokerIdProp()));
+        assertEquals(brokerId, capture.getValue().get(KafkaConfig.BROKER_ID_PROP));
     }
 
     @Test
@@ -391,7 +392,7 @@ public class RemoteLogManagerTest {
             // should be overridden as SSL
             assertEquals("SSL", capture.getValue().get(REMOTE_LOG_METADATA_COMMON_CLIENT_PREFIX + "security.protocol"));
             assertEquals(clusterId, capture.getValue().get("cluster.id"));
-            assertEquals(brokerId, capture.getValue().get(KafkaConfig.BrokerIdProp()));
+            assertEquals(brokerId, capture.getValue().get(KafkaConfig.BROKER_ID_PROP));
         }
     }
 

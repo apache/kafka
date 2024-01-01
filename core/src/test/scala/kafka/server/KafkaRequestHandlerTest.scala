@@ -191,7 +191,7 @@ class KafkaRequestHandlerTest {
     val topic = "topic"
     val props = kafka.utils.TestUtils.createDummyBrokerConfig()
     props.setProperty(RemoteLogManagerConfig.REMOTE_LOG_STORAGE_SYSTEM_ENABLE_PROP, systemRemoteStorageEnabled.toString)
-    val brokerTopicStats = new BrokerTopicStats(java.util.Optional.of(KafkaConfig.fromProps(props)))
+    val brokerTopicStats = new BrokerTopicStats(java.util.Optional.of(KafkaConfigProvider.fromProps(props)))
     brokerTopicStats.topicStats(topic)
     val gaugeMetrics = Set(
       RemoteStorageMetrics.REMOTE_LOG_SIZE_COMPUTATION_TIME_METRIC.getName,
@@ -239,7 +239,7 @@ class KafkaRequestHandlerTest {
     val topic = "topic"
     val props = kafka.utils.TestUtils.createDummyBrokerConfig()
     props.setProperty(RemoteLogManagerConfig.REMOTE_LOG_STORAGE_SYSTEM_ENABLE_PROP, systemRemoteStorageEnabled.toString)
-    new BrokerTopicMetrics(Option.apply(topic), java.util.Optional.of(KafkaConfig.fromProps(props)))
+    new BrokerTopicMetrics(Option.apply(topic), java.util.Optional.of(KafkaConfigProvider.fromProps(props)))
   }
 
   @ParameterizedTest

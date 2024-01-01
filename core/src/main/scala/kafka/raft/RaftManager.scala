@@ -24,8 +24,6 @@ import java.util.OptionalInt
 import java.util.concurrent.CompletableFuture
 import kafka.log.LogManager
 import kafka.log.UnifiedLog
-import kafka.server.KafkaRaftServer.ControllerRole
-import kafka.server.KafkaConfig
 import kafka.utils.CoreUtils
 import kafka.utils.FileLock
 import kafka.utils.Logging
@@ -41,8 +39,11 @@ import org.apache.kafka.common.security.JaasContext
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.utils.{LogContext, Time}
 import org.apache.kafka.raft.RaftConfig.{AddressSpec, InetAddressSpec, NON_ROUTABLE_ADDRESS, UnknownAddressSpec}
-import org.apache.kafka.raft.{FileBasedStateStore, KafkaNetworkChannel, KafkaRaftClient, KafkaRaftClientDriver, LeaderAndEpoch, RaftClient, RaftConfig, ReplicatedLog}
+import org.apache.kafka.raft.{FileBasedStateStore, KafkaNetworkChannel, KafkaRaftClient, LeaderAndEpoch, RaftClient, RaftConfig, ReplicatedLog}
+import org.apache.kafka.server.KafkaRaftServer.ProcessRole.ControllerRole
+import org.apache.kafka.raft.KafkaRaftClientDriver
 import org.apache.kafka.server.common.serialization.RecordSerde
+import org.apache.kafka.server.config.KafkaConfig
 import org.apache.kafka.server.util.KafkaScheduler
 import org.apache.kafka.server.fault.FaultHandler
 import org.apache.kafka.server.util.timer.SystemTimer
@@ -116,11 +117,11 @@ class KafkaRaftManager[T](
   private val dataDirLock = {
     // Acquire the log dir lock if the metadata log dir is different from the log dirs
     val differentMetadataLogDir = !config
-      .logDirs
+      .logDirs().asScala
       .map(Paths.get(_).toAbsolutePath)
       .contains(Paths.get(config.metadataLogDir).toAbsolutePath)
     // Or this node is only a controller
-    val isOnlyController = config.processRoles == Set(ControllerRole)
+    val isOnlyController = config.processRoles.asScala == Set(ControllerRole)
 
     if (differentMetadataLogDir || isOnlyController) {
       Some(KafkaRaftManager.lockDataDir(new File(config.metadataLogDir)))
@@ -222,8 +223,8 @@ class KafkaRaftManager[T](
   }
 
   private def buildNetworkClient(): NetworkClient = {
-    val controllerListenerName = new ListenerName(config.controllerListenerNames.head)
-    val controllerSecurityProtocol = config.effectiveListenerSecurityProtocolMap.getOrElse(controllerListenerName, SecurityProtocol.forName(controllerListenerName.value()))
+    val controllerListenerName = new ListenerName(config.controllerListenerNames.asScala.head)
+    val controllerSecurityProtocol = config.effectiveListenerSecurityProtocolMap.asScala.getOrElse(controllerListenerName, SecurityProtocol.forName(controllerListenerName.value()))
     val channelBuilder = ChannelBuilders.clientChannelBuilder(
       controllerSecurityProtocol,
       JaasContext.Type.SERVER,

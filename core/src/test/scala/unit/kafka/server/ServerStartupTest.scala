@@ -20,6 +20,7 @@ package kafka.server
 import kafka.utils.TestUtils
 import org.apache.kafka.common.config.ConfigException
 import org.apache.kafka.metadata.BrokerState
+import org.apache.kafka.server.config.KafkaConfig
 import org.apache.kafka.server.log.remote.storage.{NoOpRemoteLogMetadataManager, NoOpRemoteStorageManager, RemoteLogManagerConfig}
 import org.apache.zookeeper.KeeperException.NodeExistsException
 import org.junit.jupiter.api.Assertions._
@@ -45,7 +46,7 @@ class ServerStartupTest extends QuorumTestHarness {
     val props = TestUtils.createBrokerConfig(brokerId, zkConnect)
     val zooKeeperConnect = props.get("zookeeper.connect")
     props.put("zookeeper.connect", zooKeeperConnect.toString + zookeeperChroot)
-    server = TestUtils.createServer(KafkaConfig.fromProps(props))
+    server = TestUtils.createServer(KafkaConfigProvider.fromProps(props))
 
     val pathExists = zkClient.pathExists(zookeeperChroot)
     assertTrue(pathExists)
@@ -56,13 +57,13 @@ class ServerStartupTest extends QuorumTestHarness {
     // Create and start first broker
     val brokerId1 = 0
     val props1 = TestUtils.createBrokerConfig(brokerId1, zkConnect)
-    server = TestUtils.createServer(KafkaConfig.fromProps(props1))
+    server = TestUtils.createServer(KafkaConfigProvider.fromProps(props1))
     val port = TestUtils.boundPort(server)
 
     // Create a second broker with same port
     val brokerId2 = 1
     val props2 = TestUtils.createBrokerConfig(brokerId2, zkConnect, port = port)
-    assertThrows(classOf[IllegalArgumentException], () => TestUtils.createServer(KafkaConfig.fromProps(props2)))
+    assertThrows(classOf[IllegalArgumentException], () => TestUtils.createServer(KafkaConfigProvider.fromProps(props2)))
   }
 
   @Test
@@ -74,10 +75,10 @@ class ServerStartupTest extends QuorumTestHarness {
     props1.put(RemoteLogManagerConfig.REMOTE_STORAGE_MANAGER_CLASS_NAME_PROP, classOf[NoOpRemoteStorageManager].getName)
     props1.put(RemoteLogManagerConfig.REMOTE_LOG_METADATA_MANAGER_CLASS_NAME_PROP, classOf[NoOpRemoteLogMetadataManager].getName)
     props1.put(RemoteLogManagerConfig.REMOTE_LOG_METADATA_MANAGER_LISTENER_NAME_PROP, "badListenerName")
-    assertThrows(classOf[ConfigException], () => TestUtils.createServer(KafkaConfig.fromProps(props1)))
+    assertThrows(classOf[ConfigException], () => TestUtils.createServer(KafkaConfigProvider.fromProps(props1)))
     // should not throw exception after adding a correct value for "remote.log.metadata.manager.listener.name"
     props1.put(RemoteLogManagerConfig.REMOTE_LOG_METADATA_MANAGER_LISTENER_NAME_PROP, "PLAINTEXT")
-    server = TestUtils.createServer(KafkaConfig.fromProps(props1))
+    server = TestUtils.createServer(KafkaConfigProvider.fromProps(props1))
   }
 
   @Test
@@ -89,7 +90,7 @@ class ServerStartupTest extends QuorumTestHarness {
     props1.put(RemoteLogManagerConfig.REMOTE_STORAGE_MANAGER_CLASS_NAME_PROP, classOf[NoOpRemoteStorageManager].getName)
     props1.put(RemoteLogManagerConfig.REMOTE_LOG_METADATA_MANAGER_CLASS_NAME_PROP, classOf[NoOpRemoteLogMetadataManager].getName)
     // should not throw exception if "remote.log.metadata.manager.listener.name" is unconfigured
-    server = TestUtils.createServer(KafkaConfig.fromProps(props1))
+    server = TestUtils.createServer(KafkaConfigProvider.fromProps(props1))
   }
 
   @Test
@@ -99,11 +100,11 @@ class ServerStartupTest extends QuorumTestHarness {
 
     val brokerId = 0
     val props1 = TestUtils.createBrokerConfig(brokerId, zkConnect)
-    server = TestUtils.createServer(KafkaConfig.fromProps(props1))
+    server = TestUtils.createServer(KafkaConfigProvider.fromProps(props1))
     val brokerRegistration = zkClient.getBroker(brokerId).getOrElse(fail("broker doesn't exists"))
 
     val props2 = TestUtils.createBrokerConfig(brokerId, zkConnect)
-    assertThrows(classOf[NodeExistsException], () => TestUtils.createServer(KafkaConfig.fromProps(props2)))
+    assertThrows(classOf[NodeExistsException], () => TestUtils.createServer(KafkaConfigProvider.fromProps(props2)))
 
     // broker registration shouldn't change
     assertEquals(brokerRegistration, zkClient.getBroker(brokerId).getOrElse(fail("broker doesn't exists")))
@@ -113,7 +114,7 @@ class ServerStartupTest extends QuorumTestHarness {
   def testBrokerSelfAware(): Unit = {
     val brokerId = 0
     val props = TestUtils.createBrokerConfig(brokerId, zkConnect)
-    server = TestUtils.createServer(KafkaConfig.fromProps(props))
+    server = TestUtils.createServer(KafkaConfigProvider.fromProps(props))
 
     TestUtils.waitUntilTrue(() => server.metadataCache.getAliveBrokers().nonEmpty, "Wait for cache to update")
     assertEquals(1, server.metadataCache.getAliveBrokers().size)
@@ -125,7 +126,7 @@ class ServerStartupTest extends QuorumTestHarness {
     val brokerId = 0
 
     val props = TestUtils.createBrokerConfig(brokerId, zkConnect)
-    server = new KafkaServer(KafkaConfig.fromProps(props))
+    server = new KafkaServer(KafkaConfigProvider.fromProps(props))
 
     server.startup()
     TestUtils.waitUntilTrue(() => server.brokerState == BrokerState.RUNNING,
@@ -139,15 +140,15 @@ class ServerStartupTest extends QuorumTestHarness {
  @ValueSource(booleans = Array(false, true))
  def testDirectoryIdsCreatedOnlyForMigration(migrationEnabled: Boolean): Unit = {
    val props = TestUtils.createBrokerConfig(1, zkConnect)
-   props.setProperty(KafkaConfig.MigrationEnabledProp, migrationEnabled.toString)
+   props.setProperty(KafkaConfig.MIGRATION_ENABLED_PROP, migrationEnabled.toString)
    if (migrationEnabled) {
      // Create Controller properties needed when migration is enabled
-     props.setProperty(KafkaConfig.QuorumVotersProp, "3000@localhost:9093")
-     props.setProperty(KafkaConfig.ControllerListenerNamesProp, "CONTROLLER")
-     props.setProperty(KafkaConfig.ListenerSecurityProtocolMapProp,
+     props.setProperty(KafkaConfig.QUORUM_VOTERS_PROP, "3000@localhost:9093")
+     props.setProperty(KafkaConfig.CONTROLLER_LISTENER_NAMES_PROP, "CONTROLLER")
+     props.setProperty(KafkaConfig.LISTENER_SECURITY_PROTOCOL_MAP_PROP,
        "CONTROLLER:PLAINTEXT,EXTERNAL:PLAINTEXT,PLAINTEXT:PLAINTEXT")
    }
-   server = new KafkaServer(KafkaConfig.fromProps(props))
+   server = new KafkaServer(KafkaConfigProvider.fromProps(props))
    server.startup()
    assertEquals(!migrationEnabled, server.logManager.directoryIdsSet.isEmpty)
    server.shutdown()

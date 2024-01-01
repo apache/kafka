@@ -18,10 +18,9 @@ package kafka.security.authorizer
 
 import java.{lang, util}
 import java.util.concurrent.{CompletableFuture, CompletionStage}
-
 import com.typesafe.scalalogging.Logger
 import kafka.security.authorizer.AclEntry.ResourceSeparator
-import kafka.server.{KafkaConfig, KafkaServer}
+import kafka.server.{KafkaConfigProvider, KafkaServer}
 import kafka.utils._
 import kafka.utils.Implicits._
 import kafka.zk._
@@ -37,6 +36,7 @@ import org.apache.kafka.common.utils.{SecurityUtils, Time}
 import org.apache.kafka.server.authorizer.AclDeleteResult.AclBindingDeleteResult
 import org.apache.kafka.server.authorizer._
 import org.apache.kafka.server.common.MetadataVersion.IBP_2_0_IV1
+import org.apache.kafka.server.config.KafkaConfig
 import org.apache.zookeeper.client.ZKClientConfig
 
 import scala.annotation.nowarn
@@ -96,7 +96,7 @@ object AclAuthorizer {
   }
 
   private[authorizer] def zkClientConfigFromKafkaConfigAndMap(kafkaConfig: KafkaConfig, configMap: mutable.Map[String, _<:Any]): ZKClientConfig = {
-    val zkSslClientEnable = configMap.get(AclAuthorizer.configPrefix + KafkaConfig.ZkSslClientEnableProp).
+    val zkSslClientEnable = configMap.get(AclAuthorizer.configPrefix + KafkaConfig.ZK_SSL_CLIENT_ENABLE_PROP).
       map(_.toString.trim).getOrElse(kafkaConfig.zkSslClientEnable.toString).toBoolean
     if (!zkSslClientEnable)
       new ZKClientConfig
@@ -105,10 +105,10 @@ object AclAuthorizer {
       // be sure to force creation since the zkSslClientEnable property in the kafkaConfig could be false
       val zkClientConfig = KafkaServer.zkClientConfigFromKafkaConfig(kafkaConfig, true)
       // add in any prefixed overlays
-      KafkaConfig.ZkSslConfigToSystemPropertyMap.forKeyValue { (kafkaProp, sysProp) =>
+      KafkaConfig.zkSslConfigToSystemPropertyMap().asScala.forKeyValue { (kafkaProp, sysProp) =>
         configMap.get(AclAuthorizer.configPrefix + kafkaProp).foreach { prefixedValue =>
           zkClientConfig.setProperty(sysProp,
-            if (kafkaProp == KafkaConfig.ZkSslEndpointIdentificationAlgorithmProp)
+            if (kafkaProp == KafkaConfig.ZK_SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_PROP)
               (prefixedValue.toString.trim.toUpperCase == "HTTPS").toString
             else
               prefixedValue.toString.trim)
@@ -196,7 +196,7 @@ class AclAuthorizer extends Authorizer with Logging {
     // Use `KafkaConfig` in order to get the default ZK config values if not present in `javaConfigs`. Note that this
     // means that `KafkaConfig.zkConnect` must always be set by the user (even if `AclAuthorizer.ZkUrlProp` is also
     // set).
-    val kafkaConfig = KafkaConfig.fromProps(props, doLog = false)
+    val kafkaConfig = KafkaConfigProvider.fromProps(props, false)
     val zkUrl = configs.get(AclAuthorizer.ZkUrlProp).map(_.toString.trim).getOrElse(kafkaConfig.zkConnect)
     val zkConnectionTimeoutMs = configs.get(AclAuthorizer.ZkConnectionTimeOutProp).map(_.toString.trim.toInt).getOrElse(kafkaConfig.zkConnectionTimeoutMs)
     val zkSessionTimeOutMs = configs.get(AclAuthorizer.ZkSessionTimeOutProp).map(_.toString.trim.toInt).getOrElse(kafkaConfig.zkSessionTimeoutMs)
@@ -236,7 +236,7 @@ class AclAuthorizer extends Authorizer with Logging {
       try {
         if (!extendedAclSupport && aclBinding.pattern.patternType == PatternType.PREFIXED) {
           throw new UnsupportedVersionException(s"Adding ACLs on prefixed resource patterns requires " +
-            s"${KafkaConfig.InterBrokerProtocolVersionProp} of $IBP_2_0_IV1 or greater")
+            s"${KafkaConfig.INTER_BROKER_PROTOCOL_VERSION_PROP} of $IBP_2_0_IV1 or greater")
         }
         validateAclBinding(aclBinding)
         true

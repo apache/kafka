@@ -25,6 +25,7 @@ import org.junit.jupiter.api.Test
 
 import java.util.Properties
 import org.apache.kafka.server.common.MetadataVersion.IBP_0_10_2_IV0
+import org.apache.kafka.server.config.KafkaConfig
 
 import scala.annotation.nowarn
 import scala.collection.Seq
@@ -35,7 +36,7 @@ class FetchRequestWithLegacyMessageFormatTest extends BaseFetchRequestTest {
   override def brokerPropertyOverrides(properties: Properties): Unit = {
     super.brokerPropertyOverrides(properties)
     // legacy message formats are only supported with IBP < 3.0
-    properties.put(KafkaConfig.InterBrokerProtocolVersionProp, "2.8")
+    properties.put(KafkaConfig.INTER_BROKER_PROTOCOL_VERSION_PROP, "2.8")
   }
 
   /**

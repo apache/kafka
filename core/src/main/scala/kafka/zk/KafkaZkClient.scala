@@ -23,7 +23,6 @@ import kafka.cluster.Broker
 import kafka.controller.{KafkaController, LeaderIsrAndControllerEpoch, ReplicaAssignment}
 import kafka.security.authorizer.AclAuthorizer.{NoAcls, VersionedAcls}
 import kafka.security.authorizer.AclEntry
-import kafka.server.KafkaConfig
 import kafka.utils.Logging
 import kafka.zk.TopicZNode.TopicIdReplicaAssignment
 import kafka.zookeeper._
@@ -35,8 +34,10 @@ import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.common.{KafkaException, TopicPartition, Uuid}
 import org.apache.kafka.metadata.migration.ZkMigrationLeadershipState
 import org.apache.kafka.server.config.ConfigType
+import org.apache.kafka.server.config.KafkaConfig
 import org.apache.kafka.server.metrics.KafkaMetricsGroup
 import org.apache.kafka.storage.internals.log.LogConfig
+import org.apache.kafka.zk.{KafkaZKClient => JKafkaZKClient}
 import org.apache.zookeeper.KeeperException.{Code, NodeExistsException}
 import org.apache.zookeeper.OpResult.{CheckResult, CreateResult, ErrorResult, SetDataResult}
 import org.apache.zookeeper.client.ZKClientConfig
@@ -61,7 +62,7 @@ case class SuccessfulRegistrationResult(zkControllerEpoch: Int, controllerEpochZ
  * monolithic [[kafka.zk.ZkData]] is the way to go.
  */
 class KafkaZkClient private[zk] (zooKeeperClient: ZooKeeperClient, isSecure: Boolean, time: Time) extends AutoCloseable with
-  Logging {
+  Logging with JKafkaZKClient {
 
   private val metricsGroup: KafkaMetricsGroup = new KafkaMetricsGroup(this.getClass) {
     override def metricName(name: String, metricTags: util.Map[String, String]): MetricName = {
@@ -2349,9 +2350,9 @@ object KafkaZkClient {
 
     if (secureAclsEnabled && !isZkSecurityEnabled)
       throw new java.lang.SecurityException(
-        s"${KafkaConfig.ZkEnableSecureAclsProp} is true, but ZooKeeper client TLS configuration identifying at least " +
-          s"${KafkaConfig.ZkSslClientEnableProp}, ${KafkaConfig.ZkClientCnxnSocketProp}, and " +
-          s"${KafkaConfig.ZkSslKeyStoreLocationProp} was not present and the verification of the JAAS login file failed " +
+        s"${KafkaConfig.ZK_ENABLE_SECURE_ACLS_PROP} is true, but ZooKeeper client TLS configuration identifying at least " +
+          s"${KafkaConfig.ZK_SSL_CLIENT_ENABLE_PROP}, ${KafkaConfig.ZK_CLIENT_CNXN_SOCKET_PROP}, and " +
+          s"${KafkaConfig.ZK_SSL_KEY_STORE_LOCATION_PROP} was not present and the verification of the JAAS login file failed " +
           s"${JaasUtils.zkSecuritySysConfigString}")
 
     KafkaZkClient(config.zkConnect, secureAclsEnabled, config.zkSessionTimeoutMs, config.zkConnectionTimeoutMs,

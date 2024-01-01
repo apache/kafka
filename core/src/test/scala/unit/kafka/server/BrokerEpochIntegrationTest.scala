@@ -35,6 +35,7 @@ import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.utils.Time
+import org.apache.kafka.server.config.KafkaConfig
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, TestInfo}
 
@@ -54,10 +55,10 @@ class BrokerEpochIntegrationTest extends QuorumTestHarness {
       TestUtils.createBrokerConfig(brokerId2, zkConnect))
 
     configs.foreach { config =>
-        config.setProperty(KafkaConfig.AutoLeaderRebalanceEnableProp, false.toString)}
+        config.setProperty(KafkaConfig.AUTO_LEADER_REBALANCE_ENABLE_PROP, false.toString)}
 
     // start both servers
-    servers = configs.map(config => TestUtils.createServer(KafkaConfig.fromProps(config)))
+    servers = configs.map(config => TestUtils.createServer(KafkaConfigProvider.fromProps(config)))
   }
 
   @AfterEach
@@ -120,7 +121,7 @@ class BrokerEpochIntegrationTest extends QuorumTestHarness {
     val controllerId = 2
     val controllerEpoch = zkClient.getControllerEpoch.get._1
 
-    val controllerConfig = KafkaConfig.fromProps(TestUtils.createBrokerConfig(controllerId, zkConnect))
+    val controllerConfig = KafkaConfigProvider.fromProps(TestUtils.createBrokerConfig(controllerId, zkConnect))
     val securityProtocol = SecurityProtocol.PLAINTEXT
     val listenerName = ListenerName.forSecurityProtocol(securityProtocol)
     val brokerAndEpochs = servers.map(s =>

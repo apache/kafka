@@ -16,18 +16,21 @@
  */
 package kafka
 
+import kafka.server.KafkaConfigProvider
+
 import java.nio.file.Files
 import java.util
 import java.util.Properties
-import kafka.server.KafkaConfig
 import kafka.utils.{Exit, TestUtils}
 import kafka.utils.TestUtils.assertBadConfigContainingMessage
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs
 import org.apache.kafka.common.config.types.Password
 import org.apache.kafka.common.internals.FatalExitError
+import org.apache.kafka.server.config.KafkaConfig
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.junit.jupiter.api.Assertions._
 
+import scala.compat.java8.OptionConverters.RichOptionalGeneric
 import scala.jdk.CollectionConverters._
 
 class KafkaTest {
@@ -43,20 +46,20 @@ class KafkaTest {
     val propertiesFile = prepareDefaultConfig()
 
     // We should load configuration file without any arguments
-    val config1 = KafkaConfig.fromProps(Kafka.getPropsFromArgs(Array(propertiesFile)))
+    val config1 = KafkaConfigProvider.fromProps(Kafka.getPropsFromArgs(Array(propertiesFile)))
     assertEquals(1, config1.brokerId)
 
     // We should be able to override given property on command line
-    val config2 = KafkaConfig.fromProps(Kafka.getPropsFromArgs(Array(propertiesFile, "--override", "broker.id=2")))
+    val config2 = KafkaConfigProvider.fromProps(Kafka.getPropsFromArgs(Array(propertiesFile, "--override", "broker.id=2")))
     assertEquals(2, config2.brokerId)
 
     // We should be also able to set completely new property
-    val config3 = KafkaConfig.fromProps(Kafka.getPropsFromArgs(Array(propertiesFile, "--override", "log.cleanup.policy=compact")))
+    val config3 = KafkaConfigProvider.fromProps(Kafka.getPropsFromArgs(Array(propertiesFile, "--override", "log.cleanup.policy=compact")))
     assertEquals(1, config3.brokerId)
     assertEquals(util.Arrays.asList("compact"), config3.logCleanupPolicy)
 
     // We should be also able to set several properties
-    val config4 = KafkaConfig.fromProps(Kafka.getPropsFromArgs(Array(propertiesFile, "--override", "log.cleanup.policy=compact,delete", "--override", "broker.id=2")))
+    val config4 = KafkaConfigProvider.fromProps(Kafka.getPropsFromArgs(Array(propertiesFile, "--override", "log.cleanup.policy=compact,delete", "--override", "broker.id=2")))
     assertEquals(2, config4.brokerId)
     assertEquals(util.Arrays.asList("compact","delete"), config4.logCleanupPolicy)
   }
@@ -64,77 +67,77 @@ class KafkaTest {
   @Test
   def testGetKafkaConfigFromArgsNonArgsAtTheEnd(): Unit = {
     val propertiesFile = prepareDefaultConfig()
-    assertThrows(classOf[FatalExitError], () => KafkaConfig.fromProps(Kafka.getPropsFromArgs(Array(propertiesFile, "--override", "broker.id=1", "broker.id=2"))))
+    assertThrows(classOf[FatalExitError], () => KafkaConfigProvider.fromProps(Kafka.getPropsFromArgs(Array(propertiesFile, "--override", "broker.id=1", "broker.id=2"))))
   }
 
   @Test
   def testGetKafkaConfigFromArgsNonArgsOnly(): Unit = {
     val propertiesFile = prepareDefaultConfig()
-    assertThrows(classOf[FatalExitError], () => KafkaConfig.fromProps(Kafka.getPropsFromArgs(Array(propertiesFile, "broker.id=1", "broker.id=2"))))
+    assertThrows(classOf[FatalExitError], () => KafkaConfigProvider.fromProps(Kafka.getPropsFromArgs(Array(propertiesFile, "broker.id=1", "broker.id=2"))))
   }
 
   @Test
   def testGetKafkaConfigFromArgsNonArgsAtTheBegging(): Unit = {
     val propertiesFile = prepareDefaultConfig()
-    assertThrows(classOf[FatalExitError], () => KafkaConfig.fromProps(Kafka.getPropsFromArgs(Array(propertiesFile, "broker.id=1", "--override", "broker.id=2"))))
+    assertThrows(classOf[FatalExitError], () => KafkaConfigProvider.fromProps(Kafka.getPropsFromArgs(Array(propertiesFile, "broker.id=1", "--override", "broker.id=2"))))
   }
 
   @Test
   def testBrokerRoleNodeIdValidation(): Unit = {
     // Ensure that validation is happening at startup to check that brokers do not use their node.id as a voter in controller.quorum.voters 
     val propertiesFile = new Properties
-    propertiesFile.setProperty(KafkaConfig.ProcessRolesProp, "broker")
-    propertiesFile.setProperty(KafkaConfig.NodeIdProp, "1")
-    propertiesFile.setProperty(KafkaConfig.QuorumVotersProp, "1@localhost:9092")
+    propertiesFile.setProperty(KafkaConfig.PROCESS_ROLES_PROP, "broker")
+    propertiesFile.setProperty(KafkaConfig.NODE_ID_PROP, "1")
+    propertiesFile.setProperty(KafkaConfig.QUORUM_VOTERS_PROP, "1@localhost:9092")
     setListenerProps(propertiesFile)
     assertBadConfigContainingMessage(propertiesFile,
       "If process.roles contains just the 'broker' role, the node id 1 must not be included in the set of voters")
 
     // Ensure that with a valid config no exception is thrown
-    propertiesFile.setProperty(KafkaConfig.NodeIdProp, "2")
-    KafkaConfig.fromProps(propertiesFile)
+    propertiesFile.setProperty(KafkaConfig.NODE_ID_PROP, "2")
+    KafkaConfigProvider.fromProps(propertiesFile)
   }
 
   @Test
   def testControllerRoleNodeIdValidation(): Unit = {
     // Ensure that validation is happening at startup to check that controllers use their node.id as a voter in controller.quorum.voters 
     val propertiesFile = new Properties
-    propertiesFile.setProperty(KafkaConfig.ProcessRolesProp, "controller")
-    propertiesFile.setProperty(KafkaConfig.NodeIdProp, "1")
-    propertiesFile.setProperty(KafkaConfig.QuorumVotersProp, "2@localhost:9092")
+    propertiesFile.setProperty(KafkaConfig.PROCESS_ROLES_PROP, "controller")
+    propertiesFile.setProperty(KafkaConfig.NODE_ID_PROP, "1")
+    propertiesFile.setProperty(KafkaConfig.QUORUM_VOTERS_PROP, "2@localhost:9092")
     setListenerProps(propertiesFile)
     assertBadConfigContainingMessage(propertiesFile,
       "If process.roles contains the 'controller' role, the node id 1 must be included in the set of voters")
 
     // Ensure that with a valid config no exception is thrown
-    propertiesFile.setProperty(KafkaConfig.NodeIdProp, "2")
-    KafkaConfig.fromProps(propertiesFile)
+    propertiesFile.setProperty(KafkaConfig.NODE_ID_PROP, "2")
+    KafkaConfigProvider.fromProps(propertiesFile)
   }
 
   @Test
   def testCombinedRoleNodeIdValidation(): Unit = {
     // Ensure that validation is happening at startup to check that combined processes use their node.id as a voter in controller.quorum.voters
     val propertiesFile = new Properties
-    propertiesFile.setProperty(KafkaConfig.ProcessRolesProp, "controller,broker")
-    propertiesFile.setProperty(KafkaConfig.NodeIdProp, "1")
-    propertiesFile.setProperty(KafkaConfig.QuorumVotersProp, "2@localhost:9092")
+    propertiesFile.setProperty(KafkaConfig.PROCESS_ROLES_PROP, "controller,broker")
+    propertiesFile.setProperty(KafkaConfig.NODE_ID_PROP, "1")
+    propertiesFile.setProperty(KafkaConfig.QUORUM_VOTERS_PROP, "2@localhost:9092")
     setListenerProps(propertiesFile)
     assertBadConfigContainingMessage(propertiesFile,
       "If process.roles contains the 'controller' role, the node id 1 must be included in the set of voters")
 
     // Ensure that with a valid config no exception is thrown
-    propertiesFile.setProperty(KafkaConfig.NodeIdProp, "2")
-    KafkaConfig.fromProps(propertiesFile)
+    propertiesFile.setProperty(KafkaConfig.NODE_ID_PROP, "2")
+    KafkaConfigProvider.fromProps(propertiesFile)
   }
 
   @Test
   def testIsKRaftCombinedMode(): Unit = {
     val propertiesFile = new Properties
-    propertiesFile.setProperty(KafkaConfig.ProcessRolesProp, "controller,broker")
-    propertiesFile.setProperty(KafkaConfig.NodeIdProp, "1")
-    propertiesFile.setProperty(KafkaConfig.QuorumVotersProp, "1@localhost:9092")
+    propertiesFile.setProperty(KafkaConfig.PROCESS_ROLES_PROP, "controller,broker")
+    propertiesFile.setProperty(KafkaConfig.NODE_ID_PROP, "1")
+    propertiesFile.setProperty(KafkaConfig.QUORUM_VOTERS_PROP, "1@localhost:9092")
     setListenerProps(propertiesFile)
-    val config = KafkaConfig.fromProps(propertiesFile)
+    val config = KafkaConfigProvider.fromProps(propertiesFile)
     assertTrue(config.isKRaftCombinedMode)
   }
 
@@ -142,87 +145,87 @@ class KafkaTest {
   def testMustContainQuorumVotersIfUsingProcessRoles(): Unit = {
     // Ensure that validation is happening at startup to check that if process.roles is set controller.quorum.voters is not empty
     val propertiesFile = new Properties
-    propertiesFile.setProperty(KafkaConfig.ProcessRolesProp, "controller,broker")
-    propertiesFile.setProperty(KafkaConfig.NodeIdProp, "1")
-    propertiesFile.setProperty(KafkaConfig.QuorumVotersProp, "")
+    propertiesFile.setProperty(KafkaConfig.PROCESS_ROLES_PROP, "controller,broker")
+    propertiesFile.setProperty(KafkaConfig.NODE_ID_PROP, "1")
+    propertiesFile.setProperty(KafkaConfig.QUORUM_VOTERS_PROP, "")
     setListenerProps(propertiesFile)
     assertBadConfigContainingMessage(propertiesFile,
       "If using process.roles, controller.quorum.voters must contain a parseable set of voters.")
 
     // Ensure that if neither process.roles nor controller.quorum.voters is populated, then an exception is thrown if zookeeper.connect is not defined
-    propertiesFile.setProperty(KafkaConfig.ProcessRolesProp, "")
+    propertiesFile.setProperty(KafkaConfig.PROCESS_ROLES_PROP, "")
     assertBadConfigContainingMessage(propertiesFile,
       "Missing required configuration `zookeeper.connect` which has no default value.")
 
     // Ensure that no exception is thrown once zookeeper.connect is defined (and we clear controller.listener.names)
-    propertiesFile.setProperty(KafkaConfig.ZkConnectProp, "localhost:2181")
-    propertiesFile.setProperty(KafkaConfig.ControllerListenerNamesProp, "")
-    KafkaConfig.fromProps(propertiesFile)
+    propertiesFile.setProperty(KafkaConfig.ZK_CONNECT_PROP, "localhost:2181")
+    propertiesFile.setProperty(KafkaConfig.CONTROLLER_LISTENER_NAMES_PROP, "")
+    KafkaConfigProvider.fromProps(propertiesFile)
   }
 
   private def setListenerProps(props: Properties): Unit = {
-    val hasBrokerRole = props.getProperty(KafkaConfig.ProcessRolesProp).contains("broker")
-    val hasControllerRole = props.getProperty(KafkaConfig.ProcessRolesProp).contains("controller")
+    val hasBrokerRole = props.getProperty(KafkaConfig.PROCESS_ROLES_PROP).contains("broker")
+    val hasControllerRole = props.getProperty(KafkaConfig.PROCESS_ROLES_PROP).contains("controller")
     val controllerListener = "SASL_PLAINTEXT://localhost:9092"
     val brokerListener = "PLAINTEXT://localhost:9093"
 
     if (hasBrokerRole || hasControllerRole) { // KRaft
-      props.setProperty(KafkaConfig.ControllerListenerNamesProp, "SASL_PLAINTEXT")
+      props.setProperty(KafkaConfig.CONTROLLER_LISTENER_NAMES_PROP, "SASL_PLAINTEXT")
       if (hasBrokerRole && hasControllerRole) {
-        props.setProperty(KafkaConfig.ListenersProp, s"$brokerListener,$controllerListener")
+        props.setProperty(KafkaConfig.LISTENERS_PROP, s"$brokerListener,$controllerListener")
       } else if (hasControllerRole) {
-        props.setProperty(KafkaConfig.ListenersProp, controllerListener)
+        props.setProperty(KafkaConfig.LISTENERS_PROP, controllerListener)
       } else if (hasBrokerRole) {
-        props.setProperty(KafkaConfig.ListenersProp, brokerListener)
+        props.setProperty(KafkaConfig.LISTENERS_PROP, brokerListener)
       }
     } else { // ZK-based
-       props.setProperty(KafkaConfig.ListenersProp, brokerListener)
+       props.setProperty(KafkaConfig.LISTENERS_PROP, brokerListener)
     }
     if (!(hasControllerRole & !hasBrokerRole)) { // not controller-only
-      props.setProperty(KafkaConfig.InterBrokerListenerNameProp, "PLAINTEXT")
-      props.setProperty(KafkaConfig.AdvertisedListenersProp, "PLAINTEXT://localhost:9092") 
+      props.setProperty(KafkaConfig.INTER_BROKER_LISTENER_NAME_PROP, "PLAINTEXT")
+      props.setProperty(KafkaConfig.ADVERTISED_LISTENERS_PROP, "PLAINTEXT://localhost:9092")
     }
   }
 
   @Test
   def testKafkaSslPasswords(): Unit = {
     val propertiesFile = prepareDefaultConfig()
-    val config = KafkaConfig.fromProps(Kafka.getPropsFromArgs(Array(propertiesFile, "--override", "ssl.keystore.password=keystore_password",
+    val config = KafkaConfigProvider.fromProps(Kafka.getPropsFromArgs(Array(propertiesFile, "--override", "ssl.keystore.password=keystore_password",
                                                                                     "--override", "ssl.key.password=key_password",
                                                                                     "--override", "ssl.truststore.password=truststore_password",
                                                                                     "--override", "ssl.keystore.certificate.chain=certificate_chain",
                                                                                     "--override", "ssl.keystore.key=private_key",
                                                                                     "--override", "ssl.truststore.certificates=truststore_certificates")))
-    assertEquals(Password.HIDDEN, config.getPassword(KafkaConfig.SslKeyPasswordProp).toString)
-    assertEquals(Password.HIDDEN, config.getPassword(KafkaConfig.SslKeystorePasswordProp).toString)
-    assertEquals(Password.HIDDEN, config.getPassword(KafkaConfig.SslTruststorePasswordProp).toString)
-    assertEquals(Password.HIDDEN, config.getPassword(KafkaConfig.SslKeystoreKeyProp).toString)
-    assertEquals(Password.HIDDEN, config.getPassword(KafkaConfig.SslKeystoreCertificateChainProp).toString)
-    assertEquals(Password.HIDDEN, config.getPassword(KafkaConfig.SslTruststoreCertificatesProp).toString)
+    assertEquals(Password.HIDDEN, config.getPassword(KafkaConfig.SSL_KEY_PASSWORD_PROP).toString)
+    assertEquals(Password.HIDDEN, config.getPassword(KafkaConfig.SSL_KEYSTORE_PASSWORD_PROP).toString)
+    assertEquals(Password.HIDDEN, config.getPassword(KafkaConfig.SSL_TRUSTSTORE_PASSWORD_PROP).toString)
+    assertEquals(Password.HIDDEN, config.getPassword(KafkaConfig.SSL_KEYSTORE_KEY_PROP).toString)
+    assertEquals(Password.HIDDEN, config.getPassword(KafkaConfig.SSL_KEYSTORE_CERTIFICATE_CHAIN_PROP).toString)
+    assertEquals(Password.HIDDEN, config.getPassword(KafkaConfig.SSL_TRUSTSTORE_CERTIFICATES_PROP).toString)
 
-    assertEquals("key_password", config.getPassword(KafkaConfig.SslKeyPasswordProp).value)
-    assertEquals("keystore_password", config.getPassword(KafkaConfig.SslKeystorePasswordProp).value)
-    assertEquals("truststore_password", config.getPassword(KafkaConfig.SslTruststorePasswordProp).value)
-    assertEquals("private_key", config.getPassword(KafkaConfig.SslKeystoreKeyProp).value)
-    assertEquals("certificate_chain", config.getPassword(KafkaConfig.SslKeystoreCertificateChainProp).value)
-    assertEquals("truststore_certificates", config.getPassword(KafkaConfig.SslTruststoreCertificatesProp).value)
+    assertEquals("key_password", config.getPassword(KafkaConfig.SSL_KEY_PASSWORD_PROP).value)
+    assertEquals("keystore_password", config.getPassword(KafkaConfig.SSL_KEYSTORE_PASSWORD_PROP).value)
+    assertEquals("truststore_password", config.getPassword(KafkaConfig.SSL_TRUSTSTORE_PASSWORD_PROP).value)
+    assertEquals("private_key", config.getPassword(KafkaConfig.SSL_KEYSTORE_KEY_PROP).value)
+    assertEquals("certificate_chain", config.getPassword(KafkaConfig.SSL_KEYSTORE_CERTIFICATE_CHAIN_PROP).value)
+    assertEquals("truststore_certificates", config.getPassword(KafkaConfig.SSL_TRUSTSTORE_CERTIFICATES_PROP).value)
   }
 
   @Test
   def testKafkaSslPasswordsWithSymbols(): Unit = {
     val password = "=!#-+!?*/\"\'^%$=\\.,@:;="
     val propertiesFile = prepareDefaultConfig()
-    val config = KafkaConfig.fromProps(Kafka.getPropsFromArgs(Array(propertiesFile,
+    val config = KafkaConfigProvider.fromProps(Kafka.getPropsFromArgs(Array(propertiesFile,
       "--override", "ssl.keystore.password=" + password,
       "--override", "ssl.key.password=" + password,
       "--override", "ssl.truststore.password=" + password)))
-    assertEquals(Password.HIDDEN, config.getPassword(KafkaConfig.SslKeyPasswordProp).toString)
-    assertEquals(Password.HIDDEN, config.getPassword(KafkaConfig.SslKeystorePasswordProp).toString)
-    assertEquals(Password.HIDDEN, config.getPassword(KafkaConfig.SslTruststorePasswordProp).toString)
+    assertEquals(Password.HIDDEN, config.getPassword(KafkaConfig.SSL_KEY_PASSWORD_PROP).toString)
+    assertEquals(Password.HIDDEN, config.getPassword(KafkaConfig.SSL_KEYSTORE_PASSWORD_PROP).toString)
+    assertEquals(Password.HIDDEN, config.getPassword(KafkaConfig.SSL_TRUSTSTORE_PASSWORD_PROP).toString)
 
-    assertEquals(password, config.getPassword(KafkaConfig.SslKeystorePasswordProp).value)
-    assertEquals(password, config.getPassword(KafkaConfig.SslKeyPasswordProp).value)
-    assertEquals(password, config.getPassword(KafkaConfig.SslTruststorePasswordProp).value)
+    assertEquals(password, config.getPassword(KafkaConfig.SSL_KEYSTORE_PASSWORD_PROP).value)
+    assertEquals(password, config.getPassword(KafkaConfig.SSL_KEY_PASSWORD_PROP).value)
+    assertEquals(password, config.getPassword(KafkaConfig.SSL_TRUSTSTORE_PASSWORD_PROP).value)
   }
 
   private val booleanPropValueToSet = true
@@ -232,115 +235,115 @@ class KafkaTest {
 
   @Test
   def testZkSslClientEnable(): Unit = {
-    testZkConfig(KafkaConfig.ZkSslClientEnableProp, "zookeeper.ssl.client.enable",
+    testZkConfig(KafkaConfig.ZK_SSL_CLIENT_ENABLE_PROP, "zookeeper.ssl.client.enable",
       "zookeeper.client.secure", booleanPropValueToSet, config => Some(config.zkSslClientEnable), booleanPropValueToSet, Some(false))
   }
 
   @Test
   def testZkSslKeyStoreLocation(): Unit = {
-    testZkConfig(KafkaConfig.ZkSslKeyStoreLocationProp, "zookeeper.ssl.keystore.location",
-      "zookeeper.ssl.keyStore.location", stringPropValueToSet, config => config.zkSslKeyStoreLocation, stringPropValueToSet)
+    testZkConfig(KafkaConfig.ZK_SSL_KEY_STORE_LOCATION_PROP, "zookeeper.ssl.keystore.location",
+      "zookeeper.ssl.keyStore.location", stringPropValueToSet, config => config.zkSslKeyStoreLocation.asScala, stringPropValueToSet)
   }
 
   @Test
   def testZkSslTrustStoreLocation(): Unit = {
-    testZkConfig(KafkaConfig.ZkSslTrustStoreLocationProp, "zookeeper.ssl.truststore.location",
-      "zookeeper.ssl.trustStore.location", stringPropValueToSet, config => config.zkSslTrustStoreLocation, stringPropValueToSet)
+    testZkConfig(KafkaConfig.ZK_SSL_TRUST_STORE_LOCATION_PROP, "zookeeper.ssl.truststore.location",
+      "zookeeper.ssl.trustStore.location", stringPropValueToSet, config => config.zkSslTrustStoreLocation.asScala, stringPropValueToSet)
   }
 
   @Test
   def testZookeeperKeyStorePassword(): Unit = {
-    testZkConfig(KafkaConfig.ZkSslKeyStorePasswordProp, "zookeeper.ssl.keystore.password",
-      "zookeeper.ssl.keyStore.password", passwordPropValueToSet, config => config.zkSslKeyStorePassword, new Password(passwordPropValueToSet))
+    testZkConfig(KafkaConfig.ZK_SSL_KEY_STORE_PASSWORD_PROP, "zookeeper.ssl.keystore.password",
+      "zookeeper.ssl.keyStore.password", passwordPropValueToSet, config => config.zkSslKeyStorePassword.asScala, new Password(passwordPropValueToSet))
   }
 
   @Test
   def testZookeeperTrustStorePassword(): Unit = {
-    testZkConfig(KafkaConfig.ZkSslTrustStorePasswordProp, "zookeeper.ssl.truststore.password",
-      "zookeeper.ssl.trustStore.password", passwordPropValueToSet, config => config.zkSslTrustStorePassword, new Password(passwordPropValueToSet))
+    testZkConfig(KafkaConfig.ZK_SSL_TRUST_STORE_PASSWORD_PROP, "zookeeper.ssl.truststore.password",
+      "zookeeper.ssl.trustStore.password", passwordPropValueToSet, config => config.zkSslTrustStorePassword.asScala, new Password(passwordPropValueToSet))
   }
 
   @Test
   def testZkSslKeyStoreType(): Unit = {
-    testZkConfig(KafkaConfig.ZkSslKeyStoreTypeProp, "zookeeper.ssl.keystore.type",
-      "zookeeper.ssl.keyStore.type", stringPropValueToSet, config => config.zkSslKeyStoreType, stringPropValueToSet)
+    testZkConfig(KafkaConfig.ZK_SSL_KEY_STORE_TYPE_PROP, "zookeeper.ssl.keystore.type",
+      "zookeeper.ssl.keyStore.type", stringPropValueToSet, config => config.zkSslKeyStoreType.asScala, stringPropValueToSet)
   }
 
   @Test
   def testZkSslTrustStoreType(): Unit = {
-    testZkConfig(KafkaConfig.ZkSslTrustStoreTypeProp, "zookeeper.ssl.truststore.type",
-      "zookeeper.ssl.trustStore.type", stringPropValueToSet, config => config.zkSslTrustStoreType, stringPropValueToSet)
+    testZkConfig(KafkaConfig.ZK_SSL_TRUST_STORE_TYPE_PROP, "zookeeper.ssl.truststore.type",
+      "zookeeper.ssl.trustStore.type", stringPropValueToSet, config => config.zkSslTrustStoreType.asScala, stringPropValueToSet)
   }
 
   @Test
   def testZkSslProtocol(): Unit = {
-    testZkConfig(KafkaConfig.ZkSslProtocolProp, "zookeeper.ssl.protocol",
-      "zookeeper.ssl.protocol", stringPropValueToSet, config => Some(config.ZkSslProtocol), stringPropValueToSet, Some("TLSv1.2"))
+    testZkConfig(KafkaConfig.ZK_SSL_PROTOCOL_PROP, "zookeeper.ssl.protocol",
+      "zookeeper.ssl.protocol", stringPropValueToSet, config => Some(config.zkSslProtocol), stringPropValueToSet, Some("TLSv1.2"))
   }
 
   @Test
   def testZkSslEnabledProtocols(): Unit = {
-    testZkConfig(KafkaConfig.ZkSslEnabledProtocolsProp, "zookeeper.ssl.enabled.protocols",
-      "zookeeper.ssl.enabledProtocols", listPropValueToSet.mkString(","), config => config.ZkSslEnabledProtocols, listPropValueToSet.asJava)
+    testZkConfig(KafkaConfig.ZK_SSL_ENABLED_PROTOCOLS_PROP, "zookeeper.ssl.enabled.protocols",
+      "zookeeper.ssl.enabledProtocols", listPropValueToSet.mkString(","), config => config.zkSslEnabledProtocols.asScala, listPropValueToSet.asJava)
   }
 
   @Test
   def testZkSslCipherSuites(): Unit = {
-    testZkConfig(KafkaConfig.ZkSslCipherSuitesProp, "zookeeper.ssl.cipher.suites",
-      "zookeeper.ssl.ciphersuites", listPropValueToSet.mkString(","), config => config.ZkSslCipherSuites, listPropValueToSet.asJava)
+    testZkConfig(KafkaConfig.ZK_SSL_CIPHER_SUITES_PROP, "zookeeper.ssl.cipher.suites",
+      "zookeeper.ssl.ciphersuites", listPropValueToSet.mkString(","), config => config.zkSslCipherSuites.asScala, listPropValueToSet.asJava)
   }
 
   @Test
   def testZkSslEndpointIdentificationAlgorithm(): Unit = {
     // this property is different than the others
     // because the system property values and the Kafka property values don't match
-    val kafkaPropName = KafkaConfig.ZkSslEndpointIdentificationAlgorithmProp
+    val kafkaPropName = KafkaConfig.ZK_SSL_ENDPOINT_IDENTIFICATION_ALGORITHM_PROP
     assertEquals("zookeeper.ssl.endpoint.identification.algorithm", kafkaPropName)
     val sysProp = "zookeeper.ssl.hostnameVerification"
     val expectedDefaultValue = "HTTPS"
     val propertiesFile = prepareDefaultConfig()
     // first make sure there is the correct default value
-    val emptyConfig = KafkaConfig.fromProps(Kafka.getPropsFromArgs(Array(propertiesFile)))
+    val emptyConfig = KafkaConfigProvider.fromProps(Kafka.getPropsFromArgs(Array(propertiesFile)))
     assertNull(emptyConfig.originals.get(kafkaPropName)) // doesn't appear in the originals
     assertEquals(expectedDefaultValue, emptyConfig.values.get(kafkaPropName)) // but default value appears in the values
-    assertEquals(expectedDefaultValue, emptyConfig.ZkSslEndpointIdentificationAlgorithm) // and has the correct default value
+    assertEquals(expectedDefaultValue, emptyConfig.zkSslEndpointIdentificationAlgorithm) // and has the correct default value
     // next set system property alone
     Map("true" -> "HTTPS", "false" -> "").foreach { case (sysPropValue, expected) => {
       try {
         System.setProperty(sysProp, sysPropValue)
-        val config = KafkaConfig.fromProps(Kafka.getPropsFromArgs(Array(propertiesFile)))
+        val config = KafkaConfigProvider.fromProps(Kafka.getPropsFromArgs(Array(propertiesFile)))
         assertNull(config.originals.get(kafkaPropName)) // doesn't appear in the originals
         assertEquals(expectedDefaultValue, config.values.get(kafkaPropName)) // default value appears in the values
-        assertEquals(expected, config.ZkSslEndpointIdentificationAlgorithm) // system property impacts the ultimate value of the property
+        assertEquals(expected, config.zkSslEndpointIdentificationAlgorithm) // system property impacts the ultimate value of the property
       } finally {
         System.clearProperty(sysProp)
       }
     }}
     // finally set Kafka config alone
     List("https", "").foreach(expected => {
-      val config = KafkaConfig.fromProps(Kafka.getPropsFromArgs(Array(propertiesFile, "--override", s"$kafkaPropName=${expected}")))
+      val config = KafkaConfigProvider.fromProps(Kafka.getPropsFromArgs(Array(propertiesFile, "--override", s"$kafkaPropName=${expected}")))
       assertEquals(expected, config.originals.get(kafkaPropName)) // appears in the originals
       assertEquals(expected, config.values.get(kafkaPropName)) // appears in the values
-      assertEquals(expected, config.ZkSslEndpointIdentificationAlgorithm) // is the ultimate value
+      assertEquals(expected, config.zkSslEndpointIdentificationAlgorithm) // is the ultimate value
     })
   }
 
   @Test
   def testZkSslCrlEnable(): Unit = {
-    testZkConfig(KafkaConfig.ZkSslCrlEnableProp, "zookeeper.ssl.crl.enable",
-      "zookeeper.ssl.crl", booleanPropValueToSet, config => Some(config.ZkSslCrlEnable), booleanPropValueToSet, Some(false))
+    testZkConfig(KafkaConfig.ZK_SSL_CRL_ENABLE_PROP, "zookeeper.ssl.crl.enable",
+      "zookeeper.ssl.crl", booleanPropValueToSet, config => Some(config.zkSslCrlEnable), booleanPropValueToSet, Some(false))
   }
 
   @Test
   def testZkSslOcspEnable(): Unit = {
-    testZkConfig(KafkaConfig.ZkSslOcspEnableProp, "zookeeper.ssl.ocsp.enable",
-      "zookeeper.ssl.ocsp", booleanPropValueToSet, config => Some(config.ZkSslOcspEnable), booleanPropValueToSet, Some(false))
+    testZkConfig(KafkaConfig.ZK_SSL_OCSP_ENABLE_PROP, "zookeeper.ssl.ocsp.enable",
+      "zookeeper.ssl.ocsp", booleanPropValueToSet, config => Some(config.zkSslOcspEnable), booleanPropValueToSet, Some(false))
   }
 
   @Test
   def testConnectionsMaxReauthMsDefault(): Unit = {
     val propertiesFile = prepareDefaultConfig()
-    val config = KafkaConfig.fromProps(Kafka.getPropsFromArgs(Array(propertiesFile)))
+    val config = KafkaConfigProvider.fromProps(Kafka.getPropsFromArgs(Array(propertiesFile)))
     assertEquals(0L, config.valuesWithPrefixOverride("sasl_ssl.oauthbearer.").get(BrokerSecurityConfigs.CONNECTIONS_MAX_REAUTH_MS).asInstanceOf[Long])
   }
 
@@ -348,7 +351,7 @@ class KafkaTest {
   def testConnectionsMaxReauthMsExplicit(): Unit = {
     val propertiesFile = prepareDefaultConfig()
     val expected = 3600000
-    val config = KafkaConfig.fromProps(Kafka.getPropsFromArgs(Array(propertiesFile, "--override", s"sasl_ssl.oauthbearer.connections.max.reauth.ms=${expected}")))
+    val config = KafkaConfigProvider.fromProps(Kafka.getPropsFromArgs(Array(propertiesFile, "--override", s"sasl_ssl.oauthbearer.connections.max.reauth.ms=${expected}")))
     assertEquals(expected, config.valuesWithPrefixOverride("sasl_ssl.oauthbearer.").get(BrokerSecurityConfigs.CONNECTIONS_MAX_REAUTH_MS).asInstanceOf[Long])
   }
 
@@ -362,7 +365,7 @@ class KafkaTest {
     assertEquals(expectedKafkaPropName, kafkaPropName)
     val propertiesFile = prepareDefaultConfig()
     // first make sure there is the correct default value (if any)
-    val emptyConfig = KafkaConfig.fromProps(Kafka.getPropsFromArgs(Array(propertiesFile)))
+    val emptyConfig = KafkaConfigProvider.fromProps(Kafka.getPropsFromArgs(Array(propertiesFile)))
     assertNull(emptyConfig.originals.get(kafkaPropName)) // doesn't appear in the originals
     if (expectedDefaultValue.isDefined) {
       // confirm default value behavior
@@ -377,7 +380,7 @@ class KafkaTest {
     try {
       System.setProperty(sysPropName, s"$propValueToSet")
       // need to create a new Kafka config for the system property to be recognized
-      val config = KafkaConfig.fromProps(Kafka.getPropsFromArgs(Array(propertiesFile)))
+      val config = KafkaConfigProvider.fromProps(Kafka.getPropsFromArgs(Array(propertiesFile)))
       assertNull(config.originals.get(kafkaPropName)) // doesn't appear in the originals
       // confirm default value (if any) overridden by system property
       if (expectedDefaultValue.isDefined)
@@ -390,7 +393,7 @@ class KafkaTest {
       System.clearProperty(sysPropName)
     }
     // finally set Kafka config alone
-    val config = KafkaConfig.fromProps(Kafka.getPropsFromArgs(Array(propertiesFile, "--override", s"$kafkaPropName=${propValueToSet}")))
+    val config = KafkaConfigProvider.fromProps(Kafka.getPropsFromArgs(Array(propertiesFile, "--override", s"$kafkaPropName=${propValueToSet}")))
     assertEquals(expectedPropertyValue, config.values.get(kafkaPropName)) // appears in the values
     assertEquals(Some(expectedPropertyValue), getPropValueFrom(config)) // appears in the property
   }

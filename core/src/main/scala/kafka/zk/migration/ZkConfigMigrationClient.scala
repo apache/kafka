@@ -17,8 +17,8 @@
 
 package kafka.zk.migration
 
-import kafka.server.{ConfigEntityName, DynamicBrokerConfig, DynamicConfig, ZkAdminManager}
-import kafka.utils.{Logging, PasswordEncoder}
+import kafka.server.{ConfigEntityName, DynamicConfig, ZkAdminManager}
+import kafka.utils.Logging
 import kafka.zk.ZkMigrationClient.{logAndRethrow, wrapZkException}
 import kafka.zk._
 import kafka.zookeeper.{CreateRequest, DeleteRequest, SetDataRequest}
@@ -31,7 +31,8 @@ import org.apache.kafka.common.quota.ClientQuotaEntity
 import org.apache.kafka.common.security.scram.internals.ScramCredentialUtils
 import org.apache.kafka.metadata.migration.ConfigMigrationClient.ClientQuotaVisitor
 import org.apache.kafka.metadata.migration.{ConfigMigrationClient, MigrationClientException, ZkMigrationLeadershipState}
-import org.apache.kafka.server.config.ConfigType
+import org.apache.kafka.utils.PasswordEncoder
+import org.apache.kafka.server.config.{ConfigType, DynamicBrokerConfigBaseManager}
 import org.apache.zookeeper.KeeperException.Code
 import org.apache.zookeeper.{CreateMode, KeeperException}
 
@@ -135,7 +136,7 @@ class ZkConfigMigrationClient(
     zkClient.getEntitiesConfigs(ConfigType.BROKER, brokerEntities.toSet).foreach { case (broker, props) =>
       val brokerResource = fromZkEntityName(broker)
       val decodedProps = props.asScala.map { case (key, value) =>
-        if (DynamicBrokerConfig.isPasswordConfig(key))
+        if (DynamicBrokerConfigBaseManager.isPasswordConfig(key))
           key -> passwordEncoder.decode(value).value
         else
           key -> value
@@ -158,7 +159,7 @@ class ZkConfigMigrationClient(
     val topicResource = fromZkEntityName(topicName)
     val props = zkClient.getEntityConfigs(ConfigType.TOPIC, topicResource)
     val decodedProps = props.asScala.map { case (key, value) =>
-      if (DynamicBrokerConfig.isPasswordConfig(key))
+      if (DynamicBrokerConfigBaseManager.isPasswordConfig(key))
         key -> passwordEncoder.decode(value).value
       else
         key -> value
@@ -184,7 +185,7 @@ class ZkConfigMigrationClient(
     if (configType.isDefined) {
       val props = new Properties()
       configMap.forEach { case (key, value) =>
-        if (DynamicBrokerConfig.isPasswordConfig(key)) {
+        if (DynamicBrokerConfigBaseManager.isPasswordConfig(key)) {
           props.put(key, passwordEncoder.encode(new Password(value)))
         } else
           props.put(key, value)

@@ -20,12 +20,11 @@ import java.net.InetAddress
 import java.util
 import java.util.UUID
 import java.util.concurrent.{Executors, TimeUnit}
-
 import javax.security.auth.Subject
 import javax.security.auth.callback.CallbackHandler
 import kafka.api.SaslSetup
 import kafka.security.authorizer.AclEntry.WildcardHost
-import kafka.server.{KafkaConfig, QuorumTestHarness}
+import kafka.server.{KafkaConfigProvider, QuorumTestHarness}
 import kafka.utils.JaasTestUtils.{JaasModule, JaasSection}
 import kafka.utils.{JaasTestUtils, TestUtils}
 import kafka.zk.KafkaZkClient
@@ -40,6 +39,7 @@ import org.apache.kafka.common.resource.PatternType.LITERAL
 import org.apache.kafka.common.resource.ResourcePattern
 import org.apache.kafka.common.resource.ResourceType.TOPIC
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
+import org.apache.kafka.server.config.KafkaConfig
 import org.apache.kafka.test.{TestUtils => JTestUtils}
 import org.apache.zookeeper.server.auth.DigestLoginModule
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -77,7 +77,7 @@ class AclAuthorizerWithZkSaslTest extends QuorumTestHarness with SaslSetup {
     aclAuthorizer2.maxUpdateRetries = Int.MaxValue
 
     super.setUp(testInfo)
-    config = KafkaConfig.fromProps(TestUtils.createBrokerConfig(0, zkConnect))
+    config = KafkaConfigProvider.fromProps(TestUtils.createBrokerConfig(0, zkConnect))
 
     aclAuthorizer.configure(config.originals)
     aclAuthorizer2.configure(config.originals)

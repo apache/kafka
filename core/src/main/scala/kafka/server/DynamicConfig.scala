@@ -23,6 +23,7 @@ import org.apache.kafka.common.config.ConfigDef
 import org.apache.kafka.common.config.ConfigDef.Importance._
 import org.apache.kafka.common.config.ConfigDef.Range._
 import org.apache.kafka.common.config.ConfigDef.Type._
+import org.apache.kafka.server.config.{DynamicBrokerConfigBaseManager, KafkaConfig, ReplicationQuotaManagerConfig}
 import org.apache.kafka.storage.internals.log.LogConfig
 
 import java.util
@@ -41,7 +42,7 @@ object DynamicConfig {
     val ReplicaAlterLogDirsIoMaxBytesPerSecondProp = "replica.alter.log.dirs.io.max.bytes.per.second"
 
     // Defaults
-    val DefaultReplicationThrottledRate = ReplicationQuotaManagerConfig.QuotaBytesPerSecondDefault
+    val DefaultReplicationThrottledRate = ReplicationQuotaManagerConfig.DEFAULT_QUOTA_BYTES_PER_SECOND
 
     // Documentation
     val LeaderReplicationThrottledRateDoc = "A long representing the upper bound (bytes/sec) on replication traffic for leaders enumerated in the " +
@@ -54,13 +55,14 @@ object DynamicConfig {
       s"This property can be only set dynamically. It is suggested that the limit be kept above 1MB/s for accurate behaviour."
 
     // Definitions
-    val brokerConfigDef = new ConfigDef()
-      // Round minimum value down, to make it easier for users.
-      .define(LeaderReplicationThrottledRateProp, LONG, DefaultReplicationThrottledRate, atLeast(0), MEDIUM, LeaderReplicationThrottledRateDoc)
-      .define(FollowerReplicationThrottledRateProp, LONG, DefaultReplicationThrottledRate, atLeast(0), MEDIUM, FollowerReplicationThrottledRateDoc)
-      .define(ReplicaAlterLogDirsIoMaxBytesPerSecondProp, LONG, DefaultReplicationThrottledRate, atLeast(0), MEDIUM, ReplicaAlterLogDirsIoMaxBytesPerSecondDoc)
-    DynamicBrokerConfig.addDynamicConfigs(brokerConfigDef)
-    val nonDynamicProps = KafkaConfig.configNames.toSet -- brokerConfigDef.names.asScala
+    val brokerConfigDef = DynamicBrokerConfigBaseManager.addDynamicConfigs(
+      new ConfigDef()
+        // Round minimum value down, to make it easier for users.
+        .define(LeaderReplicationThrottledRateProp, LONG, DefaultReplicationThrottledRate, atLeast(0), MEDIUM, LeaderReplicationThrottledRateDoc)
+        .define(FollowerReplicationThrottledRateProp, LONG, DefaultReplicationThrottledRate, atLeast(0), MEDIUM, FollowerReplicationThrottledRateDoc)
+        .define(ReplicaAlterLogDirsIoMaxBytesPerSecondProp, LONG, DefaultReplicationThrottledRate, atLeast(0), MEDIUM, ReplicaAlterLogDirsIoMaxBytesPerSecondDoc)
+    )
+    val nonDynamicProps: Set[String] = KafkaConfig.configNames.asScala.toSet -- brokerConfigDef.names.asScala
 
     def names = brokerConfigDef.names
 
@@ -118,7 +120,7 @@ object DynamicConfig {
     def names: util.Set[String] = clientConfigs.names
   }
 
-  private def validate(configDef: ConfigDef, props: Properties, customPropsAllowed: Boolean) = {
+  private def validate(configDef: ConfigDef, props: Properties, customPropsAllowed: Boolean): util.Map[String, AnyRef] = {
     // Validate Names
     val names = configDef.names()
     val propKeys = props.keySet.asScala.map(_.asInstanceOf[String])
@@ -126,7 +128,7 @@ object DynamicConfig {
       val unknownKeys = propKeys.filterNot(names.contains(_))
       require(unknownKeys.isEmpty, s"Unknown Dynamic Configuration: $unknownKeys.")
     }
-    val propResolved = DynamicBrokerConfig.resolveVariableConfigs(props)
+    val propResolved = DynamicBrokerConfigBaseManager.resolveVariableConfigs(props)
     // ValidateValues
     configDef.parse(propResolved)
   }

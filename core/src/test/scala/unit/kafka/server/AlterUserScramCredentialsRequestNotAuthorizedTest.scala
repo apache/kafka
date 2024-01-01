@@ -22,6 +22,7 @@ import org.apache.kafka.common.message.AlterUserScramCredentialsRequestData
 import org.apache.kafka.common.message.AlterUserScramCredentialsResponseData.AlterUserScramCredentialsResult
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{AlterUserScramCredentialsRequest, AlterUserScramCredentialsResponse}
+import org.apache.kafka.server.config.KafkaConfig
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
 
@@ -35,9 +36,9 @@ import scala.jdk.CollectionConverters._
 class AlterUserScramCredentialsRequestNotAuthorizedTest extends BaseRequestTest {
 
   override def brokerPropertyOverrides(properties: Properties): Unit = {
-    properties.put(KafkaConfig.ControlledShutdownEnableProp, "false")
-    properties.put(KafkaConfig.AuthorizerClassNameProp, classOf[AlterCredentialsTest.TestAuthorizer].getName)
-    properties.put(KafkaConfig.PrincipalBuilderClassProp, classOf[AlterCredentialsTest.TestPrincipalBuilderReturningUnauthorized].getName)
+    properties.put(KafkaConfig.CONTROLLED_SHUTDOWN_ENABLE_PROP, "false")
+    properties.put(KafkaConfig.AUTHORIZER_CLASS_NAME_PROP, classOf[AlterCredentialsTest.TestAuthorizer].getName)
+    properties.put(KafkaConfig.PRINCIPAL_BUILDER_CLASS_PROP, classOf[AlterCredentialsTest.TestPrincipalBuilderReturningUnauthorized].getName)
   }
 
   private val user1 = "user1"

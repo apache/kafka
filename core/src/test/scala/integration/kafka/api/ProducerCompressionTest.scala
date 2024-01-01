@@ -17,7 +17,7 @@
 
 package kafka.api.test
 
-import kafka.server.{KafkaBroker, KafkaConfig, QuorumTestHarness}
+import kafka.server.{KafkaBroker, KafkaConfigProvider, QuorumTestHarness}
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord, RecordMetadata}
 import org.apache.kafka.common.TopicPartition
@@ -48,7 +48,7 @@ class ProducerCompressionTest extends QuorumTestHarness {
   override def setUp(testInfo: TestInfo): Unit = {
     super.setUp(testInfo)
     val props = TestUtils.createBrokerConfig(brokerId, zkConnectOrNull)
-    broker = createBroker(new KafkaConfig(props))
+    broker = createBroker(KafkaConfigProvider.fromProps(props))
   }
 
   @AfterEach

@@ -18,10 +18,9 @@ package kafka.coordinator.transaction
 
 import java.nio.ByteBuffer
 import java.util.Properties
-import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.locks.ReentrantReadWriteLock
-import kafka.server.{Defaults, ReplicaManager, RequestLocal}
+import kafka.server.{ReplicaManager, RequestLocal}
 import kafka.utils.CoreUtils.{inReadLock, inWriteLock}
 import kafka.utils.{Logging, Pool}
 import kafka.utils.Implicits._
@@ -36,6 +35,8 @@ import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.requests.TransactionResult
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.common.{KafkaException, TopicPartition}
+import org.apache.kafka.coordinator.transaction.{TransactionLogConfig, TransactionStateManagerConfig}
+import org.apache.kafka.server.config.Defaults
 import org.apache.kafka.server.record.BrokerCompressionType
 import org.apache.kafka.server.util.Scheduler
 import org.apache.kafka.storage.internals.log.{AppendOrigin, FetchIsolation}
@@ -45,12 +46,6 @@ import scala.collection.mutable
 
 
 object TransactionStateManager {
-  // default transaction management config values
-  val DefaultTransactionsMaxTimeoutMs: Int = TimeUnit.MINUTES.toMillis(15).toInt
-  val DefaultTransactionalIdExpirationMs: Int = TimeUnit.DAYS.toMillis(7).toInt
-  val DefaultAbortTimedOutTransactionsIntervalMs: Int = TimeUnit.SECONDS.toMillis(10).toInt
-  val DefaultRemoveExpiredTransactionalIdsIntervalMs: Int = TimeUnit.HOURS.toMillis(1).toInt
-
   val MetricsGroup: String = "transaction-coordinator-metrics"
   val LoadTimeSensor: String = "TransactionsPartitionLoadTime"
 }
@@ -808,16 +803,16 @@ private[transaction] case class TxnMetadataCacheEntry(coordinatorEpoch: Int,
 private[transaction] case class CoordinatorEpochAndTxnMetadata(coordinatorEpoch: Int,
                                                                transactionMetadata: TransactionMetadata)
 
-private[transaction] case class TransactionConfig(transactionalIdExpirationMs: Int = TransactionStateManager.DefaultTransactionalIdExpirationMs,
-                                                  transactionMaxTimeoutMs: Int = TransactionStateManager.DefaultTransactionsMaxTimeoutMs,
-                                                  transactionLogNumPartitions: Int = TransactionLog.DefaultNumPartitions,
-                                                  transactionLogReplicationFactor: Short = TransactionLog.DefaultReplicationFactor,
-                                                  transactionLogSegmentBytes: Int = TransactionLog.DefaultSegmentBytes,
-                                                  transactionLogLoadBufferSize: Int = TransactionLog.DefaultLoadBufferSize,
-                                                  transactionLogMinInsyncReplicas: Int = TransactionLog.DefaultMinInSyncReplicas,
-                                                  abortTimedOutTransactionsIntervalMs: Int = TransactionStateManager.DefaultAbortTimedOutTransactionsIntervalMs,
-                                                  removeExpiredTransactionalIdsIntervalMs: Int = TransactionStateManager.DefaultRemoveExpiredTransactionalIdsIntervalMs,
-                                                  requestTimeoutMs: Int = Defaults.RequestTimeoutMs)
+private[transaction] case class TransactionConfig(transactionalIdExpirationMs: Int = TransactionStateManagerConfig.DEFAULT_TRANSACTIONAL_ID_EXPIRATION_MS,
+                                                  transactionMaxTimeoutMs: Int = TransactionStateManagerConfig.DEFAULT_TRANSACTIONS_MAX_TIMEOUT_MS,
+                                                  transactionLogNumPartitions: Int = TransactionLogConfig.DEFAULT_NUM_PARTITIONS,
+                                                  transactionLogReplicationFactor: Short = TransactionLogConfig.DEFAULT_REPLICATION_FACTOR,
+                                                  transactionLogSegmentBytes: Int = TransactionLogConfig.DEFAULT_SEGMENT_BYTES,
+                                                  transactionLogLoadBufferSize: Int = TransactionLogConfig.DEFAULT_LOAD_BUFFER_SIZE,
+                                                  transactionLogMinInsyncReplicas: Int = TransactionLogConfig.DEFAULT_MIN_IN_SYNC_REPLICAS,
+                                                  abortTimedOutTransactionsIntervalMs: Int = TransactionStateManagerConfig.DEFAULT_ABORT_TIMED_OUT_TRANSACTIONS_INTERVAL_MS,
+                                                  removeExpiredTransactionalIdsIntervalMs: Int = TransactionStateManagerConfig.DEFAULT_REMOVE_EXPIRED_TRANSACTIONAL_IDS_INTERVAL_MS,
+                                                  requestTimeoutMs: Int = Defaults.REQUEST_TIMEOUT_MS)
 
 case class TransactionalIdAndProducerIdEpoch(transactionalId: String, producerId: Long, producerEpoch: Short) {
   override def toString: String = {

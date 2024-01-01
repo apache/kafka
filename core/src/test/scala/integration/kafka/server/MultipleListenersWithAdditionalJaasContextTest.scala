@@ -19,8 +19,6 @@ package kafka.server
 
 import java.util.Properties
 
-import scala.collection.Seq
-
 import kafka.utils.JaasTestUtils
 import kafka.utils.JaasTestUtils.JaasSection
 
@@ -28,10 +26,11 @@ class MultipleListenersWithAdditionalJaasContextTest extends MultipleListenersWi
 
   import MultipleListenersWithSameSecurityProtocolBaseTest._
 
-  override def staticJaasSections: Seq[JaasSection] = {
+  override protected def staticJaasSections: scala.Seq[JaasSection] = {
     val (serverKeytabFile, _) = maybeCreateEmptyKeytabFiles()
-    JaasTestUtils.zkSections :+
+    (JaasTestUtils.zkSections :+
       JaasTestUtils.kafkaServerSection("secure_external.KafkaServer", kafkaServerSaslMechanisms(SecureExternal), Some(serverKeytabFile))
+    ).toSeq
   }
 
   override protected def dynamicJaasSections: Properties = {

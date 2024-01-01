@@ -38,6 +38,7 @@ import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.serialization.{IntegerDeserializer, IntegerSerializer, StringDeserializer, StringSerializer}
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.metadata.BrokerState
+import org.apache.kafka.server.config.KafkaConfig
 import org.junit.jupiter.api.{BeforeEach, Disabled, TestInfo, Timeout}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.function.Executable
@@ -62,14 +63,14 @@ class ServerShutdownTest extends KafkaServerTestHarness {
     priorConfig.foreach { config =>
       // keep the same log directory
       val originals = config.originals
-      val logDirsValue = originals.get(KafkaConfig.LogDirsProp)
+      val logDirsValue = originals.get(KafkaConfig.LOG_DIRS_PROP)
       if (logDirsValue != null) {
-        propsToChangeUponRestart.put(KafkaConfig.LogDirsProp, logDirsValue)
+        propsToChangeUponRestart.put(KafkaConfig.LOG_DIRS_PROP, logDirsValue)
       } else {
-        propsToChangeUponRestart.put(KafkaConfig.LogDirProp, originals.get(KafkaConfig.LogDirProp))
+        propsToChangeUponRestart.put(KafkaConfig.LOG_DIR_PROP, originals.get(KafkaConfig.LOG_DIR_PROP))
       }
     }
-    priorConfig = Some(KafkaConfig.fromProps(TestUtils.createBrokerConfigs(1, zkConnectOrNull).head, propsToChangeUponRestart))
+    priorConfig = Some(KafkaConfigProvider.fromProps(TestUtils.createBrokerConfigs(1, zkConnectOrNull).head, propsToChangeUponRestart))
     Seq(priorConfig.get)
   }
 
@@ -111,7 +112,7 @@ class ServerShutdownTest extends KafkaServerTestHarness {
 
     // do a clean shutdown and check that offset checkpoint file exists
     shutdownBroker()
-    for (logDir <- config.logDirs) {
+    for (logDir <- config.logDirs.asScala) {
       val OffsetCheckpointFile = new File(logDir, LogManager.RecoveryPointCheckpointFile)
       assertTrue(OffsetCheckpointFile.exists)
       assertTrue(OffsetCheckpointFile.length() > 0)
@@ -145,13 +146,13 @@ class ServerShutdownTest extends KafkaServerTestHarness {
   @ValueSource(strings = Array("zk", "kraft"))
   def testCleanShutdownAfterFailedStartup(quorum: String): Unit = {
     if (isKRaftTest()) {
-      propsToChangeUponRestart.setProperty(KafkaConfig.InitialBrokerRegistrationTimeoutMsProp, "1000")
+      propsToChangeUponRestart.setProperty(KafkaConfig.INITIAL_BROKER_REGISTRATION_TIMEOUT_MS_PROP, "1000")
       shutdownBroker()
       shutdownKRaftController()
       verifyCleanShutdownAfterFailedStartup[CancellationException]
     } else {
-      propsToChangeUponRestart.setProperty(KafkaConfig.ZkConnectionTimeoutMsProp, "50")
-      propsToChangeUponRestart.setProperty(KafkaConfig.ZkConnectProp, "some.invalid.hostname.foo.bar.local:65535")
+      propsToChangeUponRestart.setProperty(KafkaConfig.ZK_CONNECTION_TIMEOUT_MS_PROP, "50")
+      propsToChangeUponRestart.setProperty(KafkaConfig.ZK_CONNECT_PROP, "some.invalid.hostname.foo.bar.local:65535")
       verifyCleanShutdownAfterFailedStartup[ZooKeeperClientTimeoutException]
     }
   }
@@ -161,7 +162,7 @@ class ServerShutdownTest extends KafkaServerTestHarness {
   def testNoCleanShutdownAfterFailedStartupDueToCorruptLogs(quorum: String): Unit = {
     createTopic(topic)
     shutdownBroker()
-    config.logDirs.foreach { dirName =>
+    config.logDirs.asScala.foreach { dirName =>
       val partitionDir = new File(dirName, s"$topic-0")
       partitionDir.listFiles.foreach(f => TestUtils.appendNonsenseToFile(f, TestUtils.random.nextInt(1024) + 1))
     }
@@ -192,7 +193,7 @@ class ServerShutdownTest extends KafkaServerTestHarness {
   def testCleanShutdownWithZkUnavailable(quorum: String): Unit = {
     shutdownZooKeeper()
     shutdownBroker()
-    CoreUtils.delete(broker.config.logDirs)
+    CoreUtils.delete(broker.config.logDirs.asScala)
     verifyNonDaemonThreadsStatus()
   }
 
@@ -202,7 +203,7 @@ class ServerShutdownTest extends KafkaServerTestHarness {
   def testCleanShutdownWithKRaftControllerUnavailable(quorum: String): Unit = {
     shutdownKRaftController()
     shutdownBroker()
-    CoreUtils.delete(broker.config.logDirs)
+    CoreUtils.delete(broker.config.logDirs.asScala)
     verifyNonDaemonThreadsStatus()
   }
 
@@ -277,7 +278,7 @@ class ServerShutdownTest extends KafkaServerTestHarness {
 
       // Start a ControllerChannelManager
       val brokerAndEpochs = Map((new Broker(1, "localhost", serverSocket.getLocalPort, listenerName, securityProtocol), 0L))
-      val controllerConfig = KafkaConfig.fromProps(TestUtils.createBrokerConfig(controllerId, zkConnect))
+      val controllerConfig = KafkaConfigProvider.fromProps(TestUtils.createBrokerConfig(controllerId, zkConnect))
       val controllerContext = new ControllerContext
       controllerContext.setLiveBrokers(brokerAndEpochs)
       controllerChannelManager = new ControllerChannelManager(

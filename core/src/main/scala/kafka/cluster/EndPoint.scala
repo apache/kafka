@@ -42,7 +42,7 @@ object EndPoint {
    *                         Negative ports are also accepted, since they are used in some unit tests
    */
   def createEndPoint(connectionString: String, securityProtocolMap: Option[Map[ListenerName, SecurityProtocol]]): EndPoint = {
-    val protocolMap = securityProtocolMap.getOrElse(DefaultSecurityProtocolMap)
+    val protocolMap: Map[ListenerName, SecurityProtocol] = securityProtocolMap.getOrElse(DefaultSecurityProtocolMap)
 
     def securityProtocol(listenerName: ListenerName): SecurityProtocol =
       protocolMap.getOrElse(listenerName,
@@ -69,7 +69,7 @@ object EndPoint {
   def fromJava(endpoint: JEndpoint): EndPoint =
     new EndPoint(endpoint.host(),
       endpoint.port(),
-      new ListenerName(endpoint.listenerName().get()),
+      ListenerName.normalised(endpoint.listenerName().get()),
       endpoint.securityProtocol())
 }
 

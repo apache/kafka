@@ -17,11 +17,11 @@
 package kafka.migration
 
 import kafka.controller.{AbstractControllerBrokerRequestBatch, ControllerChannelContext, ControllerChannelManager, StateChangeLogger}
-import kafka.server.KafkaConfig
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests._
 import org.apache.kafka.server.common.MetadataVersion
+import org.apache.kafka.server.config.KafkaConfig
 
 import scala.collection.mutable.ArrayBuffer
 import scala.jdk.CollectionConverters._

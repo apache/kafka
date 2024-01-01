@@ -19,7 +19,6 @@ package kafka.cluster
 
 import java.util
 import kafka.common.BrokerEndPointNotAvailableException
-import kafka.server.KafkaConfig
 import org.apache.kafka.common.feature.{Features, SupportedVersionRange}
 import org.apache.kafka.common.feature.Features._
 import org.apache.kafka.common.{ClusterResource, Endpoint, Node}
@@ -27,6 +26,7 @@ import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.metadata.{BrokerRegistration, VersionRange}
 import org.apache.kafka.server.authorizer.AuthorizerServerInfo
+import org.apache.kafka.server.config.KafkaConfig
 
 import scala.collection.Seq
 import scala.compat.java8.OptionConverters._
@@ -112,6 +112,6 @@ case class Broker(id: Int, endPoints: Seq[EndPoint], rack: Option[String], featu
     val interBrokerEndpoint: Endpoint = endPoint(config.interBrokerListenerName).toJava
     val brokerEndpoints: util.List[Endpoint] = endPoints.toList.map(_.toJava).asJava
     Broker.ServerInfo(clusterResource, id, brokerEndpoints, interBrokerEndpoint,
-      config.earlyStartListeners.map(_.value()).asJava)
+      config.earlyStartListeners.asScala.map(_.value()).asJava)
   }
 }

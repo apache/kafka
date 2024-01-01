@@ -19,13 +19,13 @@ package kafka.server
 
 import java.util
 import java.util.Properties
-
 import kafka.network.SocketServer
 import kafka.utils.TestUtils
 import org.apache.kafka.common.message.CreateTopicsRequestData
 import org.apache.kafka.common.message.CreateTopicsRequestData._
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests._
+import org.apache.kafka.server.config.KafkaConfig
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertNotEquals, assertNotNull, assertTrue}
 
 import scala.jdk.CollectionConverters._
@@ -33,7 +33,7 @@ import scala.jdk.CollectionConverters._
 abstract class AbstractCreateTopicsRequestTest extends BaseRequestTest {
 
   override def brokerPropertyOverrides(properties: Properties): Unit =
-    properties.put(KafkaConfig.AutoCreateTopicsEnableProp, false.toString)
+    properties.put(KafkaConfig.AUTO_CREATE_TOPICS_ENABLE_PROP, false.toString)
 
   def topicsReq(topics: Seq[CreatableTopic],
                 timeout: Integer = 10000,

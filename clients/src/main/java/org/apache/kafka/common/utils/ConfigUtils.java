@@ -127,13 +127,13 @@ public class ConfigUtils {
         for (String key : keys) {
             bld.append(prefix).append(key).append("=");
             ConfigKey configKey = configDef.configKeys().get(key);
-            if (configKey == null || configKey.type().isSensitive()) {
+            if (configKey == null || configKey.type.isSensitive()) {
                 bld.append("(redacted)");
             } else {
                 Object value = map.get(key);
                 if (value == null) {
                     bld.append("null");
-                } else if (configKey.type() == Type.STRING) {
+                } else if (configKey.type == Type.STRING) {
                     bld.append("\"").append(value).append("\"");
                 } else {
                     bld.append(value);

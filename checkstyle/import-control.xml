@@ -294,6 +294,7 @@
 
   <subpackage name="tools">
     <allow pkg="org.apache.kafka.common"/>
+    <allow pkg="org.apache.kafka.server.config"/>
     <allow pkg="org.apache.kafka.server.util" />
     <allow pkg="kafka.admin" />
     <allow pkg="kafka.server" />
@@ -458,12 +459,14 @@
 
   <subpackage name="connect">
     <allow pkg="org.apache.kafka.common" />
+    <allow pkg="org.apache.kafka.server.config" />
     <allow pkg="org.apache.kafka.connect.data" />
     <allow pkg="org.apache.kafka.connect.errors" />
     <allow pkg="org.apache.kafka.connect.header" />
     <allow pkg="org.apache.kafka.connect.components"/>
     <allow pkg="org.apache.kafka.clients" />
     <allow pkg="org.apache.kafka.test"/>
+    <allow pkg="scala.collection"/>
 
     <subpackage name="source">
       <allow pkg="org.apache.kafka.connect.connector" />

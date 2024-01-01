@@ -48,7 +48,7 @@ class ZkAdminManagerTest {
 
   def createConfigHelper(metadataCache: MetadataCache, zkClient: KafkaZkClient): ConfigHelper = {
     val props = TestUtils.createBrokerConfig(brokerId, "zk")
-    new ConfigHelper(metadataCache, KafkaConfig.fromProps(props), new ZkConfigRepository(new AdminZkClient(zkClient)))
+    new ConfigHelper(metadataCache, KafkaConfigProvider.fromProps(props), new ZkConfigRepository(new AdminZkClient(zkClient)))
   }
 
   @Test

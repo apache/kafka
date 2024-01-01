@@ -16,7 +16,6 @@ package kafka.server
 
 import java.net.Socket
 import java.util.{Collections, Properties}
-
 import kafka.utils.TestUtils
 import org.apache.kafka.common.config.internals.QuotaConfigs
 import org.apache.kafka.common.network.ListenerName
@@ -27,9 +26,10 @@ import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.protocol.Errors
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, TestInfo}
-import java.util.concurrent.atomic.AtomicInteger
 
+import java.util.concurrent.atomic.AtomicInteger
 import org.apache.kafka.common.message.ListGroupsRequestData
+import org.apache.kafka.server.config.KafkaConfig
 
 /*
  * this test checks that a reporter that throws an exception will not affect other reporters
@@ -40,7 +40,7 @@ class KafkaMetricReporterExceptionHandlingTest extends BaseRequestTest {
   override def brokerCount: Int = 1
 
   override def brokerPropertyOverrides(properties: Properties): Unit = {
-    properties.put(KafkaConfig.MetricReporterClassesProp, classOf[KafkaMetricReporterExceptionHandlingTest.BadReporter].getName + "," + classOf[KafkaMetricReporterExceptionHandlingTest.GoodReporter].getName)
+    properties.put(KafkaConfig.METRIC_REPORTER_CLASSES_PROP, classOf[KafkaMetricReporterExceptionHandlingTest.BadReporter].getName + "," + classOf[KafkaMetricReporterExceptionHandlingTest.GoodReporter].getName)
   }
 
   @BeforeEach

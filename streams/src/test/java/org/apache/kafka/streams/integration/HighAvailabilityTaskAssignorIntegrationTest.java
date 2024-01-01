@@ -17,7 +17,7 @@
 package org.apache.kafka.streams.integration;
 
 import java.util.stream.Stream;
-import kafka.server.KafkaConfig;
+import org.apache.kafka.server.config.KafkaConfig;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
@@ -85,13 +85,13 @@ public class HighAvailabilityTaskAssignorIntegrationTest {
         new Properties(),
         asList(
             new Properties() {{
-                    setProperty(KafkaConfig.RackProp(), AssignmentTestUtils.RACK_0);
+                    setProperty(KafkaConfig.RACK_PROP, AssignmentTestUtils.RACK_0);
                 }},
             new Properties() {{
-                    setProperty(KafkaConfig.RackProp(), AssignmentTestUtils.RACK_1);
+                    setProperty(KafkaConfig.RACK_PROP, AssignmentTestUtils.RACK_1);
                 }},
             new Properties() {{
-                    setProperty(KafkaConfig.RackProp(), AssignmentTestUtils.RACK_2);
+                    setProperty(KafkaConfig.RACK_PROP, AssignmentTestUtils.RACK_2);
                 }}
         )
     );

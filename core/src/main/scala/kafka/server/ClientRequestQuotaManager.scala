@@ -23,6 +23,7 @@ import org.apache.kafka.common.MetricName
 import org.apache.kafka.common.metrics._
 import org.apache.kafka.common.metrics.stats.Rate
 import org.apache.kafka.common.utils.Time
+import org.apache.kafka.server.config.ClientQuotaManagerConfig
 import org.apache.kafka.server.quota.ClientQuotaCallback
 
 import scala.jdk.CollectionConverters._
@@ -43,7 +44,7 @@ class ClientRequestQuotaManager(private val config: ClientQuotaManagerConfig,
                                 private val quotaCallback: Option[ClientQuotaCallback])
     extends ClientQuotaManager(config, metrics, QuotaType.Request, time, threadNamePrefix, quotaCallback) {
 
-  private val maxThrottleTimeMs = TimeUnit.SECONDS.toMillis(this.config.quotaWindowSizeSeconds)
+  private val maxThrottleTimeMs = TimeUnit.SECONDS.toMillis(this.config.getQuotaWindowSizeSeconds)
   private val exemptMetricName = metrics.metricName("exempt-request-time",
     QuotaType.Request.toString, "Tracking exempt-request-time utilization percentage")
 

@@ -17,17 +17,19 @@
 
 package kafka.log
 
+import kafka.server.KafkaConfigProvider
+
 import java.io.File
 import java.nio.channels.ClosedChannelException
 import java.nio.charset.StandardCharsets
 import java.util.regex.Pattern
 import java.util.Collections
-import kafka.server.KafkaConfig
 import kafka.utils.TestUtils
 import org.apache.kafka.common.{KafkaException, TopicPartition}
 import org.apache.kafka.common.errors.KafkaStorageException
 import org.apache.kafka.common.record.{CompressionType, MemoryRecords, Record, SimpleRecord}
 import org.apache.kafka.common.utils.{Time, Utils}
+import org.apache.kafka.server.config.KafkaConfig
 import org.apache.kafka.server.util.{MockTime, Scheduler}
 import org.apache.kafka.storage.internals.log.{FetchDataInfo, LogConfig, LogDirFailureChannel, LogFileUtils, LogOffsetMetadata, LogSegment, LogSegments}
 import org.junit.jupiter.api.Assertions._
@@ -50,7 +52,7 @@ class LocalLogTest {
   @BeforeEach
   def setUp(): Unit = {
     val props = TestUtils.createBrokerConfig(0, "127.0.0.1:1", port = -1)
-    config = KafkaConfig.fromProps(props)
+    config = KafkaConfigProvider.fromProps(props)
   }
 
   @AfterEach

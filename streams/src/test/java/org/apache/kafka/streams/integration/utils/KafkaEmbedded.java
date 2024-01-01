@@ -17,7 +17,8 @@
 package org.apache.kafka.streams.integration.utils;
 
 import kafka.cluster.EndPoint;
-import kafka.server.KafkaConfig;
+import kafka.server.KafkaConfigProvider;
+import org.apache.kafka.server.config.KafkaConfig;
 import kafka.server.KafkaServer;
 import kafka.utils.TestUtils;
 import org.apache.kafka.clients.CommonClientConfigs;
@@ -69,7 +70,7 @@ public class KafkaEmbedded {
         logDir = org.apache.kafka.test.TestUtils.tempDirectory(tmpFolder.toPath(), "log");
         effectiveConfig = effectiveConfigFrom(config);
         final boolean loggingEnabled = true;
-        final KafkaConfig kafkaConfig = new KafkaConfig(effectiveConfig, loggingEnabled);
+        final KafkaConfig kafkaConfig = KafkaConfigProvider.fromProps(effectiveConfig, loggingEnabled);
         log.debug("Starting embedded Kafka broker (with log.dirs={} and ZK ensemble at {}) ...",
             logDir, zookeeperConnect());
         kafka = TestUtils.createServer(kafkaConfig, time);
@@ -85,15 +86,15 @@ public class KafkaEmbedded {
      */
     private Properties effectiveConfigFrom(final Properties initialConfig) {
         final Properties effectiveConfig = new Properties();
-        effectiveConfig.put(KafkaConfig.BrokerIdProp(), 0);
-        effectiveConfig.put(KafkaConfig.NumPartitionsProp(), 1);
-        effectiveConfig.put(KafkaConfig.AutoCreateTopicsEnableProp(), true);
-        effectiveConfig.put(KafkaConfig.MessageMaxBytesProp(), 1000000);
-        effectiveConfig.put(KafkaConfig.ControlledShutdownEnableProp(), true);
-        effectiveConfig.put(KafkaConfig.ZkSessionTimeoutMsProp(), 10000);
+        effectiveConfig.put(KafkaConfig.BROKER_ID_PROP, 0);
+        effectiveConfig.put(KafkaConfig.NUM_PARTITIONS_PROP, 1);
+        effectiveConfig.put(KafkaConfig.AUTO_CREATE_TOPICS_ENABLE_PROP, true);
+        effectiveConfig.put(KafkaConfig.MESSAGE_MAX_BYTES_PROP, 1000000);
+        effectiveConfig.put(KafkaConfig.CONTROLLED_SHUTDOWN_ENABLE_PROP, true);
+        effectiveConfig.put(KafkaConfig.ZK_SESSION_TIMEOUT_MS_PROP, 10000);
 
         effectiveConfig.putAll(initialConfig);
-        effectiveConfig.setProperty(KafkaConfig.LogDirProp(), logDir.getAbsolutePath());
+        effectiveConfig.setProperty(KafkaConfig.LOG_DIR_PROP, logDir.getAbsolutePath());
         return effectiveConfig;
     }
 
@@ -185,7 +186,7 @@ public class KafkaEmbedded {
     public Admin createAdminClient() {
         final Properties adminClientConfig = new Properties();
         adminClientConfig.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, brokerList());
-        final Object listeners = effectiveConfig.get(KafkaConfig.ListenersProp());
+        final Object listeners = effectiveConfig.get(KafkaConfig.LISTENERS_PROP);
         if (listeners != null && listeners.toString().contains("SSL")) {
             adminClientConfig.put(SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG, effectiveConfig.get(SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG));
             adminClientConfig.put(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG, ((Password) effectiveConfig.get(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG)).value());

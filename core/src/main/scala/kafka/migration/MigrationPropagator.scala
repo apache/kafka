@@ -19,7 +19,6 @@ package kafka.migration
 import kafka.api.LeaderAndIsr
 import kafka.cluster.Broker
 import kafka.controller.{ControllerChannelContext, ControllerChannelManager, ReplicaAssignment, StateChangeLogger}
-import kafka.server.KafkaConfig
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.requests.AbstractControlRequest
@@ -27,6 +26,7 @@ import org.apache.kafka.common.utils.Time
 import org.apache.kafka.image.{ClusterImage, MetadataDelta, MetadataImage, TopicsImage}
 import org.apache.kafka.metadata.PartitionRegistration
 import org.apache.kafka.metadata.migration.LegacyPropagator
+import org.apache.kafka.server.config.KafkaConfig
 
 import java.util
 import scala.jdk.CollectionConverters._

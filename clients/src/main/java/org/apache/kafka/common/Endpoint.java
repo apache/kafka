@@ -16,11 +16,13 @@
  */
 package org.apache.kafka.common;
 
+import java.util.Locale;
 import java.util.Objects;
 import java.util.Optional;
 
 import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
+import org.apache.kafka.common.utils.Utils;
 
 /**
  * Represents a broker endpoint.
@@ -90,6 +92,11 @@ public class Endpoint {
     @Override
     public int hashCode() {
         return Objects.hash(listenerName, securityProtocol, host, port);
+    }
+
+    public String connectionString() {
+        String hostport = host == null ? ":" + port : Utils.formatAddress(host, port);
+        return listenerName.toUpperCase(Locale.ROOT) + "://" + hostport;
     }
 
     @Override

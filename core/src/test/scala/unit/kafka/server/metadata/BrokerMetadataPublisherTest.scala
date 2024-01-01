@@ -23,7 +23,7 @@ import java.util.Collections.{singleton, singletonList, singletonMap}
 import java.util.Properties
 import java.util.concurrent.atomic.{AtomicInteger, AtomicReference}
 import kafka.log.{LogManager, UnifiedLog}
-import kafka.server.{BrokerServer, KafkaConfig, ReplicaManager}
+import kafka.server.{BrokerServer, KafkaConfigProvider, ReplicaManager}
 import kafka.testkit.{KafkaClusterTestKit, TestKitNodes}
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.admin.AlterConfigOp.OpType.SET
@@ -38,6 +38,7 @@ import org.apache.kafka.image.loader.LogDeltaManifest
 import org.apache.kafka.metadata.LeaderRecoveryState
 import org.apache.kafka.metadata.PartitionRegistration
 import org.apache.kafka.raft.LeaderAndEpoch
+import org.apache.kafka.server.config.KafkaConfig
 import org.apache.kafka.server.fault.FaultHandler
 import org.junit.jupiter.api.Assertions.{assertEquals, assertNotNull, assertTrue}
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
@@ -216,7 +217,7 @@ class BrokerMetadataPublisherTest {
         assertEquals(0, numTimesReloadCalled.get())
         admin.incrementalAlterConfigs(singletonMap(
           new ConfigResource(BROKER, ""),
-          singleton(new AlterConfigOp(new ConfigEntry(KafkaConfig.MaxConnectionsProp, "123"), SET)))).all().get()
+          singleton(new AlterConfigOp(new ConfigEntry(KafkaConfig.MAX_CONNECTIONS_PROP, "123"), SET)))).all().get()
         TestUtils.waitUntilTrue(() => numTimesReloadCalled.get() == 0,
           "numTimesConfigured never reached desired value")
 
@@ -224,7 +225,7 @@ class BrokerMetadataPublisherTest {
         // reloadUpdatedFilesWithoutConfigChange will be called.
         admin.incrementalAlterConfigs(singletonMap(
           new ConfigResource(BROKER, broker.config.nodeId.toString),
-          singleton(new AlterConfigOp(new ConfigEntry(KafkaConfig.MaxConnectionsProp, "123"), SET)))).all().get()
+          singleton(new AlterConfigOp(new ConfigEntry(KafkaConfig.MAX_CONNECTIONS_PROP, "123"), SET)))).all().get()
         TestUtils.waitUntilTrue(() => numTimesReloadCalled.get() == 1,
           "numTimesConfigured never reached desired value")
       } finally {
@@ -273,7 +274,7 @@ class BrokerMetadataPublisherTest {
 
   @Test
   def testNewImagePushedToGroupCoordinator(): Unit = {
-    val config = KafkaConfig.fromProps(TestUtils.createBrokerConfig(0, ""))
+    val config = KafkaConfigProvider.fromProps(TestUtils.createBrokerConfig(0, ""))
     val metadataCache = new KRaftMetadataCache(0)
     val logManager = mock(classOf[LogManager])
     val replicaManager = mock(classOf[ReplicaManager])

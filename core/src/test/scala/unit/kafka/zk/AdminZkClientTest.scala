@@ -20,8 +20,7 @@ import java.util
 import java.util.{Optional, Properties}
 import kafka.controller.ReplicaAssignment
 import kafka.server.DynamicConfig.Broker._
-import kafka.server.KafkaConfig._
-import kafka.server.{KafkaConfig, KafkaServer, QuorumTestHarness}
+import kafka.server.{KafkaConfigProvider, KafkaServer, QuorumTestHarness}
 import kafka.utils.CoreUtils._
 import kafka.utils.TestUtils._
 import kafka.utils.{Logging, TestUtils}
@@ -196,7 +195,7 @@ class AdminZkClientTest extends QuorumTestHarness with Logging with RackAwareTes
   def testTopicConfigChange(): Unit = {
     val partitions = 3
     val topic = "my-topic"
-    val server = TestUtils.createServer(KafkaConfig.fromProps(TestUtils.createBrokerConfig(0, zkConnect)))
+    val server = TestUtils.createServer(KafkaConfigProvider.fromProps(TestUtils.createBrokerConfig(0, zkConnect)))
     servers = Seq(server)
 
     def makeConfig(messageSize: Int, retentionMs: Long, throttledLeaders: String, throttledFollowers: String) = {
@@ -268,7 +267,7 @@ class AdminZkClientTest extends QuorumTestHarness with Logging with RackAwareTes
   @Test
   def shouldPropagateDynamicBrokerConfigs(): Unit = {
     val brokerIds = Seq(0, 1, 2)
-    servers = createBrokerConfigs(3, zkConnect).map(fromProps).map(createServer(_))
+    servers = createBrokerConfigs(3, zkConnect).map(KafkaConfigProvider.fromProps).map(createServer(_))
 
     def checkConfig(limit: Long): Unit = {
       retry(10000) {
@@ -325,7 +324,7 @@ class AdminZkClientTest extends QuorumTestHarness with Logging with RackAwareTes
     assertEquals(props, configInZk(clientId))
 
     // Test that the existing clientId overrides are read
-    val server = TestUtils.createServer(KafkaConfig.fromProps(TestUtils.createBrokerConfig(0, zkConnect)))
+    val server = TestUtils.createServer(KafkaConfigProvider.fromProps(TestUtils.createBrokerConfig(0, zkConnect)))
     servers = Seq(server)
     assertEquals(new Quota(1000, true), server.dataPlaneRequestProcessor.quotas.produce.quota("ANONYMOUS", clientId))
     assertEquals(new Quota(2000, true), server.dataPlaneRequestProcessor.quotas.fetch.quota("ANONYMOUS", clientId))

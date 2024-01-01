@@ -25,7 +25,7 @@ import kafka.server.BrokerTopicStats;
 import kafka.server.DelegationTokenManager;
 import kafka.server.FetchManager;
 import kafka.server.KafkaApis;
-import kafka.server.KafkaConfig;
+import kafka.server.KafkaConfigProvider;
 import kafka.server.MetadataCache;
 import kafka.server.MetadataSupport;
 import kafka.server.QuotaFactory.QuotaManagers;
@@ -34,6 +34,7 @@ import kafka.server.metadata.ConfigRepository;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.coordinator.group.GroupCoordinator;
+import org.apache.kafka.server.config.KafkaConfig;
 import org.apache.kafka.server.ClientMetricsManager;
 import org.apache.kafka.server.authorizer.Authorizer;
 
@@ -173,7 +174,7 @@ public class KafkaApisBuilder {
         if (txnCoordinator == null) throw new RuntimeException("You must set txnCoordinator");
         if (autoTopicCreationManager == null)
             throw new RuntimeException("You must set autoTopicCreationManager");
-        if (config == null) config = new KafkaConfig(Collections.emptyMap());
+        if (config == null) config = KafkaConfigProvider.fromProps(Collections.emptyMap());
         if (configRepository == null) throw new RuntimeException("You must set configRepository");
         if (metadataCache == null) throw new RuntimeException("You must set metadataCache");
         if (metrics == null) throw new RuntimeException("You must set metrics");

@@ -19,11 +19,12 @@ package kafka.server.metadata
 
 import java.util.Properties
 import kafka.server.ConfigAdminManager.toLoggableProps
-import kafka.server.{ConfigEntityName, ConfigHandler, KafkaConfig}
+import kafka.server.{ConfigEntityName, ConfigHandler}
 import kafka.utils.Logging
 import org.apache.kafka.common.config.ConfigResource.Type.{BROKER, CLIENT_METRICS, TOPIC}
 import org.apache.kafka.image.loader.LoaderManifest
 import org.apache.kafka.image.{MetadataDelta, MetadataImage}
+import org.apache.kafka.server.config.KafkaConfig
 import org.apache.kafka.server.config.ConfigType
 import org.apache.kafka.server.fault.FaultHandler
 

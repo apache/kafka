@@ -71,7 +71,7 @@ class AddPartitionsToTxnManagerTest {
   private val versionMismatchResponse = clientResponse(null, mismatchException = new UnsupportedVersionException(""))
   private val disconnectedResponse = clientResponse(null, disconnected = true)
 
-  private val config = KafkaConfig.fromProps(TestUtils.createBrokerConfig(1, "localhost:2181"))
+  private val config = KafkaConfigProvider.fromProps(TestUtils.createBrokerConfig(1, "localhost:2181"))
 
   @BeforeEach
   def setup(): Unit = {

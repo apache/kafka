@@ -22,6 +22,7 @@ import kafka.coordinator.transaction.TransactionCoordinator;
 import kafka.network.RequestChannel;
 import kafka.network.RequestConvertToJson;
 import kafka.server.AutoTopicCreationManager;
+import kafka.server.KafkaConfigProvider;
 import kafka.server.ZkBrokerEpochManager;
 import kafka.server.BrokerFeatures;
 import kafka.server.BrokerTopicStats;
@@ -30,8 +31,6 @@ import kafka.server.ClientRequestQuotaManager;
 import kafka.server.ControllerMutationQuotaManager;
 import kafka.server.FetchManager;
 import kafka.server.KafkaApis;
-import kafka.server.KafkaConfig;
-import kafka.server.KafkaConfig$;
 import kafka.server.MetadataCache;
 import kafka.server.QuotaFactory;
 import kafka.server.ReplicaManager;
@@ -60,6 +59,7 @@ import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.coordinator.group.GroupCoordinator;
+import org.apache.kafka.server.config.KafkaConfig;
 import org.apache.kafka.server.common.Features;
 import org.apache.kafka.server.common.MetadataVersion;
 import org.mockito.Mockito;
@@ -177,9 +177,9 @@ public class MetadataRequestBenchmark {
 
     private KafkaApis createKafkaApis() {
         Properties kafkaProps =  new Properties();
-        kafkaProps.put(KafkaConfig$.MODULE$.ZkConnectProp(), "zk");
-        kafkaProps.put(KafkaConfig$.MODULE$.BrokerIdProp(), brokerId + "");
-        KafkaConfig config = new KafkaConfig(kafkaProps);
+        kafkaProps.put(KafkaConfig.ZK_CONNECT_PROP, "zk");
+        kafkaProps.put(KafkaConfig.BROKER_ID_PROP, brokerId + "");
+        KafkaConfig config = KafkaConfigProvider.fromProps(kafkaProps);
         return new KafkaApisBuilder().
             setRequestChannel(requestChannel).
             setMetadataSupport(new ZkSupport(adminManager, kafkaController, kafkaZkClient,

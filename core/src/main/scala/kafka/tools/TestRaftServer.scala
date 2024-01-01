@@ -23,7 +23,7 @@ import joptsimple.OptionException
 import kafka.network.{DataPlaneAcceptor, SocketServer}
 import kafka.raft.{KafkaRaftManager, RaftManager}
 import kafka.security.CredentialProvider
-import kafka.server.{KafkaConfig, KafkaRequestHandlerPool, SimpleApiVersionManager}
+import kafka.server.{KafkaConfigProvider, KafkaRequestHandlerPool, SimpleApiVersionManager}
 import kafka.utils.{CoreUtils, Exit, Logging}
 import org.apache.kafka.common.errors.InvalidConfigurationException
 import org.apache.kafka.common.message.ApiMessageType.ListenerType
@@ -39,6 +39,7 @@ import org.apache.kafka.raft.errors.NotLeaderException
 import org.apache.kafka.raft.{Batch, BatchReader, LeaderAndEpoch, RaftClient, RaftConfig}
 import org.apache.kafka.server.common.{Features, MetadataVersion}
 import org.apache.kafka.server.common.serialization.RecordSerde
+import org.apache.kafka.server.config.KafkaConfig
 import org.apache.kafka.server.fault.ProcessTerminatingFaultHandler
 import org.apache.kafka.server.util.{CommandDefaultOptions, CommandLineUtils, ShutdownableThread}
 import org.apache.kafka.snapshot.SnapshotReader
@@ -447,9 +448,9 @@ object TestRaftServer extends Logging {
 
       // KafkaConfig requires either `process.roles` or `zookeeper.connect`. Neither are
       // actually used by the test server, so we fill in `process.roles` with an arbitrary value.
-      serverProps.put(KafkaConfig.ProcessRolesProp, "controller")
+      serverProps.put(KafkaConfig.PROCESS_ROLES_PROP, "controller")
 
-      val config = KafkaConfig.fromProps(serverProps, doLog = false)
+      val config = KafkaConfigProvider.fromProps(serverProps, false)
       val throughput = opts.options.valueOf(opts.throughputOpt)
       val recordSize = opts.options.valueOf(opts.recordSizeOpt)
       val server = new TestRaftServer(config, throughput, recordSize)

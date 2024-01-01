@@ -19,7 +19,8 @@ package org.apache.kafka.tools;
 
 import kafka.admin.RackAwareTest;
 import kafka.server.KafkaBroker;
-import kafka.server.KafkaConfig;
+import kafka.server.KafkaConfigProvider;
+import org.apache.kafka.server.config.KafkaConfig;
 import kafka.utils.Logging;
 import kafka.utils.TestUtils;
 import org.apache.kafka.clients.CommonClientConfigs;
@@ -111,8 +112,8 @@ public class TopicCommandIntegrationTest extends kafka.integration.KafkaServerTe
 
         List<KafkaConfig> configs = new ArrayList<>();
         for (Properties props : brokerConfigs) {
-            props.put(KafkaConfig.ReplicaFetchMaxBytesProp(), "1");
-            configs.add(KafkaConfig.fromProps(props));
+            props.put(KafkaConfig.REPLICA_FETCH_MAX_BYTES_PROP, "1");
+            configs.add(KafkaConfigProvider.fromProps(props));
         }
         return JavaConverters.asScalaBuffer(configs).toSeq();
     }

@@ -17,6 +17,7 @@
 
 package kafka.server
 
+import kafka.cluster.EndPoint
 import kafka.network.SocketServer
 import kafka.server.IntegrationTestUtils.connectAndReceive
 import kafka.testkit.{BrokerNode, KafkaClusterTestKit, TestKitNodes}
@@ -40,6 +41,7 @@ import org.apache.kafka.image.ClusterImage
 import org.apache.kafka.metadata.BrokerState
 import org.apache.kafka.server.authorizer._
 import org.apache.kafka.server.common.MetadataVersion
+import org.apache.kafka.server.config.KafkaConfig
 import org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig
 import org.apache.kafka.server.quota
 import org.apache.kafka.server.quota.{ClientQuotaCallback, ClientQuotaType}
@@ -107,14 +109,14 @@ class KRaftClusterTest {
       cluster.format()
       cluster.startup()
       val controller = cluster.controllers().values().iterator().asScala.filter(_.controller.isActive).next()
-      val port = controller.socketServer.boundPort(controller.config.controllerListeners.head.listenerName)
+      val port = controller.socketServer.boundPort(controller.config.controllerListeners.asScala.map(EndPoint.fromJava).head.listenerName)
 
       // shutdown active controller
       controller.shutdown()
       // Rewrite The `listeners` config to avoid controller socket server init using different port
       val config = controller.sharedServer.controllerConfig.props
-      config.asInstanceOf[java.util.HashMap[String,String]].put(KafkaConfig.ListenersProp, s"CONTROLLER://localhost:$port")
-      controller.sharedServer.controllerConfig.updateCurrentConfig(new KafkaConfig(config))
+      config.asInstanceOf[java.util.HashMap[String,String]].put(KafkaConfig.LISTENERS_PROP, s"CONTROLLER://localhost:$port")
+      controller.sharedServer.controllerConfig.updateCurrentConfig(KafkaConfigProvider.fromProps(config))
       //  metrics will be set to null when closing a controller, so we should recreate it for testing
       controller.sharedServer.metrics = new Metrics()
 
@@ -324,8 +326,8 @@ class KRaftClusterTest {
   @Test
   def testCreateClusterWithAdvertisedPortZero(): Unit = {
     val brokerPropertyOverrides: (TestKitNodes, BrokerNode) => Map[String, String] = (nodes, _) => Map(
-      (KafkaConfig.ListenersProp, s"${nodes.externalListenerName.value}://localhost:0"),
-      (KafkaConfig.AdvertisedListenersProp, s"${nodes.externalListenerName.value}://localhost:0"))
+      (KafkaConfig.LISTENERS_PROP, s"${nodes.externalListenerName.value}://localhost:0"),
+      (KafkaConfig.ADVERTISED_LISTENERS_PROP, s"${nodes.externalListenerName.value}://localhost:0"))
 
     doOnStartedKafkaCluster(numBrokerNodes = 3, brokerPropertyOverrides = brokerPropertyOverrides) { implicit cluster =>
       sendDescribeClusterRequestToBoundPortUntilAllBrokersPropagated(cluster.nodes.externalListenerName, (15L, SECONDS))
@@ -341,8 +343,8 @@ class KRaftClusterTest {
   @Test
   def testCreateClusterWithAdvertisedHostAndPortDifferentFromSocketServer(): Unit = {
     val brokerPropertyOverrides: (TestKitNodes, BrokerNode) => Map[String, String] = (nodes, broker) => Map(
-      (KafkaConfig.ListenersProp, s"${nodes.externalListenerName.value}://localhost:0"),
-      (KafkaConfig.AdvertisedListenersProp, s"${nodes.externalListenerName.value}://advertised-host-${broker.id}:${broker.id + 100}"))
+      (KafkaConfig.LISTENERS_PROP, s"${nodes.externalListenerName.value}://localhost:0"),
+      (KafkaConfig.ADVERTISED_LISTENERS_PROP, s"${nodes.externalListenerName.value}://advertised-host-${broker.id}:${broker.id + 100}"))
 
     doOnStartedKafkaCluster(numBrokerNodes = 3, brokerPropertyOverrides = brokerPropertyOverrides) { implicit cluster =>
       sendDescribeClusterRequestToBoundPortUntilAllBrokersPropagated(cluster.nodes.externalListenerName, (15L, SECONDS))
@@ -1148,8 +1150,8 @@ class KRaftClusterTest {
       new TestKitNodes.Builder().
         setNumBrokerNodes(3).
         setNumControllerNodes(1).build()).
-      setConfigProp(KafkaConfig.BrokerHeartbeatIntervalMsProp, 10.toString).
-      setConfigProp(KafkaConfig.BrokerSessionTimeoutMsProp, 1000.toString).
+      setConfigProp(KafkaConfig.BROKER_HEARTBEAT_INTERVAL_MS_PROP, 10.toString).
+      setConfigProp(KafkaConfig.BROKER_SESSION_TIMEOUT_MS_PROP, 1000.toString).
       build()
     try {
       cluster.format()

@@ -22,12 +22,11 @@ import kafka.migration.MigrationPropagator
 import kafka.network.{DataPlaneAcceptor, SocketServer}
 import kafka.raft.KafkaRaftManager
 import kafka.security.CredentialProvider
-import kafka.server.KafkaConfig.{AlterConfigPolicyClassNameProp, CreateTopicPolicyClassNameProp}
 import kafka.server.QuotaFactory.QuotaManagers
 
 import scala.collection.immutable
 import kafka.server.metadata.{AclPublisher, ClientQuotaMetadataManager, DelegationTokenPublisher, DynamicClientQuotaPublisher, DynamicConfigPublisher, KRaftMetadataCache, KRaftMetadataCachePublisher, ScramPublisher}
-import kafka.utils.{CoreUtils, Logging, PasswordEncoder}
+import kafka.utils.{CoreUtils, Logging}
 import kafka.zk.{KafkaZkClient, ZkMigrationClient}
 import org.apache.kafka.common.message.ApiMessageType.ListenerType
 import org.apache.kafka.common.network.ListenerName
@@ -44,14 +43,16 @@ import org.apache.kafka.metadata.bootstrap.BootstrapMetadata
 import org.apache.kafka.metadata.migration.{KRaftMigrationDriver, LegacyPropagator}
 import org.apache.kafka.metadata.publisher.FeaturesPublisher
 import org.apache.kafka.raft.RaftConfig
-import org.apache.kafka.server.NodeToControllerChannelManager
+import org.apache.kafka.server.{NodeToControllerChannelManager, ReconfigurableServer}
 import org.apache.kafka.server.authorizer.Authorizer
 import org.apache.kafka.server.common.ApiMessageAndVersion
+import org.apache.kafka.server.config.KafkaConfig
 import org.apache.kafka.server.config.ConfigType
 import org.apache.kafka.server.metrics.{KafkaMetricsGroup, KafkaYammerMetrics}
 import org.apache.kafka.server.network.{EndpointReadyFutures, KafkaAuthorizerServerInfo}
 import org.apache.kafka.server.policy.{AlterConfigPolicy, CreateTopicPolicy}
 import org.apache.kafka.server.util.{Deadline, FutureUtils}
+import org.apache.kafka.utils.PasswordEncoder
 
 import java.util
 import java.util.{Optional, OptionalLong}
@@ -86,7 +87,7 @@ class ControllerServer(
   val sharedServer: SharedServer,
   val configSchema: KafkaConfigSchema,
   val bootstrapMetadata: BootstrapMetadata
-) extends Logging {
+) extends ReconfigurableServer with Logging {
 
   import kafka.server.Server._
 
@@ -147,7 +148,7 @@ class ControllerServer(
     try {
       this.logIdent = logContext.logPrefix()
       info("Starting controller")
-      config.dynamicConfig.initialize(zkClientOpt = None, clientMetricsReceiverPluginOpt = None)
+      config.dynamicConfig.initialize(Optional.empty(), Optional.empty())
 
       maybeChangeStatus(STARTING, STARTED)
 
@@ -160,7 +161,7 @@ class ControllerServer(
         metricsGroup.newGauge("linux-disk-write-bytes", () => linuxIoMetricsCollector.writeBytes())
       }
 
-      authorizer = config.createNewAuthorizer()
+      authorizer = config.createNewAuthorizer().asScala
       authorizer.foreach(_.configure(config.originals))
 
       metadataCache = MetadataCache.kRaftMetadataCache(config.nodeId)
@@ -188,7 +189,7 @@ class ControllerServer(
         credentialProvider,
         apiVersionManager)
 
-      val listenerInfo = ListenerInfo.create(config.controllerListeners.map(_.toJava).asJava).
+      val listenerInfo = ListenerInfo.create(config.controllerListeners).
         withWildcardHostnamesResolved().
         withEphemeralPortsCorrected(name => socketServer.boundPort(new ListenerName(name)))
       socketServerFirstBoundPortFuture.complete(listenerInfo.firstListener().port())
@@ -201,15 +202,15 @@ class ControllerServer(
             config.nodeId,
             listenerInfo.listeners().values(),
             listenerInfo.firstListener(),
-            config.earlyStartListeners.map(_.value()).asJava))
+            config.earlyStartListeners.asScala.map(_.value()).asJava))
       }
 
       sharedServer.startForController()
 
       createTopicPolicy = Option(config.
-        getConfiguredInstance(CreateTopicPolicyClassNameProp, classOf[CreateTopicPolicy]))
+        getConfiguredInstance(KafkaConfig.CREATE_TOPIC_POLICY_CLASS_NAME_PROP, classOf[CreateTopicPolicy]))
       alterConfigPolicy = Option(config.
-        getConfiguredInstance(AlterConfigPolicyClassNameProp, classOf[AlterConfigPolicy]))
+        getConfiguredInstance(KafkaConfig.ALTER_CONFIG_POLICY_CLASS_NAME_PROP, classOf[AlterConfigPolicy]))
 
       val voterConnections = FutureUtils.waitWithLogging(logger.underlying, logIdent,
         "controller quorum voters future",
@@ -235,7 +236,7 @@ class ControllerServer(
           OptionalLong.empty()
         }
 
-        val maxIdleIntervalNs = config.metadataMaxIdleIntervalNs.fold(OptionalLong.empty)(OptionalLong.of)
+        val maxIdleIntervalNs = config.metadataMaxIdleIntervalNs
 
         quorumControllerMetrics = new QuorumControllerMetrics(Optional.of(KafkaYammerMetrics.defaultRegistry), time, config.migrationEnabled)
 
@@ -279,13 +280,13 @@ class ControllerServer(
 
       if (config.migrationEnabled) {
         val zkClient = KafkaZkClient.createZkClient("KRaft Migration", time, config, KafkaServer.zkClientConfigFromKafkaConfig(config))
-        val zkConfigEncoder = config.passwordEncoderSecret match {
+        val zkConfigEncoder = config.passwordEncoderSecret.asScala match {
           case Some(secret) => PasswordEncoder.encrypting(secret,
             config.passwordEncoderKeyFactoryAlgorithm,
             config.passwordEncoderCipherAlgorithm,
             config.passwordEncoderKeyLength,
             config.passwordEncoderIterations)
-          case None => PasswordEncoder.noop()
+          case None => PasswordEncoder.NO_OP_PASSWORD_ENCODER
         }
         val migrationClient = ZkMigrationClient(zkClient, zkConfigEncoder)
         val propagator: LegacyPropagator = new MigrationPropagator(config.nodeId, config)

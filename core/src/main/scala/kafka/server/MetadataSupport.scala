@@ -22,6 +22,7 @@ import kafka.network.RequestChannel
 import kafka.server.metadata.{KRaftMetadataCache, ZkMetadataCache}
 import kafka.zk.KafkaZkClient
 import org.apache.kafka.common.requests.AbstractResponse
+import org.apache.kafka.server.config.KafkaConfig
 
 sealed trait MetadataSupport {
   /**

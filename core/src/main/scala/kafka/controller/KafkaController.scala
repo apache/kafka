@@ -30,7 +30,7 @@ import kafka.utils._
 import kafka.utils.Implicits._
 import kafka.zk.KafkaZkClient.UpdateLeaderAndIsrResult
 import kafka.zk.TopicZNode.TopicIdReplicaAssignment
-import kafka.zk.{FeatureZNodeStatus, _}
+import kafka.zk._
 import kafka.zookeeper.{StateChangeHandler, ZNodeChangeHandler, ZNodeChildChangeHandler}
 import org.apache.kafka.clients.admin.FeatureUpdate.UpgradeType
 import org.apache.kafka.common.ElectionType
@@ -46,6 +46,7 @@ import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.metadata.LeaderRecoveryState
 import org.apache.kafka.metadata.migration.ZkMigrationState
 import org.apache.kafka.server.common.{AdminOperationException, ProducerIdsBlock}
+import org.apache.kafka.server.config.KafkaConfig
 import org.apache.kafka.server.metrics.KafkaMetricsGroup
 import org.apache.kafka.server.util.KafkaScheduler
 import org.apache.zookeeper.KeeperException

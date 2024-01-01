@@ -24,17 +24,17 @@ import scala.util.Random
 import scala.jdk.CollectionConverters._
 import scala.collection.{Map, Seq}
 import org.apache.log4j.{Level, Logger}
+
 import java.util.Properties
 import java.util.concurrent.ExecutionException
-
-import kafka.server.{KafkaConfig, KafkaServer}
+import kafka.server.{KafkaConfigProvider, KafkaServer, QuorumTestHarness}
 import kafka.utils.{CoreUtils, TestUtils}
 import kafka.utils.TestUtils._
-import kafka.server.QuorumTestHarness
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.TimeoutException
 import org.apache.kafka.common.serialization.StringDeserializer
 import org.apache.kafka.clients.admin.{Admin, AdminClientConfig, AlterConfigsResult, Config, ConfigEntry}
+import org.apache.kafka.server.config.KafkaConfig
 import org.junit.jupiter.api.Assertions._
 
 import scala.annotation.nowarn
@@ -81,7 +81,7 @@ class UncleanLeaderElectionTest extends QuorumTestHarness {
   @AfterEach
   override def tearDown(): Unit = {
     servers.foreach(server => shutdownServer(server))
-    servers.foreach(server => CoreUtils.delete(server.config.logDirs))
+    servers.foreach(server => CoreUtils.delete(server.config.logDirs.asScala))
 
     // restore log levels
     kafkaApisLogger.setLevel(Level.ERROR)
@@ -92,7 +92,7 @@ class UncleanLeaderElectionTest extends QuorumTestHarness {
 
   private def startBrokers(cluster: Seq[Properties]): Unit = {
     for (props <- cluster) {
-      val config = KafkaConfig.fromProps(props)
+      val config = KafkaConfigProvider.fromProps(props)
       val server = createServer(config)
       configs ++= List(config)
       servers ++= List(server)
@@ -325,7 +325,7 @@ class UncleanLeaderElectionTest extends QuorumTestHarness {
     // Enable unclean leader election for topic
     val adminClient = createAdminClient()
     val newProps = new Properties
-    newProps.put(KafkaConfig.UncleanLeaderElectionEnableProp, "true")
+    newProps.put(KafkaConfig.UNCLEAN_LEADER_ELECTION_ENABLE_PROP, "true")
     alterTopicConfigs(adminClient, topic, newProps).all.get
     adminClient.close()
 

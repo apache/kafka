@@ -41,6 +41,7 @@ import org.apache.kafka.metadata.LeaderRecoveryState
 import org.apache.kafka.metadata.PartitionRegistration
 import org.apache.kafka.metadata.properties.{MetaProperties, MetaPropertiesVersion}
 import org.apache.kafka.server.common.MetadataVersion
+import org.apache.kafka.server.config.KafkaConfig
 import org.apache.kafka.server.util.{MockTime, ShutdownableThread}
 import org.apache.kafka.storage.internals.log.{AppendOrigin, FetchIsolation, FetchParams, FetchPartitionData, LogConfig, LogDirFailureChannel}
 import org.junit.jupiter.api.Assertions._
@@ -165,14 +166,14 @@ class ReplicaManagerConcurrencyTest extends Logging {
     TestUtils.formatDirectories(immutable.Seq(logDir.getAbsolutePath), metaProperties, MetadataVersion.latest(), None)
 
     val props = new Properties
-    props.put(KafkaConfig.QuorumVotersProp, "100@localhost:12345")
-    props.put(KafkaConfig.ProcessRolesProp, "broker")
-    props.put(KafkaConfig.NodeIdProp, localId.toString)
-    props.put(KafkaConfig.ControllerListenerNamesProp, "SSL")
-    props.put(KafkaConfig.LogDirProp, logDir.getAbsolutePath)
-    props.put(KafkaConfig.ReplicaLagTimeMaxMsProp, 5000.toString)
+    props.put(KafkaConfig.QUORUM_VOTERS_PROP, "100@localhost:12345")
+    props.put(KafkaConfig.PROCESS_ROLES_PROP, "broker")
+    props.put(KafkaConfig.NODE_ID_PROP, localId.toString)
+    props.put(KafkaConfig.CONTROLLER_LISTENER_NAMES_PROP, "SSL")
+    props.put(KafkaConfig.LOG_DIR_PROP, logDir.getAbsolutePath)
+    props.put(KafkaConfig.REPLICA_LAG_TIME_MAX_MS_PROP, 5000.toString)
 
-    val config = new KafkaConfig(props, doLog = false)
+    val config = KafkaConfigProvider.fromProps(props, false)
 
     val logManager = TestUtils.createLogManager(
       defaultConfig = new LogConfig(new Properties),

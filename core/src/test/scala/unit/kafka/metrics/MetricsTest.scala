@@ -33,6 +33,7 @@ import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.metrics.JmxReporter
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.metadata.migration.ZkMigrationState
+import org.apache.kafka.server.config.KafkaConfig
 import org.apache.kafka.server.metrics.KafkaMetricsGroup
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.junit.jupiter.api.Timeout
@@ -46,12 +47,12 @@ class MetricsTest extends KafkaServerTestHarness with Logging {
 
   val requiredKafkaServerPrefix = "kafka.server:type=KafkaServer,name"
   val overridingProps = new Properties
-  overridingProps.put(KafkaConfig.NumPartitionsProp, numParts.toString)
+  overridingProps.put(KafkaConfig.NUM_PARTITIONS_PROP, numParts.toString)
   overridingProps.put(JmxReporter.EXCLUDE_CONFIG, s"$requiredKafkaServerPrefix=ClusterId")
 
   def generateConfigs: Seq[KafkaConfig] =
     TestUtils.createBrokerConfigs(numNodes, zkConnectOrNull, enableControlledShutdown = false).
-      map(KafkaConfig.fromProps(_, overridingProps))
+      map(KafkaConfigProvider.fromProps(_, overridingProps))
 
   val nMessages = 2
 

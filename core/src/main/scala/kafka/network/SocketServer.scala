@@ -28,9 +28,8 @@ import kafka.cluster.{BrokerEndPoint, EndPoint}
 import kafka.network.ConnectionQuotas._
 import kafka.network.Processor._
 import kafka.network.RequestChannel.{CloseConnectionResponse, EndThrottlingResponse, NoOpResponse, SendResponse, StartThrottlingResponse}
-import kafka.network.SocketServer._
 import kafka.security.CredentialProvider
-import kafka.server.{ApiVersionManager, BrokerReconfigurable, KafkaConfig}
+import kafka.server.ApiVersionManager
 import org.apache.kafka.common.message.ApiMessageType.ListenerType
 import kafka.utils._
 import org.apache.kafka.common.config.ConfigException
@@ -46,12 +45,15 @@ import org.apache.kafka.common.requests.{ApiVersionsRequest, RequestContext, Req
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.utils.{KafkaThread, LogContext, Time, Utils}
 import org.apache.kafka.common.{Endpoint, KafkaException, MetricName, Reconfigurable}
+import org.apache.kafka.server.config.DynamicBrokerConfigManager.BrokerReconfigurable
+import org.apache.kafka.server.config.KafkaConfig
 import org.apache.kafka.server.metrics.KafkaMetricsGroup
 import org.apache.kafka.server.util.FutureUtils
 import org.slf4j.event.Level
 
 import scala.collection._
 import scala.collection.mutable.ArrayBuffer
+import scala.compat.java8.OptionConverters.RichOptionalGeneric
 import scala.jdk.CollectionConverters._
 import scala.util.control.ControlThrowable
 
@@ -91,16 +93,16 @@ class SocketServer(val config: KafkaConfig,
   this.logIdent = logContext.logPrefix
 
   private val memoryPoolSensor = metrics.sensor("MemoryPoolUtilization")
-  private val memoryPoolDepletedPercentMetricName = metrics.metricName("MemoryPoolAvgDepletedPercent", MetricsGroup)
-  private val memoryPoolDepletedTimeMetricName = metrics.metricName("MemoryPoolDepletedTimeTotal", MetricsGroup)
+  private val memoryPoolDepletedPercentMetricName = metrics.metricName("MemoryPoolAvgDepletedPercent", org.apache.kafka.network.SocketServer.METRICS_GROUP)
+  private val memoryPoolDepletedTimeMetricName = metrics.metricName("MemoryPoolDepletedTimeTotal", org.apache.kafka.network.SocketServer.METRICS_GROUP)
   memoryPoolSensor.add(new Meter(TimeUnit.MILLISECONDS, memoryPoolDepletedPercentMetricName, memoryPoolDepletedTimeMetricName))
-  private val memoryPool = if (config.queuedMaxBytes > 0) new SimpleMemoryPool(config.queuedMaxBytes, config.socketRequestMaxBytes, false, memoryPoolSensor) else MemoryPool.NONE
+  private val memoryPool = if (config.queuedMaxBytes() > 0) new SimpleMemoryPool(config.queuedMaxBytes, config.socketRequestMaxBytes, false, memoryPoolSensor) else MemoryPool.NONE
   // data-plane
   private[network] val dataPlaneAcceptors = new ConcurrentHashMap[EndPoint, DataPlaneAcceptor]()
   val dataPlaneRequestChannel = new RequestChannel(maxQueuedRequests, DataPlaneAcceptor.MetricPrefix, time, apiVersionManager.newRequestMetrics)
   // control-plane
   private[network] var controlPlaneAcceptorOpt: Option[ControlPlaneAcceptor] = None
-  val controlPlaneRequestChannelOpt: Option[RequestChannel] = config.controlPlaneListenerName.map(_ =>
+  val controlPlaneRequestChannelOpt: Option[RequestChannel] = config.controlPlaneListenerName.asScala.map(_ =>
     new RequestChannel(20, ControlPlaneAcceptor.MetricPrefix, time, apiVersionManager.newRequestMetrics))
 
   private[this] val nextProcessorId: AtomicInteger = new AtomicInteger(0)
@@ -120,7 +122,7 @@ class SocketServer(val config: KafkaConfig,
   metricsGroup.newGauge(s"${DataPlaneAcceptor.MetricPrefix}NetworkProcessorAvgIdlePercent", () => SocketServer.this.synchronized {
     val dataPlaneProcessors = dataPlaneAcceptors.asScala.values.flatMap(a => a.processors)
     val ioWaitRatioMetricNames = dataPlaneProcessors.map { p =>
-      metrics.metricName("io-wait-ratio", MetricsGroup, p.metricTags)
+      metrics.metricName("io-wait-ratio", org.apache.kafka.network.SocketServer.METRICS_GROUP, p.metricTags)
     }
     if (dataPlaneProcessors.isEmpty) {
       1.0
@@ -134,7 +136,7 @@ class SocketServer(val config: KafkaConfig,
     metricsGroup.newGauge(s"${ControlPlaneAcceptor.MetricPrefix}NetworkProcessorAvgIdlePercent", () => SocketServer.this.synchronized {
       val controlPlaneProcessorOpt = controlPlaneAcceptorOpt.map(a => a.processors(0))
       val ioWaitRatioMetricName = controlPlaneProcessorOpt.map { p =>
-        metrics.metricName("io-wait-ratio", MetricsGroup, p.metricTags)
+        metrics.metricName("io-wait-ratio", org.apache.kafka.network.SocketServer.METRICS_GROUP, p.metricTags)
       }
       ioWaitRatioMetricName.map { metricName =>
         Option(metrics.metric(metricName)).fold(0.0)(m => Math.min(m.metricValue.asInstanceOf[Double], 1.0))
@@ -146,7 +148,7 @@ class SocketServer(val config: KafkaConfig,
   metricsGroup.newGauge(s"${DataPlaneAcceptor.MetricPrefix}ExpiredConnectionsKilledCount", () => SocketServer.this.synchronized {
     val dataPlaneProcessors = dataPlaneAcceptors.asScala.values.flatMap(a => a.processors)
     val expiredConnectionsKilledCountMetricNames = dataPlaneProcessors.map { p =>
-      metrics.metricName("expired-connections-killed-count", MetricsGroup, p.metricTags)
+      metrics.metricName("expired-connections-killed-count", org.apache.kafka.network.SocketServer.METRICS_GROUP, p.metricTags)
     }
     expiredConnectionsKilledCountMetricNames.map { metricName =>
       Option(metrics.metric(metricName)).fold(0.0)(m => m.metricValue.asInstanceOf[Double])
@@ -156,7 +158,7 @@ class SocketServer(val config: KafkaConfig,
     metricsGroup.newGauge(s"${ControlPlaneAcceptor.MetricPrefix}ExpiredConnectionsKilledCount", () => SocketServer.this.synchronized {
       val controlPlaneProcessorOpt = controlPlaneAcceptorOpt.map(a => a.processors(0))
       val expiredConnectionsKilledCountMetricNames = controlPlaneProcessorOpt.map { p =>
-        metrics.metricName("expired-connections-killed-count", MetricsGroup, p.metricTags)
+        metrics.metricName("expired-connections-killed-count", org.apache.kafka.network.SocketServer.METRICS_GROUP, p.metricTags)
       }
       expiredConnectionsKilledCountMetricNames.map { metricName =>
         Option(metrics.metric(metricName)).fold(0.0)(m => m.metricValue.asInstanceOf[Double])
@@ -169,10 +171,10 @@ class SocketServer(val config: KafkaConfig,
   // structures. It does not start the acceptors and processors or their associated JVM
   // threads.
   if (apiVersionManager.listenerType.equals(ListenerType.CONTROLLER)) {
-    config.controllerListeners.foreach(createDataPlaneAcceptorAndProcessors)
+    config.controllerListeners.asScala.foreach(createDataPlaneAcceptorAndProcessors)
   } else {
-    config.controlPlaneListener.foreach(createControlPlaneAcceptorAndProcessor)
-    config.dataPlaneListeners.foreach(createDataPlaneAcceptorAndProcessors)
+    config.controlPlaneListener.asScala.foreach(createControlPlaneAcceptorAndProcessor)
+    config.dataPlaneListeners.asScala.foreach(createDataPlaneAcceptorAndProcessors)
   }
 
   // Processors are now created by each Acceptor. However to preserve compatibility, we need to number the processors
@@ -238,6 +240,10 @@ class SocketServer(val config: KafkaConfig,
     enableFuture
   }
 
+  def createDataPlaneAcceptorAndProcessors(endpoint: Endpoint): Unit = synchronized {
+    createDataPlaneAcceptorAndProcessors(EndPoint.fromJava(endpoint))
+  }
+
   def createDataPlaneAcceptorAndProcessors(endpoint: EndPoint): Unit = synchronized {
     if (stopped) {
       throw new RuntimeException("Can't create new data plane acceptor and processors: SocketServer is stopped.")
@@ -253,6 +259,9 @@ class SocketServer(val config: KafkaConfig,
     info(s"Created data-plane acceptor and processors for endpoint : ${endpoint.listenerName}")
   }
 
+  private def createControlPlaneAcceptorAndProcessor(endpoint: Endpoint): Unit = synchronized {
+    createControlPlaneAcceptorAndProcessor(EndPoint.fromJava(endpoint))
+  }
   private def createControlPlaneAcceptorAndProcessor(endpoint: EndPoint): Unit = synchronized {
     if (stopped) {
       throw new RuntimeException("Can't create new control plane acceptor and processor: SocketServer is stopped.")
@@ -264,7 +273,10 @@ class SocketServer(val config: KafkaConfig,
     info(s"Created control-plane acceptor and processor for endpoint : ${endpoint.listenerName}")
   }
 
-  private def endpoints = config.listeners.map(l => l.listenerName -> l).toMap
+  private def endpoints: Predef.Map[String, EndPoint] = config.listeners.asScala.map(l => {
+    val endPoint = EndPoint.fromJava(l)
+    endPoint.listenerName.value() -> endPoint
+  }).toMap
 
   protected def createDataPlaneAcceptor(endPoint: EndPoint, isPrivilegedListener: Boolean, requestChannel: RequestChannel): DataPlaneAcceptor = {
     new DataPlaneAcceptor(this, endPoint, config, nodeId, connectionQuotas, time, isPrivilegedListener, requestChannel, metrics, credentialProvider, logContext, memoryPool, apiVersionManager)
@@ -310,7 +322,7 @@ class SocketServer(val config: KafkaConfig,
 
   def boundPort(listenerName: ListenerName): Int = {
     try {
-      val acceptor = dataPlaneAcceptors.get(endpoints(listenerName))
+      val acceptor = dataPlaneAcceptors.get(endpoints(listenerName.value()))
       if (acceptor != null) {
         acceptor.localPort
       } else {
@@ -345,6 +357,10 @@ class SocketServer(val config: KafkaConfig,
     }
   }
 
+  def addListeners(listenersAdded: util.List[Endpoint]): Unit = synchronized {
+    addListeners(listenersAdded.asScala.map(EndPoint.fromJava))
+  }
+
   def removeListeners(listenersRemoved: Seq[EndPoint]): Unit = synchronized {
     info(s"Removing data-plane listeners for endpoints $listenersRemoved")
     listenersRemoved.foreach { endpoint =>
@@ -357,7 +373,11 @@ class SocketServer(val config: KafkaConfig,
     }
   }
 
-  override def reconfigurableConfigs: Set[String] = SocketServer.ReconfigurableConfigs
+  def removeListeners(listenersRemoved: util.List[Endpoint]): Unit = synchronized {
+    removeListeners(listenersRemoved.asScala.map(EndPoint.fromJava))
+  }
+
+  override def reconfigurableConfigs: util.Set[String] = org.apache.kafka.network.SocketServer.RECONFIGURABLE_CONFIGS
 
   override def validateReconfiguration(newConfig: KafkaConfig): Unit = {
 
@@ -369,8 +389,9 @@ class SocketServer(val config: KafkaConfig,
       info(s"Updating maxConnectionsPerIp: $maxConnectionsPerIp")
       connectionQuotas.updateMaxConnectionsPerIp(maxConnectionsPerIp)
     }
-    val maxConnectionsPerIpOverrides = newConfig.maxConnectionsPerIpOverrides
-    if (maxConnectionsPerIpOverrides != oldConfig.maxConnectionsPerIpOverrides) {
+    val maxConnectionsPerIpOverrides: Map[String, Int] = newConfig.maxConnectionsPerIpOverrides.asScala.map { case (host, count) => (host, count.intValue()) }
+
+    if (maxConnectionsPerIpOverrides != oldConfig.maxConnectionsPerIpOverrides.asScala) {
       info(s"Updating maxConnectionsPerIpOverrides: ${maxConnectionsPerIpOverrides.map { case (k, v) => s"$k=$v" }.mkString(",")}")
       connectionQuotas.updateMaxConnectionsPerIpOverride(maxConnectionsPerIpOverrides)
     }
@@ -400,17 +421,7 @@ class SocketServer(val config: KafkaConfig,
   }
 }
 
-object SocketServer {
-  val MetricsGroup = "socket-server-metrics"
-
-  val ReconfigurableConfigs = Set(
-    KafkaConfig.MaxConnectionsPerIpProp,
-    KafkaConfig.MaxConnectionsPerIpOverridesProp,
-    KafkaConfig.MaxConnectionsProp,
-    KafkaConfig.MaxConnectionCreationRateProp)
-
-  val ListenerReconfigurableConfigs = Set(KafkaConfig.MaxConnectionsProp, KafkaConfig.MaxConnectionCreationRateProp)
-
+object SocketServerUtils {
   def closeSocket(
     channel: SocketChannel,
     logging: Logging
@@ -423,7 +434,7 @@ object SocketServer {
 object DataPlaneAcceptor {
   val ThreadPrefix = "data-plane"
   val MetricPrefix = ""
-  val ListenerReconfigurableConfigs = Set(KafkaConfig.NumNetworkThreadsProp)
+  val ListenerReconfigurableConfigs = Set(KafkaConfig.NUM_NETWORK_THREADS_PROP)
 }
 
 class DataPlaneAcceptor(socketServer: SocketServer,
@@ -504,7 +515,7 @@ class DataPlaneAcceptor(socketServer: SocketServer,
    * the configs have passed validation using {@link #validateReconfiguration ( Map )}.
    */
   override def reconfigure(configs: util.Map[String, _]): Unit = {
-    val newNumNetworkThreads = configs.get(KafkaConfig.NumNetworkThreadsProp).asInstanceOf[Int]
+    val newNumNetworkThreads = configs.get(KafkaConfig.NUM_NETWORK_THREADS_PROP).asInstanceOf[Int]
 
     if (newNumNetworkThreads != processors.length) {
       info(s"Resizing network thread pool size for ${endPoint.listenerName} listener from ${processors.length} to $newNumNetworkThreads")
@@ -520,7 +531,7 @@ class DataPlaneAcceptor(socketServer: SocketServer,
    * Configure this class with the given key-value pairs
    */
   override def configure(configs: util.Map[String, _]): Unit = {
-    addProcessors(configs.get(KafkaConfig.NumNetworkThreadsProp).asInstanceOf[Int])
+    addProcessors(configs.get(KafkaConfig.NUM_NETWORK_THREADS_PROP).asInstanceOf[Int])
   }
 }
 
@@ -582,7 +593,7 @@ private[kafka] abstract class Acceptor(val socketServer: SocketServer,
                                        logContext: LogContext,
                                        memoryPool: MemoryPool,
                                        apiVersionManager: ApiVersionManager)
-  extends Runnable with Logging {
+  extends Logging with Runnable {
 
   private val metricsGroup = new KafkaMetricsGroup(this.getClass)
 
@@ -707,7 +718,7 @@ private[kafka] abstract class Acceptor(val socketServer: SocketServer,
       debug("Closing server socket, selector, and any throttled sockets.")
       CoreUtils.swallow(serverChannel.close(), this, Level.ERROR)
       CoreUtils.swallow(nioSelector.close(), this, Level.ERROR)
-      throttledSockets.foreach(throttledSocket => closeSocket(throttledSocket.socket, this))
+      throttledSockets.foreach(throttledSocket => SocketServerUtils.closeSocket(throttledSocket.socket, this))
       throttledSockets.clear()
     }
   }
@@ -820,7 +831,7 @@ private[kafka] abstract class Acceptor(val socketServer: SocketServer,
     while (throttledSockets.headOption.exists(_.endThrottleTimeMs < timeMs)) {
       val closingSocket = throttledSockets.dequeue()
       debug(s"Closing socket from ip ${closingSocket.socket.getRemoteAddress}")
-      closeSocket(closingSocket.socket, this)
+      SocketServerUtils.closeSocket(closingSocket.socket, this)
     }
   }
 
@@ -916,7 +927,7 @@ private[kafka] class Processor(
   isPrivilegedListener: Boolean,
   apiVersionManager: ApiVersionManager,
   threadName: String
-) extends Runnable with Logging {
+) extends Logging with Runnable {
   private val metricsGroup = new KafkaMetricsGroup(this.getClass)
 
   val shouldRun = new AtomicBoolean(true)
@@ -948,7 +959,7 @@ private[kafka] class Processor(
   ).asJava
 
   metricsGroup.newGauge(IdlePercentMetricName, () => {
-    Option(metrics.metric(metrics.metricName("io-wait-ratio", MetricsGroup, metricTags))).fold(0.0)(m =>
+    Option(metrics.metric(metrics.metricName("io-wait-ratio", org.apache.kafka.network.SocketServer.METRICS_GROUP, metricTags))).fold(0.0)(m =>
       Math.min(m.metricValue.asInstanceOf[Double], 1.0))
   },
     // for compatibility, only add a networkProcessor tag to the Yammer Metrics alias (the equivalent Selector metric
@@ -957,7 +968,7 @@ private[kafka] class Processor(
   )
 
   val expiredConnectionsKilledCount = new CumulativeSum()
-  private val expiredConnectionsKilledCountMetricName = metrics.metricName("expired-connections-killed-count", MetricsGroup, metricTags)
+  private val expiredConnectionsKilledCountMetricName = metrics.metricName("expired-connections-killed-count", org.apache.kafka.network.SocketServer.METRICS_GROUP, metricTags)
   metrics.addMetric(expiredConnectionsKilledCountMetricName, expiredConnectionsKilledCount)
 
   private[network] val selector = createSelector(
@@ -1424,7 +1435,7 @@ object ConnectionQuotas {
 class ConnectionQuotas(config: KafkaConfig, time: Time, metrics: Metrics) extends Logging with AutoCloseable {
 
   @volatile private var defaultMaxConnectionsPerIp: Int = config.maxConnectionsPerIp
-  @volatile private var maxConnectionsPerIpOverrides = config.maxConnectionsPerIpOverrides.map { case (host, count) => (InetAddress.getByName(host), count) }
+  @volatile private var maxConnectionsPerIpOverrides: Map[InetAddress, Int] = config.maxConnectionsPerIpOverrides.asScala.map { case (host, count) => (InetAddress.getByName(host), count.intValue()) }
   @volatile private var brokerMaxConnections = config.maxConnections
   private val interBrokerListenerName = config.interBrokerListenerName
   private val counts = mutable.Map[InetAddress, Int]()
@@ -1489,7 +1500,7 @@ class ConnectionQuotas(config: KafkaConfig, time: Time, metrics: Metrics) extend
   def updateIpConnectionRateQuota(ip: Option[InetAddress], maxConnectionRate: Option[Int]): Unit = synchronized {
     def isIpConnectionRateMetric(metricName: MetricName) = {
       metricName.name == ConnectionRateMetricName &&
-      metricName.group == MetricsGroup &&
+      metricName.group == org.apache.kafka.network.SocketServer.METRICS_GROUP &&
       metricName.tags.containsKey(IpMetricTag)
     }
 
@@ -1757,7 +1768,7 @@ class ConnectionQuotas(config: KafkaConfig, time: Time, metrics: Metrics) extend
   private def connectionRateMetricName(connectionQuotaEntity: ConnectionQuotaEntity): MetricName = {
     metrics.metricName(
       connectionQuotaEntity.metricName,
-      MetricsGroup,
+      org.apache.kafka.network.SocketServer.METRICS_GROUP,
       s"Tracking rate of accepting new connections (per second)",
       connectionQuotaEntity.metricTags.asJava)
   }
@@ -1790,17 +1801,17 @@ class ConnectionQuotas(config: KafkaConfig, time: Time, metrics: Metrics) extend
     }
 
     override def reconfigurableConfigs(): util.Set[String] = {
-      SocketServer.ListenerReconfigurableConfigs.asJava
+      org.apache.kafka.network.SocketServer.LISTENER_RECONFIGURABLE_CONFIGS
     }
 
     override def validateReconfiguration(configs: util.Map[String, _]): Unit = {
       val value = maxConnections(configs)
       if (value <= 0)
-        throw new ConfigException(s"Invalid ${KafkaConfig.MaxConnectionsProp} $value")
+        throw new ConfigException(s"Invalid ${KafkaConfig.MAX_CONNECTIONS_PROP} $value")
 
       val rate = maxConnectionCreationRate(configs)
       if (rate <= 0)
-        throw new ConfigException(s"Invalid ${KafkaConfig.MaxConnectionCreationRateProp} $rate")
+        throw new ConfigException(s"Invalid ${KafkaConfig.MAX_CONNECTION_CREATION_RATE_PROP} $rate")
     }
 
     override def reconfigure(configs: util.Map[String, _]): Unit = {
@@ -1818,11 +1829,11 @@ class ConnectionQuotas(config: KafkaConfig, time: Time, metrics: Metrics) extend
     }
 
     private def maxConnections(configs: util.Map[String, _]): Int = {
-      Option(configs.get(KafkaConfig.MaxConnectionsProp)).map(_.toString.toInt).getOrElse(Int.MaxValue)
+      Option(configs.get(KafkaConfig.MAX_CONNECTIONS_PROP)).map(_.toString.toInt).getOrElse(Int.MaxValue)
     }
 
     private def maxConnectionCreationRate(configs: util.Map[String, _]): Int = {
-      Option(configs.get(KafkaConfig.MaxConnectionCreationRateProp)).map(_.toString.toInt).getOrElse(Int.MaxValue)
+      Option(configs.get(KafkaConfig.MAX_CONNECTION_CREATION_RATE_PROP)).map(_.toString.toInt).getOrElse(Int.MaxValue)
     }
 
     /**
@@ -1833,7 +1844,7 @@ class ConnectionQuotas(config: KafkaConfig, time: Time, metrics: Metrics) extend
     private def createConnectionRateThrottleSensor(throttlePrefix: String): Sensor = {
       val sensor = metrics.sensor(s"${throttlePrefix}ConnectionRateThrottleTime-${listener.value}")
       val metricName = metrics.metricName(s"${throttlePrefix}connection-accept-throttle-time",
-        MetricsGroup,
+        org.apache.kafka.network.SocketServer.METRICS_GROUP,
         "Tracking average throttle-time, out of non-zero throttle times, per listener",
         Map(ListenerMetricTag -> listener.value).asJava)
       sensor.add(metricName, new Avg)
@@ -1848,7 +1859,7 @@ class ConnectionQuotas(config: KafkaConfig, time: Time, metrics: Metrics) extend
     if (channel != null) {
       log.debug(s"Closing connection from ${channel.socket.getRemoteSocketAddress}")
       dec(listenerName, channel.socket.getInetAddress)
-      closeSocket(channel, log)
+      SocketServerUtils.closeSocket(channel, log)
     }
   }
 

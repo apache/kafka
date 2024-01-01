@@ -17,7 +17,7 @@
 package kafka.log.remote;
 
 import kafka.server.BrokerTopicStats;
-import kafka.server.KafkaConfig;
+import kafka.server.KafkaConfigProvider;
 import kafka.utils.TestUtils;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.record.Records;
@@ -57,7 +57,7 @@ public class RemoteLogReaderTest {
         TestUtils.clearYammerMetrics();
         Properties props = kafka.utils.TestUtils.createDummyBrokerConfig();
         props.setProperty(RemoteLogManagerConfig.REMOTE_LOG_STORAGE_SYSTEM_ENABLE_PROP, "true");
-        brokerTopicStats = new BrokerTopicStats(Optional.of(KafkaConfig.fromProps(props)));
+        brokerTopicStats = new BrokerTopicStats(Optional.of(KafkaConfigProvider.fromProps(props)));
     }
 
     @Test

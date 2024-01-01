@@ -19,6 +19,7 @@ package kafka.server
 import org.apache.kafka.clients.CommonClientConfigs
 import org.apache.kafka.common.metrics.{KafkaMetricsContext, MetricConfig, Metrics, MetricsReporter, Sensor}
 import org.apache.kafka.common.utils.Time
+import org.apache.kafka.server.config.KafkaConfig
 
 import java.util
 import java.util.concurrent.TimeUnit

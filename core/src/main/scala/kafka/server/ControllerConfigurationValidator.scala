@@ -24,6 +24,7 @@ import org.apache.kafka.common.config.ConfigResource.Type.{BROKER, CLIENT_METRIC
 import org.apache.kafka.controller.ConfigurationValidator
 import org.apache.kafka.common.errors.{InvalidConfigurationException, InvalidRequestException}
 import org.apache.kafka.common.internals.Topic
+import org.apache.kafka.server.config.KafkaConfig
 import org.apache.kafka.server.metrics.ClientMetricsConfigs
 import org.apache.kafka.storage.internals.log.LogConfig
 

@@ -18,13 +18,12 @@
 package kafka.api
 
 import com.yammer.metrics.core.Gauge
+
 import java.util.{Collections, Properties}
 import java.util.concurrent.ExecutionException
-
 import kafka.security.authorizer.AclAuthorizer
 import kafka.security.authorizer.AclEntry.WildcardHost
 import org.apache.kafka.metadata.authorizer.StandardAuthorizer
-import kafka.server._
 import kafka.utils._
 import org.apache.kafka.clients.admin.Admin
 import org.apache.kafka.clients.consumer.{Consumer, ConsumerConfig, ConsumerRecords}
@@ -38,11 +37,12 @@ import org.apache.kafka.common.resource._
 import org.apache.kafka.common.resource.ResourceType._
 import org.apache.kafka.common.resource.PatternType.{LITERAL, PREFIXED}
 import org.apache.kafka.common.security.auth._
+import org.apache.kafka.server.config.KafkaConfig
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo, Timeout}
 import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.{ValueSource, CsvSource}
+import org.junit.jupiter.params.provider.{CsvSource, ValueSource}
 
 import scala.jdk.CollectionConverters._
 
@@ -132,11 +132,11 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
     new AccessControlEntry(clientPrincipal.toString, "*", AclOperation.READ, AclPermissionType.ALLOW))
 
   // Some needed configuration for brokers, producers, and consumers
-  this.serverConfig.setProperty(KafkaConfig.OffsetsTopicPartitionsProp, "1")
-  this.serverConfig.setProperty(KafkaConfig.OffsetsTopicReplicationFactorProp, "3")
-  this.serverConfig.setProperty(KafkaConfig.MinInSyncReplicasProp, "3")
-  this.serverConfig.setProperty(KafkaConfig.DefaultReplicationFactorProp, "3")
-  this.serverConfig.setProperty(KafkaConfig.ConnectionsMaxReauthMsProp, "1500")
+  this.serverConfig.setProperty(KafkaConfig.OFFSETS_TOPIC_PARTITIONS_PROP, "1")
+  this.serverConfig.setProperty(KafkaConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_PROP, "3")
+  this.serverConfig.setProperty(KafkaConfig.MIN_IN_SYNC_REPLICAS_PROP, "3")
+  this.serverConfig.setProperty(KafkaConfig.DEFAULT_REPLICATION_FACTOR_PROP, "3")
+  this.serverConfig.setProperty(KafkaConfig.CONNECTIONS_MAX_REAUTH_MS_PROP, "1500")
   this.consumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, "group")
   this.consumerConfig.setProperty(ConsumerConfig.METADATA_MAX_AGE_CONFIG, "1500")
 
@@ -151,13 +151,13 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
     if (TestInfoUtils.isKRaft(testInfo)) {
       this.serverConfig.setProperty(StandardAuthorizer.SUPER_USERS_CONFIG, kafkaPrincipal.toString)
       this.controllerConfig.setProperty(StandardAuthorizer.SUPER_USERS_CONFIG, kafkaPrincipal.toString + ";" + "User:ANONYMOUS")
-      this.serverConfig.setProperty(KafkaConfig.AuthorizerClassNameProp, classOf[StandardAuthorizer].getName)
-      this.controllerConfig.setProperty(KafkaConfig.AuthorizerClassNameProp, classOf[StandardAuthorizer].getName)
+      this.serverConfig.setProperty(KafkaConfig.AUTHORIZER_CLASS_NAME_PROP, classOf[StandardAuthorizer].getName)
+      this.controllerConfig.setProperty(KafkaConfig.AUTHORIZER_CLASS_NAME_PROP, classOf[StandardAuthorizer].getName)
     } else {
       // The next two configuration parameters enable ZooKeeper secure ACLs
       // and sets the Kafka authorizer, both necessary to enable security.
-      this.serverConfig.setProperty(KafkaConfig.ZkEnableSecureAclsProp, "true")
-      this.serverConfig.setProperty(KafkaConfig.AuthorizerClassNameProp, authorizerClass.getName)
+      this.serverConfig.setProperty(KafkaConfig.ZK_ENABLE_SECURE_ACLS_PROP, "true")
+      this.serverConfig.setProperty(KafkaConfig.AUTHORIZER_CLASS_NAME_PROP, authorizerClass.getName)
 
       // Set the specific principal that can update ACLs.
       this.serverConfig.setProperty(AclAuthorizer.SuperUsersProp, kafkaPrincipal.toString)

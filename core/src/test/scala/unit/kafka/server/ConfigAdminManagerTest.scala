@@ -19,7 +19,6 @@ package kafka.server
 
 import java.util
 import java.util.Collections
-
 import kafka.server.metadata.MockConfigRepository
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.admin.AlterConfigOp.OpType
@@ -48,7 +47,7 @@ class ConfigAdminManagerTest {
 
   def newConfigAdminManager(brokerId: Integer): ConfigAdminManager = {
     val config = TestUtils.createBrokerConfig(nodeId = brokerId, zkConnect = null)
-    new ConfigAdminManager(brokerId, new KafkaConfig(config), new MockConfigRepository())
+    new ConfigAdminManager(brokerId, KafkaConfigProvider.fromProps(config), new MockConfigRepository())
   }
 
   def broker0Incremental(): IAlterConfigsResource = new IAlterConfigsResource().

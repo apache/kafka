@@ -17,7 +17,7 @@
 package kafka.controller
 
 import kafka.cluster.{Broker, EndPoint}
-import kafka.server.KafkaConfig
+import kafka.server.KafkaConfigProvider
 import kafka.utils.TestUtils
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.network.ListenerName
@@ -29,7 +29,7 @@ import org.mockito.Mockito._
 class TopicDeletionManagerTest {
 
   private val brokerId = 1
-  private val config = KafkaConfig.fromProps(TestUtils.createBrokerConfig(brokerId, "zkConnect"))
+  private val config = KafkaConfigProvider.fromProps(TestUtils.createBrokerConfig(brokerId, "zkConnect"))
   private val deletionClient = mock(classOf[DeletionClient])
 
   @Test

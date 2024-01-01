@@ -238,10 +238,10 @@ public class KafkaConfigSchema {
             configKey.name,
             stringValue,
             source,
-            configKey.type().isSensitive(),
+            configKey.type.isSensitive(),
             false, // "readonly" is always false, for now.
             emptyList(), // we don't populate synonyms, for now.
-            translateConfigType(configKey.type()),
+            translateConfigType(configKey.type),
             configKey.documentation);
     }
 }

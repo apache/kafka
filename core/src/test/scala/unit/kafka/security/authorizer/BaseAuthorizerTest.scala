@@ -21,7 +21,6 @@ import java.net.InetAddress
 import java.util.UUID
 
 import kafka.security.authorizer.AclEntry.{WildcardHost, WildcardPrincipalString}
-import kafka.server.KafkaConfig
 import kafka.zookeeper.ZooKeeperClient
 import org.apache.kafka.common.acl.AclOperation.{ALL, READ, WRITE}
 import org.apache.kafka.common.acl.AclPermissionType.{ALLOW, DENY}
@@ -35,6 +34,7 @@ import org.apache.kafka.common.resource.ResourceType.{CLUSTER, GROUP, TOPIC, TRA
 import org.apache.kafka.common.resource.{ResourcePattern, ResourceType}
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
 import org.apache.kafka.server.authorizer.{AuthorizationResult, Authorizer}
+import org.apache.kafka.server.config.KafkaConfig
 import org.junit.jupiter.api.Assertions.{assertFalse, assertTrue}
 import org.junit.jupiter.api.Test
 

@@ -31,7 +31,7 @@ import com.yammer.metrics.core.{Gauge, Meter}
 import javax.net.ssl._
 import kafka.cluster.EndPoint
 import kafka.security.CredentialProvider
-import kafka.server.{ApiVersionManager, KafkaConfig, SimpleApiVersionManager, ThrottleCallback, ThrottledChannel}
+import kafka.server.{ApiVersionManager, KafkaConfigProvider, SimpleApiVersionManager, ThrottleCallback, ThrottledChannel}
 import kafka.utils.Implicits._
 import kafka.utils.TestUtils
 import org.apache.kafka.common.memory.MemoryPool
@@ -39,7 +39,7 @@ import org.apache.kafka.common.message.ApiMessageType.ListenerType
 import org.apache.kafka.common.message.{ProduceRequestData, SaslAuthenticateRequestData, SaslHandshakeRequestData, VoteRequestData}
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.KafkaChannel.ChannelMuteState
-import org.apache.kafka.common.network.{ClientInformation, _}
+import org.apache.kafka.common.network._
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests
 import org.apache.kafka.common.requests._
@@ -47,6 +47,7 @@ import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
 import org.apache.kafka.common.security.scram.internals.ScramMechanism
 import org.apache.kafka.common.utils.{AppInfoParser, LogContext, MockTime, Time, Utils}
 import org.apache.kafka.server.common.{Features, MetadataVersion}
+import org.apache.kafka.server.config.KafkaConfig
 import org.apache.kafka.test.{TestSslUtils, TestUtils => JTestUtils}
 import org.apache.log4j.Level
 import org.junit.jupiter.api.Assertions._
@@ -70,7 +71,7 @@ class SocketServerTest {
   props.put("socket.request.max.bytes", "100")
   props.put("max.connections.per.ip", "5")
   props.put("connections.max.idle.ms", "60000")
-  val config = KafkaConfig.fromProps(props)
+  val config = KafkaConfigProvider.fromProps(props)
   val metrics = new Metrics
   val credentialProvider = new CredentialProvider(ScramMechanism.mechanismNames, null)
   val localAddress = InetAddress.getLoopbackAddress
@@ -86,7 +87,7 @@ class SocketServerTest {
   private val kafkaLogger = org.apache.log4j.LogManager.getLogger("kafka")
   private var logLevelToRestore: Level = _
   def endpoint: EndPoint = {
-    KafkaConfig.fromProps(props, doLog = false).dataPlaneListeners.head
+    EndPoint.fromJava(KafkaConfigProvider.fromProps(props, false).dataPlaneListeners.asScala.head)
   }
   def listener: String = endpoint.listenerName.value
   val uncaughtExceptions = new AtomicInteger(0)
@@ -362,10 +363,11 @@ class SocketServerTest {
     testProps.put("listener.security.protocol.map", "EXTERNAL:PLAINTEXT,INTERNAL:PLAINTEXT,CONTROL_PLANE:PLAINTEXT")
     testProps.put("control.plane.listener.name", "CONTROL_PLANE")
     testProps.put("inter.broker.listener.name", "INTERNAL")
-    val config = KafkaConfig.fromProps(testProps)
+    val config = KafkaConfigProvider.fromProps(testProps)
     val testableServer = new TestableSocketServer(config)
 
-    val updatedEndPoints = config.effectiveAdvertisedListeners.map { endpoint =>
+    val updatedEndPoints = config.effectiveAdvertisedListeners.asScala.map { e =>
+      val endpoint = EndPoint.fromJava(e)
       endpoint.copy(port = testableServer.boundPort(endpoint.listenerName))
     }.map(_.toJava)
 
@@ -421,7 +423,7 @@ class SocketServerTest {
     testProps.put("listener.security.protocol.map", "EXTERNAL:PLAINTEXT,INTERNAL:PLAINTEXT,CONTROLLER:PLAINTEXT")
     testProps.put("control.plane.listener.name", "CONTROLLER")
     testProps.put("inter.broker.listener.name", "INTERNAL")
-    val config = KafkaConfig.fromProps(testProps)
+    val config = KafkaConfigProvider.fromProps(testProps)
     val connectionQueueSize = 1
     val testableServer = new TestableSocketServer(config, connectionQueueSize)
     testableServer.enableRequestProcessing(Map()).get(1, TimeUnit.MINUTES)
@@ -524,9 +526,9 @@ class SocketServerTest {
   def testIdleConnection(): Unit = {
     val idleTimeMs = 60000
     val time = new MockTime()
-    props.put(KafkaConfig.ConnectionsMaxIdleMsProp, idleTimeMs.toString)
+    props.put(KafkaConfig.CONNECTIONS_MAX_IDLE_MS_PROP, idleTimeMs.toString)
     val serverMetrics = new Metrics
-    val overrideServer = new SocketServer(KafkaConfig.fromProps(props), serverMetrics,
+    val overrideServer = new SocketServer(KafkaConfigProvider.fromProps(props), serverMetrics,
       time, credentialProvider, apiVersionManager)
 
     try {
@@ -577,10 +579,10 @@ class SocketServerTest {
   @Test
   def testConnectionIdReuse(): Unit = {
     val idleTimeMs = 60000
-    props.put(KafkaConfig.ConnectionsMaxIdleMsProp, idleTimeMs.toString)
+    props.put(KafkaConfig.CONNECTIONS_MAX_IDLE_MS_PROP, idleTimeMs.toString)
     props ++= sslServerProps
     val overrideConnectionId = "127.0.0.1:1-127.0.0.1:2-0"
-    val overrideServer = new TestableSocketServer(KafkaConfig.fromProps(props))
+    val overrideServer = new TestableSocketServer(KafkaConfigProvider.fromProps(props))
 
     def openChannel: Option[KafkaChannel] = overrideServer.dataPlaneAcceptor(listener).get.processors(0).channel(overrideConnectionId)
     def openOrClosingChannel: Option[KafkaChannel] = overrideServer.dataPlaneAcceptor(listener).get.processors(0).openOrClosingChannel(overrideConnectionId)
@@ -862,9 +864,9 @@ class SocketServerTest {
   @Test
   def testZeroMaxConnectionsPerIp(): Unit = {
     val newProps = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 0)
-    newProps.setProperty(KafkaConfig.MaxConnectionsPerIpProp, "0")
-    newProps.setProperty(KafkaConfig.MaxConnectionsPerIpOverridesProp, "%s:%s".format("127.0.0.1", "5"))
-    val server = new SocketServer(KafkaConfig.fromProps(newProps), new Metrics(),
+    newProps.setProperty(KafkaConfig.MAX_CONNECTIONS_PER_IP_PROP, "0")
+    newProps.setProperty(KafkaConfig.MAX_CONNECTIONS_PER_IP_OVERRIDES_PROP, "%s:%s".format("127.0.0.1", "5"))
+    val server = new SocketServer(KafkaConfigProvider.fromProps(newProps), new Metrics(),
       Time.SYSTEM, credentialProvider, apiVersionManager)
     try {
       server.enableRequestProcessing(Map.empty).get(1, TimeUnit.MINUTES)
@@ -901,9 +903,9 @@ class SocketServerTest {
   def testMaxConnectionsPerIpOverrides(): Unit = {
     val overrideNum = server.config.maxConnectionsPerIp + 1
     val overrideProps = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 0)
-    overrideProps.put(KafkaConfig.MaxConnectionsPerIpOverridesProp, s"localhost:$overrideNum")
+    overrideProps.put(KafkaConfig.MAX_CONNECTIONS_PER_IP_OVERRIDES_PROP, s"localhost:$overrideNum")
     val serverMetrics = new Metrics()
-    val overrideServer = new SocketServer(KafkaConfig.fromProps(overrideProps), serverMetrics,
+    val overrideServer = new SocketServer(KafkaConfigProvider.fromProps(overrideProps), serverMetrics,
       Time.SYSTEM, credentialProvider, apiVersionManager)
     try {
       overrideServer.enableRequestProcessing(Map.empty).get(1, TimeUnit.MINUTES)
@@ -929,7 +931,7 @@ class SocketServerTest {
   def testExceptionInAcceptor(): Unit = {
     val serverMetrics = new Metrics()
 
-    val overrideServer = new SocketServer(KafkaConfig.fromProps(props), serverMetrics,
+    val overrideServer = new SocketServer(KafkaConfigProvider.fromProps(props), serverMetrics,
       Time.SYSTEM, credentialProvider, apiVersionManager) {
 
       // same as SocketServer.createAcceptor,
@@ -960,11 +962,11 @@ class SocketServerTest {
   def testConnectionRatePerIp(): Unit = {
     val defaultTimeoutMs = 2000
     val overrideProps = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 0)
-    overrideProps.remove(KafkaConfig.MaxConnectionsPerIpProp)
-    overrideProps.put(KafkaConfig.NumQuotaSamplesProp, String.valueOf(2))
+    overrideProps.remove(KafkaConfig.MAX_CONNECTIONS_PER_IP_PROP)
+    overrideProps.put(KafkaConfig.NUM_QUOTA_SAMPLES_PROP, String.valueOf(2))
     val connectionRate = 5
     val time = new MockTime()
-    val overrideServer = new SocketServer(KafkaConfig.fromProps(overrideProps), new Metrics(),
+    val overrideServer = new SocketServer(KafkaConfigProvider.fromProps(overrideProps), new Metrics(),
       time, credentialProvider, apiVersionManager)
     // update the connection rate to 5
     overrideServer.connectionQuotas.updateIpConnectionRateQuota(None, Some(connectionRate))
@@ -1012,10 +1014,10 @@ class SocketServerTest {
   def testThrottledSocketsClosedOnShutdown(): Unit = {
     val overrideProps = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 0)
     overrideProps.remove("max.connections.per.ip")
-    overrideProps.put(KafkaConfig.NumQuotaSamplesProp, String.valueOf(2))
+    overrideProps.put(KafkaConfig.NUM_QUOTA_SAMPLES_PROP, String.valueOf(2))
     val connectionRate = 5
     val time = new MockTime()
-    val overrideServer = new SocketServer(KafkaConfig.fromProps(overrideProps), new Metrics(),
+    val overrideServer = new SocketServer(KafkaConfigProvider.fromProps(overrideProps), new Metrics(),
       time, credentialProvider, apiVersionManager)
     overrideServer.connectionQuotas.updateIpConnectionRateQuota(None, Some(connectionRate))
     overrideServer.enableRequestProcessing(Map.empty).get(1, TimeUnit.MINUTES)
@@ -1038,7 +1040,7 @@ class SocketServerTest {
   @Test
   def testSslSocketServer(): Unit = {
     val serverMetrics = new Metrics
-    val overrideServer = new SocketServer(KafkaConfig.fromProps(sslServerProps), serverMetrics,
+    val overrideServer = new SocketServer(KafkaConfigProvider.fromProps(sslServerProps), serverMetrics,
       Time.SYSTEM, credentialProvider, apiVersionManager)
     try {
       overrideServer.enableRequestProcessing(Map.empty).get(1, TimeUnit.MINUTES)
@@ -1098,7 +1100,7 @@ class SocketServerTest {
     val overrideProps = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect,
       saslProperties = Some(props), enableSaslPlaintext = true)
     val time = new MockTime()
-    val overrideServer = new TestableSocketServer(KafkaConfig.fromProps(overrideProps), time = time)
+    val overrideServer = new TestableSocketServer(KafkaConfigProvider.fromProps(overrideProps), time = time)
     try {
       overrideServer.enableRequestProcessing(Map.empty).get(1, TimeUnit.MINUTES)
       val socket = connect(overrideServer, ListenerName.forSecurityProtocol(SecurityProtocol.SASL_PLAINTEXT))
@@ -1177,7 +1179,7 @@ class SocketServerTest {
 
   private def checkClientDisconnectionUpdatesRequestMetrics(responseBufferSize: Int): Unit = {
     val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 0)
-    val overrideServer = new TestableSocketServer(KafkaConfig.fromProps(props))
+    val overrideServer = new TestableSocketServer(KafkaConfigProvider.fromProps(props))
 
     try {
       overrideServer.enableRequestProcessing(Map.empty).get(1, TimeUnit.MINUTES)
@@ -1209,7 +1211,7 @@ class SocketServerTest {
   def testClientDisconnectionWithOutstandingReceivesProcessedUntilFailedSend(): Unit = {
     shutdownServerAndMetrics(server)
     val serverMetrics = new Metrics
-    val overrideServer = new TestableSocketServer(KafkaConfig.fromProps(props))
+    val overrideServer = new TestableSocketServer(KafkaConfigProvider.fromProps(props))
 
     try {
       overrideServer.enableRequestProcessing(Map.empty).get(1, TimeUnit.MINUTES)
@@ -1234,10 +1236,10 @@ class SocketServerTest {
    */
   @Test
   def testBrokerSendAfterChannelClosedUpdatesRequestMetrics(): Unit = {
-    props.setProperty(KafkaConfig.ConnectionsMaxIdleMsProp, "110")
+    props.setProperty(KafkaConfig.CONNECTIONS_MAX_IDLE_MS_PROP, "110")
     val serverMetrics = new Metrics
     var conn: Socket = null
-    val overrideServer = new SocketServer(KafkaConfig.fromProps(props), serverMetrics,
+    val overrideServer = new SocketServer(KafkaConfigProvider.fromProps(props), serverMetrics,
       Time.SYSTEM, credentialProvider, apiVersionManager)
     try {
       overrideServer.enableRequestProcessing(Map.empty).get(1, TimeUnit.MINUTES)
@@ -1618,7 +1620,7 @@ class SocketServerTest {
     shutdownServerAndMetrics(server)
     val idleTimeMs = 60000
     val time = new MockTime()
-    props.put(KafkaConfig.ConnectionsMaxIdleMsProp, idleTimeMs.toString)
+    props.put(KafkaConfig.CONNECTIONS_MAX_IDLE_MS_PROP, idleTimeMs.toString)
     props ++= sslServerProps
     val testableServer = new TestableSocketServer(time = time)
     testableServer.enableRequestProcessing(Map.empty).get(1, TimeUnit.MINUTES)
@@ -1802,7 +1804,7 @@ class SocketServerTest {
     shutdownServerAndMetrics(server)
     val numConnections = 5
     props.put("max.connections.per.ip", numConnections.toString)
-    val testableServer = new TestableSocketServer(KafkaConfig.fromProps(props), connectionQueueSize = 1)
+    val testableServer = new TestableSocketServer(KafkaConfigProvider.fromProps(props), connectionQueueSize = 1)
     testableServer.enableRequestProcessing(Map.empty).get(1, TimeUnit.MINUTES)
     val testableSelector = testableServer.testableSelector
     val errors = new mutable.HashSet[String]
@@ -1864,7 +1866,7 @@ class SocketServerTest {
     testProps.put("listeners", "PLAINTEXT://localhost:0,CONTROLLER://localhost:0")
     testProps.put("listener.security.protocol.map", "PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT")
     testProps.put("control.plane.listener.name", "CONTROLLER")
-    val config = KafkaConfig.fromProps(testProps)
+    val config = KafkaConfigProvider.fromProps(testProps)
     withTestableServer(config, { testableServer =>
       val controlPlaneSocket = connect(testableServer, config.controlPlaneListenerName.get,
         localAddr = InetAddress.getLocalHost)
@@ -1884,7 +1886,7 @@ class SocketServerTest {
     testProps.put("listeners", "EXTERNAL://localhost:0,INTERNAL://localhost:0")
     testProps.put("listener.security.protocol.map", "EXTERNAL:PLAINTEXT,INTERNAL:PLAINTEXT")
     testProps.put("inter.broker.listener.name", "INTERNAL")
-    val config = KafkaConfig.fromProps(testProps)
+    val config = KafkaConfigProvider.fromProps(testProps)
     withTestableServer(config, { testableServer =>
       val interBrokerSocket = connect(testableServer, config.interBrokerListenerName,
         localAddr = InetAddress.getLocalHost)
@@ -1906,7 +1908,7 @@ class SocketServerTest {
     testProps.put("listener.security.protocol.map", "EXTERNAL:PLAINTEXT,INTERNAL:PLAINTEXT,CONTROLLER:PLAINTEXT")
     testProps.put("control.plane.listener.name", "CONTROLLER")
     testProps.put("inter.broker.listener.name", "INTERNAL")
-    val config = KafkaConfig.fromProps(testProps)
+    val config = KafkaConfigProvider.fromProps(testProps)
     withTestableServer(config, { testableServer =>
       val controlPlaneSocket = connect(testableServer, config.controlPlaneListenerName.get,
         localAddr = InetAddress.getLocalHost)
@@ -1935,7 +1937,7 @@ class SocketServerTest {
     // From client perspective, such connections should be visible as already "connected")
     // Hence, we can check if listen backlog size is properly configured by trying to connect the server
     // without starting acceptor thread.
-    withTestableServer(KafkaConfig.fromProps(props), { testableServer =>
+    withTestableServer(KafkaConfigProvider.fromProps(props), { testableServer =>
       1 to backlogSize foreach { _ =>
         assertTrue(connect(testableServer).isConnected)
       }
@@ -1951,7 +1953,7 @@ class SocketServerTest {
     shutdownServerAndMetrics(server)
 
     props ++= sslServerProps
-    val testableServer = new TestableSocketServer(KafkaConfig.fromProps(props))
+    val testableServer = new TestableSocketServer(KafkaConfigProvider.fromProps(props))
     testableServer.enableRequestProcessing(Map.empty).get(1, TimeUnit.MINUTES)
     val testableSelector = testableServer.testableSelector
     val proxyServer = new ProxyServer(testableServer)
@@ -2037,12 +2039,12 @@ class SocketServerTest {
     val trustStoreFile = TestUtils.tempFile("truststore", ".jks")
     val sslProps = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, interBrokerSecurityProtocol = Some(SecurityProtocol.SSL),
       trustStoreFile = Some(trustStoreFile))
-    sslProps.put(KafkaConfig.ListenersProp, "SSL://localhost:0")
-    sslProps.put(KafkaConfig.NumNetworkThreadsProp, "1")
+    sslProps.put(KafkaConfig.LISTENERS_PROP, "SSL://localhost:0")
+    sslProps.put(KafkaConfig.NUM_NETWORK_THREADS_PROP, "1")
     sslProps
   }
 
-  private def withTestableServer(config : KafkaConfig = KafkaConfig.fromProps(props),
+  private def withTestableServer(config : KafkaConfig = KafkaConfigProvider.fromProps(props),
                                  testWithServer: TestableSocketServer => Unit,
                                  startProcessingRequests: Boolean = true): Unit = {
     shutdownServerAndMetrics(server)
@@ -2188,7 +2190,7 @@ class SocketServerTest {
   }
 
   class TestableSocketServer(
-    config : KafkaConfig = KafkaConfig.fromProps(props),
+    config : KafkaConfig = KafkaConfigProvider.fromProps(props),
     connectionQueueSize: Int = 20,
     time: Time = Time.SYSTEM
   ) extends SocketServer(
@@ -2203,7 +2205,7 @@ class SocketServerTest {
       testableProcessor.selector.asInstanceOf[TestableSelector]
 
     def testableProcessor: TestableProcessor = {
-      val endpoint = this.config.dataPlaneListeners.head
+      val endpoint = EndPoint.fromJava(this.config.dataPlaneListeners.asScala.head)
       dataPlaneAcceptors.get(endpoint).processors(0).asInstanceOf[TestableProcessor]
     }
 
@@ -2373,7 +2375,7 @@ class SocketServerTest {
           super.poll(pollTimeoutOverride.getOrElse(timeout))
         }
       } finally {
-        super.channels.forEach(allChannels += _.id)
+        super.channels.forEach(tp => allChannels += tp.id)
         allDisconnectedChannels ++= super.disconnected.asScala.keys
 
         cachedCompletedReceives.updateResults()

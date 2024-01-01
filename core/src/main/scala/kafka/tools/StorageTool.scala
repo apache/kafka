@@ -17,7 +17,7 @@
 
 package kafka.tools
 
-import kafka.server.KafkaConfig
+import kafka.server.KafkaConfigProvider
 
 import java.io.PrintStream
 import java.nio.file.{Files, Paths}
@@ -35,6 +35,7 @@ import org.apache.kafka.common.security.scram.internals.ScramMechanism
 import org.apache.kafka.common.security.scram.internals.ScramFormatter
 import org.apache.kafka.metadata.properties.MetaPropertiesEnsemble.VerificationFlag
 import org.apache.kafka.metadata.properties.{MetaProperties, MetaPropertiesEnsemble, MetaPropertiesVersion, PropertiesUtils}
+import org.apache.kafka.server.config.KafkaConfig
 
 import java.util
 import java.util.Base64
@@ -49,7 +50,7 @@ object StorageTool extends Logging {
       val namespace = parseArguments(args)
       val command = namespace.getString("command")
       val config = Option(namespace.getString("config")).flatMap(
-        p => Some(new KafkaConfig(Utils.loadProps(p))))
+        p => Some(KafkaConfigProvider.fromProps(Utils.loadProps(p))))
       command match {
         case "info" =>
           val directories = configToLogDirectories(config.get)
@@ -60,7 +61,7 @@ object StorageTool extends Logging {
           val directories = configToLogDirectories(config.get)
           val clusterId = namespace.getString("cluster_id")
           val metadataVersion = getMetadataVersion(namespace,
-            Option(config.get.originals.get(KafkaConfig.InterBrokerProtocolVersionProp)).map(_.toString))
+            Option(config.get.originals.get(KafkaConfig.INTER_BROKER_PROTOCOL_VERSION_PROP)).map(_.toString))
           if (!metadataVersion.isKRaftSupported) {
             throw new TerseFailure(s"Must specify a valid KRaft metadata version of at least 3.0.")
           }
@@ -146,12 +147,12 @@ object StorageTool extends Logging {
 
   def configToLogDirectories(config: KafkaConfig): Seq[String] = {
     val directories = new mutable.TreeSet[String]
-    directories ++= config.logDirs
+    directories ++= config.logDirs.asScala
     Option(config.metadataLogDir).foreach(directories.add)
     directories.toSeq
   }
 
-  def configToSelfManagedMode(config: KafkaConfig): Boolean = config.processRoles.nonEmpty
+  def configToSelfManagedMode(config: KafkaConfig): Boolean = !config.processRoles.isEmpty
 
   def getMetadataVersion(
     namespace: Namespace,

@@ -22,9 +22,9 @@ import java.util.concurrent.{CompletableFuture, CountDownLatch, LinkedBlockingQu
 import java.util.stream.{Stream => JStream}
 import com.yammer.metrics.core.Timer
 import kafka.api.LeaderAndIsr
-import kafka.server.{KafkaConfig, KafkaServer, QuorumTestHarness}
+import kafka.server.{KafkaConfigProvider, KafkaServer, QuorumTestHarness}
 import kafka.utils.{LogCaptureAppender, TestUtils}
-import kafka.zk.{FeatureZNodeStatus, _}
+import kafka.zk._
 import org.apache.kafka.common.errors.{ControllerMovedException, StaleBrokerEpochException}
 import org.apache.kafka.common.message.{AlterPartitionRequestData, AlterPartitionResponseData}
 import org.apache.kafka.common.metrics.KafkaMetric
@@ -36,6 +36,7 @@ import org.apache.kafka.common.{ElectionType, TopicPartition, Uuid}
 import org.apache.kafka.metadata.LeaderRecoveryState
 import org.apache.kafka.server.common.MetadataVersion
 import org.apache.kafka.server.common.MetadataVersion.{IBP_2_6_IV0, IBP_2_7_IV0, IBP_3_2_IV0}
+import org.apache.kafka.server.config.KafkaConfig
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.apache.log4j.Level
 import org.junit.jupiter.api.Assertions.{assertEquals, assertNotEquals, assertTrue}
@@ -618,7 +619,7 @@ class ControllerIntegrationTest extends QuorumTestHarness {
     val topic = "test"
     val partition = 0
     // create brokers
-    val serverConfigs = TestUtils.createBrokerConfigs(3, zkConnect, false).map(KafkaConfig.fromProps)
+    val serverConfigs = TestUtils.createBrokerConfigs(3, zkConnect, false).map(KafkaConfigProvider.fromProps)
     servers = serverConfigs.reverse.map(s => TestUtils.createServer(s))
     // create the topic
     TestUtils.createTopic(zkClient, topic, partitionReplicaAssignment = expectedReplicaAssignment, servers = servers)
@@ -662,7 +663,7 @@ class ControllerIntegrationTest extends QuorumTestHarness {
   @Test
   def testControllerRejectControlledShutdownRequestWithStaleBrokerEpoch(): Unit = {
     // create brokers
-    val serverConfigs = TestUtils.createBrokerConfigs(2, zkConnect, false).map(KafkaConfig.fromProps)
+    val serverConfigs = TestUtils.createBrokerConfigs(2, zkConnect, false).map(KafkaConfigProvider.fromProps)
     servers = serverConfigs.reverse.map(s => TestUtils.createServer(s))
 
     val controller = getController().kafkaController
@@ -1941,15 +1942,15 @@ class ControllerIntegrationTest extends QuorumTestHarness {
                           startingIdNumber: Int = 0): Seq[KafkaServer] = {
     val configs = TestUtils.createBrokerConfigs(numConfigs, zkConnect, enableControlledShutdown = enableControlledShutdown, logDirCount = logDirCount, startingIdNumber = startingIdNumber)
     configs.foreach { config =>
-      config.setProperty(KafkaConfig.AutoLeaderRebalanceEnableProp, autoLeaderRebalanceEnable.toString)
-      config.setProperty(KafkaConfig.UncleanLeaderElectionEnableProp, uncleanLeaderElectionEnable.toString)
-      config.setProperty(KafkaConfig.LeaderImbalanceCheckIntervalSecondsProp, "1")
-      listeners.foreach(listener => config.setProperty(KafkaConfig.ListenersProp, listener))
-      listenerSecurityProtocolMap.foreach(listenerMap => config.setProperty(KafkaConfig.ListenerSecurityProtocolMapProp, listenerMap))
-      controlPlaneListenerName.foreach(controlPlaneListener => config.setProperty(KafkaConfig.ControlPlaneListenerNameProp, controlPlaneListener))
-      interBrokerProtocolVersion.foreach(ibp => config.setProperty(KafkaConfig.InterBrokerProtocolVersionProp, ibp.toString))
+      config.setProperty(KafkaConfig.AUTO_LEADER_REBALANCE_ENABLE_PROP, autoLeaderRebalanceEnable.toString)
+      config.setProperty(KafkaConfig.UNCLEAN_LEADER_ELECTION_ENABLE_PROP, uncleanLeaderElectionEnable.toString)
+      config.setProperty(KafkaConfig.LEADER_IMBALANCE_CHECK_INTERVAL_SECONDS_PROP, "1")
+      listeners.foreach(listener => config.setProperty(KafkaConfig.LISTENERS_PROP, listener))
+      listenerSecurityProtocolMap.foreach(listenerMap => config.setProperty(KafkaConfig.LISTENER_SECURITY_PROTOCOL_MAP_PROP, listenerMap))
+      controlPlaneListenerName.foreach(controlPlaneListener => config.setProperty(KafkaConfig.CONTROL_PLANE_LISTENER_NAME_PROP, controlPlaneListener))
+      interBrokerProtocolVersion.foreach(ibp => config.setProperty(KafkaConfig.INTER_BROKER_PROTOCOL_VERSION_PROP, ibp.toString))
     }
-    configs.map(config => TestUtils.createServer(KafkaConfig.fromProps(config)))
+    configs.map(config => TestUtils.createServer(KafkaConfigProvider.fromProps(config)))
   }
 
   private def timer(metricName: String): Timer = {

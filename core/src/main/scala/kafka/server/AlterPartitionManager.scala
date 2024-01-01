@@ -36,6 +36,7 @@ import org.apache.kafka.common.utils.Time
 import org.apache.kafka.metadata.LeaderRecoveryState
 import org.apache.kafka.server.{ControllerRequestCompletionHandler, NodeToControllerChannelManager}
 import org.apache.kafka.server.common.MetadataVersion
+import org.apache.kafka.server.config.KafkaConfig
 import org.apache.kafka.server.util.Scheduler
 
 import scala.collection.mutable

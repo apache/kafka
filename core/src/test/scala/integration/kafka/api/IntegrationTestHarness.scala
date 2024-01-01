@@ -24,11 +24,12 @@ import kafka.utils.Implicits._
 
 import java.util.Properties
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig}
-import kafka.server.KafkaConfig
 import kafka.integration.KafkaServerTestHarness
+import kafka.server.KafkaConfigProvider
 import org.apache.kafka.clients.admin.{Admin, AdminClientConfig}
 import org.apache.kafka.common.network.{ListenerName, Mode}
 import org.apache.kafka.common.serialization.{ByteArrayDeserializer, ByteArraySerializer, Deserializer, Serializer}
+import org.apache.kafka.server.config.KafkaConfig
 import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo}
 
 import scala.collection.mutable
@@ -65,13 +66,13 @@ abstract class IntegrationTestHarness extends KafkaServerTestHarness {
     configureListeners(cfgs)
     modifyConfigs(cfgs)
     if (isZkMigrationTest()) {
-      cfgs.foreach(_.setProperty(KafkaConfig.MigrationEnabledProp, "true"))
+      cfgs.foreach(_.setProperty(KafkaConfig.MIGRATION_ENABLED_PROP, "true"))
     }
     if (isNewGroupCoordinatorEnabled()) {
-      cfgs.foreach(_.setProperty(KafkaConfig.NewGroupCoordinatorEnableProp, "true"))
+      cfgs.foreach(_.setProperty(KafkaConfig.NEW_GROUP_COORDINATOR_ENABLE_PROP, "true"))
     }
     insertControllerListenersIfNeeded(cfgs)
-    cfgs.map(KafkaConfig.fromProps)
+    cfgs.map(prop => KafkaConfigProvider.fromProps(prop))
   }
 
   override protected def kraftControllerConfigs(): Seq[Properties] = {
@@ -80,16 +81,16 @@ abstract class IntegrationTestHarness extends KafkaServerTestHarness {
 
   protected def configureListeners(props: Seq[Properties]): Unit = {
     props.foreach { config =>
-      config.remove(KafkaConfig.InterBrokerSecurityProtocolProp)
-      config.setProperty(KafkaConfig.InterBrokerListenerNameProp, interBrokerListenerName.value)
+      config.remove(KafkaConfig.INTER_BROKER_SECURITY_PROTOCOL_PROP)
+      config.setProperty(KafkaConfig.INTER_BROKER_LISTENER_NAME_PROP, interBrokerListenerName.value)
 
       val listenerNames = Set(listenerName, interBrokerListenerName)
       val listeners = listenerNames.map(listenerName => s"${listenerName.value}://localhost:${TestUtils.RandomPort}").mkString(",")
       val listenerSecurityMap = listenerNames.map(listenerName => s"${listenerName.value}:${securityProtocol.name}").mkString(",")
 
-      config.setProperty(KafkaConfig.ListenersProp, listeners)
-      config.setProperty(KafkaConfig.AdvertisedListenersProp, listeners)
-      config.setProperty(KafkaConfig.ListenerSecurityProtocolMapProp, listenerSecurityMap)
+      config.setProperty(KafkaConfig.LISTENERS_PROP, listeners)
+      config.setProperty(KafkaConfig.ADVERTISED_LISTENERS_PROP, listeners)
+      config.setProperty(KafkaConfig.LISTENER_SECURITY_PROTOCOL_MAP_PROP, listenerSecurityMap)
     }
   }
 
@@ -97,12 +98,12 @@ abstract class IntegrationTestHarness extends KafkaServerTestHarness {
     if (isKRaftTest()) {
       props.foreach { config =>
         // Add a security protocol for the controller endpoints, if one is not already set.
-        val securityPairs = config.getProperty(KafkaConfig.ListenerSecurityProtocolMapProp, "").split(",")
-        val toAdd = config.getProperty(KafkaConfig.ControllerListenerNamesProp, "").split(",").filter{
+        val securityPairs = config.getProperty(KafkaConfig.LISTENER_SECURITY_PROTOCOL_MAP_PROP, "").split(",")
+        val toAdd = config.getProperty(KafkaConfig.CONTROLLER_LISTENER_NAMES_PROP, "").split(",").filter{
           case e => !securityPairs.exists(_.startsWith(s"${e}:"))
         }
         if (toAdd.nonEmpty) {
-          config.setProperty(KafkaConfig.ListenerSecurityProtocolMapProp, (securityPairs ++
+          config.setProperty(KafkaConfig.LISTENER_SECURITY_PROTOCOL_MAP_PROP, (securityPairs ++
             toAdd.map(e => s"${e}:${controllerListenerSecurityProtocol.toString}")).mkString(","))
         }
       }

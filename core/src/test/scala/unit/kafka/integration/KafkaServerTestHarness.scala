@@ -37,6 +37,7 @@ import org.apache.kafka.common.resource.ResourcePattern
 import org.apache.kafka.common.security.scram.ScramCredential
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.controller.ControllerRequestContextUtil.ANONYMOUS_CONTEXT
+import org.apache.kafka.server.config.KafkaConfig
 
 /**
  * A test harness that brings up some number of broker nodes

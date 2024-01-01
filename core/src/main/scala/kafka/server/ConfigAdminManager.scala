@@ -36,6 +36,7 @@ import org.apache.kafka.common.message.IncrementalAlterConfigsResponseData.{Alte
 import org.apache.kafka.common.protocol.Errors.{INVALID_REQUEST, UNKNOWN_SERVER_ERROR}
 import org.apache.kafka.common.requests.ApiError
 import org.apache.kafka.common.resource.{Resource, ResourceType}
+import org.apache.kafka.server.config.KafkaConfig
 import org.slf4j.LoggerFactory
 
 import scala.collection.{Map, Seq}
@@ -180,7 +181,7 @@ class ConfigAdminManager(nodeId: Int,
         }
         new AlterConfigOp(new ConfigEntry(config.name(), config.value()), opType)
     }.toSeq
-    prepareIncrementalConfigs(alterConfigOps, configProps, KafkaConfig.configKeys)
+    prepareIncrementalConfigs(alterConfigOps, configProps, KafkaConfig.configKeys.asScala)
     try {
       validateBrokerConfigChange(configProps, configResource)
     } catch {

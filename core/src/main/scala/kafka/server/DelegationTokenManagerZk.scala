@@ -20,7 +20,6 @@ package kafka.server
 import java.nio.ByteBuffer
 import java.nio.charset.StandardCharsets
 import java.util.Base64
-
 import kafka.common.{NotificationHandler, ZkNodeChangeNotificationListener}
 import kafka.utils.{CoreUtils, Json}
 import kafka.zk.{DelegationTokenChangeNotificationSequenceZNode, DelegationTokenChangeNotificationZNode, DelegationTokensZNode}
@@ -30,6 +29,7 @@ import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.security.token.delegation.internals.DelegationTokenCache
 import org.apache.kafka.common.security.token.delegation.{DelegationToken, TokenInformation}
 import org.apache.kafka.common.utils.{Sanitizer, SecurityUtils, Time}
+import org.apache.kafka.server.config.KafkaConfig
 
 import scala.jdk.CollectionConverters._
 import scala.collection.mutable

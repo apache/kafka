@@ -16,7 +16,7 @@
  */
 package kafka.zk
 
-import kafka.utils.{Logging, PasswordEncoder}
+import kafka.utils.Logging
 import kafka.zk.ZkMigrationClient.wrapZkException
 import kafka.zk.migration.{ZkAclMigrationClient, ZkConfigMigrationClient, ZkDelegationTokenMigrationClient, ZkTopicMigrationClient}
 import kafka.zookeeper._
@@ -34,6 +34,7 @@ import org.apache.kafka.metadata.migration.ConfigMigrationClient.ClientQuotaVisi
 import org.apache.kafka.metadata.migration.TopicMigrationClient.{TopicVisitor, TopicVisitorInterest}
 import org.apache.kafka.metadata.migration._
 import org.apache.kafka.server.common.{ApiMessageAndVersion, ProducerIdsBlock}
+import org.apache.kafka.utils.PasswordEncoder
 import org.apache.zookeeper.KeeperException
 import org.apache.zookeeper.KeeperException.{AuthFailedException, NoAuthException, SessionClosedRequireAuthException}
 

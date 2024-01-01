@@ -18,7 +18,7 @@
  limitations under the License.
 -->
 
-<import-control pkg="org.apache.kafka.server">
+<import-control pkg="org.apache.kafka">
 
   <!-- THINK HARD ABOUT THE LAYERING OF THE PROJECT BEFORE CHANGING THIS FILE -->
 
@@ -70,9 +70,19 @@
   <!-- server-metrics specific classes -->
   <allow pkg="org.apache.kafka.server.metrics" />
 
-  <subpackage name="metrics">
-    <allow class="org.apache.kafka.server.authorizer.AuthorizableRequestContext" />
-    <allow pkg="org.apache.kafka.server.telemetry" />
+  <!-- KafkaConfig dependencies -->
+  <allow pkg="org.apache.kafka" />
+  <allow pkg="org.apache.zookeeper" />
+
+  <subpackage name="server">
+    <subpackage name="metrics">
+      <allow class="org.apache.kafka.server.authorizer.AuthorizableRequestContext" />
+      <allow pkg="org.apache.kafka.server.telemetry" />
+    </subpackage>
+  </subpackage>
+  <subpackage name="utils">
+    <allow pkg="org.apache.commons.validator.routines" />
+    <allow pkg="javax.crypto" />
   </subpackage>
 
 </import-control>

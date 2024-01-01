@@ -21,7 +21,7 @@ import java.util.{Collections, Optional, Properties}
 import kafka.admin.ConsumerGroupCommand.{ConsumerGroupCommandOptions, ConsumerGroupService}
 import kafka.security.authorizer.{AclAuthorizer, AclEntry}
 import kafka.security.authorizer.AclEntry.WildcardHost
-import kafka.server.{BaseRequestTest, KafkaConfig}
+import kafka.server.BaseRequestTest
 import kafka.utils.{TestInfoUtils, TestUtils}
 import kafka.utils.TestUtils.waitUntilTrue
 import org.apache.kafka.clients.admin.{Admin, AlterConfigOp, NewTopic}
@@ -66,6 +66,7 @@ import org.junit.jupiter.params.provider.{CsvSource, ValueSource}
 
 import java.util.Collections.singletonList
 import org.apache.kafka.common.message.MetadataRequestData.MetadataRequestTopic
+import org.apache.kafka.server.config.KafkaConfig
 import org.junit.jupiter.api.function.Executable
 
 import scala.annotation.nowarn
@@ -149,7 +150,7 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
   consumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, group)
 
   override def brokerPropertyOverrides(properties: Properties): Unit = {
-    properties.put(KafkaConfig.BrokerIdProp, brokerId.toString)
+    properties.put(KafkaConfig.BROKER_ID_PROP, brokerId.toString)
     addNodeProperties(properties)
   }
 
@@ -161,18 +162,18 @@ class AuthorizerIntegrationTest extends BaseRequestTest {
 
   private def addNodeProperties(properties: Properties): Unit = {
     if (isKRaftTest()) {
-      properties.put(KafkaConfig.AuthorizerClassNameProp, classOf[StandardAuthorizer].getName)
+      properties.put(KafkaConfig.AUTHORIZER_CLASS_NAME_PROP, classOf[StandardAuthorizer].getName)
       properties.put(StandardAuthorizer.SUPER_USERS_CONFIG, BrokerPrincipal.toString)
     } else {
-      properties.put(KafkaConfig.AuthorizerClassNameProp, classOf[AclAuthorizer].getName)
+      properties.put(KafkaConfig.AUTHORIZER_CLASS_NAME_PROP, classOf[AclAuthorizer].getName)
     }
 
-    properties.put(KafkaConfig.OffsetsTopicPartitionsProp, "1")
-    properties.put(KafkaConfig.OffsetsTopicReplicationFactorProp, "1")
-    properties.put(KafkaConfig.TransactionsTopicPartitionsProp, "1")
-    properties.put(KafkaConfig.TransactionsTopicReplicationFactorProp, "1")
-    properties.put(KafkaConfig.TransactionsTopicMinISRProp, "1")
-    properties.put(KafkaConfig.UnstableApiVersionsEnableProp, "true")
+    properties.put(KafkaConfig.OFFSETS_TOPIC_PARTITIONS_PROP, "1")
+    properties.put(KafkaConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_PROP, "1")
+    properties.put(KafkaConfig.TRANSACTIONS_TOPIC_PARTITIONS_PROP, "1")
+    properties.put(KafkaConfig.TRANSACTIONS_TOPIC_REPLICATION_FACTOR_PROP, "1")
+    properties.put(KafkaConfig.TRANSACTIONS_TOPIC_MIN_ISR_PROP, "1")
+    properties.put(KafkaConfig.UNSTABLE_API_VERSIONS_ENABLE_PROP, "true")
     properties.put(BrokerSecurityConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG, classOf[PrincipalBuilder].getName)
   }
 

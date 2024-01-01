@@ -22,7 +22,7 @@ import java.nio.charset.StandardCharsets
 import java.util.{Collections, Properties}
 import java.util.concurrent.TimeUnit
 import kafka.integration.KafkaServerTestHarness
-import kafka.server.KafkaConfig
+import kafka.server.KafkaConfigProvider
 import kafka.utils.{TestInfoUtils, TestUtils}
 import org.apache.kafka.clients.admin.{Admin, NewPartitions}
 import org.apache.kafka.clients.consumer.Consumer
@@ -33,6 +33,7 @@ import org.apache.kafka.common.network.{ListenerName, Mode}
 import org.apache.kafka.common.record.TimestampType
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.{KafkaException, TopicPartition}
+import org.apache.kafka.server.config.KafkaConfig
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo}
 import org.junit.jupiter.params.ParameterizedTest
@@ -47,7 +48,7 @@ abstract class BaseProducerSendTest extends KafkaServerTestHarness {
   def generateConfigs: scala.collection.Seq[KafkaConfig] = {
     val overridingProps = new Properties()
     val numServers = 2
-    overridingProps.put(KafkaConfig.NumPartitionsProp, 4.toString)
+    overridingProps.put(KafkaConfig.NUM_PARTITIONS_PROP, 4.toString)
     TestUtils.createBrokerConfigs(
       numServers,
       zkConnectOrNull,
@@ -55,7 +56,7 @@ abstract class BaseProducerSendTest extends KafkaServerTestHarness {
       interBrokerSecurityProtocol = Some(securityProtocol),
       trustStoreFile = trustStoreFile,
       saslProperties = serverSaslProperties
-    ).map(KafkaConfig.fromProps(_, overridingProps))
+    ).map(KafkaConfigProvider.fromProps(_, overridingProps))
   }
 
   private var consumer: Consumer[Array[Byte], Array[Byte]] = _

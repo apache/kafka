@@ -21,6 +21,7 @@ import kafka.cluster.BrokerEndPoint;
 import kafka.cluster.DelayedOperations;
 import kafka.cluster.AlterPartitionListener;
 import kafka.cluster.Partition;
+import kafka.server.KafkaConfigProvider;
 import org.apache.kafka.server.util.MockTime;
 import org.apache.kafka.storage.internals.log.LogAppendInfo;
 import kafka.log.LogManager;
@@ -29,7 +30,7 @@ import kafka.server.BrokerFeatures;
 import kafka.server.BrokerTopicStats;
 import kafka.server.FailedPartitions;
 import kafka.server.InitialFetchState;
-import kafka.server.KafkaConfig;
+import org.apache.kafka.server.config.KafkaConfig;
 import kafka.server.MetadataCache;
 import kafka.server.OffsetTruncationState;
 import kafka.server.QuotaFactory;
@@ -131,7 +132,7 @@ public class ReplicaFetcherThreadBenchmark {
         scheduler.startup();
         Properties props = new Properties();
         props.put("zookeeper.connect", "127.0.0.1:9999");
-        KafkaConfig config = new KafkaConfig(props);
+        KafkaConfig config = KafkaConfigProvider.fromProps(props);
         LogConfig logConfig = createLogConfig();
 
         BrokerTopicStats brokerTopicStats = new BrokerTopicStats(Optional.empty());

@@ -849,10 +849,29 @@ project(':server') {
 
   dependencies {
     implementation project(':clients')
+    implementation libs.commonsValidator
+    implementation project(':raft')
+    implementation project(':storage')
     implementation project(':server-common')
     implementation libs.metrics
 
+    implementation project(':group-coordinator')
+    implementation project(':metadata')
+    implementation(libs.zookeeper) {
+      // Dropwizard Metrics are required by ZooKeeper as of v3.6.0,
+      // but the library should *not* be used in Kafka code
+      implementation libs.dropwizardMetrics
+      exclude module: 'slf4j-log4j12'
+      exclude module: 'log4j'
+      // Both Kafka and Zookeeper use slf4j. ZooKeeper moved from log4j to logback in v3.8.0, but Kafka relies on reload4j.
+      // We are removing Zookeeper's dependency on logback so we have a singular logging backend.
+      exclude module: 'logback-classic'
+      exclude module: 'logback-core'
+    }
     implementation libs.slf4jApi
+
+    api libs.scalaLibrary
+    implementation libs.scalaJava8Compat
 
     compileOnly libs.log4j
 
@@ -1808,6 +1827,7 @@ project(':storage') {
 
     testImplementation project(':clients')
     testImplementation project(':clients').sourceSets.test.output
+    testImplementation project(':server')
     testImplementation project(':core')
     testImplementation project(':core').sourceSets.test.output
     testImplementation project(':server-common')
@@ -1972,6 +1992,7 @@ project(':tools') {
     implementation project(':clients')
     implementation project(':storage')
     implementation project(':server-common')
+    implementation project(':server')
     implementation project(':connect:runtime')
     implementation project(':log4j-appender')
     implementation project(':tools:tools-api')
@@ -2146,8 +2167,10 @@ project(':streams') {
 
     testImplementation project(':clients').sourceSets.test.output
     testImplementation project(':core')
+    testImplementation project(':server')
     testImplementation project(':tools')
     testImplementation project(':core').sourceSets.test.output
+    testImplementation project(':server').sourceSets.test.output
     testImplementation project(':server-common')
     testImplementation project(':server-common').sourceSets.test.output
     testImplementation libs.log4j
@@ -2699,6 +2722,7 @@ project(':jmh-benchmarks') {
       exclude group: 'net.sf.jopt-simple', module: 'jopt-simple'
     }
     implementation project(':server-common')
+    implementation project(':server')
     implementation project(':clients')
     implementation project(':group-coordinator')
     implementation project(':metadata')
@@ -2925,6 +2949,7 @@ project(':connect:runtime') {
 
     testImplementation project(':clients').sourceSets.test.output
     testImplementation project(':core')
+    testImplementation project(':server')
     testImplementation project(':metadata')
     testImplementation project(':core').sourceSets.test.output
     testImplementation project(':server-common')
@@ -3112,6 +3137,7 @@ project(':connect:mirror') {
   archivesBaseName = "connect-mirror"
 
   dependencies {
+    implementation project(':server')
     implementation project(':connect:api')
     implementation project(':connect:runtime')
     implementation project(':connect:mirror-client')

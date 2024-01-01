@@ -54,6 +54,7 @@ import org.apache.kafka.controller.{Controller, ControllerRequestContext, Result
 import org.apache.kafka.image.publisher.ControllerRegistrationsPublisher
 import org.apache.kafka.server.authorizer.{Action, AuthorizableRequestContext, AuthorizationResult, Authorizer}
 import org.apache.kafka.server.common.{ApiMessageAndVersion, Features, MetadataVersion, ProducerIdsBlock}
+import org.apache.kafka.server.config.KafkaConfig
 import org.apache.kafka.server.util.FutureUtils
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, Test}
@@ -150,10 +151,10 @@ class ControllerApisTest {
                                    controller: Controller,
                                    props: Properties = new Properties(),
                                    throttle: Boolean = false): ControllerApis = {
-    props.put(KafkaConfig.NodeIdProp, nodeId: java.lang.Integer)
-    props.put(KafkaConfig.ProcessRolesProp, "controller")
-    props.put(KafkaConfig.ControllerListenerNamesProp, "PLAINTEXT")
-    props.put(KafkaConfig.QuorumVotersProp, s"$nodeId@localhost:9092")
+    props.put(KafkaConfig.NODE_ID_PROP, nodeId: java.lang.Integer)
+    props.put(KafkaConfig.PROCESS_ROLES_PROP, "controller")
+    props.put(KafkaConfig.CONTROLLER_LISTENER_NAMES_PROP, "PLAINTEXT")
+    props.put(KafkaConfig.QUORUM_VOTERS_PROP, s"$nodeId@localhost:9092")
     new ControllerApis(
       requestChannel,
       authorizer,
@@ -161,7 +162,7 @@ class ControllerApisTest {
       time,
       controller,
       raftManager,
-      new KafkaConfig(props),
+      KafkaConfigProvider.fromProps(props),
       "JgxuGe9URy-E-ceaL04lEw",
       new ControllerRegistrationsPublisher(),
       new SimpleApiVersionManager(
@@ -318,19 +319,19 @@ class ControllerApisTest {
           setResourceName("1").
           setResourceType(ConfigResource.Type.BROKER.id()).
           setConfigs(new OldAlterableConfigCollection(util.Arrays.asList(new OldAlterableConfig().
-            setName(KafkaConfig.LogCleanerBackoffMsProp).
+            setName(KafkaConfig.LOG_CLEANER_BACKOFF_MS_PROP).
             setValue("100000")).iterator())),
         new OldAlterConfigsResource().
           setResourceName("2").
           setResourceType(ConfigResource.Type.BROKER.id()).
           setConfigs(new OldAlterableConfigCollection(util.Arrays.asList(new OldAlterableConfig().
-            setName(KafkaConfig.LogCleanerBackoffMsProp).
+            setName(KafkaConfig.LOG_CLEANER_BACKOFF_MS_PROP).
             setValue("100000")).iterator())),
         new OldAlterConfigsResource().
           setResourceName("2").
           setResourceType(ConfigResource.Type.BROKER.id()).
           setConfigs(new OldAlterableConfigCollection(util.Arrays.asList(new OldAlterableConfig().
-            setName(KafkaConfig.LogCleanerBackoffMsProp).
+            setName(KafkaConfig.LOG_CLEANER_BACKOFF_MS_PROP).
             setValue("100000")).iterator())),
         new OldAlterConfigsResource().
           setResourceName("baz").
@@ -472,7 +473,7 @@ class ControllerApisTest {
           setResourceName("1").
           setResourceType(ConfigResource.Type.BROKER.id()).
           setConfigs(new AlterableConfigCollection(util.Arrays.asList(new AlterableConfig().
-            setName(KafkaConfig.LogCleanerBackoffMsProp).
+            setName(KafkaConfig.LOG_CLEANER_BACKOFF_MS_PROP).
             setValue("100000").
             setConfigOperation(AlterConfigOp.OpType.SET.id())).iterator())),
         new AlterConfigsResource().
@@ -536,14 +537,14 @@ class ControllerApisTest {
           setResourceName("3").
           setResourceType(ConfigResource.Type.BROKER.id()).
           setConfigs(new AlterableConfigCollection(util.Arrays.asList(new AlterableConfig().
-            setName(KafkaConfig.LogCleanerBackoffMsProp).
+            setName(KafkaConfig.LOG_CLEANER_BACKOFF_MS_PROP).
             setValue("100000").
             setConfigOperation(AlterConfigOp.OpType.SET.id())).iterator())),
         new AlterConfigsResource().
           setResourceName("3").
           setResourceType(ConfigResource.Type.BROKER.id()).
           setConfigs(new AlterableConfigCollection(util.Arrays.asList(new AlterableConfig().
-            setName(KafkaConfig.LogCleanerBackoffMsProp).
+            setName(KafkaConfig.LOG_CLEANER_BACKOFF_MS_PROP).
             setValue("100000").
             setConfigOperation(AlterConfigOp.OpType.SET.id())).iterator())),
         new AlterConfigsResource().
@@ -889,7 +890,7 @@ class ControllerApisTest {
     val controller = new MockController.Builder().
       newInitialTopic("foo", fooId).build()
     val props = new Properties()
-    props.put(KafkaConfig.DeleteTopicEnableProp, "false")
+    props.put(KafkaConfig.DELETE_TOPIC_ENABLE_PROP, "false")
     controllerApis = createControllerApis(None, controller, props)
     val request = new DeleteTopicsRequestData()
     request.topics().add(new DeleteTopicState().setName("foo").setTopicId(ZERO_UUID))

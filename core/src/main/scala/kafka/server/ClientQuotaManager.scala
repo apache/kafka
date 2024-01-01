@@ -19,9 +19,7 @@ package kafka.server
 import java.{lang, util}
 import java.util.concurrent.{ConcurrentHashMap, DelayQueue, TimeUnit}
 import java.util.concurrent.locks.ReentrantReadWriteLock
-
 import kafka.network.RequestChannel
-import kafka.network.RequestChannel._
 import kafka.server.ClientQuotaManager._
 import kafka.utils.{Logging, QuotaUtils}
 import org.apache.kafka.common.{Cluster, MetricName}
@@ -30,6 +28,8 @@ import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.metrics.stats.{Avg, CumulativeSum, Rate}
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.utils.{Sanitizer, Time}
+import org.apache.kafka.network.Session
+import org.apache.kafka.server.config.ClientQuotaManagerConfig
 import org.apache.kafka.server.quota.{ClientQuotaCallback, ClientQuotaEntity, ClientQuotaType}
 import org.apache.kafka.server.util.ShutdownableThread
 
@@ -42,23 +42,6 @@ import scala.jdk.CollectionConverters._
  * @param throttleTimeSensor @Sensor that tracks the throttle time
  */
 case class ClientSensors(metricTags: Map[String, String], quotaSensor: Sensor, throttleTimeSensor: Sensor)
-
-/**
- * Configuration settings for quota management
- * @param numQuotaSamples The number of samples to retain in memory
- * @param quotaWindowSizeSeconds The time span of each sample
- *
- */
-case class ClientQuotaManagerConfig(numQuotaSamples: Int =
-                                        ClientQuotaManagerConfig.DefaultNumQuotaSamples,
-                                    quotaWindowSizeSeconds: Int =
-                                        ClientQuotaManagerConfig.DefaultQuotaWindowSizeSeconds)
-
-object ClientQuotaManagerConfig {
-  // Always have 10 whole windows + 1 current window
-  val DefaultNumQuotaSamples = 11
-  val DefaultQuotaWindowSizeSeconds = 1
-}
 
 object QuotaTypes {
   val NoQuotas = 0
@@ -288,7 +271,7 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
     if (quotasEnabled) {
       val clientSensors = getOrCreateQuotaSensors(session, clientId)
       Option(quotaCallback.quotaLimit(clientQuotaType, clientSensors.metricTags.asJava))
-        .map(_.toDouble * (config.numQuotaSamples - 1) * config.quotaWindowSizeSeconds)
+        .map(_.toDouble * (config.getNumQuotaSamples - 1) * config.getQuotaWindowSizeSeconds)
         .getOrElse(Double.MaxValue)
     } else {
       Double.MaxValue
@@ -403,8 +386,8 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
 
   private def getQuotaMetricConfig(quotaLimit: Double): MetricConfig = {
     new MetricConfig()
-      .timeWindow(config.quotaWindowSizeSeconds, TimeUnit.SECONDS)
-      .samples(config.numQuotaSamples)
+      .timeWindow(config.getQuotaWindowSizeSeconds, TimeUnit.SECONDS)
+      .samples(config.getNumQuotaSamples)
       .quota(new Quota(quotaLimit, true))
   }
 

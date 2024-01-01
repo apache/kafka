@@ -19,12 +19,11 @@ package kafka.admin
 import java.util
 import java.util.concurrent.ExecutionException
 import java.util.{Collections, Optional, Properties}
-
 import scala.collection.Seq
 import kafka.log.UnifiedLog
 import kafka.zk.TopicPartitionZNode
 import kafka.utils.TestUtils
-import kafka.server.{KafkaConfig, KafkaServer, QuorumTestHarness}
+import kafka.server.{KafkaConfigProvider, KafkaServer, QuorumTestHarness}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, Test}
 import kafka.common.TopicAlreadyMarkedForDeletionException
@@ -32,6 +31,7 @@ import kafka.controller.{OfflineReplica, PartitionAndReplica, ReplicaAssignment,
 import org.apache.kafka.clients.admin.{Admin, AdminClientConfig, NewPartitionReassignment, NewPartitions}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException
+
 import scala.jdk.CollectionConverters._
 
 class DeleteTopicTest extends QuorumTestHarness {
@@ -115,7 +115,7 @@ class DeleteTopicTest extends QuorumTestHarness {
     val brokerConfigs = TestUtils.createBrokerConfigs(4, zkConnect, false)
     brokerConfigs.foreach(p => p.setProperty("delete.topic.enable", "true"))
     // create brokers
-    val allServers = brokerConfigs.map(b => TestUtils.createServer(KafkaConfig.fromProps(b)))
+    val allServers = brokerConfigs.map(b => TestUtils.createServer(KafkaConfigProvider.fromProps(b)))
     this.servers = allServers
     val servers = allServers.filter(s => expectedReplicaAssignment(0).contains(s.config.brokerId))
     // create the topic
@@ -194,7 +194,7 @@ class DeleteTopicTest extends QuorumTestHarness {
     val brokerConfigs = TestUtils.createBrokerConfigs(4, zkConnect, false)
     brokerConfigs.foreach(p => p.setProperty("delete.topic.enable", "true"))
     // create brokers
-    val allServers = brokerConfigs.map(b => TestUtils.createServer(KafkaConfig.fromProps(b)))
+    val allServers = brokerConfigs.map(b => TestUtils.createServer(KafkaConfigProvider.fromProps(b)))
     this.servers = allServers
     val servers = allServers.filter(s => expectedReplicaAssignment(0).contains(s.config.brokerId))
     // create the topic
@@ -380,7 +380,7 @@ class DeleteTopicTest extends QuorumTestHarness {
   private def createTestTopicAndCluster(topic: String, brokerConfigs: Seq[Properties], replicaAssignment: Map[Int, List[Int]]): Seq[KafkaServer] = {
     val topicPartition = new TopicPartition(topic, 0)
     // create brokers
-    val servers = brokerConfigs.map(b => TestUtils.createServer(KafkaConfig.fromProps(b)))
+    val servers = brokerConfigs.map(b => TestUtils.createServer(KafkaConfigProvider.fromProps(b)))
     // create the topic
     TestUtils.createTopic(zkClient, topic, expectedReplicaAssignment, servers)
     // wait until replica log is created on every broker

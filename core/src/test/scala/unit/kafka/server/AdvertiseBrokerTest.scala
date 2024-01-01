@@ -40,7 +40,7 @@ class AdvertiseBrokerTest extends QuorumTestHarness {
   def testBrokerAdvertiseListenersToZK(): Unit = {
     val props = TestUtils.createBrokerConfig(brokerId, zkConnect, enableControlledShutdown = false)
     props.put("advertised.listeners", "PLAINTEXT://routable-listener:3334")
-    servers += TestUtils.createServer(KafkaConfig.fromProps(props))
+    servers += TestUtils.createServer(KafkaConfigProvider.fromProps(props))
 
     val brokerInfo = zkClient.getBroker(brokerId).get
     assertEquals(1, brokerInfo.endPoints.size)
@@ -58,7 +58,7 @@ class AdvertiseBrokerTest extends QuorumTestHarness {
     props.put("advertised.listeners", "EXTERNAL://external-listener:9999,INTERNAL://internal-listener:10999")
     props.put("listener.security.protocol.map", "INTERNAL:PLAINTEXT,EXTERNAL:PLAINTEXT")
     props.put("inter.broker.listener.name", "INTERNAL")
-    servers += TestUtils.createServer(KafkaConfig.fromProps(props))
+    servers += TestUtils.createServer(KafkaConfigProvider.fromProps(props))
 
     val brokerInfo = zkClient.getBroker(brokerId).get
     assertEquals(2, brokerInfo.endPoints.size)

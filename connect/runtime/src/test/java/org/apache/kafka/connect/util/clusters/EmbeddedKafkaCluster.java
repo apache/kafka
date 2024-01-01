@@ -17,7 +17,8 @@
 package org.apache.kafka.connect.util.clusters;
 
 import kafka.cluster.EndPoint;
-import kafka.server.KafkaConfig;
+import kafka.server.KafkaConfigProvider;
+import org.apache.kafka.server.config.KafkaConfig;
 import kafka.server.KafkaServer;
 import kafka.utils.CoreUtils;
 import kafka.utils.TestUtils;
@@ -57,6 +58,7 @@ import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.metadata.BrokerState;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import scala.collection.JavaConverters;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -129,7 +131,7 @@ public class EmbeddedKafkaCluster {
         // Since we support `stop` followed by `startOnlyKafkaOnSamePorts`, we track whether
         // a listener config is defined during initialization in order to know if it's
         // safe to override it
-        hasListenerConfig = brokerConfig.get(KafkaConfig.ListenersProp()) != null;
+        hasListenerConfig = brokerConfig.get(KafkaConfig.LISTENERS_PROP) != null;
 
         this.clientConfigs = clientConfigs;
     }
@@ -153,29 +155,29 @@ public class EmbeddedKafkaCluster {
     }
 
     private void doStart() {
-        brokerConfig.put(KafkaConfig.ZkConnectProp(), zKConnectString());
+        brokerConfig.put(KafkaConfig.ZK_CONNECT_PROP, zKConnectString());
 
-        putIfAbsent(brokerConfig, KafkaConfig.DeleteTopicEnableProp(), true);
-        putIfAbsent(brokerConfig, KafkaConfig.GroupInitialRebalanceDelayMsProp(), 0);
-        putIfAbsent(brokerConfig, KafkaConfig.OffsetsTopicReplicationFactorProp(), (short) brokers.length);
-        putIfAbsent(brokerConfig, KafkaConfig.AutoCreateTopicsEnableProp(), false);
+        putIfAbsent(brokerConfig, KafkaConfig.DELETE_TOPIC_ENABLE_PROP, true);
+        putIfAbsent(brokerConfig, KafkaConfig.GROUP_INITIAL_REBALANCE_DELAY_MS_PROP, 0);
+        putIfAbsent(brokerConfig, KafkaConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_PROP, (short) brokers.length);
+        putIfAbsent(brokerConfig, KafkaConfig.AUTO_CREATE_TOPICS_ENABLE_PROP, false);
         // reduce the size of the log cleaner map to reduce test memory usage
-        putIfAbsent(brokerConfig, KafkaConfig.LogCleanerDedupeBufferSizeProp(), 2 * 1024 * 1024L);
+        putIfAbsent(brokerConfig, KafkaConfig.LOG_CLEANER_DEDUPE_BUFFER_SIZE_PROP, 2 * 1024 * 1024L);
 
-        Object listenerConfig = brokerConfig.get(KafkaConfig.InterBrokerListenerNameProp());
+        Object listenerConfig = brokerConfig.get(KafkaConfig.INTER_BROKER_LISTENER_NAME_PROP);
         if (listenerConfig == null)
-            listenerConfig = brokerConfig.get(KafkaConfig.InterBrokerSecurityProtocolProp());
+            listenerConfig = brokerConfig.get(KafkaConfig.INTER_BROKER_SECURITY_PROTOCOL_PROP);
         if (listenerConfig == null)
             listenerConfig = "PLAINTEXT";
         listenerName = new ListenerName(listenerConfig.toString());
 
         for (int i = 0; i < brokers.length; i++) {
-            brokerConfig.put(KafkaConfig.BrokerIdProp(), i);
+            brokerConfig.put(KafkaConfig.BROKER_ID_PROP, i);
             currentBrokerLogDirs[i] = currentBrokerLogDirs[i] == null ? createLogDir() : currentBrokerLogDirs[i];
-            brokerConfig.put(KafkaConfig.LogDirProp(), currentBrokerLogDirs[i]);
+            brokerConfig.put(KafkaConfig.LOG_DIR_PROP, currentBrokerLogDirs[i]);
             if (!hasListenerConfig)
-                brokerConfig.put(KafkaConfig.ListenersProp(), listenerName.value() + "://localhost:" + currentBrokerPorts[i]);
-            brokers[i] = TestUtils.createServer(new KafkaConfig(brokerConfig, true), time);
+                brokerConfig.put(KafkaConfig.LISTENERS_PROP, listenerName.value() + "://localhost:" + currentBrokerPorts[i]);
+            brokers[i] = TestUtils.createServer(KafkaConfigProvider.fromProps(brokerConfig), time);
             currentBrokerPorts[i] = brokers[i].boundPort(listenerName);
         }
 
@@ -197,6 +199,7 @@ public class EmbeddedKafkaCluster {
         stop(true, true);
     }
 
+    @SuppressWarnings("deprecation")
     private void stop(boolean deleteLogDirs, boolean stopZK) {
         try {
             if (producer != null) {
@@ -221,7 +224,7 @@ public class EmbeddedKafkaCluster {
             for (KafkaServer broker : brokers) {
                 try {
                     log.info("Cleaning up kafka log dirs at {}", broker.config().logDirs());
-                    CoreUtils.delete(broker.config().logDirs());
+                    CoreUtils.delete(JavaConverters.asScalaBuffer(broker.config().logDirs()));
                 } catch (Throwable t) {
                     String msg = String.format("Could not clean up log dirs for broker at %s",
                             address(broker));
@@ -304,7 +307,7 @@ public class EmbeddedKafkaCluster {
     }
     
     public boolean sslEnabled() {
-        final String listeners = brokerConfig.getProperty(KafkaConfig.ListenersProp());
+        final String listeners = brokerConfig.getProperty(KafkaConfig.LISTENERS_PROP);
         return listeners != null && listeners.contains("SSL");
     }
 
@@ -462,7 +465,7 @@ public class EmbeddedKafkaCluster {
         Properties props = Utils.mkProperties(clientConfigs);
         props.putAll(adminClientConfig);
         props.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers());
-        final Object listeners = brokerConfig.get(KafkaConfig.ListenersProp());
+        final Object listeners = brokerConfig.get(KafkaConfig.LISTENERS_PROP);
         if (listeners != null && listeners.toString().contains("SSL")) {
             props.put(SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG, brokerConfig.get(SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG));
             props.put(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG, ((Password) brokerConfig.get(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG)).value());

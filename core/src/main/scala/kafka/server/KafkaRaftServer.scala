@@ -20,18 +20,19 @@ import java.io.File
 import java.util.concurrent.CompletableFuture
 import kafka.log.UnifiedLog
 import kafka.metrics.KafkaMetricsReporter
-import kafka.server.KafkaRaftServer.{BrokerRole, ControllerRole}
 import kafka.utils.{CoreUtils, Logging, Mx4jLoader, VerifiableProperties}
 import org.apache.kafka.common.config.{ConfigDef, ConfigResource}
-import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.utils.{AppInfoParser, Time}
-import org.apache.kafka.common.{KafkaException, Uuid}
+import org.apache.kafka.common.KafkaException
 import org.apache.kafka.metadata.KafkaConfigSchema
 import org.apache.kafka.metadata.bootstrap.{BootstrapDirectory, BootstrapMetadata}
 import org.apache.kafka.metadata.properties.MetaPropertiesEnsemble.VerificationFlag.{REQUIRE_AT_LEAST_ONE_VALID, REQUIRE_METADATA_LOG_DIR}
 import org.apache.kafka.metadata.properties.{MetaProperties, MetaPropertiesEnsemble}
 import org.apache.kafka.raft.RaftConfig
-import org.apache.kafka.server.config.ServerTopicConfigSynonyms
+import org.apache.kafka.server.KafkaRaftServer.ProcessRole.BrokerRole
+import org.apache.kafka.server.KafkaRaftServer.ProcessRole.ControllerRole
+import org.apache.kafka.server.KafkaRaftServer.METADATA_PARTITION
+import org.apache.kafka.server.config.{KafkaConfig, ServerTopicConfigSynonyms}
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.apache.kafka.storage.internals.log.LogConfig
 import org.slf4j.Logger
@@ -117,21 +118,10 @@ class KafkaRaftServer(
 }
 
 object KafkaRaftServer {
-  val MetadataTopic = Topic.CLUSTER_METADATA_TOPIC_NAME
-  val MetadataPartition = Topic.CLUSTER_METADATA_TOPIC_PARTITION
-  val MetadataTopicId = Uuid.METADATA_TOPIC_ID
-
-  sealed trait ProcessRole
-  case object BrokerRole extends ProcessRole {
-    override def toString: String = "broker"
-  }
-  case object ControllerRole extends ProcessRole {
-    override def toString: String = "controller"
-  }
 
   /**
-   * Initialize the configured log directories, including both [[KafkaConfig.MetadataLogDirProp]]
-   * and [[KafkaConfig.LogDirProp]]. This method performs basic validation to ensure that all
+   * Initialize the configured log directories, including both [[KafkaConfig.METADATA_LOG_DIR_PROP]]
+   * and [[KafkaConfig.LOG_DIR_PROP]]. This method performs basic validation to ensure that all
    * directories are accessible and have been initialized with consistent `meta.properties`.
    *
    * @param config The process configuration
@@ -139,20 +129,20 @@ object KafkaRaftServer {
    *         be consistent across all log dirs) and the offline directories
    */
   def initializeLogDirs(
-    config: KafkaConfig,
-    log: Logger,
-    logPrefix: String
-  ): (MetaPropertiesEnsemble, BootstrapMetadata) = {
+                         config: KafkaConfig,
+                         log: Logger,
+                         logPrefix: String
+  ): (MetaPropertiesEnsemble, BootstrapMetadata) =  {
     // Load and verify the original ensemble.
-    val loader = new MetaPropertiesEnsemble.Loader()
+    val loader: MetaPropertiesEnsemble.Loader = new MetaPropertiesEnsemble.Loader()
     loader.addMetadataLogDir(config.metadataLogDir)
-    config.logDirs.foreach(loader.addLogDir(_))
-    val initialMetaPropsEnsemble = loader.load()
+    config.logDirs.asScala.foreach(loader.addLogDir(_))
+    val initialMetaPropsEnsemble: MetaPropertiesEnsemble = loader.load()
     val verificationFlags = util.EnumSet.of(REQUIRE_AT_LEAST_ONE_VALID, REQUIRE_METADATA_LOG_DIR)
     initialMetaPropsEnsemble.verify(Optional.empty(), OptionalInt.of(config.nodeId), verificationFlags);
 
     // Check that the __cluster_metadata-0 topic does not appear outside the metadata directory.
-    val metadataPartitionDirName = UnifiedLog.logDirName(MetadataPartition)
+    val metadataPartitionDirName = UnifiedLog.logDirName(METADATA_PARTITION)
     initialMetaPropsEnsemble.logDirProps().keySet().forEach(logDir => {
       if (!logDir.equals(config.metadataLogDir)) {
         val clusterMetadataTopic = new File(logDir, metadataPartitionDirName)

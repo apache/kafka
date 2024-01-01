@@ -17,15 +17,17 @@
 
 package kafka.log
 
+import kafka.server.KafkaConfigProvider
+
 import java.io.File
 import java.util.Properties
-import kafka.server.KafkaConfig
 import kafka.server.checkpoints.OffsetCheckpointFile
 import kafka.utils._
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.record._
 import org.apache.kafka.server.common.MetadataVersion.{IBP_0_10_0_IV1, IBP_0_11_0_IV0, IBP_0_9_0}
+import org.apache.kafka.server.config.KafkaConfig
 import org.apache.kafka.server.util.MockTime
 import org.apache.kafka.storage.internals.log.{CleanerConfig, LogConfig}
 import org.junit.jupiter.api.Assertions._
@@ -251,14 +253,14 @@ class LogCleanerParameterizedIntegrationTest extends AbstractLogCleanerIntegrati
 
     def kafkaConfigWithCleanerConfig(cleanerConfig: CleanerConfig): KafkaConfig = {
       val props = TestUtils.createBrokerConfig(0, "localhost:2181")
-      props.put(KafkaConfig.LogCleanerThreadsProp, cleanerConfig.numThreads.toString)
-      props.put(KafkaConfig.LogCleanerDedupeBufferSizeProp, cleanerConfig.dedupeBufferSize.toString)
-      props.put(KafkaConfig.LogCleanerDedupeBufferLoadFactorProp, cleanerConfig.dedupeBufferLoadFactor.toString)
-      props.put(KafkaConfig.LogCleanerIoBufferSizeProp, cleanerConfig.ioBufferSize.toString)
-      props.put(KafkaConfig.MessageMaxBytesProp, cleanerConfig.maxMessageSize.toString)
-      props.put(KafkaConfig.LogCleanerBackoffMsProp, cleanerConfig.backoffMs.toString)
-      props.put(KafkaConfig.LogCleanerIoMaxBytesPerSecondProp, cleanerConfig.maxIoBytesPerSecond.toString)
-      KafkaConfig.fromProps(props)
+      props.put(KafkaConfig.LOG_CLEANER_DELETE_RETENTION_MS_PROP, cleanerConfig.numThreads.toString)
+      props.put(KafkaConfig.LOG_CLEANER_DEDUPE_BUFFER_SIZE_PROP, cleanerConfig.dedupeBufferSize.toString)
+      props.put(KafkaConfig.LOG_CLEANER_DEDUPE_BUFFER_LOAD_FACTOR_PROP, cleanerConfig.dedupeBufferLoadFactor.toString)
+      props.put(KafkaConfig.LOG_CLEANER_IO_BUFFER_SIZE_PROP, cleanerConfig.ioBufferSize.toString)
+      props.put(KafkaConfig.MESSAGE_MAX_BYTES_PROP, cleanerConfig.maxMessageSize.toString)
+      props.put(KafkaConfig.LOG_CLEANER_BACKOFF_MS_PROP, cleanerConfig.backoffMs.toString)
+      props.put(KafkaConfig.LOG_CLEANER_IO_MAX_BYTES_PER_SECOND_PROP, cleanerConfig.maxIoBytesPerSecond.toString)
+      KafkaConfigProvider.fromProps(props)
     }
 
     // Verify cleaning done with larger LogCleanerIoBufferSizeProp

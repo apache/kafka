@@ -32,6 +32,8 @@ import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.record.RecordBatch
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.utils.Time
+import org.apache.kafka.coordinator.group.OffsetConfig
+import org.apache.kafka.server.config.KafkaConfig
 import org.apache.kafka.server.record.BrokerCompressionType
 import org.apache.kafka.storage.internals.log.VerificationGuard
 
@@ -93,7 +95,7 @@ private[group] class GroupCoordinator(
   def offsetsTopicConfigs: Properties = {
     val props = new Properties
     props.put(TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_COMPACT)
-    props.put(TopicConfig.SEGMENT_BYTES_CONFIG, offsetConfig.offsetsTopicSegmentBytes.toString)
+    props.put(TopicConfig.SEGMENT_BYTES_CONFIG, offsetConfig.getOffsetsTopicSegmentBytes().toString)
     props.put(TopicConfig.COMPRESSION_TYPE_CONFIG, BrokerCompressionType.PRODUCER.name)
 
     props
@@ -1751,17 +1753,17 @@ object GroupCoordinator {
     GroupCoordinator(config, replicaManager, heartbeatPurgatory, rebalancePurgatory, time, metrics)
   }
 
-  private[group] def offsetConfig(config: KafkaConfig) = OffsetConfig(
-    maxMetadataSize = config.offsetMetadataMaxSize,
-    loadBufferSize = config.offsetsLoadBufferSize,
-    offsetsRetentionMs = config.offsetsRetentionMinutes * 60L * 1000L,
-    offsetsRetentionCheckIntervalMs = config.offsetsRetentionCheckIntervalMs,
-    offsetsTopicNumPartitions = config.offsetsTopicPartitions,
-    offsetsTopicSegmentBytes = config.offsetsTopicSegmentBytes,
-    offsetsTopicReplicationFactor = config.offsetsTopicReplicationFactor,
-    offsetsTopicCompressionType = config.offsetsTopicCompressionType,
-    offsetCommitTimeoutMs = config.offsetCommitTimeoutMs,
-    offsetCommitRequiredAcks = config.offsetCommitRequiredAcks
+  private[group] def offsetConfig(config: KafkaConfig) = new OffsetConfig(
+    config.offsetMetadataMaxSize,
+    config.offsetsLoadBufferSize,
+    config.offsetsRetentionMinutes * 60L * 1000L,
+    config.offsetsRetentionCheckIntervalMs,
+    config.offsetsTopicPartitions,
+    config.offsetsTopicSegmentBytes,
+    config.offsetsTopicReplicationFactor,
+    config.offsetsTopicCompressionType,
+    config.offsetCommitTimeoutMs,
+    config.offsetCommitRequiredAcks
   )
 
   private[group] def apply(

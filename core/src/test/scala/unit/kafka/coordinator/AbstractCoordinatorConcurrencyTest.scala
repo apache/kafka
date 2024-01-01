@@ -24,7 +24,7 @@ import java.util.concurrent.locks.Lock
 import kafka.coordinator.AbstractCoordinatorConcurrencyTest._
 import kafka.log.{LogManager, UnifiedLog}
 import kafka.server.QuotaFactory.QuotaManagers
-import kafka.server.{DelayedOperationPurgatory, KafkaConfig, _}
+import kafka.server.{DelayedOperationPurgatory, _}
 import kafka.utils._
 import kafka.zk.KafkaZkClient
 import org.apache.kafka.common.TopicPartition
@@ -32,6 +32,7 @@ import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.{MemoryRecords, RecordBatch, RecordValidationStats}
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.utils.Time
+import org.apache.kafka.server.config.KafkaConfig
 import org.apache.kafka.server.util.timer.{MockTimer, Timer}
 import org.apache.kafka.server.util.{MockScheduler, MockTime, Scheduler}
 import org.apache.kafka.storage.internals.log.{AppendOrigin, LogConfig, VerificationGuard}
@@ -62,7 +63,7 @@ abstract class AbstractCoordinatorConcurrencyTest[M <: CoordinatorMember] extend
     when(mockLogMger.liveLogDirs).thenReturn(Seq.empty)
     val producePurgatory = new DelayedOperationPurgatory[DelayedProduce]("Produce", timer, 1, reaperEnabled = false)
     val watchKeys = Collections.newSetFromMap(new ConcurrentHashMap[TopicPartitionOperationKey, java.lang.Boolean]()).asScala
-    replicaManager = TestReplicaManager(KafkaConfig.fromProps(serverProps), time, scheduler, timer, mockLogMger, mock(classOf[QuotaManagers], withSettings().stubOnly()), producePurgatory, watchKeys)
+    replicaManager = TestReplicaManager(KafkaConfigProvider.fromProps(serverProps), time, scheduler, timer, mockLogMger, mock(classOf[QuotaManagers], withSettings().stubOnly()), producePurgatory, watchKeys)
     zkClient = mock(classOf[KafkaZkClient], withSettings().stubOnly())
   }
 

@@ -20,7 +20,7 @@ import java.util
 import java.util.Arrays.asList
 import java.util.Collections
 import java.util.concurrent.{Callable, Executors, Future}
-import kafka.server.{KafkaConfig, MetadataCache}
+import kafka.server.{KafkaConfigProvider, MetadataCache}
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.{ClientResponse, NetworkClient}
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
@@ -70,7 +70,7 @@ class TransactionMarkerChannelManagerTest {
   private val time = new MockTime
 
   private val channelManager = new TransactionMarkerChannelManager(
-    KafkaConfig.fromProps(TestUtils.createBrokerConfig(1, "localhost:2181")),
+    KafkaConfigProvider.fromProps(TestUtils.createBrokerConfig(1, "localhost:2181")),
     metadataCache,
     networkClient,
     txnStateManager,
@@ -92,7 +92,7 @@ class TransactionMarkerChannelManagerTest {
     val mockMetricsGroupCtor = mockConstruction(classOf[KafkaMetricsGroup])
     try {
       val transactionMarkerChannelManager = new TransactionMarkerChannelManager(
-        KafkaConfig.fromProps(TestUtils.createBrokerConfig(1, "localhost:2181")),
+        KafkaConfigProvider.fromProps(TestUtils.createBrokerConfig(1, "localhost:2181")),
         metadataCache,
         networkClient,
         txnStateManager,

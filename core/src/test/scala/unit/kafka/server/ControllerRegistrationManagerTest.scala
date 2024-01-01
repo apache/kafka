@@ -28,6 +28,7 @@ import org.apache.kafka.image.{MetadataDelta, MetadataImage, MetadataProvenance}
 import org.apache.kafka.metadata.{ListenerInfo, RecordTestUtils, VersionRange}
 import org.apache.kafka.raft.LeaderAndEpoch
 import org.apache.kafka.server.common.MetadataVersion
+import org.apache.kafka.server.config.KafkaConfig
 import org.apache.kafka.test.TestUtils
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
 import org.junit.jupiter.api.{Test, Timeout}
@@ -37,7 +38,6 @@ import org.junit.jupiter.params.provider.ValueSource
 import java.util
 import java.util.{OptionalInt, Properties}
 import java.util.concurrent.{CompletableFuture, TimeUnit}
-import scala.jdk.CollectionConverters._
 
 @Timeout(value = 60)
 class ControllerRegistrationManagerTest {
@@ -45,13 +45,13 @@ class ControllerRegistrationManagerTest {
 
   private def configProperties = {
     val properties = new Properties()
-    properties.setProperty(KafkaConfig.LogDirsProp, "/tmp/foo")
-    properties.setProperty(KafkaConfig.ProcessRolesProp, "controller")
-    properties.setProperty(KafkaConfig.ListenerSecurityProtocolMapProp, s"CONTROLLER:PLAINTEXT")
-    properties.setProperty(KafkaConfig.ListenersProp, s"CONTROLLER://localhost:8001")
-    properties.setProperty(KafkaConfig.ControllerListenerNamesProp, "CONTROLLER")
-    properties.setProperty(KafkaConfig.NodeIdProp, "1")
-    properties.setProperty(KafkaConfig.QuorumVotersProp, s"1@localhost:8000,2@localhost:5000,3@localhost:7000")
+    properties.setProperty(KafkaConfig.LOG_DIRS_PROP, "/tmp/foo")
+    properties.setProperty(KafkaConfig.PROCESS_ROLES_PROP, "controller")
+    properties.setProperty(KafkaConfig.LISTENER_SECURITY_PROTOCOL_MAP_PROP, s"CONTROLLER:PLAINTEXT")
+    properties.setProperty(KafkaConfig.LISTENERS_PROP, s"CONTROLLER://localhost:8001")
+    properties.setProperty(KafkaConfig.CONTROLLER_LISTENER_NAMES_PROP, "CONTROLLER")
+    properties.setProperty(KafkaConfig.NODE_ID_PROP, "1")
+    properties.setProperty(KafkaConfig.QUORUM_VOTERS_PROP, s"1@localhost:8000,2@localhost:5000,3@localhost:7000")
     properties
   }
 
@@ -75,7 +75,7 @@ class ControllerRegistrationManagerTest {
       createSupportedFeatures(MetadataVersion.IBP_3_7_IV0),
       false,
       RecordTestUtils.createTestControllerRegistration(1, false).incarnationId(),
-      ListenerInfo.create(context.config.controllerListeners.map(_.toJava).asJava),
+      ListenerInfo.create(context.config.controllerListeners),
       new ExponentialBackoff(1, 2, 100, 0.02))
   }
 

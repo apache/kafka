@@ -19,7 +19,6 @@ package kafka.controller
 import kafka.api.LeaderAndIsr
 import kafka.common.StateChangeFailedException
 import kafka.controller.Election._
-import kafka.server.KafkaConfig
 import kafka.utils.Implicits._
 import kafka.utils.Logging
 import kafka.zk.KafkaZkClient
@@ -28,6 +27,7 @@ import kafka.zk.TopicPartitionStateZNode
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.ControllerMovedException
 import org.apache.kafka.server.common.MetadataVersion.IBP_3_2_IV0
+import org.apache.kafka.server.config.KafkaConfig
 import org.apache.zookeeper.KeeperException
 import org.apache.zookeeper.KeeperException.Code
 

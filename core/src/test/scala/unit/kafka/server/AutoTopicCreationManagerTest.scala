@@ -37,6 +37,7 @@ import org.apache.kafka.common.requests._
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, KafkaPrincipalSerde, SecurityProtocol}
 import org.apache.kafka.common.utils.{SecurityUtils, Utils}
 import org.apache.kafka.coordinator.group.GroupCoordinator
+import org.apache.kafka.server.config.KafkaConfig
 import org.apache.kafka.server.{ControllerRequestCompletionHandler, NodeToControllerChannelManager}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertThrows, assertTrue}
 import org.junit.jupiter.api.{BeforeEach, Test}
@@ -64,15 +65,15 @@ class AutoTopicCreationManagerTest {
   @BeforeEach
   def setup(): Unit = {
     val props = TestUtils.createBrokerConfig(1, "localhost")
-    props.setProperty(KafkaConfig.RequestTimeoutMsProp, requestTimeout.toString)
+    props.setProperty(KafkaConfig.REQUEST_TIMEOUT_MS_PROP, requestTimeout.toString)
 
-    props.setProperty(KafkaConfig.OffsetsTopicReplicationFactorProp, internalTopicPartitions.toString)
-    props.setProperty(KafkaConfig.TransactionsTopicReplicationFactorProp, internalTopicPartitions.toString)
+    props.setProperty(KafkaConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_PROP, internalTopicPartitions.toString)
+    props.setProperty(KafkaConfig.TRANSACTIONS_TOPIC_REPLICATION_FACTOR_PROP, internalTopicPartitions.toString)
 
-    props.setProperty(KafkaConfig.OffsetsTopicPartitionsProp, internalTopicReplicationFactor.toString)
-    props.setProperty(KafkaConfig.TransactionsTopicPartitionsProp, internalTopicReplicationFactor.toString)
+    props.setProperty(KafkaConfig.OFFSETS_TOPIC_PARTITIONS_PROP, internalTopicReplicationFactor.toString)
+    props.setProperty(KafkaConfig.TRANSACTIONS_TOPIC_PARTITIONS_PROP, internalTopicReplicationFactor.toString)
 
-    config = KafkaConfig.fromProps(props)
+    config = KafkaConfigProvider.fromProps(props)
     val aliveBrokers = Seq(new Node(0, "host0", 0), new Node(1, "host1", 1))
 
     Mockito.reset(metadataCache, controller, brokerToController, groupCoordinator, transactionCoordinator)
