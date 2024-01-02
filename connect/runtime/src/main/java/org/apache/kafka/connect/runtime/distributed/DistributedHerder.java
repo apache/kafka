@@ -1678,7 +1678,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
     }
 
     // Should only be called from work thread, so synchronization should not be needed
-    private boolean isLeader() {
+    protected boolean isLeader() {
         return assignment != null && member.memberId().equals(assignment.leader());
     }
 
@@ -1804,7 +1804,15 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
             member.requestRejoin();
             return false;
         }
+        rebalanceSuccess();
         return true;
+    }
+
+    /**
+     * Hook for performing operations after a successful rebalance
+     */
+    protected void rebalanceSuccess() {
+        // This space intentionally left blank.
     }
 
     /**

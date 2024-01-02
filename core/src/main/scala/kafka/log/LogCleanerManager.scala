@@ -98,7 +98,7 @@ private[log] class LogCleanerManager(val logDirs: Seq[File],
       () => inLock(lock) { uncleanablePartitions.get(dir.getAbsolutePath).map(_.size).getOrElse(0) },
       metricTag
     )
-    gaugeMetricNameWithTag.computeIfAbsent(UncleanablePartitionsCountMetricName, k => new java.util.ArrayList[java.util.Map[String, String]]())
+    gaugeMetricNameWithTag.computeIfAbsent(UncleanablePartitionsCountMetricName, _ => new java.util.ArrayList[java.util.Map[String, String]]())
       .add(metricTag)
   }
 
@@ -125,7 +125,7 @@ private[log] class LogCleanerManager(val logDirs: Seq[File],
       },
       metricTag
     )
-    gaugeMetricNameWithTag.computeIfAbsent(UncleanableBytesMetricName, k => new java.util.ArrayList[java.util.Map[String, String]]())
+    gaugeMetricNameWithTag.computeIfAbsent(UncleanableBytesMetricName, _ => new java.util.ArrayList[java.util.Map[String, String]]())
       .add(metricTag)
   }
 
@@ -597,7 +597,7 @@ private[log] object LogCleanerManager extends Logging {
     val dirtyNonActiveSegments = log.nonActiveLogSegmentsFrom(firstDirtyOffset)
     val firstBatchTimestamps = log.getFirstBatchTimestampForSegments(dirtyNonActiveSegments).stream.filter(_ > 0)
 
-    val earliestDirtySegmentTimestamp = firstBatchTimestamps.min(Comparator.naturalOrder()).orElse(Long.MaxValue);
+    val earliestDirtySegmentTimestamp = firstBatchTimestamps.min(Comparator.naturalOrder()).orElse(Long.MaxValue)
 
     val maxCompactionLagMs = math.max(log.config.maxCompactionLagMs, 0L)
     val cleanUntilTime = now - maxCompactionLagMs

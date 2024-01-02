@@ -53,7 +53,7 @@ if ( !versions.scala.contains('-') ) {
   versions["baseScala"] = versions.scala
 }
 
-// mockito 5.5 is required for Java 21 and mockito 5.x requires at least Java 11
+// mockito >= 5.5 is required for Java 21 and mockito 5.x requires at least Java 11
 // mockito 4.9 is required for Scala 2.12 as a workaround for compiler errors due to ambiguous reference to `Mockito.spy`
 // since Scala 2.12 support is going away soon, this is simpler than adjusting the code.
 // mockito 4.11 is used with Java 8 and Scala 2.13
@@ -61,7 +61,7 @@ String mockitoVersion
 if (scalaVersion == "2.12")
   mockitoVersion = "4.9.0"
 else if (JavaVersion.current().isCompatibleWith(JavaVersion.VERSION_11))
-  mockitoVersion = "5.5.0"
+  mockitoVersion = "5.8.0"
 else
   mockitoVersion = "4.11.0"
 
@@ -103,8 +103,7 @@ versions += [
   gradle: "8.5",
   grgit: "4.1.1",
   httpclient: "4.5.14",
-  jackson: "2.13.5",
-  jacksonDatabind: "2.13.5",
+  jackson: "2.16.0",
   jacoco: "0.8.10",
   javassist: "3.29.2-GA",
   jetty: "9.4.53.v20231009",
@@ -133,8 +132,8 @@ versions += [
   kafka_23: "2.3.1",
   kafka_24: "2.4.1",
   kafka_25: "2.5.1",
-  kafka_26: "2.6.2",
-  kafka_27: "2.7.1",
+  kafka_26: "2.6.3",
+  kafka_27: "2.7.2",
   kafka_28: "2.8.2",
   kafka_30: "3.0.2",
   kafka_31: "3.1.2",
@@ -187,10 +186,11 @@ libs += [
   commonsCodec: "commons-codec:commons-codec:$versions.commonsCodec",
   easymock: "org.easymock:easymock:$easymockVersion",
   jacksonAnnotations: "com.fasterxml.jackson.core:jackson-annotations:$versions.jackson",
-  jacksonDatabind: "com.fasterxml.jackson.core:jackson-databind:$versions.jacksonDatabind",
+  jacksonDatabind: "com.fasterxml.jackson.core:jackson-databind:$versions.jackson",
   jacksonDataformatCsv: "com.fasterxml.jackson.dataformat:jackson-dataformat-csv:$versions.jackson",
   jacksonModuleScala: "com.fasterxml.jackson.module:jackson-module-scala_$versions.baseScala:$versions.jackson",
   jacksonJDK8Datatypes: "com.fasterxml.jackson.datatype:jackson-datatype-jdk8:$versions.jackson",
+  jacksonAfterburner: "com.fasterxml.jackson.module:jackson-module-afterburner:$versions.jackson",
   jacksonJaxrsJsonProvider: "com.fasterxml.jackson.jaxrs:jackson-jaxrs-json-provider:$versions.jackson",
   jaxAnnotationApi: "javax.annotation:javax.annotation-api:$versions.jaxAnnotation",
   jaxbApi: "javax.xml.bind:jaxb-api:$versions.jaxb",

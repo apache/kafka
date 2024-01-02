@@ -19,7 +19,6 @@ package kafka.zk.migration
 
 import kafka.api.LeaderAndIsr
 import kafka.controller.{LeaderIsrAndControllerEpoch, ReplicaAssignment}
-import kafka.server.ConfigType
 import kafka.utils.Logging
 import kafka.zk.TopicZNode.TopicIdReplicaAssignment
 import kafka.zk.ZkMigrationClient.{logAndRethrow, wrapZkException}
@@ -30,6 +29,7 @@ import org.apache.kafka.common.{TopicIdPartition, TopicPartition, Uuid}
 import org.apache.kafka.metadata.migration.TopicMigrationClient.TopicVisitorInterest
 import org.apache.kafka.metadata.migration.{MigrationClientException, TopicMigrationClient, ZkMigrationLeadershipState}
 import org.apache.kafka.metadata.{LeaderRecoveryState, PartitionRegistration}
+import org.apache.kafka.server.config.ConfigType
 import org.apache.zookeeper.CreateMode
 import org.apache.zookeeper.KeeperException.Code
 
@@ -212,7 +212,7 @@ class ZkTopicMigrationClient(zkClient: KafkaZkClient) extends TopicMigrationClie
     val deleteRequests = topicChildZNodes.map { childPath =>
       DeleteRequest(childPath, ZkVersion.MatchAnyVersion)
     } ++ Seq(
-      DeleteRequest(ConfigEntityZNode.path(ConfigType.Topic, topicName), ZkVersion.MatchAnyVersion),
+      DeleteRequest(ConfigEntityZNode.path(ConfigType.TOPIC, topicName), ZkVersion.MatchAnyVersion),
       DeleteRequest(TopicZNode.path(topicName), ZkVersion.MatchAnyVersion)
     )
 

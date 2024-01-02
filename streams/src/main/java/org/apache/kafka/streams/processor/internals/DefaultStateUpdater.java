@@ -16,8 +16,12 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.errors.TimeoutException;
+import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.Sensor.RecordingLevel;
@@ -78,6 +82,9 @@ public class DefaultStateUpdater implements StateUpdater {
         private final Map<TaskId, Task> pausedTasks = new ConcurrentHashMap<>();
 
         private long totalCheckpointLatency = 0L;
+
+        private volatile long fetchDeadlineClientInstanceId = -1L;
+        private volatile KafkaFutureImpl<Uuid> clientInstanceIdFuture = new KafkaFutureImpl<>();
 
         public StateUpdaterThread(final String name,
                                   final Metrics metrics,
@@ -165,6 +172,8 @@ public class DefaultStateUpdater implements StateUpdater {
             pauseTasks();
             restoreTasks(totalStartTimeMs);
 
+            maybeGetClientInstanceIds();
+
             final long checkpointStartTimeMs = time.milliseconds();
             maybeCheckpointTasks(checkpointStartTimeMs);
 
@@ -230,6 +239,69 @@ public class DefaultStateUpdater implements StateUpdater {
                 maybeCompleteRestoration((StreamTask) task, completedChangelogs);
             }
         }
+
+        private void maybeGetClientInstanceIds() {
+            if (fetchDeadlineClientInstanceId != -1) {
+                if (!clientInstanceIdFuture.isDone()) {
+                    if (fetchDeadlineClientInstanceId >= time.milliseconds()) {
+                        try {
+                            // if the state-updated thread has active work:
+                            //    we pass in a timeout of zero into each `clientInstanceId()` call
+                            //    to just trigger the "get instance id" background RPC;
+                            //    we don't want to block the state updater thread that can do useful work in the meantime
+                            // otherwise, we pass in 100ms to avoid busy waiting
+                            clientInstanceIdFuture.complete(
+                                restoreConsumer.clientInstanceId(
+                                    allWorkDone() ? Duration.ofMillis(100L) : Duration.ZERO
+                                )
+                            );
+                            fetchDeadlineClientInstanceId = -1L;
+                        } catch (final IllegalStateException disabledError) {
+                            // if telemetry is disabled on a client, we swallow the error,
+                            // to allow returning a partial result for all other clients
+                            clientInstanceIdFuture.complete(null);
+                            fetchDeadlineClientInstanceId = -1L;
+                        } catch (final TimeoutException swallow) {
+                            // swallow
+                        } catch (final Exception error) {
+                            clientInstanceIdFuture.completeExceptionally(error);
+                            fetchDeadlineClientInstanceId = -1L;
+                        }
+                    } else {
+                        clientInstanceIdFuture.completeExceptionally(
+                            new TimeoutException("Could not retrieve restore consumer client instance id.")
+                        );
+                        fetchDeadlineClientInstanceId = -1L;
+                    }
+                }
+            }
+        }
+
+        private KafkaFutureImpl<Uuid> restoreConsumerInstanceId(final Duration timeout) {
+            boolean setDeadline = false;
+
+            if (clientInstanceIdFuture.isDone()) {
+                if (clientInstanceIdFuture.isCompletedExceptionally()) {
+                    clientInstanceIdFuture = new KafkaFutureImpl<>();
+                    setDeadline = true;
+                }
+            } else {
+                setDeadline = true;
+            }
+
+            if (setDeadline) {
+                fetchDeadlineClientInstanceId = time.milliseconds() + timeout.toMillis();
+                tasksAndActionsLock.lock();
+                try {
+                    tasksAndActionsCondition.signalAll();
+                } finally {
+                    tasksAndActionsLock.unlock();
+                }
+            }
+
+            return clientInstanceIdFuture;
+        }
+
 
         private void handleRuntimeException(final RuntimeException runtimeException) {
             log.error("An unexpected error occurred within the state updater thread: " + runtimeException);
@@ -306,13 +378,8 @@ public class DefaultStateUpdater implements StateUpdater {
 
         private void waitIfAllChangelogsCompletelyRead() {
             tasksAndActionsLock.lock();
-            final boolean noTasksToUpdate = changelogReader.allChangelogsCompleted() || updatingTasks.isEmpty();
             try {
-                while (isRunning.get() &&
-                    noTasksToUpdate &&
-                    tasksAndActions.isEmpty() &&
-                    !isTopologyResumed.get()) {
-
+                while (allWorkDone() && fetchDeadlineClientInstanceId == -1L) {
                     isIdle.set(true);
                     tasksAndActionsCondition.await();
                 }
@@ -323,6 +390,15 @@ public class DefaultStateUpdater implements StateUpdater {
                 tasksAndActionsLock.unlock();
                 isIdle.set(false);
             }
+        }
+
+        private boolean allWorkDone() {
+            final boolean noTasksToUpdate = changelogReader.allChangelogsCompleted() || updatingTasks.isEmpty();
+
+            return isRunning.get() &&
+                noTasksToUpdate &&
+                tasksAndActions.isEmpty() &&
+                !isTopologyResumed.get();
         }
 
         private void removeUpdatingAndPausedTasks() {
@@ -525,6 +601,7 @@ public class DefaultStateUpdater implements StateUpdater {
     private final Logger log;
     private final String name;
     private final Metrics metrics;
+    private final Consumer<byte[], byte[]> restoreConsumer;
     private final ChangelogReader changelogReader;
     private final TopologyMetadata topologyMetadata;
     private final Queue<TaskAndAction> tasksAndActions = new LinkedList<>();
@@ -546,12 +623,14 @@ public class DefaultStateUpdater implements StateUpdater {
     public DefaultStateUpdater(final String name,
                                final Metrics metrics,
                                final StreamsConfig config,
+                               final Consumer<byte[], byte[]> restoreConsumer,
                                final ChangelogReader changelogReader,
                                final TopologyMetadata topologyMetadata,
                                final Time time) {
         this.time = time;
         this.name = name;
         this.metrics = metrics;
+        this.restoreConsumer = restoreConsumer;
         this.changelogReader = changelogReader;
         this.topologyMetadata = topologyMetadata;
         this.commitIntervalMs = config.getLong(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG);
@@ -561,6 +640,7 @@ public class DefaultStateUpdater implements StateUpdater {
         this.log = logContext.logger(DefaultStateUpdater.class);
     }
 
+    @Override
     public void start() {
         if (stateUpdaterThread == null) {
             stateUpdaterThread = new StateUpdaterThread(name, metrics, changelogReader);
@@ -770,6 +850,11 @@ public class DefaultStateUpdater implements StateUpdater {
         return executeWithQueuesLocked(
             () -> getStreamOfTasks().filter(t -> !t.isActive()).map(t -> (StandbyTask) t).collect(Collectors.toSet())
         );
+    }
+
+    @Override
+    public KafkaFutureImpl<Uuid> restoreConsumerInstanceId(final Duration timeout) {
+        return stateUpdaterThread.restoreConsumerInstanceId(timeout);
     }
 
     // used for testing

@@ -16,13 +16,13 @@
  */
 package org.apache.kafka.streams.integration.utils;
 
-import kafka.server.ConfigType;
 import kafka.server.KafkaConfig;
 import kafka.server.KafkaServer;
 import kafka.zk.EmbeddedZookeeper;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
+import org.apache.kafka.server.config.ConfigType;
 import org.apache.kafka.server.util.MockTime;
 import org.apache.kafka.test.TestCondition;
 import org.apache.kafka.test.TestUtils;
@@ -355,7 +355,7 @@ public class EmbeddedKafkaCluster {
     }
 
     public Properties getLogConfig(final String topic) {
-        return brokers[0].kafkaServer().zkClient().getEntityConfigs(ConfigType.Topic(), topic);
+        return brokers[0].kafkaServer().zkClient().getEntityConfigs(ConfigType.TOPIC, topic);
     }
 
     public Set<String> getAllTopicsInCluster() {

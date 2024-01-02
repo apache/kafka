@@ -32,6 +32,7 @@ public class DslWindowParams {
     private final boolean retainDuplicates;
     private final EmitStrategy emitStrategy;
     private final boolean isSlidingWindow;
+    private final boolean isTimestamped;
 
     /**
      * @param name             name of the store (cannot be {@code null})
@@ -44,6 +45,7 @@ public class DslWindowParams {
      *                         caching and means that null values will be ignored.
      * @param emitStrategy     defines how to emit results
      * @param isSlidingWindow  whether the requested store is a sliding window
+     * @param isTimestamped    whether the requested store should be timestamped (see {@link TimestampedWindowStore}
      */
     public DslWindowParams(
             final String name,
@@ -51,8 +53,10 @@ public class DslWindowParams {
             final Duration windowSize,
             final boolean retainDuplicates,
             final EmitStrategy emitStrategy,
-            final boolean isSlidingWindow
+            final boolean isSlidingWindow,
+            final boolean isTimestamped
     ) {
+        this.isTimestamped = isTimestamped;
         Objects.requireNonNull(name);
         this.name = name;
         this.retentionPeriod = retentionPeriod;
@@ -84,6 +88,10 @@ public class DslWindowParams {
 
     public boolean isSlidingWindow() {
         return isSlidingWindow;
+    }
+
+    public boolean isTimestamped() {
+        return isTimestamped;
     }
 
     @Override

@@ -1175,7 +1175,7 @@ public class KafkaStreamsTest {
 
     @Test
     public void statelessTopologyShouldNotCreateStateDirectory() {
-        final String safeTestName = safeUniqueTestName(getClass(), testName);
+        final String safeTestName = safeUniqueTestName(testName);
         final String inputTopic = safeTestName + "-input";
         final String outputTopic = safeTestName + "-output";
         final Topology topology = new Topology();
@@ -1201,7 +1201,7 @@ public class KafkaStreamsTest {
 
     @Test
     public void inMemoryStatefulTopologyShouldNotCreateStateDirectory() {
-        final String safeTestName = safeUniqueTestName(getClass(), testName);
+        final String safeTestName = safeUniqueTestName(testName);
         final String inputTopic = safeTestName + "-input";
         final String outputTopic = safeTestName + "-output";
         final String globalTopicName = safeTestName + "-global";
@@ -1213,7 +1213,7 @@ public class KafkaStreamsTest {
 
     @Test
     public void statefulTopologyShouldCreateStateDirectory() {
-        final String safeTestName = safeUniqueTestName(getClass(), testName);
+        final String safeTestName = safeUniqueTestName(testName);
         final String inputTopic = safeTestName + "-input";
         final String outputTopic = safeTestName + "-output";
         final String globalTopicName = safeTestName + "-global";
