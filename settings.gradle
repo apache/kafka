@@ -21,6 +21,7 @@ plugins {
 def isGithubActions = System.getenv('GITHUB_ACTIONS') != null
 def isJenkins = System.getenv('JENKINS_URL') != null
 def isCI = isGithubActions || isJenkins
+def isTrunk = System.getenv("BRANCH_NAME") == "trunk" || System.getenv("GITHUB_REF") == "trunk"
 
 gradleEnterprise {
     server = "https://ge.apache.org"
@@ -43,7 +44,8 @@ buildCache {
     }
 
     remote(gradleEnterprise.buildCache) {
-        enabled = false
+        enabled = true
+        push = isCI && isTrunk
     }
 }
 
