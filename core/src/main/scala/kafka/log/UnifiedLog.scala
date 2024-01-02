@@ -48,6 +48,7 @@ import java.io.{File, IOException}
 import java.nio.file.{Files, Path}
 import java.util
 import java.util.concurrent.{ConcurrentHashMap, ConcurrentMap, ScheduledFuture}
+import java.util.function.Supplier
 import java.util.stream.Collectors
 import java.util.{Collections, Optional, OptionalInt, OptionalLong}
 import scala.annotation.nowarn
@@ -654,7 +655,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
       maybeFlushMetadataFile()
       localLog.checkIfMemoryMappedBufferClosed()
       producerExpireCheck.cancel(true)
-      maybeHandleIOException(s"Error while renaming dir for $topicPartition in dir ${dir.getParent}") {
+      maybeHandleIOException(() => s"Error while renaming dir for $topicPartition in dir ${dir.getParent}") {
         // We take a snapshot at the last written offset to hopefully avoid the need to scan the log
         // after restarting and to ensure that we cannot inadvertently hit the upgrade optimization
         // (the clean shutdown file is written after the logs are all closed).
@@ -674,7 +675,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
    */
   def renameDir(name: String, shouldReinitialize: Boolean): Unit = {
     lock synchronized {
-      maybeHandleIOException(s"Error while renaming dir for $topicPartition in log dir ${dir.getParent}") {
+      maybeHandleIOException(() => s"Error while renaming dir for $topicPartition in log dir ${dir.getParent}") {
         // Flush partitionMetadata file before initializing again
         maybeFlushMetadataFile()
         if (localLog.renameDir(name)) {
@@ -783,7 +784,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
 
       // they are valid, insert them in the log
       lock synchronized {
-        maybeHandleIOException(s"Error while appending records to $topicPartition in dir ${dir.getParent}") {
+        maybeHandleIOException(() => s"Error while appending records to $topicPartition in dir ${dir.getParent}") {
           localLog.checkIfMemoryMappedBufferClosed()
           if (validateAndAssignOffsets) {
             // assign offsets to the message set
@@ -998,7 +999,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
     // The deleteRecordsOffset may be lost only if all in-sync replicas of this broker are shutdown
     // in an unclean manner within log.flush.start.offset.checkpoint.interval.ms. The chance of this happening is low.
     var updatedLogStartOffset = false
-    maybeHandleIOException(s"Exception while increasing log start offset for $topicPartition to $newLogStartOffset in dir ${dir.getParent}") {
+    maybeHandleIOException(() => s"Exception while increasing log start offset for $topicPartition to $newLogStartOffset in dir ${dir.getParent}") {
       lock synchronized {
         if (newLogStartOffset > highWatermark)
           throw new OffsetOutOfRangeException(s"Cannot increment the log start offset to $newLogStartOffset of partition $topicPartition " +
@@ -1266,7 +1267,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
    */
   @nowarn("cat=deprecation")
   def fetchOffsetByTimestamp(targetTimestamp: Long, remoteLogManager: Option[RemoteLogManager] = None): Option[TimestampAndOffset] = {
-    maybeHandleIOException(s"Error while fetching offset by timestamp for $topicPartition in dir ${dir.getParent}") {
+    maybeHandleIOException(() => s"Error while fetching offset by timestamp for $topicPartition in dir ${dir.getParent}") {
       debug(s"Searching offset for timestamp $targetTimestamp")
 
       def latestEpochAsOptional(leaderEpochCache: Option[LeaderEpochFileCache]): Optional[Integer] = {
@@ -1498,7 +1499,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
   }
 
   private def deleteSegments(deletable: Iterable[LogSegment], reason: SegmentDeletionReason): Int = {
-    maybeHandleIOException(s"Error while deleting segments for $topicPartition in dir ${dir.getParent}") {
+    maybeHandleIOException(() => s"Error while deleting segments for $topicPartition in dir ${dir.getParent}") {
       val numToDelete = deletable.size
       if (numToDelete > 0) {
         // we must always have at least one segment, so if we are going to delete all the segments, create a new one first
@@ -1566,9 +1567,8 @@ class UnifiedLog(@volatile var logStartOffset: Long,
 
   private def deleteLogStartOffsetBreachedSegments(): Int = {
     def shouldDelete(segment: LogSegment, nextSegmentOpt: Optional[LogSegment]): Boolean = {
-      if (nextSegmentOpt.isPresent)
+      nextSegmentOpt.isPresent &&
         nextSegmentOpt.get().baseOffset <= (if (remoteLogEnabled()) localLogStartOffset() else logStartOffset)
-      else false
     }
 
     deleteOldSegments(shouldDelete, StartOffsetBreach(this, remoteLogEnabled()))
@@ -1709,7 +1709,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
     val flushOffset = if (includingOffset) offset + 1  else offset
     val newRecoveryPoint = offset
     val includingOffsetStr =  if (includingOffset) "inclusive" else "exclusive"
-    maybeHandleIOException(s"Error while flushing log for $topicPartition in dir ${dir.getParent} with offset $offset " +
+    maybeHandleIOException(() => s"Error while flushing log for $topicPartition in dir ${dir.getParent} with offset $offset " +
       s"($includingOffsetStr) and recovery point $newRecoveryPoint") {
       if (flushOffset > localLog.recoveryPoint) {
         debug(s"Flushing log up to offset $offset ($includingOffsetStr)" +
@@ -1727,7 +1727,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
    * Completely delete the local log directory and all contents from the file system with no delay
    */
   private[log] def delete(): Unit = {
-    maybeHandleIOException(s"Error while deleting log for $topicPartition in dir ${dir.getParent}") {
+    maybeHandleIOException(() => s"Error while deleting log for $topicPartition in dir ${dir.getParent}") {
       lock synchronized {
         localLog.checkIfMemoryMappedBufferClosed()
         producerExpireCheck.cancel(true)
@@ -1761,7 +1761,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
   }
 
   private[log] def flushProducerStateSnapshot(snapshot: Path): Unit = {
-    maybeHandleIOException(s"Error while deleting producer state snapshot $snapshot for $topicPartition in dir ${dir.getParent}") {
+    maybeHandleIOException(() => s"Error while deleting producer state snapshot $snapshot for $topicPartition in dir ${dir.getParent}") {
       Utils.flushFileIfExists(snapshot)
     }
   }
@@ -1773,7 +1773,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
    * @return True iff targetOffset < logEndOffset
    */
   private[kafka] def truncateTo(targetOffset: Long): Boolean = {
-    maybeHandleIOException(s"Error while truncating log to offset $targetOffset for $topicPartition in dir ${dir.getParent}") {
+    maybeHandleIOException(() => s"Error while truncating log to offset $targetOffset for $topicPartition in dir ${dir.getParent}") {
       if (targetOffset < 0)
         throw new IllegalArgumentException(s"Cannot truncate partition $topicPartition to a negative offset (%d).".format(targetOffset))
       if (targetOffset >= localLog.logEndOffset) {
@@ -1817,7 +1817,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
    */
   def truncateFullyAndStartAt(newOffset: Long,
                               logStartOffsetOpt: Option[Long] = None): Unit = {
-    maybeHandleIOException(s"Error while truncating the entire log for $topicPartition in dir ${dir.getParent}") {
+    maybeHandleIOException(() => s"Error while truncating the entire log for $topicPartition in dir ${dir.getParent}") {
       debug(s"Truncate and start at offset $newOffset, logStartOffset: ${logStartOffsetOpt.getOrElse(newOffset)}")
       lock synchronized {
         localLog.truncateFullyAndStartAt(newOffset)
@@ -1909,9 +1909,9 @@ class UnifiedLog(@volatile var logStartOffset: Long,
   @threadsafe
   private[log] def addSegment(segment: LogSegment): LogSegment = localLog.segments.add(segment)
 
-  private def maybeHandleIOException[T](msg: => String)(fun: => T): T = {
+  private def maybeHandleIOException[T](msgSupplier: => Supplier[String])(fun: => T): T = {
     def action: StorageAction[T, IOException] = () => fun
-    LocalLog.maybeHandleIOException(logDirFailureChannel, parentDir, msg, action);
+    LocalLog.maybeHandleIOException(logDirFailureChannel, parentDir, msgSupplier, action);
   }
 
   private[log] def splitOverflowedSegment(segment: LogSegment): List[LogSegment] = lock synchronized {
@@ -1943,7 +1943,7 @@ object UnifiedLog extends Logging {
   val StrayDirSuffix: String = LocalLog.STRAY_DIR_SUFFIX
 
   val FutureDirSuffix: String = LocalLog.FUTURE_DIR_SUFFIX
-
+  
   private[log] val DeleteDirPattern = LocalLog.DELETE_DIR_PATTERN
   private[log] val FutureDirPattern = LocalLog.FUTURE_DIR_PATTERN
 
@@ -2266,13 +2266,12 @@ object UnifiedLog extends Logging {
     }
 
     def deleteProducerSnapshots(): Unit = {
-      LocalLog.maybeHandleIOException(logDirFailureChannel,
-        parentDir,
-        s"Error while deleting producer state snapshots for $topicPartition in dir $parentDir", {
+      LocalLog.maybeHandleIOException(logDirFailureChannel, parentDir,
+        () => s"Error while deleting producer state snapshots for $topicPartition in dir $parentDir",
+        () => {
         snapshotsToDelete.foreach { snapshot =>
           snapshot.deleteIfExists()
         }
-          return;
       })
     }
 
