@@ -19,11 +19,61 @@ package kafka.test.junit;
 
 import kafka.utils.TestUtils;
 import org.junit.jupiter.api.extension.AfterEachCallback;
+import org.junit.jupiter.api.extension.BeforeEachCallback;
 import org.junit.jupiter.api.extension.ExtensionContext;
 
-public class LeakTestingExtension implements AfterEachCallback {
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashSet;
+import java.util.Objects;
+import java.util.Set;
+import java.util.stream.Collectors;
+import scala.Tuple2;
+
+import static org.apache.kafka.test.TestUtils.DEFAULT_MAX_WAIT_MS;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+
+public class LeakTestingExtension implements BeforeEachCallback, AfterEachCallback {
+    private static final Set<String> EXPECTED_THREAD_NAMES = new HashSet<>(
+            Arrays.asList("junit-", "ForkJoinPool", "metrics-meter-tick-thread", "pool-", "scala-")
+    );
+    private Set<Thread> initialThreads;
+
+    @Override
+    public void beforeEach(ExtensionContext extensionContext) {
+        initialThreads = Thread.getAllStackTraces().keySet();
+    }
+
     @Override
     public void afterEach(ExtensionContext extensionContext) {
-        TestUtils.verifyNoUnexpectedThreads("@AfterEach");
+        Tuple2<Set<Thread>, Object> unexpectedThreads = TestUtils.computeUntilTrue(
+                this::unexpectedThreads,
+                DEFAULT_MAX_WAIT_MS,
+                100L,
+                Set::isEmpty
+        );
+
+        assertTrue(unexpectedThreads._1.isEmpty(), "Found unexpected threads after executing test: " +
+                unexpectedThreads._1.stream().map(Objects::toString).collect(Collectors.joining(", ")));
+    }
+
+    private Set<Thread> unexpectedThreads() {
+        Set<Thread> finalThreads = Thread.getAllStackTraces().keySet();
+
+        if (initialThreads.size() != finalThreads.size()) {
+            Set<Thread> leakedThreads = new HashSet<>(finalThreads);
+            leakedThreads.removeAll(initialThreads);
+            return leakedThreads.stream()
+                    .filter(t -> {
+                        for (String s: EXPECTED_THREAD_NAMES) {
+                            if (t.getName().contains(s))
+                                return false;
+                        }
+                        return true;
+                    })
+                    .collect(Collectors.toSet());
+        }
+
+        return Collections.emptySet();
     }
 }
