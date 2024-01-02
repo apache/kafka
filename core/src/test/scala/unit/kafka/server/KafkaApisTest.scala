@@ -1666,8 +1666,8 @@ class KafkaApisTest extends Logging {
       val request = buildRequest(offsetCommitRequest)
       when(clientRequestQuotaManager.maybeRecordAndGetThrottleTimeMs(any[RequestChannel.Request](),
         any[Long])).thenReturn(0)
-    kafkaApis = createKafkaApis()
-    kafkaApis.handleOffsetCommitRequest(request, RequestLocal.withThreadConfinedCaching)
+      kafkaApis = createKafkaApis()
+      kafkaApis.handleOffsetCommitRequest(request, RequestLocal.withThreadConfinedCaching)
 
       val response = verifyNoThrottling[OffsetCommitResponse](request)
       assertEquals(Errors.UNKNOWN_TOPIC_OR_PARTITION,
@@ -1698,8 +1698,8 @@ class KafkaApisTest extends Logging {
       val request = buildRequest(offsetCommitRequest)
       when(clientRequestQuotaManager.maybeRecordAndGetThrottleTimeMs(any[RequestChannel.Request](),
         any[Long])).thenReturn(0)
-    kafkaApis = createKafkaApis()
-    kafkaApis.handleTxnOffsetCommitRequest(request, RequestLocal.withThreadConfinedCaching)
+      kafkaApis = createKafkaApis()
+      kafkaApis.handleTxnOffsetCommitRequest(request, RequestLocal.withThreadConfinedCaching)
 
       val response = verifyNoThrottling[TxnOffsetCommitResponse](request)
       assertEquals(Errors.UNKNOWN_TOPIC_OR_PARTITION, response.errors().get(invalidTopicPartition))
