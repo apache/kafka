@@ -1877,6 +1877,9 @@ public class KafkaStreams implements AutoCloseable {
 
     /**
      * Returns the internal clients' assigned {@code client instance ids}.
+     * <p>
+     * Note, if {@link StreamsConfig#PROCESSING_GUARANTEE_CONFIG} is set to {@link StreamsConfig#EXACTLY_ONCE},
+     * the producer client instance ids are not returned yet. This gap will be closed in the next release.
      *
      * @return The internal clients' assigned instance ids used for metrics collection.
      *
