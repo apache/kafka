@@ -21,14 +21,14 @@ import org.apache.kafka.server.util.Scheduler;
 import org.slf4j.Logger;
 
 import java.io.File;
-import java.util.Collection;
+import java.util.List;
 
 /**
  * Holds the result of splitting a segment into one or more segments, see {@link LocalLog#splitOverflowedSegment(LogSegment, LogSegments, File, TopicPartition, LogConfig, Scheduler, LogDirFailureChannel, Logger)}.
  */
 public class SplitSegmentResult {
-    public final Collection<LogSegment> deletedSegments;
-    public final Collection<LogSegment> newSegments;
+    public final List<LogSegment> deletedSegments;
+    public final List<LogSegment> newSegments;
 
     /**
      * Creates a new SplitSegmentResult instance.
@@ -36,7 +36,7 @@ public class SplitSegmentResult {
      * @param deletedSegments segments deleted when splitting a segment
      * @param newSegments new segments created when splitting a segment
      */
-    SplitSegmentResult(Collection<LogSegment> deletedSegments, Collection<LogSegment> newSegments) {
+    SplitSegmentResult(List<LogSegment> deletedSegments, List<LogSegment> newSegments) {
         this.deletedSegments = deletedSegments;
         this.newSegments = newSegments;
     }

@@ -47,7 +47,6 @@ import java.util.OptionalLong;
 import java.util.Set;
 import java.util.StringJoiner;
 import java.util.concurrent.atomic.AtomicLong;
-import java.util.function.BiFunction;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Supplier;
@@ -378,7 +377,7 @@ public class LocalLog {
      *
      * @return the deleted segments
      */
-    public Iterable<LogSegment> deleteAllSegments() {
+    public Collection<LogSegment> deleteAllSegments() {
         return maybeHandleIOException(
                 () -> "Error while deleting all segments for " + topicPartition + " in dir " + dir.getParent(),
                 () -> {
@@ -388,36 +387,6 @@ public class LocalLog {
                     isMemoryMappedBufferClosed = true;
                     return deletableSegments;
                 });
-    }
-
-    /**
-     * Find segments starting from the oldest until the user-supplied predicate is false.
-     * A final segment that is empty will never be returned.
-     *
-     * @param predicate A function that takes in a candidate log segment, the next higher segment
-     *                  (if there is one). It returns true iff the segment is deletable.
-     * @return the segments ready to be deleted
-     */
-    public Collection<LogSegment> deletableSegments(BiFunction<LogSegment, Optional<LogSegment>, Boolean> predicate) {
-        if (segments.isEmpty()) {
-            return Collections.emptyList();
-        } else {
-            ArrayList<LogSegment> deletable = new ArrayList<>();
-            Iterator<LogSegment> segmentsIterator = segments.values().iterator();
-            Optional<LogSegment> segmentOpt = nextItem(segmentsIterator);
-            while (segmentOpt.isPresent()) {
-                LogSegment segment = segmentOpt.get();
-                Optional<LogSegment> nextSegmentOpt = nextItem(segmentsIterator);
-                boolean isLastSegmentAndEmpty = !nextSegmentOpt.isPresent() && segment.size() == 0;
-                if (predicate.apply(segment, nextSegmentOpt) && !isLastSegmentAndEmpty) {
-                    deletable.add(segment);
-                    segmentOpt = nextSegmentOpt;
-                } else {
-                    segmentOpt = Optional.empty();
-                }
-            }
-            return deletable;
-        }
     }
 
     /**

@@ -17,23 +17,22 @@
 
 package kafka.log
 
-import java.io.{File, IOException}
-import java.nio.file.{Files, NoSuchFileException}
 import kafka.log.UnifiedLog.{CleanedFileSuffix, SwapFileSuffix, isIndexFile, isLogFile, offsetFromFile}
 import kafka.utils.Logging
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.InvalidOffsetException
 import org.apache.kafka.common.utils.{Time, Utils}
-import org.apache.kafka.snapshot.Snapshots
 import org.apache.kafka.server.util.Scheduler
+import org.apache.kafka.snapshot.Snapshots
 import org.apache.kafka.storage.internals.epoch.LeaderEpochFileCache
-import org.apache.kafka.storage.internals.log.{CorruptIndexException, LoadedLogOffsets, LogConfig, LogDirFailureChannel, LogFileUtils, LogOffsetMetadata, LogSegment, LogSegmentOffsetOverflowException, LogSegments, ProducerStateManager}
+import org.apache.kafka.storage.internals.log.{CorruptIndexException, LoadedLogOffsets, LocalLog, LogConfig, LogDirFailureChannel, LogFileUtils, LogOffsetMetadata, LogSegment, LogSegmentOffsetOverflowException, LogSegments, ProducerStateManager}
 
+import java.io.{File, IOException}
+import java.nio.file.{Files, NoSuchFileException}
+import java.util
 import java.util.Optional
 import java.util.concurrent.{ConcurrentHashMap, ConcurrentMap}
-import scala.collection.mutable.ArrayBuffer
 import scala.collection.{Set, mutable}
-import scala.jdk.CollectionConverters._
 
 /**
  * @param dir The directory from which log segments need to be loaded
@@ -283,7 +282,7 @@ class LogLoader(
             scheduler,
             logDirFailureChannel,
             logger.underlying)
-          deleteProducerSnapshotsAsync(result.deletedSegments.asScala)
+          deleteProducerSnapshotsAsync(result.deletedSegments)
       }
     }
     throw new IllegalStateException()
@@ -399,7 +398,7 @@ class LogLoader(
           warn(s"Deleting all segments because logEndOffset ($logEndOffset) " +
             s"is smaller than logStartOffset $logStartOffsetCheckpoint. " +
             "This could happen if segment files were deleted from the file system.")
-          removeAndDeleteSegmentsAsync(segments.values.asScala)
+          removeAndDeleteSegmentsAsync(segments.values)
           leaderEpochCache.ifPresent(_.clearAndFlush())
           producerStateManager.truncateFullyAndStartAt(logStartOffsetCheckpoint)
           None
@@ -435,8 +434,8 @@ class LogLoader(
           // we had an invalid message, delete all remaining log
           warn(s"Corruption found in segment ${segment.baseOffset}," +
             s" truncating to offset ${segment.readNextOffset}")
-          val unflushedRemaining = new ArrayBuffer[LogSegment]
-          unflushedIter.forEachRemaining(s => unflushedRemaining += s)
+          val unflushedRemaining = new util.ArrayList[LogSegment]
+          unflushedIter.forEachRemaining(s => unflushedRemaining.add(s))
           removeAndDeleteSegmentsAsync(unflushedRemaining)
           truncated = true
           // segment is truncated, so set remaining segments to 0
@@ -490,16 +489,16 @@ class LogLoader(
    *
    * @param segmentsToDelete The log segments to schedule for deletion
    */
-  private def removeAndDeleteSegmentsAsync(segmentsToDelete: Iterable[LogSegment]): Unit = {
-    if (segmentsToDelete.nonEmpty) {
+  private def removeAndDeleteSegmentsAsync(segmentsToDelete: java.util.Collection[LogSegment]): Unit = {
+    if (!segmentsToDelete.isEmpty) {
       // Most callers hold an iterator into the `params.segments` collection and
       // `removeAndDeleteSegmentAsync` mutates it by removing the deleted segment. Therefore,
       // we should force materialization of the iterator here, so that results of the iteration
       // remain valid and deterministic. We should also pass only the materialized view of the
       // iterator to the logic that deletes the segments.
-      val toDelete = segmentsToDelete.toList
-      info(s"Deleting segments as part of log recovery: ${toDelete.mkString(",")}")
-      toDelete.foreach { segment =>
+      val toDelete = new util.ArrayList[LogSegment](segmentsToDelete)
+      info(s"Deleting segments as part of log recovery: ${LocalLog.mkString(toDelete.iterator(), ",")}")
+      toDelete.forEach { segment =>
         segments.remove(segment.baseOffset)
       }
       UnifiedLog.deleteSegmentFiles(
@@ -515,7 +514,7 @@ class LogLoader(
     }
   }
 
-  private def deleteProducerSnapshotsAsync(segments: Iterable[LogSegment]): Unit = {
+  private def deleteProducerSnapshotsAsync(segments: java.util.Collection[LogSegment]): Unit = {
     UnifiedLog.deleteProducerSnapshots(segments,
       producerStateManager,
       asyncDelete = true,
