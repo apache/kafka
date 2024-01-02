@@ -200,7 +200,7 @@ public class FileConfigProviderTest {
         configProvider.configure(configs);
 
         // Check we can't escape outside the path directory
-        ConfigData configData = configProvider.get(dir + "../siblingdir/siblingdirFile");
+        ConfigData configData = configProvider.get(dirFile + Paths.get("/../siblingdir/siblingdirFile"));
         assertTrue(configData.data().isEmpty());
         assertNull(configData.ttl());
     }

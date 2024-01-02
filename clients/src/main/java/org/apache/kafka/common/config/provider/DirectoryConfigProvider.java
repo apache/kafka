@@ -58,7 +58,7 @@ public class DirectoryConfigProvider implements ConfigProvider {
 
             if (configValue != null && !configValue.isEmpty()) {
                 allowedPaths = new ArrayList<>();
-                Arrays.stream(configValue.split(",")).forEach(b -> allowedPaths.add(Paths.get(b)));
+                Arrays.stream(configValue.split(",")).forEach(b -> allowedPaths.add(Paths.get(b).normalize()));
             }
         } else {
             allowedPaths = null;
@@ -96,7 +96,7 @@ public class DirectoryConfigProvider implements ConfigProvider {
     private ConfigData get(String path, Predicate<Path> fileFilter) {
         Map<String, String> map = emptyMap();
         if (path != null && !path.isEmpty()) {
-            Path dir = Paths.get(path);
+            Path dir = Paths.get(path).normalize();
             if (!Files.isDirectory(dir)) {
                 log.warn("The path {} is not a directory", path);
             } else {

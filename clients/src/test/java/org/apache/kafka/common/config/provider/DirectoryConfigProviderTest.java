@@ -200,5 +200,16 @@ public class DirectoryConfigProviderTest {
         assertTrue(configData.data().isEmpty());
         assertNull(configData.ttl());
     }
+
+    @Test
+    public void testNoTraversalAllowedPath() {
+        Map<String, String> configs = new HashMap<>();
+        configs.put(ALLOWED_PATHS_CONFIG, dir);
+        provider.configure(configs);
+
+        ConfigData configData = provider.get(dir + Paths.get("/../siblingdir"));
+        assertTrue(configData.data().isEmpty());
+        assertNull(configData.ttl());
+    }
 }
 

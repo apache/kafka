@@ -54,7 +54,7 @@ public class FileConfigProvider implements ConfigProvider {
 
             if (configValue != null && !configValue.isEmpty()) {
                 allowedPaths = new ArrayList<>();
-                Arrays.stream(configValue.split(",")).forEach(b -> allowedPaths.add(Paths.get(b)));
+                Arrays.stream(configValue.split(",")).forEach(b -> allowedPaths.add(Paths.get(b).normalize()));
             }
         } else {
             allowedPaths = null;
@@ -74,12 +74,9 @@ public class FileConfigProvider implements ConfigProvider {
         }
 
         Path filePath = Paths.get(path);
-        if (allowedPaths != null) {
-            long allowed = allowedPaths.stream().filter(allowedPath -> filePath.startsWith(allowedPath) || filePath.equals(allowedPath)).count();
-            if (allowed == 0) {
-                log.warn("The path {} is not allowed to be accessed", path);
-                return new ConfigData(data);
-            }
+        if (!pathIsAllowed(filePath)) {
+            log.warn("The path {} is not allowed to be accessed", path);
+            return new ConfigData(data);
         }
 
         try (Reader reader = reader(filePath)) {
@@ -114,12 +111,9 @@ public class FileConfigProvider implements ConfigProvider {
         }
 
         Path filePath = Paths.get(path);
-        if (allowedPaths != null) {
-            long allowed = allowedPaths.stream().filter(allowedPath -> filePath.startsWith(allowedPath)).count();
-            if (allowed == 0) {
-                log.warn("The path {} is not allowed to be accessed", path);
-                return new ConfigData(data);
-            }
+        if (!pathIsAllowed(filePath)) {
+            log.warn("The path {} is not allowed to be accessed", path);
+            return new ConfigData(data);
         }
 
         try (Reader reader = reader(filePath)) {
@@ -136,6 +130,16 @@ public class FileConfigProvider implements ConfigProvider {
             log.error("Could not read properties from file {}", path, e);
             throw new ConfigException("Could not read properties from file " + path);
         }
+    }
+
+    private boolean pathIsAllowed(Path filePath) {
+        if (allowedPaths != null) {
+            long allowed = allowedPaths.stream().filter(allowedPath -> filePath.normalize().startsWith(allowedPath)).count();
+            if (allowed == 0) {
+                return false;
+            }
+        }
+        return true;
     }
 
     // visible for testing
