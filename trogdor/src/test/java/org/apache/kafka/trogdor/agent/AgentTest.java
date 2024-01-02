@@ -96,7 +96,6 @@ public class AgentTest {
 
     @AfterEach
     public void cleanUp() throws Exception {
-
         if (agent != null) {
             agent.beginShutdown();
             agent.waitForShutdown();
