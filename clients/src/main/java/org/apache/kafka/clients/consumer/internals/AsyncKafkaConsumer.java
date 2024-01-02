@@ -757,7 +757,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         try {
             CompletableFuture<Void> future = commit(offsets, false);
             future.whenComplete((r, t) -> {
-                if (t == null && interceptors != null) {
+                if (t == null && !interceptors.isEmpty()) {
                     invoker.submit(new OffsetCommitCallbackTask(
                             (o, e) -> interceptors.onCommit(o),
                             offsets,
@@ -1341,9 +1341,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         try {
             CompletableFuture<Void> commitFuture = commit(offsets, true);
             ConsumerUtils.getResult(commitFuture, time.timer(timeout));
-            if (interceptors != null) {
-                interceptors.onCommit(offsets);
-            }
+            interceptors.onCommit(offsets);
         } finally {
             wakeupTrigger.clearTask();
             kafkaConsumerMetrics.recordCommitSync(time.nanoseconds() - commitStart);
