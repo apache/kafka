@@ -63,7 +63,7 @@ import java.util.stream.Collectors;
 public class LocalLog {
 
     /**
-     * a file that is scheduled to be deleted
+     * A file that is scheduled to be deleted
      */
     public static final String DELETED_FILE_SUFFIX = LogFileUtils.DELETED_FILE_SUFFIX;
 
@@ -78,12 +78,12 @@ public class LocalLog {
     public static final String SWAP_FILE_SUFFIX = ".swap";
 
     /**
-     * a directory that is scheduled to be deleted
+     * A directory that is scheduled to be deleted
      */
     public static final String DELETE_DIR_SUFFIX = "-delete";
 
     /**
-     * a directory that is used for future partition
+     * A directory that is used for future partition
      */
     public static final String FUTURE_DIR_SUFFIX = "-future";
     public static final String STRAY_DIR_SUFFIX = "-stray";
@@ -594,8 +594,7 @@ public class LocalLog {
                                     long upperBoundOffset,
                                     LogSegment startingSegment,
                                     Consumer<List<AbortedTxn>> accumulator) throws IOException {
-        Iterator<LogSegment> higherSegments =
-                segments.higherSegments(startingSegment.baseOffset()).iterator();
+        Iterator<LogSegment> higherSegments = segments.higherSegments(startingSegment.baseOffset()).iterator();
         Optional<LogSegment> segmentEntryOpt = Optional.of(startingSegment);
         while (segmentEntryOpt.isPresent()) {
             LogSegment segment = segmentEntryOpt.get();
@@ -606,7 +605,9 @@ public class LocalLog {
         }
     }
 
-    public List<AbortedTxn> collectAbortedTransactions(long logStartOffset, long baseOffset, long upperBoundOffset) throws IOException {
+    public List<AbortedTxn> collectAbortedTransactions(long logStartOffset,
+                                                       long baseOffset,
+                                                       long upperBoundOffset) throws IOException {
         Optional<LogSegment> segmentEntry = segments.floorSegment(baseOffset);
         List<AbortedTxn> allAbortedTxns = new ArrayList<>();
 
@@ -630,7 +631,6 @@ public class LocalLog {
     public LogSegment roll(OptionalLong expectedNextOffset) {
         return maybeHandleIOException("Error while rolling log segment for " + topicPartition + " in dir " + dir.getParent(),
                 () -> {
-
                     long start = time.hiResClockMs();
                     checkIfMemoryMappedBufferClosed();
                     long newOffset = Math.max(expectedNextOffset.orElse(0L), logEndOffset());
@@ -740,10 +740,10 @@ public class LocalLog {
     }
 
     /**
-     * Wraps the value of iterator.next() in an option.
+     * Wraps the value of iterator.next() in an Optional instance.
      *
      * @param iterator given iterator to iterate over
-     * @return if a next element exists, None otherwise.
+     * @return if a next element exists, Optional#empty otherwise.
      * @param <T> the type of object held within the iterator
      */
     public static <T> Optional<T> nextItem(Iterator<T> iterator) {
