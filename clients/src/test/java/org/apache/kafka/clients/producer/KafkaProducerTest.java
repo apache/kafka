@@ -1689,20 +1689,19 @@ public class KafkaProducerTest {
         ClientTelemetryReporter clientTelemetryReporter = mock(ClientTelemetryReporter.class);
         clientTelemetryReporter.configure(any());
 
-        MockedStatic<CommonClientConfigs> mockedCommonClientConfigs = mockStatic(CommonClientConfigs.class, new CallsRealMethods());
-        mockedCommonClientConfigs.when(() -> CommonClientConfigs.telemetryReporter(anyString(), any())).thenReturn(Optional.of(clientTelemetryReporter));
+        try (MockedStatic<CommonClientConfigs> mockedCommonClientConfigs = mockStatic(CommonClientConfigs.class, new CallsRealMethods())) {
+            mockedCommonClientConfigs.when(() -> CommonClientConfigs.telemetryReporter(anyString(), any())).thenReturn(Optional.of(clientTelemetryReporter));
 
-        ClientTelemetrySender clientTelemetrySender = mock(ClientTelemetrySender.class);
-        Uuid expectedUuid = Uuid.randomUuid();
-        when(clientTelemetryReporter.telemetrySender()).thenReturn(clientTelemetrySender);
-        when(clientTelemetrySender.clientInstanceId(any())).thenReturn(Optional.of(expectedUuid));
+            ClientTelemetrySender clientTelemetrySender = mock(ClientTelemetrySender.class);
+            Uuid expectedUuid = Uuid.randomUuid();
+            when(clientTelemetryReporter.telemetrySender()).thenReturn(clientTelemetrySender);
+            when(clientTelemetrySender.clientInstanceId(any())).thenReturn(Optional.of(expectedUuid));
 
-        KafkaProducer<String, String> producer = new KafkaProducer<>(props, new StringSerializer(), new StringSerializer());
-        Uuid uuid = producer.clientInstanceId(Duration.ofMillis(0));
-        assertEquals(expectedUuid, uuid);
-
-        mockedCommonClientConfigs.close();
-        producer.close();
+            try (KafkaProducer<String, String> producer = new KafkaProducer<>(props, new StringSerializer(), new StringSerializer())) {
+                Uuid uuid = producer.clientInstanceId(Duration.ofMillis(0));
+                assertEquals(expectedUuid, uuid);
+            }
+        }
     }
 
     @Test

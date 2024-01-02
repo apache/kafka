@@ -61,6 +61,8 @@ import org.rocksdb.Snapshot;
 import org.rocksdb.Statistics;
 import org.rocksdb.TableFormatConfig;
 import org.rocksdb.WriteBatch;
+import org.rocksdb.WriteBatchInterface;
+import org.rocksdb.WriteBatchWithIndex;
 import org.rocksdb.WriteOptions;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -652,13 +654,22 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
 
     @Override
     public void addToBatch(final KeyValue<byte[], byte[]> record,
-                           final WriteBatch batch) throws RocksDBException {
+                           final WriteBatchInterface batch) throws RocksDBException {
         dbAccessor.addToBatch(record.key, record.value, batch);
     }
 
     @Override
-    public void write(final WriteBatch batch) throws RocksDBException {
-        db.write(wOptions, batch);
+    public void write(final WriteBatchInterface batch) throws RocksDBException {
+        if (batch instanceof WriteBatch) {
+            db.write(wOptions, (WriteBatch) batch);
+        } else if (batch instanceof WriteBatchWithIndex) {
+            db.write(wOptions, (WriteBatchWithIndex) batch);
+        } else {
+            log.error("Unknown type of batch {}. This is a bug in Kafka Streams. " +
+                    "Please file a bug report at https://issues.apache.org/jira/projects/KAFKA.",
+                    batch.getClass().getCanonicalName());
+            throw new IllegalStateException("Unknown type of batch " + batch.getClass().getCanonicalName());
+        }
     }
 
     @Override
@@ -719,7 +730,7 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
                  final byte[] value);
 
         void prepareBatch(final List<KeyValue<Bytes, byte[]>> entries,
-                          final WriteBatch batch) throws RocksDBException;
+                          final WriteBatchInterface batch) throws RocksDBException;
 
         byte[] get(final byte[] key) throws RocksDBException;
 
@@ -752,7 +763,7 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
 
         void addToBatch(final byte[] key,
                         final byte[] value,
-                        final WriteBatch batch) throws RocksDBException;
+                        final WriteBatchInterface batch) throws RocksDBException;
 
         void close();
     }
@@ -786,7 +797,7 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
 
         @Override
         public void prepareBatch(final List<KeyValue<Bytes, byte[]>> entries,
-                                 final WriteBatch batch) throws RocksDBException {
+                                 final WriteBatchInterface batch) throws RocksDBException {
             for (final KeyValue<Bytes, byte[]> entry : entries) {
                 Objects.requireNonNull(entry.key, "key cannot be null");
                 addToBatch(entry.key.get(), entry.value, batch);
@@ -869,7 +880,7 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
         @Override
         public void addToBatch(final byte[] key,
                                final byte[] value,
-                               final WriteBatch batch) throws RocksDBException {
+                               final WriteBatchInterface batch) throws RocksDBException {
             if (value == null) {
                 batch.delete(columnFamily, key);
             } else {

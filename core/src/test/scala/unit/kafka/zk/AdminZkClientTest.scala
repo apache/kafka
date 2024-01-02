@@ -21,7 +21,7 @@ import java.util.{Optional, Properties}
 import kafka.controller.ReplicaAssignment
 import kafka.server.DynamicConfig.Broker._
 import kafka.server.KafkaConfig._
-import kafka.server.{ConfigType, KafkaConfig, KafkaServer, QuorumTestHarness}
+import kafka.server.{KafkaConfig, KafkaServer, QuorumTestHarness}
 import kafka.utils.CoreUtils._
 import kafka.utils.TestUtils._
 import kafka.utils.{Logging, TestUtils}
@@ -32,6 +32,7 @@ import org.apache.kafka.common.config.internals.QuotaConfigs
 import org.apache.kafka.common.errors.{InvalidReplicaAssignmentException, InvalidTopicException, TopicExistsException}
 import org.apache.kafka.common.metrics.Quota
 import org.apache.kafka.server.common.AdminOperationException
+import org.apache.kafka.server.config.ConfigType
 import org.apache.kafka.storage.internals.log.LogConfig
 import org.apache.kafka.test.{TestUtils => JTestUtils}
 import org.junit.jupiter.api.Assertions._
@@ -179,7 +180,7 @@ class AdminZkClientTest extends QuorumTestHarness with Logging with RackAwareTes
       partitionAssignment.foreach { case (partition, partitionReplicaAssignment) =>
         assertEquals(1, partitionReplicaAssignment.replicas.size, s"Unexpected replication factor for $partition")
       }
-      val savedProps = zkClient.getEntityConfigs(ConfigType.Topic, topic)
+      val savedProps = zkClient.getEntityConfigs(ConfigType.TOPIC, topic)
       assertEquals(props, savedProps)
     }
 
@@ -248,7 +249,7 @@ class AdminZkClientTest extends QuorumTestHarness with Logging with RackAwareTes
     checkConfig(2 * maxMessageSize, 2 * retentionMs, "*", "*", quotaManagerIsThrottled = true)
 
     // Verify that the same config can be read from ZK
-    val configInZk = adminZkClient.fetchEntityConfig(ConfigType.Topic, topic)
+    val configInZk = adminZkClient.fetchEntityConfig(ConfigType.TOPIC, topic)
     assertEquals(newConfig, configInZk)
 
     //Now delete the config
@@ -295,7 +296,7 @@ class AdminZkClientTest extends QuorumTestHarness with Logging with RackAwareTes
 
     // Verify that the same config can be read from ZK
     for (brokerId <- brokerIds) {
-      val configInZk = adminZkClient.fetchEntityConfig(ConfigType.Broker, brokerId.toString)
+      val configInZk = adminZkClient.fetchEntityConfig(ConfigType.BROKER, brokerId.toString)
       assertEquals(newLimit, configInZk.getProperty(LeaderReplicationThrottledRateProp).toInt)
       assertEquals(newLimit, configInZk.getProperty(FollowerReplicationThrottledRateProp).toInt)
     }
@@ -317,9 +318,9 @@ class AdminZkClientTest extends QuorumTestHarness with Logging with RackAwareTes
     props.setProperty("consumer_byte_rate", "2000")
 
     // Write config without notification to ZK.
-    zkClient.setOrCreateEntityConfigs(ConfigType.Client, clientId, props)
+    zkClient.setOrCreateEntityConfigs(ConfigType.CLIENT, clientId, props)
 
-    val configInZk: Map[String, Properties] = adminZkClient.fetchAllEntityConfigs(ConfigType.Client)
+    val configInZk: Map[String, Properties] = adminZkClient.fetchAllEntityConfigs(ConfigType.CLIENT)
     assertEquals(1, configInZk.size, "Must have 1 overridden client config")
     assertEquals(props, configInZk(clientId))
 
@@ -364,24 +365,24 @@ class AdminZkClientTest extends QuorumTestHarness with Logging with RackAwareTes
     val config = new Properties()
     config.put(QuotaConfigs.PRODUCER_BYTE_RATE_OVERRIDE_CONFIG, producerByteRate)
     adminZkClient.changeUserOrUserClientIdConfig("user01/clients/client01", config, isUserClientId = true)
-    var props = zkClient.getEntityConfigs(ConfigType.User, "user01/clients/client01")
+    var props = zkClient.getEntityConfigs(ConfigType.USER, "user01/clients/client01")
     assertEquals(producerByteRate, props.getProperty(QuotaConfigs.PRODUCER_BYTE_RATE_OVERRIDE_CONFIG))
 
     // Children of clients and user01 should all be empty, so user01 should be deleted
     adminZkClient.changeUserOrUserClientIdConfig("user01/clients/client01", new Properties(), isUserClientId = true)
-    var users = zkClient.getChildren(ConfigEntityTypeZNode.path(ConfigType.User))
+    var users = zkClient.getChildren(ConfigEntityTypeZNode.path(ConfigType.USER))
     assert(users.isEmpty)
 
     adminZkClient.changeUserOrUserClientIdConfig("user01", config)
-    props = zkClient.getEntityConfigs(ConfigType.User, "user01")
+    props = zkClient.getEntityConfigs(ConfigType.USER, "user01")
     assertEquals(producerByteRate, props.getProperty(QuotaConfigs.PRODUCER_BYTE_RATE_OVERRIDE_CONFIG))
     adminZkClient.changeUserOrUserClientIdConfig("user01/clients/client01", config, isUserClientId = true)
-    props = zkClient.getEntityConfigs(ConfigType.User, "user01/clients/client01")
+    props = zkClient.getEntityConfigs(ConfigType.USER, "user01/clients/client01")
     assertEquals(producerByteRate, props.getProperty(QuotaConfigs.PRODUCER_BYTE_RATE_OVERRIDE_CONFIG))
 
     // Children of clients are empty but configs of user01 are not empty, so clients should be deleted, but user01 should not
     adminZkClient.changeUserOrUserClientIdConfig("user01/clients/client01", new Properties(), isUserClientId = true)
-    users = zkClient.getChildren(ConfigEntityTypeZNode.path(ConfigType.User))
+    users = zkClient.getChildren(ConfigEntityTypeZNode.path(ConfigType.USER))
     assert(users == Seq("user01"))
   }
 
@@ -390,11 +391,11 @@ class AdminZkClientTest extends QuorumTestHarness with Logging with RackAwareTes
     val config = new Properties()
     config.put(QuotaConfigs.PRODUCER_BYTE_RATE_OVERRIDE_CONFIG, producerByteRate)
     adminZkClient.changeUserOrUserClientIdConfig("user01", config)
-    val props = zkClient.getEntityConfigs(ConfigType.User, "user01")
+    val props = zkClient.getEntityConfigs(ConfigType.USER, "user01")
     assertEquals(producerByteRate, props.getProperty(QuotaConfigs.PRODUCER_BYTE_RATE_OVERRIDE_CONFIG))
 
     adminZkClient.changeUserOrUserClientIdConfig("user01", new Properties())
-    val users = zkClient.getChildren(ConfigEntityTypeZNode.path(ConfigType.User))
+    val users = zkClient.getChildren(ConfigEntityTypeZNode.path(ConfigType.USER))
     assert(users.isEmpty)
   }
 
@@ -403,11 +404,11 @@ class AdminZkClientTest extends QuorumTestHarness with Logging with RackAwareTes
     val config = new Properties()
     config.put(QuotaConfigs.PRODUCER_BYTE_RATE_OVERRIDE_CONFIG, producerByteRate)
     adminZkClient.changeClientIdConfig("client01", config)
-    val props = zkClient.getEntityConfigs(ConfigType.Client, "client01")
+    val props = zkClient.getEntityConfigs(ConfigType.CLIENT, "client01")
     assertEquals(producerByteRate, props.getProperty(QuotaConfigs.PRODUCER_BYTE_RATE_OVERRIDE_CONFIG))
 
     adminZkClient.changeClientIdConfig("client01", new Properties())
-    val users = zkClient.getChildren(ConfigEntityTypeZNode.path(ConfigType.Client))
+    val users = zkClient.getChildren(ConfigEntityTypeZNode.path(ConfigType.CLIENT))
     assert(users.isEmpty)
   }
 
@@ -416,11 +417,11 @@ class AdminZkClientTest extends QuorumTestHarness with Logging with RackAwareTes
     val config = new Properties()
     config.put(QuotaConfigs.IP_CONNECTION_RATE_OVERRIDE_CONFIG, ipConnectionRate)
     adminZkClient.changeIpConfig("127.0.0.1", config)
-    val props = zkClient.getEntityConfigs(ConfigType.Ip, "127.0.0.1")
+    val props = zkClient.getEntityConfigs(ConfigType.IP, "127.0.0.1")
     assertEquals(ipConnectionRate, props.getProperty(QuotaConfigs.IP_CONNECTION_RATE_OVERRIDE_CONFIG))
 
     adminZkClient.changeIpConfig("127.0.0.1", new Properties())
-    val users = zkClient.getChildren(ConfigEntityTypeZNode.path(ConfigType.Ip))
+    val users = zkClient.getChildren(ConfigEntityTypeZNode.path(ConfigType.IP))
     assert(users.isEmpty)
   }
 }

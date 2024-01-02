@@ -32,7 +32,7 @@ import org.rocksdb.ReadOptions;
 import org.rocksdb.RocksDB;
 import org.rocksdb.RocksDBException;
 import org.rocksdb.RocksIterator;
-import org.rocksdb.WriteBatch;
+import org.rocksdb.WriteBatchInterface;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -132,7 +132,7 @@ public class RocksDBTimestampedStore extends RocksDBStore implements Timestamped
 
         @Override
         public void prepareBatch(final List<KeyValue<Bytes, byte[]>> entries,
-                                 final WriteBatch batch) throws RocksDBException {
+                                 final WriteBatchInterface batch) throws RocksDBException {
             for (final KeyValue<Bytes, byte[]> entry : entries) {
                 Objects.requireNonNull(entry.key, "key cannot be null");
                 addToBatch(entry.key.get(), entry.value, batch);
@@ -256,7 +256,7 @@ public class RocksDBTimestampedStore extends RocksDBStore implements Timestamped
         @Override
         public void addToBatch(final byte[] key,
                                final byte[] value,
-                               final WriteBatch batch) throws RocksDBException {
+                               final WriteBatchInterface batch) throws RocksDBException {
             if (value == null) {
                 batch.delete(oldColumnFamily, key);
                 batch.delete(newColumnFamily, key);

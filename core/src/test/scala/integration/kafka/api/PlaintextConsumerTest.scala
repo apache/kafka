@@ -134,7 +134,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
   // Deprecated poll(timeout) not supported for consumer group protocol
   @deprecated("poll(Duration) is the replacement", since = "2.0")
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersGenericGroupProtocolOnly"))
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersClassicGroupProtocolOnly"))
   def testDeprecatedPollBlocksForAssignment(quorum: String, groupProtocol: String): Unit = {
     val consumer = createConsumer()
     consumer.subscribe(Set(topic).asJava)
@@ -169,9 +169,9 @@ class PlaintextConsumerTest extends BaseConsumerTest {
       startingTimestamp = startingTimestamp)
   }
 
-  // TODO: enable this test for the consumer group protocol when KAFKA-16008 has been fixed.
+  // TODO: Enable this test when callback invocation is implemented for max.poll.interval.ms
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersGenericGroupProtocolOnly"))
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersClassicGroupProtocolOnly"))
   def testMaxPollIntervalMs(quorum: String, groupProtocol: String): Unit = {
     this.consumerConfig.setProperty(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, 1000.toString)
     this.consumerConfig.setProperty(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, 500.toString)
@@ -196,9 +196,9 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     assertEquals(1, listener.callsToRevoked)
   }
 
-  // TODO: enable this test for the consumer group protocol when KAFKA-16009 has been fixed.
+  // TODO: Enable this test when callback invocation is implemented for max.poll.interval.ms
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersGenericGroupProtocolOnly"))
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersClassicGroupProtocolOnly"))
   def testMaxPollIntervalMsDelayInRevocation(quorum: String, groupProtocol: String): Unit = {
     this.consumerConfig.setProperty(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, 5000.toString)
     this.consumerConfig.setProperty(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, 500.toString)
@@ -290,7 +290,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
 
   // TODO: enable this test for the consumer group protocol when support for committing offsets on close is implemented.
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersGenericGroupProtocolOnly"))
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersClassicGroupProtocolOnly"))
   def testAutoCommitOnCloseAfterWakeup(quorum: String, groupProtocol: String): Unit = {
     this.consumerConfig.setProperty(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "true")
     val consumer = createConsumer()
@@ -352,7 +352,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
    */
   // TODO: enable this test for the consumer group protocol when support for pattern subscriptions is implemented.
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersGenericGroupProtocolOnly"))
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersClassicGroupProtocolOnly"))
   def testPatternSubscription(quorum: String, groupProtocol: String): Unit = {
     val numRecords = 10000
     val producer = createProducer()
@@ -411,7 +411,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
    */
   // TODO: enable this test for the consumer group protocol when support for pattern subscriptions is implemented.
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersGenericGroupProtocolOnly"))
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersClassicGroupProtocolOnly"))
   def testSubsequentPatternSubscription(quorum: String, groupProtocol: String): Unit = {
     this.consumerConfig.setProperty(ConsumerConfig.METADATA_MAX_AGE_CONFIG, "30000")
     val consumer = createConsumer()
@@ -464,7 +464,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
    */
   // TODO: enable this test for the consumer group protocol when support for pattern subscriptions is implemented.
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersGenericGroupProtocolOnly"))
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersClassicGroupProtocolOnly"))
   def testPatternUnsubscription(quorum: String, groupProtocol: String): Unit = {
     val numRecords = 10000
     val producer = createProducer()
@@ -533,7 +533,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
   }
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersGenericGroupProtocolOnly"))
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersClassicGroupProtocolOnly"))
   def testExpandingTopicSubscriptions(quorum: String, groupProtocol: String): Unit = {
     val otherTopic = "other"
     val initialAssignment = Set(new TopicPartition(topic, 0), new TopicPartition(topic, 1))
@@ -548,7 +548,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
   }
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersGenericGroupProtocolOnly"))
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersClassicGroupProtocolOnly"))
   def testShrinkingTopicSubscriptions(quorum: String, groupProtocol: String): Unit = {
     val otherTopic = "other"
     createTopic(otherTopic, 2, brokerCount)
@@ -975,9 +975,9 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     assertEquals(0, consumer.assignment().size)
   }
 
-  // Only the generic group protocol supports client-side assignors
+  // Only the classic group protocol supports client-side assignors
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersGenericGroupProtocolOnly"))
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersClassicGroupProtocolOnly"))
   def testRoundRobinAssignment(quorum: String, groupProtocol: String): Unit = {
     // 1 consumer using round-robin assignment
     this.consumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, "roundrobin-group")
@@ -1013,9 +1013,9 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     assertEquals(0, consumer.assignment().size)
   }
 
-  // Only the generic group protocol supports client-side assignors
+  // Only the classic group protocol supports client-side assignors
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersGenericGroupProtocolOnly"))
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersClassicGroupProtocolOnly"))
   def testMultiConsumerRoundRobinAssignor(quorum: String, groupProtocol: String): Unit = {
     this.consumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, "roundrobin-group")
     this.consumerConfig.setProperty(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG, classOf[RoundRobinAssignor].getName)
@@ -1052,9 +1052,9 @@ class PlaintextConsumerTest extends BaseConsumerTest {
    *  - (#par / 10) partition per consumer, where one partition from each of the early (#par mod 9) consumers
    *    will move to consumer #10, leading to a total of (#par mod 9) partition movement
    */
-  // Only the generic group protocol supports client-side assignors
+  // Only the classic group protocol supports client-side assignors
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersGenericGroupProtocolOnly"))
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersClassicGroupProtocolOnly"))
   def testMultiConsumerStickyAssignor(quorum: String, groupProtocol: String): Unit = {
 
     def reverse(m: Map[Long, Set[TopicPartition]]) =
@@ -1100,9 +1100,9 @@ class PlaintextConsumerTest extends BaseConsumerTest {
    * This test re-uses BaseConsumerTest's consumers.
    * As a result, it is testing the default assignment strategy set by BaseConsumerTest
    */
-  // Only the generic group protocol supports client-side assignors
+  // Only the classic group protocol supports client-side assignors
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersGenericGroupProtocolOnly"))
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersClassicGroupProtocolOnly"))
   def testMultiConsumerDefaultAssignor(quorum: String, groupProtocol: String): Unit = {
     // use consumers and topics defined in this class + one more topic
     val producer = createProducer()
@@ -1137,7 +1137,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     }
   }
 
-  // Only the generic group protocol supports client-side assignors
+  // Only the classic group protocol supports client-side assignors
   @ParameterizedTest
   @CsvSource(Array(
     "org.apache.kafka.clients.consumer.CooperativeStickyAssignor,   zk",
@@ -1147,7 +1147,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
   ))
   def testRebalanceAndRejoin(assignmentStrategy: String, quorum: String): Unit = {
     // create 2 consumers
-    this.consumerConfig.setProperty(ConsumerConfig.GROUP_PROTOCOL_CONFIG, "generic")
+    this.consumerConfig.setProperty(ConsumerConfig.GROUP_PROTOCOL_CONFIG, "classic")
     this.consumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, "rebalance-and-rejoin-group")
     this.consumerConfig.setProperty(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG, assignmentStrategy)
     this.consumerConfig.setProperty(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "true")
@@ -1230,9 +1230,9 @@ class PlaintextConsumerTest extends BaseConsumerTest {
    * As a result, it is testing the default assignment strategy set by BaseConsumerTest
    * It tests the assignment results is expected using default assignor (i.e. Range assignor)
    */
-  // Only the generic group protocol supports client-side assignors
+  // Only the classic group protocol supports client-side assignors
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersGenericGroupProtocolOnly"))
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersClassicGroupProtocolOnly"))
   def testMultiConsumerDefaultAssignorAndVerifyAssignment(quorum: String, groupProtocol: String): Unit = {
     // create two new topics, each having 3 partitions
     val topic1 = "topic1"
@@ -1264,16 +1264,15 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     }
   }
 
-  // TODO: enable this test for the consumer group protocol when KAFKA-16010 has been fixed.
+  // TODO: HeartbeatState needs to be reset upon rejoining. Otherwise GC will treat it as bad request.
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersGenericGroupProtocolOnly"))
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersClassicGroupProtocolOnly"))
   def testMultiConsumerSessionTimeoutOnStopPolling(quorum: String, groupProtocol: String): Unit = {
     runMultiConsumerSessionTimeoutTest(false)
   }
 
-  // TODO: enable this test for the consumer group protocol when KAFKA-16011 has been fixed.
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersGenericGroupProtocolOnly"))
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
   def testMultiConsumerSessionTimeoutOnClose(quorum: String, groupProtocol: String): Unit = {
     runMultiConsumerSessionTimeoutTest(true)
   }
@@ -1340,7 +1339,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
 
   // TODO: enable this test for the consumer group protocol when consumer interceptors are supported
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersGenericGroupProtocolOnly"))
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersClassicGroupProtocolOnly"))
   def testAutoCommitIntercept(quorum: String, groupProtocol: String): Unit = {
     val topic2 = "topic2"
     createTopic(topic2, 2, brokerCount)
@@ -1554,7 +1553,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
 
   // TODO: enable this test for the consumer group protocol when auto-commit support is implemented.
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersGenericGroupProtocolOnly"))
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersClassicGroupProtocolOnly"))
   def testAutoCommitOnRebalance(quorum: String, groupProtocol: String): Unit = {
     val topic2 = "topic2"
     createTopic(topic2, 2, brokerCount)
@@ -1594,7 +1593,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
   }
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersGenericGroupProtocolOnly"))
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersClassicGroupProtocolOnly"))
   def testPerPartitionLeadMetricsCleanUpWithSubscribe(quorum: String, groupProtocol: String): Unit = {
     val numMessages = 1000
     val topic2 = "topic2"
@@ -1634,7 +1633,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
   }
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersGenericGroupProtocolOnly"))
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersClassicGroupProtocolOnly"))
   def testPerPartitionLagMetricsCleanUpWithSubscribe(quorum: String, groupProtocol: String): Unit = {
     val numMessages = 1000
     val topic2 = "topic2"
@@ -2032,9 +2031,9 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     assertThrows(classOf[InvalidGroupIdException], () => consumer1.commitSync())
   }
 
-  // Empty group ID only supported for generic group protocol
+  // Empty group ID only supported for classic group protocol
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersGenericGroupProtocolOnly"))
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersClassicGroupProtocolOnly"))
   def testConsumingWithEmptyGroupId(quorum: String, groupProtocol: String): Unit = {
     val topic = "test_topic"
     val partition = 0
@@ -2095,7 +2094,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
 
   // TODO: enable this test for the consumer group protocol when static membership is implemented.
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersGenericGroupProtocolOnly"))
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersClassicGroupProtocolOnly"))
   def testStaticConsumerDetectsNewPartitionCreatedAfterRestart(quorum:String, groupProtocol: String): Unit = {
     val foo = "foo"
     val foo0 = new TopicPartition(foo, 0)
@@ -2229,7 +2228,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
   // partitionsFor not implemented in consumer group protocol and this test requires ZK also
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
   @CsvSource(Array(
-    "zk, generic"
+    "zk, classic"
   ))
   def testAssignAndConsumeWithLeaderChangeValidatingPositions(quorum:String, groupProtocol: String): Unit = {
     val numRecords = 10

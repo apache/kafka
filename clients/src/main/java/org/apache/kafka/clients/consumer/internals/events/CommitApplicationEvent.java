@@ -21,14 +21,32 @@ import org.apache.kafka.common.TopicPartition;
 
 import java.util.Collections;
 import java.util.Map;
+import java.util.Optional;
 
 public class CommitApplicationEvent extends CompletableApplicationEvent<Void> {
 
+    /**
+     * Offsets to commit per partition.
+     */
     private final Map<TopicPartition, OffsetAndMetadata> offsets;
 
-    public CommitApplicationEvent(final Map<TopicPartition, OffsetAndMetadata> offsets) {
+    /**
+     * Time to wait for a response, retrying on retriable errors. If not present, the request is
+     * triggered without waiting for a response or being retried.
+     */
+    private final Optional<Long> retryTimeoutMs;
+
+    /**
+     * Create new event to commit offsets. If timer is present, the request will be retried on
+     * retriable errors until the timer expires (sync commit offsets request). If the timer is
+     * not present, the request will be sent without waiting for a response of retrying (async
+     * commit offsets request).
+     */
+    public CommitApplicationEvent(final Map<TopicPartition, OffsetAndMetadata> offsets,
+                                  final Optional<Long> retryTimeoutMs) {
         super(Type.COMMIT);
         this.offsets = Collections.unmodifiableMap(offsets);
+        this.retryTimeoutMs = retryTimeoutMs;
 
         for (OffsetAndMetadata offsetAndMetadata : offsets.values()) {
             if (offsetAndMetadata.offset() < 0) {
@@ -39,6 +57,10 @@ public class CommitApplicationEvent extends CompletableApplicationEvent<Void> {
 
     public Map<TopicPartition, OffsetAndMetadata> offsets() {
         return offsets;
+    }
+
+    public Optional<Long> retryTimeoutMs() {
+        return retryTimeoutMs;
     }
 
     @Override
@@ -64,6 +86,7 @@ public class CommitApplicationEvent extends CompletableApplicationEvent<Void> {
         return "CommitApplicationEvent{" +
                 toStringBase() +
                 ", offsets=" + offsets +
+                ", retryTimeout=" + (retryTimeoutMs.map(t -> t + "ms").orElse("none")) +
                 '}';
     }
 }

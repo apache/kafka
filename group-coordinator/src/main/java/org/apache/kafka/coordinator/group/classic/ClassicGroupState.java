@@ -15,17 +15,17 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.coordinator.group.generic;
+package org.apache.kafka.coordinator.group.classic;
 
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.Set;
 
 /**
- * Represents all states that a generic group can be in, as well as the states that a group must
+ * Represents all states that a classic group can be in, as well as the states that a group must
  * be in to transition to a particular state.
  */
-public enum GenericGroupState {
+public enum ClassicGroupState {
 
     /**
      * Group has no more members, but lingers until all offsets have expired. This state
@@ -104,7 +104,7 @@ public enum GenericGroupState {
     DEAD("Dead");
 
     private final String name;
-    private Set<GenericGroupState> validPreviousStates;
+    private Set<ClassicGroupState> validPreviousStates;
 
     static {
         EMPTY.addValidPreviousStates(PREPARING_REBALANCE);
@@ -114,7 +114,7 @@ public enum GenericGroupState {
         DEAD.addValidPreviousStates(STABLE, PREPARING_REBALANCE, COMPLETING_REBALANCE, EMPTY, DEAD);
     }
 
-    GenericGroupState(String name) {
+    ClassicGroupState(String name) {
         this.name = name;
     }
 
@@ -123,14 +123,14 @@ public enum GenericGroupState {
         return name;
     }
 
-    private void addValidPreviousStates(GenericGroupState... validPreviousStates) {
+    private void addValidPreviousStates(ClassicGroupState... validPreviousStates) {
         this.validPreviousStates = new HashSet<>(Arrays.asList(validPreviousStates));
     }
 
     /**
      * @return valid previous states a group must be in to transition to this state.
      */
-    public Set<GenericGroupState> validPreviousStates() {
+    public Set<ClassicGroupState> validPreviousStates() {
         return this.validPreviousStates;
     }
 }
