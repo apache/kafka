@@ -70,6 +70,7 @@ import org.apache.kafka.connect.storage.StatusBackingStore;
 import org.apache.kafka.connect.util.Callback;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.apache.kafka.connect.util.FutureCallback;
+import org.apache.kafka.connect.util.Stage;
 import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
@@ -92,6 +93,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.AbstractExecutorService;
+import java.util.concurrent.Callable;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
@@ -102,12 +104,14 @@ import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.function.Function;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 import static java.util.Collections.singletonList;
 import static javax.ws.rs.core.Response.Status.FORBIDDEN;
 import static javax.ws.rs.core.Response.Status.SERVICE_UNAVAILABLE;
+import static org.apache.kafka.common.utils.Utils.UncheckedCloseable;
 import static org.apache.kafka.connect.runtime.AbstractStatus.State.FAILED;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.CONNECTOR_CLIENT_CONSUMER_OVERRIDES_PREFIX;
 import static org.apache.kafka.connect.runtime.SourceConnectorConfig.ExactlyOnceSupportLevel.REQUIRED;
@@ -338,7 +342,7 @@ public class DistributedHerderTest {
         expectExecuteTaskReconfiguration(true, conn1SinkConfig, invocation -> TASK_CONFIGS);
         when(worker.startSourceTask(eq(TASK1), any(), any(), any(), eq(herder), eq(TargetState.STARTED))).thenReturn(true);
 
-        doNothing().when(member).poll(anyLong());
+        expectMemberPoll();
 
         herder.tick();
         time.sleep(1000L);
@@ -362,7 +366,7 @@ public class DistributedHerderTest {
         expectExecuteTaskReconfiguration(true, conn1SinkConfig, invocation -> TASK_CONFIGS);
         when(worker.startSourceTask(eq(TASK1), any(), any(), any(), eq(herder), eq(TargetState.STARTED))).thenReturn(true);
 
-        doNothing().when(member).poll(anyLong());
+        expectMemberPoll();
 
         time.sleep(1000L);
         assertStatistics(0, 0, 0, Double.POSITIVE_INFINITY);
@@ -400,7 +404,7 @@ public class DistributedHerderTest {
         expectRebalance(1, Collections.emptyList(), Collections.emptyList());
         expectConfigRefreshAndSnapshot(SNAPSHOT);
 
-        doNothing().when(member).poll(anyLong());
+        expectMemberPoll();
 
         time.sleep(1000L);
         assertStatistics(0, 0, 0, Double.POSITIVE_INFINITY);
@@ -445,7 +449,7 @@ public class DistributedHerderTest {
                 ConnectProtocol.Assignment.NO_ERROR, 1,
                 Collections.emptyList(), Collections.emptyList(), 0);
         doNothing().when(member).requestRejoin();
-        doNothing().when(member).poll(anyLong());
+        expectMemberPoll();
 
         herder.configState = SNAPSHOT;
         time.sleep(1000L);
@@ -486,7 +490,7 @@ public class DistributedHerderTest {
         doAnswer(invocation -> {
             time.sleep(9900L);
             return null;
-        }).when(member).poll(anyLong());
+        }).when(member).poll(anyLong(), any());
 
         // Request to re-join expected because the scheduled rebalance delay has been reached
         doNothing().when(member).requestRejoin();
@@ -510,7 +514,7 @@ public class DistributedHerderTest {
         expectExecuteTaskReconfiguration(true, conn1SinkConfig, invocation -> TASK_CONFIGS);
         when(worker.startSourceTask(eq(TASK1), any(), any(), any(), eq(herder), eq(TargetState.STARTED))).thenReturn(true);
 
-        doNothing().when(member).poll(anyLong());
+        expectMemberPoll();
 
         herder.tick();
         time.sleep(2000L);
@@ -535,7 +539,7 @@ public class DistributedHerderTest {
         expectExecuteTaskReconfiguration(true, conn1SinkConfig, invocation -> TASK_CONFIGS);
         when(worker.startSourceTask(eq(TASK1), any(), any(), any(), eq(herder), eq(TargetState.STARTED))).thenReturn(true);
 
-        doNothing().when(member).poll(anyLong());
+        expectMemberPoll();
 
         herder.tick();
         time.sleep(1000L);
@@ -592,7 +596,7 @@ public class DistributedHerderTest {
         when(worker.startSourceTask(eq(TASK1), any(), any(), any(), eq(herder), eq(TargetState.STARTED))).thenReturn(true);
         expectExecuteTaskReconfiguration(true, conn1SinkConfig, invocation -> TASK_CONFIGS);
 
-        doNothing().when(member).poll(anyLong());
+        expectMemberPoll();
 
         herder.tick();
 
@@ -650,7 +654,7 @@ public class DistributedHerderTest {
 
         // The tick loop where the revoke happens returns early (because there's a subsequent rebalance) and doesn't result in a poll at
         // the end of the method
-        verify(member, times(2)).poll(anyLong());
+        verify(member, times(2)).poll(anyLong(), any());
 
         verifyNoMoreInteractions(member, statusBackingStore, configBackingStore, worker);
     }
@@ -677,7 +681,7 @@ public class DistributedHerderTest {
         expectConfigRefreshAndSnapshot(SNAPSHOT);
 
         when(statusBackingStore.connectors()).thenReturn(Collections.emptySet());
-        doNothing().when(member).poll(anyLong());
+        expectMemberPoll();
 
         // Initial rebalance where this member becomes the leader
         herder.tick();
@@ -691,12 +695,14 @@ public class DistributedHerderTest {
         }).when(herder).validateConnectorConfig(eq(CONN2_CONFIG), validateCallback.capture());
 
         // CONN2 is new, should succeed
-        doNothing().when(configBackingStore).putConnectorConfig(CONN2, CONN2_CONFIG);
+        doNothing().when(configBackingStore).putConnectorConfig(eq(CONN2), eq(CONN2_CONFIG), isNull());
 
         // This will occur just before/during the second tick
-        doNothing().when(member).ensureActive();
+        expectMemberEnsureActive();
 
         // No immediate action besides this -- change will be picked up via the config log
+
+        List<String> stages = expectRecordStages(putConnectorCallback);
 
         herder.putConnectorConfig(CONN2, CONN2_CONFIG, false, putConnectorCallback);
         // This tick runs the initial herder request, which issues an asynchronous request for
@@ -712,6 +718,68 @@ public class DistributedHerderTest {
         ConnectorInfo info = new ConnectorInfo(CONN2, CONN2_CONFIG, Collections.emptyList(), ConnectorType.SOURCE);
         verify(putConnectorCallback).onCompletion(isNull(), eq(new Herder.Created<>(true, info)));
         verifyNoMoreInteractions(worker, member, configBackingStore, statusBackingStore, putConnectorCallback);
+
+        assertEquals(
+                Arrays.asList(
+                        "ensuring membership in the cluster",
+                        "writing a config for connector " + CONN2 + " to the config topic"
+                ),
+                stages
+        );
+    }
+
+    @Test
+    public void testCreateConnectorWithInitialState() throws Exception {
+        when(member.memberId()).thenReturn("leader");
+        when(member.currentProtocolVersion()).thenReturn(CONNECT_PROTOCOL_V0);
+        expectRebalance(1, Collections.emptyList(), Collections.emptyList(), true);
+        expectConfigRefreshAndSnapshot(SNAPSHOT);
+
+        when(statusBackingStore.connectors()).thenReturn(Collections.emptySet());
+        expectMemberPoll();
+
+        // Initial rebalance where this member becomes the leader
+        herder.tick();
+
+        // mock the actual validation since its asynchronous nature is difficult to test and should
+        // be covered sufficiently by the unit tests for the AbstractHerder class
+        ArgumentCaptor<Callback<ConfigInfos>> validateCallback = ArgumentCaptor.forClass(Callback.class);
+        doAnswer(invocation -> {
+            validateCallback.getValue().onCompletion(null, CONN2_CONFIG_INFOS);
+            return null;
+        }).when(herder).validateConnectorConfig(eq(CONN2_CONFIG), validateCallback.capture());
+
+        // CONN2 is new, should succeed
+        doNothing().when(configBackingStore).putConnectorConfig(eq(CONN2), eq(CONN2_CONFIG), eq(TargetState.STOPPED));
+
+        // This will occur just before/during the second tick
+        expectMemberEnsureActive();
+
+        // No immediate action besides this -- change will be picked up via the config log
+        List<String> stages = expectRecordStages(putConnectorCallback);
+
+        herder.putConnectorConfig(CONN2, CONN2_CONFIG, TargetState.STOPPED, false, putConnectorCallback);
+        // This tick runs the initial herder request, which issues an asynchronous request for
+        // connector validation
+        herder.tick();
+
+        // Once that validation is complete, another request is added to the herder request queue
+        // for actually performing the config write; this tick is for that request
+        herder.tick();
+        time.sleep(1000L);
+        assertStatistics(3, 1, 100, 1000L);
+
+        ConnectorInfo info = new ConnectorInfo(CONN2, CONN2_CONFIG, Collections.emptyList(), ConnectorType.SOURCE);
+        verify(putConnectorCallback).onCompletion(isNull(), eq(new Herder.Created<>(true, info)));
+        verifyNoMoreInteractions(worker, member, configBackingStore, statusBackingStore, putConnectorCallback);
+
+        assertEquals(
+                Arrays.asList(
+                        "ensuring membership in the cluster",
+                        "writing a config for connector " + CONN2 + " to the config topic"
+                ),
+                stages
+        );
     }
 
     @Test
@@ -722,7 +790,7 @@ public class DistributedHerderTest {
         expectConfigRefreshAndSnapshot(SNAPSHOT);
 
         when(statusBackingStore.connectors()).thenReturn(Collections.emptySet());
-        doNothing().when(member).poll(anyLong());
+        expectMemberPoll();
 
         // Initial rebalance where this member becomes the leader
         herder.tick();
@@ -736,10 +804,12 @@ public class DistributedHerderTest {
         }).when(herder).validateConnectorConfig(eq(CONN2_CONFIG), validateCallback.capture());
 
         doThrow(new ConnectException("Error writing connector configuration to Kafka"))
-                .when(configBackingStore).putConnectorConfig(CONN2, CONN2_CONFIG);
+                .when(configBackingStore).putConnectorConfig(eq(CONN2), eq(CONN2_CONFIG), isNull());
 
         // This will occur just before/during the second tick
-        doNothing().when(member).ensureActive();
+        expectMemberEnsureActive();
+
+        List<String> stages = expectRecordStages(putConnectorCallback);
 
         herder.putConnectorConfig(CONN2, CONN2_CONFIG, false, putConnectorCallback);
         // This tick runs the initial herder request, which issues an asynchronous request for
@@ -755,6 +825,14 @@ public class DistributedHerderTest {
         // Verify that the exception thrown during the config backing store write is propagated via the callback
         verify(putConnectorCallback).onCompletion(any(ConnectException.class), isNull());
         verifyNoMoreInteractions(worker, member, configBackingStore, statusBackingStore, putConnectorCallback);
+
+        assertEquals(
+                Arrays.asList(
+                        "ensuring membership in the cluster",
+                        "writing a config for connector " + CONN2 + " to the config topic"
+                ),
+                stages
+        );
     }
 
     @Test
@@ -765,7 +843,7 @@ public class DistributedHerderTest {
         expectConfigRefreshAndSnapshot(SNAPSHOT);
 
         when(statusBackingStore.connectors()).thenReturn(Collections.emptySet());
-        doNothing().when(member).poll(anyLong());
+        expectMemberPoll();
 
         HashMap<String, String> config = new HashMap<>(CONN2_CONFIG);
         config.remove(ConnectorConfig.NAME_CONFIG);
@@ -778,11 +856,13 @@ public class DistributedHerderTest {
             return null;
         }).when(herder).validateConnectorConfig(eq(config), validateCallback.capture());
 
+        List<String> stages = expectRecordStages(putConnectorCallback);
+
         herder.putConnectorConfig(CONN2, config, false, putConnectorCallback);
         herder.tick();
 
         // We don't need another rebalance to occur
-        doNothing().when(member).ensureActive();
+        expectMemberEnsureActive();
         herder.tick();
         time.sleep(1000L);
         assertStatistics(3, 1, 100, 1000L);
@@ -791,6 +871,15 @@ public class DistributedHerderTest {
         verify(putConnectorCallback).onCompletion(error.capture(), isNull());
         assertTrue(error.getValue() instanceof BadRequestException);
         verifyNoMoreInteractions(worker, member, configBackingStore, statusBackingStore, putConnectorCallback);
+
+        assertEquals(
+                Arrays.asList(
+                        "awaiting startup",
+                        "ensuring membership in the cluster",
+                        "reading to the end of the config topic"
+                ),
+                stages
+        );
     }
 
     @Test
@@ -839,7 +928,7 @@ public class DistributedHerderTest {
         expectConfigRefreshAndSnapshot(SNAPSHOT);
 
         when(statusBackingStore.connectors()).thenReturn(Collections.emptySet());
-        doNothing().when(member).poll(anyLong());
+        expectMemberPoll();
 
         // mock the actual validation since its asynchronous nature is difficult to test and should
         // be covered sufficiently by the unit tests for the AbstractHerder class
@@ -849,11 +938,13 @@ public class DistributedHerderTest {
             return null;
         }).when(herder).validateConnectorConfig(eq(CONN1_CONFIG), validateCallback.capture());
 
+        List<String> stages = expectRecordStages(putConnectorCallback);
+
         herder.putConnectorConfig(CONN1, CONN1_CONFIG, false, putConnectorCallback);
         herder.tick();
 
         // We don't need another rebalance to occur
-        doNothing().when(member).ensureActive();
+        expectMemberEnsureActive();
         herder.tick();
         time.sleep(1000L);
         assertStatistics(3, 1, 100, 1000L);
@@ -861,6 +952,15 @@ public class DistributedHerderTest {
         // CONN1 already exists
         verify(putConnectorCallback).onCompletion(any(AlreadyExistsException.class), isNull());
         verifyNoMoreInteractions(worker, member, configBackingStore, statusBackingStore, putConnectorCallback);
+
+        assertEquals(
+                Arrays.asList(
+                        "awaiting startup",
+                        "ensuring membership in the cluster",
+                        "reading to the end of the config topic"
+                ),
+                stages
+        );
     }
 
     @Test
@@ -879,11 +979,13 @@ public class DistributedHerderTest {
         expectExecuteTaskReconfiguration(true, conn1SinkConfig, invocation -> TASK_CONFIGS);
 
         when(statusBackingStore.connectors()).thenReturn(Collections.emptySet());
-        doNothing().when(member).poll(anyLong());
+        expectMemberPoll();
 
         // And delete the connector
         doNothing().when(configBackingStore).removeConnectorConfig(CONN1);
         doNothing().when(putConnectorCallback).onCompletion(null, new Herder.Created<>(false, null));
+
+        List<String> stages = expectRecordStages(putConnectorCallback);
 
         herder.deleteConnectorConfig(CONN1, putConnectorCallback);
 
@@ -912,6 +1014,17 @@ public class DistributedHerderTest {
         assertStatistics("leaderUrl", true, 3, 1, 100, 2100L);
 
         verifyNoMoreInteractions(worker, member, configBackingStore, statusBackingStore, putConnectorCallback);
+
+        assertEquals(
+                Arrays.asList(
+                        "awaiting startup",
+                        "ensuring membership in the cluster",
+                        "reading to the end of the config topic",
+                        "starting 1 connector(s) and task(s) after a rebalance",
+                        "removing the config for connector sourceA from the config topic"
+                ),
+                stages
+        );
     }
 
     @Test
@@ -924,7 +1037,7 @@ public class DistributedHerderTest {
         expectConfigRefreshAndSnapshot(SNAPSHOT);
 
         when(statusBackingStore.connectors()).thenReturn(Collections.emptySet());
-        doNothing().when(member).poll(anyLong());
+        expectMemberPoll();
 
         ArgumentCaptor<Callback<TargetState>> onStart = ArgumentCaptor.forClass(Callback.class);
         doAnswer(invocation -> {
@@ -936,7 +1049,7 @@ public class DistributedHerderTest {
         // Initial rebalance where this member becomes the leader
         herder.tick();
 
-        doNothing().when(member).ensureActive();
+        expectMemberEnsureActive();
 
         doNothing().when(worker).stopAndAwaitConnector(CONN1);
 
@@ -960,12 +1073,12 @@ public class DistributedHerderTest {
         expectConfigRefreshAndSnapshot(SNAPSHOT);
 
         when(statusBackingStore.connectors()).thenReturn(Collections.emptySet());
-        doNothing().when(member).poll(anyLong());
+        expectMemberPoll();
 
         herder.tick();
 
         // now handle the connector restart
-        doNothing().when(member).ensureActive();
+        expectMemberEnsureActive();
         FutureCallback<Void> callback = new FutureCallback<>();
         herder.restartConnector(CONN2, callback);
         herder.tick();
@@ -983,12 +1096,12 @@ public class DistributedHerderTest {
         expectRebalance(1, Collections.emptyList(), Collections.emptyList());
         expectConfigRefreshAndSnapshot(SNAPSHOT);
 
-        doNothing().when(member).poll(anyLong());
+        expectMemberPoll();
 
         herder.tick();
 
         // now handle the connector restart
-        doNothing().when(member).ensureActive();
+        expectMemberEnsureActive();
 
         FutureCallback<Void> callback = new FutureCallback<>();
         herder.restartConnector(CONN1, callback);
@@ -1008,12 +1121,12 @@ public class DistributedHerderTest {
         expectConfigRefreshAndSnapshot(SNAPSHOT);
 
         when(statusBackingStore.connectors()).thenReturn(Collections.emptySet());
-        doNothing().when(member).poll(anyLong());
+        expectMemberPoll();
 
         herder.tick();
 
         // now handle the connector restart
-        doNothing().when(member).ensureActive();
+        expectMemberEnsureActive();
         String ownerUrl = "ownerUrl";
         when(member.ownerUrl(CONN1)).thenReturn(ownerUrl);
 
@@ -1046,12 +1159,12 @@ public class DistributedHerderTest {
         expectConfigRefreshAndSnapshot(SNAPSHOT);
 
         when(statusBackingStore.connectors()).thenReturn(Collections.emptySet());
-        doNothing().when(member).poll(anyLong());
+        expectMemberPoll();
 
         herder.tick();
 
         // now handle the connector restart
-        doNothing().when(member).ensureActive();
+        expectMemberEnsureActive();
         herder.tick();
         FutureCallback<ConnectorStateInfo> callback = new FutureCallback<>();
         herder.restartConnectorAndTasks(restartRequest, callback);
@@ -1070,12 +1183,12 @@ public class DistributedHerderTest {
         when(member.currentProtocolVersion()).thenReturn(CONNECT_PROTOCOL_V0);
         expectRebalance(1, Collections.emptyList(), Collections.emptyList());
         expectConfigRefreshAndSnapshot(SNAPSHOT);
-        doNothing().when(member).poll(anyLong());
+        expectMemberPoll();
 
         herder.tick();
 
         // now handle the connector restart
-        doNothing().when(member).ensureActive();
+        expectMemberEnsureActive();
 
         herder.tick();
         FutureCallback<ConnectorStateInfo> callback = new FutureCallback<>();
@@ -1097,12 +1210,12 @@ public class DistributedHerderTest {
         expectConfigRefreshAndSnapshot(SNAPSHOT);
 
         when(statusBackingStore.connectors()).thenReturn(Collections.emptySet());
-        doNothing().when(member).poll(anyLong());
+        expectMemberPoll();
 
         herder.tick();
 
         // now handle the connector restart
-        doNothing().when(member).ensureActive();
+        expectMemberEnsureActive();
         when(statusBackingStore.get(CONN1)).thenReturn(null);
         RestartRequest restartRequest = new RestartRequest(CONN1, false, true);
         doNothing().when(configBackingStore).putRestartRequest(restartRequest);
@@ -1126,12 +1239,12 @@ public class DistributedHerderTest {
         expectConfigRefreshAndSnapshot(SNAPSHOT);
 
         when(statusBackingStore.connectors()).thenReturn(Collections.emptySet());
-        doNothing().when(member).poll(anyLong());
+        expectMemberPoll();
 
         herder.tick();
 
         // now handle the connector restart
-        doNothing().when(member).ensureActive();
+        expectMemberEnsureActive();
 
         RestartPlan restartPlan = mock(RestartPlan.class);
         ConnectorStateInfo connectorStateInfo = mock(ConnectorStateInfo.class);
@@ -1284,14 +1397,14 @@ public class DistributedHerderTest {
         expectConfigRefreshAndSnapshot(SNAPSHOT);
 
         when(statusBackingStore.connectors()).thenReturn(Collections.emptySet());
-        doNothing().when(member).poll(anyLong());
+        expectMemberPoll();
 
         when(worker.startSourceTask(eq(TASK0), any(), any(), any(), eq(herder), any())).thenReturn(true);
 
         herder.tick();
 
         // now handle the task restart
-        doNothing().when(member).ensureActive();
+        expectMemberEnsureActive();
         doNothing().when(worker).stopAndAwaitTask(TASK0);
         FutureCallback<Void> callback = new FutureCallback<>();
         herder.restartTask(TASK0, callback);
@@ -1310,11 +1423,11 @@ public class DistributedHerderTest {
         when(member.currentProtocolVersion()).thenReturn(CONNECT_PROTOCOL_V0);
         expectRebalance(1, Collections.emptyList(), Collections.emptyList());
         expectConfigRefreshAndSnapshot(SNAPSHOT);
-        doNothing().when(member).poll(anyLong());
+        expectMemberPoll();
 
         herder.tick();
 
-        doNothing().when(member).ensureActive();
+        expectMemberEnsureActive();
         FutureCallback<Void> callback = new FutureCallback<>();
         herder.restartTask(new ConnectorTaskId("blah", 0), callback);
         herder.tick();
@@ -1332,12 +1445,12 @@ public class DistributedHerderTest {
         when(member.currentProtocolVersion()).thenReturn(CONNECT_PROTOCOL_V0);
         expectRebalance(1, Collections.emptyList(), Collections.emptyList());
         expectConfigRefreshAndSnapshot(SNAPSHOT);
-        doNothing().when(member).poll(anyLong());
+        expectMemberPoll();
 
         herder.tick();
 
         // now handle the task restart
-        doNothing().when(member).ensureActive();
+        expectMemberEnsureActive();
         FutureCallback<Void> callback = new FutureCallback<>();
         herder.restartTask(TASK0, callback);
         herder.tick();
@@ -1357,14 +1470,14 @@ public class DistributedHerderTest {
         expectConfigRefreshAndSnapshot(SNAPSHOT);
 
         when(statusBackingStore.connectors()).thenReturn(Collections.emptySet());
-        doNothing().when(member).poll(anyLong());
+        expectMemberPoll();
 
         herder.tick();
 
         // now handle the task restart
         String ownerUrl = "ownerUrl";
         when(member.ownerUrl(TASK0)).thenReturn(ownerUrl);
-        doNothing().when(member).ensureActive();
+        expectMemberEnsureActive();
 
         FutureCallback<Void> callback = new FutureCallback<>();
         herder.restartTask(TASK0, callback);
@@ -1379,10 +1492,13 @@ public class DistributedHerderTest {
 
     @Test
     public void testRequestProcessingOrder() {
-        final DistributedHerder.DistributedHerderRequest req1 = herder.addRequest(100, null, null);
-        final DistributedHerder.DistributedHerderRequest req2 = herder.addRequest(10, null, null);
-        final DistributedHerder.DistributedHerderRequest req3 = herder.addRequest(200, null, null);
-        final DistributedHerder.DistributedHerderRequest req4 = herder.addRequest(200, null, null);
+        Callable<Void> action = mock(Callable.class);
+        Callback<Void> callback = mock(Callback.class);
+
+        final DistributedHerder.DistributedHerderRequest req1 = herder.addRequest(100, action, callback);
+        final DistributedHerder.DistributedHerderRequest req2 = herder.addRequest(10, action, callback);
+        final DistributedHerder.DistributedHerderRequest req3 = herder.addRequest(200, action, callback);
+        final DistributedHerder.DistributedHerderRequest req4 = herder.addRequest(200, action, callback);
 
         assertEquals(req2, herder.requests.pollFirst()); // lowest delay
         assertEquals(req1, herder.requests.pollFirst()); // next lowest delay
@@ -1398,7 +1514,7 @@ public class DistributedHerderTest {
 
         // join, no configs so no need to catch up on config topic
         expectRebalance(-1, Collections.emptyList(), Collections.emptyList());
-        doNothing().when(member).poll(anyLong());
+        expectMemberPoll();
 
         herder.tick(); // join
 
@@ -1437,7 +1553,7 @@ public class DistributedHerderTest {
         // join
         expectRebalance(1, Arrays.asList(CONN1), Collections.emptyList());
         expectConfigRefreshAndSnapshot(SNAPSHOT);
-        doNothing().when(member).poll(anyLong());
+        expectMemberPoll();
 
         ArgumentCaptor<Callback<TargetState>> onStart = ArgumentCaptor.forClass(Callback.class);
         doAnswer(invocation -> {
@@ -1449,7 +1565,7 @@ public class DistributedHerderTest {
         herder.tick();
 
         // apply config
-        doNothing().when(member).ensureActive();
+        expectMemberEnsureActive();
         when(configBackingStore.snapshot()).thenReturn(SNAPSHOT); // for this test, it doesn't matter if we use the same config snapshot
         doNothing().when(worker).stopAndAwaitConnector(CONN1);
 
@@ -1472,7 +1588,7 @@ public class DistributedHerderTest {
         // join
         expectRebalance(1, Arrays.asList(CONN1), Collections.emptyList());
         expectConfigRefreshAndSnapshot(SNAPSHOT);
-        doNothing().when(member).poll(anyLong());
+        expectMemberPoll();
 
         ArgumentCaptor<Callback<TargetState>> onStart = ArgumentCaptor.forClass(Callback.class);
         doAnswer(invocation -> {
@@ -1484,7 +1600,7 @@ public class DistributedHerderTest {
         herder.tick();
 
         // apply config
-        doNothing().when(member).ensureActive();
+        expectMemberEnsureActive();
         // During the next tick, throw an error from the transformer
         ClusterConfigState snapshotWithTransform = new ClusterConfigState(
                 1,
@@ -1527,7 +1643,7 @@ public class DistributedHerderTest {
         // join
         expectRebalance(1, Arrays.asList(CONN1), Collections.emptyList());
         expectConfigRefreshAndSnapshot(SNAPSHOT);
-        doNothing().when(member).poll(anyLong());
+        expectMemberPoll();
 
         ArgumentCaptor<Callback<TargetState>> onStart = ArgumentCaptor.forClass(Callback.class);
         doAnswer(invocation -> {
@@ -1539,7 +1655,7 @@ public class DistributedHerderTest {
         herder.tick(); // join
 
         // handle the state change
-        doNothing().when(member).ensureActive();
+        expectMemberEnsureActive();
         when(configBackingStore.snapshot()).thenReturn(SNAPSHOT_PAUSED_CONN1);
 
         ArgumentCaptor<Callback<TargetState>> onPause = ArgumentCaptor.forClass(Callback.class);
@@ -1564,7 +1680,7 @@ public class DistributedHerderTest {
         // start with the connector paused
         expectRebalance(1, Arrays.asList(CONN1), Collections.emptyList());
         expectConfigRefreshAndSnapshot(SNAPSHOT_PAUSED_CONN1);
-        doNothing().when(member).poll(anyLong());
+        expectMemberPoll();
 
         ArgumentCaptor<Callback<TargetState>> onStart = ArgumentCaptor.forClass(Callback.class);
         doAnswer(invocation -> {
@@ -1575,7 +1691,7 @@ public class DistributedHerderTest {
         herder.tick(); // join
 
         // handle the state change
-        doNothing().when(member).ensureActive();
+        expectMemberEnsureActive();
         when(configBackingStore.snapshot()).thenReturn(SNAPSHOT);
 
         ArgumentCaptor<Callback<TargetState>> onResume = ArgumentCaptor.forClass(Callback.class);
@@ -1604,7 +1720,7 @@ public class DistributedHerderTest {
         // join
         expectRebalance(1, Arrays.asList(CONN1), Collections.emptyList());
         expectConfigRefreshAndSnapshot(SNAPSHOT);
-        doNothing().when(member).poll(anyLong());
+        expectMemberPoll();
 
         ArgumentCaptor<Callback<TargetState>> onStart = ArgumentCaptor.forClass(Callback.class);
         doAnswer(invocation -> {
@@ -1616,7 +1732,7 @@ public class DistributedHerderTest {
         herder.tick(); // join
 
         // handle the state change
-        doNothing().when(member).ensureActive();
+        expectMemberEnsureActive();
         when(configBackingStore.snapshot()).thenReturn(SNAPSHOT_STOPPED_CONN1);
 
         ArgumentCaptor<Callback<TargetState>> onStop = ArgumentCaptor.forClass(Callback.class);
@@ -1641,14 +1757,14 @@ public class DistributedHerderTest {
         // join
         expectRebalance(1, Collections.emptyList(), singletonList(TASK0));
         expectConfigRefreshAndSnapshot(SNAPSHOT);
-        doNothing().when(member).poll(anyLong());
+        expectMemberPoll();
 
         when(worker.startSourceTask(eq(TASK0), any(), any(), any(), eq(herder), eq(TargetState.STARTED))).thenReturn(true);
 
         herder.tick(); // join
 
         // state change is ignored since we have no target state
-        doNothing().when(member).ensureActive();
+        expectMemberEnsureActive();
         when(configBackingStore.snapshot()).thenReturn(SNAPSHOT);
 
         configUpdateListener.onConnectorTargetStateChange("unknown-connector");
@@ -1667,14 +1783,14 @@ public class DistributedHerderTest {
         expectConfigRefreshAndSnapshot(SNAPSHOT);
 
         when(statusBackingStore.connectors()).thenReturn(Collections.emptySet());
-        doNothing().when(member).poll(anyLong());
+        expectMemberPoll();
 
         when(worker.startSourceTask(eq(TASK0), any(), any(), any(), eq(herder), eq(TargetState.STARTED))).thenReturn(true);
 
         herder.tick(); // join
 
         // handle stop request
-        doNothing().when(member).ensureActive();
+        expectMemberEnsureActive();
         expectConfigRefreshAndSnapshot(SNAPSHOT);
         doNothing().when(configBackingStore).putTaskConfigs(CONN1, Collections.emptyList());
         doNothing().when(configBackingStore).putTargetState(CONN1, TargetState.STOPPED);
@@ -1698,14 +1814,14 @@ public class DistributedHerderTest {
         // join as member (non-leader)
         expectRebalance(1, Collections.emptyList(), singletonList(TASK0));
         expectConfigRefreshAndSnapshot(SNAPSHOT);
-        doNothing().when(member).poll(anyLong());
+        expectMemberPoll();
 
         when(worker.startSourceTask(eq(TASK0), any(), any(), any(), eq(herder), eq(TargetState.STARTED))).thenReturn(true);
 
         herder.tick();
 
         // handle stop request
-        doNothing().when(member).ensureActive();
+        expectMemberEnsureActive();
         FutureCallback<Void> cb = new FutureCallback<>();
 
         herder.stopConnector(CONN1, cb); // external request
@@ -1732,7 +1848,7 @@ public class DistributedHerderTest {
         expectConfigRefreshAndSnapshot(SNAPSHOT);
 
         when(statusBackingStore.connectors()).thenReturn(Collections.emptySet());
-        doNothing().when(member).poll(anyLong());
+        expectMemberPoll();
 
         when(worker.startSourceTask(eq(TASK0), any(), any(), any(), eq(herder), eq(TargetState.STARTED))).thenReturn(true);
 
@@ -1740,7 +1856,7 @@ public class DistributedHerderTest {
 
         ConnectException taskConfigsWriteException = new ConnectException("Could not write task configs to config topic");
         // handle stop request
-        doNothing().when(member).ensureActive();
+        expectMemberEnsureActive();
         doThrow(taskConfigsWriteException).when(configBackingStore).putTaskConfigs(CONN1, Collections.emptyList());
         // We do not expect configBackingStore::putTargetState to be invoked, which
         // is intentional since that call should only take place if we are first able to
@@ -1773,14 +1889,14 @@ public class DistributedHerderTest {
         // join
         expectRebalance(1, Collections.emptyList(), singletonList(TASK0));
         expectConfigRefreshAndSnapshot(SNAPSHOT);
-        doNothing().when(member).poll(anyLong());
+        expectMemberPoll();
 
         when(worker.startSourceTask(eq(TASK0), any(), any(), any(), eq(herder), eq(TargetState.STARTED))).thenReturn(true);
 
         herder.tick(); // join
 
         // handle the state change
-        doNothing().when(member).ensureActive();
+        expectMemberEnsureActive();
         when(configBackingStore.snapshot()).thenReturn(SNAPSHOT_PAUSED_CONN1);
 
         ArgumentCaptor<Callback<TargetState>> onPause = ArgumentCaptor.forClass(Callback.class);
@@ -1807,14 +1923,14 @@ public class DistributedHerderTest {
         // join
         expectRebalance(1, Collections.emptyList(), singletonList(TASK0));
         expectConfigRefreshAndSnapshot(SNAPSHOT_PAUSED_CONN1);
-        doNothing().when(member).poll(anyLong());
+        expectMemberPoll();
 
         when(worker.startSourceTask(eq(TASK0), any(), any(), any(), eq(herder), eq(TargetState.PAUSED))).thenReturn(true);
 
         herder.tick(); // join
 
         // handle the state change
-        doNothing().when(member).ensureActive();
+        expectMemberEnsureActive();
         when(configBackingStore.snapshot()).thenReturn(SNAPSHOT);
 
         ArgumentCaptor<Callback<TargetState>> onStart = ArgumentCaptor.forClass(Callback.class);
@@ -1840,7 +1956,7 @@ public class DistributedHerderTest {
 
         // join
         expectRebalance(-1, Collections.emptyList(), Collections.emptyList());
-        doNothing().when(member).poll(anyLong());
+        expectMemberPoll();
 
         herder.tick(); // join
 
@@ -1904,7 +2020,7 @@ public class DistributedHerderTest {
         expectExecuteTaskReconfiguration(true, conn1SinkConfig, invocation -> TASK_CONFIGS);
 
         when(worker.startSourceTask(eq(TASK1), any(), any(), any(), eq(herder), eq(TargetState.STARTED))).thenReturn(true);
-        doNothing().when(member).poll(anyLong());
+        expectMemberPoll();
 
         herder.tick();
         assertEquals(before + coordinatorDiscoveryTimeoutMs, time.milliseconds());
@@ -1933,7 +2049,7 @@ public class DistributedHerderTest {
         expectRebalance(1, Arrays.asList(CONN1), Arrays.asList(TASK1), true);
         expectConfigRefreshAndSnapshot(SNAPSHOT);
 
-        doNothing().when(member).poll(anyLong());
+        expectMemberPoll();
 
         ArgumentCaptor<Callback<TargetState>> onStart = ArgumentCaptor.forClass(Callback.class);
         doAnswer(invocation -> {
@@ -2007,7 +2123,7 @@ public class DistributedHerderTest {
         expectRebalance(1, Arrays.asList(CONN1), Arrays.asList(TASK1), true);
         expectConfigRefreshAndSnapshot(SNAPSHOT);
 
-        doNothing().when(member).poll(anyLong());
+        expectMemberPoll();
 
         ArgumentCaptor<Callback<TargetState>> onStart = ArgumentCaptor.forClass(Callback.class);
         doAnswer(invocation -> {
@@ -2086,7 +2202,7 @@ public class DistributedHerderTest {
 
         expectRebalance(1, Collections.emptyList(), Collections.emptyList(), true);
 
-        doNothing().when(member).poll(anyLong());
+        expectMemberPoll();
 
         WorkerConfigTransformer configTransformer = mock(WorkerConfigTransformer.class);
 
@@ -2158,7 +2274,7 @@ public class DistributedHerderTest {
         }).when(worker).startConnector(eq(CONN1), eq(CONN1_CONFIG), any(), eq(herder), eq(TargetState.STARTED), onStart.capture());
         expectExecuteTaskReconfiguration(true, conn1SinkConfig, invocation -> TASK_CONFIGS);
 
-        doNothing().when(member).poll(anyLong());
+        expectMemberPoll();
 
         // Should pick up original config
         FutureCallback<Map<String, String>> connectorConfigCb = new FutureCallback<>();
@@ -2168,7 +2284,7 @@ public class DistributedHerderTest {
         assertEquals(CONN1_CONFIG, connectorConfigCb.get());
 
         // Poll loop for second round of calls
-        doNothing().when(member).ensureActive();
+        expectMemberEnsureActive();
 
         ArgumentCaptor<Callback<ConfigInfos>> validateCallback = ArgumentCaptor.forClass(Callback.class);
         doAnswer(invocation -> {
@@ -2180,7 +2296,7 @@ public class DistributedHerderTest {
             // Simulate response to writing config + waiting until end of log to be read
             configUpdateListener.onConnectorConfigUpdate(CONN1);
             return null;
-        }).when(configBackingStore).putConnectorConfig(eq(CONN1), eq(CONN1_CONFIG_UPDATED));
+        }).when(configBackingStore).putConnectorConfig(eq(CONN1), eq(CONN1_CONFIG_UPDATED), isNull());
 
         // As a result of reconfig, should need to update snapshot. With only connector updates, we'll just restart
         // connector without rebalance
@@ -2224,12 +2340,12 @@ public class DistributedHerderTest {
         expectRebalance(1, Collections.emptyList(), Collections.emptyList());
         expectConfigRefreshAndSnapshot(SNAPSHOT);
 
-        doNothing().when(member).poll(anyLong());
+        expectMemberPoll();
 
         herder.tick();
 
         // First rebalance: poll indefinitely as no key has been read yet, so expiration doesn't come into play
-        verify(member).poll(eq(Long.MAX_VALUE));
+        verify(member).poll(eq(Long.MAX_VALUE), any());
 
         expectRebalance(2, Collections.emptyList(), Collections.emptyList());
         SessionKey initialKey = new SessionKey(mock(SecretKey.class), 0);
@@ -2250,7 +2366,7 @@ public class DistributedHerderTest {
         herder.tick();
 
         // Second rebalance: poll indefinitely as worker is follower, so expiration still doesn't come into play
-        verify(member, times(2)).poll(eq(Long.MAX_VALUE));
+        verify(member, times(2)).poll(eq(Long.MAX_VALUE), any());
 
         expectRebalance(2, Collections.emptyList(), Collections.emptyList(), "member", MEMBER_URL, true);
         when(statusBackingStore.connectors()).thenReturn(Collections.emptySet());
@@ -2263,7 +2379,7 @@ public class DistributedHerderTest {
         herder.tick();
 
         // Third rebalance: poll for a limited time as worker has become leader and must wake up for key expiration
-        verify(member).poll(eq(rotationTtlDelay));
+        verify(member).poll(eq(rotationTtlDelay), any());
         verifyNoMoreInteractions(worker, member, configBackingStore, statusBackingStore);
     }
 
@@ -2291,19 +2407,19 @@ public class DistributedHerderTest {
                 Collections.emptySet(),
                 Collections.emptySet());
         expectConfigRefreshAndSnapshot(snapshotWithKey);
-        doNothing().when(member).poll(anyLong());
+        expectMemberPoll();
 
         configUpdateListener.onSessionKeyUpdate(initialKey);
         herder.tick();
 
         // First rebalance: poll for a limited time as worker is leader and must wake up for key expiration
-        verify(member).poll(leq(rotationTtlDelay));
+        verify(member).poll(leq(rotationTtlDelay), any());
 
         expectRebalance(1, Collections.emptyList(), Collections.emptyList());
         herder.tick();
 
         // Second rebalance: poll indefinitely as worker is no longer leader, so key expiration doesn't come into play
-        verify(member).poll(eq(Long.MAX_VALUE));
+        verify(member).poll(eq(Long.MAX_VALUE), any());
         verifyNoMoreInteractions(worker, member, configBackingStore, statusBackingStore);
     }
 
@@ -2312,11 +2428,16 @@ public class DistributedHerderTest {
         when(member.currentProtocolVersion()).thenReturn(CONNECT_PROTOCOL_V0);
 
         Callback<Void> taskConfigCb = mock(Callback.class);
+        List<String> stages = expectRecordStages(taskConfigCb);
         herder.putTaskConfigs(CONN1, TASK_CONFIGS, taskConfigCb, null);
 
         // Expect a wakeup call after the request to write task configs is added to the herder's request queue
         verify(member).wakeup();
         verifyNoMoreInteractions(member, taskConfigCb);
+        assertEquals(
+                Arrays.asList("awaiting startup"),
+                stages
+        );
     }
 
     @Test
@@ -2324,11 +2445,16 @@ public class DistributedHerderTest {
         when(member.currentProtocolVersion()).thenReturn(CONNECT_PROTOCOL_V1);
 
         Callback<Void> taskConfigCb = mock(Callback.class);
+        List<String> stages = expectRecordStages(taskConfigCb);
         herder.putTaskConfigs(CONN1, TASK_CONFIGS, taskConfigCb, null);
 
         // Expect a wakeup call after the request to write task configs is added to the herder's request queue
         verify(member).wakeup();
         verifyNoMoreInteractions(member, taskConfigCb);
+        assertEquals(
+                Arrays.asList("awaiting startup"),
+                stages
+        );
     }
 
     @Test
@@ -2424,11 +2550,17 @@ public class DistributedHerderTest {
         configUpdateListener.onSessionKeyUpdate(sessionKey);
 
         Callback<Void> taskConfigCb = mock(Callback.class);
+        List<String> stages = expectRecordStages(taskConfigCb);
         herder.putTaskConfigs(CONN1, TASK_CONFIGS, taskConfigCb, signature);
 
         // Expect a wakeup call after the request to write task configs is added to the herder's request queue
         verify(member).wakeup();
         verifyNoMoreInteractions(member, taskConfigCb);
+
+        assertEquals(
+                Arrays.asList("awaiting startup"),
+                stages
+        );
     }
 
     @Test
@@ -2453,8 +2585,8 @@ public class DistributedHerderTest {
 
         herder.tick();
 
-        verify(member, times(2)).ensureActive();
-        verify(member, times(1)).poll(anyLong());
+        verify(member, times(2)).ensureActive(any());
+        verify(member, times(1)).poll(anyLong(), any());
         verify(configBackingStore, times(2)).putSessionKey(any(SessionKey.class));
     }
 
@@ -2502,8 +2634,8 @@ public class DistributedHerderTest {
 
         herder.tick();
 
-        verify(member, times(2)).ensureActive();
-        verify(member, times(1)).poll(anyLong());
+        verify(member, times(2)).ensureActive(any());
+        verify(member, times(1)).poll(anyLong(), any());
         verify(configBackingStore, times(1)).putSessionKey(any(SessionKey.class));
     }
 
@@ -2557,7 +2689,7 @@ public class DistributedHerderTest {
         expectConfigRefreshAndSnapshot(SNAPSHOT);
 
         expectRebalance(1, Collections.emptyList(), Collections.emptyList());
-        doNothing().when(member).poll(anyLong());
+        expectMemberPoll();
 
         OngoingStubbing<RestClient.HttpResponse<Object>> expectRequest = when(restClient.httpRequest(
                 any(), eq("PUT"), isNull(), isNull(), isNull(), any(), any()
@@ -2646,7 +2778,7 @@ public class DistributedHerderTest {
         expectRebalance(1, Collections.emptyList(), Collections.emptyList(), true);
 
         when(statusBackingStore.connectors()).thenReturn(Collections.emptySet());
-        doNothing().when(member).poll(anyLong());
+        expectMemberPoll();
 
         if (expectTaskCountRecord) {
             doNothing().when(configBackingStore).putTaskCountRecord(CONN1, 1);
@@ -2690,7 +2822,7 @@ public class DistributedHerderTest {
         expectConfigRefreshAndSnapshot(configState);
 
         when(statusBackingStore.connectors()).thenReturn(Collections.emptySet());
-        doNothing().when(member).poll(anyLong());
+        expectMemberPoll();
 
         // The future returned by Worker::fenceZombies
         KafkaFuture<Void> workerFencingFuture = mock(KafkaFuture.class);
@@ -2749,7 +2881,7 @@ public class DistributedHerderTest {
         expectConfigRefreshAndSnapshot(configState);
 
         when(statusBackingStore.connectors()).thenReturn(Collections.emptySet());
-        doNothing().when(member).poll(anyLong());
+        expectMemberPoll();
 
         Exception fencingException = new KafkaException("whoops!");
         when(worker.fenceZombies(eq(CONN1), eq(2), eq(CONN1_CONFIG))).thenThrow(fencingException);
@@ -2792,7 +2924,7 @@ public class DistributedHerderTest {
         expectConfigRefreshAndSnapshot(configState);
 
         when(statusBackingStore.connectors()).thenReturn(Collections.emptySet());
-        doNothing().when(member).poll(anyLong());
+        expectMemberPoll();
 
         // The future returned by Worker::fenceZombies
         KafkaFuture<Void> workerFencingFuture = mock(KafkaFuture.class);
@@ -2871,7 +3003,7 @@ public class DistributedHerderTest {
         expectConfigRefreshAndSnapshot(configState);
 
         when(statusBackingStore.connectors()).thenReturn(Collections.emptySet());
-        doNothing().when(member).poll(anyLong());
+        expectMemberPoll();
 
         // The callbacks that the herder has accrued for outstanding fencing futures, which will be completed after
         // a successful round of fencing and a task record write to the config topic
@@ -3097,7 +3229,7 @@ public class DistributedHerderTest {
 
         // We should poll for less than the delay - time to start the connector, meaning that a long connector start
         // does not delay the poll timeout
-        verify(member, times(3)).poll(leq(maxPollWaitMs));
+        verify(member, times(3)).poll(leq(maxPollWaitMs), any());
         verify(worker, times(2)).startConnector(eq(CONN1), any(), any(), eq(herder), eq(TargetState.STARTED), any());
         verifyNoMoreInteractions(member, worker, configBackingStore);
     }
@@ -3179,13 +3311,13 @@ public class DistributedHerderTest {
         // 1. end of initial tick when no request has been added to the herder queue yet
         // 2. the third task reconfiguration request is expected to pass; so expect no more retries (a Long.MAX_VALUE poll
         //    timeout indicates that there is no herder request currently in the queue)
-        verify(member, times(2)).poll(eq(Long.MAX_VALUE));
+        verify(member, times(2)).poll(eq(Long.MAX_VALUE), any());
 
         // task reconfiguration herder request with initial retry backoff
-        verify(member).poll(eq(250L));
+        verify(member).poll(eq(250L), any());
 
         // task reconfiguration herder request with double the initial retry backoff
-        verify(member).poll(eq(500L));
+        verify(member).poll(eq(500L), any());
 
         verifyNoMoreInteractions(member, worker, restClient);
     }
@@ -3443,7 +3575,7 @@ public class DistributedHerderTest {
         expectConfigRefreshAndSnapshot(SNAPSHOT);
 
         when(statusBackingStore.connectors()).thenReturn(Collections.emptySet());
-        doNothing().when(member).poll(anyLong());
+        expectMemberPoll();
 
         herder.tick();
 
@@ -3584,12 +3716,12 @@ public class DistributedHerderTest {
         when(member.currentProtocolVersion()).thenReturn(CONNECT_PROTOCOL_V0);
         expectRebalance(1, Collections.emptyList(), Collections.emptyList(), true);
         expectConfigRefreshAndSnapshot(SNAPSHOT_STOPPED_CONN1);
-        doNothing().when(member).poll(anyLong());
+        expectMemberPoll();
 
         herder.tick();
 
         // Now handle the alter connector offsets request
-        doNothing().when(member).ensureActive();
+        expectMemberEnsureActive();
         when(herder.connectorType(any())).thenReturn(ConnectorType.SOURCE);
 
         // Expect a round of zombie fencing to occur
@@ -3650,12 +3782,12 @@ public class DistributedHerderTest {
         when(member.currentProtocolVersion()).thenReturn(CONNECT_PROTOCOL_V0);
         expectRebalance(1, Collections.emptyList(), Collections.emptyList(), true);
         expectConfigRefreshAndSnapshot(SNAPSHOT_STOPPED_CONN1);
-        doNothing().when(member).poll(anyLong());
+        expectMemberPoll();
 
         herder.tick();
 
         // Now handle the reset connector offsets request
-        doNothing().when(member).ensureActive();
+        expectMemberEnsureActive();
         when(herder.connectorType(any())).thenReturn(ConnectorType.SOURCE);
 
         // Expect a round of zombie fencing to occur
@@ -3684,6 +3816,22 @@ public class DistributedHerderTest {
         // queue up the actual reset offsets request if the zombie fencing succeeds.
         verify(herderFencingFuture, times(2)).whenComplete(any());
         verifyNoMoreInteractions(workerFencingFuture, herderFencingFuture, member, worker);
+    }
+
+    private void expectMemberPoll() {
+        ArgumentCaptor<Supplier<UncheckedCloseable>> onPoll = ArgumentCaptor.forClass(Supplier.class);
+        doAnswer(invocation -> {
+            onPoll.getValue().get().close();
+            return null;
+        }).when(member).poll(anyLong(), onPoll.capture());
+    }
+
+    private void expectMemberEnsureActive() {
+        ArgumentCaptor<Supplier<UncheckedCloseable>> onPoll = ArgumentCaptor.forClass(Supplier.class);
+        doAnswer(invocation -> {
+            onPoll.getValue().get().close();
+            return null;
+        }).when(member).ensureActive(onPoll.capture());
     }
 
     private void expectRebalance(final long offset,
@@ -3739,7 +3887,9 @@ public class DistributedHerderTest {
                                  final List<ConnectorTaskId> assignedTasks,
                                  int delay,
                                  boolean isLeader) {
+        ArgumentCaptor<Supplier<UncheckedCloseable>> onPoll = ArgumentCaptor.forClass(Supplier.class);
         doAnswer(invocation -> {
+            onPoll.getValue().get().close();
             ExtendedAssignment assignment;
             if (!revokedConnectors.isEmpty() || !revokedTasks.isEmpty()) {
                 rebalanceListener.onRevoked(leader, revokedConnectors, revokedTasks);
@@ -3759,7 +3909,7 @@ public class DistributedHerderTest {
             rebalanceListener.onAssigned(assignment, 3);
             time.sleep(100L);
             return null;
-        }).when(member).ensureActive();
+        }).when(member).ensureActive(onPoll.capture());
 
         if (isLeader) {
             doNothing().when(configBackingStore).claimWritePrivileges();
@@ -3910,6 +4060,20 @@ public class DistributedHerderTest {
             assertEquals(rebalanceTime, rebalanceTimeMax, 0.0001d);
             assertEquals(rebalanceTime, rebalanceTimeAvg, 0.0001d);
         }
+    }
+
+    private static List<String> expectRecordStages(Callback<?> callback) {
+        when(callback.chainStaging(any())).thenCallRealMethod();
+        List<String> result = Collections.synchronizedList(new ArrayList<>());
+
+        doAnswer(invocation -> {
+            Stage stage = invocation.getArgument(0);
+            if (stage != null)
+                result.add(stage.description());
+            return null;
+        }).when(callback).recordStage(any());
+
+        return result;
     }
 
     // We need to use a real class here due to some issue with mocking java.lang.Class

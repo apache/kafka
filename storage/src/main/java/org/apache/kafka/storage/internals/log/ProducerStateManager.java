@@ -462,14 +462,21 @@ public class ProducerStateManager {
     }
 
     /**
-     * Take a snapshot at the current end offset if one does not already exist.
+     * Take a snapshot at the current end offset if one does not already exist with syncing the change to the device
      */
     public void takeSnapshot() throws IOException {
+        takeSnapshot(true);
+    }
+
+    /**
+     * Take a snapshot at the current end offset if one does not already exist, then return the snapshot file if taken.
+     */
+    public Optional<File> takeSnapshot(boolean sync) throws IOException {
         // If not a new offset, then it is not worth taking another snapshot
         if (lastMapOffset > lastSnapOffset) {
             SnapshotFile snapshotFile = new SnapshotFile(LogFileUtils.producerSnapshotFile(logDir, lastMapOffset));
             long start = time.hiResClockMs();
-            writeSnapshot(snapshotFile.file(), producers);
+            writeSnapshot(snapshotFile.file(), producers, sync);
             log.info("Wrote producer snapshot at offset {} with {} producer ids in {} ms.", lastMapOffset,
                     producers.size(), time.hiResClockMs() - start);
 
@@ -477,7 +484,10 @@ public class ProducerStateManager {
 
             // Update the last snap offset according to the serialized map
             lastSnapOffset = lastMapOffset;
+
+            return Optional.of(snapshotFile.file());
         }
+        return Optional.empty();
     }
 
     /**
@@ -635,7 +645,7 @@ public class ProducerStateManager {
             // deletion, so ignoring the exception here just means that the intended operation was
             // already completed.
             try {
-                snapshotFile.renameTo(LogFileUtils.DELETED_FILE_SUFFIX);
+                snapshotFile.renameToDelete();
                 return Optional.of(snapshotFile);
             } catch (NoSuchFileException ex) {
                 log.info("Failed to rename producer state snapshot {} with deletion suffix because it was already deleted", snapshotFile.file().getAbsoluteFile());
@@ -684,7 +694,7 @@ public class ProducerStateManager {
         }
     }
 
-    private static void writeSnapshot(File file, Map<Long, ProducerStateEntry> entries) throws IOException {
+    private static void writeSnapshot(File file, Map<Long, ProducerStateEntry> entries, boolean sync) throws IOException {
         Struct struct = new Struct(PID_SNAPSHOT_MAP_SCHEMA);
         struct.set(VERSION_FIELD, PRODUCER_SNAPSHOT_VERSION);
         struct.set(CRC_FIELD, 0L); // we'll fill this after writing the entries
@@ -716,7 +726,9 @@ public class ProducerStateManager {
 
         try (FileChannel fileChannel = FileChannel.open(file.toPath(), StandardOpenOption.CREATE, StandardOpenOption.WRITE)) {
             fileChannel.write(buffer);
-            fileChannel.force(true);
+            if (sync) {
+                fileChannel.force(true);
+            }
         }
     }
 

@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.tools.reassign;
 
-import kafka.admin.ReassignPartitionsCommand;
 import org.apache.kafka.admin.BrokerMetadata;
 import org.apache.kafka.clients.admin.Config;
 import org.apache.kafka.clients.admin.MockAdminClient;
@@ -36,12 +35,8 @@ import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
-import scala.Tuple2;
-import scala.collection.JavaConverters;
-import scala.collection.Seq;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -52,37 +47,38 @@ import java.util.concurrent.ExecutionException;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import static kafka.admin.ReassignPartitionsCommand.alterPartitionReassignments;
-import static kafka.admin.ReassignPartitionsCommand.alterReplicaLogDirs;
-import static kafka.admin.ReassignPartitionsCommand.brokerLevelFollowerThrottle;
-import static kafka.admin.ReassignPartitionsCommand.brokerLevelLeaderThrottle;
-import static kafka.admin.ReassignPartitionsCommand.brokerLevelLogDirThrottle;
-import static kafka.admin.ReassignPartitionsCommand.calculateFollowerThrottles;
-import static kafka.admin.ReassignPartitionsCommand.calculateLeaderThrottles;
-import static kafka.admin.ReassignPartitionsCommand.calculateMovingBrokers;
-import static kafka.admin.ReassignPartitionsCommand.calculateProposedMoveMap;
-import static kafka.admin.ReassignPartitionsCommand.calculateReassigningBrokers;
-import static kafka.admin.ReassignPartitionsCommand.cancelPartitionReassignments;
-import static kafka.admin.ReassignPartitionsCommand.compareTopicPartitionReplicas;
-import static kafka.admin.ReassignPartitionsCommand.compareTopicPartitions;
-import static kafka.admin.ReassignPartitionsCommand.curReassignmentsToString;
-import static kafka.admin.ReassignPartitionsCommand.currentPartitionReplicaAssignmentToString;
-import static kafka.admin.ReassignPartitionsCommand.executeAssignment;
-import static kafka.admin.ReassignPartitionsCommand.findLogDirMoveStates;
-import static kafka.admin.ReassignPartitionsCommand.findPartitionReassignmentStates;
-import static kafka.admin.ReassignPartitionsCommand.generateAssignment;
-import static kafka.admin.ReassignPartitionsCommand.getBrokerMetadata;
-import static kafka.admin.ReassignPartitionsCommand.getReplicaAssignmentForPartitions;
-import static kafka.admin.ReassignPartitionsCommand.getReplicaAssignmentForTopics;
-import static kafka.admin.ReassignPartitionsCommand.modifyInterBrokerThrottle;
-import static kafka.admin.ReassignPartitionsCommand.modifyLogDirThrottle;
-import static kafka.admin.ReassignPartitionsCommand.modifyTopicThrottles;
-import static kafka.admin.ReassignPartitionsCommand.parseExecuteAssignmentArgs;
-import static kafka.admin.ReassignPartitionsCommand.parseGenerateAssignmentArgs;
-import static kafka.admin.ReassignPartitionsCommand.partitionReassignmentStatesToString;
-import static kafka.admin.ReassignPartitionsCommand.replicaMoveStatesToString;
-import static kafka.admin.ReassignPartitionsCommand.topicLevelFollowerThrottle;
-import static kafka.admin.ReassignPartitionsCommand.topicLevelLeaderThrottle;
+import static java.util.Arrays.asList;
+import static org.apache.kafka.tools.reassign.ReassignPartitionsCommand.BROKER_LEVEL_FOLLOWER_THROTTLE;
+import static org.apache.kafka.tools.reassign.ReassignPartitionsCommand.BROKER_LEVEL_LEADER_THROTTLE;
+import static org.apache.kafka.tools.reassign.ReassignPartitionsCommand.BROKER_LEVEL_LOG_DIR_THROTTLE;
+import static org.apache.kafka.tools.reassign.ReassignPartitionsCommand.TOPIC_LEVEL_FOLLOWER_THROTTLE;
+import static org.apache.kafka.tools.reassign.ReassignPartitionsCommand.TOPIC_LEVEL_LEADER_THROTTLE;
+import static org.apache.kafka.tools.reassign.ReassignPartitionsCommand.alterPartitionReassignments;
+import static org.apache.kafka.tools.reassign.ReassignPartitionsCommand.alterReplicaLogDirs;
+import static org.apache.kafka.tools.reassign.ReassignPartitionsCommand.calculateFollowerThrottles;
+import static org.apache.kafka.tools.reassign.ReassignPartitionsCommand.calculateLeaderThrottles;
+import static org.apache.kafka.tools.reassign.ReassignPartitionsCommand.calculateMovingBrokers;
+import static org.apache.kafka.tools.reassign.ReassignPartitionsCommand.calculateProposedMoveMap;
+import static org.apache.kafka.tools.reassign.ReassignPartitionsCommand.calculateReassigningBrokers;
+import static org.apache.kafka.tools.reassign.ReassignPartitionsCommand.cancelPartitionReassignments;
+import static org.apache.kafka.tools.reassign.ReassignPartitionsCommand.compareTopicPartitionReplicas;
+import static org.apache.kafka.tools.reassign.ReassignPartitionsCommand.compareTopicPartitions;
+import static org.apache.kafka.tools.reassign.ReassignPartitionsCommand.curReassignmentsToString;
+import static org.apache.kafka.tools.reassign.ReassignPartitionsCommand.currentPartitionReplicaAssignmentToString;
+import static org.apache.kafka.tools.reassign.ReassignPartitionsCommand.executeAssignment;
+import static org.apache.kafka.tools.reassign.ReassignPartitionsCommand.findLogDirMoveStates;
+import static org.apache.kafka.tools.reassign.ReassignPartitionsCommand.findPartitionReassignmentStates;
+import static org.apache.kafka.tools.reassign.ReassignPartitionsCommand.generateAssignment;
+import static org.apache.kafka.tools.reassign.ReassignPartitionsCommand.getBrokerMetadata;
+import static org.apache.kafka.tools.reassign.ReassignPartitionsCommand.getReplicaAssignmentForPartitions;
+import static org.apache.kafka.tools.reassign.ReassignPartitionsCommand.getReplicaAssignmentForTopics;
+import static org.apache.kafka.tools.reassign.ReassignPartitionsCommand.modifyInterBrokerThrottle;
+import static org.apache.kafka.tools.reassign.ReassignPartitionsCommand.modifyLogDirThrottle;
+import static org.apache.kafka.tools.reassign.ReassignPartitionsCommand.modifyTopicThrottles;
+import static org.apache.kafka.tools.reassign.ReassignPartitionsCommand.parseExecuteAssignmentArgs;
+import static org.apache.kafka.tools.reassign.ReassignPartitionsCommand.parseGenerateAssignmentArgs;
+import static org.apache.kafka.tools.reassign.ReassignPartitionsCommand.partitionReassignmentStatesToString;
+import static org.apache.kafka.tools.reassign.ReassignPartitionsCommand.replicaMoveStatesToString;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -106,109 +102,107 @@ public class ReassignPartitionsUnitTest {
     @Test
     public void testCompareTopicPartitions() {
         assertTrue(compareTopicPartitions(new TopicPartition("abc", 0),
-            new TopicPartition("abc", 1)));
+            new TopicPartition("abc", 1)) < 0);
         assertFalse(compareTopicPartitions(new TopicPartition("def", 0),
-            new TopicPartition("abc", 1)));
+            new TopicPartition("abc", 1)) < 0);
     }
 
     @Test
     public void testCompareTopicPartitionReplicas() {
         assertTrue(compareTopicPartitionReplicas(new TopicPartitionReplica("def", 0, 0),
-            new TopicPartitionReplica("abc", 0, 1)));
+            new TopicPartitionReplica("abc", 0, 1)) < 0);
         assertFalse(compareTopicPartitionReplicas(new TopicPartitionReplica("def", 0, 0),
-            new TopicPartitionReplica("cde", 0, 0)));
+            new TopicPartitionReplica("cde", 0, 0)) < 0);
     }
 
     @Test
     public void testPartitionReassignStatesToString() {
-        Map<TopicPartition, ReassignPartitionsCommand.PartitionReassignmentState> states = new HashMap<>();
+        Map<TopicPartition, PartitionReassignmentState> states = new HashMap<>();
 
         states.put(new TopicPartition("foo", 0),
-            new ReassignPartitionsCommand.PartitionReassignmentState(seq(1, 2, 3), seq(1, 2, 3), true));
+            new PartitionReassignmentState(asList(1, 2, 3), asList(1, 2, 3), true));
         states.put(new TopicPartition("foo", 1),
-            new ReassignPartitionsCommand.PartitionReassignmentState(seq(1, 2, 3), seq(1, 2, 4), false));
+            new PartitionReassignmentState(asList(1, 2, 3), asList(1, 2, 4), false));
         states.put(new TopicPartition("bar", 0),
-            new ReassignPartitionsCommand.PartitionReassignmentState(seq(1, 2, 3), seq(1, 2, 4), false));
+            new PartitionReassignmentState(asList(1, 2, 3), asList(1, 2, 4), false));
 
         assertEquals(String.join(System.lineSeparator(),
             "Status of partition reassignment:",
             "Reassignment of partition bar-0 is still in progress.",
             "Reassignment of partition foo-0 is completed.",
             "Reassignment of partition foo-1 is still in progress."),
-            partitionReassignmentStatesToString(asScala(states)));
+            partitionReassignmentStatesToString(states));
     }
 
     private void addTopics(MockAdminClient adminClient) {
         List<Node> b = adminClient.brokers();
-        adminClient.addTopic(false, "foo", Arrays.asList(
+        adminClient.addTopic(false, "foo", asList(
             new TopicPartitionInfo(0, b.get(0),
-                Arrays.asList(b.get(0), b.get(1), b.get(2)),
-                Arrays.asList(b.get(0), b.get(1))),
+                asList(b.get(0), b.get(1), b.get(2)),
+                asList(b.get(0), b.get(1))),
             new TopicPartitionInfo(1, b.get(1),
-                Arrays.asList(b.get(1), b.get(2), b.get(3)),
-                Arrays.asList(b.get(1), b.get(2), b.get(3)))
+                asList(b.get(1), b.get(2), b.get(3)),
+                asList(b.get(1), b.get(2), b.get(3)))
         ), Collections.emptyMap());
-        adminClient.addTopic(false, "bar", Arrays.asList(
+        adminClient.addTopic(false, "bar", asList(
             new TopicPartitionInfo(0, b.get(2),
-                Arrays.asList(b.get(2), b.get(3), b.get(0)),
-                Arrays.asList(b.get(2), b.get(3), b.get(0)))
+                asList(b.get(2), b.get(3), b.get(0)),
+                asList(b.get(2), b.get(3), b.get(0)))
         ), Collections.emptyMap());
     }
 
-    @SuppressWarnings("unchecked")
     @Test
-    public void testFindPartitionReassignmentStates() {
+    public void testFindPartitionReassignmentStates() throws Exception {
         try (MockAdminClient adminClient = new MockAdminClient.Builder().numBrokers(4).build()) {
             addTopics(adminClient);
             // Create a reassignment and test findPartitionReassignmentStates.
-            Map<TopicPartition, Seq<Object>> reassignments = new HashMap<>();
+            Map<TopicPartition, List<Integer>> reassignments = new HashMap<>();
 
-            reassignments.put(new TopicPartition("foo", 0), seq(0, 1, 3));
-            reassignments.put(new TopicPartition("quux", 0), seq(1, 2, 3));
+            reassignments.put(new TopicPartition("foo", 0), asList(0, 1, 3));
+            reassignments.put(new TopicPartition("quux", 0), asList(1, 2, 3));
 
-            scala.collection.Map<TopicPartition, Throwable> reassignmentResult = alterPartitionReassignments(adminClient,
-                asScala(reassignments));
+            Map<TopicPartition, Throwable> reassignmentResult = alterPartitionReassignments(adminClient, reassignments);
 
             assertEquals(1, reassignmentResult.size());
-            assertEquals(UnknownTopicOrPartitionException.class, reassignmentResult.get(new TopicPartition("quux", 0)).get().getClass());
+            assertEquals(UnknownTopicOrPartitionException.class, reassignmentResult.get(new TopicPartition("quux", 0)).getClass());
 
-            Map<TopicPartition, ReassignPartitionsCommand.PartitionReassignmentState> expStates = new HashMap<>();
+            Map<TopicPartition, PartitionReassignmentState> expStates = new HashMap<>();
 
             expStates.put(new TopicPartition("foo", 0),
-                new ReassignPartitionsCommand.PartitionReassignmentState(seq(0, 1, 2), seq(0, 1, 3), false));
+                new PartitionReassignmentState(asList(0, 1, 2), asList(0, 1, 3), false));
             expStates.put(new TopicPartition("foo", 1),
-                new ReassignPartitionsCommand.PartitionReassignmentState(seq(1, 2, 3), seq(1, 2, 3), true));
+                new PartitionReassignmentState(asList(1, 2, 3), asList(1, 2, 3), true));
 
-            Tuple2<scala.collection.Map<TopicPartition, ReassignPartitionsCommand.PartitionReassignmentState>, Object> actual =
-                findPartitionReassignmentStates(adminClient, seq(
-                    new Tuple2<>(new TopicPartition("foo", 0), seq(0, 1, 3)),
-                    new Tuple2<>(new TopicPartition("foo", 1), seq(1, 2, 3))
+            Tuple2<Map<TopicPartition, PartitionReassignmentState>, Boolean> actual =
+                findPartitionReassignmentStates(adminClient, asList(
+                    new Tuple2<>(new TopicPartition("foo", 0), asList(0, 1, 3)),
+                    new Tuple2<>(new TopicPartition("foo", 1), asList(1, 2, 3))
                 ));
 
-            assertEquals(asScala(expStates), actual._1);
-            assertTrue((Boolean) actual._2);
+            assertEquals(expStates, actual.v1);
+            assertTrue(actual.v2);
 
             // Cancel the reassignment and test findPartitionReassignmentStates again.
-            scala.collection.Map<TopicPartition, Throwable> cancelResult = cancelPartitionReassignments(adminClient,
-                set(new TopicPartition("foo", 0), new TopicPartition("quux", 2)));
+            Map<TopicPartition, Throwable> cancelResult = cancelPartitionReassignments(adminClient,
+                new HashSet<>(asList(new TopicPartition("foo", 0), new TopicPartition("quux", 2))));
 
             assertEquals(1, cancelResult.size());
-            assertEquals(UnknownTopicOrPartitionException.class, cancelResult.get(new TopicPartition("quux", 2)).get().getClass());
+            assertEquals(UnknownTopicOrPartitionException.class, cancelResult.get(new TopicPartition("quux", 2)).getClass());
 
             expStates.clear();
 
             expStates.put(new TopicPartition("foo", 0),
-                new ReassignPartitionsCommand.PartitionReassignmentState(seq(0, 1, 2), seq(0, 1, 3), true));
+                new PartitionReassignmentState(asList(0, 1, 2), asList(0, 1, 3), true));
             expStates.put(new TopicPartition("foo", 1),
-                new ReassignPartitionsCommand.PartitionReassignmentState(seq(1, 2, 3), seq(1, 2, 3), true));
+                new PartitionReassignmentState(asList(1, 2, 3), asList(1, 2, 3), true));
 
-            actual = findPartitionReassignmentStates(adminClient, seq(
-                new Tuple2<>(new TopicPartition("foo", 0), seq(0, 1, 3)),
-                new Tuple2<>(new TopicPartition("foo", 1), seq(1, 2, 3))
+            actual = findPartitionReassignmentStates(adminClient, asList(
+                new Tuple2<>(new TopicPartition("foo", 0), asList(0, 1, 3)),
+                new Tuple2<>(new TopicPartition("foo", 1), asList(1, 2, 3))
             ));
 
-            assertEquals(asScala(expStates), actual._1);
-            assertFalse((Boolean) actual._2);
+            assertEquals(expStates, actual.v1);
+            assertFalse(actual.v2);
         }
     }
 
@@ -216,19 +210,19 @@ public class ReassignPartitionsUnitTest {
     public void testFindLogDirMoveStates() throws Exception {
         try (MockAdminClient adminClient = new MockAdminClient.Builder().
                 numBrokers(4).
-                brokerLogDirs(Arrays.asList(
-                    Arrays.asList("/tmp/kafka-logs0", "/tmp/kafka-logs1"),
-                    Arrays.asList("/tmp/kafka-logs0", "/tmp/kafka-logs1"),
-                    Arrays.asList("/tmp/kafka-logs0", "/tmp/kafka-logs1"),
-                    Arrays.asList("/tmp/kafka-logs0", null)))
+                brokerLogDirs(asList(
+                    asList("/tmp/kafka-logs0", "/tmp/kafka-logs1"),
+                    asList("/tmp/kafka-logs0", "/tmp/kafka-logs1"),
+                    asList("/tmp/kafka-logs0", "/tmp/kafka-logs1"),
+                    asList("/tmp/kafka-logs0", null)))
                 .build()) {
 
             addTopics(adminClient);
             List<Node> b = adminClient.brokers();
-            adminClient.addTopic(false, "quux", Arrays.asList(
+            adminClient.addTopic(false, "quux", asList(
                     new TopicPartitionInfo(0, b.get(2),
-                        Arrays.asList(b.get(1), b.get(2), b.get(3)),
-                        Arrays.asList(b.get(1), b.get(2), b.get(3)))),
+                        asList(b.get(1), b.get(2), b.get(3)),
+                        asList(b.get(1), b.get(2), b.get(3)))),
                 Collections.emptyMap());
 
             Map<TopicPartitionReplica, String> replicaAssignment = new HashMap<>();
@@ -238,15 +232,15 @@ public class ReassignPartitionsUnitTest {
 
             adminClient.alterReplicaLogDirs(replicaAssignment).all().get();
 
-            Map<TopicPartitionReplica, ReassignPartitionsCommand.LogDirMoveState> states = new HashMap<>();
+            Map<TopicPartitionReplica, LogDirMoveState> states = new HashMap<>();
 
-            states.put(new TopicPartitionReplica("bar", 0, 0), new ReassignPartitionsCommand.CompletedMoveState("/tmp/kafka-logs0"));
-            states.put(new TopicPartitionReplica("foo", 0, 0), new ReassignPartitionsCommand.ActiveMoveState("/tmp/kafka-logs0",
+            states.put(new TopicPartitionReplica("bar", 0, 0), new CompletedMoveState("/tmp/kafka-logs0"));
+            states.put(new TopicPartitionReplica("foo", 0, 0), new ActiveMoveState("/tmp/kafka-logs0",
                 "/tmp/kafka-logs1", "/tmp/kafka-logs1"));
-            states.put(new TopicPartitionReplica("foo", 1, 0), new ReassignPartitionsCommand.CancelledMoveState("/tmp/kafka-logs0",
+            states.put(new TopicPartitionReplica("foo", 1, 0), new CancelledMoveState("/tmp/kafka-logs0",
                 "/tmp/kafka-logs1"));
-            states.put(new TopicPartitionReplica("quux", 1, 0), new ReassignPartitionsCommand.MissingLogDirMoveState("/tmp/kafka-logs1"));
-            states.put(new TopicPartitionReplica("quuz", 0, 0), new ReassignPartitionsCommand.MissingReplicaMoveState("/tmp/kafka-logs0"));
+            states.put(new TopicPartitionReplica("quux", 1, 0), new MissingLogDirMoveState("/tmp/kafka-logs1"));
+            states.put(new TopicPartitionReplica("quuz", 0, 0), new MissingReplicaMoveState("/tmp/kafka-logs0"));
 
             Map<TopicPartitionReplica, String> targetMoves = new HashMap<>();
 
@@ -256,23 +250,23 @@ public class ReassignPartitionsUnitTest {
             targetMoves.put(new TopicPartitionReplica("quux", 1, 0), "/tmp/kafka-logs1");
             targetMoves.put(new TopicPartitionReplica("quuz", 0, 0), "/tmp/kafka-logs0");
 
-            assertEquals(asScala(states), findLogDirMoveStates(adminClient, asScala(targetMoves)));
+            assertEquals(states, findLogDirMoveStates(adminClient, targetMoves));
         }
     }
 
     @Test
     public void testReplicaMoveStatesToString() {
-        Map<TopicPartitionReplica, ReassignPartitionsCommand.LogDirMoveState> states = new HashMap<>();
+        Map<TopicPartitionReplica, LogDirMoveState> states = new HashMap<>();
 
-        states.put(new TopicPartitionReplica("bar", 0, 0), new ReassignPartitionsCommand.CompletedMoveState("/tmp/kafka-logs0"));
-        states.put(new TopicPartitionReplica("foo", 0, 0), new ReassignPartitionsCommand.ActiveMoveState("/tmp/kafka-logs0",
+        states.put(new TopicPartitionReplica("bar", 0, 0), new CompletedMoveState("/tmp/kafka-logs0"));
+        states.put(new TopicPartitionReplica("foo", 0, 0), new ActiveMoveState("/tmp/kafka-logs0",
             "/tmp/kafka-logs1", "/tmp/kafka-logs1"));
-        states.put(new TopicPartitionReplica("foo", 1, 0), new ReassignPartitionsCommand.CancelledMoveState("/tmp/kafka-logs0",
+        states.put(new TopicPartitionReplica("foo", 1, 0), new CancelledMoveState("/tmp/kafka-logs0",
             "/tmp/kafka-logs1"));
-        states.put(new TopicPartitionReplica("quux", 0, 0), new ReassignPartitionsCommand.MissingReplicaMoveState("/tmp/kafka-logs1"));
-        states.put(new TopicPartitionReplica("quux", 1, 1), new ReassignPartitionsCommand.ActiveMoveState("/tmp/kafka-logs0",
+        states.put(new TopicPartitionReplica("quux", 0, 0), new MissingReplicaMoveState("/tmp/kafka-logs1"));
+        states.put(new TopicPartitionReplica("quux", 1, 1), new ActiveMoveState("/tmp/kafka-logs0",
             "/tmp/kafka-logs1", "/tmp/kafka-logs2"));
-        states.put(new TopicPartitionReplica("quux", 2, 1), new ReassignPartitionsCommand.MissingLogDirMoveState("/tmp/kafka-logs1"));
+        states.put(new TopicPartitionReplica("quux", 2, 1), new MissingLogDirMoveState("/tmp/kafka-logs1"));
 
         assertEquals(String.join(System.lineSeparator(),
             "Reassignment of replica bar-0-0 completed successfully.",
@@ -282,59 +276,59 @@ public class ReassignPartitionsUnitTest {
             "Partition quux-1 on broker 1 is being moved to log dir /tmp/kafka-logs2 instead of /tmp/kafka-logs1.",
             "Partition quux-2 is not found in any live log dir on broker 1. " +
                 "There is likely an offline log directory on the broker."),
-            replicaMoveStatesToString(asScala(states)));
+            replicaMoveStatesToString(states));
     }
 
     @Test
-    public void testGetReplicaAssignments() {
+    public void testGetReplicaAssignments() throws Exception {
         try (MockAdminClient adminClient = new MockAdminClient.Builder().numBrokers(4).build()) {
             addTopics(adminClient);
 
-            Map<TopicPartition, Seq<Object>> assignments = new HashMap<>();
+            Map<TopicPartition, List<Integer>> assignments = new HashMap<>();
 
-            assignments.put(new TopicPartition("foo", 0), seq(0, 1, 2));
-            assignments.put(new TopicPartition("foo", 1), seq(1, 2, 3));
+            assignments.put(new TopicPartition("foo", 0), asList(0, 1, 2));
+            assignments.put(new TopicPartition("foo", 1), asList(1, 2, 3));
 
-            assertEquals(asScala(assignments), getReplicaAssignmentForTopics(adminClient, seq("foo")));
+            assertEquals(assignments, getReplicaAssignmentForTopics(adminClient, asList("foo")));
 
             assignments.clear();
 
-            assignments.put(new TopicPartition("foo", 0), seq(0, 1, 2));
-            assignments.put(new TopicPartition("bar", 0), seq(2, 3, 0));
+            assignments.put(new TopicPartition("foo", 0), asList(0, 1, 2));
+            assignments.put(new TopicPartition("bar", 0), asList(2, 3, 0));
 
-            assertEquals(asScala(assignments),
-                getReplicaAssignmentForPartitions(adminClient, set(new TopicPartition("foo", 0), new TopicPartition("bar", 0))));
+            assertEquals(assignments,
+                getReplicaAssignmentForPartitions(adminClient, new HashSet<>(asList(new TopicPartition("foo", 0), new TopicPartition("bar", 0)))));
         }
     }
 
     @Test
-    public void testGetBrokerRackInformation() {
+    public void testGetBrokerRackInformation() throws Exception {
         try (MockAdminClient adminClient = new MockAdminClient.Builder().
-            brokers(Arrays.asList(new Node(0, "localhost", 9092, "rack0"),
+            brokers(asList(new Node(0, "localhost", 9092, "rack0"),
                 new Node(1, "localhost", 9093, "rack1"),
                 new Node(2, "localhost", 9094, null))).
             build()) {
 
-            assertEquals(seq(
+            assertEquals(asList(
                 new BrokerMetadata(0, Optional.of("rack0")),
                 new BrokerMetadata(1, Optional.of("rack1"))
-            ), getBrokerMetadata(adminClient, seq(0, 1), true));
-            assertEquals(seq(
+            ), getBrokerMetadata(adminClient, asList(0, 1), true));
+            assertEquals(asList(
                 new BrokerMetadata(0, Optional.empty()),
                 new BrokerMetadata(1, Optional.empty())
-            ), getBrokerMetadata(adminClient, seq(0, 1), false));
+            ), getBrokerMetadata(adminClient, asList(0, 1), false));
             assertStartsWith("Not all brokers have rack information",
                 assertThrows(AdminOperationException.class,
-                    () -> getBrokerMetadata(adminClient, seq(1, 2), true)).getMessage());
-            assertEquals(seq(
+                    () -> getBrokerMetadata(adminClient, asList(1, 2), true)).getMessage());
+            assertEquals(asList(
                 new BrokerMetadata(1, Optional.empty()),
                 new BrokerMetadata(2, Optional.empty())
-            ), getBrokerMetadata(adminClient, seq(1, 2), false));
+            ), getBrokerMetadata(adminClient, asList(1, 2), false));
         }
     }
 
     @Test
-    public void testParseGenerateAssignmentArgs() {
+    public void testParseGenerateAssignmentArgs() throws Exception {
         assertStartsWith("Broker list contains duplicate entries",
             assertThrows(AdminCommandFailedException.class, () -> parseGenerateAssignmentArgs(
                 "{\"topics\": [{\"topic\": \"foo\"}], \"version\":1}", "1,1,2"),
@@ -343,13 +337,13 @@ public class ReassignPartitionsUnitTest {
             assertThrows(AdminCommandFailedException.class, () -> parseGenerateAssignmentArgs(
                 "{\"topics\": [{\"topic\": \"foo\"}], \"version\":1}", "5,2,3,4,5"),
                 "Expected to detect duplicate broker list entries").getMessage());
-        assertEquals(new Tuple2<>(seq(5, 2, 3, 4), seq("foo")),
+        assertEquals(new Tuple2<>(asList(5, 2, 3, 4), asList("foo")),
             parseGenerateAssignmentArgs("{\"topics\": [{\"topic\": \"foo\"}], \"version\":1}", "5,2,3,4"));
         assertStartsWith("List of topics to reassign contains duplicate entries",
             assertThrows(AdminCommandFailedException.class, () -> parseGenerateAssignmentArgs(
                 "{\"topics\": [{\"topic\": \"foo\"},{\"topic\": \"foo\"}], \"version\":1}", "5,2,3,4"),
                 "Expected to detect duplicate topic entries").getMessage());
-        assertEquals(new Tuple2<>(seq(5, 3, 4), seq("foo", "bar")),
+        assertEquals(new Tuple2<>(asList(5, 3, 4), asList("foo", "bar")),
             parseGenerateAssignmentArgs(
                 "{\"topics\": [{\"topic\": \"foo\"},{\"topic\": \"bar\"}], \"version\":1}", "5,3,4"));
     }
@@ -377,9 +371,9 @@ public class ReassignPartitionsUnitTest {
     }
 
     @Test
-    public void testGenerateAssignmentWithInconsistentRacks() {
+    public void testGenerateAssignmentWithInconsistentRacks() throws Exception {
         try (MockAdminClient adminClient = new MockAdminClient.Builder().
-            brokers(Arrays.asList(
+            brokers(asList(
                 new Node(0, "localhost", 9092, "rack0"),
                 new Node(1, "localhost", 9093, "rack0"),
                 new Node(2, "localhost", 9094, null),
@@ -394,59 +388,58 @@ public class ReassignPartitionsUnitTest {
                     () -> generateAssignment(adminClient, "{\"topics\":[{\"topic\":\"foo\"}]}", "0,1,2,3", true),
                     "Expected generateAssignment to fail").getMessage());
             // It should succeed when --disable-rack-aware is used.
-            Tuple2<scala.collection.Map<TopicPartition, Seq<Object>>, scala.collection.Map<TopicPartition, Seq<Object>>>
+            Tuple2<Map<TopicPartition, List<Integer>>, Map<TopicPartition, List<Integer>>>
                 proposedCurrent = generateAssignment(adminClient, "{\"topics\":[{\"topic\":\"foo\"}]}", "0,1,2,3", false);
 
-            Map<TopicPartition, Seq<Object>> expCurrent = new HashMap<>();
+            Map<TopicPartition, List<Integer>> expCurrent = new HashMap<>();
 
-            expCurrent.put(new TopicPartition("foo", 0), seq(0, 1, 2));
-            expCurrent.put(new TopicPartition("foo", 1), seq(1, 2, 3));
+            expCurrent.put(new TopicPartition("foo", 0), asList(0, 1, 2));
+            expCurrent.put(new TopicPartition("foo", 1), asList(1, 2, 3));
 
-            assertEquals(asScala(expCurrent), proposedCurrent._2());
+            assertEquals(expCurrent, proposedCurrent.v2);
         }
     }
 
     @Test
-    public void testGenerateAssignmentWithFewerBrokers() {
+    public void testGenerateAssignmentWithFewerBrokers() throws Exception {
         try (MockAdminClient adminClient = new MockAdminClient.Builder().numBrokers(4).build()) {
             addTopics(adminClient);
-            List<Integer> goalBrokers = Arrays.asList(0, 1, 3);
+            List<Integer> goalBrokers = asList(0, 1, 3);
 
-            Tuple2<scala.collection.Map<TopicPartition, Seq<Object>>, scala.collection.Map<TopicPartition, Seq<Object>>>
+            Tuple2<Map<TopicPartition, List<Integer>>, Map<TopicPartition, List<Integer>>>
                 proposedCurrent = generateAssignment(adminClient,
                     "{\"topics\":[{\"topic\":\"foo\"},{\"topic\":\"bar\"}]}",
                     goalBrokers.stream().map(Object::toString).collect(Collectors.joining(",")), false);
 
-            Map<TopicPartition, Seq<Object>> expCurrent = new HashMap<>();
+            Map<TopicPartition, List<Integer>> expCurrent = new HashMap<>();
 
-            expCurrent.put(new TopicPartition("foo", 0), seq(0, 1, 2));
-            expCurrent.put(new TopicPartition("foo", 1), seq(1, 2, 3));
-            expCurrent.put(new TopicPartition("bar", 0), seq(2, 3, 0));
+            expCurrent.put(new TopicPartition("foo", 0), asList(0, 1, 2));
+            expCurrent.put(new TopicPartition("foo", 1), asList(1, 2, 3));
+            expCurrent.put(new TopicPartition("bar", 0), asList(2, 3, 0));
 
-            assertEquals(asScala(expCurrent), proposedCurrent._2());
+            assertEquals(expCurrent, proposedCurrent.v2);
 
             // The proposed assignment should only span the provided brokers
-            proposedCurrent._1().values().foreach(replicas -> {
-                assertTrue(replicas.forall(replica -> goalBrokers.contains((Integer) replica)),
-                    "Proposed assignment " + proposedCurrent._1()  + " puts replicas on brokers other than " + goalBrokers);
-                return null;
-            });
+            proposedCurrent.v1.values().forEach(replicas ->
+                assertTrue(goalBrokers.containsAll(replicas),
+                    "Proposed assignment " + proposedCurrent.v1 + " puts replicas on brokers other than " + goalBrokers)
+            );
         }
     }
 
     @Test
-    public void testCurrentPartitionReplicaAssignmentToString() {
-        Map<TopicPartition, Seq<Object>> proposedParts = new HashMap<>();
+    public void testCurrentPartitionReplicaAssignmentToString() throws Exception {
+        Map<TopicPartition, List<Integer>> proposedParts = new HashMap<>();
 
-        proposedParts.put(new TopicPartition("foo", 1), seq(1, 2, 3));
-        proposedParts.put(new TopicPartition("bar", 0), seq(7, 8, 9));
+        proposedParts.put(new TopicPartition("foo", 1), asList(1, 2, 3));
+        proposedParts.put(new TopicPartition("bar", 0), asList(7, 8, 9));
 
-        Map<TopicPartition, Seq<Object>> currentParts = new HashMap<>();
+        Map<TopicPartition, List<Integer>> currentParts = new HashMap<>();
 
-        currentParts.put(new TopicPartition("foo", 0), seq(1, 2, 3));
-        currentParts.put(new TopicPartition("foo", 1), seq(4, 5, 6));
-        currentParts.put(new TopicPartition("bar", 0), seq(7, 8));
-        currentParts.put(new TopicPartition("baz", 0), seq(10, 11, 12));
+        currentParts.put(new TopicPartition("foo", 0), asList(1, 2, 3));
+        currentParts.put(new TopicPartition("foo", 1), asList(4, 5, 6));
+        currentParts.put(new TopicPartition("bar", 0), asList(7, 8));
+        currentParts.put(new TopicPartition("baz", 0), asList(10, 11, 12));
 
         assertEquals(String.join(System.lineSeparator(),
             "Current partition replica assignment",
@@ -457,7 +450,7 @@ public class ReassignPartitionsUnitTest {
                 "}",
             "",
             "Save this to use as the --reassignment-json-file option during rollback"),
-            currentPartitionReplicaAssignmentToString(asScala(proposedParts), asScala(currentParts))
+            currentPartitionReplicaAssignmentToString(proposedParts, currentParts)
         );
     }
 
@@ -473,79 +466,78 @@ public class ReassignPartitionsUnitTest {
         Map<TopicPartition, PartitionReassignment> currentReassignments = new HashMap<>();
 
         currentReassignments.put(new TopicPartition("foo", 0), new PartitionReassignment(
-            Arrays.asList(1, 2, 3, 4), Arrays.asList(4), Arrays.asList(3)));
+            asList(1, 2, 3, 4), asList(4), asList(3)));
         currentReassignments.put(new TopicPartition("foo", 1), new PartitionReassignment(
-            Arrays.asList(4, 5, 6, 7, 8), Arrays.asList(7, 8), Arrays.asList(4, 5)));
+            asList(4, 5, 6, 7, 8), asList(7, 8), asList(4, 5)));
         currentReassignments.put(new TopicPartition("foo", 2), new PartitionReassignment(
-            Arrays.asList(1, 2, 3, 4), Arrays.asList(3, 4), Arrays.asList(1, 2)));
+            asList(1, 2, 3, 4), asList(3, 4), asList(1, 2)));
         currentReassignments.put(new TopicPartition("foo", 3), new PartitionReassignment(
-            Arrays.asList(1, 2, 3, 4), Arrays.asList(3, 4), Arrays.asList(1, 2)));
+            asList(1, 2, 3, 4), asList(3, 4), asList(1, 2)));
         currentReassignments.put(new TopicPartition("foo", 4), new PartitionReassignment(
-            Arrays.asList(1, 2, 3, 4), Arrays.asList(3, 4), Arrays.asList(1, 2)));
+            asList(1, 2, 3, 4), asList(3, 4), asList(1, 2)));
         currentReassignments.put(new TopicPartition("foo", 5), new PartitionReassignment(
-            Arrays.asList(1, 2, 3, 4), Arrays.asList(3, 4), Arrays.asList(1, 2)));
+            asList(1, 2, 3, 4), asList(3, 4), asList(1, 2)));
 
-        Map<TopicPartition, Seq<Object>> proposedParts = new HashMap<>();
+        Map<TopicPartition, List<Integer>> proposedParts = new HashMap<>();
 
-        proposedParts.put(new TopicPartition("foo", 0), seq(1, 2, 5));
-        proposedParts.put(new TopicPartition("foo", 2), seq(3, 4));
-        proposedParts.put(new TopicPartition("foo", 3), seq(5, 6));
-        proposedParts.put(new TopicPartition("foo", 4), seq(3));
-        proposedParts.put(new TopicPartition("foo", 5), seq(3, 4, 5, 6));
-        proposedParts.put(new TopicPartition("bar", 0), seq(1, 2, 3));
+        proposedParts.put(new TopicPartition("foo", 0), asList(1, 2, 5));
+        proposedParts.put(new TopicPartition("foo", 2), asList(3, 4));
+        proposedParts.put(new TopicPartition("foo", 3), asList(5, 6));
+        proposedParts.put(new TopicPartition("foo", 4), asList(3));
+        proposedParts.put(new TopicPartition("foo", 5), asList(3, 4, 5, 6));
+        proposedParts.put(new TopicPartition("bar", 0), asList(1, 2, 3));
 
-        Map<TopicPartition, Seq<Object>> currentParts = new HashMap<>();
+        Map<TopicPartition, List<Integer>> currentParts = new HashMap<>();
 
-        currentParts.put(new TopicPartition("foo", 0), seq(1, 2, 3, 4));
-        currentParts.put(new TopicPartition("foo", 1), seq(4, 5, 6, 7, 8));
-        currentParts.put(new TopicPartition("foo", 2), seq(1, 2, 3, 4));
-        currentParts.put(new TopicPartition("foo", 3), seq(1, 2, 3, 4));
-        currentParts.put(new TopicPartition("foo", 4), seq(1, 2, 3, 4));
-        currentParts.put(new TopicPartition("foo", 5), seq(1, 2, 3, 4));
-        currentParts.put(new TopicPartition("bar", 0), seq(2, 3, 4));
-        currentParts.put(new TopicPartition("baz", 0), seq(1, 2, 3));
+        currentParts.put(new TopicPartition("foo", 0), asList(1, 2, 3, 4));
+        currentParts.put(new TopicPartition("foo", 1), asList(4, 5, 6, 7, 8));
+        currentParts.put(new TopicPartition("foo", 2), asList(1, 2, 3, 4));
+        currentParts.put(new TopicPartition("foo", 3), asList(1, 2, 3, 4));
+        currentParts.put(new TopicPartition("foo", 4), asList(1, 2, 3, 4));
+        currentParts.put(new TopicPartition("foo", 5), asList(1, 2, 3, 4));
+        currentParts.put(new TopicPartition("bar", 0), asList(2, 3, 4));
+        currentParts.put(new TopicPartition("baz", 0), asList(1, 2, 3));
 
-        scala.collection.mutable.Map<String, scala.collection.mutable.Map<Object, ReassignPartitionsCommand.PartitionMove>>
-            moveMap = calculateProposedMoveMap(asScala(currentReassignments), asScala(proposedParts), asScala(currentParts));
+        Map<String, Map<Integer, PartitionMove>> moveMap = calculateProposedMoveMap(currentReassignments, proposedParts, currentParts);
 
-        Map<Integer, ReassignPartitionsCommand.PartitionMove> fooMoves = new HashMap<>();
+        Map<Integer, PartitionMove> fooMoves = new HashMap<>();
 
-        fooMoves.put(0, new ReassignPartitionsCommand.PartitionMove(mutableSet(1, 2, 3), mutableSet(5)));
-        fooMoves.put(1, new ReassignPartitionsCommand.PartitionMove(mutableSet(4, 5, 6), mutableSet(7, 8)));
-        fooMoves.put(2, new ReassignPartitionsCommand.PartitionMove(mutableSet(1, 2), mutableSet(3, 4)));
-        fooMoves.put(3, new ReassignPartitionsCommand.PartitionMove(mutableSet(1, 2), mutableSet(5, 6)));
-        fooMoves.put(4, new ReassignPartitionsCommand.PartitionMove(mutableSet(1, 2), mutableSet(3)));
-        fooMoves.put(5, new ReassignPartitionsCommand.PartitionMove(mutableSet(1, 2), mutableSet(3, 4, 5, 6)));
+        fooMoves.put(0, new PartitionMove(new HashSet<>(asList(1, 2, 3)), new HashSet<>(asList(5))));
+        fooMoves.put(1, new PartitionMove(new HashSet<>(asList(4, 5, 6)), new HashSet<>(asList(7, 8))));
+        fooMoves.put(2, new PartitionMove(new HashSet<>(asList(1, 2)), new HashSet<>(asList(3, 4))));
+        fooMoves.put(3, new PartitionMove(new HashSet<>(asList(1, 2)), new HashSet<>(asList(5, 6))));
+        fooMoves.put(4, new PartitionMove(new HashSet<>(asList(1, 2)), new HashSet<>(asList(3))));
+        fooMoves.put(5, new PartitionMove(new HashSet<>(asList(1, 2)), new HashSet<>(asList(3, 4, 5, 6))));
 
-        Map<Integer, ReassignPartitionsCommand.PartitionMove> barMoves = new HashMap<>();
+        Map<Integer, PartitionMove> barMoves = new HashMap<>();
 
-        barMoves.put(0, new ReassignPartitionsCommand.PartitionMove(mutableSet(2, 3, 4), mutableSet(1)));
+        barMoves.put(0, new PartitionMove(new HashSet<>(asList(2, 3, 4)), new HashSet<>(asList(1))));
 
-        assertEquals(asScala(fooMoves), moveMap.get("foo").get());
-        assertEquals(asScala(barMoves), moveMap.get("bar").get());
+        assertEquals(fooMoves, moveMap.get("foo"));
+        assertEquals(barMoves, moveMap.get("bar"));
 
         Map<String, String> expLeaderThrottle = new HashMap<>();
 
         expLeaderThrottle.put("foo", "0:1,0:2,0:3,1:4,1:5,1:6,2:1,2:2,3:1,3:2,4:1,4:2,5:1,5:2");
         expLeaderThrottle.put("bar", "0:2,0:3,0:4");
 
-        assertEquals(asScala(expLeaderThrottle), calculateLeaderThrottles(moveMap));
+        assertEquals(expLeaderThrottle, calculateLeaderThrottles(moveMap));
 
         Map<String, String> expFollowerThrottle = new HashMap<>();
 
         expFollowerThrottle.put("foo", "0:5,1:7,1:8,2:3,2:4,3:5,3:6,4:3,5:3,5:4,5:5,5:6");
         expFollowerThrottle.put("bar", "0:1");
 
-        assertEquals(asScala(expFollowerThrottle), calculateFollowerThrottles(moveMap));
+        assertEquals(expFollowerThrottle, calculateFollowerThrottles(moveMap));
 
-        assertEquals(set(1, 2, 3, 4, 5, 6, 7, 8), calculateReassigningBrokers(moveMap));
-        assertEquals(set(0, 2), calculateMovingBrokers(set(
+        assertEquals(new HashSet<>(asList(1, 2, 3, 4, 5, 6, 7, 8)), calculateReassigningBrokers(moveMap));
+        assertEquals(new HashSet<>(asList(0, 2)), calculateMovingBrokers(new HashSet<>(asList(
             new TopicPartitionReplica("quux", 0, 0),
-            new TopicPartitionReplica("quux", 1, 2))));
+            new TopicPartitionReplica("quux", 1, 2)))));
     }
 
     @Test
-    public void testParseExecuteAssignmentArgs() {
+    public void testParseExecuteAssignmentArgs() throws Exception {
         assertStartsWith("Partition reassignment list cannot be empty",
             assertThrows(AdminCommandFailedException.class,
                 () -> parseExecuteAssignmentArgs("{\"version\":1,\"partitions\":[]}"),
@@ -569,19 +561,19 @@ public class ReassignPartitionsUnitTest {
                     "{\"topic\":\"foo\",\"partition\":1,\"replicas\":[2,3],\"log_dirs\":[\"/abc\",\"/def\"]}" +
                     "]}"), "Expected to detect a partition replica list with duplicate entries").getMessage());
 
-        Map<TopicPartition, Seq<Object>> partitionsToBeReassigned = new HashMap<>();
+        Map<TopicPartition, List<Integer>> partitionsToBeReassigned = new HashMap<>();
 
-        partitionsToBeReassigned.put(new TopicPartition("foo", 0), seq(1, 2, 3));
-        partitionsToBeReassigned.put(new TopicPartition("foo", 1), seq(3, 4, 5));
+        partitionsToBeReassigned.put(new TopicPartition("foo", 0), asList(1, 2, 3));
+        partitionsToBeReassigned.put(new TopicPartition("foo", 1), asList(3, 4, 5));
 
-        Tuple2<scala.collection.Map<TopicPartition, Seq<Object>>, scala.collection.Map<TopicPartitionReplica, String>> actual = parseExecuteAssignmentArgs(
+        Tuple2<Map<TopicPartition, List<Integer>>, Map<TopicPartitionReplica, String>> actual = parseExecuteAssignmentArgs(
             "{\"version\":1,\"partitions\":" +
                 "[{\"topic\":\"foo\",\"partition\":0,\"replicas\":[1,2,3],\"log_dirs\":[\"any\",\"any\",\"any\"]}," +
                 "{\"topic\":\"foo\",\"partition\":1,\"replicas\":[3,4,5],\"log_dirs\":[\"any\",\"any\",\"any\"]}" +
                 "]}");
 
-        assertEquals(asScala(partitionsToBeReassigned), actual._1);
-        assertTrue(actual._2.isEmpty());
+        assertEquals(partitionsToBeReassigned, actual.v1);
+        assertTrue(actual.v2.isEmpty());
 
         Map<TopicPartitionReplica, String> replicaAssignment = new HashMap<>();
 
@@ -594,8 +586,8 @@ public class ReassignPartitionsUnitTest {
                 "[{\"topic\":\"foo\",\"partition\":0,\"replicas\":[1,2,3],\"log_dirs\":[\"/tmp/a\",\"/tmp/b\",\"/tmp/c\"]}" +
                 "]}");
 
-        assertEquals(asScala(Collections.singletonMap(new TopicPartition("foo", 0), seq(1, 2, 3))), actual._1);
-        assertEquals(asScala(replicaAssignment), actual._2);
+        assertEquals(Collections.singletonMap(new TopicPartition("foo", 0), asList(1, 2, 3)), actual.v1);
+        assertEquals(replicaAssignment, actual.v2);
     }
 
     @Test
@@ -627,8 +619,8 @@ public class ReassignPartitionsUnitTest {
     @Test
     public void testModifyBrokerInterBrokerThrottle() throws Exception {
         try (MockAdminClient adminClient = new MockAdminClient.Builder().numBrokers(4).build()) {
-            modifyInterBrokerThrottle(adminClient, set(0, 1, 2), 1000);
-            modifyInterBrokerThrottle(adminClient, set(0, 3), 100);
+            modifyInterBrokerThrottle(adminClient, new HashSet<>(asList(0, 1, 2)), 1000);
+            modifyInterBrokerThrottle(adminClient, new HashSet<>(asList(0, 3)), 100);
             List<ConfigResource> brokers = new ArrayList<>();
             for (int i = 0; i < 4; i++)
                 brokers.add(new ConfigResource(ConfigResource.Type.BROKER, Integer.toString(i)));
@@ -643,8 +635,8 @@ public class ReassignPartitionsUnitTest {
     @Test
     public void testModifyLogDirThrottle() throws Exception {
         try (MockAdminClient adminClient = new MockAdminClient.Builder().numBrokers(4).build()) {
-            modifyLogDirThrottle(adminClient, set(0, 1, 2), 2000);
-            modifyLogDirThrottle(adminClient, set(0, 3), -1);
+            modifyLogDirThrottle(adminClient, new HashSet<>(asList(0, 1, 2)), 2000);
+            modifyLogDirThrottle(adminClient, new HashSet<>(asList(0, 3)), -1);
 
             List<ConfigResource> brokers = new ArrayList<>();
             for (int i = 0; i < 4; i++)
@@ -660,19 +652,18 @@ public class ReassignPartitionsUnitTest {
     }
 
     @Test
-    public void testCurReassignmentsToString() {
+    public void testCurReassignmentsToString() throws Exception {
         try (MockAdminClient adminClient = new MockAdminClient.Builder().numBrokers(4).build()) {
             addTopics(adminClient);
             assertEquals("No partition reassignments found.", curReassignmentsToString(adminClient));
 
-            Map<TopicPartition, Seq<Object>> reassignments = new HashMap<>();
+            Map<TopicPartition, List<Integer>> reassignments = new HashMap<>();
 
-            reassignments.put(new TopicPartition("foo", 1), seq(4, 5, 3));
-            reassignments.put(new TopicPartition("foo", 0), seq(0, 1, 4, 2));
-            reassignments.put(new TopicPartition("bar", 0), seq(2, 3));
+            reassignments.put(new TopicPartition("foo", 1), asList(4, 5, 3));
+            reassignments.put(new TopicPartition("foo", 0), asList(0, 1, 4, 2));
+            reassignments.put(new TopicPartition("bar", 0), asList(2, 3));
 
-            scala.collection.Map<TopicPartition, Throwable> reassignmentResult =
-                alterPartitionReassignments(adminClient, asScala(reassignments));
+            Map<TopicPartition, Throwable> reassignmentResult = alterPartitionReassignments(adminClient, reassignments);
 
             assertTrue(reassignmentResult.isEmpty());
             assertEquals(String.join(System.lineSeparator(),
@@ -691,13 +682,13 @@ public class ReassignPartitionsUnitTest {
         config.entries().forEach(entry -> configs.put(entry.name(), entry.value()));
         if (expectedInterBrokerThrottle >= 0) {
             assertEquals(Long.toString(expectedInterBrokerThrottle),
-                configs.getOrDefault(brokerLevelLeaderThrottle(), ""));
+                configs.getOrDefault(BROKER_LEVEL_LEADER_THROTTLE, ""));
             assertEquals(Long.toString(expectedInterBrokerThrottle),
-                configs.getOrDefault(brokerLevelFollowerThrottle(), ""));
+                configs.getOrDefault(BROKER_LEVEL_FOLLOWER_THROTTLE, ""));
         }
         if (expectedReplicaAlterLogDirsThrottle >= 0) {
             assertEquals(Long.toString(expectedReplicaAlterLogDirsThrottle),
-                configs.getOrDefault(brokerLevelLogDirThrottle(), ""));
+                configs.getOrDefault(BROKER_LEVEL_LOG_DIR_THROTTLE, ""));
         }
     }
 
@@ -712,8 +703,8 @@ public class ReassignPartitionsUnitTest {
             leaderThrottles.put("bar", "leaderBar");
 
             modifyTopicThrottles(adminClient,
-                asScala(leaderThrottles),
-                asScala(Collections.singletonMap("bar", "followerBar")));
+                leaderThrottles,
+                Collections.singletonMap("bar", "followerBar"));
             List<ConfigResource> topics = Stream.of("bar", "foo").map(
                 id -> new ConfigResource(ConfigResource.Type.TOPIC, id)).collect(Collectors.toList());
             Map<ConfigResource, Config> results = adminClient.describeConfigs(topics).all().get();
@@ -728,17 +719,17 @@ public class ReassignPartitionsUnitTest {
         Map<String, String> configs = new HashMap<>();
         config.entries().forEach(entry -> configs.put(entry.name(), entry.value()));
         assertEquals(expectedLeaderThrottle,
-            configs.getOrDefault(topicLevelLeaderThrottle(), ""));
+            configs.getOrDefault(TOPIC_LEVEL_LEADER_THROTTLE, ""));
         assertEquals(expectedFollowerThrottle,
-            configs.getOrDefault(topicLevelFollowerThrottle(), ""));
+            configs.getOrDefault(TOPIC_LEVEL_FOLLOWER_THROTTLE, ""));
     }
 
     @Test
-    public void testAlterReplicaLogDirs() {
+    public void testAlterReplicaLogDirs() throws Exception {
         try (MockAdminClient adminClient = new MockAdminClient.Builder().
             numBrokers(4).
             brokerLogDirs(Collections.nCopies(4,
-                Arrays.asList("/tmp/kafka-logs0", "/tmp/kafka-logs1"))).
+                asList("/tmp/kafka-logs0", "/tmp/kafka-logs1"))).
             build()) {
 
             addTopics(adminClient);
@@ -749,8 +740,8 @@ public class ReassignPartitionsUnitTest {
             assignment.put(new TopicPartitionReplica("quux", 1, 0), "/tmp/kafka-logs1");
 
             assertEquals(
-                set(new TopicPartitionReplica("foo", 0, 0)),
-                alterReplicaLogDirs(adminClient, asScala(assignment))
+                new HashSet<>(asList(new TopicPartitionReplica("foo", 0, 0))),
+                alterReplicaLogDirs(adminClient, assignment)
             );
         }
     }
@@ -766,25 +757,5 @@ public class ReassignPartitionsUnitTest {
             assertStartsWith("Unexpected character",
                 assertThrows(AdminOperationException.class, () -> executeAssignment(adminClient, false, "{invalid_json", -1L, -1L, 10000L, Time.SYSTEM)).getMessage());
         }
-    }
-
-    @SuppressWarnings("unchecked")
-    private static <T> scala.collection.immutable.Set<T> set(final T... set) {
-        return mutableSet(set).toSet();
-    }
-
-    @SuppressWarnings({"deprecation", "unchecked"})
-    private static <T> scala.collection.mutable.Set<T> mutableSet(final T...set) {
-        return JavaConverters.asScalaSet(new HashSet<>(Arrays.asList(set)));
-    }
-
-    @SuppressWarnings({"deprecation", "unchecked"})
-    private static <T> Seq<T> seq(T... seq) {
-        return JavaConverters.asScalaIteratorConverter(Arrays.asList(seq).iterator()).asScala().toSeq();
-    }
-
-    @SuppressWarnings("deprecation")
-    private static <K, V> scala.collection.Map<K, V> asScala(Map<K, V> jmap) {
-        return JavaConverters.mapAsScalaMap(jmap);
     }
 }

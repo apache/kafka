@@ -17,6 +17,7 @@
 package org.apache.kafka.coordinator.group;
 
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.coordinator.group.assignor.GroupAssignment;
 
 import java.util.AbstractMap;
 import java.util.Arrays;
@@ -26,6 +27,8 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class AssignmentTestUtil {
     public static Map.Entry<Uuid, Set<Integer>> mkTopicAssignment(
@@ -64,5 +67,19 @@ public class AssignmentTestUtil {
             assignment.put(entry.getKey(), entry.getValue());
         }
         return assignment;
+    }
+
+    /**
+     * Verifies that the expected assignment is equal to the computed assignment for every member in the group.
+     */
+    public static void assertAssignment(
+        Map<String, Map<Uuid, Set<Integer>>> expectedAssignment,
+        GroupAssignment computedGroupAssignment
+    ) {
+        assertEquals(expectedAssignment.size(), computedGroupAssignment.members().size());
+        computedGroupAssignment.members().forEach((memberId, memberAssignment) -> {
+            Map<Uuid, Set<Integer>> computedAssignmentForMember = memberAssignment.targetPartitions();
+            assertEquals(expectedAssignment.get(memberId), computedAssignmentForMember);
+        });
     }
 }

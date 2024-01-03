@@ -149,9 +149,9 @@ public abstract class AbstractTask implements Task {
 
     final void transitionTo(final Task.State newState) {
         final State oldState = state();
-
         if (oldState.isValidTransition(newState)) {
             state = newState;
+            stateMgr.transitionTaskState(newState);
         } else {
             throw new IllegalStateException("Invalid transition from " + oldState + " to " + newState);
         }

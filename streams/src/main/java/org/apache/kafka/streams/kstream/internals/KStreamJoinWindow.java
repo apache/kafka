@@ -51,8 +51,8 @@ class KStreamJoinWindow<K, V> implements ProcessorSupplier<K, V, K, V> {
         public void process(final Record<K, V> record) {
             // if the key is null, we do not need to put the record into window store
             // since it will never be considered for join operations
+            context().forward(record);
             if (record.key() != null) {
-                context().forward(record);
                 // Every record basically starts a new window. We're using a window store mostly for the retention.
                 window.put(record.key(), record.value(), record.timestamp());
             }

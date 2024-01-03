@@ -35,10 +35,9 @@ import org.apache.kafka.metadata.ControllerRegistration;
 import org.apache.kafka.metadata.RecordTestUtils;
 import org.apache.kafka.metadata.VersionRange;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
+import org.apache.kafka.server.common.MetadataVersion;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -47,6 +46,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.apache.kafka.common.metadata.MetadataRecordType.FENCE_BROKER_RECORD;
 import static org.apache.kafka.common.metadata.MetadataRecordType.UNFENCE_BROKER_RECORD;
@@ -55,7 +55,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 @Timeout(value = 40)
 public class ClusterImageTest {
-    private static final Logger log = LoggerFactory.getLogger(ClusterImageTest.class);
 
     public final static ClusterImage IMAGE1;
 
@@ -67,30 +66,33 @@ public class ClusterImageTest {
 
     static {
         Map<Integer, BrokerRegistration> map1 = new HashMap<>();
-        map1.put(0, new BrokerRegistration(0,
-            1000,
-            Uuid.fromString("vZKYST0pSA2HO5x_6hoO2Q"),
-            Arrays.asList(new Endpoint("PLAINTEXT", SecurityProtocol.PLAINTEXT, "localhost", 9092)),
-            Collections.singletonMap("foo", VersionRange.of((short) 1, (short) 3)),
-            Optional.empty(),
-            true,
-            false));
-        map1.put(1, new BrokerRegistration(1,
-            1001,
-            Uuid.fromString("U52uRe20RsGI0RvpcTx33Q"),
-            Arrays.asList(new Endpoint("PLAINTEXT", SecurityProtocol.PLAINTEXT, "localhost", 9093)),
-            Collections.singletonMap("foo", VersionRange.of((short) 1, (short) 3)),
-            Optional.empty(),
-            false,
-            false));
-        map1.put(2, new BrokerRegistration(2,
-            123,
-            Uuid.fromString("hr4TVh3YQiu3p16Awkka6w"),
-            Arrays.asList(new Endpoint("PLAINTEXT", SecurityProtocol.PLAINTEXT, "localhost", 9093)),
-            Collections.emptyMap(),
-            Optional.of("arack"),
-            false,
-            false));
+        map1.put(0, new BrokerRegistration.Builder().
+            setId(0).
+            setEpoch(1000).
+            setIncarnationId(Uuid.fromString("vZKYST0pSA2HO5x_6hoO2Q")).
+            setListeners(Arrays.asList(new Endpoint("PLAINTEXT", SecurityProtocol.PLAINTEXT, "localhost", 9092))).
+            setSupportedFeatures(Collections.singletonMap("foo", VersionRange.of((short) 1, (short) 3))).
+            setRack(Optional.empty()).
+            setFenced(true).
+            setInControlledShutdown(false).build());
+        map1.put(1, new BrokerRegistration.Builder().
+            setId(1).
+            setEpoch(1001).
+            setIncarnationId(Uuid.fromString("U52uRe20RsGI0RvpcTx33Q")).
+            setListeners(Arrays.asList(new Endpoint("PLAINTEXT", SecurityProtocol.PLAINTEXT, "localhost", 9093))).
+            setSupportedFeatures(Collections.singletonMap("foo", VersionRange.of((short) 1, (short) 3))).
+            setRack(Optional.empty()).
+            setFenced(false).
+            setInControlledShutdown(false).build());
+        map1.put(2, new BrokerRegistration.Builder().
+            setId(2).
+            setEpoch(123).
+            setIncarnationId(Uuid.fromString("hr4TVh3YQiu3p16Awkka6w")).
+            setListeners(Arrays.asList(new Endpoint("PLAINTEXT", SecurityProtocol.PLAINTEXT, "localhost", 9093))).
+            setSupportedFeatures(Collections.emptyMap()).
+            setRack(Optional.of("arack")).
+            setFenced(false).
+            setInControlledShutdown(false).build());
         Map<Integer, ControllerRegistration> cmap1 = new HashMap<>();
         cmap1.put(1000, new ControllerRegistration.Builder().
             setId(1000).
@@ -115,11 +117,11 @@ public class ClusterImageTest {
             (short) 0));
 
         ControllerEndpointCollection endpointsFor1001 = new ControllerEndpointCollection();
-        new ControllerEndpointCollection().add(new ControllerEndpoint().
-                setHost("localhost").
-                setName("PLAINTEXT").
-                setPort(19093).
-                setSecurityProtocol(SecurityProtocol.PLAINTEXT.id));
+        endpointsFor1001.add(new ControllerEndpoint().
+            setHost("localhost").
+            setName("PLAINTEXT").
+            setPort(19093).
+            setSecurityProtocol(SecurityProtocol.PLAINTEXT.id));
         DELTA1_RECORDS.add(new ApiMessageAndVersion(new RegisterControllerRecord().
             setControllerId(1001).
             setIncarnationId(Uuid.fromString("FdEHF-IqScKfYyjZ1CjfNQ")).
@@ -131,22 +133,24 @@ public class ClusterImageTest {
         RecordTestUtils.replayAll(DELTA1, DELTA1_RECORDS);
 
         Map<Integer, BrokerRegistration> map2 = new HashMap<>();
-        map2.put(0, new BrokerRegistration(0,
-            1000,
-            Uuid.fromString("vZKYST0pSA2HO5x_6hoO2Q"),
-            Arrays.asList(new Endpoint("PLAINTEXT", SecurityProtocol.PLAINTEXT, "localhost", 9092)),
-            Collections.singletonMap("foo", VersionRange.of((short) 1, (short) 3)),
-            Optional.empty(),
-            false,
-            true));
-        map2.put(1, new BrokerRegistration(1,
-            1001,
-            Uuid.fromString("U52uRe20RsGI0RvpcTx33Q"),
-            Arrays.asList(new Endpoint("PLAINTEXT", SecurityProtocol.PLAINTEXT, "localhost", 9093)),
-            Collections.singletonMap("foo", VersionRange.of((short) 1, (short) 3)),
-            Optional.empty(),
-            true,
-            false));
+        map2.put(0, new BrokerRegistration.Builder().
+            setId(0).
+            setEpoch(1000).
+            setIncarnationId(Uuid.fromString("vZKYST0pSA2HO5x_6hoO2Q")).
+            setListeners(Arrays.asList(new Endpoint("PLAINTEXT", SecurityProtocol.PLAINTEXT, "localhost", 9092))).
+            setSupportedFeatures(Collections.singletonMap("foo", VersionRange.of((short) 1, (short) 3))).
+            setRack(Optional.empty()).
+            setFenced(false).
+            setInControlledShutdown(true).build());
+        map2.put(1, new BrokerRegistration.Builder().
+            setId(1).
+            setEpoch(1001).
+            setIncarnationId(Uuid.fromString("U52uRe20RsGI0RvpcTx33Q")).
+            setListeners(Arrays.asList(new Endpoint("PLAINTEXT", SecurityProtocol.PLAINTEXT, "localhost", 9093))).
+            setSupportedFeatures(Collections.singletonMap("foo", VersionRange.of((short) 1, (short) 3))).
+            setRack(Optional.empty()).
+            setFenced(true).
+            setInControlledShutdown(false).build());
         Map<Integer, ControllerRegistration> cmap2 = new HashMap<>(cmap1);
         cmap2.put(1001, new ControllerRegistration.Builder().
             setId(1001).
@@ -202,5 +206,23 @@ public class ClusterImageTest {
         RecordListWriter writer = new RecordListWriter();
         image.write(writer, new ImageWriterOptions.Builder().build());
         return writer.records();
+    }
+
+    @Test
+    public void testHandleLossOfControllerRegistrations() {
+        ClusterImage testImage = new ClusterImage(Collections.emptyMap(),
+            Collections.singletonMap(1000, new ControllerRegistration.Builder().
+                setId(1000).
+                setIncarnationId(Uuid.fromString("9ABu6HEgRuS-hjHLgC4cHw")).
+                setListeners(Collections.singletonMap("PLAINTEXT",
+                    new Endpoint("PLAINTEXT", SecurityProtocol.PLAINTEXT, "localhost", 19092))).
+                setSupportedFeatures(Collections.emptyMap()).build()));
+        RecordListWriter writer = new RecordListWriter();
+        final AtomicReference<String> lossString = new AtomicReference<>("");
+        testImage.write(writer, new ImageWriterOptions.Builder().
+            setMetadataVersion(MetadataVersion.IBP_3_6_IV2).
+            setLossHandler(loss -> lossString.compareAndSet("", loss.loss())).
+                build());
+        assertEquals("controller registration data", lossString.get());
     }
 }

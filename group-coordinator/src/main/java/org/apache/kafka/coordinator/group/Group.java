@@ -28,7 +28,7 @@ import java.util.Optional;
 public interface Group {
     enum GroupType {
         CONSUMER("consumer"),
-        GENERIC("generic");
+        CLASSIC("classic");
 
         private final String name;
 
@@ -74,11 +74,13 @@ public interface Group {
      * @param groupInstanceId           The group instance id.
      * @param generationIdOrMemberEpoch The generation id for genetic groups or the member epoch
      *                                  for consumer groups.
+     * @param isTransactional           Whether the offset commit is transactional or not.
      */
     void validateOffsetCommit(
         String memberId,
         String groupInstanceId,
-        int generationIdOrMemberEpoch
+        int generationIdOrMemberEpoch,
+        boolean isTransactional
     ) throws KafkaException;
 
     /**

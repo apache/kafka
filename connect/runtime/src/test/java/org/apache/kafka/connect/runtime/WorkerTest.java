@@ -44,6 +44,7 @@ import org.apache.kafka.common.metrics.MetricsReporter;
 import org.apache.kafka.common.metrics.stats.Avg;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.connector.Connector;
 import org.apache.kafka.connect.connector.ConnectorContext;
 import org.apache.kafka.connect.connector.Task;
@@ -99,6 +100,7 @@ import org.mockito.Mock;
 import org.mockito.MockedConstruction;
 import org.mockito.Mockito;
 import org.mockito.MockitoSession;
+import org.mockito.invocation.InvocationOnMock;
 import org.mockito.quality.Strictness;
 import org.mockito.stubbing.OngoingStubbing;
 
@@ -165,7 +167,6 @@ import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.mockConstructionWithAnswer;
 import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.timeout;
 import static org.mockito.Mockito.times;
@@ -238,6 +239,8 @@ public class WorkerTest {
     private final boolean enableTopicCreation;
 
     private MockedConstruction<WorkerSourceTask> sourceTaskMockedConstruction;
+    private MockedConstruction<ExactlyOnceWorkerSourceTask> eosSourceTaskMockedConstruction;
+    private MockedConstruction<WorkerSinkTask> sinkTaskMockedConstruction;
     private MockitoSession mockitoSession;
 
     @ParameterizedTest.Parameters
@@ -296,20 +299,18 @@ public class WorkerTest {
         connectorProps = anyConnectorConfigMap();
 
         // Make calls to new WorkerSourceTask() return a mock to avoid the source task trying to connect to a broker.
-        sourceTaskMockedConstruction = mockConstructionWithAnswer(WorkerSourceTask.class, invocation -> {
-
-            // provide implementations of three methods used during testing
-            switch (invocation.getMethod().getName()) {
-                case "id":
-                    return TASK_ID;
-                case "loader":
-                    return pluginLoader;
-                case "awaitStop":
-                    return true;
-                default:
-                    return null;
-            }
-        });
+        sourceTaskMockedConstruction = Mockito.mockConstruction(
+                WorkerSourceTask.class,
+                context -> Mockito.withSettings().defaultAnswer(this::workerTaskMethod),
+                WorkerTest::workerTaskConstructor);
+        eosSourceTaskMockedConstruction = Mockito.mockConstruction(
+                ExactlyOnceWorkerSourceTask.class,
+                context -> Mockito.withSettings().defaultAnswer(this::workerTaskMethod),
+                WorkerTest::workerTaskConstructor);
+        sinkTaskMockedConstruction = Mockito.mockConstruction(
+                WorkerSinkTask.class,
+                context -> Mockito.withSettings().defaultAnswer(this::workerTaskMethod),
+                WorkerTest::workerTaskConstructor);
     }
 
     @After
@@ -318,6 +319,8 @@ public class WorkerTest {
         // Ideal would be to use try-with-resources in an individual test, but it introduced a rather large level of
         // indentation of most test bodies, hence sticking with setup() / teardown()
         sourceTaskMockedConstruction.close();
+        eosSourceTaskMockedConstruction.close();
+        sinkTaskMockedConstruction.close();
 
         mockitoSession.finishMocking();
     }
@@ -1312,48 +1315,60 @@ public class WorkerTest {
         SourceConnectorConfig sourceConfig = new SourceConnectorConfig(plugins, connectorProps, enableTopicCreation);
         // With no connector-specific offsets topic in the config, we should only use the worker-global offsets store
         ConnectorOffsetBackingStore connectorStore = worker.offsetStoreForRegularSourceConnector(sourceConfig, CONNECTOR_ID, sourceConnector, null);
+        connectorStore.configure(config);
         assertTrue(connectorStore.hasWorkerGlobalStore());
         assertFalse(connectorStore.hasConnectorSpecificStore());
+        connectorStore.stop();
 
         connectorProps.put(SourceConnectorConfig.OFFSETS_TOPIC_CONFIG, "connector-offsets-topic");
         sourceConfig = new SourceConnectorConfig(plugins, connectorProps, enableTopicCreation);
         // With a connector-specific offsets topic in the config (whose name differs from the worker's offsets topic), we should use both a
         // connector-specific store and the worker-global store
         connectorStore = worker.offsetStoreForRegularSourceConnector(sourceConfig, CONNECTOR_ID, sourceConnector, null);
+        connectorStore.configure(config);
         assertTrue(connectorStore.hasWorkerGlobalStore());
         assertTrue(connectorStore.hasConnectorSpecificStore());
+        connectorStore.stop();
 
         connectorProps.put(SourceConnectorConfig.OFFSETS_TOPIC_CONFIG, workerOffsetsTopic);
         sourceConfig = new SourceConnectorConfig(plugins, connectorProps, enableTopicCreation);
         // With a connector-specific offsets topic in the config whose name matches the worker's offsets topic, and no overridden bootstrap.servers
         // for the connector, we should only use a connector-specific offsets store
         connectorStore = worker.offsetStoreForRegularSourceConnector(sourceConfig, CONNECTOR_ID, sourceConnector, null);
+        connectorStore.configure(config);
         assertFalse(connectorStore.hasWorkerGlobalStore());
         assertTrue(connectorStore.hasConnectorSpecificStore());
+        connectorStore.stop();
 
         connectorProps.put(CONNECTOR_CLIENT_PRODUCER_OVERRIDES_PREFIX + BOOTSTRAP_SERVERS_CONFIG, workerBootstrapServers);
         sourceConfig = new SourceConnectorConfig(plugins, connectorProps, enableTopicCreation);
         // With a connector-specific offsets topic in the config whose name matches the worker's offsets topic, and an overridden bootstrap.servers
         // for the connector that exactly matches the worker's, we should only use a connector-specific offsets store
         connectorStore = worker.offsetStoreForRegularSourceConnector(sourceConfig, CONNECTOR_ID, sourceConnector, null);
+        connectorStore.configure(config);
         assertFalse(connectorStore.hasWorkerGlobalStore());
         assertTrue(connectorStore.hasConnectorSpecificStore());
+        connectorStore.stop();
 
         connectorProps.put(CONNECTOR_CLIENT_PRODUCER_OVERRIDES_PREFIX + BOOTSTRAP_SERVERS_CONFIG, "localhost:1111");
         sourceConfig = new SourceConnectorConfig(plugins, connectorProps, enableTopicCreation);
         // With a connector-specific offsets topic in the config whose name matches the worker's offsets topic, and an overridden bootstrap.servers
         // for the connector that doesn't match the worker's, we should use both a connector-specific store and the worker-global store
         connectorStore = worker.offsetStoreForRegularSourceConnector(sourceConfig, CONNECTOR_ID, sourceConnector, null);
+        connectorStore.configure(config);
         assertTrue(connectorStore.hasWorkerGlobalStore());
         assertTrue(connectorStore.hasConnectorSpecificStore());
+        connectorStore.stop();
 
         connectorProps.remove(SourceConnectorConfig.OFFSETS_TOPIC_CONFIG);
         sourceConfig = new SourceConnectorConfig(plugins, connectorProps, enableTopicCreation);
         // With no connector-specific offsets topic in the config, even with an overridden bootstrap.servers
         // for the connector that doesn't match the worker's, we should still only use the worker-global offsets store
         connectorStore = worker.offsetStoreForRegularSourceConnector(sourceConfig, CONNECTOR_ID, sourceConnector, null);
+        connectorStore.configure(config);
         assertTrue(connectorStore.hasWorkerGlobalStore());
         assertFalse(connectorStore.hasConnectorSpecificStore());
+        connectorStore.stop();
 
         worker.stop();
 
@@ -1387,48 +1402,60 @@ public class WorkerTest {
         SourceConnectorConfig sourceConfig = new SourceConnectorConfig(plugins, connectorProps, enableTopicCreation);
         // With no connector-specific offsets topic in the config, we should only use a connector-specific offsets store
         ConnectorOffsetBackingStore connectorStore = worker.offsetStoreForExactlyOnceSourceConnector(sourceConfig, CONNECTOR_ID, sourceConnector, null);
+        connectorStore.configure(config);
         assertFalse(connectorStore.hasWorkerGlobalStore());
         assertTrue(connectorStore.hasConnectorSpecificStore());
+        connectorStore.stop();
 
         connectorProps.put(SourceConnectorConfig.OFFSETS_TOPIC_CONFIG, "connector-offsets-topic");
         sourceConfig = new SourceConnectorConfig(plugins, connectorProps, enableTopicCreation);
         // With a connector-specific offsets topic in the config (whose name differs from the worker's offsets topic), we should use both a
         // connector-specific store and the worker-global store
         connectorStore = worker.offsetStoreForExactlyOnceSourceConnector(sourceConfig, CONNECTOR_ID, sourceConnector, null);
+        connectorStore.configure(config);
         assertTrue(connectorStore.hasWorkerGlobalStore());
         assertTrue(connectorStore.hasConnectorSpecificStore());
+        connectorStore.stop();
 
         connectorProps.put(SourceConnectorConfig.OFFSETS_TOPIC_CONFIG, workerOffsetsTopic);
         sourceConfig = new SourceConnectorConfig(plugins, connectorProps, enableTopicCreation);
         // With a connector-specific offsets topic in the config whose name matches the worker's offsets topic, and no overridden bootstrap.servers
         // for the connector, we should only use a connector-specific store
         connectorStore = worker.offsetStoreForExactlyOnceSourceConnector(sourceConfig, CONNECTOR_ID, sourceConnector, null);
+        connectorStore.configure(config);
         assertFalse(connectorStore.hasWorkerGlobalStore());
         assertTrue(connectorStore.hasConnectorSpecificStore());
+        connectorStore.stop();
 
         connectorProps.put(CONNECTOR_CLIENT_PRODUCER_OVERRIDES_PREFIX + BOOTSTRAP_SERVERS_CONFIG, workerBootstrapServers);
         sourceConfig = new SourceConnectorConfig(plugins, connectorProps, enableTopicCreation);
         // With a connector-specific offsets topic in the config whose name matches the worker's offsets topic, and an overridden bootstrap.servers
         // for the connector that exactly matches the worker's, we should only use a connector-specific store
         connectorStore = worker.offsetStoreForExactlyOnceSourceConnector(sourceConfig, CONNECTOR_ID, sourceConnector, null);
+        connectorStore.configure(config);
         assertFalse(connectorStore.hasWorkerGlobalStore());
         assertTrue(connectorStore.hasConnectorSpecificStore());
+        connectorStore.stop();
 
         connectorProps.put(CONNECTOR_CLIENT_PRODUCER_OVERRIDES_PREFIX + BOOTSTRAP_SERVERS_CONFIG, "localhost:1111");
         sourceConfig = new SourceConnectorConfig(plugins, connectorProps, enableTopicCreation);
         // With a connector-specific offsets topic in the config whose name matches the worker's offsets topic, and an overridden bootstrap.servers
         // for the connector that doesn't match the worker's, we should use both a connector-specific store and the worker-global store
         connectorStore = worker.offsetStoreForExactlyOnceSourceConnector(sourceConfig, CONNECTOR_ID, sourceConnector, null);
+        connectorStore.configure(config);
         assertTrue(connectorStore.hasWorkerGlobalStore());
         assertTrue(connectorStore.hasConnectorSpecificStore());
+        connectorStore.stop();
 
         connectorProps.remove(SourceConnectorConfig.OFFSETS_TOPIC_CONFIG);
         sourceConfig = new SourceConnectorConfig(plugins, connectorProps, enableTopicCreation);
         // With no connector-specific offsets topic in the config and an overridden bootstrap.servers
         // for the connector that doesn't match the worker's,  we should use both a connector-specific store and the worker-global store
         connectorStore = worker.offsetStoreForExactlyOnceSourceConnector(sourceConfig, CONNECTOR_ID, sourceConnector, null);
+        connectorStore.configure(config);
         assertTrue(connectorStore.hasWorkerGlobalStore());
         assertTrue(connectorStore.hasConnectorSpecificStore());
+        connectorStore.stop();
 
         worker.stop();
 
@@ -1470,14 +1497,17 @@ public class WorkerTest {
         // With no connector-specific offsets topic in the config, we should only use the worker-global store
         // Pass in a null topic admin to make sure that with these parameters, the method doesn't require a topic admin
         ConnectorOffsetBackingStore connectorStore = worker.offsetStoreForRegularSourceTask(TASK_ID, sourceConfigWithoutOffsetsTopic, sourceConnector.pluginClass(), producer, producerProps, null);
+        connectorStore.configure(config);
         assertTrue(connectorStore.hasWorkerGlobalStore());
         assertFalse(connectorStore.hasConnectorSpecificStore());
+        connectorStore.stop();
 
         connectorProps.put(SourceConnectorConfig.OFFSETS_TOPIC_CONFIG, "connector-offsets-topic");
         final SourceConnectorConfig sourceConfigWithOffsetsTopic = new SourceConnectorConfig(plugins, connectorProps, enableTopicCreation);
         // With a connector-specific offsets topic in the config (whose name differs from the worker's offsets topic), we should use both a
         // connector-specific store and the worker-global store
         connectorStore = worker.offsetStoreForRegularSourceTask(TASK_ID, sourceConfigWithOffsetsTopic, sourceConnector.pluginClass(), producer, producerProps, topicAdmin);
+        connectorStore.configure(config);
         assertTrue(connectorStore.hasWorkerGlobalStore());
         assertTrue(connectorStore.hasConnectorSpecificStore());
         assertThrows(NullPointerException.class,
@@ -1485,12 +1515,14 @@ public class WorkerTest {
                         TASK_ID, sourceConfigWithOffsetsTopic, sourceConnector.pluginClass(), producer, producerProps, null
                 )
         );
+        connectorStore.stop();
 
         connectorProps.put(SourceConnectorConfig.OFFSETS_TOPIC_CONFIG, workerOffsetsTopic);
         final SourceConnectorConfig sourceConfigWithSameOffsetsTopicAsWorker = new SourceConnectorConfig(plugins, connectorProps, enableTopicCreation);
         // With a connector-specific offsets topic in the config whose name matches the worker's offsets topic, and no overridden bootstrap.servers
         // for the connector, we should only use a connector-specific store
         connectorStore = worker.offsetStoreForRegularSourceTask(TASK_ID, sourceConfigWithSameOffsetsTopicAsWorker, sourceConnector.pluginClass(), producer, producerProps, topicAdmin);
+        connectorStore.configure(config);
         assertFalse(connectorStore.hasWorkerGlobalStore());
         assertTrue(connectorStore.hasConnectorSpecificStore());
         assertThrows(
@@ -1499,11 +1531,13 @@ public class WorkerTest {
                         TASK_ID, sourceConfigWithSameOffsetsTopicAsWorker, sourceConnector.pluginClass(), producer, producerProps, null
                 )
         );
+        connectorStore.stop();
 
         producerProps.put(BOOTSTRAP_SERVERS_CONFIG, workerBootstrapServers);
         // With a connector-specific offsets topic in the config whose name matches the worker's offsets topic, and an overridden bootstrap.servers
         // for the connector that exactly matches the worker's, we should only use a connector-specific store
         connectorStore = worker.offsetStoreForRegularSourceTask(TASK_ID, sourceConfigWithSameOffsetsTopicAsWorker, sourceConnector.pluginClass(), producer, producerProps, topicAdmin);
+        connectorStore.configure(config);
         assertFalse(connectorStore.hasWorkerGlobalStore());
         assertTrue(connectorStore.hasConnectorSpecificStore());
         assertThrows(
@@ -1512,11 +1546,13 @@ public class WorkerTest {
                         TASK_ID, sourceConfigWithSameOffsetsTopicAsWorker, sourceConnector.pluginClass(), producer, producerProps, null
                 )
         );
+        connectorStore.stop();
 
         producerProps.put(BOOTSTRAP_SERVERS_CONFIG, "localhost:1111");
         // With a connector-specific offsets topic in the config whose name matches the worker's offsets topic, and an overridden bootstrap.servers
         // for the connector that doesn't match the worker's, we should use both a connector-specific store and the worker-global store
         connectorStore = worker.offsetStoreForRegularSourceTask(TASK_ID, sourceConfigWithSameOffsetsTopicAsWorker, sourceConnector.pluginClass(), producer, producerProps, topicAdmin);
+        connectorStore.configure(config);
         assertTrue(connectorStore.hasWorkerGlobalStore());
         assertTrue(connectorStore.hasConnectorSpecificStore());
         assertThrows(
@@ -1525,14 +1561,17 @@ public class WorkerTest {
                         TASK_ID, sourceConfigWithSameOffsetsTopicAsWorker, sourceConnector.pluginClass(), producer, producerProps, null
                 )
         );
+        connectorStore.stop();
 
         connectorProps.remove(SourceConnectorConfig.OFFSETS_TOPIC_CONFIG);
         // With no connector-specific offsets topic in the config and an overridden bootstrap.servers
         // for the connector that doesn't match the worker's, we should still only use the worker-global store
         // Pass in a null topic admin to make sure that with these parameters, the method doesn't require a topic admin
         connectorStore = worker.offsetStoreForRegularSourceTask(TASK_ID, sourceConfigWithoutOffsetsTopic, sourceConnector.pluginClass(), producer, producerProps, null);
+        connectorStore.configure(config);
         assertTrue(connectorStore.hasWorkerGlobalStore());
         assertFalse(connectorStore.hasConnectorSpecificStore());
+        connectorStore.stop();
 
         worker.stop();
 
@@ -1572,48 +1611,60 @@ public class WorkerTest {
         producerProps.put(BOOTSTRAP_SERVERS_CONFIG, workerBootstrapServers);
         // With no connector-specific offsets topic in the config, we should only use a connector-specific offsets store
         ConnectorOffsetBackingStore connectorStore = worker.offsetStoreForExactlyOnceSourceTask(TASK_ID, sourceConfig, sourceConnector.pluginClass(), producer, producerProps, topicAdmin);
+        connectorStore.configure(config);
         assertFalse(connectorStore.hasWorkerGlobalStore());
         assertTrue(connectorStore.hasConnectorSpecificStore());
+        connectorStore.stop();
 
         connectorProps.put(SourceConnectorConfig.OFFSETS_TOPIC_CONFIG, "connector-offsets-topic");
         sourceConfig = new SourceConnectorConfig(plugins, connectorProps, enableTopicCreation);
         // With a connector-specific offsets topic in the config (whose name differs from the worker's offsets topic), we should use both a
         // connector-specific store and the worker-global store
         connectorStore = worker.offsetStoreForExactlyOnceSourceTask(TASK_ID, sourceConfig, sourceConnector.pluginClass(), producer, producerProps, topicAdmin);
+        connectorStore.configure(config);
         assertTrue(connectorStore.hasWorkerGlobalStore());
         assertTrue(connectorStore.hasConnectorSpecificStore());
+        connectorStore.stop();
 
         connectorProps.put(SourceConnectorConfig.OFFSETS_TOPIC_CONFIG, workerOffsetsTopic);
         sourceConfig = new SourceConnectorConfig(plugins, connectorProps, enableTopicCreation);
         // With a connector-specific offsets topic in the config whose name matches the worker's offsets topic, and no overridden bootstrap.servers
         // for the connector, we should only use a connector-specific store
         connectorStore = worker.offsetStoreForExactlyOnceSourceTask(TASK_ID, sourceConfig, sourceConnector.pluginClass(), producer, producerProps, topicAdmin);
+        connectorStore.configure(config);
         assertFalse(connectorStore.hasWorkerGlobalStore());
         assertTrue(connectorStore.hasConnectorSpecificStore());
+        connectorStore.stop();
 
         producerProps.put(BOOTSTRAP_SERVERS_CONFIG, workerBootstrapServers);
         sourceConfig = new SourceConnectorConfig(plugins, connectorProps, enableTopicCreation);
         // With a connector-specific offsets topic in the config whose name matches the worker's offsets topic, and an overridden bootstrap.servers
         // for the connector that exactly matches the worker's, we should only use a connector-specific store
         connectorStore = worker.offsetStoreForExactlyOnceSourceTask(TASK_ID, sourceConfig, sourceConnector.pluginClass(), producer, producerProps, topicAdmin);
+        connectorStore.configure(config);
         assertFalse(connectorStore.hasWorkerGlobalStore());
         assertTrue(connectorStore.hasConnectorSpecificStore());
+        connectorStore.stop();
 
         producerProps.put(BOOTSTRAP_SERVERS_CONFIG, "localhost:1111");
         sourceConfig = new SourceConnectorConfig(plugins, connectorProps, enableTopicCreation);
         // With a connector-specific offsets topic in the config whose name matches the worker's offsets topic, and an overridden bootstrap.servers
         // for the connector that doesn't match the worker's, we should use both a connector-specific store and the worker-global store
         connectorStore = worker.offsetStoreForExactlyOnceSourceTask(TASK_ID, sourceConfig, sourceConnector.pluginClass(), producer, producerProps, topicAdmin);
+        connectorStore.configure(config);
         assertTrue(connectorStore.hasWorkerGlobalStore());
         assertTrue(connectorStore.hasConnectorSpecificStore());
+        connectorStore.stop();
 
         connectorProps.remove(SourceConnectorConfig.OFFSETS_TOPIC_CONFIG);
         sourceConfig = new SourceConnectorConfig(plugins, connectorProps, enableTopicCreation);
         // With no connector-specific offsets topic in the config and an overridden bootstrap.servers
         // for the connector that doesn't match the worker's,  we should use both a connector-specific store and the worker-global store
         connectorStore = worker.offsetStoreForExactlyOnceSourceTask(TASK_ID, sourceConfig, sourceConnector.pluginClass(), producer, producerProps, topicAdmin);
+        connectorStore.configure(config);
         assertTrue(connectorStore.hasWorkerGlobalStore());
         assertTrue(connectorStore.hasConnectorSpecificStore());
+        connectorStore.stop();
 
         worker.stop();
 
@@ -1706,6 +1757,8 @@ public class WorkerTest {
 
         assertEquals(Collections.emptySet(), worker.connectorNames());
         worker.stop();
+        // Clear the interrupted status so that the test infrastructure doesn't hit an unexpected interrupt.
+        assertTrue(Thread.interrupted());
         verifyKafkaClusterId();
         verify(executorService, times(1)).shutdown();
         verify(executorService, times(1)).shutdownNow();
@@ -2649,6 +2702,39 @@ public class WorkerTest {
         props.put(DEFAULT_TOPIC_CREATION_PREFIX + REPLICATION_FACTOR_CONFIG, String.valueOf(1));
         props.put(DEFAULT_TOPIC_CREATION_PREFIX + PARTITIONS_CONFIG, String.valueOf(1));
         return props;
+    }
+
+    /**
+     * This method is called in place of the constructor of WorkerTask subclasses.
+     * All AutoClosable objects (producers, consumers, admin clients, etc.) are closed, as their lifetimes
+     * are managed by the WorkerTask. While the worker task is mocked, it cannot manage the lifetimes itself.
+     */
+    private static void workerTaskConstructor(WorkerTask mock, MockedConstruction.Context context) {
+        for (Object argument : context.arguments()) {
+            if (argument instanceof AutoCloseable) {
+                Utils.closeQuietly((AutoCloseable) argument, "worker task client");
+            }
+            if (argument instanceof OffsetBackingStore) {
+                Utils.closeQuietly(((OffsetBackingStore) argument)::stop, "offset backing store");
+            }
+        }
+    }
+
+    /**
+     * This method is called in place of methods on WorkerTask subclasses.
+     */
+    private Object workerTaskMethod(InvocationOnMock invocation) {
+        // provide implementations of three methods used during testing
+        switch (invocation.getMethod().getName()) {
+            case "id":
+                return TASK_ID;
+            case "loader":
+                return pluginLoader;
+            case "awaitStop":
+                return true;
+            default:
+                return null;
+        }
     }
 
     private static class TestSourceTask extends SourceTask {
