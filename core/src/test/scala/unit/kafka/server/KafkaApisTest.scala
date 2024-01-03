@@ -31,7 +31,7 @@ import kafka.log.UnifiedLog
 import kafka.network.{RequestChannel, RequestMetrics}
 import kafka.server.QuotaFactory.QuotaManagers
 import kafka.server.metadata.{ConfigRepository, KRaftMetadataCache, MockConfigRepository, ZkMetadataCache}
-import kafka.utils.{Log4jController, TestUtils}
+import kafka.utils.{CoreUtils, Log4jController, Logging, TestUtils}
 import kafka.zk.KafkaZkClient
 import org.apache.kafka.clients.admin.AlterConfigOp.OpType
 import org.apache.kafka.clients.admin.{AlterConfigOp, ConfigEntry}
@@ -106,7 +106,7 @@ import org.apache.kafka.storage.internals.log.{AppendOrigin, FetchParams, FetchP
 
 import java.time.Duration
 
-class KafkaApisTest {
+class KafkaApisTest extends Logging {
   private val requestChannel: RequestChannel = mock(classOf[RequestChannel])
   private val requestChannelMetrics: RequestChannel.Metrics = mock(classOf[RequestChannel.Metrics])
   private val replicaManager: ReplicaManager = mock(classOf[ReplicaManager])
@@ -139,10 +139,13 @@ class KafkaApisTest {
   private val clusterId = "clusterId"
   private val time = new MockTime
   private val clientId = ""
+  private var kafkaApis: KafkaApis = _
 
   @AfterEach
   def tearDown(): Unit = {
-    quotas.shutdown()
+    CoreUtils.swallow(quotas.shutdown(), this)
+    if (kafkaApis != null)
+      CoreUtils.swallow(kafkaApis.close(), this)
     TestUtils.clearYammerMetrics()
     metrics.close()
   }
@@ -266,9 +269,8 @@ class KafkaApisTest {
       requestHeader = Option(requestHeader))
     when(clientRequestQuotaManager.maybeRecordAndGetThrottleTimeMs(any[RequestChannel.Request](),
       any[Long])).thenReturn(0)
-
-    createKafkaApis(authorizer = Some(authorizer), configRepository = configRepository)
-      .handleDescribeConfigsRequest(request)
+    kafkaApis = createKafkaApis(authorizer = Some(authorizer), configRepository = configRepository)
+    kafkaApis.handleDescribeConfigsRequest(request)
 
     verify(authorizer).authorize(any(), ArgumentMatchers.eq(expectedActions.asJava))
     val response = verifyNoThrottling[DescribeConfigsResponse](request)
@@ -335,8 +337,8 @@ class KafkaApisTest {
 
     val capturedResponse: ArgumentCaptor[AlterConfigsResponse] = ArgumentCaptor.forClass(classOf[AlterConfigsResponse])
     val capturedRequest: ArgumentCaptor[RequestChannel.Request] = ArgumentCaptor.forClass(classOf[RequestChannel.Request])
-
-    createKafkaApis(authorizer = Some(authorizer), enableForwarding = true).handle(request, RequestLocal.withThreadConfinedCaching)
+    kafkaApis = createKafkaApis(authorizer = Some(authorizer), enableForwarding = true)
+    kafkaApis.handle(request, RequestLocal.withThreadConfinedCaching)
 
     verify(requestChannel).sendResponse(
       capturedRequest.capture(),
@@ -370,8 +372,8 @@ class KafkaApisTest {
       leaveGroupRequest, kafkaPrincipalSerde, requestChannelMetrics, time.nanoseconds())
     when(clientRequestQuotaManager.maybeRecordAndGetThrottleTimeMs(any[RequestChannel.Request](),
       any[Long])).thenReturn(0)
-
-    createKafkaApis(enableForwarding = true).handle(request, RequestLocal.withThreadConfinedCaching)
+    kafkaApis = createKafkaApis(enableForwarding = true)
+    kafkaApis.handle(request, RequestLocal.withThreadConfinedCaching)
 
     val response = verifyNoThrottling[EnvelopeResponse](request)
     assertEquals(Errors.INVALID_REQUEST, response.error())
@@ -424,7 +426,8 @@ class KafkaApisTest {
       alterConfigsRequest, kafkaPrincipalSerde, requestChannelMetrics, time.nanoseconds(), fromPrivilegedListener = fromPrivilegedListener)
 
     val capturedResponse: ArgumentCaptor[AbstractResponse] = ArgumentCaptor.forClass(classOf[AbstractResponse])
-    createKafkaApis(authorizer = Some(authorizer), enableForwarding = true).handle(request, RequestLocal.withThreadConfinedCaching)
+    kafkaApis = createKafkaApis(authorizer = Some(authorizer), enableForwarding = true)
+    kafkaApis.handle(request, RequestLocal.withThreadConfinedCaching)
 
     if (shouldCloseConnection) {
       verify(requestChannel).closeConnection(
@@ -472,8 +475,8 @@ class KafkaApisTest {
       any[Long])).thenReturn(0)
     when(adminManager.alterConfigs(any(), ArgumentMatchers.eq(false)))
       .thenReturn(Map(authorizedResource -> ApiError.NONE))
-
-    createKafkaApis(authorizer = Some(authorizer)).handleAlterConfigsRequest(request)
+    kafkaApis = createKafkaApis(authorizer = Some(authorizer))
+    kafkaApis.handleAlterConfigsRequest(request)
 
     val response = verifyNoThrottling[AlterConfigsResponse](request)
     verifyAlterConfigResult(response, Map(authorizedTopic -> Errors.NONE,
@@ -513,8 +516,8 @@ class KafkaApisTest {
       any[Long])).thenReturn(0)
     when(adminManager.alterConfigs(any(), ArgumentMatchers.eq(false)))
       .thenReturn(Map(authorizedResource -> ApiError.NONE))
-
-    createKafkaApis(authorizer = Some(authorizer)).handleAlterConfigsRequest(request)
+    kafkaApis = createKafkaApis(authorizer = Some(authorizer))
+    kafkaApis.handleAlterConfigsRequest(request)
     val response = verifyNoThrottling[AlterConfigsResponse](request)
     verifyAlterConfigResult(response, Map(subscriptionName -> Errors.NONE))
     verify(authorizer, times(1)).authorize(any(), any())
@@ -544,8 +547,8 @@ class KafkaApisTest {
       any[Long])).thenReturn(0)
     when(adminManager.incrementalAlterConfigs(any(), ArgumentMatchers.eq(false)))
       .thenReturn(Map(resource -> ApiError.NONE))
-
-    createKafkaApis(authorizer = Some(authorizer)).handleIncrementalAlterConfigsRequest(request)
+    kafkaApis = createKafkaApis(authorizer = Some(authorizer))
+    kafkaApis.handleIncrementalAlterConfigsRequest(request)
     val response = verifyNoThrottling[IncrementalAlterConfigsResponse](request)
     verifyIncrementalAlterConfigResult(response, Map(subscriptionName -> Errors.NONE ))
     verify(authorizer, times(1)).authorize(any(), any())
@@ -594,9 +597,8 @@ class KafkaApisTest {
       requestHeader = Option(requestHeader))
     when(clientRequestQuotaManager.maybeRecordAndGetThrottleTimeMs(any[RequestChannel.Request](),
       any[Long])).thenReturn(0)
-
-    createKafkaApis(authorizer = Some(authorizer), configRepository = configRepository)
-      .handleDescribeConfigsRequest(request)
+    kafkaApis = createKafkaApis(authorizer = Some(authorizer), configRepository = configRepository)
+    kafkaApis.handleDescribeConfigsRequest(request)
 
     val response = verifyNoThrottling[DescribeConfigsResponse](request)
     // Verify that authorize is only called once
@@ -619,7 +621,8 @@ class KafkaApisTest {
 
     when(clientRequestQuotaManager.maybeRecordAndGetThrottleTimeMs(any[RequestChannel.Request](),
       any[Long])).thenReturn(0)
-    createKafkaApis(enableForwarding = true).handle(request, RequestLocal.withThreadConfinedCaching)
+    kafkaApis = createKafkaApis(enableForwarding = true)
+    kafkaApis.handle(request, RequestLocal.withThreadConfinedCaching)
 
     val response = verifyNoThrottling[DescribeQuorumResponse](request)
     assertEquals(Errors.UNKNOWN_SERVER_ERROR, Errors.forCode(response.data.errorCode))
@@ -631,8 +634,7 @@ class KafkaApisTest {
     val requestBuilder = new DescribeQuorumRequest.Builder(requestData)
     metadataCache = MetadataCache.kRaftMetadataCache(brokerId)
 
-    testForwardableApi(
-      createKafkaApis(raftSupport = true),
+    testForwardableApi(kafkaApis = createKafkaApis(raftSupport = true),
       ApiKeys.DESCRIBE_QUORUM,
       requestBuilder
     )
@@ -643,16 +645,14 @@ class KafkaApisTest {
     requestBuilder: AbstractRequest.Builder[_ <: AbstractRequest]
   ): Unit = {
     metadataCache = MetadataCache.kRaftMetadataCache(brokerId)
-    testForwardableApi(
-      createKafkaApis(enableForwarding = true, raftSupport = true),
+    testForwardableApi(kafkaApis = createKafkaApis(enableForwarding = true, raftSupport = true),
       apiKey,
       requestBuilder
     )
   }
 
   private def testForwardableApi(apiKey: ApiKeys, requestBuilder: AbstractRequest.Builder[_ <: AbstractRequest]): Unit = {
-    testForwardableApi(
-      createKafkaApis(enableForwarding = true),
+    testForwardableApi(kafkaApis = createKafkaApis(enableForwarding = true),
       apiKey,
       requestBuilder
     )
@@ -760,8 +760,8 @@ class KafkaApisTest {
       any[Long])).thenReturn(0)
     when(adminManager.incrementalAlterConfigs(any(), ArgumentMatchers.eq(false)))
       .thenReturn(Map(authorizedResource -> ApiError.NONE))
-
-    createKafkaApis(authorizer = Some(authorizer)).handleIncrementalAlterConfigsRequest(request)
+    kafkaApis = createKafkaApis(authorizer = Some(authorizer))
+    kafkaApis.handleIncrementalAlterConfigsRequest(request)
 
     val capturedResponse = verifyNoThrottling[IncrementalAlterConfigsResponse](request)
     verifyIncrementalAlterConfigResult(capturedResponse, Map(
@@ -811,8 +811,8 @@ class KafkaApisTest {
     when(controller.isActive).thenReturn(true)
     when(clientRequestQuotaManager.maybeRecordAndGetThrottleTimeMs(any[RequestChannel.Request](),
       anyLong)).thenReturn(0)
-
-    createKafkaApis(authorizer = Some(authorizer)).handleAlterClientQuotasRequest(request)
+    kafkaApis = createKafkaApis(authorizer = Some(authorizer))
+    kafkaApis.handleAlterClientQuotasRequest(request)
 
     val capturedResponse = verifyNoThrottling[AlterClientQuotasResponse](request)
     verifyAlterClientQuotaResult(capturedResponse, Map(quotaEntity -> Errors.CLUSTER_AUTHORIZATION_FAILED))
@@ -882,8 +882,8 @@ class KafkaApisTest {
       any[Long])).thenReturn(0)
     when(clientControllerQuotaManager.newQuotaFor(
       ArgumentMatchers.eq(request), ArgumentMatchers.eq(6))).thenReturn(UnboundedControllerMutationQuota)
-
-    createKafkaApis(authorizer = Some(authorizer)).handleCreateTopicsRequest(request)
+    kafkaApis = createKafkaApis(authorizer = Some(authorizer))
+    kafkaApis.handleCreateTopicsRequest(request)
 
     val capturedCallback: ArgumentCaptor[Map[String, ApiError] => Unit] = ArgumentCaptor.forClass(classOf[Map[String, ApiError] => Unit])
 
@@ -930,7 +930,7 @@ class KafkaApisTest {
     val requestBuilder = new CreateTopicsRequest.Builder(requestData).build()
     val request = buildRequest(requestBuilder)
 
-    val kafkaApis = createKafkaApis(enableForwarding = true, raftSupport = true)
+    kafkaApis = createKafkaApis(enableForwarding = true, raftSupport = true)
     val forwardCallback: ArgumentCaptor[Option[AbstractResponse] => Unit] =
       ArgumentCaptor.forClass(classOf[Option[AbstractResponse] => Unit])
 
@@ -965,7 +965,7 @@ class KafkaApisTest {
   @Test
   def testCreatePartitionsAuthorization(): Unit = {
     val authorizer: Authorizer = mock(classOf[Authorizer])
-    val kafkaApis = createKafkaApis(authorizer = Some(authorizer))
+    kafkaApis = createKafkaApis(authorizer = Some(authorizer))
 
     val timeoutMs = 35000
     val requestData = new CreatePartitionsRequestData()
@@ -1221,9 +1221,9 @@ class KafkaApisTest {
       any[Long])).thenReturn(0)
 
     val capturedRequest = verifyTopicCreation(topicName, true, true, request)
-
-    createKafkaApis(authorizer = Some(authorizer),
-      overrideProperties = topicConfigOverride).handleFindCoordinatorRequest(request)
+    kafkaApis = createKafkaApis(authorizer = Some(authorizer),
+      overrideProperties = topicConfigOverride)
+    kafkaApis.handleFindCoordinatorRequest(request)
 
     val response = verifyNoThrottling[FindCoordinatorResponse](request)
     if (version >= 4) {
@@ -1324,9 +1324,9 @@ class KafkaApisTest {
       any[Long])).thenReturn(0)
 
     val capturedRequest = verifyTopicCreation(topicName, enableAutoTopicCreation, isInternal, request)
-
-    createKafkaApis(authorizer = Some(authorizer), enableForwarding = enableAutoTopicCreation,
-      overrideProperties = topicConfigOverride).handleTopicMetadataRequest(request)
+    kafkaApis = createKafkaApis(authorizer = Some(authorizer), enableForwarding = enableAutoTopicCreation,
+      overrideProperties = topicConfigOverride)
+    kafkaApis.handleTopicMetadataRequest(request)
 
     val response = verifyNoThrottling[MetadataResponse](request)
     val expectedMetadataResponse = util.Collections.singletonList(new TopicMetadata(
@@ -1388,7 +1388,7 @@ class KafkaApisTest {
       topics.foreach(topic => {
         val metadataRequestData = new MetadataRequestData().setTopics(Collections.singletonList(topic))
         val request = buildRequest(new MetadataRequest(metadataRequestData, version.toShort))
-        val kafkaApis = createKafkaApis()
+        kafkaApis = createKafkaApis()
 
         val capturedResponse: ArgumentCaptor[AbstractResponse] = ArgumentCaptor.forClass(classOf[AbstractResponse])
         kafkaApis.handle(request, RequestLocal.withThreadConfinedCaching)
@@ -1429,8 +1429,8 @@ class KafkaApisTest {
       offsetCommitRequest,
       RequestLocal.NoCaching.bufferSupplier
     )).thenReturn(future)
-
-    createKafkaApis().handle(
+    kafkaApis = createKafkaApis()
+    kafkaApis.handle(
       requestChannelRequest,
       RequestLocal.NoCaching
     )
@@ -1473,8 +1473,9 @@ class KafkaApisTest {
       offsetCommitRequest,
       RequestLocal.NoCaching.bufferSupplier
     )).thenReturn(future)
-
-    createKafkaApis().handle(
+    
+    kafkaApis = createKafkaApis()
+    kafkaApis.handle(
       requestChannelRequest,
       RequestLocal.NoCaching
     )
@@ -1569,8 +1570,8 @@ class KafkaApisTest {
       expectedOffsetCommitRequest,
       RequestLocal.NoCaching.bufferSupplier
     )).thenReturn(future)
-
-    createKafkaApis().handle(
+    kafkaApis = createKafkaApis()
+    kafkaApis.handle(
       requestChannelRequest,
       RequestLocal.NoCaching
     )
@@ -1665,7 +1666,8 @@ class KafkaApisTest {
       val request = buildRequest(offsetCommitRequest)
       when(clientRequestQuotaManager.maybeRecordAndGetThrottleTimeMs(any[RequestChannel.Request](),
         any[Long])).thenReturn(0)
-      createKafkaApis().handleOffsetCommitRequest(request, RequestLocal.withThreadConfinedCaching)
+      kafkaApis = createKafkaApis()
+      kafkaApis.handleOffsetCommitRequest(request, RequestLocal.withThreadConfinedCaching)
 
       val response = verifyNoThrottling[OffsetCommitResponse](request)
       assertEquals(Errors.UNKNOWN_TOPIC_OR_PARTITION,
@@ -1696,7 +1698,8 @@ class KafkaApisTest {
       val request = buildRequest(offsetCommitRequest)
       when(clientRequestQuotaManager.maybeRecordAndGetThrottleTimeMs(any[RequestChannel.Request](),
         any[Long])).thenReturn(0)
-      createKafkaApis().handleTxnOffsetCommitRequest(request, RequestLocal.withThreadConfinedCaching)
+      kafkaApis = createKafkaApis()
+      kafkaApis.handleTxnOffsetCommitRequest(request, RequestLocal.withThreadConfinedCaching)
 
       val response = verifyNoThrottling[TxnOffsetCommitResponse](request)
       assertEquals(Errors.UNKNOWN_TOPIC_OR_PARTITION, response.errors().get(invalidTopicPartition))
@@ -1735,8 +1738,8 @@ class KafkaApisTest {
       txnOffsetCommitRequest,
       RequestLocal.NoCaching.bufferSupplier
     )).thenReturn(future)
-
-    createKafkaApis().handle(
+    kafkaApis = createKafkaApis()
+    kafkaApis.handle(
       requestChannelRequest,
       RequestLocal.NoCaching
     )
@@ -1780,8 +1783,8 @@ class KafkaApisTest {
       txnOffsetCommitRequest,
       RequestLocal.NoCaching.bufferSupplier
     )).thenReturn(future)
-
-    createKafkaApis().handle(
+    kafkaApis = createKafkaApis()
+    kafkaApis.handle(
       requestChannelRequest,
       RequestLocal.NoCaching
     )
@@ -1877,8 +1880,8 @@ class KafkaApisTest {
       expectedTxnOffsetCommitRequest,
       RequestLocal.NoCaching.bufferSupplier
     )).thenReturn(future)
-
-    createKafkaApis().handle(
+    kafkaApis = createKafkaApis()
+    kafkaApis.handle(
       requestChannelRequest,
       RequestLocal.NoCaching
     )
@@ -1990,8 +1993,8 @@ class KafkaApisTest {
               .setErrorCode(Errors.COORDINATOR_LOAD_IN_PROGRESS.code)
           ).asJava)
       ).asJava))
-
-    createKafkaApis().handleTxnOffsetCommitRequest(request, requestLocal)
+    kafkaApis = createKafkaApis()
+    kafkaApis.handleTxnOffsetCommitRequest(request, requestLocal)
 
     verify(requestChannel).sendResponse(
       ArgumentMatchers.eq(request),
@@ -2055,8 +2058,8 @@ class KafkaApisTest {
         responseCallback.capture(),
         ArgumentMatchers.eq(requestLocal)
       )).thenAnswer(_ => responseCallback.getValue.apply(InitProducerIdResult(producerId, epoch, Errors.PRODUCER_FENCED)))
-
-      createKafkaApis().handleInitProducerIdRequest(request, requestLocal)
+      kafkaApis = createKafkaApis()
+      kafkaApis.handleInitProducerIdRequest(request, requestLocal)
 
       verify(requestChannel).sendResponse(
         ArgumentMatchers.eq(request),
@@ -2113,8 +2116,8 @@ class KafkaApisTest {
         responseCallback.capture(),
         ArgumentMatchers.eq(requestLocal)
       )).thenAnswer(_ => responseCallback.getValue.apply(Errors.PRODUCER_FENCED))
-
-      createKafkaApis().handleAddOffsetsToTxnRequest(request, requestLocal)
+      kafkaApis = createKafkaApis()
+      kafkaApis.handleAddOffsetsToTxnRequest(request, requestLocal)
 
       verify(requestChannel).sendResponse(
         ArgumentMatchers.eq(request),
@@ -2167,8 +2170,8 @@ class KafkaApisTest {
         responseCallback.capture(),
         ArgumentMatchers.eq(requestLocal)
       )).thenAnswer(_ => responseCallback.getValue.apply(Errors.PRODUCER_FENCED))
-
-      createKafkaApis().handleAddPartitionsToTxnRequest(request, requestLocal)
+      kafkaApis = createKafkaApis()
+      kafkaApis.handleAddPartitionsToTxnRequest(request, requestLocal)
 
       verify(requestChannel).sendResponse(
         ArgumentMatchers.eq(request),
@@ -2246,8 +2249,8 @@ class KafkaApisTest {
       ArgumentMatchers.eq(Set(tp1)),
       verifyPartitionsCallback.capture(),
     )).thenAnswer(_ => verifyPartitionsCallback.getValue.apply(AddPartitionsToTxnResponse.resultForTransaction(transactionalId2, Map(tp1 -> Errors.PRODUCER_FENCED).asJava)))
-
-    createKafkaApis().handleAddPartitionsToTxnRequest(request, requestLocal)
+    kafkaApis = createKafkaApis()
+    kafkaApis.handleAddPartitionsToTxnRequest(request, requestLocal)
 
     val response = verifyNoThrottling[AddPartitionsToTxnResponse](request)
     
@@ -2299,8 +2302,8 @@ class KafkaApisTest {
       val authorizer: Authorizer = mock(classOf[Authorizer])
       when(authorizer.authorize(any[RequestContext], any[util.List[Action]]))
         .thenReturn(Seq(AuthorizationResult.DENIED).asJava)
-
-      createKafkaApis(authorizer = Some(authorizer)).handle(
+      kafkaApis = createKafkaApis(authorizer = Some(authorizer))
+      kafkaApis.handle(
         requestChannelRequest,
         RequestLocal.NoCaching
       )
@@ -2356,8 +2359,8 @@ class KafkaApisTest {
           ).asJava.iterator())).build(version)
 
     val requestChannelRequest = buildRequest(addPartitionsToTxnRequest)
-
-    createKafkaApis().handleAddPartitionsToTxnRequest(
+    kafkaApis = createKafkaApis()
+    kafkaApis.handleAddPartitionsToTxnRequest(
       requestChannelRequest,
       RequestLocal.NoCaching
     )
@@ -2410,8 +2413,8 @@ class KafkaApisTest {
         responseCallback.capture(),
         ArgumentMatchers.eq(requestLocal)
       )).thenAnswer(_ => responseCallback.getValue.apply(Errors.PRODUCER_FENCED))
-
-      createKafkaApis().handleEndTxnRequest(request, requestLocal)
+      kafkaApis = createKafkaApis()
+      kafkaApis.handleEndTxnRequest(request, requestLocal)
 
       verify(requestChannel).sendResponse(
         ArgumentMatchers.eq(request),
@@ -2470,8 +2473,8 @@ class KafkaApisTest {
         any[Long])).thenReturn(0)
       when(clientQuotaManager.maybeRecordAndGetThrottleTimeMs(
         any[RequestChannel.Request](), anyDouble, anyLong)).thenReturn(0)
-
-      createKafkaApis().handleProduceRequest(request, RequestLocal.withThreadConfinedCaching)
+      kafkaApis = createKafkaApis()
+      kafkaApis.handleProduceRequest(request, RequestLocal.withThreadConfinedCaching)
 
       val response = verifyNoThrottling[ProduceResponse](request)
 
@@ -2532,8 +2535,8 @@ class KafkaApisTest {
         any[Long])).thenReturn(0)
       when(clientQuotaManager.maybeRecordAndGetThrottleTimeMs(
         any[RequestChannel.Request](), anyDouble, anyLong)).thenReturn(0)
-
-      createKafkaApis().handleProduceRequest(request, RequestLocal.withThreadConfinedCaching)
+      kafkaApis = createKafkaApis()
+      kafkaApis.handleProduceRequest(request, RequestLocal.withThreadConfinedCaching)
 
       val response = verifyNoThrottling[ProduceResponse](request)
 
@@ -2595,8 +2598,8 @@ class KafkaApisTest {
         any[Long])).thenReturn(0)
       when(clientQuotaManager.maybeRecordAndGetThrottleTimeMs(
         any[RequestChannel.Request](), anyDouble, anyLong)).thenReturn(0)
-
-      createKafkaApis().handleProduceRequest(request, RequestLocal.withThreadConfinedCaching)
+      kafkaApis = createKafkaApis()
+      kafkaApis.handleProduceRequest(request, RequestLocal.withThreadConfinedCaching)
 
       val response = verifyNoThrottling[ProduceResponse](request)
 
@@ -2662,8 +2665,8 @@ class KafkaApisTest {
       when(metadataCache.contains(tp)).thenAnswer(_ => true)
       when(metadataCache.getPartitionInfo(tp.topic(), tp.partition())).thenAnswer(_ => Option.empty)
       when(metadataCache.getAliveBrokerNode(any(), any())).thenReturn(Option.empty)
-
-      createKafkaApis().handleProduceRequest(request, RequestLocal.withThreadConfinedCaching)
+      kafkaApis = createKafkaApis()
+      kafkaApis.handleProduceRequest(request, RequestLocal.withThreadConfinedCaching)
 
       val response = verifyNoThrottling[ProduceResponse](request)
 
@@ -2705,11 +2708,8 @@ class KafkaApisTest {
         .build(version.toShort)
       val request = buildRequest(produceRequest)
 
-      val kafkaApis = createKafkaApis()
-
-      val requestLocal = RequestLocal.withThreadConfinedCaching
-
-      kafkaApis.handleProduceRequest(request, requestLocal)
+      kafkaApis = createKafkaApis()
+      kafkaApis.handleProduceRequest(request, RequestLocal.withThreadConfinedCaching)
       
       verify(replicaManager).handleProduceAppend(anyLong,
         anyShort,
@@ -2740,7 +2740,8 @@ class KafkaApisTest {
 
       when(clientRequestQuotaManager.maybeRecordAndGetThrottleTimeMs(any[RequestChannel.Request](),
         any[Long])).thenReturn(0)
-      createKafkaApis().handleAddPartitionsToTxnRequest(request, RequestLocal.withThreadConfinedCaching)
+      kafkaApis = createKafkaApis()
+      kafkaApis.handleAddPartitionsToTxnRequest(request, RequestLocal.withThreadConfinedCaching)
 
       val response = verifyNoThrottling[AddPartitionsToTxnResponse](request)
       assertEquals(Errors.UNKNOWN_TOPIC_OR_PARTITION, response.errors().get(AddPartitionsToTxnResponse.V3_AND_BELOW_TXN_ID).get(invalidTopicPartition))
@@ -2789,8 +2790,8 @@ class KafkaApisTest {
 
     when(replicaManager.getMagic(topicPartition))
       .thenReturn(Some(RecordBatch.MAGIC_VALUE_V1))
-
-    createKafkaApis().handleWriteTxnMarkersRequest(request, RequestLocal.withThreadConfinedCaching)
+    kafkaApis = createKafkaApis()
+    kafkaApis.handleWriteTxnMarkersRequest(request, RequestLocal.withThreadConfinedCaching)
 
     verify(requestChannel).sendResponse(
       ArgumentMatchers.eq(request),
@@ -2810,7 +2811,8 @@ class KafkaApisTest {
 
     when(replicaManager.getMagic(topicPartition))
       .thenReturn(None)
-    createKafkaApis().handleWriteTxnMarkersRequest(request, RequestLocal.withThreadConfinedCaching)
+    kafkaApis = createKafkaApis()
+    kafkaApis.handleWriteTxnMarkersRequest(request, RequestLocal.withThreadConfinedCaching)
 
     verify(requestChannel).sendResponse(
       ArgumentMatchers.eq(request),
@@ -2850,8 +2852,8 @@ class KafkaApisTest {
       any(),
       any()
     )).thenAnswer(_ => responseCallback.getValue.apply(Map(tp2 -> new PartitionResponse(Errors.NONE))))
-
-    createKafkaApis().handleWriteTxnMarkersRequest(request, requestLocal)
+    kafkaApis = createKafkaApis()
+    kafkaApis.handleWriteTxnMarkersRequest(request, requestLocal)
 
     verify(requestChannel).sendResponse(
       ArgumentMatchers.eq(request),
@@ -2940,8 +2942,8 @@ class KafkaApisTest {
       ), Errors.NONE)
     )
     when(controller.brokerEpoch).thenReturn(brokerEpoch)
-
-    createKafkaApis().handleStopReplicaRequest(request)
+    kafkaApis = createKafkaApis()
+    kafkaApis.handleStopReplicaRequest(request)
 
     if (deletePartition) {
       if (leaderEpoch >= 0) {
@@ -2983,8 +2985,8 @@ class KafkaApisTest {
       any(),
       any()
     )).thenAnswer(_ => responseCallback.getValue.apply(Map(tp2 -> new PartitionResponse(Errors.NONE))))
-
-    createKafkaApis().handleWriteTxnMarkersRequest(request, requestLocal)
+    kafkaApis = createKafkaApis()
+    kafkaApis.handleWriteTxnMarkersRequest(request, requestLocal)
     verify(requestChannel).sendResponse(
       ArgumentMatchers.eq(request),
       capturedResponse.capture(),
@@ -3003,8 +3005,8 @@ class KafkaApisTest {
       .thenReturn(Some(RecordBatch.MAGIC_VALUE_V2))
 
     val requestLocal = RequestLocal.withThreadConfinedCaching
-
-    createKafkaApis().handleWriteTxnMarkersRequest(request, requestLocal)
+    kafkaApis = createKafkaApis()
+    kafkaApis.handleWriteTxnMarkersRequest(request, requestLocal)
     verify(replicaManager).appendRecords(anyLong,
       anyShort,
       ArgumentMatchers.eq(true),
@@ -3103,10 +3105,10 @@ class KafkaApisTest {
         }.toMap
       )
     }
-
-    createKafkaApis(overrideProperties = Map(
+    kafkaApis = createKafkaApis(overrideProperties = Map(
       KafkaConfig.NewGroupCoordinatorEnableProp -> "true"
-    )).handleWriteTxnMarkersRequest(requestChannelRequest, RequestLocal.NoCaching)
+    ))
+    kafkaApis.handleWriteTxnMarkersRequest(requestChannelRequest, RequestLocal.NoCaching)
 
     val expectedResponse = new WriteTxnMarkersResponseData()
       .setMarkers(List(
@@ -3188,10 +3190,10 @@ class KafkaApisTest {
       ArgumentMatchers.eq(TransactionResult.COMMIT),
       ArgumentMatchers.eq(Duration.ofMillis(Defaults.RequestTimeoutMs))
     )).thenReturn(FutureUtils.failedFuture[Void](error.exception()))
-
-    createKafkaApis(overrideProperties = Map(
+    kafkaApis = createKafkaApis(overrideProperties = Map(
       KafkaConfig.NewGroupCoordinatorEnableProp -> "true"
-    )).handleWriteTxnMarkersRequest(requestChannelRequest, RequestLocal.NoCaching)
+    ))
+    kafkaApis.handleWriteTxnMarkersRequest(requestChannelRequest, RequestLocal.NoCaching)
 
     val expectedError = error match {
       case Errors.COORDINATOR_NOT_AVAILABLE | Errors.COORDINATOR_LOAD_IN_PROGRESS | Errors.NOT_COORDINATOR =>
@@ -3273,8 +3275,8 @@ class KafkaApisTest {
       List("group-1", "group-2", "group-3").asJava,
       RequestLocal.NoCaching.bufferSupplier
     )).thenReturn(future)
-
-    createKafkaApis().handleDeleteGroupsRequest(
+    kafkaApis = createKafkaApis()
+    kafkaApis.handleDeleteGroupsRequest(
       requestChannelRequest,
       RequestLocal.NoCaching
     )
@@ -3316,8 +3318,8 @@ class KafkaApisTest {
       List("group-1", "group-2", "group-3").asJava,
       RequestLocal.NoCaching.bufferSupplier
     )).thenReturn(future)
-
-    createKafkaApis().handleDeleteGroupsRequest(
+    kafkaApis = createKafkaApis()
+    kafkaApis.handleDeleteGroupsRequest(
       requestChannelRequest,
       RequestLocal.NoCaching
     )
@@ -3375,8 +3377,8 @@ class KafkaApisTest {
       List("group-2", "group-3").asJava,
       RequestLocal.NoCaching.bufferSupplier
     )).thenReturn(future)
-
-    createKafkaApis(authorizer = Some(authorizer)).handleDeleteGroupsRequest(
+    kafkaApis = createKafkaApis(authorizer = Some(authorizer))
+    kafkaApis.handleDeleteGroupsRequest(
       requestChannelRequest,
       RequestLocal.NoCaching
     )
@@ -3421,8 +3423,8 @@ class KafkaApisTest {
       requestChannelRequest.context,
       describeGroupsRequest.groups
     )).thenReturn(future)
-
-    createKafkaApis().handleDescribeGroupsRequest(requestChannelRequest)
+    kafkaApis = createKafkaApis()
+    kafkaApis.handleDescribeGroupsRequest(requestChannelRequest)
 
     val groupResults = List(
       new DescribeGroupsResponseData.DescribedGroup()
@@ -3463,8 +3465,8 @@ class KafkaApisTest {
       requestChannelRequest.context,
       describeGroupsRequest.groups
     )).thenReturn(future)
-
-    createKafkaApis().handleDescribeGroupsRequest(requestChannelRequest)
+    kafkaApis = createKafkaApis()
+    kafkaApis.handleDescribeGroupsRequest(requestChannelRequest)
 
     val expectedDescribeGroupsResponse = new DescribeGroupsResponseData().setGroups(List(
       new DescribeGroupsResponseData.DescribedGroup()
@@ -3517,8 +3519,8 @@ class KafkaApisTest {
       requestChannelRequest.context,
       List("group-2").asJava
     )).thenReturn(future)
-
-    createKafkaApis(authorizer = Some(authorizer)).handleDescribeGroupsRequest(requestChannelRequest)
+    kafkaApis = createKafkaApis(authorizer = Some(authorizer))
+    kafkaApis.handleDescribeGroupsRequest(requestChannelRequest)
 
     future.complete(List(
       new DescribeGroupsResponseData.DescribedGroup()
@@ -3575,8 +3577,8 @@ class KafkaApisTest {
       offsetDeleteRequest.data,
       requestLocal.bufferSupplier
     )).thenReturn(future)
-
-    createKafkaApis().handleOffsetDeleteRequest(request, requestLocal)
+    kafkaApis = createKafkaApis()
+    kafkaApis.handleOffsetDeleteRequest(request, requestLocal)
 
     val offsetDeleteResponseData = new OffsetDeleteResponseData()
       .setTopics(new OffsetDeleteResponseData.OffsetDeleteResponseTopicCollection(List(
@@ -3668,8 +3670,8 @@ class KafkaApisTest {
       expectedOffsetDeleteRequest,
       RequestLocal.NoCaching.bufferSupplier
     )).thenReturn(future)
-
-    createKafkaApis().handle(
+    kafkaApis = createKafkaApis()
+    kafkaApis.handle(
       requestChannelRequest,
       RequestLocal.NoCaching
     )
@@ -3775,8 +3777,8 @@ class KafkaApisTest {
       )).thenReturn(CompletableFuture.completedFuture(
         new OffsetDeleteResponseData()
       ))
-
-      createKafkaApis().handleOffsetDeleteRequest(request, RequestLocal.NoCaching)
+      kafkaApis = createKafkaApis()
+      kafkaApis.handleOffsetDeleteRequest(request, RequestLocal.NoCaching)
 
       val response = verifyNoThrottling[OffsetDeleteResponse](request)
 
@@ -3805,8 +3807,8 @@ class KafkaApisTest {
       offsetDeleteRequest.data,
       RequestLocal.NoCaching.bufferSupplier
     )).thenReturn(future)
-
-    createKafkaApis().handleOffsetDeleteRequest(request, RequestLocal.NoCaching)
+    kafkaApis = createKafkaApis()
+    kafkaApis.handleOffsetDeleteRequest(request, RequestLocal.NoCaching)
 
     future.completeExceptionally(Errors.GROUP_ID_NOT_FOUND.exception)
 
@@ -3839,8 +3841,8 @@ class KafkaApisTest {
       new OffsetDeleteRequestData().setGroupId(group), // Nonexistent topics won't be passed to groupCoordinator.
       RequestLocal.NoCaching.bufferSupplier
     )).thenReturn(future)
-
-    createKafkaApis().handleOffsetDeleteRequest(request, RequestLocal.NoCaching)
+    kafkaApis = createKafkaApis()
+    kafkaApis.handleOffsetDeleteRequest(request, RequestLocal.NoCaching)
 
     future.complete(new OffsetDeleteResponseData()
       .setErrorCode(Errors.GROUP_ID_NOT_FOUND.code())
@@ -3875,8 +3877,8 @@ class KafkaApisTest {
     val request = buildRequest(listOffsetRequest)
     when(clientRequestQuotaManager.maybeRecordAndGetThrottleTimeMs(any[RequestChannel.Request](),
       any[Long])).thenReturn(0)
-
-    createKafkaApis().handleListOffsetRequest(request)
+    kafkaApis = createKafkaApis()
+    kafkaApis.handleListOffsetRequest(request)
 
     val response = verifyNoThrottling[ListOffsetsResponse](request)
     val partitionDataOptional = response.topics.asScala.find(_.name == tp.topic).get
@@ -4050,8 +4052,8 @@ class KafkaApisTest {
     val repByTopicId = buildRequest(metadataReqByTopicId, plaintextListener)
     when(clientRequestQuotaManager.maybeRecordAndGetThrottleTimeMs(any[RequestChannel.Request](),
       any[Long])).thenReturn(0)
-
-    createKafkaApis(authorizer = Some(authorizer)).handleTopicMetadataRequest(repByTopicId)
+    kafkaApis = createKafkaApis(authorizer = Some(authorizer))
+    kafkaApis.handleTopicMetadataRequest(repByTopicId)
     val metadataByTopicIdResp = verifyNoThrottling[MetadataResponse](repByTopicId)
 
     val metadataByTopicId = metadataByTopicIdResp.data().topics().asScala.groupBy(_.topicId()).map(kv => (kv._1, kv._2.head))
@@ -4072,8 +4074,8 @@ class KafkaApisTest {
     reset(clientRequestQuotaManager, requestChannel)
     val metadataReqByTopicName = new MetadataRequest.Builder(util.Arrays.asList(authorizedTopic, unauthorizedTopic), false).build()
     val repByTopicName = buildRequest(metadataReqByTopicName, plaintextListener)
-
-    createKafkaApis(authorizer = Some(authorizer)).handleTopicMetadataRequest(repByTopicName)
+    kafkaApis = createKafkaApis(authorizer = Some(authorizer))
+    kafkaApis.handleTopicMetadataRequest(repByTopicName)
     val metadataByTopicNameResp = verifyNoThrottling[MetadataResponse](repByTopicName)
 
     val metadataByTopicName = metadataByTopicNameResp.data().topics().asScala.groupBy(_.name()).map(kv => (kv._1, kv._2.head))
@@ -4138,8 +4140,8 @@ class KafkaApisTest {
     val fetchRequest = new FetchRequest.Builder(9, 9, -1, -1, 100, 0, fetchDataBuilder)
       .build()
     val request = buildRequest(fetchRequest)
-
-    createKafkaApis().handleFetchRequest(request)
+    kafkaApis = createKafkaApis()
+    kafkaApis.handleFetchRequest(request)
 
     val response = verifyNoThrottling[FetchResponse](request)
     val responseData = response.responseData(metadataCache.topicIdsToNames(), 9)
@@ -4194,8 +4196,8 @@ class KafkaApisTest {
     val fetchRequest = new FetchRequest.Builder(ApiKeys.FETCH.latestVersion, ApiKeys.FETCH.latestVersion,
       replicaId, replicaEpoch, 100, 0, fetchDataBuilder).metadata(fetchMetadata).build()
     val request = buildRequest(fetchRequest)
-
-    createKafkaApis().handleFetchRequest(request)
+    kafkaApis = createKafkaApis()
+    kafkaApis.handleFetchRequest(request)
 
     val response = verifyNoThrottling[FetchResponse](request)
     val responseData = response.responseData(metadataCache.topicIdsToNames(), ApiKeys.FETCH.latestVersion)
@@ -4261,8 +4263,8 @@ class KafkaApisTest {
     val fetchRequest = new FetchRequest.Builder(16, 16, -1, -1, 100, 0, fetchDataBuilder)
       .build()
     val request = buildRequest(fetchRequest)
-
-    createKafkaApis().handleFetchRequest(request)
+    kafkaApis = createKafkaApis()
+    kafkaApis.handleFetchRequest(request)
 
     val response = verifyNoThrottling[FetchResponse](request)
     val responseData = response.responseData(metadataCache.topicIdsToNames(), 16)
@@ -4301,8 +4303,8 @@ class KafkaApisTest {
       expectedJoinGroupRequest,
       RequestLocal.NoCaching.bufferSupplier
     )).thenReturn(future)
-
-    createKafkaApis().handleJoinGroupRequest(
+    kafkaApis = createKafkaApis()
+    kafkaApis.handleJoinGroupRequest(
       requestChannelRequest,
       RequestLocal.NoCaching
     )
@@ -4344,8 +4346,8 @@ class KafkaApisTest {
       expectedJoinGroupRequest,
       RequestLocal.NoCaching.bufferSupplier
     )).thenReturn(future)
-
-    createKafkaApis().handleJoinGroupRequest(
+    kafkaApis = createKafkaApis()
+    kafkaApis.handleJoinGroupRequest(
       requestChannelRequest,
       RequestLocal.NoCaching
     )
@@ -4382,8 +4384,8 @@ class KafkaApisTest {
       joinGroupRequest,
       RequestLocal.NoCaching.bufferSupplier
     )).thenReturn(future)
-
-    createKafkaApis().handleJoinGroupRequest(
+    kafkaApis = createKafkaApis()
+    kafkaApis.handleJoinGroupRequest(
       requestChannelRequest,
       RequestLocal.NoCaching
     )
@@ -4407,8 +4409,8 @@ class KafkaApisTest {
     val authorizer: Authorizer = mock(classOf[Authorizer])
     when(authorizer.authorize(any[RequestContext], any[util.List[Action]]))
       .thenReturn(Seq(AuthorizationResult.DENIED).asJava)
-
-    createKafkaApis(authorizer = Some(authorizer)).handleJoinGroupRequest(
+    kafkaApis = createKafkaApis(authorizer = Some(authorizer))
+    kafkaApis.handleJoinGroupRequest(
       requestChannelRequest,
       RequestLocal.NoCaching
     )
@@ -4441,8 +4443,8 @@ class KafkaApisTest {
     }.thenAnswer { invocation =>
       response = invocation.getArgument(1, classOf[JoinGroupResponse])
     }
-
-    createKafkaApis().handle(
+    kafkaApis = createKafkaApis()
+    kafkaApis.handle(
       requestChannelRequest,
       RequestLocal.NoCaching
     )
@@ -4477,8 +4479,8 @@ class KafkaApisTest {
       expectedSyncGroupRequest,
       RequestLocal.NoCaching.bufferSupplier
     )).thenReturn(future)
-
-    createKafkaApis().handleSyncGroupRequest(
+    kafkaApis = createKafkaApis()
+    kafkaApis.handleSyncGroupRequest(
       requestChannelRequest,
       RequestLocal.NoCaching
     )
@@ -4514,8 +4516,8 @@ class KafkaApisTest {
       expectedSyncGroupRequest,
       RequestLocal.NoCaching.bufferSupplier
     )).thenReturn(future)
-
-    createKafkaApis().handleSyncGroupRequest(
+    kafkaApis = createKafkaApis()
+    kafkaApis.handleSyncGroupRequest(
       requestChannelRequest,
       RequestLocal.NoCaching
     )
@@ -4538,8 +4540,8 @@ class KafkaApisTest {
     val authorizer: Authorizer = mock(classOf[Authorizer])
     when(authorizer.authorize(any[RequestContext], any[util.List[Action]]))
       .thenReturn(Seq(AuthorizationResult.DENIED).asJava)
-
-    createKafkaApis(authorizer = Some(authorizer)).handleSyncGroupRequest(
+    kafkaApis = createKafkaApis(authorizer = Some(authorizer))
+    kafkaApis.handleSyncGroupRequest(
       requestChannelRequest,
       RequestLocal.NoCaching
     )
@@ -4567,8 +4569,8 @@ class KafkaApisTest {
       expectedSyncGroupRequest,
       RequestLocal.NoCaching.bufferSupplier
     )).thenReturn(future)
-
-    createKafkaApis().handleSyncGroupRequest(
+    kafkaApis = createKafkaApis()
+    kafkaApis.handleSyncGroupRequest(
       requestChannelRequest,
       RequestLocal.NoCaching
     )
@@ -4608,8 +4610,8 @@ class KafkaApisTest {
       requestChannelRequest.context,
       expectedHeartbeatRequest
     )).thenReturn(future)
-
-    createKafkaApis().handleHeartbeatRequest(requestChannelRequest)
+    kafkaApis = createKafkaApis()
+    kafkaApis.handleHeartbeatRequest(requestChannelRequest)
 
     val expectedHeartbeatResponse = new HeartbeatResponseData()
     future.complete(expectedHeartbeatResponse)
@@ -4636,8 +4638,8 @@ class KafkaApisTest {
       requestChannelRequest.context,
       expectedHeartbeatRequest
     )).thenReturn(future)
-
-    createKafkaApis().handleHeartbeatRequest(requestChannelRequest)
+    kafkaApis = createKafkaApis()
+    kafkaApis.handleHeartbeatRequest(requestChannelRequest)
 
     future.completeExceptionally(Errors.UNKNOWN_SERVER_ERROR.exception)
     val response = verifyNoThrottling[HeartbeatResponse](requestChannelRequest)
@@ -4656,8 +4658,8 @@ class KafkaApisTest {
     val authorizer: Authorizer = mock(classOf[Authorizer])
     when(authorizer.authorize(any[RequestContext], any[util.List[Action]]))
       .thenReturn(Seq(AuthorizationResult.DENIED).asJava)
-
-    createKafkaApis(authorizer = Some(authorizer)).handleHeartbeatRequest(
+    kafkaApis = createKafkaApis(authorizer = Some(authorizer))
+    kafkaApis.handleHeartbeatRequest(
       requestChannelRequest
     )
 
@@ -4677,8 +4679,8 @@ class KafkaApisTest {
     ).build()
 
     val requestChannelRequest = buildRequest(joinGroupRequest)
-
-    createKafkaApis(IBP_2_2_IV1).handleJoinGroupRequest(requestChannelRequest, RequestLocal.withThreadConfinedCaching)
+    kafkaApis = createKafkaApis(IBP_2_2_IV1)
+    kafkaApis.handleJoinGroupRequest(requestChannelRequest, RequestLocal.withThreadConfinedCaching)
 
     val response = verifyNoThrottling[JoinGroupResponse](requestChannelRequest)
     assertEquals(Errors.UNSUPPORTED_VERSION, response.error())
@@ -4695,8 +4697,8 @@ class KafkaApisTest {
     ).build()
 
     val requestChannelRequest = buildRequest(syncGroupRequest)
-
-    createKafkaApis(IBP_2_2_IV1).handleSyncGroupRequest(requestChannelRequest, RequestLocal.withThreadConfinedCaching)
+    kafkaApis = createKafkaApis(IBP_2_2_IV1)
+    kafkaApis.handleSyncGroupRequest(requestChannelRequest, RequestLocal.withThreadConfinedCaching)
 
     val response = verifyNoThrottling[SyncGroupResponse](requestChannelRequest)
     assertEquals(Errors.UNSUPPORTED_VERSION, response.error)
@@ -4712,8 +4714,8 @@ class KafkaApisTest {
         .setGenerationId(1)
     ).build()
     val requestChannelRequest = buildRequest(heartbeatRequest)
-
-    createKafkaApis(IBP_2_2_IV1).handleHeartbeatRequest(requestChannelRequest)
+    kafkaApis = createKafkaApis(IBP_2_2_IV1)
+    kafkaApis.handleHeartbeatRequest(requestChannelRequest)
 
     val response = verifyNoThrottling[HeartbeatResponse](requestChannelRequest)
     assertEquals(Errors.UNSUPPORTED_VERSION, response.error())
@@ -4741,8 +4743,8 @@ class KafkaApisTest {
     ).build()
 
     val requestChannelRequest = buildRequest(offsetCommitRequest)
-
-    createKafkaApis(IBP_2_2_IV1).handleOffsetCommitRequest(requestChannelRequest, RequestLocal.withThreadConfinedCaching)
+    kafkaApis = createKafkaApis(IBP_2_2_IV1)
+    kafkaApis.handleOffsetCommitRequest(requestChannelRequest, RequestLocal.withThreadConfinedCaching)
 
     val expectedTopicErrors = Collections.singletonList(
       new OffsetCommitResponseData.OffsetCommitResponseTopic()
@@ -4796,8 +4798,8 @@ class KafkaApisTest {
         requestChannelRequest.context,
         expectedLeaveGroupRequest
       )).thenReturn(future)
-
-      createKafkaApis().handleLeaveGroupRequest(requestChannelRequest)
+      kafkaApis = createKafkaApis()
+      kafkaApis.handleLeaveGroupRequest(requestChannelRequest)
 
       val expectedLeaveResponse = new LeaveGroupResponseData()
         .setErrorCode(Errors.NONE.code)
@@ -4841,8 +4843,8 @@ class KafkaApisTest {
       requestChannelRequest.context,
       expectedLeaveGroupRequest
     )).thenReturn(future)
-
-    createKafkaApis().handleLeaveGroupRequest(requestChannelRequest)
+    kafkaApis = createKafkaApis()
+    kafkaApis.handleLeaveGroupRequest(requestChannelRequest)
 
     val leaveGroupResponse = new LeaveGroupResponseData()
       .setErrorCode(Errors.NONE.code)
@@ -4894,8 +4896,8 @@ class KafkaApisTest {
       requestChannelRequest.context,
       expectedLeaveGroupRequest
     )).thenReturn(future)
-
-    createKafkaApis().handleLeaveGroupRequest(requestChannelRequest)
+    kafkaApis = createKafkaApis()
+    kafkaApis.handleLeaveGroupRequest(requestChannelRequest)
 
     future.completeExceptionally(Errors.UNKNOWN_SERVER_ERROR.exception)
     val response = verifyNoThrottling[LeaveGroupResponse](requestChannelRequest)
@@ -4930,8 +4932,8 @@ class KafkaApisTest {
     val authorizer: Authorizer = mock(classOf[Authorizer])
     when(authorizer.authorize(any[RequestContext], any[util.List[Action]]))
       .thenReturn(Seq(AuthorizationResult.DENIED).asJava)
-
-    createKafkaApis(authorizer = Some(authorizer)).handleLeaveGroupRequest(requestChannelRequest)
+    kafkaApis = createKafkaApis(authorizer = Some(authorizer))
+    kafkaApis.handleLeaveGroupRequest(requestChannelRequest)
 
     val response = verifyNoThrottling[LeaveGroupResponse](requestChannelRequest)
     assertEquals(Errors.GROUP_AUTHORIZATION_FAILED, response.error)
@@ -5001,8 +5003,8 @@ class KafkaApisTest {
           .setTopics(null),
         false
       )).thenReturn(group4Future)
-
-      createKafkaApis().handleOffsetFetchRequest(requestChannelRequest)
+      kafkaApis = createKafkaApis()
+      kafkaApis.handleOffsetFetchRequest(requestChannelRequest)
 
       val group1Response = new OffsetFetchResponseData.OffsetFetchResponseGroup()
         .setGroupId("group-1")
@@ -5093,8 +5095,8 @@ class KafkaApisTest {
           .setPartitionIndexes(List[Integer](0, 1).asJava)).asJava),
       false
     )).thenReturn(future)
-
-    createKafkaApis().handleOffsetFetchRequest(requestChannelRequest)
+    kafkaApis = createKafkaApis()
+    kafkaApis.handleOffsetFetchRequest(requestChannelRequest)
 
     val group1Response = new OffsetFetchResponseData.OffsetFetchResponseGroup()
       .setGroupId("group-1")
@@ -5166,8 +5168,8 @@ class KafkaApisTest {
         .setTopics(null),
       false
     )).thenReturn(future)
-
-    createKafkaApis().handleOffsetFetchRequest(requestChannelRequest)
+    kafkaApis = createKafkaApis()
+    kafkaApis.handleOffsetFetchRequest(requestChannelRequest)
 
     val group1Response = new OffsetFetchResponseData.OffsetFetchResponseGroup()
       .setGroupId("group-1")
@@ -5275,8 +5277,8 @@ class KafkaApisTest {
         .setTopics(null),
       false
     )).thenReturn(group3Future)
-
-    createKafkaApis(authorizer = Some(authorizer)).handle(requestChannelRequest, RequestLocal.NoCaching)
+    kafkaApis = createKafkaApis(authorizer = Some(authorizer))
+    kafkaApis.handle(requestChannelRequest, RequestLocal.NoCaching)
 
     val group1ResponseFromCoordinator = new OffsetFetchResponseData.OffsetFetchResponseGroup()
       .setGroupId("group-1")
@@ -5425,8 +5427,8 @@ class KafkaApisTest {
           .setPartitionIndexes(List[Integer](0).asJava)).asJava),
       false
     )).thenReturn(group1Future)
-
-    createKafkaApis(authorizer = Some(authorizer)).handle(requestChannelRequest, RequestLocal.NoCaching)
+    kafkaApis = createKafkaApis(authorizer = Some(authorizer))
+    kafkaApis.handle(requestChannelRequest, RequestLocal.NoCaching)
 
     // group-2 mocks using the new group coordinator.
     // When the coordinator is not active, a response with top-level error code is returned
@@ -5500,8 +5502,8 @@ class KafkaApisTest {
 
     when(replicaManager.getLogConfig(ArgumentMatchers.eq(tp0))).thenReturn(None)
     when(replicaManager.isAddingReplica(any(), anyInt)).thenReturn(isReassigning)
-
-    createKafkaApis().handle(fetchFromFollower, RequestLocal.withThreadConfinedCaching)
+    kafkaApis = createKafkaApis()
+    kafkaApis.handle(fetchFromFollower, RequestLocal.withThreadConfinedCaching)
     verify(replicaQuotaManager).record(anyLong)
 
     if (isReassigning)
@@ -5522,8 +5524,8 @@ class KafkaApisTest {
     ).build()
 
     val requestChannelRequest = buildRequest(initProducerIdRequest)
-
-    createKafkaApis(IBP_2_2_IV1).handleInitProducerIdRequest(requestChannelRequest, RequestLocal.withThreadConfinedCaching)
+    kafkaApis = createKafkaApis(IBP_2_2_IV1)
+    kafkaApis.handleInitProducerIdRequest(requestChannelRequest, RequestLocal.withThreadConfinedCaching)
 
     val response = verifyNoThrottling[InitProducerIdResponse](requestChannelRequest)
     assertEquals(Errors.INVALID_REQUEST, response.error)
@@ -5539,8 +5541,8 @@ class KafkaApisTest {
         .setProducerEpoch(2)
     ).build()
     val requestChannelRequest = buildRequest(initProducerIdRequest)
-
-    createKafkaApis(IBP_2_2_IV1).handleInitProducerIdRequest(requestChannelRequest, RequestLocal.withThreadConfinedCaching)
+    kafkaApis = createKafkaApis(IBP_2_2_IV1)
+    kafkaApis.handleInitProducerIdRequest(requestChannelRequest, RequestLocal.withThreadConfinedCaching)
 
     val response = verifyNoThrottling[InitProducerIdResponse](requestChannelRequest)
     assertEquals(Errors.INVALID_REQUEST, response.error)
@@ -5577,8 +5579,8 @@ class KafkaApisTest {
     )).thenReturn(
       Seq()
     )
-
-    createKafkaApis().handleUpdateMetadataRequest(request, RequestLocal.withThreadConfinedCaching)
+    kafkaApis = createKafkaApis()
+    kafkaApis.handleUpdateMetadataRequest(request, RequestLocal.withThreadConfinedCaching)
     verify(requestChannel).sendResponse(
       ArgumentMatchers.eq(request),
       capturedResponse.capture(),
@@ -5650,8 +5652,8 @@ class KafkaApisTest {
     )).thenReturn(
       response
     )
-
-    createKafkaApis().handleLeaderAndIsrRequest(request)
+    kafkaApis = createKafkaApis()
+    kafkaApis.handleLeaderAndIsrRequest(request)
     verify(requestChannel).sendResponse(
       ArgumentMatchers.eq(request),
       capturedResponse.capture(),
@@ -5713,8 +5715,8 @@ class KafkaApisTest {
         fooPartition -> Errors.NONE
       ), Errors.NONE)
     )
-
-    createKafkaApis().handleStopReplicaRequest(request)
+    kafkaApis = createKafkaApis()
+    kafkaApis.handleStopReplicaRequest(request)
     verify(requestChannel).sendResponse(
       ArgumentMatchers.eq(request),
       capturedResponse.capture(),
@@ -5748,8 +5750,8 @@ class KafkaApisTest {
       requestChannelRequest.context,
       expectedListGroupsRequest
     )).thenReturn(future)
-
-    createKafkaApis().handleListGroupsRequest(requestChannelRequest)
+    kafkaApis = createKafkaApis()
+    kafkaApis.handleListGroupsRequest(requestChannelRequest)
 
     val expectedListGroupsResponse = new ListGroupsResponseData()
       .setGroups(List(
@@ -5783,8 +5785,8 @@ class KafkaApisTest {
       requestChannelRequest.context,
       expectedListGroupsRequest
     )).thenReturn(future)
-
-    createKafkaApis().handleListGroupsRequest(requestChannelRequest)
+    kafkaApis = createKafkaApis()
+    kafkaApis.handleListGroupsRequest(requestChannelRequest)
 
     future.completeExceptionally(Errors.UNKNOWN_SERVER_ERROR.exception)
     val response = verifyNoThrottling[ListGroupsResponse](requestChannelRequest)
@@ -5879,8 +5881,8 @@ class KafkaApisTest {
       requestChannelRequest.context,
       expectedListGroupsRequest
     )).thenReturn(future)
-
-    createKafkaApis(authorizer = Some(authorizer)).handleListGroupsRequest(requestChannelRequest)
+    kafkaApis = createKafkaApis(authorizer = Some(authorizer))
+    kafkaApis.handleListGroupsRequest(requestChannelRequest)
 
     val listGroupsResponse = new ListGroupsResponseData()
     groups.foreach { groupId =>
@@ -5933,8 +5935,8 @@ class KafkaApisTest {
       .setIncludeClusterAuthorizedOperations(true)).build()
 
     val request = buildRequest(describeClusterRequest, plaintextListener)
-
-    createKafkaApis().handleDescribeCluster(request)
+    kafkaApis = createKafkaApis()
+    kafkaApis.handleDescribeCluster(request)
 
     val describeClusterResponse = verifyNoThrottling[DescribeClusterResponse](request)
 
@@ -5986,8 +5988,8 @@ class KafkaApisTest {
   private def sendMetadataRequestWithInconsistentListeners(requestListener: ListenerName): MetadataResponse = {
     val metadataRequest = MetadataRequest.Builder.allTopics.build()
     val requestChannelRequest = buildRequest(metadataRequest, requestListener)
-
-    createKafkaApis().handleTopicMetadataRequest(requestChannelRequest)
+    kafkaApis = createKafkaApis()
+    kafkaApis.handleTopicMetadataRequest(requestChannelRequest)
 
     verifyNoThrottling[MetadataResponse](requestChannelRequest)
   }
@@ -6013,8 +6015,8 @@ class KafkaApisTest {
     val listOffsetRequest = ListOffsetsRequest.Builder.forConsumer(true, isolationLevel, false)
       .setTargetTimes(targetTimes).build()
     val request = buildRequest(listOffsetRequest)
-
-    createKafkaApis().handleListOffsetRequest(request)
+    kafkaApis = createKafkaApis()
+    kafkaApis.handleListOffsetRequest(request)
 
     val response = verifyNoThrottling[ListOffsetsResponse](request)
     val partitionDataOptional = response.topics.asScala.find(_.name == tp.topic).get
@@ -6181,8 +6183,8 @@ class KafkaApisTest {
       t0p1 -> "/foo",
       t0p2 -> "/foo"))))
     .thenReturn(partitionResults)
-
-    createKafkaApis().handleAlterReplicaLogDirsRequest(request)
+    kafkaApis = createKafkaApis()
+    kafkaApis.handleAlterReplicaLogDirsRequest(request)
 
     val response = verifyNoThrottling[AlterReplicaLogDirsResponse](request)
     assertEquals(partitionResults, response.data.results.asScala.flatMap { tr =>
@@ -6292,8 +6294,8 @@ class KafkaApisTest {
     val request = buildRequest(describeProducersRequest)
     when(clientRequestQuotaManager.maybeRecordAndGetThrottleTimeMs(any[RequestChannel.Request](),
       any[Long])).thenReturn(0)
-
-    createKafkaApis(authorizer = Some(authorizer)).handleDescribeProducersRequest(request)
+    kafkaApis = createKafkaApis(authorizer = Some(authorizer))
+    kafkaApis.handleDescribeProducersRequest(request)
 
     val response = verifyNoThrottling[DescribeProducersResponse](request)
     assertEquals(Set("foo", "bar", "baz", "invalid;topic"), response.data.topics.asScala.map(_.name).toSet)
@@ -6355,8 +6357,8 @@ class KafkaApisTest {
 
     when(authorizer.authorize(any[RequestContext], ArgumentMatchers.eq(buildExpectedActions("bar"))))
       .thenReturn(Seq(AuthorizationResult.DENIED).asJava)
-
-    createKafkaApis(authorizer = Some(authorizer)).handleDescribeTransactionsRequest(request)
+    kafkaApis = createKafkaApis(authorizer = Some(authorizer))
+    kafkaApis.handleDescribeTransactionsRequest(request)
 
     val response = verifyNoThrottling[DescribeTransactionsResponse](request)
     assertEquals(2, response.data.transactionStates.size)
@@ -6427,8 +6429,8 @@ class KafkaApisTest {
 
     when(txnCoordinator.handleDescribeTransactions("foo"))
       .thenReturn(describeTransactionsResponse)
-
-    createKafkaApis(authorizer = Some(authorizer)).handleDescribeTransactionsRequest(request)
+    kafkaApis = createKafkaApis(authorizer = Some(authorizer))
+    kafkaApis.handleDescribeTransactionsRequest(request)
 
     val response = verifyNoThrottling[DescribeTransactionsResponse](request)
     assertEquals(1, response.data.transactionStates.size)
@@ -6454,8 +6456,8 @@ class KafkaApisTest {
     when(txnCoordinator.handleListTransactions(Set.empty[Long], Set.empty[String]))
       .thenReturn(new ListTransactionsResponseData()
         .setErrorCode(Errors.COORDINATOR_LOAD_IN_PROGRESS.code))
-
-    createKafkaApis().handleListTransactionsRequest(request)
+    kafkaApis = createKafkaApis()
+    kafkaApis.handleListTransactionsRequest(request)
 
     val response = verifyNoThrottling[ListTransactionsResponse](request)
     assertEquals(0, response.data.transactionStates.size)
@@ -6497,8 +6499,8 @@ class KafkaApisTest {
 
     when(authorizer.authorize(any[RequestContext], ArgumentMatchers.eq(buildExpectedActions("bar"))))
       .thenReturn(Seq(AuthorizationResult.DENIED).asJava)
-
-    createKafkaApis(authorizer = Some(authorizer)).handleListTransactionsRequest(request)
+    kafkaApis = createKafkaApis(authorizer = Some(authorizer))
+    kafkaApis.handleListTransactionsRequest(request)
 
     val response = verifyNoThrottling[ListTransactionsResponse](request)
     assertEquals(1, response.data.transactionStates.size())
@@ -6563,8 +6565,8 @@ class KafkaApisTest {
     val request = buildRequest(deleteRequest)
     when(clientRequestQuotaManager.maybeRecordAndGetThrottleTimeMs(any[RequestChannel.Request](),
       any[Long])).thenReturn(0)
-
-    createKafkaApis(authorizer = Some(authorizer)).handleDeleteTopicsRequest(request)
+    kafkaApis = createKafkaApis(authorizer = Some(authorizer))
+    kafkaApis.handleDeleteTopicsRequest(request)
     verify(authorizer, times(2)).authorize(any(), any())
 
     val deleteResponse = verifyNoThrottling[DeleteTopicsResponse](request)
@@ -6642,8 +6644,8 @@ class KafkaApisTest {
     val request = buildRequest(deleteRequest)
     when(clientRequestQuotaManager.maybeRecordAndGetThrottleTimeMs(any[RequestChannel.Request](),
       any[Long])).thenReturn(0)
-
-    createKafkaApis(authorizer = Some(authorizer)).handleDeleteTopicsRequest(request)
+    kafkaApis = createKafkaApis(authorizer = Some(authorizer))
+    kafkaApis.handleDeleteTopicsRequest(request)
     verify(authorizer, times(2)).authorize(any(), any())
 
     val deleteResponse = verifyNoThrottling[DeleteTopicsResponse](request)
@@ -6750,8 +6752,8 @@ class KafkaApisTest {
     metadataCache = MetadataCache.kRaftMetadataCache(brokerId)
     when(clientRequestQuotaManager.maybeRecordAndGetThrottleTimeMs(any[RequestChannel.Request](),
       any[Long])).thenReturn(0)
-
-    createKafkaApis(raftSupport = true).handleAlterConfigsRequest(request)
+    kafkaApis = createKafkaApis(raftSupport = true)
+    kafkaApis.handleAlterConfigsRequest(request)
     val response = verifyNoThrottling[AlterConfigsResponse](request)
     assertEquals(new AlterConfigsResponseData(), response.data())
   }
@@ -6770,7 +6772,8 @@ class KafkaApisTest {
     metadataCache = MetadataCache.kRaftMetadataCache(brokerId)
     when(clientRequestQuotaManager.maybeRecordAndGetThrottleTimeMs(any[RequestChannel.Request](),
       any[Long])).thenReturn(0)
-    createKafkaApis(raftSupport = true).handleAlterConfigsRequest(request)
+    kafkaApis = createKafkaApis(raftSupport = true)
+    kafkaApis.handleAlterConfigsRequest(request)
     val response = verifyNoThrottling[AlterConfigsResponse](request)
     assertEquals(new AlterConfigsResponseData().setResponses(asList(
       new LAlterConfigsResourceResponse().
@@ -6793,7 +6796,8 @@ class KafkaApisTest {
     metadataCache = MetadataCache.kRaftMetadataCache(brokerId)
     when(clientRequestQuotaManager.maybeRecordAndGetThrottleTimeMs(any[RequestChannel.Request](),
       any[Long])).thenReturn(0)
-    createKafkaApis(raftSupport = true).handleIncrementalAlterConfigsRequest(request)
+    kafkaApis = createKafkaApis(raftSupport = true)
+    kafkaApis.handleIncrementalAlterConfigsRequest(request)
     val response = verifyNoThrottling[IncrementalAlterConfigsResponse](request)
     assertEquals(new IncrementalAlterConfigsResponseData(), response.data())
   }
@@ -6812,7 +6816,8 @@ class KafkaApisTest {
     metadataCache = MetadataCache.kRaftMetadataCache(brokerId)
     when(clientRequestQuotaManager.maybeRecordAndGetThrottleTimeMs(any[RequestChannel.Request](),
       any[Long])).thenReturn(0)
-    createKafkaApis(raftSupport = true).handleIncrementalAlterConfigsRequest(request)
+    kafkaApis = createKafkaApis(raftSupport = true)
+    kafkaApis.handleIncrementalAlterConfigsRequest(request)
     val response = verifyNoThrottling[IncrementalAlterConfigsResponse](request)
     assertEquals(new IncrementalAlterConfigsResponseData().setResponses(asList(
       new IAlterConfigsResourceResponse().
@@ -6882,8 +6887,8 @@ class KafkaApisTest {
     val consumerGroupHeartbeatRequest = new ConsumerGroupHeartbeatRequestData().setGroupId("group")
 
     val requestChannelRequest = buildRequest(new ConsumerGroupHeartbeatRequest.Builder(consumerGroupHeartbeatRequest, true).build())
-
-    createKafkaApis().handle(requestChannelRequest, RequestLocal.NoCaching)
+    kafkaApis = createKafkaApis()
+    kafkaApis.handle(requestChannelRequest, RequestLocal.NoCaching)
 
     val expectedHeartbeatResponse = new ConsumerGroupHeartbeatResponseData()
       .setErrorCode(Errors.UNSUPPORTED_VERSION.code)
@@ -6902,10 +6907,10 @@ class KafkaApisTest {
       requestChannelRequest.context,
       consumerGroupHeartbeatRequest
     )).thenReturn(future)
-
-    createKafkaApis(overrideProperties = Map(
+    kafkaApis = createKafkaApis(overrideProperties = Map(
       KafkaConfig.NewGroupCoordinatorEnableProp -> "true"
-    )).handle(requestChannelRequest, RequestLocal.NoCaching)
+    ))
+    kafkaApis.handle(requestChannelRequest, RequestLocal.NoCaching)
 
     val consumerGroupHeartbeatResponse = new ConsumerGroupHeartbeatResponseData()
       .setMemberId("member")
@@ -6926,10 +6931,10 @@ class KafkaApisTest {
       requestChannelRequest.context,
       consumerGroupHeartbeatRequest
     )).thenReturn(future)
-
-    createKafkaApis(overrideProperties = Map(
+    kafkaApis = createKafkaApis(overrideProperties = Map(
       KafkaConfig.NewGroupCoordinatorEnableProp -> "true"
-    )).handle(requestChannelRequest, RequestLocal.NoCaching)
+    ))
+    kafkaApis.handle(requestChannelRequest, RequestLocal.NoCaching)
 
     future.completeExceptionally(Errors.FENCED_MEMBER_EPOCH.exception)
     val response = verifyNoThrottling[ConsumerGroupHeartbeatResponse](requestChannelRequest)
@@ -6945,11 +6950,11 @@ class KafkaApisTest {
     val authorizer: Authorizer = mock(classOf[Authorizer])
     when(authorizer.authorize(any[RequestContext], any[util.List[Action]]))
       .thenReturn(Seq(AuthorizationResult.DENIED).asJava)
-
-    createKafkaApis(
+    kafkaApis = createKafkaApis(
       authorizer = Some(authorizer),
       overrideProperties = Map(KafkaConfig.NewGroupCoordinatorEnableProp -> "true")
-    ).handle(requestChannelRequest, RequestLocal.NoCaching)
+    )
+    kafkaApis.handle(requestChannelRequest, RequestLocal.NoCaching)
 
     val response = verifyNoThrottling[ConsumerGroupHeartbeatResponse](requestChannelRequest)
     assertEquals(Errors.GROUP_AUTHORIZATION_FAILED.code, response.data.errorCode)
@@ -6967,10 +6972,10 @@ class KafkaApisTest {
       any[RequestContext],
       any[util.List[String]]
     )).thenReturn(future)
-
-    createKafkaApis(
+    kafkaApis = createKafkaApis(
       overrideProperties = Map(KafkaConfig.NewGroupCoordinatorEnableProp -> "true")
-    ).handle(requestChannelRequest, RequestLocal.NoCaching)
+    )
+    kafkaApis.handle(requestChannelRequest, RequestLocal.NoCaching)
 
     val describedGroups = List(
       new DescribedGroup().setGroupId(groupIds.get(0)),
@@ -6998,8 +7003,8 @@ class KafkaApisTest {
     val expectedDescribedGroup = new DescribedGroup().setGroupId(groupId).setErrorCode(errorCode)
     val expectedResponse = new ConsumerGroupDescribeResponseData()
     expectedResponse.groups.add(expectedDescribedGroup)
-
-    createKafkaApis().handle(requestChannelRequest, RequestLocal.NoCaching)
+    kafkaApis = createKafkaApis()
+    kafkaApis.handle(requestChannelRequest, RequestLocal.NoCaching)
     val response = verifyNoThrottling[ConsumerGroupDescribeResponse](requestChannelRequest)
 
     assertEquals(expectedResponse, response.data)
@@ -7021,11 +7026,11 @@ class KafkaApisTest {
       any[util.List[String]]
     )).thenReturn(future)
     future.complete(List().asJava)
-
-    createKafkaApis(
+    kafkaApis = createKafkaApis(
       authorizer = Some(authorizer),
       overrideProperties = Map(KafkaConfig.NewGroupCoordinatorEnableProp -> "true")
-    ).handle(requestChannelRequest, RequestLocal.NoCaching)
+    )
+    kafkaApis.handle(requestChannelRequest, RequestLocal.NoCaching)
 
     val response = verifyNoThrottling[ConsumerGroupDescribeResponse](requestChannelRequest)
     assertEquals(Errors.GROUP_AUTHORIZATION_FAILED.code, response.data.groups.get(0).errorCode)
@@ -7042,10 +7047,10 @@ class KafkaApisTest {
       any[RequestContext],
       any[util.List[String]]
     )).thenReturn(future)
-
-    createKafkaApis(overrideProperties = Map(
+    kafkaApis = createKafkaApis(overrideProperties = Map(
       KafkaConfig.NewGroupCoordinatorEnableProp -> "true"
-    )).handle(requestChannelRequest, RequestLocal.NoCaching)
+    ))
+    kafkaApis.handle(requestChannelRequest, RequestLocal.NoCaching)
 
     future.completeExceptionally(Errors.FENCED_MEMBER_EPOCH.exception)
     val response = verifyNoThrottling[ConsumerGroupDescribeResponse](requestChannelRequest)
@@ -7057,7 +7062,8 @@ class KafkaApisTest {
     val data = new GetTelemetrySubscriptionsRequestData()
 
     val request = buildRequest(new GetTelemetrySubscriptionsRequest.Builder(data, true).build())
-    createKafkaApis(enableForwarding = true).handle(request, RequestLocal.NoCaching)
+    kafkaApis = createKafkaApis(enableForwarding = true)
+    kafkaApis.handle(request, RequestLocal.NoCaching)
 
     val response = verifyNoThrottling[GetTelemetrySubscriptionsResponse](request)
     assertEquals(Errors.UNKNOWN_SERVER_ERROR, Errors.forCode(response.data.errorCode))
@@ -7074,7 +7080,8 @@ class KafkaApisTest {
       new GetTelemetrySubscriptionsResponseData()))
 
     metadataCache = MetadataCache.kRaftMetadataCache(brokerId)
-    createKafkaApis(raftSupport = true).handle(request, RequestLocal.NoCaching)
+    kafkaApis = createKafkaApis(raftSupport = true)
+    kafkaApis.handle(request, RequestLocal.NoCaching)
 
     val response = verifyNoThrottling[GetTelemetrySubscriptionsResponse](request)
 
@@ -7092,7 +7099,8 @@ class KafkaApisTest {
       any[RequestContext]())).thenThrow(new RuntimeException("test"))
 
     metadataCache = MetadataCache.kRaftMetadataCache(brokerId)
-    createKafkaApis(raftSupport = true).handle(request, RequestLocal.NoCaching)
+    kafkaApis = createKafkaApis(raftSupport = true)
+    kafkaApis.handle(request, RequestLocal.NoCaching)
 
     val response = verifyNoThrottling[GetTelemetrySubscriptionsResponse](request)
 
@@ -7105,7 +7113,8 @@ class KafkaApisTest {
     val data = new PushTelemetryRequestData()
 
     val request = buildRequest(new PushTelemetryRequest.Builder(data, true).build())
-    createKafkaApis(enableForwarding = true).handle(request, RequestLocal.NoCaching)
+    kafkaApis = createKafkaApis(enableForwarding = true)
+    kafkaApis.handle(request, RequestLocal.NoCaching)
 
     val response = verifyNoThrottling[PushTelemetryResponse](request)
     assertEquals(Errors.UNKNOWN_SERVER_ERROR, Errors.forCode(response.data.errorCode))
@@ -7120,7 +7129,8 @@ class KafkaApisTest {
       .thenReturn(new PushTelemetryResponse(new PushTelemetryResponseData()))
 
     metadataCache = MetadataCache.kRaftMetadataCache(brokerId)
-    createKafkaApis(raftSupport = true).handle(request, RequestLocal.NoCaching)
+    kafkaApis = createKafkaApis(raftSupport = true)
+    kafkaApis.handle(request, RequestLocal.NoCaching)
     val response = verifyNoThrottling[PushTelemetryResponse](request)
 
     val expectedResponse = new PushTelemetryResponseData().setErrorCode(Errors.NONE.code)
@@ -7136,7 +7146,8 @@ class KafkaApisTest {
       .thenThrow(new RuntimeException("test"))
 
     metadataCache = MetadataCache.kRaftMetadataCache(brokerId)
-    createKafkaApis(raftSupport = true).handle(request, RequestLocal.NoCaching)
+    kafkaApis = createKafkaApis(raftSupport = true)
+    kafkaApis.handle(request, RequestLocal.NoCaching)
     val response = verifyNoThrottling[PushTelemetryResponse](request)
 
     val expectedResponse = new PushTelemetryResponseData().setErrorCode(Errors.INVALID_REQUEST.code)
@@ -7146,7 +7157,8 @@ class KafkaApisTest {
   @Test
   def testListClientMetricsResourcesNotAllowedForZkClusters(): Unit = {
     val request = buildRequest(new ListClientMetricsResourcesRequest.Builder(new ListClientMetricsResourcesRequestData()).build())
-    createKafkaApis(enableForwarding = true).handle(request, RequestLocal.NoCaching)
+    kafkaApis = createKafkaApis(enableForwarding = true)
+    kafkaApis.handle(request, RequestLocal.NoCaching)
 
     val response = verifyNoThrottling[ListClientMetricsResourcesResponse](request)
     assertEquals(Errors.UNKNOWN_SERVER_ERROR, Errors.forCode(response.data.errorCode))
@@ -7161,8 +7173,8 @@ class KafkaApisTest {
     resources.add("test1")
     resources.add("test2")
     when(clientMetricsManager.listClientMetricsResources).thenReturn(resources.asJava)
-
-    createKafkaApis(raftSupport = true).handle(request, RequestLocal.NoCaching)
+    kafkaApis = createKafkaApis(raftSupport = true)
+    kafkaApis.handle(request, RequestLocal.NoCaching)
     val response = verifyNoThrottling[ListClientMetricsResourcesResponse](request)
     val expectedResponse = new ListClientMetricsResourcesResponseData().setClientMetricsResources(
       resources.map(resource => new ClientMetricsResource().setName(resource)).toBuffer.asJava)
@@ -7176,8 +7188,8 @@ class KafkaApisTest {
 
     val resources = new mutable.HashSet[String]
     when(clientMetricsManager.listClientMetricsResources).thenReturn(resources.asJava)
-
-    createKafkaApis(raftSupport = true).handle(request, RequestLocal.NoCaching)
+    kafkaApis = createKafkaApis(raftSupport = true)
+    kafkaApis.handle(request, RequestLocal.NoCaching)
     val response = verifyNoThrottling[ListClientMetricsResourcesResponse](request)
     val expectedResponse = new ListClientMetricsResourcesResponseData()
     assertEquals(expectedResponse, response.data)
@@ -7189,8 +7201,8 @@ class KafkaApisTest {
     metadataCache = MetadataCache.kRaftMetadataCache(brokerId)
 
     when(clientMetricsManager.listClientMetricsResources).thenThrow(new RuntimeException("test"))
-
-    createKafkaApis(raftSupport = true).handle(request, RequestLocal.NoCaching)
+    kafkaApis = createKafkaApis(raftSupport = true)
+    kafkaApis.handle(request, RequestLocal.NoCaching)
     val response = verifyNoThrottling[ListClientMetricsResourcesResponse](request)
 
     val expectedResponse = new ListClientMetricsResourcesResponseData().setErrorCode(Errors.UNKNOWN_SERVER_ERROR.code)
