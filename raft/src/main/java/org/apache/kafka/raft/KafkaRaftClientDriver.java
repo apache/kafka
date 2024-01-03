@@ -16,10 +16,14 @@
  */
 package org.apache.kafka.raft;
 
+import org.apache.kafka.common.protocol.ApiMessage;
+import org.apache.kafka.common.requests.RequestHeader;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.server.fault.FaultHandler;
 import org.apache.kafka.server.util.ShutdownableThread;
 import org.slf4j.Logger;
+
+import java.util.concurrent.CompletableFuture;
 
 public class KafkaRaftClientDriver<T> extends ShutdownableThread {
     private final Logger log;
@@ -66,6 +70,26 @@ public class KafkaRaftClientDriver<T> extends ShutdownableThread {
     @Override
     public boolean isRunning() {
         return client.isRunning() && !isThreadFailed();
+    }
+
+    public CompletableFuture<ApiMessage> handleRequest(
+        RequestHeader header,
+        ApiMessage request,
+        long createdTimeMs
+    ) {
+        RaftRequest.Inbound inboundRequest = new RaftRequest.Inbound(
+            header.correlationId(),
+            request,
+            createdTimeMs
+        );
+
+        client.handle(inboundRequest);
+
+        return inboundRequest.completion.thenApply(response -> response.data);
+    }
+
+    public KafkaRaftClient<T> client() {
+        return client;
     }
 
 }

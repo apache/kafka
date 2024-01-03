@@ -134,7 +134,7 @@ class KafkaRaftManager[T](
   private val expirationTimer = new SystemTimer("raft-expiration-executor")
   private val expirationService = new TimingWheelExpirationService(expirationTimer)
   override val client: KafkaRaftClient[T] = buildRaftClient()
-  private val raftIoThread = new KafkaRaftClientDriver[T](client, threadNamePrefix, fatalFaultHandler, logContext)
+  private val clientDriver = new KafkaRaftClientDriver[T](client, threadNamePrefix, fatalFaultHandler, logContext)
 
   def startup(): Unit = {
     // Update the voter endpoints (if valid) with what's in RaftConfig
@@ -152,13 +152,13 @@ class KafkaRaftManager[T](
       }
     }
     netChannel.start()
-    raftIoThread.start()
+    clientDriver.start()
   }
 
   def shutdown(): Unit = {
     CoreUtils.swallow(expirationService.shutdown(), this)
     CoreUtils.swallow(expirationTimer.close(), this)
-    CoreUtils.swallow(raftIoThread.shutdown(), this)
+    CoreUtils.swallow(clientDriver.shutdown(), this)
     CoreUtils.swallow(client.close(), this)
     CoreUtils.swallow(scheduler.shutdown(), this)
     CoreUtils.swallow(netChannel.close(), this)
@@ -177,17 +177,7 @@ class KafkaRaftManager[T](
     request: ApiMessage,
     createdTimeMs: Long
   ): CompletableFuture[ApiMessage] = {
-    val inboundRequest = new RaftRequest.Inbound(
-      header.correlationId,
-      request,
-      createdTimeMs
-    )
-
-    client.handle(inboundRequest)
-
-    inboundRequest.completion.thenApply { response =>
-      response.data
-    }
+    clientDriver.handleRequest(header, request, createdTimeMs)
   }
 
   private def buildRaftClient(): KafkaRaftClient[T] = {
