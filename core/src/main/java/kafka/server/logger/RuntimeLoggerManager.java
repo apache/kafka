@@ -142,7 +142,7 @@ public class RuntimeLoggerManager {
                         " operation is not allowed for the " + BROKER_LOGGER + " resource");
                 default:
                     throw new InvalidRequestException("Unknown operation type " +
-                        (int) op.configOperation() + " is not alowed for the " +
+                        (int) op.configOperation() + " is not allowed for the " +
                         BROKER_LOGGER + " resource");
             }
         });

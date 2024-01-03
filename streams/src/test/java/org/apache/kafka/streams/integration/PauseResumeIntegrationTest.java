@@ -125,7 +125,7 @@ public class PauseResumeIntegrationTest {
     @BeforeEach
     public void createTopics(final TestInfo testInfo) throws InterruptedException {
         cleanStateBeforeTest(CLUSTER, 1, INPUT_STREAM_1, INPUT_STREAM_2, OUTPUT_STREAM_1, OUTPUT_STREAM_2);
-        appId = safeUniqueTestName(PauseResumeIntegrationTest.class, testInfo);
+        appId = safeUniqueTestName(testInfo);
     }
 
     private Properties props(final boolean stateUpdaterEnabled) {

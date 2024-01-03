@@ -319,9 +319,9 @@ public class DefaultTaskManager implements TaskManager {
             exception.getMessage());
     }
 
-    public Map<TaskId, StreamsException> drainUncaughtExceptions() {
-        final Map<TaskId, StreamsException> returnValue = returnWithTasksLocked(() -> {
-            final Map<TaskId, StreamsException> result = new HashMap<>(uncaughtExceptions);
+    public Map<TaskId, RuntimeException> drainUncaughtExceptions() {
+        final Map<TaskId, RuntimeException> returnValue = returnWithTasksLocked(() -> {
+            final Map<TaskId, RuntimeException> result = new HashMap<>(uncaughtExceptions);
             uncaughtExceptions.clear();
             return result;
         });

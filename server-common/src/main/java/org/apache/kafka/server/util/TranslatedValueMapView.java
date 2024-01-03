@@ -29,7 +29,7 @@ import java.util.function.Function;
 /**
  * A map which presents a lightweight view of another "underlying" map. Values in the
  * underlying map will be translated by a callback before they are returned.
- *
+ * <br>
  * This class is not internally synchronized. (Typically the underlyingMap is treated as
  * immutable.)
  */

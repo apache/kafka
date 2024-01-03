@@ -46,10 +46,10 @@ public interface StreamsMetrics {
      * of the operation, and hence the rate / count metrics will be updated accordingly; and the recorded latency value
      * will be used to update the average / max latency as well.
      *
-     * Note that you can add more metrics to this sensor after you created it, which can then be updated upon
+     * <p>Note that you can add more metrics to this sensor after you created it, which can then be updated upon
      * {@link Sensor#record(double)} calls.
      *
-     * The added sensor and its metrics can be removed with {@link #removeSensor(Sensor) removeSensor()}.
+     * <p>The added sensor and its metrics can be removed with {@link #removeSensor(Sensor) removeSensor()}.
      *
      * @param scopeName          name of the scope, which will be used as part of the metric type, e.g.: "stream-[scope]-metrics".
      * @param entityName         name of the entity, which will be used as part of the metric tags, e.g.: "[scope]-id" = "[entity]".
@@ -76,10 +76,10 @@ public interface StreamsMetrics {
      * Whenever a user records this sensor via {@link Sensor#record(double)} etc,
      * it will be counted as one invocation of the operation, and hence the rate / count metrics will be updated accordingly.
      *
-     * Note that you can add more metrics to this sensor after you created it, which can then be updated upon
+     * <p>Note that you can add more metrics to this sensor after you created it, which can then be updated upon
      * {@link Sensor#record(double)} calls.
      *
-     * The added sensor and its metrics can be removed with {@link #removeSensor(Sensor) removeSensor()}.
+     * <p>The added sensor and its metrics can be removed with {@link #removeSensor(Sensor) removeSensor()}.
      *
      * @param scopeName          name of the scope, which will be used as part of the metrics type, e.g.: "stream-[scope]-metrics".
      * @param entityName         name of the entity, which will be used as part of the metric tags, e.g.: "[scope]-id" = "[entity]".

@@ -148,9 +148,11 @@ class RequestHandlerHelper(
    * Throttle the channel if the controller mutations quota or the request quota have been violated.
    * Regardless of throttling, send the response immediately.
    */
-  def sendResponseMaybeThrottleWithControllerQuota(controllerMutationQuota: ControllerMutationQuota,
-                                                   request: RequestChannel.Request,
-                                                   createResponse: Int => AbstractResponse): Unit = {
+  def sendResponseMaybeThrottleWithControllerQuota(
+    controllerMutationQuota: ControllerMutationQuota,
+    request: RequestChannel.Request,
+    response: AbstractResponse
+  ): Unit = {
     val timeMs = time.milliseconds
     val controllerThrottleTimeMs = controllerMutationQuota.throttleTime
     val requestThrottleTimeMs = quotas.request.maybeRecordAndGetThrottleTimeMs(request, timeMs)
@@ -165,7 +167,8 @@ class RequestHandlerHelper(
       }
     }
 
-    requestChannel.sendResponse(request, createResponse(maxThrottleTimeMs), None)
+    response.maybeSetThrottleTimeMs(maxThrottleTimeMs)
+    requestChannel.sendResponse(request, response, None)
   }
 
   def sendResponseExemptThrottle(request: RequestChannel.Request,

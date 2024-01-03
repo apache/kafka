@@ -21,15 +21,19 @@ import kafka.server.ReplicaManager
 import kafka.utils.TestUtils
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.NotLeaderOrFollowerException
-import org.apache.kafka.common.record.{CompressionType, FileRecords, MemoryRecords, SimpleRecord}
+import org.apache.kafka.common.record.{CompressionType, ControlRecordType, EndTransactionMarker, FileRecords, MemoryRecords, RecordBatch, SimpleRecord}
+import org.apache.kafka.common.requests.TransactionResult
+import org.apache.kafka.common.utils.{MockTime, Time}
 import org.apache.kafka.coordinator.group.runtime.CoordinatorLoader.UnknownRecordTypeException
 import org.apache.kafka.coordinator.group.runtime.{CoordinatorLoader, CoordinatorPlayback}
 import org.apache.kafka.storage.internals.log.{FetchDataInfo, FetchIsolation, LogOffsetMetadata}
 import org.apache.kafka.test.TestUtils.assertFutureThrows
-import org.junit.jupiter.api.Assertions.{assertEquals, assertNull}
+import org.junit.jupiter.api.Assertions.{assertEquals, assertNotNull}
 import org.junit.jupiter.api.{Test, Timeout}
+import org.mockito.ArgumentMatchers.anyLong
 import org.mockito.{ArgumentCaptor, ArgumentMatchers}
-import org.mockito.Mockito.{mock, verify, when}
+import org.mockito.Mockito.{mock, times, verify, when}
+import org.mockito.invocation.InvocationOnMock
 
 import java.nio.ByteBuffer
 import java.nio.charset.Charset
@@ -54,6 +58,7 @@ class CoordinatorLoaderImplTest {
     val coordinator = mock(classOf[CoordinatorPlayback[(String, String)]])
 
     TestUtils.resource(new CoordinatorLoaderImpl[(String, String)](
+      time = Time.SYSTEM,
       replicaManager = replicaManager,
       deserializer = serde,
       loadBufferSize = 1000
@@ -73,6 +78,7 @@ class CoordinatorLoaderImplTest {
     val coordinator = mock(classOf[CoordinatorPlayback[(String, String)]])
 
     TestUtils.resource(new CoordinatorLoaderImpl[(String, String)](
+      time = Time.SYSTEM,
       replicaManager = replicaManager,
       deserializer = serde,
       loadBufferSize = 1000
@@ -93,13 +99,15 @@ class CoordinatorLoaderImplTest {
     val coordinator = mock(classOf[CoordinatorPlayback[(String, String)]])
 
     TestUtils.resource(new CoordinatorLoaderImpl[(String, String)](
+      time = Time.SYSTEM,
       replicaManager = replicaManager,
       deserializer = serde,
       loadBufferSize = 1000
     )) { loader =>
       when(replicaManager.getLog(tp)).thenReturn(Some(log))
       when(log.logStartOffset).thenReturn(0L)
-      when(replicaManager.getLogEndOffset(tp)).thenReturn(Some(5L))
+      when(replicaManager.getLogEndOffset(tp)).thenReturn(Some(9L))
+      when(log.highWatermark).thenReturn(0L)
 
       val readResult1 = logReadResult(startOffset = 0, records = Seq(
         new SimpleRecord("k1".getBytes, "v1".getBytes),
@@ -126,13 +134,62 @@ class CoordinatorLoaderImplTest {
         minOneMessage = true
       )).thenReturn(readResult2)
 
-      assertNull(loader.load(tp, coordinator).get(10, TimeUnit.SECONDS))
+      val readResult3 = logReadResult(startOffset = 5, producerId = 100L, producerEpoch = 5, records = Seq(
+        new SimpleRecord("k6".getBytes, "v6".getBytes),
+        new SimpleRecord("k7".getBytes, "v7".getBytes)
+      ))
 
-      verify(coordinator).replay(("k1", "v1"))
-      verify(coordinator).replay(("k2", "v2"))
-      verify(coordinator).replay(("k3", "v3"))
-      verify(coordinator).replay(("k4", "v4"))
-      verify(coordinator).replay(("k5", "v5"))
+      when(log.read(
+        startOffset = 5L,
+        maxLength = 1000,
+        isolation = FetchIsolation.LOG_END,
+        minOneMessage = true
+      )).thenReturn(readResult3)
+
+      val readResult4 = logReadResult(
+        startOffset = 7,
+        producerId = 100L,
+        producerEpoch = 5,
+        controlRecordType = ControlRecordType.COMMIT
+      )
+
+      when(log.read(
+        startOffset = 7L,
+        maxLength = 1000,
+        isolation = FetchIsolation.LOG_END,
+        minOneMessage = true
+      )).thenReturn(readResult4)
+
+      val readResult5 = logReadResult(
+        startOffset = 8,
+        producerId = 500L,
+        producerEpoch = 10,
+        controlRecordType = ControlRecordType.ABORT
+      )
+
+      when(log.read(
+        startOffset = 8L,
+        maxLength = 1000,
+        isolation = FetchIsolation.LOG_END,
+        minOneMessage = true
+      )).thenReturn(readResult5)
+
+      assertNotNull(loader.load(tp, coordinator).get(10, TimeUnit.SECONDS))
+
+      verify(coordinator).replay(RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, ("k1", "v1"))
+      verify(coordinator).replay(RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, ("k2", "v2"))
+      verify(coordinator).replay(RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, ("k3", "v3"))
+      verify(coordinator).replay(RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, ("k4", "v4"))
+      verify(coordinator).replay(RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, ("k5", "v5"))
+      verify(coordinator).replay(100L, 5.toShort, ("k6", "v6"))
+      verify(coordinator).replay(100L, 5.toShort, ("k7", "v7"))
+      verify(coordinator).replayEndTransactionMarker(100L, 5, TransactionResult.COMMIT)
+      verify(coordinator).replayEndTransactionMarker(500L, 10, TransactionResult.ABORT)
+      verify(coordinator).updateLastWrittenOffset(2)
+      verify(coordinator).updateLastWrittenOffset(5)
+      verify(coordinator).updateLastWrittenOffset(7)
+      verify(coordinator).updateLastWrittenOffset(8)
+      verify(coordinator).updateLastCommittedOffset(0)
     }
   }
 
@@ -145,6 +202,7 @@ class CoordinatorLoaderImplTest {
     val coordinator = mock(classOf[CoordinatorPlayback[(String, String)]])
 
     TestUtils.resource(new CoordinatorLoaderImpl[(String, String)](
+      time = Time.SYSTEM,
       replicaManager = replicaManager,
       deserializer = serde,
       loadBufferSize = 1000
@@ -187,6 +245,7 @@ class CoordinatorLoaderImplTest {
     val coordinator = mock(classOf[CoordinatorPlayback[(String, String)]])
 
     TestUtils.resource(new CoordinatorLoaderImpl[(String, String)](
+      time = Time.SYSTEM,
       replicaManager = replicaManager,
       deserializer = serde,
       loadBufferSize = 1000
@@ -213,7 +272,7 @@ class CoordinatorLoaderImplTest {
 
       loader.load(tp, coordinator).get(10, TimeUnit.SECONDS)
 
-      verify(coordinator).replay(("k2", "v2"))
+      verify(coordinator).replay(RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, ("k2", "v2"))
     }
   }
 
@@ -226,6 +285,7 @@ class CoordinatorLoaderImplTest {
     val coordinator = mock(classOf[CoordinatorPlayback[(String, String)]])
 
     TestUtils.resource(new CoordinatorLoaderImpl[(String, String)](
+      time = Time.SYSTEM,
       replicaManager = replicaManager,
       deserializer = serde,
       loadBufferSize = 1000
@@ -266,6 +326,7 @@ class CoordinatorLoaderImplTest {
     val coordinator = mock(classOf[CoordinatorPlayback[(String, String)]])
 
     TestUtils.resource(new CoordinatorLoaderImpl[(String, String)](
+      time = Time.SYSTEM,
       replicaManager = replicaManager,
       deserializer = serde,
       loadBufferSize = 1000
@@ -283,19 +344,345 @@ class CoordinatorLoaderImplTest {
         minOneMessage = true
       )).thenReturn(readResult)
 
-      assertNull(loader.load(tp, coordinator).get(10, TimeUnit.SECONDS))
+      assertNotNull(loader.load(tp, coordinator).get(10, TimeUnit.SECONDS))
+    }
+  }
+
+  @Test
+  def testLoadSummary(): Unit = {
+    val tp = new TopicPartition("foo", 0)
+    val replicaManager = mock(classOf[ReplicaManager])
+    val serde = new StringKeyValueDeserializer
+    val log = mock(classOf[UnifiedLog])
+    val coordinator = mock(classOf[CoordinatorPlayback[(String, String)]])
+    val time = new MockTime()
+
+    TestUtils.resource(new CoordinatorLoaderImpl[(String, String)](
+      time,
+      replicaManager = replicaManager,
+      deserializer = serde,
+      loadBufferSize = 1000
+    )) { loader =>
+      val startTimeMs = time.milliseconds()
+      when(replicaManager.getLog(tp)).thenReturn(Some(log))
+      when(log.logStartOffset).thenReturn(0L)
+      when(replicaManager.getLogEndOffset(tp)).thenReturn(Some(5L))
+
+      val readResult1 = logReadResult(startOffset = 0, records = Seq(
+        new SimpleRecord("k1".getBytes, "v1".getBytes),
+        new SimpleRecord("k2".getBytes, "v2".getBytes)
+      ))
+
+      when(log.read(
+        startOffset = 0L,
+        maxLength = 1000,
+        isolation = FetchIsolation.LOG_END,
+        minOneMessage = true
+      )).thenAnswer((_: InvocationOnMock) => {
+        time.sleep(1000)
+        readResult1
+      })
+
+      val readResult2 = logReadResult(startOffset = 2, records = Seq(
+        new SimpleRecord("k3".getBytes, "v3".getBytes),
+        new SimpleRecord("k4".getBytes, "v4".getBytes),
+        new SimpleRecord("k5".getBytes, "v5".getBytes)
+      ))
+
+      when(log.read(
+        startOffset = 2L,
+        maxLength = 1000,
+        isolation = FetchIsolation.LOG_END,
+        minOneMessage = true
+      )).thenReturn(readResult2)
+
+      val summary = loader.load(tp, coordinator).get(10, TimeUnit.SECONDS)
+      assertEquals(startTimeMs, summary.startTimeMs())
+      assertEquals(startTimeMs + 1000, summary.endTimeMs())
+      assertEquals(5, summary.numRecords())
+      assertEquals(readResult1.records.sizeInBytes() + readResult2.records.sizeInBytes(), summary.numBytes())
+    }
+  }
+
+  @Test
+  def testUpdateLastWrittenOffsetOnBatchLoaded(): Unit = {
+    val tp = new TopicPartition("foo", 0)
+    val replicaManager = mock(classOf[ReplicaManager])
+    val serde = new StringKeyValueDeserializer
+    val log = mock(classOf[UnifiedLog])
+    val coordinator = mock(classOf[CoordinatorPlayback[(String, String)]])
+
+    TestUtils.resource(new CoordinatorLoaderImpl[(String, String)](
+      time = Time.SYSTEM,
+      replicaManager = replicaManager,
+      deserializer = serde,
+      loadBufferSize = 1000
+    )) { loader =>
+      when(replicaManager.getLog(tp)).thenReturn(Some(log))
+      when(log.logStartOffset).thenReturn(0L)
+      when(log.highWatermark).thenReturn(0L).thenReturn(0L).thenReturn(2L)
+      when(replicaManager.getLogEndOffset(tp)).thenReturn(Some(7L))
+
+      val readResult1 = logReadResult(startOffset = 0, records = Seq(
+        new SimpleRecord("k1".getBytes, "v1".getBytes),
+        new SimpleRecord("k2".getBytes, "v2".getBytes)
+      ))
+
+      when(log.read(
+        startOffset = 0L,
+        maxLength = 1000,
+        isolation = FetchIsolation.LOG_END,
+        minOneMessage = true
+      )).thenReturn(readResult1)
+
+      val readResult2 = logReadResult(startOffset = 2, records = Seq(
+        new SimpleRecord("k3".getBytes, "v3".getBytes),
+        new SimpleRecord("k4".getBytes, "v4".getBytes),
+        new SimpleRecord("k5".getBytes, "v5".getBytes)
+      ))
+
+      when(log.read(
+        startOffset = 2L,
+        maxLength = 1000,
+        isolation = FetchIsolation.LOG_END,
+        minOneMessage = true
+      )).thenReturn(readResult2)
+
+      val readResult3 = logReadResult(startOffset = 5, records = Seq(
+        new SimpleRecord("k6".getBytes, "v6".getBytes),
+        new SimpleRecord("k7".getBytes, "v7".getBytes)
+      ))
+
+      when(log.read(
+        startOffset = 5L,
+        maxLength = 1000,
+        isolation = FetchIsolation.LOG_END,
+        minOneMessage = true
+      )).thenReturn(readResult3)
+
+      assertNotNull(loader.load(tp, coordinator).get(10, TimeUnit.SECONDS))
+
+      verify(coordinator).replay(RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, ("k1", "v1"))
+      verify(coordinator).replay(RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, ("k2", "v2"))
+      verify(coordinator).replay(RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, ("k3", "v3"))
+      verify(coordinator).replay(RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, ("k4", "v4"))
+      verify(coordinator).replay(RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, ("k5", "v5"))
+      verify(coordinator).replay(RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, ("k6", "v6"))
+      verify(coordinator).replay(RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, ("k7", "v7"))
+      verify(coordinator, times(0)).updateLastWrittenOffset(0)
+      verify(coordinator, times(1)).updateLastWrittenOffset(2)
+      verify(coordinator, times(1)).updateLastWrittenOffset(5)
+      verify(coordinator, times(1)).updateLastWrittenOffset(7)
+      verify(coordinator, times(1)).updateLastCommittedOffset(0)
+      verify(coordinator, times(1)).updateLastCommittedOffset(2)
+      verify(coordinator, times(0)).updateLastCommittedOffset(5)
+    }
+  }
+
+  @Test
+  def testUpdateLastWrittenOffsetAndUpdateLastCommittedOffsetNoRecordsRead(): Unit = {
+    val tp = new TopicPartition("foo", 0)
+    val replicaManager = mock(classOf[ReplicaManager])
+    val serde = new StringKeyValueDeserializer
+    val log = mock(classOf[UnifiedLog])
+    val coordinator = mock(classOf[CoordinatorPlayback[(String, String)]])
+
+    TestUtils.resource(new CoordinatorLoaderImpl[(String, String)](
+      time = Time.SYSTEM,
+      replicaManager = replicaManager,
+      deserializer = serde,
+      loadBufferSize = 1000
+    )) { loader =>
+      when(replicaManager.getLog(tp)).thenReturn(Some(log))
+      when(log.logStartOffset).thenReturn(0L)
+      when(log.highWatermark).thenReturn(0L)
+      when(replicaManager.getLogEndOffset(tp)).thenReturn(Some(0L))
+
+      assertNotNull(loader.load(tp, coordinator).get(10, TimeUnit.SECONDS))
+
+      verify(coordinator, times(0)).updateLastWrittenOffset(anyLong())
+      verify(coordinator, times(0)).updateLastCommittedOffset(anyLong())
+    }
+  }
+
+  @Test
+  def testUpdateLastWrittenOffsetOnBatchLoadedWhileHighWatermarkAhead(): Unit = {
+    val tp = new TopicPartition("foo", 0)
+    val replicaManager = mock(classOf[ReplicaManager])
+    val serde = new StringKeyValueDeserializer
+    val log = mock(classOf[UnifiedLog])
+    val coordinator = mock(classOf[CoordinatorPlayback[(String, String)]])
+
+    TestUtils.resource(new CoordinatorLoaderImpl[(String, String)](
+      time = Time.SYSTEM,
+      replicaManager = replicaManager,
+      deserializer = serde,
+      loadBufferSize = 1000
+    )) { loader =>
+      when(replicaManager.getLog(tp)).thenReturn(Some(log))
+      when(log.logStartOffset).thenReturn(0L)
+      when(log.highWatermark).thenReturn(5L).thenReturn(7L).thenReturn(7L)
+      when(replicaManager.getLogEndOffset(tp)).thenReturn(Some(7L))
+
+      val readResult1 = logReadResult(startOffset = 0, records = Seq(
+        new SimpleRecord("k1".getBytes, "v1".getBytes),
+        new SimpleRecord("k2".getBytes, "v2".getBytes)
+      ))
+
+      when(log.read(
+        startOffset = 0L,
+        maxLength = 1000,
+        isolation = FetchIsolation.LOG_END,
+        minOneMessage = true
+      )).thenReturn(readResult1)
+
+      val readResult2 = logReadResult(startOffset = 2, records = Seq(
+        new SimpleRecord("k3".getBytes, "v3".getBytes),
+        new SimpleRecord("k4".getBytes, "v4".getBytes),
+        new SimpleRecord("k5".getBytes, "v5".getBytes)
+      ))
+
+      when(log.read(
+        startOffset = 2L,
+        maxLength = 1000,
+        isolation = FetchIsolation.LOG_END,
+        minOneMessage = true
+      )).thenReturn(readResult2)
+
+      val readResult3 = logReadResult(startOffset = 5, records = Seq(
+        new SimpleRecord("k6".getBytes, "v6".getBytes),
+        new SimpleRecord("k7".getBytes, "v7".getBytes)
+      ))
+
+      when(log.read(
+        startOffset = 5L,
+        maxLength = 1000,
+        isolation = FetchIsolation.LOG_END,
+        minOneMessage = true
+      )).thenReturn(readResult3)
+
+      assertNotNull(loader.load(tp, coordinator).get(10, TimeUnit.SECONDS))
+
+      verify(coordinator).replay(RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, ("k1", "v1"))
+      verify(coordinator).replay(RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, ("k2", "v2"))
+      verify(coordinator).replay(RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, ("k3", "v3"))
+      verify(coordinator).replay(RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, ("k4", "v4"))
+      verify(coordinator).replay(RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, ("k5", "v5"))
+      verify(coordinator).replay(RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, ("k6", "v6"))
+      verify(coordinator).replay(RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, ("k7", "v7"))
+      verify(coordinator, times(0)).updateLastWrittenOffset(0)
+      verify(coordinator, times(0)).updateLastWrittenOffset(2)
+      verify(coordinator, times(0)).updateLastWrittenOffset(5)
+      verify(coordinator, times(1)).updateLastWrittenOffset(7)
+      verify(coordinator, times(0)).updateLastCommittedOffset(0)
+      verify(coordinator, times(0)).updateLastCommittedOffset(2)
+      verify(coordinator, times(0)).updateLastCommittedOffset(5)
+      verify(coordinator, times(1)).updateLastCommittedOffset(7)
+    }
+  }
+
+  @Test
+  def testPartitionGoesOfflineDuringLoad(): Unit = {
+    val tp = new TopicPartition("foo", 0)
+    val replicaManager = mock(classOf[ReplicaManager])
+    val serde = new StringKeyValueDeserializer
+    val log = mock(classOf[UnifiedLog])
+    val coordinator = mock(classOf[CoordinatorPlayback[(String, String)]])
+
+    TestUtils.resource(new CoordinatorLoaderImpl[(String, String)](
+      time = Time.SYSTEM,
+      replicaManager = replicaManager,
+      deserializer = serde,
+      loadBufferSize = 1000
+    )) { loader =>
+      when(replicaManager.getLog(tp)).thenReturn(Some(log))
+      when(log.logStartOffset).thenReturn(0L)
+      when(log.highWatermark).thenReturn(0L)
+      when(replicaManager.getLogEndOffset(tp)).thenReturn(Some(5L)).thenReturn(Some(-1L))
+
+      val readResult1 = logReadResult(startOffset = 0, records = Seq(
+        new SimpleRecord("k1".getBytes, "v1".getBytes),
+        new SimpleRecord("k2".getBytes, "v2".getBytes)
+      ))
+
+      when(log.read(
+        startOffset = 0L,
+        maxLength = 1000,
+        isolation = FetchIsolation.LOG_END,
+        minOneMessage = true
+      )).thenReturn(readResult1)
+
+      val readResult2 = logReadResult(startOffset = 2, records = Seq(
+        new SimpleRecord("k3".getBytes, "v3".getBytes),
+        new SimpleRecord("k4".getBytes, "v4".getBytes),
+        new SimpleRecord("k5".getBytes, "v5".getBytes)
+      ))
+
+      when(log.read(
+        startOffset = 2L,
+        maxLength = 1000,
+        isolation = FetchIsolation.LOG_END,
+        minOneMessage = true
+      )).thenReturn(readResult2)
+
+      assertFutureThrows(loader.load(tp, coordinator), classOf[NotLeaderOrFollowerException])
     }
   }
 
   private def logReadResult(
     startOffset: Long,
+    producerId: Long = RecordBatch.NO_PRODUCER_ID,
+    producerEpoch: Short = RecordBatch.NO_PRODUCER_EPOCH,
     records: Seq[SimpleRecord]
   ): FetchDataInfo = {
     val fileRecords = mock(classOf[FileRecords])
-    val memoryRecords = MemoryRecords.withRecords(
+    val memoryRecords = if (producerId == RecordBatch.NO_PRODUCER_ID) {
+      MemoryRecords.withRecords(
+        startOffset,
+        CompressionType.NONE,
+        records: _*
+      )
+    } else {
+      MemoryRecords.withTransactionalRecords(
+        startOffset,
+        CompressionType.NONE,
+        producerId,
+        producerEpoch,
+        0,
+        RecordBatch.NO_PARTITION_LEADER_EPOCH,
+        records: _*
+      )
+    }
+
+    when(fileRecords.sizeInBytes).thenReturn(memoryRecords.sizeInBytes)
+
+    val bufferCapture: ArgumentCaptor[ByteBuffer] = ArgumentCaptor.forClass(classOf[ByteBuffer])
+    when(fileRecords.readInto(
+      bufferCapture.capture(),
+      ArgumentMatchers.anyInt())
+    ).thenAnswer { _ =>
+      val buffer = bufferCapture.getValue
+      buffer.put(memoryRecords.buffer.duplicate)
+      buffer.flip()
+    }
+
+    new FetchDataInfo(new LogOffsetMetadata(startOffset), fileRecords)
+  }
+
+  private def logReadResult(
+    startOffset: Long,
+    producerId: Long,
+    producerEpoch: Short,
+    controlRecordType: ControlRecordType
+  ): FetchDataInfo = {
+    val fileRecords = mock(classOf[FileRecords])
+    val memoryRecords = MemoryRecords.withEndTransactionMarker(
       startOffset,
-      CompressionType.NONE,
-      records: _*
+      0L,
+      RecordBatch.NO_PARTITION_LEADER_EPOCH,
+      producerId,
+      producerEpoch,
+      new EndTransactionMarker(controlRecordType, 0)
     )
 
     when(fileRecords.sizeInBytes).thenReturn(memoryRecords.sizeInBytes)

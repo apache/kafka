@@ -73,6 +73,7 @@ class ControllerRegistrationManagerTest {
       Time.SYSTEM,
       "controller-registration-manager-test-",
       createSupportedFeatures(MetadataVersion.IBP_3_7_IV0),
+      false,
       RecordTestUtils.createTestControllerRegistration(1, false).incarnationId(),
       ListenerInfo.create(context.config.controllerListeners.map(_.toJava).asJava),
       new ExponentialBackoff(1, 2, 100, 0.02))

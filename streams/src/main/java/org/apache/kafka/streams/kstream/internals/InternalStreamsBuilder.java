@@ -28,7 +28,9 @@ import org.apache.kafka.streams.kstream.GlobalKTable;
 import org.apache.kafka.streams.kstream.Grouped;
 import org.apache.kafka.streams.kstream.KStream;
 import org.apache.kafka.streams.kstream.KTable;
+import org.apache.kafka.streams.kstream.internals.graph.BaseRepartitionNode;
 import org.apache.kafka.streams.kstream.internals.graph.GlobalStoreNode;
+import org.apache.kafka.streams.kstream.internals.graph.NodesWithRelaxedNullKeyJoinDownstream;
 import org.apache.kafka.streams.kstream.internals.graph.OptimizableRepartitionNode;
 import org.apache.kafka.streams.kstream.internals.graph.ProcessorParameters;
 import org.apache.kafka.streams.kstream.internals.graph.StateStoreNode;
@@ -40,8 +42,8 @@ import org.apache.kafka.streams.kstream.internals.graph.TableSourceNode;
 import org.apache.kafka.streams.kstream.internals.graph.VersionedSemanticsGraphNode;
 import org.apache.kafka.streams.kstream.internals.graph.WindowedStreamProcessorNode;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
+import org.apache.kafka.streams.processor.internals.StoreFactory;
 import org.apache.kafka.streams.state.KeyValueStore;
-import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.VersionedBytesStoreSupplier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -212,23 +214,23 @@ public class InternalStreamsBuilder implements InternalNameProvider {
         return prefix + String.format(KTableImpl.STATE_STORE_NAME + "%010d", index.getAndIncrement());
     }
 
-    public synchronized void addStateStore(final StoreBuilder<?> builder) {
+    public synchronized void addStateStore(final StoreFactory builder) {
         addGraphNode(root, new StateStoreNode<>(builder));
     }
 
-    public synchronized <KIn, VIn> void addGlobalStore(final StoreBuilder<?> storeBuilder,
+    public synchronized <KIn, VIn> void addGlobalStore(final StoreFactory storeFactory,
                                                        final String topic,
                                                        final ConsumedInternal<KIn, VIn> consumed,
                                                        final org.apache.kafka.streams.processor.api.ProcessorSupplier<KIn, VIn, Void, Void> stateUpdateSupplier) {
         // explicitly disable logging for global stores
-        storeBuilder.withLoggingDisabled();
+        storeFactory.withLoggingDisabled();
 
         final NamedInternal named = new NamedInternal(consumed.name());
         final String sourceName = named.suffixWithOrElseGet(TABLE_SOURCE_SUFFIX, this, KStreamImpl.SOURCE_NAME);
         final String processorName = named.orElseGenerateWithPrefix(this, KTableImpl.SOURCE_NAME);
 
         final GraphNode globalStoreNode = new GlobalStoreNode<>(
-            storeBuilder,
+            storeFactory,
             sourceName,
             topic,
             consumed,
@@ -351,7 +353,22 @@ public class InternalStreamsBuilder implements InternalNameProvider {
             LOG.debug("Optimizing the Kafka Streams graph for self-joins");
             rewriteSingleStoreSelfJoin(root, new IdentityHashMap<>());
         }
+        LOG.debug("Optimizing the Kafka Streams graph for null-key records");
+        rewriteRepartitionNodes();
     }
+
+    private void rewriteRepartitionNodes() {
+        final Set<BaseRepartitionNode<?, ?>> nodes = new NodesWithRelaxedNullKeyJoinDownstream(root).find();
+        for (final BaseRepartitionNode<?, ?> partitionNode : nodes) {
+            if (partitionNode.getProcessorParameters() != null) {
+                partitionNode.setProcessorParameters(new ProcessorParameters<>(
+                    new KStreamFilter<>((k, v) -> k != null, false),
+                    partitionNode.getProcessorParameters().processorName()
+                ));
+            }
+        }
+    }
+
 
     private void mergeDuplicateSourceNodes() {
         final Map<String, StreamSourceNode<?, ?>> topicsToSourceNodes = new HashMap<>();
@@ -683,4 +700,9 @@ public class InternalStreamsBuilder implements InternalNameProvider {
     public GraphNode root() {
         return root;
     }
+
+    public InternalTopologyBuilder internalTopologyBuilder() {
+        return internalTopologyBuilder;
+    }
+
 }

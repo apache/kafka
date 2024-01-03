@@ -46,6 +46,7 @@ import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.OptionalLong;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -97,8 +98,11 @@ public class ProcessorStateManager implements StateManager {
         //      update blindly with the given offset
         private Long offset;
 
+        // Will be updated on batch restored
+        private Long endOffset;
         // corrupted state store should not be included in checkpointing
         private boolean corrupted;
+
 
         private StateStoreMetadata(final StateStore stateStore,
                                    final CommitCallback commitCallback) {
@@ -137,6 +141,14 @@ public class ProcessorStateManager implements StateManager {
             return this.offset;
         }
 
+        Long endOffset() {
+            return this.endOffset;
+        }
+
+        public void setEndOffset(final Long endOffset) {
+            this.endOffset = endOffset;
+        }
+
         TopicPartition changelogPartition() {
             return this.changelogPartition;
         }
@@ -157,6 +169,7 @@ public class ProcessorStateManager implements StateManager {
     private String logPrefix;
 
     private final TaskId taskId;
+    private Task.State taskState;
     private final boolean eosEnabled;
     private final ChangelogRegister changelogReader;
     private final Collection<TopicPartition> sourcePartitions;
@@ -412,6 +425,14 @@ public class ProcessorStateManager implements StateManager {
         return taskId;
     }
 
+    void transitionTaskState(final Task.State taskState) {
+        this.taskState = taskState;
+    }
+
+    Task.State taskState() {
+        return taskState;
+    }
+
     // used by the changelog reader only
     boolean changelogAsSource(final TopicPartition partition) {
         return sourcePartitions.contains(partition);
@@ -433,7 +454,7 @@ public class ProcessorStateManager implements StateManager {
     }
 
     // used by the changelog reader only
-    void restore(final StateStoreMetadata storeMetadata, final List<ConsumerRecord<byte[], byte[]>> restoreRecords) {
+    void restore(final StateStoreMetadata storeMetadata, final List<ConsumerRecord<byte[], byte[]>> restoreRecords, final OptionalLong optionalLag) {
         if (!stores.containsValue(storeMetadata)) {
             throw new IllegalStateException("Restoring " + storeMetadata + " which is not registered in this state manager, " +
                 "this should not happen.");
@@ -457,6 +478,10 @@ public class ProcessorStateManager implements StateManager {
             }
 
             storeMetadata.setOffset(batchEndOffset);
+            // If null means the lag for this partition is not known yet
+            if (optionalLag.isPresent()) {
+                storeMetadata.setEndOffset(optionalLag.getAsLong() + batchEndOffset);
+            }
         }
     }
 

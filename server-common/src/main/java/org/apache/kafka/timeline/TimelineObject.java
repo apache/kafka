@@ -23,7 +23,7 @@ import java.util.Objects;
 
 /**
  * This is a mutable reference to an immutable object. It can be snapshotted.
- *
+ * <br>
  * This class requires external synchronization.
  */
 public class TimelineObject<T> implements Revertable {

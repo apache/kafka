@@ -31,6 +31,7 @@ import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.message.UpdateMetadataRequestData.UpdateMetadataPartitionState;
@@ -46,7 +47,9 @@ import org.apache.kafka.streams.StoreQueryParameters;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
+import org.apache.kafka.streams.processor.StandbyUpdateListener;
 import org.apache.kafka.streams.processor.StateRestoreListener;
+import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.StreamThread;
 import org.apache.kafka.streams.processor.internals.ThreadStateTransitionValidator;
 import org.apache.kafka.streams.processor.internals.assignment.AssignorConfiguration.AssignmentListener;
@@ -229,8 +232,9 @@ public class IntegrationTestUtils {
      * The name is safe even for parameterized methods.
      * Used by tests not yet migrated from JUnit 4.
      */
-    public static String safeUniqueTestName(final Class<?> testClass, final TestName testName) {
-        return safeUniqueTestName(testClass, testName.getMethodName());
+    public static String safeUniqueTestName(final TestName testName) {
+        final String methodName = testName.getMethodName();
+        return safeUniqueTestName(methodName);
     }
 
     /**
@@ -238,21 +242,25 @@ public class IntegrationTestUtils {
      * JUnit 5 instead of a TestName from JUnit 4.
      * Used by tests migrated to JUnit 5.
      */
-    public static String safeUniqueTestName(final Class<?> testClass, final TestInfo testInfo) {
-        final String displayName = testInfo.getDisplayName();
+    public static String safeUniqueTestName(final TestInfo testInfo) {
         final String methodName = testInfo.getTestMethod().map(Method::getName).orElse("unknownMethodName");
-        final String testName = displayName.contains(methodName) ? methodName : methodName + displayName;
-        return safeUniqueTestName(testClass, testName);
+        return safeUniqueTestName(methodName);
     }
 
-    private static String safeUniqueTestName(final Class<?> testClass, final String testName) {
-        return (testClass.getSimpleName() + testName)
-                .replace(':', '_')
-                .replace('.', '_')
-                .replace('[', '_')
-                .replace(']', '_')
-                .replace(' ', '_')
-                .replace('=', '_');
+    private static String safeUniqueTestName(final String testName) {
+        return sanitize(testName + Uuid.randomUuid().toString());
+    }
+
+    private static String sanitize(final String str) {
+        return str
+            // The `-` is used in Streams' thread name as a separator and some tests rely on this.
+            .replace('-', '_')
+            .replace(':', '_')
+            .replace('.', '_')
+            .replace('[', '_')
+            .replace(']', '_')
+            .replace(' ', '_')
+            .replace('=', '_');
     }
 
     /**
@@ -1305,7 +1313,6 @@ public class IntegrationTestUtils {
                                                                  final int maxMessages) {
         final List<ConsumerRecord<K, V>> consumerRecords;
         consumer.subscribe(singletonList(topic));
-        System.out.println("Got assignment:" + consumer.assignment());
         final int pollIntervalMs = 100;
         consumerRecords = new ArrayList<>();
         int totalPollTimeMs = 0;
@@ -1542,6 +1549,28 @@ public class IntegrationTestUtils {
                 totalNumRestored += numRestored.get();
             }
             return totalNumRestored;
+        }
+    }
+
+    public static class TrackingStandbyUpdateListener implements StandbyUpdateListener {
+        public final List<TopicPartition> promotedPartitions = new ArrayList<>();
+
+
+        @Override
+        public void onUpdateStart(final TopicPartition topicPartition, final String storeName, final long startingOffset) {
+
+        }
+
+        @Override
+        public void onBatchLoaded(final TopicPartition topicPartition, final String storeName, final TaskId taskId, final long batchEndOffset, final long batchSize, final long currentEndOffset) {
+
+        }
+
+        @Override
+        public void onUpdateSuspended(final TopicPartition topicPartition, final String storeName, final long storeOffset, final long currentEndOffset, final SuspendReason reason) {
+            if (reason.equals(SuspendReason.PROMOTED)) {
+                promotedPartitions.add(topicPartition);
+            }
         }
     }
 
