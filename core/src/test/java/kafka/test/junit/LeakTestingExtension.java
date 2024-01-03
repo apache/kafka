@@ -21,6 +21,8 @@ import kafka.utils.TestUtils;
 import org.junit.jupiter.api.extension.AfterEachCallback;
 import org.junit.jupiter.api.extension.BeforeEachCallback;
 import org.junit.jupiter.api.extension.ExtensionContext;
+import org.junit.jupiter.api.extension.ExtensionContext.Namespace;
+import org.junit.jupiter.api.extension.ExtensionContext.Store;
 
 import java.util.Arrays;
 import java.util.Collections;
@@ -36,19 +38,22 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 public class LeakTestingExtension implements BeforeEachCallback, AfterEachCallback {
     private static final Set<String> EXPECTED_THREAD_NAMES = new HashSet<>(
             Arrays.asList("junit-", "JMX", "feature-zk-node-event-process-thread", "ForkJoinPool", "executor-",
-                    "kafka-scheduler-", "metrics-meter-tick-thread", "ReplicaFetcherThread", "scala-", "pool-")
+                    "ExpirationReaper", "kafka-scheduler-", "metrics-meter-tick-thread", "ReplicaFetcherThread",
+                    "scala-", "pool-")
     );
-    private Set<Thread> initialThreads;
+    private static final String THREADS_KEY = "threads";
 
     @Override
-    public void beforeEach(ExtensionContext extensionContext) {
-        initialThreads = Thread.getAllStackTraces().keySet();
+    public void beforeEach(ExtensionContext context) {
+        getStore(context).put(THREADS_KEY, Thread.getAllStackTraces().keySet());
     }
 
     @Override
-    public void afterEach(ExtensionContext extensionContext) {
+    @SuppressWarnings("unchecked")
+    public void afterEach(ExtensionContext context) {
+        Set<Thread> initialThreads = getStore(context).remove(THREADS_KEY, Set.class);
         Tuple2<Set<Thread>, Object> unexpectedThreads = TestUtils.computeUntilTrue(
-                this::unexpectedThreads,
+                () -> unexpectedThreads(initialThreads),
                 DEFAULT_MAX_WAIT_MS,
                 100L,
                 Set::isEmpty
@@ -58,7 +63,7 @@ public class LeakTestingExtension implements BeforeEachCallback, AfterEachCallba
                 unexpectedThreads._1.stream().map(Objects::toString).collect(Collectors.joining(", ")));
     }
 
-    private Set<Thread> unexpectedThreads() {
+    private Set<Thread> unexpectedThreads(Set<Thread> initialThreads) {
         Set<Thread> finalThreads = Thread.getAllStackTraces().keySet();
 
         if (initialThreads.size() != finalThreads.size()) {
@@ -76,5 +81,9 @@ public class LeakTestingExtension implements BeforeEachCallback, AfterEachCallba
         }
 
         return Collections.emptySet();
+    }
+
+    private Store getStore(ExtensionContext context) {
+        return context.getStore(Namespace.create(getClass(), context.getRequiredTestMethod()));
     }
 }
