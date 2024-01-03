@@ -79,7 +79,7 @@ object BrokerFeatures extends Logging {
       java.util.Collections.singletonMap(MetadataVersion.FEATURE_NAME,
         new SupportedVersionRange(
           MetadataVersion.MINIMUM_KRAFT_VERSION.featureLevel(),
-          MetadataVersion.latest(true).featureLevel())))
+          MetadataVersion.latest().featureLevel())))
   }
 
   def createEmpty(): BrokerFeatures = {

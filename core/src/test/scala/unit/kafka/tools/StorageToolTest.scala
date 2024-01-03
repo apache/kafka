@@ -173,13 +173,13 @@ Found problem:
         setNodeId(2).
         build()
       val stream = new ByteArrayOutputStream()
-      val bootstrapMetadata = StorageTool.buildBootstrapMetadata(MetadataVersion.latest(false), None, "test format command")
+      val bootstrapMetadata = StorageTool.buildBootstrapMetadata(MetadataVersion.latestTesting(), None, "test format command")
       assertEquals(0, StorageTool.
-        formatCommand(new PrintStream(stream), Seq(tempDir.toString), metaProperties, bootstrapMetadata, MetadataVersion.latest(false), ignoreFormatted = false))
+        formatCommand(new PrintStream(stream), Seq(tempDir.toString), metaProperties, bootstrapMetadata, MetadataVersion.latestTesting(), ignoreFormatted = false))
       assertTrue(stream.toString().startsWith("Formatting %s".format(tempDir)))
 
       try assertEquals(1, StorageTool.
-        formatCommand(new PrintStream(new ByteArrayOutputStream()), Seq(tempDir.toString), metaProperties, bootstrapMetadata, MetadataVersion.latest(false), ignoreFormatted = false)) catch {
+        formatCommand(new PrintStream(new ByteArrayOutputStream()), Seq(tempDir.toString), metaProperties, bootstrapMetadata, MetadataVersion.latestTesting(), ignoreFormatted = false)) catch {
         case e: TerseFailure => assertEquals(s"Log directory ${tempDir} is already " +
           "formatted. Use --ignore-formatted to ignore this directory and format the " +
           "others.", e.getMessage)
@@ -187,7 +187,7 @@ Found problem:
 
       val stream2 = new ByteArrayOutputStream()
       assertEquals(0, StorageTool.
-        formatCommand(new PrintStream(stream2), Seq(tempDir.toString), metaProperties, bootstrapMetadata, MetadataVersion.latest(false), ignoreFormatted = true))
+        formatCommand(new PrintStream(stream2), Seq(tempDir.toString), metaProperties, bootstrapMetadata, MetadataVersion.latestTesting(), ignoreFormatted = true))
       assertEquals("All of the log directories are already formatted.%n".format(), stream2.toString())
     } finally Utils.delete(tempDir)
   }
@@ -379,9 +379,9 @@ Found problem:
         setNodeId(2).
         build()
       val bootstrapMetadata = StorageTool.
-        buildBootstrapMetadata(MetadataVersion.latest(false), None, "test format command")
+        buildBootstrapMetadata(MetadataVersion.latestTesting(), None, "test format command")
       assertEquals(0, StorageTool.
-        formatCommand(new PrintStream(NullOutputStream.NULL_OUTPUT_STREAM), Seq(tempDir.toString), metaProperties, bootstrapMetadata, MetadataVersion.latest(false), ignoreFormatted = false))
+        formatCommand(new PrintStream(NullOutputStream.NULL_OUTPUT_STREAM), Seq(tempDir.toString), metaProperties, bootstrapMetadata, MetadataVersion.latestTesting(), ignoreFormatted = false))
 
       val metaPropertiesFile = Paths.get(tempDir.toURI).resolve(MetaPropertiesEnsemble.META_PROPERTIES_NAME).toFile
       assertTrue(metaPropertiesFile.exists())
@@ -416,7 +416,7 @@ Found problem:
     }
     val args = Array("format", "-c", s"${propsFile.toPath}",
       "-t", "XcZZOzUqS4yHOjhMQB6JLQ",
-      "--release-version", MetadataVersion.latest(false).toString)
+      "--release-version", MetadataVersion.latestTesting().toString)
     try {
       StorageTool.main(args)
     } catch {
@@ -428,7 +428,7 @@ Found problem:
       assertEquals("", exitString)
       assertEquals(0, exitStatus)
     } else {
-      assertEquals(s"Metadata version ${MetadataVersion.latest(false).toString} is not ready for " +
+      assertEquals(s"Metadata version ${MetadataVersion.latestTesting().toString} is not ready for " +
         "production use yet.", exitString)
       assertEquals(1, exitStatus)
     }

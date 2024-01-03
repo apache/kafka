@@ -168,7 +168,7 @@ class ControllerApisTest {
         ListenerType.CONTROLLER,
         true,
         false,
-        () => Features.fromKRaftVersion(MetadataVersion.latest(false))),
+        () => Features.fromKRaftVersion(MetadataVersion.latestTesting())),
       metadataCache
     )
   }

@@ -380,7 +380,7 @@ public class OffsetMetadataManagerTest {
                     commitTimestamp,
                     OptionalLong.empty()
                 ),
-                MetadataVersion.latest(false)
+                MetadataVersion.latestTesting()
             ));
         }
 

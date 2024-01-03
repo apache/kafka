@@ -31,7 +31,7 @@ import scala.jdk.CollectionConverters._
 
 class ApiVersionManagerTest {
   private val brokerFeatures = BrokerFeatures.createDefault()
-  private val metadataCache = new ZkMetadataCache(1, MetadataVersion.latest(false), brokerFeatures)
+  private val metadataCache = new ZkMetadataCache(1, MetadataVersion.latestTesting(), brokerFeatures)
 
   @ParameterizedTest
   @EnumSource(classOf[ListenerType])

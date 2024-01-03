@@ -48,7 +48,7 @@ import scala.jdk.CollectionConverters._
  */
 class AlterUserScramCredentialsRequestTest extends BaseRequestTest {
 
-  protected var testMetadataVersion = MetadataVersion.latest(false)
+  protected var testMetadataVersion = MetadataVersion.latestTesting
   override protected def metadataVersion = testMetadataVersion
 
   @BeforeEach

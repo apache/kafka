@@ -582,12 +582,13 @@ public enum MetadataVersion {
         }
     }
 
-    public static MetadataVersion latest(boolean productionOnly) {
-        if (productionOnly) {
-            return LATEST_PRODUCTION;
-        } else {
-            return VERSIONS[VERSIONS.length - 1];
-        }
+    // Testing only
+    public static MetadataVersion latestTesting() {
+        return VERSIONS[VERSIONS.length - 1];
+    }
+
+    public static MetadataVersion latest() {
+        return LATEST_PRODUCTION;
     }
 
     public static boolean checkIfMetadataChanged(MetadataVersion sourceVersion, MetadataVersion targetVersion) {
