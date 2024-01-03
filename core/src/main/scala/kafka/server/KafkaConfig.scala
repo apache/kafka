@@ -279,6 +279,7 @@ object Defaults {
   val DelegationTokenMaxLifeTimeMsDefault = 7 * 24 * 60 * 60 * 1000L
   val DelegationTokenExpiryTimeMsDefault = 24 * 60 * 60 * 1000L
   val DelegationTokenExpiryCheckIntervalMsDefault = 1 * 60 * 60 * 1000L
+  val DelegationTokenCleanSchedulerEnableDefault = true
 
   /** ********* Password encryption configuration for dynamic configs *********/
   val PasswordEncoderCipherAlgorithm = "AES/CBC/PKCS5Padding"
@@ -669,6 +670,7 @@ object KafkaConfig {
   val DelegationTokenMaxLifeTimeProp = "delegation.token.max.lifetime.ms"
   val DelegationTokenExpiryTimeMsProp = "delegation.token.expiry.time.ms"
   val DelegationTokenExpiryCheckIntervalMsProp = "delegation.token.expiry.check.interval.ms"
+  val DelegationTokenCleanSchedulerEnableProp = "delegation.token.clean.scheduler.enable"
 
   /** ********* Password encryption configuration for dynamic configs *********/
   val PasswordEncoderSecretProp = "password.encoder.secret"
@@ -1181,6 +1183,7 @@ object KafkaConfig {
   val DelegationTokenMaxLifeTimeDoc = "The token has a maximum lifetime beyond which it cannot be renewed anymore. Default value 7 days."
   val DelegationTokenExpiryTimeMsDoc = "The token validity time in milliseconds before the token needs to be renewed. Default value 1 day."
   val DelegationTokenExpiryCheckIntervalDoc = "Scan interval to remove expired delegation tokens."
+  val DelegationTokenCleanSchedulerEnableDoc = "Enable the token expiry check scheduler to clean up expired tokens"
 
   /** ********* Password encryption configuration for dynamic configs *********/
   val PasswordEncoderSecretDoc = "The secret used for encoding dynamically configured passwords for this broker."
@@ -1518,6 +1521,7 @@ object KafkaConfig {
       .define(DelegationTokenMaxLifeTimeProp, LONG, Defaults.DelegationTokenMaxLifeTimeMsDefault, atLeast(1), MEDIUM, DelegationTokenMaxLifeTimeDoc)
       .define(DelegationTokenExpiryTimeMsProp, LONG, Defaults.DelegationTokenExpiryTimeMsDefault, atLeast(1), MEDIUM, DelegationTokenExpiryTimeMsDoc)
       .define(DelegationTokenExpiryCheckIntervalMsProp, LONG, Defaults.DelegationTokenExpiryCheckIntervalMsDefault, atLeast(1), LOW, DelegationTokenExpiryCheckIntervalDoc)
+      .define(DelegationTokenCleanSchedulerEnableProp, BOOLEAN, Defaults.DelegationTokenCleanSchedulerEnableDefault, LOW, DelegationTokenCleanSchedulerEnableDoc)
 
       /** ********* Password encryption configuration for dynamic configs *********/
       .define(PasswordEncoderSecretProp, PASSWORD, null, MEDIUM, PasswordEncoderSecretDoc)
@@ -2098,6 +2102,7 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
   val delegationTokenMaxLifeMs = getLong(KafkaConfig.DelegationTokenMaxLifeTimeProp)
   val delegationTokenExpiryTimeMs = getLong(KafkaConfig.DelegationTokenExpiryTimeMsProp)
   val delegationTokenExpiryCheckIntervalMs = getLong(KafkaConfig.DelegationTokenExpiryCheckIntervalMsProp)
+  val tokenCleanSchedulerEnable = tokenAuthEnabled && getBoolean(KafkaConfig.DelegationTokenCleanSchedulerEnableProp)
 
   /** ********* Password encryption configuration for dynamic configs *********/
   def passwordEncoderSecret = Option(getPassword(KafkaConfig.PasswordEncoderSecretProp))
