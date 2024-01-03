@@ -35,6 +35,16 @@ public interface SourceTaskContext {
     Map<String, String> configs();
 
     /**
+     * Get the Connector Name. The Connector Name is a unique identifier.
+     */
+    String connectorName();
+
+    /**
+     * Get the Task ID.  The Task ID is unique within the Connector.
+     */
+    int taskId();
+
+    /**
      * Get the OffsetStorageReader for this SourceTask.
      */
     OffsetStorageReader offsetStorageReader();

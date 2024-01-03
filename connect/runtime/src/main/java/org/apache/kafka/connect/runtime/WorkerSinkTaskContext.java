@@ -60,6 +60,16 @@ public class WorkerSinkTaskContext implements SinkTaskContext {
     }
 
     @Override
+    public String connectorName() {
+        return this.sinkTask.id.connector();
+    }
+
+    @Override
+    public int taskId() {
+        return this.sinkTask.id.task();
+    }
+
+    @Override
     public void offset(Map<TopicPartition, Long> offsets) {
         log.debug("{} Setting offsets for topic partitions {}", this, offsets);
         this.offsets.putAll(offsets);

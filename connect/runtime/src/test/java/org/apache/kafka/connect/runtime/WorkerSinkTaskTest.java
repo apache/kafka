@@ -232,6 +232,9 @@ public class WorkerSinkTaskTest {
         assertTaskMetricValue("pause-ratio", 1.0);
         assertTaskMetricValue("offset-commit-max-time-ms", Double.NaN);
 
+        assertEquals(taskId.connector(), sinkTaskContext.getValue().connectorName());
+        assertEquals(taskId.task(), sinkTaskContext.getValue().taskId());
+
         PowerMock.verifyAll();
     }
 

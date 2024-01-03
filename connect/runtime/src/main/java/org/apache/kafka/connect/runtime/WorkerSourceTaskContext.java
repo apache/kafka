@@ -46,6 +46,16 @@ public class WorkerSourceTaskContext implements SourceTaskContext {
     }
 
     @Override
+    public String connectorName() {
+        return this.task.id.connector();
+    }
+
+    @Override
+    public int taskId() {
+        return this.task.id.task();
+    }
+
+    @Override
     public OffsetStorageReader offsetStorageReader() {
         return reader;
     }
