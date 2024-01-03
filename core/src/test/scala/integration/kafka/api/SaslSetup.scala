@@ -20,12 +20,10 @@ package kafka.api
 import java.io.File
 import java.util
 import java.util.Properties
-
 import javax.security.auth.login.Configuration
-
 import scala.collection.Seq
 import kafka.security.minikdc.MiniKdc
-import kafka.server.{ConfigType, KafkaConfig}
+import kafka.server.KafkaConfig
 import kafka.utils.JaasTestUtils.{JaasSection, Krb5LoginModule, ZkDigestModule}
 import kafka.utils.{JaasTestUtils, TestUtils}
 import kafka.zk.{AdminZkClient, KafkaZkClient}
@@ -37,6 +35,7 @@ import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.security.authenticator.LoginManager
 import org.apache.kafka.common.security.scram.internals.{ScramCredentialUtils, ScramFormatter, ScramMechanism}
 import org.apache.kafka.common.utils.Time
+import org.apache.kafka.server.config.ConfigType
 import org.apache.zookeeper.client.ZKClientConfig
 
 /*
@@ -205,7 +204,7 @@ trait SaslSetup {
       Int.MaxValue, Time.SYSTEM, name = "SaslSetup", zkClientConfig = zkClientConfig)) { zkClient =>
       val adminZkClient = new AdminZkClient(zkClient)
 
-      val entityType = ConfigType.User
+      val entityType = ConfigType.USER
       val entityName = userName
       val configs = adminZkClient.fetchEntityConfig(entityType, entityName)
 

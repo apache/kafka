@@ -21,7 +21,7 @@ import kafka.test.annotation.{ClusterConfigProperty, ClusterTest, ClusterTestDef
 import kafka.test.junit.ClusterTestExtensions
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests.JoinGroupRequest
-import org.apache.kafka.coordinator.group.generic.GenericGroupState
+import org.apache.kafka.coordinator.group.classic.ClassicGroupState
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.{Tag, Timeout}
 import org.junit.jupiter.api.extension.ExtendWith
@@ -115,7 +115,7 @@ class LeaveGroupRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBa
 
       // grp-1 is empty.
       assertEquals(
-        GenericGroupState.EMPTY.toString,
+        ClassicGroupState.EMPTY.toString,
         describeGroups(List("grp-1")).head.groupState
       )
 
@@ -142,7 +142,7 @@ class LeaveGroupRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBa
 
         // grp-2 is empty.
         assertEquals(
-          GenericGroupState.EMPTY.toString,
+          ClassicGroupState.EMPTY.toString,
           describeGroups(List("grp-2")).head.groupState
         )
       }
