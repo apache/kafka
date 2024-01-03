@@ -79,8 +79,11 @@ public class KafkaRaftClientDriver<T> extends ShutdownableThread {
      */
     @Override
     public void shutdown() throws InterruptedException {
-        super.shutdown();
-        client.close();
+        try {
+            super.shutdown();
+        } finally {
+            client.close();
+        }
     }
 
     @Override
