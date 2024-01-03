@@ -1229,21 +1229,16 @@ public class TaskManager {
             final String namedTopology = taskDir.namedTopology();
             try {
                 final TaskId id = parseTaskDirectoryName(dir.getName(), namedTopology);
-                boolean lockedEmptyDirectory = false;
-                try {
-                    if (stateDirectory.lock(id)) {
-                        if (stateDirectory.directoryForTaskIsEmpty(id)) {
-                            lockedEmptyDirectory = true;
-                        } else {
-                            lockedTaskDirectories.add(id);
-                            if (!allTasks.containsKey(id)) {
-                                log.debug("Temporarily locked unassigned task {} for the upcoming rebalance", id);
-                            }
-                        }
-                    }
-                } finally {
-                    if (lockedEmptyDirectory) {
+                if (stateDirectory.lock(id)) {
+                    // Check again in case the cleaner thread ran and emptied the directory
+                    if (stateDirectory.directoryForTaskIsEmpty(id)) {
+                        log.debug("Releasing lock on empty directory for task {}", id);
                         stateDirectory.unlock(id);
+                    } else {
+                        lockedTaskDirectories.add(id);
+                        if (!allTasks.containsKey(id)) {
+                            log.debug("Temporarily locked unassigned task {} for the upcoming rebalance", id);
+                        }
                     }
                 }
             } catch (final TaskIdFormatException e) {
