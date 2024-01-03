@@ -36,6 +36,7 @@ import static org.apache.kafka.connect.mirror.Heartbeat.TARGET_CLUSTER_ALIAS_KEY
  *  @see MirrorHeartbeatConfig for supported config properties.
  */
 public class MirrorHeartbeatConnector extends SourceConnector {
+    private BackgroundResources backgroundResources;
     private MirrorHeartbeatConfig config;
     private Scheduler scheduler;
     private Admin targetAdminClient;
@@ -47,12 +48,14 @@ public class MirrorHeartbeatConnector extends SourceConnector {
     // visible for testing
     MirrorHeartbeatConnector(MirrorHeartbeatConfig config) {
         this.config = config;
+        this.backgroundResources = new BackgroundResources();
     }
 
     @Override
     public void start(Map<String, String> props) {
         config = new MirrorHeartbeatConfig(props);
-        targetAdminClient = config.forwardingAdmin(config.targetAdminConfig("heartbeats-target-admin"));
+        this.backgroundResources = new BackgroundResources();
+        targetAdminClient = backgroundResources.admin(config, config.targetAdminConfig("heartbeats-target-admin"), "target admin client");
         scheduler = new Scheduler(getClass(), config.entityLabel(), config.adminTimeout());
         scheduler.execute(this::createInternalTopics, "creating internal topics");
     }

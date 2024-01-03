@@ -16,8 +16,6 @@
  */
 package org.apache.kafka.connect.mirror;
 
-import org.apache.kafka.clients.admin.ForwardingAdmin;
-import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.metrics.KafkaMetricsContext;
@@ -224,17 +222,6 @@ public abstract class MirrorConnectorConfig extends AbstractConfig {
         }
 
         return reporters;
-    }
-
-    @SuppressWarnings({"unchecked", "rawtypes"})
-    ForwardingAdmin forwardingAdmin(Map<String, Object> config) {
-        try {
-            return Utils.newParameterizedInstance(
-                    getClass(FORWARDING_ADMIN_CLASS).getName(), (Class<Map<String, Object>>) (Class) Map.class, config
-            );
-        } catch (ClassNotFoundException e) {
-            throw new KafkaException("Can't create instance of " + get(FORWARDING_ADMIN_CLASS), e);
-        }
     }
 
     void addClientId(Map<String, Object> props, String role) {

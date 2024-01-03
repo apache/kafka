@@ -40,12 +40,6 @@ public class MirrorCheckpointTaskConfig extends MirrorCheckpointConfig {
         return new HashSet<>(fields);
     }
 
-    MirrorCheckpointMetrics metrics() {
-        MirrorCheckpointMetrics metrics = new MirrorCheckpointMetrics(this);
-        metricsReporters().forEach(metrics::addReporter);
-        return metrics;
-    }
-
     @Override
     String entityLabel() {
         return super.entityLabel() + "-" + (getInt(TASK_INDEX) == null ? "?" : getInt(TASK_INDEX));

@@ -36,7 +36,7 @@ public class OffsetSyncStoreTest {
     static class FakeOffsetSyncStore extends OffsetSyncStore {
 
         FakeOffsetSyncStore() {
-            super();
+            super(null, null, null);
         }
 
         @Override

@@ -204,14 +204,6 @@ public class MirrorSourceConfig extends MirrorConnectorConfig {
         return getShort(OFFSET_SYNCS_TOPIC_REPLICATION_FACTOR);
     }
 
-    TopicFilter topicFilter() {
-        return getConfiguredInstance(TOPIC_FILTER_CLASS, TopicFilter.class);
-    }
-
-    ConfigPropertyFilter configPropertyFilter() {
-        return getConfiguredInstance(CONFIG_PROPERTY_FILTER_CLASS, ConfigPropertyFilter.class);
-    }
-
     Duration consumerPollTimeout() {
         return Duration.ofMillis(getLong(CONSUMER_POLL_TIMEOUT_MILLIS));
     }

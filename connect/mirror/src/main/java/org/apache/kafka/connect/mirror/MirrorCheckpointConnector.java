@@ -22,7 +22,6 @@ import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.utils.AppInfoParser;
-import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.connector.Task;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.source.SourceConnector;
@@ -60,6 +59,7 @@ public class MirrorCheckpointConnector extends SourceConnector {
     private Admin targetAdminClient;
     private SourceAndTarget sourceAndTarget;
     private Set<String> knownConsumerGroups = Collections.emptySet();
+    private BackgroundResources backgroundResources;
 
     public MirrorCheckpointConnector() {
         // nop
@@ -69,6 +69,7 @@ public class MirrorCheckpointConnector extends SourceConnector {
     MirrorCheckpointConnector(Set<String> knownConsumerGroups, MirrorCheckpointConfig config) {
         this.knownConsumerGroups = knownConsumerGroups;
         this.config = config;
+        this.backgroundResources = new BackgroundResources();
     }
 
     @Override
@@ -77,13 +78,14 @@ public class MirrorCheckpointConnector extends SourceConnector {
         if (!config.enabled()) {
             return;
         }
+        backgroundResources = new BackgroundResources();
         String connectorName = config.connectorName();
         sourceAndTarget = new SourceAndTarget(config.sourceClusterAlias(), config.targetClusterAlias());
-        topicFilter = config.topicFilter();
-        groupFilter = config.groupFilter();
-        sourceAdminClient = config.forwardingAdmin(config.sourceAdminConfig("checkpoint-source-admin"));
-        targetAdminClient = config.forwardingAdmin(config.targetAdminConfig("checkpoint-target-admin"));
-        scheduler = new Scheduler(getClass(), config.entityLabel(), config.adminTimeout());
+        topicFilter = backgroundResources.topicFilter(config, "topic filter");
+        groupFilter = backgroundResources.groupFilter(config, "group filter");
+        sourceAdminClient = backgroundResources.admin(config, config.sourceAdminConfig("checkpoint-source-admin"), "source admin client");
+        targetAdminClient = backgroundResources.admin(config, config.targetAdminConfig("checkpoint-target-admin"), "target admin client");
+        scheduler = backgroundResources.scheduler(getClass(), config.entityLabel(), config.adminTimeout(), "scheduler");
         scheduler.execute(this::createInternalTopics, "creating internal topics");
         scheduler.execute(this::loadInitialConsumerGroups, "loading initial consumer groups");
         scheduler.scheduleRepeatingDelayed(this::refreshConsumerGroups, config.refreshGroupsInterval(),
@@ -97,11 +99,7 @@ public class MirrorCheckpointConnector extends SourceConnector {
         if (!config.enabled()) {
             return;
         }
-        Utils.closeQuietly(scheduler, "scheduler");
-        Utils.closeQuietly(topicFilter, "topic filter");
-        Utils.closeQuietly(groupFilter, "group filter");
-        Utils.closeQuietly(sourceAdminClient, "source admin client");
-        Utils.closeQuietly(targetAdminClient, "target admin client");
+        backgroundResources.close();
     }
 
     @Override

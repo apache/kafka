@@ -67,23 +67,9 @@ class OffsetSyncStore implements AutoCloseable {
     private final TopicAdmin admin;
     protected volatile boolean readToEnd = false;
 
-    OffsetSyncStore(MirrorCheckpointConfig config) {
-        Consumer<byte[], byte[]> consumer = null;
-        TopicAdmin admin = null;
-        KafkaBasedLog<byte[], byte[]> store;
-        try {
-            consumer = MirrorUtils.newConsumer(config.offsetSyncsTopicConsumerConfig());
-            admin = new TopicAdmin(
-                    config.offsetSyncsTopicAdminConfig(),
-                    config.forwardingAdmin(config.offsetSyncsTopicAdminConfig()));
-            store = createBackingStore(config, consumer, admin);
-        } catch (Throwable t) {
-            Utils.closeQuietly(consumer, "consumer for offset syncs");
-            Utils.closeQuietly(admin, "admin client for offset syncs");
-            throw t;
-        }
+    OffsetSyncStore(MirrorCheckpointConfig config, Consumer<byte[], byte[]> consumer, TopicAdmin admin) {
         this.admin = admin;
-        this.backingStore = store;
+        this.backingStore = createBackingStore(config, consumer, admin);
     }
 
     private KafkaBasedLog<byte[], byte[]> createBackingStore(MirrorCheckpointConfig config, Consumer<byte[], byte[]> consumer, TopicAdmin admin) {
@@ -114,10 +100,6 @@ class OffsetSyncStore implements AutoCloseable {
         };
     }
 
-    OffsetSyncStore() {
-        this.admin = null;
-        this.backingStore = null;
-    }
 
     /**
      * Start the OffsetSyncStore, blocking until all previous Offset Syncs have been read from backing storage.

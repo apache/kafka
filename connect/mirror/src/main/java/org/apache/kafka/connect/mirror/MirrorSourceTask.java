@@ -31,7 +31,6 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.KafkaException;
-import org.apache.kafka.common.utils.Utils;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -68,6 +67,7 @@ public class MirrorSourceTask extends SourceTask {
     private final Map<TopicPartition, OffsetSync> pendingOffsetSyncs = new LinkedHashMap<>();
     private Semaphore outstandingOffsetSyncs;
     private Semaphore consumerAccess;
+    private BackgroundResources backgroundResources;
 
     public MirrorSourceTask() {}
 
@@ -86,6 +86,7 @@ public class MirrorSourceTask extends SourceTask {
         this.outstandingOffsetSyncs = outstandingOffsetSyncs;
         this.partitionStates = partitionStates;
         this.offsetSyncsTopic = offsetSyncsTopic;
+        backgroundResources = new BackgroundResources();
     }
 
     @Override
@@ -94,15 +95,16 @@ public class MirrorSourceTask extends SourceTask {
         pendingOffsetSyncs.clear();
         outstandingOffsetSyncs = new Semaphore(MAX_OUTSTANDING_OFFSET_SYNCS);
         consumerAccess = new Semaphore(1);  // let one thread at a time access the consumer
+        backgroundResources = new BackgroundResources();
         sourceClusterAlias = config.sourceClusterAlias();
-        metrics = config.metrics();
+        metrics = backgroundResources.sourceMetrics(config, "metrics");
         pollTimeout = config.consumerPollTimeout();
         maxOffsetLag = config.maxOffsetLag();
         replicationPolicy = config.replicationPolicy();
         partitionStates = new HashMap<>();
         offsetSyncsTopic = config.offsetSyncsTopic();
-        consumer = MirrorUtils.newConsumer(config.sourceConsumerConfig("replication-consumer"));
-        offsetProducer = MirrorUtils.newProducer(config.offsetSyncsTopicProducerConfig());
+        consumer = backgroundResources.consumer(config.sourceConsumerConfig("replication-consumer"), "source consumer");
+        offsetProducer = backgroundResources.producer(config.offsetSyncsTopicProducerConfig(), "offset producer");
         Set<TopicPartition> taskTopicPartitions = config.taskTopicPartitions();
         initializeConsumer(taskTopicPartitions);
 
@@ -130,9 +132,7 @@ public class MirrorSourceTask extends SourceTask {
         } catch (InterruptedException e) {
             log.warn("Interrupted waiting for access to consumer. Will try closing anyway."); 
         }
-        Utils.closeQuietly(consumer, "source consumer");
-        Utils.closeQuietly(offsetProducer, "offset producer");
-        Utils.closeQuietly(metrics, "metrics");
+        backgroundResources.close();
         log.info("Stopping {} took {} ms.", Thread.currentThread().getName(), System.currentTimeMillis() - start);
     }
    

@@ -46,7 +46,6 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.InvalidPartitionsException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.utils.AppInfoParser;
-import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.clients.admin.AlterConfigOp;
 import org.apache.kafka.clients.admin.TopicDescription;
 import org.apache.kafka.clients.admin.Config;
@@ -91,6 +90,7 @@ public class MirrorSourceConnector extends SourceConnector {
     private static final String READ_COMMITTED = IsolationLevel.READ_COMMITTED.toString().toLowerCase(Locale.ROOT);
     private static final String EXACTLY_ONCE_SUPPORT_CONFIG = "exactly.once.support";
 
+    private BackgroundResources backgroundResources;
     private Scheduler scheduler;
     private MirrorSourceConfig config;
     private SourceAndTarget sourceAndTarget;
@@ -115,6 +115,7 @@ public class MirrorSourceConnector extends SourceConnector {
     MirrorSourceConnector(List<TopicPartition> knownSourceTopicPartitions, MirrorSourceConfig config) {
         this.knownSourceTopicPartitions = knownSourceTopicPartitions;
         this.config = config;
+        this.backgroundResources = new BackgroundResources();
     }
 
     // visible for testing
@@ -124,6 +125,7 @@ public class MirrorSourceConnector extends SourceConnector {
         this.replicationPolicy = replicationPolicy;
         this.topicFilter = topicFilter;
         this.configPropertyFilter = configPropertyFilter;
+        this.backgroundResources = new BackgroundResources();
     }
 
     // visible for testing the deprecated setting "use.incremental.alter.configs"
@@ -135,9 +137,9 @@ public class MirrorSourceConnector extends SourceConnector {
         this.configPropertyFilter = configPropertyFilter;
         this.config = config;
         this.useIncrementalAlterConfigs = !config.useIncrementalAlterConfigs().equals(MirrorSourceConfig.NEVER_USE_INCREMENTAL_ALTER_CONFIGS);
-        this.targetAdminClient = targetAdmin;                      
+        this.targetAdminClient = targetAdmin;
     }
-        
+
     // visible for testing
     MirrorSourceConnector(Admin sourceAdminClient, Admin targetAdminClient) {
         this.sourceAdminClient = sourceAdminClient;
@@ -151,17 +153,19 @@ public class MirrorSourceConnector extends SourceConnector {
         if (!config.enabled()) {
             return;
         }
+        backgroundResources = new BackgroundResources();
         connectorName = config.connectorName();
         sourceAndTarget = new SourceAndTarget(config.sourceClusterAlias(), config.targetClusterAlias());
-        topicFilter = config.topicFilter();
-        configPropertyFilter = config.configPropertyFilter();
+        topicFilter = backgroundResources.topicFilter(config, "topic filter");
+        configPropertyFilter = backgroundResources.configPropertyFilter(config, "config property filter");
         replicationPolicy = config.replicationPolicy();
         replicationFactor = config.replicationFactor();
-        sourceAdminClient = config.forwardingAdmin(config.sourceAdminConfig("replication-source-admin"));
-        targetAdminClient = config.forwardingAdmin(config.targetAdminConfig("replication-target-admin"));
-        useIncrementalAlterConfigs =  !config.useIncrementalAlterConfigs().equals(MirrorSourceConfig.NEVER_USE_INCREMENTAL_ALTER_CONFIGS);
-        offsetSyncsAdminClient = config.forwardingAdmin(config.offsetSyncsTopicAdminConfig());
         scheduler = new Scheduler(getClass(), config.entityLabel(), config.adminTimeout());
+        sourceAdminClient = backgroundResources.admin(config, config.sourceAdminConfig("source admin client"), "source admin client");
+        targetAdminClient = backgroundResources.admin(config, config.targetAdminConfig("target admin client"), "target admin client");
+        useIncrementalAlterConfigs =  !config.useIncrementalAlterConfigs().equals(MirrorSourceConfig.NEVER_USE_INCREMENTAL_ALTER_CONFIGS);
+        offsetSyncsAdminClient = backgroundResources.admin(config, config.offsetSyncsTopicAdminConfig(), "offset syncs admin client");
+        scheduler = backgroundResources.scheduler(MirrorSourceConnector.class, config.entityLabel(), config.adminTimeout(), "scheduler");
         scheduler.execute(this::createOffsetSyncsTopic, "creating upstream offset-syncs topic");
         scheduler.execute(this::loadTopicPartitions, "loading initial set of topic-partitions");
         scheduler.execute(this::computeAndCreateTopicPartitions, "creating downstream topic-partitions");
@@ -181,12 +185,7 @@ public class MirrorSourceConnector extends SourceConnector {
         if (!config.enabled()) {
             return;
         }
-        Utils.closeQuietly(scheduler, "scheduler");
-        Utils.closeQuietly(topicFilter, "topic filter");
-        Utils.closeQuietly(configPropertyFilter, "config property filter");
-        Utils.closeQuietly(sourceAdminClient, "source admin client");
-        Utils.closeQuietly(targetAdminClient, "target admin client");
-        Utils.closeQuietly(offsetSyncsAdminClient, "offset syncs admin client");
+        backgroundResources.close();
         log.info("Stopping {} took {} ms.", connectorName, System.currentTimeMillis() - start);
     }
 
