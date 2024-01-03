@@ -77,7 +77,9 @@ object BrokerFeatures extends Logging {
   def defaultSupportedFeatures(): Features[SupportedVersionRange] = {
     Features.supportedFeatures(
       java.util.Collections.singletonMap(MetadataVersion.FEATURE_NAME,
-        new SupportedVersionRange(MetadataVersion.MINIMUM_KRAFT_VERSION.featureLevel(), MetadataVersion.latest().featureLevel())))
+        new SupportedVersionRange(
+          MetadataVersion.MINIMUM_KRAFT_VERSION.featureLevel(),
+          MetadataVersion.latest(true).featureLevel())))
   }
 
   def createEmpty(): BrokerFeatures = {

@@ -715,7 +715,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
   def appendAsLeader(records: MemoryRecords,
                      leaderEpoch: Int,
                      origin: AppendOrigin = AppendOrigin.CLIENT,
-                     interBrokerProtocolVersion: MetadataVersion = MetadataVersion.latest,
+                     interBrokerProtocolVersion: MetadataVersion = MetadataVersion.latest(true),
                      requestLocal: RequestLocal = RequestLocal.NoCaching,
                      verificationGuard: VerificationGuard = VerificationGuard.SENTINEL): LogAppendInfo = {
     val validateAndAssignOffsets = origin != AppendOrigin.RAFT_LEADER
@@ -732,7 +732,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
   def appendAsFollower(records: MemoryRecords): LogAppendInfo = {
     append(records,
       origin = AppendOrigin.REPLICATION,
-      interBrokerProtocolVersion = MetadataVersion.latest,
+      interBrokerProtocolVersion = MetadataVersion.latest(true),
       validateAndAssignOffsets = false,
       leaderEpoch = -1,
       requestLocal = None,

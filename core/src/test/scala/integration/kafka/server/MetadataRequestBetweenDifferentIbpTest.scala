@@ -37,8 +37,8 @@ class MetadataRequestBetweenDifferentIbpTest extends BaseRequestTest {
   override def generateConfigs: Seq[KafkaConfig] = {
     Seq(
       createConfig(0, IBP_2_8_IV0),
-      createConfig(1, MetadataVersion.latest),
-      createConfig(2, MetadataVersion.latest)
+      createConfig(1, MetadataVersion.latest(false)),
+      createConfig(2, MetadataVersion.latest(false))
     )
   }
 

@@ -98,7 +98,7 @@ public class TestKitNodes {
                     clusterId = Uuid.randomUuid();
                 }
                 if (bootstrapMetadataVersion == null) {
-                    bootstrapMetadataVersion = MetadataVersion.latest();
+                    bootstrapMetadataVersion = MetadataVersion.latest(false);
                 }
                 TreeMap<Integer, ControllerNode> controllerNodes = new TreeMap<>();
                 for (ControllerNode.Builder builder : controllerNodeBuilders.values()) {

@@ -595,7 +595,7 @@ class KafkaConfigTest {
     props.setProperty(KafkaConfig.BrokerIdProp, "1")
     props.setProperty(KafkaConfig.ZkConnectProp, "localhost:2181")
     val conf = KafkaConfig.fromProps(props)
-    assertEquals(MetadataVersion.latest, conf.interBrokerProtocolVersion)
+    assertEquals(MetadataVersion.latest(false), conf.interBrokerProtocolVersion)
 
     props.setProperty(KafkaConfig.InterBrokerProtocolVersionProp, "0.8.2.0")
     // We need to set the message format version to make the configuration valid.
@@ -611,7 +611,7 @@ class KafkaConfigTest {
     assertEquals(IBP_0_8_2, conf3.interBrokerProtocolVersion)
 
     //check that latest is newer than 0.8.2
-    assertTrue(MetadataVersion.latest.isAtLeast(conf3.interBrokerProtocolVersion))
+    assertTrue(MetadataVersion.latest(false).isAtLeast(conf3.interBrokerProtocolVersion))
   }
 
   private def isValidKafkaConfig(props: Properties): Boolean = {
@@ -1687,6 +1687,13 @@ class KafkaConfigTest {
     props.putAll(kraftProps())
     val config = KafkaConfig.fromProps(props)
     assertEquals(config.interBrokerProtocolVersion, MetadataVersion.MINIMUM_KRAFT_VERSION)
+  }
+
+  @Test
+  def testDefaultInterBrokerProtocolVersionIsProduction(): Unit = {
+    val props = TestUtils.createBrokerConfig(1, TestUtils.MockZkConnect, port = TestUtils.MockZkPort)
+    val config = KafkaConfig.fromProps(props)
+    assertTrue(config.interBrokerProtocolVersion.isProduction)
   }
 
   @Test

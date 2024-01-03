@@ -175,7 +175,7 @@ abstract class QuorumTestHarness extends Logging {
     Seq(new Properties())
   }
 
-  protected def metadataVersion: MetadataVersion = MetadataVersion.latest()
+  protected def metadataVersion: MetadataVersion = MetadataVersion.latest(false)
 
   private var testInfo: TestInfo = _
   private var implementation: QuorumImplementation = _

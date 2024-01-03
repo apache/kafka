@@ -921,12 +921,12 @@ class KRaftClusterTest {
       try {
         admin.updateFeatures(
           Map(MetadataVersion.FEATURE_NAME ->
-            new FeatureUpdate(MetadataVersion.latest().featureLevel(), FeatureUpdate.UpgradeType.UPGRADE)).asJava, new UpdateFeaturesOptions
+            new FeatureUpdate(MetadataVersion.latest(false).featureLevel(), FeatureUpdate.UpgradeType.UPGRADE)).asJava, new UpdateFeaturesOptions
         )
       } finally {
         admin.close()
       }
-      TestUtils.waitUntilTrue(() => cluster.brokers().get(1).metadataCache.currentImage().features().metadataVersion().equals(MetadataVersion.latest()),
+      TestUtils.waitUntilTrue(() => cluster.brokers().get(1).metadataCache.currentImage().features().metadataVersion().equals(MetadataVersion.latest(false)),
         "Timed out waiting for metadata version update.")
     } finally {
       cluster.close()

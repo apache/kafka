@@ -35,7 +35,7 @@ public final class ImageWriterOptions {
         };
 
         public Builder() {
-            this.metadataVersion = MetadataVersion.latest();
+            this.metadataVersion = MetadataVersion.latest(false);
         }
 
         public Builder(MetadataImage image) {

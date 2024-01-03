@@ -160,7 +160,7 @@ class ControllerChannelManagerTest {
 
   @Test
   def testLeaderAndIsrInterBrokerProtocolVersion(): Unit = {
-    testLeaderAndIsrRequestFollowsInterBrokerProtocolVersion(MetadataVersion.latest, ApiKeys.LEADER_AND_ISR.latestVersion)
+    testLeaderAndIsrRequestFollowsInterBrokerProtocolVersion(MetadataVersion.latest(false), ApiKeys.LEADER_AND_ISR.latestVersion)
 
     for (metadataVersion <- MetadataVersion.VERSIONS) {
       val leaderAndIsrRequestVersion: Short = {
@@ -379,7 +379,7 @@ class ControllerChannelManagerTest {
 
   @Test
   def testUpdateMetadataInterBrokerProtocolVersion(): Unit = {
-    testUpdateMetadataFollowsInterBrokerProtocolVersion(MetadataVersion.latest, ApiKeys.UPDATE_METADATA.latestVersion)
+    testUpdateMetadataFollowsInterBrokerProtocolVersion(MetadataVersion.latest(false), ApiKeys.UPDATE_METADATA.latestVersion)
 
     for (metadataVersion <- MetadataVersion.VERSIONS) {
       val updateMetadataRequestVersion: Short =
@@ -625,7 +625,7 @@ class ControllerChannelManagerTest {
 
   @Test
   def testMixedDeleteAndNotDeleteStopReplicaRequests(): Unit = {
-    testMixedDeleteAndNotDeleteStopReplicaRequests(MetadataVersion.latest,
+    testMixedDeleteAndNotDeleteStopReplicaRequests(MetadataVersion.latest(false),
       ApiKeys.STOP_REPLICA.latestVersion)
 
     for (metadataVersion <- MetadataVersion.VERSIONS) {
@@ -775,7 +775,7 @@ class ControllerChannelManagerTest {
 
   @Test
   def testStopReplicaInterBrokerProtocolVersion(): Unit = {
-    testStopReplicaFollowsInterBrokerProtocolVersion(MetadataVersion.latest, ApiKeys.STOP_REPLICA.latestVersion)
+    testStopReplicaFollowsInterBrokerProtocolVersion(MetadataVersion.latest(false), ApiKeys.STOP_REPLICA.latestVersion)
 
     for (metadataVersion <- MetadataVersion.VERSIONS) {
       if (metadataVersion.isLessThan(IBP_2_2_IV0))

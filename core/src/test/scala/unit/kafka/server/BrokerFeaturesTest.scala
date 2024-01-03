@@ -94,7 +94,7 @@ class BrokerFeaturesTest {
     brokerFeatures.setSupportedFeatures(supportedFeatures)
 
     val expectedFeatures = Map[String, Short](
-      MetadataVersion.FEATURE_NAME -> MetadataVersion.latest().featureLevel(),
+      MetadataVersion.FEATURE_NAME -> MetadataVersion.latest(false).featureLevel(),
       "test_feature_1" -> 4,
       "test_feature_2" -> 3,
       "test_feature_3" -> 7)
