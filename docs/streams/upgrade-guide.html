@@ -209,7 +209,17 @@
     </pre>
     </p>
 
-    <h3><a id="streams_api_changes_370" href="#streams_api_changes_370">Streams API changes in 3.7.0</a></h3>
+
+    <p>
+        The <code>default.dsl.store</code> config was deprecated in favor of the new
+        <code>dsl.store.suppliers.class</code> config to allow for custom state store 
+        implementations to be configured as the default.
+        
+        If you currently specify <code>default.dsl.store=ROCKS_DB</code> or <code>default.dsl.store=IN_MEMORY</code> replace those
+        configurations with <code>dsl.store.suppliers.class=BuiltInDslStoreSuppliers.RocksDBDslStoreSuppliers.class</code> and
+        <code>dsl.stores.suppliers.class=BuiltInDslStoreSuppliers.InMemoryDslStoreSuppliers.class</code> respectively
+    </p>
+
     <p>
       A new configuration option <code>balance_subtopology</code> for <code>rack.aware.assignment.strategy</code> was introduced in 3.7 release.
       For more information, including how it can be enabled and further configured, see the <a href="/{{version}}/documentation/streams/developer-guide/config-streams.html#rack-aware-assignment-strategy"><b>Kafka Streams Developer Guide</b></a>.
