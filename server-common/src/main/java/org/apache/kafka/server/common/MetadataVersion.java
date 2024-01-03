@@ -587,7 +587,7 @@ public enum MetadataVersion {
         return VERSIONS[VERSIONS.length - 1];
     }
 
-    public static MetadataVersion latest() {
+    public static MetadataVersion latestProduction() {
         return LATEST_PRODUCTION;
     }
 
