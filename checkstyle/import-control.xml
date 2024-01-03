@@ -196,6 +196,13 @@
     <subpackage name="quotas">
       <allow pkg="org.apache.kafka.common" />
     </subpackage>
+
+    <subpackage name="telemetry">
+      <allow pkg="io.opentelemetry.proto"/>
+      <allow pkg="org.apache.kafka.clients"/>
+      <allow pkg="org.apache.kafka.common" />
+    </subpackage>
+
   </subpackage>
 
   <subpackage name="clients">
@@ -205,6 +212,10 @@
 
     <subpackage name="consumer">
       <allow pkg="org.apache.kafka.clients.consumer" />
+
+      <subpackage name="internals">
+        <allow pkg="org.apache.kafka.clients" />
+      </subpackage>
     </subpackage>
 
     <subpackage name="producer">
@@ -239,6 +250,11 @@
       <allow pkg="org.apache.kafka.server.util"/>
       <allow pkg="org.apache.kafka.test" />
       <allow pkg="org.apache.kafka.timeline" />
+      <subpackage name="metrics">
+        <allow pkg="com.yammer.metrics"/>
+        <allow pkg="org.apache.kafka.common.metrics" />
+        <allow pkg="org.apache.kafka.server.metrics" />
+      </subpackage>
     </subpackage>
   </subpackage>
 
@@ -247,6 +263,11 @@
 
     <!-- This is required to make AlterConfigPolicyTest work. -->
     <allow pkg="org.apache.kafka.server.policy" />
+
+    <subpackage name="telemetry">
+      <allow class="org.apache.kafka.server.authorizer.AuthorizableRequestContext" />
+    </subpackage>
+
   </subpackage>
 
   <subpackage name="shell">
@@ -254,6 +275,7 @@
     <allow pkg="kafka.raft"/>
     <allow pkg="kafka.server"/>
     <allow pkg="kafka.tools"/>
+    <allow pkg="kafka.utils"/>
     <allow pkg="net.sourceforge.argparse4j" />
     <allow pkg="org.apache.kafka.common"/>
     <allow pkg="org.apache.kafka.metadata"/>
@@ -273,6 +295,9 @@
   <subpackage name="tools">
     <allow pkg="org.apache.kafka.common"/>
     <allow pkg="org.apache.kafka.server.util" />
+    <allow pkg="kafka.admin" />
+    <allow pkg="kafka.server" />
+    <allow pkg="org.apache.kafka.storage.internals" />
     <allow pkg="org.apache.kafka.server.common" />
     <allow pkg="org.apache.kafka.clients" />
     <allow pkg="org.apache.kafka.clients.admin" />
@@ -292,7 +317,21 @@
     <allow pkg="scala.collection" />
 
     <subpackage name="reassign">
+      <allow pkg="org.apache.kafka.admin"/>
+      <allow pkg="org.apache.kafka.tools"/>
       <allow pkg="kafka.admin" />
+      <allow pkg="kafka.cluster" />
+      <allow pkg="kafka.log" />
+      <allow pkg="kafka.server" />
+      <allow pkg="scala" />
+    </subpackage>
+
+    <subpackage name="other">
+      <allow pkg="org.apache.kafka.tools.reassign"/>
+      <allow pkg="kafka.log" />
+      <allow pkg="org.jfree"/>
+      <allow pkg="javax.imageio" />
+      <allow pkg="scala" />
     </subpackage>
   </subpackage>
 
@@ -354,6 +393,7 @@
       <allow class="kafka.zk.EmbeddedZookeeper"/>
       <allow pkg="com.fasterxml.jackson" />
       <allow pkg="org.apache.kafka.tools" />
+      <allow pkg="org.apache.kafka.server.config" />
     </subpackage>
 
     <subpackage name="test">
@@ -369,6 +409,7 @@
         <allow pkg="com.fasterxml.jackson" />
         <allow pkg="kafka.utils" />
         <allow pkg="org.apache.zookeeper" />
+        <allow pkg="org.apache.log4j" />
       </subpackage>
     </subpackage>
   </subpackage>
@@ -400,6 +441,7 @@
     <allow pkg="org.apache.kafka.common.protocol" />
     <allow pkg="org.apache.kafka.server.common" />
     <allow pkg="org.apache.kafka.server.common.serialization" />
+    <allow pkg="org.apache.kafka.server.util" />
     <allow pkg="org.apache.kafka.test"/>
     <allow pkg="com.fasterxml.jackson" />
     <allow pkg="net.jqwik"/>
@@ -482,6 +524,7 @@
       <allow pkg="org.reflections.util"/>
       <allow pkg="javax.crypto"/>
       <allow pkg="org.eclipse.jetty.util" />
+      <allow pkg="org.apache.log4j" />
 
       <subpackage name="rest">
         <allow pkg="org.eclipse.jetty" />
@@ -491,9 +534,6 @@
         <allow pkg="com.fasterxml.jackson" />
         <allow pkg="org.apache.http"/>
         <allow pkg="io.swagger.v3.oas.annotations"/>
-        <subpackage name="resources">
-          <allow pkg="org.apache.log4j" />
-        </subpackage>
       </subpackage>
 
       <subpackage name="isolation">
@@ -508,6 +548,7 @@
     </subpackage>
 
     <subpackage name="cli">
+      <allow pkg="com.fasterxml.jackson" />
       <allow pkg="org.apache.kafka.connect.runtime" />
       <allow pkg="org.apache.kafka.connect.storage" />
       <allow pkg="org.apache.kafka.connect.util" />

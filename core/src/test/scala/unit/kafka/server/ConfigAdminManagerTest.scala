@@ -21,11 +21,10 @@ import java.util
 import java.util.Collections
 
 import kafka.server.metadata.MockConfigRepository
-import kafka.utils.{Log4jController, TestUtils}
+import kafka.utils.TestUtils
 import org.apache.kafka.clients.admin.AlterConfigOp.OpType
 import org.apache.kafka.common.config.ConfigResource.Type.{BROKER, BROKER_LOGGER, TOPIC, UNKNOWN}
-import org.apache.kafka.common.config.LogLevelConfig.VALID_LOG_LEVELS
-import org.apache.kafka.common.errors.{InvalidConfigurationException, InvalidRequestException}
+import org.apache.kafka.common.errors.InvalidRequestException
 import org.apache.kafka.common.message.{AlterConfigsRequestData, AlterConfigsResponseData, IncrementalAlterConfigsRequestData, IncrementalAlterConfigsResponseData}
 import org.apache.kafka.common.message.AlterConfigsRequestData.{AlterConfigsResource => LAlterConfigsResource}
 import org.apache.kafka.common.message.AlterConfigsRequestData.{AlterConfigsResourceCollection => LAlterConfigsResourceCollection}
@@ -43,8 +42,6 @@ import org.apache.kafka.common.requests.ApiError
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertTrue}
 import org.junit.jupiter.api.{Assertions, Test}
 import org.slf4j.LoggerFactory
-
-import scala.jdk.CollectionConverters._
 
 class ConfigAdminManagerTest {
   val logger = LoggerFactory.getLogger(classOf[ConfigAdminManagerTest])
@@ -257,47 +254,6 @@ class ConfigAdminManagerTest {
     assertEquals("Node id must be an integer, but it is: e",
       Assertions.assertThrows(classOf[InvalidRequestException],
         () => manager.validateResourceNameIsCurrentNodeId("e")).getMessage())
-  }
-
-  @Test
-  def testValidateLogLevelConfigs(): Unit = {
-    val manager = newConfigAdminManager(5)
-    manager.validateLogLevelConfigs(util.Arrays.asList(new IAlterableConfig().
-      setName(logger.getName).
-      setConfigOperation(OpType.SET.id()).
-      setValue("TRACE")))
-    manager.validateLogLevelConfigs(util.Arrays.asList(new IAlterableConfig().
-      setName(logger.getName).
-      setConfigOperation(OpType.DELETE.id()).
-      setValue("")))
-    assertEquals("APPEND operation is not allowed for the BROKER_LOGGER resource",
-      Assertions.assertThrows(classOf[InvalidRequestException],
-        () => manager.validateLogLevelConfigs(util.Arrays.asList(new IAlterableConfig().
-          setName(logger.getName).
-          setConfigOperation(OpType.APPEND.id()).
-          setValue("TRACE")))).getMessage())
-    assertEquals(s"Cannot set the log level of ${logger.getName} to BOGUS as it is not " +
-      s"a supported log level. Valid log levels are ${VALID_LOG_LEVELS.asScala.mkString(", ")}",
-      Assertions.assertThrows(classOf[InvalidConfigurationException],
-        () => manager.validateLogLevelConfigs(util.Arrays.asList(new IAlterableConfig().
-          setName(logger.getName).
-          setConfigOperation(OpType.SET.id()).
-          setValue("BOGUS")))).getMessage())
-  }
-
-  @Test
-  def testValidateRootLogLevelConfigs(): Unit = {
-    val manager = newConfigAdminManager(5)
-    manager.validateLogLevelConfigs(util.Arrays.asList(new IAlterableConfig().
-      setName(Log4jController.ROOT_LOGGER).
-      setConfigOperation(OpType.SET.id()).
-      setValue("TRACE")))
-    assertEquals(s"Removing the log level of the ${Log4jController.ROOT_LOGGER} logger is not allowed",
-      Assertions.assertThrows(classOf[InvalidRequestException],
-        () => manager.validateLogLevelConfigs(util.Arrays.asList(new IAlterableConfig().
-          setName(Log4jController.ROOT_LOGGER).
-          setConfigOperation(OpType.DELETE.id()).
-          setValue("")))).getMessage())
   }
 
   def brokerLogger1Incremental(): IAlterConfigsResource = new IAlterConfigsResource().

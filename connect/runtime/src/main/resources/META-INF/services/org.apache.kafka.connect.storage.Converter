@@ -19,3 +19,4 @@ org.apache.kafka.connect.converters.FloatConverter
 org.apache.kafka.connect.converters.IntegerConverter
 org.apache.kafka.connect.converters.LongConverter
 org.apache.kafka.connect.converters.ShortConverter
+org.apache.kafka.connect.converters.BooleanConverter

@@ -48,7 +48,7 @@ import org.apache.kafka.connect.source.SourceRecord;
 import org.apache.kafka.connect.source.SourceTask;
 import org.apache.kafka.connect.storage.StringConverter;
 import org.apache.kafka.connect.util.clusters.EmbeddedConnectCluster;
-import org.apache.kafka.connect.util.clusters.EmbeddedConnectClusterAssertions;
+import org.apache.kafka.connect.util.clusters.ConnectAssertions;
 import org.apache.kafka.connect.util.clusters.EmbeddedKafkaCluster;
 import org.apache.kafka.test.IntegrationTest;
 import org.junit.After;
@@ -650,13 +650,14 @@ public class ExactlyOnceSourceIntegrationTest {
         final String globalOffsetsTopic = "connect-worker-offsets-topic";
         workerProps.put(DistributedConfig.OFFSET_STORAGE_TOPIC_CONFIG, globalOffsetsTopic);
 
-        connectBuilder.clientConfigs(superUserClientConfig);
+        connectBuilder.clientProps(superUserClientConfig);
 
         startConnect();
 
         String topic = "test-topic";
-        Admin admin = connect.kafka().createAdminClient();
-        admin.createTopics(Collections.singleton(new NewTopic(topic, 3, (short) 1))).all().get();
+        try (Admin admin = connect.kafka().createAdminClient()) {
+            admin.createTopics(Collections.singleton(new NewTopic(topic, 3, (short) 1))).all().get();
+        }
 
         Map<String, String> props = new HashMap<>();
         int tasksMax = 2; // Use two tasks since single-task connectors don't require zombie fencing
@@ -680,16 +681,18 @@ public class ExactlyOnceSourceIntegrationTest {
                         + "password=\"connector_pwd\";");
         // Grant the connector's admin permissions to access the topics for its records and offsets
         // Intentionally leave out permissions required for fencing
-        admin.createAcls(Arrays.asList(
-                new AclBinding(
-                        new ResourcePattern(ResourceType.TOPIC, topic, PatternType.LITERAL),
-                        new AccessControlEntry("User:connector", "*", AclOperation.ALL, AclPermissionType.ALLOW)
-                ),
-                new AclBinding(
-                        new ResourcePattern(ResourceType.TOPIC, globalOffsetsTopic, PatternType.LITERAL),
-                        new AccessControlEntry("User:connector", "*", AclOperation.ALL, AclPermissionType.ALLOW)
-                )
-        )).all().get();
+        try (Admin admin = connect.kafka().createAdminClient()) {
+            admin.createAcls(Arrays.asList(
+                    new AclBinding(
+                            new ResourcePattern(ResourceType.TOPIC, topic, PatternType.LITERAL),
+                            new AccessControlEntry("User:connector", "*", AclOperation.ALL, AclPermissionType.ALLOW)
+                    ),
+                    new AclBinding(
+                            new ResourcePattern(ResourceType.TOPIC, globalOffsetsTopic, PatternType.LITERAL),
+                            new AccessControlEntry("User:connector", "*", AclOperation.ALL, AclPermissionType.ALLOW)
+                    )
+            )).all().get();
+        }
 
         StartAndStopLatch connectorStart = connectorAndTaskStart(tasksMax);
 
@@ -707,16 +710,18 @@ public class ExactlyOnceSourceIntegrationTest {
         connect.assertions().assertConnectorIsRunningAndTasksHaveFailed(CONNECTOR_NAME, tasksMax, "Task should have failed on startup");
 
         // Now grant the necessary permissions for fencing to the connector's admin
-        admin.createAcls(Arrays.asList(
-                new AclBinding(
-                        new ResourcePattern(ResourceType.TRANSACTIONAL_ID, Worker.taskTransactionalId(CLUSTER_GROUP_ID, CONNECTOR_NAME, 0), PatternType.LITERAL),
-                        new AccessControlEntry("User:connector", "*", AclOperation.ALL, AclPermissionType.ALLOW)
-                ),
-                new AclBinding(
-                        new ResourcePattern(ResourceType.TRANSACTIONAL_ID, Worker.taskTransactionalId(CLUSTER_GROUP_ID, CONNECTOR_NAME, 1), PatternType.LITERAL),
-                        new AccessControlEntry("User:connector", "*", AclOperation.ALL, AclPermissionType.ALLOW)
-                )
-        ));
+        try (Admin admin = connect.kafka().createAdminClient()) {
+            admin.createAcls(Arrays.asList(
+                    new AclBinding(
+                            new ResourcePattern(ResourceType.TRANSACTIONAL_ID, Worker.taskTransactionalId(CLUSTER_GROUP_ID, CONNECTOR_NAME, 0), PatternType.LITERAL),
+                            new AccessControlEntry("User:connector", "*", AclOperation.ALL, AclPermissionType.ALLOW)
+                    ),
+                    new AclBinding(
+                            new ResourcePattern(ResourceType.TRANSACTIONAL_ID, Worker.taskTransactionalId(CLUSTER_GROUP_ID, CONNECTOR_NAME, 1), PatternType.LITERAL),
+                            new AccessControlEntry("User:connector", "*", AclOperation.ALL, AclPermissionType.ALLOW)
+                    )
+            ));
+        }
 
         log.info("Restarting connector after tweaking its ACLs; fencing should succeed this time");
         connect.restartConnectorAndTasks(CONNECTOR_NAME, false, true, false);
@@ -1095,7 +1100,7 @@ public class ExactlyOnceSourceIntegrationTest {
     private void assertConnectorStarted(StartAndStopLatch connectorStart) throws InterruptedException {
         assertTrue("Connector and tasks did not finish startup in time",
                 connectorStart.await(
-                        EmbeddedConnectClusterAssertions.CONNECTOR_SETUP_DURATION_MS,
+                        ConnectAssertions.CONNECTOR_SETUP_DURATION_MS,
                         TimeUnit.MILLISECONDS
                 )
         );
@@ -1105,7 +1110,7 @@ public class ExactlyOnceSourceIntegrationTest {
         assertTrue(
                 "Connector and tasks did not finish shutdown in time",
                 connectorStop.await(
-                        EmbeddedConnectClusterAssertions.CONNECTOR_SHUTDOWN_DURATION_MS,
+                        ConnectAssertions.CONNECTOR_SHUTDOWN_DURATION_MS,
                         TimeUnit.MILLISECONDS
                 )
         );

@@ -136,7 +136,7 @@ final class BrokerServerMetrics private (
 }
 
 
-final object BrokerServerMetrics {
+object BrokerServerMetrics {
   private val metricGroupName = "broker-metadata-metrics"
 
   private def addMetric[T](metrics: Metrics, name: MetricName)(func: Long => T): Unit = {

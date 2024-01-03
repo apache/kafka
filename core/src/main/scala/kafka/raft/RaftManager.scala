@@ -26,7 +26,7 @@ import kafka.log.LogManager
 import kafka.log.UnifiedLog
 import kafka.raft.KafkaRaftManager.RaftIoThread
 import kafka.server.KafkaRaftServer.ControllerRole
-import kafka.server.{KafkaConfig, MetaProperties}
+import kafka.server.KafkaConfig
 import kafka.utils.CoreUtils
 import kafka.utils.FileLock
 import kafka.utils.Logging
@@ -42,7 +42,7 @@ import org.apache.kafka.common.security.JaasContext
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.utils.{LogContext, Time}
 import org.apache.kafka.raft.RaftConfig.{AddressSpec, InetAddressSpec, NON_ROUTABLE_ADDRESS, UnknownAddressSpec}
-import org.apache.kafka.raft.{FileBasedStateStore, KafkaRaftClient, LeaderAndEpoch, RaftClient, RaftConfig, RaftRequest, ReplicatedLog}
+import org.apache.kafka.raft.{FileBasedStateStore, KafkaNetworkChannel, KafkaRaftClient, LeaderAndEpoch, RaftClient, RaftConfig, RaftRequest, ReplicatedLog}
 import org.apache.kafka.server.common.serialization.RecordSerde
 import org.apache.kafka.server.util.{KafkaScheduler, ShutdownableThread}
 import org.apache.kafka.server.fault.FaultHandler
@@ -128,7 +128,7 @@ trait RaftManager[T] {
 }
 
 class KafkaRaftManager[T](
-  metaProperties: MetaProperties,
+  clusterId: String,
   config: KafkaConfig,
   recordSerde: RecordSerde[T],
   topicPartition: TopicPartition,
@@ -241,7 +241,7 @@ class KafkaRaftManager[T](
       metrics,
       expirationService,
       logContext,
-      metaProperties.clusterId,
+      clusterId,
       nodeId,
       raftConfig
     )

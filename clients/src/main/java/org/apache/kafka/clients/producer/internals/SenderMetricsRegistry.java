@@ -76,7 +76,7 @@ public class SenderMetricsRegistry {
         this.tags = this.metrics.config().tags().keySet();
         this.allTemplates = new ArrayList<>();
         
-        /***** Client level *****/
+        /* Client level */
         
         this.batchSizeAvg = createMetricName("batch-size-avg",
                 "The average number of bytes sent per partition per-request.");
@@ -125,7 +125,7 @@ public class SenderMetricsRegistry {
         this.produceThrottleTimeMax = createMetricName("produce-throttle-time-max",
                 "The maximum time in ms a request was throttled by a broker");
 
-        /***** Topic level *****/
+        /* Topic level */
         this.topicTags = new LinkedHashSet<>(tags);
         this.topicTags.add("topic");
 
@@ -160,7 +160,7 @@ public class SenderMetricsRegistry {
         return createTemplate(name, TOPIC_METRIC_GROUP_NAME, description, this.topicTags);
     }
 
-    /** topic level metrics **/
+    /* topic level metrics */
     public MetricName topicRecordSendRate(Map<String, String> tags) {
         return this.metrics.metricInstance(this.topicRecordSendRate, tags);
     }

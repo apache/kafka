@@ -31,6 +31,7 @@ import org.apache.kafka.common.requests._
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.common.{Node, Uuid}
+import org.apache.kafka.server.{ControllerRequestCompletionHandler, NodeToControllerChannelManager}
 import org.apache.kafka.server.common.MetadataVersion
 import org.junit.jupiter.api.Assertions.{assertEquals, assertThrows}
 import org.junit.jupiter.api.extension.ExtendWith
@@ -46,8 +47,8 @@ import java.util.concurrent.{CompletableFuture, TimeUnit, TimeoutException}
 @ExtendWith(value = Array(classOf[ClusterTestExtensions]))
 class BrokerRegistrationRequestTest {
 
-  def brokerToControllerChannelManager(clusterInstance: ClusterInstance): BrokerToControllerChannelManager = {
-    BrokerToControllerChannelManager(
+  def brokerToControllerChannelManager(clusterInstance: ClusterInstance): NodeToControllerChannelManager = {
+    new NodeToControllerChannelManagerImpl(
       new ControllerNodeProvider() {
         def node: Option[Node] = Some(new Node(
           clusterInstance.anyControllerSocketServer().config.nodeId,
@@ -76,7 +77,7 @@ class BrokerRegistrationRequestTest {
   }
 
   def sendAndReceive[T <: AbstractRequest, R <: AbstractResponse](
-    channelManager: BrokerToControllerChannelManager,
+    channelManager: NodeToControllerChannelManager,
     reqBuilder: AbstractRequest.Builder[T],
     timeoutMs: Int
   ): R = {
@@ -91,7 +92,7 @@ class BrokerRegistrationRequestTest {
   }
 
   def registerBroker(
-    channelManager: BrokerToControllerChannelManager,
+    channelManager: NodeToControllerChannelManager,
     clusterId: String,
     brokerId: Int,
     zkEpoch: Option[Long],
@@ -121,7 +122,7 @@ class BrokerRegistrationRequestTest {
   }
 
 
-  def createTopics(channelManager: BrokerToControllerChannelManager,
+  def createTopics(channelManager: NodeToControllerChannelManager,
                    topicName: String): Errors = {
     val createTopics = new CreateTopicsRequestData()
     createTopics.setTopics(new CreateTopicsRequestData.CreatableTopicCollection())

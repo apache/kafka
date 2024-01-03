@@ -48,6 +48,7 @@ import org.apache.kafka.streams.processor.TimestampExtractor;
 import org.apache.kafka.streams.processor.internals.DefaultKafkaClientSupplier;
 import org.apache.kafka.streams.processor.internals.StreamsPartitionAssignor;
 import org.apache.kafka.streams.processor.internals.assignment.RackAwareTaskAssignor;
+import org.apache.kafka.streams.state.BuiltInDslStoreSuppliers;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -157,6 +158,7 @@ public class StreamsConfig extends AbstractConfig {
     private static final long EOS_DEFAULT_COMMIT_INTERVAL_MS = 100L;
     private static final int DEFAULT_TRANSACTION_TIMEOUT = 10000;
 
+    @SuppressWarnings("unused")
     public static final int DUMMY_THREAD_INDEX = 1;
     public static final long MAX_TASK_IDLE_MS_DISABLED = -1;
 
@@ -240,14 +242,12 @@ public class StreamsConfig extends AbstractConfig {
     public static final String CLIENT_TAG_PREFIX = "client.tag.";
 
     /** {@code topology.optimization} */
-    private static final String CONFIG_ERROR_MSG = "Acceptable values are:"
-        + " \"+NO_OPTIMIZATION+\", \"+OPTIMIZE+\", "
-        + "or a comma separated list of specific optimizations: "
-        + "(\"+REUSE_KTABLE_SOURCE_TOPICS+\", \"+MERGE_REPARTITION_TOPICS+\" + "
-        + "\"SINGLE_STORE_SELF_JOIN+\").";
-
-
     public static final String TOPOLOGY_OPTIMIZATION_CONFIG = "topology.optimization";
+    private static final String CONFIG_ERROR_MSG = "Acceptable values are:"
+            + " \"+NO_OPTIMIZATION+\", \"+OPTIMIZE+\", "
+            + "or a comma separated list of specific optimizations: "
+            + "(\"+REUSE_KTABLE_SOURCE_TOPICS+\", \"+MERGE_REPARTITION_TOPICS+\" + "
+            + "\"SINGLE_STORE_SELF_JOIN+\").";
     private static final String TOPOLOGY_OPTIMIZATION_DOC = "A configuration telling Kafka "
         + "Streams if it should optimize the topology and what optimizations to apply. "
         + CONFIG_ERROR_MSG
@@ -496,8 +496,13 @@ public class StreamsConfig extends AbstractConfig {
     /** {@code client.id} */
     @SuppressWarnings("WeakerAccess")
     public static final String CLIENT_ID_CONFIG = CommonClientConfigs.CLIENT_ID_CONFIG;
-    private static final String CLIENT_ID_DOC = "An ID prefix string used for the client IDs of internal consumer, producer and restore-consumer," +
-        " with pattern <code>&lt;client.id&gt;-StreamThread-&lt;threadSequenceNumber$gt;-&lt;consumer|producer|restore-consumer&gt;</code>.";
+    private static final String CLIENT_ID_DOC = "An ID prefix string used for the client IDs of internal [main-|restore-|global-]consumer, producer, and admin clients" +
+        " with pattern <code>&lt;client.id&gt;-[Global]StreamThread[-&lt;threadSequenceNumber$gt;]-&lt;consumer|producer|restore-consumer|global-consumer&gt;</code>.";
+
+    /** {@code enable.metrics.push} */
+    @SuppressWarnings("WeakerAccess")
+    public static  final String ENABLE_METRICS_PUSH_CONFIG = CommonClientConfigs.ENABLE_METRICS_PUSH_CONFIG;
+    public static final String ENABLE_METRICS_PUSH_DOC = "Whether to enable pushing of internal [main-|restore-|global]consumer, producer, and admin client metrics to the cluster, if the cluster has a client metrics subscription which matches a client.";
 
     /** {@code commit.interval.ms} */
     @SuppressWarnings("WeakerAccess")
@@ -530,12 +535,23 @@ public class StreamsConfig extends AbstractConfig {
     private static final String DEFAULT_PRODUCTION_EXCEPTION_HANDLER_CLASS_DOC = "Exception handling class that implements the <code>org.apache.kafka.streams.errors.ProductionExceptionHandler</code> interface.";
 
     /** {@code default.dsl.store} */
+    @Deprecated
     @SuppressWarnings("WeakerAccess")
     public static final String DEFAULT_DSL_STORE_CONFIG = "default.dsl.store";
+    @Deprecated
     public static final String DEFAULT_DSL_STORE_DOC = "The default state store type used by DSL operators.";
 
+    @Deprecated
     public static final String ROCKS_DB = "rocksDB";
+    @Deprecated
     public static final String IN_MEMORY = "in_memory";
+    @Deprecated
+    public static final String DEFAULT_DSL_STORE = ROCKS_DB;
+
+    /** {@code dsl.store.suppliers.class } */
+    public static final String DSL_STORE_SUPPLIERS_CLASS_CONFIG = "dsl.store.suppliers.class";
+    static final String DSL_STORE_SUPPLIERS_CLASS_DOC = "Defines which store implementations to plug in to DSL operators. Must implement the <code>org.apache.kafka.streams.state.DslStoreSuppliers</code> interface.";
+    static final Class<?> DSL_STORE_SUPPLIERS_CLASS_DEFAULT = BuiltInDslStoreSuppliers.RocksDBDslStoreSuppliers.class;
 
     /** {@code default.windowed.key.serde.inner} */
     @SuppressWarnings("WeakerAccess")
@@ -760,13 +776,14 @@ public class StreamsConfig extends AbstractConfig {
 
     public static final String RACK_AWARE_ASSIGNMENT_STRATEGY_NONE = "none";
     public static final String RACK_AWARE_ASSIGNMENT_STRATEGY_MIN_TRAFFIC = "min_traffic";
+    public static final String RACK_AWARE_ASSIGNMENT_STRATEGY_BALANCE_SUBTOPOLOGY = "balance_subtopology";
 
     /** {@code } rack.aware.assignment.strategy */
     @SuppressWarnings("WeakerAccess")
     public static final String RACK_AWARE_ASSIGNMENT_STRATEGY_CONFIG = "rack.aware.assignment.strategy";
     public static final String RACK_AWARE_ASSIGNMENT_STRATEGY_DOC = "The strategy we use for rack aware assignment. Rack aware assignment will take <code>client.rack</code> and <code>racks</code> of <code>TopicPartition</code> into account when assigning"
         + " tasks to minimize cross rack traffic. Valid settings are : <code>" + RACK_AWARE_ASSIGNMENT_STRATEGY_NONE + "</code> (default), which will disable rack aware assignment; <code>" + RACK_AWARE_ASSIGNMENT_STRATEGY_MIN_TRAFFIC
-        + "</code>, which will compute minimum cross rack traffic assignment.";
+        + "</code>, which will compute minimum cross rack traffic assignment; <code>" + RACK_AWARE_ASSIGNMENT_STRATEGY_BALANCE_SUBTOPOLOGY + "</code>, which will compute minimum cross rack traffic and try to balance the tasks of same subtopolgies across different clients";
 
     @SuppressWarnings("WeakerAccess")
     public static final String RACK_AWARE_ASSIGNMENT_TRAFFIC_COST_CONFIG = "rack.aware.assignment.traffic_cost";
@@ -777,7 +794,7 @@ public class StreamsConfig extends AbstractConfig {
     @SuppressWarnings("WeakerAccess")
     public static final String RACK_AWARE_ASSIGNMENT_NON_OVERLAP_COST_CONFIG = "rack.aware.assignment.non_overlap_cost";
     public static final String RACK_AWARE_ASSIGNMENT_NON_OVERLAP_COST_DOC = "Cost associated with moving tasks from existing assignment. This config and <code>" + RACK_AWARE_ASSIGNMENT_TRAFFIC_COST_CONFIG + "</code> controls whether the "
-        + "optimization algorithm favors minimizing cross rack traffic or minimize the movement of tasks in existing assignment. If set a larger value <code>" + RackAwareTaskAssignor.class.getName() + "<code/> will "
+        + "optimization algorithm favors minimizing cross rack traffic or minimize the movement of tasks in existing assignment. If set a larger value <code>" + RackAwareTaskAssignor.class.getName() + "</code> will "
         + "optimize to maintain the existing assignment. The default value is null which means it will use default non_overlap cost values in different assignors.";
 
 
@@ -924,7 +941,7 @@ public class StreamsConfig extends AbstractConfig {
             .define(RACK_AWARE_ASSIGNMENT_STRATEGY_CONFIG,
                     Type.STRING,
                     RACK_AWARE_ASSIGNMENT_STRATEGY_NONE,
-                    in(RACK_AWARE_ASSIGNMENT_STRATEGY_NONE, RACK_AWARE_ASSIGNMENT_STRATEGY_MIN_TRAFFIC),
+                    in(RACK_AWARE_ASSIGNMENT_STRATEGY_NONE, RACK_AWARE_ASSIGNMENT_STRATEGY_MIN_TRAFFIC, RACK_AWARE_ASSIGNMENT_STRATEGY_BALANCE_SUBTOPOLOGY),
                     Importance.MEDIUM,
                     RACK_AWARE_ASSIGNMENT_STRATEGY_DOC)
             .define(RACK_AWARE_ASSIGNMENT_TAGS_CONFIG,
@@ -988,6 +1005,11 @@ public class StreamsConfig extends AbstractConfig {
                     atLeast(0),
                     Importance.LOW,
                     COMMIT_INTERVAL_MS_DOC)
+            .define(ENABLE_METRICS_PUSH_CONFIG,
+                    Type.BOOLEAN,
+                    true,
+                    Importance.LOW,
+                    ENABLE_METRICS_PUSH_DOC)
             .define(REPARTITION_PURGE_INTERVAL_MS_CONFIG,
                     Type.LONG,
                     DEFAULT_COMMIT_INTERVAL_MS,
@@ -1001,10 +1023,15 @@ public class StreamsConfig extends AbstractConfig {
                     CommonClientConfigs.CONNECTIONS_MAX_IDLE_MS_DOC)
             .define(DEFAULT_DSL_STORE_CONFIG,
                     Type.STRING,
-                    ROCKS_DB,
+                    DEFAULT_DSL_STORE,
                     in(ROCKS_DB, IN_MEMORY),
                     Importance.LOW,
                     DEFAULT_DSL_STORE_DOC)
+            .define(DSL_STORE_SUPPLIERS_CLASS_CONFIG,
+                    Type.CLASS,
+                    DSL_STORE_SUPPLIERS_CLASS_DEFAULT,
+                    Importance.LOW,
+                    DSL_STORE_SUPPLIERS_CLASS_DOC)
             .define(DEFAULT_CLIENT_SUPPLIER_CONFIG,
                     Type.CLASS,
                     DefaultKafkaClientSupplier.class.getName(),
@@ -1198,6 +1225,17 @@ public class StreamsConfig extends AbstractConfig {
         // Private API to enable the state updater (i.e. state updating on a dedicated thread)
         public static final String STATE_UPDATER_ENABLED = "__state.updater.enabled__";
 
+        public static boolean getStateUpdaterEnabled(final Map<String, Object> configs) {
+            return InternalConfig.getBoolean(configs, InternalConfig.STATE_UPDATER_ENABLED, true);
+        }
+        
+        // Private API to enable processing threads (i.e. polling is decoupled from processing)
+        public static final String PROCESSING_THREADS_ENABLED = "__processing.threads.enabled__";
+
+        public static boolean getProcessingThreadsEnabled(final Map<String, Object> configs) {
+            return InternalConfig.getBoolean(configs, InternalConfig.PROCESSING_THREADS_ENABLED, false);
+        }
+
         public static boolean getBoolean(final Map<String, Object> configs, final String key, final boolean defaultValue) {
             final Object value = configs.getOrDefault(key, defaultValue);
             if (value instanceof Boolean) {
@@ -1346,6 +1384,7 @@ public class StreamsConfig extends AbstractConfig {
         this(props, true);
     }
 
+    @SuppressWarnings("this-escape")
     protected StreamsConfig(final Map<?, ?> props,
                             final boolean doLog) {
         super(CONFIG, props, doLog);
@@ -1375,8 +1414,12 @@ public class StreamsConfig extends AbstractConfig {
     private void verifyEOSTransactionTimeoutCompatibility() {
         final long commitInterval = getLong(COMMIT_INTERVAL_MS_CONFIG);
         final String transactionTimeoutConfigKey = producerPrefix(ProducerConfig.TRANSACTION_TIMEOUT_CONFIG);
-        final int transactionTimeout = originals().containsKey(transactionTimeoutConfigKey) ? (int) parseType(
-            transactionTimeoutConfigKey, originals().get(transactionTimeoutConfigKey), Type.INT) : DEFAULT_TRANSACTION_TIMEOUT;
+        final int transactionTimeout =
+                originals().containsKey(transactionTimeoutConfigKey) ?
+                    (int) Objects.requireNonNull(
+                        parseType(transactionTimeoutConfigKey, originals().get(transactionTimeoutConfigKey), Type.INT),
+                        "Could not parse config `" + COMMIT_INTERVAL_MS_CONFIG + "` because it's set to `null`") :
+                    DEFAULT_TRANSACTION_TIMEOUT;
 
         if (transactionTimeout < commitInterval) {
             throw new IllegalArgumentException(String.format("Transaction timeout %d was set lower than " +
@@ -1543,9 +1586,7 @@ public class StreamsConfig extends AbstractConfig {
 
         // Get main consumer override configs
         final Map<String, Object> mainConsumerProps = originalsWithPrefix(MAIN_CONSUMER_PREFIX);
-        for (final Map.Entry<String, Object> entry: mainConsumerProps.entrySet()) {
-            consumerProps.put(entry.getKey(), entry.getValue());
-        }
+        consumerProps.putAll(mainConsumerProps);
 
         // this is a hack to work around StreamsConfig constructor inside StreamsPartitionAssignor to avoid casting
         consumerProps.put(APPLICATION_ID_CONFIG, groupId);
@@ -1617,9 +1658,7 @@ public class StreamsConfig extends AbstractConfig {
 
         // Get restore consumer override configs
         final Map<String, Object> restoreConsumerProps = originalsWithPrefix(RESTORE_CONSUMER_PREFIX);
-        for (final Map.Entry<String, Object> entry: restoreConsumerProps.entrySet()) {
-            baseConsumerProps.put(entry.getKey(), entry.getValue());
-        }
+        baseConsumerProps.putAll(restoreConsumerProps);
 
         // no need to set group id for a restore consumer
         baseConsumerProps.remove(ConsumerConfig.GROUP_ID_CONFIG);
@@ -1652,9 +1691,7 @@ public class StreamsConfig extends AbstractConfig {
 
         // Get global consumer override configs
         final Map<String, Object> globalConsumerProps = originalsWithPrefix(GLOBAL_CONSUMER_PREFIX);
-        for (final Map.Entry<String, Object> entry: globalConsumerProps.entrySet()) {
-            baseConsumerProps.put(entry.getKey(), entry.getValue());
-        }
+        baseConsumerProps.putAll(globalConsumerProps);
 
         // no need to set group id for a global consumer
         baseConsumerProps.remove(ConsumerConfig.GROUP_ID_CONFIG);
@@ -1801,7 +1838,7 @@ public class StreamsConfig extends AbstractConfig {
      * @return an configured instance of key Serde class
      */
     @SuppressWarnings("WeakerAccess")
-    public Serde defaultKeySerde() {
+    public Serde<?> defaultKeySerde() {
         final Object keySerdeConfigSetting = get(DEFAULT_KEY_SERDE_CLASS_CONFIG);
         if (keySerdeConfigSetting ==  null) {
             throw new ConfigException("Please specify a key serde or set one through StreamsConfig#DEFAULT_KEY_SERDE_CLASS_CONFIG");
@@ -1823,7 +1860,7 @@ public class StreamsConfig extends AbstractConfig {
      * @return an configured instance of value Serde class
      */
     @SuppressWarnings("WeakerAccess")
-    public Serde defaultValueSerde() {
+    public Serde<?> defaultValueSerde() {
         final Object valueSerdeConfigSetting = get(DEFAULT_VALUE_SERDE_CLASS_CONFIG);
         if (valueSerdeConfigSetting == null) {
             throw new ConfigException("Please specify a value serde or set one through StreamsConfig#DEFAULT_VALUE_SERDE_CLASS_CONFIG");

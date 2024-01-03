@@ -783,7 +783,7 @@ public class EosV2UpgradeIntegrationTest {
             commitRequested.set(0);
             stateTransitions1.clear();
             stateTransitions2.clear();
-            streams2V2 = getKafkaStreams(APP_DIR_1, StreamsConfig.EXACTLY_ONCE_V2);
+            streams2V2 = getKafkaStreams(APP_DIR_2, StreamsConfig.EXACTLY_ONCE_V2);
             streams2V2.setStateListener(
                 (newState, oldState) -> stateTransitions2.add(KeyValue.pair(oldState, newState))
             );
@@ -1149,7 +1149,6 @@ public class EosV2UpgradeIntegrationTest {
                         keys.add(row.key);
                     }
                 }
-
                 return true;
             },
             MAX_WAIT_TIME_MS,

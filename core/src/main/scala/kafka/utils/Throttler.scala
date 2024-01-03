@@ -54,7 +54,7 @@ class Throttler(@volatile var desiredRatePerSec: Double,
   def maybeThrottle(observed: Double): Unit = {
     val msPerSec = TimeUnit.SECONDS.toMillis(1)
     val nsPerSec = TimeUnit.SECONDS.toNanos(1)
-    val currentDesiredRatePerSec = desiredRatePerSec;
+    val currentDesiredRatePerSec = desiredRatePerSec
 
     meter.mark(observed.toLong)
     lock synchronized {
@@ -83,7 +83,7 @@ class Throttler(@volatile var desiredRatePerSec: Double,
   }
 
   def updateDesiredRatePerSec(updatedDesiredRatePerSec: Double): Unit = {
-    desiredRatePerSec = updatedDesiredRatePerSec;
+    desiredRatePerSec = updatedDesiredRatePerSec
   }
 }
 

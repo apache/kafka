@@ -167,7 +167,7 @@ final class DelayedOperationPurgatory[T <: DelayedOperation](purgatoryName: Stri
      * Return all the current watcher lists,
      * note that the returned watchers may be removed from the list by other threads
      */
-    def allWatchers = {
+    def allWatchers: Iterable[Watchers] = {
       watchersByKey.values
     }
   }

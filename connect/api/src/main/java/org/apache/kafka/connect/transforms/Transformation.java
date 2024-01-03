@@ -50,10 +50,10 @@ public interface Transformation<R extends ConnectRecord<R>> extends Configurable
      */
     R apply(R record);
 
-    /** Configuration specification for this transformation. **/
+    /** Configuration specification for this transformation. */
     ConfigDef config();
 
-    /** Signal that this transformation instance will no longer will be used. **/
+    /** Signal that this transformation instance will no longer will be used. */
     @Override
     void close();
 

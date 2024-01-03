@@ -38,6 +38,7 @@ import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
 import org.apache.kafka.streams.processor.internals.ProcessorAdapter;
 import org.apache.kafka.streams.processor.internals.ProcessorNode;
 import org.apache.kafka.streams.processor.internals.SourceNode;
+import org.apache.kafka.streams.processor.internals.StoreBuilderWrapper;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
 import org.apache.kafka.streams.state.StoreBuilder;
@@ -85,13 +86,14 @@ public class StreamsBuilder {
      *
      * @param topologyConfigs    the streams configs that apply at the topology level. Please refer to {@link TopologyConfig} for more detail
      */
+    @SuppressWarnings("this-escape")
     public StreamsBuilder(final TopologyConfig topologyConfigs) {
-        topology = getNewTopology(topologyConfigs);
+        topology = newTopology(topologyConfigs);
         internalTopologyBuilder = topology.internalTopologyBuilder;
         internalStreamsBuilder = new InternalStreamsBuilder(internalTopologyBuilder);
     }
 
-    protected Topology getNewTopology(final TopologyConfig topologyConfigs) {
+    protected Topology newTopology(final TopologyConfig topologyConfigs) {
         return new Topology(topologyConfigs);
     }
 
@@ -415,7 +417,7 @@ public class StreamsBuilder {
 
     /**
      * Create a {@link GlobalKTable} for the specified topic.
-     *
+     * <p>
      * Input {@link KeyValue} pairs with {@code null} key will be dropped.
      * <p>
      * The resulting {@link GlobalKTable} will be materialized in a local {@link KeyValueStore} configured with
@@ -466,7 +468,7 @@ public class StreamsBuilder {
 
     /**
      * Create a {@link GlobalKTable} for the specified topic.
-     *
+     * <p>
      * Input {@link KeyValue} pairs with {@code null} key will be dropped.
      * <p>
      * The resulting {@link GlobalKTable} will be materialized in a local {@link KeyValueStore} configured with
@@ -519,7 +521,7 @@ public class StreamsBuilder {
      */
     public synchronized StreamsBuilder addStateStore(final StoreBuilder<?> builder) {
         Objects.requireNonNull(builder, "builder can't be null");
-        internalStreamsBuilder.addStateStore(builder);
+        internalStreamsBuilder.addStateStore(new StoreBuilderWrapper(builder));
         return this;
     }
 
@@ -562,7 +564,7 @@ public class StreamsBuilder {
         Objects.requireNonNull(storeBuilder, "storeBuilder can't be null");
         Objects.requireNonNull(consumed, "consumed can't be null");
         internalStreamsBuilder.addGlobalStore(
-            storeBuilder,
+            new StoreBuilderWrapper(storeBuilder),
             topic,
             new ConsumedInternal<>(consumed),
             () -> ProcessorAdapter.adapt(stateUpdateSupplier.get())
@@ -606,7 +608,7 @@ public class StreamsBuilder {
         Objects.requireNonNull(storeBuilder, "storeBuilder can't be null");
         Objects.requireNonNull(consumed, "consumed can't be null");
         internalStreamsBuilder.addGlobalStore(
-            storeBuilder,
+            new StoreBuilderWrapper(storeBuilder),
             topic,
             new ConsumedInternal<>(consumed),
             stateUpdateSupplier

@@ -27,6 +27,8 @@ import org.apache.kafka.connect.runtime.rest.entities.ConfigKeyInfo;
 import org.apache.kafka.connect.runtime.rest.entities.PluginInfo;
 import org.apache.kafka.connect.runtime.rest.errors.ConnectRestException;
 import org.apache.kafka.connect.util.FutureCallback;
+import org.apache.kafka.connect.util.Stage;
+import org.apache.kafka.connect.util.StagedTimeoutException;
 
 import javax.ws.rs.BadRequestException;
 import javax.ws.rs.Consumes;
@@ -39,11 +41,14 @@ import javax.ws.rs.Produces;
 import javax.ws.rs.QueryParam;
 import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.stream.Collectors;
@@ -55,12 +60,12 @@ public class ConnectorPluginsResource implements ConnectResource {
 
     private static final String ALIAS_SUFFIX = "Connector";
     private final Herder herder;
-    private final List<PluginInfo> connectorPlugins;
+    private final Set<PluginInfo> connectorPlugins;
     private long requestTimeoutMs;
 
     public ConnectorPluginsResource(Herder herder) {
         this.herder = herder;
-        this.connectorPlugins = new ArrayList<>();
+        this.connectorPlugins = new LinkedHashSet<>();
         this.requestTimeoutMs = DEFAULT_REST_REQUEST_TIMEOUT_MS;
 
         // TODO: improve once plugins are allowed to be added/removed during runtime.
@@ -105,6 +110,22 @@ public class ConnectorPluginsResource implements ConnectResource {
 
         try {
             return validationCallback.get(requestTimeoutMs, TimeUnit.MILLISECONDS);
+        } catch (StagedTimeoutException e) {
+            Stage stage = e.stage();
+            String message;
+            if (stage.completed() != null) {
+                message = "Request timed out. The last operation the worker completed was "
+                        + stage.description() + ", which began at "
+                        + Instant.ofEpochMilli(stage.started()) + " and completed at "
+                        + Instant.ofEpochMilli(stage.completed());
+            } else {
+                message = "Request timed out. The worker is currently "
+                        + stage.description() + ", which began at "
+                        + Instant.ofEpochMilli(stage.started());
+            }
+            // This timeout is for the operation itself. None of the timeout error codes are relevant, so internal server
+            // error is the best option
+            throw new ConnectRestException(Response.Status.INTERNAL_SERVER_ERROR.getStatusCode(), message);
         } catch (TimeoutException e) {
             // This timeout is for the operation itself. None of the timeout error codes are relevant, so internal server
             // error is the best option
@@ -126,7 +147,7 @@ public class ConnectorPluginsResource implements ConnectResource {
                         .filter(p -> PluginType.SINK.toString().equals(p.type()) || PluginType.SOURCE.toString().equals(p.type()))
                         .collect(Collectors.toList()));
             } else {
-                return Collections.unmodifiableList(connectorPlugins);
+                return Collections.unmodifiableList(new ArrayList<>(connectorPlugins));
             }
         }
     }

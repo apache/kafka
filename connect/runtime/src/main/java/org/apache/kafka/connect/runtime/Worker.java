@@ -171,6 +171,7 @@ public class Worker {
         this(workerId, time, plugins, config, globalOffsetBackingStore, Executors.newCachedThreadPool(), connectorClientConfigOverridePolicy, Admin::create);
     }
 
+    @SuppressWarnings("this-escape")
     Worker(
             String workerId,
             Time time,

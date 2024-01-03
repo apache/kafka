@@ -40,6 +40,7 @@ import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.errors.ApiException;
 import org.apache.kafka.common.errors.AuthenticationException;
@@ -65,10 +66,13 @@ import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.requests.JoinGroupRequest;
 import org.apache.kafka.common.serialization.Serializer;
+import org.apache.kafka.common.telemetry.internals.ClientTelemetryReporter;
+import org.apache.kafka.common.telemetry.internals.ClientTelemetryUtils;
 import org.apache.kafka.common.utils.AppInfoParser;
 import org.apache.kafka.common.utils.KafkaThread;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.Timer;
 import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 
@@ -79,6 +83,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Properties;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
@@ -256,6 +261,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     private final ProducerInterceptors<K, V> interceptors;
     private final ApiVersions apiVersions;
     private final TransactionManager transactionManager;
+    private final Optional<ClientTelemetryReporter> clientTelemetryReporter;
 
     /**
      * A producer is instantiated by providing a set of key-value pairs as configuration. Valid configuration strings
@@ -333,7 +339,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     }
 
     // visible for testing
-    @SuppressWarnings("unchecked")
+    @SuppressWarnings({"unchecked", "this-escape"})
     KafkaProducer(ProducerConfig config,
                   Serializer<K> keySerializer,
                   Serializer<V> valueSerializer,
@@ -363,6 +369,8 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                     .recordLevel(Sensor.RecordingLevel.forName(config.getString(ProducerConfig.METRICS_RECORDING_LEVEL_CONFIG)))
                     .tags(metricTags);
             List<MetricsReporter> reporters = CommonClientConfigs.metricsReporters(clientId, config);
+            this.clientTelemetryReporter = CommonClientConfigs.telemetryReporter(clientId, config);
+            this.clientTelemetryReporter.ifPresent(reporters::add);
             MetricsContext metricsContext = new KafkaMetricsContext(JMX_PREFIX,
                     config.originalsWithPrefix(CommonClientConfigs.METRICS_CONTEXT_PREFIX));
             this.metrics = new Metrics(metricConfig, reporters, time, metricsContext);
@@ -479,7 +487,8 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                   ProducerInterceptors<K, V> interceptors,
                   Partitioner partitioner,
                   Time time,
-                  KafkaThread ioThread) {
+                  KafkaThread ioThread,
+                  Optional<ClientTelemetryReporter> clientTelemetryReporter) {
         this.producerConfig = config;
         this.time = time;
         this.clientId = config.getString(ProducerConfig.CLIENT_ID_CONFIG);
@@ -502,6 +511,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
         this.metadata = metadata;
         this.sender = sender;
         this.ioThread = ioThread;
+        this.clientTelemetryReporter = clientTelemetryReporter;
     }
 
     // visible for testing
@@ -518,7 +528,8 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                 time,
                 maxInflightRequests,
                 metadata,
-                throttleTimeSensor);
+                throttleTimeSensor,
+                clientTelemetryReporter.map(ClientTelemetryReporter::telemetrySender).orElse(null));
 
         short acks = Short.parseShort(producerConfig.getString(ProducerConfig.ACKS_CONFIG));
         return new Sender(logContext,
@@ -1253,6 +1264,40 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     }
 
     /**
+     * Determines the client's unique client instance ID used for telemetry. This ID is unique to
+     * this specific client instance and will not change after it is initially generated.
+     * The ID is useful for correlating client operations with telemetry sent to the broker and
+     * to its eventual monitoring destinations.
+     * <p>
+     * If telemetry is enabled, this will first require a connection to the cluster to generate
+     * the unique client instance ID. This method waits up to {@code timeout} for the producer
+     * client to complete the request.
+     * <p>
+     * Client telemetry is controlled by the {@link ProducerConfig#ENABLE_METRICS_PUSH_CONFIG}
+     * configuration option.
+     *
+     * @param timeout The maximum time to wait for producer client to determine its client instance ID.
+     *                The value must be non-negative. Specifying a timeout of zero means do not
+     *                wait for the initial request to complete if it hasn't already.
+     * @throws InterruptException If the thread is interrupted while blocked.
+     * @throws KafkaException If an unexpected error occurs while trying to determine the client
+     *                        instance ID, though this error does not necessarily imply the
+     *                        producer client is otherwise unusable.
+     * @throws IllegalArgumentException If the {@code timeout} is negative.
+     * @throws IllegalStateException If telemetry is not enabled ie, config `{@code enable.metrics.push}`
+     *                               is set to `{@code false}`.
+     * @return The client's assigned instance id used for metrics collection.
+     */
+    @Override
+    public Uuid clientInstanceId(Duration timeout) {
+        if (!clientTelemetryReporter.isPresent()) {
+            throw new IllegalStateException("Telemetry is not enabled. Set config `" + ProducerConfig.ENABLE_METRICS_PUSH_CONFIG + "` to `true`.");
+        }
+
+        return ClientTelemetryUtils.fetchClientInstanceId(clientTelemetryReporter.get(), timeout);
+    }
+
+    /**
      * Close this producer. This method blocks until all previously sent requests complete.
      * This method is equivalent to <code>close(Long.MAX_VALUE, TimeUnit.MILLISECONDS)</code>.
      * <p>
@@ -1310,16 +1355,22 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                         timeoutMs);
             } else {
                 // Try to close gracefully.
-                if (this.sender != null)
+                final Timer closeTimer = time.timer(timeout);
+                if (this.sender != null) {
                     this.sender.initiateClose();
+                    closeTimer.update();
+                }
                 if (this.ioThread != null) {
                     try {
-                        this.ioThread.join(timeoutMs);
+                        this.ioThread.join(closeTimer.remainingMs());
                     } catch (InterruptedException t) {
                         firstException.compareAndSet(null, new InterruptException(t));
                         log.error("Interrupted while joining ioThread", t);
+                    } finally {
+                        closeTimer.update();
                     }
                 }
+                clientTelemetryReporter.ifPresent(reporter -> reporter.initiateClose(closeTimer.remainingMs()));
             }
         }
 
@@ -1343,6 +1394,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
         Utils.closeQuietly(keySerializer, "producer keySerializer", firstException);
         Utils.closeQuietly(valueSerializer, "producer valueSerializer", firstException);
         Utils.closeQuietly(partitioner, "producer partitioner", firstException);
+        clientTelemetryReporter.ifPresent(reporter -> Utils.closeQuietly(reporter, "producer telemetry reporter", firstException));
         AppInfoParser.unregisterAppInfo(JMX_PREFIX, clientId, metrics);
         Throwable exception = firstException.get();
         if (exception != null && !swallowException) {

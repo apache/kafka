@@ -66,10 +66,12 @@ import java.util.stream.Stream;
  */
 public class ZkClusterInvocationContext implements TestTemplateInvocationContext {
 
+    private final String baseDisplayName;
     private final ClusterConfig clusterConfig;
     private final AtomicReference<IntegrationTestHarness> clusterReference;
 
-    public ZkClusterInvocationContext(ClusterConfig clusterConfig) {
+    public ZkClusterInvocationContext(String baseDisplayName, ClusterConfig clusterConfig) {
+        this.baseDisplayName = baseDisplayName;
         this.clusterConfig = clusterConfig;
         this.clusterReference = new AtomicReference<>();
     }
@@ -79,7 +81,7 @@ public class ZkClusterInvocationContext implements TestTemplateInvocationContext
         String clusterDesc = clusterConfig.nameTags().entrySet().stream()
             .map(Object::toString)
             .collect(Collectors.joining(", "));
-        return String.format("[%d] Type=ZK, %s", invocationIndex, clusterDesc);
+        return String.format("%s [%d] Type=ZK, %s", baseDisplayName, invocationIndex, clusterDesc);
     }
 
     @Override
@@ -196,6 +198,11 @@ public class ZkClusterInvocationContext implements TestTemplateInvocationContext
         @Override
         public String bootstrapServers() {
             return TestUtils.bootstrapServers(clusterReference.get().servers(), clusterReference.get().listenerName());
+        }
+
+        @Override
+        public String bootstrapControllers() {
+            throw new RuntimeException("Cannot use --bootstrap-controller with ZK-based clusters.");
         }
 
         @Override
@@ -338,7 +345,7 @@ public class ZkClusterInvocationContext implements TestTemplateInvocationContext
                 .orElseThrow(() -> new IllegalArgumentException("Unknown brokerId " + brokerId));
         }
 
-        private Stream<KafkaServer> servers() {
+        public Stream<KafkaServer> servers() {
             return JavaConverters.asJavaCollection(clusterReference.get().servers()).stream();
         }
     }

@@ -109,13 +109,13 @@ public class CheckpointBench {
             JavaConverters.seqAsJavaList(brokerProperties.logDirs()).stream().map(File::new).collect(Collectors.toList());
         this.logManager = TestUtils.createLogManager(JavaConverters.asScalaBuffer(files),
                 new LogConfig(new Properties()), new MockConfigRepository(), new CleanerConfig(1, 4 * 1024 * 1024L, 0.9d,
-                        1024 * 1024, 32 * 1024 * 1024, Double.MAX_VALUE, 15 * 1000, true), time, MetadataVersion.latest(), 4, false, Option.empty());
+                        1024 * 1024, 32 * 1024 * 1024, Double.MAX_VALUE, 15 * 1000, true), time, MetadataVersion.latest(), 4, false, Option.empty(), false);
         scheduler.startup();
         final BrokerTopicStats brokerTopicStats = new BrokerTopicStats(Optional.empty());
         final MetadataCache metadataCache =
                 MetadataCache.zkMetadataCache(this.brokerProperties.brokerId(),
                     this.brokerProperties.interBrokerProtocolVersion(),
-                    BrokerFeatures.createEmpty(), null);
+                    BrokerFeatures.createEmpty(), null, false);
         this.quotaManagers =
                 QuotaFactory.instantiate(this.brokerProperties,
                         this.metrics,
@@ -147,7 +147,7 @@ public class CheckpointBench {
         OffsetCheckpoints checkpoints = (logDir, topicPartition) -> Option.apply(0L);
         for (TopicPartition topicPartition : topicPartitions) {
             final Partition partition = this.replicaManager.createPartition(topicPartition);
-            partition.createLogIfNotExists(true, false, checkpoints, Option.apply(Uuid.randomUuid()));
+            partition.createLogIfNotExists(true, false, checkpoints, Option.apply(Uuid.randomUuid()), Option.empty());
         }
 
         replicaManager.checkpointHighWatermarks();

@@ -43,7 +43,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.nio.file.StandardOpenOption;
-import java.text.NumberFormat;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
@@ -70,7 +69,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assertions.fail;
 
 import static org.apache.kafka.server.log.remote.storage.RemoteStorageManager.IndexType.LEADER_EPOCH;
 import static org.apache.kafka.server.log.remote.storage.RemoteStorageManager.IndexType.OFFSET;
@@ -347,12 +345,7 @@ public final class LocalTieredStorageTest {
         assertThrows(RemoteResourceNotFoundException.class, () -> tieredStorage.fetchIndex(metadata, TIMESTAMP));
         assertThrows(RemoteResourceNotFoundException.class, () -> tieredStorage.fetchIndex(metadata, LEADER_EPOCH));
         assertThrows(RemoteResourceNotFoundException.class, () -> tieredStorage.fetchIndex(metadata, PRODUCER_SNAPSHOT));
-
-        try {
-            assertArrayEquals(new byte[0], remoteStorageVerifier.readFully(tieredStorage.fetchIndex(metadata, TRANSACTION)));
-        } catch (Exception ex) {
-            fail("Shouldn't have thrown an exception when optional file doesn't exists in the remote store");
-        }
+        assertThrows(RemoteResourceNotFoundException.class, () -> tieredStorage.fetchIndex(metadata, TRANSACTION));
     }
 
     @Test
@@ -601,14 +594,6 @@ public final class LocalTieredStorageTest {
         private static final byte[] PRODUCER_SNAPSHOT_FILE_BYTES = "pid".getBytes();
         private static final byte[] LEADER_EPOCH_CHECKPOINT_FILE_BYTES = "0\n2\n0 0\n2 12".getBytes();
 
-        private static final NumberFormat OFFSET_FORMAT = NumberFormat.getInstance();
-
-        static {
-            OFFSET_FORMAT.setMaximumIntegerDigits(20);
-            OFFSET_FORMAT.setMaximumFractionDigits(0);
-            OFFSET_FORMAT.setGroupingUsed(false);
-        }
-
         private final Path segmentPath = Paths.get("local-segments");
         private long baseOffset = 0;
 
@@ -627,7 +612,7 @@ public final class LocalTieredStorageTest {
         }
 
         LogSegmentData nextSegment(final byte[]... data) {
-            final String offset = OFFSET_FORMAT.format(baseOffset);
+            final String offset = LogFileUtils.filenamePrefixFromOffset(baseOffset);
 
             try {
                 final FileChannel channel = FileChannel.open(

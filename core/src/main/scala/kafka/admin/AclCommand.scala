@@ -487,7 +487,7 @@ object AclCommand extends Logging {
     for ((resource, acls) <- resourceToAcls) {
       val validOps = AclEntry.supportedOperations(resource.resourceType) + AclOperation.ALL
       if ((acls.map(_.operation) -- validOps).nonEmpty)
-        CommandLineUtils.printUsageAndExit(opts.parser, s"ResourceType ${resource.resourceType} only supports operations ${validOps.mkString(",")}")
+        CommandLineUtils.printUsageAndExit(opts.parser, s"ResourceType ${resource.resourceType} only supports operations ${validOps.map(JSecurityUtils.operationName(_)).mkString(", ")}")
     }
   }
 
