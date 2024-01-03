@@ -17,7 +17,10 @@
 
 package org.apache.kafka.common.telemetry.internals;
 
+import java.time.Duration;
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.requests.AbstractRequest.Builder;
 import org.apache.kafka.common.requests.GetTelemetrySubscriptionsResponse;
 import org.apache.kafka.common.requests.PushTelemetryResponse;
@@ -76,4 +79,36 @@ public interface ClientTelemetrySender extends AutoCloseable {
      * @param kafkaException the fatal exception.
      */
     void handleFailedPushTelemetryRequest(KafkaException kafkaException);
+
+    /**
+     * Determines the client's unique client instance ID used for telemetry. This ID is unique to
+     * the specific enclosing client instance and will not change after it is initially generated.
+     * The ID is useful for correlating client operations with telemetry sent to the broker and
+     * to its eventual monitoring destination(s).
+     * <p>
+     * This method waits up to <code>timeout</code> for the subscription to become available in
+     * order to complete the request.
+     *
+     * @param timeout The maximum time to wait for enclosing client instance to determine its
+     *                client instance ID. The value must be non-negative. Specifying a timeout
+     *                of zero means do not wait for the initial request to complete if it hasn't
+     *                already.
+     * @throws InterruptException If the thread is interrupted while blocked.
+     * @throws KafkaException If an unexpected error occurs while trying to determine the client
+     *                        instance ID, though this error does not necessarily imply the
+     *                        enclosing client instance is otherwise unusable.
+     * @throws IllegalArgumentException If the <code>timeout</code> is negative.
+     *
+     * @return If present, optional of the client's assigned instance id used for metrics collection.
+     */
+
+    Optional<Uuid> clientInstanceId(Duration timeout);
+
+    /**
+     * Initiates shutdown of this client. This method is called when the enclosing client instance
+     * is being closed. This method should not throw an exception if the client is already closed.
+     *
+     * @param timeoutMs The maximum time to wait for the client to close.
+     */
+    void initiateClose(long timeoutMs);
 }

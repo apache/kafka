@@ -25,7 +25,7 @@ public interface DirectoryEventHandler {
      * A no-op implementation of {@link DirectoryEventHandler}.
      */
     DirectoryEventHandler NOOP = new DirectoryEventHandler() {
-        @Override public void handleAssignment(TopicIdPartition partition, Uuid directoryId) {}
+        @Override public void handleAssignment(TopicIdPartition partition, Uuid directoryId, Runnable callback) {}
         @Override public void handleFailure(Uuid directoryId) {}
     };
 
@@ -33,8 +33,9 @@ public interface DirectoryEventHandler {
      * Handle the assignment of a topic partition to a directory.
      * @param directoryId  The directory ID
      * @param partition    The topic partition
+     * @param callback     Callback to apply when the request is completed.
      */
-    void handleAssignment(TopicIdPartition partition, Uuid directoryId);
+    void handleAssignment(TopicIdPartition partition, Uuid directoryId, Runnable callback);
 
     /**
      * Handle the transition of an online log directory to the offline state.

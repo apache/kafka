@@ -44,6 +44,7 @@ import org.apache.kafka.common.quota.{ClientQuotaAlteration, ClientQuotaEntity}
 import org.apache.kafka.common.record.{CompressionType, RecordVersion}
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.server.common.MetadataVersion.IBP_3_0_IV1
+import org.apache.kafka.server.config.ConfigType
 import org.apache.kafka.storage.internals.log.LogConfig
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{Test, Timeout}
@@ -65,7 +66,7 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
   @ValueSource(strings = Array("zk", "kraft"))
   def testConfigChange(quorum: String): Unit = {
     if (!isKRaftTest()) {
-      assertTrue(this.servers.head.dynamicConfigHandlers.contains(ConfigType.Topic),
+      assertTrue(this.servers.head.dynamicConfigHandlers.contains(ConfigType.TOPIC),
         "Should contain a ConfigHandler for topics")
     }
     val oldVal: java.lang.Long = 100000L
@@ -417,7 +418,7 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
     // Create a mock ConfigHandler to record config changes it is asked to process
     val handler: ConfigHandler = mock(classOf[ConfigHandler])
 
-    val configManager = new ZkConfigManager(zkClient, Map(ConfigType.Topic -> handler))
+    val configManager = new ZkConfigManager(zkClient, Map(ConfigType.TOPIC -> handler))
     // Notifications created using the old TopicConfigManager are ignored.
     configManager.ConfigChangedNotificationHandler.processNotification("not json".getBytes(StandardCharsets.UTF_8))
 
@@ -430,11 +431,11 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
     assertThrows(classOf[Throwable], () => configManager.ConfigChangedNotificationHandler.processNotification(Json.encodeAsBytes(jsonMap.asJava)))
 
     // EntityName isn't provided
-    jsonMap = Map("version" -> 1, "entity_type" -> ConfigType.Topic)
+    jsonMap = Map("version" -> 1, "entity_type" -> ConfigType.TOPIC)
     assertThrows(classOf[Throwable], () => configManager.ConfigChangedNotificationHandler.processNotification(Json.encodeAsBytes(jsonMap.asJava)))
 
     // Everything is provided
-    jsonMap = Map("version" -> 1, "entity_type" -> ConfigType.Topic, "entity_name" -> "x")
+    jsonMap = Map("version" -> 1, "entity_type" -> ConfigType.TOPIC, "entity_name" -> "x")
     configManager.ConfigChangedNotificationHandler.processNotification(Json.encodeAsBytes(jsonMap.asJava))
 
     // Verify that processConfigChanges was only called once

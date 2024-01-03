@@ -31,6 +31,7 @@ import org.junit.jupiter.params.provider.ValueSource
 import java.util.Collections
 import scala.concurrent.ExecutionException
 import scala.jdk.CollectionConverters._
+import scala.util.Using
 
 class DelegationTokenEndToEndAuthorizationWithOwnerTest extends DelegationTokenEndToEndAuthorizationTest {
 
@@ -64,14 +65,14 @@ class DelegationTokenEndToEndAuthorizationWithOwnerTest extends DelegationTokenE
 
   override def configureSecurityAfterServersStart(): Unit = {
     // Create the Acls before calling super which will create the additiona tokens
-    val superuserAdminClient = createPrivilegedAdminClient()
-    superuserAdminClient.createAcls(List(AclTokenOtherDescribe, AclTokenCreate, AclTokenDescribe).asJava).values
+    Using(createPrivilegedAdminClient()) { superuserAdminClient =>
+      superuserAdminClient.createAcls(List(AclTokenOtherDescribe, AclTokenCreate, AclTokenDescribe).asJava).values
 
-    brokers.foreach { s =>
-      TestUtils.waitAndVerifyAcls(TokenCreateAcl ++ TokenDescribeAcl, s.dataPlaneRequestProcessor.authorizer.get,
-        new ResourcePattern(USER, clientPrincipal.toString, LITERAL))
+      brokers.foreach { s =>
+        TestUtils.waitAndVerifyAcls(TokenCreateAcl ++ TokenDescribeAcl, s.dataPlaneRequestProcessor.authorizer.get,
+          new ResourcePattern(USER, clientPrincipal.toString, LITERAL))
+      }
     }
-    superuserAdminClient.close()
 
     super.configureSecurityAfterServersStart()
   }
@@ -104,17 +105,14 @@ class DelegationTokenEndToEndAuthorizationWithOwnerTest extends DelegationTokenE
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("kraft", "zk"))
   def testDescribeTokenForOtherUserFails(quorum: String): Unit = {
-    val describeTokenFailAdminClient = createScramAdminClient(kafkaClientSaslMechanism, describeTokenFailPrincipal.getName, describeTokenFailPassword)
-    val otherClientAdminClient = createScramAdminClient(kafkaClientSaslMechanism, otherClientPrincipal.getName, otherClientPassword)
-    try {
-      otherClientAdminClient.createDelegationToken().delegationToken().get()
-      val tokens = describeTokenFailAdminClient.describeDelegationToken(
-        new DescribeDelegationTokenOptions().owners(Collections.singletonList(otherClientPrincipal)))
-        .delegationTokens.get.asScala
-      assertTrue(tokens.isEmpty)
-    } finally {
-      describeTokenFailAdminClient.close()
-      otherClientAdminClient.close()
+    TestUtils.resource(createScramAdminClient(kafkaClientSaslMechanism, describeTokenFailPrincipal.getName, describeTokenFailPassword)) { describeTokenFailAdminClient =>
+      TestUtils.resource(createScramAdminClient(kafkaClientSaslMechanism, otherClientPrincipal.getName, otherClientPassword)) { otherClientAdminClient =>
+        otherClientAdminClient.createDelegationToken().delegationToken().get()
+        val tokens = describeTokenFailAdminClient.describeDelegationToken(
+          new DescribeDelegationTokenOptions().owners(Collections.singletonList(otherClientPrincipal))
+        ).delegationTokens.get.asScala
+        assertTrue(tokens.isEmpty)
+      }
     }
   }
 

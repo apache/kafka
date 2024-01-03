@@ -48,7 +48,10 @@ import org.apache.kafka.common.errors.InvalidGroupIdException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.metrics.MetricsReporter;
 import org.apache.kafka.common.serialization.Deserializer;
+import org.apache.kafka.common.telemetry.internals.ClientTelemetryReporter;
+import org.apache.kafka.common.telemetry.internals.ClientTelemetryUtils;
 import org.apache.kafka.common.utils.AppInfoParser;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
@@ -93,13 +96,13 @@ import static org.apache.kafka.common.utils.Utils.join;
 import static org.apache.kafka.common.utils.Utils.swallow;
 
 /**
- * A client that consumes records from a Kafka cluster using the {@link GroupProtocol#GENERIC generic group protocol}.
+ * A client that consumes records from a Kafka cluster using the {@link GroupProtocol#CLASSIC classic group protocol}.
  * In this implementation, all network I/O happens in the thread of the application making the call.
  *
  * <p/>
  *
  * <em>Note:</em> per its name, this implementation is left for backward compatibility purposes. The updated consumer
- * group protocol (from KIP-848) introduces allows users continue using the legacy "generic" group protocol.
+ * group protocol (from KIP-848) introduces allows users continue using the legacy "classic" group protocol.
  * This class should not be invoked directly; users should instead create a {@link KafkaConsumer} as before.
  */
 public class LegacyKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
@@ -130,6 +133,7 @@ public class LegacyKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
     private final int defaultApiTimeoutMs;
     private volatile boolean closed = false;
     private final List<ConsumerPartitionAssignor> assignors;
+    private final Optional<ClientTelemetryReporter> clientTelemetryReporter;
 
     // currentThread holds the threadId of the current thread accessing LegacyKafkaConsumer
     // and is used to prevent multi-threaded access
@@ -160,7 +164,10 @@ public class LegacyKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             this.requestTimeoutMs = config.getInt(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG);
             this.defaultApiTimeoutMs = config.getInt(ConsumerConfig.DEFAULT_API_TIMEOUT_MS_CONFIG);
             this.time = Time.SYSTEM;
-            this.metrics = createMetrics(config, time);
+            List<MetricsReporter> reporters = CommonClientConfigs.metricsReporters(clientId, config);
+            this.clientTelemetryReporter = CommonClientConfigs.telemetryReporter(clientId, config);
+            this.clientTelemetryReporter.ifPresent(reporters::add);
+            this.metrics = createMetrics(config, time, reporters);
             this.retryBackoffMs = config.getLong(ConsumerConfig.RETRY_BACKOFF_MS_CONFIG);
             this.retryBackoffMaxMs = config.getLong(ConsumerConfig.RETRY_BACKOFF_MAX_MS_CONFIG);
 
@@ -188,7 +195,8 @@ public class LegacyKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                     time,
                     metadata,
                     fetchMetricsManager.throttleTimeSensor(),
-                    retryBackoffMs);
+                    retryBackoffMs,
+                    clientTelemetryReporter.map(ClientTelemetryReporter::telemetrySender).orElse(null));
 
             this.assignors = ConsumerPartitionAssignor.getAssignorInstances(
                     config.getList(ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG),
@@ -214,7 +222,8 @@ public class LegacyKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                         config.getInt(ConsumerConfig.AUTO_COMMIT_INTERVAL_MS_CONFIG),
                         this.interceptors,
                         config.getBoolean(THROW_ON_FETCH_STABLE_OFFSET_UNSUPPORTED),
-                        config.getString(ConsumerConfig.CLIENT_RACK_CONFIG));
+                        config.getString(ConsumerConfig.CLIENT_RACK_CONFIG),
+                        clientTelemetryReporter);
             }
             this.fetcher = new Fetcher<>(
                     logContext,
@@ -282,6 +291,7 @@ public class LegacyKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         this.retryBackoffMs = config.getLong(ConsumerConfig.RETRY_BACKOFF_MS_CONFIG);
         this.retryBackoffMaxMs = config.getLong(ConsumerConfig.RETRY_BACKOFF_MAX_MS_CONFIG);
         this.requestTimeoutMs = config.getInt(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG);
+        this.clientTelemetryReporter = Optional.empty();
 
         int sessionTimeoutMs = config.getInt(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG);
         int rebalanceTimeoutMs = config.getInt(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG);
@@ -327,7 +337,8 @@ public class LegacyKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                 autoCommitIntervalMs,
                 interceptors,
                 throwOnStableOffsetNotSupported,
-                rackId
+                rackId,
+                clientTelemetryReporter
             );
         } else {
             this.coordinator = null;
@@ -866,8 +877,8 @@ public class LegacyKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             offsets = coordinator.fetchCommittedOffsets(partitions, time.timer(timeout));
             if (offsets == null) {
                 throw new TimeoutException("Timeout of " + timeout.toMillis() + "ms expired before the last " +
-                        "committed offset for partitions " + partitions + " could be determined. Try tuning default.api.timeout.ms " +
-                        "larger to relax the threshold.");
+                        "committed offset for partitions " + partitions + " could be determined. Try tuning " +
+                        ConsumerConfig.DEFAULT_API_TIMEOUT_MS_CONFIG + " larger to relax the threshold.");
             } else {
                 offsets.forEach(this::updateLastSeenEpochIfNewer);
                 return offsets;
@@ -880,7 +891,12 @@ public class LegacyKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
 
     @Override
     public Uuid clientInstanceId(Duration timeout) {
-        throw new UnsupportedOperationException();
+        if (!clientTelemetryReporter.isPresent()) {
+            throw new IllegalStateException("Telemetry is not enabled. Set config `" + ConsumerConfig.ENABLE_METRICS_PUSH_CONFIG + "` to `true`.");
+
+        }
+
+        return ClientTelemetryUtils.fetchClientInstanceId(clientTelemetryReporter.get(), timeout);
     }
 
     @Override
@@ -1108,6 +1124,8 @@ public class LegacyKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         AtomicReference<Throwable> firstException = new AtomicReference<>();
 
         final Timer closeTimer = createTimerForRequest(timeout);
+        clientTelemetryReporter.ifPresent(reporter -> reporter.initiateClose(timeout.toMillis()));
+        closeTimer.update();
         // Close objects with a timeout. The timeout is required because the coordinator & the fetcher send requests to
         // the server in the process of closing which may not respect the overall timeout defined for closing the
         // consumer.
@@ -1134,6 +1152,7 @@ public class LegacyKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         closeQuietly(metrics, "consumer metrics", firstException);
         closeQuietly(client, "consumer network client", firstException);
         closeQuietly(deserializers, "consumer deserializers", firstException);
+        clientTelemetryReporter.ifPresent(reporter -> closeQuietly(reporter, "consumer telemetry reporter", firstException));
         AppInfoParser.unregisterAppInfo(CONSUMER_JMX_PREFIX, clientId, metrics);
         log.debug("Kafka consumer has been closed");
         Throwable exception = firstException.get();

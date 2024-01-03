@@ -17,9 +17,11 @@
 package org.apache.kafka.coordinator.group.consumer;
 
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.message.ConsumerGroupDescribeResponseData;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupCurrentMemberAssignmentValue;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupMemberMetadataValue;
 
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashSet;
@@ -543,6 +545,39 @@ public class ConsumerGroupMember {
             ", partitionsPendingRevocation=" + partitionsPendingRevocation +
             ", partitionsPendingAssignment=" + partitionsPendingAssignment +
             ')';
+    }
+
+    /**
+     * @param targetAssignment The target assignment of this member in the corresponding group.
+     *
+     * @return The ConsumerGroupMember mapped as ConsumerGroupDescribeResponseData.Member.
+     */
+    public ConsumerGroupDescribeResponseData.Member asConsumerGroupDescribeMember(Assignment targetAssignment) {
+        return new ConsumerGroupDescribeResponseData.Member()
+            .setMemberEpoch(memberEpoch)
+            .setMemberId(memberId)
+            .setAssignment(new ConsumerGroupDescribeResponseData.Assignment()
+                .setTopicPartitions(topicPartitionsFromMap(assignedPartitions)))
+            .setTargetAssignment(new ConsumerGroupDescribeResponseData.Assignment()
+                .setTopicPartitions(topicPartitionsFromMap(
+                    targetAssignment != null ? targetAssignment.partitions() : Collections.emptyMap()
+                )))
+            .setClientHost(clientHost)
+            .setClientId(clientId)
+            .setInstanceId(instanceId)
+            .setRackId(rackId)
+            .setSubscribedTopicNames(subscribedTopicNames)
+            .setSubscribedTopicRegex(subscribedTopicRegex);
+    }
+
+    private static List<ConsumerGroupDescribeResponseData.TopicPartitions> topicPartitionsFromMap(
+        Map<Uuid, Set<Integer>> partitions
+    ) {
+        return partitions.entrySet().stream().map(
+            item -> new ConsumerGroupDescribeResponseData.TopicPartitions()
+                .setTopicId(item.getKey())
+                .setPartitions(new ArrayList<>(item.getValue()))
+        ).collect(Collectors.toList());
     }
 
     @Override

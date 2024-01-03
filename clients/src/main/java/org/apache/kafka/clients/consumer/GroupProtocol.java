@@ -19,8 +19,8 @@ package org.apache.kafka.clients.consumer;
 import java.util.Locale;
 
 public enum GroupProtocol {
-    /** Generic group protocol.  */
-    GENERIC("GENERIC"),
+    /** Classic group protocol.  */
+    CLASSIC("CLASSIC"),
 
     /** Consumer group protocol */
     CONSUMER("CONSUMER");
