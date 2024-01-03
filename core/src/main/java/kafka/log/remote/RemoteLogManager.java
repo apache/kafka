@@ -1293,6 +1293,10 @@ public class RemoteLogManager implements Closeable {
         try {
             int startPos = 0;
             RecordBatch firstBatch = null;
+
+            //  Iteration over multiple RemoteSegmentMetadata is required in case of log compaction.
+            //  It may be possible the offset is log compacted in the current RemoteLogSegmentMetadata
+            //  And we need to iterate over the next segment metadata to fetch messages higher than the given offset.
             while (firstBatch == null && rlsMetadataOptional.isPresent()) {
                 remoteLogSegmentMetadata = rlsMetadataOptional.get();
                 // Search forward for the position of the last offset that is greater than or equal to the target offset

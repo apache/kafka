@@ -2068,7 +2068,7 @@ public class RemoteLogManagerTest {
 
             public Optional<RemoteLogSegmentMetadata> findNextSegmentMetadata(RemoteLogSegmentMetadata segmentMetadata,
                                                                               Option<LeaderEpochFileCache> leaderEpochFileCacheOption) {
-                return Optional.ofNullable(null);
+                return Optional.empty();
             }
 
             int lookupPositionForOffset(RemoteLogSegmentMetadata remoteLogSegmentMetadata, long offset) {
@@ -2175,9 +2175,6 @@ public class RemoteLogManagerTest {
         RemoteLogSegmentMetadata segmentMetadata = mock(RemoteLogSegmentMetadata.class);
         LeaderEpochFileCache cache = mock(LeaderEpochFileCache.class);
         when(cache.epochForOffset(anyLong())).thenReturn(OptionalInt.of(1));
-
-        when(remoteStorageManager.fetchLogSegment(any(RemoteLogSegmentMetadata.class), anyInt()))
-                .thenAnswer(a -> fileInputStream);
         when(mockLog.leaderEpochCache()).thenReturn(Option.apply(cache));
 
         int fetchOffset = 0;
