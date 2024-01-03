@@ -190,49 +190,4 @@ class RaftManagerTest {
     }
   }
 
-  @Test
-  def testShutdownIoThread(): Unit = {
-    val raftClient = mock(classOf[KafkaRaftClient[String]])
-    val faultHandler = new MockFaultHandler("RaftManagerTestFaultHandler")
-    val ioThread = new KafkaRaftClientDriver(raftClient, "test-raft", faultHandler, new LogContext)
-
-    when(raftClient.isRunning).thenReturn(true)
-    assertTrue(ioThread.isRunning)
-
-    val shutdownFuture = new CompletableFuture[Void]
-    when(raftClient.shutdown(5000)).thenReturn(shutdownFuture)
-
-    ioThread.initiateShutdown()
-    assertTrue(ioThread.isRunning)
-    assertTrue(ioThread.isShutdownInitiated)
-    verify(raftClient).shutdown(5000)
-
-    shutdownFuture.complete(null)
-    when(raftClient.isRunning).thenReturn(false)
-    ioThread.run()
-    assertFalse(ioThread.isRunning)
-    assertTrue(ioThread.isShutdownComplete)
-    assertNull(faultHandler.firstException)
-  }
-
-  @Test
-  def testUncaughtExceptionInIoThread(): Unit = {
-    val raftClient = mock(classOf[KafkaRaftClient[String]])
-    val faultHandler = new MockFaultHandler("RaftManagerTestFaultHandler")
-    val ioThread = new KafkaRaftClientDriver(raftClient, "test-raft", faultHandler, new LogContext)
-
-    when(raftClient.isRunning).thenReturn(true)
-    assertTrue(ioThread.isRunning)
-
-    val exception = new RuntimeException()
-    when(raftClient.poll()).thenThrow(exception)
-    ioThread.run()
-
-    assertTrue(ioThread.isShutdownComplete)
-    assertTrue(ioThread.isThreadFailed)
-    assertFalse(ioThread.isRunning)
-
-    val caughtException = faultHandler.firstException.getCause
-    assertEquals(exception, caughtException)
-  }
 }

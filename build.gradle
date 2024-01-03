@@ -1582,6 +1582,7 @@ project(':raft') {
     implementation libs.jacksonDatabind
 
     testImplementation project(':server-common')
+    testImplementation project(':server-common').sourceSets.test.output
     testImplementation project(':clients')
     testImplementation project(':clients').sourceSets.test.output
     testImplementation libs.junitJupiter
