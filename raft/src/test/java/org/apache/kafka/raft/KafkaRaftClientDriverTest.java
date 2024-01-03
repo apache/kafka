@@ -36,7 +36,7 @@ class KafkaRaftClientDriverTest {
     public void testShutdown() throws Exception {
         @SuppressWarnings("unchecked")
         KafkaRaftClient<String> raftClient = (KafkaRaftClient<String>) Mockito.mock(KafkaRaftClient.class);
-        MockFaultHandler faultHandler = new MockFaultHandler("RaftManagerTestFaultHandler");
+        MockFaultHandler faultHandler = new MockFaultHandler("TestFaultHandler");
         KafkaRaftClientDriver<String> driver = new KafkaRaftClientDriver<>(
             raftClient,
             "test-raft",
@@ -68,10 +68,10 @@ class KafkaRaftClientDriverTest {
 
 
     @Test
-    public void testUncaughtExceptionInIoThread() {
+    public void testUncaughtException() {
         @SuppressWarnings("unchecked")
         KafkaRaftClient<String> raftClient = (KafkaRaftClient<String>) Mockito.mock(KafkaRaftClient.class);
-        MockFaultHandler faultHandler = new MockFaultHandler("RaftManagerTestFaultHandler");
+        MockFaultHandler faultHandler = new MockFaultHandler("TestFaultHandler");
         KafkaRaftClientDriver<String> driver = new KafkaRaftClientDriver<>(
             raftClient,
             "test-raft",
