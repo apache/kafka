@@ -225,7 +225,7 @@ private[group] class GroupCoordinatorAdapter(
         .setGroupId(group.groupId)
         .setProtocolType(group.protocolType)
         .setGroupState(group.state)
-        .setGroupType(group.protocolType))
+        .setGroupType(group.groupType))
     }
 
     CompletableFuture.completedFuture(response)

@@ -24,7 +24,7 @@ import java.util.stream.Collectors;
 public enum ConsumerGroupType {
     UNKNOWN("unknown"),
     CONSUMER("consumer"),
-    GENERIC("generic");
+    CLASSIC("classic");
 
     private final static Map<String, ConsumerGroupType> NAME_TO_ENUM = Arrays.stream(values())
         .collect(Collectors.toMap(type -> type.name, Function.identity()));

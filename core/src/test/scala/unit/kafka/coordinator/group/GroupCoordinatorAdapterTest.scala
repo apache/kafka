@@ -327,13 +327,14 @@ class GroupCoordinatorAdapterTest {
 
   @Test
   def testListGroups(): Unit = {
-    testListGroups(null, Set.empty, Set.empty)
-    testListGroups(List(), Set.empty, Set.empty)
-    testListGroups(List("Stable"), Set("Stable"), Set.empty)
+    testListGroups(null, null, Set.empty, Set.empty)
+    testListGroups(List(), List(), Set.empty, Set.empty)
+    testListGroups(List("Stable, Empty"), List(), Set("Stable, Empty"), Set.empty)
   }
 
   def testListGroups(
     statesFilter: List[String],
+    typesFilter: List[String],
     expectedStatesFilter: Set[String],
     expectedTypesFilter: Set[String]
   ): Unit = {
@@ -343,10 +344,11 @@ class GroupCoordinatorAdapterTest {
     val ctx = makeContext(ApiKeys.LIST_GROUPS, ApiKeys.LIST_GROUPS.latestVersion)
     val data = new ListGroupsRequestData()
       .setStatesFilter(statesFilter.asJava)
+      .setTypesFilter(typesFilter.asJava)
 
     when(groupCoordinator.handleListGroups(expectedStatesFilter, expectedTypesFilter)).thenReturn {
       (Errors.NOT_COORDINATOR, List(
-        GroupOverview("group1", "protocol1", "Stable", "generic"),
+        GroupOverview("group1", "protocol1", "Stable", "classic"),
         GroupOverview("group2", "qwerty", "Empty", "consumer")
       ))
     }
@@ -361,7 +363,7 @@ class GroupCoordinatorAdapterTest {
           .setGroupId("group1")
           .setGroupState("Stable")
           .setProtocolType("protocol1")
-          .setGroupType("generic"),
+          .setGroupType("classic"),
         new ListGroupsResponseData.ListedGroup()
           .setGroupId("group2")
           .setGroupState("Empty")

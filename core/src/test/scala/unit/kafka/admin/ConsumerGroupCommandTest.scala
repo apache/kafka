@@ -40,6 +40,8 @@ class ConsumerGroupCommandTest extends KafkaServerTestHarness {
 
   val topic = "foo"
   val group = "test.group"
+  val classicGroup = "classic.test.group"
+  val consumerGroup = "consumer.test.group"
 
   private var consumerGroupService: List[ConsumerGroupService] = List()
   private var consumerGroupExecutors: List[AbstractConsumerGroupExecutor] = List()
