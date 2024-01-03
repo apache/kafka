@@ -25,6 +25,12 @@ import org.slf4j.Logger;
 
 import java.util.concurrent.CompletableFuture;
 
+
+/**
+ * A single-threaded driver for {@link KafkaRaftClient}.
+ *
+ * @param <T> See {@link KafkaRaftClient<T>}
+ */
 public class KafkaRaftClientDriver<T> extends ShutdownableThread {
     private final Logger log;
     private final KafkaRaftClient<T> client;
@@ -65,6 +71,16 @@ public class KafkaRaftClientDriver<T> extends ShutdownableThread {
         } else {
             return false;
         }
+    }
+
+    /**
+     * Shutdown the thread. In addition to stopping any utilized threads, this will
+     * close the {@link KafkaRaftClient} instance.
+     */
+    @Override
+    public void shutdown() throws InterruptedException {
+        super.shutdown();
+        client.close();
     }
 
     @Override

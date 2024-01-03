@@ -159,7 +159,6 @@ class KafkaRaftManager[T](
     CoreUtils.swallow(expirationService.shutdown(), this)
     CoreUtils.swallow(expirationTimer.close(), this)
     CoreUtils.swallow(clientDriver.shutdown(), this)
-    CoreUtils.swallow(client.close(), this)
     CoreUtils.swallow(scheduler.shutdown(), this)
     CoreUtils.swallow(netChannel.close(), this)
     CoreUtils.swallow(replicatedLog.close(), this)
