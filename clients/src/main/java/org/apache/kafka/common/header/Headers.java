@@ -69,4 +69,9 @@ public interface Headers extends Iterable<Header> {
      */
     Header[] toArray();
 
+    /**
+     * Set a field to show if headers are in read-only state or not.
+     */
+    default void setReadOnly() {
+    }
 }
