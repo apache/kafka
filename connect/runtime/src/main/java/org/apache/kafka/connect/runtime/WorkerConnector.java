@@ -382,11 +382,11 @@ public class WorkerConnector implements Runnable {
         }
     }
 
-    public boolean isSinkConnector() {
+    public final boolean isSinkConnector() {
         return connector.type() == PluginType.SINK;
     }
 
-    public boolean isSourceConnector() {
+    public final boolean isSourceConnector() {
         return connector.type() == PluginType.SOURCE;
     }
 
