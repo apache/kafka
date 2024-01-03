@@ -1351,7 +1351,7 @@ public class RemoteLogManager implements Closeable {
         }
     }
     // for testing
-    public RemoteLogInputStream getRemoteLogInputStream(InputStream in) {
+    RemoteLogInputStream getRemoteLogInputStream(InputStream in) {
         return new RemoteLogInputStream(in);
     }
 
