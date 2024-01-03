@@ -1246,8 +1246,8 @@ class UnifiedLog(@volatile var logStartOffset: Long,
     localLog.read(startOffset, maxLength, minOneMessage, maxOffsetMetadata, isolation == FetchIsolation.TXN_COMMITTED)
   }
 
-  private[log] def collectAbortedTransactions(startOffset: Long, upperBoundOffset: Long): List[AbortedTxn] = {
-    localLog.collectAbortedTransactions(logStartOffset, startOffset, upperBoundOffset).asScala.toList
+  private[log] def collectAbortedTransactions(startOffset: Long, upperBoundOffset: Long): util.List[AbortedTxn] = {
+    localLog.collectAbortedTransactions(logStartOffset, startOffset, upperBoundOffset)
   }
 
   /**
@@ -2273,9 +2273,9 @@ object UnifiedLog extends Logging {
         () => s"Error while deleting producer state snapshots for $topicPartition in dir $parentDir",
         () => {
           snapshotsToDelete.forEach { snapshot =>
-          snapshot.deleteIfExists()
-        }
-      })
+            snapshot.deleteIfExists()
+          }
+        })
     }
 
     if (asyncDelete)

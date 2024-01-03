@@ -39,7 +39,7 @@ import java.io.{File, RandomAccessFile}
 import java.nio._
 import java.nio.charset.StandardCharsets
 import java.nio.file.Paths
-import java.util.Properties
+import java.util.{Collections, Properties}
 import java.util.concurrent.{CountDownLatch, TimeUnit}
 import scala.collection._
 import scala.compat.java8.OptionConverters._
@@ -329,7 +329,7 @@ class LogCleanerTest extends Logging {
   }
 
   private def assertAllAbortedTxns(
-    expectedAbortedTxns: List[AbortedTxn],
+    expectedAbortedTxns: java.util.List[AbortedTxn],
     log: UnifiedLog
   ): Unit= {
     val abortedTxns = log.collectAbortedTransactions(startOffset = 0L, upperBoundOffset = log.logEndOffset)
@@ -385,7 +385,7 @@ class LogCleanerTest extends Logging {
     log.roll()
     assertEquals(20L, log.logEndOffset)
 
-    val expectedAbortedTxns = List(
+    val expectedAbortedTxns = java.util.Arrays.asList[AbortedTxn](
       new AbortedTxn(producerId1, 8, 10, 11),
       new AbortedTxn(producerId2, 11, 16, 17)
     )
@@ -420,7 +420,7 @@ class LogCleanerTest extends Logging {
     assertEquals(List(0, 2, 4, 6, 7, 10, 13, 15, 16, 17, 19), batchBaseOffsetsInLog(log))
     assertEquals(List(0, 2, 4, 5, 6, 7, 10, 13, 14, 15, 16, 17, 18, 19), offsetsInLog(log))
     assertAllTransactionsComplete(log)
-    assertAllAbortedTxns(List(), log)
+    assertAllAbortedTxns(Collections.emptyList[AbortedTxn](), log)
 
     // On the last pass, wait for the retention time to expire. The abort markers
     // (offsets 10 and 16) should be deleted.
@@ -430,7 +430,7 @@ class LogCleanerTest extends Logging {
     assertEquals(List(0, 2, 4, 6, 7, 13, 15, 17, 19), batchBaseOffsetsInLog(log))
     assertEquals(List(0, 2, 4, 5, 6, 7, 13, 15, 17, 18, 19), offsetsInLog(log))
     assertAllTransactionsComplete(log)
-    assertAllAbortedTxns(List(), log)
+    assertAllAbortedTxns(Collections.emptyList[AbortedTxn](), log)
   }
 
   @Test
@@ -834,9 +834,10 @@ class LogCleanerTest extends Logging {
     def assertAbortedTransactionIndexed(): Unit = {
       val abortedTxns = log.collectAbortedTransactions(0L, 100L)
       assertEquals(1, abortedTxns.size)
-      assertEquals(producerId, abortedTxns.head.producerId)
-      assertEquals(0, abortedTxns.head.firstOffset)
-      assertEquals(2, abortedTxns.head.lastOffset)
+      val abortedTxn = abortedTxns.get(0)
+      assertEquals(producerId, abortedTxn.producerId)
+      assertEquals(0, abortedTxn.firstOffset)
+      assertEquals(2, abortedTxn.lastOffset)
     }
 
     assertAbortedTransactionIndexed()

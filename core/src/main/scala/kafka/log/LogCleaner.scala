@@ -19,6 +19,7 @@ package kafka.log
 
 import java.io.{File, IOException}
 import java.nio._
+import java.util
 import java.util.Date
 import java.util.concurrent.TimeUnit
 import kafka.common._
@@ -1245,8 +1246,8 @@ private[log] class CleanedTransactionMetadata {
    *
    * @param abortedTransactions The new found aborted transactions to add
    */
-  def addAbortedTransactions(abortedTransactions: List[AbortedTxn]): Unit = {
-    this.abortedTransactions ++= abortedTransactions
+  def addAbortedTransactions(abortedTransactions: util.List[AbortedTxn]): Unit = {
+    abortedTransactions.forEach(abortedTxn => this.abortedTransactions += abortedTxn)
   }
 
   /**
