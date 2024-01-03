@@ -14,7 +14,7 @@
 // limitations under the License.
 
 {
-  "apiKey": 74,
+  "apiKey": 75,
   "type": "response",
   "name": "DescribeTopicPartitionsResponse",
   "validVersions": "0",

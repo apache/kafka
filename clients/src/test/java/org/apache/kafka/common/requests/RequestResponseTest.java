@@ -1160,11 +1160,8 @@ public class RequestResponseTest {
             case GET_TELEMETRY_SUBSCRIPTIONS: return createGetTelemetrySubscriptionsResponse();
             case PUSH_TELEMETRY: return createPushTelemetryResponse();
             case ASSIGN_REPLICAS_TO_DIRS: return createAssignReplicasToDirsResponse();
-<<<<<<< HEAD
             case LIST_CLIENT_METRICS_RESOURCES: return createListClientMetricsResourcesResponse();
-=======
             case DESCRIBE_TOPIC_PARTITIONS: return createDescribeTopicPartitionsResponse();
->>>>>>> 8ca5bea1a5 (Fix UT)
             default: throw new IllegalArgumentException("Unknown API key " + apikey);
         }
     }
