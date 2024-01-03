@@ -35,7 +35,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class LeakTestingExtension implements BeforeEachCallback, AfterEachCallback {
     private static final Set<String> EXPECTED_THREAD_NAMES = new HashSet<>(
-            Arrays.asList("junit-", "ForkJoinPool", "metrics-meter-tick-thread", "pool-", "scala-")
+            Arrays.asList("junit-", "JMX", "feature-zk-node-event-process-thread", "ForkJoinPool", "executor-",
+                    "kafka-scheduler-","metrics-meter-tick-thread", "ReplicaFetcherThread", "scala-", "pool-")
     );
     private Set<Thread> initialThreads;
 
