@@ -273,6 +273,7 @@ class CoordinatorPartitionWriterTest {
       ArgumentMatchers.any(),
       ArgumentMatchers.any(),
       ArgumentMatchers.any(),
+      ArgumentMatchers.any(),
       ArgumentMatchers.any()
     )).thenAnswer(_ => {
       callbackCapture.getValue.apply(Map(
