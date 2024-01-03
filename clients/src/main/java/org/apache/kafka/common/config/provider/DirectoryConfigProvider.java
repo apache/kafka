@@ -16,12 +16,9 @@
  */
 package org.apache.kafka.common.config.provider;
 
-import java.nio.file.Paths;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
 import org.apache.kafka.common.config.ConfigData;
 import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.common.config.internals.ConfigProviderUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -29,6 +26,8 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.Predicate;
@@ -48,21 +47,13 @@ public class DirectoryConfigProvider implements ConfigProvider {
     private static final Logger log = LoggerFactory.getLogger(DirectoryConfigProvider.class);
 
     public static final String ALLOWED_PATHS_CONFIG = "allowed.paths";
-    public static final String ALLOWED_PATHS_DOC = "Path that this config provider is allowed to access";
+    public static final String ALLOWED_PATHS_DOC = "A comma separated list of paths that this config provider is " +
+            "allowed to access. If not set, all paths are allowed.";
     private List<Path> allowedPaths;
 
     @Override
     public void configure(Map<String, ?> configs) {
-        if (configs.containsKey(ALLOWED_PATHS_CONFIG)) {
-            String configValue = (String) configs.get(ALLOWED_PATHS_CONFIG);
-
-            if (configValue != null && !configValue.isEmpty()) {
-                allowedPaths = new ArrayList<>();
-                Arrays.stream(configValue.split(",")).forEach(b -> allowedPaths.add(Paths.get(b).normalize()));
-            }
-        } else {
-            allowedPaths = null;
-        }
+        allowedPaths = ConfigProviderUtils.configureAllowedPaths((String) configs.getOrDefault(ALLOWED_PATHS_CONFIG, null));
     }
 
     @Override
@@ -95,19 +86,17 @@ public class DirectoryConfigProvider implements ConfigProvider {
 
     private ConfigData get(String path, Predicate<Path> fileFilter) {
         Map<String, String> map = emptyMap();
+
         if (path != null && !path.isEmpty()) {
-            Path dir = Paths.get(path).normalize();
+            Path dir = ConfigProviderUtils.pathIsAllowed(Paths.get(path), allowedPaths);
+            if (dir == null) {
+                log.warn("The path {} is not allowed to be accessed", path);
+                return new ConfigData(map);
+            }
+
             if (!Files.isDirectory(dir)) {
                 log.warn("The path {} is not a directory", path);
             } else {
-                if (allowedPaths != null) {
-                    long allowed = allowedPaths.stream().filter(allowedPath -> dir.startsWith(allowedPath)).count();
-                    if (allowed == 0) {
-                        log.warn("The path {} is not allowed to be accessed", path);
-                        return new ConfigData(map);
-                    }
-                }
-
                 try (Stream<Path> stream = Files.list(dir)) {
                     map = stream
                         .filter(fileFilter)

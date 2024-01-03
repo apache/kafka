@@ -16,18 +16,18 @@
  */
 package org.apache.kafka.common.config.provider;
 
-import java.io.File;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
 import org.apache.kafka.common.config.ConfigData;
 import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import java.io.File;
 import java.io.IOException;
 import java.io.Reader;
 import java.io.StringReader;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
@@ -54,11 +54,11 @@ public class FileConfigProviderTest {
         configProvider.configure(Collections.emptyMap());
         parent = TestUtils.tempDirectory();
 
-        dir = String.valueOf(Files.createDirectory(Paths.get(parent.getAbsolutePath(), "dir")));
-        dirFile = String.valueOf(Files.createFile(Paths.get(dir, "dirFile")));
+        dir = Files.createDirectory(Paths.get(parent.getAbsolutePath(), "dir")).toString();
+        dirFile = Files.createFile(Paths.get(dir, "dirFile")).toString();
 
-        siblingDir = String.valueOf(Files.createDirectory(Paths.get(parent.toString(), "siblingdir")));
-        siblingDirFile = String.valueOf(Files.createFile(Paths.get(siblingDir, "siblingDirFile")));
+        siblingDir = Files.createDirectory(Paths.get(parent.toString(), "siblingDir")).toString();
+        siblingDirFile = Files.createFile(Paths.get(siblingDir, "siblingDirFile")).toString();
     }
 
     @Test
@@ -200,7 +200,7 @@ public class FileConfigProviderTest {
         configProvider.configure(configs);
 
         // Check we can't escape outside the path directory
-        ConfigData configData = configProvider.get(dirFile + Paths.get("/../siblingdir/siblingdirFile"));
+        ConfigData configData = configProvider.get(Paths.get(dirFile, "..", "..", "siblingDir", "siblingDirFile").toString());
         assertTrue(configData.data().isEmpty());
         assertNull(configData.ttl());
     }

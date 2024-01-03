@@ -16,8 +16,6 @@
  */
 package org.apache.kafka.common.config.provider;
 
-import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.HashMap;
 import java.util.Map;
 import org.apache.kafka.common.config.ConfigData;
@@ -29,6 +27,8 @@ import org.junit.jupiter.api.Test;
 
 import java.io.File;
 import java.io.IOException;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.util.Collections;
@@ -68,14 +68,14 @@ public class DirectoryConfigProviderTest {
         provider.configure(Collections.emptyMap());
         parent = TestUtils.tempDirectory();
         
-        dir = String.valueOf(Files.createDirectory(Paths.get(parent.getAbsolutePath(), "dir")));
+        dir = Files.createDirectory(Paths.get(parent.getAbsolutePath(), "dir")).toString();
         writeFile(Files.createFile(Paths.get(dir, foo)));
         writeFile(Files.createFile(Paths.get(dir, bar)));
 
-        subdir = String.valueOf(Files.createDirectory(Paths.get(dir, "subdir")));
+        subdir = Files.createDirectory(Paths.get(dir, "subdir")).toString();
         writeFile(Files.createFile(Paths.get(subdir, subdirFileName)));
 
-        siblingDir = String.valueOf(Files.createDirectory(Paths.get(parent.getAbsolutePath(), "siblingDir")));
+        siblingDir = Files.createDirectory(Paths.get(parent.getAbsolutePath(), "siblingDir")).toString();
         writeFile(Files.createFile(Paths.get(siblingDir, siblingDirFileName)));
 
         writeFile(Files.createFile(Paths.get(parent.getAbsolutePath(), siblingFileName)));
@@ -207,7 +207,7 @@ public class DirectoryConfigProviderTest {
         configs.put(ALLOWED_PATHS_CONFIG, dir);
         provider.configure(configs);
 
-        ConfigData configData = provider.get(dir + Paths.get("/../siblingdir"));
+        ConfigData configData = provider.get(Paths.get(dir, "..", "siblingDir").toString());
         assertTrue(configData.data().isEmpty());
         assertNull(configData.ttl());
     }

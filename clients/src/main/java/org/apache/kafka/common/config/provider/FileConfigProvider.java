@@ -16,13 +16,9 @@
  */
 package org.apache.kafka.common.config.provider;
 
-import java.nio.file.Path;
-import java.nio.file.Paths;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
 import org.apache.kafka.common.config.ConfigData;
 import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.common.config.internals.ConfigProviderUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -30,8 +26,11 @@ import java.io.IOException;
 import java.io.Reader;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.Enumeration;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
@@ -45,20 +44,12 @@ public class FileConfigProvider implements ConfigProvider {
     private static final Logger log = LoggerFactory.getLogger(FileConfigProvider.class);
 
     public static final String ALLOWED_PATHS_CONFIG = "allowed.paths";
-    public static final String ALLOWED_PATHS_DOC = "Path that this config provider is allowed to access";
-    private List<Path> allowedPaths;
+    public static final String ALLOWED_PATHS_DOC = "A comma separated list of paths that this config provider is " +
+            "allowed to access. If not set, all paths are allowed.";
+    private List<Path> allowedPaths = null;
 
     public void configure(Map<String, ?> configs) {
-        if (configs.containsKey(ALLOWED_PATHS_CONFIG)) {
-            String configValue = (String) configs.get(ALLOWED_PATHS_CONFIG);
-
-            if (configValue != null && !configValue.isEmpty()) {
-                allowedPaths = new ArrayList<>();
-                Arrays.stream(configValue.split(",")).forEach(b -> allowedPaths.add(Paths.get(b).normalize()));
-            }
-        } else {
-            allowedPaths = null;
-        }
+        allowedPaths = ConfigProviderUtils.configureAllowedPaths((String) configs.getOrDefault(ALLOWED_PATHS_CONFIG, null));
     }
 
     /**
@@ -73,8 +64,8 @@ public class FileConfigProvider implements ConfigProvider {
             return new ConfigData(data);
         }
 
-        Path filePath = Paths.get(path);
-        if (!pathIsAllowed(filePath)) {
+        Path filePath = ConfigProviderUtils.pathIsAllowed(Paths.get(path), allowedPaths);
+        if (filePath == null) {
             log.warn("The path {} is not allowed to be accessed", path);
             return new ConfigData(data);
         }
@@ -110,8 +101,8 @@ public class FileConfigProvider implements ConfigProvider {
             return new ConfigData(data);
         }
 
-        Path filePath = Paths.get(path);
-        if (!pathIsAllowed(filePath)) {
+        Path filePath = ConfigProviderUtils.pathIsAllowed(Paths.get(path), allowedPaths);
+        if (filePath == null) {
             log.warn("The path {} is not allowed to be accessed", path);
             return new ConfigData(data);
         }
@@ -130,16 +121,6 @@ public class FileConfigProvider implements ConfigProvider {
             log.error("Could not read properties from file {}", path, e);
             throw new ConfigException("Could not read properties from file " + path);
         }
-    }
-
-    private boolean pathIsAllowed(Path filePath) {
-        if (allowedPaths != null) {
-            long allowed = allowedPaths.stream().filter(allowedPath -> filePath.normalize().startsWith(allowedPath)).count();
-            if (allowed == 0) {
-                return false;
-            }
-        }
-        return true;
     }
 
     // visible for testing
