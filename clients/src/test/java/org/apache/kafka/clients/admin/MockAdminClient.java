@@ -1017,10 +1017,10 @@ public class MockAdminClient extends AdminClient {
                     Map<TopicPartition, ReplicaInfo> topicPartitionReplicaInfoMap = new HashMap<>(logDirDescription.replicaInfos());
                     topicPartitionReplicaInfoMap.put(new TopicPartition(topicName, topicPartitionInfo.partition()), new ReplicaInfo(0, 0, false));
                     logDirDescriptionMap.put(partitionLogDirs.get(0), new LogDirDescription(
-                      logDirDescription.error(),
-                      topicPartitionReplicaInfoMap,
-                      logDirDescription.totalBytes().orElse(DescribeLogDirsResponse.UNKNOWN_VOLUME_BYTES),
-                      logDirDescription.usableBytes().orElse(DescribeLogDirsResponse.UNKNOWN_VOLUME_BYTES)));
+                        logDirDescription.error(),
+                        topicPartitionReplicaInfoMap,
+                        logDirDescription.totalBytes().orElse(DescribeLogDirsResponse.UNKNOWN_VOLUME_BYTES),
+                        logDirDescription.usableBytes().orElse(DescribeLogDirsResponse.UNKNOWN_VOLUME_BYTES)));
                 }
             }
         }
