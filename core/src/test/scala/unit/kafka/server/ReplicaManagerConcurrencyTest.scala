@@ -75,6 +75,7 @@ class ReplicaManagerConcurrencyTest extends Logging {
     CoreUtils.swallow(replicaManager.shutdown(checkpointHW = false), this)
     CoreUtils.swallow(quotaManagers.shutdown(), this)
     CoreUtils.swallow(metrics.close(), this)
+    CoreUtils.swallow(time.scheduler.shutdown(), this)
   }
 
   @Test
