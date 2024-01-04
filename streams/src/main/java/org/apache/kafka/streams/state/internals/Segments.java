@@ -16,9 +16,12 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.streams.processor.ProcessorContext;
+import org.apache.kafka.streams.query.Position;
 
 import java.util.List;
+import java.util.Map;
 
 interface Segments<S extends Segment> {
 
@@ -38,7 +41,7 @@ interface Segments<S extends Segment> {
 
     List<S> allSegments(final boolean forward);
 
-    void flush();
+    void commit(final Map<TopicPartition, Long> changelogOffsets, final Position position);
 
     void close();
 }

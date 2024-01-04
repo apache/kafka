@@ -109,6 +109,13 @@ public class StateStoreMetrics {
     private static final String FLUSH_AVG_LATENCY_DESCRIPTION = AVG_LATENCY_DESCRIPTION_PREFIX + FLUSH_DESCRIPTION;
     private static final String FLUSH_MAX_LATENCY_DESCRIPTION = MAX_LATENCY_DESCRIPTION_PREFIX + FLUSH_DESCRIPTION;
 
+    private static final String COMMIT = "commit";
+    private static final String COMMIT_DESCRIPTION = "calls to commit";
+    private static final String COMMIT_RATE_DESCRIPTION =
+            RATE_DESCRIPTION_PREFIX + COMMIT_DESCRIPTION + RATE_DESCRIPTION_SUFFIX;
+    private static final String COMMIT_AVG_LATENCY_DESCRIPTION = AVG_LATENCY_DESCRIPTION_PREFIX + COMMIT_DESCRIPTION;
+    private static final String COMMIT_MAX_LATENCY_DESCRIPTION = MAX_LATENCY_DESCRIPTION_PREFIX + COMMIT_DESCRIPTION;
+
     private static final String DELETE = "delete";
     private static final String DELETE_DESCRIPTION = "calls to delete";
     private static final String DELETE_RATE_DESCRIPTION =
@@ -301,6 +308,23 @@ public class StateStoreMetrics {
             FLUSH_MAX_LATENCY_DESCRIPTION,
             RecordingLevel.DEBUG,
             streamsMetrics
+        );
+    }
+
+    public static Sensor commitSensor(final String taskId,
+                                      final String storeType,
+                                      final String storeName,
+                                      final StreamsMetricsImpl streamsMetrics) {
+        return throughputAndLatencySensor(
+                taskId,
+                storeType,
+                storeName,
+                COMMIT,
+                COMMIT_RATE_DESCRIPTION,
+                COMMIT_AVG_LATENCY_DESCRIPTION,
+                COMMIT_MAX_LATENCY_DESCRIPTION,
+                RecordingLevel.DEBUG,
+                streamsMetrics
         );
     }
 

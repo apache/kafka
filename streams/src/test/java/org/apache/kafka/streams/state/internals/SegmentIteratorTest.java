@@ -53,7 +53,7 @@ public class SegmentIteratorTest {
 
     private SegmentIterator<KeyValueSegment> iterator = null;
 
-    @SuppressWarnings("rawtypes")
+    @SuppressWarnings({"rawtypes"})
     @Before
     public void before() {
         final InternalMockProcessorContext context = new InternalMockProcessorContext<>(

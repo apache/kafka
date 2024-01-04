@@ -68,6 +68,7 @@ public class RocksDBTimeOrderedKeyValueBytesStore extends AbstractRocksDBTimeOrd
 
                     final byte[] baseKey = TimeFirstWindowKeySchema.fromNonPrefixWindowKey(record.key());
                     segment.addToBatch(new KeyValue<>(baseKey, record.value()), batch);
+                    segment.addPositionOffsetsToBatch(position, batch);
                 } catch (final RocksDBException e) {
                     throw new ProcessorStateException("Error restoring batch to store " + name(), e);
                 }

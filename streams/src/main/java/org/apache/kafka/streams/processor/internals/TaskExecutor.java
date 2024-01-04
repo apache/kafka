@@ -18,6 +18,7 @@ package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.clients.consumer.CommitFailedException;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
+import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.TimeoutException;
@@ -52,14 +53,18 @@ public class TaskExecutor {
     private final TaskManager taskManager;
     private final TaskExecutionMetadata executionMetadata;
 
+    private final long maxUncommittedStateBytes;
+
     public TaskExecutor(final TasksRegistry tasks,
                         final TaskManager taskManager,
                         final TaskExecutionMetadata executionMetadata,
-                        final LogContext logContext) {
+                        final LogContext logContext,
+                        final long maxUncommittedStateBytes) {
         this.tasks = tasks;
         this.taskManager = taskManager;
         this.executionMetadata = executionMetadata;
         this.log = logContext.logger(getClass());
+        this.maxUncommittedStateBytes = maxUncommittedStateBytes;
     }
 
     /**
@@ -157,7 +162,10 @@ public class TaskExecutor {
             if (task.commitNeeded()) {
                 task.clearTaskTimeout();
                 ++committed;
-                task.postCommit(false);
+                // under EOS, we need to enforce a checkpoint if our transaction buffers have exceeded their capacity
+                // todo: find a way to proactively commit *before* exceeding capacity
+                final boolean enforceCheckpoint = maxUncommittedStateBytes > -1 && tasks.approximateUncommittedStateBytes() >= maxUncommittedStateBytes;
+                task.postCommit(enforceCheckpoint);
             }
         }
 
@@ -169,8 +177,8 @@ public class TaskExecutor {
      * this is a possibility, prefer the {@link #commitTasksAndMaybeUpdateCommittableOffsets} instead.
      *
      * @throws TaskMigratedException   if committing offsets failed due to CommitFailedException (non-EOS)
-     * @throws TimeoutException        if committing offsets failed due to TimeoutException (non-EOS)
-     * @throws TaskCorruptedException  if committing offsets failed due to TimeoutException (EOS)
+     * @throws TimeoutException        if committing offsets failed due to TimeoutException (non-EOS or READ_COMMITTED)
+     * @throws TaskCorruptedException  if committing offsets failed due to TimeoutException (EOS and READ_UNCOMMITTED)
      */
     void commitOffsetsOrTransaction(final Map<Task, Map<TopicPartition, OffsetAndMetadata>> offsetsPerTask) {
         log.debug("Committing task offsets {}", offsetsPerTask.entrySet().stream().collect(Collectors.toMap(t -> t.getKey().id(), Entry::getValue))); // avoid logging actual Task objects
@@ -190,7 +198,13 @@ public class TaskExecutor {
                             String.format("Committing task %s failed.", task.id()),
                             timeoutException
                         );
-                        corruptedTasks.add(task.id());
+                        if (executionMetadata.isolationLevel() == IsolationLevel.READ_UNCOMMITTED) {
+                            // under EOS and READ_UNCOMMITTED any error committing must wipe the local state to ensure
+                            // our stores are not inconsistent with the changelog
+                            corruptedTasks.add(task.id());
+                        } else {
+                            throw timeoutException;
+                        }
                     }
                 }
             }
@@ -212,9 +226,15 @@ public class TaskExecutor {
                                           .collect(Collectors.joining(", "))),
                         timeoutException
                     );
-                    offsetsPerTask
-                        .keySet()
-                        .forEach(task -> corruptedTasks.add(task.id()));
+                    if (executionMetadata.isolationLevel() == IsolationLevel.READ_UNCOMMITTED) {
+                        // under EOS and READ_UNCOMMITTED any error committing must wipe the local state to ensure
+                        // our stores are not inconsistent with the changelog
+                        offsetsPerTask
+                                .keySet()
+                                .forEach(task -> corruptedTasks.add(task.id()));
+                    } else {
+                        throw timeoutException;
+                    }
                 }
             }
         } else {
@@ -246,6 +266,7 @@ public class TaskExecutor {
             }
         }
         if (!corruptedTasks.isEmpty()) {
+            // this can only happen under EOS and READ_UNCOMMITTED
             throw new TaskCorruptedException(corruptedTasks);
         }
     }

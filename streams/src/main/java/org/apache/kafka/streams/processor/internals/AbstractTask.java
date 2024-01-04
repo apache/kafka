@@ -93,12 +93,11 @@ public abstract class AbstractTask implements Task {
      */
     @Override
     public void maybeCheckpoint(final boolean enforceCheckpoint) {
-        final Map<TopicPartition, Long> offsetSnapshot = stateMgr.changelogOffsets();
-        if (StateManagerUtil.checkpointNeeded(enforceCheckpoint, offsetSnapshotSinceLastFlush, offsetSnapshot)) {
-            // the state's current offset would be used to checkpoint
-            stateMgr.flush();
-            stateMgr.checkpoint();
-            offsetSnapshotSinceLastFlush = new HashMap<>(offsetSnapshot);
+        final Map<TopicPartition, Long> changelogOffsets = stateMgr.changelogOffsets();
+        // if it is null it means the registration is not done and hence we should not overwrite the checkpoint
+        if (changelogOffsets != null) {
+            stateMgr.commit();
+            offsetSnapshotSinceLastFlush = new HashMap<>(changelogOffsets);
         }
     }
 

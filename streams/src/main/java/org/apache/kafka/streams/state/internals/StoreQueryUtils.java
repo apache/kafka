@@ -154,7 +154,7 @@ public final class StoreQueryUtils {
         final Position position,
         final StateStoreContext stateStoreContext) {
 
-        if (stateStoreContext != null && stateStoreContext.recordMetadata().isPresent()) {
+        if (position != null && stateStoreContext != null && stateStoreContext.recordMetadata().isPresent()) {
             final RecordMetadata meta = stateStoreContext.recordMetadata().get();
             if (meta.topic() != null) {
                 position.withComponent(meta.topic(), meta.partition(), meta.offset());

@@ -75,6 +75,10 @@ public class StreamsConfigUtils {
             processingMode == ProcessingMode.EXACTLY_ONCE_V2;
     }
 
+    public static boolean readUncommittedIsolation(final StreamsConfig config) {
+        return config.getString(StreamsConfig.DEFAULT_STATE_ISOLATION_LEVEL_CONFIG).equals(StreamsConfig.READ_UNCOMMITTED);
+    }
+
     @SuppressWarnings("deprecation")
     public static long getTotalCacheSize(final StreamsConfig config) {
         // both deprecated and new config set. Warn and use the new one.

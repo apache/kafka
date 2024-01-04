@@ -374,7 +374,6 @@ public class StandbyTaskEOSIntegrationTest {
                         }
 
                         store.put(key, value);
-                        store.flush();
 
                         if (key == KEY_1) {
                             // after error injection, we need to avoid a consecutive error after rebalancing

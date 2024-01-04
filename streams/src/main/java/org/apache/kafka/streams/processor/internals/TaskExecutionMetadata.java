@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.internals.StreamsConfigUtils.ProcessingMode;
 import org.apache.kafka.streams.processor.TaskId;
@@ -40,16 +41,19 @@ public class TaskExecutionMetadata {
     private final boolean hasNamedTopologies;
     private final Set<String> pausedTopologies;
     private final ProcessingMode processingMode;
+    private final IsolationLevel isolationLevel;
     private final Collection<Task> successfullyProcessed = new HashSet<>();
     // map of topologies experiencing errors/currently under backoff
     private final ConcurrentHashMap<String, NamedTopologyMetadata> topologyNameToErrorMetadata = new ConcurrentHashMap<>();
 
     public TaskExecutionMetadata(final Set<String> allTopologyNames,
                                  final Set<String> pausedTopologies,
-                                 final ProcessingMode processingMode) {
+                                 final ProcessingMode processingMode,
+                                 final IsolationLevel isolationLevel) {
         this.hasNamedTopologies = !(allTopologyNames.size() == 1 && allTopologyNames.contains(UNNAMED_TOPOLOGY));
         this.pausedTopologies = pausedTopologies;
         this.processingMode = processingMode;
+        this.isolationLevel = isolationLevel;
     }
 
     public boolean hasNamedTopologies() {
@@ -58,6 +62,10 @@ public class TaskExecutionMetadata {
 
     public ProcessingMode processingMode() {
         return processingMode;
+    }
+
+    public IsolationLevel isolationLevel() {
+        return isolationLevel;
     }
 
     public boolean canProcessTask(final Task task, final long now) {

@@ -550,16 +550,14 @@ public class EosIntegrationTest {
             // p-1: ---> 10 rec + C  + 5 rec (pending)
 
             final List<KeyValue<Long, Long>> uncommittedRecords = readResult(SINGLE_PARTITION_OUTPUT_TOPIC, dataBeforeFailure.size(), null);
-            final List<KeyValue<Long, Long>> expectedResultBeforeFailure = computeExpectedResult(dataBeforeFailure);
-
 
             checkResultPerKey(
                 uncommittedRecords,
-                expectedResultBeforeFailure,
+                computeExpectedResult(dataBeforeFailure),
                 "The uncommitted records before failure do not match what expected");
             verifyStateStore(
                 streams,
-                getMaxPerKey(expectedResultBeforeFailure),
+                getMaxPerKey(computeExpectedResult(committedDataBeforeFailure)),
                 "The state store content before failure do not match what expected");
 
             errorInjected.set(true);
@@ -1078,7 +1076,6 @@ public class EosIntegrationTest {
                                 sum += value;
                             }
                             state.put(key, sum);
-                            state.flush();
                         }
 
 

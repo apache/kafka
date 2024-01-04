@@ -115,12 +115,14 @@ final class StateManagerUtil {
     static void closeStateManager(final Logger log,
                                   final String logPrefix,
                                   final boolean closeClean,
-                                  final boolean eosEnabled,
                                   final ProcessorStateManager stateMgr,
                                   final StateDirectory stateDirectory,
                                   final TaskType taskType) {
-        // if EOS is enabled, wipe out the whole state store for unclean close since it is now invalid
-        final boolean wipeStateStore = !closeClean && eosEnabled;
+        // if any stores are marked as "corrupted", we should wipe out the state for this Task
+        // note: this is done irrespective of processing mode, as this should only be the case when a TaskCorruptedException
+        // is raised, which only occurs when the offsets for the store either can't be determined, or don't correspond with
+        // the changelogs
+        final boolean wipeStateStore = !closeClean && stateMgr.hasCorruptedStores();
 
         final TaskId id = stateMgr.taskId();
         log.trace("Closing state manager for {} task {}", taskType, id);

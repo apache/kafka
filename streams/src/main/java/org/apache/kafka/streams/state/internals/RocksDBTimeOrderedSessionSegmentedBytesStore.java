@@ -151,6 +151,7 @@ public class RocksDBTimeOrderedSessionSegmentedBytesStore extends AbstractRocksD
 
                     final byte[] baseKey = TimeFirstSessionKeySchema.extractWindowBytesFromNonPrefixSessionKey(record.key());
                     segment.addToBatch(new KeyValue<>(baseKey, record.value()), batch);
+                    segment.addPositionOffsetsToBatch(position, batch);
                 } catch (final RocksDBException e) {
                     throw new ProcessorStateException("Error restoring batch to store " + name(), e);
                 }
@@ -160,8 +161,7 @@ public class RocksDBTimeOrderedSessionSegmentedBytesStore extends AbstractRocksD
     }
 
     @Override
-    protected IndexToBaseStoreIterator getIndexToBaseStoreIterator(
-        final SegmentIterator<KeyValueSegment> segmentIterator) {
+    protected IndexToBaseStoreIterator getIndexToBaseStoreIterator(final SegmentIterator<KeyValueSegment> segmentIterator) {
         return new SessionKeySchemaIndexToBaseStoreIterator(segmentIterator);
     }
 }

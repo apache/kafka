@@ -521,6 +521,7 @@ public class MockProcessorContext<KForward, VForward> implements ProcessorContex
             public void register(final StateStore store,
                                  final StateRestoreCallback stateRestoreCallback,
                                  final CommitCallback checkpoint) {
+                if (store == null) return;
                 stateStores.put(store.name(), store);
             }
 

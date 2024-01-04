@@ -41,8 +41,7 @@ class TimestampedSegments extends AbstractSegments<TimestampedSegment> {
         if (segments.containsKey(segmentId)) {
             return segments.get(segmentId);
         } else {
-            final TimestampedSegment newSegment =
-                new TimestampedSegment(segmentName(segmentId), name, segmentId, metricsRecorder);
+            final TimestampedSegment newSegment = new TimestampedSegment(segmentName(segmentId), name, segmentId, metricsRecorder);
 
             if (segments.put(segmentId, newSegment) != null) {
                 throw new IllegalStateException("TimestampedSegment already exists. Possible concurrent access.");
@@ -55,8 +54,8 @@ class TimestampedSegments extends AbstractSegments<TimestampedSegment> {
 
     @Override
     public TimestampedSegment getOrCreateSegmentIfLive(final long segmentId,
-                                                    final ProcessorContext context,
-                                                    final long streamTime) {
+                                                       final ProcessorContext context,
+                                                       final long streamTime) {
         final TimestampedSegment segment = super.getOrCreateSegmentIfLive(segmentId, context, streamTime);
         cleanupExpiredSegments(streamTime);
         return segment;

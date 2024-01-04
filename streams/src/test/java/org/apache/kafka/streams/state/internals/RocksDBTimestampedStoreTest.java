@@ -86,7 +86,8 @@ public class RocksDBTimestampedStoreTest extends RocksDBStoreTest {
 
         final List<ColumnFamilyDescriptor> columnFamilyDescriptors = asList(
             new ColumnFamilyDescriptor(RocksDB.DEFAULT_COLUMN_FAMILY, columnFamilyOptions),
-            new ColumnFamilyDescriptor("keyValueWithTimestamp".getBytes(StandardCharsets.UTF_8), columnFamilyOptions));
+            new ColumnFamilyDescriptor("keyValueWithTimestamp".getBytes(StandardCharsets.UTF_8), columnFamilyOptions),
+            new ColumnFamilyDescriptor(RocksDBStore.OFFSETS_COLUMN_FAMILY_NAME, columnFamilyOptions));
         final List<ColumnFamilyHandle> columnFamilies = new ArrayList<>(columnFamilyDescriptors.size());
 
         RocksDB db = null;
@@ -145,7 +146,6 @@ public class RocksDBTimestampedStoreTest extends RocksDBStoreTest {
         // must return timestamp plus value, ie, it's not 1 byte but 9 bytes
         assertThat(rocksDBStore.get(new Bytes("key1".getBytes())).length, is(8 + 1));
         // one delete on old CF, one put on new CF
-        // approx: 6 entries on old CF, 1 in new CF
         assertThat(rocksDBStore.approximateNumEntries(), is(7L));
 
         // put()
@@ -153,7 +153,6 @@ public class RocksDBTimestampedStoreTest extends RocksDBStoreTest {
         // should migrate key2 from old to new CF with new value
         rocksDBStore.put(new Bytes("key2".getBytes()), "timestamp+22".getBytes());
         // one delete on old CF, one put on new CF
-        // approx: 5 entries on old CF, 2 in new CF
         assertThat(rocksDBStore.approximateNumEntries(), is(7L));
 
         // should delete key3 from old and new CF
@@ -165,7 +164,6 @@ public class RocksDBTimestampedStoreTest extends RocksDBStoreTest {
         // should add new key8 to new CF
         rocksDBStore.put(new Bytes("key8".getBytes()), "timestamp+88888888".getBytes());
         // one delete on old CF, one put on new CF
-        // approx: 3 entries on old CF, 2 in new CF
         assertThat(rocksDBStore.approximateNumEntries(), is(5L));
 
         // putIfAbsent()
@@ -364,7 +362,8 @@ public class RocksDBTimestampedStoreTest extends RocksDBStoreTest {
 
         final List<ColumnFamilyDescriptor> columnFamilyDescriptors = asList(
             new ColumnFamilyDescriptor(RocksDB.DEFAULT_COLUMN_FAMILY, columnFamilyOptions),
-            new ColumnFamilyDescriptor("keyValueWithTimestamp".getBytes(StandardCharsets.UTF_8), columnFamilyOptions));
+            new ColumnFamilyDescriptor("keyValueWithTimestamp".getBytes(StandardCharsets.UTF_8), columnFamilyOptions),
+            new ColumnFamilyDescriptor(RocksDBStore.OFFSETS_COLUMN_FAMILY_NAME, columnFamilyOptions));
         final List<ColumnFamilyHandle> columnFamilies = new ArrayList<>(columnFamilyDescriptors.size());
 
         RocksDB db = null;

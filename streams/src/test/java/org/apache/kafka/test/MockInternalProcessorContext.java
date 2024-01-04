@@ -142,6 +142,7 @@ public class MockInternalProcessorContext extends MockProcessorContext implement
     @Override
     public void register(final StateStore store,
                          final StateRestoreCallback stateRestoreCallback) {
+        if (store == null) return;
         restoreCallbacks.put(store.name(), stateRestoreCallback);
         super.register(store, stateRestoreCallback);
     }
@@ -150,6 +151,7 @@ public class MockInternalProcessorContext extends MockProcessorContext implement
     public void register(final StateStore store,
                          final StateRestoreCallback stateRestoreCallback,
                          final CommitCallback checkpoint) {
+        if (store == null) return;
         restoreCallbacks.put(store.name(), stateRestoreCallback);
         super.register(store, stateRestoreCallback);
     }

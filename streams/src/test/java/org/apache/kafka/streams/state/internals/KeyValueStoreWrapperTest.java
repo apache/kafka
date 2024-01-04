@@ -43,6 +43,8 @@ import org.junit.runner.RunWith;
 import org.mockito.Mock;
 import org.mockito.junit.MockitoJUnitRunner;
 
+import java.util.Collections;
+
 @RunWith(MockitoJUnitRunner.StrictStubs.class)
 public class KeyValueStoreWrapperTest {
 
@@ -231,18 +233,18 @@ public class KeyValueStoreWrapperTest {
     public void shouldFlushTimestampedStore() {
         givenWrapperWithTimestampedStore();
 
-        wrapper.flush();
+        wrapper.commit(Collections.emptyMap());
 
-        verify(timestampedStore).flush();
+        verify(timestampedStore).commit(Collections.emptyMap());
     }
 
     @Test
     public void shouldFlushVersionedStore() {
         givenWrapperWithVersionedStore();
 
-        wrapper.flush();
+        wrapper.commit(Collections.emptyMap());
 
-        verify(versionedStore).flush();
+        verify(versionedStore).commit(Collections.emptyMap());
     }
 
     @Test

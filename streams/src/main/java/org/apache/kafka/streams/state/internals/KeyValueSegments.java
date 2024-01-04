@@ -36,13 +36,11 @@ class KeyValueSegments extends AbstractSegments<KeyValueSegment> {
     }
 
     @Override
-    public KeyValueSegment getOrCreateSegment(final long segmentId,
-                                              final ProcessorContext context) {
+    public KeyValueSegment getOrCreateSegment(final long segmentId, final ProcessorContext context) {
         if (segments.containsKey(segmentId)) {
             return segments.get(segmentId);
         } else {
-            final KeyValueSegment newSegment =
-                new KeyValueSegment(segmentName(segmentId), name, segmentId, metricsRecorder);
+            final KeyValueSegment newSegment = new KeyValueSegment(segmentName(segmentId), name, segmentId, metricsRecorder);
 
             if (segments.put(segmentId, newSegment) != null) {
                 throw new IllegalStateException("KeyValueSegment already exists. Possible concurrent access.");

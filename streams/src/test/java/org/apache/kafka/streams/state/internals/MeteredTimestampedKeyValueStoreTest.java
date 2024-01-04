@@ -354,6 +354,7 @@ public class MeteredTimestampedKeyValueStoreTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void shouldFlushInnerWhenFlushTimeRecords() {
         doNothing().when(inner).flush();
         init();
@@ -361,6 +362,17 @@ public class MeteredTimestampedKeyValueStoreTest {
         metered.flush();
 
         final KafkaMetric metric = metric("flush-rate");
+        assertTrue((Double) metric.metricValue() > 0);
+    }
+
+    @Test
+    public void shouldCommitInnerWhenCommitTimeRecords() {
+        doNothing().when(inner).commit(Collections.emptyMap());
+        init();
+
+        metered.commit(Collections.emptyMap());
+
+        final KafkaMetric metric = metric("commit-rate");
         assertTrue((Double) metric.metricValue() > 0);
     }
 

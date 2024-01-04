@@ -273,7 +273,6 @@ public class StandbyTask extends AbstractTask implements Task {
                         log,
                         logPrefix,
                         clean,
-                        eosEnabled,
                         stateMgr,
                         stateDirectory,
                         TaskType.STANDBY
@@ -305,7 +304,19 @@ public class StandbyTask extends AbstractTask implements Task {
     public boolean commitNeeded() {
         // for standby tasks committing is the same as checkpointing,
         // so we only need to commit if we want to checkpoint
-        return StateManagerUtil.checkpointNeeded(false, offsetSnapshotSinceLastFlush, stateMgr.changelogOffsets());
+        final Map<TopicPartition, Long> changelogOffsets = stateMgr.changelogOffsets();
+
+        if (offsetSnapshotSinceLastFlush == null || changelogOffsets.size() != offsetSnapshotSinceLastFlush.size()) {
+            return !changelogOffsets.isEmpty();
+        }
+
+        for (final Map.Entry<TopicPartition, Long> offsets : changelogOffsets.entrySet()) {
+            final Long lastOffset = offsetSnapshotSinceLastFlush.get(offsets.getKey());
+            if (lastOffset == null || !lastOffset.equals(offsets.getValue())) {
+                return true;
+            }
+        }
+        return false;
     }
 
     @Override

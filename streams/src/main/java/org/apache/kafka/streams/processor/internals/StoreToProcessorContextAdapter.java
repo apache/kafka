@@ -20,6 +20,7 @@ import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.StreamsMetrics;
 import org.apache.kafka.streams.processor.Cancellable;
+import org.apache.kafka.streams.processor.CommitCallback;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.PunctuationType;
 import org.apache.kafka.streams.processor.Punctuator;
@@ -28,12 +29,14 @@ import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.To;
+import org.apache.kafka.streams.processor.api.RecordMetadata;
 
 import java.io.File;
 import java.time.Duration;
 import java.util.Map;
+import java.util.Optional;
 
-public final class StoreToProcessorContextAdapter implements ProcessorContext {
+public final class StoreToProcessorContextAdapter implements ProcessorContext, StateStoreContext {
     private final StateStoreContext delegate;
 
     public static ProcessorContext adapt(final StateStoreContext delegate) {
@@ -59,6 +62,11 @@ public final class StoreToProcessorContextAdapter implements ProcessorContext {
     }
 
     @Override
+    public Optional<RecordMetadata> recordMetadata() {
+        return delegate.recordMetadata();
+    }
+
+    @Override
     public Serde<?> keySerde() {
         return delegate.keySerde();
     }
@@ -81,6 +89,13 @@ public final class StoreToProcessorContextAdapter implements ProcessorContext {
     @Override
     public void register(final StateStore store, final StateRestoreCallback stateRestoreCallback) {
         delegate.register(store, stateRestoreCallback);
+    }
+
+    @Override
+    public void register(final StateStore store,
+                         final StateRestoreCallback stateRestoreCallback,
+                         final CommitCallback commitCallback) {
+        delegate.register(store, stateRestoreCallback, commitCallback);
     }
 
     @Override

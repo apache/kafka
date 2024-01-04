@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
@@ -27,6 +28,8 @@ import org.apache.kafka.streams.query.QueryConfig;
 import org.apache.kafka.streams.query.QueryResult;
 import org.apache.kafka.streams.state.TimestampedBytesStore;
 import org.apache.kafka.streams.state.VersionedBytesStore;
+
+import java.util.Map;
 
 /**
  * A storage engine wrapper for utilities like logging, caching, and metering.
@@ -118,8 +121,14 @@ public abstract class WrappedStateStore<S extends StateStore, K, V> implements S
     }
 
     @Override
+    @Deprecated
     public void flush() {
         wrapped.flush();
+    }
+
+    @Override
+    public void commit(final Map<TopicPartition, Long> changelogOffsets) {
+        wrapped.commit(changelogOffsets);
     }
 
     @Override
@@ -150,5 +159,20 @@ public abstract class WrappedStateStore<S extends StateStore, K, V> implements S
 
     public S wrapped() {
         return wrapped;
+    }
+
+    @Override
+    public long approximateNumUncommittedBytes() {
+        return wrapped.approximateNumUncommittedBytes();
+    }
+
+    @Override
+    public boolean managesOffsets() {
+        return wrapped.managesOffsets();
+    }
+
+    @Override
+    public Long getCommittedOffset(final TopicPartition partition) {
+        return wrapped.getCommittedOffset(partition);
     }
 }

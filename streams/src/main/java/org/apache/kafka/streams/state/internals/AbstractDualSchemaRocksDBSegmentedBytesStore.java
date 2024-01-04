@@ -18,6 +18,7 @@ package org.apache.kafka.streams.state.internals;
 
 import java.util.Optional;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
@@ -38,7 +39,6 @@ import org.rocksdb.WriteBatch;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.File;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
@@ -61,7 +61,6 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStore<S extends Seg
     protected long observedStreamTime = ConsumerRecord.NO_TIMESTAMP;
     protected boolean consistencyEnabled = false;
     protected Position position;
-    protected OffsetCheckpoint positionCheckpoint;
     private volatile boolean open;
 
     AbstractDualSchemaRocksDBSegmentedBytesStore(final String name,
@@ -193,7 +192,7 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStore<S extends Seg
             expiredRecordSensor.record(1.0d, context.currentSystemTimeMs());
             LOG.warn("Skipping record for expired segment.");
         } else {
-            StoreQueryUtils.updatePosition(position, stateStoreContext);
+            segment.updatePosition(position, stateStoreContext);
 
             // Put to index first so that if put to base failed, when we iterate index, we will
             // find no base value. If put to base first but putting to index fails, when we iterate
@@ -256,15 +255,18 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStore<S extends Seg
 
         segments.openExisting(context, observedStreamTime);
 
-        final File positionCheckpointFile = new File(context.stateDir(), name() + ".position");
-        this.positionCheckpoint = new OffsetCheckpoint(positionCheckpointFile);
-        this.position = StoreQueryUtils.readPositionFromCheckpoint(positionCheckpoint);
+        position = Position.emptyPosition();
+        for (final S segment : segments.allSegments(true)) {
+            if (segment.getPosition() != null) {
+                position.merge(segment.getPosition());
+            }
+        }
 
         // register and possibly restore the state from the logs
         stateStoreContext.register(
             root,
             (RecordBatchingStateRestoreCallback) this::restoreAllInternal,
-            () -> StoreQueryUtils.checkpointPosition(positionCheckpoint, position)
+            () -> { }
         );
 
         open = true;
@@ -283,8 +285,24 @@ public abstract class AbstractDualSchemaRocksDBSegmentedBytesStore<S extends Seg
     }
 
     @Override
-    public void flush() {
-        segments.flush();
+    public void commit(final Map<TopicPartition, Long> changelogOffsets) {
+        segments.commit(changelogOffsets, position);
+    }
+
+    @Override
+    public Long getCommittedOffset(final TopicPartition partition) {
+        for (final Segment segment : segments.allSegments(false)) {
+            final Long offset = segment.getCommittedOffset(partition);
+            if (offset != null) {
+                return offset;
+            }
+        }
+        return null;
+    }
+
+    @Override
+    public boolean managesOffsets() {
+        return true;
     }
 
     @Override

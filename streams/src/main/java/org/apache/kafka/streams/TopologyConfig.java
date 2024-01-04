@@ -123,6 +123,7 @@ public class TopologyConfig extends AbstractConfig {
 
     public final String topologyName;
     public final boolean eosEnabled;
+    public final boolean readUncommittedIsolation;
 
     public final StreamsConfig applicationConfigs;
     public final Properties topologyOverrides;
@@ -147,6 +148,7 @@ public class TopologyConfig extends AbstractConfig {
         this.globalAppConfigs = globalAppConfigs;
         this.topologyName = topologyName;
         this.eosEnabled = StreamsConfigUtils.eosEnabled(globalAppConfigs);
+        this.readUncommittedIsolation = StreamsConfigUtils.readUncommittedIsolation(globalAppConfigs);
 
         this.applicationConfigs = globalAppConfigs;
         this.topologyOverrides = topologyOverrides;
@@ -280,7 +282,8 @@ public class TopologyConfig extends AbstractConfig {
             maxBufferedSize,
             timestampExtractorSupplier.get(),
             deserializationExceptionHandlerSupplier.get(),
-            eosEnabled
+            eosEnabled,
+            readUncommittedIsolation
         );
     }
 
@@ -291,19 +294,22 @@ public class TopologyConfig extends AbstractConfig {
         public final TimestampExtractor timestampExtractor;
         public final DeserializationExceptionHandler deserializationExceptionHandler;
         public final boolean eosEnabled;
+        public final boolean readUncommittedIsolation;
 
         private TaskConfig(final long maxTaskIdleMs,
                            final long taskTimeoutMs,
                            final int maxBufferedSize,
                            final TimestampExtractor timestampExtractor,
                            final DeserializationExceptionHandler deserializationExceptionHandler,
-                           final boolean eosEnabled) {
+                           final boolean eosEnabled,
+                           final boolean readUncommittedIsolation) {
             this.maxTaskIdleMs = maxTaskIdleMs;
             this.taskTimeoutMs = taskTimeoutMs;
             this.maxBufferedSize = maxBufferedSize;
             this.timestampExtractor = timestampExtractor;
             this.deserializationExceptionHandler = deserializationExceptionHandler;
             this.eosEnabled = eosEnabled;
+            this.readUncommittedIsolation = readUncommittedIsolation;
         }
     }
 }

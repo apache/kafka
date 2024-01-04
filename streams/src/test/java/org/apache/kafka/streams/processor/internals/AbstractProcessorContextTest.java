@@ -84,11 +84,6 @@ public class AbstractProcessorContextTest {
     }
 
     @Test
-    public void shouldThrowNullPointerOnRegisterIfStateStoreIsNull() {
-        assertThrows(NullPointerException.class, () -> context.register(null, null));
-    }
-
-    @Test
     public void shouldReturnNullTopicIfNoRecordContext() {
         context.setRecordContext(null);
         assertThat(context.topic(), is(nullValue()));

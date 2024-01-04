@@ -31,6 +31,8 @@ import org.junit.runner.RunWith;
 import org.mockito.Mock;
 import org.mockito.junit.MockitoJUnitRunner;
 
+import java.util.Collections;
+
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.mockito.Mockito.times;
@@ -168,9 +170,9 @@ public class ChangeLoggingSessionBytesStoreTest {
 
     @Test
     public void shouldFlushUnderlyingStore() {
-        store.flush();
+        store.commit(Collections.emptyMap());
 
-        verify(inner).flush();
+        verify(inner).commit(Collections.emptyMap());
     }
 
     @Test

@@ -57,7 +57,7 @@ import static org.apache.kafka.streams.processor.internals.StateManagerUtil.CHEC
 import static org.apache.kafka.streams.processor.internals.StateManagerUtil.converterForStore;
 
 /**
- * This class is responsible for the initialization, restoration, closing, flushing etc
+ * This class is responsible for the initialization, restoration, closing, committing etc
  * of Global State Stores. There is only ever 1 instance of this class per Application Instance.
  */
 public class GlobalStateManagerImpl implements GlobalStateManager {
@@ -201,6 +201,32 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
                 topicPartitions
             )
         );
+
+        // load and, if necessary, migrate changelog offsets
+        if (store.managesOffsets()) {
+            final Map<TopicPartition, Long> managedOffsets = new HashMap<>(topicPartitions.size());
+            boolean migrateOffsets = false;
+
+            for (final TopicPartition changelogPartition : topicPartitions) {
+                final Long offset = store.getCommittedOffset(changelogPartition);
+                if (offset == null) {
+                    // migrate offset
+                    final Long offsetToMigrate = checkpointFileCache.get(changelogPartition);
+                    if (offsetToMigrate != null) {
+                        migrateOffsets = true;
+                        managedOffsets.put(changelogPartition, offsetToMigrate);
+                    }
+                } else {
+                    managedOffsets.put(changelogPartition, offset);
+                }
+            }
+
+            if (migrateOffsets) {
+                store.commit(managedOffsets);
+            }
+
+            checkpointFileCache.putAll(managedOffsets);
+        }
 
         try {
             restoreState(
@@ -349,24 +375,39 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
     }
 
     @Override
-    public void flush() {
-        log.debug("Flushing all global globalStores registered in the state manager");
+    public void commit() {
+        log.debug("Committing all global globalStores registered in the state manager");
         for (final Map.Entry<String, Optional<StateStore>> entry : globalStores.entrySet()) {
             if (entry.getValue().isPresent()) {
                 final StateStore store = entry.getValue().get();
+                log.trace("Committing global store={}", store.name());
+
+                // Skip non persistent store
+                final Map<TopicPartition, Long> filteredOffsets = new HashMap<>();
+                final String changelogTopic = changelogFor(store.name());
+                if (changelogTopic != null && store.persistent()) {
+                    for (final Map.Entry<TopicPartition, Long> topicPartitionOffset : checkpointFileCache.entrySet()) {
+                        final String topic = topicPartitionOffset.getKey().topic();
+                        if (changelogTopic.equals(topic)) {
+                            filteredOffsets.put(topicPartitionOffset.getKey(), topicPartitionOffset.getValue());
+                        }
+                    }
+                }
+
                 try {
-                    log.trace("Flushing global store={}", store.name());
-                    store.flush();
+                    store.commit(filteredOffsets);
                 } catch (final RuntimeException e) {
                     throw new ProcessorStateException(
-                        String.format("Failed to flush global state store %s", store.name()),
-                        e
+                            String.format("Failed to commit global state store %s", store.name()),
+                            e
                     );
                 }
             } else {
                 throw new IllegalStateException("Expected " + entry.getKey() + " to have been initialized");
             }
         }
+
+        writeCheckpointFile(false);
     }
 
     @Override
@@ -375,6 +416,7 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
             return;
         }
         final StringBuilder closeFailed = new StringBuilder();
+        final List<String> storesToRemove = new ArrayList<>(globalStores.size());
         for (final Map.Entry<String, Optional<StateStore>> entry : globalStores.entrySet()) {
             if (entry.getValue().isPresent()) {
                 log.debug("Closing global storage engine {}", entry.getKey());
@@ -388,10 +430,18 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
                         .append(e)
                         .append("\n");
                 }
-                globalStores.put(entry.getKey(), Optional.empty());
+                storesToRemove.add(entry.getKey());
             } else {
                 log.info("Skipping to close non-initialized store {}", entry.getKey());
             }
+        }
+
+        writeCheckpointFile(true);
+
+        // we have to do this *after* writing the checkpoint file, as writing the checkpoint depends on the StateStore
+        // reference still being available in globalStores
+        for (final String key : storesToRemove) {
+            globalStores.put(key, Optional.empty());
         }
 
         if (closeFailed.length() > 0) {
@@ -404,19 +454,38 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
         checkpointFileCache.putAll(offsets);
     }
 
-    @Override
-    public void checkpoint() {
-        final Map<TopicPartition, Long> filteredOffsets = new HashMap<>();
-
-        // Skip non persistent store
-        for (final Map.Entry<TopicPartition, Long> topicPartitionOffset : checkpointFileCache.entrySet()) {
-            final String topic = topicPartitionOffset.getKey().topic();
-            if (!globalNonPersistentStoresTopics.contains(topic)) {
-                filteredOffsets.put(topicPartitionOffset.getKey(), topicPartitionOffset.getValue());
-            }
-        }
-
+    public void writeCheckpointFile(final boolean includeStoreManagedOffsets) {
         try {
+            final Map<TopicPartition, Long> existingOffsets = checkpointFile.read();
+            final Map<TopicPartition, Long> filteredOffsets = new HashMap<>();
+
+            for (final Map.Entry<String, Optional<StateStore>> entry : globalStores.entrySet()) {
+                final String topic = changelogFor(entry.getKey());
+
+                // Skip non persistent store
+                if (entry.getValue().isPresent()) {
+                    final StateStore store = entry.getValue().get();
+                    if (store.persistent()) {
+                        for (final Map.Entry<TopicPartition, Long> topicPartitionOffset : checkpointFileCache.entrySet()) {
+                            final TopicPartition tp = topicPartitionOffset.getKey();
+                            if (tp.topic().equals(topic)) {
+                                if (includeStoreManagedOffsets || !store.managesOffsets()) {
+                                    filteredOffsets.put(tp, topicPartitionOffset.getValue());
+                                } else {
+                                    // we need to use the existing offsets for managed stores, since we don't know when the current
+                                    // offset will be persisted, but we need to make an offset available for partition assignment
+                                    // when the store is closed
+                                    final Long offset = existingOffsets.get(tp);
+                                    if (offset != null) {
+                                        filteredOffsets.put(tp, offset);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
             checkpointFile.write(filteredOffsets);
         } catch (final IOException e) {
             log.warn("Failed to write offset checkpoint file to {} for global stores." +
@@ -437,5 +506,12 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
 
     public final String changelogFor(final String storeName) {
         return storeToChangelogTopic.get(storeName);
+    }
+
+    @Override
+    public long approximateNumUncommittedBytes() {
+        return globalStores.values().stream()
+            .map(optional -> optional.map(StateStore::approximateNumUncommittedBytes).orElse(0L))
+            .reduce(0L, Long::sum);
     }
 }

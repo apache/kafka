@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Utils;
@@ -39,7 +40,6 @@ import org.rocksdb.WriteBatch;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.File;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
@@ -62,7 +62,6 @@ public class AbstractRocksDBSegmentedBytesStore<S extends Segment> implements Se
     private long observedStreamTime = ConsumerRecord.NO_TIMESTAMP;
     private boolean consistencyEnabled = false;
     private Position position;
-    protected OffsetCheckpoint positionCheckpoint;
     private volatile boolean open;
 
     AbstractRocksDBSegmentedBytesStore(final String name,
@@ -266,7 +265,7 @@ public class AbstractRocksDBSegmentedBytesStore<S extends Segment> implements Se
             expiredRecordSensor.record(1.0d, context.currentSystemTimeMs());
             LOG.warn("Skipping record for expired segment.");
         } else {
-            StoreQueryUtils.updatePosition(position, stateStoreContext);
+            segment.updatePosition(position, stateStoreContext);
             segment.put(key, value);
         }
     }
@@ -310,15 +309,16 @@ public class AbstractRocksDBSegmentedBytesStore<S extends Segment> implements Se
 
         segments.openExisting(this.context, observedStreamTime);
 
-        final File positionCheckpointFile = new File(context.stateDir(), name() + ".position");
-        this.positionCheckpoint = new OffsetCheckpoint(positionCheckpointFile);
-        this.position = StoreQueryUtils.readPositionFromCheckpoint(positionCheckpoint);
+        position = Position.emptyPosition();
+        for (final S segment : segments.allSegments(true)) {
+            position.merge(((RocksDBStore) segment).loadPositionOffsetsFromDatabase());
+        }
 
         // register and possibly restore the state from the logs
         stateStoreContext.register(
             root,
             (RecordBatchingStateRestoreCallback) this::restoreAllInternal,
-            () -> StoreQueryUtils.checkpointPosition(positionCheckpoint, position)
+            () -> { }
         );
 
         open = true;
@@ -336,8 +336,24 @@ public class AbstractRocksDBSegmentedBytesStore<S extends Segment> implements Se
     }
 
     @Override
-    public void flush() {
-        segments.flush();
+    public void commit(final Map<TopicPartition, Long> changelogOffsets) {
+        segments.commit(changelogOffsets, position);
+    }
+
+    @Override
+    public Long getCommittedOffset(final TopicPartition partition) {
+        for (final Segment segment : segments.allSegments(false)) {
+            final Long offset = segment.getCommittedOffset(partition);
+            if (offset != null) {
+                return offset;
+            }
+        }
+        return null;
+    }
+
+    @Override
+    public boolean managesOffsets() {
+        return true;
     }
 
     @Override
@@ -399,6 +415,7 @@ public class AbstractRocksDBSegmentedBytesStore<S extends Segment> implements Se
                 try {
                     batch = writeBatchMap.computeIfAbsent(segment, s -> new WriteBatch());
                     segment.addToBatch(new KeyValue<>(record.key(), record.value()), batch);
+                    segment.addPositionOffsetsToBatch(position, batch);
                 } catch (final RocksDBException e) {
                     Utils.closeQuietly(batch, "rocksdb write batch");
                     throw new ProcessorStateException("Error restoring batch to store " + this.name, e);

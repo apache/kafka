@@ -17,11 +17,13 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.streams.KeyValue;
+import org.apache.kafka.streams.query.Position;
 import org.rocksdb.RocksDBException;
 import org.rocksdb.WriteBatchInterface;
 
 public interface BatchWritingStore {
     void addToBatch(final KeyValue<byte[], byte[]> record,
                     final WriteBatchInterface batch) throws RocksDBException;
+    void addPositionOffsetsToBatch(final Position position, final WriteBatchInterface batch);
     void write(final WriteBatchInterface batch) throws RocksDBException;
 }

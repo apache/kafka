@@ -23,16 +23,21 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
+
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.BytesSerializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.processor.StateStoreContext;
+import org.apache.kafka.streams.query.Position;
 import org.apache.kafka.streams.state.KeyValueIterator;
 import org.apache.kafka.streams.state.internals.RocksDBVersionedStore.VersionedStoreSegment;
 import org.rocksdb.ReadOptions;
@@ -141,8 +146,23 @@ class LogicalKeyValueSegment implements Comparable<LogicalKeyValueSegment>, Segm
     }
 
     @Override
-    public void flush() {
-        throw new UnsupportedOperationException("nothing to flush for logical segment");
+    public void commit(final Map<TopicPartition, Long> changelogOffsets) {
+        throw new UnsupportedOperationException("nothing to commit for logical segment");
+    }
+
+    @Override
+    public void commit(final Map<TopicPartition, Long> changelogOffsets, final Position position) {
+        throw new UnsupportedOperationException("nothing to commit for logical segment");
+    }
+
+    @Override
+    public Long getCommittedOffset(final TopicPartition partition) {
+        return physicalStore.getCommittedOffset(partition);
+    }
+
+    @Override
+    public boolean managesOffsets() {
+        return physicalStore.managesOffsets();
     }
 
     @Override
@@ -248,10 +268,25 @@ class LogicalKeyValueSegment implements Comparable<LogicalKeyValueSegment>, Segm
     }
 
     @Override
+    public void addPositionOffsetsToBatch(final Position position, final WriteBatchInterface batch) {
+        physicalStore.addPositionOffsetsToBatch(position, batch);
+    }
+
+    @Override
     public void write(final WriteBatchInterface batch) throws RocksDBException {
         // no key transformations here since they should've already been done as part
         // of adding to the write batch
         physicalStore.write(batch);
+    }
+
+    @Override
+    public Position getPosition() {
+        return physicalStore.getPosition();
+    }
+
+    @Override
+    public void updatePosition(final Position position, final StateStoreContext context) {
+        physicalStore.updatePosition(position, context);
     }
 
     /**

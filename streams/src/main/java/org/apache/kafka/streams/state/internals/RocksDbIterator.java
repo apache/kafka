@@ -67,6 +67,10 @@ class RocksDbIterator extends AbstractIterator<KeyValue<Bytes, byte[]>> implemen
         return new KeyValue<>(new Bytes(iter.key()), iter.value());
     }
 
+    public boolean isOpen() {
+        return open;
+    }
+
     @Override
     public synchronized void close() {
         if (closeCallback == null) {
@@ -88,6 +92,14 @@ class RocksDbIterator extends AbstractIterator<KeyValue<Bytes, byte[]>> implemen
 
     @Override
     public synchronized void onClose(final Runnable closeCallback) {
-        this.closeCallback = closeCallback;
+        if (this.closeCallback == null) {
+            this.closeCallback = closeCallback;
+        } else {
+            final Runnable prevCallback = this.closeCallback;
+            this.closeCallback = () -> {
+                prevCallback.run();
+                closeCallback.run();
+            };
+        }
     }
 }

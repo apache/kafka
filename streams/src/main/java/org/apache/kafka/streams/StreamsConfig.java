@@ -25,6 +25,7 @@ import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
+import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigDef.Importance;
@@ -65,7 +66,6 @@ import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import static org.apache.kafka.common.IsolationLevel.READ_COMMITTED;
 import static org.apache.kafka.common.config.ConfigDef.ListSize.atMostOfSize;
 import static org.apache.kafka.common.config.ConfigDef.Range.atLeast;
 import static org.apache.kafka.common.config.ConfigDef.Range.between;
@@ -505,6 +505,11 @@ public class StreamsConfig extends AbstractConfig {
     public static final String STATESTORE_CACHE_MAX_BYTES_CONFIG = "statestore.cache.max.bytes";
     public static final String STATESTORE_CACHE_MAX_BYTES_DOC = "Maximum number of memory bytes to be used for statestore cache across all threads";
 
+    public static final String STATESTORE_UNCOMMITTED_MAX_BYTES_CONFIG = "statestore.uncommitted.max.bytes";
+    public static final String STATESTORE_UNCOMMITTED_MAX_BYTES_DOC = "Maximum number of memory bytes to be used to buffer uncommitted state-store records. " +
+            "If this limit is exceeded, a task commit will be requested. No limit: -1. " +
+            "Note: if this is too high or unbounded, it's possible for RocksDB to trigger out-of-memory errors.";
+
     /** {@code client.id} */
     @SuppressWarnings("WeakerAccess")
     public static final String CLIENT_ID_CONFIG = CommonClientConfigs.CLIENT_ID_CONFIG;
@@ -683,6 +688,16 @@ public class StreamsConfig extends AbstractConfig {
         "Note that exactly-once processing requires a cluster of at least three brokers by default what is the " +
         "recommended setting for production; for development you can change this, by adjusting broker setting " +
         "<code>transaction.state.log.replication.factor</code> and <code>transaction.state.log.min.isr</code>.";
+
+    public static final String READ_COMMITTED = "READ_COMMITTED";
+    public static final String READ_UNCOMMITTED = "READ_UNCOMMITTED";
+
+    public static final String DEFAULT_STATE_ISOLATION_LEVEL_CONFIG = "default.state.isolation.level";
+    private static final String DEFAULT_STATE_ISOLATION_LEVEL_DOC = "The default isolation level to use for Interactive Queries against state stores. " +
+        "Supported values are <code>" + READ_UNCOMMITTED + "</code> (default), and <code>" + READ_COMMITTED + "</code> (default when <code>" + PROCESSING_GUARANTEE_CONFIG + "</code> is one of " +
+        "<code>" + EXACTLY_ONCE_V2 + "</code>, <code>" + EXACTLY_ONCE_BETA + "</code>, or <code>" + EXACTLY_ONCE + "</code>. " +
+        "Under <code>" + READ_UNCOMMITTED + "</code>, writes will become visible to Interactive Queries immediately. " +
+        "Under <code>" + READ_COMMITTED + "</code>, the maximum latency for writes to become visible to Interactive Queries is determined by <code>" + COMMIT_INTERVAL_MS_CONFIG + "</code>.";
 
     /** {@code receive.buffer.bytes} */
     @SuppressWarnings("WeakerAccess")
@@ -874,6 +889,12 @@ public class StreamsConfig extends AbstractConfig {
                     atLeast(0),
                     Importance.MEDIUM,
                     STATESTORE_CACHE_MAX_BYTES_DOC)
+            .define(STATESTORE_UNCOMMITTED_MAX_BYTES_CONFIG,
+                    Type.LONG,
+                    64 * 1024 * 1024L,
+                    atLeast(-1),
+                    Importance.MEDIUM,
+                    STATESTORE_UNCOMMITTED_MAX_BYTES_DOC)
             .define(CLIENT_ID_CONFIG,
                     Type.STRING,
                     "",
@@ -946,6 +967,12 @@ public class StreamsConfig extends AbstractConfig {
                     in(AT_LEAST_ONCE, EXACTLY_ONCE, EXACTLY_ONCE_BETA, EXACTLY_ONCE_V2),
                     Importance.MEDIUM,
                     PROCESSING_GUARANTEE_DOC)
+            .define(DEFAULT_STATE_ISOLATION_LEVEL_CONFIG,
+                    Type.STRING,
+                    READ_UNCOMMITTED,
+                    in(READ_UNCOMMITTED, READ_COMMITTED),
+                    Importance.MEDIUM,
+                    DEFAULT_STATE_ISOLATION_LEVEL_DOC)
             .define(RACK_AWARE_ASSIGNMENT_NON_OVERLAP_COST_CONFIG,
                     Type.INT,
                     null,
@@ -1207,7 +1234,7 @@ public class StreamsConfig extends AbstractConfig {
     private static final Map<String, Object> CONSUMER_EOS_OVERRIDES;
     static {
         final Map<String, Object> tempConsumerDefaultOverrides = new HashMap<>(CONSUMER_DEFAULT_OVERRIDES);
-        tempConsumerDefaultOverrides.put(ConsumerConfig.ISOLATION_LEVEL_CONFIG, READ_COMMITTED.name().toLowerCase(Locale.ROOT));
+        tempConsumerDefaultOverrides.put(ConsumerConfig.ISOLATION_LEVEL_CONFIG, IsolationLevel.READ_COMMITTED.name().toLowerCase(Locale.ROOT));
         CONSUMER_EOS_OVERRIDES = Collections.unmodifiableMap(tempConsumerDefaultOverrides);
     }
 
@@ -1453,6 +1480,12 @@ public class StreamsConfig extends AbstractConfig {
             log.debug("Using {} default value of {} as exactly once is enabled.",
                     COMMIT_INTERVAL_MS_CONFIG, EOS_DEFAULT_COMMIT_INTERVAL_MS);
             configUpdates.put(COMMIT_INTERVAL_MS_CONFIG, EOS_DEFAULT_COMMIT_INTERVAL_MS);
+        }
+
+        if (StreamsConfigUtils.eosEnabled(this) && !originals().containsKey(DEFAULT_STATE_ISOLATION_LEVEL_CONFIG)) {
+            log.debug("Using {} default value of {} as exactly once is enabled.",
+                    DEFAULT_STATE_ISOLATION_LEVEL_CONFIG, READ_COMMITTED);
+            configUpdates.put(DEFAULT_STATE_ISOLATION_LEVEL_CONFIG, READ_COMMITTED);
         }
 
         validateRackAwarenessConfiguration();

@@ -65,14 +65,18 @@ public class RocksDBTimestampedStore extends RocksDBStore implements Timestamped
 
     @Override
     void openRocksDB(final DBOptions dbOptions,
-                     final ColumnFamilyOptions columnFamilyOptions) {
+                     final ColumnFamilyOptions columnFamilyOptions,
+                     final ColumnFamilyOptions offsetsColumnFamilyOptions) {
         final List<ColumnFamilyHandle> columnFamilies = openRocksDB(
                 dbOptions,
                 new ColumnFamilyDescriptor(RocksDB.DEFAULT_COLUMN_FAMILY, columnFamilyOptions),
-                new ColumnFamilyDescriptor(TIMESTAMPED_VALUES_COLUMN_FAMILY_NAME, columnFamilyOptions)
+                new ColumnFamilyDescriptor(TIMESTAMPED_VALUES_COLUMN_FAMILY_NAME, columnFamilyOptions),
+                new ColumnFamilyDescriptor(OFFSETS_COLUMN_FAMILY_NAME, columnFamilyOptions)
         );
         final ColumnFamilyHandle noTimestampColumnFamily = columnFamilies.get(0);
         final ColumnFamilyHandle withTimestampColumnFamily = columnFamilies.get(1);
+
+        offsetsCF = columnFamilies.get(2);
 
         final RocksIterator noTimestampsIter = db.newIterator(noTimestampColumnFamily);
         noTimestampsIter.seekToFirst();
@@ -123,7 +127,6 @@ public class RocksDBTimestampedStore extends RocksDBStore implements Timestamped
                 }
                 try {
                     accessor.put(newColumnFamily, key, valueWithTimestamp);
-                    StoreQueryUtils.updatePosition(position, context);
                 } catch (final RocksDBException e) {
                     // String format is happening in wrapping stores. So formatted message is thrown from wrapping stores.
                     throw new ProcessorStateException("Error while putting key/value into store " + name, e);
@@ -247,11 +250,6 @@ public class RocksDBTimestampedStore extends RocksDBStore implements Timestamped
         public long approximateNumEntries(final DBAccessor accessor) throws RocksDBException {
             return accessor.approximateNumEntries(oldColumnFamily) +
                     accessor.approximateNumEntries(newColumnFamily);
-        }
-
-        @Override
-        public void flush(final DBAccessor accessor) throws RocksDBException {
-            accessor.flush(oldColumnFamily, newColumnFamily);
         }
 
         @Override

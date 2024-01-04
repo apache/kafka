@@ -82,6 +82,7 @@ import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -215,41 +216,20 @@ public class StandbyTaskTest {
     @Test
     public void shouldAlwaysCheckpointStateIfEnforced() {
         when(stateManager.changelogOffsets()).thenReturn(Collections.emptyMap());
+        doNothing().when(stateManager).commit();
 
         task = createStandbyTask();
 
         task.initializeIfNeeded();
         task.maybeCheckpoint(true);
 
-        verify(stateManager).flush();
-        verify(stateManager).checkpoint();
-    }
-
-    @Test
-    public void shouldOnlyCheckpointStateWithBigAdvanceIfNotEnforced() {
-        when(stateManager.changelogOffsets())
-                .thenReturn(Collections.singletonMap(partition, 50L))
-                .thenReturn(Collections.singletonMap(partition, 11000L))
-                .thenReturn(Collections.singletonMap(partition, 12000L));
-
-        task = createStandbyTask();
-        task.initializeIfNeeded();
-
-        task.maybeCheckpoint(false);  // this should not checkpoint
-        assertTrue(task.offsetSnapshotSinceLastFlush.isEmpty());
-        task.maybeCheckpoint(false);  // this should checkpoint
-        assertEquals(Collections.singletonMap(partition, 11000L), task.offsetSnapshotSinceLastFlush);
-        task.maybeCheckpoint(false);  // this should not checkpoint
-        assertEquals(Collections.singletonMap(partition, 11000L), task.offsetSnapshotSinceLastFlush);
-
-        verify(stateManager).flush();
-        verify(stateManager).checkpoint();
+        verify(stateManager).commit();
     }
 
     @Test
     public void shouldFlushAndCheckpointStateManagerOnCommit() {
         when(stateManager.changelogOffsets()).thenReturn(Collections.emptyMap());
-        doNothing().when(stateManager).flush();
+        doNothing().when(stateManager).commit();
         when(stateManager.changelogOffsets())
                 .thenReturn(Collections.singletonMap(partition, 50L))
                 .thenReturn(Collections.singletonMap(partition, 11000L))
@@ -266,7 +246,7 @@ public class StandbyTaskTest {
         task.prepareCommit();
         task.postCommit(false);  // this should not checkpoint
 
-        verify(stateManager).checkpoint();
+        verify(stateManager, times(3)).commit();
     }
 
     @Test
@@ -293,8 +273,7 @@ public class StandbyTaskTest {
         final double expectedCloseTaskMetric = 1.0;
         verifyCloseTaskMetric(expectedCloseTaskMetric, streamsMetrics, metricName);
 
-        verify(stateManager, never()).flush();
-        verify(stateManager, never()).checkpoint();
+        verify(stateManager, never()).commit();
     }
 
     @Test
@@ -326,7 +305,7 @@ public class StandbyTaskTest {
 
         final double expectedCloseTaskMetric = 1.0;
         verifyCloseTaskMetric(expectedCloseTaskMetric, streamsMetrics, metricName);
-        verify(stateManager).checkpoint();
+        verify(stateManager).commit();
     }
 
     @Test
@@ -343,21 +322,24 @@ public class StandbyTaskTest {
     public void shouldOnlyNeedCommitWhenChangelogOffsetChanged() {
         when(stateManager.changelogOffsets())
             .thenReturn(Collections.singletonMap(partition, 50L))
+            .thenReturn(Collections.singletonMap(partition, 50L))
+            .thenReturn(Collections.singletonMap(partition, 50L))
+            .thenReturn(Collections.singletonMap(partition, 10100L))
             .thenReturn(Collections.singletonMap(partition, 10100L));
-        doNothing().when(stateManager).flush();
-        doNothing().when(stateManager).checkpoint();
-
         task = createStandbyTask();
-        task.initializeIfNeeded();
 
-        // no need to commit if we've just initialized and offset not advanced much
-        assertFalse(task.commitNeeded());
-
-        // could commit if the offset advanced beyond threshold
+        // need to commit after initial offsets have changed
         assertTrue(task.commitNeeded());
 
-        task.prepareCommit();
-        task.postCommit(true);
+        task.maybeCheckpoint(false);
+
+        // no need to commit if offsets have not changed
+        assertFalse(task.commitNeeded());
+
+        // need to commit if offsets have advanced
+        assertTrue(task.commitNeeded());
+
+        task.maybeCheckpoint(false);
     }
 
     @Test
@@ -379,7 +361,7 @@ public class StandbyTaskTest {
     public void shouldThrowOnCloseCleanCheckpointError() {
         when(stateManager.changelogOffsets())
             .thenReturn(Collections.singletonMap(partition, 50L));
-        doThrow(new RuntimeException("KABOOM!")).when(stateManager).checkpoint();
+        doThrow(new RuntimeException("KABOOM!")).when(stateManager).commit();
         final MetricName metricName = setupCloseTaskMetric();
 
         task = createStandbyTask();
@@ -438,10 +420,8 @@ public class StandbyTaskTest {
 
     @SuppressWarnings("deprecation")
     @Test
-    public void shouldDeleteStateDirOnTaskCreatedAndEosAlphaUncleanClose() {
+    public void shouldNotDeleteStateDirOnTaskCreatedAndEosAlphaUncleanClose() {
         doNothing().when(stateManager).close();
-
-        when(stateManager.baseDir()).thenReturn(baseDir);
 
         final MetricName metricName = setupCloseTaskMetric();
 
@@ -459,14 +439,13 @@ public class StandbyTaskTest {
         final double expectedCloseTaskMetric = 1.0;
         verifyCloseTaskMetric(expectedCloseTaskMetric, streamsMetrics, metricName);
 
+        assertTrue(baseDir.exists());
         assertEquals(Task.State.CLOSED, task.state());
     }
 
     @Test
-    public void shouldDeleteStateDirOnTaskCreatedAndEosV2UncleanClose() {
+    public void shouldNotDeleteStateDirOnTaskCreatedAndEosV2UncleanClose() {
         doNothing().when(stateManager).close();
-
-        when(stateManager.baseDir()).thenReturn(baseDir);
 
         final MetricName metricName = setupCloseTaskMetric();
 
@@ -484,6 +463,7 @@ public class StandbyTaskTest {
         final double expectedCloseTaskMetric = 1.0;
         verifyCloseTaskMetric(expectedCloseTaskMetric, streamsMetrics, metricName);
 
+        assertTrue(baseDir.exists());
         assertEquals(Task.State.CLOSED, task.state());
     }
 

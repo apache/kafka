@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.state.internals;
 
 import java.util.Objects;
+
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.processor.StateStore;
@@ -57,26 +58,6 @@ public class RocksDBTimeOrderedWindowStore
     public void init(final StateStoreContext context, final StateStore root) {
         stateStoreContext = context;
         wrapped().init(context, root);
-    }
-
-    @Override
-    public void flush() {
-        wrapped().flush();
-    }
-
-    @Override
-    public void close() {
-        wrapped().close();
-    }
-
-    @Override
-    public boolean persistent() {
-        return wrapped().persistent();
-    }
-
-    @Override
-    public boolean isOpen() {
-        return wrapped().isOpen();
     }
 
     @Override

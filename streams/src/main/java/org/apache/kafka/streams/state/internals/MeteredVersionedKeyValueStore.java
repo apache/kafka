@@ -26,6 +26,8 @@ import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetric
 import java.time.Instant;
 import java.util.Map;
 import java.util.Objects;
+
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Time;
@@ -364,8 +366,14 @@ public class MeteredVersionedKeyValueStore<K, V>
     }
 
     @Override
+    @Deprecated
     public void flush() {
         internal.flush();
+    }
+
+    @Override
+    public void commit(final Map<TopicPartition, Long> changelogOffsets) {
+        internal.commit(changelogOffsets);
     }
 
     @Override

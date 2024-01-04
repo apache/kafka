@@ -16,16 +16,19 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.streams.processor.StateStoreContext;
+import org.apache.kafka.streams.query.Position;
 import org.apache.kafka.streams.state.internals.metrics.RocksDBMetricsRecorder;
 
-import java.io.File;
 import java.io.IOException;
 import java.util.Map;
 import java.util.Objects;
 
 class KeyValueSegment extends RocksDBStore implements Comparable<KeyValueSegment>, Segment {
+
     public final long id;
 
     KeyValueSegment(final String segmentName,
@@ -34,6 +37,11 @@ class KeyValueSegment extends RocksDBStore implements Comparable<KeyValueSegment
                     final RocksDBMetricsRecorder metricsRecorder) {
         super(segmentName, windowName, metricsRecorder);
         this.id = id;
+    }
+
+    @Override
+    public void commit(final Map<TopicPartition, Long> changelogOffsets, final Position position) {
+        super.commit(changelogOffsets, position);
     }
 
     @Override
@@ -47,14 +55,13 @@ class KeyValueSegment extends RocksDBStore implements Comparable<KeyValueSegment
     }
 
     @Override
-    public int compareTo(final KeyValueSegment segment) {
-        return Long.compare(id, segment.id);
+    public void updatePosition(final Position position, final StateStoreContext context) {
+        super.updatePosition(position, context);
     }
 
     @Override
-    public void openDB(final Map<String, Object> configs, final File stateDir) {
-        super.openDB(configs, stateDir);
-        // skip the registering step
+    public int compareTo(final KeyValueSegment segment) {
+        return Long.compare(id, segment.id);
     }
 
     @Override

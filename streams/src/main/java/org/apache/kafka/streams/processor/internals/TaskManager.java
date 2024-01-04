@@ -100,6 +100,8 @@ public class TaskManager {
     private final StandbyTaskCreator standbyTaskCreator;
     private final StateUpdater stateUpdater;
     private final DefaultTaskManager schedulingTaskManager;
+    private final long maxUncommittedStateBytes;
+
     TaskManager(final Time time,
                 final ChangelogReader changelogReader,
                 final UUID processId,
@@ -111,7 +113,8 @@ public class TaskManager {
                 final Admin adminClient,
                 final StateDirectory stateDirectory,
                 final StateUpdater stateUpdater,
-                final DefaultTaskManager schedulingTaskManager
+                final DefaultTaskManager schedulingTaskManager,
+                final long maxUncommittedStateBytes
                 ) {
         this.time = time;
         this.processId = processId;
@@ -134,8 +137,11 @@ public class TaskManager {
             this.tasks,
             this,
             topologyMetadata.taskExecutionMetadata(),
-            logContext
+            logContext,
+            maxUncommittedStateBytes
         );
+
+        this.maxUncommittedStateBytes = maxUncommittedStateBytes;
     }
 
     void setMainConsumer(final Consumer<byte[], byte[]> mainConsumer) {
@@ -262,8 +268,7 @@ public class TaskManager {
                 final Collection<TopicPartition> corruptedPartitions = task.changelogPartitions();
 
                 // mark corrupted partitions to not be checkpointed, and then close the task as dirty
-                // TODO: this step should be removed as we complete migrating to state updater
-                if (markAsCorrupted && stateUpdater == null) {
+                if (markAsCorrupted) {
                     task.markChangelogAsCorrupted(corruptedPartitions);
                 }
 
@@ -1063,15 +1068,15 @@ public class TaskManager {
             taskExecutor.commitOffsetsOrTransaction(consumedOffsetsPerTask);
         } catch (final TaskCorruptedException e) {
             log.warn("Some tasks were corrupted when trying to commit offsets, these will be cleaned and revived: {}",
-                     e.corruptedTasks());
+                    e.corruptedTasks());
 
-            // If we hit a TaskCorruptedException it must be EOS, just handle the cleanup for those corrupted tasks right here
+            // If we hit a TaskCorruptedException it must be EOS and READ_UNCOMMITTED, just handle the cleanup for those corrupted tasks right here
             dirtyTasks.addAll(tasks.tasks(e.corruptedTasks()));
             closeDirtyAndRevive(dirtyTasks, true);
         } catch (final TimeoutException e) {
             log.warn("Timed out while trying to commit all tasks during revocation, these will be cleaned and revived");
 
-            // If we hit a TimeoutException it must be ALOS, just close dirty and revive without wiping the state
+            // If we hit a TimeoutException, just close dirty and revive without wiping the state
             dirtyTasks.addAll(consumedOffsetsPerTask.keySet());
             closeDirtyAndRevive(dirtyTasks, false);
         } catch (final RuntimeException e) {
@@ -1097,10 +1102,10 @@ public class TaskManager {
             for (final Task task : commitNeededActiveTasks) {
                 if (!dirtyTasks.contains(task)) {
                     try {
-                        // for non-revoking active tasks, we should not enforce checkpoint
-                        // since if it is EOS enabled, no checkpoint should be written while
-                        // the task is in RUNNING tate
-                        task.postCommit(false);
+                        // we only enforce a checkpoint if the transaction buffers are full
+                        // to avoid unnecessary flushing of stores under EOS
+                        final boolean enforceCheckpoint = maxUncommittedStateBytes > -1 && tasks.approximateUncommittedStateBytes() >= maxUncommittedStateBytes;
+                        task.postCommit(enforceCheckpoint);
                     } catch (final RuntimeException e) {
                         log.error("Exception caught while post-committing task " + task.id(), e);
                         maybeSetFirstException(false, maybeWrapTaskException(e, task.id()), firstException);
@@ -1836,6 +1841,25 @@ public class TaskManager {
         }
     }
 
+    private long lastUncommittedBytes = 0L;
+
+    boolean needsCommit() {
+        // force an early commit if the uncommitted bytes exceeds or is *likely to exceed* the configured threshold
+        final long uncommittedBytes = tasks.approximateUncommittedStateBytes();
+
+        final long deltaBytes = Math.min(uncommittedBytes, Math.max(uncommittedBytes, uncommittedBytes - lastUncommittedBytes));
+
+        final boolean needsCommit =  maxUncommittedStateBytes > -1 && uncommittedBytes + deltaBytes > maxUncommittedStateBytes;
+        if (needsCommit) {
+            log.debug(
+                    "Needs commit because we will exceed max uncommitted bytes before next commit. max: {}, last: {}, current: {}, delta: {}",
+                    maxUncommittedStateBytes, lastUncommittedBytes, uncommittedBytes, deltaBytes
+            );
+        }
+        lastUncommittedBytes = uncommittedBytes;
+        return needsCommit;
+    }
+
     /**
      * @throws TaskMigratedException if committing offsets failed (non-EOS)
      *                               or if the task producer got fenced (EOS)
@@ -1889,7 +1913,9 @@ public class TaskManager {
         if (rebalanceInProgress) {
             return -1;
         } else {
-            return taskExecutor.commitTasksAndMaybeUpdateCommittableOffsets(tasksToCommit, consumedOffsetsAndMetadata);
+            final int committedOffsets = taskExecutor.commitTasksAndMaybeUpdateCommittableOffsets(tasksToCommit, consumedOffsetsAndMetadata);
+            lastUncommittedBytes = 0L;
+            return committedOffsets;
         }
     }
 

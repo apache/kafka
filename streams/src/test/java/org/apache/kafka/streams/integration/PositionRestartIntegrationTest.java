@@ -85,6 +85,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.LinkedList;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Properties;
 import java.util.Random;
@@ -437,7 +438,17 @@ public class PositionRestartIntegrationTest {
         final StateQueryResult<?> result =
             IntegrationTestUtils.iqv2WaitForResult(kafkaStreams, request);
 
-        assertThat(result.getPosition(), is(INPUT_POSITION));
+        // Position may now include offsets for the changelog topic(s), so exclude those for our assertions
+        final Position actual = result.getPosition();
+        final Position actualWithoutChangelog = Position.emptyPosition();
+        for (final String topic : actual.getTopics()) {
+            if (!topic.endsWith("-changelog")) {
+                for (final Map.Entry<Integer, Long> e : actual.getPartitionPositions(topic).entrySet()) {
+                    actualWithoutChangelog.withComponent(topic, e.getKey(), e.getValue());
+                }
+            }
+        }
+        assertThat(actualWithoutChangelog, is(INPUT_POSITION));
     }
 
     private void setUpSessionDSLTopology(final SessionBytesStoreSupplier supplier,

@@ -268,7 +268,8 @@ public class KafkaStreamsTest {
                 any(StandbyUpdateListener.class),
                 anyInt(),
                 any(Runnable.class),
-                any()
+                any(),
+                anyLong()
         )).thenReturn(streamThreadOne).thenReturn(streamThreadTwo);
 
         streamsConfigUtils = mockStatic(StreamsConfigUtils.class);

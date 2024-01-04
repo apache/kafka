@@ -33,6 +33,7 @@ import java.util.Map;
 import java.util.Set;
 
 import static org.apache.kafka.streams.internals.StreamsConfigUtils.eosEnabled;
+import static org.apache.kafka.streams.internals.StreamsConfigUtils.readUncommittedIsolation;
 
 class StandbyTaskCreator {
     private final TopologyMetadata topologyMetadata;
@@ -84,6 +85,7 @@ class StandbyTaskCreator {
                     taskId,
                     Task.TaskType.STANDBY,
                     eosEnabled(applicationConfig),
+                    readUncommittedIsolation(applicationConfig),
                     getLogContext(taskId),
                     stateDirectory,
                     storeChangelogReader,

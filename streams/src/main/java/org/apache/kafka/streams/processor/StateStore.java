@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.processor;
 
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.annotation.InterfaceStability.Evolving;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.processor.api.ProcessorContext;
@@ -26,6 +27,8 @@ import org.apache.kafka.streams.query.PositionBound;
 import org.apache.kafka.streams.query.Query;
 import org.apache.kafka.streams.query.QueryConfig;
 import org.apache.kafka.streams.query.QueryResult;
+
+import java.util.Map;
 
 /**
  * A storage engine for managing state maintained by a stream processor.
@@ -101,8 +104,86 @@ public interface StateStore {
 
     /**
      * Flush any cached data
+     *
+     * @deprecated Use {@link org.apache.kafka.streams.processor.api.ProcessingContext#commit() ProcessorContext#commit()}
+     *             to request a Task commit instead.
      */
-    void flush();
+    @Deprecated
+    default void flush() {
+        // no-op
+    }
+
+    /**
+     * Commit all written records to this StateStore.
+     * <p>
+     * This method MUST NOT be called by users from {@link org.apache.kafka.streams.processor.api.Processor processors},
+     * as doing so may violate the consistency guarantees provided by this store, and expected by Kafka Streams.
+     * Instead, users should call {@link org.apache.kafka.streams.processor.api.ProcessingContext#commit()
+     * ProcessorContext#commit()} to request a Task commit.
+     * <p>
+     * When called, every write written since the last call to {@link #commit(Map)}, or since this store was {@link
+     * #init(StateStoreContext, StateStore) opened} will be made available to readers using the {@link
+     * org.apache.kafka.common.IsolationLevel#READ_COMMITTED READ_COMMITTED} {@link
+     * org.apache.kafka.common.IsolationLevel IsolationLevel}.
+     * <p>
+     * If {@link #persistent()} returns {@code true}, after this method returns, all records written since the last call
+     * to {@link #commit(Map)} are guaranteed to be persisted to disk, and available to read, even if this {@link
+     * StateStore} is {@link #close() closed} and subsequently {@link #init(StateStoreContext, StateStore) re-opened}.
+     * <p>
+     * If {@link #managesOffsets()} <em>also</em> returns {@code true}, the given {@code changelogOffsets} will be
+     * guaranteed to be persisted to disk along with the written records.
+     * <p>
+     * {@code changelogOffsets} will usually contain a single partition, in the case of a regular StateStore. However,
+     * they may contain multiple partitions in the case of a Global StateStore with multiple partitions. All provided
+     * partitions <em>MUST</em> be persisted to disk.
+     * <p>
+     * Implementations <em>SHOULD</em> ensure that {@code changelogOffsets} are comitted to disk atomically with the
+     * records they represent.
+     *
+     * @param changelogOffsets The changelog offset(s) corresponding to the most recently written records.
+     */
+    default void commit(final Map<TopicPartition, Long> changelogOffsets) {
+        flush();
+    }
+
+    /**
+     * Returns the most recently {@link #commit(Map) committed} offset for the given {@link TopicPartition}.
+     * <p>
+     * If {@link #managesOffsets()} and {@link #persistent()} both return {@code true}, this method will return the
+     * offset that corresponds to the changelog record most recently written to this store, for the given {@code
+     * partition}.
+     * <p>
+     * This method provides readers using the {@link org.apache.kafka.common.IsolationLevel#READ_COMMITTED} {@link
+     * org.apache.kafka.common.IsolationLevel} a means to determine the point in the changelog that this StateStore
+     * currently represents.
+     *
+     * @param partition The partition to get the committed offset for.
+     * @return The last {@link #commit(Map) committed} offset for the {@code partition}; or {@code null} if no offset
+     *         has been committed for the partition, or if either {@link #persistent()} or {@link #managesOffsets()}
+     *         return {@code false}.
+     */
+    default Long getCommittedOffset(final TopicPartition partition) {
+        return null;
+    }
+
+    /**
+     * Determines if this StateStore manages its own offsets.
+     * <p>
+     * If this method returns {@code true}, then offsets provided to {@link #commit(Map)} will be retrievable using
+     * {@link #getCommittedOffset(TopicPartition)}, even if the store is {@link #close() closed} and later re-opened.
+     * <p>
+     * If this method returns {@code false}, offsets provided to {@link #commit(Map)} will be ignored, and {@link
+     * #getCommittedOffset(TopicPartition)} will be expected to always return {@code null}.
+     * <p>
+     * This method is provided to enable custom StateStores to opt-in to managing their own offsets. This is highly
+     * recommended, if possible, to ensure that custom StateStores provide the consistency guarantees that Kafka Streams
+     * expects when operating under the {@code exactly-once} {@code processing.mode}.
+     *
+     * @return Whether this StateStore manages its own offsets.
+     */
+    default boolean managesOffsets() {
+        return false;
+    }
 
     /**
      * Close the storage engine.
@@ -164,5 +245,23 @@ public interface StateStore {
         throw new UnsupportedOperationException(
             "getPosition is not implemented by this StateStore (" + getClass() + ")"
         );
+    }
+
+    /**
+     * Return an approximate count of memory used by records not yet committed to this StateStore.
+     * <p>
+     * This method will return an approximation of the memory that would be freed by the next call to {@link
+     * #commit(Map)}.
+     * <p>
+     * If no records have been written to this store since {@link #init(StateStoreContext, StateStore) opening}, or
+     * since the last {@link #commit(Map)}; or if this store does not support atomic transactions, it will return {@code
+     * 0}, as no records are currently being buffered.
+     *
+     * @return The approximate size of all records awaiting {@link #commit(Map)}; or {@code 0} if this store does not
+     *         support transactions, or has not been written to since {@link #init(StateStoreContext, StateStore)} or
+     *         last {@link #commit(Map)}.
+     */
+    default long approximateNumUncommittedBytes() {
+        return 0;
     }
 }

@@ -184,6 +184,23 @@ public class StateStoreMetricsTest {
     }
 
     @Test
+    public void shouldGetCommitSensor() {
+        final String metricName = "commit";
+        final String descriptionOfRate = "The average number of calls to commit per second";
+        final String descriptionOfAvg = "The average latency of calls to commit";
+        final String descriptionOfMax = "The maximum latency of calls to commit";
+        setupStreamsMetrics(metricName);
+
+        getAndVerifySensor(
+                () -> StateStoreMetrics.commitSensor(TASK_ID, STORE_TYPE, STORE_NAME, streamsMetrics),
+                metricName,
+                descriptionOfAvg,
+                descriptionOfMax,
+                descriptionOfRate
+        );
+    }
+
+    @Test
     public void shouldGetRemoveSensor() {
         final String metricName = "remove";
         final String descriptionOfRate = "The average number of calls to remove per second";

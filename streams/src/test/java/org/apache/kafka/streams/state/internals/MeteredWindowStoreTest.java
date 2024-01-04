@@ -48,6 +48,7 @@ import org.junit.runner.RunWith;
 import org.mockito.junit.MockitoJUnitRunner;
 
 import java.time.temporal.ChronoUnit;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -352,6 +353,7 @@ public class MeteredWindowStoreTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void shouldRecordFlushLatency() {
         doNothing().when(innerStoreMock).flush();
 
@@ -361,6 +363,19 @@ public class MeteredWindowStoreTest {
         // it suffices to verify one flush metric since all flush metrics are recorded by the same sensor
         // and the sensor is tested elsewhere
         final KafkaMetric metric = metric("flush-rate");
+        assertTrue((Double) metric.metricValue() > 0);
+    }
+
+    @Test
+    public void shouldRecordCommitLatency() {
+        doNothing().when(innerStoreMock).commit(Collections.emptyMap());
+
+        store.init((StateStoreContext) context, store);
+        store.commit(Collections.emptyMap());
+
+        // it suffices to verify one commit metric since all commit metrics are recorded by the same sensor
+        // and the sensor is tested elsewhere
+        final KafkaMetric metric = metric("commit-rate");
         assertTrue((Double) metric.metricValue() > 0);
     }
 

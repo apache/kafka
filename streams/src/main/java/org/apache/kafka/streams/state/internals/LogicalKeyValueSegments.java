@@ -18,8 +18,11 @@ package org.apache.kafka.streams.state.internals;
 
 import java.util.HashMap;
 import java.util.Map;
+
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.internals.ProcessorContextUtils;
+import org.apache.kafka.streams.query.Position;
 import org.apache.kafka.streams.state.internals.metrics.RocksDBMetricsRecorder;
 
 /**
@@ -30,7 +33,7 @@ import org.apache.kafka.streams.state.internals.metrics.RocksDBMetricsRecorder;
  * {@link #getSegmentForTimestamp(long)}, {@link #getOrCreateSegment(long, ProcessorContext)},
  * {@link #getOrCreateSegmentIfLive(long, ProcessorContext, long)},
  * {@link #segments(long, long, boolean)}, and {@link #allSegments(boolean)}
- * only return regular segments and not reserved segments. The methods {@link #flush()}
+ * only return regular segments and not reserved segments. The methods {@link Segments#commit(Map)}
  * and {@link #close()} flush and close both regular and reserved segments, due to
  * the fact that both types of segments share the same physical RocksDB instance.
  * To create a reserved segment, use {@link #createReservedSegment(long, String)} instead.
@@ -51,6 +54,10 @@ public class LogicalKeyValueSegments extends AbstractSegments<LogicalKeyValueSeg
         super(name, retentionPeriod, segmentInterval);
         this.metricsRecorder = metricsRecorder;
         this.physicalStore = new RocksDBStore(name, parentDir, metricsRecorder, false);
+    }
+
+    RocksDBStore getPhysicalStore() {
+        return physicalStore;
     }
 
     @Override
@@ -107,8 +114,8 @@ public class LogicalKeyValueSegments extends AbstractSegments<LogicalKeyValueSeg
     }
 
     @Override
-    public void flush() {
-        physicalStore.flush();
+    public void commit(final Map<TopicPartition, Long> changelogOffsets, final Position position) {
+        physicalStore.commit(changelogOffsets, position);
     }
 
     @Override

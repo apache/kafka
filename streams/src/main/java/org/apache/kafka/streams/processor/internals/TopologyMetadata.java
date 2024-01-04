@@ -17,6 +17,7 @@
 package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
+import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
@@ -113,7 +114,9 @@ public class TopologyMetadata {
         } else {
             builders.put(UNNAMED_TOPOLOGY, builder);
         }
-        this.taskExecutionMetadata = new TaskExecutionMetadata(builders.keySet(), pausedTopologies, processingMode);
+        final IsolationLevel isolationLevel = StreamsConfigUtils.readUncommittedIsolation(config) ?
+                IsolationLevel.READ_UNCOMMITTED : IsolationLevel.READ_COMMITTED;
+        this.taskExecutionMetadata = new TaskExecutionMetadata(builders.keySet(), pausedTopologies, processingMode, isolationLevel);
     }
 
     public TopologyMetadata(final ConcurrentNavigableMap<String, InternalTopologyBuilder> builders,
@@ -128,7 +131,9 @@ public class TopologyMetadata {
         if (builders.isEmpty()) {
             log.info("Created an empty KafkaStreams app with no topology");
         }
-        this.taskExecutionMetadata = new TaskExecutionMetadata(builders.keySet(), pausedTopologies, processingMode);
+        final IsolationLevel isolationLevel = StreamsConfigUtils.readUncommittedIsolation(config) ?
+                IsolationLevel.READ_UNCOMMITTED : IsolationLevel.READ_COMMITTED;
+        this.taskExecutionMetadata = new TaskExecutionMetadata(builders.keySet(), pausedTopologies, processingMode, isolationLevel);
     }
 
     // Need to (re)set the log here to pick up the `processId` part of the clientId in the prefix

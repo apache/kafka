@@ -131,6 +131,7 @@ public class MockInternalNewProcessorContext<KOut, VOut> extends MockProcessorCo
     @Override
     public void register(final StateStore store,
                          final StateRestoreCallback stateRestoreCallback) {
+        if (store == null) return;
         addStateStore(store);
     }
 
@@ -138,6 +139,7 @@ public class MockInternalNewProcessorContext<KOut, VOut> extends MockProcessorCo
     public void register(final StateStore store,
                          final StateRestoreCallback stateRestoreCallback,
                          final CommitCallback checkpoint) {
+        if (store == null) return;
         addStateStore(store);
     }
 

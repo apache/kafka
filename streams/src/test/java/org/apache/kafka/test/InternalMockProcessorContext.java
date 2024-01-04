@@ -294,6 +294,7 @@ public class InternalMockProcessorContext<KOut, VOut>
     public void register(final StateStore store,
                          final StateRestoreCallback func,
                          final CommitCallback checkpoint) {
+        if (store == null) return;
         storeMap.put(store.name(), store);
         restoreFuncs.put(store.name(), func);
         stateManager().registerStore(store, func, checkpoint);

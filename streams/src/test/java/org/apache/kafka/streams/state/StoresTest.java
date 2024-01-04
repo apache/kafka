@@ -184,14 +184,18 @@ public class StoresTest {
 
     @Test
     public void shouldCreateRocksDbStore() {
+        final StateStore store = Stores.persistentKeyValueStore("store").get();
         assertThat(
-            Stores.persistentKeyValueStore("store").get(),
+            store,
             allOf(not(instanceOf(RocksDBTimestampedStore.class)), instanceOf(RocksDBStore.class)));
     }
 
     @Test
     public void shouldCreateRocksDbTimestampedStore() {
-        assertThat(Stores.persistentTimestampedKeyValueStore("store").get(), instanceOf(RocksDBTimestampedStore.class));
+        final StateStore store = Stores.persistentTimestampedKeyValueStore("store").get();
+        assertThat(
+            store,
+            instanceOf(RocksDBTimestampedStore.class));
     }
 
     @Test

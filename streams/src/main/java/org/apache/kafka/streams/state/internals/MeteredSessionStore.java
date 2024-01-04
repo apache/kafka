@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.utils.Bytes;
@@ -65,6 +66,7 @@ public class MeteredSessionStore<K, V>
     private Sensor putSensor;
     private Sensor fetchSensor;
     private Sensor flushSensor;
+    private Sensor commitSensor;
     private Sensor removeSensor;
     private Sensor e2eLatencySensor;
     private InternalProcessorContext<?, ?> context;
@@ -129,6 +131,7 @@ public class MeteredSessionStore<K, V>
         putSensor = StateStoreMetrics.putSensor(taskId.toString(), metricsScope, name(), streamsMetrics);
         fetchSensor = StateStoreMetrics.fetchSensor(taskId.toString(), metricsScope, name(), streamsMetrics);
         flushSensor = StateStoreMetrics.flushSensor(taskId.toString(), metricsScope, name(), streamsMetrics);
+        commitSensor = StateStoreMetrics.commitSensor(taskId.toString(), metricsScope, name(), streamsMetrics);
         removeSensor = StateStoreMetrics.removeSensor(taskId.toString(), metricsScope, name(), streamsMetrics);
         e2eLatencySensor = StateStoreMetrics.e2ELatencySensor(taskId.toString(), metricsScope, name(), streamsMetrics);
     }
@@ -382,8 +385,14 @@ public class MeteredSessionStore<K, V>
     }
 
     @Override
+    @Deprecated
     public void flush() {
         maybeMeasureLatency(super::flush, time, flushSensor);
+    }
+
+    @Override
+    public void commit(final Map<TopicPartition, Long> changelogOffsets) {
+        maybeMeasureLatency(() -> super.commit(changelogOffsets), time, commitSensor);
     }
 
     @Override
