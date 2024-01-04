@@ -113,8 +113,8 @@ class ListConsumerGroupTest extends ConsumerGroupCommandTest {
     var result = ConsumerGroupCommand.consumerGroupTypesFromString("consumer")
     assertEquals(Set(ConsumerGroupType.CONSUMER), result)
 
-    result = ConsumerGroupCommand.consumerGroupTypesFromString("consumer, generic")
-    assertEquals(Set(ConsumerGroupType.CONSUMER, ConsumerGroupType.GENERIC), result)
+    result = ConsumerGroupCommand.consumerGroupTypesFromString("consumer, classic")
+    assertEquals(Set(ConsumerGroupType.CONSUMER, ConsumerGroupType.CLASSIC), result)
 
     assertThrows(classOf[IllegalArgumentException], () => ConsumerGroupCommand.consumerGroupTypesFromString("bad, wrong"))
 
@@ -124,7 +124,6 @@ class ListConsumerGroupTest extends ConsumerGroupCommandTest {
 
     assertThrows(classOf[IllegalArgumentException], () => ConsumerGroupCommand.consumerGroupTypesFromString("   ,   ,"))
   }
-
 
   @ParameterizedTest
   @ValueSource(strings = Array("zk", "kraft"))
@@ -144,24 +143,24 @@ class ListConsumerGroupTest extends ConsumerGroupCommandTest {
     TestUtils.waitUntilTrue(() => {
       out = TestUtils.grabConsoleOutput(ConsumerGroupCommand.main(cgcArgs))
       out.contains("STATE") && !out.contains("TYPE") && out.contains(simpleGroup) && out.contains(group)
-    }, s"Expected 2 to find $simpleGroup, $group and the header, but found $out")
+    }, s"Expected to find $simpleGroup, $group and the header, but found $out")
 
     cgcArgs = Array("--bootstrap-server", bootstrapServers(), "--list", "--type")
     TestUtils.waitUntilTrue(() => {
       out = TestUtils.grabConsoleOutput(ConsumerGroupCommand.main(cgcArgs))
       out.contains("TYPE") && !out.contains("STATE") && out.contains(simpleGroup) && out.contains(group)
-    }, s"Expected 3 to find $simpleGroup, $group and the header, but found $out")
+    }, s"Expected to find $simpleGroup, $group and the header, but found $out")
 
     cgcArgs = Array("--bootstrap-server", bootstrapServers(), "--list", "--state", "--type")
     TestUtils.waitUntilTrue(() => {
       out = TestUtils.grabConsoleOutput(ConsumerGroupCommand.main(cgcArgs))
       out.contains("TYPE") && out.contains("STATE") && out.contains(simpleGroup) && out.contains(group)
-    }, s"Expected 4 to find $simpleGroup, $group and the header, but found $out")
+    }, s"Expected to find $simpleGroup, $group and the header, but found $out")
 
     cgcArgs = Array("--bootstrap-server", bootstrapServers(), "--list", "--state", "Stable")
     TestUtils.waitUntilTrue(() => {
       out = TestUtils.grabConsoleOutput(ConsumerGroupCommand.main(cgcArgs))
       out.contains("STATE") && out.contains(group) && out.contains("Stable")
-    }, s"Expected 5 to find $group in state Stable and the header, but found $out")
+    }, s"Expected to find $group in state Stable and the header, but found $out")
   }
 }

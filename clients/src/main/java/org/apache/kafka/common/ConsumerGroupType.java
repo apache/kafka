@@ -31,7 +31,9 @@ public enum ConsumerGroupType {
 
     private final String name;
 
-    ConsumerGroupType(String name) { this.name = name; }
+    ConsumerGroupType(String name) {
+        this.name = name;
+    }
 
     /**
      * Parse a string into a consumer group type.
@@ -42,5 +44,7 @@ public enum ConsumerGroupType {
     }
 
     @Override
-    public String toString() { return name; }
+    public String toString() {
+        return name;
+    }
 }
