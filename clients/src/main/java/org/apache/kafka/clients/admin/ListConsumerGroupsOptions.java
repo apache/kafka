@@ -22,6 +22,7 @@ import java.util.HashSet;
 import java.util.Set;
 
 import org.apache.kafka.common.ConsumerGroupState;
+import org.apache.kafka.common.ConsumerGroupType;
 import org.apache.kafka.common.annotation.InterfaceStability;
 
 /**
@@ -34,8 +35,10 @@ public class ListConsumerGroupsOptions extends AbstractOptions<ListConsumerGroup
 
     private Set<ConsumerGroupState> states = Collections.emptySet();
 
+    private Set<ConsumerGroupType> groupTypes = Collections.emptySet();
+
     /**
-     * If states is set, only groups in these states will be returned by listConsumerGroups()
+     * If states is set, only groups in these states will be returned by listConsumerGroups().
      * Otherwise, all groups are returned.
      * This operation is supported by brokers with version 2.6.0 or later.
      */
@@ -45,9 +48,26 @@ public class ListConsumerGroupsOptions extends AbstractOptions<ListConsumerGroup
     }
 
     /**
+     * If groupTypes is set, only groups of these groupTypes will be returned by listConsumerGroups().
+     * Otherwise, all groups are returned.
+     *
+     */
+    public ListConsumerGroupsOptions inTypes(Set<ConsumerGroupType> groupTypes) {
+        this.groupTypes = (groupTypes == null) ? Collections.emptySet() : new HashSet<>(groupTypes);
+        return this;
+    }
+
+    /**
      * Returns the list of States that are requested or empty if no states have been specified
      */
     public Set<ConsumerGroupState> states() {
         return states;
+    }
+
+    /**
+     * Returns the list of types that are requested or empty if no groupTypes have been specified
+     */
+    public Set<ConsumerGroupType> groupTypes() {
+        return groupTypes;
     }
 }

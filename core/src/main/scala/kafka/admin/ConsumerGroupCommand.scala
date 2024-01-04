@@ -29,7 +29,7 @@ import org.apache.kafka.clients.admin._
 import org.apache.kafka.clients.consumer.OffsetAndMetadata
 import org.apache.kafka.clients.CommonClientConfigs
 import org.apache.kafka.common.utils.Utils
-import org.apache.kafka.common.{KafkaException, Node, TopicPartition}
+import org.apache.kafka.common.{ConsumerGroupState, ConsumerGroupType, KafkaException, Node, TopicPartition}
 import org.apache.kafka.server.util.{CommandDefaultOptions, CommandLineUtils}
 
 import scala.jdk.CollectionConverters._
@@ -41,8 +41,9 @@ import org.apache.kafka.common.protocol.Errors
 
 import scala.collection.immutable.TreeMap
 import scala.reflect.ClassTag
-import org.apache.kafka.common.ConsumerGroupState
 import org.apache.kafka.common.requests.ListOffsetsResponse
+
+import scala.collection.compat.immutable.ArraySeq
 
 object ConsumerGroupCommand extends Logging {
 
@@ -100,6 +101,15 @@ object ConsumerGroupCommand extends Logging {
     if (parsedStates.contains(ConsumerGroupState.UNKNOWN)) {
       val validStates = ConsumerGroupState.values().filter(_ != ConsumerGroupState.UNKNOWN)
       throw new IllegalArgumentException(s"Invalid state list '$input'. Valid states are: ${validStates.mkString(", ")}")
+    }
+    parsedStates
+  }
+
+  def consumerGroupTypesFromString(input: String): Set[ConsumerGroupType] = {
+    val parsedStates = input.split(',').map(s => ConsumerGroupType.parse(s.trim)).toSet
+    if (parsedStates.contains(ConsumerGroupType.UNKNOWN)) {
+      val validTypes = ConsumerGroupType.values().filter(_ != ConsumerGroupType.UNKNOWN)
+      throw new IllegalArgumentException(s"Invalid types list '$input'. Valid types are: ${validTypes.mkString(", ")}")
     }
     parsedStates
   }
@@ -189,16 +199,75 @@ object ConsumerGroupCommand extends Logging {
     }
 
     def listGroups(): Unit = {
-      if (opts.options.has(opts.stateOpt)) {
-        val stateValue = opts.options.valueOf(opts.stateOpt)
-        val states = if (stateValue == null || stateValue.isEmpty)
-          Set[ConsumerGroupState]()
-        else
-          consumerGroupStatesFromString(stateValue)
+      val includeState = opts.options.has(opts.stateOpt)
+      val includeType = opts.options.has(opts.typeOpt)
+
+      val groupInfoMap = mutable.Map[String, (String, String)]() // Mutable map
+
+      if (includeState) {
+        val states = getStateValues()
         val listings = listConsumerGroupsWithState(states)
-        printGroupStates(listings.map(e => (e.groupId, e.state.get.toString)))
-      } else
+        listings.foreach { e =>
+          groupInfoMap.update(e.groupId, (e.state().toString, groupInfoMap.getOrElse(e.groupId, ("", ""))._2))
+        }
+      }
+
+      if (includeType) {
+        val types = getTypeValues()
+        val listings = listConsumerGroupsWithType(types)
+        listings.foreach { listing =>
+          val groupId = listing.groupId
+          val groupType = listing.groupType().toString
+          val currentState = groupInfoMap.getOrElse(groupId, ("", ""))._1
+          groupInfoMap.update(groupId, (currentState, groupType))
+        }
+      }
+
+      val groupInfoList = groupInfoMap.toList.map { case (groupId, (state, groupType)) => (groupId, state, groupType) }
+
+      if (groupInfoList.nonEmpty) {
+        printGroupInfo(groupInfoList, includeState, includeType)
+      } else {
         listConsumerGroups().foreach(println(_))
+      }
+    }
+
+    private def getStateValues(): Set[ConsumerGroupState] = {
+      val stateValue = opts.options.valueOf(opts.stateOpt)
+      if (stateValue == null || stateValue.isEmpty)
+        Set[ConsumerGroupState]()
+      else
+        consumerGroupStatesFromString(stateValue)
+    }
+
+    private def getTypeValues(): Set[ConsumerGroupType] = {
+      val typeValue = opts.options.valueOf(opts.typeOpt)
+      if (typeValue == null || typeValue.isEmpty)
+        Set[ConsumerGroupType]()
+      else
+        consumerGroupTypesFromString(typeValue)
+    }
+
+    private def printGroupInfo(groupsAndInfo: List[(String, String, String)], includeState: Boolean, includeType: Boolean): Unit = {
+      val maxGroupLen: Int = groupsAndInfo.foldLeft(15)((maxLen, group) => Math.max(maxLen, group._1.length))
+      var header = "GROUP"
+      var format = s"%-${maxGroupLen}s"
+
+      if (includeState) {
+        header += " STATE"
+        format += " %-20s"
+      }
+      if (includeType) {
+        header += " TYPE"
+        format += " %-20s"
+      }
+
+      println(format.format(ArraySeq.unsafeWrapArray(header.split(" ")): _*))
+
+      groupsAndInfo.foreach { case (groupId, state, groupType) =>
+        val info = List(groupId) ++ (if (includeState) List(state) else List()) ++ (if (includeType) List(groupType) else List())
+        println(format.format(info: _*))
+      }
     }
 
     def listConsumerGroups(): List[String] = {
@@ -214,17 +283,11 @@ object ConsumerGroupCommand extends Logging {
       result.all.get.asScala.toList
     }
 
-    private def printGroupStates(groupsAndStates: List[(String, String)]): Unit = {
-      // find proper columns width
-      var maxGroupLen = 15
-      for ((groupId, _) <- groupsAndStates) {
-        maxGroupLen = Math.max(maxGroupLen, groupId.length)
-      }
-      val format = s"%${-maxGroupLen}s %s"
-      println(format.format("GROUP", "STATE"))
-      for ((groupId, state) <- groupsAndStates) {
-        println(format.format(groupId, state))
-      }
+    def listConsumerGroupsWithType(types: Set[ConsumerGroupType]): List[ConsumerGroupListing] = {
+      val listConsumerGroupsOptions = withTimeoutMs(new ListConsumerGroupsOptions())
+      listConsumerGroupsOptions.inTypes(types.asJava)
+      val result = adminClient.listConsumerGroups(listConsumerGroupsOptions)
+      result.all.get.asScala.toList
     }
 
     private def shouldPrintMemberState(group: String, state: Option[String], numRows: Option[Int]): Boolean = {
@@ -1024,7 +1087,10 @@ object ConsumerGroupCommand extends Logging {
       "When specified with '--list', it displays the state of all groups. It can also be used to list groups with specific states." + nl +
       "Example: --bootstrap-server localhost:9092 --list --state stable,empty" + nl +
       "This option may be used with '--describe', '--list' and '--bootstrap-server' options only."
-    private val DeleteOffsetsDoc = "Delete offsets of consumer group. Supports one consumer group at the time, and multiple topics."
+    private val TypeDoc = "When specified with '--list', it displays groups of the specified types. It can also be used to list groups with specific types." + nl +
+      "Example: --bootstrap-server localhost:9092 --list --type classic,consumer" + nl +
+      "This option may be used with the '--list' option only."
+    private val DeleteOffsetsDoc = "Delete offsets of consumer group. Supports one consumer group at the time, and multiple topics."git
 
     val bootstrapServerOpt: OptionSpec[String] = parser.accepts("bootstrap-server", BootstrapServerDoc)
                                    .withRequiredArg
@@ -1090,6 +1156,10 @@ object ConsumerGroupCommand extends Logging {
                          .availableIf(describeOpt, listOpt)
                          .withOptionalArg()
                          .ofType(classOf[String])
+    val typeOpt = parser.accepts("type", TypeDoc)
+                        .availableIf(listOpt)
+                        .withOptionalArg()
+                        .ofType(classOf[String])
 
     options = parser.parse(args : _*)
 
