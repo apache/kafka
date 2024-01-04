@@ -34,7 +34,6 @@ import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.record.Records;
 import org.apache.kafka.common.record.SimpleRecord;
 import org.apache.kafka.common.record.TimestampType;
-import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.UUIDDeserializer;
 import org.apache.kafka.common.serialization.UUIDSerializer;
@@ -67,23 +66,22 @@ public class CompletedFetchTest {
         FetchResponseData.PartitionData partitionData = new FetchResponseData.PartitionData()
                 .setRecords(newRecords(startingOffset, numRecords, fetchOffset));
 
-        FetchConfig<String, String> fetchConfig = newFetchConfig(new StringDeserializer(),
-                new StringDeserializer(),
-                IsolationLevel.READ_UNCOMMITTED,
-                true);
+        Deserializers<String, String> deserializers = newStringDeserializers();
+        FetchConfig fetchConfig = newFetchConfig(IsolationLevel.READ_UNCOMMITTED, true);
+
         CompletedFetch completedFetch = newCompletedFetch(fetchOffset, partitionData);
 
-        List<ConsumerRecord<String, String>> records = completedFetch.fetchRecords(fetchConfig, 10);
+        List<ConsumerRecord<String, String>> records = completedFetch.fetchRecords(fetchConfig, deserializers, 10);
         assertEquals(10, records.size());
         ConsumerRecord<String, String> record = records.get(0);
         assertEquals(10, record.offset());
 
-        records = completedFetch.fetchRecords(fetchConfig, 10);
+        records = completedFetch.fetchRecords(fetchConfig, deserializers, 10);
         assertEquals(1, records.size());
         record = records.get(0);
         assertEquals(20, record.offset());
 
-        records = completedFetch.fetchRecords(fetchConfig, 10);
+        records = completedFetch.fetchRecords(fetchConfig, deserializers, 10);
         assertEquals(0, records.size());
     }
 
@@ -96,21 +94,15 @@ public class CompletedFetchTest {
                 .setRecords(rawRecords)
                 .setAbortedTransactions(newAbortedTransactions());
 
-        try (final StringDeserializer deserializer = new StringDeserializer()) {
-            FetchConfig<String, String> fetchConfig = newFetchConfig(deserializer,
-                    deserializer,
-                    IsolationLevel.READ_COMMITTED,
-                    true);
+        try (final Deserializers<String, String> deserializers = newStringDeserializers()) {
+            FetchConfig fetchConfig = newFetchConfig(IsolationLevel.READ_COMMITTED, true);
             CompletedFetch completedFetch = newCompletedFetch(0, partitionData);
-            List<ConsumerRecord<String, String>> records = completedFetch.fetchRecords(fetchConfig, 10);
+            List<ConsumerRecord<String, String>> records = completedFetch.fetchRecords(fetchConfig, deserializers, 10);
             assertEquals(0, records.size());
 
-            fetchConfig = newFetchConfig(deserializer,
-                    deserializer,
-                    IsolationLevel.READ_UNCOMMITTED,
-                    true);
+            fetchConfig = newFetchConfig(IsolationLevel.READ_UNCOMMITTED, true);
             completedFetch = newCompletedFetch(0, partitionData);
-            records = completedFetch.fetchRecords(fetchConfig, 10);
+            records = completedFetch.fetchRecords(fetchConfig, deserializers, 10);
             assertEquals(numRecords, records.size());
         }
     }
@@ -122,12 +114,9 @@ public class CompletedFetchTest {
         FetchResponseData.PartitionData partitionData = new FetchResponseData.PartitionData()
                 .setRecords(rawRecords);
         CompletedFetch completedFetch = newCompletedFetch(0, partitionData);
-        try (final StringDeserializer deserializer = new StringDeserializer()) {
-            FetchConfig<String, String> fetchConfig = newFetchConfig(deserializer,
-                    deserializer,
-                    IsolationLevel.READ_COMMITTED,
-                    true);
-            List<ConsumerRecord<String, String>> records = completedFetch.fetchRecords(fetchConfig, 10);
+        try (final Deserializers<String, String> deserializers = newStringDeserializers()) {
+            FetchConfig fetchConfig = newFetchConfig(IsolationLevel.READ_COMMITTED, true);
+            List<ConsumerRecord<String, String>> records = completedFetch.fetchRecords(fetchConfig, deserializers, 10);
             assertEquals(10, records.size());
         }
     }
@@ -140,14 +129,13 @@ public class CompletedFetchTest {
         FetchResponseData.PartitionData partitionData = new FetchResponseData.PartitionData()
                 .setRecords(newRecords(startingOffset, numRecords, fetchOffset));
 
-        CompletedFetch completedFetch = newCompletedFetch(fetchOffset, partitionData);
-        FetchConfig<String, String> fetchConfig = newFetchConfig(new StringDeserializer(),
-                new StringDeserializer(),
-                IsolationLevel.READ_UNCOMMITTED,
-                true);
+        try (final Deserializers<String, String> deserializers = newStringDeserializers()) {
+            CompletedFetch completedFetch = newCompletedFetch(fetchOffset, partitionData);
+            FetchConfig fetchConfig = newFetchConfig(IsolationLevel.READ_UNCOMMITTED, true);
 
-        List<ConsumerRecord<String, String>> records = completedFetch.fetchRecords(fetchConfig, -10);
-        assertEquals(0, records.size());
+            List<ConsumerRecord<String, String>> records = completedFetch.fetchRecords(fetchConfig, deserializers, -10);
+            assertEquals(0, records.size());
+        }
     }
 
     @Test
@@ -159,13 +147,9 @@ public class CompletedFetchTest {
                 .setLogStartOffset(0);
 
         CompletedFetch completedFetch = newCompletedFetch(1, partitionData);
-        try (final StringDeserializer deserializer = new StringDeserializer()) {
-            FetchConfig<String, String> fetchConfig = newFetchConfig(deserializer,
-                    deserializer,
-                    IsolationLevel.READ_UNCOMMITTED,
-                    true);
-
-            List<ConsumerRecord<String, String>> records = completedFetch.fetchRecords(fetchConfig, 10);
+        try (final Deserializers<String, String> deserializers = newStringDeserializers()) {
+            FetchConfig fetchConfig = newFetchConfig(IsolationLevel.READ_UNCOMMITTED, true);
+            List<ConsumerRecord<String, String>> records = completedFetch.fetchRecords(fetchConfig, deserializers, 10);
             assertEquals(0, records.size());
         }
     }
@@ -174,8 +158,7 @@ public class CompletedFetchTest {
     public void testCorruptedMessage() {
         // Create one good record and then one "corrupted" record.
         try (final MemoryRecordsBuilder builder = MemoryRecords.builder(ByteBuffer.allocate(1024), CompressionType.NONE, TimestampType.CREATE_TIME, 0);
-             final UUIDSerializer serializer = new UUIDSerializer();
-             final UUIDDeserializer deserializer = new UUIDDeserializer()) {
+             final UUIDSerializer serializer = new UUIDSerializer()) {
             builder.append(new SimpleRecord(serializer.serialize(TOPIC_NAME, UUID.randomUUID())));
             builder.append(0L, "key".getBytes(), "value".getBytes());
             Records records = builder.build();
@@ -187,16 +170,15 @@ public class CompletedFetchTest {
                     .setLogStartOffset(0)
                     .setRecords(records);
 
-            FetchConfig<UUID, UUID> fetchConfig = newFetchConfig(deserializer,
-                    deserializer,
-                    IsolationLevel.READ_COMMITTED,
-                    false);
-            CompletedFetch completedFetch = newCompletedFetch(0, partitionData);
+            try (final Deserializers<UUID, UUID> deserializers = newUuidDeserializers()) {
+                FetchConfig fetchConfig = newFetchConfig(IsolationLevel.READ_COMMITTED, false);
+                CompletedFetch completedFetch = newCompletedFetch(0, partitionData);
 
-            completedFetch.fetchRecords(fetchConfig, 10);
+                completedFetch.fetchRecords(fetchConfig, deserializers, 10);
 
-            assertThrows(RecordDeserializationException.class,
-                    () -> completedFetch.fetchRecords(fetchConfig, 10));
+                assertThrows(RecordDeserializationException.class,
+                        () -> completedFetch.fetchRecords(fetchConfig, deserializers, 10));
+            }
         }
     }
 
@@ -219,11 +201,16 @@ public class CompletedFetchTest {
                 ApiKeys.FETCH.latestVersion());
     }
 
-    private static <K, V> FetchConfig<K, V> newFetchConfig(Deserializer<K> keyDeserializer,
-                                                           Deserializer<V> valueDeserializer,
-                                                           IsolationLevel isolationLevel,
-                                                           boolean checkCrcs) {
-        return new FetchConfig<>(
+    private static Deserializers<UUID, UUID> newUuidDeserializers() {
+        return new Deserializers<>(new UUIDDeserializer(), new UUIDDeserializer());
+    }
+
+    private static Deserializers<String, String> newStringDeserializers() {
+        return new Deserializers<>(new StringDeserializer(), new StringDeserializer());
+    }
+
+    private static FetchConfig newFetchConfig(IsolationLevel isolationLevel, boolean checkCrcs) {
+        return new FetchConfig(
                 ConsumerConfig.DEFAULT_FETCH_MIN_BYTES,
                 ConsumerConfig.DEFAULT_FETCH_MAX_BYTES,
                 ConsumerConfig.DEFAULT_FETCH_MAX_WAIT_MS,
@@ -231,7 +218,6 @@ public class CompletedFetchTest {
                 ConsumerConfig.DEFAULT_MAX_POLL_RECORDS,
                 checkCrcs,
                 ConsumerConfig.DEFAULT_CLIENT_RACK,
-                new Deserializers<>(keyDeserializer, valueDeserializer),
                 isolationLevel
         );
     }

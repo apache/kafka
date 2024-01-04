@@ -27,7 +27,7 @@ public class PendingUpdateAction {
         UPDATE_INPUT_PARTITIONS,
         RECYCLE,
         SUSPEND,
-        CLOSE_DIRTY,
+        ADD_BACK,
         CLOSE_CLEAN
     }
 
@@ -57,8 +57,8 @@ public class PendingUpdateAction {
         return new PendingUpdateAction(Action.SUSPEND);
     }
 
-    public static PendingUpdateAction createCloseDirty() {
-        return new PendingUpdateAction(Action.CLOSE_DIRTY);
+    public static PendingUpdateAction createAddBack() {
+        return new PendingUpdateAction(Action.ADD_BACK);
     }
 
     public static PendingUpdateAction createCloseClean() {

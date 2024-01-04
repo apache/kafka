@@ -32,7 +32,7 @@ import java.util
 import java.util.concurrent.atomic.AtomicLong
 import java.util.regex.Pattern
 import java.util.{Collections, Optional}
-import scala.collection.mutable.{ArrayBuffer, ListBuffer}
+import scala.collection.mutable.ListBuffer
 import scala.collection.{Seq, immutable}
 import scala.compat.java8.OptionConverters._
 import scala.jdk.CollectionConverters._
@@ -254,36 +254,6 @@ class LocalLog(@volatile private var _dir: File,
       removeAndDeleteSegments(segments.values.asScala, asyncDelete = false, LogDeletion(this))
       isMemoryMappedBufferClosed = true
       deletableSegments
-    }
-  }
-
-  /**
-   * Find segments starting from the oldest until the user-supplied predicate is false.
-   * A final segment that is empty will never be returned.
-   *
-   * @param predicate A function that takes in a candidate log segment, the next higher segment
-   *                  (if there is one). It returns true iff the segment is deletable.
-   * @return the segments ready to be deleted
-   */
-  private[log] def deletableSegments(predicate: (LogSegment, Option[LogSegment]) => Boolean): Iterable[LogSegment] = {
-    if (segments.isEmpty) {
-      Seq.empty
-    } else {
-      val deletable = ArrayBuffer.empty[LogSegment]
-      val segmentsIterator = segments.values.iterator
-      var segmentOpt = nextOption(segmentsIterator)
-      while (segmentOpt.isDefined) {
-        val segment = segmentOpt.get
-        val nextSegmentOpt = nextOption(segmentsIterator)
-        val isLastSegmentAndEmpty = nextSegmentOpt.isEmpty && segment.size == 0
-        if (predicate(segment, nextSegmentOpt) && !isLastSegmentAndEmpty) {
-          deletable += segment
-          segmentOpt = nextSegmentOpt
-        } else {
-          segmentOpt = Option.empty
-        }
-      }
-      deletable
     }
   }
 
@@ -610,8 +580,12 @@ object LocalLog extends Logging {
   /** a directory that is used for future partition */
   private[log] val FutureDirSuffix = "-future"
 
+  /** a directory that is used for stray partition */
+  private[log] val StrayDirSuffix = "-stray"
+
   private[log] val DeleteDirPattern = Pattern.compile(s"^(\\S+)-(\\S+)\\.(\\S+)$DeleteDirSuffix")
   private[log] val FutureDirPattern = Pattern.compile(s"^(\\S+)-(\\S+)\\.(\\S+)$FutureDirSuffix")
+  private[log] val StrayDirPattern = Pattern.compile(s"^(\\S+)-(\\S+)\\.(\\S+)$StrayDirSuffix")
 
   private[log] val UnknownOffset = -1L
 
@@ -622,10 +596,17 @@ object LocalLog extends Logging {
    * from exceeding 255 characters.
    */
   private[log] def logDeleteDirName(topicPartition: TopicPartition): String = {
-    val uniqueId = java.util.UUID.randomUUID.toString.replaceAll("-", "")
-    val suffix = s"-${topicPartition.partition()}.$uniqueId$DeleteDirSuffix"
-    val prefixLength = Math.min(topicPartition.topic().size, 255 - suffix.size)
-    s"${topicPartition.topic().substring(0, prefixLength)}$suffix"
+    logDirNameWithSuffixCappedLength(topicPartition, DeleteDirSuffix)
+  }
+
+  /**
+   * Return a directory name to rename the log directory to for stray partition deletion.
+   * The name will be in the following format: "topic-partitionId.uniqueId-stray".
+   * If the topic name is too long, it will be truncated to prevent the total name
+   * from exceeding 255 characters.
+   */
+  private[log] def logStrayDirName(topicPartition: TopicPartition): String = {
+    logDirNameWithSuffixCappedLength(topicPartition, StrayDirSuffix)
   }
 
   /**
@@ -634,6 +615,18 @@ object LocalLog extends Logging {
    */
   private[log] def logFutureDirName(topicPartition: TopicPartition): String = {
     logDirNameWithSuffix(topicPartition, FutureDirSuffix)
+  }
+
+  /**
+   * Return a new directory name in the following format: "${topic}-${partitionId}.${uniqueId}${suffix}".
+   * If the topic name is too long, it will be truncated to prevent the total name
+   * from exceeding 255 characters.
+   */
+  private[log] def logDirNameWithSuffixCappedLength(topicPartition: TopicPartition, suffix: String): String = {
+    val uniqueId = java.util.UUID.randomUUID.toString.replaceAll("-", "")
+    val fullSuffix = s"-${topicPartition.partition()}.$uniqueId$suffix"
+    val prefixLength = Math.min(topicPartition.topic().length, 255 - fullSuffix.length)
+    s"${topicPartition.topic().substring(0, prefixLength)}$fullSuffix"
   }
 
   private[log] def logDirNameWithSuffix(topicPartition: TopicPartition, suffix: String): String = {
@@ -666,11 +659,13 @@ object LocalLog extends Logging {
     if (dirName == null || dirName.isEmpty || !dirName.contains('-'))
       throw exception(dir)
     if (dirName.endsWith(DeleteDirSuffix) && !DeleteDirPattern.matcher(dirName).matches ||
-      dirName.endsWith(FutureDirSuffix) && !FutureDirPattern.matcher(dirName).matches)
+      dirName.endsWith(FutureDirSuffix) && !FutureDirPattern.matcher(dirName).matches ||
+      dirName.endsWith(StrayDirSuffix) && !StrayDirPattern.matcher(dirName).matches)
       throw exception(dir)
 
     val name: String =
-      if (dirName.endsWith(DeleteDirSuffix) || dirName.endsWith(FutureDirSuffix)) dirName.substring(0, dirName.lastIndexOf('.'))
+      if (dirName.endsWith(DeleteDirSuffix) || dirName.endsWith(FutureDirSuffix) || dirName.endsWith(StrayDirSuffix))
+        dirName.substring(0, dirName.lastIndexOf('.'))
       else dirName
 
     val index = name.lastIndexOf('-')
@@ -957,7 +952,7 @@ object LocalLog extends Logging {
    * @tparam T the type of object held within the iterator
    * @return Some(iterator.next) if a next element exists, None otherwise.
    */
-  private def nextOption[T](iterator: util.Iterator[T]): Option[T] = {
+  private[log] def nextOption[T](iterator: util.Iterator[T]): Option[T] = {
     if (iterator.hasNext)
       Some(iterator.next())
     else

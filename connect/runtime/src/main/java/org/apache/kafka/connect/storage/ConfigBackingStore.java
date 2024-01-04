@@ -56,8 +56,10 @@ public interface ConfigBackingStore {
      * Update the configuration for a connector.
      * @param connector name of the connector
      * @param properties the connector configuration
+     * @param targetState the desired target state for the connector; may be {@code null} if no target state change is desired. Note that the default
+     *                    target state is {@link TargetState#STARTED} if no target state exists previously
      */
-    void putConnectorConfig(String connector, Map<String, String> properties);
+    void putConnectorConfig(String connector, Map<String, String> properties, TargetState targetState);
 
     /**
      * Remove configuration for a connector
@@ -123,6 +125,14 @@ public interface ConfigBackingStore {
     }
 
     /**
+     * Emit a new level for the specified logging namespace (and all of its children). This level should
+     * be applied by all workers currently in the cluster, but not to workers that join after it is stored.
+     * @param namespace the namespace to adjust; may not be null
+     * @param level the new level for the namespace; may not be null
+     */
+    void putLoggerLevel(String namespace, String level);
+
+    /**
      * Set an update listener to get notifications when there are new records written to the backing store.
      * @param listener non-null listener
      */
@@ -164,6 +174,13 @@ public interface ConfigBackingStore {
          * @param restartRequest the {@link RestartRequest restart request}
          */
         void onRestartRequest(RestartRequest restartRequest);
+
+        /**
+         * Invoked when a dynamic log level adjustment has been read
+         * @param namespace the namespace to adjust; never null
+         * @param level the level to set the namespace to; never null
+         */
+        void onLoggingLevelUpdate(String namespace, String level);
     }
 
 }

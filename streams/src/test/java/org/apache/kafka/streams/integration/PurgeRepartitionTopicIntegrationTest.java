@@ -181,6 +181,9 @@ public class PurgeRepartitionTopicIntegrationTest {
 
     @AfterEach
     public void shutdown() {
+        if (adminClient != null) {
+            adminClient.close();
+        }
         if (kafkaStreams != null) {
             kafkaStreams.close(Duration.ofSeconds(30));
         }

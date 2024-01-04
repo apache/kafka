@@ -26,18 +26,16 @@ import java.util.Optional;
 /**
  * A simple wrapper over Jackson's JsonNode that enables type safe parsing via the `DecodeJson` type
  * class.
- *
+ * <br>
  * Typical usage would be something like:
- *
- * {{{
- * val jsonNode: JsonNode = ???
- * val jsonObject = JsonValue(jsonNode).asJsonObject
- * val intValue = jsonObject("int_field").to[Int]
- * val optionLongValue = jsonObject("option_long_field").to[Option[Long]]
- * val mapStringIntField = jsonObject("map_string_int_field").to[Map[String, Int]]
- * val seqStringField = jsonObject("seq_string_field").to[Seq[String]
- * }}}
- *
+ * <pre><code>
+ * // Given a jsonNode containing a parsed JSON:
+ * JsonObject jsonObject = JsonValue.apply(jsonNode).asJsonObject();
+ * Integer intField = jsonObject.apply("int_field").to(new DecodeJson.DecodeInteger());
+ * Optional<Integer> optionLongField = jsonObject.apply("option_long_field").to(DecodeJson.decodeOptional(new DecodeJson.DecodeInteger()));
+ * Map<String, Integer> mapStringIntField = jsonObject.apply("map_string_int_field").to(DecodeJson.decodeMap(new DecodeJson.DecodeInteger()));
+ * List<String> seqStringField = jsonObject.apply("seq_string_field").to(DecodeJson.decodeList(new DecodeJson.DecodeString()));
+ * </code></pre>
  * The `to` method throws an exception if the value cannot be converted to the requested type.
  */
 

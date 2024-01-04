@@ -18,11 +18,13 @@ package org.apache.kafka.metadata.migration;
 
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.metadata.BrokerRegistrationChangeRecord;
 import org.apache.kafka.common.metadata.ConfigRecord;
 import org.apache.kafka.common.metadata.FeatureLevelRecord;
 import org.apache.kafka.common.metadata.RegisterBrokerRecord;
+import org.apache.kafka.common.metadata.TopicRecord;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.controller.QuorumFeatures;
@@ -53,8 +55,11 @@ import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.EnumSet;
@@ -72,6 +77,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
+import java.util.stream.Stream;
 
 import static java.util.concurrent.TimeUnit.MILLISECONDS;
 import static java.util.concurrent.TimeUnit.NANOSECONDS;
@@ -82,7 +88,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class KRaftMigrationDriverTest {
     private final static QuorumFeatures QUORUM_FEATURES = new QuorumFeatures(4,
-        QuorumFeatures.defaultFeatureMap(),
+        QuorumFeatures.defaultFeatureMap(true),
         Arrays.asList(4, 5, 6));
 
     static class MockControllerMetrics extends QuorumControllerMetrics {
@@ -305,7 +311,8 @@ public class KRaftMigrationDriverTest {
                 new CapturingTopicMigrationClient(),
                 new CapturingConfigMigrationClient(),
                 new CapturingAclMigrationClient(),
-                new CapturingDelegationTokenMigrationClient()) {
+                new CapturingDelegationTokenMigrationClient(),
+                CapturingMigrationClient.EMPTY_BATCH_SUPPLIER) {
             @Override
             public ZkMigrationLeadershipState claimControllerLeadership(ZkMigrationLeadershipState state) {
                 if (claimLeaderAttempts.getCount() == 0) {
@@ -447,11 +454,8 @@ public class KRaftMigrationDriverTest {
     @Test
     public void testSkipWaitForBrokersInDualWrite() throws Exception {
         CountingMetadataPropagator metadataPropagator = new CountingMetadataPropagator();
-        CapturingMigrationClient migrationClient = new CapturingMigrationClient(Collections.emptySet(),
-            new CapturingTopicMigrationClient(),
-            new CapturingConfigMigrationClient(),
-            new CapturingAclMigrationClient(),
-            new CapturingDelegationTokenMigrationClient());
+        CapturingMigrationClient.newBuilder().build();
+        CapturingMigrationClient migrationClient = CapturingMigrationClient.newBuilder().build();
         MockFaultHandler faultHandler = new MockFaultHandler("testMigrationClientExpiration");
         KRaftMigrationDriver.Builder builder = defaultTestBuilder()
             .setZkMigrationClient(migrationClient)
@@ -615,7 +619,7 @@ public class KRaftMigrationDriverTest {
 
             // Wait for migration
             TestUtils.waitForCondition(() -> driver.migrationState().get(1, TimeUnit.MINUTES).equals(MigrationDriverState.DUAL_WRITE),
-                    "Waiting for KRaftMigrationDriver to enter ZK_MIGRATION state");
+                    "Waiting for KRaftMigrationDriver to enter DUAL_WRITE state");
 
             // Modify topics in a KRaft snapshot -- delete foo, modify bar, add baz
             provenance = new MetadataProvenance(200, 1, 1);
@@ -631,6 +635,61 @@ public class KRaftMigrationDriverTest {
             assertEquals("baz", topicClient.createdTopics.get(0));
             assertTrue(topicClient.updatedTopicPartitions.get("bar").contains(0));
             assertEquals(new ConfigResource(ConfigResource.Type.TOPIC, "foo"), configClient.deletedResources.get(0));
+        });
+    }
+
+    @Test
+    public void testNoDualWriteBeforeMigration() throws Exception {
+        setupTopicDualWrite((driver, migrationClient, topicClient, configClient) -> {
+            MetadataImage image = new MetadataImage(
+                MetadataProvenance.EMPTY,
+                FeaturesImage.EMPTY,
+                ClusterImage.EMPTY,
+                IMAGE1,
+                ConfigurationsImage.EMPTY,
+                ClientQuotasImage.EMPTY,
+                ProducerIdsImage.EMPTY,
+                AclsImage.EMPTY,
+                ScramImage.EMPTY,
+                DelegationTokenImage.EMPTY);
+            MetadataDelta delta = new MetadataDelta(image);
+
+            driver.start();
+            setupDeltaForMigration(delta, true);
+            delta.replay(ZkMigrationState.PRE_MIGRATION.toRecord().message());
+            delta.replay(zkBrokerRecord(0));
+            delta.replay(zkBrokerRecord(1));
+            delta.replay(zkBrokerRecord(2));
+            delta.replay(zkBrokerRecord(3));
+            delta.replay(zkBrokerRecord(4));
+            delta.replay(zkBrokerRecord(5));
+            MetadataProvenance provenance = new MetadataProvenance(100, 1, 1);
+            image = delta.apply(provenance);
+
+            // Publish a delta with this node (3000) as the leader
+            LeaderAndEpoch newLeader = new LeaderAndEpoch(OptionalInt.of(3000), 1);
+            driver.onControllerChange(newLeader);
+
+            TestUtils.waitForCondition(() -> driver.migrationState().get(1, TimeUnit.MINUTES).equals(MigrationDriverState.WAIT_FOR_CONTROLLER_QUORUM),
+                "Waiting for KRaftMigrationDriver to enter DUAL_WRITE state");
+
+            driver.onMetadataUpdate(delta, image, logDeltaManifestBuilder(provenance, newLeader).build());
+
+            driver.transitionTo(MigrationDriverState.WAIT_FOR_BROKERS);
+            driver.transitionTo(MigrationDriverState.BECOME_CONTROLLER);
+            driver.transitionTo(MigrationDriverState.ZK_MIGRATION);
+            driver.transitionTo(MigrationDriverState.SYNC_KRAFT_TO_ZK);
+
+            provenance = new MetadataProvenance(200, 1, 1);
+            delta = new MetadataDelta(image);
+            RecordTestUtils.replayAll(delta, DELTA1_RECORDS);
+            image = delta.apply(provenance);
+            driver.onMetadataUpdate(delta, image, new SnapshotManifest(provenance, 100));
+
+
+            // Wait for migration
+            TestUtils.waitForCondition(() -> driver.migrationState().get(1, TimeUnit.MINUTES).equals(MigrationDriverState.DUAL_WRITE),
+                "Waiting for KRaftMigrationDriver to enter DUAL_WRITE state");
         });
     }
 
@@ -706,7 +765,7 @@ public class KRaftMigrationDriverTest {
         };
         CountingMetadataPropagator metadataPropagator = new CountingMetadataPropagator();
         CapturingMigrationClient migrationClient = CapturingMigrationClient.newBuilder().setBrokersInZk(1, 2, 3).build();
-        MockFaultHandler faultHandler = new MockFaultHandler("testTwoMigrateMetadataEvents");
+        MockFaultHandler faultHandler = new MockFaultHandler("testBeginMigrationOnce");
         KRaftMigrationDriver.Builder builder = defaultTestBuilder()
             .setZkMigrationClient(migrationClient)
             .setZkRecordConsumer(recordConsumer)
@@ -738,6 +797,85 @@ public class KRaftMigrationDriverTest {
             TestUtils.waitForCondition(() -> driver.migrationState().get(1, TimeUnit.MINUTES).equals(MigrationDriverState.DUAL_WRITE),
                     "Waiting for KRaftMigrationDriver to enter ZK_MIGRATION state");
             assertEquals(1, migrationBeginCalls.get());
+        }
+    }
+
+    private List<ApiMessageAndVersion> fillBatch(int size) {
+        ApiMessageAndVersion[] batch = new ApiMessageAndVersion[size];
+        Arrays.fill(batch, new ApiMessageAndVersion(new TopicRecord().setName("topic-fill").setTopicId(Uuid.randomUuid()), (short) 0));
+        return Arrays.asList(batch);
+    }
+
+    static Stream<Arguments> batchSizes() {
+        return Stream.of(
+            Arguments.of(Arrays.asList(0, 0, 0, 0), 0, 0),
+            Arguments.of(Arrays.asList(0, 0, 1, 0), 1, 1),
+            Arguments.of(Arrays.asList(1, 1, 1, 1), 1, 4),
+            Arguments.of(Collections.singletonList(KRaftMigrationDriver.MIGRATION_MIN_BATCH_SIZE - 1), 1, 999),
+            Arguments.of(Collections.singletonList(KRaftMigrationDriver.MIGRATION_MIN_BATCH_SIZE), 1, 1000),
+            Arguments.of(Collections.singletonList(KRaftMigrationDriver.MIGRATION_MIN_BATCH_SIZE + 1), 1, 1001),
+            Arguments.of(Arrays.asList(KRaftMigrationDriver.MIGRATION_MIN_BATCH_SIZE, 1), 2, 1001),
+            Arguments.of(Arrays.asList(0, 0, 0, 0), 0, 0),
+            Arguments.of(Arrays.asList(KRaftMigrationDriver.MIGRATION_MIN_BATCH_SIZE, KRaftMigrationDriver.MIGRATION_MIN_BATCH_SIZE, KRaftMigrationDriver.MIGRATION_MIN_BATCH_SIZE), 3, 3000)
+        );
+    }
+    @ParameterizedTest
+    @MethodSource("batchSizes")
+    public void testCoalesceMigrationRecords(List<Integer> batchSizes, int expectedBatchCount, int expectedRecordCount) throws Exception {
+        List<List<ApiMessageAndVersion>> batchesPassedToController = new ArrayList<>();
+        NoOpRecordConsumer recordConsumer = new NoOpRecordConsumer() {
+            @Override
+            public CompletableFuture<?> acceptBatch(List<ApiMessageAndVersion> recordBatch) {
+                batchesPassedToController.add(recordBatch);
+                return CompletableFuture.completedFuture(null);
+            }
+        };
+        CountingMetadataPropagator metadataPropagator = new CountingMetadataPropagator();
+        CapturingMigrationClient migrationClient = CapturingMigrationClient.newBuilder()
+            .setBrokersInZk(1, 2, 3)
+            .setBatchSupplier(new CapturingMigrationClient.MigrationBatchSupplier() {
+                @Override
+                public List<List<ApiMessageAndVersion>> recordBatches() {
+                    List<List<ApiMessageAndVersion>> batches = new ArrayList<>();
+                    for (int batchSize : batchSizes) {
+                        batches.add(fillBatch(batchSize));
+                    }
+                    return batches;
+                }
+            })
+            .build();
+        MockFaultHandler faultHandler = new MockFaultHandler("testRebatchMigrationRecords");
+
+        KRaftMigrationDriver.Builder builder = defaultTestBuilder()
+                .setZkMigrationClient(migrationClient)
+                .setZkRecordConsumer(recordConsumer)
+                .setPropagator(metadataPropagator)
+                .setFaultHandler(faultHandler);
+        try (KRaftMigrationDriver driver = builder.build()) {
+            MetadataImage image = MetadataImage.EMPTY;
+            MetadataDelta delta = new MetadataDelta(image);
+
+            driver.start();
+            setupDeltaForMigration(delta, true);
+            delta.replay(ZkMigrationState.PRE_MIGRATION.toRecord().message());
+            delta.replay(zkBrokerRecord(1));
+            delta.replay(zkBrokerRecord(2));
+            delta.replay(zkBrokerRecord(3));
+            MetadataProvenance provenance = new MetadataProvenance(100, 1, 1);
+            image = delta.apply(provenance);
+
+            driver.onControllerChange(new LeaderAndEpoch(OptionalInt.of(3000), 1));
+
+            driver.onMetadataUpdate(delta, image, logDeltaManifestBuilder(provenance,
+                    new LeaderAndEpoch(OptionalInt.of(3000), 1)).build());
+            driver.onMetadataUpdate(delta, image, logDeltaManifestBuilder(provenance,
+                    new LeaderAndEpoch(OptionalInt.of(3000), 1)).build());
+
+            TestUtils.waitForCondition(() -> driver.migrationState().get(1, TimeUnit.MINUTES).equals(MigrationDriverState.DUAL_WRITE),
+                    "Waiting for KRaftMigrationDriver to enter ZK_MIGRATION state");
+
+            assertEquals(expectedBatchCount, batchesPassedToController.size());
+            assertEquals(expectedRecordCount, batchesPassedToController.stream().mapToInt(List::size).sum());
         }
     }
 }
