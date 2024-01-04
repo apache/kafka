@@ -1077,7 +1077,7 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
         }
 
         private List<NetworkClientDelegate.UnsentRequest> drainPendingCommits() {
-            ArrayList<NetworkClientDelegate.UnsentRequest> res = new ArrayList<>(unsentOffsetCommits.stream().map(OffsetCommitRequestState::toUnsentRequest).collect(Collectors.toList()));
+            List<NetworkClientDelegate.UnsentRequest> res = new ArrayList<>(unsentOffsetCommits.stream().map(OffsetCommitRequestState::toUnsentRequest).collect(Collectors.toList()));
             clearAll();
             return res;
         }
