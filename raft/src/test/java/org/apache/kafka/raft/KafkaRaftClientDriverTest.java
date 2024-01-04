@@ -66,7 +66,6 @@ class KafkaRaftClientDriverTest {
         verify(raftClient).close();
     }
 
-
     @Test
     public void testUncaughtException() {
         @SuppressWarnings("unchecked")

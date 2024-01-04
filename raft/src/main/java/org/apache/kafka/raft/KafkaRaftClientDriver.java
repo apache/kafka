@@ -25,7 +25,6 @@ import org.slf4j.Logger;
 
 import java.util.concurrent.CompletableFuture;
 
-
 /**
  * A single-threaded driver for {@link KafkaRaftClient}.
  *
@@ -104,7 +103,7 @@ public class KafkaRaftClientDriver<T> extends ShutdownableThread {
 
         client.handle(inboundRequest);
 
-        return inboundRequest.completion.thenApply(response -> response.data);
+        return inboundRequest.completion.thenApply(RaftMessage::data);
     }
 
     public KafkaRaftClient<T> client() {
