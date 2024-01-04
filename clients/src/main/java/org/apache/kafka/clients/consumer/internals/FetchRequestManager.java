@@ -56,7 +56,7 @@ public class FetchRequestManager extends AbstractFetch implements RequestManager
     }
 
     /**
-     * Node's availability will be checked at a later stage, so we default to return false;
+     * Node's availability will be checked at a later stage, so we default to return false.
      * @param node {@link Node} to check for availability
      * @return
      */
@@ -66,7 +66,7 @@ public class FetchRequestManager extends AbstractFetch implements RequestManager
     }
 
     /**
-     * Authentication failure will be checked at a later stage, so we do nothing here
+     * Authentication failure will be checked at a later stage, so we do nothing here.
      * @param node {@link Node} to check for a previous {@link AuthenticationException}; if found it is thrown
      */
     @Override
