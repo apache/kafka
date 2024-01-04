@@ -42,7 +42,8 @@ import org.apache.kafka.common.security.auth.KafkaPrincipalSerde
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.security.authenticator.DefaultKafkaPrincipalBuilder
 import org.apache.kafka.common.utils.Utils
-import org.apache.kafka.coordinator.group.assignor.{PartitionAssignor, RangeAssignor}
+import org.apache.kafka.coordinator.group.Group.GroupType
+import org.apache.kafka.coordinator.group.assignor.{PartitionAssignor, RangeAssignor, UniformAssignor}
 import org.apache.kafka.raft.RaftConfig
 import org.apache.kafka.server.authorizer.Authorizer
 import org.apache.kafka.server.common.{MetadataVersion, MetadataVersionValidator}
@@ -166,6 +167,7 @@ object Defaults {
 
   /** New group coordinator configs */
   val NewGroupCoordinatorEnable = false
+  val GroupCoordinatorRebalanceProtocols = List(GroupType.CLASSIC.toString).asJava
   val GroupCoordinatorNumThreads = 1
 
   /** Consumer group configs */
@@ -176,7 +178,7 @@ object Defaults {
   val ConsumerGroupMinHeartbeatIntervalMs = 5000
   val ConsumerGroupMaxHeartbeatIntervalMs = 15000
   val ConsumerGroupMaxSize = Int.MaxValue
-  val ConsumerGroupAssignors = List(classOf[RangeAssignor].getName).asJava
+  val ConsumerGroupAssignors = List(classOf[UniformAssignor].getName, classOf[RangeAssignor].getName).asJava
 
   /** ********* Offset management configuration ***********/
   val OffsetMetadataMaxSize = OffsetConfig.DefaultMaxMetadataSize
@@ -231,6 +233,9 @@ object Defaults {
   /** ********* Kafka Yammer Metrics Reporter Configuration ***********/
   val KafkaMetricReporterClasses = ""
   val KafkaMetricsPollingIntervalSeconds = 10
+
+  /** ********* Kafka Client Telemetry Metrics Configuration ***********/
+  val ClientTelemetryMaxBytes = 1024 * 1024
 
   /** ********* SSL configuration ***********/
   val SslProtocol = SslConfigs.DEFAULT_SSL_PROTOCOL
@@ -519,6 +524,7 @@ object KafkaConfig {
 
   /** New group coordinator configs */
   val NewGroupCoordinatorEnableProp = "group.coordinator.new.enable"
+  val GroupCoordinatorRebalanceProtocolsProp = "group.coordinator.rebalance.protocols"
   val GroupCoordinatorNumThreadsProp = "group.coordinator.threads"
 
   /** Consumer group configs */
@@ -588,6 +594,9 @@ object KafkaConfig {
   /** ********* Kafka Yammer Metrics Reporters Configuration ***********/
   val KafkaMetricsReporterClassesProp = "kafka.metrics.reporters"
   val KafkaMetricsPollingIntervalSecondsProp = "kafka.metrics.polling.interval.secs"
+
+  /** ********* Kafka Client Telemetry Metrics Configuration ***********/
+  val ClientTelemetryMaxBytesProp = "telemetry.max.bytes"
 
   /** ******** Common Security Configuration *************/
   val PrincipalBuilderClassProp = BrokerSecurityConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG
@@ -671,6 +680,7 @@ object KafkaConfig {
 
   /** Internal Configurations **/
   val UnstableApiVersionsEnableProp = "unstable.api.versions.enable"
+  val UnstableMetadataVersionsEnableProp = "unstable.metadata.versions.enable"
 
   /* Documentation */
   /** ********* Zookeeper Configuration ***********/
@@ -1000,6 +1010,8 @@ object KafkaConfig {
 
   /** New group coordinator configs */
   val NewGroupCoordinatorEnableDoc = "Enable the new group coordinator."
+  val GroupCoordinatorRebalanceProtocolsDoc = "The list of enabled rebalance protocols. Supported protocols: " + Utils.join(GroupType.values.toList.map(_.toString).asJava, ",") + ". " +
+    s"The ${GroupType.CONSUMER} rebalance protocol is in early access and therefore must not be used in production."
   val GroupCoordinatorNumThreadsDoc = "The number of threads used by the group coordinator."
 
   /** Consumer group configs */
@@ -1091,6 +1103,10 @@ object KafkaConfig {
 
   val KafkaMetricsPollingIntervalSecondsDoc = s"The metrics polling interval (in seconds) which can be used" +
     s" in $KafkaMetricsReporterClassesProp implementations."
+
+  /** ********* Kafka Client Telemetry Metrics Configuration ***********/
+  val ClientTelemetryMaxBytesDoc = "The maximum size (after compression if compression is used) of" +
+    " telemetry metrics pushed from a client to the broker. The default value is 1048576 (1 MB)."
 
   /** ******** Common Security Configuration *************/
   val PrincipalBuilderClassDoc = BrokerSecurityConfigs.PRINCIPAL_BUILDER_CLASS_DOC
@@ -1356,22 +1372,21 @@ object KafkaConfig {
       .define(GroupMaxSizeProp, INT, Defaults.GroupMaxSize, atLeast(1), MEDIUM, GroupMaxSizeDoc)
 
       /** New group coordinator configs */
-      // All properties are kept internal until KIP-848 is released.
-      // This property is meant to be here only during the development of KIP-848. It will
-      // be replaced by a metadata version before releasing it.
+      .define(GroupCoordinatorRebalanceProtocolsProp, LIST, Defaults.GroupCoordinatorRebalanceProtocols,
+        ConfigDef.ValidList.in(Utils.enumOptions(classOf[GroupType]):_*), MEDIUM, GroupCoordinatorRebalanceProtocolsDoc)
+      .define(GroupCoordinatorNumThreadsProp, INT, Defaults.GroupCoordinatorNumThreads, atLeast(1), MEDIUM, GroupCoordinatorNumThreadsDoc)
+      // Internal configuration used by integration and system tests.
       .defineInternal(NewGroupCoordinatorEnableProp, BOOLEAN, Defaults.NewGroupCoordinatorEnable, null, MEDIUM, NewGroupCoordinatorEnableDoc)
-      .defineInternal(GroupCoordinatorNumThreadsProp, INT, Defaults.GroupCoordinatorNumThreads, atLeast(1), MEDIUM, GroupCoordinatorNumThreadsDoc)
 
       /** Consumer groups configs */
-      // All properties are kept internal until KIP-848 is released.
-      .defineInternal(ConsumerGroupSessionTimeoutMsProp, INT, Defaults.ConsumerGroupSessionTimeoutMs, atLeast(1), MEDIUM, ConsumerGroupSessionTimeoutMsDoc)
-      .defineInternal(ConsumerGroupMinSessionTimeoutMsProp, INT, Defaults.ConsumerGroupMinSessionTimeoutMs, atLeast(1), MEDIUM, ConsumerGroupMinSessionTimeoutMsDoc)
-      .defineInternal(ConsumerGroupMaxSessionTimeoutMsProp, INT, Defaults.ConsumerGroupMaxSessionTimeoutMs, atLeast(1), MEDIUM, ConsumerGroupMaxSessionTimeoutMsDoc)
-      .defineInternal(ConsumerGroupHeartbeatIntervalMsProp, INT, Defaults.ConsumerGroupHeartbeatIntervalMs, atLeast(1), MEDIUM, ConsumerGroupHeartbeatIntervalMsDoc)
-      .defineInternal(ConsumerGroupMinHeartbeatIntervalMsProp, INT, Defaults.ConsumerGroupMinHeartbeatIntervalMs, atLeast(1), MEDIUM, ConsumerGroupMinHeartbeatIntervalMsDoc)
-      .defineInternal(ConsumerGroupMaxHeartbeatIntervalMsProp, INT, Defaults.ConsumerGroupMaxHeartbeatIntervalMs, atLeast(1), MEDIUM, ConsumerGroupMaxHeartbeatIntervalMsDoc)
-      .defineInternal(ConsumerGroupMaxSizeProp, INT, Defaults.ConsumerGroupMaxSize, atLeast(1), MEDIUM, ConsumerGroupMaxSizeDoc)
-      .defineInternal(ConsumerGroupAssignorsProp, LIST, Defaults.ConsumerGroupAssignors, null, MEDIUM, ConsumerGroupAssignorsDoc)
+      .define(ConsumerGroupSessionTimeoutMsProp, INT, Defaults.ConsumerGroupSessionTimeoutMs, atLeast(1), MEDIUM, ConsumerGroupSessionTimeoutMsDoc)
+      .define(ConsumerGroupMinSessionTimeoutMsProp, INT, Defaults.ConsumerGroupMinSessionTimeoutMs, atLeast(1), MEDIUM, ConsumerGroupMinSessionTimeoutMsDoc)
+      .define(ConsumerGroupMaxSessionTimeoutMsProp, INT, Defaults.ConsumerGroupMaxSessionTimeoutMs, atLeast(1), MEDIUM, ConsumerGroupMaxSessionTimeoutMsDoc)
+      .define(ConsumerGroupHeartbeatIntervalMsProp, INT, Defaults.ConsumerGroupHeartbeatIntervalMs, atLeast(1), MEDIUM, ConsumerGroupHeartbeatIntervalMsDoc)
+      .define(ConsumerGroupMinHeartbeatIntervalMsProp, INT, Defaults.ConsumerGroupMinHeartbeatIntervalMs, atLeast(1), MEDIUM, ConsumerGroupMinHeartbeatIntervalMsDoc)
+      .define(ConsumerGroupMaxHeartbeatIntervalMsProp, INT, Defaults.ConsumerGroupMaxHeartbeatIntervalMs, atLeast(1), MEDIUM, ConsumerGroupMaxHeartbeatIntervalMsDoc)
+      .define(ConsumerGroupMaxSizeProp, INT, Defaults.ConsumerGroupMaxSize, atLeast(1), MEDIUM, ConsumerGroupMaxSizeDoc)
+      .define(ConsumerGroupAssignorsProp, LIST, Defaults.ConsumerGroupAssignors, null, MEDIUM, ConsumerGroupAssignorsDoc)
 
       /** ********* Offset management configuration ***********/
       .define(OffsetMetadataMaxSizeProp, INT, Defaults.OffsetMetadataMaxSize, HIGH, OffsetMetadataMaxSizeDoc)
@@ -1418,6 +1433,9 @@ object KafkaConfig {
       /** ********* Kafka Yammer Metrics Reporter Configuration for docs ***********/
       .define(KafkaMetricsReporterClassesProp, LIST, Defaults.KafkaMetricReporterClasses, LOW, KafkaMetricsReporterClassesDoc)
       .define(KafkaMetricsPollingIntervalSecondsProp, INT, Defaults.KafkaMetricsPollingIntervalSeconds, atLeast(1), LOW, KafkaMetricsPollingIntervalSecondsDoc)
+
+      /** ********* Kafka Client Telemetry Metrics Configuration ***********/
+      .define(ClientTelemetryMaxBytesProp, INT, Defaults.ClientTelemetryMaxBytes, atLeast(1), LOW, ClientTelemetryMaxBytesDoc)
 
       /** ********* Quota configuration ***********/
       .define(NumQuotaSamplesProp, INT, Defaults.NumQuotaSamples, atLeast(1), LOW, NumQuotaSamplesDoc)
@@ -1519,8 +1537,10 @@ object KafkaConfig {
       .define(RaftConfig.QUORUM_RETRY_BACKOFF_MS_CONFIG, INT, Defaults.QuorumRetryBackoffMs, null, LOW, RaftConfig.QUORUM_RETRY_BACKOFF_MS_DOC)
 
       /** Internal Configurations **/
-      // This indicates whether unreleased APIs should be advertised by this broker.
-      .defineInternal(UnstableApiVersionsEnableProp, BOOLEAN, false, LOW)
+      // This indicates whether unreleased APIs should be advertised by this node.
+      .defineInternal(UnstableApiVersionsEnableProp, BOOLEAN, false, HIGH)
+      // This indicates whether unreleased MetadataVersions should be enabled on this node.
+      .defineInternal(UnstableMetadataVersionsEnableProp, BOOLEAN, false, HIGH)
   }
 
   /** ********* Remote Log Management Configuration *********/
@@ -1586,6 +1606,7 @@ object KafkaConfig {
       case ConfigResource.Type.BROKER => KafkaConfig.maybeSensitive(KafkaConfig.configType(name))
       case ConfigResource.Type.TOPIC => KafkaConfig.maybeSensitive(LogConfig.configType(name).asScala)
       case ConfigResource.Type.BROKER_LOGGER => false
+      case ConfigResource.Type.CLIENT_METRICS => false
       case _ => true
     }
     if (maybeSensitive) Password.HIDDEN else value
@@ -1989,7 +2010,22 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
   val groupMaxSize = getInt(KafkaConfig.GroupMaxSizeProp)
 
   /** New group coordinator configs */
-  val isNewGroupCoordinatorEnabled = getBoolean(KafkaConfig.NewGroupCoordinatorEnableProp)
+  val groupCoordinatorRebalanceProtocols = {
+    val protocols = getList(KafkaConfig.GroupCoordinatorRebalanceProtocolsProp)
+      .asScala.map(_.toUpperCase).map(GroupType.valueOf).toSet
+    if (!protocols.contains(GroupType.CLASSIC)) {
+      throw new ConfigException(s"Disabling the '${GroupType.CLASSIC}' protocol is not supported.")
+    }
+    if (protocols.contains(GroupType.CONSUMER)) {
+      warn(s"The new '${GroupType.CONSUMER}' rebalance protocol is enabled along with the new group coordinator. " +
+        "This is part of the early access of KIP-848 and MUST NOT be used in production.")
+    }
+    protocols
+  }
+  // The new group coordinator is enabled in two cases: 1) The internal configuration to enable
+  // it is explicitly set; or 2) the consumer rebalance protocol is enabled.
+  val isNewGroupCoordinatorEnabled = getBoolean(KafkaConfig.NewGroupCoordinatorEnableProp) ||
+    groupCoordinatorRebalanceProtocols.contains(GroupType.CONSUMER)
   val groupCoordinatorNumThreads = getInt(KafkaConfig.GroupCoordinatorNumThreadsProp)
 
   /** Consumer group configs */
@@ -2032,6 +2068,9 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
   val metricNumSamples = getInt(KafkaConfig.MetricNumSamplesProp)
   val metricSampleWindowMs = getLong(KafkaConfig.MetricSampleWindowMsProp)
   val metricRecordingLevel = getString(KafkaConfig.MetricRecordingLevelProp)
+
+  /** ********* Kafka Client Telemetry Metrics Configuration ***********/
+  val clientTelemetryMaxBytes: Int = getInt(KafkaConfig.ClientTelemetryMaxBytesProp)
 
   /** ********* SSL/SASL Configuration **************/
   // Security configs may be overridden for listeners, so it is not safe to use the base values
@@ -2096,6 +2135,7 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
 
   /** Internal Configurations **/
   val unstableApiVersionsEnabled = getBoolean(KafkaConfig.UnstableApiVersionsEnableProp)
+  val unstableMetadataVersionsEnabled = getBoolean(KafkaConfig.UnstableMetadataVersionsEnableProp)
 
   def addReconfigurable(reconfigurable: Reconfigurable): Unit = {
     dynamicConfig.addReconfigurable(reconfigurable)
@@ -2385,7 +2425,11 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
           s"${KafkaConfig.ControllerListenerNamesProp} must not be empty when running in ZooKeeper migration mode: ${controllerListenerNames.asJava}")
         require(interBrokerProtocolVersion.isMigrationSupported, s"Cannot enable ZooKeeper migration without setting " +
           s"'${KafkaConfig.InterBrokerProtocolVersionProp}' to 3.4 or higher")
-        require(logDirs.size == 1, "Cannot enable ZooKeeper migration when multiple log directories (aka JBOD) are in use.")
+        if (logDirs.size > 1) {
+          require(interBrokerProtocolVersion.isDirectoryAssignmentSupported,
+            s"Cannot enable ZooKeeper migration with multiple log directories (aka JBOD) without setting " +
+            s"'${KafkaConfig.InterBrokerProtocolVersionProp}' to ${MetadataVersion.IBP_3_7_IV2} or higher")
+        }
       } else {
         // controller listener names must be empty when not in KRaft mode
         require(controllerListenerNames.isEmpty,

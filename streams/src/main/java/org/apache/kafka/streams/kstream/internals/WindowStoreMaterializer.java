@@ -63,7 +63,8 @@ public class WindowStoreMaterializer<K, V> extends MaterializedStoreFactory<K, V
                         Duration.ofMillis(windows.size()),
                         false,
                         emitStrategy,
-                        false
+                        false,
+                        true
                 ))
                 : (WindowBytesStoreSupplier) materialized.storeSupplier();
 

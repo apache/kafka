@@ -20,12 +20,12 @@ package kafka.coordinator.group
 import java.util.Properties
 import java.util.concurrent.locks.{Lock, ReentrantLock}
 import java.util.concurrent.{ConcurrentHashMap, TimeUnit}
-
 import kafka.common.OffsetAndMetadata
 import kafka.coordinator.AbstractCoordinatorConcurrencyTest
 import kafka.coordinator.AbstractCoordinatorConcurrencyTest._
 import kafka.coordinator.group.GroupCoordinatorConcurrencyTest._
 import kafka.server.{DelayedOperationPurgatory, KafkaConfig}
+import kafka.utils.CoreUtils
 import org.apache.kafka.common.{TopicIdPartition, TopicPartition, Uuid}
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.metrics.Metrics
@@ -47,10 +47,10 @@ class GroupCoordinatorConcurrencyTest extends AbstractCoordinatorConcurrencyTest
   private val protocolName = "range"
   private val metadata = Array[Byte]()
   private val protocols = List((protocolName, metadata))
-
   private val nGroups = nThreads * 10
   private val nMembersPerGroup = nThreads * 5
   private val numPartitions = 2
+  private var metrics: Metrics = _
 
   private val allOperations = Seq(
       new JoinGroupOperation,
@@ -81,7 +81,8 @@ class GroupCoordinatorConcurrencyTest extends AbstractCoordinatorConcurrencyTest
     heartbeatPurgatory = new DelayedOperationPurgatory[DelayedHeartbeat]("Heartbeat", timer, config.brokerId, reaperEnabled = false)
     rebalancePurgatory = new DelayedOperationPurgatory[DelayedRebalance]("Rebalance", timer, config.brokerId, reaperEnabled = false)
 
-    groupCoordinator = GroupCoordinator(config, replicaManager, heartbeatPurgatory, rebalancePurgatory, timer.time, new Metrics())
+    metrics = new Metrics
+    groupCoordinator = GroupCoordinator(config, replicaManager, heartbeatPurgatory, rebalancePurgatory, timer.time, metrics)
     groupCoordinator.startup(() => zkClient.getTopicPartitionCount(Topic.GROUP_METADATA_TOPIC_NAME).getOrElse(config.offsetsTopicPartitions),
       false)
   }
@@ -89,8 +90,8 @@ class GroupCoordinatorConcurrencyTest extends AbstractCoordinatorConcurrencyTest
   @AfterEach
   override def tearDown(): Unit = {
     try {
-      if (groupCoordinator != null)
-        groupCoordinator.shutdown()
+      CoreUtils.swallow(groupCoordinator.shutdown(), this)
+      CoreUtils.swallow(metrics.close(), this)
     } finally {
       super.tearDown()
     }

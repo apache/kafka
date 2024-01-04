@@ -45,8 +45,9 @@ import org.apache.kafka.raft.RaftConfig
 import org.apache.kafka.server.{AssignmentsManager, ClientMetricsManager, NodeToControllerChannelManager}
 import org.apache.kafka.server.authorizer.Authorizer
 import org.apache.kafka.server.common.{ApiMessageAndVersion, DirectoryEventHandler, TopicIdPartition}
+import org.apache.kafka.server.config.ConfigType
 import org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig
-import org.apache.kafka.server.metrics.KafkaYammerMetrics
+import org.apache.kafka.server.metrics.{ClientMetricsReceiverPlugin, KafkaYammerMetrics}
 import org.apache.kafka.server.network.{EndpointReadyFutures, KafkaAuthorizerServerInfo}
 import org.apache.kafka.server.util.timer.SystemTimer
 import org.apache.kafka.server.util.{Deadline, FutureUtils, KafkaScheduler}
@@ -177,7 +178,8 @@ class BrokerServer(
 
       info("Starting broker")
 
-      config.dynamicConfig.initialize(zkClientOpt = None)
+      val clientMetricsReceiverPlugin = new ClientMetricsReceiverPlugin()
+      config.dynamicConfig.initialize(zkClientOpt = None, Some(clientMetricsReceiverPlugin))
 
       /* start scheduler */
       kafkaScheduler = new KafkaScheduler(config.backgroundThreads)
@@ -209,7 +211,7 @@ class BrokerServer(
         time,
         s"broker-${config.nodeId}-",
         isZkBroker = false,
-        logDirs = logManager.directoryIds.values.toSet)
+        logDirs = logManager.directoryIdsSet)
 
       // Enable delegation token cache for all SCRAM mechanisms to simplify dynamic update.
       // This keeps the cache up-to-date if new SCRAM mechanisms are enabled dynamically.
@@ -234,14 +236,15 @@ class BrokerServer(
       )
       clientToControllerChannelManager.start()
       forwardingManager = new ForwardingManagerImpl(clientToControllerChannelManager)
-
+      clientMetricsManager = new ClientMetricsManager(clientMetricsReceiverPlugin, config.clientTelemetryMaxBytes, time)
 
       val apiVersionManager = ApiVersionManager(
         ListenerType.BROKER,
         config,
         Some(forwardingManager),
         brokerFeatures,
-        metadataCache
+        metadataCache,
+        Some(clientMetricsManager)
       )
 
       // Create and start the socket server acceptor threads so that the bound port is known.
@@ -296,8 +299,9 @@ class BrokerServer(
         () => lifecycleManager.brokerEpoch
       )
       val directoryEventHandler = new DirectoryEventHandler {
-        override def handleAssignment(partition: TopicIdPartition, directoryId: Uuid): Unit =
-          assignmentsManager.onAssignment(partition, directoryId)
+        override def handleAssignment(partition: TopicIdPartition, directoryId: Uuid, callback: Runnable): Unit =
+          assignmentsManager.onAssignment(partition, directoryId, callback)
+
         override def handleFailure(directoryId: Uuid): Unit =
           lifecycleManager.propagateDirectoryFailure(directoryId)
       }
@@ -346,12 +350,10 @@ class BrokerServer(
         config, Some(clientToControllerChannelManager), None, None,
         groupCoordinator, transactionCoordinator)
 
-      clientMetricsManager = ClientMetricsManager.instance()
-
       dynamicConfigHandlers = Map[String, ConfigHandler](
-        ConfigType.Topic -> new TopicConfigHandler(replicaManager, config, quotaManagers, None),
-        ConfigType.Broker -> new BrokerConfigHandler(config, quotaManagers),
-        ConfigType.ClientMetrics -> new ClientMetricsConfigHandler(clientMetricsManager))
+        ConfigType.TOPIC -> new TopicConfigHandler(replicaManager, config, quotaManagers, None),
+        ConfigType.BROKER -> new BrokerConfigHandler(config, quotaManagers),
+        ConfigType.CLIENT_METRICS -> new ClientMetricsConfigHandler(clientMetricsManager))
 
       val featuresRemapped = brokerFeatures.supportedFeatures.features().asScala.map {
         case (k: String, v: SupportedVersionRange) =>
@@ -560,11 +562,12 @@ class BrokerServer(
         config.offsetMetadataMaxSize,
         config.groupMaxSize,
         config.groupInitialRebalanceDelay,
-        GroupCoordinatorConfig.GENERIC_GROUP_NEW_MEMBER_JOIN_TIMEOUT_MS,
+        GroupCoordinatorConfig.CLASSIC_GROUP_NEW_MEMBER_JOIN_TIMEOUT_MS,
         config.groupMinSessionTimeoutMs,
         config.groupMaxSessionTimeoutMs,
         config.offsetsRetentionCheckIntervalMs,
-        config.offsetsRetentionMinutes * 60 * 1000L
+        config.offsetsRetentionMinutes * 60 * 1000L,
+        config.offsetCommitTimeoutMs
       )
       val timer = new SystemTimerReaper(
         "group-coordinator-reaper",

@@ -24,6 +24,7 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -195,8 +196,9 @@ public class QuorumControllerTest {
         ) {
             controlEnv.activeController().registerBroker(ANONYMOUS_CONTEXT,
                 new BrokerRegistrationRequestData().
-                setFeatures(brokerFeatures(MetadataVersion.IBP_3_0_IV1, MetadataVersion.IBP_3_7_IV1)).
+                setFeatures(brokerFeatures(MetadataVersion.IBP_3_0_IV1, MetadataVersion.IBP_3_8_IV0)).
                 setBrokerId(0).
+                setLogDirs(Collections.singletonList(Uuid.fromString("iiaQjkRPQcuMULNII0MUeA"))).
                 setClusterId(logEnv.clusterId())).get();
             testConfigurationOperations(controlEnv.activeController());
 
@@ -238,8 +240,9 @@ public class QuorumControllerTest {
         ) {
             controlEnv.activeController().registerBroker(ANONYMOUS_CONTEXT,
                 new BrokerRegistrationRequestData().
-                    setFeatures(brokerFeatures(MetadataVersion.IBP_3_0_IV1, MetadataVersion.IBP_3_7_IV1)).
+                    setFeatures(brokerFeatures(MetadataVersion.IBP_3_0_IV1, MetadataVersion.IBP_3_8_IV0)).
                     setBrokerId(0).
+                    setLogDirs(Collections.singletonList(Uuid.fromString("sTbzRAMnTpahIyIPNjiLhw"))).
                     setClusterId(logEnv.clusterId())).get();
             testDelayedConfigurationOperations(logEnv, controlEnv.activeController());
 
@@ -377,7 +380,7 @@ public class QuorumControllerTest {
                 }).
                 setSessionTimeoutMillis(OptionalLong.of(sessionTimeoutMillis)).
 
-                setBootstrapMetadata(BootstrapMetadata.fromVersion(MetadataVersion.IBP_3_7_IV1, "test-provided bootstrap ELR enabled")).
+                setBootstrapMetadata(BootstrapMetadata.fromVersion(MetadataVersion.IBP_3_8_IV0, "test-provided bootstrap ELR enabled")).
                 build()
         ) {
             ListenerCollection listeners = new ListenerCollection();
@@ -391,8 +394,9 @@ public class QuorumControllerTest {
                     new BrokerRegistrationRequestData().
                         setBrokerId(brokerId).
                         setClusterId(active.clusterId()).
-                        setFeatures(brokerFeatures(MetadataVersion.IBP_3_0_IV1, MetadataVersion.IBP_3_7_IV1)).
+                        setFeatures(brokerFeatures(MetadataVersion.IBP_3_0_IV1, MetadataVersion.IBP_3_8_IV0)).
                         setIncarnationId(Uuid.randomUuid()).
+                        setLogDirs(Collections.singletonList(Uuid.randomUuid())).
                         setListeners(listeners));
                 brokerEpochs.put(brokerId, reply.get().epoch());
             }
@@ -459,8 +463,9 @@ public class QuorumControllerTest {
                 new BrokerRegistrationRequestData().
                     setBrokerId(brokerToUncleanShutdown).
                     setClusterId(active.clusterId()).
-                    setFeatures(brokerFeatures(MetadataVersion.IBP_3_0_IV1, MetadataVersion.IBP_3_7_IV1)).
+                    setFeatures(brokerFeatures(MetadataVersion.IBP_3_0_IV1, MetadataVersion.IBP_3_8_IV0)).
                     setIncarnationId(Uuid.randomUuid()).
+                    setLogDirs(Collections.singletonList(Uuid.randomUuid())).
                     setListeners(listeners)).get();
             partition = active.replicationControl().getPartition(topicIdFoo, 0);
             assertArrayEquals(new int[]{brokerToBeTheLeader}, partition.elr, partition.toString());
@@ -471,8 +476,9 @@ public class QuorumControllerTest {
                 new BrokerRegistrationRequestData().
                     setBrokerId(lastKnownElr[0]).
                     setClusterId(active.clusterId()).
-                    setFeatures(brokerFeatures(MetadataVersion.IBP_3_0_IV1, MetadataVersion.IBP_3_7_IV1)).
+                    setFeatures(brokerFeatures(MetadataVersion.IBP_3_0_IV1, MetadataVersion.IBP_3_8_IV0)).
                     setIncarnationId(Uuid.randomUuid()).
+                    setLogDirs(Collections.singletonList(Uuid.randomUuid())).
                     setListeners(listeners)).get();
             partition = active.replicationControl().getPartition(topicIdFoo, 0);
             assertArrayEquals(lastKnownElr, partition.lastKnownElr, partition.toString());
@@ -597,7 +603,7 @@ public class QuorumControllerTest {
             sendBrokerHeartbeatToUnfenceBrokers(active, allBrokers, brokerEpochs);
 
             // Let the unfenced broker, 3, join the ISR partition 2
-            Set<TopicIdPartition> imbalancedPartitions = active.replicationControl().imbalancedPartitions();
+            Set<TopicIdPartition> imbalancedPartitions = new HashSet<>(active.replicationControl().imbalancedPartitions());
             assertEquals(1, imbalancedPartitions.size());
             int imbalancedPartitionId = imbalancedPartitions.iterator().next().partitionId();
             PartitionRegistration partitionRegistration = active.replicationControl().getPartition(topicIdFoo, imbalancedPartitionId);
@@ -711,7 +717,8 @@ public class QuorumControllerTest {
                     setBrokerId(0).
                     setClusterId(active.clusterId()).
                     setIncarnationId(Uuid.fromString("kxAT73dKQsitIedpiPtwBA")).
-                    setFeatures(brokerFeatures(MetadataVersion.IBP_3_0_IV1, MetadataVersion.IBP_3_7_IV1)).
+                    setFeatures(brokerFeatures(MetadataVersion.IBP_3_0_IV1, MetadataVersion.IBP_3_8_IV0)).
+                    setLogDirs(Collections.singletonList(Uuid.fromString("vBpaRsZVSaGsQT53wtYGtg"))).
                     setListeners(listeners));
             assertEquals(5L, reply.get().epoch());
             CreateTopicsRequestData createTopicsRequestData =

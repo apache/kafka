@@ -23,7 +23,7 @@ import kafka.utils.Logging
 import org.apache.kafka.admin.BrokerMetadata
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.message.MetadataResponseData.{MetadataResponsePartition, MetadataResponseTopic}
-import org.apache.kafka.common.{Cluster, DirectoryId, Node, PartitionInfo, TopicPartition, Uuid}
+import org.apache.kafka.common.{Cluster, Node, PartitionInfo, TopicPartition, Uuid}
 import org.apache.kafka.common.message.UpdateMetadataRequestData.UpdateMetadataPartitionState
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.Errors
@@ -155,18 +155,11 @@ class KRaftMetadataCache(val brokerId: Int) extends MetadataCache with Logging w
     offlineReplicas
   }
 
-  private def isReplicaOffline(partition: PartitionRegistration, listenerName: ListenerName, broker: BrokerRegistration) = {
-    broker.fenced() || !broker.listeners().containsKey(listenerName.value()) || isInOfflineDir(broker, partition)
-  }
+  private def isReplicaOffline(partition: PartitionRegistration, listenerName: ListenerName, broker: BrokerRegistration) =
+    broker.fenced() || !broker.listeners().containsKey(listenerName.value()) || isReplicaInOfflineDir(broker, partition)
 
-  private def isInOfflineDir(broker: BrokerRegistration, partition: PartitionRegistration): Boolean = {
-    partition.directory(broker.id()) match {
-      case DirectoryId.LOST => true
-      case DirectoryId.MIGRATING => false
-      case DirectoryId.UNASSIGNED => false
-      case dir => !broker.hasOnlineDir(dir)
-    }
-  }
+  private def isReplicaInOfflineDir(broker: BrokerRegistration, partition: PartitionRegistration): Boolean =
+    !broker.hasOnlineDir(partition.directory(broker.id()))
 
   /**
    * Get the endpoint matching the provided listener if the broker is alive. Note that listeners can

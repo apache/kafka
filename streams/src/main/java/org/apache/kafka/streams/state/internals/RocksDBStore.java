@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.state.internals;
 
+import java.util.Optional;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.metrics.Sensor.RecordingLevel;
 import org.apache.kafka.common.serialization.Serializer;
@@ -52,12 +53,16 @@ import org.rocksdb.FlushOptions;
 import org.rocksdb.InfoLogLevel;
 import org.rocksdb.LRUCache;
 import org.rocksdb.Options;
+import org.rocksdb.ReadOptions;
 import org.rocksdb.RocksDB;
 import org.rocksdb.RocksDBException;
 import org.rocksdb.RocksIterator;
+import org.rocksdb.Snapshot;
 import org.rocksdb.Statistics;
 import org.rocksdb.TableFormatConfig;
 import org.rocksdb.WriteBatch;
+import org.rocksdb.WriteBatchInterface;
+import org.rocksdb.WriteBatchWithIndex;
 import org.rocksdb.WriteOptions;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -66,13 +71,16 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 import static org.apache.kafka.streams.StreamsConfig.InternalConfig.IQ_CONSISTENCY_OFFSET_VECTOR_ENABLED;
 import static org.apache.kafka.streams.StreamsConfig.METRICS_RECORDING_LEVEL_CONFIG;
@@ -278,16 +286,74 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
 
     void openRocksDB(final DBOptions dbOptions,
                      final ColumnFamilyOptions columnFamilyOptions) {
-        final List<ColumnFamilyDescriptor> columnFamilyDescriptors
-                = Collections.singletonList(new ColumnFamilyDescriptor(RocksDB.DEFAULT_COLUMN_FAMILY, columnFamilyOptions));
-        final List<ColumnFamilyHandle> columnFamilies = new ArrayList<>(columnFamilyDescriptors.size());
+        final List<ColumnFamilyHandle> columnFamilies = openRocksDB(
+                dbOptions,
+                new ColumnFamilyDescriptor(RocksDB.DEFAULT_COLUMN_FAMILY, columnFamilyOptions)
+        );
+
+        dbAccessor = new SingleColumnFamilyAccessor(columnFamilies.get(0));
+    }
+
+    /**
+     * Open RocksDB while automatically creating any requested column families that don't yet exist.
+     */
+    protected List<ColumnFamilyHandle> openRocksDB(final DBOptions dbOptions,
+                                                   final ColumnFamilyDescriptor defaultColumnFamilyDescriptor,
+                                                   final ColumnFamilyDescriptor... columnFamilyDescriptors) {
+        final String absolutePath = dbDir.getAbsolutePath();
+        final List<ColumnFamilyDescriptor> extraDescriptors = Arrays.asList(columnFamilyDescriptors);
+        final List<ColumnFamilyDescriptor> allDescriptors = new ArrayList<>(1 + columnFamilyDescriptors.length);
+        allDescriptors.add(defaultColumnFamilyDescriptor);
+        allDescriptors.addAll(extraDescriptors);
 
         try {
-            db = RocksDB.open(dbOptions, dbDir.getAbsolutePath(), columnFamilyDescriptors, columnFamilies);
-            dbAccessor = new SingleColumnFamilyAccessor(columnFamilies.get(0));
+            final Options options = new Options(dbOptions, defaultColumnFamilyDescriptor.getOptions());
+            final List<byte[]> allExisting = RocksDB.listColumnFamilies(options, absolutePath);
+
+            final List<ColumnFamilyDescriptor> existingDescriptors = new LinkedList<>();
+            existingDescriptors.add(defaultColumnFamilyDescriptor);
+            existingDescriptors.addAll(extraDescriptors.stream()
+                    .filter(descriptor -> allExisting.stream().anyMatch(existing -> Arrays.equals(existing, descriptor.getName())))
+                    .collect(Collectors.toList()));
+            final List<ColumnFamilyDescriptor> toCreate = extraDescriptors.stream()
+                    .filter(descriptor -> allExisting.stream().noneMatch(existing -> Arrays.equals(existing, descriptor.getName())))
+                    .collect(Collectors.toList());
+            final List<ColumnFamilyHandle> existingColumnFamilies = new ArrayList<>(existingDescriptors.size());
+            db = RocksDB.open(dbOptions, absolutePath, existingDescriptors, existingColumnFamilies);
+            final List<ColumnFamilyHandle> createdColumnFamilies = db.createColumnFamilies(toCreate);
+
+            return mergeColumnFamilyHandleLists(existingColumnFamilies, createdColumnFamilies, allDescriptors);
+
         } catch (final RocksDBException e) {
             throw new ProcessorStateException("Error opening store " + name + " at location " + dbDir.toString(), e);
         }
+    }
+
+    /**
+     * match up the existing and created ColumnFamilyHandles with the existing/created ColumnFamilyDescriptors
+     * so that the order of the resultant List matches the order of the allDescriptors argument
+     */
+    private List<ColumnFamilyHandle> mergeColumnFamilyHandleLists(final List<ColumnFamilyHandle> existingColumnFamilyHandles,
+                                                                  final List<ColumnFamilyHandle> createdColumnFamilyHandles,
+                                                                  final List<ColumnFamilyDescriptor> allDescriptors) throws RocksDBException {
+        final List<ColumnFamilyHandle> columnFamilies = new ArrayList<>(allDescriptors.size());
+        int existing = 0;
+        int created = 0;
+
+        while (existing + created < allDescriptors.size()) {
+            final ColumnFamilyHandle existingHandle = existing < existingColumnFamilyHandles.size() ? existingColumnFamilyHandles.get(existing) : null;
+            final ColumnFamilyHandle createdHandle = created < createdColumnFamilyHandles.size() ? createdColumnFamilyHandles.get(created) : null;
+            if (existingHandle != null && Arrays.equals(existingHandle.getDescriptor().getName(), allDescriptors.get(existing + created).getName())) {
+                columnFamilies.add(existingHandle);
+                existing++;
+            } else if (createdHandle != null && Arrays.equals(createdHandle.getDescriptor().getName(), allDescriptors.get(existing + created).getName())) {
+                columnFamilies.add(createdHandle);
+                created++;
+            } else {
+                throw new IllegalStateException("Unable to match up column family handles with descriptors.");
+            }
+        }
+        return columnFamilies;
     }
 
     @Override
@@ -309,6 +375,14 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
         if (!open) {
             throw new InvalidStateStoreException("Store " + name + " is currently closed");
         }
+    }
+
+    public Snapshot getSnapshot() {
+        return db.getSnapshot();
+    }
+
+    public void releaseSnapshot(final Snapshot snapshot) {
+        db.releaseSnapshot(snapshot);
     }
 
     @Override
@@ -394,9 +468,17 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
 
     @Override
     public synchronized byte[] get(final Bytes key) {
+        return get(key, Optional.empty());
+    }
+
+    public synchronized byte[] get(final Bytes key, final ReadOptions readOptions) {
+        return get(key, Optional.of(readOptions));
+    }
+
+    private synchronized byte[] get(final Bytes key, final Optional<ReadOptions> readOptions) {
         validateStoreOpen();
         try {
-            return dbAccessor.get(key.get());
+            return readOptions.isPresent() ? dbAccessor.get(key.get(), readOptions.get()) : dbAccessor.get(key.get());
         } catch (final RocksDBException e) {
             // String format is happening in wrapping stores. So formatted message is thrown from wrapping stores.
             throw new ProcessorStateException("Error while getting value for key from store " + name, e);
@@ -572,13 +654,22 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
 
     @Override
     public void addToBatch(final KeyValue<byte[], byte[]> record,
-                           final WriteBatch batch) throws RocksDBException {
+                           final WriteBatchInterface batch) throws RocksDBException {
         dbAccessor.addToBatch(record.key, record.value, batch);
     }
 
     @Override
-    public void write(final WriteBatch batch) throws RocksDBException {
-        db.write(wOptions, batch);
+    public void write(final WriteBatchInterface batch) throws RocksDBException {
+        if (batch instanceof WriteBatch) {
+            db.write(wOptions, (WriteBatch) batch);
+        } else if (batch instanceof WriteBatchWithIndex) {
+            db.write(wOptions, (WriteBatchWithIndex) batch);
+        } else {
+            log.error("Unknown type of batch {}. This is a bug in Kafka Streams. " +
+                    "Please file a bug report at https://issues.apache.org/jira/projects/KAFKA.",
+                    batch.getClass().getCanonicalName());
+            throw new IllegalStateException("Unknown type of batch " + batch.getClass().getCanonicalName());
+        }
     }
 
     @Override
@@ -639,9 +730,11 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
                  final byte[] value);
 
         void prepareBatch(final List<KeyValue<Bytes, byte[]>> entries,
-                          final WriteBatch batch) throws RocksDBException;
+                          final WriteBatchInterface batch) throws RocksDBException;
 
         byte[] get(final byte[] key) throws RocksDBException;
+
+        byte[] get(final byte[] key, ReadOptions readOptions) throws RocksDBException;
 
         /**
          * In contrast to get(), we don't migrate the key to new CF.
@@ -670,7 +763,7 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
 
         void addToBatch(final byte[] key,
                         final byte[] value,
-                        final WriteBatch batch) throws RocksDBException;
+                        final WriteBatchInterface batch) throws RocksDBException;
 
         void close();
     }
@@ -704,7 +797,7 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
 
         @Override
         public void prepareBatch(final List<KeyValue<Bytes, byte[]>> entries,
-                                 final WriteBatch batch) throws RocksDBException {
+                                 final WriteBatchInterface batch) throws RocksDBException {
             for (final KeyValue<Bytes, byte[]> entry : entries) {
                 Objects.requireNonNull(entry.key, "key cannot be null");
                 addToBatch(entry.key.get(), entry.value, batch);
@@ -714,6 +807,11 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
         @Override
         public byte[] get(final byte[] key) throws RocksDBException {
             return db.get(columnFamily, key);
+        }
+
+        @Override
+        public byte[] get(final byte[] key, final ReadOptions readOptions) throws RocksDBException {
+            return db.get(columnFamily, readOptions, key);
         }
 
         @Override
@@ -782,7 +880,7 @@ public class RocksDBStore implements KeyValueStore<Bytes, byte[]>, BatchWritingS
         @Override
         public void addToBatch(final byte[] key,
                                final byte[] value,
-                               final WriteBatch batch) throws RocksDBException {
+                               final WriteBatchInterface batch) throws RocksDBException {
             if (value == null) {
                 batch.delete(columnFamily, key);
             } else {

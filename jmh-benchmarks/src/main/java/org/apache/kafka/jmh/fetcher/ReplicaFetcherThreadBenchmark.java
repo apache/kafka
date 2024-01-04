@@ -182,7 +182,7 @@ public class ReplicaFetcherThreadBenchmark {
                     0, () -> -1, Time.SYSTEM, alterPartitionListener, new DelayedOperationsMock(tp),
                     Mockito.mock(MetadataCache.class), logManager, isrChannelManager);
 
-            partition.makeFollower(partitionState, offsetCheckpoints, topicId);
+            partition.makeFollower(partitionState, offsetCheckpoints, topicId, Option.empty());
             pool.put(tp, partition);
             initialFetchStates.put(tp, new InitialFetchState(topicId, new BrokerEndPoint(3, "host", 3000), 0, 0));
             BaseRecords fetched = new BaseRecords() {

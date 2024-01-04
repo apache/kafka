@@ -17,6 +17,8 @@
 
 package org.apache.kafka.metadata.placement;
 
+import org.apache.kafka.common.DirectoryId;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.InvalidReplicationFactorException;
 import org.apache.kafka.metadata.placement.StripedReplicaPlacer.BrokerList;
 import org.apache.kafka.metadata.placement.StripedReplicaPlacer.RackList;
@@ -27,6 +29,7 @@ import org.junit.jupiter.api.Timeout;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -94,7 +97,17 @@ public class StripedReplicaPlacerTest {
         PlacementSpec placementSpec = new PlacementSpec(startPartition,
             numPartitions,
             replicationFactor);
-        return placer.place(placementSpec, brokers::iterator);
+        return placer.place(placementSpec, new ClusterDescriber() {
+            @Override
+            public Iterator<UsableBroker> usableBrokers() {
+                return brokers.iterator();
+            }
+
+            @Override
+            public Uuid defaultDir(int brokerId) {
+                return DirectoryId.UNASSIGNED;
+            }
+        });
     }
 
     /**
