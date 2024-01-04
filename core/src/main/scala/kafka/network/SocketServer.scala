@@ -384,6 +384,11 @@ class SocketServer(val config: KafkaConfig,
       info(s"Updating broker-wide maxConnectionCreationRate: $maxConnectionRate")
       connectionQuotas.updateBrokerMaxConnectionRate(maxConnectionRate)
     }
+    val maxSslConnections = newConfig.maxSslConnections
+    if (maxSslConnections != oldConfig.maxSslConnections) {
+      info(s"Updating broker-wide maxSslConnections: $maxSslConnections")
+      connectionQuotas.updateBrokerMaxSslConnections(maxSslConnections)
+    }
   }
 
   // For test usage
@@ -407,6 +412,7 @@ object SocketServer {
     KafkaConfig.MaxConnectionsPerIpProp,
     KafkaConfig.MaxConnectionsPerIpOverridesProp,
     KafkaConfig.MaxConnectionsProp,
+    KafkaConfig.MaxSslConnectionsProp,
     KafkaConfig.MaxConnectionCreationRateProp)
 
   val ListenerReconfigurableConfigs = Set(KafkaConfig.MaxConnectionsProp, KafkaConfig.MaxConnectionCreationRateProp)
@@ -783,13 +789,13 @@ private[kafka] abstract class Acceptor(val socketServer: SocketServer,
     val serverSocketChannel = key.channel().asInstanceOf[ServerSocketChannel]
     val socketChannel = serverSocketChannel.accept()
     try {
-      connectionQuotas.inc(endPoint.listenerName, socketChannel.socket.getInetAddress, blockedPercentMeter)
+      connectionQuotas.inc(endPoint.listenerName, endPoint.securityProtocol, socketChannel.socket.getInetAddress, blockedPercentMeter)
       configureAcceptedSocketChannel(socketChannel)
       Some(socketChannel)
     } catch {
       case e: TooManyConnectionsException =>
         info(s"Rejected connection from ${e.ip}, address already has the configured maximum of ${e.count} connections.")
-        connectionQuotas.closeChannel(this, endPoint.listenerName, socketChannel)
+        connectionQuotas.closeChannel(this, endPoint.listenerName, endPoint.securityProtocol, socketChannel)
         None
       case e: ConnectionThrottledException =>
         val ip = socketChannel.socket.getInetAddress
@@ -799,7 +805,7 @@ private[kafka] abstract class Acceptor(val socketServer: SocketServer,
         None
       case e: IOException =>
         error(s"Encountered an error while configuring the connection, closing it.", e)
-        connectionQuotas.closeChannel(this, endPoint.listenerName, socketChannel)
+        connectionQuotas.closeChannel(this, endPoint.listenerName, endPoint.securityProtocol, socketChannel)
         None
     }
   }
@@ -1215,7 +1221,7 @@ private[kafka] class Processor(
         }.remoteHost
         inflightResponses.remove(connectionId).foreach(updateRequestMetrics)
         // the channel has been closed by the selector but the quotas still need to be updated
-        connectionQuotas.dec(listenerName, InetAddress.getByName(remoteHost))
+        connectionQuotas.dec(listenerName, securityProtocol, InetAddress.getByName(remoteHost))
       } catch {
         case e: Throwable => processException(s"Exception while processing disconnection of $connectionId", e)
       }
@@ -1242,7 +1248,7 @@ private[kafka] class Processor(
       debug(s"Closing selector connection $connectionId")
       val address = channel.socketAddress
       if (address != null)
-        connectionQuotas.dec(listenerName, address)
+        connectionQuotas.dec(listenerName, securityProtocol, address)
       selector.close(connectionId)
 
       inflightResponses.remove(connectionId).foreach(response => updateRequestMetrics(response))
@@ -1289,7 +1295,7 @@ private[kafka] class Processor(
         case e: Throwable =>
           val remoteAddress = channel.socket.getRemoteSocketAddress
           // need to close the channel here to avoid a socket leak.
-          connectionQuotas.closeChannel(this, listenerName, channel)
+          connectionQuotas.closeChannel(this, listenerName, securityProtocol, channel)
           processException(s"Processor $id closed connection from $remoteAddress", e)
       }
     }
@@ -1426,6 +1432,7 @@ class ConnectionQuotas(config: KafkaConfig, time: Time, metrics: Metrics) extend
   @volatile private var defaultMaxConnectionsPerIp: Int = config.maxConnectionsPerIp
   @volatile private var maxConnectionsPerIpOverrides = config.maxConnectionsPerIpOverrides.map { case (host, count) => (InetAddress.getByName(host), count) }
   @volatile private var brokerMaxConnections = config.maxConnections
+  @volatile private var brokerMaxSslConnections = config.maxSslConnections
   private val interBrokerListenerName = config.interBrokerListenerName
   private val counts = mutable.Map[InetAddress, Int]()
 
@@ -1433,6 +1440,7 @@ class ConnectionQuotas(config: KafkaConfig, time: Time, metrics: Metrics) extend
   private val listenerCounts = mutable.Map[ListenerName, Int]()
   private[network] val maxConnectionsPerListener = mutable.Map[ListenerName, ListenerConnectionQuota]()
   @volatile private var totalCount = 0
+  @volatile private var sslCounts = 0
   // updates to defaultConnectionRatePerIp or connectionRatePerIp must be synchronized on `counts`
   @volatile private var defaultConnectionRatePerIp = QuotaConfigs.IP_CONNECTION_RATE_DEFAULT.intValue()
   private val connectionRatePerIp = new ConcurrentHashMap[InetAddress, Int]()
@@ -1440,14 +1448,19 @@ class ConnectionQuotas(config: KafkaConfig, time: Time, metrics: Metrics) extend
   private val brokerConnectionRateSensor = getOrCreateConnectionRateQuotaSensor(config.maxConnectionCreationRate, BrokerQuotaEntity)
   private val maxThrottleTimeMs = TimeUnit.SECONDS.toMillis(config.quotaWindowSizeSeconds.toLong)
 
-  def inc(listenerName: ListenerName, address: InetAddress, acceptorBlockedPercentMeter: com.yammer.metrics.core.Meter): Unit = {
+  def getSslConnectionCounts: Int = sslCounts
+
+  def inc(listenerName: ListenerName, securityProtocol: SecurityProtocol, address: InetAddress, acceptorBlockedPercentMeter: com.yammer.metrics.core.Meter): Unit = {
     counts.synchronized {
-      waitForConnectionSlot(listenerName, acceptorBlockedPercentMeter)
+      waitForConnectionSlot(listenerName, securityProtocol, acceptorBlockedPercentMeter)
 
       recordIpConnectionMaybeThrottle(listenerName, address)
       val count = counts.getOrElseUpdate(address, 0)
       counts.put(address, count + 1)
       totalCount += 1
+      if (isSslConnection(securityProtocol)) {
+        sslCounts += 1
+      }
       if (listenerCounts.contains(listenerName)) {
         listenerCounts.put(listenerName, listenerCounts(listenerName) + 1)
       }
@@ -1468,6 +1481,13 @@ class ConnectionQuotas(config: KafkaConfig, time: Time, metrics: Metrics) extend
   private[network] def updateBrokerMaxConnections(maxConnections: Int): Unit = {
     counts.synchronized {
       brokerMaxConnections = maxConnections
+      counts.notifyAll()
+    }
+  }
+
+  private[network] def updateBrokerMaxSslConnections(maxSslConnections: Int): Unit = {
+    counts.synchronized {
+      brokerMaxSslConnections = maxSslConnections
       counts.notifyAll()
     }
   }
@@ -1560,7 +1580,7 @@ class ConnectionQuotas(config: KafkaConfig, time: Time, metrics: Metrics) extend
     }
   }
 
-  def dec(listenerName: ListenerName, address: InetAddress): Unit = {
+  def dec(listenerName: ListenerName, securityProtocol: SecurityProtocol, address: InetAddress): Unit = {
     counts.synchronized {
       val count = counts.getOrElse(address,
         throw new IllegalArgumentException(s"Attempted to decrease connection count for address with no connections, address: $address"))
@@ -1568,10 +1588,15 @@ class ConnectionQuotas(config: KafkaConfig, time: Time, metrics: Metrics) extend
         counts.remove(address)
       else
         counts.put(address, count - 1)
-
       if (totalCount <= 0)
         error(s"Attempted to decrease total connection count for broker with no connections")
       totalCount -= 1
+
+      if (isSslConnection(securityProtocol)) {
+        if (sslCounts <= 0)
+          error(s"Attempted to decrease ssl connection count for broker with no ssl connections")
+        sslCounts -= 1
+      }
 
       if (maxConnectionsPerListener.contains(listenerName)) {
         val listenerCount = listenerCounts(listenerName)
@@ -1589,19 +1614,20 @@ class ConnectionQuotas(config: KafkaConfig, time: Time, metrics: Metrics) extend
   }
 
   private def waitForConnectionSlot(listenerName: ListenerName,
+                                    securityProtocol: SecurityProtocol,
                                     acceptorBlockedPercentMeter: com.yammer.metrics.core.Meter): Unit = {
     counts.synchronized {
       val startThrottleTimeMs = time.milliseconds
       val throttleTimeMs = math.max(recordConnectionAndGetThrottleTimeMs(listenerName, startThrottleTimeMs), 0)
 
-      if (throttleTimeMs > 0 || !connectionSlotAvailable(listenerName)) {
+      if (throttleTimeMs > 0 || !connectionSlotAvailable(listenerName, securityProtocol)) {
         val startNs = time.nanoseconds
         val endThrottleTimeMs = startThrottleTimeMs + throttleTimeMs
         var remainingThrottleTimeMs = throttleTimeMs
         do {
           counts.wait(remainingThrottleTimeMs)
           remainingThrottleTimeMs = math.max(endThrottleTimeMs - time.milliseconds, 0)
-        } while (remainingThrottleTimeMs > 0 || !connectionSlotAvailable(listenerName))
+        } while (remainingThrottleTimeMs > 0 || !connectionSlotAvailable(listenerName, securityProtocol))
         acceptorBlockedPercentMeter.mark(time.nanoseconds - startNs)
       }
     }
@@ -1613,11 +1639,13 @@ class ConnectionQuotas(config: KafkaConfig, time: Time, metrics: Metrics) extend
     totalCount > brokerMaxConnections && !protectedListener(listenerName)
   }
 
-  private def connectionSlotAvailable(listenerName: ListenerName): Boolean = {
+  private def connectionSlotAvailable(listenerName: ListenerName, securityProtocol: SecurityProtocol): Boolean = {
     if (listenerCounts(listenerName) >= maxListenerConnections(listenerName))
       false
     else if (protectedListener(listenerName))
       true
+    else if (sslCounts >= brokerMaxSslConnections && isSslConnection(securityProtocol))
+      false
     else
       totalCount < brokerMaxConnections
   }
@@ -1627,6 +1655,9 @@ class ConnectionQuotas(config: KafkaConfig, time: Time, metrics: Metrics) extend
 
   private def maxListenerConnections(listenerName: ListenerName): Int =
     maxConnectionsPerListener.get(listenerName).map(_.maxConnections).getOrElse(Int.MaxValue)
+
+  private def isSslConnection(secureProtocol:SecurityProtocol): Boolean =
+    secureProtocol.equals(SecurityProtocol.SSL) || secureProtocol.equals(SecurityProtocol.SASL_SSL)
 
   /**
    * Calculates the delay needed to bring the observed connection creation rate to listener-level limit or to broker-wide
@@ -1844,10 +1875,10 @@ class ConnectionQuotas(config: KafkaConfig, time: Time, metrics: Metrics) extend
   /**
    * Close `channel` and decrement the connection count.
    */
-  def closeChannel(log: Logging, listenerName: ListenerName, channel: SocketChannel): Unit = {
+  def closeChannel(log: Logging, listenerName: ListenerName, securityProtocol: SecurityProtocol, channel: SocketChannel): Unit = {
     if (channel != null) {
       log.debug(s"Closing connection from ${channel.socket.getRemoteSocketAddress}")
-      dec(listenerName, channel.socket.getInetAddress)
+      dec(listenerName, securityProtocol, channel.socket.getInetAddress)
       closeSocket(channel, log)
     }
   }

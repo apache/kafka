@@ -31,6 +31,7 @@ import org.apache.kafka.common.config.internals.QuotaConfigs
 import org.apache.kafka.common.metrics.internals.MetricsUtils
 import org.apache.kafka.common.metrics.{KafkaMetric, MetricConfig, Metrics}
 import org.apache.kafka.common.network._
+import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.server.metrics.KafkaMetricsGroup
 import org.apache.kafka.server.util.MockTime
@@ -57,6 +58,7 @@ class ConnectionQuotasTest {
 
   private val numQuotaSamples = 2
   private val quotaWindowSizeSeconds = 1
+  private val securityProtocol = SecurityProtocol.PLAINTEXT
   private val eps = 0.01
 
   case class ListenerDesc(listenerName: ListenerName, defaultIp: InetAddress) {
@@ -71,6 +73,17 @@ class ConnectionQuotasTest {
     // ConnectionQuotas does not limit inter-broker listener even when broker-wide connection limit is reached
     props.put(KafkaConfig.InterBrokerListenerNameProp, "REPLICATION")
     props.put(KafkaConfig.ListenerSecurityProtocolMapProp, "EXTERNAL:PLAINTEXT,REPLICATION:PLAINTEXT,ADMIN:PLAINTEXT")
+    props.put(KafkaConfig.NumQuotaSamplesProp, numQuotaSamples.toString)
+    props.put(KafkaConfig.QuotaWindowSizeSecondsProp, quotaWindowSizeSeconds.toString)
+    props
+  }
+
+  def brokerPropsWithDefaultSslConnectionLimits: Properties = {
+    val props = TestUtils.createBrokerConfig(0, TestUtils.MockZkConnect, port = 0)
+    props.put(KafkaConfig.ListenersProp, "EXTERNAL://localhost:0,REPLICATION://localhost:1,ADMIN://localhost:2")
+    // ConnectionQuotas does not limit inter-broker listener even when broker-wide connection limit is reached
+    props.put(KafkaConfig.InterBrokerListenerNameProp, "REPLICATION")
+    props.put(KafkaConfig.ListenerSecurityProtocolMapProp, "EXTERNAL:SASL_SSL,REPLICATION:PLAINTEXT,ADMIN:PLAINTEXT")
     props.put(KafkaConfig.NumQuotaSamplesProp, numQuotaSamples.toString)
     props.put(KafkaConfig.QuotaWindowSizeSecondsProp, quotaWindowSizeSeconds.toString)
     props
@@ -119,7 +132,7 @@ class ConnectionQuotasTest {
     val listener = listeners("EXTERNAL")
     executor.submit((() =>
       assertThrows(classOf[RuntimeException],
-        () => connectionQuotas.inc(listener.listenerName, listener.defaultIp, blockedPercentMeters("EXTERNAL"))
+        () => connectionQuotas.inc(listener.listenerName, securityProtocol, listener.defaultIp, blockedPercentMeters("EXTERNAL"))
       )): Runnable
     ).get(5, TimeUnit.SECONDS)
   }
@@ -131,7 +144,7 @@ class ConnectionQuotasTest {
     addListenersAndVerify(config, connectionQuotas)
 
     // calling dec() for an IP for which we didn't call inc() should throw an exception
-    assertThrows(classOf[IllegalArgumentException], () => connectionQuotas.dec(listeners("EXTERNAL").listenerName, unknownHost))
+    assertThrows(classOf[IllegalArgumentException], () => connectionQuotas.dec(listeners("EXTERNAL").listenerName, securityProtocol, unknownHost))
   }
 
   @Test
@@ -154,7 +167,7 @@ class ConnectionQuotasTest {
         s"Expected connection-accept-rate metric to get recorded for listener $listener")
 
       // verify removing one connection
-      connectionQuotas.dec(listener.listenerName, listener.defaultIp)
+      connectionQuotas.dec(listener.listenerName, securityProtocol, listener.defaultIp)
       assertEquals(numConnections - 1, connectionQuotas.get(listener.defaultIp),
         s"Number of connections on $listener:")
     }
@@ -188,12 +201,12 @@ class ConnectionQuotasTest {
 
     // connections on the same listener but from a different IP should be accepted
     executor.submit((() =>
-      acceptConnections(connectionQuotas, externalListener.listenerName, knownHost, maxConnectionsPerIp,
+      acceptConnections(connectionQuotas, externalListener.listenerName, securityProtocol, knownHost, maxConnectionsPerIp,
         0, expectIpThrottle = false)): Runnable
     ).get(5, TimeUnit.SECONDS)
 
     // remove two "rejected" connections and remove 2 more connections to free up the space for another 2 connections
-    for (_ <- 0 until 4) connectionQuotas.dec(externalListener.listenerName, externalListener.defaultIp)
+    for (_ <- 0 until 4) connectionQuotas.dec(externalListener.listenerName, securityProtocol, externalListener.defaultIp)
     assertEquals(maxConnectionsPerIp - 2, connectionQuotas.get(externalListener.defaultIp),
       s"Number of connections on $externalListener:")
 
@@ -235,7 +248,7 @@ class ConnectionQuotasTest {
     assertThrows(classOf[TimeoutException], () => future.get(100, TimeUnit.MILLISECONDS))
 
     // removing one connection should make the waiting connection to succeed
-    connectionQuotas.dec(listeners("EXTERNAL").listenerName, listeners("EXTERNAL").defaultIp)
+    connectionQuotas.dec(listeners("EXTERNAL").listenerName, securityProtocol, listeners("EXTERNAL").defaultIp)
     future.get(1, TimeUnit.SECONDS)
     assertEquals(maxConnections, connectionQuotas.get(listeners("EXTERNAL").defaultIp),
       s"Number of connections on ${listeners("EXTERNAL")}:")
@@ -263,9 +276,9 @@ class ConnectionQuotasTest {
 
     // at this point, we need to remove 3 connections for the waiting connection to succeed
     // remove 2 first -- should not be enough to accept the waiting connection
-    for (_ <- 0 until 2) connectionQuotas.dec(listeners("EXTERNAL").listenerName, listeners("EXTERNAL").defaultIp)
+    for (_ <- 0 until 2) connectionQuotas.dec(listeners("EXTERNAL").listenerName, securityProtocol, listeners("EXTERNAL").defaultIp)
     assertThrows(classOf[TimeoutException], () => future1.get(100, TimeUnit.MILLISECONDS))
-    connectionQuotas.dec(listeners("EXTERNAL").listenerName, listeners("EXTERNAL").defaultIp)
+    connectionQuotas.dec(listeners("EXTERNAL").listenerName, securityProtocol, listeners("EXTERNAL").defaultIp)
     future1.get(1, TimeUnit.SECONDS)
   }
 
@@ -308,7 +321,7 @@ class ConnectionQuotasTest {
     }
     listeners.values.foreach { listener =>
       // free up one connection slot
-      connectionQuotas.dec(listener.listenerName, listener.defaultIp)
+      connectionQuotas.dec(listener.listenerName, securityProtocol, listener.defaultIp)
     }
     // all connections should get added
     overLimitFutures.foreach(_.get(5, TimeUnit.SECONDS))
@@ -503,9 +516,9 @@ class ConnectionQuotasTest {
     // use a small number of connections because a longer-running test will have both IPs throttle at different times
     val numConnections = 35
     val futures = List(
-      executor.submit((() => acceptConnections(connectionQuotas, listener, knownHost, numConnections,
+      executor.submit((() => acceptConnections(connectionQuotas, listener, securityProtocol, knownHost, numConnections,
         0, true)): Callable[Boolean]),
-      executor.submit((() => acceptConnections(connectionQuotas, listener, unknownHost, numConnections,
+      executor.submit((() => acceptConnections(connectionQuotas, listener, securityProtocol, unknownHost, numConnections,
         0, true)): Callable[Boolean])
     )
 
@@ -529,7 +542,7 @@ class ConnectionQuotasTest {
     connectionQuotas.updateIpConnectionRateQuota(Some(protectedListener.defaultIp), Some(0))
 
     assertThrows(classOf[ConnectionThrottledException],
-      () => connectionQuotas.inc(externalListener.listenerName, externalListener.defaultIp, blockedPercentMeters("EXTERNAL"))
+      () => connectionQuotas.inc(externalListener.listenerName, securityProtocol, externalListener.defaultIp, blockedPercentMeters("EXTERNAL"))
     )
 
     val brokerRateMetric = brokerConnRateMetric()
@@ -539,7 +552,7 @@ class ConnectionQuotasTest {
     assertEquals(0, metricValue(brokerRateMetric), eps)
 
     assertThrows(classOf[ConnectionThrottledException],
-      () => connectionQuotas.inc(protectedListener.listenerName, protectedListener.defaultIp, blockedPercentMeters("REPLICATION"))
+      () => connectionQuotas.inc(protectedListener.listenerName, securityProtocol, protectedListener.defaultIp, blockedPercentMeters("REPLICATION"))
     )
 
     assertEquals(0, metricValue(ipConnRateMetric(protectedListener.defaultIp.getHostAddress)), eps)
@@ -631,8 +644,8 @@ class ConnectionQuotasTest {
     val adminListener = listeners("ADMIN")
     // set a non-unlimited default quota so that we create ip rate sensors/metrics
     connectionQuotas.updateIpConnectionRateQuota(None, Some(defaultIpRate))
-    connectionQuotas.inc(externalListener.listenerName, externalListener.defaultIp, blockedPercentMeters("EXTERNAL"))
-    connectionQuotas.inc(adminListener.listenerName, adminListener.defaultIp, blockedPercentMeters("ADMIN"))
+    connectionQuotas.inc(externalListener.listenerName, securityProtocol, externalListener.defaultIp, blockedPercentMeters("EXTERNAL"))
+    connectionQuotas.inc(adminListener.listenerName, securityProtocol, adminListener.defaultIp, blockedPercentMeters("ADMIN"))
 
     // both IPs should have the default rate
     verifyIpConnectionQuota(externalListener.defaultIp, defaultIpRate)
@@ -713,6 +726,53 @@ class ConnectionQuotasTest {
   }
 
   @Test
+  def testMaxSslConnectionReconfiguration(): Unit = {
+    val props = brokerPropsWithDefaultSslConnectionLimits
+    val config = KafkaConfig.fromProps(props)
+    connectionQuotas = new ConnectionQuotas(config, Time.SYSTEM, metrics)
+    connectionQuotas.addListener(config, listeners("EXTERNAL").listenerName)
+
+    addListenersAndVerify(config, connectionQuotas)
+    val maxSslConnection = 10
+    connectionQuotas.updateBrokerMaxSslConnections(maxSslConnection)
+    // verify that ConnectionQuota can give all connections to one listener
+    executor.submit((() =>
+      acceptConnections(connectionQuotas, listeners("EXTERNAL").listenerName, SecurityProtocol.SASL_SSL, knownHost, maxSslConnection,
+        0, expectIpThrottle = false)): Runnable
+    ).get(5, TimeUnit.SECONDS)
+    assertEquals(
+      maxSslConnection, connectionQuotas.getSslConnectionCounts, s"Number of connections of ssl:")
+    assertEquals(0, blockedPercentMeters("EXTERNAL").count())
+
+    // the number of connections should be above max for maxConnectionsExceeded to return true
+    assertFalse(
+      connectionQuotas.maxConnectionsExceeded(listeners("EXTERNAL").listenerName), "Total number of connections is exactly the maximum.")
+
+    // adding one plain connection will not block ConnectionQuota.inc()
+    val future =  executor.submit((() =>
+      acceptConnections(connectionQuotas, listeners("EXTERNAL").listenerName, SecurityProtocol.PLAINTEXT, knownHost, 1,
+        0, expectIpThrottle = false)): Runnable
+    )
+    future.get(100, TimeUnit.MILLISECONDS)
+    assertTrue(
+      blockedPercentMeters("EXTERNAL").count() == 0, "Expected BlockedPercentMeter metric to zero")
+
+    // adding one more connection will block ConnectionQuota.inc()
+    val future1 = executor.submit((() =>
+      acceptConnections(connectionQuotas, listeners("EXTERNAL").listenerName, SecurityProtocol.SASL_SSL, knownHost, 1,
+        0, expectIpThrottle = false)): Runnable
+    )
+    assertThrows(classOf[TimeoutException], () => future1.get(100, TimeUnit.MILLISECONDS))
+
+    // removing one sasl connection should make the waiting connection to succeed
+    connectionQuotas.dec(listeners("EXTERNAL").listenerName, SecurityProtocol.SASL_SSL, knownHost)
+    future.get(1, TimeUnit.SECONDS)
+    assertEquals(
+      9, connectionQuotas.getSslConnectionCounts, s"Number of ssl connections")
+    future1.get(1, TimeUnit.SECONDS)
+  }
+
+  @Test
   def testNonDefaultConnectionCountLimitAndRateLimit(): Unit = {
     val brokerRateLimit = 25
     val maxConnections = 350  // with rate == 25, will run out of connections in 14 seconds
@@ -742,7 +802,7 @@ class ConnectionQuotasTest {
     assertThrows(classOf[TimeoutException], () => future.get(100, TimeUnit.MILLISECONDS))
 
     // removing one connection should make the waiting connection to succeed
-    connectionQuotas.dec(listener.listenerName, listener.defaultIp)
+    connectionQuotas.dec(listener.listenerName, securityProtocol, listener.defaultIp)
     future.get(1, TimeUnit.SECONDS)
     assertEquals(maxConnections, connectionQuotas.get(listener.defaultIp),
       s"Number of connections on EXTERNAL listener:")
@@ -882,7 +942,7 @@ class ConnectionQuotasTest {
                                 numConnections: Long,
                                 timeIntervalMs: Long = 0L,
                                 expectIpThrottle: Boolean = false) : Unit = {
-    acceptConnections(connectionQuotas, listenerDesc.listenerName, listenerDesc.defaultIp, numConnections,
+    acceptConnections(connectionQuotas, listenerDesc.listenerName, securityProtocol, listenerDesc.defaultIp, numConnections,
       timeIntervalMs, expectIpThrottle)
   }
 
@@ -896,7 +956,7 @@ class ConnectionQuotasTest {
                                              expectIpThrottle: Boolean = false) : Unit = {
     val startTimeMs = time.milliseconds
     val startNumConnections = connectionQuotas.get(listenerDesc.defaultIp)
-    acceptConnections(connectionQuotas, listenerDesc.listenerName, listenerDesc.defaultIp, numConnections,
+    acceptConnections(connectionQuotas, listenerDesc.listenerName, securityProtocol, listenerDesc.defaultIp, numConnections,
       timeIntervalMs, expectIpThrottle)
     val elapsedSeconds = MetricsUtils.convert(time.milliseconds - startTimeMs, TimeUnit.SECONDS)
     val createdConnections = connectionQuotas.get(listenerDesc.defaultIp) - startNumConnections
@@ -914,6 +974,7 @@ class ConnectionQuotasTest {
    */
   private def acceptConnections(connectionQuotas: ConnectionQuotas,
                                 listenerName: ListenerName,
+                                securityProtocol: SecurityProtocol,
                                 address: InetAddress,
                                 numConnections: Long,
                                 timeIntervalMs: Long,
@@ -923,7 +984,7 @@ class ConnectionQuotasTest {
     for (_ <- 0L until numConnections) {
       // this method may block if broker-wide or listener limit on the number of connections is reached
       try {
-        connectionQuotas.inc(listenerName, address, blockedPercentMeters(listenerName.value))
+        connectionQuotas.inc(listenerName, securityProtocol, address, blockedPercentMeters(listenerName.value))
       } catch {
         case e: ConnectionThrottledException =>
           if (!expectIpThrottle)
@@ -947,7 +1008,7 @@ class ConnectionQuotasTest {
     for (i <- 0L until numConnections) {
       // this method may block if broker-wide or listener limit is reached
       assertThrows(classOf[TooManyConnectionsException],
-        () => connectionQuotas.inc(listenerName, listenerDesc.defaultIp, blockedPercentMeters(listenerName.value))
+        () => connectionQuotas.inc(listenerName, securityProtocol, listenerDesc.defaultIp, blockedPercentMeters(listenerName.value))
       )
     }
   }
