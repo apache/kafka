@@ -370,7 +370,7 @@ class AdminZkClient(zkClient: KafkaZkClient,
       case ConfigType.USER => changeUserOrUserClientIdConfig(entityName, configs, isUserClientId)
       case ConfigType.BROKER => changeBrokerConfig(parseBroker(entityName), configs)
       case ConfigType.IP => changeIpConfig(entityName, configs)
-      case _ => throw new IllegalArgumentException(s"$entityType is not a known entityType. Should be one of ${ConfigType.ALL}")
+      case _ => throw new IllegalArgumentException(s"$entityType is not a known entityType. Should be one of List(${String.join(", ",ConfigType.ALL)})")
     }
   }
 

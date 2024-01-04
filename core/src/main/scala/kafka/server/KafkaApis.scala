@@ -1304,7 +1304,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     val knownTopicNames = topicIds.flatMap(metadataCache.getTopicName)
 
     val unknownTopicIdsTopicMetadata = unknownTopicIds.map(topicId =>
-        metadataResponseTopic(Errors.UNKNOWN_TOPIC_ID, null, topicId, false, util.Collections.emptyList())).toSeq
+        metadataResponseTopic(Errors.UNKNOWN_TOPIC_ID, null, topicId, isInternal = false, util.Collections.emptyList())).toSeq
 
     val topics = if (metadataRequest.isAllTopics)
       metadataCache.getAllTopics()
@@ -1342,11 +1342,11 @@ class KafkaApis(val requestChannel: RequestChannel,
       else if (useTopicId) {
         // Topic IDs are not considered sensitive information, so returning TOPIC_AUTHORIZATION_FAILED is OK
         unauthorizedForDescribeTopics.map(topic =>
-          metadataResponseTopic(Errors.TOPIC_AUTHORIZATION_FAILED, null, metadataCache.getTopicId(topic), false, util.Collections.emptyList()))
+          metadataResponseTopic(Errors.TOPIC_AUTHORIZATION_FAILED, null, metadataCache.getTopicId(topic), isInternal = false, util.Collections.emptyList()))
       } else {
         // We should not return topicId when on unauthorized error, so we return zero uuid.
         unauthorizedForDescribeTopics.map(topic =>
-          metadataResponseTopic(Errors.TOPIC_AUTHORIZATION_FAILED, topic, Uuid.ZERO_UUID, false, util.Collections.emptyList()))
+          metadataResponseTopic(Errors.TOPIC_AUTHORIZATION_FAILED, topic, Uuid.ZERO_UUID, isInternal = false, util.Collections.emptyList()))
       }
 
     // In version 0, we returned an error when brokers with replicas were unavailable,
@@ -1985,7 +1985,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       }
 
       val authorizedTopics = if (hasClusterAuthorization) {
-        allowedTopicNames.toSet
+        allowedTopicNames
       } else {
         authHelper.filterByAuthorized(request.context, CREATE, TOPIC, allowedTopicNames)(identity)
       }
@@ -2501,24 +2501,24 @@ class KafkaApis(val requestChannel: RequestChannel,
   def handleAddPartitionsToTxnRequest(request: RequestChannel.Request, requestLocal: RequestLocal): Unit = {
     ensureInterBrokerVersion(IBP_0_11_0_IV0)
     val addPartitionsToTxnRequest =
-      if (request.context.apiVersion() < 4) 
-        request.body[AddPartitionsToTxnRequest].normalizeRequest() 
-      else 
+      if (request.context.apiVersion() < 4)
+        request.body[AddPartitionsToTxnRequest].normalizeRequest()
+      else
         request.body[AddPartitionsToTxnRequest]
     val version = addPartitionsToTxnRequest.version
     val responses = new AddPartitionsToTxnResultCollection()
     val partitionsByTransaction = addPartitionsToTxnRequest.partitionsByTransaction()
-    
+
     // Newer versions of the request should only come from other brokers.
     if (version >= 4) authHelper.authorizeClusterOperation(request, CLUSTER_ACTION)
 
-    // V4 requests introduced batches of transactions. We need all transactions to be handled before sending the 
+    // V4 requests introduced batches of transactions. We need all transactions to be handled before sending the
     // response so there are a few differences in handling errors and sending responses.
     def createResponse(requestThrottleMs: Int): AbstractResponse = {
       if (version < 4) {
         // There will only be one response in data. Add it to the response data object.
         val data = new AddPartitionsToTxnResponseData()
-        responses.forEach { result => 
+        responses.forEach { result =>
           data.setResultsByTopicV3AndBelow(result.topicResults())
           data.setThrottleTimeMs(requestThrottleMs)
         }
@@ -2539,7 +2539,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       }
     }
 
-    txns.forEach { transaction => 
+    txns.forEach { transaction =>
       val transactionalId = transaction.transactionalId
 
       if (transactionalId == null)
@@ -2556,10 +2556,10 @@ class KafkaApis(val requestChannel: RequestChannel,
         val authorizedPartitions = mutable.Set[TopicPartition]()
 
         // Only request versions less than 4 need write authorization since they come from clients.
-        val authorizedTopics = 
-          if (version < 4) 
-            authHelper.filterByAuthorized(request.context, WRITE, TOPIC, partitionsToAdd.filterNot(tp => Topic.isInternal(tp.topic)))(_.topic) 
-          else 
+        val authorizedTopics =
+          if (version < 4)
+            authHelper.filterByAuthorized(request.context, WRITE, TOPIC, partitionsToAdd.filterNot(tp => Topic.isInternal(tp.topic)))(_.topic)
+          else
             partitionsToAdd.map(_.topic).toSet
         for (topicPartition <- partitionsToAdd) {
           if (!authorizedTopics.contains(topicPartition.topic))
@@ -3510,7 +3510,7 @@ class KafkaApis(val requestChannel: RequestChannel,
             new DescribeUserScramCredentialsResponse(result.setThrottleTimeMs(requestThrottleMs)))
         case RaftSupport(_, metadataCache) =>
           val result = metadataCache.describeScramCredentials(describeUserScramCredentialsRequest.data())
-          requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs => 
+          requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
             new DescribeUserScramCredentialsResponse(result.setThrottleTimeMs(requestThrottleMs)))
       }
     }

@@ -3265,6 +3265,8 @@ public class StreamThreadTest {
         thread = setUpThread(streamsConfigProps);
         thread.setState(State.STARTING);
         thread.setState(State.PARTITIONS_ASSIGNED);
+        thread.updateThreadMetadata("metadata");
+        thread.setState(State.RUNNING);
 
         runOnce();
 
