@@ -239,7 +239,6 @@ class ConsumerTask implements Runnable, Closeable {
             // for newly assigned user-partitions, read from the beginning of the corresponding metadata partition
             final Set<TopicPartition> seekToBeginOffsetPartitions = assignedUserTopicIdPartitionsSnapshot
                 .stream()
-                .filter(utp -> !utp.isAssigned)
                 .map(utp -> toRemoteLogPartition(utp.metadataPartition))
                 .collect(Collectors.toSet());
             consumer.seekToBeginning(seekToBeginOffsetPartitions);

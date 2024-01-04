@@ -226,11 +226,14 @@ public class ConsumerTaskTest {
         final TopicIdPartition tpId0 = new TopicIdPartition(topicId, new TopicPartition("sample", 0));
         final TopicIdPartition tpId1 = new TopicIdPartition(topicId, new TopicPartition("sample", 1));
         final TopicIdPartition tpId2 = new TopicIdPartition(topicId, new TopicPartition("sample", 2));
+        final TopicIdPartition tpId3 = new TopicIdPartition(topicId, new TopicPartition("sample", 3));
         assertEquals(partitioner.metadataPartition(tpId0), partitioner.metadataPartition(tpId1));
         assertEquals(partitioner.metadataPartition(tpId0), partitioner.metadataPartition(tpId2));
 
         final int metadataPartition = partitioner.metadataPartition(tpId0);
+        final int metadataPartition4 = partitioner.metadataPartition(tpId3);
         consumer.updateEndOffsets(Collections.singletonMap(toRemoteLogPartition(metadataPartition), 0L));
+        consumer.updateEndOffsets(Collections.singletonMap(toRemoteLogPartition(metadataPartition4), 0L));
         final Set<TopicIdPartition> assignments = Collections.singleton(tpId0);
         consumerTask.addAssignmentsForPartitions(assignments);
         thread.start();
@@ -252,6 +255,26 @@ public class ConsumerTaskTest {
         addRecord(consumer, metadataPartition, tpId2, 3);
         TestUtils.waitForCondition(() -> consumerTask.readOffsetForMetadataPartition(metadataPartition).equals(Optional.of(3L)), "Couldn't read record");
         assertEquals(3, handler.metadataCounter);
+
+
+        // Adding the assignment for tpId2 later
+        consumerTask.addAssignmentsForPartitions(Collections.singleton(tpId2));
+        TestUtils.waitForCondition(() -> consumerTask.isUserPartitionAssigned(tpId2), "Timed out waiting for " + tpId2 + " to be assigned");
+
+        // Adding more records for tpId3 that is not yet assigned
+        addRecord(consumer, metadataPartition, tpId3, 4);
+        addRecord(consumer, metadataPartition, tpId3, 5);
+        // Waiting for corresponding metadata messages to be read
+        TestUtils.waitForCondition(() -> consumerTask.readOffsetForMetadataPartition(metadataPartition).equals(Optional.of(5L)), "Couldn't read record");
+        // Checking that only message for tpId2 was processed
+        assertEquals(4, handler.metadataCounter);
+        // Adding assignment for tpId3
+        consumerTask.addAssignmentsForPartitions(Collections.singleton(tpId3));
+        TestUtils.waitForCondition(() -> consumerTask.isUserPartitionAssigned(tpId3), "Timed out waiting for " + tpId3 + " to be assigned");
+        // Checking that we are still on the same offset
+        TestUtils.waitForCondition(() -> consumerTask.readOffsetForMetadataPartition(metadataPartition).equals(Optional.of(5L)), "Couldn't read record");
+        // Checking that all the metadata messages were processed
+        TestUtils.waitForCondition(() -> handler.metadataCounter == 6, "Couldn't read record");
     }
 
     @Test

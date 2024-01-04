@@ -230,7 +230,10 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
                         subscriptions.position(entry.getKey(), newPosition);
                     }
                 }
-                toClear.add(entry.getKey());
+                // Since reassignment logic for tiered topics relies on seekToBeginning,
+                // the messages need to be re-read after that and dropped on a previous poll.
+                // Perhaps there is a better solution?
+//                toClear.add(entry.getKey());
             }
         }
 
