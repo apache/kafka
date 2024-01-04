@@ -5740,7 +5740,6 @@ class KafkaApisTest extends Logging {
   @ParameterizedTest
   @ApiKeyVersionsSource(apiKey = ApiKeys.LIST_GROUPS)
   def testListGroupsRequest(version: Short): Unit = {
-    System.out.println("Version is " + version);
     val listGroupsRequest = new ListGroupsRequestData()
       .setStatesFilter(if (version >= 4) List("Stable", "Empty").asJava else List.empty.asJava)
       .setTypesFilter(if (version >= 5) List("generic", "consumer").asJava else List.empty.asJava)
