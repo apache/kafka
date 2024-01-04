@@ -16,11 +16,11 @@
  */
 package kafka.docker
 
-import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Test
 
 import java.nio.charset.StandardCharsets
-import java.nio.file.{Files, Path, Paths}
+import java.nio.file.{Files, Path}
 
 class KafkaDockerWrapperTest {
   @Test
@@ -36,17 +36,17 @@ class KafkaDockerWrapperTest {
 
   @Test
   def testPrepareServerConfigs(): Unit = {
-    val (defaultConfigsDir, mountedConfigsDir, finalConfigsDir) = createDirs()
+    val (defaultConfigsPath, mountedConfigsPath, finalConfigsPath) = createDirs()
 
     val envVars = Map("KAFKA_ENV_CONFIG" -> "env value")
 
-    Files.write(Paths.get(defaultConfigsDir.toString + "/server.properties"), "default.config=default value".getBytes(StandardCharsets.UTF_8)).toFile.deleteOnExit()
-    Files.write(Paths.get(mountedConfigsDir.toString + "/server.properties"), "mounted.config=mounted value".getBytes(StandardCharsets.UTF_8)).toFile.deleteOnExit()
-    Files.write(Paths.get(finalConfigsDir.toString + "/server.properties"), "existing.config=existing value".getBytes(StandardCharsets.UTF_8)).toFile.deleteOnExit()
+    Files.write(defaultConfigsPath.resolve("server.properties"), "default.config=default value".getBytes(StandardCharsets.UTF_8)).toFile.deleteOnExit()
+    Files.write(mountedConfigsPath.resolve("server.properties"), "mounted.config=mounted value".getBytes(StandardCharsets.UTF_8)).toFile.deleteOnExit()
+    Files.write(finalConfigsPath.resolve("server.properties"), "existing.config=existing value".getBytes(StandardCharsets.UTF_8)).toFile.deleteOnExit()
 
-    KafkaDockerWrapper.prepareServerConfigs(defaultConfigsDir.toString, mountedConfigsDir.toString, finalConfigsDir.toString, envVars)
+    KafkaDockerWrapper.prepareServerConfigs(defaultConfigsPath, mountedConfigsPath, finalConfigsPath, envVars)
 
-    val source = scala.io.Source.fromFile(finalConfigsDir.toString + "/server.properties")
+    val source = scala.io.Source.fromFile(finalConfigsPath.toString + "/server.properties")
     val actual = try source.mkString finally source.close()
     val expected = "mounted.config=mounted value" + "\n" + "env.config=env value"
 
@@ -55,16 +55,16 @@ class KafkaDockerWrapperTest {
 
   @Test
   def testPrepareServerConfigsWithoutMountedFile(): Unit = {
-    val (defaultConfigsDir, mountedConfigsDir, finalConfigsDir) = createDirs()
+    val (defaultConfigsPath, mountedConfigsPath, finalConfigsPath) = createDirs()
 
     val envVars = Map("KAFKA_ENV_CONFIG" -> "env value")
 
-    Files.write(Paths.get(defaultConfigsDir.toString + "/server.properties"), "default.config=default value".getBytes(StandardCharsets.UTF_8)).toFile.deleteOnExit()
-    Files.write(Paths.get(finalConfigsDir.toString + "/server.properties"), "existing.config=existing value".getBytes(StandardCharsets.UTF_8)).toFile.deleteOnExit()
+    Files.write(defaultConfigsPath.resolve("server.properties"), "default.config=default value".getBytes(StandardCharsets.UTF_8)).toFile.deleteOnExit()
+    Files.write(finalConfigsPath.resolve("server.properties"), "existing.config=existing value".getBytes(StandardCharsets.UTF_8)).toFile.deleteOnExit()
 
-    KafkaDockerWrapper.prepareServerConfigs(defaultConfigsDir.toString, mountedConfigsDir.toString, finalConfigsDir.toString, envVars)
+    KafkaDockerWrapper.prepareServerConfigs(defaultConfigsPath, mountedConfigsPath, finalConfigsPath, envVars)
 
-    val source = scala.io.Source.fromFile(finalConfigsDir.toString + "/server.properties")
+    val source = scala.io.Source.fromFile(finalConfigsPath.toString + "/server.properties")
     val actual = try source.mkString finally source.close()
     val expected = "\n" + "env.config=env value"
 
@@ -73,17 +73,17 @@ class KafkaDockerWrapperTest {
 
   @Test
   def testPrepareServerConfigsWithoutEnvVariables(): Unit = {
-    val (defaultConfigsDir, mountedConfigsDir, finalConfigsDir) = createDirs()
+    val (defaultConfigsPath, mountedConfigsPath, finalConfigsPath) = createDirs()
 
     val envVars = Map.empty[String, String]
 
-    Files.write(Paths.get(defaultConfigsDir.toString + "/server.properties"), "default.config=default value".getBytes(StandardCharsets.UTF_8)).toFile.deleteOnExit()
-    Files.write(Paths.get(mountedConfigsDir.toString + "/server.properties"), "mounted.config=mounted value".getBytes(StandardCharsets.UTF_8)).toFile.deleteOnExit()
-    Files.write(Paths.get(finalConfigsDir.toString + "/server.properties"), "existing.config=existing value".getBytes(StandardCharsets.UTF_8)).toFile.deleteOnExit()
+    Files.write(defaultConfigsPath.resolve("server.properties"), "default.config=default value".getBytes(StandardCharsets.UTF_8)).toFile.deleteOnExit()
+    Files.write(mountedConfigsPath.resolve("server.properties"), "mounted.config=mounted value".getBytes(StandardCharsets.UTF_8)).toFile.deleteOnExit()
+    Files.write(finalConfigsPath.resolve("server.properties"), "existing.config=existing value".getBytes(StandardCharsets.UTF_8)).toFile.deleteOnExit()
 
-    KafkaDockerWrapper.prepareServerConfigs(defaultConfigsDir.toString, mountedConfigsDir.toString, finalConfigsDir.toString, envVars)
+    KafkaDockerWrapper.prepareServerConfigs(defaultConfigsPath, mountedConfigsPath, finalConfigsPath, envVars)
 
-    val source = scala.io.Source.fromFile(finalConfigsDir.toString + "/server.properties")
+    val source = scala.io.Source.fromFile(finalConfigsPath.toString + "/server.properties")
     val actual = try source.mkString finally source.close()
     val expected = "mounted.config=mounted value"
 
@@ -92,16 +92,16 @@ class KafkaDockerWrapperTest {
 
   @Test
   def testPrepareServerConfigsWithoutUserInput(): Unit = {
-    val (defaultConfigsDir, mountedConfigsDir, finalConfigsDir) = createDirs()
+    val (defaultConfigsPath, mountedConfigsPath, finalConfigsPath) = createDirs()
 
     val envVars = Map.empty[String, String]
 
-    Files.write(Paths.get(defaultConfigsDir.toString + "/server.properties"), "default.config=default value".getBytes(StandardCharsets.UTF_8)).toFile.deleteOnExit()
-    Files.write(Paths.get(finalConfigsDir.toString + "/server.properties"), "existing.config=existing value".getBytes(StandardCharsets.UTF_8)).toFile.deleteOnExit()
+    Files.write(defaultConfigsPath.resolve("server.properties"), "default.config=default value".getBytes(StandardCharsets.UTF_8)).toFile.deleteOnExit()
+    Files.write(finalConfigsPath.resolve("server.properties"), "existing.config=existing value".getBytes(StandardCharsets.UTF_8)).toFile.deleteOnExit()
 
-    KafkaDockerWrapper.prepareServerConfigs(defaultConfigsDir.toString, mountedConfigsDir.toString, finalConfigsDir.toString, envVars)
+    KafkaDockerWrapper.prepareServerConfigs(defaultConfigsPath, mountedConfigsPath, finalConfigsPath, envVars)
 
-    val source = scala.io.Source.fromFile(finalConfigsDir.toString + "/server.properties")
+    val source = scala.io.Source.fromFile(finalConfigsPath.toString + "/server.properties")
     val actual = try source.mkString finally source.close()
     val expected = "default.config=default value"
 
@@ -110,17 +110,17 @@ class KafkaDockerWrapperTest {
 
   @Test
   def testPrepareServerConfigsWithEmptyMountedFile(): Unit = {
-    val (defaultConfigsDir, mountedConfigsDir, finalConfigsDir) = createDirs()
+    val (defaultConfigsPath, mountedConfigsPath, finalConfigsPath) = createDirs()
 
     val envVars = Map.empty[String, String]
 
-    Files.write(Paths.get(defaultConfigsDir.toString + "/server.properties"), "default.config=default value".getBytes(StandardCharsets.UTF_8)).toFile.deleteOnExit()
-    Files.write(Paths.get(mountedConfigsDir.toString + "/server.properties"), " \n \n ".getBytes(StandardCharsets.UTF_8)).toFile.deleteOnExit()
-    Files.write(Paths.get(finalConfigsDir.toString + "/server.properties"), "existing.config=existing value".getBytes(StandardCharsets.UTF_8)).toFile.deleteOnExit()
+    Files.write(defaultConfigsPath.resolve("server.properties"), "default.config=default value".getBytes(StandardCharsets.UTF_8)).toFile.deleteOnExit()
+    Files.write(mountedConfigsPath.resolve("server.properties"), " \n \n ".getBytes(StandardCharsets.UTF_8)).toFile.deleteOnExit()
+    Files.write(finalConfigsPath.resolve("server.properties"), "existing.config=existing value".getBytes(StandardCharsets.UTF_8)).toFile.deleteOnExit()
 
-    KafkaDockerWrapper.prepareServerConfigs(defaultConfigsDir.toString, mountedConfigsDir.toString, finalConfigsDir.toString, envVars)
+    KafkaDockerWrapper.prepareServerConfigs(defaultConfigsPath, mountedConfigsPath, finalConfigsPath, envVars)
 
-    val source = scala.io.Source.fromFile(finalConfigsDir.toString + "/server.properties")
+    val source = scala.io.Source.fromFile(finalConfigsPath.toString + "/server.properties")
     val actual = try source.mkString finally source.close()
     val expected = "default.config=default value"
 
@@ -163,7 +163,7 @@ class KafkaDockerWrapperTest {
 
   @Test
   def testPrepareLog4jConfigs(): Unit = {
-    val (defaultConfigsDir, mountedConfigsDir, finalConfigsDir) = createDirs()
+    val (defaultConfigsPath, mountedConfigsPath, finalConfigsPath) = createDirs()
 
     val envVars = Map(
       "KAFKA_LOG4J_LOGGERS" -> "kafka=INFO,kafka.network.RequestChannel$=WARN,kafka.producer.async.DefaultEventHandler=DEBUG,",
@@ -171,13 +171,13 @@ class KafkaDockerWrapperTest {
       "SOME_VARIABLE" -> "Some Value"
     )
 
-    Files.write(Paths.get(defaultConfigsDir.toString + "/log4j.properties"), "default.config=default value".getBytes(StandardCharsets.UTF_8)).toFile.deleteOnExit()
-    Files.write(Paths.get(mountedConfigsDir.toString + "/log4j.properties"), "mounted.config=mounted value".getBytes(StandardCharsets.UTF_8)).toFile.deleteOnExit()
-    Files.write(Paths.get(finalConfigsDir.toString + "/log4j.properties"), "existing.config=existing value".getBytes(StandardCharsets.UTF_8)).toFile.deleteOnExit()
+    Files.write(defaultConfigsPath.resolve("log4j.properties"), "default.config=default value".getBytes(StandardCharsets.UTF_8)).toFile.deleteOnExit()
+    Files.write(mountedConfigsPath.resolve("log4j.properties"), "mounted.config=mounted value".getBytes(StandardCharsets.UTF_8)).toFile.deleteOnExit()
+    Files.write(finalConfigsPath.resolve("log4j.properties"), "existing.config=existing value".getBytes(StandardCharsets.UTF_8)).toFile.deleteOnExit()
 
-    KafkaDockerWrapper.prepareLog4jConfigs(defaultConfigsDir.toString, mountedConfigsDir.toString, finalConfigsDir.toString, envVars)
+    KafkaDockerWrapper.prepareLog4jConfigs(defaultConfigsPath, mountedConfigsPath, finalConfigsPath, envVars)
 
-    val source = scala.io.Source.fromFile(finalConfigsDir.toString + "/log4j.properties")
+    val source = scala.io.Source.fromFile(finalConfigsPath.toString + "/log4j.properties")
     val actual = try source.mkString finally source.close()
     val expected = "mounted.config=mounted value" + "\n" + "log4j.rootLogger=ERROR, stdout" + "\n" +
       "log4j.logger.kafka=INFO" + "\n" +
@@ -189,7 +189,7 @@ class KafkaDockerWrapperTest {
 
   @Test
   def testPrepareLog4jConfigsWithoutMountedFile(): Unit = {
-    val (defaultConfigsDir, mountedConfigsDir, finalConfigsDir) = createDirs()
+    val (defaultConfigsPath, mountedConfigsPath, finalConfigsPath) = createDirs()
 
     val envVars = Map(
       "KAFKA_LOG4J_LOGGERS" -> "kafka=INFO,kafka.network.RequestChannel$=WARN,kafka.producer.async.DefaultEventHandler=DEBUG,",
@@ -197,12 +197,12 @@ class KafkaDockerWrapperTest {
       "SOME_VARIABLE" -> "Some Value"
     )
 
-    Files.write(Paths.get(defaultConfigsDir.toString + "/log4j.properties"), "default.config=default value".getBytes(StandardCharsets.UTF_8)).toFile.deleteOnExit()
-    Files.write(Paths.get(finalConfigsDir.toString + "/log4j.properties"), "existing.config=existing value".getBytes(StandardCharsets.UTF_8)).toFile.deleteOnExit()
+    Files.write(defaultConfigsPath.resolve("log4j.properties"), "default.config=default value".getBytes(StandardCharsets.UTF_8)).toFile.deleteOnExit()
+    Files.write(finalConfigsPath.resolve("log4j.properties"), "existing.config=existing value".getBytes(StandardCharsets.UTF_8)).toFile.deleteOnExit()
 
-    KafkaDockerWrapper.prepareLog4jConfigs(defaultConfigsDir.toString, mountedConfigsDir.toString, finalConfigsDir.toString, envVars)
+    KafkaDockerWrapper.prepareLog4jConfigs(defaultConfigsPath, mountedConfigsPath, finalConfigsPath, envVars)
 
-    val source = scala.io.Source.fromFile(finalConfigsDir.toString + "/log4j.properties")
+    val source = scala.io.Source.fromFile(finalConfigsPath.toString + "/log4j.properties")
     val actual = try source.mkString finally source.close()
     val expected = "default.config=default value" + "\n" + "log4j.rootLogger=ERROR, stdout" + "\n" +
       "log4j.logger.kafka=INFO" + "\n" +
@@ -214,17 +214,17 @@ class KafkaDockerWrapperTest {
 
   @Test
   def testPrepareLog4jConfigsWithoutEnvVariables(): Unit = {
-    val (defaultConfigsDir, mountedConfigsDir, finalConfigsDir) = createDirs()
+    val (defaultConfigsPath, mountedConfigsPath, finalConfigsPath) = createDirs()
 
     val envVars = Map.empty[String, String]
 
-    Files.write(Paths.get(defaultConfigsDir.toString + "/log4j.properties"), "default.config=default value".getBytes(StandardCharsets.UTF_8)).toFile.deleteOnExit()
-    Files.write(Paths.get(mountedConfigsDir.toString + "/log4j.properties"), "mounted.config=mounted value".getBytes(StandardCharsets.UTF_8)).toFile.deleteOnExit()
-    Files.write(Paths.get(finalConfigsDir.toString + "/log4j.properties"), "existing.config=existing value".getBytes(StandardCharsets.UTF_8)).toFile.deleteOnExit()
+    Files.write(defaultConfigsPath.resolve("log4j.properties"), "default.config=default value".getBytes(StandardCharsets.UTF_8)).toFile.deleteOnExit()
+    Files.write(mountedConfigsPath.resolve("log4j.properties"), "mounted.config=mounted value".getBytes(StandardCharsets.UTF_8)).toFile.deleteOnExit()
+    Files.write(finalConfigsPath.resolve("log4j.properties"), "existing.config=existing value".getBytes(StandardCharsets.UTF_8)).toFile.deleteOnExit()
 
-    KafkaDockerWrapper.prepareLog4jConfigs(defaultConfigsDir.toString, mountedConfigsDir.toString, finalConfigsDir.toString, envVars)
+    KafkaDockerWrapper.prepareLog4jConfigs(defaultConfigsPath, mountedConfigsPath, finalConfigsPath, envVars)
 
-    val source = scala.io.Source.fromFile(finalConfigsDir.toString + "/log4j.properties")
+    val source = scala.io.Source.fromFile(finalConfigsPath.toString + "/log4j.properties")
     val actual = try source.mkString finally source.close()
     val expected = "mounted.config=mounted value"
 
@@ -257,17 +257,17 @@ class KafkaDockerWrapperTest {
 
   @Test
   def testPrepareToolsLog4jConfigs(): Unit = {
-    val (defaultConfigsDir, mountedConfigsDir, finalConfigsDir) = createDirs()
+    val (defaultConfigsPath, mountedConfigsPath, finalConfigsPath) = createDirs()
 
     val envVars = Map("KAFKA_TOOLS_LOG4J_LOGLEVEL" -> "TRACE")
 
-    Files.write(Paths.get(defaultConfigsDir.toString + "/tools-log4j.properties"), "default.config=default value".getBytes(StandardCharsets.UTF_8)).toFile.deleteOnExit()
-    Files.write(Paths.get(mountedConfigsDir.toString + "/tools-log4j.properties"), "mounted.config=mounted value".getBytes(StandardCharsets.UTF_8)).toFile.deleteOnExit()
-    Files.write(Paths.get(finalConfigsDir.toString + "/tools-log4j.properties"), "existing.config=existing value".getBytes(StandardCharsets.UTF_8)).toFile.deleteOnExit()
+    Files.write(defaultConfigsPath.resolve("tools-log4j.properties"), "default.config=default value".getBytes(StandardCharsets.UTF_8)).toFile.deleteOnExit()
+    Files.write(mountedConfigsPath.resolve("tools-log4j.properties"), "mounted.config=mounted value".getBytes(StandardCharsets.UTF_8)).toFile.deleteOnExit()
+    Files.write(finalConfigsPath.resolve("tools-log4j.properties"), "existing.config=existing value".getBytes(StandardCharsets.UTF_8)).toFile.deleteOnExit()
 
-    KafkaDockerWrapper.prepareToolsLog4jConfigs(defaultConfigsDir.toString, mountedConfigsDir.toString, finalConfigsDir.toString, envVars)
+    KafkaDockerWrapper.prepareToolsLog4jConfigs(defaultConfigsPath, mountedConfigsPath, finalConfigsPath, envVars)
 
-    val source = scala.io.Source.fromFile(finalConfigsDir.toString + "/tools-log4j.properties")
+    val source = scala.io.Source.fromFile(finalConfigsPath.toString + "/tools-log4j.properties")
     val actual = try source.mkString finally source.close()
     val expected = "mounted.config=mounted value" + "\n" + "log4j.rootLogger=TRACE, stderr"
 
@@ -276,16 +276,16 @@ class KafkaDockerWrapperTest {
 
   @Test
   def testPrepareToolsLog4jConfigsWithoutMountedFile(): Unit = {
-    val (defaultConfigsDir, mountedConfigsDir, finalConfigsDir) = createDirs()
+    val (defaultConfigsPath, mountedConfigsPath, finalConfigsPath) = createDirs()
 
     val envVars = Map("KAFKA_TOOLS_LOG4J_LOGLEVEL" -> "TRACE")
 
-    Files.write(Paths.get(defaultConfigsDir.toString + "/tools-log4j.properties"), "default.config=default value".getBytes(StandardCharsets.UTF_8)).toFile.deleteOnExit()
-    Files.write(Paths.get(finalConfigsDir.toString + "/tools-log4j.properties"), "existing.config=existing value".getBytes(StandardCharsets.UTF_8)).toFile.deleteOnExit()
+    Files.write(defaultConfigsPath.resolve("tools-log4j.properties"), "default.config=default value".getBytes(StandardCharsets.UTF_8)).toFile.deleteOnExit()
+    Files.write(finalConfigsPath.resolve("tools-log4j.properties"), "existing.config=existing value".getBytes(StandardCharsets.UTF_8)).toFile.deleteOnExit()
 
-    KafkaDockerWrapper.prepareToolsLog4jConfigs(defaultConfigsDir.toString, mountedConfigsDir.toString, finalConfigsDir.toString, envVars)
+    KafkaDockerWrapper.prepareToolsLog4jConfigs(defaultConfigsPath, mountedConfigsPath, finalConfigsPath, envVars)
 
-    val source = scala.io.Source.fromFile(finalConfigsDir.toString + "/tools-log4j.properties")
+    val source = scala.io.Source.fromFile(finalConfigsPath.toString + "/tools-log4j.properties")
     val actual = try source.mkString finally source.close()
     val expected = "default.config=default value" + "\n" + "log4j.rootLogger=TRACE, stderr"
 
@@ -294,17 +294,17 @@ class KafkaDockerWrapperTest {
 
   @Test
   def testPrepareToolsLog4jConfigsWithoutEnvVariable(): Unit = {
-    val (defaultConfigsDir, mountedConfigsDir, finalConfigsDir) = createDirs()
+    val (defaultConfigsPath, mountedConfigsPath, finalConfigsPath) = createDirs()
 
     val envVars = Map.empty[String, String]
 
-    Files.write(Paths.get(defaultConfigsDir.toString + "/tools-log4j.properties"), "default.config=default value".getBytes(StandardCharsets.UTF_8)).toFile.deleteOnExit()
-    Files.write(Paths.get(mountedConfigsDir.toString + "/tools-log4j.properties"), "mounted.config=mounted value".getBytes(StandardCharsets.UTF_8)).toFile.deleteOnExit()
-    Files.write(Paths.get(finalConfigsDir.toString + "/tools-log4j.properties"), "existing.config=existing value".getBytes(StandardCharsets.UTF_8)).toFile.deleteOnExit()
+    Files.write(defaultConfigsPath.resolve("tools-log4j.properties"), "default.config=default value".getBytes(StandardCharsets.UTF_8)).toFile.deleteOnExit()
+    Files.write(mountedConfigsPath.resolve("tools-log4j.properties"), "mounted.config=mounted value".getBytes(StandardCharsets.UTF_8)).toFile.deleteOnExit()
+    Files.write(finalConfigsPath.resolve("tools-log4j.properties"), "existing.config=existing value".getBytes(StandardCharsets.UTF_8)).toFile.deleteOnExit()
 
-    KafkaDockerWrapper.prepareToolsLog4jConfigs(defaultConfigsDir.toString, mountedConfigsDir.toString, finalConfigsDir.toString, envVars)
+    KafkaDockerWrapper.prepareToolsLog4jConfigs(defaultConfigsPath, mountedConfigsPath, finalConfigsPath, envVars)
 
-    val source = scala.io.Source.fromFile(finalConfigsDir.toString + "/tools-log4j.properties")
+    val source = scala.io.Source.fromFile(finalConfigsPath.toString + "/tools-log4j.properties")
     val actual = try source.mkString finally source.close()
     val expected = "mounted.config=mounted value"
 
@@ -312,14 +312,14 @@ class KafkaDockerWrapperTest {
   }
 
   private def createDirs(): (Path, Path, Path) = {
-    val defaultConfigsDir = Files.createTempDirectory("tmp")
-    val mountedConfigsDir = Files.createTempDirectory("tmp")
-    val finalConfigsDir = Files.createTempDirectory("tmp")
+    val defaultConfigsPath = Files.createTempDirectory("tmp")
+    val mountedConfigsPath = Files.createTempDirectory("tmp")
+    val finalConfigsPath = Files.createTempDirectory("tmp")
 
-    defaultConfigsDir.toFile.deleteOnExit()
-    mountedConfigsDir.toFile.deleteOnExit()
-    finalConfigsDir.toFile.deleteOnExit()
+    defaultConfigsPath.toFile.deleteOnExit()
+    mountedConfigsPath.toFile.deleteOnExit()
+    finalConfigsPath.toFile.deleteOnExit()
 
-    (defaultConfigsDir, mountedConfigsDir, finalConfigsDir)
+    (defaultConfigsPath, mountedConfigsPath, finalConfigsPath)
   }
 }

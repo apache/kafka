@@ -18,32 +18,24 @@ package kafka.docker
 
 import kafka.tools.StorageTool
 import kafka.utils.Exit
+import net.sourceforge.argparse4j.ArgumentParsers
+import net.sourceforge.argparse4j.impl.Arguments.store
+import net.sourceforge.argparse4j.inf.Namespace
 
 import java.nio.charset.StandardCharsets
-import java.nio.file.{Files, Paths, StandardCopyOption, StandardOpenOption}
+import java.nio.file.{Files, Path, Paths, StandardCopyOption, StandardOpenOption}
 
 object KafkaDockerWrapper {
   def main(args: Array[String]): Unit = {
-    if (args.length == 0) {
-      throw new RuntimeException(s"Error: No operation input provided. " +
-        s"Please provide a valid operation: 'setup'.")
-    }
-    val operation = args.head
-    val arguments = args.tail
-
-    operation match {
+    val namespace = parseArguments(args)
+    val command = namespace.getString("command")
+    command match {
       case "setup" =>
-        if (arguments.length != 3) {
-          val errMsg = "not enough arguments passed. Usage: " +
-            "setup <default-configs-dir> <mounted-configs-dir>, <final-configs-dir>"
-          System.err.println(errMsg)
-          Exit.exit(1, Some(errMsg))
-        }
-        val defaultConfigsDir = arguments(0)
-        val mountedConfigsDir = arguments(1)
-        val finalConfigsDir = arguments(2)
+        val defaultConfigsPath = Paths.get(namespace.getString("default_configs_dir"))
+        val mountedConfigsPath = Paths.get(namespace.getString("mounted_configs_dir"))
+        val finalConfigsPath = Paths.get(namespace.getString("final_configs_dir"))
         try {
-          prepareConfigs(defaultConfigsDir, mountedConfigsDir, finalConfigsDir)
+          prepareConfigs(defaultConfigsPath, mountedConfigsPath, finalConfigsPath)
         } catch {
           case e: Throwable =>
             val errMsg = s"error while preparing configs: ${e.getMessage}"
@@ -51,60 +43,94 @@ object KafkaDockerWrapper {
             Exit.exit(1, Some(errMsg))
         }
 
-        val formatCmd = formatStorageCmd(finalConfigsDir, envVars)
+        val formatCmd = formatStorageCmd(finalConfigsPath, envVars)
         StorageTool.main(formatCmd)
       case _ =>
-        throw new RuntimeException(s"Unknown operation $operation. " +
+        throw new RuntimeException(s"Unknown operation $command. " +
           s"Please provide a valid operation: 'setup'.")
     }
   }
 
   import Constants._
 
-  private def formatStorageCmd(configsDir: String, env: Map[String, String]): Array[String] = {
-    Array("format", "--cluster-id=" + env.get("CLUSTER_ID"), "-c", s"$configsDir/server.properties",
+  private def parseArguments(args: Array[String]): Namespace = {
+    val parser = ArgumentParsers.
+      newArgumentParser("kafka-docker-wrapper", true, "-", "@").
+      description("The Kafka docker wrapper.")
+
+    val subparsers = parser.addSubparsers().dest("command")
+
+    val setupParser = subparsers.addParser("setup")
+
+    setupParser.addArgument("--default-configs-dir", "-D").
+      action(store()).
+      required(true).
+      help(
+        """Directory which holds default properties. It should contain the three file:-
+          |server.properties, log4j.properties and tools-log4j.properties.
+          |""".stripMargin)
+
+    setupParser.addArgument("--mounted-configs-dir", "-M").
+      action(store()).
+      required(true).
+      help(
+        """Directory which holds user mounted properties. It can contain none to all the three files:-
+          |server.properties, log4j.properties and tools-log4j.properties.""".stripMargin)
+
+    setupParser.addArgument("--final-configs-dir", "-F").
+      action(store()).
+      required(true).
+      help(
+        """Directory which holds final properties. It holds the final properties that will be used to boot kafka.
+          |""".stripMargin)
+
+    parser.parseArgsOrFail(args)
+  }
+
+  private def formatStorageCmd(configsPath: Path, env: Map[String, String]): Array[String] = {
+    Array("format", "--cluster-id=" + env.get("CLUSTER_ID"), "-c", s"${configsPath.toString}/server.properties",
       "--ignore-formatted")
   }
 
-  private def prepareConfigs(defaultConfigsDir: String, mountedConfigsDir: String, finalConfigsDir: String): Unit = {
-    prepareServerConfigs(defaultConfigsDir, mountedConfigsDir, finalConfigsDir, envVars)
-    prepareLog4jConfigs(defaultConfigsDir, mountedConfigsDir, finalConfigsDir, envVars)
-    prepareToolsLog4jConfigs(defaultConfigsDir, mountedConfigsDir, finalConfigsDir, envVars)
+  private def prepareConfigs(defaultConfigsPath: Path, mountedConfigsPath: Path, finalConfigsPath: Path): Unit = {
+    prepareServerConfigs(defaultConfigsPath, mountedConfigsPath, finalConfigsPath, envVars)
+    prepareLog4jConfigs(defaultConfigsPath, mountedConfigsPath, finalConfigsPath, envVars)
+    prepareToolsLog4jConfigs(defaultConfigsPath, mountedConfigsPath, finalConfigsPath, envVars)
   }
 
-  private[docker] def prepareServerConfigs(defaultConfigsDir: String,
-                                           mountedConfigsDir: String,
-                                           finalConfigsDir: String,
+  private[docker] def prepareServerConfigs(defaultConfigsPath: Path,
+                                           mountedConfigsPath: Path,
+                                           finalConfigsPath: Path,
                                            env: Map[String, String]): Unit = {
     val propsToAdd = addNewlinePadding(getServerConfigsFromEnv(env).mkString(NewlineChar))
 
-    val defaultFilePath = s"$defaultConfigsDir/$ServerPropsFilename"
-    val mountedFilePath = s"$mountedConfigsDir/$ServerPropsFilename"
-    val finalFilePath = s"$finalConfigsDir/$ServerPropsFilename"
+    val defaultFilePath = defaultConfigsPath.resolve(s"$ServerPropsFilename")
+    val mountedFilePath = mountedConfigsPath.resolve(s"$ServerPropsFilename")
+    val finalFilePath = finalConfigsPath.resolve(s"$ServerPropsFilename")
 
-    if (Files.exists(Paths.get(mountedFilePath))) {
+    if (Files.exists(mountedFilePath)) {
       copyFile(mountedFilePath, finalFilePath)
       addToFile(propsToAdd, finalFilePath, StandardOpenOption.APPEND)
     } else {
       addToFile(propsToAdd, finalFilePath, StandardOpenOption.TRUNCATE_EXISTING)
     }
 
-    val source = scala.io.Source.fromFile(finalFilePath)
+    val source = scala.io.Source.fromFile(finalFilePath.toString)
     val data = try source.mkString finally source.close()
     if (data.trim.isEmpty) {
       copyFile(defaultFilePath, finalFilePath)
     }
   }
 
-  private[docker] def prepareLog4jConfigs(defaultConfigsDir: String,
-                                          mountedConfigsDir: String,
-                                          finalConfigsDir: String,
+  private[docker] def prepareLog4jConfigs(defaultConfigsPath: Path,
+                                          mountedConfigsPath: Path,
+                                          finalConfigsPath: Path,
                                           env: Map[String, String]): Unit = {
     val propsToAdd = getLog4jConfigsFromEnv(env)
 
-    val defaultFilePath = s"$defaultConfigsDir/$Log4jPropsFilename"
-    val mountedFilePath = s"$mountedConfigsDir/$Log4jPropsFilename"
-    val finalFilePath = s"$finalConfigsDir/$Log4jPropsFilename"
+    val defaultFilePath = defaultConfigsPath.resolve(s"$Log4jPropsFilename")
+    val mountedFilePath = mountedConfigsPath.resolve(s"$Log4jPropsFilename")
+    val finalFilePath = finalConfigsPath.resolve(s"$Log4jPropsFilename")
 
     copyFile(defaultFilePath, finalFilePath)
     copyFile(mountedFilePath, finalFilePath)
@@ -112,15 +138,15 @@ object KafkaDockerWrapper {
     addToFile(propsToAdd, finalFilePath, StandardOpenOption.APPEND)
   }
 
-  private[docker] def prepareToolsLog4jConfigs(defaultConfigsDir: String,
-                                               mountedConfigsDir: String,
-                                               finalConfigsDir: String,
+  private[docker] def prepareToolsLog4jConfigs(defaultConfigsPath: Path,
+                                               mountedConfigsPath: Path,
+                                               finalConfigsPath: Path,
                                                env: Map[String, String]): Unit = {
     val propToAdd = getToolsLog4jConfigsFromEnv(env)
 
-    val defaultFilePath = s"$defaultConfigsDir/$ToolsLog4jFilename"
-    val mountedFilePath = s"$mountedConfigsDir/$ToolsLog4jFilename"
-    val finalFilePath = s"$finalConfigsDir/$ToolsLog4jFilename"
+    val defaultFilePath = defaultConfigsPath.resolve(s"$ToolsLog4jFilename")
+    val mountedFilePath = mountedConfigsPath.resolve(s"$ToolsLog4jFilename")
+    val finalFilePath = finalConfigsPath.resolve(s"$ToolsLog4jFilename")
 
     copyFile(defaultFilePath, finalFilePath)
     copyFile(mountedFilePath, finalFilePath)
@@ -170,17 +196,17 @@ object KafkaDockerWrapper {
       .getOrElse("")
   }
 
-  private def addToFile(properties: String, filepath: String, mode: StandardOpenOption): Unit = {
-    val path = Paths.get(filepath)
+  private def addToFile(properties: String, filepath: Path, mode: StandardOpenOption): Unit = {
+    val path = filepath
     if (!Files.exists(path)) {
       Files.createFile(path)
     }
-    Files.write(Paths.get(filepath), properties.getBytes(StandardCharsets.UTF_8), mode)
+    Files.write(filepath, properties.getBytes(StandardCharsets.UTF_8), mode)
   }
 
-  private def copyFile(source: String, destination: String) = {
-    if (Files.exists(Paths.get(source))) {
-      Files.copy(Paths.get(source), Paths.get(destination), StandardCopyOption.REPLACE_EXISTING)
+  private def copyFile(source: Path, destination: Path) = {
+    if (Files.exists(source)) {
+      Files.copy(source, destination, StandardCopyOption.REPLACE_EXISTING)
     }
   }
 
