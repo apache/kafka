@@ -26,13 +26,15 @@ abstract class EmbeddedConnectBuilder<C extends EmbeddedConnect, B extends Embed
     private Properties brokerProps = new Properties();
     private boolean maskExitProcedures = true;
     private final Map<String, String> clientProps = new HashMap<>();
+    private boolean ssl;
 
     protected abstract C build(
             int numBrokers,
             Properties brokerProps,
             boolean maskExitProcedures,
             Map<String, String> clientProps,
-            Map<String, String> workerProps
+            Map<String, String> workerProps,
+            boolean ssl
     );
 
     public B workerProps(Map<String, String> workerProps) {
@@ -72,13 +74,17 @@ abstract class EmbeddedConnectBuilder<C extends EmbeddedConnect, B extends Embed
         return self();
     }
 
+    public B ssl() {
+        ssl = true;
+        return self();
+    }
+
     public C build() {
-        return build(numBrokers, brokerProps, maskExitProcedures, clientProps, workerProps);
+        return build(numBrokers, brokerProps, maskExitProcedures, clientProps, workerProps, ssl);
     }
 
     @SuppressWarnings("unchecked")
     protected B self() {
         return (B) this;
     }
-
 }

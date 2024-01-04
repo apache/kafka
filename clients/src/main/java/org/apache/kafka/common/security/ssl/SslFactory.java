@@ -95,7 +95,7 @@ public class SslFactory implements Reconfigurable, Closeable {
         if (clientAuthConfigOverride != null) {
             nextConfigs.put(BrokerSecurityConfigs.SSL_CLIENT_AUTH_CONFIG, clientAuthConfigOverride);
         }
-        SslEngineFactory builder = instantiateSslEngineFactory(nextConfigs);
+        SslEngineFactory builder = instantiateSslEngineFactory0(nextConfigs);
         if (keystoreVerifiableUsingTruststore) {
             try {
                 SslEngineValidator.validate(builder, builder);
@@ -128,10 +128,16 @@ public class SslFactory implements Reconfigurable, Closeable {
         }
     }
 
-    private SslEngineFactory instantiateSslEngineFactory(Map<String, Object> configs) {
+    private SslEngineFactory instantiateSslEngineFactory0(Map<String, Object> configs) {
+        SslEngineFactory sslEngineFactory = instantiateSslEngineFactory(configs);
+        this.sslEngineFactoryConfig = configs;
+        return sslEngineFactory;
+    }
+
+    public static SslEngineFactory instantiateSslEngineFactory(Map<String, Object> configs) {
         @SuppressWarnings("unchecked")
         Class<? extends SslEngineFactory> sslEngineFactoryClass =
-                (Class<? extends SslEngineFactory>) configs.get(SslConfigs.SSL_ENGINE_FACTORY_CLASS_CONFIG);
+            (Class<? extends SslEngineFactory>) configs.get(SslConfigs.SSL_ENGINE_FACTORY_CLASS_CONFIG);
         SslEngineFactory sslEngineFactory;
         if (sslEngineFactoryClass == null) {
             sslEngineFactory = new DefaultSslEngineFactory();
@@ -139,7 +145,6 @@ public class SslFactory implements Reconfigurable, Closeable {
             sslEngineFactory = Utils.newInstance(sslEngineFactoryClass);
         }
         sslEngineFactory.configure(configs);
-        this.sslEngineFactoryConfig = configs;
         return sslEngineFactory;
     }
 
@@ -156,7 +161,7 @@ public class SslFactory implements Reconfigurable, Closeable {
             return sslEngineFactory;
         }
         try {
-            SslEngineFactory newSslEngineFactory = instantiateSslEngineFactory(nextConfigs);
+            SslEngineFactory newSslEngineFactory = instantiateSslEngineFactory0(nextConfigs);
             if (sslEngineFactory.keystore() == null) {
                 if (newSslEngineFactory.keystore() != null) {
                     throw new ConfigException("Cannot add SSL keystore to an existing listener for " +

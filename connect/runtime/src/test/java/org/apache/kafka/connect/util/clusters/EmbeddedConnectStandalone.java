@@ -49,6 +49,7 @@ public class EmbeddedConnectStandalone extends EmbeddedConnect {
 
     private final Map<String, String> workerProps;
     private final String offsetsFile;
+    private final boolean ssl;
 
     private WorkerHandle connectWorker;
 
@@ -58,11 +59,13 @@ public class EmbeddedConnectStandalone extends EmbeddedConnect {
             boolean maskExitProcedures,
             Map<String, String> clientProps,
             Map<String, String> workerProps,
-            String offsetsFile
+            String offsetsFile,
+            boolean ssl
     ) {
         super(numBrokers, brokerProps, maskExitProcedures, clientProps);
         this.workerProps = workerProps;
         this.offsetsFile = offsetsFile;
+        this.ssl = ssl;
     }
 
     @Override
@@ -71,7 +74,7 @@ public class EmbeddedConnectStandalone extends EmbeddedConnect {
 
         workerProps.put(BOOTSTRAP_SERVERS_CONFIG, kafka().bootstrapServers());
         // use a random available port
-        workerProps.put(LISTENERS_CONFIG, "HTTP://" + REST_HOST_NAME + ":0");
+        workerProps.put(LISTENERS_CONFIG, (ssl ? "HTTPS://" : "HTTP://") + REST_HOST_NAME + ":0");
 
         workerProps.putIfAbsent(OFFSET_STORAGE_FILE_FILENAME_CONFIG, offsetsFile);
         workerProps.putIfAbsent(KEY_CONVERTER_CLASS_CONFIG, "org.apache.kafka.connect.storage.StringConverter");
@@ -111,7 +114,8 @@ public class EmbeddedConnectStandalone extends EmbeddedConnect {
                 Properties brokerProps,
                 boolean maskExitProcedures,
                 Map<String, String> clientProps,
-                Map<String, String> workerProps
+                Map<String, String> workerProps,
+                boolean ssl
         ) {
             if (offsetsFile == null)
                 offsetsFile = tempOffsetsFile();
@@ -122,7 +126,8 @@ public class EmbeddedConnectStandalone extends EmbeddedConnect {
                     maskExitProcedures,
                     clientProps,
                     workerProps,
-                    offsetsFile
+                    offsetsFile,
+                    ssl
             );
         }
 

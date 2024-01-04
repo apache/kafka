@@ -18,6 +18,9 @@ package org.apache.kafka.connect.runtime.rest;
 
 import com.fasterxml.jackson.jaxrs.json.JacksonJsonProvider;
 import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.common.config.SslConfigs;
+import org.apache.kafka.common.network.Mode;
+import org.apache.kafka.common.security.ssl.SslFactory;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.health.ConnectClusterDetails;
@@ -28,7 +31,6 @@ import org.apache.kafka.connect.runtime.health.ConnectClusterDetailsImpl;
 import org.apache.kafka.connect.runtime.health.ConnectClusterStateImpl;
 import org.apache.kafka.connect.runtime.rest.errors.ConnectExceptionMapper;
 import org.apache.kafka.connect.runtime.rest.resources.ConnectResource;
-import org.apache.kafka.connect.runtime.rest.util.SSLUtils;
 import org.eclipse.jetty.server.Connector;
 import org.eclipse.jetty.server.CustomRequestLog;
 import org.eclipse.jetty.server.Handler;
@@ -49,6 +51,7 @@ import org.glassfish.jersey.servlet.ServletContainer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import javax.net.ssl.SSLEngine;
 import javax.servlet.DispatcherType;
 import javax.ws.rs.core.UriBuilder;
 import java.io.IOException;
@@ -59,8 +62,12 @@ import java.util.Collections;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+
+import static org.apache.kafka.connect.runtime.rest.RestServerConfig.ADMIN_LISTENERS_HTTPS_CONFIGS_PREFIX;
+import static org.apache.kafka.connect.runtime.rest.RestServerConfig.LISTENERS_HTTPS_CONFIGS_PREFIX;
 
 /**
  * Embedded server for the REST API that provides the control plane for Kafka Connect workers.
@@ -149,13 +156,14 @@ public abstract class RestServer {
         ServerConnector connector;
 
         if (PROTOCOL_HTTPS.equals(protocol)) {
-            SslContextFactory ssl;
-            if (isAdmin) {
-                ssl = SSLUtils.createServerSideSslContextFactory(config, RestServerConfig.ADMIN_LISTENERS_HTTPS_CONFIGS_PREFIX);
-            } else {
-                ssl = SSLUtils.createServerSideSslContextFactory(config);
-            }
-            connector = new ServerConnector(jettyServer, ssl);
+            SslFactory sslFactory = new SslFactory(Mode.SERVER);
+            String prefix = isAdmin ? ADMIN_LISTENERS_HTTPS_CONFIGS_PREFIX : LISTENERS_HTTPS_CONFIGS_PREFIX;
+
+            Map<String, Object> cfgMap = SslConfigs.sslConfigWithPrefix(config, prefix);
+            sslFactory.configure(cfgMap);
+
+            connector = new ServerConnector(jettyServer, new SslContextFactoryServerAdapter(sslFactory));
+
             if (!isAdmin) {
                 connector.setName(String.format("%s_%s%d", PROTOCOL_HTTPS, hostname, port));
             }
@@ -519,5 +527,28 @@ public abstract class RestServer {
         FilterHolder headerFilterHolder = new FilterHolder(HeaderFilter.class);
         headerFilterHolder.setInitParameter("headerConfig", headerConfig);
         context.addFilter(headerFilterHolder, "/*", EnumSet.of(DispatcherType.REQUEST));
+    }
+
+    private static class SslContextFactoryServerAdapter extends SslContextFactory.Server {
+        private final SslFactory sslFactory;
+
+        public SslContextFactoryServerAdapter(SslFactory sslFactory) {
+            this.sslFactory = sslFactory;
+        }
+
+        @Override public SSLEngine newSSLEngine() {
+            return sslFactory.createSslEngine(null, -1);
+        }
+
+        @Override public SSLEngine newSSLEngine(String host, int port) {
+            return sslFactory.createSslEngine(host, port);
+        }
+
+        @Override
+        protected void doStop() throws Exception {
+            super.doStop();
+
+            sslFactory.close();
+        }
     }
 }
