@@ -1001,6 +1001,48 @@ public class StandaloneHerderTest {
         assertEquals(msg, resetOffsetsCallback.get(1000, TimeUnit.MILLISECONDS));
     }
 
+    @Test()
+    public void testRequestTaskReconfigurationDoesNotDeadlock() throws Exception {
+        connector = mock(BogusSourceConnector.class);
+        expectAdd(SourceSink.SOURCE);
+
+        // Start the connector
+        Map<String, String> config = connectorConfig(SourceSink.SOURCE);
+        Connector connectorMock = mock(SourceConnector.class);
+        expectConfigValidation(connectorMock, true, config);
+
+        herder.putConnectorConfig(CONNECTOR_NAME, config, false, createCallback);
+
+        // Wait on connector to start
+        Herder.Created<ConnectorInfo> connectorInfo = createCallback.get(1000L, TimeUnit.MILLISECONDS);
+        assertEquals(createdInfo(SourceSink.SOURCE), connectorInfo.result());
+
+        // Updated task with new config
+        Map<String, String> updatedTaskConfig = taskConfig(SourceSink.SOURCE);
+        updatedTaskConfig.put("dummy-task-property", "yes");
+        when(worker.connectorTaskConfigs(CONNECTOR_NAME, new SourceConnectorConfig(plugins, config, true)))
+                .thenReturn(Collections.singletonList(updatedTaskConfig));
+
+        // Expect that tasks will be stopped and started again
+        when(worker.connectorNames()).thenReturn(Collections.singleton(CONNECTOR_NAME));
+        doNothing().when(worker).stopAndAwaitTasks(singletonList(new ConnectorTaskId(CONNECTOR_NAME, 0)));
+        when(worker.startSourceTask(eq(new ConnectorTaskId(CONNECTOR_NAME, 0)), any(), eq(connectorConfig(SourceSink.SOURCE)), eq(updatedTaskConfig), eq(herder), eq(TargetState.STARTED))).thenReturn(true);
+
+        // Set new connector config
+        Map<String, String> newConfig = connectorConfig(SourceSink.SOURCE);
+        newConfig.put("dummy-task-property", "yes");
+        herder.putConnectorConfig(CONNECTOR_NAME, newConfig, true, createCallback);
+
+        // Reconfigure the tasks
+        herder.requestTaskReconfiguration(CONNECTOR_NAME);
+
+        // Wait on connector update
+        Herder.Created<ConnectorInfo> updatedConnectorInfo = createCallback.get(1000L, TimeUnit.MILLISECONDS);
+        assertEquals(createdInfo(SourceSink.SOURCE), updatedConnectorInfo.result());
+
+        verify(statusBackingStore).put(new TaskStatus(new ConnectorTaskId(CONNECTOR_NAME, 0), TaskStatus.State.DESTROYED, WORKER_ID, 0));
+    }
+
     private void expectAdd(SourceSink sourceSink) {
         Map<String, String> connectorProps = connectorConfig(sourceSink);
         ConnectorConfig connConfig = sourceSink == SourceSink.SOURCE ?
