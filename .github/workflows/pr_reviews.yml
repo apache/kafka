@@ -20,7 +20,18 @@ on:
     types: [submitted]
 
 permissions:
+  actions: write
+  checks: write
+  contents: write
+  deployments: write
+  discussions: write
+  issues: write
+  packages: write
+  pages: write
   pull-requests: write
+  repository-projects: write
+  security-events: write
+  statuses: write
 
 jobs:
   add_reviewers:
