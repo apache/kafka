@@ -24,9 +24,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v3
-    - name: Add Reviewers
+    - name: TEST Add Reviewers
       run: |
-        user_json=$(gh api users/${{ github.event.review.user.login }})
+        user_json=$(gh api -H "Accept: application/vnd.github+json" -H "X-GitHub-Api-Version: 2022-11-28" users/${{ github.event.review.user.login }})
         user_name=$(echo "$user_json" | jq -r '.name')
         user_email=$(echo "$user_json" | jq -r '.email')
         if [[ "${{ github.event.pull_request.body }}" =~ ^.*Reviewers:\ .*${user_name}.*$ ]]; then
