@@ -20,7 +20,7 @@ package kafka.server
 import kafka.cluster.BrokerEndPoint
 import kafka.server.QuotaFactory.QuotaManagers
 import kafka.server.checkpoints.LazyOffsetCheckpoints
-import kafka.utils.TestUtils
+import kafka.utils.{CoreUtils, Logging, TestUtils}
 import org.apache.kafka.common.{Node, TopicPartition, Uuid}
 import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrPartitionState
 import org.apache.kafka.common.message.OffsetForLeaderEpochRequestData.OffsetForLeaderPartition
@@ -42,7 +42,7 @@ import java.util.Collections
 import scala.collection.{Map, Seq}
 import scala.jdk.CollectionConverters._
 
-class LocalLeaderEndPointTest {
+class LocalLeaderEndPointTest extends Logging {
 
   val time = new MockTime
   val topicId: Uuid = Uuid.randomUuid()
@@ -84,8 +84,8 @@ class LocalLeaderEndPointTest {
 
   @AfterEach
   def tearDown(): Unit = {
-    replicaManager.shutdown(checkpointHW = false)
-    quotaManager.shutdown()
+    CoreUtils.swallow(replicaManager.shutdown(checkpointHW = false), this)
+    CoreUtils.swallow(quotaManager.shutdown(), this)
   }
 
   @Test
