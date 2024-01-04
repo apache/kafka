@@ -34,6 +34,7 @@ import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.SecurityConfig;
 import org.apache.kafka.common.config.SslConfigs;
 import org.apache.kafka.common.config.types.Password;
+import org.apache.kafka.common.errors.InvalidConfigurationException;
 import org.apache.kafka.common.security.TestSecurityConfig;
 import org.apache.kafka.common.security.auth.SslEngineFactory;
 import org.apache.kafka.common.security.ssl.DefaultSslEngineFactory.FileBasedStore;
@@ -386,7 +387,7 @@ public abstract class SslFactoryTest {
         try {
             sslFactory.configure(sslConfig1);
             fail("Validation did not fail with untrusted truststore");
-        } catch (ConfigException e) {
+        } catch (InvalidConfigurationException e) {
             // Expected exception
         }
     }

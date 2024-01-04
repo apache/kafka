@@ -23,7 +23,7 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
-import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.common.errors.InvalidConfigurationException;
 import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.metrics.MetricsReporter;
 import org.apache.kafka.common.utils.SystemTime;
@@ -110,7 +110,7 @@ public class PushHttpMetricsReporter implements MetricsReporter {
         try {
             url = new URL(config.getString(METRICS_URL_CONFIG));
         } catch (MalformedURLException e) {
-            throw new ConfigException("Malformed metrics.url", e);
+            throw new InvalidConfigurationException("Malformed metrics.url", e);
         }
         int period = config.getInteger(METRICS_PERIOD_CONFIG);
         clientId = config.getString(CLIENT_ID_CONFIG);
@@ -120,7 +120,7 @@ public class PushHttpMetricsReporter implements MetricsReporter {
             try {
                 host = InetAddress.getLocalHost().getCanonicalHostName();
             } catch (UnknownHostException e) {
-                throw new ConfigException("Failed to get canonical hostname", e);
+                throw new InvalidConfigurationException("Failed to get canonical hostname", e);
             }
         }
 
