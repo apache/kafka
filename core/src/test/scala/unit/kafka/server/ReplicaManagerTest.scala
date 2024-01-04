@@ -2912,8 +2912,11 @@ class ReplicaManagerTest {
         new ReplicaFetcherManager(this.config, rm, metrics, time, threadNamePrefix, replicationQuotaManager, () => this.metadataCache.metadataVersion(), () => 1) {
 
           override def createFetcherThread(fetcherId: Int, sourceBroker: BrokerEndPoint): ReplicaFetcherThread = {
-            val logContext = new LogContext(s"[ReplicaFetcher replicaId=${rm.config.brokerId}, leaderId=${sourceBroker.id}, " +
-              s"fetcherId=$fetcherId] ")
+            val logContext = LogContext.forComponent("ReplicaFetcher")
+              .withTag("replicaId", rm.config.brokerId)
+              .withTag("leaderId", sourceBroker.id)
+              .withTag("fetcherId", fetcherId)
+              .build()
             val fetchSessionHandler = new FetchSessionHandler(logContext, sourceBroker.id)
             val leader = new RemoteLeaderEndPoint(logContext.logPrefix, blockingSend, fetchSessionHandler, rm.config,
               rm, quotaManager.follower, () => rm.config.interBrokerProtocolVersion, () => 1)

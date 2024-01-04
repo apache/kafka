@@ -27,6 +27,7 @@ import kafka.zk.KafkaZkClient.UpdateLeaderAndIsrResult
 import kafka.zk.TopicPartitionStateZNode
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.ControllerMovedException
+import org.apache.kafka.common.utils.LogContext
 import org.apache.kafka.server.common.MetadataVersion.IBP_3_2_IV0
 import org.apache.zookeeper.KeeperException
 import org.apache.zookeeper.KeeperException.Code
@@ -136,7 +137,7 @@ class ZkPartitionStateMachine(config: KafkaConfig,
   private val isLeaderRecoverySupported = config.interBrokerProtocolVersion.isAtLeast(IBP_3_2_IV0)
 
   private val controllerId = config.brokerId
-  this.logIdent = s"[PartitionStateMachine controllerId=$controllerId] "
+  this.logIdent = LogContext.forComponent("PartitionStateMachine").withTag("controllerId", controllerId).build().logPrefix()
 
   /**
    * Try to change the state of the given partitions to the given targetState, using the given

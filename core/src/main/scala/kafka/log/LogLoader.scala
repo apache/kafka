@@ -23,7 +23,7 @@ import kafka.log.UnifiedLog.{CleanedFileSuffix, SwapFileSuffix, isIndexFile, isL
 import kafka.utils.Logging
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.InvalidOffsetException
-import org.apache.kafka.common.utils.{Time, Utils}
+import org.apache.kafka.common.utils.{LogContext, Time, Utils}
 import org.apache.kafka.snapshot.Snapshots
 import org.apache.kafka.server.util.Scheduler
 import org.apache.kafka.storage.internals.epoch.LeaderEpochFileCache
@@ -69,7 +69,7 @@ class LogLoader(
   numRemainingSegments: ConcurrentMap[String, Int] = new ConcurrentHashMap[String, Int],
   isRemoteLogEnabled: Boolean = false,
 ) extends Logging {
-  logIdent = s"[LogLoader partition=$topicPartition, dir=${dir.getParent}] "
+  logIdent = LogContext.forComponent("LogLoader").withTag("partition", topicPartition).withTag("dir", dir.getParent).build().logPrefix()
 
   /**
    * Load the log segments from the log files on disk, and returns the components of the loaded log.

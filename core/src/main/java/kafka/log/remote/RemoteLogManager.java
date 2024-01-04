@@ -586,7 +586,10 @@ public class RemoteLogManager implements Closeable {
         public RLMTask(TopicIdPartition topicIdPartition, int customMetadataSizeLimit) {
             this.topicIdPartition = topicIdPartition;
             this.customMetadataSizeLimit = customMetadataSizeLimit;
-            LogContext logContext = new LogContext("[RemoteLogManager=" + brokerId + " partition=" + topicIdPartition + "] ");
+            LogContext logContext = LogContext.forComponent("RemoteLogManager")
+                .withTag("brokerId", String.valueOf(brokerId))
+                .withTag("topicIdPartition", topicIdPartition.toString())
+                .build();
             logger = logContext.logger(RLMTask.class);
         }
 

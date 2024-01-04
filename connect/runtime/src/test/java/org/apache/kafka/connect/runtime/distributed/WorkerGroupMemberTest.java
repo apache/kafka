@@ -65,7 +65,10 @@ public class WorkerGroupMemberTest {
         DistributedConfig config = spy(new DistributedConfig(workerProps));
         doReturn("cluster-1").when(config).kafkaClusterId();
 
-        LogContext logContext = new LogContext("[Worker clientId=client-1 + groupId= group-1]");
+        LogContext logContext = LogContext.forComponent("Worker")
+            .withTag("clientId", "client-1")
+            .withTag("groupId", "group-1")
+            .build();
         member = new WorkerGroupMember(config, "", configBackingStore, null, Time.SYSTEM, "client-1", logContext);
 
         verify(config, atLeastOnce()).kafkaClusterId();
@@ -108,7 +111,10 @@ public class WorkerGroupMemberTest {
         DistributedConfig config = spy(new DistributedConfig(workerProps));
         doReturn("cluster-1").when(config).kafkaClusterId();
 
-        LogContext logContext = new LogContext("[Worker clientId=client-1 + groupId= group-1]");
+        LogContext logContext = LogContext.forComponent("Worker")
+            .withTag("clientId", "client-1")
+            .withTag("groupId", "group-1")
+            .build();
         member = new WorkerGroupMember(config, "", configBackingStore, null, Time.SYSTEM, "client-1", logContext);
 
         verify(config, atLeastOnce()).kafkaClusterId();

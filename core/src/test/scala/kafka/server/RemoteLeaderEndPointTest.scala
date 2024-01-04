@@ -60,7 +60,7 @@ class RemoteLeaderEndPointTest {
         val logPrefix = "remote-leader-endpoint"
         val sourceBroker: BrokerEndPoint = BrokerEndPoint(0, "localhost", 9092)
         val props = TestUtils.createBrokerConfig(sourceBroker.id, TestUtils.MockZkConnect, port = sourceBroker.port)
-        val fetchSessionHandler = new FetchSessionHandler(new LogContext(logPrefix), sourceBroker.id)
+        val fetchSessionHandler = new FetchSessionHandler(LogContext.forComponent(logPrefix).build(), sourceBroker.id)
         val config = KafkaConfig.fromProps(props)
         blockingSend = new MockBlockingSender(offsets = new util.HashMap[TopicPartition, EpochEndOffset](),
             sourceBroker = sourceBroker, time = time)

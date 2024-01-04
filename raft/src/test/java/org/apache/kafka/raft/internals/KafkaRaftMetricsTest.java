@@ -69,7 +69,7 @@ public class KafkaRaftMetricsTest {
             fetchTimeoutMs,
             new MockQuorumStateStore(),
             time,
-            new LogContext("kafka-raft-metrics-test"),
+            LogContext.forComponent("kafka-raft-metrics-test").build(),
             random
         );
     }

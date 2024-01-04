@@ -22,6 +22,7 @@ import kafka.server.ConfigAdminManager.toLoggableProps
 import kafka.server.{ConfigEntityName, ConfigHandler, KafkaConfig}
 import kafka.utils.Logging
 import org.apache.kafka.common.config.ConfigResource.Type.{BROKER, CLIENT_METRICS, TOPIC}
+import org.apache.kafka.common.utils.LogContext
 import org.apache.kafka.image.loader.LoaderManifest
 import org.apache.kafka.image.{MetadataDelta, MetadataImage}
 import org.apache.kafka.server.config.ConfigType
@@ -34,7 +35,7 @@ class DynamicConfigPublisher(
   dynamicConfigHandlers: Map[String, ConfigHandler],
   nodeType: String,
 ) extends Logging with org.apache.kafka.image.publisher.MetadataPublisher {
-  logIdent = s"[${name()}] "
+  logIdent = LogContext.forComponent(name()).build().logPrefix()
 
   override def name(): String = s"DynamicConfigPublisher $nodeType id=${conf.nodeId}"
 

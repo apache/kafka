@@ -30,6 +30,7 @@ import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.resource.Resource.CLUSTER_NAME
 import org.apache.kafka.common.resource.ResourceType
+import org.apache.kafka.common.utils.LogContext
 import org.apache.kafka.server.authorizer._
 
 import java.util
@@ -47,7 +48,7 @@ class AclApis(authHelper: AuthHelper,
               requestHelper: RequestHandlerHelper,
               name: String,
               config: KafkaConfig) extends Logging {
-  this.logIdent = "[AclApis-%s-%s] ".format(name, config.nodeId)
+  this.logIdent = LogContext.forComponent("AclApis").withTag("name", name).withTag("nodeId", config.nodeId).build().logPrefix()
   private val alterAclsPurgatory =
       new DelayedFuturePurgatory(purgatoryName = "AlterAcls", brokerId = config.nodeId)
 

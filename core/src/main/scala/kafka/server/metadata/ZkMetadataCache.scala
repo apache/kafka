@@ -40,6 +40,7 @@ import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{AbstractControlRequest, ApiVersionsResponse, MetadataResponse, UpdateMetadataRequest}
 import org.apache.kafka.common.security.auth.SecurityProtocol
+import org.apache.kafka.common.utils.LogContext
 import org.apache.kafka.server.common.{Features, MetadataVersion}
 
 import java.util.concurrent.{ThreadLocalRandom, TimeUnit}
@@ -134,7 +135,7 @@ class ZkMetadataCache(
     aliveBrokers = mutable.LongMap.empty,
     aliveNodes = mutable.LongMap.empty)
 
-  this.logIdent = s"[MetadataCache brokerId=$brokerId] "
+  this.logIdent = LogContext.forComponent("MetadataCache").withTag("brokerId", brokerId).build().logPrefix()
   private val stateChangeLogger = new StateChangeLogger(brokerId, inControllerContext = false, None)
 
   // Features are updated via ZK notification (see FinalizedFeatureChangeListener)

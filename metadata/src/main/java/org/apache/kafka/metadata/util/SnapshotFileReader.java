@@ -65,8 +65,12 @@ public final class SnapshotFileReader implements AutoCloseable {
     public SnapshotFileReader(String snapshotPath, RaftClient.Listener<ApiMessageAndVersion> listener) {
         this.snapshotPath = snapshotPath;
         this.listener = listener;
-        this.queue = new KafkaEventQueue(Time.SYSTEM,
-            new LogContext("[snapshotReaderQueue] "), "snapshotReaderQueue_", new ShutdownEvent());
+        this.queue = new KafkaEventQueue(
+            Time.SYSTEM,
+            LogContext.forComponent("SnapshotReaderQueue").build(),
+            "snapshotReaderQueue_",
+            new ShutdownEvent()
+        );
         this.caughtUpFuture = new CompletableFuture<>();
     }
 

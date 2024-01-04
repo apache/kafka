@@ -57,15 +57,14 @@ class ControllerRegistrationManager(
 ) extends Logging with MetadataPublisher {
   override def name(): String = "ControllerRegistrationManager"
 
-  private def logPrefix(): String = {
-    val builder = new StringBuilder("[ControllerRegistrationManager")
-    builder.append(" id=").append(nodeId)
-    builder.append(" incarnation=").append(incarnationId)
-    builder.append("] ")
-    builder.toString()
+  private def logContextBuilder(): LogContext.Builder = {
+    val builder = LogContext.forComponent("ControllerRegistrationManager")
+    builder.withTag("id", nodeId)
+    builder.withTag("incarnation", incarnationId)
+    builder
   }
 
-  val logContext = new LogContext(logPrefix())
+  val logContext: LogContext = logContextBuilder().build()
 
   this.logIdent = logContext.logPrefix()
 

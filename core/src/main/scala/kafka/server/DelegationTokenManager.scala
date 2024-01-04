@@ -20,7 +20,6 @@ package kafka.server
 import java.nio.ByteBuffer
 import java.nio.charset.StandardCharsets
 import java.security.InvalidKeyException
-
 import javax.crypto.spec.SecretKeySpec
 import javax.crypto.{Mac, SecretKey}
 import kafka.utils.Logging
@@ -30,7 +29,7 @@ import org.apache.kafka.common.security.scram.internals.{ScramFormatter, ScramMe
 import org.apache.kafka.common.security.scram.ScramCredential
 import org.apache.kafka.common.security.token.delegation.internals.DelegationTokenCache
 import org.apache.kafka.common.security.token.delegation.{DelegationToken, TokenInformation}
-import org.apache.kafka.common.utils.Time
+import org.apache.kafka.common.utils.{LogContext, Time}
 
 import scala.jdk.CollectionConverters._
 import scala.collection.mutable
@@ -100,7 +99,7 @@ object DelegationTokenManager {
 class DelegationTokenManager(val config: KafkaConfig,
                              val tokenCache: DelegationTokenCache,
                              val time: Time) extends Logging {
-  this.logIdent = s"[Token Manager on Node ${config.brokerId}]: "
+  this.logIdent = LogContext.forComponent("TokenManager").withTag("nodeId", config.brokerId).build().logPrefix()
 
   protected val lock = new Object()
 

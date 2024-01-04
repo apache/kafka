@@ -23,6 +23,11 @@ import org.slf4j.helpers.FormattingTuple;
 import org.slf4j.helpers.MessageFormatter;
 import org.slf4j.spi.LocationAwareLogger;
 
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Objects;
+import java.util.Optional;
+
 /**
  * This class provides a way to instrument loggers with a common context which can be used to
  * automatically enrich log messages. For example, in the KafkaConsumer, it is often useful to know
@@ -33,6 +38,10 @@ import org.slf4j.spi.LocationAwareLogger;
 public class LogContext {
 
     private final String logPrefix;
+
+    public static Builder forComponent(String componentName) {
+        return new Builder(componentName);
+    }
 
     public LogContext(String logPrefix) {
         this.logPrefix = logPrefix == null ? "" : logPrefix;
@@ -53,6 +62,45 @@ public class LogContext {
 
     public String logPrefix() {
         return logPrefix;
+    }
+
+    public static class Builder {
+        private final String componentName;
+        private final List<String> tags = new ArrayList<>();
+
+        public Builder(String componentName) {
+            requireNonNullAndNonEmpty(componentName, "componentName");
+            this.componentName = componentName;
+        }
+
+        private void requireNonNullAndNonEmpty(String value, String name) {
+            Objects.requireNonNull(value, name + " cannot be null");
+            if (value.isEmpty()) {
+                throw new IllegalArgumentException(name + " cannot be empty");
+            }
+        }
+
+        public Builder withTag(String tag, Object value) {
+            return withTag(tag, value.toString());
+        }
+
+        public Builder withTag(String tag, String value) {
+            requireNonNullAndNonEmpty(tag, "tag");
+            requireNonNullAndNonEmpty(value, "tagValue");
+            this.tags.add(tag + "=" + value);
+            return this;
+        }
+
+        public LogContext build() {
+            String tagsAnnotation = Optional.of(this.tags)
+                .filter(t -> !t.isEmpty())
+                .map(t -> String.join(", ", t))
+                .orElse("");
+            tagsAnnotation = tagsAnnotation.isEmpty() ? "" : " " + tagsAnnotation;
+            // space is needed after brackets to separate context from log message
+            String logPrefix = "[" + componentName + tagsAnnotation + "] ";
+            return new LogContext(logPrefix);
+        }
     }
 
     private static abstract class AbstractKafkaLogger implements Logger {

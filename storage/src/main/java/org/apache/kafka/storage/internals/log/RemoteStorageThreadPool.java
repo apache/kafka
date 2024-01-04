@@ -45,7 +45,7 @@ public class RemoteStorageThreadPool extends ThreadPoolExecutor {
         logger = new LogContext() {
             @Override
             public String logPrefix() {
-                return "[" + Thread.currentThread().getName() + "]";
+                return "[" + Thread.currentThread().getName() + "] ";
             }
         }.logger(RemoteStorageThreadPool.class);
 

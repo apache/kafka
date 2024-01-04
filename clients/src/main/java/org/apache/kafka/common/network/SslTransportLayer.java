@@ -105,7 +105,10 @@ public class SslTransportLayer implements TransportLayer {
         this.state = State.NOT_INITIALIZED;
         this.metadataRegistry = metadataRegistry;
 
-        final LogContext logContext = new LogContext(String.format("[SslTransportLayer channelId=%s key=%s] ", channelId, key));
+        final LogContext logContext = LogContext.forComponent("SslTransportLayer")
+            .withTag("channelId", channelId)
+            .withTag("key", key.toString())
+            .build();
         this.log = logContext.logger(getClass());
     }
 

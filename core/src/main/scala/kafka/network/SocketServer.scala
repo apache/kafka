@@ -86,7 +86,10 @@ class SocketServer(val config: KafkaConfig,
 
   protected val nodeId = config.brokerId
 
-  private val logContext = new LogContext(s"[SocketServer listenerType=${apiVersionManager.listenerType}, nodeId=$nodeId] ")
+  private val logContext = LogContext.forComponent("SocketServer")
+    .withTag("listenerType", apiVersionManager.listenerType.toString)
+    .withTag("nodeId", nodeId)
+    .build()
 
   this.logIdent = logContext.logPrefix
 

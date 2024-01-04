@@ -18,6 +18,7 @@
 package kafka.server.metadata
 
 import kafka.utils.Logging
+import org.apache.kafka.common.utils.LogContext
 import org.apache.kafka.image.loader.{LoaderManifest, LoaderManifestType}
 import org.apache.kafka.image.{MetadataDelta, MetadataImage}
 import org.apache.kafka.metadata.authorizer.ClusterMetadataAuthorizer
@@ -33,7 +34,7 @@ class AclPublisher(
   nodeType: String,
   authorizer: Option[Authorizer],
 ) extends Logging with org.apache.kafka.image.publisher.MetadataPublisher {
-  logIdent = s"[${name()}] "
+  logIdent = LogContext.forComponent(name()).build().logPrefix()
 
   override def name(): String = s"AclPublisher $nodeType id=$nodeId"
 

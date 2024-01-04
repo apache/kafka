@@ -291,6 +291,9 @@ public class ReplicaFetcherThreadBenchmark {
 
 
     static class ReplicaFetcherBenchThread extends ReplicaFetcherThread {
+        private static final LogContext.Builder LOG_CONTEXT_BUILDER = LogContext.forComponent("ReplicaFetcher")
+            .withTag("leaderId", "3")
+            .withTag("fetcherId", "3");
         private final Pool<TopicPartition, Partition> pool;
 
         ReplicaFetcherBenchThread(KafkaConfig config,
@@ -300,7 +303,7 @@ public class ReplicaFetcherThreadBenchmark {
                                   Partition> partitions) {
             super("name",
                     new RemoteLeaderEndPoint(
-                            String.format("[ReplicaFetcher replicaId=%d, leaderId=%d, fetcherId=%d", config.brokerId(), 3, 3),
+                            LOG_CONTEXT_BUILDER.withTag("replicaId", config.brokerId()).build().logPrefix(),
                             new BrokerBlockingSender(
                                     new BrokerEndPoint(3, "host", 3000),
                                     config,
@@ -308,10 +311,9 @@ public class ReplicaFetcherThreadBenchmark {
                                     Time.SYSTEM,
                                     3,
                                     String.format("broker-%d-fetcher-%d", 3, 3),
-                                    new LogContext(String.format("[ReplicaFetcher replicaId=%d, leaderId=%d, fetcherId=%d", config.brokerId(), 3, 3))
+                                    LOG_CONTEXT_BUILDER.withTag("replicaId", config.brokerId()).build()
                             ),
-                            new FetchSessionHandler(
-                                    new LogContext(String.format("[ReplicaFetcher replicaId=%d, leaderId=%d, fetcherId=%d", config.brokerId(), 3, 3)), 3),
+                            new FetchSessionHandler(LOG_CONTEXT_BUILDER.withTag("replicaId", config.brokerId()).build(), 3),
                             config,
                             replicaManager,
                             replicaQuota,

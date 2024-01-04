@@ -19,6 +19,7 @@ package kafka.server.metadata
 
 import kafka.server.KafkaConfig
 import kafka.utils.Logging
+import org.apache.kafka.common.utils.LogContext
 import org.apache.kafka.image.loader.LoaderManifest
 import org.apache.kafka.image.{MetadataDelta, MetadataImage}
 import org.apache.kafka.server.fault.FaultHandler
@@ -30,7 +31,7 @@ class DynamicClientQuotaPublisher(
   nodeType: String,
   clientQuotaMetadataManager: ClientQuotaMetadataManager,
 ) extends Logging with org.apache.kafka.image.publisher.MetadataPublisher {
-  logIdent = s"[${name()}] "
+  logIdent = LogContext.forComponent(name()).build().logPrefix()
 
   override def name(): String = s"DynamicClientQuotaPublisher $nodeType id=${conf.nodeId}"
 

@@ -48,7 +48,7 @@ import org.apache.kafka.common.protocol.{ApiKeys, ApiMessage, Errors}
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.resource.Resource.CLUSTER_NAME
 import org.apache.kafka.common.resource.ResourceType.{CLUSTER, TOPIC, USER}
-import org.apache.kafka.common.utils.Time
+import org.apache.kafka.common.utils.{LogContext, Time}
 import org.apache.kafka.common.Uuid
 import org.apache.kafka.controller.ControllerRequestContext.requestTimeoutMsToDeadlineNs
 import org.apache.kafka.controller.{Controller, ControllerRequestContext}
@@ -79,7 +79,7 @@ class ControllerApis(
   val metadataCache: KRaftMetadataCache
 ) extends ApiRequestHandler with Logging {
 
-  this.logIdent = s"[ControllerApis nodeId=${config.nodeId}] "
+  this.logIdent = LogContext.forComponent("ControllerApis").withTag("nodeId", config.nodeId).build().logPrefix()
   val authHelper = new AuthHelper(authorizer)
   val configHelper = new ConfigHelper(metadataCache, config, metadataCache)
   val requestHelper = new RequestHandlerHelper(requestChannel, quotas, time)

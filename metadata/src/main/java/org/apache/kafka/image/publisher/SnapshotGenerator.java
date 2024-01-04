@@ -190,7 +190,9 @@ public class SnapshotGenerator implements MetadataPublisher {
         this.faultHandler = faultHandler;
         this.maxBytesSinceLastSnapshot = maxBytesSinceLastSnapshot;
         this.maxTimeSinceLastSnapshotNs = maxTimeSinceLastSnapshotNs;
-        LogContext logContext = new LogContext("[SnapshotGenerator id=" + nodeId + "] ");
+        LogContext logContext = LogContext.forComponent("SnapshotGenerator")
+            .withTag("id", nodeId)
+            .build();
         this.log = logContext.logger(SnapshotGenerator.class);
         this.disabledReason = disabledReason;
         this.eventQueue = new KafkaEventQueue(time, logContext, threadNamePrefix + "snapshot-generator-");

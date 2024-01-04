@@ -166,14 +166,14 @@ public class GroupCoordinatorService implements GroupCoordinator {
             if (groupCoordinatorMetrics == null)
                 throw new IllegalArgumentException("GroupCoordinatorMetrics must be set.");
 
-            String logPrefix = String.format("GroupCoordinator id=%d", nodeId);
-            LogContext logContext = new LogContext(String.format("[%s] ", logPrefix));
+            LogContext.Builder logContextBuilder = LogContext.forComponent("GroupCoordinator")
+                .withTag("id", nodeId);
 
             CoordinatorShardBuilderSupplier<GroupCoordinatorShard, Record> supplier = () ->
                 new GroupCoordinatorShard.Builder(config);
 
             CoordinatorEventProcessor processor = new MultiThreadedEventProcessor(
-                logContext,
+                logContextBuilder.build(),
                 "group-coordinator-event-processor-",
                 config.numThreads,
                 time,
@@ -184,8 +184,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
                 new CoordinatorRuntime.Builder<GroupCoordinatorShard, Record>()
                     .withTime(time)
                     .withTimer(timer)
-                    .withLogPrefix(logPrefix)
-                    .withLogContext(logContext)
+                    .withLogContextBuilder(logContextBuilder)
                     .withEventProcessor(processor)
                     .withPartitionWriter(writer)
                     .withLoader(loader)
@@ -197,7 +196,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
                     .build();
 
             return new GroupCoordinatorService(
-                logContext,
+                logContextBuilder.build(),
                 config,
                 runtime,
                 groupCoordinatorMetrics

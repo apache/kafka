@@ -36,6 +36,7 @@ import org.apache.kafka.common.message.IncrementalAlterConfigsResponseData.{Alte
 import org.apache.kafka.common.protocol.Errors.{INVALID_REQUEST, UNKNOWN_SERVER_ERROR}
 import org.apache.kafka.common.requests.ApiError
 import org.apache.kafka.common.resource.{Resource, ResourceType}
+import org.apache.kafka.common.utils.LogContext
 import org.slf4j.LoggerFactory
 
 import scala.collection.{Map, Seq}
@@ -84,7 +85,7 @@ class ConfigAdminManager(nodeId: Int,
                          configRepository: ConfigRepository) extends Logging {
   import ConfigAdminManager._
 
-  this.logIdent = "[ConfigAdminManager[nodeId=" + nodeId + "]: "
+  this.logIdent = LogContext.forComponent("ConfigAdminManager").withTag("nodeId", nodeId).build().logPrefix()
 
   val runtimeLoggerManager = new RuntimeLoggerManager(nodeId, logger.underlying)
 

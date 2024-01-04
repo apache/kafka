@@ -111,7 +111,10 @@ public class StandardAuthorizerData {
 
 
     private static Logger createLogger(int nodeId) {
-        return new LogContext("[StandardAuthorizer " + nodeId + "] ").logger(StandardAuthorizerData.class);
+        return LogContext.forComponent("StandardAuthorizer")
+            .withTag("nodeId", nodeId)
+            .build()
+            .logger(StandardAuthorizerData.class);
     }
 
     private static Logger auditLogger() {

@@ -122,7 +122,10 @@ public class SnapshotEmitter implements SnapshotGenerator.Emitter {
         SnapshotEmitterMetrics metrics
     ) {
         this.time = time;
-        this.log = new LogContext("[SnapshotEmitter id=" + nodeId + "] ").logger(SnapshotEmitter.class);
+        this.log = LogContext.forComponent("SnapshotEmitter")
+            .withTag("id", nodeId)
+            .build()
+            .logger(SnapshotEmitter.class);
         this.raftClient = raftClient;
         this.batchSize = batchSize;
         this.metrics = metrics;

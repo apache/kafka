@@ -25,7 +25,7 @@ import java.util.concurrent.{ConcurrentHashMap, CountDownLatch, TimeUnit}
 import java.util.concurrent.atomic.AtomicInteger
 import com.yammer.metrics.core.{Gauge, Meter}
 import org.apache.kafka.common.internals.FatalExitError
-import org.apache.kafka.common.utils.{KafkaThread, Time}
+import org.apache.kafka.common.utils.{KafkaThread, LogContext, Time}
 import org.apache.kafka.server.log.remote.storage.RemoteStorageMetrics
 import org.apache.kafka.server.metrics.KafkaMetricsGroup
 
@@ -97,7 +97,12 @@ class KafkaRequestHandler(
   time: Time,
   nodeName: String = "broker"
 ) extends Runnable with Logging {
-  this.logIdent = s"[Kafka Request Handler $id on ${nodeName.capitalize} $brokerId], "
+  this.logIdent = LogContext.forComponent("KafkaRequestHandler")
+    .withTag("id", id)
+    .withTag("nodeName", nodeName.capitalize)
+    .withTag("brokerId", brokerId)
+    .build()
+    .logPrefix()
   private val shutdownComplete = new CountDownLatch(1)
   private val requestLocal = RequestLocal.withThreadConfinedCaching
   @volatile private var stopped = false
@@ -210,7 +215,7 @@ class KafkaRequestHandlerPool(
   /* a meter to track the average free capacity of the request handlers */
   private val aggregateIdleMeter = metricsGroup.newMeter(requestHandlerAvgIdleMetricName, "percent", TimeUnit.NANOSECONDS)
 
-  this.logIdent = "[" + logAndThreadNamePrefix + " Kafka Request Handler on Broker " + brokerId + "], "
+  this.logIdent = LogContext.forComponent(logAndThreadNamePrefix + " KafkaRequestHandler").withTag("brokerId", brokerId).build().logPrefix()
   val runnables = new mutable.ArrayBuffer[KafkaRequestHandler](numThreads)
   for (i <- 0 until numThreads) {
     createHandler(i)

@@ -148,7 +148,10 @@ class NodeToControllerChannelManagerImpl(
   threadNamePrefix: String,
   retryTimeoutMs: Long
 ) extends NodeToControllerChannelManager with Logging {
-  private val logContext = new LogContext(s"[NodeToControllerChannelManager id=${config.nodeId} name=${channelName}] ")
+  private val logContext = LogContext.forComponent("NodeToControllerChannelManager")
+    .withTag("id", config.nodeId)
+    .withTag("name", channelName)
+    .build()
   private val manualMetadataUpdater = new ManualMetadataUpdater()
   private val apiVersions = new ApiVersions()
   private val requestThread = newRequestThread
@@ -270,8 +273,6 @@ class NodeToControllerRequestThread(
   time,
   false
 ) with Logging {
-
-  this.logIdent = logPrefix
 
   private def maybeResetNetworkClient(controllerInformation: ControllerInformation): Unit = {
     if (isNetworkClientForZkController != controllerInformation.isZkController) {

@@ -87,8 +87,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
      * @param <U> The type of the record.
      */
     public static class Builder<S extends CoordinatorShard<U>, U> {
-        private String logPrefix;
-        private LogContext logContext;
+        private LogContext.Builder logContextBuilder;
         private CoordinatorEventProcessor eventProcessor;
         private PartitionWriter<U> partitionWriter;
         private CoordinatorLoader<U> loader;
@@ -99,13 +98,8 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
         private CoordinatorRuntimeMetrics runtimeMetrics;
         private CoordinatorMetrics coordinatorMetrics;
 
-        public Builder<S, U> withLogPrefix(String logPrefix) {
-            this.logPrefix = logPrefix;
-            return this;
-        }
-
-        public Builder<S, U> withLogContext(LogContext logContext) {
-            this.logContext = logContext;
+        public Builder<S, U> withLogContextBuilder(LogContext.Builder logContextBuilder) {
+            this.logContextBuilder = logContextBuilder;
             return this;
         }
 
@@ -155,10 +149,8 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
         }
 
         public CoordinatorRuntime<S, U> build() {
-            if (logPrefix == null)
-                logPrefix = "";
-            if (logContext == null)
-                logContext = new LogContext(logPrefix);
+            if (logContextBuilder == null)
+                logContextBuilder = LogContext.forComponent("CoordinatorRuntime");
             if (eventProcessor == null)
                 throw new IllegalArgumentException("Event processor must be set.");
             if (partitionWriter == null)
@@ -177,8 +169,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
                 throw new IllegalArgumentException("CoordinatorMetrics must be set.");
 
             return new CoordinatorRuntime<>(
-                logPrefix,
-                logContext,
+                logContextBuilder,
                 eventProcessor,
                 partitionWriter,
                 loader,
@@ -446,11 +437,10 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
         ) {
             this.lock = new ReentrantLock();
             this.tp = tp;
-            this.logContext = new LogContext(String.format("[%s topic=%s partition=%d] ",
-                logPrefix,
-                tp.topic(),
-                tp.partition()
-            ));
+            this.logContext = logContextBuilder
+                .withTag("topic", tp.topic())
+                .withTag("partition", tp.partition())
+                .build();
             this.state = CoordinatorState.INITIAL;
             this.epoch = -1;
             this.deferredEventQueue = new DeferredEventQueue(logContext);
@@ -1186,14 +1176,9 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
     }
 
     /**
-     * The log prefix.
-     */
-    private final String logPrefix;
-
-    /**
      * The log context.
      */
-    private final LogContext logContext;
+    private final LogContext.Builder logContextBuilder;
 
     /**
      * The logger.
@@ -1270,8 +1255,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
     /**
      * Constructor.
      *
-     * @param logPrefix                         The log prefix.
-     * @param logContext                        The log context.
+     * @param logContextBuilder                 The log context builder.
      * @param processor                         The event processor.
      * @param partitionWriter                   The partition writer.
      * @param loader                            The coordinator loader.
@@ -1281,8 +1265,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
      * @param defaultWriteTimeout               The write operation timeout.
      */
     private CoordinatorRuntime(
-        String logPrefix,
-        LogContext logContext,
+        LogContext.Builder logContextBuilder,
         CoordinatorEventProcessor processor,
         PartitionWriter<U> partitionWriter,
         CoordinatorLoader<U> loader,
@@ -1293,9 +1276,8 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
         CoordinatorRuntimeMetrics runtimeMetrics,
         CoordinatorMetrics coordinatorMetrics
     ) {
-        this.logPrefix = logPrefix;
-        this.logContext = logContext;
-        this.log = logContext.logger(CoordinatorRuntime.class);
+        this.logContextBuilder = logContextBuilder;
+        this.log = logContextBuilder.build().logger(CoordinatorRuntime.class);
         this.time = time;
         this.timer = timer;
         this.defaultWriteTimeout = defaultWriteTimeout;

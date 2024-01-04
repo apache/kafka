@@ -21,7 +21,7 @@ import kafka.cluster.BrokerEndPoint
 import kafka.utils.Implicits._
 import kafka.utils.Logging
 import org.apache.kafka.common.{TopicPartition, Uuid}
-import org.apache.kafka.common.utils.Utils
+import org.apache.kafka.common.utils.{LogContext, Utils}
 import org.apache.kafka.server.metrics.KafkaMetricsGroup
 
 import scala.collection.{Map, Set, mutable}
@@ -37,7 +37,7 @@ abstract class AbstractFetcherManager[T <: AbstractFetcherThread](val name: Stri
   private val lock = new Object
   private var numFetchersPerBroker = numFetchers
   val failedPartitions = new FailedPartitions
-  this.logIdent = "[" + name + "] "
+  this.logIdent = LogContext.forComponent(name).build().logPrefix()
 
   private val tags = Map("clientId" -> clientId).asJava
 

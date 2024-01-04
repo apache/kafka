@@ -81,7 +81,7 @@ class BrokerServer(
 
   import kafka.server.Server._
 
-  private val logContext: LogContext = new LogContext(s"[BrokerServer id=${config.nodeId}] ")
+  private val logContext: LogContext = LogContext.forComponent("BrokerServer").withTag("id", config.nodeId.toString).build()
 
   this.logIdent = logContext.logPrefix
 
@@ -271,7 +271,9 @@ class BrokerServer(
       )
       alterPartitionManager.start()
 
-      val addPartitionsLogContext = new LogContext(s"[AddPartitionsToTxnManager broker=${config.brokerId}]")
+      val addPartitionsLogContext = LogContext.forComponent("AddPartitionsToTxnManager")
+        .withTag("brokerId", config.brokerId.toString)
+        .build()
       val addPartitionsToTxnNetworkClient = NetworkUtils.buildNetworkClient("AddPartitionsManager", config, metrics, time, addPartitionsLogContext)
       val addPartitionsToTxnManager = new AddPartitionsToTxnManager(
         config,
@@ -606,7 +608,7 @@ class BrokerServer(
   protected def createRemoteLogManager(): Option[RemoteLogManager] = {
     if (config.remoteLogManagerConfig.enableRemoteStorageSystem()) {
       if (config.logDirs.size > 1) {
-        throw new KafkaException("Tiered storage is not supported with multiple log dirs.");
+        throw new KafkaException("Tiered storage is not supported with multiple log dirs.")
       }
 
       Some(new RemoteLogManager(config.remoteLogManagerConfig, config.brokerId, config.logDirs.head, clusterId, time,

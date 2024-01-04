@@ -41,7 +41,7 @@ import org.apache.kafka.common.record._
 import org.apache.kafka.common.requests.OffsetFetchResponse.PartitionData
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.requests.{OffsetCommitRequest, OffsetFetchResponse}
-import org.apache.kafka.common.utils.{Time, Utils}
+import org.apache.kafka.common.utils.{LogContext, Time, Utils}
 import org.apache.kafka.common.{KafkaException, MessageFormatter, TopicIdPartition, TopicPartition}
 import org.apache.kafka.coordinator.group.generated.{GroupMetadataValue, OffsetCommitKey, OffsetCommitValue, GroupMetadataKey => GroupMetadataKeyData}
 import org.apache.kafka.server.common.MetadataVersion
@@ -123,7 +123,7 @@ class GroupMetadataManager(brokerId: Int,
       "group-coordinator-metrics",
       "The total number of expired offsets")))
 
-  this.logIdent = s"[GroupMetadataManager brokerId=$brokerId] "
+  this.logIdent = LogContext.forComponent("GroupMetadataManager").withTag("brokerId", brokerId).build().logPrefix()
 
   private def recreateGauge[T](name: String, gauge: Gauge[T]): Gauge[T] = {
     metricsGroup.removeMetric(name)

@@ -34,7 +34,7 @@ import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.{FileRecords, MemoryRecords, MemoryRecordsBuilder, Record, SimpleRecord, TimestampType}
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.requests.TransactionResult
-import org.apache.kafka.common.utils.{Time, Utils}
+import org.apache.kafka.common.utils.{LogContext, Time, Utils}
 import org.apache.kafka.common.{KafkaException, TopicPartition}
 import org.apache.kafka.server.record.BrokerCompressionType
 import org.apache.kafka.server.util.Scheduler
@@ -79,7 +79,7 @@ class TransactionStateManager(brokerId: Int,
                               time: Time,
                               metrics: Metrics) extends Logging {
 
-  this.logIdent = "[Transaction State Manager " + brokerId + "]: "
+  this.logIdent = LogContext.forComponent("TransactionStateManager").withTag("brokerId", brokerId).build().logPrefix()
 
   type SendTxnMarkersCallback = (Int, TransactionResult, TransactionMetadata, TxnTransitMetadata) => Unit
 

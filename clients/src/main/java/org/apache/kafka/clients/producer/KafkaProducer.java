@@ -355,11 +355,11 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
 
             this.clientId = config.getString(ProducerConfig.CLIENT_ID_CONFIG);
 
-            LogContext logContext;
-            if (transactionalId == null)
-                logContext = new LogContext(String.format("[Producer clientId=%s] ", clientId));
-            else
-                logContext = new LogContext(String.format("[Producer clientId=%s, transactionalId=%s] ", clientId, transactionalId));
+            LogContext.Builder logContextBuilder = LogContext.forComponent("Producer")
+                .withTag("clientId", clientId);
+            if (transactionalId != null)
+                logContextBuilder.withTag("transactionalId", transactionalId);
+            LogContext logContext = logContextBuilder.build();
             log = logContext.logger(KafkaProducer.class);
             log.trace("Starting the Kafka producer");
 
