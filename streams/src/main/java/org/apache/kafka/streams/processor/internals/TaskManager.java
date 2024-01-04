@@ -927,7 +927,7 @@ public class TaskManager {
                 if (closeTaskClean(task, tasksToCloseDirty, taskExceptions)) {
                     task.revive();
                     task.updateInputPartitions(inputPartitions, topologyMetadata.nodeToSourceTopics(task.id()));
-                    stateUpdater.add(task);
+                    addTaskToStateUpdater(task);
                 }
             } else if ((inputPartitions = tasks.removePendingTaskToUpdateInputPartitions(task.id())) != null) {
                 task.updateInputPartitions(inputPartitions, topologyMetadata.nodeToSourceTopics(task.id()));
@@ -967,7 +967,7 @@ public class TaskManager {
                 if (closeTaskClean(task, tasksToCloseDirty, taskExceptions)) {
                     task.revive();
                     task.updateInputPartitions(inputPartitions, topologyMetadata.nodeToSourceTopics(task.id()));
-                    stateUpdater.add(task);
+                    addTaskToStateUpdater(task);
                 }
             } else if ((inputPartitions = tasks.removePendingTaskToUpdateInputPartitions(task.id())) != null) {
                 task.updateInputPartitions(inputPartitions, topologyMetadata.nodeToSourceTopics(task.id()));

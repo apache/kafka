@@ -1148,61 +1148,53 @@ public class TaskManagerTest {
 
     @Test
     public void shouldUpdateInputPartitionsOfTasksRemovedFromStateUpdater() {
-        final StreamTask task00 = statefulTask(taskId00, taskId00ChangelogPartitions)
+        final StreamTask activeTask = statefulTask(taskId00, taskId00ChangelogPartitions)
             .withInputPartitions(taskId00Partitions)
             .inState(State.RESTORING).build();
-        final StandbyTask task01 = standbyTask(taskId01, taskId01ChangelogPartitions)
+        final StandbyTask standbyTask = standbyTask(taskId01, taskId01ChangelogPartitions)
             .withInputPartitions(taskId01Partitions)
             .inState(State.RUNNING).build();
         when(stateUpdater.hasRemovedTasks()).thenReturn(true);
-        when(stateUpdater.drainRemovedTasks()).thenReturn(mkSet(task00, task01));
+        when(stateUpdater.drainRemovedTasks()).thenReturn(mkSet(activeTask, standbyTask));
         final TasksRegistry tasks = mock(TasksRegistry.class);
         when(tasks.removePendingTaskToRecycle(any())).thenReturn(null);
         when(tasks.removePendingTaskToCloseReviveAndUpdateInputPartitions(any())).thenReturn(null);
-        when(tasks.removePendingTaskToUpdateInputPartitions(task00.id())).thenReturn(taskId02Partitions);
-        when(tasks.removePendingTaskToUpdateInputPartitions(task01.id())).thenReturn(taskId03Partitions);
+        when(tasks.removePendingTaskToUpdateInputPartitions(activeTask.id())).thenReturn(taskId02Partitions);
+        when(tasks.removePendingTaskToUpdateInputPartitions(standbyTask.id())).thenReturn(taskId03Partitions);
         taskManager = setUpTaskManager(StreamsConfigUtils.ProcessingMode.AT_LEAST_ONCE, tasks, true);
 
         taskManager.checkStateUpdater(time.milliseconds(), noOpResetter);
 
-        Mockito.verify(task00).updateInputPartitions(Mockito.eq(taskId02Partitions), anyMap());
-        Mockito.verify(task00, never()).closeDirty();
-        Mockito.verify(task00, never()).closeClean();
-        Mockito.verify(stateUpdater).add(task00);
-        Mockito.verify(task01).updateInputPartitions(Mockito.eq(taskId03Partitions), anyMap());
-        Mockito.verify(task01, never()).closeDirty();
-        Mockito.verify(task01, never()).closeClean();
-        Mockito.verify(stateUpdater).add(task01);
+        Mockito.verify(activeTask).updateInputPartitions(Mockito.eq(taskId02Partitions), anyMap());
+        Mockito.verify(activeTask, never()).closeDirty();
+        Mockito.verify(activeTask, never()).closeClean();
+        Mockito.verify(stateUpdater).add(activeTask);
+        Mockito.verify(standbyTask).updateInputPartitions(Mockito.eq(taskId03Partitions), anyMap());
+        Mockito.verify(standbyTask, never()).closeDirty();
+        Mockito.verify(standbyTask, never()).closeClean();
+        Mockito.verify(stateUpdater).add(standbyTask);
     }
 
     @Test
     public void shouldCloseReviveAndUpdateInputPartitionsOfTasksRemovedFromStateUpdater() {
-        final StreamTask task00 = statefulTask(taskId00, taskId00ChangelogPartitions)
+        final StreamTask activeTask = statefulTask(taskId00, taskId00ChangelogPartitions)
                 .withInputPartitions(taskId00Partitions)
                 .inState(State.RESTORING).build();
-        final StandbyTask task01 = standbyTask(taskId01, taskId01ChangelogPartitions)
-                .withInputPartitions(taskId01Partitions)
-                .inState(State.RUNNING).build();
         when(stateUpdater.hasRemovedTasks()).thenReturn(true);
-        when(stateUpdater.drainRemovedTasks()).thenReturn(mkSet(task00, task01));
+        when(stateUpdater.drainRemovedTasks()).thenReturn(mkSet(activeTask));
         final TasksRegistry tasks = mock(TasksRegistry.class);
         when(tasks.removePendingTaskToRecycle(any())).thenReturn(null);
-        when(tasks.removePendingTaskToCloseReviveAndUpdateInputPartitions(task00.id())).thenReturn(taskId02Partitions);
-        when(tasks.removePendingTaskToCloseReviveAndUpdateInputPartitions(task01.id())).thenReturn(taskId03Partitions);
+        when(tasks.removePendingTaskToCloseReviveAndUpdateInputPartitions(activeTask.id())).thenReturn(taskId02Partitions);
         taskManager = setUpTaskManager(StreamsConfigUtils.ProcessingMode.AT_LEAST_ONCE, tasks, true);
 
         taskManager.checkStateUpdater(time.milliseconds(), noOpResetter);
 
-        Mockito.verify(task01).closeClean();
-        Mockito.verify(task00).revive();
-        Mockito.verify(task00).updateInputPartitions(Mockito.eq(taskId02Partitions), anyMap());
-        Mockito.verify(task00, never()).closeDirty();
-        Mockito.verify(stateUpdater).add(task00);
-        Mockito.verify(task01).closeClean();
-        Mockito.verify(task00).revive();
-        Mockito.verify(task01).updateInputPartitions(Mockito.eq(taskId03Partitions), anyMap());
-        Mockito.verify(task01, never()).closeDirty();
-        Mockito.verify(stateUpdater).add(task01);
+        Mockito.verify(activeTask).closeClean();
+        Mockito.verify(activeTask).revive();
+        Mockito.verify(activeTask).updateInputPartitions(Mockito.eq(taskId02Partitions), anyMap());
+        Mockito.verify(activeTask).initializeIfNeeded();
+        Mockito.verify(activeTask, never()).closeDirty();
+        Mockito.verify(stateUpdater).add(activeTask);
     }
 
     @Test
@@ -1288,6 +1280,7 @@ public class TaskManagerTest {
         Mockito.verify(taskToCloseReviveAndUpdateInputPartitions).closeClean();
         Mockito.verify(taskToCloseReviveAndUpdateInputPartitions).revive();
         Mockito.verify(taskToCloseReviveAndUpdateInputPartitions).updateInputPartitions(Mockito.eq(taskId05Partitions), anyMap());
+        Mockito.verify(taskToCloseReviveAndUpdateInputPartitions).initializeIfNeeded();
         Mockito.verify(stateUpdater).add(taskToCloseReviveAndUpdateInputPartitions);
     }
 
@@ -1670,6 +1663,7 @@ public class TaskManagerTest {
         Mockito.verify(statefulTask).updateInputPartitions(Mockito.eq(taskId01Partitions), anyMap());
         Mockito.verify(statefulTask).closeClean();
         Mockito.verify(statefulTask).revive();
+        Mockito.verify(statefulTask).initializeIfNeeded();
         Mockito.verify(stateUpdater).add(statefulTask);
     }
 
@@ -1716,8 +1710,8 @@ public class TaskManagerTest {
             .inState(State.RESTORING)
             .withInputPartitions(taskId04Partitions).build();
         final StreamTask taskToCloseReviveAndUpdateInputPartitions = statelessTask(taskId05)
-                .inState(State.RESTORING)
-                .withInputPartitions(taskId05Partitions).build();
+            .inState(State.RESTORING)
+            .withInputPartitions(taskId05Partitions).build();
         final TasksRegistry tasks = mock(TasksRegistry.class);
         final TaskManager taskManager = setUpTaskManager(ProcessingMode.AT_LEAST_ONCE, tasks, true);
         when(standbyTaskCreator.createStandbyTaskFromActive(taskToRecycle, taskToRecycle.inputPartitions()))
@@ -1762,6 +1756,7 @@ public class TaskManagerTest {
         Mockito.verify(taskToUpdateInputPartitions).updateInputPartitions(Mockito.eq(taskId05Partitions), anyMap());
         Mockito.verify(taskToCloseReviveAndUpdateInputPartitions).closeClean();
         Mockito.verify(taskToCloseReviveAndUpdateInputPartitions).revive();
+        Mockito.verify(taskToCloseReviveAndUpdateInputPartitions).initializeIfNeeded();
         Mockito.verify(stateUpdater).add(taskToCloseReviveAndUpdateInputPartitions);
     }
 
