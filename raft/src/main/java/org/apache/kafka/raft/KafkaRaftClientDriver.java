@@ -26,13 +26,22 @@ import org.slf4j.Logger;
 import java.util.concurrent.CompletableFuture;
 
 /**
- * A single-threaded driver for {@link KafkaRaftClient}.
+ * A single-threaded driver for {@link KafkaRaftClient}. Client APIs will only do useful work
+ * as long as the driver's thread is active. To start the thread, use {@link #start()}. To
+ * stop it, use {@link #shutdown()}.
+ *
+ * Note that the driver is responsible for the lifecycle of the {@link KafkaRaftClient} instance.
+ * Shutdown of the driver through {@link #shutdown()} ensures that the client itself is properly
+ * shutdown and closed.
  *
  * @param <T> See {@link KafkaRaftClient<T>}
  */
 public class KafkaRaftClientDriver<T> extends ShutdownableThread {
-    private final Logger log;
+    /**
+     * Closed in {@link #shutdown()} after shutdown completes.
+     */
     private final KafkaRaftClient<T> client;
+    private final Logger log;
     private final FaultHandler fatalFaultHandler;
 
     public KafkaRaftClientDriver(
