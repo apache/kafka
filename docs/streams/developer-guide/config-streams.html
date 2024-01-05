@@ -243,7 +243,7 @@ streamsSettings.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, 1);</code></pre>
           <tr class="row-odd"><td>acceptable.recovery.lag</td>
             <td>Medium</td>
             <td colspan="2">The maximum acceptable lag (number of offsets to catch up) for an instance to be considered caught-up and ready for the active task.</td>
-            <td>10000</td>
+            <td><code class="docutils literal"><span class="pre">10000</span></code></td>
           </tr>
           <tr class="row-even"><td>application.server</td>
             <td>Low</td>
@@ -255,7 +255,7 @@ streamsSettings.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, 1);</code></pre>
           <tr class="row-odd"><td>buffered.records.per.partition</td>
             <td>Low</td>
             <td colspan="2">The maximum number of records to buffer per partition.</td>
-            <td>1000</td>
+            <td><code class="docutils literal"><span class="pre">1000</span></code></td>
           </tr>
           <tr class="row-even"><td>cache.max.bytes.buffering</td>
             <td>Medium</td>
@@ -303,12 +303,12 @@ streamsSettings.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, 1);</code></pre>
           <tr class="row-even"><td>default.windowed.key.serde.inner</td>
             <td>Medium</td>
             <td colspan="2">Default serializer/deserializer for the inner class of windowed keys, implementing the <code class="docutils literal"><span class="pre">Serde</span></code> interface.</td>
-            <td>null</td>
+            <td><code class="docutils literal"><span class="pre">null</span></code></td>
           </tr>
           <tr class="row-odd"><td>default.windowed.value.serde.inner</td>
             <td>Medium</td>
             <td colspan="2">Default serializer/deserializer for the inner class of windowed values, implementing the <code class="docutils literal"><span class="pre">Serde</span></code> interface.</td>
-            <td>null</td>
+            <td><code class="docutils literal"><span class="pre">null</span></code></td>
           </tr>
           <tr class="row-even"><td>default.dsl.store</td>
             <td>Low</td>
@@ -349,7 +349,7 @@ streamsSettings.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, 1);</code></pre>
           <tr class="row-odd"><td>max.warmup.replicas</td>
             <td>Medium</td>
             <td colspan="2">The maximum number of warmup replicas (extra standbys beyond the configured num.standbys) that can be assigned at once.</td>
-            <td>2</td>
+            <td><code class="docutils literal"><span class="pre">2</span></code></td>
           </tr>
           <tr class="row-even"><td>metric.reporters</td>
             <td>Low</td>
@@ -359,7 +359,7 @@ streamsSettings.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, 1);</code></pre>
           <tr class="row-odd"><td>metrics.num.samples</td>
             <td>Low</td>
             <td colspan="2">The number of samples maintained to compute metrics.</td>
-            <td>2</td>
+            <td><code class="docutils literal"><span class="pre">2</span></code></td>
           </tr>
           <tr class="row-even"><td>metrics.recording.level</td>
             <td>Low</td>
@@ -374,12 +374,12 @@ streamsSettings.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, 1);</code></pre>
           <tr class="row-even"><td>num.standby.replicas</td>
             <td>High</td>
             <td colspan="2">The number of standby replicas for each task.</td>
-            <td>0</td>
+            <td><code class="docutils literal"><span class="pre">0</span></code></td>
           </tr>
           <tr class="row-odd"><td>num.stream.threads</td>
             <td>Medium</td>
             <td colspan="2">The number of threads to execute stream processing.</td>
-            <td>1</td>
+            <td><code class="docutils literal"><span class="pre">1</span></code></td>
           </tr>
           <tr class="row-odd"><td>probing.rebalance.interval.ms</td>
             <td>Low</td>
@@ -409,12 +409,12 @@ streamsSettings.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, 1);</code></pre>
             <td>Medium</td>
             <td colspan="2">The replication factor for changelog topics and repartition topics created by the application.
               The default of <code>-1</code> (meaning: use broker default replication factor) requires broker version 2.4 or newer.</td>
-            <td>-1</td>
+            <td><code class="docutils literal"><span class="pre">-1</span></code></td>
           </tr>
           <tr class="row-even"><td>retry.backoff.ms</td>
-              <td>Medium</td>
-              <td colspan="2">The amount of time in milliseconds, before a request is retried. This applies if the <code class="docutils literal"><span class="pre">retries</span></code> parameter is configured to be greater than 0. </td>
-              <td>100 milliseconds</td>
+            <td>Medium</td>
+            <td colspan="2">The amount of time in milliseconds, before a request is retried. This applies if the <code class="docutils literal"><span class="pre">retries</span></code> parameter is configured to be greater than 0. </td>
+            <td>100 milliseconds</td>
           </tr>
           <tr class="row-odd"><td>rocksdb.config.setter</td>
             <td>Medium</td>
@@ -439,7 +439,7 @@ streamsSettings.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, 1);</code></pre>
           <tr class="row-even"><td>topology.optimization</td>
             <td>Medium</td>
             <td colspan="2">A configuration telling Kafka Streams if it should optimize the topology and what optimizations to apply. Acceptable values are: <code>StreamsConfig.NO_OPTIMIZATION</code> (<code>none</code>), <code>StreamsConfig.OPTIMIZE</code> (<code>all</code>) or a comma separated list of specific optimizations: (<code>StreamsConfig.REUSE_KTABLE_SOURCE_TOPICS</code> (<code>reuse.ktable.source.topics</code>), <code>StreamsConfig.MERGE_REPARTITION_TOPICS</code> (<code>merge.repartition.topics</code>)). </td>
-            <td><code> NO_OPTIMIZATION</code></td>
+            <td><code>NO_OPTIMIZATION</code></td>
           </tr>
           <tr class="row-odd"><td>upgrade.from</td>
             <td>Medium</td>
@@ -452,9 +452,9 @@ streamsSettings.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, 1);</code></pre>
             <td>86400000 milliseconds (1 day)</td>
           </tr>
           <tr class="row-even"><td>window.size.ms</td>
-              <td>Low</td>
-              <td colspan="2">Sets window size for the deserializer in order to calculate window end times.</td>
-              <td>null</td>
+            <td>Low</td>
+            <td colspan="2">Sets window size for the deserializer in order to calculate window end times.</td>
+            <td><code class="docutils literal"><span class="pre">null</span></code></td>
           </tr>
           </tbody>
         </table>
