@@ -1388,20 +1388,23 @@ class KafkaApisTest extends Logging {
       topics.foreach(topic => {
         val metadataRequestData = new MetadataRequestData().setTopics(Collections.singletonList(topic))
         val request = buildRequest(new MetadataRequest(metadataRequestData, version.toShort))
-        kafkaApis = createKafkaApis()
-
-        val capturedResponse: ArgumentCaptor[AbstractResponse] = ArgumentCaptor.forClass(classOf[AbstractResponse])
-        kafkaApis.handle(request, RequestLocal.withThreadConfinedCaching)
-        verify(requestChannel).sendResponse(
-          ArgumentMatchers.eq(request),
-          capturedResponse.capture(),
-          any()
-        )
-        val response = capturedResponse.getValue.asInstanceOf[MetadataResponse]
-        assertEquals(1, response.topicMetadata.size)
-        assertEquals(1, response.errorCounts.get(Errors.INVALID_REQUEST))
-        response.data.topics.forEach(topic => assertNotEquals(null, topic.name))
-        reset(requestChannel)
+        val kafkaApis = createKafkaApis()
+        try {
+          val capturedResponse: ArgumentCaptor[AbstractResponse] = ArgumentCaptor.forClass(classOf[AbstractResponse])
+          kafkaApis.handle(request, RequestLocal.withThreadConfinedCaching)
+          verify(requestChannel).sendResponse(
+            ArgumentMatchers.eq(request),
+            capturedResponse.capture(),
+            any()
+          )
+          val response = capturedResponse.getValue.asInstanceOf[MetadataResponse]
+          assertEquals(1, response.topicMetadata.size)
+          assertEquals(1, response.errorCounts.get(Errors.INVALID_REQUEST))
+          response.data.topics.forEach(topic => assertNotEquals(null, topic.name))
+          reset(requestChannel)
+        } finally {
+          kafkaApis.close()
+        }
       })
     )
   }
