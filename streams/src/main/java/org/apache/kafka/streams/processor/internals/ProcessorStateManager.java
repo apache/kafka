@@ -270,7 +270,7 @@ public class ProcessorStateManager implements StateManager {
                         final Long offset = changelogOffsetFromCheckpointedOffset(loadedCheckpoints.remove(store.changelogPartition));
                         store.setOffset(offset);
 
-                        log.debug("State store {} initialized from checkpoint with offset {} at changelog {}",
+                        log.info("State store {} initialized from checkpoint with offset {} at changelog {}",
                                   store.stateStore.name(), store.offset, store.changelogPartition);
                     } else {
                         // with EOS, if the previous run did not shutdown gracefully, we may lost the checkpoint file
