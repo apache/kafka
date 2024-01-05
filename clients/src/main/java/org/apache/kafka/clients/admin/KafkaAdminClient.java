@@ -90,6 +90,7 @@ import org.apache.kafka.common.errors.ThrottlingQuotaExceededException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.UnacceptableCredentialException;
 import org.apache.kafka.common.errors.UnknownServerException;
+import org.apache.kafka.common.errors.UnknownTopicIdException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.errors.UnsupportedEndpointTypeException;
 import org.apache.kafka.common.errors.UnsupportedSaslMechanismException;
@@ -2228,7 +2229,7 @@ public class KafkaAdminClient extends AdminClient {
 
                     String topicName = cluster.topicName(topicId);
                     if (topicName == null) {
-                        future.completeExceptionally(new InvalidTopicException("TopicId " + topicId + " not found."));
+                        future.completeExceptionally(new UnknownTopicIdException("TopicId " + topicId + " not found."));
                         continue;
                     }
                     Errors topicError = errors.get(topicId);
