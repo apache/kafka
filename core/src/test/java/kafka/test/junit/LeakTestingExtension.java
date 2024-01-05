@@ -25,7 +25,6 @@ import org.junit.jupiter.api.extension.ExtensionContext.Namespace;
 import org.junit.jupiter.api.extension.ExtensionContext.Store;
 
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.HashSet;
 import java.util.Objects;
 import java.util.Set;
@@ -63,23 +62,17 @@ public class LeakTestingExtension implements BeforeEachCallback, AfterEachCallba
     }
 
     private Set<Thread> unexpectedThreads(Set<Thread> initialThreads) {
-        Set<Thread> finalThreads = Thread.getAllStackTraces().keySet();
-
-        if (initialThreads.size() != finalThreads.size()) {
-            Set<Thread> leakedThreads = new HashSet<>(finalThreads);
-            leakedThreads.removeAll(initialThreads);
-            return leakedThreads.stream()
-                    .filter(t -> {
-                        for (String s: EXPECTED_THREAD_NAMES) {
-                            if (t.getName().contains(s))
-                                return false;
-                        }
-                        return true;
-                    })
-                    .collect(Collectors.toSet());
-        }
-
-        return Collections.emptySet();
+        Set<Thread> threads = new HashSet<>(Thread.getAllStackTraces().keySet());
+        return threads.stream()
+                .filter(t -> !initialThreads.contains(t))
+                .filter(t -> {
+                    for (String s: EXPECTED_THREAD_NAMES) {
+                        if (t.getName().contains(s))
+                            return false;
+                    }
+                    return true;
+                })
+                .collect(Collectors.toSet());
     }
 
     private Store getStore(ExtensionContext context) {
