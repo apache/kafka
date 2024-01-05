@@ -774,7 +774,7 @@ public class StreamThreadTest {
             mockTime
         );
 
-        when(consumer.poll(any())).thenReturn(ConsumerRecords.empty());
+        lenient().when(consumer.poll(any())).thenReturn(ConsumerRecords.empty());
         final ConsumerGroupMetadata consumerGroupMetadata = mock(ConsumerGroupMetadata.class);
         when(consumer.groupMetadata()).thenReturn(consumerGroupMetadata);
         when(consumerGroupMetadata.groupInstanceId()).thenReturn(Optional.empty());
