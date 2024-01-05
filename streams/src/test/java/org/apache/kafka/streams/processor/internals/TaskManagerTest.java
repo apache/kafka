@@ -1210,11 +1210,13 @@ public class TaskManagerTest {
         when(stateUpdater.hasRemovedTasks()).thenReturn(true);
         when(stateUpdater.drainRemovedTasks()).thenReturn(mkSet(statefulTask));
         taskManager = setUpTaskManager(ProcessingMode.AT_LEAST_ONCE, tasks, true);
+        taskManager.setMainConsumer(mockitoConsumer);
 
         taskManager.checkStateUpdater(time.milliseconds(), noOpResetter);
 
         Mockito.verify(statefulTask).suspend();
         Mockito.verify(tasks).addTask(statefulTask);
+        Mockito.verifyNoInteractions(mockitoConsumer);
     }
 
     @Test
@@ -1276,6 +1278,7 @@ public class TaskManagerTest {
         Mockito.verify(taskToCloseReviveAndUpdateInputPartitions).updateInputPartitions(Mockito.eq(taskId05Partitions), anyMap());
         Mockito.verify(taskToCloseReviveAndUpdateInputPartitions).initializeIfNeeded();
         Mockito.verify(stateUpdater).add(taskToCloseReviveAndUpdateInputPartitions);
+        Mockito.verifyNoInteractions(mockitoConsumer);
     }
 
     @Test
@@ -1428,6 +1431,7 @@ public class TaskManagerTest {
             .withInputPartitions(taskId00Partitions).build();
         final TasksRegistry tasks = mock(TasksRegistry.class);
         final TaskManager taskManager = setUpTransitionToRunningOfRestoredTask(task, tasks);
+        taskManager.setMainConsumer(mockitoConsumer);
         final TimeoutException timeoutException = new TimeoutException();
         doThrow(timeoutException).when(task).completeRestoration(noOpResetter);
 
@@ -1436,6 +1440,7 @@ public class TaskManagerTest {
         Mockito.verify(task).maybeInitTaskTimeoutOrThrow(anyLong(), Mockito.eq(timeoutException));
         Mockito.verify(tasks, never()).addTask(task);
         Mockito.verify(task, never()).clearTaskTimeout();
+        Mockito.verifyNoInteractions(mockitoConsumer);
     }
 
     private TaskManager setUpTransitionToRunningOfRestoredTask(final StreamTask statefulTask,
@@ -1670,11 +1675,13 @@ public class TaskManagerTest {
         when(stateUpdater.drainRestoredActiveTasks(any(Duration.class))).thenReturn(mkSet(statefulTask));
         when(stateUpdater.restoresActiveTasks()).thenReturn(true);
         final TaskManager taskManager = setUpTaskManager(ProcessingMode.AT_LEAST_ONCE, tasks, true);
+        taskManager.setMainConsumer(mockitoConsumer);
 
         taskManager.checkStateUpdater(time.milliseconds(), noOpResetter);
 
         Mockito.verify(statefulTask).suspend();
         Mockito.verify(tasks).addTask(statefulTask);
+        Mockito.verifyNoInteractions(mockitoConsumer);
     }
 
     @Test
@@ -5013,6 +5020,8 @@ public class TaskManagerTest {
         assignment.putAll(taskId01Assignment);
         when(activeTaskCreator.createTasks(any(), Mockito.eq(assignment))).thenReturn(asList(task00, task01));
 
+        taskManager.setMainConsumer(mockitoConsumer);
+
         taskManager.handleAssignment(assignment, Collections.emptyMap());
 
         final RuntimeException thrown = assertThrows(
@@ -5022,6 +5031,7 @@ public class TaskManagerTest {
         assertThat(thrown.getCause().getMessage(), is("KABOOM!"));
         assertThat(task00.state(), is(Task.State.SUSPENDED));
         assertThat(task01.state(), is(Task.State.SUSPENDED));
+        Mockito.verifyNoInteractions(mockitoConsumer);
     }
 
     @Test
@@ -5037,12 +5047,15 @@ public class TaskManagerTest {
         when(activeTaskCreator.createTasks(any(), Mockito.eq(taskId00Assignment))).thenReturn(singletonList(activeTask));
         when(standbyTaskCreator.createStandbyTaskFromActive(Mockito.any(), Mockito.eq(taskId00Partitions))).thenReturn(standbyTask);
 
+        taskManager.setMainConsumer(mockitoConsumer);
+
         taskManager.handleAssignment(taskId00Assignment, Collections.emptyMap());
         taskManager.handleAssignment(Collections.emptyMap(), taskId00Assignment);
 
         Mockito.verify(activeTaskCreator).closeAndRemoveTaskProducerIfNeeded(taskId00);
         Mockito.verify(activeTaskCreator).createTasks(any(), Mockito.eq(emptyMap()));
         Mockito.verify(standbyTaskCreator, times(2)).createTasks(Collections.emptyMap());
+        Mockito.verifyNoInteractions(mockitoConsumer);
     }
 
     @Test
@@ -5059,11 +5072,14 @@ public class TaskManagerTest {
         when(activeTaskCreator.createActiveTaskFromStandby(Mockito.eq(standbyTask), Mockito.eq(taskId00Partitions), any()))
             .thenReturn(activeTask);
 
+        taskManager.setMainConsumer(mockitoConsumer);
+
         taskManager.handleAssignment(Collections.emptyMap(), taskId00Assignment);
         taskManager.handleAssignment(taskId00Assignment, Collections.emptyMap());
 
         Mockito.verify(activeTaskCreator, times(2)).createTasks(any(), Mockito.eq(emptyMap()));
         Mockito.verify(standbyTaskCreator).createTasks(Collections.emptyMap());
+        Mockito.verifyNoInteractions(mockitoConsumer);
     }
 
     @Test
