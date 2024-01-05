@@ -543,11 +543,11 @@ public class TaskManager {
             if (activeTasksToCreate.containsKey(taskId)) {
                 final Set<TopicPartition> inputPartitions = activeTasksToCreate.get(taskId);
                 if (task.isActive() && !task.inputPartitions().equals(inputPartitions)) {
-                    stateUpdater.remove(taskId);
                     if (tasks.removePendingTaskToCloseClean(taskId)) {
                         tasks.addPendingTaskToCloseReviveAndUpdateInputPartitions(taskId, inputPartitions);
                     } else {
                         tasks.addPendingTaskToUpdateInputPartitions(taskId, inputPartitions);
+                        stateUpdater.remove(taskId);
                     }
                 } else if (task.isActive()) {
                     tasks.removePendingActiveTaskToSuspend(taskId);
