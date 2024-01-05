@@ -2114,7 +2114,13 @@ class ReplicaManager(val config: KafkaConfig,
     for (partition <- partitions) {
       val topicPartition = partition.topicPartition
       logManager.getLog(topicPartition, isFuture = true).foreach { futureLog =>
-        partition.log.foreach { _ =>
+        partition.log.foreach { currentLog =>
+          if (currentLog.parentDir == futureLog.parentDir) {
+            // The future is stale, likely because of a broker crash during a previous move and must
+            // be removed
+            logManager.asyncDelete(topicPartition, isFuture = true)
+            return
+          }
           val leader = BrokerEndPoint(config.brokerId, "localhost", -1)
 
           // Add future replica log to partition's map
