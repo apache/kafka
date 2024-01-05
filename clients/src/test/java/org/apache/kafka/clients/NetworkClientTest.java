@@ -589,7 +589,7 @@ public class NetworkClientTest {
         client.poll(0, time.milliseconds());
 
         assertEquals(1, client.inFlightRequestCount(node.idString()));
-        assertFalse(client.connectionFailed(node), "Connection failed after throttling.");
+        assertFalse(client.connectionFailed(node), "Connection should not have failed due to the extra time spent throttling.");
     }
 
     @Test
