@@ -547,7 +547,7 @@ public class TaskManagerTest {
         );
 
         Mockito.verify(activeTaskCreator).createTasks(consumer, Collections.emptyMap());
-        Mockito.verify(stateUpdater).remove(activeTaskToUpdateInputPartitions.id());
+        Mockito.verify(stateUpdater, never()).remove(activeTaskToUpdateInputPartitions.id());
         Mockito.verify(tasks).removePendingTaskToCloseClean(activeTaskToUpdateInputPartitions.id());
         Mockito.verify(tasks).addPendingTaskToCloseReviveAndUpdateInputPartitions(activeTaskToUpdateInputPartitions.id(), newInputPartitions);
         Mockito.verify(standbyTaskCreator).createTasks(Collections.emptyMap());
