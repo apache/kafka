@@ -68,6 +68,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -526,16 +527,37 @@ public class HeartbeatRequestManagerTest {
 
     @Test
     public void testPollTimerExpiration() {
-        heartbeatRequestManager = createHeartbeatRequestManager();
+        coordinatorRequestManager = mock(CoordinatorRequestManager.class);
+        membershipManager = mock(MembershipManager.class);
+        heartbeatState = mock(HeartbeatRequestManager.HeartbeatState.class);
+        heartbeatRequestState = spy(new HeartbeatRequestManager.HeartbeatRequestState(
+                new LogContext(),
+                time,
+                heartbeatIntervalMs,
+                retryBackoffMs,
+                retryBackoffMaxMs,
+                0));
+        backgroundEventHandler = mock(BackgroundEventHandler.class);
+
+        heartbeatRequestManager = createHeartbeatRequestManager(
+                coordinatorRequestManager,
+                membershipManager,
+                heartbeatState,
+                heartbeatRequestState,
+                backgroundEventHandler);
         when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(new Node(1, "localhost", 9999)));
         when(membershipManager.shouldSkipHeartbeat()).thenReturn(false);
+        when(membershipManager.state()).thenReturn(MemberState.STABLE);
 
         time.sleep(maxPollIntervalMs);
-        assertLeaveGroup(heartbeatRequestManager);
-        verify(membershipManager).transitionToStaled();
+        NetworkClientDelegate.PollResult pollResult = heartbeatRequestManager.poll(time.milliseconds());
+        assertEquals(1, pollResult.unsentRequests.size());
+        verify(heartbeatState).reset();
+        verify(heartbeatRequestState).reset();
+        verify(membershipManager).transitionToStale();
 
         assertNoHeartbeat(heartbeatRequestManager);
-        heartbeatRequestManager.resetPollTimer();
+        heartbeatRequestManager.resetPollTimer(time.milliseconds());
         assertTrue(pollTimer.notExpired());
         assertHeartbeat(heartbeatRequestManager);
     }
@@ -551,12 +573,6 @@ public class HeartbeatRequestManagerTest {
     private void assertNoHeartbeat(HeartbeatRequestManager hrm) {
         NetworkClientDelegate.PollResult pollResult = hrm.poll(time.milliseconds());
         assertEquals(0, pollResult.unsentRequests.size());
-    }
-
-    private NetworkClientDelegate.PollResult assertLeaveGroup(HeartbeatRequestManager hrm) {
-        NetworkClientDelegate.PollResult pollResult = hrm.poll(time.milliseconds());
-        assertEquals(1, pollResult.unsentRequests.size());
-        return pollResult;
     }
 
     private void mockStableMember() {
@@ -657,18 +673,6 @@ public class HeartbeatRequestManagerTest {
 
     private HeartbeatRequestManager createHeartbeatRequestManager() {
         LogContext logContext = new LogContext();
-        coordinatorRequestManager = mock(CoordinatorRequestManager.class);
-        subscriptions = mock(SubscriptionState.class);
-        membershipManager = mock(MembershipManager.class);
-        backgroundEventHandler = mock(BackgroundEventHandler.class);
-        heartbeatState = new HeartbeatRequestManager.HeartbeatState(subscriptions, membershipManager, maxPollIntervalMs);
-        heartbeatRequestState = new HeartbeatRequestManager.HeartbeatRequestState(
-            logContext,
-            time,
-            heartbeatIntervalMs,
-            retryBackoffMs,
-            retryBackoffMaxMs,
-            0);
         pollTimer = time.timer(maxPollIntervalMs);
         return new HeartbeatRequestManager(
             logContext,
@@ -679,5 +683,24 @@ public class HeartbeatRequestManagerTest {
             heartbeatState,
             heartbeatRequestState,
             backgroundEventHandler);
+    }
+
+    private HeartbeatRequestManager createHeartbeatRequestManager(
+            final CoordinatorRequestManager coordinatorRequestManager,
+            final MembershipManager membershipManager,
+            final HeartbeatRequestManager.HeartbeatState heartbeatState,
+            final HeartbeatRequestManager.HeartbeatRequestState heartbeatRequestState,
+            final BackgroundEventHandler backgroundEventHandler) {
+        LogContext logContext = new LogContext();
+        pollTimer = time.timer(maxPollIntervalMs);
+        return new HeartbeatRequestManager(
+                logContext,
+                pollTimer,
+                config(),
+                coordinatorRequestManager,
+                membershipManager,
+                heartbeatState,
+                heartbeatRequestState,
+                backgroundEventHandler);
     }
 }

@@ -393,6 +393,7 @@
       <allow class="kafka.zk.EmbeddedZookeeper"/>
       <allow pkg="com.fasterxml.jackson" />
       <allow pkg="org.apache.kafka.tools" />
+      <allow pkg="org.apache.kafka.server.config" />
     </subpackage>
 
     <subpackage name="test">
