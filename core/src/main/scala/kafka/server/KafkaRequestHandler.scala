@@ -347,13 +347,13 @@ class BrokerTopicMetrics(name: Option[String], configOpt: java.util.Optional[Kaf
         RemoteStorageMetrics.FAILED_BUILD_REMOTE_LOG_AUX_STATE_PER_SEC_METRIC.getName -> MeterWrapper(RemoteStorageMetrics.FAILED_BUILD_REMOTE_LOG_AUX_STATE_PER_SEC_METRIC.getName, "requests")
       ).asJava)
       metricGaugeTypeMap.putAll(Map(
-        RemoteStorageMetrics.REMOTE_COPY_LAG_BYTES_METRIC.getName -> GaugeWrapper(RemoteStorageMetrics.REMOTE_COPY_LAG_BYTES_METRIC.getName, new BrokerTopicAggregatedMetric),
-        RemoteStorageMetrics.REMOTE_COPY_LAG_SEGMENTS_METRIC.getName -> GaugeWrapper(RemoteStorageMetrics.REMOTE_COPY_LAG_SEGMENTS_METRIC.getName, new BrokerTopicAggregatedMetric),
-        RemoteStorageMetrics.REMOTE_DELETE_LAG_BYTES_METRIC.getName -> GaugeWrapper(RemoteStorageMetrics.REMOTE_DELETE_LAG_BYTES_METRIC.getName, new BrokerTopicAggregatedMetric),
-        RemoteStorageMetrics.REMOTE_DELETE_LAG_SEGMENTS_METRIC.getName -> GaugeWrapper(RemoteStorageMetrics.REMOTE_DELETE_LAG_SEGMENTS_METRIC.getName, new BrokerTopicAggregatedMetric),
-        RemoteStorageMetrics.REMOTE_LOG_METADATA_COUNT_METRIC.getName -> GaugeWrapper(RemoteStorageMetrics.REMOTE_LOG_METADATA_COUNT_METRIC.getName, new BrokerTopicAggregatedMetric),
-        RemoteStorageMetrics.REMOTE_LOG_SIZE_COMPUTATION_TIME_METRIC.getName -> GaugeWrapper(RemoteStorageMetrics.REMOTE_LOG_SIZE_COMPUTATION_TIME_METRIC.getName, new BrokerTopicAggregatedMetric),
-        RemoteStorageMetrics.REMOTE_LOG_SIZE_BYTES_METRIC.getName -> GaugeWrapper(RemoteStorageMetrics.REMOTE_LOG_SIZE_BYTES_METRIC.getName, new BrokerTopicAggregatedMetric)
+        RemoteStorageMetrics.REMOTE_COPY_LAG_BYTES_METRIC.getName -> GaugeWrapper(RemoteStorageMetrics.REMOTE_COPY_LAG_BYTES_METRIC.getName, new BrokerTopicAggregatedMetric(allTopics = tags.isEmpty)),
+        RemoteStorageMetrics.REMOTE_COPY_LAG_SEGMENTS_METRIC.getName -> GaugeWrapper(RemoteStorageMetrics.REMOTE_COPY_LAG_SEGMENTS_METRIC.getName, new BrokerTopicAggregatedMetric(allTopics = tags.isEmpty)),
+        RemoteStorageMetrics.REMOTE_DELETE_LAG_BYTES_METRIC.getName -> GaugeWrapper(RemoteStorageMetrics.REMOTE_DELETE_LAG_BYTES_METRIC.getName, new BrokerTopicAggregatedMetric(allTopics = tags.isEmpty)),
+        RemoteStorageMetrics.REMOTE_DELETE_LAG_SEGMENTS_METRIC.getName -> GaugeWrapper(RemoteStorageMetrics.REMOTE_DELETE_LAG_SEGMENTS_METRIC.getName, new BrokerTopicAggregatedMetric(allTopics = tags.isEmpty)),
+        RemoteStorageMetrics.REMOTE_LOG_METADATA_COUNT_METRIC.getName -> GaugeWrapper(RemoteStorageMetrics.REMOTE_LOG_METADATA_COUNT_METRIC.getName, new BrokerTopicAggregatedMetric(allTopics = tags.isEmpty)),
+        RemoteStorageMetrics.REMOTE_LOG_SIZE_COMPUTATION_TIME_METRIC.getName -> GaugeWrapper(RemoteStorageMetrics.REMOTE_LOG_SIZE_COMPUTATION_TIME_METRIC.getName, new BrokerTopicAggregatedMetric(allTopics = tags.isEmpty)),
+        RemoteStorageMetrics.REMOTE_LOG_SIZE_BYTES_METRIC.getName -> GaugeWrapper(RemoteStorageMetrics.REMOTE_LOG_SIZE_BYTES_METRIC.getName, new BrokerTopicAggregatedMetric(allTopics = tags.isEmpty))
       ).asJava)
     })
 
@@ -409,6 +409,11 @@ class BrokerTopicMetrics(name: Option[String], configOpt: java.util.Optional[Kaf
   def recordRemoteCopyLagBytes(partition: Int, bytesLag: Long): Unit = {
     val brokerTopicAggregatedMetric = metricGaugeTypeMap.get(RemoteStorageMetrics.REMOTE_COPY_LAG_BYTES_METRIC.getName).brokerTopicAggregatedMetric
     brokerTopicAggregatedMetric.setPartitionMetricValue(partition, bytesLag)
+  }
+
+  def recordRemoteCopyLagBytes(topic: String, bytesLag: Long): Unit = {
+    val brokerTopicAggregatedMetric = metricGaugeTypeMap.get(RemoteStorageMetrics.REMOTE_COPY_LAG_BYTES_METRIC.getName).brokerTopicAggregatedMetric
+    brokerTopicAggregatedMetric.setTopicMetricValue(topic, bytesLag)
   }
 
   def removeRemoteCopyLagBytes(partition: Int): Unit = {
@@ -529,18 +534,28 @@ class BrokerTopicMetrics(name: Option[String], configOpt: java.util.Optional[Kaf
   }
 }
 
-class BrokerTopicAggregatedMetric() {
+class BrokerTopicAggregatedMetric(allTopics: Boolean = false) {
   private val partitionMetricValues = new ConcurrentHashMap[Int, Long]()
+  private val topicMetricValues = new ConcurrentHashMap[String, Long]()
 
   def setPartitionMetricValue(partition: Int, partitionValue: Long): Unit = {
     partitionMetricValues.put(partition, partitionValue)
+  }
+
+  def setTopicMetricValue(topic: String, topicValue: Long): Unit = {
+    topicMetricValues.put(topic, topicValue)
   }
 
   def removePartition(partition: Int): Option[Long] = {
     Option.apply(partitionMetricValues.remove(partition))
   }
 
-  def value(): Long = partitionMetricValues.values().stream().mapToLong(v => v).sum()
+  def value(): Long = {
+    if (!allTopics)
+      partitionMetricValues.values().stream().mapToLong(v => v).sum()
+    else
+      topicMetricValues.values().stream().mapToLong(v => v).sum()
+  }
 
   def close(): Unit = partitionMetricValues.clear()
 }
