@@ -708,7 +708,6 @@ public class ConsumerGroupTest {
         GroupCoordinatorMetricsShard metricsShard = new GroupCoordinatorMetricsShard(
             snapshotRegistry,
             Collections.emptyMap(),
-            Collections.emptyMap(),
             new TopicPartition("__consumer_offsets", 0)
         );
         ConsumerGroup group = new ConsumerGroup(snapshotRegistry, "group-foo", metricsShard);

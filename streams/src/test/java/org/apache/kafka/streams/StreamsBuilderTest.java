@@ -52,7 +52,7 @@ import org.apache.kafka.streams.state.WindowStore;
 import org.apache.kafka.streams.state.internals.InMemoryKeyValueStore;
 import org.apache.kafka.streams.state.internals.InMemorySessionStore;
 import org.apache.kafka.streams.state.internals.InMemoryWindowStore;
-import org.apache.kafka.streams.state.internals.RocksDBTimestampedStore;
+import org.apache.kafka.streams.state.internals.RocksDBStore;
 import org.apache.kafka.streams.state.internals.RocksDBWindowStore;
 import org.apache.kafka.streams.state.internals.WrappedStateStore;
 import org.apache.kafka.test.MockApiProcessorSupplier;
@@ -1299,7 +1299,7 @@ public class StreamsBuilderTest {
         assertTypesForStateStore(topology.stateStores(),
                 InMemoryWindowStore.class,
                 RocksDBWindowStore.class,
-                RocksDBTimestampedStore.class);
+                RocksDBStore.class);
     }
 
     @Test

@@ -16,8 +16,6 @@
  */
 package org.apache.kafka.clients;
 
-import java.util.Map.Entry;
-import java.util.stream.Collectors;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.ClusterResourceListener;
 import org.apache.kafka.common.KafkaException;
@@ -44,10 +42,12 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Map.Entry;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.function.Supplier;
+import java.util.stream.Collectors;
 
 import static org.apache.kafka.common.record.RecordBatch.NO_PARTITION_LEADER_EPOCH;
 
@@ -427,10 +427,16 @@ public class Metadata implements Closeable {
             );
         }
 
-        this.cache = cache.mergeWith(cache.clusterResource().clusterId(), newNodes,
-                    updatePartitionMetadata, Collections.emptySet(), Collections.emptySet(),
-                    Collections.emptySet(), cache.cluster().controller(), topicIdsForUpdatedTopics,
-                    (topic, isInternal) -> !updatedTopics.contains(topic));
+        // Fetch responses can include partition level leader changes, when this happens, we perform a partial
+        // metadata update, by keeping the unchanged partition and update the changed partitions.
+        this.cache = cache.mergeWith(
+            cache.clusterResource().clusterId(),
+            newNodes,
+            updatePartitionMetadata,
+            Collections.emptySet(), Collections.emptySet(), Collections.emptySet(),
+            cache.cluster().controller(),
+            topicIdsForUpdatedTopics,
+            (topic, isInternal) -> true);
         clusterResourceListeners.onUpdate(cache.clusterResource());
 
         return updatePartitionMetadata.stream()

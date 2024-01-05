@@ -310,6 +310,23 @@ streamsSettings.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, 1);</code></pre>
             <td colspan="2">Default serializer/deserializer for the inner class of windowed values, implementing the <code class="docutils literal"><span class="pre">Serde</span></code> interface.</td>
             <td>null</td>
           </tr>
+          <tr class="row-even"><td>default.dsl.store</td>
+            <td>Low</td>
+            <td colspan="2">
+              [DEPRECATED] The default state store type used by DSL operators. Deprecated in
+              favor of <code>dsl.store.suppliers.class</code>
+              </td>
+            <td><code>ROCKS_DB</code></td>
+          </tr>
+          <tr class="row-odd"><td>dsl.store.suppliers.class</td>
+            <td>Low</td>
+            <td colspan="2">
+              Defines a default state store implementation to be used by any stateful DSL operator
+              that has not explicitly configured the store implementation type. Must implement
+              the <code>org.apache.kafka.streams.state.DslStoreSuppliers</code> interface.
+            </td>
+            <td><code>BuiltInDslStoreSuppliers.RocksDBDslStoreSuppliers</code></td>
+          </tr>
           <tr class="row-even"><td>max.task.idle.ms</td>
             <td>Medium</td>
             <td colspan="2">

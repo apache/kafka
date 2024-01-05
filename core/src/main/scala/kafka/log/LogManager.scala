@@ -83,7 +83,7 @@ class LogManager(logDirs: Seq[File],
 
   private val metricsGroup = new KafkaMetricsGroup(this.getClass)
 
-  val InitialTaskDelayMs = 30 * 1000
+  val InitialTaskDelayMs: Int = 30 * 1000
 
   private val logCreationOrDeletionLock = new Object
   private val currentLogs = new Pool[TopicPartition, UnifiedLog]()
@@ -293,7 +293,7 @@ class LogManager(logDirs: Seq[File],
         })
       } catch {
         case e: NoSuchFileException =>
-          info(s"No meta.properties file found in ${logDir}.")
+          info(s"No meta.properties file found in $logDir.")
          case e: IOException =>
           logDirFailureChannel.maybeAddOfflineLogDir(logDir.getAbsolutePath, s"Disk error while loading ID $logDir", e)
        }
@@ -1013,7 +1013,7 @@ class LogManager(logDirs: Seq[File],
             case Some(targetId) if !preferredLogDirs.containsKey(topicPartition) =>
               // If partition is configured with both targetLogDirectoryId and preferredLogDirs, then
               // preferredLogDirs will be respected, otherwise targetLogDirectoryId will be respected
-              directoryIds.find(_._2 == targetId).map(_._1).getOrElse(null)
+              directoryIds.find(_._2 == targetId).map(_._1).orNull
             case _ =>
               preferredLogDirs.get(topicPartition)
           }
@@ -1173,7 +1173,7 @@ class LogManager(logDirs: Seq[File],
       if (destLog == null)
         throw new KafkaStorageException(s"The future replica for $topicPartition is offline")
 
-      destLog.renameDir(UnifiedLog.logDirName(topicPartition), true)
+      destLog.renameDir(UnifiedLog.logDirName(topicPartition), shouldReinitialize = true)
       // the metrics tags still contain "future", so we have to remove it.
       // we will add metrics back after sourceLog remove the metrics
       destLog.removeLogMetrics()
@@ -1189,7 +1189,7 @@ class LogManager(logDirs: Seq[File],
       }
 
       try {
-        sourceLog.renameDir(UnifiedLog.logDeleteDirName(topicPartition), true)
+        sourceLog.renameDir(UnifiedLog.logDeleteDirName(topicPartition), shouldReinitialize = true)
         // Now that replica in source log directory has been successfully renamed for deletion.
         // Close the log, update checkpoint files, and enqueue this log to be deleted.
         sourceLog.close()
@@ -1240,10 +1240,10 @@ class LogManager(logDirs: Seq[File],
         }
         if (isStray) {
           // Move aside stray partitions, don't delete them
-          removedLog.renameDir(UnifiedLog.logStrayDirName(topicPartition), false)
+          removedLog.renameDir(UnifiedLog.logStrayDirName(topicPartition), shouldReinitialize = false)
           warn(s"Log for partition ${removedLog.topicPartition} is marked as stray and renamed to ${removedLog.dir.getAbsolutePath}")
         } else {
-          removedLog.renameDir(UnifiedLog.logDeleteDirName(topicPartition), false)
+          removedLog.renameDir(UnifiedLog.logDeleteDirName(topicPartition), shouldReinitialize = false)
           addLogToBeDeleted(removedLog)
           info(s"Log for partition ${removedLog.topicPartition} is renamed to ${removedLog.dir.getAbsolutePath} and is scheduled for deletion")
         }
