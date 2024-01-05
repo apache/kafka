@@ -37,6 +37,7 @@
   // Version 9 is the first version that can be used with the new consumer group protocol (KIP-848). It adds
   // the MemberId and MemberEpoch fields. Those are filled in and validated when the new consumer protocol is used.
   "validVersions": "0-9",
+  "deprecatedVersions": "0",
   "flexibleVersions": "6+",
   "fields": [
     { "name": "GroupId", "type": "string", "versions": "0-7", "entityType": "groupId",

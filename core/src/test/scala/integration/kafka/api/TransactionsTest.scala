@@ -69,8 +69,13 @@ class TransactionsTest extends IntegrationTestHarness {
     props.put(KafkaConfig.AutoLeaderRebalanceEnableProp, false.toString)
     props.put(KafkaConfig.GroupInitialRebalanceDelayMsProp, "0")
     props.put(KafkaConfig.TransactionsAbortTimedOutTransactionCleanupIntervalMsProp, "200")
-    props
 
+    // The new group coordinator does not support verifying transactions yet.
+    if (isNewGroupCoordinatorEnabled()) {
+      props.put(KafkaConfig.TransactionPartitionVerificationEnableProp, "false")
+    }
+
+    props
   }
 
   override protected def modifyConfigs(props: Seq[Properties]): Unit = {
@@ -299,14 +304,14 @@ class TransactionsTest extends IntegrationTestHarness {
 
   @nowarn("cat=deprecation")
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
-  @ValueSource(strings = Array("zk", "kraft"))  // TODO: Enable kraft+kip848 after TxnOffsetCommit is implemented
+  @ValueSource(strings = Array("zk", "kraft", "kraft+kip848"))
   def testSendOffsetsWithGroupId(quorum: String): Unit = {
     sendOffset((producer, groupId, consumer) =>
       producer.sendOffsetsToTransaction(TestUtils.consumerPositions(consumer).asJava, groupId))
   }
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
-  @ValueSource(strings = Array("zk", "kraft"))  // TODO: Enable kraft+kip848 after TxnOffsetCommit is implemented
+  @ValueSource(strings = Array("zk", "kraft", "kraft+kip848"))
   def testSendOffsetsWithGroupMetadata(quorum: String): Unit = {
     sendOffset((producer, _, consumer) =>
       producer.sendOffsetsToTransaction(TestUtils.consumerPositions(consumer).asJava, consumer.groupMetadata()))
@@ -448,7 +453,7 @@ class TransactionsTest extends IntegrationTestHarness {
   }
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
-  @ValueSource(strings = Array("zk", "kraft"))  // TODO: Enable kraft+kip848 after TxnOffsetCommit is implemented
+  @ValueSource(strings = Array("zk", "kraft", "kraft+kip848"))
   def testOffsetMetadataInSendOffsetsToTransaction(quorum: String): Unit = {
     val tp = new TopicPartition(topic1, 0)
     val groupId = "group"

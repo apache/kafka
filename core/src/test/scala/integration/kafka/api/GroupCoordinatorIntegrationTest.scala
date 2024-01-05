@@ -19,6 +19,8 @@ import kafka.utils.{TestInfoUtils, TestUtils}
 import org.apache.kafka.clients.consumer.OffsetAndMetadata
 import org.apache.kafka.common.TopicPartition
 import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.ValueSource
 
 import scala.jdk.CollectionConverters._
 import java.util.Properties
@@ -35,7 +37,6 @@ class GroupCoordinatorIntegrationTest extends KafkaServerTestHarness {
 
   override def generateConfigs = TestUtils.createBrokerConfigs(1, zkConnectOrNull, enableControlledShutdown = false).map {
     if (isNewGroupCoordinatorEnabled()) {
-      overridingProps.put(KafkaConfig.UnstableApiVersionsEnableProp, "true")
       overridingProps.put(KafkaConfig.NewGroupCoordinatorEnableProp, "true")
     }
     KafkaConfig.fromProps(_, overridingProps)

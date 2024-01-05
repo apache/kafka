@@ -426,11 +426,11 @@ abstract class QuorumTestHarness extends Logging {
 
   @AfterEach
   def tearDown(): Unit = {
-    Exit.resetExitProcedure()
-    Exit.resetHaltProcedure()
     if (implementation != null) {
       implementation.shutdown()
     }
+    Exit.resetExitProcedure()
+    Exit.resetHaltProcedure()
     TestUtils.clearYammerMetrics()
     System.clearProperty(JaasUtils.JAVA_LOGIN_CONFIG_PARAM)
     Configuration.setConfiguration(null)

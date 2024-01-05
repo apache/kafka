@@ -543,8 +543,12 @@ public class TaskManager {
             if (activeTasksToCreate.containsKey(taskId)) {
                 final Set<TopicPartition> inputPartitions = activeTasksToCreate.get(taskId);
                 if (task.isActive() && !task.inputPartitions().equals(inputPartitions)) {
-                    stateUpdater.remove(taskId);
-                    tasks.addPendingTaskToUpdateInputPartitions(taskId, inputPartitions);
+                    if (tasks.removePendingTaskToCloseClean(taskId)) {
+                        tasks.addPendingTaskToCloseReviveAndUpdateInputPartitions(taskId, inputPartitions);
+                    } else {
+                        tasks.addPendingTaskToUpdateInputPartitions(taskId, inputPartitions);
+                        stateUpdater.remove(taskId);
+                    }
                 } else if (task.isActive()) {
                     tasks.removePendingActiveTaskToSuspend(taskId);
                     if (tasks.removePendingTaskToCloseClean(taskId)) {
@@ -819,15 +823,17 @@ public class TaskManager {
         }
     }
 
-    private void closeTaskClean(final Task task,
-                                final Set<Task> tasksToCloseDirty,
-                                final Map<TaskId, RuntimeException> taskExceptions) {
+    /** Returns true if the task closed clean */
+    private boolean closeTaskClean(final Task task,
+                                   final Set<Task> tasksToCloseDirty,
+                                   final Map<TaskId, RuntimeException> taskExceptions) {
         try {
             task.suspend();
             task.closeClean();
             if (task.isActive()) {
                 activeTaskCreator.closeAndRemoveTaskProducerIfNeeded(task.id());
             }
+            return true;
         } catch (final RuntimeException e) {
             final String uncleanMessage = String.format("Failed to close task %s cleanly. " +
                 "Attempting to close remaining tasks before re-throwing:", task.id());
@@ -838,6 +844,7 @@ public class TaskManager {
             }
 
             taskExceptions.putIfAbsent(task.id(), e);
+            return false;
         }
     }
 
@@ -916,6 +923,12 @@ public class TaskManager {
                 stateUpdater.add(task);
             } else if (tasks.removePendingTaskToCloseClean(task.id())) {
                 closeTaskClean(task, tasksToCloseDirty, taskExceptions);
+            } else if ((inputPartitions = tasks.removePendingTaskToCloseReviveAndUpdateInputPartitions(task.id())) != null) {
+                if (closeTaskClean(task, tasksToCloseDirty, taskExceptions)) {
+                    task.revive();
+                    task.updateInputPartitions(inputPartitions, topologyMetadata.nodeToSourceTopics(task.id()));
+                    addTaskToStateUpdater(task);
+                }
             } else if ((inputPartitions = tasks.removePendingTaskToUpdateInputPartitions(task.id())) != null) {
                 task.updateInputPartitions(inputPartitions, topologyMetadata.nodeToSourceTopics(task.id()));
                 stateUpdater.add(task);
@@ -950,6 +963,12 @@ public class TaskManager {
                 closeTaskClean(task, tasksToCloseDirty, taskExceptions);
             } else if (tasks.removePendingTaskToAddBack(task.id())) {
                 stateUpdater.add(task);
+            } else if ((inputPartitions = tasks.removePendingTaskToCloseReviveAndUpdateInputPartitions(task.id())) != null) {
+                if (closeTaskClean(task, tasksToCloseDirty, taskExceptions)) {
+                    task.revive();
+                    task.updateInputPartitions(inputPartitions, topologyMetadata.nodeToSourceTopics(task.id()));
+                    addTaskToStateUpdater(task);
+                }
             } else if ((inputPartitions = tasks.removePendingTaskToUpdateInputPartitions(task.id())) != null) {
                 task.updateInputPartitions(inputPartitions, topologyMetadata.nodeToSourceTopics(task.id()));
                 transitRestoredTaskToRunning(task, now, offsetResetter);
@@ -1306,7 +1325,7 @@ public class TaskManager {
             // before suspending and closing the topology
             task.prepareCommit();
         } catch (final RuntimeException swallow) {
-            log.error("Error flushing caches of dirty task {} ", task.id(), swallow);
+            log.error("Error flushing caches of dirty task {}", task.id(), swallow);
         }
 
         try {
