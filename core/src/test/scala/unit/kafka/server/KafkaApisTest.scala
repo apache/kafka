@@ -2849,7 +2849,6 @@ class KafkaApisTest extends Logging {
       any(),
       ArgumentMatchers.eq(requestLocal),
       any(),
-      any(),
       any()
     )).thenAnswer(_ => responseCallback.getValue.apply(Map(tp2 -> new PartitionResponse(Errors.NONE))))
     kafkaApis = createKafkaApis()
@@ -2982,7 +2981,6 @@ class KafkaApisTest extends Logging {
       any(),
       ArgumentMatchers.eq(requestLocal),
       any(),
-      any(),
       any()
     )).thenAnswer(_ => responseCallback.getValue.apply(Map(tp2 -> new PartitionResponse(Errors.NONE))))
     kafkaApis = createKafkaApis()
@@ -3016,7 +3014,6 @@ class KafkaApisTest extends Logging {
       any(),
       any(),
       ArgumentMatchers.eq(requestLocal),
-      any(),
       any(),
       any())
   }
@@ -3095,7 +3092,6 @@ class KafkaApisTest extends Logging {
       any(),
       any(),
       ArgumentMatchers.eq(RequestLocal.NoCaching),
-      any(),
       any(),
       any()
     )).thenAnswer { _ =>

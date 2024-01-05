@@ -765,26 +765,20 @@ class ReplicaManager(val config: KafkaConfig,
                     recordValidationStatsCallback: Map[TopicPartition, RecordValidationStats] => Unit = _ => (),
                     requestLocal: RequestLocal = RequestLocal.NoCaching,
                     actionQueue: ActionQueue = this.defaultActionQueue,
-                    verificationGuards: Map[TopicPartition, VerificationGuard] = Map.empty,
-                    preAppendErrors: Map[TopicPartition, LogAppendResult] = Map.empty): Unit = {
+                    verificationGuards: Map[TopicPartition, VerificationGuard] = Map.empty): Unit = {
     if (!isValidRequiredAcks(requiredAcks)) {
       sendInvalidRequiredAcksResponse(entriesPerPartition, responseCallback)
       return
     }
 
-    val nonErrorEntriesPerPartition = entriesPerPartition.filter {
-      case (tp, _) => !preAppendErrors.contains(tp)
-    }
-
     val sTime = time.milliseconds
     val localProduceResults = appendToLocalLog(internalTopicsAllowed = internalTopicsAllowed,
-      origin, nonErrorEntriesPerPartition, requiredAcks, requestLocal, verificationGuards.toMap)
+      origin, entriesPerPartition, requiredAcks, requestLocal, verificationGuards.toMap)
     debug("Produce to local log in %d ms".format(time.milliseconds - sTime))
 
-    val allResults = localProduceResults ++ preAppendErrors
-    val produceStatus = buildProducePartitionStatus(allResults)
+    val produceStatus = buildProducePartitionStatus(localProduceResults)
 
-    addCompletePurgatoryAction(actionQueue, allResults)
+    addCompletePurgatoryAction(actionQueue, localProduceResults)
     recordValidationStatsCallback(localProduceResults.map { case (k, v) =>
       k -> v.info.recordValidationStats
     })
@@ -794,7 +788,7 @@ class ReplicaManager(val config: KafkaConfig,
       delayedProduceLock,
       timeout,
       entriesPerPartition,
-      allResults,
+      localProduceResults,
       produceStatus,
       responseCallback
     )
@@ -860,19 +854,25 @@ class ReplicaManager(val config: KafkaConfig,
             hasCustomErrorMessage = customException.isDefined
           )
       }
+      val entriesWithoutErrorsPerPartition = entriesPerPartition.filter { case (key, _) => !errorResults.contains(key) }
+
+      val preAppendPartitionResponses = buildProducePartitionStatus(errorResults).map { case (k, status) => k -> status.responseStatus }
+
+      def newResponseCallback(responses: Map[TopicPartition, PartitionResponse]): Unit = {
+        responseCallback(preAppendPartitionResponses ++ responses)
+      }
 
       appendRecords(
         timeout = timeout,
         requiredAcks = requiredAcks,
         internalTopicsAllowed = internalTopicsAllowed,
         origin = origin,
-        entriesPerPartition = entriesPerPartition,
-        responseCallback = responseCallback,
+        entriesPerPartition = entriesWithoutErrorsPerPartition,
+        responseCallback = newResponseCallback,
         recordValidationStatsCallback = recordValidationStatsCallback,
         requestLocal = newRequestLocal,
         actionQueue = actionQueue,
-        verificationGuards = verificationGuards,
-        preAppendErrors = errorResults
+        verificationGuards = verificationGuards
       )
     }
 

@@ -219,8 +219,7 @@ object AbstractCoordinatorConcurrencyTest {
                                processingStatsCallback: Map[TopicPartition, RecordValidationStats] => Unit = _ => (),
                                requestLocal: RequestLocal = RequestLocal.NoCaching,
                                actionQueue: ActionQueue = null,
-                               verificationGuards: Map[TopicPartition, VerificationGuard] = Map.empty,
-                               preAppendErrors: Map[TopicPartition, LogAppendResult] = Map.empty): Unit = {
+                               verificationGuards: Map[TopicPartition, VerificationGuard] = Map.empty): Unit = {
 
       if (entriesPerPartition.isEmpty)
         return
