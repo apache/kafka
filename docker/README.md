@@ -5,7 +5,7 @@ Introduction
 ------------
 
 This directory contains scripts to build, test, push and promote docker image for kafka.
-All fo the steps can be either performed locally or by using Github Actions.
+All of the steps can be either performed locally or by using Github Actions.
 
 Github Actions
 --------------
@@ -19,7 +19,7 @@ Repository Setup
 
 Make sure the `DOCKERHUB_USER` and `DOCKERHUB_TOKEN` secrets are added and made available to Github Actions in Github Repository settings. This is required for pushing the docker image.
 
-Bulding image and running tests using github actions
+Building image and running tests using github actions
 ----------------------------------------------------
 
 - This is the recommended way to build, test and get a CVE report for the docker image.
@@ -41,7 +41,7 @@ Creating a Release Candidate using github actions
 
 - This is the recommended way to push an RC docker image.
 - Go to `Build and Push Release Candidate Docker Image` Github Actions Workflow.
-- Choose the `image_type` and and provide `kafka_url` that needs to be containerised in the `rc_docker_image` that will be pushed to github.
+- Choose the `image_type` and provide `kafka_url` that needs to be containerised in the `rc_docker_image` that will be pushed to github.
 - Example:-
 If you want to push a jvm image which contains kafka from https://archive.apache.org/dist/kafka/3.6.0/kafka_2.13-3.6.0.tgz to dockerhub under the namespace apache, repo name as kafka and image tag as 3.6.0-rc1 then following values need to be added in Github Actions Workflow:-
 ```
@@ -72,7 +72,7 @@ Run `pip install -r requirements.txt` to get all the requirements for running th
 
 Make sure you have docker installed with support for buildx enabled. (For pushing multi-architecture image to docker registry)
 
-Bulding image and running tests locally
+Building image and running tests locally
 ---------------------------------------
 
 - `docker_build_test.py` script builds and tests the docker image.
