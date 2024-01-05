@@ -200,7 +200,7 @@ class KafkaApisTest extends Logging {
     val apiVersionManager = new SimpleApiVersionManager(
       listenerType,
       enabledApis,
-      BrokerFeatures.defaultSupportedFeatures(),
+      BrokerFeatures.defaultSupportedFeatures(true),
       true,
       false,
       () => new Features(MetadataVersion.latestTesting(), Collections.emptyMap[String, java.lang.Short], 0, raftSupport))
