@@ -107,7 +107,7 @@ public enum MemberState {
      * within the <code>max.poll.interval.ms</code> time bound; therefore causing the member to leave the
      * group. The member rejoins on the next poll.
      */
-    STALED;
+    STALE;
 
     // Valid state transitions
     static {
@@ -124,7 +124,7 @@ public enum MemberState {
         FENCED.previousValidStates = Arrays.asList(JOINING, STABLE, RECONCILING, ACKNOWLEDGING,
                 PREPARE_LEAVING, LEAVING);
 
-        JOINING.previousValidStates = Arrays.asList(FENCED, UNSUBSCRIBED, STALED);
+        JOINING.previousValidStates = Arrays.asList(FENCED, UNSUBSCRIBED, STALE);
 
         PREPARE_LEAVING.previousValidStates = Arrays.asList(JOINING, STABLE, RECONCILING,
                 ACKNOWLEDGING, UNSUBSCRIBED, FENCED);
@@ -133,7 +133,7 @@ public enum MemberState {
 
         UNSUBSCRIBED.previousValidStates = Arrays.asList(PREPARE_LEAVING, LEAVING);
 
-        STALED.previousValidStates = Arrays.asList(JOINING, RECONCILING, ACKNOWLEDGING, STABLE);
+        STALE.previousValidStates = Arrays.asList(JOINING, RECONCILING, ACKNOWLEDGING, STABLE);
     }
 
     private List<MemberState> previousValidStates;

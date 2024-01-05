@@ -25,15 +25,29 @@ import java.util.Set;
 
 public class FetchCommittedOffsetsApplicationEvent extends CompletableApplicationEvent<Map<TopicPartition, OffsetAndMetadata>> {
 
+    /**
+     * Partitions to retrieve committed offsets for.
+     */
     private final Set<TopicPartition> partitions;
 
-    public FetchCommittedOffsetsApplicationEvent(final Set<TopicPartition> partitions) {
+    /**
+     * Time until which the request will be retried if it fails with a retriable error.
+     */
+    private final long timeoutMs;
+
+    public FetchCommittedOffsetsApplicationEvent(final Set<TopicPartition> partitions,
+                                                 final long timeoutMs) {
         super(Type.FETCH_COMMITTED_OFFSETS);
         this.partitions = Collections.unmodifiableSet(partitions);
+        this.timeoutMs = timeoutMs;
     }
 
     public Set<TopicPartition> partitions() {
         return partitions;
+    }
+
+    public long timeout() {
+        return timeoutMs;
     }
 
     @Override
@@ -59,6 +73,7 @@ public class FetchCommittedOffsetsApplicationEvent extends CompletableApplicatio
         return getClass().getSimpleName() + "{" +
                 toStringBase() +
                 ", partitions=" + partitions +
+                ", timeout=" + timeoutMs + "ms" +
                 '}';
     }
 }

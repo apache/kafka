@@ -27,6 +27,7 @@ import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.requests.RequestContext;
+import org.apache.kafka.common.requests.TransactionResult;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
@@ -52,6 +53,8 @@ import org.apache.kafka.coordinator.group.runtime.CoordinatorResult;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 import org.mockito.ArgumentCaptor;
 import org.mockito.ArgumentMatchers;
 
@@ -967,5 +970,35 @@ public class GroupCoordinatorShardTest {
         verify(offsetMetadataManager, times(1)).cleanupExpiredOffsets(eq("other-group-id"), any());
         verify(groupMetadataManager, times(1)).maybeDeleteGroup(eq("group-id"), any());
         verify(groupMetadataManager, times(0)).maybeDeleteGroup(eq("other-group-id"), any());
+    }
+
+    @ParameterizedTest
+    @EnumSource(value = TransactionResult.class)
+    public void testReplayEndTransactionMarker(TransactionResult result) {
+        GroupMetadataManager groupMetadataManager = mock(GroupMetadataManager.class);
+        OffsetMetadataManager offsetMetadataManager = mock(OffsetMetadataManager.class);
+        CoordinatorMetrics coordinatorMetrics = mock(CoordinatorMetrics.class);
+        CoordinatorMetricsShard metricsShard = mock(CoordinatorMetricsShard.class);
+        GroupCoordinatorShard coordinator = new GroupCoordinatorShard(
+            new LogContext(),
+            groupMetadataManager,
+            offsetMetadataManager,
+            Time.SYSTEM,
+            new MockCoordinatorTimer<>(Time.SYSTEM),
+            mock(GroupCoordinatorConfig.class),
+            coordinatorMetrics,
+            metricsShard
+        );
+
+        coordinator.replayEndTransactionMarker(
+            100L,
+            (short) 5,
+            result
+        );
+
+        verify(offsetMetadataManager, times(1)).replayEndTransactionMarker(
+            100L,
+            result
+        );
     }
 }

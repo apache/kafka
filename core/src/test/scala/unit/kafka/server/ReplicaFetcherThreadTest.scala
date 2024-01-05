@@ -667,6 +667,7 @@ class ReplicaFetcherThreadTest {
     val log: UnifiedLog = mock(classOf[UnifiedLog])
     val partition: Partition = mock(classOf[Partition])
     val replicaManager: ReplicaManager = mock(classOf[ReplicaManager])
+    val replicaAlterLogDirsManager: ReplicaAlterLogDirsManager = mock(classOf[ReplicaAlterLogDirsManager])
 
     val logEndOffset = 150
     val highWatermark = 130
@@ -678,6 +679,7 @@ class ReplicaFetcherThreadTest {
 
     when(replicaManager.metadataCache).thenReturn(metadataCache)
     when(replicaManager.logManager).thenReturn(logManager)
+    when(replicaManager.replicaAlterLogDirsManager).thenReturn(replicaAlterLogDirsManager)
 
     when(replicaManager.localLogOrException(t1p0)).thenReturn(log)
     when(replicaManager.getPartitionOrException(t1p0)).thenReturn(partition)

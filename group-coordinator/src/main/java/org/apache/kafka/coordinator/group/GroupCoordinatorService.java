@@ -78,6 +78,7 @@ import org.apache.kafka.coordinator.group.runtime.PartitionWriter;
 import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.server.record.BrokerCompressionType;
+import org.apache.kafka.server.util.FutureUtils;
 import org.apache.kafka.server.util.timer.Timer;
 import org.slf4j.Logger;
 
@@ -354,10 +355,10 @@ public class GroupCoordinatorService implements GroupCoordinator {
         CompletableFuture<JoinGroupResponseData> responseFuture = new CompletableFuture<>();
 
         runtime.scheduleWriteOperation(
-            "generic-group-join",
+            "classic-group-join",
             topicPartitionFor(request.groupId()),
             Duration.ofMillis(config.offsetCommitTimeoutMs),
-            coordinator -> coordinator.genericGroupJoin(context, request, responseFuture)
+            coordinator -> coordinator.classicGroupJoin(context, request, responseFuture)
         ).exceptionally(exception -> {
             if (!(exception instanceof KafkaException)) {
                 log.error("JoinGroup request {} hit an unexpected exception: {}",
@@ -398,10 +399,10 @@ public class GroupCoordinatorService implements GroupCoordinator {
         CompletableFuture<SyncGroupResponseData> responseFuture = new CompletableFuture<>();
 
         runtime.scheduleWriteOperation(
-            "generic-group-sync",
+            "classic-group-sync",
             topicPartitionFor(request.groupId()),
             Duration.ofMillis(config.offsetCommitTimeoutMs),
-            coordinator -> coordinator.genericGroupSync(context, request, responseFuture)
+            coordinator -> coordinator.classicGroupSync(context, request, responseFuture)
         ).exceptionally(exception -> {
             if (!(exception instanceof KafkaException)) {
                 log.error("SyncGroup request {} hit an unexpected exception: {}",
@@ -440,9 +441,9 @@ public class GroupCoordinatorService implements GroupCoordinator {
 
         // Using a read operation is okay here as we ignore the last committed offset in the snapshot registry.
         // This means we will read whatever is in the latest snapshot, which is how the old coordinator behaves.
-        return runtime.scheduleReadOperation("generic-group-heartbeat",
+        return runtime.scheduleReadOperation("classic-group-heartbeat",
             topicPartitionFor(request.groupId()),
-            (coordinator, __) -> coordinator.genericGroupHeartbeat(context, request)
+            (coordinator, __) -> coordinator.classicGroupHeartbeat(context, request)
         ).exceptionally(exception -> {
             if (!(exception instanceof KafkaException)) {
                 log.error("Heartbeat request {} hit an unexpected exception: {}",
@@ -481,10 +482,10 @@ public class GroupCoordinatorService implements GroupCoordinator {
         }
 
         return runtime.scheduleWriteOperation(
-            "generic-group-leave",
+            "classic-group-leave",
             topicPartitionFor(request.groupId()),
             Duration.ofMillis(config.offsetCommitTimeoutMs),
-            coordinator -> coordinator.genericGroupLeave(context, request)
+            coordinator -> coordinator.classicGroupLeave(context, request)
         ).exceptionally(exception -> {
             if (!(exception instanceof KafkaException)) {
                 log.error("LeaveGroup request {} hit an unexpected exception: {}",
@@ -902,9 +903,12 @@ public class GroupCoordinatorService implements GroupCoordinator {
             ));
         }
 
-        return runtime.scheduleWriteOperation(
+        return runtime.scheduleTransactionalWriteOperation(
             "txn-commit-offset",
             topicPartitionFor(request.groupId()),
+            request.transactionalId(),
+            request.producerId(),
+            request.producerEpoch(),
             Duration.ofMillis(config.offsetCommitTimeoutMs),
             coordinator -> coordinator.commitTransactionalOffset(context, request)
         ).exceptionally(exception ->
@@ -945,6 +949,39 @@ public class GroupCoordinatorService implements GroupCoordinator {
     }
 
     /**
+     * See {@link GroupCoordinator#completeTransaction(TopicPartition, long, short, int, TransactionResult, Duration)}.
+     */
+    @Override
+    public CompletableFuture<Void> completeTransaction(
+        TopicPartition tp,
+        long producerId,
+        short producerEpoch,
+        int coordinatorEpoch,
+        TransactionResult result,
+        Duration timeout
+    ) {
+        if (!isActive.get()) {
+            return FutureUtils.failedFuture(Errors.COORDINATOR_NOT_AVAILABLE.exception());
+        }
+
+        if (!tp.topic().equals(Topic.GROUP_METADATA_TOPIC_NAME)) {
+            return FutureUtils.failedFuture(new IllegalStateException(
+                "Completing a transaction for " + tp + " is not expected"
+            ));
+        }
+
+        return runtime.scheduleTransactionCompletion(
+            "write-txn-marker",
+            tp,
+            producerId,
+            producerEpoch,
+            coordinatorEpoch,
+            result,
+            timeout
+        );
+    }
+
+    /**
      * See {@link GroupCoordinator#onTransactionCompleted(long, Iterable, TransactionResult)}.
      */
     @Override
@@ -954,6 +991,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
         TransactionResult transactionResult
     ) {
         throwIfNotActive();
+        throw new IllegalStateException("onTransactionCompleted is not supported.");
     }
 
     /**

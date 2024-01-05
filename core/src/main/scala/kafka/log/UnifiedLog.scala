@@ -948,7 +948,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
   def endOffsetForEpoch(leaderEpoch: Int): Option[OffsetAndEpoch] = {
     leaderEpochCache.flatMap { cache =>
       val entry = cache.endOffsetFor(leaderEpoch, logEndOffset)
-      val (foundEpoch, foundOffset) = (entry.getKey(), entry.getValue())
+      val (foundEpoch, foundOffset) = (entry.getKey, entry.getValue)
       if (foundOffset == UNDEFINED_EPOCH_OFFSET)
         None
       else
@@ -1270,10 +1270,9 @@ class UnifiedLog(@volatile var logStartOffset: Long,
 
       def latestEpochAsOptional(leaderEpochCache: Option[LeaderEpochFileCache]): Optional[Integer] = {
         leaderEpochCache match {
-          case Some(cache) => {
+          case Some(cache) =>
             val latestEpoch = cache.latestEpoch()
             if (latestEpoch.isPresent) Optional.of(latestEpoch.getAsInt) else Optional.empty[Integer]()
-          }
           case None => Optional.empty[Integer]()
         }
       }
@@ -1303,7 +1302,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
 
         val earliestLocalLogEpochEntry = leaderEpochCache.asJava.flatMap(cache => {
           val epoch = cache.epochForOffset(curLocalLogStartOffset)
-          if (epoch.isPresent) (cache.epochEntry(epoch.getAsInt)) else Optional.empty[EpochEntry]()
+          if (epoch.isPresent) cache.epochEntry(epoch.getAsInt) else Optional.empty[EpochEntry]()
         })
 
         val epochOpt = if (earliestLocalLogEpochEntry.isPresent && earliestLocalLogEpochEntry.get().startOffset <= curLocalLogStartOffset)
@@ -1586,6 +1585,12 @@ class UnifiedLog(@volatile var logStartOffset: Long,
     UnifiedLog.sizeInBytes(logSegments.stream.filter(_.baseOffset >= highestOffsetInRemoteStorage).collect(Collectors.toList[LogSegment]))
 
   /**
+   * The number of segments that are only in local log but not yet in remote log.
+   */
+  def onlyLocalLogSegmentsCount: Long =
+    logSegments.stream().filter(_.baseOffset >= highestOffsetInRemoteStorage).count()
+
+  /**
    * The offset of the next message that will be appended to the log
    */
   def logEndOffset: Long =  localLog.logEndOffset
@@ -1687,7 +1692,7 @@ class UnifiedLog(@volatile var logStartOffset: Long,
    *
    * @param offset The offset to flush up to (non-inclusive); the new recovery point
    */
-  def flushUptoOffsetExclusive(offset: Long): Unit = flush(offset, false)
+  def flushUptoOffsetExclusive(offset: Long): Unit = flush(offset, includingOffset = false)
 
   /**
    * Flush local log segments for all offsets up to offset-1 if includingOffset=false; up to offset
