@@ -77,6 +77,10 @@ class BaseClientQuotaManagerTest {
     quotaManager.maybeRecordAndGetThrottleTimeMs(buildSession(user), clientId, value, time.milliseconds)
   }
 
+  protected def maybeRecord(quotaManager: ClientQuotaManager, user: String, clientId: String, topicPartitions: Map[TopicPartition, Integer]): Int = {
+    quotaManager.maybeRecordAndGetThrottleTimeMs(buildSession(user), clientId, topicPartitions, time.milliseconds)
+  }
+
   protected def throttle(quotaManager: ClientQuotaManager, user: String, clientId: String, throttleTimeMs: Int,
                          channelThrottlingCallback: ThrottleCallback): Unit = {
     val (_, request) = buildRequest(FetchRequest.Builder.forConsumer(ApiKeys.FETCH.latestVersion, 0, 1000, new util.HashMap[TopicPartition, PartitionData]))

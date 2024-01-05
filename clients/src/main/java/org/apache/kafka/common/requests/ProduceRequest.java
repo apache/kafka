@@ -127,8 +127,7 @@ public class ProduceRequest extends AbstractRequest {
         this.transactionalId = data.transactionalId();
     }
 
-    // visible for testing
-    Map<TopicPartition, Integer> partitionSizes() {
+    public Map<TopicPartition, Integer> partitionSizes() {
         if (partitionSizes == null) {
             // this method may be called by different thread (see the comment on data)
             synchronized (this) {

@@ -18,7 +18,7 @@ package kafka.server
 
 import kafka.network.RequestChannel
 import kafka.network.RequestChannel.Session
-import org.apache.kafka.common.MetricName
+import org.apache.kafka.common.{MetricName, TopicPartition}
 import org.apache.kafka.common.errors.ThrottlingQuotaExceededException
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.metrics.QuotaViolationException
@@ -203,7 +203,8 @@ class ControllerMutationQuotaManager(private val config: ClientQuotaManagerConfi
    * @return The throttle time in milliseconds defines as the time to wait until the average
    *         rate gets back to the defined quota
    */
-  override def recordAndGetThrottleTimeMs(session: Session, clientId: String, value: Double, timeMs: Long): Int = {
+  override def recordAndGetThrottleTimeMs(session: Session, clientId: String,
+                                          topicPartitions: Option[TopicPartition] = null, value: Double, timeMs: Long): Int = {
     val clientSensors = getOrCreateQuotaSensors(session, clientId)
     val quotaSensor = clientSensors.quotaSensor
     try {

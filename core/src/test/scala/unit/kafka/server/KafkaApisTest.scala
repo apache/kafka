@@ -2476,7 +2476,7 @@ class KafkaApisTest extends Logging {
       when(clientRequestQuotaManager.maybeRecordAndGetThrottleTimeMs(any[RequestChannel.Request](),
         any[Long])).thenReturn(0)
       when(clientQuotaManager.maybeRecordAndGetThrottleTimeMs(
-        any[RequestChannel.Request](), anyDouble, anyLong)).thenReturn(0)
+        any[RequestChannel.Request](), anyDouble, any, anyLong)).thenReturn(0)
       kafkaApis = createKafkaApis()
       kafkaApis.handleProduceRequest(request, RequestLocal.withThreadConfinedCaching)
 
@@ -2539,7 +2539,7 @@ class KafkaApisTest extends Logging {
       when(clientRequestQuotaManager.maybeRecordAndGetThrottleTimeMs(any[RequestChannel.Request](),
         any[Long])).thenReturn(0)
       when(clientQuotaManager.maybeRecordAndGetThrottleTimeMs(
-        any[RequestChannel.Request](), anyDouble, anyLong)).thenReturn(0)
+        any[RequestChannel.Request](), anyDouble, any, anyLong)).thenReturn(0)
       kafkaApis = createKafkaApis()
       kafkaApis.handleProduceRequest(request, RequestLocal.withThreadConfinedCaching)
 
@@ -2603,7 +2603,7 @@ class KafkaApisTest extends Logging {
       when(clientRequestQuotaManager.maybeRecordAndGetThrottleTimeMs(any[RequestChannel.Request](),
         any[Long])).thenReturn(0)
       when(clientQuotaManager.maybeRecordAndGetThrottleTimeMs(
-        any[RequestChannel.Request](), anyDouble, anyLong)).thenReturn(0)
+        any[RequestChannel.Request](), anyDouble, any, anyLong)).thenReturn(0)
       kafkaApis = createKafkaApis()
       kafkaApis.handleProduceRequest(request, RequestLocal.withThreadConfinedCaching)
 
@@ -2668,7 +2668,7 @@ class KafkaApisTest extends Logging {
       when(clientRequestQuotaManager.maybeRecordAndGetThrottleTimeMs(any[RequestChannel.Request](),
         any[Long])).thenReturn(0)
       when(clientQuotaManager.maybeRecordAndGetThrottleTimeMs(
-        any[RequestChannel.Request](), anyDouble, anyLong)).thenReturn(0)
+        any[RequestChannel.Request](), anyDouble, any, anyLong)).thenReturn(0)
       when(metadataCache.contains(tp)).thenAnswer(_ => true)
       when(metadataCache.getPartitionInfo(tp.topic(), tp.partition())).thenAnswer(_ => Option.empty)
       when(metadataCache.getAliveBrokerNode(any(), any())).thenReturn(Option.empty)
@@ -4141,7 +4141,7 @@ class KafkaApisTest extends Logging {
       any[util.Map[Uuid, String]])).thenReturn(fetchContext)
 
     when(clientQuotaManager.maybeRecordAndGetThrottleTimeMs(
-      any[RequestChannel.Request](), anyDouble, anyLong)).thenReturn(0)
+      any[RequestChannel.Request](), anyDouble, any, anyLong)).thenReturn(0)
 
     val fetchRequest = new FetchRequest.Builder(9, 9, -1, -1, 100, 0, fetchDataBuilder)
       .build()
@@ -4195,7 +4195,7 @@ class KafkaApisTest extends Logging {
     ).thenReturn(fetchContext)
 
     when(clientQuotaManager.maybeRecordAndGetThrottleTimeMs(
-      any[RequestChannel.Request](), anyDouble, anyLong)).thenReturn(0)
+      any[RequestChannel.Request](), anyDouble, any, anyLong)).thenReturn(0)
 
     // If replicaId is -1 we will build a consumer request. Any non-negative replicaId will build a follower request.
     val replicaEpoch = if (replicaId < 0) -1 else 1
@@ -4264,7 +4264,7 @@ class KafkaApisTest extends Logging {
       any[util.Map[Uuid, String]])).thenReturn(fetchContext)
 
     when(clientQuotaManager.maybeRecordAndGetThrottleTimeMs(
-      any[RequestChannel.Request](), anyDouble, anyLong)).thenReturn(0)
+      any[RequestChannel.Request](), anyDouble, any, anyLong)).thenReturn(0)
 
     val fetchRequest = new FetchRequest.Builder(16, 16, -1, -1, 100, 0, fetchDataBuilder)
       .build()
