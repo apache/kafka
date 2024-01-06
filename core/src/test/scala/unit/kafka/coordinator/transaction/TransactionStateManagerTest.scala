@@ -20,7 +20,7 @@ import kafka.internals.generated.TransactionLogKey
 
 import java.lang.management.ManagementFactory
 import java.nio.ByteBuffer
-import java.util.concurrent.{ConcurrentHashMap, CountDownLatch}
+import java.util.concurrent.CountDownLatch
 import java.util.concurrent.locks.ReentrantLock
 import javax.management.ObjectName
 import kafka.log.UnifiedLog
@@ -186,7 +186,7 @@ class TransactionStateManagerTest {
     val partitionAndLeaderEpoch = TransactionPartitionAndLeaderEpoch(partitionId, coordinatorEpoch)
 
     val loadingThread = new Thread(() => {
-      transactionManager.maybeLoadTransactionsAndBumpEpochForTxnTopicPartition(partitionId, coordinatorEpoch, (_, _, _, _) => (), transactionStateLoaded = true)
+      transactionManager.loadTransactionsForTxnTopicPartition(partitionId, coordinatorEpoch, (_, _, _, _) => ())
     })
     loadingThread.start()
     TestUtils.waitUntilTrue(() => transactionManager.loadingPartitions.contains(partitionAndLeaderEpoch),
@@ -264,7 +264,7 @@ class TransactionStateManagerTest {
       _ => fail(transactionalId2 + "'s transaction state is already in the cache")
     )
 
-    transactionManager.maybeLoadTransactionsAndBumpEpochForTxnTopicPartition(partitionId, 0, (_, _, _, _) => (), transactionStateLoaded = false)
+    transactionManager.loadTransactionsForTxnTopicPartition(partitionId, 0, (_, _, _, _) => ())
 
     // let the time advance to trigger the background thread loading
     scheduler.tick()
@@ -871,35 +871,18 @@ class TransactionStateManagerTest {
     val startOffset = 0L
     val records = MemoryRecords.withRecords(startOffset, CompressionType.NONE, txnRecords.toArray: _*)
 
-    val transactionsWithPendingMarkers = new ConcurrentHashMap[String, PendingCompleteTxn]
-    def sendMarkers(coordinatorEpoch: Int,
-                    txnResult: TransactionResult,
-                    txnMetadata: TransactionMetadata,
-                    newMetadata: TxnTransitMetadata): Unit = {
-      val transactionalId = txnMetadata.transactionalId
-      val pendingCompleteTxn = PendingCompleteTxn(
-        transactionalId,
-        coordinatorEpoch,
-        txnMetadata,
-        newMetadata)
-
-      transactionsWithPendingMarkers.put(transactionalId, pendingCompleteTxn)
-    }
-
     prepareTxnLog(topicPartition, 0, records)
 
     // immigrate partition at epoch 0
-    transactionManager.maybeLoadTransactionsAndBumpEpochForTxnTopicPartition(partitionId, coordinatorEpoch = 0, sendMarkers, transactionStateLoaded = false)
+    transactionManager.loadTransactionsForTxnTopicPartition(partitionId, coordinatorEpoch = 0, (_, _, _, _) => ())
     assertEquals(0, transactionManager.loadingPartitions.size)
-    assertEquals(0, transactionsWithPendingMarkers.get(transactionalId1).coordinatorEpoch)
 
     // Re-immigrate partition at epoch 1. This should be successful even though we didn't get to emigrate the partition.
     prepareTxnLog(topicPartition, 0, records)
-    transactionManager.maybeLoadTransactionsAndBumpEpochForTxnTopicPartition(partitionId, coordinatorEpoch = 1, sendMarkers, transactionStateLoaded = true)
+    transactionManager.loadTransactionsForTxnTopicPartition(partitionId, coordinatorEpoch = 1, (_, _, _, _) => ())
     assertEquals(0, transactionManager.loadingPartitions.size)
     assertTrue(transactionManager.transactionMetadataCache.contains(partitionId))
     assertEquals(1, transactionManager.transactionMetadataCache(partitionId).coordinatorEpoch)
-    assertEquals(1, transactionsWithPendingMarkers.get(transactionalId1).coordinatorEpoch)
   }
 
   @Test
@@ -920,7 +903,7 @@ class TransactionStateManagerTest {
     ).thenReturn(new FetchDataInfo(new LogOffsetMetadata(startOffset), MemoryRecords.EMPTY))
     when(replicaManager.getLogEndOffset(topicPartition)).thenReturn(Some(endOffset))
 
-    transactionManager.maybeLoadTransactionsAndBumpEpochForTxnTopicPartition(partitionId, coordinatorEpoch = 0, (_, _, _, _) => (), transactionStateLoaded = false)
+    transactionManager.loadTransactionsForTxnTopicPartition(partitionId, coordinatorEpoch = 0, (_, _, _, _) => ())
 
     // let the time advance to trigger the background thread loading
     scheduler.tick()
@@ -1061,7 +1044,7 @@ class TransactionStateManagerTest {
       txnId = metadata.transactionalId
     }
 
-    transactionManager.maybeLoadTransactionsAndBumpEpochForTxnTopicPartition(partitionId, 0, rememberTxnMarkers, transactionStateLoaded = false)
+    transactionManager.loadTransactionsForTxnTopicPartition(partitionId, 0, rememberTxnMarkers)
     scheduler.tick()
 
     assertEquals(transactionalId1, txnId)
@@ -1159,7 +1142,7 @@ class TransactionStateManagerTest {
     val records = MemoryRecords.withRecords(startOffset, CompressionType.NONE, txnRecords.toArray: _*)
 
     prepareTxnLog(topicPartition, startOffset, records)
-    transactionManager.maybeLoadTransactionsAndBumpEpochForTxnTopicPartition(partitionId, 0, (_, _, _, _) => (), transactionStateLoaded = false)
+    transactionManager.loadTransactionsForTxnTopicPartition(partitionId, 0, (_, _, _, _) => ())
     scheduler.tick()
 
     assertTrue(partitionLoadTime("partition-load-time-max") >= 0)
@@ -1184,7 +1167,7 @@ class TransactionStateManagerTest {
 
     prepareTxnLog(topicPartition, 0, records)
 
-    transactionManager.maybeLoadTransactionsAndBumpEpochForTxnTopicPartition(partitionId, coordinatorEpoch = 1, (_, _, _, _) => (), transactionStateLoaded = false)
+    transactionManager.loadTransactionsForTxnTopicPartition(partitionId, coordinatorEpoch = 1, (_, _, _, _) => ())
     assertEquals(0, transactionManager.loadingPartitions.size)
     assertTrue(transactionManager.transactionMetadataCache.contains(partitionId))
     val txnMetadataPool = transactionManager.transactionMetadataCache(partitionId).metadataPerTransactionalId
