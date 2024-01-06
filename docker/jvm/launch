@@ -51,8 +51,12 @@ export KAFKA_JVM_PERFORMANCE_OPTS="${KAFKA_JVM_PERFORMANCE_OPTS-} -XX:SharedArch
 echo "===> Using provided cluster id $CLUSTER_ID ..."
 
 # Invoke the docker wrapper to setup property files and format storage
-/opt/kafka/bin/kafka-run-class.sh kafka.docker.KafkaDockerWrapper setup --default-configs-dir /etc/kafka/docker \
---mounted-configs-dir /mnt/shared/config --final-configs-dir /opt/kafka/config
+result=$(/opt/kafka/bin/kafka-run-class.sh kafka.docker.KafkaDockerWrapper setup \
+      --default-configs-dir /etc/kafka/docker \
+      --mounted-configs-dir /mnt/shared/config \
+      --final-configs-dir /opt/kafka/config 2>&1) || \
+      echo $result | grep -i "already formatted" || \
+      { echo $result && (exit 1) }
 
 # Using temp env variable to get rid of storage CDS command
 export KAFKA_JVM_PERFORMANCE_OPTS="$TEMP_KAFKA_JVM_PERFORMANCE_OPTS"
