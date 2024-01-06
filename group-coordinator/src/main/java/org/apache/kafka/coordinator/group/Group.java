@@ -19,13 +19,16 @@ package org.apache.kafka.coordinator.group;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.message.ListGroupsResponseData;
 
+import java.util.List;
+import java.util.Optional;
+
 /**
  * Interface common for all groups.
  */
 public interface Group {
     enum GroupType {
         CONSUMER("consumer"),
-        GENERIC("generic");
+        CLASSIC("classic");
 
         private final String name;
 
@@ -71,11 +74,13 @@ public interface Group {
      * @param groupInstanceId           The group instance id.
      * @param generationIdOrMemberEpoch The generation id for genetic groups or the member epoch
      *                                  for consumer groups.
+     * @param isTransactional           Whether the offset commit is transactional or not.
      */
     void validateOffsetCommit(
         String memberId,
         String groupInstanceId,
-        int generationIdOrMemberEpoch
+        int generationIdOrMemberEpoch,
+        boolean isTransactional
     ) throws KafkaException;
 
     /**
@@ -90,4 +95,42 @@ public interface Group {
         int memberEpoch,
         long lastCommittedOffset
     ) throws KafkaException;
+
+    /**
+     * Validates the OffsetDelete request.
+     */
+    void validateOffsetDelete() throws KafkaException;
+
+    /**
+     * Validates the DeleteGroups request.
+     */
+    void validateDeleteGroup() throws KafkaException;
+
+    /**
+     * Returns true if the group is actively subscribed to the topic.
+     *
+     * @param topic  The topic name.
+     *
+     * @return Whether the group is subscribed to the topic.
+     */
+    boolean isSubscribedToTopic(String topic);
+    
+    /**
+     * Populates the list of records with tombstone(s) for deleting the group.
+     *
+     * @param records The list of records.
+     */
+    void createGroupTombstoneRecords(List<Record> records);
+
+    /**
+     * @return Whether the group is in Empty state.
+     */
+    boolean isEmpty();
+
+    /**
+     * See {@link OffsetExpirationCondition}
+     *
+     * @return The offset expiration condition for the group or Empty if no such condition exists.
+     */
+    Optional<OffsetExpirationCondition> offsetExpirationCondition();
 }

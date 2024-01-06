@@ -23,6 +23,8 @@ import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
 
 import java.nio.ByteBuffer;
+import java.util.List;
+import java.util.stream.Collectors;
 
 public class ConsumerGroupDescribeRequest extends AbstractRequest {
 
@@ -82,5 +84,16 @@ public class ConsumerGroupDescribeRequest extends AbstractRequest {
             new ConsumerGroupDescribeRequestData(new ByteBufferAccessor(buffer), version),
             version
         );
+    }
+
+    public static List<ConsumerGroupDescribeResponseData.DescribedGroup> getErrorDescribedGroupList(
+        List<String> groupIds,
+        Errors error
+    ) {
+        return groupIds.stream()
+            .map(groupId -> new ConsumerGroupDescribeResponseData.DescribedGroup()
+                .setGroupId(groupId)
+                .setErrorCode(error.code())
+            ).collect(Collectors.toList());
     }
 }

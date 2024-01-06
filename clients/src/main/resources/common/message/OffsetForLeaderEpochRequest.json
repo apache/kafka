@@ -28,6 +28,7 @@
   //
   // Version 4 enables flexible versions.
   "validVersions": "0-4",
+  "deprecatedVersions": "0-1",
   "flexibleVersions": "4+",
   "fields": [
     { "name": "ReplicaId", "type": "int32", "versions": "3+", "default": -2, "ignorable": true, "entityType": "brokerId",

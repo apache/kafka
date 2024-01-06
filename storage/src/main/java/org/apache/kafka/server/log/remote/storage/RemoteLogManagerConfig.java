@@ -197,7 +197,7 @@ public final class RemoteLogManagerConfig {
                                   atLeast(0),
                                   LOW,
                                   REMOTE_LOG_METADATA_CUSTOM_METADATA_MAX_BYTES_DOC)
-                  .defineInternal(REMOTE_LOG_INDEX_FILE_CACHE_TOTAL_SIZE_BYTES_PROP,
+                  .define(REMOTE_LOG_INDEX_FILE_CACHE_TOTAL_SIZE_BYTES_PROP,
                                   LONG,
                                   DEFAULT_REMOTE_LOG_INDEX_FILE_CACHE_TOTAL_SIZE_BYTES,
                                   atLeast(1),

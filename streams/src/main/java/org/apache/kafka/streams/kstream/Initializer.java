@@ -16,12 +16,12 @@
  */
 package org.apache.kafka.streams.kstream;
 
-
 /**
  * The {@code Initializer} interface for creating an initial value in aggregations.
  * {@code Initializer} is used in combination with {@link Aggregator}.
  *
- * @param <VA> aggregate value type
+ * @param <VAgg> aggregate value type
+ *
  * @see Aggregator
  * @see KGroupedStream#aggregate(Initializer, Aggregator)
  * @see KGroupedStream#aggregate(Initializer, Aggregator, Materialized)
@@ -30,12 +30,12 @@ package org.apache.kafka.streams.kstream;
  * @see SessionWindowedKStream#aggregate(Initializer, Aggregator, Merger)
  * @see SessionWindowedKStream#aggregate(Initializer, Aggregator, Merger, Materialized)
  */
-public interface Initializer<VA> {
+public interface Initializer<VAgg> {
 
     /**
      * Return the initial value for an aggregation.
      *
      * @return the initial value for an aggregation
      */
-    VA apply();
+    VAgg apply();
 }

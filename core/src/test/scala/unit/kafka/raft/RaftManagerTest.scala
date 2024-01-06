@@ -23,25 +23,22 @@ import java.nio.file.StandardOpenOption
 import java.util.Properties
 import java.util.concurrent.CompletableFuture
 import kafka.log.LogManager
-import kafka.raft.KafkaRaftManager.RaftIoThread
 import kafka.server.KafkaConfig
 import kafka.server.KafkaRaftServer.BrokerRole
 import kafka.server.KafkaRaftServer.ControllerRole
 import kafka.server.KafkaRaftServer.ProcessRole
-import kafka.server.MetaProperties
 import kafka.utils.TestUtils
 import kafka.tools.TestRaftServer.ByteArraySerde
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.Uuid
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.utils.Time
-import org.apache.kafka.raft.KafkaRaftClient
 import org.apache.kafka.raft.RaftConfig
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
-import org.apache.kafka.server.fault.{FaultHandler, MockFaultHandler}
+import org.apache.kafka.server.fault.FaultHandler
 import org.mockito.Mockito._
 
 class RaftManagerTest {
@@ -83,13 +80,9 @@ class RaftManagerTest {
     config: KafkaConfig
   ): KafkaRaftManager[Array[Byte]] = {
     val topicId = new Uuid(0L, 2L)
-    val metaProperties = MetaProperties(
-      clusterId = Uuid.randomUuid.toString,
-      nodeId = config.nodeId
-    )
 
     new KafkaRaftManager[Array[Byte]](
-      metaProperties,
+      Uuid.randomUuid.toString,
       config,
       new ByteArraySerde,
       topicPartition,
@@ -197,49 +190,4 @@ class RaftManagerTest {
     }
   }
 
-  @Test
-  def testShutdownIoThread(): Unit = {
-    val raftClient = mock(classOf[KafkaRaftClient[String]])
-    val faultHandler = new MockFaultHandler("RaftManagerTestFaultHandler")
-    val ioThread = new RaftIoThread(raftClient, threadNamePrefix = "test-raft", faultHandler)
-
-    when(raftClient.isRunning).thenReturn(true)
-    assertTrue(ioThread.isRunning)
-
-    val shutdownFuture = new CompletableFuture[Void]
-    when(raftClient.shutdown(5000)).thenReturn(shutdownFuture)
-
-    ioThread.initiateShutdown()
-    assertTrue(ioThread.isRunning)
-    assertTrue(ioThread.isShutdownInitiated)
-    verify(raftClient).shutdown(5000)
-
-    shutdownFuture.complete(null)
-    when(raftClient.isRunning).thenReturn(false)
-    ioThread.run()
-    assertFalse(ioThread.isRunning)
-    assertTrue(ioThread.isShutdownComplete)
-    assertNull(faultHandler.firstException)
-  }
-
-  @Test
-  def testUncaughtExceptionInIoThread(): Unit = {
-    val raftClient = mock(classOf[KafkaRaftClient[String]])
-    val faultHandler = new MockFaultHandler("RaftManagerTestFaultHandler")
-    val ioThread = new RaftIoThread(raftClient, threadNamePrefix = "test-raft", faultHandler)
-
-    when(raftClient.isRunning).thenReturn(true)
-    assertTrue(ioThread.isRunning)
-
-    val exception = new RuntimeException()
-    when(raftClient.poll()).thenThrow(exception)
-    ioThread.run()
-
-    assertTrue(ioThread.isShutdownComplete)
-    assertTrue(ioThread.isThreadFailed)
-    assertFalse(ioThread.isRunning)
-
-    val caughtException = faultHandler.firstException.getCause
-    assertEquals(exception, caughtException)
-  }
 }

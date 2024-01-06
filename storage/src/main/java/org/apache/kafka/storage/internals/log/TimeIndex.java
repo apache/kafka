@@ -60,6 +60,7 @@ public class TimeIndex extends AbstractIndex {
         this(file, baseOffset, maxIndexSize, true);
     }
 
+    @SuppressWarnings("this-escape")
     public TimeIndex(File file, long baseOffset, int maxIndexSize, boolean writable) throws IOException {
         super(file, baseOffset, maxIndexSize, writable);
 

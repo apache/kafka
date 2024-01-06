@@ -79,7 +79,7 @@ abstract class AbstractConsumerTest extends BaseRequestTest {
     super.setUp(testInfo)
 
     // create the test topic with all the brokers as replicas
-    createTopic(topic, 2, brokerCount)
+    createTopic(topic, 2, brokerCount, adminClientConfig = this.adminClientConfig)
   }
 
   protected class TestConsumerReassignmentListener extends ConsumerRebalanceListener {

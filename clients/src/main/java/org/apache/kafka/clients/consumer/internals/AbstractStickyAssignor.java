@@ -52,7 +52,7 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
     private static final Logger log = LoggerFactory.getLogger(AbstractStickyAssignor.class);
 
     public static final int DEFAULT_GENERATION = -1;
-    public int maxGeneration = DEFAULT_GENERATION;
+    private int maxGeneration = DEFAULT_GENERATION;
 
     private PartitionMovements partitionMovements;
 
@@ -116,6 +116,10 @@ public abstract class AbstractStickyAssignor extends AbstractPartitionAssignor {
     public Map<String, List<TopicPartition>> assign(Map<String, Integer> partitionsPerTopic,
                                                     Map<String, Subscription> subscriptions) {
         return assignPartitions(partitionInfosWithoutRacks(partitionsPerTopic), subscriptions);
+    }
+
+    public int maxGeneration() {
+        return maxGeneration;
     }
 
     /**

@@ -17,6 +17,7 @@
 
 package org.apache.kafka.image;
 
+import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.metadata.PartitionRegistration;
@@ -31,19 +32,22 @@ public final class LocalReplicaChanges {
     private final Map<TopicPartition, PartitionInfo> followers;
     // The topic name -> topic id map in leaders and followers changes
     private final Map<String, Uuid> topicIds;
+    private final Map<TopicIdPartition, Uuid> directoryIds;
 
     LocalReplicaChanges(
         Set<TopicPartition> deletes,
         Map<TopicPartition, PartitionInfo> electedLeaders,
         Map<TopicPartition, PartitionInfo> updatedLeaders,
         Map<TopicPartition, PartitionInfo> followers,
-        Map<String, Uuid> topicIds
+        Map<String, Uuid> topicIds,
+        Map<TopicIdPartition, Uuid> directoryIds
     ) {
         this.deletes = deletes;
         this.electedLeaders = electedLeaders;
         this.updatedLeaders = updatedLeaders;
         this.followers = followers;
         this.topicIds = topicIds;
+        this.directoryIds = directoryIds;
     }
 
     public Set<TopicPartition> deletes() {
@@ -75,6 +79,10 @@ public final class LocalReplicaChanges {
             updatedLeaders,
             followers
         );
+    }
+
+    public Map<TopicIdPartition, Uuid> directoryIds() {
+        return directoryIds;
     }
 
     public static final class PartitionInfo {

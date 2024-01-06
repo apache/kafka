@@ -61,6 +61,8 @@ import org.apache.kafka.common.message.ApiVersionsRequestData;
 import org.apache.kafka.common.message.ApiVersionsResponseData;
 import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersion;
 import org.apache.kafka.common.message.ApiVersionsResponseData.ApiVersionCollection;
+import org.apache.kafka.common.message.AssignReplicasToDirsRequestData;
+import org.apache.kafka.common.message.AssignReplicasToDirsResponseData;
 import org.apache.kafka.common.message.BeginQuorumEpochRequestData;
 import org.apache.kafka.common.message.BeginQuorumEpochResponseData;
 import org.apache.kafka.common.message.BrokerHeartbeatRequestData;
@@ -146,6 +148,8 @@ import org.apache.kafka.common.message.FetchResponseData;
 import org.apache.kafka.common.message.FetchSnapshotRequestData;
 import org.apache.kafka.common.message.FetchSnapshotResponseData;
 import org.apache.kafka.common.message.FindCoordinatorRequestData;
+import org.apache.kafka.common.message.GetTelemetrySubscriptionsRequestData;
+import org.apache.kafka.common.message.GetTelemetrySubscriptionsResponseData;
 import org.apache.kafka.common.message.HeartbeatRequestData;
 import org.apache.kafka.common.message.HeartbeatResponseData;
 import org.apache.kafka.common.message.IncrementalAlterConfigsRequestData;
@@ -163,6 +167,8 @@ import org.apache.kafka.common.message.LeaderAndIsrResponseData;
 import org.apache.kafka.common.message.LeaderAndIsrResponseData.LeaderAndIsrTopicErrorCollection;
 import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity;
 import org.apache.kafka.common.message.LeaveGroupResponseData;
+import org.apache.kafka.common.message.ListClientMetricsResourcesRequestData;
+import org.apache.kafka.common.message.ListClientMetricsResourcesResponseData;
 import org.apache.kafka.common.message.ListGroupsRequestData;
 import org.apache.kafka.common.message.ListGroupsResponseData;
 import org.apache.kafka.common.message.ListOffsetsRequestData.ListOffsetsPartition;
@@ -193,6 +199,8 @@ import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.EpochEnd
 import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.OffsetForLeaderTopicResult;
 import org.apache.kafka.common.message.ProduceRequestData;
 import org.apache.kafka.common.message.ProduceResponseData;
+import org.apache.kafka.common.message.PushTelemetryRequestData;
+import org.apache.kafka.common.message.PushTelemetryResponseData;
 import org.apache.kafka.common.message.RenewDelegationTokenRequestData;
 import org.apache.kafka.common.message.RenewDelegationTokenResponseData;
 import org.apache.kafka.common.message.SaslAuthenticateRequestData;
@@ -1065,6 +1073,10 @@ public class RequestResponseTest {
             case CONSUMER_GROUP_HEARTBEAT: return createConsumerGroupHeartbeatRequest(version);
             case CONSUMER_GROUP_DESCRIBE: return createConsumerGroupDescribeRequest(version);
             case CONTROLLER_REGISTRATION: return createControllerRegistrationRequest(version);
+            case GET_TELEMETRY_SUBSCRIPTIONS: return createGetTelemetrySubscriptionsRequest(version);
+            case PUSH_TELEMETRY: return createPushTelemetryRequest(version);
+            case ASSIGN_REPLICAS_TO_DIRS: return createAssignReplicasToDirsRequest(version);
+            case LIST_CLIENT_METRICS_RESOURCES: return createListClientMetricsResourcesRequest(version);
             default: throw new IllegalArgumentException("Unknown API key " + apikey);
         }
     }
@@ -1142,6 +1154,10 @@ public class RequestResponseTest {
             case CONSUMER_GROUP_HEARTBEAT: return createConsumerGroupHeartbeatResponse();
             case CONSUMER_GROUP_DESCRIBE: return createConsumerGroupDescribeResponse();
             case CONTROLLER_REGISTRATION: return createControllerRegistrationResponse();
+            case GET_TELEMETRY_SUBSCRIPTIONS: return createGetTelemetrySubscriptionsResponse();
+            case PUSH_TELEMETRY: return createPushTelemetryResponse();
+            case ASSIGN_REPLICAS_TO_DIRS: return createAssignReplicasToDirsResponse();
+            case LIST_CLIENT_METRICS_RESOURCES: return createListClientMetricsResourcesResponse();
             default: throw new IllegalArgumentException("Unknown API key " + apikey);
         }
     }
@@ -1170,6 +1186,71 @@ public class RequestResponseTest {
         return new ConsumerGroupDescribeResponse(data);
     }
 
+    private AssignReplicasToDirsRequest createAssignReplicasToDirsRequest(short version) {
+        AssignReplicasToDirsRequestData data = new AssignReplicasToDirsRequestData()
+                .setBrokerId(1)
+                .setBrokerEpoch(123L)
+                .setDirectories(Arrays.asList(
+                        new AssignReplicasToDirsRequestData.DirectoryData()
+                                .setId(Uuid.randomUuid())
+                                .setTopics(Arrays.asList(
+                                        new AssignReplicasToDirsRequestData.TopicData()
+                                                .setTopicId(Uuid.fromString("qo0Pcp70TdGnAa7YKMKCqw"))
+                                                .setPartitions(Arrays.asList(
+                                                        new AssignReplicasToDirsRequestData.PartitionData()
+                                                                .setPartitionIndex(8)
+                                                ))
+                                )),
+                        new AssignReplicasToDirsRequestData.DirectoryData()
+                                .setId(Uuid.randomUuid())
+                                .setTopics(Arrays.asList(
+                                        new AssignReplicasToDirsRequestData.TopicData()
+                                                .setTopicId(Uuid.fromString("yEu11V7HTRGIwm6FDWFhzg"))
+                                                .setPartitions(Arrays.asList(
+                                                        new AssignReplicasToDirsRequestData.PartitionData()
+                                                                .setPartitionIndex(2),
+                                                        new AssignReplicasToDirsRequestData.PartitionData()
+                                                                .setPartitionIndex(80)
+                                                        ))
+                                ))
+                ));
+        return new AssignReplicasToDirsRequest.Builder(data).build(version);
+    }
+
+    private AssignReplicasToDirsResponse createAssignReplicasToDirsResponse() {
+        AssignReplicasToDirsResponseData data = new AssignReplicasToDirsResponseData()
+                .setErrorCode(Errors.NONE.code())
+                .setThrottleTimeMs(123)
+                .setDirectories(Arrays.asList(
+                        new AssignReplicasToDirsResponseData.DirectoryData()
+                                .setId(Uuid.randomUuid())
+                                .setTopics(Arrays.asList(
+                                        new AssignReplicasToDirsResponseData.TopicData()
+                                                .setTopicId(Uuid.fromString("sKhZV8LnTA275KvByB9bVg"))
+                                                .setPartitions(Arrays.asList(
+                                                        new AssignReplicasToDirsResponseData.PartitionData()
+                                                                .setPartitionIndex(8)
+                                                                .setErrorCode(Errors.NONE.code())
+                                                ))
+                                )),
+                        new AssignReplicasToDirsResponseData.DirectoryData()
+                                .setId(Uuid.randomUuid())
+                                .setTopics(Arrays.asList(
+                                        new AssignReplicasToDirsResponseData.TopicData()
+                                                .setTopicId(Uuid.fromString("ORLP5NEzRo64SvKq1hIVQg"))
+                                                .setPartitions(Arrays.asList(
+                                                        new AssignReplicasToDirsResponseData.PartitionData()
+                                                                .setPartitionIndex(2)
+                                                                .setErrorCode(Errors.UNKNOWN_TOPIC_OR_PARTITION.code()),
+                                                        new AssignReplicasToDirsResponseData.PartitionData()
+                                                                .setPartitionIndex(8)
+                                                                .setErrorCode(Errors.NONE.code())
+                                                ))
+                                ))
+                ));
+        return new AssignReplicasToDirsResponse(data);
+    }
+
     private ConsumerGroupHeartbeatRequest createConsumerGroupHeartbeatRequest(short version) {
         ConsumerGroupHeartbeatRequestData data = new ConsumerGroupHeartbeatRequestData()
             .setGroupId("group")
@@ -1196,9 +1277,8 @@ public class RequestResponseTest {
             .setThrottleTimeMs(1000)
             .setMemberId("memberid")
             .setMemberEpoch(11)
-            .setShouldComputeAssignment(false)
             .setAssignment(new ConsumerGroupHeartbeatResponseData.Assignment()
-                .setAssignedTopicPartitions(Arrays.asList(
+                .setTopicPartitions(Arrays.asList(
                     new ConsumerGroupHeartbeatResponseData.TopicPartitions()
                         .setTopicId(Uuid.randomUuid())
                         .setPartitions(Arrays.asList(0, 1, 2)),
@@ -3503,6 +3583,52 @@ public class RequestResponseTest {
                 .setTransactionState("PrepareAbort")
         ));
         return new ListTransactionsResponse(response);
+    }
+
+    private GetTelemetrySubscriptionsRequest createGetTelemetrySubscriptionsRequest(short version) {
+        return new GetTelemetrySubscriptionsRequest.Builder(new GetTelemetrySubscriptionsRequestData()
+            .setClientInstanceId(Uuid.randomUuid())
+        ).build(version);
+    }
+
+    private GetTelemetrySubscriptionsResponse createGetTelemetrySubscriptionsResponse() {
+        GetTelemetrySubscriptionsResponseData response = new GetTelemetrySubscriptionsResponseData();
+        response.setClientInstanceId(Uuid.randomUuid());
+        response.setSubscriptionId(1);
+        response.setAcceptedCompressionTypes(Collections.singletonList(CompressionType.GZIP.id));
+        response.setPushIntervalMs(60 * 1000);
+        response.setDeltaTemporality(false);
+        response.setErrorCode(Errors.NONE.code());
+        response.setThrottleTimeMs(10);
+        return new GetTelemetrySubscriptionsResponse(response);
+    }
+
+    private PushTelemetryRequest createPushTelemetryRequest(short version) {
+        return new PushTelemetryRequest.Builder(new PushTelemetryRequestData()
+            .setClientInstanceId(Uuid.randomUuid())
+            .setSubscriptionId(1)
+            .setTerminating(false)
+            .setCompressionType(CompressionType.ZSTD.id)
+            .setMetrics("test-metrics".getBytes(StandardCharsets.UTF_8))
+        ).build(version);
+    }
+
+    private PushTelemetryResponse createPushTelemetryResponse() {
+        PushTelemetryResponseData response = new PushTelemetryResponseData();
+        response.setErrorCode(Errors.NONE.code());
+        response.setThrottleTimeMs(10);
+        return new PushTelemetryResponse(response);
+    }
+
+    private ListClientMetricsResourcesRequest createListClientMetricsResourcesRequest(short version) {
+        return new ListClientMetricsResourcesRequest.Builder(new ListClientMetricsResourcesRequestData()).build(version);
+    }
+
+    private ListClientMetricsResourcesResponse createListClientMetricsResourcesResponse() {
+        ListClientMetricsResourcesResponseData response = new ListClientMetricsResourcesResponseData();
+        response.setErrorCode(Errors.NONE.code());
+        response.setThrottleTimeMs(10);
+        return new ListClientMetricsResourcesResponse(response);
     }
 
     @Test

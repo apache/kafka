@@ -40,6 +40,7 @@ import java.util.concurrent.Future;
 
 import static java.util.Arrays.asList;
 import static java.util.Collections.singletonList;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -702,7 +703,15 @@ public class MockProducerTest {
         producer.close();
         assertThrows(IllegalStateException.class, producer::flush);
     }
-    
+
+    @Test
+    public void shouldNotThrowOnFlushProducerIfProducerIsFenced() {
+        buildMockProducer(true);
+        producer.initTransactions();
+        producer.fenceProducer();
+        assertDoesNotThrow(producer::flush);
+    }
+
     @Test
     @SuppressWarnings("unchecked")
     public void shouldThrowClassCastException() {

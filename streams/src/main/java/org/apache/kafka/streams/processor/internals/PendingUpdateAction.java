@@ -25,9 +25,10 @@ public class PendingUpdateAction {
 
     enum Action {
         UPDATE_INPUT_PARTITIONS,
+        CLOSE_REVIVE_AND_UPDATE_INPUT_PARTITIONS,
         RECYCLE,
         SUSPEND,
-        CLOSE_DIRTY,
+        ADD_BACK,
         CLOSE_CLEAN
     }
 
@@ -48,6 +49,11 @@ public class PendingUpdateAction {
         return new PendingUpdateAction(Action.UPDATE_INPUT_PARTITIONS, inputPartitions);
     }
 
+    public static PendingUpdateAction createCloseReviveAndUpdateInputPartition(final Set<TopicPartition> inputPartitions) {
+        Objects.requireNonNull(inputPartitions, "Set of input partitions to update is null!");
+        return new PendingUpdateAction(Action.CLOSE_REVIVE_AND_UPDATE_INPUT_PARTITIONS, inputPartitions);
+    }
+
     public static PendingUpdateAction createRecycleTask(final Set<TopicPartition> inputPartitions) {
         Objects.requireNonNull(inputPartitions, "Set of input partitions to update is null!");
         return new PendingUpdateAction(Action.RECYCLE, inputPartitions);
@@ -57,8 +63,8 @@ public class PendingUpdateAction {
         return new PendingUpdateAction(Action.SUSPEND);
     }
 
-    public static PendingUpdateAction createCloseDirty() {
-        return new PendingUpdateAction(Action.CLOSE_DIRTY);
+    public static PendingUpdateAction createAddBack() {
+        return new PendingUpdateAction(Action.ADD_BACK);
     }
 
     public static PendingUpdateAction createCloseClean() {
@@ -66,7 +72,7 @@ public class PendingUpdateAction {
     }
 
     public Set<TopicPartition> getInputPartitions() {
-        if (action != Action.UPDATE_INPUT_PARTITIONS && action != Action.RECYCLE) {
+        if (action != Action.UPDATE_INPUT_PARTITIONS && action != Action.CLOSE_REVIVE_AND_UPDATE_INPUT_PARTITIONS && action != Action.RECYCLE) {
             throw new IllegalStateException("Action type " + action + " does not have a set of input partitions!");
         }
         return inputPartitions;

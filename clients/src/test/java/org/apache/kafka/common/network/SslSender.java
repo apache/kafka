@@ -33,6 +33,7 @@ public class SslSender extends Thread {
     private final byte[] payload;
     private final CountDownLatch handshaked = new CountDownLatch(1);
 
+    @SuppressWarnings("this-escape")
     public SslSender(String tlsProtocol, InetSocketAddress serverAddress, byte[] payload) {
         this.tlsProtocol = tlsProtocol;
         this.serverAddress = serverAddress;

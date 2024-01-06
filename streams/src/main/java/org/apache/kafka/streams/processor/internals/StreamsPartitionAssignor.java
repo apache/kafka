@@ -640,7 +640,7 @@ public class StreamsPartitionAssignor implements ConsumerPartitionAssignor, Conf
         log.info("Assigning stateful tasks: {}\n"
                      + "and stateless tasks: {}",
                  statefulTasks,
-                 allTasks.stream().filter(t -> !statefulTasks.contains(t)));
+                 allTasks.stream().filter(t -> !statefulTasks.contains(t)).collect(Collectors.toSet()));
         log.debug("Assigning tasks and {} standby replicas to client nodes {}",
                   numStandbyReplicas(), clientStates);
 

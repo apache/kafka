@@ -63,7 +63,7 @@ public class KafkaEmbedded {
      *               broker should listen to.  Note that you cannot change the `log.dirs` setting
      *               currently.
      */
-    @SuppressWarnings("WeakerAccess")
+    @SuppressWarnings({"WeakerAccess", "this-escape"})
     public KafkaEmbedded(final Properties config, final MockTime time) throws IOException {
         tmpFolder = org.apache.kafka.test.TestUtils.tempDirectory();
         logDir = org.apache.kafka.test.TestUtils.tempDirectory(tmpFolder.toPath(), "log");

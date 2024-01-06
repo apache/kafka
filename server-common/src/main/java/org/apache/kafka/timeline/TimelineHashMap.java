@@ -27,9 +27,9 @@ import java.util.Set;
 
 /**
  * This is a hash map which can be snapshotted.
- *
+ * <br>
  * See {@SnapshottableHashTable} for more details about the implementation.
- *
+ * <br>
  * This class requires external synchronization.  Null keys and values are not supported.
  *
  * @param <K>   The key type of the set.

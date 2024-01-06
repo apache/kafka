@@ -17,6 +17,7 @@
 
 package org.apache.kafka.image;
 
+import org.apache.kafka.common.DirectoryId;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.metadata.PartitionChangeRecord;
@@ -101,13 +102,17 @@ public class TopicsImageTest {
         TOPIC_IMAGES1 = Arrays.asList(
             newTopicImage("foo", FOO_UUID,
                 new PartitionRegistration.Builder().setReplicas(new int[] {2, 3, 4}).
+                    setDirectories(DirectoryId.migratingArray(3)).
                     setIsr(new int[] {2, 3}).setLeader(2).setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).setLeaderEpoch(1).setPartitionEpoch(345).build(),
                 new PartitionRegistration.Builder().setReplicas(new int[] {3, 4, 5}).
+                        setDirectories(DirectoryId.migratingArray(3)).
                     setIsr(new int[] {3, 4, 5}).setLeader(3).setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).setLeaderEpoch(4).setPartitionEpoch(684).build(),
                 new PartitionRegistration.Builder().setReplicas(new int[] {2, 4, 5}).
+                        setDirectories(DirectoryId.migratingArray(3)).
                     setIsr(new int[] {2, 4, 5}).setLeader(2).setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).setLeaderEpoch(10).setPartitionEpoch(84).build()),
             newTopicImage("bar", BAR_UUID,
                 new PartitionRegistration.Builder().setReplicas(new int[] {0, 1, 2, 3, 4}).
+                    setDirectories(DirectoryId.migratingArray(5)).
                     setIsr(new int[] {0, 1, 2, 3}).setRemovingReplicas(new int[] {1}).setAddingReplicas(new int[] {3, 4}).setLeader(0).setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).setLeaderEpoch(1).setPartitionEpoch(345).build()));
 
         IMAGE1 = new TopicsImage(newTopicsByIdMap(TOPIC_IMAGES1), newTopicsByNameMap(TOPIC_IMAGES1));
@@ -140,9 +145,11 @@ public class TopicsImageTest {
         List<TopicImage> topics2 = Arrays.asList(
             newTopicImage("bar", BAR_UUID,
                 new PartitionRegistration.Builder().setReplicas(new int[] {0, 1, 2, 3, 4}).
+                    setDirectories(DirectoryId.migratingArray(5)).
                     setIsr(new int[] {0, 1, 2, 3}).setRemovingReplicas(new int[] {1}).setAddingReplicas(new int[] {3, 4}).setLeader(1).setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).setLeaderEpoch(2).setPartitionEpoch(346).build()),
             newTopicImage("baz", BAZ_UUID,
                 new PartitionRegistration.Builder().setReplicas(new int[] {1, 2, 3, 4}).
+                    setDirectories(DirectoryId.migratingArray(4)).
                     setIsr(new int[] {3, 4}).setRemovingReplicas(new int[] {2}).setAddingReplicas(new int[] {1}).setLeader(3).setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).setLeaderEpoch(2).setPartitionEpoch(1).build()));
         IMAGE2 = new TopicsImage(newTopicsByIdMap(topics2), newTopicsByNameMap(topics2));
     }
@@ -162,8 +169,13 @@ public class TopicsImageTest {
     }
 
     private PartitionRegistration newPartition(int[] replicas) {
+        Uuid[] directories = new Uuid[replicas.length];
+        for (int i = 0; i < replicas.length; i++) {
+            directories[i] = DirectoryId.random();
+        }
         return new PartitionRegistration.Builder().
             setReplicas(replicas).
+            setDirectories(directories).
             setIsr(replicas).
             setLeader(replicas[0]).
             setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).

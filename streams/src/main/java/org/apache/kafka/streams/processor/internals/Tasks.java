@@ -20,6 +20,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.PendingUpdateAction.Action;
+import org.apache.kafka.streams.processor.internals.Task.State;
 import org.slf4j.Logger;
 
 import java.util.Collection;
@@ -120,6 +121,19 @@ class Tasks implements TasksRegistry {
     }
 
     @Override
+    public Set<TopicPartition> removePendingTaskToCloseReviveAndUpdateInputPartitions(final TaskId taskId) {
+        if (containsTaskIdWithAction(taskId, Action.CLOSE_REVIVE_AND_UPDATE_INPUT_PARTITIONS)) {
+            return pendingUpdateActions.remove(taskId).getInputPartitions();
+        }
+        return null;
+    }
+
+    @Override
+    public void addPendingTaskToCloseReviveAndUpdateInputPartitions(final TaskId taskId, final Set<TopicPartition> inputPartitions) {
+        pendingUpdateActions.put(taskId, PendingUpdateAction.createCloseReviveAndUpdateInputPartition(inputPartitions));
+    }
+
+    @Override
     public Set<TopicPartition> removePendingTaskToUpdateInputPartitions(final TaskId taskId) {
         if (containsTaskIdWithAction(taskId, Action.UPDATE_INPUT_PARTITIONS)) {
             return pendingUpdateActions.remove(taskId).getInputPartitions();
@@ -133,8 +147,8 @@ class Tasks implements TasksRegistry {
     }
 
     @Override
-    public boolean removePendingTaskToCloseDirty(final TaskId taskId) {
-        if (containsTaskIdWithAction(taskId, Action.CLOSE_DIRTY)) {
+    public boolean removePendingTaskToAddBack(final TaskId taskId) {
+        if (containsTaskIdWithAction(taskId, Action.ADD_BACK)) {
             pendingUpdateActions.remove(taskId);
             return true;
         }
@@ -142,8 +156,8 @@ class Tasks implements TasksRegistry {
     }
 
     @Override
-    public void addPendingTaskToCloseDirty(final TaskId taskId) {
-        pendingUpdateActions.put(taskId, PendingUpdateAction.createCloseDirty());
+    public void addPendingTaskToAddBack(final TaskId taskId) {
+        pendingUpdateActions.put(taskId, PendingUpdateAction.createAddBack());
     }
 
     @Override
@@ -240,8 +254,8 @@ class Tasks implements TasksRegistry {
     public synchronized void removeTask(final Task taskToRemove) {
         final TaskId taskId = taskToRemove.id();
 
-        if (taskToRemove.state() != Task.State.CLOSED) {
-            throw new IllegalStateException("Attempted to remove a task that is not closed: " + taskId);
+        if (taskToRemove.state() != Task.State.CLOSED && taskToRemove.state() != State.SUSPENDED) {
+            throw new IllegalStateException("Attempted to remove a task that is not closed or suspended: " + taskId);
         }
 
         if (taskToRemove.isActive()) {
@@ -346,6 +360,11 @@ class Tasks implements TasksRegistry {
             tasks.add(task(taskId));
         }
         return tasks;
+    }
+
+    @Override
+    public synchronized Collection<TaskId> activeTaskIds() {
+        return Collections.unmodifiableCollection(activeTasksPerId.keySet());
     }
 
     @Override

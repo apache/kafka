@@ -20,7 +20,7 @@ import java.util
 import java.util.Properties
 import kafka.admin.ConfigCommand.ConfigCommandOptions
 import kafka.cluster.Broker
-import kafka.server.{ConfigEntityName, ConfigType}
+import kafka.server.ConfigEntityName
 import kafka.utils.{Exit, Logging, TestUtils}
 import kafka.zk.{AdminZkClient, KafkaZkClient}
 import org.apache.kafka.clients.admin._
@@ -31,6 +31,7 @@ import org.apache.kafka.common.internals.KafkaFutureImpl
 import org.apache.kafka.common.quota.{ClientQuotaAlteration, ClientQuotaEntity, ClientQuotaFilter, ClientQuotaFilterComponent}
 import org.apache.kafka.common.security.scram.internals.ScramCredentialUtils
 import org.apache.kafka.common.utils.Sanitizer
+import org.apache.kafka.server.config.ConfigType
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
 import org.mockito.ArgumentMatchers.anyString
@@ -44,6 +45,10 @@ class ConfigCommandTest extends Logging {
   private val zkConnect = "localhost:2181"
   private val dummyAdminZkClient = new DummyAdminZkClient(null)
 
+  private val zookeeperBootstrap = Array("--zookeeper", zkConnect)
+  private val brokerBootstrap = Array("--bootstrap-server", "localhost:9092")
+  private val controllerBootstrap = Array("--bootstrap-controller", "localhost:9093")
+
   @Test
   def shouldExitWithNonZeroStatusOnArgError(): Unit = {
     assertNonZeroStatusExit(Array("--blah"))
@@ -51,32 +56,28 @@ class ConfigCommandTest extends Logging {
 
   @Test
   def shouldExitWithNonZeroStatusOnZkCommandWithTopicsEntity(): Unit = {
-    assertNonZeroStatusExit(Array(
-      "--zookeeper", zkConnect,
+    assertNonZeroStatusExit(zookeeperBootstrap  ++ Array(
       "--entity-type", "topics",
       "--describe"))
   }
 
   @Test
   def shouldExitWithNonZeroStatusOnZkCommandWithClientsEntity(): Unit = {
-    assertNonZeroStatusExit(Array(
-      "--zookeeper", zkConnect,
+    assertNonZeroStatusExit(zookeeperBootstrap ++ Array(
       "--entity-type", "clients",
       "--describe"))
   }
 
   @Test
   def shouldExitWithNonZeroStatusOnZkCommandWithIpsEntity(): Unit = {
-    assertNonZeroStatusExit(Array(
-      "--zookeeper", zkConnect,
+    assertNonZeroStatusExit(zookeeperBootstrap ++ Array(
       "--entity-type", "ips",
       "--describe"))
   }
 
   @Test
   def shouldExitWithNonZeroStatusAlterUserQuotaWithoutEntityName(): Unit = {
-    assertNonZeroStatusExit(Array(
-      "--bootstrap-server", "localhost:9092",
+    assertNonZeroStatusExit(brokerBootstrap ++ Array(
       "--entity-type", "users",
       "--alter", "--add-config", "consumer_byte_rate=20000"))
   }
@@ -88,6 +89,12 @@ class ConfigCommandTest extends Logging {
       "--entity-type", "brokers",
       "--entity-name", "1",
       "--describe"))
+  }
+
+  @Test
+  def shouldExitWithNonZeroStatusIfBothBootstrapServerAndBootstrapControllerGiven(): Unit = {
+    assertNonZeroStatusExit(brokerBootstrap ++ controllerBootstrap ++ Array(
+      "--describe", "--broker-defaults" ))
   }
 
   @Test
@@ -119,66 +126,96 @@ class ConfigCommandTest extends Logging {
 
   @Test
   def shouldFailParseArgumentsForClientsEntityTypeUsingZookeeper(): Unit = {
-    assertThrows(classOf[IllegalArgumentException], () => testArgumentParse("clients", zkConfig = true))
+    assertThrows(classOf[IllegalArgumentException], () => testArgumentParse(zookeeperBootstrap, "clients"))
   }
 
   @Test
-  def shouldParseArgumentsForClientsEntityType(): Unit = {
-    testArgumentParse("clients", zkConfig = false)
+  def shouldParseArgumentsForClientsEntityTypeWithBrokerBootstrap(): Unit = {
+    testArgumentParse(brokerBootstrap, "clients")
+  }
+
+  @Test
+  def shouldParseArgumentsForClientsEntityTypeWithControllerBootstrap(): Unit = {
+    testArgumentParse(controllerBootstrap, "clients")
   }
 
   @Test
   def shouldParseArgumentsForUsersEntityTypeUsingZookeeper(): Unit = {
-    testArgumentParse("users", zkConfig = true)
+    testArgumentParse(zookeeperBootstrap, "users")
   }
 
   @Test
-  def shouldParseArgumentsForUsersEntityType(): Unit = {
-    testArgumentParse("users", zkConfig = false)
+  def shouldParseArgumentsForUsersEntityTypeWithBrokerBootstrap(): Unit = {
+    testArgumentParse(brokerBootstrap, "users")
+  }
+
+  @Test
+  def shouldParseArgumentsForUsersEntityTypeWithControllerBootstrap(): Unit = {
+    testArgumentParse(controllerBootstrap, "users")
   }
 
   @Test
   def shouldFailParseArgumentsForTopicsEntityTypeUsingZookeeper(): Unit = {
-    assertThrows(classOf[IllegalArgumentException], () => testArgumentParse("topics", zkConfig = true))
+    assertThrows(classOf[IllegalArgumentException], () => testArgumentParse(zookeeperBootstrap, "topics"))
   }
 
   @Test
-  def shouldParseArgumentsForTopicsEntityType(): Unit = {
-    testArgumentParse("topics", zkConfig = false)
+  def shouldParseArgumentsForTopicsEntityTypeWithBrokerBootstrap(): Unit = {
+    testArgumentParse(brokerBootstrap, "topics")
+  }
+
+  @Test
+  def shouldParseArgumentsForTopicsEntityTypeWithControllerBootstrap(): Unit = {
+    testArgumentParse(controllerBootstrap, "topics")
   }
 
   @Test
   def shouldParseArgumentsForBrokersEntityTypeUsingZookeeper(): Unit = {
-    testArgumentParse("brokers", zkConfig = true)
+    testArgumentParse(zookeeperBootstrap, "brokers")
   }
 
   @Test
-  def shouldParseArgumentsForBrokersEntityType(): Unit = {
-    testArgumentParse("brokers", zkConfig = false)
+  def shouldParseArgumentsForBrokersEntityTypeWithBrokerBootstrap(): Unit = {
+    testArgumentParse(brokerBootstrap, "brokers")
   }
 
   @Test
-  def shouldParseArgumentsForBrokerLoggersEntityType(): Unit = {
-    testArgumentParse("broker-loggers", zkConfig = false)
+  def shouldParseArgumentsForBrokersEntityTypeWithControllerBootstrap(): Unit = {
+    testArgumentParse(controllerBootstrap, "brokers")
+  }
+
+  @Test
+  def shouldParseArgumentsForBrokerLoggersEntityTypeWithBrokerBootstrap(): Unit = {
+    testArgumentParse(brokerBootstrap, "broker-loggers")
+  }
+
+  @Test
+  def shouldParseArgumentsForBrokerLoggersEntityTypeWithControllerBootstrap(): Unit = {
+    testArgumentParse(controllerBootstrap, "broker-loggers")
   }
 
   @Test
   def shouldFailParseArgumentsForIpEntityTypeUsingZookeeper(): Unit = {
-    assertThrows(classOf[IllegalArgumentException], () => testArgumentParse("ips", zkConfig = true))
+    assertThrows(classOf[IllegalArgumentException], () => testArgumentParse(zookeeperBootstrap, "ips"))
   }
 
   @Test
-  def shouldParseArgumentsForIpEntityType(): Unit = {
-    testArgumentParse("ips", zkConfig = false)
+  def shouldParseArgumentsForIpEntityTypeWithBrokerBootstrap(): Unit = {
+    testArgumentParse(brokerBootstrap, "ips")
   }
 
-  def testArgumentParse(entityType: String, zkConfig: Boolean): Unit = {
+  @Test
+  def shouldParseArgumentsForIpEntityTypeWithControllerBootstrap(): Unit = {
+    testArgumentParse(controllerBootstrap, "ips")
+  }
+
+  def testArgumentParse(
+    bootstrapArguments: Array[String],
+    entityType: String
+  ): Unit = {
     val shortFlag: String = s"--${entityType.dropRight(1)}"
 
-    val connectOpts = if (zkConfig)
-      ("--zookeeper", zkConnect)
-    else
-      ("--bootstrap-server", "localhost:9092")
+    val connectOpts = (bootstrapArguments(0), bootstrapArguments(1))
 
     // Should parse correctly
     var createOpts = new ConfigCommandOptions(Array(connectOpts._1, connectOpts._2,
@@ -268,15 +305,31 @@ class ConfigCommandTest extends Logging {
     createOpts = new ConfigCommandOptions(Array(connectOpts._1, connectOpts._2,
       shortFlag, "1",
       "--alter",
-      "--add-config", "a=b,c=,d=e,f="))
+      "--add-config", "a._-c=b,c=,d=e,f="))
     createOpts.checkArgs()
 
     val addedProps2 = ConfigCommand.parseConfigsToBeAdded(createOpts)
     assertEquals(4, addedProps2.size())
-    assertEquals("b", addedProps2.getProperty("a"))
+    assertEquals("b", addedProps2.getProperty("a._-c"))
     assertEquals("e", addedProps2.getProperty("d"))
     assertTrue(addedProps2.getProperty("c").isEmpty)
     assertTrue(addedProps2.getProperty("f").isEmpty)
+
+    var inValidCreateOpts = new ConfigCommandOptions(Array(connectOpts._1, connectOpts._2,
+      shortFlag, "1",
+      "--alter",
+      "--add-config", "a;c=b"))
+
+    assertThrows(classOf[IllegalArgumentException],
+      () => ConfigCommand.parseConfigsToBeAdded(inValidCreateOpts))
+
+    inValidCreateOpts = new ConfigCommandOptions(Array(connectOpts._1, connectOpts._2,
+      shortFlag, "1",
+      "--alter",
+      "--add-config", "a,=b"))
+
+    assertThrows(classOf[IllegalArgumentException],
+      () => ConfigCommand.parseConfigsToBeAdded(inValidCreateOpts))
   }
 
   @Test
@@ -335,26 +388,26 @@ class ConfigCommandTest extends Logging {
 
     // zookeeper config only supports "users" and "brokers" entity type
     if (!zkConfig) {
-      testExpectedEntityTypeNames(List(ConfigType.Topic), List("A"), "--entity-type", "topics", "--entity-name", "A")
-      testExpectedEntityTypeNames(List(ConfigType.Ip), List("1.2.3.4"), "--entity-name", "1.2.3.4", "--entity-type", "ips")
-      testExpectedEntityTypeNames(List(ConfigType.User, ConfigType.Client), List("A", ""),
+      testExpectedEntityTypeNames(List(ConfigType.TOPIC), List("A"), "--entity-type", "topics", "--entity-name", "A")
+      testExpectedEntityTypeNames(List(ConfigType.IP), List("1.2.3.4"), "--entity-name", "1.2.3.4", "--entity-type", "ips")
+      testExpectedEntityTypeNames(List(ConfigType.USER, ConfigType.CLIENT), List("A", ""),
         "--entity-type", "users", "--entity-type", "clients", "--entity-name", "A", "--entity-default")
-      testExpectedEntityTypeNames(List(ConfigType.User, ConfigType.Client), List("", "B"),
+      testExpectedEntityTypeNames(List(ConfigType.USER, ConfigType.CLIENT), List("", "B"),
         "--entity-default", "--entity-name", "B", "--entity-type", "users", "--entity-type", "clients")
-      testExpectedEntityTypeNames(List(ConfigType.Topic), List("A"), "--topic", "A")
-      testExpectedEntityTypeNames(List(ConfigType.Ip), List("1.2.3.4"), "--ip", "1.2.3.4")
-      testExpectedEntityTypeNames(List(ConfigType.Client, ConfigType.User), List("B", "A"), "--client", "B", "--user", "A")
-      testExpectedEntityTypeNames(List(ConfigType.Client, ConfigType.User), List("B", ""), "--client", "B", "--user-defaults")
-      testExpectedEntityTypeNames(List(ConfigType.Client, ConfigType.User), List("A"),
+      testExpectedEntityTypeNames(List(ConfigType.TOPIC), List("A"), "--topic", "A")
+      testExpectedEntityTypeNames(List(ConfigType.IP), List("1.2.3.4"), "--ip", "1.2.3.4")
+      testExpectedEntityTypeNames(List(ConfigType.CLIENT, ConfigType.USER), List("B", "A"), "--client", "B", "--user", "A")
+      testExpectedEntityTypeNames(List(ConfigType.CLIENT, ConfigType.USER), List("B", ""), "--client", "B", "--user-defaults")
+      testExpectedEntityTypeNames(List(ConfigType.CLIENT, ConfigType.USER), List("A"),
         "--entity-type", "clients", "--entity-type", "users", "--entity-name", "A")
-      testExpectedEntityTypeNames(List(ConfigType.Topic), List.empty, "--entity-type", "topics")
-      testExpectedEntityTypeNames(List(ConfigType.Ip), List.empty, "--entity-type", "ips")
+      testExpectedEntityTypeNames(List(ConfigType.TOPIC), List.empty, "--entity-type", "topics")
+      testExpectedEntityTypeNames(List(ConfigType.IP), List.empty, "--entity-type", "ips")
     }
 
-    testExpectedEntityTypeNames(List(ConfigType.Broker), List("0"), "--entity-name", "0", "--entity-type", "brokers")
-    testExpectedEntityTypeNames(List(ConfigType.Broker), List("0"), "--broker", "0")
-    testExpectedEntityTypeNames(List(ConfigType.User), List.empty, "--entity-type", "users")
-    testExpectedEntityTypeNames(List(ConfigType.Broker), List.empty, "--entity-type", "brokers")
+    testExpectedEntityTypeNames(List(ConfigType.BROKER), List("0"), "--entity-name", "0", "--entity-type", "brokers")
+    testExpectedEntityTypeNames(List(ConfigType.BROKER), List("0"), "--broker", "0")
+    testExpectedEntityTypeNames(List(ConfigType.USER), List.empty, "--entity-type", "users")
+    testExpectedEntityTypeNames(List(ConfigType.BROKER), List.empty, "--entity-type", "brokers")
   }
 
   @Test
@@ -951,7 +1004,7 @@ class ConfigCommandTest extends Logging {
   @Test
   def testNoSpecifiedEntityOptionWithDescribeBrokersInZKIsAllowed(): Unit = {
     val optsList = List("--zookeeper", zkConnect,
-      "--entity-type", ConfigType.Broker,
+      "--entity-type", ConfigType.BROKER,
       "--describe"
     )
 
@@ -961,7 +1014,7 @@ class ConfigCommandTest extends Logging {
   @Test
   def testNoSpecifiedEntityOptionWithDescribeBrokersInBootstrapServerIsAllowed(): Unit = {
     val optsList = List("--bootstrap-server", "localhost:9092",
-      "--entity-type", ConfigType.Broker,
+      "--entity-type", ConfigType.BROKER,
       "--describe"
     )
 
@@ -971,7 +1024,7 @@ class ConfigCommandTest extends Logging {
   @Test
   def testDescribeAllBrokerConfig(): Unit = {
     val optsList = List("--bootstrap-server", "localhost:9092",
-      "--entity-type", ConfigType.Broker,
+      "--entity-type", ConfigType.BROKER,
       "--entity-name", "1",
       "--describe",
       "--all")
@@ -982,7 +1035,7 @@ class ConfigCommandTest extends Logging {
   @Test
   def testDescribeAllTopicConfig(): Unit = {
     val optsList = List("--bootstrap-server", "localhost:9092",
-      "--entity-type", ConfigType.Topic,
+      "--entity-type", ConfigType.TOPIC,
       "--entity-name", "foo",
       "--describe",
       "--all")
@@ -993,7 +1046,7 @@ class ConfigCommandTest extends Logging {
   @Test
   def testDescribeAllBrokerConfigBootstrapServerRequired(): Unit = {
     val optsList = List("--zookeeper", zkConnect,
-      "--entity-type", ConfigType.Broker,
+      "--entity-type", ConfigType.BROKER,
       "--entity-name", "1",
       "--describe",
       "--all")
@@ -1574,6 +1627,143 @@ class ConfigCommandTest extends Logging {
     checkEntities(opts,
         Map("users" -> Seq("<default>", sanitizedPrincipal)) ++ defaultUserMap ++ userMap,
         Seq("<default>/clients/client-3", sanitizedPrincipal + "/clients/client-2"))
+  }
+
+  @Test
+  def shouldAlterClientMetricsConfig(): Unit = {
+    val node = new Node(1, "localhost", 9092)
+    verifyAlterClientMetricsConfig(node, "1", List("--entity-name", "1"))
+  }
+
+  private def verifyAlterClientMetricsConfig(node: Node, resourceName: String, resourceOpts: List[String]): Unit = {
+    val optsList = List("--bootstrap-server", "localhost:9092",
+      "--entity-type", "client-metrics",
+      "--alter",
+      "--delete-config", "interval.ms",
+      "--add-config", "metrics=org.apache.kafka.consumer.," +
+        "match=[client_software_name=kafka.python,client_software_version=1\\.2\\..*]") ++ resourceOpts
+    val alterOpts = new ConfigCommandOptions(optsList.toArray)
+
+    val resource = new ConfigResource(ConfigResource.Type.CLIENT_METRICS, resourceName)
+    val configEntries = util.Collections.singletonList(new ConfigEntry("interval.ms", "1000",
+      ConfigEntry.ConfigSource.DYNAMIC_CLIENT_METRICS_CONFIG, false, false, util.Collections.emptyList[ConfigEntry.ConfigSynonym],
+      ConfigEntry.ConfigType.UNKNOWN, null))
+    val future = new KafkaFutureImpl[util.Map[ConfigResource, Config]]
+    future.complete(util.Collections.singletonMap(resource, new Config(configEntries)))
+    val describeResult: DescribeConfigsResult = mock(classOf[DescribeConfigsResult])
+    when(describeResult.all()).thenReturn(future)
+
+    val alterFuture = new KafkaFutureImpl[Void]
+    alterFuture.complete(null)
+    val alterResult: AlterConfigsResult = mock(classOf[AlterConfigsResult])
+    when(alterResult.all()).thenReturn(alterFuture)
+
+    val mockAdminClient = new MockAdminClient(util.Collections.singletonList(node), node) {
+      override def describeConfigs(resources: util.Collection[ConfigResource], options: DescribeConfigsOptions): DescribeConfigsResult = {
+        assertFalse(options.includeSynonyms(), "Config synonyms requested unnecessarily")
+        assertEquals(1, resources.size)
+        val resource = resources.iterator.next
+        assertEquals(ConfigResource.Type.CLIENT_METRICS, resource.`type`)
+        assertEquals(resourceName, resource.name)
+        describeResult
+      }
+
+      override def incrementalAlterConfigs(configs: util.Map[ConfigResource, util.Collection[AlterConfigOp]], options: AlterConfigsOptions): AlterConfigsResult = {
+        assertEquals(1, configs.size)
+        val entry = configs.entrySet.iterator.next
+        val resource = entry.getKey
+        val alterConfigOps = entry.getValue
+        assertEquals(ConfigResource.Type.CLIENT_METRICS, resource.`type`)
+        assertEquals(3, alterConfigOps.size)
+
+        val expectedConfigOps = List(
+          new AlterConfigOp(new ConfigEntry("match", "client_software_name=kafka.python,client_software_version=1\\.2\\..*"), AlterConfigOp.OpType.SET),
+          new AlterConfigOp(new ConfigEntry("metrics", "org.apache.kafka.consumer."), AlterConfigOp.OpType.SET),
+          new AlterConfigOp(new ConfigEntry("interval.ms", ""), AlterConfigOp.OpType.DELETE)
+        )
+        assertEquals(expectedConfigOps, alterConfigOps.asScala.toList)
+        alterResult
+      }
+    }
+    ConfigCommand.alterConfig(mockAdminClient, alterOpts)
+    verify(describeResult).all()
+    verify(alterResult).all()
+  }
+
+  @Test
+  def shouldDescribeClientMetricsConfigWithoutEntityName(): Unit = {
+    val describeOpts = new ConfigCommandOptions(Array("--bootstrap-server", "localhost:9092",
+      "--entity-type", "client-metrics",
+      "--describe"))
+
+    val resourceCustom = new ConfigResource(ConfigResource.Type.CLIENT_METRICS, "1")
+    val configEntry = new ConfigEntry("metrics", "*")
+    val future = new KafkaFutureImpl[util.Map[ConfigResource, Config]]
+    val describeResult: DescribeConfigsResult = mock(classOf[DescribeConfigsResult])
+    when(describeResult.all()).thenReturn(future)
+
+    val node = new Node(1, "localhost", 9092)
+    val mockAdminClient = new MockAdminClient(util.Collections.singletonList(node), node) {
+      override def describeConfigs(resources: util.Collection[ConfigResource], options: DescribeConfigsOptions): DescribeConfigsResult = {
+        assertTrue(options.includeSynonyms())
+        assertEquals(1, resources.size)
+        val resource = resources.iterator.next
+        assertEquals(ConfigResource.Type.CLIENT_METRICS, resource.`type`)
+        assertTrue(resourceCustom.name == resource.name)
+        future.complete(Map(resourceCustom -> new Config(util.Collections.singletonList(configEntry))).asJava)
+        describeResult
+      }
+    }
+    mockAdminClient.incrementalAlterConfigs(util.Collections.singletonMap(resourceCustom,
+      util.Collections.singletonList(new AlterConfigOp(configEntry, AlterConfigOp.OpType.SET))), new AlterConfigsOptions())
+    ConfigCommand.describeConfig(mockAdminClient, describeOpts)
+    verify(describeResult).all()
+  }
+
+  @Test
+  def shouldNotAlterClientMetricsConfigWithoutEntityName(): Unit = {
+    val alterOpts = new ConfigCommandOptions(Array("--bootstrap-server", "localhost:9092",
+      "--entity-type", "client-metrics",
+      "--alter",
+      "--add-config", "interval.ms=1000"))
+
+    val exception = assertThrows(classOf[IllegalArgumentException], () => alterOpts.checkArgs())
+    assertEquals("an entity name must be specified with --alter of client-metrics", exception.getMessage)
+  }
+
+  @Test
+  def shouldNotSupportAlterClientMetricsWithZookeeperArg(): Unit = {
+    val alterOpts = new ConfigCommandOptions(Array("--zookeeper", zkConnect,
+      "--entity-name", "sub",
+      "--entity-type", "client-metrics",
+      "--alter",
+      "--add-config", "interval.ms=1000"))
+
+    val exception = assertThrows(classOf[IllegalArgumentException], () => alterOpts.checkArgs())
+    assertEquals("Invalid entity type client-metrics, the entity type must be one of users, brokers with a --zookeeper argument", exception.getMessage)
+  }
+
+  @Test
+  def shouldNotSupportDescribeClientMetricsWithZookeeperArg(): Unit = {
+    val describeOpts = new ConfigCommandOptions(Array("--zookeeper", zkConnect,
+      "--entity-name", "sub",
+      "--entity-type", "client-metrics",
+      "--describe"))
+
+    val exception = assertThrows(classOf[IllegalArgumentException], () => describeOpts.checkArgs())
+    assertEquals("Invalid entity type client-metrics, the entity type must be one of users, brokers with a --zookeeper argument", exception.getMessage)
+  }
+
+  @Test
+  def shouldNotSupportAlterClientMetricsWithZookeeper(): Unit = {
+    val alterOpts = new ConfigCommandOptions(Array("--zookeeper", zkConnect,
+      "--entity-name", "sub",
+      "--entity-type", "client-metrics",
+      "--alter",
+      "--add-config", "interval.ms=1000"))
+
+    val exception = assertThrows(classOf[IllegalArgumentException], () => ConfigCommand.alterConfigWithZk(null, alterOpts, dummyAdminZkClient))
+    assertEquals("client-metrics is not a known entityType. Should be one of List(topics, clients, users, brokers, ips)", exception.getMessage)
   }
 
   class DummyAdminZkClient(zkClient: KafkaZkClient) extends AdminZkClient(zkClient) {

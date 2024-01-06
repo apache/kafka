@@ -119,6 +119,7 @@ public class ConfigurableProducerSpec extends TaskSpec {
     private final TopicsSpec activeTopic;
     private final int activePartition;
 
+    @SuppressWarnings("this-escape")
     @JsonCreator
     public ConfigurableProducerSpec(@JsonProperty("startMs") long startMs,
                                     @JsonProperty("durationMs") long durationMs,

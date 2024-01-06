@@ -46,7 +46,7 @@ class StopReplicaRequestTest extends BaseRequestTest {
 
     val server = servers.head
     val offlineDir = server.logManager.getLog(tp1).get.dir.getParent
-    server.replicaManager.handleLogDirFailure(offlineDir, sendZkNotification = false)
+    server.replicaManager.handleLogDirFailure(offlineDir, notifyController = false)
 
     val topicStates = Seq(
       new StopReplicaTopicState()

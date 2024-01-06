@@ -30,13 +30,13 @@ import org.apache.kafka.common.message.OffsetForLeaderEpochRequestData.OffsetFor
 import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.EpochEndOffset
 import org.apache.kafka.common.protocol.Errors._
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
-import org.apache.kafka.common.record.{CompressionType, MemoryRecords, RecordBatch, RecordConversionStats, SimpleRecord}
+import org.apache.kafka.common.record.{CompressionType, MemoryRecords, RecordBatch, RecordValidationStats, SimpleRecord}
 import org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.{UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET}
 import org.apache.kafka.common.requests.{FetchRequest, FetchResponse, UpdateMetadataRequest}
 import org.apache.kafka.common.utils.{LogContext, SystemTime}
 import org.apache.kafka.server.common.{MetadataVersion, OffsetAndEpoch}
 import org.apache.kafka.server.common.MetadataVersion.IBP_2_6_IV0
-import org.apache.kafka.storage.internals.log.{LogAppendInfo, LogOffsetMetadata}
+import org.apache.kafka.storage.internals.log.LogAppendInfo
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, Test}
 import org.junit.jupiter.params.ParameterizedTest
@@ -667,6 +667,7 @@ class ReplicaFetcherThreadTest {
     val log: UnifiedLog = mock(classOf[UnifiedLog])
     val partition: Partition = mock(classOf[Partition])
     val replicaManager: ReplicaManager = mock(classOf[ReplicaManager])
+    val replicaAlterLogDirsManager: ReplicaAlterLogDirsManager = mock(classOf[ReplicaAlterLogDirsManager])
 
     val logEndOffset = 150
     val highWatermark = 130
@@ -678,6 +679,7 @@ class ReplicaFetcherThreadTest {
 
     when(replicaManager.metadataCache).thenReturn(metadataCache)
     when(replicaManager.logManager).thenReturn(logManager)
+    when(replicaManager.replicaAlterLogDirsManager).thenReturn(replicaAlterLogDirsManager)
 
     when(replicaManager.localLogOrException(t1p0)).thenReturn(log)
     when(replicaManager.getPartitionOrException(t1p0)).thenReturn(partition)
@@ -749,9 +751,10 @@ class ReplicaFetcherThreadTest {
     val log: UnifiedLog = mock(classOf[UnifiedLog])
     val partition: Partition = mock(classOf[Partition])
     val replicaManager: ReplicaManager = mock(classOf[ReplicaManager])
+    val lastFetchedEpoch = 2
 
     when(log.highWatermark).thenReturn(0)
-    when(log.latestEpoch).thenReturn(Some(0))
+    when(log.latestEpoch).thenReturn(Some(lastFetchedEpoch))
     when(log.endOffsetForEpoch(0)).thenReturn(Some(new OffsetAndEpoch(0, 0)))
     when(log.logEndOffset).thenReturn(0)
     when(log.maybeUpdateHighWatermark(0)).thenReturn(None)
@@ -764,19 +767,16 @@ class ReplicaFetcherThreadTest {
 
     when(partition.localLogOrException).thenReturn(log)
     when(partition.appendRecordsToFollowerOrFutureReplica(any(), any())).thenReturn(Some(new LogAppendInfo(
-      Optional.empty[LogOffsetMetadata],
+      -1,
       0,
       OptionalInt.empty,
       RecordBatch.NO_TIMESTAMP,
       -1L,
       RecordBatch.NO_TIMESTAMP,
       -1L,
-      RecordConversionStats.EMPTY,
+      RecordValidationStats.EMPTY,
       CompressionType.NONE,
-      CompressionType.NONE,
-      -1,
-      0, // No records.
-      false,
+      -1, // No records.
       -1L
     )))
 
@@ -835,6 +835,7 @@ class ReplicaFetcherThreadTest {
 
     // Lag is set to Some(0).
     assertEquals(Some(0), thread.fetchState(t1p0).flatMap(_.lag))
+    assertEquals(Some(lastFetchedEpoch), thread.fetchState(t1p0).flatMap(_.lastFetchedEpoch))
   }
 
   @Test

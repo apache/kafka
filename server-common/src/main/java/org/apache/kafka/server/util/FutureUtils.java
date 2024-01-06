@@ -80,14 +80,11 @@ public class FutureUtils {
         CompletableFuture<? extends T> sourceFuture,
         CompletableFuture<T> destinationFuture
     ) {
-        sourceFuture.whenComplete(new BiConsumer<T, Throwable>() {
-            @Override
-            public void accept(T val, Throwable throwable) {
-                if (throwable != null) {
-                    destinationFuture.completeExceptionally(throwable);
-                } else {
-                    destinationFuture.complete(val);
-                }
+        sourceFuture.whenComplete((BiConsumer<T, Throwable>) (val, throwable) -> {
+            if (throwable != null) {
+                destinationFuture.completeExceptionally(throwable);
+            } else {
+                destinationFuture.complete(val);
             }
         });
     }

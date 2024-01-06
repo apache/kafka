@@ -19,18 +19,22 @@ package kafka.tools
 
 import java.io.{ByteArrayOutputStream, PrintStream}
 import java.nio.charset.StandardCharsets
-import java.nio.file.Files
+import java.nio.file.{Files, Paths}
 import java.util
 import java.util.Properties
-import org.apache.kafka.common.KafkaException
-import kafka.server.{KafkaConfig, MetaProperties}
+import org.apache.kafka.common.{DirectoryId, KafkaException}
+import kafka.server.KafkaConfig
 import kafka.utils.Exit
 import kafka.utils.TestUtils
+import org.apache.commons.io.output.NullOutputStream
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.server.common.MetadataVersion
 import org.apache.kafka.common.metadata.UserScramCredentialRecord
-import org.junit.jupiter.api.Assertions.{assertEquals, assertThrows, assertTrue}
+import org.apache.kafka.metadata.properties.{MetaProperties, MetaPropertiesEnsemble, MetaPropertiesVersion, PropertiesUtils}
+import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertThrows, assertTrue}
 import org.junit.jupiter.api.{Test, Timeout}
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.ValueSource
 
 import scala.collection.mutable
 import scala.collection.mutable.ArrayBuffer
@@ -114,9 +118,10 @@ Found problem:
     val stream = new ByteArrayOutputStream()
     val tempDir = TestUtils.tempDir()
     try {
-      Files.write(tempDir.toPath.resolve("meta.properties"),
+      Files.write(tempDir.toPath.resolve(MetaPropertiesEnsemble.META_PROPERTIES_NAME),
         String.join("\n", util.Arrays.asList(
           "version=1",
+          "node.id=1",
           "cluster.id=XcZZOzUqS4yHOjhMQB6JLQ")).
             getBytes(StandardCharsets.UTF_8))
       assertEquals(1, StorageTool.
@@ -124,7 +129,7 @@ Found problem:
       assertEquals(s"""Found log directory:
   ${tempDir.toString}
 
-Found metadata: {cluster.id=XcZZOzUqS4yHOjhMQB6JLQ, version=1}
+Found metadata: {cluster.id=XcZZOzUqS4yHOjhMQB6JLQ, node.id=1, version=1}
 
 Found problem:
   The kafka configuration file appears to be for a legacy cluster, but the directories are formatted for a cluster in KRaft mode.
@@ -138,7 +143,7 @@ Found problem:
     val stream = new ByteArrayOutputStream()
     val tempDir = TestUtils.tempDir()
     try {
-      Files.write(tempDir.toPath.resolve("meta.properties"),
+      Files.write(tempDir.toPath.resolve(MetaPropertiesEnsemble.META_PROPERTIES_NAME),
         String.join("\n", util.Arrays.asList(
           "version=0",
           "broker.id=1",
@@ -162,8 +167,11 @@ Found problem:
   def testFormatEmptyDirectory(): Unit = {
     val tempDir = TestUtils.tempDir()
     try {
-      val metaProperties = MetaProperties(
-        clusterId = "XcZZOzUqS4yHOjhMQB6JLQ", nodeId = 2)
+      val metaProperties = new MetaProperties.Builder().
+        setVersion(MetaPropertiesVersion.V1).
+        setClusterId("XcZZOzUqS4yHOjhMQB6JLQ").
+        setNodeId(2).
+        build()
       val stream = new ByteArrayOutputStream()
       val bootstrapMetadata = StorageTool.buildBootstrapMetadata(MetadataVersion.latest(), None, "test format command")
       assertEquals(0, StorageTool.
@@ -197,8 +205,8 @@ Found problem:
   def testDefaultMetadataVersion(): Unit = {
     val namespace = StorageTool.parseArguments(Array("format", "-c", "config.props", "-t", "XcZZOzUqS4yHOjhMQB6JLQ"))
     val mv = StorageTool.getMetadataVersion(namespace, defaultVersionString = None)
-    assertEquals(MetadataVersion.latest().featureLevel(), mv.featureLevel(),
-      "Expected the default metadata.version to be the latest version")
+    assertEquals(MetadataVersion.LATEST_PRODUCTION.featureLevel(), mv.featureLevel(),
+      "Expected the default metadata.version to be the latest production version")
   }
 
   @Test
@@ -359,6 +367,70 @@ Found problem:
       assertEquals(0, exitStatus)
     } finally {
       Exit.resetExitProcedure()
+    }
+  }
+
+  @Test
+  def testDirUuidGeneration(): Unit = {
+    val tempDir = TestUtils.tempDir()
+    try {
+      val metaProperties = new MetaProperties.Builder().
+        setClusterId("XcZZOzUqS4yHOjhMQB6JLQ").
+        setNodeId(2).
+        build()
+      val bootstrapMetadata = StorageTool.
+        buildBootstrapMetadata(MetadataVersion.latest(), None, "test format command")
+      assertEquals(0, StorageTool.
+        formatCommand(new PrintStream(NullOutputStream.NULL_OUTPUT_STREAM), Seq(tempDir.toString), metaProperties, bootstrapMetadata, MetadataVersion.latest(), ignoreFormatted = false))
+
+      val metaPropertiesFile = Paths.get(tempDir.toURI).resolve(MetaPropertiesEnsemble.META_PROPERTIES_NAME).toFile
+      assertTrue(metaPropertiesFile.exists())
+      val metaProps = new MetaProperties.Builder(
+        PropertiesUtils.readPropertiesFile(metaPropertiesFile.getAbsolutePath())).
+          build()
+      assertTrue(metaProps.directoryId().isPresent())
+      assertFalse(DirectoryId.reserved(metaProps.directoryId().get()))
+    } finally Utils.delete(tempDir)
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = Array(false, true))
+  def testFormattingUnstableMetadataVersionBlocked(enableUnstable: Boolean): Unit = {
+    var exitString: String = ""
+    var exitStatus: Int = 1
+    def exitProcedure(status: Int, message: Option[String]) : Nothing = {
+      exitStatus = status
+      exitString = message.getOrElse("")
+      throw new StorageToolTestException(exitString)
+    }
+    Exit.setExitProcedure(exitProcedure)
+    val properties = newSelfManagedProperties()
+    val propsFile = TestUtils.tempFile()
+    val propsStream = Files.newOutputStream(propsFile.toPath)
+    try {
+      properties.setProperty(KafkaConfig.LogDirsProp, TestUtils.tempDir().toString)
+      properties.setProperty(KafkaConfig.UnstableMetadataVersionsEnableProp, enableUnstable.toString)
+      properties.store(propsStream, "config.props")
+    } finally {
+      propsStream.close()
+    }
+    val args = Array("format", "-c", s"${propsFile.toPath}",
+      "-t", "XcZZOzUqS4yHOjhMQB6JLQ",
+      "--release-version", MetadataVersion.latest().toString)
+    try {
+      StorageTool.main(args)
+    } catch {
+      case _: StorageToolTestException =>
+    } finally {
+      Exit.resetExitProcedure()
+    }
+    if (enableUnstable) {
+      assertEquals("", exitString)
+      assertEquals(0, exitStatus)
+    } else {
+      assertEquals(s"Metadata version ${MetadataVersion.latest().toString} is not ready for " +
+        "production use yet.", exitString)
+      assertEquals(1, exitStatus)
     }
   }
 }

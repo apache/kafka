@@ -197,7 +197,7 @@ public class MirrorSourceConnectorTest {
         when(sourceAdmin.describeAcls(any())).thenReturn(describeAclsResult);
 
         try (LogCaptureAppender connectorLogs = LogCaptureAppender.createAndRegister(MirrorSourceConnector.class)) {
-            LogCaptureAppender.setClassLoggerToTrace(MirrorSourceConnector.class);
+            connectorLogs.setClassLoggerToTrace(MirrorSourceConnector.class);
             connector.syncTopicAcls();
             long aclSyncDisableMessages = connectorLogs.getMessages().stream()
                     .filter(m -> m.contains("Consider disabling topic ACL syncing"))

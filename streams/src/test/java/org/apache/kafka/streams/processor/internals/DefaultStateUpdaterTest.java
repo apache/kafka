@@ -104,7 +104,7 @@ class DefaultStateUpdaterTest {
     private final ChangelogReader changelogReader = mock(ChangelogReader.class);
     private final TopologyMetadata topologyMetadata = unnamedTopology().build();
     private DefaultStateUpdater stateUpdater =
-        new DefaultStateUpdater("test-state-updater", metrics, config, changelogReader, topologyMetadata, time);
+        new DefaultStateUpdater("test-state-updater", metrics, config, null, changelogReader, topologyMetadata, time);
 
     @AfterEach
     public void tearDown() {
@@ -162,7 +162,7 @@ class DefaultStateUpdaterTest {
     @Test
     public void shouldRemoveUpdatingTasksOnShutdown() throws Exception {
         stateUpdater.shutdown(Duration.ofMillis(Long.MAX_VALUE));
-        stateUpdater = new DefaultStateUpdater("test-state-updater", metrics, new StreamsConfig(configProps(Integer.MAX_VALUE)), changelogReader, topologyMetadata, time);
+        stateUpdater = new DefaultStateUpdater("test-state-updater", metrics, new StreamsConfig(configProps(Integer.MAX_VALUE)), null, changelogReader, topologyMetadata, time);
         final StreamTask activeTask = statefulTask(TASK_0_0, mkSet(TOPIC_PARTITION_A_0)).inState(State.RESTORING).build();
         final StandbyTask standbyTask = standbyTask(TASK_0_2, mkSet(TOPIC_PARTITION_C_0)).inState(State.RUNNING).build();
         when(changelogReader.completedChangelogs()).thenReturn(Collections.emptySet());
@@ -1044,6 +1044,24 @@ class DefaultStateUpdaterTest {
     }
 
     @Test
+    public void shouldIdleWhenAllTasksPaused() throws Exception {
+        final StreamTask task = statefulTask(TASK_0_0, mkSet(TOPIC_PARTITION_A_0)).inState(State.RESTORING).build();
+        stateUpdater.start();
+        stateUpdater.add(task);
+
+        when(topologyMetadata.isPaused(null)).thenReturn(true);
+
+        verifyPausedTasks(task);
+        verifyIdle();
+
+        when(topologyMetadata.isPaused(null)).thenReturn(false);
+        stateUpdater.signalResume();
+
+        verifyPausedTasks();
+        verifyUpdatingTasks(task);
+    }
+
+    @Test
     public void shouldResumeStandbyTask() throws Exception {
         final StandbyTask task = standbyTask(TASK_0_0, mkSet(TOPIC_PARTITION_A_0)).inState(State.RUNNING).build();
         shouldResumeStatefulTask(task);
@@ -1251,7 +1269,7 @@ class DefaultStateUpdaterTest {
     }
 
     @Test
-    public void shouldAddFailedTasksToQueueWhenRestoreThrowsTaskCorruptedException() throws Exception {
+    public void shouldHandleTaskCorruptedExceptionAndAddFailedTasksToQueue() throws Exception {
         final StreamTask task1 = statefulTask(TASK_0_0, mkSet(TOPIC_PARTITION_A_0)).inState(State.RESTORING).build();
         final StandbyTask task2 = standbyTask(TASK_0_2, mkSet(TOPIC_PARTITION_B_0)).inState(State.RUNNING).build();
         final StreamTask task3 = statefulTask(TASK_1_0, mkSet(TOPIC_PARTITION_C_0)).inState(State.RESTORING).build();
@@ -1275,6 +1293,8 @@ class DefaultStateUpdaterTest {
         verifyRestoredActiveTasks();
         verifyRemovedTasks();
         verify(changelogReader).unregister(mkSet(TOPIC_PARTITION_A_0, TOPIC_PARTITION_B_0));
+        verify(task1).markChangelogAsCorrupted(mkSet(TOPIC_PARTITION_A_0));
+        verify(task2).markChangelogAsCorrupted(mkSet(TOPIC_PARTITION_B_0));
     }
 
     @Test
@@ -1377,7 +1397,7 @@ class DefaultStateUpdaterTest {
     public void shouldNotAutoCheckpointTasksIfIntervalNotElapsed() {
         // we need to use a non auto-ticking timer here to control how much time elapsed exactly
         final Time time = new MockTime();
-        final DefaultStateUpdater stateUpdater = new DefaultStateUpdater("test-state-updater", metrics, config, changelogReader, topologyMetadata, time);
+        final DefaultStateUpdater stateUpdater = new DefaultStateUpdater("test-state-updater", metrics, config, null, changelogReader, topologyMetadata, time);
         try {
             final StreamTask task1 = statefulTask(TASK_0_0, mkSet(TOPIC_PARTITION_A_0)).inState(State.RESTORING).build();
             final StreamTask task2 = statefulTask(TASK_0_2, mkSet(TOPIC_PARTITION_B_0)).inState(State.RESTORING).build();
@@ -1765,6 +1785,14 @@ class DefaultStateUpdaterTest {
                 "Did not get all removed task within the given timeout!"
             );
         }
+    }
+
+    private void verifyIdle() throws Exception {
+        waitForCondition(
+            () -> stateUpdater.isIdle(),
+            VERIFICATION_TIMEOUT,
+            "State updater did not enter an idling state!"
+        );
     }
 
     private void verifyPausedTasks(final Task... tasks) throws Exception {

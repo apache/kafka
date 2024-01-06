@@ -16,18 +16,20 @@
  */
 package org.apache.kafka.clients.consumer.internals.events;
 
+import org.apache.kafka.clients.consumer.internals.ConsumerNetworkThread;
+
 import java.util.Objects;
 
 /**
- * This is the abstract definition of the events created by the background thread.
+ * This is the abstract definition of the events created by the {@link ConsumerNetworkThread network thread}.
  */
 public abstract class BackgroundEvent {
 
     public enum Type {
-        NOOP, ERROR,
+        ERROR, CONSUMER_REBALANCE_LISTENER_CALLBACK_NEEDED, GROUP_METADATA_UPDATE
     }
 
-    protected final Type type;
+    private final Type type;
 
     public BackgroundEvent(Type type) {
         this.type = Objects.requireNonNull(type);

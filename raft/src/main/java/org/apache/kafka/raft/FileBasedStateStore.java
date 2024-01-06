@@ -71,7 +71,7 @@ public class FileBasedStateStore implements QuorumStateStore {
     }
 
     private QuorumStateData readStateFromFile(File file) {
-        try (final BufferedReader reader = Files.newBufferedReader(file.toPath())) {
+        try (final BufferedReader reader = Files.newBufferedReader(file.toPath(), StandardCharsets.UTF_8)) {
             final String line = reader.readLine();
             if (line == null) {
                 throw new EOFException("File ended prematurely.");
