@@ -25,6 +25,7 @@ import org.apache.kafka.streams.kstream.internals.KTableProcessorSupplier;
 import org.apache.kafka.streams.kstream.internals.KTableValueGetter;
 import org.apache.kafka.streams.kstream.internals.KTableValueGetterSupplier;
 import org.apache.kafka.streams.kstream.internals.suppress.TimeDefinitions.TimeDefinition;
+import org.apache.kafka.streams.processor.PunctuationType;
 import org.apache.kafka.streams.processor.api.ContextualProcessor;
 import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.ProcessorContext;
@@ -36,6 +37,11 @@ import org.apache.kafka.streams.processor.internals.metrics.ProcessorNodeMetrics
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.streams.state.internals.Maybe;
 import org.apache.kafka.streams.state.internals.TimeOrderedKeyValueBuffer;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+
+import java.time.Duration;
+import java.util.Objects;
 
 import static java.util.Objects.requireNonNull;
 
@@ -126,6 +132,8 @@ public class KTableSuppressProcessorSupplier<K, V> implements
         private final BufferFullStrategy bufferFullStrategy;
         private final boolean safeToDropTombstones;
         private final String storeName;
+        private final PunctuationType punctuationType;
+        private final Duration wallClockPunctuationInterval;
 
         private TimeOrderedKeyValueBuffer<K, V, Change<V>> buffer;
         private InternalProcessorContext<K, Change<V>> internalProcessorContext;
@@ -137,6 +145,8 @@ public class KTableSuppressProcessorSupplier<K, V> implements
             requireNonNull(suppress);
             maxRecords = suppress.bufferConfig().maxRecords();
             maxBytes = suppress.bufferConfig().maxBytes();
+            punctuationType = suppress.punctuationType();
+            wallClockPunctuationInterval = suppress.wallClockPunctuationInterval();
             suppressDurationMillis = suppress.timeToWaitForMoreEvents().toMillis();
             bufferTimeDefinition = suppress.timeDefinition();
             bufferFullStrategy = suppress.bufferConfig().bufferFullStrategy();
@@ -156,6 +166,22 @@ public class KTableSuppressProcessorSupplier<K, V> implements
 
             buffer = requireNonNull(context.getStateStore(storeName));
             buffer.setSerdesIfNull(new SerdeGetter(context));
+
+            enforceWallClockConstraints(context);
+        }
+
+        private void enforceWallClockConstraints(final ProcessorContext<K, Change<V>> context) {
+            if (punctuationType == PunctuationType.WALL_CLOCK_TIME) {
+                if (Objects.isNull(wallClockPunctuationInterval) || wallClockPunctuationInterval.isZero() ||
+                        wallClockPunctuationInterval.isNegative()) {
+                    throw new StreamsException("PunctuationType.WALL_CLOCK_TIME needs a nonnull and > 0 " +
+                            "wallClockPunctuationInterval parameter");
+                }
+                context.schedule(wallClockPunctuationInterval, PunctuationType.WALL_CLOCK_TIME, (wallClockTs) -> {
+                    final long expiryTime = wallClockTs - suppressDurationMillis;
+                    buffer.evictWhile(() -> wallClockTs <= expiryTime, this::emit);
+                });
+            }
         }
 
         @Override
@@ -172,10 +198,12 @@ public class KTableSuppressProcessorSupplier<K, V> implements
         }
 
         private void enforceConstraints() {
-            final long streamTime = observedStreamTime;
-            final long expiryTime = streamTime - suppressDurationMillis;
+            if (punctuationType == PunctuationType.STREAM_TIME) {
+                final long streamTime = observedStreamTime;
+                final long expiryTime = streamTime - suppressDurationMillis;
 
-            buffer.evictWhile(() -> buffer.minTimestamp() <= expiryTime, this::emit);
+                buffer.evictWhile(() -> buffer.minTimestamp() <= expiryTime, this::emit);
+            }
 
             if (overCapacity()) {
                 switch (bufferFullStrategy) {

@@ -63,11 +63,10 @@ import static java.time.Duration.ofMillis;
 import static java.util.Arrays.asList;
 import static java.util.Collections.emptyList;
 import static java.util.Collections.singletonList;
+import static org.apache.kafka.streams.kstream.Suppressed.*;
 import static org.apache.kafka.streams.kstream.Suppressed.BufferConfig.maxBytes;
 import static org.apache.kafka.streams.kstream.Suppressed.BufferConfig.maxRecords;
 import static org.apache.kafka.streams.kstream.Suppressed.BufferConfig.unbounded;
-import static org.apache.kafka.streams.kstream.Suppressed.untilTimeLimit;
-import static org.apache.kafka.streams.kstream.Suppressed.untilWindowCloses;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
 
@@ -354,6 +353,52 @@ public class SuppressScenarioTest {
                     // now we see that last update to v1, but we won't see the update to x until it gets evicted
                     new KeyValueTimestamp<>("v1", 1L, 2L)
                 )
+            );
+        }
+    }
+
+    @Test
+    public void shouldSupportFinalResultsForTimeWindowsWithSuppressUntilWindowClosesAfterWallClock() {
+        final StreamsBuilder builder = new StreamsBuilder();
+        final KTable<Windowed<String>, Long> valueCounts = builder
+                .stream("input", Consumed.with(STRING_SERDE, STRING_SERDE))
+                .groupBy((String k, String v) -> k, Grouped.with(STRING_SERDE, STRING_SERDE))
+                .windowedBy(TimeWindows.ofSizeWithNoGrace(ofMillis(2L)))
+                .count(Materialized.<String, Long, WindowStore<Bytes, byte[]>>as("counts").withCachingDisabled());
+        valueCounts
+                .suppress(untilWindowClosesAfterWallClock(unbounded(), ofMillis(2L)))
+                .toStream()
+                .map((final Windowed<String> k, final Long v) -> new KeyValue<>(k.toString(), v))
+                .to("output-suppressed", Produced.with(STRING_SERDE, Serdes.Long()));
+
+        final Topology topology = builder.build();
+        System.out.println(topology.describe());
+        try (final TopologyTestDriver driver = new TopologyTestDriver(topology, config)) {
+            final TestInputTopic<String, String> inputTopic =
+                    driver.createInputTopic("input", STRING_SERIALIZER, STRING_SERIALIZER);
+
+            inputTopic.pipeInput("k1", "v1", 0L);
+            driver.advanceWallClockTime(Duration.ofMillis(1));
+            inputTopic.pipeInput("k1", "v1", 1L);
+            driver.advanceWallClockTime(Duration.ofMillis(1));
+            inputTopic.pipeInput("k1", "v1", 2L);
+            driver.advanceWallClockTime(Duration.ofMillis(1));
+            inputTopic.pipeInput("k1", "v1", 3L);
+            driver.advanceWallClockTime(Duration.ofMillis(1));
+            inputTopic.pipeInput("k1", "v1", 4L);
+            driver.advanceWallClockTime(Duration.ofMillis(1));
+            inputTopic.pipeInput("k1", "v1", 5L);
+            driver.advanceWallClockTime(Duration.ofMillis(1));
+
+            //won't be emitted as it comes after last wall clock advancement
+            inputTopic.pipeInput("k1", "v1", 3L);
+            verify(
+                    drainProducerRecords(driver, "output-suppressed", STRING_DESERIALIZER, LONG_DESERIALIZER),
+                    asList(
+                            new KeyValueTimestamp<>("[k1@0/2]", 2L, 1L),
+                            new KeyValueTimestamp<>("[k1@2/4]", 2L, 3L),
+                            new KeyValueTimestamp<>("[k1@4/6]", 2L, 5L)
+                    )
             );
         }
     }

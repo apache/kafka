@@ -18,6 +18,7 @@ package org.apache.kafka.streams.kstream.internals.suppress;
 
 import org.apache.kafka.streams.kstream.Suppressed;
 import org.apache.kafka.streams.kstream.Windowed;
+import org.apache.kafka.streams.processor.PunctuationType;
 
 import java.time.Duration;
 import java.util.Objects;
@@ -25,10 +26,18 @@ import java.util.Objects;
 public class FinalResultsSuppressionBuilder<K extends Windowed> implements Suppressed<K>, NamedSuppressed<K> {
     private final String name;
     private final StrictBufferConfig bufferConfig;
+    private final PunctuationType punctuationType;
+    private final Duration wallClockPunctuationInterval;
 
     public FinalResultsSuppressionBuilder(final String name, final Suppressed.StrictBufferConfig bufferConfig) {
+        this(name, bufferConfig, PunctuationType.STREAM_TIME, Duration.ZERO);
+    }
+
+    public FinalResultsSuppressionBuilder(final String name, final Suppressed.StrictBufferConfig bufferConfig, PunctuationType punctuationType, Duration wallClockPunctuationInterval) {
         this.name = name;
         this.bufferConfig = bufferConfig;
+        this.punctuationType = punctuationType;
+        this.wallClockPunctuationInterval = wallClockPunctuationInterval;
     }
 
     public SuppressedInternal<K> buildFinalResultsSuppression(final Duration gracePeriod) {
@@ -37,13 +46,15 @@ public class FinalResultsSuppressionBuilder<K extends Windowed> implements Suppr
             gracePeriod,
             bufferConfig,
             TimeDefinitions.WindowEndTimeDefinition.instance(),
-            true
+            true,
+                punctuationType,
+                wallClockPunctuationInterval
         );
     }
 
     @Override
     public Suppressed<K> withName(final String name) {
-        return new FinalResultsSuppressionBuilder<>(name, bufferConfig);
+        return new FinalResultsSuppressionBuilder<>(name, bufferConfig, punctuationType, wallClockPunctuationInterval);
     }
 
     @Override

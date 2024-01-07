@@ -18,6 +18,7 @@ package org.apache.kafka.streams.kstream.internals.suppress;
 
 import org.apache.kafka.streams.kstream.Suppressed;
 import org.apache.kafka.streams.kstream.internals.suppress.TimeDefinitions.TimeDefinition;
+import org.apache.kafka.streams.processor.PunctuationType;
 
 import java.time.Duration;
 import java.util.Objects;
@@ -30,6 +31,8 @@ public class SuppressedInternal<K> implements Suppressed<K>, NamedSuppressed<K> 
     private final BufferConfigInternal bufferConfig;
     private final Duration timeToWaitForMoreEvents;
     private final TimeDefinition<K> timeDefinition;
+    private final PunctuationType punctuationType;
+    private final Duration wallClockPunctuationInterval;
     private final boolean safeToDropTombstones;
 
     /**
@@ -50,11 +53,36 @@ public class SuppressedInternal<K> implements Suppressed<K>, NamedSuppressed<K> 
                               final BufferConfig bufferConfig,
                               final TimeDefinition<K> timeDefinition,
                               final boolean safeToDropTombstones) {
+        this(name, suppressionTime, bufferConfig, timeDefinition, safeToDropTombstones, PunctuationType.STREAM_TIME, Duration.ZERO);
+    }
+
+    /**
+     * @param safeToDropTombstones Note: it's *only* safe to drop tombstones for windowed KTables in "final results" mode.
+     *                             In that case, we have a priori knowledge that we have never before emitted any
+     *                             results for a given key, and therefore the tombstone is unnecessary (albeit
+     *                             idempotent and correct). We decided that the unnecessary tombstones would not be
+     *                             desirable in the output stream, though, hence the ability to drop them.
+     *
+     *                             A alternative is to remember whether a result has previously been emitted
+     *                             for a key and drop tombstones in that case, but it would be a little complicated to
+     *                             figure out when to forget the fact that we have emitted some result (currently, the
+     *                             buffer immediately forgets all about a key when we emit, which helps to keep it
+     *                             compact).
+     */
+    public SuppressedInternal(final String name,
+                              final Duration suppressionTime,
+                              final BufferConfig bufferConfig,
+                              final TimeDefinition<K> timeDefinition,
+                              final boolean safeToDropTombstones,
+                              final PunctuationType punctuationType,
+                              final Duration wallClockPunctuationInterval) {
         this.name = name;
         this.timeToWaitForMoreEvents = suppressionTime == null ? DEFAULT_SUPPRESSION_TIME : suppressionTime;
         this.timeDefinition = timeDefinition == null ? TimeDefinitions.RecordTimeDefinition.instance() : timeDefinition;
         this.bufferConfig = bufferConfig == null ? DEFAULT_BUFFER_CONFIG : (BufferConfigInternal) bufferConfig;
         this.safeToDropTombstones = safeToDropTombstones;
+        this.punctuationType = punctuationType;
+        this.wallClockPunctuationInterval = wallClockPunctuationInterval;
     }
 
     @Override
@@ -82,6 +110,14 @@ public class SuppressedInternal<K> implements Suppressed<K>, NamedSuppressed<K> 
 
     boolean safeToDropTombstones() {
         return safeToDropTombstones;
+    }
+
+    PunctuationType punctuationType() {
+        return punctuationType;
+    }
+
+    Duration wallClockPunctuationInterval() {
+        return wallClockPunctuationInterval;
     }
 
     @Override

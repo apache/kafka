@@ -20,6 +20,7 @@ import org.apache.kafka.streams.kstream.internals.suppress.EagerBufferConfigImpl
 import org.apache.kafka.streams.kstream.internals.suppress.FinalResultsSuppressionBuilder;
 import org.apache.kafka.streams.kstream.internals.suppress.StrictBufferConfigImpl;
 import org.apache.kafka.streams.kstream.internals.suppress.SuppressedInternal;
+import org.apache.kafka.streams.processor.PunctuationType;
 
 import java.time.Duration;
 import java.util.Collections;
@@ -163,6 +164,39 @@ public interface Suppressed<K> extends NamedOperation<Suppressed<K>> {
      */
     static Suppressed<Windowed> untilWindowCloses(final StrictBufferConfig bufferConfig) {
         return new FinalResultsSuppressionBuilder<>(null, bufferConfig);
+    }
+
+    /**
+     * Configure the suppression to emit only the "final results" from the window using <b>Wall-Clock Time</b>
+     * <p>
+     *
+     * By default, all Streams operators emit results whenever new results are available.
+     * This includes windowed operations.
+     * <p>
+     * This configuration will instead emit just one result per key for each window, guaranteeing
+     * to deliver only the final result. This option is suitable for use cases in which the business logic
+     * requires a hard guarantee that only the final result is propagated. For example, sending alerts.
+     * <p>
+     * To accomplish this, the operator will buffer events from the window until the window close (that is,
+     * until the end-time passes, and additionally until the grace period expires).
+     * <p>
+     * This configuration uses <b>Wall-Clock Time</b> instead of <b>Stream Time</b> like
+     * {@link #untilWindowCloses(StrictBufferConfig)}.
+     * That means the SuppressedProcessor initiates a scheduled operation with {@link PunctuationType#WALL_CLOCK_TIME}
+     * that is punctuated every {@code wallClockPunctuationInterval}. It checks if the current
+     * <b>Wall-Clock Timestamp</b> has passed the window size and emits one result per key for each expired window.
+     *
+     * @param bufferConfig A configuration specifying how much space to use for buffering intermediate results.
+     *                     This is required to be a "strict" config, since it would violate the "final results"
+     *                     property to emit early and then issue an update later.
+     * @param wallClockPunctuationInterval the interval in which the "Wall-Clock Scheduler" Checks for closed windows.
+     *
+     * @return a "final results" mode suppression configuration
+     */
+    static Suppressed<Windowed> untilWindowClosesAfterWallClock(final StrictBufferConfig bufferConfig,
+                                                                final Duration wallClockPunctuationInterval) {
+        return new FinalResultsSuppressionBuilder<>(null, bufferConfig, PunctuationType.WALL_CLOCK_TIME,
+                wallClockPunctuationInterval);
     }
 
     /**
