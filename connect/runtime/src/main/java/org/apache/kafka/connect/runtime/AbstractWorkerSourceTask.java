@@ -59,6 +59,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.time.Duration;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -201,6 +202,7 @@ public abstract class AbstractWorkerSourceTask extends WorkerTask {
 
     // Visible for testing
     List<SourceRecord> toSend;
+    Map<ProducerRecord<byte[], byte[]>, SourceRecord> processedToSend = new HashMap<>();
     protected Map<String, String> taskConfig;
     protected boolean started = false;
     private volatile boolean producerClosed = false;
@@ -396,18 +398,26 @@ public abstract class AbstractWorkerSourceTask extends WorkerTask {
         recordBatch(toSend.size());
         final SourceRecordWriteCounter counter =
                 toSend.size() > 0 ? new SourceRecordWriteCounter(toSend.size(), sourceTaskMetricsGroup) : null;
-        for (final SourceRecord preTransformRecord : toSend) {
-            retryWithToleranceOperator.sourceRecord(preTransformRecord);
-            final SourceRecord record = transformationChain.apply(preTransformRecord);
-            final ProducerRecord<byte[], byte[]> producerRecord = convertTransformedRecord(record);
-            if (producerRecord == null || retryWithToleranceOperator.failed()) {
-                counter.skipRecord();
-                recordDropped(preTransformRecord);
-                processed++;
-                continue;
-            }
 
-            log.trace("{} Appending record to the topic {} with key {}, value {}", this, record.topic(), record.key(), record.value());
+        if(processedToSend.size() == 0) {
+            for (final SourceRecord preTransformRecord :  toSend) {
+                retryWithToleranceOperator.sourceRecord(preTransformRecord);
+                final SourceRecord record = transformationChain.apply(preTransformRecord);
+                final ProducerRecord<byte[], byte[]> producerRecord = convertTransformedRecord(record);
+                if (producerRecord == null || retryWithToleranceOperator.failed()) {
+                    counter.skipRecord();
+                    recordDropped(preTransformRecord);
+                    processed++;
+                    continue;
+                }
+                processedToSend.put(producerRecord, preTransformRecord);
+            }
+        }
+
+        for (final Map.Entry<ProducerRecord<byte[], byte[]>, SourceRecord> entry : processedToSend.entrySet()) {
+            ProducerRecord<byte[], byte[]> producerRecord = entry.getKey();
+            SourceRecord preTransformRecord = entry.getValue();
+            log.trace("{} Appending record to the topic {} with key {}, value {}", this, producerRecord.topic(), producerRecord.key(), producerRecord.value());
             Optional<SubmittedRecords.SubmittedRecord> submittedRecord = prepareToSendRecord(preTransformRecord, producerRecord);
             try {
                 final String topic = producerRecord.topic();
@@ -460,6 +470,7 @@ public abstract class AbstractWorkerSourceTask extends WorkerTask {
             recordDispatched(preTransformRecord);
         }
         toSend = null;
+        processedToSend.clear();
         batchDispatched();
         return true;
     }
