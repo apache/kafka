@@ -1111,9 +1111,10 @@ private[group] class GroupCoordinator(
     } else {
       val errorCode = if (groupManager.isLoading) Errors.COORDINATOR_LOAD_IN_PROGRESS else Errors.NONE
       // Filter groups based on states and groupTypes. If either is empty, it won't filter on that criterion.
+      // If groupType is mentioned then no group is returned since the notion of groupTypes doesn't exist in the
+      // old group coordinator.
       val groups = groupManager.currentGroups.filter { g =>
-        (states.isEmpty || states.contains(g.summary.state)) &&
-        (groupTypes.isEmpty || groupTypes.contains(g.overview.groupType))
+        (states.isEmpty || states.contains(g.summary.state)) && groupTypes.isEmpty
       }
       (errorCode, groups.map(_.overview).toList)
     }

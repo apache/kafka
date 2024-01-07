@@ -18,7 +18,6 @@
 package org.apache.kafka.clients.admin;
 
 import java.util.Collections;
-import java.util.HashSet;
 import java.util.Set;
 
 import org.apache.kafka.common.ConsumerGroupState;
@@ -43,7 +42,7 @@ public class ListConsumerGroupsOptions extends AbstractOptions<ListConsumerGroup
      * This operation is supported by brokers with version 2.6.0 or later.
      */
     public ListConsumerGroupsOptions inStates(Set<ConsumerGroupState> states) {
-        this.states = (states == null) ? Collections.emptySet() : new HashSet<>(states);
+        this.states = (states == null || states.isEmpty()) ? Collections.emptySet() : states;
         return this;
     }
 
@@ -53,7 +52,7 @@ public class ListConsumerGroupsOptions extends AbstractOptions<ListConsumerGroup
      *
      */
     public ListConsumerGroupsOptions inTypes(Set<ConsumerGroupType> groupTypes) {
-        this.groupTypes = (groupTypes == null) ? Collections.emptySet() : new HashSet<>(groupTypes);
+        this.groupTypes = (groupTypes == null || groupTypes.isEmpty()) ? Collections.emptySet() : groupTypes;
         return this;
     }
 

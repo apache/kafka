@@ -31,6 +31,7 @@ import org.apache.kafka.common.{PartitionInfo, TopicPartition}
 import org.apache.kafka.common.errors.WakeupException
 import org.apache.kafka.common.serialization.StringDeserializer
 import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo}
+import org.junit.jupiter.params.provider.Arguments
 
 import scala.jdk.CollectionConverters._
 import scala.collection.mutable.ArrayBuffer
@@ -48,9 +49,12 @@ class ConsumerGroupCommandTest extends KafkaServerTestHarness {
 
   // configure the servers and clients
   override def generateConfigs = {
-    TestUtils.createBrokerConfigs(1, zkConnectOrNull, enableControlledShutdown = false).map { props =>
-      KafkaConfig.fromProps(props)
+    val overridingProps = new Properties()
+    if (isNewGroupCoordinatorEnabled()) {
+      overridingProps.put(KafkaConfig.NewGroupCoordinatorEnableProp, "true")
     }
+    TestUtils.createBrokerConfigs(1, zkConnectOrNull, enableControlledShutdown = false)
+      .map(KafkaConfig.fromProps(_, overridingProps))
   }
 
   @BeforeEach
@@ -118,6 +122,18 @@ class ConsumerGroupCommandTest extends KafkaServerTestHarness {
 }
 
 object ConsumerGroupCommandTest {
+  // We want to test the following combinations:
+  // * ZooKeeper and the classic group protocol.
+  // * KRaft and the classic group protocol.
+  // * KRaft with the new group coordinator enabled and the classic group protocol.
+  // * KRaft with the new group coordinator enabled and the consumer group protocol.
+  def getTestQuorumAndGroupProtocolParametersAll: java.util.stream.Stream[Arguments] = {
+    java.util.stream.Stream.of(
+      Arguments.of("zk", "classic"),
+      Arguments.of("kraft", "classic"),
+      Arguments.of("kraft+kip848", "classic"),
+      Arguments.of("kraft+kip848", "consumer"))
+  }
 
   abstract class AbstractConsumerRunnable(broker: String, groupId: String, customPropsOpt: Option[Properties] = None,
                                           syncCommit: Boolean = false) extends Runnable {

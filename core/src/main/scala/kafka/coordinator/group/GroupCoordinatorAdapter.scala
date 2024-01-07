@@ -224,8 +224,7 @@ private[group] class GroupCoordinatorAdapter(
       response.groups.add(new ListGroupsResponseData.ListedGroup()
         .setGroupId(group.groupId)
         .setProtocolType(group.protocolType)
-        .setGroupState(group.state)
-        .setGroupType(group.groupType))
+        .setGroupState(group.state))
     }
 
     CompletableFuture.completedFuture(response)
