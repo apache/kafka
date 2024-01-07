@@ -550,10 +550,9 @@ public class TaskManager {
                         stateUpdater.remove(taskId);
                     }
                 } else if (task.isActive()) {
-                    tasks.removePendingActiveTaskToSuspend(taskId);
-                    if (tasks.removePendingTaskToCloseClean(taskId)) {
+                    if (tasks.removePendingActiveTaskToSuspend(taskId) || tasks.removePendingTaskToCloseClean(taskId)) {
                         log.info(
-                            "We were planning on closing task {} because we lost one of its partitions." +
+                            "We were planning on suspending or closing task {} because we lost one of its partitions." +
                             "The task got reassigned to this thread, so cancel closing  of the task, but add it back to the " +
                             "state updater, since we may have to catch up on the changelog.",
                             taskId);

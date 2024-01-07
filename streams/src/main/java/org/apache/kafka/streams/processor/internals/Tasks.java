@@ -94,17 +94,20 @@ class Tasks implements TasksRegistry {
 
     @Override
     public void addPendingActiveTasksToCreate(final Map<TaskId, Set<TopicPartition>> pendingTasks) {
+        log.info("addPendingActiveTasksToCreate {}", pendingTasks);
         pendingActiveTasksToCreate.putAll(pendingTasks);
     }
 
     @Override
     public void addPendingStandbyTasksToCreate(final Map<TaskId, Set<TopicPartition>> pendingTasks) {
+        log.info("addPendingStandbyTasksToCreate {}", pendingTasks);
         pendingStandbyTasksToCreate.putAll(pendingTasks);
     }
 
     @Override
     public Set<TopicPartition> removePendingTaskToRecycle(final TaskId taskId) {
         if (containsTaskIdWithAction(taskId, Action.RECYCLE)) {
+            log.info("Removing pending update action RECYCLE for task {}", taskId);
             return pendingUpdateActions.remove(taskId).getInputPartitions();
         }
         return null;
@@ -112,6 +115,8 @@ class Tasks implements TasksRegistry {
 
     @Override
     public void addPendingTaskToRecycle(final TaskId taskId, final Set<TopicPartition> inputPartitions) {
+        log.info("Adding pending update action RECYCLE for task {}, previous state was {}", taskId,
+            pendingUpdateActions.getOrDefault(taskId, PendingUpdateAction.createEmpty()).toString());
         pendingUpdateActions.put(taskId, PendingUpdateAction.createRecycleTask(inputPartitions));
     }
 
@@ -123,6 +128,7 @@ class Tasks implements TasksRegistry {
     @Override
     public Set<TopicPartition> removePendingTaskToCloseReviveAndUpdateInputPartitions(final TaskId taskId) {
         if (containsTaskIdWithAction(taskId, Action.CLOSE_REVIVE_AND_UPDATE_INPUT_PARTITIONS)) {
+            log.info("Removing pending update action CLOSE_REVIVE_AND_UPDATE_INPUT_PARTITIONS for task {}", taskId);
             return pendingUpdateActions.remove(taskId).getInputPartitions();
         }
         return null;
@@ -130,12 +136,15 @@ class Tasks implements TasksRegistry {
 
     @Override
     public void addPendingTaskToCloseReviveAndUpdateInputPartitions(final TaskId taskId, final Set<TopicPartition> inputPartitions) {
+        log.info("Adding pending update action CLOSE_REVIVE_AND_UPDATE_INPUT_PARTITIONS for task {}, previous state was {}", taskId,
+            pendingUpdateActions.getOrDefault(taskId, PendingUpdateAction.createEmpty()).toString());
         pendingUpdateActions.put(taskId, PendingUpdateAction.createCloseReviveAndUpdateInputPartition(inputPartitions));
     }
 
     @Override
     public Set<TopicPartition> removePendingTaskToUpdateInputPartitions(final TaskId taskId) {
         if (containsTaskIdWithAction(taskId, Action.UPDATE_INPUT_PARTITIONS)) {
+            log.info("Removing pending update action UPDATE_INPUT_PARTITIONS for task {}", taskId);
             return pendingUpdateActions.remove(taskId).getInputPartitions();
         }
         return null;
@@ -143,12 +152,15 @@ class Tasks implements TasksRegistry {
 
     @Override
     public void addPendingTaskToUpdateInputPartitions(final TaskId taskId, final Set<TopicPartition> inputPartitions) {
+        log.info("Adding pending update action UPDATE_INPUT_PARTITIONS for task {}, previous state was {}", taskId,
+            pendingUpdateActions.getOrDefault(taskId, PendingUpdateAction.createEmpty()).toString());
         pendingUpdateActions.put(taskId, PendingUpdateAction.createUpdateInputPartition(inputPartitions));
     }
 
     @Override
     public boolean removePendingTaskToAddBack(final TaskId taskId) {
         if (containsTaskIdWithAction(taskId, Action.ADD_BACK)) {
+            log.info("Removing pending update action ADD_BACK for task {}", taskId);
             pendingUpdateActions.remove(taskId);
             return true;
         }
@@ -157,12 +169,15 @@ class Tasks implements TasksRegistry {
 
     @Override
     public void addPendingTaskToAddBack(final TaskId taskId) {
+        log.info("Adding pending update action ADD_BACK for task {}, previous state was {}", taskId,
+            pendingUpdateActions.getOrDefault(taskId, PendingUpdateAction.createEmpty()).toString());
         pendingUpdateActions.put(taskId, PendingUpdateAction.createAddBack());
     }
 
     @Override
     public boolean removePendingTaskToCloseClean(final TaskId taskId) {
         if (containsTaskIdWithAction(taskId, Action.CLOSE_CLEAN)) {
+            log.info("Removing pending update action CLOSE_CLEAN for task {}", taskId);
             pendingUpdateActions.remove(taskId);
             return true;
         }
@@ -171,12 +186,15 @@ class Tasks implements TasksRegistry {
 
     @Override
     public void addPendingTaskToCloseClean(final TaskId taskId) {
+        log.info("Adding pending update action CLOSE_CLEAN for task {}, previous state was {}", taskId,
+            pendingUpdateActions.getOrDefault(taskId, PendingUpdateAction.createEmpty()).toString());
         pendingUpdateActions.put(taskId, PendingUpdateAction.createCloseClean());
     }
 
     @Override
     public boolean removePendingActiveTaskToSuspend(final TaskId taskId) {
         if (containsTaskIdWithAction(taskId, Action.SUSPEND)) {
+            log.info("Removing pending update action SUSPEND for task {}", taskId);
             pendingUpdateActions.remove(taskId);
             return true;
         }
@@ -185,6 +203,8 @@ class Tasks implements TasksRegistry {
 
     @Override
     public void addPendingActiveTaskToSuspend(final TaskId taskId) {
+        log.info("Adding pending update action SUSPEND for task {}, previous state was {}", taskId,
+            pendingUpdateActions.getOrDefault(taskId, PendingUpdateAction.createEmpty()).toString());
         pendingUpdateActions.put(taskId, PendingUpdateAction.createSuspend());
     }
 
@@ -196,12 +216,16 @@ class Tasks implements TasksRegistry {
     @Override
     public Set<Task> drainPendingTasksToInit() {
         final Set<Task> result = new HashSet<>(pendingTasksToInit);
+        if (!pendingTasksToInit.isEmpty()) {
+            log.info("drainPendingTasksToInit {}", result);
+        }
         pendingTasksToInit.clear();
         return result;
     }
 
     @Override
     public void addPendingTasksToInit(final Collection<Task> tasks) {
+        log.info("addPendingTasksToInit {}", tasks);
         pendingTasksToInit.addAll(tasks);
     }
 

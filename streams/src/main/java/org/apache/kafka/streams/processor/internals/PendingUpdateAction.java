@@ -29,7 +29,8 @@ public class PendingUpdateAction {
         RECYCLE,
         SUSPEND,
         ADD_BACK,
-        CLOSE_CLEAN
+        CLOSE_CLEAN,
+        EMPTY
     }
 
     private final Set<TopicPartition> inputPartitions;
@@ -70,6 +71,9 @@ public class PendingUpdateAction {
     public static PendingUpdateAction createCloseClean() {
         return new PendingUpdateAction(Action.CLOSE_CLEAN);
     }
+    public static PendingUpdateAction createEmpty() {
+        return new PendingUpdateAction(Action.EMPTY);
+    }
 
     public Set<TopicPartition> getInputPartitions() {
         if (action != Action.UPDATE_INPUT_PARTITIONS && action != Action.CLOSE_REVIVE_AND_UPDATE_INPUT_PARTITIONS && action != Action.RECYCLE) {
@@ -82,5 +86,11 @@ public class PendingUpdateAction {
         return action;
     }
 
-
+    @Override
+    public String toString() {
+        return "PendingUpdateAction{" +
+            "inputPartitions=" + inputPartitions +
+            ", action=" + action +
+            '}';
+    }
 }
