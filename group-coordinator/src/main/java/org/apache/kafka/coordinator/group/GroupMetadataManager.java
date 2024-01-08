@@ -99,6 +99,7 @@ import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
+import java.util.function.Predicate;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -452,22 +453,37 @@ public class GroupMetadataManager {
     /**
      * Get the Group List.
      *
-     * @param statesFilter The states of the groups we want to list.
-     *                     If empty all groups are returned with their state.
-     * @param committedOffset A specified committed offset corresponding to this shard
+     * @param statesFilter      The states of the groups we want to list.
+     *                          If empty, all groups are returned with their state.
+     * @param typesFilter       The types of the groups we want to list.
+     *                          If empty, all groups are returned with their type.
+     * @param committedOffset   A specified committed offset corresponding to this shard.
      *
      * @return A list containing the ListGroupsResponseData.ListedGroup
      */
+    public List<ListGroupsResponseData.ListedGroup> listGroups(
+        List<String> statesFilter,
+        List<String> typesFilter,
+        long committedOffset
+    ) {
+        Set<String> caseInsensitiveFilterSet = statesFilter.stream()
+            .map(String::toLowerCase)
+            .map(String::trim)
+            .collect(Collectors.toSet());
 
-    public List<ListGroupsResponseData.ListedGroup> listGroups(List<String> statesFilter, long committedOffset) {
-        Stream<Group> groupStream = groups.values(committedOffset).stream();
-        if (!statesFilter.isEmpty()) {
-            Set<String> caseInsensitiveFilterSet = statesFilter.stream().map(String::toLowerCase).map(String::trim).collect(Collectors.toSet());
-            groupStream = groupStream.filter(group -> group.isInStates(caseInsensitiveFilterSet, committedOffset));
-        }
-        return groupStream.map(group -> group.asListedGroup(committedOffset)).collect(Collectors.toList());
+        Predicate<Group> combinedFilter = group -> {
+            boolean stateCheck = statesFilter.isEmpty() || group.isInStates(caseInsensitiveFilterSet, committedOffset);
+            boolean typeCheck = typesFilter.isEmpty() || typesFilter.contains(group.type().toString());
+            return stateCheck && typeCheck;
+        };
+
+        Stream<Group> groupStream = groups.values(committedOffset).parallelStream();
+
+        return groupStream
+            .filter(combinedFilter)
+            .map(group -> group.asListedGroup(committedOffset))
+            .collect(Collectors.toList());
     }
-
 
     /**
      * Handles a ConsumerGroupDescribe request.
