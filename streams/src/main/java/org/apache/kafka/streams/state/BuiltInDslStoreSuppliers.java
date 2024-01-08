@@ -36,7 +36,9 @@ public class BuiltInDslStoreSuppliers {
 
         @Override
         public KeyValueBytesStoreSupplier keyValueStore(final DslKeyValueParams params) {
-            return Stores.persistentTimestampedKeyValueStore(params.name());
+            return params.isTimestamped()
+                    ? Stores.persistentTimestampedKeyValueStore(params.name())
+                    : Stores.persistentKeyValueStore(params.name());
         }
 
         @Override

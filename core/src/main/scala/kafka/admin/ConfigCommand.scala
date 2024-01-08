@@ -22,7 +22,7 @@ import java.util.concurrent.TimeUnit
 import java.util.{Collections, Properties}
 import joptsimple._
 import kafka.server.DynamicConfig.QuotaConfigs
-import kafka.server.{ConfigEntityName, Defaults, DynamicBrokerConfig, DynamicConfig, KafkaConfig}
+import kafka.server.{Defaults, DynamicBrokerConfig, DynamicConfig, KafkaConfig}
 import kafka.utils.{Exit, Logging, PasswordEncoder}
 import kafka.utils.Implicits._
 import kafka.zk.{AdminZkClient, KafkaZkClient}
@@ -35,7 +35,7 @@ import org.apache.kafka.common.quota.{ClientQuotaAlteration, ClientQuotaEntity, 
 import org.apache.kafka.common.security.JaasUtils
 import org.apache.kafka.common.security.scram.internals.{ScramCredentialUtils, ScramFormatter, ScramMechanism}
 import org.apache.kafka.common.utils.{Sanitizer, Time, Utils}
-import org.apache.kafka.server.config.ConfigType
+import org.apache.kafka.server.config.{ConfigEntityName, ConfigType}
 import org.apache.kafka.server.util.{CommandDefaultOptions, CommandLineUtils}
 import org.apache.kafka.storage.internals.log.LogConfig
 import org.apache.zookeeper.client.ZKClientConfig
@@ -152,7 +152,7 @@ object ConfigCommand extends Logging {
       if (!configsToBeAdded.isEmpty || configsToBeDeleted.nonEmpty) {
         validateBrokersNotRunning(entityName, adminZkClient, zkClient, errorMessage)
 
-        val perBrokerConfig = entityName != ConfigEntityName.Default
+        val perBrokerConfig = entityName != ConfigEntityName.DEFAULT
         preProcessBrokerConfigs(configsToBeAdded, perBrokerConfig)
       }
     }
@@ -177,7 +177,7 @@ object ConfigCommand extends Logging {
                                         adminZkClient: AdminZkClient,
                                         zkClient: KafkaZkClient,
                                         errorMessage: String): Unit = {
-    val perBrokerConfig = entityName != ConfigEntityName.Default
+    val perBrokerConfig = entityName != ConfigEntityName.DEFAULT
     val info = "Broker configuration operations using ZooKeeper are only supported if the affected broker(s) are not running."
     if (perBrokerConfig) {
       adminZkClient.parseBroker(entityName).foreach { brokerId =>
@@ -696,7 +696,7 @@ object ConfigCommand extends Logging {
         case t => t
       }
       sanitizedName match {
-        case Some(ConfigEntityName.Default) => "default " + typeName
+        case Some(ConfigEntityName.DEFAULT) => "default " + typeName
         case Some(n) =>
           val desanitized = if (entityType == ConfigType.USER || entityType == ConfigType.CLIENT) Sanitizer.desanitize(n) else n
           s"$typeName '$desanitized'"
@@ -757,7 +757,7 @@ object ConfigCommand extends Logging {
     else {
       // Exactly one entity type and at-most one entity name expected for other entities
       val name = entityNames.headOption match {
-        case Some("") => Some(ConfigEntityName.Default)
+        case Some("") => Some(ConfigEntityName.DEFAULT)
         case v => v
       }
       ConfigEntity(Entity(entityTypes.head, name), None)
@@ -774,7 +774,7 @@ object ConfigCommand extends Logging {
 
     def sanitizeName(entityType: String, name: String) = {
       if (name.isEmpty)
-        ConfigEntityName.Default
+        ConfigEntityName.DEFAULT
       else {
         entityType match {
           case ConfigType.USER | ConfigType.CLIENT => Sanitizer.sanitize(name)
