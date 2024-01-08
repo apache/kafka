@@ -70,7 +70,6 @@ public class LoggingResource implements ConnectResource {
      * @return a list of current loggers and their levels.
      */
     @GET
-    @Path("/")
     @Operation(summary = "List the current loggers that have their levels explicitly set and their log levels")
     public Response listLoggers() {
         return Response.ok(herder.allLoggerLevels()).build();

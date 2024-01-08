@@ -136,7 +136,6 @@ public class ConnectorPluginsResource implements ConnectResource {
     }
 
     @GET
-    @Path("/")
     @Operation(summary = "List all connector plugins installed")
     public List<PluginInfo> listConnectorPlugins(
             @DefaultValue("true") @QueryParam("connectorsOnly") @Parameter(description = "Whether to list only connectors instead of all plugins") boolean connectorsOnly

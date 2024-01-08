@@ -93,7 +93,6 @@ public class ConnectorsResource implements ConnectResource {
     }
 
     @GET
-    @Path("/")
     @Operation(summary = "List all active connectors")
     public Response listConnectors(
         final @Context UriInfo uriInfo,
@@ -131,7 +130,6 @@ public class ConnectorsResource implements ConnectResource {
     }
 
     @POST
-    @Path("/")
     @Operation(summary = "Create a new connector")
     public Response createConnector(final @Parameter(hidden = true) @QueryParam("forward") Boolean forward,
                                     final @Context HttpHeaders headers,
