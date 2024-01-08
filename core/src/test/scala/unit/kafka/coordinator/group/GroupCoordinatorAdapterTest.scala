@@ -348,8 +348,8 @@ class GroupCoordinatorAdapterTest {
 
     when(groupCoordinator.handleListGroups(expectedStatesFilter, expectedTypesFilter)).thenReturn {
       (Errors.NOT_COORDINATOR, List(
-        GroupOverview("group1", "protocol1", "Stable", "classic"),
-        GroupOverview("group2", "qwerty", "Empty", "consumer")
+        GroupOverview("group1", "protocol1", "Stable"),
+        GroupOverview("group2", "qwerty", "Empty")
       ))
     }
 
@@ -362,13 +362,11 @@ class GroupCoordinatorAdapterTest {
         new ListGroupsResponseData.ListedGroup()
           .setGroupId("group1")
           .setGroupState("Stable")
-          .setProtocolType("protocol1")
-          .setGroupType("classic"),
+          .setProtocolType("protocol1"),
         new ListGroupsResponseData.ListedGroup()
           .setGroupId("group2")
           .setGroupState("Empty")
           .setProtocolType("qwerty")
-          .setGroupType("consumer")
       ).asJava)
 
     assertTrue(future.isDone)
