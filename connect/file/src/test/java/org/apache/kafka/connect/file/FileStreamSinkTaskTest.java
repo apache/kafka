@@ -40,7 +40,6 @@ public class FileStreamSinkTaskTest {
 
     private FileStreamSinkTask task;
     private ByteArrayOutputStream os;
-    private PrintStream printStream;
 
     @TempDir
     public Path topDir;
@@ -49,7 +48,7 @@ public class FileStreamSinkTaskTest {
     @BeforeEach
     public void setup() {
         os = new ByteArrayOutputStream();
-        printStream = new PrintStream(os);
+        PrintStream printStream = new PrintStream(os);
         task = new FileStreamSinkTask(printStream);
         outputFile = topDir.resolve("connect.output").toAbsolutePath().toString();
     }
