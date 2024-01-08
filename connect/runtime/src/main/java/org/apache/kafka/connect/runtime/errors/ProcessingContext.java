@@ -17,27 +17,14 @@
 package org.apache.kafka.connect.runtime.errors;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
-import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.record.TimestampType;
-import org.apache.kafka.connect.errors.ConnectException;
-import org.apache.kafka.connect.runtime.errors.WorkerErrantRecordReporter.ErrantRecordFuture;
 import org.apache.kafka.connect.source.SourceRecord;
-
-import java.util.Collection;
-import java.util.Collections;
-import java.util.List;
-import java.util.Objects;
-import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.Future;
-import java.util.stream.Collectors;
 
 /**
  * Contains all the metadata related to the currently evaluating operation. Only one instance of this class is meant
  * to exist per task in a JVM.
  */
-class ProcessingContext implements AutoCloseable {
-
-    private Collection<ErrorReporter> reporters = Collections.emptyList();
+class ProcessingContext {
 
     private ConsumerRecord<byte[], byte[]> consumedMessage;
     private SourceRecord sourceRecord;
@@ -136,26 +123,6 @@ class ProcessingContext implements AutoCloseable {
         executingClass(klass);
     }
 
-    /**
-     * Report errors. Should be called only if an error was encountered while executing the operation.
-     *
-     * @return a errant record future that potentially aggregates the producer futures
-     */
-    public Future<Void> report() {
-        if (reporters.size() == 1) {
-            return new ErrantRecordFuture(Collections.singletonList(reporters.iterator().next().report(this)));
-        }
-
-        List<Future<RecordMetadata>> futures = reporters.stream()
-                .map(r -> r.report(this))
-                .filter(f -> !f.isDone())
-                .collect(Collectors.toList());
-        if (futures.isEmpty()) {
-            return CompletableFuture.completedFuture(null);
-        }
-        return new ErrantRecordFuture(futures);
-    }
-
     @Override
     public String toString() {
         return toString(false);
@@ -222,31 +189,5 @@ class ProcessingContext implements AutoCloseable {
      */
     public boolean failed() {
         return error() != null;
-    }
-
-    /**
-     * Set the error reporters for this connector.
-     *
-     * @param reporters the error reporters (should not be null).
-     */
-    public void reporters(Collection<ErrorReporter> reporters) {
-        Objects.requireNonNull(reporters);
-        this.reporters = reporters;
-    }
-
-    @Override
-    public void close() {
-        ConnectException e = null;
-        for (ErrorReporter reporter : reporters) {
-            try {
-                reporter.close();
-            } catch (Throwable t) {
-                e = e != null ? e : new ConnectException("Failed to close all reporters");
-                e.addSuppressed(t);
-            }
-        }
-        if (e != null) {
-            throw e;
-        }
     }
 }

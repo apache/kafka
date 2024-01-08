@@ -17,6 +17,7 @@
 package org.apache.kafka.connect.runtime.errors;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.connect.errors.ConnectException;
@@ -26,13 +27,17 @@ import org.apache.kafka.connect.source.SourceRecord;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Future;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
 
 /**
  * Attempt to recover a failed operation with retries and tolerance limits.
@@ -80,6 +85,7 @@ public class RetryWithToleranceOperator implements AutoCloseable {
     private final ErrorHandlingMetrics errorHandlingMetrics;
     private final CountDownLatch stopRequestedLatch;
     private volatile boolean stopping;   // indicates whether the operator has been asked to stop retrying
+    private List<ErrorReporter> reporters;
 
     protected final ProcessingContext context;
 
@@ -99,6 +105,7 @@ public class RetryWithToleranceOperator implements AutoCloseable {
         this.context = context;
         this.stopRequestedLatch = stopRequestedLatch;
         this.stopping = false;
+        this.reporters = Collections.emptyList();
     }
 
     public synchronized Future<Void> executeFailed(Stage stage, Class<?> executingClass,
@@ -110,7 +117,7 @@ public class RetryWithToleranceOperator implements AutoCloseable {
         context.currentContext(stage, executingClass);
         context.error(error);
         errorHandlingMetrics.recordFailure();
-        Future<Void> errantRecordFuture = context.report();
+        Future<Void> errantRecordFuture = report(context);
         if (!withinToleranceLimits()) {
             errorHandlingMetrics.recordError();
             throw new ConnectException("Tolerance exceeded in error handler", error);
@@ -127,12 +134,32 @@ public class RetryWithToleranceOperator implements AutoCloseable {
         context.currentContext(stage, executingClass);
         context.error(error);
         errorHandlingMetrics.recordFailure();
-        Future<Void> errantRecordFuture = context.report();
+        Future<Void> errantRecordFuture = report(context);
         if (!withinToleranceLimits()) {
             errorHandlingMetrics.recordError();
             throw new ConnectException("Tolerance exceeded in Source Worker error handler", error);
         }
         return errantRecordFuture;
+    }
+
+    /**
+     * Report errors. Should be called only if an error was encountered while executing the operation.
+     *
+     * @return a errant record future that potentially aggregates the producer futures
+     */
+    // Visible for testing
+    synchronized Future<Void> report(ProcessingContext context) {
+        if (reporters.size() == 1) {
+            return new WorkerErrantRecordReporter.ErrantRecordFuture(Collections.singletonList(reporters.iterator().next().report(context)));
+        }
+        List<Future<RecordMetadata>> futures = reporters.stream()
+                .map(r -> r.report(context))
+                .filter(f -> !f.isDone())
+                .collect(Collectors.toList());
+        if (futures.isEmpty()) {
+            return CompletableFuture.completedFuture(null);
+        }
+        return new WorkerErrantRecordReporter.ErrantRecordFuture(futures);
     }
 
     /**
@@ -157,7 +184,7 @@ public class RetryWithToleranceOperator implements AutoCloseable {
         } finally {
             if (context.failed()) {
                 errorHandlingMetrics.recordError();
-                context.report();
+                report(context);
             }
         }
     }
@@ -303,7 +330,7 @@ public class RetryWithToleranceOperator implements AutoCloseable {
      * @param reporters the error reporters (should not be null).
      */
     public synchronized void reporters(List<ErrorReporter> reporters) {
-        this.context.reporters(reporters);
+        this.reporters = Objects.requireNonNull(reporters, "reporters");
     }
 
     /**
@@ -353,6 +380,18 @@ public class RetryWithToleranceOperator implements AutoCloseable {
 
     @Override
     public synchronized void close() {
-        this.context.close();
+        ConnectException e = null;
+        for (ErrorReporter reporter : reporters) {
+            try {
+                reporter.close();
+            } catch (Throwable t) {
+                e = e != null ? e : new ConnectException("Failed to close all reporters");
+                e.addSuppressed(t);
+            }
+        }
+        reporters = Collections.emptyList();
+        if (e != null) {
+            throw e;
+        }
     }
 }

@@ -18,6 +18,8 @@ package org.apache.kafka.connect.runtime.errors;
 
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
+import org.apache.kafka.clients.producer.RecordMetadata;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.SystemTime;
@@ -44,6 +46,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -412,12 +415,12 @@ public class RetryWithToleranceOperatorTest {
                     }
 
                     @Override
-                    public Future<Void> report() {
+                    public boolean failed() {
                         if (count.getAndSet(0) > 1) {
-                            failed.compareAndSet(null, new AssertionError("Concurrent call to error() in report()"));
+                            failed.compareAndSet(null, new AssertionError("Concurrent call to error() in failed()"));
                         }
 
-                        return super.report();
+                        return super.failed();
                     }
 
                     @Override
@@ -437,6 +440,10 @@ public class RetryWithToleranceOperatorTest {
                     }
                 }, new CountDownLatch(1));
 
+        retryWithToleranceOperator.reporters(Collections.singletonList(context -> {
+            context.failed();
+            return CompletableFuture.completedFuture(null);
+        }));
         ExecutorService pool = Executors.newFixedThreadPool(numThreads);
         List<? extends Future<?>> futures = IntStream.range(0, numThreads).boxed()
                 .map(id ->
@@ -477,5 +484,33 @@ public class RetryWithToleranceOperatorTest {
         if (exception != null) {
             throw exception;
         }
+    }
+
+    @Test
+    public void testReportWithSingleReporter() {
+        testReport(1);
+    }
+
+    @Test
+    public void testReportWithMultipleReporters() {
+        testReport(2);
+    }
+
+    private void testReport(int numberOfReports) {
+        MockTime time = new MockTime(0, 0, 0);
+        CountDownLatch exitLatch = mock(CountDownLatch.class);
+        ProcessingContext context = new ProcessingContext();
+        RetryWithToleranceOperator retryWithToleranceOperator = new RetryWithToleranceOperator(-1, ERRORS_RETRY_MAX_DELAY_DEFAULT, ALL, time, errorHandlingMetrics, context, exitLatch);
+        ConsumerRecord<byte[], byte[]> consumerRecord = new ConsumerRecord<>("t", 0, 0, null, null);
+        List<CompletableFuture<RecordMetadata>> fs = IntStream.range(0, numberOfReports).mapToObj(i -> new CompletableFuture<RecordMetadata>()).collect(Collectors.toList());
+        List<ErrorReporter> reporters = IntStream.range(0, numberOfReports).mapToObj(i -> (ErrorReporter) c -> fs.get(i)).collect(Collectors.toList());
+        retryWithToleranceOperator.reporters(reporters);
+        context.consumerRecord(consumerRecord);
+        Future<Void> result = retryWithToleranceOperator.report(context);
+        fs.forEach(f -> {
+            assertFalse(result.isDone());
+            f.complete(new RecordMetadata(new TopicPartition("t", 0), 0, 0, 0, 0, 0));
+        });
+        assertTrue(result.isDone());
     }
 }
