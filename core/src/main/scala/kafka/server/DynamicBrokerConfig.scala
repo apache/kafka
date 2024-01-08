@@ -30,7 +30,7 @@ import kafka.utils.{CoreUtils, Logging, PasswordEncoder}
 import kafka.utils.Implicits._
 import kafka.zk.{AdminZkClient, KafkaZkClient}
 import org.apache.kafka.common.Reconfigurable
-import org.apache.kafka.common.config.{AbstractConfig, ConfigDef, ConfigException, SslConfigs}
+import org.apache.kafka.common.config.{ConfigDef, ConfigException, SslConfigs}
 import org.apache.kafka.common.metrics.{JmxReporter, Metrics, MetricsReporter}
 import org.apache.kafka.common.config.types.Password
 import org.apache.kafka.common.network.{ListenerName, ListenerReconfigurable}
@@ -40,6 +40,7 @@ import org.apache.kafka.server.config.{ConfigEntityName, ConfigType, ServerTopic
 import org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig
 import org.apache.kafka.server.metrics.ClientMetricsReceiverPlugin
 import org.apache.kafka.server.telemetry.ClientTelemetry
+import org.apache.kafka.server.{DynamicConfig => JDynamicConfig, DynamicBrokerConfig => JDynamicBrokerConfig}
 import org.apache.kafka.storage.internals.log.{LogConfig, ProducerStateManagerConfig}
 
 import scala.annotation.nowarn
@@ -174,7 +175,7 @@ object DynamicBrokerConfig {
       case (ListenerConfigRegex(baseName), v) => baseProps.put(baseName, v)
       case (k, v) => baseProps.put(k, v)
     }
-    DynamicConfig.Broker.validate(baseProps)
+    JDynamicConfig.Broker.validate(baseProps)
   }
 
   private[server] def addDynamicConfigs(configDef: ConfigDef): Unit = {
@@ -192,17 +193,6 @@ object DynamicBrokerConfig {
       val mode = if (PerBrokerConfigs.contains(name)) "per-broker" else "cluster-wide"
       name -> mode
     }.toMap.asJava
-  }
-
-  private[server] def resolveVariableConfigs(propsOriginal: Properties): Properties = {
-    val props = new Properties
-    val config = new AbstractConfig(new ConfigDef(), propsOriginal, false)
-    config.originals.forEach { (key, value) =>
-      if (!key.startsWith(AbstractConfig.CONFIG_PROVIDERS_CONFIG)) {
-        props.put(key, value)
-      }
-    }
-    props
   }
 }
 
@@ -479,7 +469,7 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
    * Note: The caller must acquire the read or write lock before invoking this method.
    */
   private def validatedKafkaProps(propsOverride: Properties, perBrokerConfig: Boolean): Map[String, String] = {
-    val propsResolved = DynamicBrokerConfig.resolveVariableConfigs(propsOverride)
+    val propsResolved = JDynamicBrokerConfig.resolveVariableConfigs(propsOverride)
     validateConfigs(propsResolved, perBrokerConfig)
     val newProps = mutable.Map[String, String]()
     newProps ++= staticBrokerConfigs

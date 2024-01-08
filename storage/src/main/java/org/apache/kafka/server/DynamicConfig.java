@@ -24,7 +24,9 @@ import java.net.InetAddress;
 import java.net.UnknownHostException;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Properties;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 import static org.apache.kafka.common.config.ConfigDef.Importance.MEDIUM;
 import static org.apache.kafka.common.config.ConfigDef.Range.atLeast;
@@ -63,6 +65,10 @@ public class DynamicConfig {
             .define(REPLICA_ALTER_LOG_DIRS_IO_MAX_BYTES_PER_SECOND_PROP, LONG, DEFAULT_REPLICATION_THROTTLED_RATE, atLeast(0), MEDIUM, REPLICA_ALTER_LOG_DIRS_IO_MAX_BYTES_PER_SECOND_DOC);
 
         public static final Set<String> NAMES = BROKER_CONFIG_DEF.names();
+
+        public static void validate(Properties props) {
+            DynamicConfig.validate(BROKER_CONFIG_DEF, props, true);
+        }
     }
 
     public static class QuotaConfigs {
@@ -77,6 +83,10 @@ public class DynamicConfig {
         public static final Map<String, ConfigDef.ConfigKey> CONFIG_KEYS = CLIENT_CONFIGS.configKeys();
 
         public static final Set<String> NAMES = CLIENT_CONFIGS.names();
+
+        public static void validate(Properties props) {
+            DynamicConfig.validate(CLIENT_CONFIGS, props, false);
+        }
     }
 
     public static class User {
@@ -85,6 +95,10 @@ public class DynamicConfig {
         public static final Map<String, ConfigDef.ConfigKey> CONFIG_KEYS = USER_CONFIGS.configKeys();
 
         public static final Set<String> NAMES = USER_CONFIGS.names();
+
+        public static void validate(Properties props) {
+            DynamicConfig.validate(USER_CONFIGS, props, false);
+        }
     }
 
     public static class Ip {
@@ -93,6 +107,10 @@ public class DynamicConfig {
         public static final Map<String, ConfigDef.ConfigKey> CONFIG_KEYS = IP_CONFIGS.configKeys();
 
         public static final Set<String> NAMES = IP_CONFIGS.names();
+
+        public static void validate(Properties props) {
+            DynamicConfig.validate(IP_CONFIGS, props, false);
+        }
 
         public static boolean isValidIpEntity(String ip) {
             if (!Objects.equals(ip, ConfigEntityName.DEFAULT)) {
@@ -110,5 +128,20 @@ public class DynamicConfig {
         public static final ConfigDef CLIENT_CONFIGS = org.apache.kafka.server.metrics.ClientMetricsConfigs.configDef();
 
         public static final Set<String> NAMES = CLIENT_CONFIGS.names();
+    }
+
+    public static void validate(ConfigDef configDef, Properties props, boolean customPropsAllowed) {
+        // Validate Names
+        Set<String> names = configDef.names();
+        Set<String> propKeys = props.keySet().stream().map(p -> (String) p).collect(Collectors.toSet());
+        if (!customPropsAllowed) {
+            Set<String> unknownKeys = propKeys.stream().filter(p -> !names.contains(p)).collect(Collectors.toSet());
+            if (!unknownKeys.isEmpty())
+                throw new IllegalArgumentException("Unknown Dynamic Configuration: " + unknownKeys + ".");
+        }
+
+        Properties propResolved = DynamicBrokerConfig.resolveVariableConfigs(props);
+        // ValidateValues
+        configDef.parse(propResolved);
     }
 }
