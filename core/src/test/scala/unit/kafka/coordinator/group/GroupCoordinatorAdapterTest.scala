@@ -327,14 +327,16 @@ class GroupCoordinatorAdapterTest {
 
   @Test
   def testListGroups(): Unit = {
-    testListGroups(null, Set.empty)
-    testListGroups(List(), Set.empty)
-    testListGroups(List("Stable"), Set("Stable"))
+    testListGroups(null, null, Set.empty, Set.empty)
+    testListGroups(List(), List(), Set.empty, Set.empty)
+    testListGroups(List("Stable, Empty"), List(), Set("Stable, Empty"), Set.empty)
   }
 
   def testListGroups(
     statesFilter: List[String],
-    expectedStatesFilter: Set[String]
+    typesFilter: List[String],
+    expectedStatesFilter: Set[String],
+    expectedTypesFilter: Set[String]
   ): Unit = {
     val groupCoordinator = mock(classOf[GroupCoordinator])
     val adapter = new GroupCoordinatorAdapter(groupCoordinator, Time.SYSTEM)
@@ -342,8 +344,9 @@ class GroupCoordinatorAdapterTest {
     val ctx = makeContext(ApiKeys.LIST_GROUPS, ApiKeys.LIST_GROUPS.latestVersion)
     val data = new ListGroupsRequestData()
       .setStatesFilter(statesFilter.asJava)
+      .setTypesFilter(typesFilter.asJava)
 
-    when(groupCoordinator.handleListGroups(expectedStatesFilter)).thenReturn {
+    when(groupCoordinator.handleListGroups(expectedStatesFilter, expectedTypesFilter)).thenReturn {
       (Errors.NOT_COORDINATOR, List(
         GroupOverview("group1", "protocol1", "Stable"),
         GroupOverview("group2", "qwerty", "Empty")

@@ -177,7 +177,7 @@ class GroupCoordinatorTest {
     assertEquals(Errors.COORDINATOR_LOAD_IN_PROGRESS, describeGroupError)
 
     // ListGroups
-    val (listGroupsError, _) = groupCoordinator.handleListGroups(Set())
+    val (listGroupsError, _) = groupCoordinator.handleListGroups(Set(), Set())
     assertEquals(Errors.COORDINATOR_LOAD_IN_PROGRESS, listGroupsError)
 
     // DeleteGroups
@@ -3301,7 +3301,7 @@ class GroupCoordinatorTest {
     val syncGroupResult = syncGroupLeader(groupId, generationId, assignedMemberId, Map(assignedMemberId -> Array[Byte]()))
     assertEquals(Errors.NONE, syncGroupResult.error)
 
-    val (error, groups) = groupCoordinator.handleListGroups(Set())
+    val (error, groups) = groupCoordinator.handleListGroups(Set(), Set())
     assertEquals(Errors.NONE, error)
     assertEquals(1, groups.size)
     assertEquals(GroupOverview("groupId", "consumer", Stable.toString), groups.head)
@@ -3313,7 +3313,7 @@ class GroupCoordinatorTest {
     val joinGroupResult = dynamicJoinGroup(groupId, memberId, protocolType, protocols)
     assertEquals(Errors.NONE, joinGroupResult.error)
 
-    val (error, groups) = groupCoordinator.handleListGroups(Set())
+    val (error, groups) = groupCoordinator.handleListGroups(Set(), Set())
     assertEquals(Errors.NONE, error)
     assertEquals(1, groups.size)
     assertEquals(GroupOverview("groupId", "consumer", CompletingRebalance.toString), groups.head)
@@ -3331,10 +3331,10 @@ class GroupCoordinatorTest {
     assertEquals(Errors.NONE, joinGroupResult.error)
 
     // The group should be in CompletingRebalance
-    val (error, groups) = groupCoordinator.handleListGroups(Set(CompletingRebalance.toString))
+    val (error, groups) = groupCoordinator.handleListGroups(Set(CompletingRebalance.toString), Set())
     assertEquals(Errors.NONE, error)
     assertEquals(1, groups.size)
-    val (error2, groups2) = groupCoordinator.handleListGroups(allStates.filterNot(s => s == CompletingRebalance.toString))
+    val (error2, groups2) = groupCoordinator.handleListGroups(allStates.filterNot(s => s == CompletingRebalance.toString), Set())
     assertEquals(Errors.NONE, error2)
     assertEquals(0, groups2.size)
 
@@ -3343,10 +3343,10 @@ class GroupCoordinatorTest {
     assertEquals(Errors.NONE, syncGroupResult.error)
 
     // The group is now stable
-    val (error3, groups3) = groupCoordinator.handleListGroups(Set(Stable.toString))
+    val (error3, groups3) = groupCoordinator.handleListGroups(Set(Stable.toString), Set())
     assertEquals(Errors.NONE, error3)
     assertEquals(1, groups3.size)
-    val (error4, groups4) = groupCoordinator.handleListGroups(allStates.filterNot(s => s == Stable.toString))
+    val (error4, groups4) = groupCoordinator.handleListGroups(allStates.filterNot(s => s == Stable.toString), Set())
     assertEquals(Errors.NONE, error4)
     assertEquals(0, groups4.size)
 
@@ -3355,12 +3355,35 @@ class GroupCoordinatorTest {
     verifyLeaveGroupResult(leaveGroupResults)
 
     // The group is now empty
-    val (error5, groups5) = groupCoordinator.handleListGroups(Set(Empty.toString))
+    val (error5, groups5) = groupCoordinator.handleListGroups(Set(Empty.toString), Set())
     assertEquals(Errors.NONE, error5)
     assertEquals(1, groups5.size)
-    val (error6, groups6) = groupCoordinator.handleListGroups(allStates.filterNot(s => s == Empty.toString))
+    val (error6, groups6) = groupCoordinator.handleListGroups(allStates.filterNot(s => s == Empty.toString), Set())
     assertEquals(Errors.NONE, error6)
     assertEquals(0, groups6.size)
+  }
+
+  @Test
+  def testListGroupsWithTypes(): Unit = {
+    val memberId = JoinGroupRequest.UNKNOWN_MEMBER_ID
+    val joinGroupResult = dynamicJoinGroup(groupId, memberId, protocolType, protocols)
+    val assignedMemberId = joinGroupResult.memberId
+    val generationId = joinGroupResult.generationId
+    assertEquals(Errors.NONE, joinGroupResult.error)
+
+    val syncGroupResult = syncGroupLeader(groupId, generationId, assignedMemberId, Map(assignedMemberId -> Array[Byte]()))
+    assertEquals(Errors.NONE, syncGroupResult.error)
+
+    // When a group type filter is specified, no groups are returned since group types don't exist in this coordinator.
+    val (error1, groups1) = groupCoordinator.handleListGroups(Set(), Set("classic"))
+    assertEquals(Errors.NONE, error1)
+    assertEquals(0, groups1.size)
+
+    // When no group type filter is specified, all groups are returned with unknown group type.
+    val (error2, groups2) = groupCoordinator.handleListGroups(Set(), Set())
+    assertEquals(Errors.NONE, error2)
+    assertEquals(1, groups2.size)
+    assertEquals(GroupOverview("groupId", "consumer", Stable.toString), groups2.head)
   }
 
   @Test

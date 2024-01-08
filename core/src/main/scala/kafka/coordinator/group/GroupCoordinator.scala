@@ -1106,17 +1106,17 @@ private[group] class GroupCoordinator(
     }
   }
 
-  def handleListGroups(states: Set[String]): (Errors, List[GroupOverview]) = {
+  def handleListGroups(states: Set[String], groupTypes: Set[String]): (Errors, List[GroupOverview]) = {
     if (!isActive.get) {
       (Errors.COORDINATOR_NOT_AVAILABLE, List[GroupOverview]())
     } else {
       val errorCode = if (groupManager.isLoading) Errors.COORDINATOR_LOAD_IN_PROGRESS else Errors.NONE
-      // if states is empty, return all groups
-      val groups = if (states.isEmpty)
-        groupManager.currentGroups
-      else {
-        val caseInsensitiveStates = states.map(_.toLowerCase)
-        groupManager.currentGroups.filter(g => g.isInStates(caseInsensitiveStates))
+
+      // Filter groups based on states and groupTypes. If either is empty, it won't filter on that criterion.
+      // If groupType is mentioned then no group is returned since the notion of groupTypes doesn't exist in the
+      // old group coordinator.
+      val groups = groupManager.currentGroups.filter { g =>
+        (states.isEmpty || g.isInStates(states.map(_.toLowerCase)) && groupTypes.isEmpty)
       }
       (errorCode, groups.map(_.overview).toList)
     }
