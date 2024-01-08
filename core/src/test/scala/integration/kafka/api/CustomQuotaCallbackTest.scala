@@ -78,6 +78,7 @@ class CustomQuotaCallbackTest extends IntegrationTestHarness with SaslSetup {
     adminClients.foreach(_.close())
     GroupedUserQuotaCallback.tearDown()
     super.tearDown()
+    closeSasl()
   }
 
   override def configureSecurityBeforeServersStart(testInfo: TestInfo): Unit = {

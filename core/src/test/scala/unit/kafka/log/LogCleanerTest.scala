@@ -47,7 +47,7 @@ import scala.jdk.CollectionConverters._
 /**
  * Unit tests for the log cleaning logic
  */
-class LogCleanerTest {
+class LogCleanerTest extends Logging {
 
   val tmpdir = TestUtils.tempDir()
   val dir = TestUtils.randomPartitionLogDir(tmpdir)
@@ -64,6 +64,7 @@ class LogCleanerTest {
 
   @AfterEach
   def teardown(): Unit = {
+    CoreUtils.swallow(time.scheduler.shutdown(), this)
     Utils.delete(tmpdir)
   }
 

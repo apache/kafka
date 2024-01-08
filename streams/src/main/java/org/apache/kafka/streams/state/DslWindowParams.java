@@ -108,7 +108,8 @@ public class DslWindowParams {
                 && Objects.equals(retentionPeriod, that.retentionPeriod)
                 && Objects.equals(windowSize, that.windowSize)
                 && Objects.equals(emitStrategy, that.emitStrategy)
-                && Objects.equals(isSlidingWindow, that.isSlidingWindow);
+                && Objects.equals(isSlidingWindow, that.isSlidingWindow)
+                && Objects.equals(isTimestamped, that.isTimestamped);
     }
 
     @Override
@@ -119,7 +120,8 @@ public class DslWindowParams {
                 windowSize,
                 retainDuplicates,
                 emitStrategy,
-                isSlidingWindow
+                isSlidingWindow,
+                isTimestamped
         );
     }
 
@@ -132,6 +134,7 @@ public class DslWindowParams {
                 ", retainDuplicates=" + retainDuplicates +
                 ", emitStrategy=" + emitStrategy +
                 ", isSlidingWindow=" + isSlidingWindow +
+                ", isTimestamped=" + isTimestamped +
                 '}';
     }
 }

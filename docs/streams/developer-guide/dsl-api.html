@@ -2814,6 +2814,7 @@ KStream&lt;String, String&gt; joined = left.join(right,
     (leftValue, rightValue) -&gt; &quot;left=&quot; + leftValue + &quot;, right=&quot; + rightValue, /* ValueJoiner */
     Joined.keySerde(Serdes.String()) /* key */
       .withValueSerde(Serdes.Long()) /* left value */
+      .withGracePeriod(Duration.ZERO) /* grace period */
   );
 
 // Java 7 example
@@ -2826,6 +2827,7 @@ KStream&lt;String, String&gt; joined = left.join(right,
     },
     Joined.keySerde(Serdes.String()) /* key */
       .withValueSerde(Serdes.Long()) /* left value */
+      .withGracePeriod(Duration.ZERO) /* grace period */
   );</code></pre>
                                     <p>Detailed behavior:</p>
                                     <ul>
@@ -2845,6 +2847,12 @@ KStream&lt;String, String&gt; joined = left.join(right,
                                         <li>When the table is <a class="reference internal" href="#versioned-state-stores"><span class="std std-ref">versioned</span></a>,
                                             the table record to join with is determined by performing a timestamped lookup, i.e., the table record which is joined will be the latest-by-timestamp record with timestamp
                                             less than or equal to the stream record timestamp. If the stream record timestamp is older than the table's history retention, then the record is dropped.</li>
+                                        <li>To use the grace period, the table needs to be <a class="reference internal" href="#versioned-state-stores"><span class="std std-ref">versioned</span></a>.
+                                            This will cause the stream to buffer for the specified grace period before trying to find a matching record with the right timestamp in the table.
+                                            The case where the grace period would be used for is if a record in the table has a timestamp less than or equal to the stream record timestamp but arrives after the stream record.
+                                            If the table record arrives within the grace period the join will still occur.
+                                            If the table record does not arrive before the grace period the join will continue as normal.
+                                        </li>
                                     </ul>
                                     <p class="last">See the semantics overview at the bottom of this section for a detailed description.</p>
                                 </td>
@@ -2868,6 +2876,7 @@ KStream&lt;String, String&gt; joined = left.leftJoin(right,
     (leftValue, rightValue) -&gt; &quot;left=&quot; + leftValue + &quot;, right=&quot; + rightValue, /* ValueJoiner */
     Joined.keySerde(Serdes.String()) /* key */
       .withValueSerde(Serdes.Long()) /* left value */
+      .withGracePeriod(Duration.ZERO) /* grace period */
   );
 
 // Java 7 example
@@ -2880,6 +2889,7 @@ KStream&lt;String, String&gt; joined = left.leftJoin(right,
     },
     Joined.keySerde(Serdes.String()) /* key */
       .withValueSerde(Serdes.Long()) /* left value */
+      .withGracePeriod(Duration.ZERO) /* grace period */
   );</code></pre>
                                     <p>Detailed behavior:</p>
                                     <ul>
@@ -2902,6 +2912,12 @@ KStream&lt;String, String&gt; joined = left.leftJoin(right,
                                         <li>When the table is <a class="reference internal" href="#versioned-state-stores"><span class="std std-ref">versioned</span></a>,
                                             the table record to join with is determined by performing a timestamped lookup, i.e., the table record which is joined will be the latest-by-timestamp record with timestamp
                                             less than or equal to the stream record timestamp. If the stream record timestamp is older than the table's history retention, then the record that is joined will be <code class="docutils literal"><span class="pre">null</span></code>.</li>
+                                        <li>To use the grace period, the table needs to be <a class="reference internal" href="#versioned-state-stores"><span class="std std-ref">versioned</span></a>.
+                                            This will cause the stream to buffer for the specified grace period before trying to find a matching record with the right timestamp in the table.
+                                            The case where the grace period would be used for is if a record in the table has a timestamp less than or equal to the stream record timestamp but arrives after the stream record.
+                                            If the table record arrives within the grace period the join will still occur.
+                                            If the table record does not arrive before the grace period the join will continue as normal.
+                                        </li>
                                     </ul>
                                     <p class="last">See the semantics overview at the bottom of this section for a detailed description.</p>
                                 </td>

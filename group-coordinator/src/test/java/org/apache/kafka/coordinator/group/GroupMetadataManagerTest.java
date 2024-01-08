@@ -2191,11 +2191,8 @@ public class GroupMetadataManagerTest {
             .setMemberEpoch(-2)
             .build();
 
-        List<Record> expectedRecords = Collections.singletonList(
-            RecordHelpers.newCurrentAssignmentRecord(groupId, member2UpdatedEpoch)
-        );
-
-        assertEquals(result.records(), expectedRecords);
+        assertEquals(1, result.records().size());
+        assertRecordEquals(result.records().get(0), RecordHelpers.newCurrentAssignmentRecord(groupId, member2UpdatedEpoch));
 
         // Member 2 rejoins the group with the same instance id.
         CoordinatorResult<ConsumerGroupHeartbeatResponseData, Record> rejoinResult = context.consumerGroupHeartbeat(
@@ -2343,11 +2340,9 @@ public class GroupMetadataManagerTest {
             .Builder(member2)
             .setMemberEpoch(LEAVE_GROUP_STATIC_MEMBER_EPOCH)
             .build();
-        List<Record> expectedRecords = Collections.singletonList(
-            RecordHelpers.newCurrentAssignmentRecord(groupId, member2UpdatedEpoch)
-        );
 
-        assertEquals(result.records(), expectedRecords);
+        assertEquals(1, result.records().size());
+        assertRecordEquals(result.records().get(0), RecordHelpers.newCurrentAssignmentRecord(groupId, member2UpdatedEpoch));
     }
 
     @Test

@@ -38,7 +38,7 @@ public class JsonDeserializer implements Deserializer<JsonNode> {
      * Default constructor needed by Kafka
      */
     public JsonDeserializer() {
-        this(Collections.emptySet(), new JsonNodeFactory(true));
+        this(Collections.emptySet(), new JsonNodeFactory(true), true);
     }
 
     /**
@@ -50,11 +50,15 @@ public class JsonDeserializer implements Deserializer<JsonNode> {
      */
     JsonDeserializer(
         final Set<DeserializationFeature> deserializationFeatures,
-        final JsonNodeFactory jsonNodeFactory
+        final JsonNodeFactory jsonNodeFactory,
+        final boolean enableModules
     ) {
         objectMapper.enable(JsonReadFeature.ALLOW_LEADING_ZEROS_FOR_NUMBERS.mappedFeature());
         deserializationFeatures.forEach(objectMapper::enable);
         objectMapper.setNodeFactory(jsonNodeFactory);
+        if (enableModules) {
+            objectMapper.findAndRegisterModules();
+        }
     }
 
     @Override
