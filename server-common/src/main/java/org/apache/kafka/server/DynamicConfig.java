@@ -18,7 +18,6 @@ package org.apache.kafka.server;
 
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.server.config.ConfigEntityName;
-import org.apache.kafka.storage.internals.log.LogConfig;
 
 import java.net.InetAddress;
 import java.net.UnknownHostException;
@@ -49,10 +48,10 @@ public class DynamicConfig {
 
         // Documentation
         public static final String LEADER_REPLICATION_THROTTLED_RATE_DOC = "A long representing the upper bound (bytes/sec) on replication traffic for leaders enumerated in the " +
-            "property " + LogConfig.LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG + " (for each topic). This property can be only set dynamically. It is suggested that the " +
+            "property leader.replication.throttled.replicas (for each topic). This property can be only set dynamically. It is suggested that the " +
             "limit be kept above 1MB/s for accurate behaviour.";
         public static final String FOLLOWER_REPLICATION_THROTTLED_RATE_DOC = "A long representing the upper bound (bytes/sec) on replication traffic for followers enumerated in the " +
-            "property " + LogConfig.FOLLOWER_REPLICATION_THROTTLED_REPLICAS_CONFIG + " (for each topic). This property can be only set dynamically. It is suggested that the " +
+            "property follower.replication.throttled.replicas (for each topic). This property can be only set dynamically. It is suggested that the " +
             "limit be kept above 1MB/s for accurate behaviour.";
         public static final String REPLICA_ALTER_LOG_DIRS_IO_MAX_BYTES_PER_SECOND_DOC = "A long representing the upper bound (bytes/sec) on disk IO used for moving replica between log directories on the same broker. " +
             "This property can be only set dynamically. It is suggested that the limit be kept above 1MB/s for accurate behaviour.";
