@@ -1098,7 +1098,7 @@ public class KafkaAdminClientTest {
             future = env.adminClient().deleteTopics(singletonList("myTopic"),
                 new DeleteTopicsOptions()).all();
             TestUtils.assertFutureError(future, UnknownTopicOrPartitionException.class);
-            
+
             // With topic IDs
             Uuid topicId = Uuid.randomUuid();
 
@@ -1124,7 +1124,7 @@ public class KafkaAdminClientTest {
             TestUtils.assertFutureError(future, UnknownTopicIdException.class);
         }
     }
-    
+
 
     @Test
     public void testDeleteTopicsPartialResponse() throws Exception {
@@ -1141,7 +1141,7 @@ public class KafkaAdminClientTest {
 
             result.topicNameValues().get("myTopic").get();
             TestUtils.assertFutureThrows(result.topicNameValues().get("myOtherTopic"), ApiException.class);
-            
+
             // With topic IDs
             Uuid topicId1 = Uuid.randomUuid();
             Uuid topicId2 = Uuid.randomUuid();
@@ -1187,12 +1187,12 @@ public class KafkaAdminClientTest {
             assertNull(result.topicNameValues().get("topic1").get());
             assertNull(result.topicNameValues().get("topic2").get());
             TestUtils.assertFutureThrows(result.topicNameValues().get("topic3"), TopicExistsException.class);
-            
+
             // With topic IDs
             Uuid topicId1 = Uuid.randomUuid();
             Uuid topicId2 = Uuid.randomUuid();
             Uuid topicId3 = Uuid.randomUuid();
-            
+
             env.kafkaClient().prepareResponse(
                     expectDeleteTopicsRequestWithTopicIds(topicId1, topicId2, topicId3),
                     prepareDeleteTopicsResponse(1000,
@@ -1262,7 +1262,7 @@ public class KafkaAdminClientTest {
                 ThrottlingQuotaExceededException.class);
             assertEquals(0, e.throttleTimeMs());
             TestUtils.assertFutureThrows(result.topicNameValues().get("topic3"), TopicExistsException.class);
-            
+
             // With topic IDs
             Uuid topicId1 = Uuid.randomUuid();
             Uuid topicId2 = Uuid.randomUuid();
