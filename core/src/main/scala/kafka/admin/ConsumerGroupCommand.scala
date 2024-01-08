@@ -202,31 +202,25 @@ object ConsumerGroupCommand extends Logging {
       val includeState = opts.options.has(opts.stateOpt)
       val includeType = opts.options.has(opts.typeOpt)
 
-      val groupInfoMap = mutable.Map[String, (String, String)]() // Mutable map
+      val groupInfoMap = mutable.Map[String, (String, String)]()
 
-      if (includeState) {
+      if (includeType || includeState) {
         val states = getStateValues()
-        val listings = listConsumerGroupsWithState(states)
-        listings.foreach { e =>
-          groupInfoMap.update(e.groupId, (e.state().toString, groupInfoMap.getOrElse(e.groupId, ("", ""))._2))
-        }
-      }
-
-      if (includeType) {
         val types = getTypeValues()
-        val listings = listConsumerGroupsWithType(types)
+        val listings = {
+          listConsumerGroupsWithFilters(states, types)
+        }
+
         listings.foreach { listing =>
           val groupId = listing.groupId
-          val groupType = listing.groupType().toString
-          val currentState = groupInfoMap.getOrElse(groupId, ("", ""))._1
-          groupInfoMap.update(groupId, (currentState, groupType))
+          val groupType = listing.groupType().orElse(ConsumerGroupType.UNKNOWN).toString
+          val state = listing.state().orElse(ConsumerGroupState.UNKNOWN).toString
+          groupInfoMap.update(groupId, (state, groupType))
         }
-      }
 
-      val groupInfoList = groupInfoMap.toList.map { case (groupId, (state, groupType)) => (groupId, state, groupType) }
-
-      if (groupInfoList.nonEmpty) {
+        val groupInfoList = groupInfoMap.toList.map { case (groupId, (state, groupType)) => (groupId, state, groupType) }
         printGroupInfo(groupInfoList, includeState, includeType)
+
       } else {
         listConsumerGroups().foreach(println(_))
       }
@@ -276,16 +270,11 @@ object ConsumerGroupCommand extends Logging {
       listings.map(_.groupId).toList
     }
 
-    def listConsumerGroupsWithState(states: Set[ConsumerGroupState]): List[ConsumerGroupListing] = {
+    def listConsumerGroupsWithFilters(states: Set[ConsumerGroupState], types: Set[ConsumerGroupType]): List[ConsumerGroupListing] = {
       val listConsumerGroupsOptions = withTimeoutMs(new ListConsumerGroupsOptions())
-      listConsumerGroupsOptions.inStates(states.asJava)
-      val result = adminClient.listConsumerGroups(listConsumerGroupsOptions)
-      result.all.get.asScala.toList
-    }
-
-    def listConsumerGroupsWithType(types: Set[ConsumerGroupType]): List[ConsumerGroupListing] = {
-      val listConsumerGroupsOptions = withTimeoutMs(new ListConsumerGroupsOptions())
-      listConsumerGroupsOptions.inTypes(types.asJava)
+      listConsumerGroupsOptions
+        .inStates(states.asJava)
+        .inTypes(types.asJava)
       val result = adminClient.listConsumerGroups(listConsumerGroupsOptions)
       result.all.get.asScala.toList
     }
