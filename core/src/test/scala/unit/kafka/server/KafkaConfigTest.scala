@@ -595,7 +595,7 @@ class KafkaConfigTest {
     props.setProperty(KafkaConfig.BrokerIdProp, "1")
     props.setProperty(KafkaConfig.ZkConnectProp, "localhost:2181")
     val conf = KafkaConfig.fromProps(props)
-    assertEquals(MetadataVersion.latestTesting, conf.interBrokerProtocolVersion)
+    assertEquals(MetadataVersion.latestProduction, conf.interBrokerProtocolVersion)
 
     props.setProperty(KafkaConfig.InterBrokerProtocolVersionProp, "0.8.2.0")
     // We need to set the message format version to make the configuration valid.

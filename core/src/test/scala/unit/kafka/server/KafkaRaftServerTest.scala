@@ -314,6 +314,6 @@ class KafkaRaftServerTest {
     assertEquals(metaProperties, metaPropertiesEnsemble.logDirProps().values().iterator().next())
     assertTrue(metaPropertiesEnsemble.errorLogDirs().isEmpty())
     assertTrue(metaPropertiesEnsemble.emptyLogDirs().isEmpty())
-    assertEquals(bootstrapMetadata.metadataVersion(), MetadataVersion.latestTesting())
+    assertEquals(bootstrapMetadata.metadataVersion(), MetadataVersion.latestProduction())
   }
 }
