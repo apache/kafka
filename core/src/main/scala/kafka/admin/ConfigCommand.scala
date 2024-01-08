@@ -21,8 +21,6 @@ import java.nio.charset.StandardCharsets
 import java.util.concurrent.TimeUnit
 import java.util.{Collections, Properties}
 import joptsimple._
-import kafka.server.DynamicConfig.QuotaConfigs
-import kafka.server.{Defaults, DynamicBrokerConfig, DynamicConfig, KafkaConfig}
 import kafka.server.{Defaults, DynamicBrokerConfig, KafkaConfig}
 import kafka.utils.{Exit, Logging, PasswordEncoder}
 import kafka.utils.Implicits._
@@ -39,7 +37,6 @@ import org.apache.kafka.common.utils.{Sanitizer, Time, Utils}
 import org.apache.kafka.server.config.{ConfigEntityName, ConfigType}
 import org.apache.kafka.server.DynamicConfig
 import org.apache.kafka.server.DynamicConfig.QuotaConfigs
-import org.apache.kafka.server.config.{ConfigEntityName, ConfigType}
 import org.apache.kafka.server.util.{CommandDefaultOptions, CommandLineUtils}
 import org.apache.kafka.storage.internals.log.LogConfig
 import org.apache.zookeeper.client.ZKClientConfig
