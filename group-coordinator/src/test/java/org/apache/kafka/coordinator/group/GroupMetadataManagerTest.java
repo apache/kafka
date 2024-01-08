@@ -18,6 +18,7 @@ package org.apache.kafka.coordinator.group;
 
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor;
 import org.apache.kafka.clients.consumer.internals.ConsumerProtocol;
+import org.apache.kafka.common.ConsumerGroupType;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.CoordinatorNotAvailableException;
@@ -1042,8 +1043,8 @@ public class GroupMetadataManagerTest {
             );
         }
 
-        public List<ListGroupsResponseData.ListedGroup> sendListGroups(List<String> statesFilter) {
-            return groupMetadataManager.listGroups(statesFilter, lastCommittedOffset);
+        public List<ListGroupsResponseData.ListedGroup> sendListGroups(List<String> statesFilter, List<String> typesFilter) {
+            return groupMetadataManager.listGroups(statesFilter, typesFilter, lastCommittedOffset);
         }
 
         public List<ConsumerGroupDescribeResponseData.DescribedGroup> sendConsumerGroupDescribe(List<String> groupIds) {
@@ -9588,10 +9589,8 @@ public class GroupMetadataManagerTest {
     @Test
     public void testListGroups() {
         String consumerGroupId = "consumer-group-id";
-        String classicGroupId = "generic-group-id";
+        String classicGroupId = "classic-group-id";
         String memberId1 = Uuid.randomUuid().toString();
-        String classicGroupType = "generic";
-        Uuid fooTopicId = Uuid.randomUuid();
         String fooTopicName = "foo";
 
         MockPartitionAssignor assignor = new MockPartitionAssignor("range");
@@ -9599,13 +9598,15 @@ public class GroupMetadataManagerTest {
             .withAssignors(Collections.singletonList(assignor))
             .withConsumerGroup(new ConsumerGroupBuilder(consumerGroupId, 10))
             .build();
+
+        // Create one classic group record.
         context.replay(newGroupMetadataRecord(
             classicGroupId,
             new GroupMetadataValue()
                 .setMembers(Collections.emptyList())
                 .setGeneration(2)
                 .setLeader(null)
-                .setProtocolType(classicGroupType)
+                .setProtocolType("classic")
                 .setProtocol("range")
                 .setCurrentStateTimestamp(context.time.milliseconds()),
             MetadataVersion.latestTesting()));
@@ -9616,19 +9617,23 @@ public class GroupMetadataManagerTest {
             .build()));
         context.replay(RecordHelpers.newGroupEpochRecord(consumerGroupId, 11));
 
+        // Test list group response without a group state or group type filter.
         Map<String, ListGroupsResponseData.ListedGroup> actualAllGroupMap =
-            context.sendListGroups(Collections.emptyList())
-                .stream().collect(Collectors.toMap(ListGroupsResponseData.ListedGroup::groupId, Function.identity()));
+            context.sendListGroups(Collections.emptyList(), Collections.emptyList()).stream()
+                .collect(Collectors.toMap(ListGroupsResponseData.ListedGroup::groupId, Function.identity()));
+
         Map<String, ListGroupsResponseData.ListedGroup> expectAllGroupMap =
             Stream.of(
                 new ListGroupsResponseData.ListedGroup()
                     .setGroupId(classicGroup.groupId())
-                    .setProtocolType(classicGroupType)
-                    .setGroupState(EMPTY.toString()),
+                    .setProtocolType("classic")
+                    .setGroupState(EMPTY.toString())
+                    .setGroupType(ConsumerGroupType.CLASSIC.toString()),
                 new ListGroupsResponseData.ListedGroup()
                     .setGroupId(consumerGroupId)
                     .setProtocolType(ConsumerProtocol.PROTOCOL_TYPE)
                     .setGroupState(ConsumerGroup.ConsumerGroupState.EMPTY.toString())
+                    .setGroupType(ConsumerGroupType.CONSUMER.toString())
             ).collect(Collectors.toMap(ListGroupsResponseData.ListedGroup::groupId, Function.identity()));
 
         assertEquals(expectAllGroupMap, actualAllGroupMap);
@@ -9641,29 +9646,43 @@ public class GroupMetadataManagerTest {
         assertEquals(expectAllGroupMap, actualAllGroupMap);
 
         context.commit();
-        actualAllGroupMap = context.sendListGroups(Collections.emptyList()).stream()
+
+        // Test list group response to check assigning state in the consumer group.
+        actualAllGroupMap = context.sendListGroups(Collections.singletonList("assigning"), Collections.emptyList()).stream()
             .collect(Collectors.toMap(ListGroupsResponseData.ListedGroup::groupId, Function.identity()));
         expectAllGroupMap =
             Stream.of(
                 new ListGroupsResponseData.ListedGroup()
-                    .setGroupId(classicGroup.groupId())
-                    .setProtocolType(classicGroupType)
-                    .setGroupState(EMPTY.toString()),
-                new ListGroupsResponseData.ListedGroup()
                     .setGroupId(consumerGroupId)
                     .setProtocolType(ConsumerProtocol.PROTOCOL_TYPE)
                     .setGroupState(ConsumerGroup.ConsumerGroupState.ASSIGNING.toString())
+                    .setGroupType(ConsumerGroupType.CONSUMER.toString())
             ).collect(Collectors.toMap(ListGroupsResponseData.ListedGroup::groupId, Function.identity()));
 
         assertEquals(expectAllGroupMap, actualAllGroupMap);
 
-        actualAllGroupMap = context.sendListGroups(Collections.singletonList("Empty")).stream()
+        // Test list group response with group state filter and no group type filter.
+        actualAllGroupMap = context.sendListGroups(Collections.singletonList("Empty"), Collections.emptyList()).stream()
             .collect(Collectors.toMap(ListGroupsResponseData.ListedGroup::groupId, Function.identity()));
         expectAllGroupMap = Stream.of(
             new ListGroupsResponseData.ListedGroup()
                 .setGroupId(classicGroup.groupId())
-                .setProtocolType(classicGroupType)
+                .setProtocolType("classic")
                 .setGroupState(EMPTY.toString())
+                .setGroupType(ConsumerGroupType.CLASSIC.toString())
+        ).collect(Collectors.toMap(ListGroupsResponseData.ListedGroup::groupId, Function.identity()));
+
+        assertEquals(expectAllGroupMap, actualAllGroupMap);
+
+        // Test list group response with no group state filter and with group type filter.
+        actualAllGroupMap = context.sendListGroups(Collections.emptyList(), Collections.singletonList(ConsumerGroupType.CLASSIC.toString())).stream()
+            .collect(Collectors.toMap(ListGroupsResponseData.ListedGroup::groupId, Function.identity()));
+        expectAllGroupMap = Stream.of(
+            new ListGroupsResponseData.ListedGroup()
+                .setGroupId(classicGroup.groupId())
+                .setProtocolType("classic")
+                .setGroupState(EMPTY.toString())
+                .setGroupType(ConsumerGroupType.CLASSIC.toString())
         ).collect(Collectors.toMap(ListGroupsResponseData.ListedGroup::groupId, Function.identity()));
 
         assertEquals(expectAllGroupMap, actualAllGroupMap);
