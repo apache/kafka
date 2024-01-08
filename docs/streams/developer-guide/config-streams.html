@@ -1111,7 +1111,7 @@ streamsSettings.put(StreamsConfig.topicPrefix("PARAMETER_NAME"), "topic-value");
           <td>Consumer</td>
           <td>earliest</td>
         </tr>
-        <tr class="row-even"><td>linger.ms</td>
+        <tr class="row-odd"><td>linger.ms</td>
           <td>Producer</td>
           <td>100</td>
         </tr>
@@ -1119,20 +1119,23 @@ streamsSettings.put(StreamsConfig.topicPrefix("PARAMETER_NAME"), "topic-value");
           <td>Consumer</td>
           <td>1000</td>
         </tr>
+        <tr class="row-odd">
+          <td>transaction.timeout.ms</td>
+          <td>Producer</td>
+          <td><code class="docutils literal"><span class="pre">10000</span></code></td>
+        </tr>
+        <tr class="row-even">
+          <td>client.id</td>
+          <td>-</td>
+          <td><code class="docutils literal"><span class="pre">&lt;application.id&gt;-&lt;random-UUID&gt;</span></code></td>
+        </tr>
         </tbody>
       </table>
     </div>
     <div class="section" id="parameters-controlled-by-kafka-streams">
       <h3><a class="toc-backref" href="#id26">Parameters controlled by Kafka Streams</a><a class="headerlink" href="#parameters-controlled-by-kafka-streams" title="Permalink to this headline"></a></h3>
-      <p>Kafka Streams assigns the following configuration parameters. If you try to change
-        <code class="docutils literal"><span class="pre">allow.auto.create.topics</span></code>, your value
-        is ignored and setting it has no effect in a Kafka Streams application. You can set the other parameters.
-        Kafka Streams sets them to different default values than a plain
-        <code class="docutils literal"><span class="pre">KafkaConsumer</span></code>.
-      <p>Kafka Streams uses the <code class="docutils literal"><span class="pre">client.id</span></code>
-        parameter to compute derived client IDs for internal clients. If you don't set
-        <code class="docutils literal"><span class="pre">client.id</span></code>, Kafka Streams sets it to
-        <code class="docutils literal"><span class="pre">&lt;application.id&gt;-&lt;random-UUID&gt;</span></code>.
+      <p>Some parameters are not configurable by the user. If you supply a value that is different from the default value,
+        your value is ignored. Below is a list of some of these parameters.
       <table border="1" class="non-scrolling-table docutils">
         <colgroup>
           <col width="50%">
@@ -1150,17 +1153,17 @@ streamsSettings.put(StreamsConfig.topicPrefix("PARAMETER_NAME"), "topic-value");
           <td>Consumer</td>
           <td><code class="docutils literal"><span class="pre">false</span></code></td>
         </tr>
-        <tr class="row-even"><td>auto.offset.reset</td>
+        <tr class="row-even"><td>group.id</td>
           <td>Consumer</td>
-          <td><code class="docutils literal"><span class="pre">earliest</span></code></td>
+          <td><code class="docutils literal"><span class="pre">application.id</span></code></td>
         </tr>
-        <tr class="row-odd"><td>linger.ms</td>
-          <td>Producer</td>
-          <td><code class="docutils literal"><span class="pre">100</span></code></td>
-        </tr>
-        <tr class="row-odd"><td>max.poll.records</td>
+        <tr class="row-odd"><td>enable.auto.commit</td>
           <td>Consumer</td>
-          <td><code class="docutils literal"><span class="pre">1000</span></code></td>
+          <td><code class="docutils literal"><span class="pre">false</span></code></td>
+        </tr>
+        <tr class="row-even"><td>partition.assignment.strategy</td>
+          <td>Consumer</td>
+          <td><code class="docutils literal"><span class="pre">StreamsPartitionAssignor</span></code></td>
         </tr>
         </tbody>
       </table>
