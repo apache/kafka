@@ -1178,6 +1178,31 @@ class LogManager(logDirs: Seq[File],
     }
   }
 
+  def maybeRecoverAbandonedFutureLog(topicPartition: TopicPartition, partitionAssignedDirectoryId: Option[Uuid]): Boolean = {
+    logCreationOrDeletionLock synchronized {
+      for {
+        sourceLog <- getLog(topicPartition, isFuture = true)
+        sourceLogDir <- directoryId(sourceLog.parentDir)
+        assignedDirId <- partitionAssignedDirectoryId
+        if sourceLogDir == assignedDirId
+      } {
+        info(s"Attempting to rename abandoned future replica $sourceLog for $topicPartition")
+
+        sourceLog.renameDir(UnifiedLog.logDirName(topicPartition), shouldReinitialize = true)
+        sourceLog.removeLogMetrics()
+
+        futureLogs.remove(topicPartition)
+        currentLogs.put(topicPartition, sourceLog)
+
+        sourceLog.newMetrics()
+
+        info(s"The abandoned future replica is successfully renamed for $topicPartition")
+        return true
+      }
+      false
+    }
+  }
+
   /**
     * Mark the partition directory in the source log directory for deletion and
     * rename the future log of this partition in the destination log directory to be the current log
