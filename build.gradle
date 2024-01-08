@@ -303,7 +303,7 @@ subprojects {
             from components.java
           } else {
             apply plugin: 'com.github.johnrengelman.shadow'
-            project.shadow.component(mavenJava)
+            artifact shadowJar
           }
 
           afterEvaluate {
