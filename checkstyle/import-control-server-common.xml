@@ -59,6 +59,7 @@
     </subpackage>
 
     <subpackage name="server">
+        <allow pkg="org.apache.kafka.server.config" />
         <allow pkg="org.apache.kafka.common" />
         <allow pkg="joptsimple" />
 
