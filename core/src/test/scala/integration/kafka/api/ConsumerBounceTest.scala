@@ -62,6 +62,7 @@ class ConsumerBounceTest extends AbstractConsumerTest with Logging {
     properties.put(KafkaConfig.GroupMaxSizeProp, maxGroupSize)
     properties.put(KafkaConfig.UncleanLeaderElectionEnableProp, "true")
     properties.put(KafkaConfig.AutoCreateTopicsEnableProp, "false")
+    properties.put(KafkaConfig.BrokerSessionTimeoutMsProp, "30000")
     if (isNewGroupCoordinatorEnabled()) {
       properties.put(KafkaConfig.UnstableApiVersionsEnableProp, "true")
       properties.put(KafkaConfig.NewGroupCoordinatorEnableProp, "true")
@@ -96,7 +97,7 @@ class ConsumerBounceTest extends AbstractConsumerTest with Logging {
     val producer = createProducer()
     producerSend(producer, numRecords)
 
-    this.consumerConfig.setProperty(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, "600000")
+    this.consumerConfig.setProperty(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, "30000")
 
     var consumed = 0L
     val consumer = createConsumer()
