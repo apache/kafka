@@ -165,13 +165,16 @@ class MetadataVersionTest {
         assertEquals(IBP_3_6_IV1, MetadataVersion.fromVersionString("3.6-IV1"));
         assertEquals(IBP_3_6_IV2, MetadataVersion.fromVersionString("3.6-IV2"));
 
-        // 3.7-IV0 is the latest production version in the 3.7 line
-        assertEquals(IBP_3_7_IV0, MetadataVersion.fromVersionString("3.7"));
+        // 3.7-IV4 is the latest production version in the 3.7 line
+        assertEquals(IBP_3_7_IV4, MetadataVersion.fromVersionString("3.7"));
 
         assertEquals(IBP_3_7_IV0, MetadataVersion.fromVersionString("3.7-IV0"));
         assertEquals(IBP_3_7_IV1, MetadataVersion.fromVersionString("3.7-IV1"));
         assertEquals(IBP_3_7_IV2, MetadataVersion.fromVersionString("3.7-IV2"));
         assertEquals(IBP_3_7_IV3, MetadataVersion.fromVersionString("3.7-IV3"));
+        assertEquals(IBP_3_7_IV4, MetadataVersion.fromVersionString("3.7-IV4"));
+
+        assertEquals(IBP_3_8_IV0, MetadataVersion.fromVersionString("3.8-IV0"));
     }
 
     @Test
@@ -228,6 +231,9 @@ class MetadataVersionTest {
         assertEquals("3.6", IBP_3_6_IV2.shortVersion());
         assertEquals("3.7", IBP_3_7_IV0.shortVersion());
         assertEquals("3.7", IBP_3_7_IV1.shortVersion());
+        assertEquals("3.7", IBP_3_7_IV2.shortVersion());
+        assertEquals("3.7", IBP_3_7_IV3.shortVersion());
+        assertEquals("3.7", IBP_3_7_IV4.shortVersion());
     }
 
     @Test
@@ -275,6 +281,8 @@ class MetadataVersionTest {
         assertEquals("3.7-IV1", IBP_3_7_IV1.version());
         assertEquals("3.7-IV2", IBP_3_7_IV2.version());
         assertEquals("3.7-IV3", IBP_3_7_IV3.version());
+        assertEquals("3.7-IV4", IBP_3_7_IV4.version());
+        assertEquals("3.8-IV0", IBP_3_8_IV0.version());
     }
 
     @Test
@@ -342,7 +350,7 @@ class MetadataVersionTest {
     @ParameterizedTest
     @EnumSource(value = MetadataVersion.class)
     public void testIsElrSupported(MetadataVersion metadataVersion) {
-        assertEquals(metadataVersion.isAtLeast(IBP_3_7_IV3), metadataVersion.isElrSupported());
+        assertEquals(metadataVersion.isAtLeast(IBP_3_8_IV0), metadataVersion.isElrSupported());
     }
 
     @ParameterizedTest

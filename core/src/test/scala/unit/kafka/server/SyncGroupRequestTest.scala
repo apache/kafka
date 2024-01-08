@@ -24,7 +24,7 @@ import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor
 import org.apache.kafka.clients.consumer.internals.ConsumerProtocol
 import org.apache.kafka.common.message.SyncGroupRequestData
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
-import org.apache.kafka.coordinator.group.generic.GenericGroupState
+import org.apache.kafka.coordinator.group.classic.ClassicGroupState
 import org.junit.jupiter.api.{Tag, Timeout}
 import org.junit.jupiter.api.extension.ExtendWith
 
@@ -182,7 +182,7 @@ class SyncGroupRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBas
 
       TestUtils.waitUntilTrue(() => {
         val described = describeGroups(groupIds = List("grp"))
-        GenericGroupState.PREPARING_REBALANCE.toString == described.head.groupState
+        ClassicGroupState.PREPARING_REBALANCE.toString == described.head.groupState
       }, msg = s"The group is not in PREPARING_REBALANCE state.")
 
       // The leader rejoins.

@@ -256,15 +256,13 @@ public class BatchAccumulator<T> implements Closeable {
         LeaderChangeMessage leaderChangeMessage,
         long currentTimestamp
     ) {
-        appendControlMessage(buffer -> {
-            return MemoryRecords.withLeaderChangeMessage(
-                this.nextOffset,
-                currentTimestamp,
-                this.epoch,
-                buffer,
-                leaderChangeMessage
-            );
-        });
+        appendControlMessage(buffer -> MemoryRecords.withLeaderChangeMessage(
+            this.nextOffset,
+            currentTimestamp,
+            this.epoch,
+            buffer,
+            leaderChangeMessage
+        ));
     }
 
 
@@ -279,15 +277,13 @@ public class BatchAccumulator<T> implements Closeable {
         SnapshotHeaderRecord snapshotHeaderRecord,
         long currentTimestamp
     ) {
-        appendControlMessage(buffer -> {
-            return MemoryRecords.withSnapshotHeaderRecord(
-                this.nextOffset,
-                currentTimestamp,
-                this.epoch,
-                buffer,
-                snapshotHeaderRecord
-            );
-        });
+        appendControlMessage(buffer -> MemoryRecords.withSnapshotHeaderRecord(
+            this.nextOffset,
+            currentTimestamp,
+            this.epoch,
+            buffer,
+            snapshotHeaderRecord
+        ));
     }
 
     /**
@@ -301,15 +297,13 @@ public class BatchAccumulator<T> implements Closeable {
         SnapshotFooterRecord snapshotFooterRecord,
         long currentTimestamp
     ) {
-        appendControlMessage(buffer -> {
-            return MemoryRecords.withSnapshotFooterRecord(
-                this.nextOffset,
-                currentTimestamp,
-                this.epoch,
-                buffer,
-                snapshotFooterRecord
-            );
-        });
+        appendControlMessage(buffer -> MemoryRecords.withSnapshotFooterRecord(
+            this.nextOffset,
+            currentTimestamp,
+            this.epoch,
+            buffer,
+            snapshotFooterRecord
+        ));
     }
 
     public void forceDrain() {

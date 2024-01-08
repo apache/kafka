@@ -393,6 +393,7 @@
       <allow class="kafka.zk.EmbeddedZookeeper"/>
       <allow pkg="com.fasterxml.jackson" />
       <allow pkg="org.apache.kafka.tools" />
+      <allow pkg="org.apache.kafka.server.config" />
     </subpackage>
 
     <subpackage name="test">
@@ -408,6 +409,7 @@
         <allow pkg="com.fasterxml.jackson" />
         <allow pkg="kafka.utils" />
         <allow pkg="org.apache.zookeeper" />
+        <allow pkg="org.apache.log4j" />
       </subpackage>
     </subpackage>
   </subpackage>
@@ -439,6 +441,7 @@
     <allow pkg="org.apache.kafka.common.protocol" />
     <allow pkg="org.apache.kafka.server.common" />
     <allow pkg="org.apache.kafka.server.common.serialization" />
+    <allow pkg="org.apache.kafka.server.fault"/>
     <allow pkg="org.apache.kafka.server.util" />
     <allow pkg="org.apache.kafka.test"/>
     <allow pkg="com.fasterxml.jackson" />

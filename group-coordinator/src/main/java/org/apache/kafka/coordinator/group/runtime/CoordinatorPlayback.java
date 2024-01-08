@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.coordinator.group.runtime;
 
+import org.apache.kafka.common.requests.TransactionResult;
+
 /**
  * The CoordinatorPlayback interface. This interface is used to replay
  * records to the coordinator in order to update its state. This is
@@ -37,6 +39,20 @@ public interface CoordinatorPlayback<U> {
         long producerId,
         short producerEpoch,
         U record
+    ) throws RuntimeException;
+
+    /**
+     * Applies the given transaction marker.
+     *
+     * @param producerId    The producer id.
+     * @param producerEpoch The producer epoch.
+     * @param result        The result of the transaction.
+     * @throws RuntimeException if the transaction can not be completed.
+     */
+    void replayEndTransactionMarker(
+        long producerId,
+        short producerEpoch,
+        TransactionResult result
     ) throws RuntimeException;
 
     /**
