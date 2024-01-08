@@ -186,6 +186,12 @@ public interface Herder {
     ConnectorStateInfo connectorStatus(String connName);
 
     /**
+     * Get the configuration for all tasks of a connector.
+     * @param connName name of the connector
+     */
+    Map<ConnectorTaskId, Map<String, String>> taskConfigs(String connName);
+
+    /**
      * Lookup the set of topics currently used by a connector.
      *
      * @param connName name of the connector

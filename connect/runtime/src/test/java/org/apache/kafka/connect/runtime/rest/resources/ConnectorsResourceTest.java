@@ -916,6 +916,54 @@ public class ConnectorsResourceTest {
         assertEquals(msg, response.getEntity());
     }
 
+    @Test
+    public void testExpandConnectorsTopics() {
+        when(herder.connectors()).thenReturn(Arrays.asList(CONNECTOR_NAME));
+        ActiveTopicsInfo connectorActiveTopics = new ActiveTopicsInfo(CONNECTOR_NAME, CONNECTOR_ACTIVE_TOPICS);
+        when(herder.connectorActiveTopics(CONNECTOR_NAME)).thenReturn(connectorActiveTopics);
+
+        forward = mock(UriInfo.class);
+        MultivaluedMap<String, String> queryParams = new MultivaluedHashMap<>();
+        queryParams.putSingle("expand", "topics");
+        when(forward.getQueryParameters()).thenReturn(queryParams);
+
+        // test topic tracking enabled
+        when(serverConfig.topicTrackingEnabled()).thenReturn(true);
+        connectorsResource = new ConnectorsResource(herder, serverConfig, restClient);
+        Map<String, Map<String, Object>> expanded = (Map<String, Map<String, Object>>) connectorsResource.listConnectors(forward, NULL_HEADERS).getEntity();
+        // Ordering isn't guaranteed, compare sets
+        assertEquals(new HashSet<>(Collections.singletonList(CONNECTOR_NAME)), expanded.keySet());
+        assertEquals(connectorActiveTopics, expanded.get(CONNECTOR_NAME).get("topics"));
+
+        // test topic tracking disabled
+        when(serverConfig.topicTrackingEnabled()).thenReturn(false);
+        connectorsResource = new ConnectorsResource(herder, serverConfig, restClient);
+        expanded = (Map<String, Map<String, Object>>) connectorsResource.listConnectors(forward, NULL_HEADERS).getEntity();
+        // Ordering isn't guaranteed, compare sets
+        assertEquals(new HashSet<>(Collections.singletonList(CONNECTOR_NAME)), expanded.keySet());
+        assertEquals(ConnectorsResource.TOPIC_TRACKING_DISABLED_MESSAGE, expanded.get(CONNECTOR_NAME).get("topics"));
+    }
+
+    @Test
+    public void testExpandConnectorsTaskConfigs() {
+        when(herder.connectors()).thenReturn(Arrays.asList(CONNECTOR2_NAME, CONNECTOR_NAME));
+        Map<ConnectorTaskId, Map<String, String>> taskConfig = mock(Map.class);
+        Map<ConnectorTaskId, Map<String, String>> taskConfig2 = mock(Map.class);
+        when(herder.taskConfigs(CONNECTOR2_NAME)).thenReturn(taskConfig2);
+        when(herder.taskConfigs(CONNECTOR_NAME)).thenReturn(taskConfig);
+
+        forward = mock(UriInfo.class);
+        MultivaluedMap<String, String> queryParams = new MultivaluedHashMap<>();
+        queryParams.putSingle("expand", "tasks-config");
+        when(forward.getQueryParameters()).thenReturn(queryParams);
+
+        Map<String, Map<String, Object>> expanded = (Map<String, Map<String, Object>>) connectorsResource.listConnectors(forward, NULL_HEADERS).getEntity();
+        // Ordering isn't guaranteed, compare sets
+        assertEquals(new HashSet<>(Arrays.asList(CONNECTOR_NAME, CONNECTOR2_NAME)), expanded.keySet());
+        assertEquals(taskConfig2, expanded.get(CONNECTOR2_NAME).get("tasks-config"));
+        assertEquals(taskConfig, expanded.get(CONNECTOR_NAME).get("tasks-config"));
+    }
+
     private <T> byte[] serializeAsBytes(final T value) throws IOException {
         return new ObjectMapper().writeValueAsBytes(value);
     }
