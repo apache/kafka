@@ -2100,13 +2100,7 @@ class ReplicaManager(val config: KafkaConfig,
     for (partition <- partitions) {
       val topicPartition = partition.topicPartition
       logManager.getLog(topicPartition, isFuture = true).foreach { futureLog =>
-        partition.log.foreach { currentLog =>
-          if (currentLog.parentDir == futureLog.parentDir) {
-            // The future is stale, likely because of a broker crash during a previous move and must
-            // be removed
-            logManager.asyncDelete(topicPartition, isFuture = true)
-            return
-          }
+        partition.log.foreach { _ =>
           val leader = BrokerEndPoint(config.brokerId, "localhost", -1)
 
           // Add future replica log to partition's map
@@ -2634,7 +2628,10 @@ class ReplicaManager(val config: KafkaConfig,
 
   private[kafka] def getOrCreatePartition(tp: TopicPartition,
                                           delta: TopicsDelta,
-                                          topicId: Uuid): Option[(Partition, Boolean)] = {
+                                          topicId: Uuid,
+                                          isLocalFollower: Boolean = false,
+                                          partitionAssignedDirectoryId: Option[Uuid] = None,
+                                         ): Option[(Partition, Boolean)] = {
     getPartition(tp) match {
       case HostedPartition.Offline(offlinePartition) =>
         if (offlinePartition.flatMap(p => p.topicId).contains(topicId)) {
@@ -2661,6 +2658,11 @@ class ReplicaManager(val config: KafkaConfig,
         Some(partition, false)
 
       case HostedPartition.None =>
+        val isNew = if (isLocalFollower) {
+          !logManager.maybeRecoverAbandonedFutureLog(tp, partitionAssignedDirectoryId)
+        } else {
+          true
+        }
         if (delta.image().topicsById().containsKey(topicId)) {
           stateChangeLogger.error(s"Expected partition $tp with topic id " +
             s"$topicId to exist, but it was missing. Creating...")
@@ -2671,7 +2673,7 @@ class ReplicaManager(val config: KafkaConfig,
         // it's a partition that we don't know about yet, so create it and mark it online
         val partition = Partition(tp, time, this)
         allPartitions.put(tp, HostedPartition.Online(partition))
-        Some(partition, true)
+        Some(partition, isNew)
     }
   }
 
@@ -2751,10 +2753,10 @@ class ReplicaManager(val config: KafkaConfig,
       "local leaders.")
     replicaFetcherManager.removeFetcherForPartitions(localLeaders.keySet)
     localLeaders.forKeyValue { (tp, info) =>
-      getOrCreatePartition(tp, delta, info.topicId).foreach { case (partition, isNew) =>
+      val partitionAssignedDirectoryId = directoryIds.find(_._1.topicPartition() == tp).map(_._2)
+      getOrCreatePartition(tp, delta, info.topicId, isLocalFollower = false, partitionAssignedDirectoryId).foreach { case (partition, isNew) =>
         try {
           val state = info.partition.toLeaderAndIsrPartitionState(tp, isNew)
-          val partitionAssignedDirectoryId = directoryIds.find(_._1.topicPartition() == tp).map(_._2)
           partition.makeLeader(state, offsetCheckpoints, Some(info.topicId), partitionAssignedDirectoryId)
 
           changedPartitions.add(partition)
@@ -2786,7 +2788,8 @@ class ReplicaManager(val config: KafkaConfig,
     val partitionsToStopFetching = new mutable.HashMap[TopicPartition, Boolean]
     val followerTopicSet = new mutable.HashSet[String]
     localFollowers.forKeyValue { (tp, info) =>
-      getOrCreatePartition(tp, delta, info.topicId).foreach { case (partition, isNew) =>
+      val partitionAssignedDirectoryId = directoryIds.find(_._1.topicPartition() == tp).map(_._2)
+      getOrCreatePartition(tp, delta, info.topicId, isLocalFollower = true, partitionAssignedDirectoryId).foreach { case (partition, isNew) =>
         try {
           followerTopicSet.add(tp.topic)
 
@@ -2796,7 +2799,6 @@ class ReplicaManager(val config: KafkaConfig,
           //   is unavailable. This is required to ensure that we include the partition's
           //   high watermark in the checkpoint file (see KAFKA-1647).
           val state = info.partition.toLeaderAndIsrPartitionState(tp, isNew)
-          val partitionAssignedDirectoryId = directoryIds.find(_._1.topicPartition() == tp).map(_._2)
           val isNewLeaderEpoch = partition.makeFollower(state, offsetCheckpoints, Some(info.topicId), partitionAssignedDirectoryId)
 
           if (isInControlledShutdown && (info.partition.leader == NO_LEADER ||
