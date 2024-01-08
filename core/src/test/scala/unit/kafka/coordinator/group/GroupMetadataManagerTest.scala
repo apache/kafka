@@ -1181,6 +1181,7 @@ class GroupMetadataManagerTest {
       any(),
       any[Option[ReentrantLock]],
       any(),
+      any(),
       any())
     verify(replicaManager).getMagic(any())
   }
@@ -1214,6 +1215,7 @@ class GroupMetadataManagerTest {
       any(),
       any(),
       any[Option[ReentrantLock]],
+      any(),
       any(),
       any())
     verify(replicaManager).getMagic(any())
@@ -1288,6 +1290,7 @@ class GroupMetadataManagerTest {
       any(),
       any[Option[ReentrantLock]],
       any(),
+      any(),
       any())
     // Will update sensor after commit
     assertEquals(1, TestUtils.totalMetricValue(metrics, "offset-commit-count"))
@@ -1328,7 +1331,8 @@ class GroupMetadataManagerTest {
       capturedResponseCallback.capture(),
       any[Option[ReentrantLock]],
       any(),
-      ArgumentMatchers.eq(Map(offsetTopicPartition -> verificationGuard)))
+      ArgumentMatchers.eq(Map(offsetTopicPartition -> verificationGuard)),
+      any())
     verify(replicaManager).getMagic(any())
     capturedResponseCallback.getValue.apply(Map(groupTopicPartition ->
       new PartitionResponse(Errors.NONE, 0L, RecordBatch.NO_TIMESTAMP, 0L)))
@@ -1386,7 +1390,8 @@ class GroupMetadataManagerTest {
       any(),
       any[Option[ReentrantLock]],
       any(),
-      ArgumentMatchers.eq(Map(offsetTopicPartition -> verificationGuard)))
+      ArgumentMatchers.eq(Map(offsetTopicPartition -> verificationGuard)),
+      any())
     verify(replicaManager).getMagic(any())
   }
 
@@ -1434,7 +1439,8 @@ class GroupMetadataManagerTest {
       any(),
       any[Option[ReentrantLock]],
       any(),
-      ArgumentMatchers.eq(Map(offsetTopicPartition -> verificationGuard)))
+      ArgumentMatchers.eq(Map(offsetTopicPartition -> verificationGuard)),
+      any())
     verify(replicaManager).getMagic(any())
   }
 
@@ -1585,6 +1591,7 @@ class GroupMetadataManagerTest {
       any(),
       any[Option[ReentrantLock]],
       any(),
+      any(),
       any())
     verify(replicaManager).getMagic(any())
     assertEquals(1, TestUtils.totalMetricValue(metrics, "offset-commit-count"))
@@ -1689,6 +1696,7 @@ class GroupMetadataManagerTest {
       any(),
       any(),
       any[Option[ReentrantLock]],
+      any(),
       any(),
       any())
     verify(replicaManager, times(2)).getMagic(any())
@@ -2797,6 +2805,7 @@ class GroupMetadataManagerTest {
       capturedArgument.capture(),
       any[Option[ReentrantLock]],
       any(),
+      any(),
       any())
     capturedArgument
   }
@@ -2809,6 +2818,7 @@ class GroupMetadataManagerTest {
       capturedRecords.capture(),
       capturedCallback.capture(),
       any[Option[ReentrantLock]],
+      any(),
       any(),
       any()
     )).thenAnswer(_ => {

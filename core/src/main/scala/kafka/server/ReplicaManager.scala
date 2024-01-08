@@ -989,6 +989,7 @@ class ReplicaManager(val config: KafkaConfig,
    * @param requestLocal                  container for the stateful instances scoped to this request -- this must correspond to the
    *                                      thread calling this method
    * @param verificationGuards            the mapping from topic partition to verification guards if transaction verification is used
+   * @param actionQueue                   the action queue to use
    */
   def appendForGroup(
     timeout: Long,
@@ -997,7 +998,8 @@ class ReplicaManager(val config: KafkaConfig,
     responseCallback: Map[TopicPartition, PartitionResponse] => Unit,
     delayedProduceLock: Option[Lock],
     requestLocal: RequestLocal,
-    verificationGuards: Map[TopicPartition, VerificationGuard]
+    verificationGuards: Map[TopicPartition, VerificationGuard],
+    actionQueue: ActionQueue = this.defaultActionQueue
   ): Unit = {
     if (!isValidRequiredAcks(requiredAcks)) {
       sendInvalidRequiredAcksResponse(entriesPerPartition, responseCallback)
@@ -1025,7 +1027,7 @@ class ReplicaManager(val config: KafkaConfig,
     val allResults = localProduceResults
     val produceStatus = buildProducePartitionStatus(allResults)
 
-    addCompletePurgatoryAction(defaultActionQueue, allResults)
+    addCompletePurgatoryAction(actionQueue, allResults)
 
     maybeAddDelayedProduce(
       requiredAcks,

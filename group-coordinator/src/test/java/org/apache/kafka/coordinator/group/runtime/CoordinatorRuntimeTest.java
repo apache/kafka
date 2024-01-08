@@ -19,6 +19,8 @@ package org.apache.kafka.coordinator.group.runtime;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.NotCoordinatorException;
+import org.apache.kafka.common.errors.NotEnoughReplicasException;
+import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.requests.TransactionResult;
 import org.apache.kafka.common.utils.LogContext;
@@ -29,7 +31,9 @@ import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorRuntimeMetrics
 import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.image.MetadataProvenance;
+import org.apache.kafka.server.util.FutureUtils;
 import org.apache.kafka.server.util.timer.MockTimer;
+import org.apache.kafka.storage.internals.log.VerificationGuard;
 import org.apache.kafka.timeline.SnapshotRegistry;
 import org.apache.kafka.timeline.TimelineHashMap;
 import org.apache.kafka.timeline.TimelineHashSet;
@@ -67,6 +71,8 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyShort;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
@@ -208,6 +214,7 @@ public class CoordinatorRuntimeTest {
             TopicPartition tp,
             long producerId,
             short producerEpoch,
+            VerificationGuard verificationGuard,
             List<String> records
         ) throws KafkaException {
             if (records.size() <= maxRecordsInBatch) {
@@ -215,6 +222,7 @@ public class CoordinatorRuntimeTest {
                     tp,
                     producerId,
                     producerEpoch,
+                    verificationGuard,
                     records
                 );
             } else {
@@ -1117,6 +1125,15 @@ public class CoordinatorRuntimeTest {
         // Verify that the listener was registered.
         verify(writer, times(1)).registerListener(eq(TP), any());
 
+        // Prepare the transaction verification.
+        VerificationGuard guard = new VerificationGuard();
+        when(writer.maybeStartTransactionVerification(
+            TP,
+            "transactional-id",
+            100L,
+            (short) 50
+        )).thenReturn(CompletableFuture.completedFuture(guard));
+
         // Schedule a transactional write.
         runtime.scheduleTransactionalWriteOperation(
             "tnx-write",
@@ -1134,6 +1151,7 @@ public class CoordinatorRuntimeTest {
             eq(TP),
             eq(100L),
             eq((short) 50),
+            eq(guard),
             eq(Arrays.asList("record1", "record2"))
         );
 
@@ -1148,6 +1166,75 @@ public class CoordinatorRuntimeTest {
             eq(100L),
             eq((short) 50),
             eq("record2")
+        );
+    }
+
+    @Test
+    public void testScheduleTransactionalWriteOpWhenVerificationFails() {
+        MockTimer timer = new MockTimer();
+        MockPartitionWriter writer = mock(MockPartitionWriter.class);
+        MockCoordinatorShard coordinator = mock(MockCoordinatorShard.class);
+        MockCoordinatorShardBuilder shardBuilder = new MockCoordinatorShardBuilder() {
+            @Override
+            public MockCoordinatorShard build() {
+                return coordinator;
+            }
+        };
+        MockCoordinatorShardBuilderSupplier shardBuilderSupplier = new MockCoordinatorShardBuilderSupplier() {
+            @Override
+            public CoordinatorShardBuilder<MockCoordinatorShard, String> get() {
+                return shardBuilder;
+            }
+        };
+
+        CoordinatorRuntime<MockCoordinatorShard, String> runtime =
+            new CoordinatorRuntime.Builder<MockCoordinatorShard, String>()
+                .withTime(timer.time())
+                .withTimer(timer)
+                .withDefaultWriteTimeOut(DEFAULT_WRITE_TIMEOUT)
+                .withLoader(new MockCoordinatorLoader())
+                .withEventProcessor(new DirectEventProcessor())
+                .withPartitionWriter(writer)
+                .withCoordinatorShardBuilderSupplier(shardBuilderSupplier)
+                .withCoordinatorRuntimeMetrics(mock(GroupCoordinatorRuntimeMetrics.class))
+                .withCoordinatorMetrics(mock(GroupCoordinatorMetrics.class))
+                .build();
+
+        // Schedule the loading.
+        runtime.scheduleLoadOperation(TP, 10);
+
+        // Verify that the listener was registered.
+        verify(writer, times(1)).registerListener(eq(TP), any());
+
+        // Fail the transaction verification.
+        when(writer.maybeStartTransactionVerification(
+            TP,
+            "transactional-id",
+            100L,
+            (short) 50
+        )).thenReturn(FutureUtils.failedFuture(Errors.NOT_ENOUGH_REPLICAS.exception()));
+
+        // Schedule a transactional write.
+        CompletableFuture<String> future = runtime.scheduleTransactionalWriteOperation(
+            "tnx-write",
+            TP,
+            "transactional-id",
+            100L,
+            (short) 50,
+            Duration.ofMillis(5000),
+            state -> new CoordinatorResult<>(Arrays.asList("record1", "record2"), "response")
+        );
+
+        // Verify that the future is failed with the expected exception.
+        assertFutureThrows(future, NotEnoughReplicasException.class);
+
+        // Verify that the writer is not called.
+        verify(writer, times(0)).append(
+            any(),
+            anyLong(),
+            anyShort(),
+            any(),
+            any()
         );
     }
 
