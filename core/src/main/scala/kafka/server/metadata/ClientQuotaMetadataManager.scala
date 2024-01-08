@@ -18,7 +18,6 @@
 package kafka.server.metadata
 
 import kafka.network.ConnectionQuotas
-import kafka.server.ConfigEntityName
 import kafka.server.QuotaFactory.QuotaManagers
 import kafka.utils.Logging
 import org.apache.kafka.common.config.internals.QuotaConfigs
@@ -28,6 +27,7 @@ import org.apache.kafka.common.utils.Sanitizer
 import java.net.{InetAddress, UnknownHostException}
 
 import org.apache.kafka.image.{ClientQuotaDelta, ClientQuotasDelta}
+import org.apache.kafka.server.config.ConfigEntityName
 
 import scala.compat.java8.OptionConverters._
 
@@ -147,13 +147,13 @@ class ClientQuotaMetadataManager(private[metadata] val quotaManagers: QuotaManag
     // Convert entity into Options with sanitized values for QuotaManagers
     val (sanitizedUser, sanitizedClientId) = quotaEntity match {
       case UserEntity(user) => (Some(Sanitizer.sanitize(user)), None)
-      case DefaultUserEntity => (Some(ConfigEntityName.Default), None)
+      case DefaultUserEntity => (Some(ConfigEntityName.DEFAULT), None)
       case ClientIdEntity(clientId) => (None, Some(Sanitizer.sanitize(clientId)))
-      case DefaultClientIdEntity => (None, Some(ConfigEntityName.Default))
+      case DefaultClientIdEntity => (None, Some(ConfigEntityName.DEFAULT))
       case ExplicitUserExplicitClientIdEntity(user, clientId) => (Some(Sanitizer.sanitize(user)), Some(Sanitizer.sanitize(clientId)))
-      case ExplicitUserDefaultClientIdEntity(user) => (Some(Sanitizer.sanitize(user)), Some(ConfigEntityName.Default))
-      case DefaultUserExplicitClientIdEntity(clientId) => (Some(ConfigEntityName.Default), Some(Sanitizer.sanitize(clientId)))
-      case DefaultUserDefaultClientIdEntity => (Some(ConfigEntityName.Default), Some(ConfigEntityName.Default))
+      case ExplicitUserDefaultClientIdEntity(user) => (Some(Sanitizer.sanitize(user)), Some(ConfigEntityName.DEFAULT))
+      case DefaultUserExplicitClientIdEntity(clientId) => (Some(ConfigEntityName.DEFAULT), Some(Sanitizer.sanitize(clientId)))
+      case DefaultUserDefaultClientIdEntity => (Some(ConfigEntityName.DEFAULT), Some(ConfigEntityName.DEFAULT))
       case IpEntity(_) | DefaultIpEntity => throw new IllegalStateException("Should not see IP quota entities here")
     }
 

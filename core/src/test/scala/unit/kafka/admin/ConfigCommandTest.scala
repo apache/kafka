@@ -20,7 +20,6 @@ import java.util
 import java.util.Properties
 import kafka.admin.ConfigCommand.ConfigCommandOptions
 import kafka.cluster.Broker
-import kafka.server.{ConfigEntityName, ConfigType}
 import kafka.utils.{Exit, Logging, TestUtils}
 import kafka.zk.{AdminZkClient, KafkaZkClient}
 import org.apache.kafka.clients.admin._
@@ -31,6 +30,7 @@ import org.apache.kafka.common.internals.KafkaFutureImpl
 import org.apache.kafka.common.quota.{ClientQuotaAlteration, ClientQuotaEntity, ClientQuotaFilter, ClientQuotaFilterComponent}
 import org.apache.kafka.common.security.scram.internals.ScramCredentialUtils
 import org.apache.kafka.common.utils.Sanitizer
+import org.apache.kafka.server.config.{ConfigEntityName, ConfigType}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
 import org.mockito.ArgumentMatchers.anyString
@@ -387,26 +387,26 @@ class ConfigCommandTest extends Logging {
 
     // zookeeper config only supports "users" and "brokers" entity type
     if (!zkConfig) {
-      testExpectedEntityTypeNames(List(ConfigType.Topic), List("A"), "--entity-type", "topics", "--entity-name", "A")
-      testExpectedEntityTypeNames(List(ConfigType.Ip), List("1.2.3.4"), "--entity-name", "1.2.3.4", "--entity-type", "ips")
-      testExpectedEntityTypeNames(List(ConfigType.User, ConfigType.Client), List("A", ""),
+      testExpectedEntityTypeNames(List(ConfigType.TOPIC), List("A"), "--entity-type", "topics", "--entity-name", "A")
+      testExpectedEntityTypeNames(List(ConfigType.IP), List("1.2.3.4"), "--entity-name", "1.2.3.4", "--entity-type", "ips")
+      testExpectedEntityTypeNames(List(ConfigType.USER, ConfigType.CLIENT), List("A", ""),
         "--entity-type", "users", "--entity-type", "clients", "--entity-name", "A", "--entity-default")
-      testExpectedEntityTypeNames(List(ConfigType.User, ConfigType.Client), List("", "B"),
+      testExpectedEntityTypeNames(List(ConfigType.USER, ConfigType.CLIENT), List("", "B"),
         "--entity-default", "--entity-name", "B", "--entity-type", "users", "--entity-type", "clients")
-      testExpectedEntityTypeNames(List(ConfigType.Topic), List("A"), "--topic", "A")
-      testExpectedEntityTypeNames(List(ConfigType.Ip), List("1.2.3.4"), "--ip", "1.2.3.4")
-      testExpectedEntityTypeNames(List(ConfigType.Client, ConfigType.User), List("B", "A"), "--client", "B", "--user", "A")
-      testExpectedEntityTypeNames(List(ConfigType.Client, ConfigType.User), List("B", ""), "--client", "B", "--user-defaults")
-      testExpectedEntityTypeNames(List(ConfigType.Client, ConfigType.User), List("A"),
+      testExpectedEntityTypeNames(List(ConfigType.TOPIC), List("A"), "--topic", "A")
+      testExpectedEntityTypeNames(List(ConfigType.IP), List("1.2.3.4"), "--ip", "1.2.3.4")
+      testExpectedEntityTypeNames(List(ConfigType.CLIENT, ConfigType.USER), List("B", "A"), "--client", "B", "--user", "A")
+      testExpectedEntityTypeNames(List(ConfigType.CLIENT, ConfigType.USER), List("B", ""), "--client", "B", "--user-defaults")
+      testExpectedEntityTypeNames(List(ConfigType.CLIENT, ConfigType.USER), List("A"),
         "--entity-type", "clients", "--entity-type", "users", "--entity-name", "A")
-      testExpectedEntityTypeNames(List(ConfigType.Topic), List.empty, "--entity-type", "topics")
-      testExpectedEntityTypeNames(List(ConfigType.Ip), List.empty, "--entity-type", "ips")
+      testExpectedEntityTypeNames(List(ConfigType.TOPIC), List.empty, "--entity-type", "topics")
+      testExpectedEntityTypeNames(List(ConfigType.IP), List.empty, "--entity-type", "ips")
     }
 
-    testExpectedEntityTypeNames(List(ConfigType.Broker), List("0"), "--entity-name", "0", "--entity-type", "brokers")
-    testExpectedEntityTypeNames(List(ConfigType.Broker), List("0"), "--broker", "0")
-    testExpectedEntityTypeNames(List(ConfigType.User), List.empty, "--entity-type", "users")
-    testExpectedEntityTypeNames(List(ConfigType.Broker), List.empty, "--entity-type", "brokers")
+    testExpectedEntityTypeNames(List(ConfigType.BROKER), List("0"), "--entity-name", "0", "--entity-type", "brokers")
+    testExpectedEntityTypeNames(List(ConfigType.BROKER), List("0"), "--broker", "0")
+    testExpectedEntityTypeNames(List(ConfigType.USER), List.empty, "--entity-type", "users")
+    testExpectedEntityTypeNames(List(ConfigType.BROKER), List.empty, "--entity-type", "brokers")
   }
 
   @Test
@@ -1003,7 +1003,7 @@ class ConfigCommandTest extends Logging {
   @Test
   def testNoSpecifiedEntityOptionWithDescribeBrokersInZKIsAllowed(): Unit = {
     val optsList = List("--zookeeper", zkConnect,
-      "--entity-type", ConfigType.Broker,
+      "--entity-type", ConfigType.BROKER,
       "--describe"
     )
 
@@ -1013,7 +1013,7 @@ class ConfigCommandTest extends Logging {
   @Test
   def testNoSpecifiedEntityOptionWithDescribeBrokersInBootstrapServerIsAllowed(): Unit = {
     val optsList = List("--bootstrap-server", "localhost:9092",
-      "--entity-type", ConfigType.Broker,
+      "--entity-type", ConfigType.BROKER,
       "--describe"
     )
 
@@ -1023,7 +1023,7 @@ class ConfigCommandTest extends Logging {
   @Test
   def testDescribeAllBrokerConfig(): Unit = {
     val optsList = List("--bootstrap-server", "localhost:9092",
-      "--entity-type", ConfigType.Broker,
+      "--entity-type", ConfigType.BROKER,
       "--entity-name", "1",
       "--describe",
       "--all")
@@ -1034,7 +1034,7 @@ class ConfigCommandTest extends Logging {
   @Test
   def testDescribeAllTopicConfig(): Unit = {
     val optsList = List("--bootstrap-server", "localhost:9092",
-      "--entity-type", ConfigType.Topic,
+      "--entity-type", ConfigType.TOPIC,
       "--entity-name", "foo",
       "--describe",
       "--all")
@@ -1045,7 +1045,7 @@ class ConfigCommandTest extends Logging {
   @Test
   def testDescribeAllBrokerConfigBootstrapServerRequired(): Unit = {
     val optsList = List("--zookeeper", zkConnect,
-      "--entity-type", ConfigType.Broker,
+      "--entity-type", ConfigType.BROKER,
       "--entity-name", "1",
       "--describe",
       "--all")
@@ -1475,7 +1475,7 @@ class ConfigCommandTest extends Logging {
     val clientId = "client-1"
     for (opts <- Seq(describeOpts, alterOpts)) {
       checkEntity("clients", Some(clientId), clientId, opts)
-      checkEntity("clients", Some(""), ConfigEntityName.Default, opts)
+      checkEntity("clients", Some(""), ConfigEntityName.DEFAULT, opts)
     }
     checkEntity("clients", None, "", describeOpts)
     checkInvalidArgs("clients", None, alterOpts)
@@ -1487,7 +1487,7 @@ class ConfigCommandTest extends Logging {
     assertEquals(principal, Sanitizer.desanitize(sanitizedPrincipal))
     for (opts <- Seq(describeOpts, alterOpts)) {
       checkEntity("users", Some(principal), sanitizedPrincipal, opts)
-      checkEntity("users", Some(""), ConfigEntityName.Default, opts)
+      checkEntity("users", Some(""), ConfigEntityName.DEFAULT, opts)
     }
     checkEntity("users", None, "", describeOpts)
     checkInvalidArgs("users", None, alterOpts)
@@ -1497,9 +1497,9 @@ class ConfigCommandTest extends Logging {
     def clientIdOpts(name: String) = Array("--entity-type", "clients", "--entity-name", name)
     for (opts <- Seq(describeOpts, alterOpts)) {
       checkEntity("users", Some(principal), userClient, opts ++ clientIdOpts(clientId))
-      checkEntity("users", Some(principal), sanitizedPrincipal + "/clients/" + ConfigEntityName.Default, opts ++ clientIdOpts(""))
-      checkEntity("users", Some(""), ConfigEntityName.Default + "/clients/" + clientId, describeOpts ++ clientIdOpts(clientId))
-      checkEntity("users", Some(""), ConfigEntityName.Default + "/clients/" + ConfigEntityName.Default, opts ++ clientIdOpts(""))
+      checkEntity("users", Some(principal), sanitizedPrincipal + "/clients/" + ConfigEntityName.DEFAULT, opts ++ clientIdOpts(""))
+      checkEntity("users", Some(""), ConfigEntityName.DEFAULT + "/clients/" + clientId, describeOpts ++ clientIdOpts(clientId))
+      checkEntity("users", Some(""), ConfigEntityName.DEFAULT + "/clients/" + ConfigEntityName.DEFAULT, opts ++ clientIdOpts(""))
     }
     checkEntity("users", Some(principal), sanitizedPrincipal + "/clients", describeOpts ++ Array("--entity-type", "clients"))
     // Both user and client-id must be provided for alter

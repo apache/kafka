@@ -17,8 +17,9 @@
 package org.apache.kafka.coordinator.group.metrics;
 
 import com.yammer.metrics.core.Gauge;
-import com.yammer.metrics.core.MetricName;
 import com.yammer.metrics.core.MetricsRegistry;
+import org.apache.kafka.common.MetricName;
+import org.apache.kafka.common.metrics.Metrics;
 
 import java.util.Set;
 import java.util.TreeSet;
@@ -44,14 +45,19 @@ public class MetricsTestUtils {
         assertEquals(new TreeSet<>(expected), actual);
     }
 
-    static void assertGaugeValue(MetricsRegistry registry, MetricName metricName, long count) {
+    static void assertGaugeValue(MetricsRegistry registry, com.yammer.metrics.core.MetricName metricName, long count) {
         Gauge gauge = (Gauge) registry.allMetrics().get(metricName);
 
         assertEquals(count, (long) gauge.value());
     }
 
-    static MetricName metricName(String type, String name) {
+    static void assertGaugeValue(Metrics metrics, MetricName metricName, long count) {
+        Long metricVal = (Long) metrics.metrics().get(metricName).metricValue();
+        assertEquals(count, metricVal);
+    }
+
+    static com.yammer.metrics.core.MetricName metricName(String type, String name) {
         String mBeanName = String.format("kafka.coordinator.group:type=%s,name=%s", type, name);
-        return new MetricName("kafka.coordinator.group", type, name, null, mBeanName);
+        return new com.yammer.metrics.core.MetricName("kafka.coordinator.group", type, name, null, mBeanName);
     }
 }

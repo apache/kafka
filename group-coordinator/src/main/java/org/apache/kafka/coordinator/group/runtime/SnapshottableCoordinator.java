@@ -17,6 +17,7 @@
 package org.apache.kafka.coordinator.group.runtime;
 
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.requests.TransactionResult;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
@@ -112,6 +113,22 @@ class SnapshottableCoordinator<S extends CoordinatorShard<U>, U> implements Coor
     }
 
     /**
+     * Applies the end transaction marker.
+     *
+     * @param producerId    The producer id.
+     * @param producerEpoch The producer epoch.
+     * @param result        The result of the transaction.
+     */
+    @Override
+    public synchronized void replayEndTransactionMarker(
+        long producerId,
+        short producerEpoch,
+        TransactionResult result
+    ) {
+        coordinator.replayEndTransactionMarker(producerId, producerEpoch, result);
+    }
+
+    /**
      * Updates the last written offset. This also create a new snapshot
      * in the snapshot registry.
      *
@@ -141,6 +158,11 @@ class SnapshottableCoordinator<S extends CoordinatorShard<U>, U> implements Coor
         if (offset < lastCommittedOffset) {
             throw new IllegalStateException("New committed offset " + offset + " of " + tp +
                 " must be greater than or equal to " + lastCommittedOffset + ".");
+        }
+
+        if (offset > lastWrittenOffset) {
+            throw new IllegalStateException("New committed offset " + offset + " of " + tp +
+                "must be less than or equal to " + lastWrittenOffset + ".");
         }
 
         lastCommittedOffset = offset;

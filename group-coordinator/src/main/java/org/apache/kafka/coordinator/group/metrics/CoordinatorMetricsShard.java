@@ -16,58 +16,16 @@
  */
 package org.apache.kafka.coordinator.group.metrics;
 
-import com.yammer.metrics.core.MetricName;
 import org.apache.kafka.common.TopicPartition;
 
 /**
- * A CoordinatorMetricsShard is mapped to a single CoordinatorShard. For gauges, each metrics shard increments/decrements
- * based on the operations performed. Then, {@link CoordinatorMetrics} will perform aggregations across all shards.
+ * A CoordinatorMetricsShard is mapped to a single CoordinatorShard. The metrics shard records sensors that have been
+ * defined in {@link CoordinatorMetrics}. Coordinator specific gauges and related methods are exposed in the
+ * implementation of CoordinatorMetricsShard (i.e. {@link GroupCoordinatorMetricsShard}).
  *
  * For sensors, each shard individually records the observed values.
  */
 public interface CoordinatorMetricsShard {
-    /**
-     * Increment a global gauge.
-     *
-     * @param metricName the metric name.
-     */
-    void incrementGlobalGauge(MetricName metricName);
-
-    /**
-     * Increment a local gauge.
-     *
-     * @param metricName the metric name.
-     */
-    void incrementLocalGauge(MetricName metricName);
-
-    /**
-     * Decrement a global gauge.
-     *
-     * @param metricName the metric name.
-     */
-    void decrementGlobalGauge(MetricName metricName);
-
-    /**
-     * Decrement a local gauge.
-     *
-     * @param metricName the metric name.
-     */
-    void decrementLocalGauge(MetricName metricName);
-
-    /**
-     * Obtain the current value of a global gauge.
-     *
-     * @param metricName the metric name.
-     */
-    long globalGaugeValue(MetricName metricName);
-
-    /**
-     * Obtain the current value of a local gauge.
-     *
-     * @param metricName the metric name.
-     */
-    long localGaugeValue(MetricName metricName);
-
     /**
      * Increment the value of a sensor.
      *

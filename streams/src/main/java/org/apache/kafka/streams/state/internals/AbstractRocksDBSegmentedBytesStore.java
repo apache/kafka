@@ -19,6 +19,7 @@ package org.apache.kafka.streams.state.internals;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.utils.Bytes;
+import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.ProcessorStateException;
@@ -394,10 +395,12 @@ public class AbstractRocksDBSegmentedBytesStore<S extends Segment> implements Se
                     consistencyEnabled,
                     position
                 );
+                WriteBatch batch = null;
                 try {
-                    final WriteBatch batch = writeBatchMap.computeIfAbsent(segment, s -> new WriteBatch());
+                    batch = writeBatchMap.computeIfAbsent(segment, s -> new WriteBatch());
                     segment.addToBatch(new KeyValue<>(record.key(), record.value()), batch);
                 } catch (final RocksDBException e) {
+                    Utils.closeQuietly(batch, "rocksdb write batch");
                     throw new ProcessorStateException("Error restoring batch to store " + this.name, e);
                 }
             }

@@ -31,17 +31,6 @@ elif [[ "$OSNAME" == "OS400" ]]; then
     PIDS=$(ps -Af | grep -i 'kafka\.Kafka' | grep java | grep -v grep | awk '{print $2}')
 else
     PIDS=$(ps ax | grep ' kafka\.Kafka ' | grep java | grep -v grep | awk '{print $1}'| xargs)
-    RelativePathToConfig=$(ps ax | grep ' kafka\.Kafka ' | grep java | grep -v grep | sed 's/--override property=[^ ]*//g' | awk 'NF>1{print $NF}' | xargs)
-    IFS=' ' read -ra RelativePathArray <<< "$RelativePathToConfig"
-    declare -a AbsolutePathToConfigArray
-    for ((i = 0; i < ${#RelativePathArray[@]}; i++)); do
-        AbsolutePathToConfig=$(readlink -f "${RelativePathArray[i]}")
-        if [ -z "$AbsolutePathToConfig" ]; then
-          echo "Can not find the configuration file in the current directory. Please make sure the kafka stop process and the start process are called in the same directory."
-          exit 1
-        fi
-        AbsolutePathToConfigArray+=("$AbsolutePathToConfig")
-    done
 fi
 
 if [ -z "$PIDS" ]; then
@@ -51,14 +40,21 @@ else
   if [ -z "$INPUT_PROCESS_ROLE" ] && [ -z "$INPUT_NID" ]; then
     kill -s $SIGNAL $PIDS
   else
+    RelativePathToConfig=$(ps ax | grep ' kafka\.Kafka ' | grep java | grep -v grep | sed 's/--override property=[^ ]*//g' | awk 'NF>1{print $NF}' | xargs)
     IFS=' ' read -ra PIDSArray <<< "$PIDS"
-    for ((i = 0; i < ${#AbsolutePathToConfigArray[@]}; i++)); do
+    IFS=' ' read -ra RelativePathArray <<< "$RelativePathToConfig"
+    for ((i = 0; i < ${#RelativePathArray[@]}; i++)); do
+        AbsolutePathToConfig=$(readlink -f "${RelativePathArray[i]}")
+        if [ -z "$AbsolutePathToConfig" ] ; then
+          echo "Can not find the configuration file in the current directory. Please make sure the kafka stop process and the start process are called in the same directory."
+          exit 1
+        fi
         if [ -n "$INPUT_NID" ] ; then
             keyword="node.id="
-            NID=$(sed -n "/$keyword/ { s/$keyword//p; q; }" "${AbsolutePathToConfigArray[i]}")
+            NID=$(sed -n "/$keyword/ { s/$keyword//p; q; }" "$AbsolutePathToConfig")
         elif [ -n "$INPUT_PROCESS_ROLE" ] && [ -z "$INPUT_NID" ]; then
             keyword="process.roles="
-            PROCESS_ROLE=$(sed -n "/$keyword/ { s/$keyword//p; q; }" "${AbsolutePathToConfigArray[i]}")
+            PROCESS_ROLE=$(sed -n "/$keyword/ { s/$keyword//p; q; }" "$AbsolutePathToConfig")
         fi
         if [ -n "$INPUT_PROCESS_ROLE" ] && [ "$PROCESS_ROLE" == "$INPUT_PROCESS_ROLE" ] || [ -n "$INPUT_NID" ] && [ "$NID" == "$INPUT_NID" ]; then
           kill -s $SIGNAL ${PIDSArray[i]}

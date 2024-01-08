@@ -20,7 +20,8 @@ import kafka.server.ReplicaManager
 import kafka.utils.Logging
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.NotLeaderOrFollowerException
-import org.apache.kafka.common.record.{FileRecords, MemoryRecords}
+import org.apache.kafka.common.record.{ControlRecordType, FileRecords, MemoryRecords}
+import org.apache.kafka.common.requests.TransactionResult
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.coordinator.group.runtime.CoordinatorLoader.{Deserializer, LoadSummary, UnknownRecordTypeException}
 import org.apache.kafka.coordinator.group.runtime.{CoordinatorLoader, CoordinatorPlayback}
@@ -135,7 +136,22 @@ class CoordinatorLoaderImpl[T](
 
             memoryRecords.batches.forEach { batch =>
               if (batch.isControlBatch) {
-                throw new IllegalStateException("Control batches are not supported yet.")
+                batch.asScala.foreach { record =>
+                  val controlRecord = ControlRecordType.parse(record.key)
+                  if (controlRecord == ControlRecordType.COMMIT) {
+                    coordinator.replayEndTransactionMarker(
+                      batch.producerId,
+                      batch.producerEpoch,
+                      TransactionResult.COMMIT
+                    )
+                  } else if (controlRecord == ControlRecordType.ABORT) {
+                    coordinator.replayEndTransactionMarker(
+                      batch.producerId,
+                      batch.producerEpoch,
+                      TransactionResult.ABORT
+                    )
+                  }
+                }
               } else {
                 batch.asScala.foreach { record =>
                   numRecords = numRecords + 1
@@ -160,18 +176,23 @@ class CoordinatorLoaderImpl[T](
               val currentHighWatermark = log.highWatermark
               if (currentOffset >= currentHighWatermark) {
                 coordinator.updateLastWrittenOffset(currentOffset)
-              }
 
-              if (currentHighWatermark > previousHighWatermark) {
-                coordinator.updateLastCommittedOffset(currentHighWatermark)
-                previousHighWatermark = currentHighWatermark
+                if (currentHighWatermark > previousHighWatermark) {
+                  coordinator.updateLastCommittedOffset(currentHighWatermark)
+                  previousHighWatermark = currentHighWatermark
+                }
               }
             }
             numBytes = numBytes + memoryRecords.sizeInBytes()
           }
+
           val endTimeMs = time.milliseconds()
 
-          if (isRunning.get) {
+          if (logEndOffset == -1L) {
+            future.completeExceptionally(new NotLeaderOrFollowerException(
+              s"Stopped loading records from $tp because the partition is not online or is no longer the leader."
+            ))
+          } else if (isRunning.get) {
             future.complete(new LoadSummary(startTimeMs, endTimeMs, numRecords, numBytes))
           } else {
             future.completeExceptionally(new RuntimeException("Coordinator loader is closed."))
