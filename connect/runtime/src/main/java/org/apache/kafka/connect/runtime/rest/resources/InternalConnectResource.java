@@ -19,9 +19,11 @@ package org.apache.kafka.connect.runtime.rest.resources;
 import org.apache.kafka.connect.runtime.Herder;
 import org.apache.kafka.connect.runtime.rest.RestClient;
 
+import javax.inject.Singleton;
 import javax.ws.rs.Path;
 
 @Path("/connectors")
+@Singleton
 public class InternalConnectResource extends InternalClusterResource {
 
     private final Herder herder;

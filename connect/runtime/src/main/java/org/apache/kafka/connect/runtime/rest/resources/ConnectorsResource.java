@@ -39,6 +39,7 @@ import org.apache.kafka.connect.util.FutureCallback;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import javax.inject.Singleton;
 import javax.servlet.ServletContext;
 import javax.ws.rs.BadRequestException;
 import javax.ws.rs.Consumes;
@@ -70,6 +71,7 @@ import static org.apache.kafka.connect.runtime.rest.HerderRequestHandler.Transla
 @Path("/connectors")
 @Produces(MediaType.APPLICATION_JSON)
 @Consumes(MediaType.APPLICATION_JSON)
+@Singleton
 public class ConnectorsResource implements ConnectResource {
     private static final Logger log = LoggerFactory.getLogger(ConnectorsResource.class);
 

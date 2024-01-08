@@ -20,6 +20,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import org.apache.kafka.connect.runtime.Herder;
 import org.apache.kafka.connect.runtime.rest.entities.ServerInfo;
 
+import javax.inject.Singleton;
 import javax.ws.rs.GET;
 import javax.ws.rs.Path;
 import javax.ws.rs.Produces;
@@ -27,6 +28,7 @@ import javax.ws.rs.core.MediaType;
 
 @Path("/")
 @Produces(MediaType.APPLICATION_JSON)
+@Singleton
 public class RootResource implements ConnectResource {
 
     private final Herder herder;

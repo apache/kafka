@@ -30,6 +30,7 @@ import org.apache.kafka.connect.util.FutureCallback;
 import org.apache.kafka.connect.util.Stage;
 import org.apache.kafka.connect.util.StagedTimeoutException;
 
+import javax.inject.Singleton;
 import javax.ws.rs.BadRequestException;
 import javax.ws.rs.Consumes;
 import javax.ws.rs.DefaultValue;
@@ -56,6 +57,7 @@ import java.util.stream.Collectors;
 @Path("/connector-plugins")
 @Produces(MediaType.APPLICATION_JSON)
 @Consumes(MediaType.APPLICATION_JSON)
+@Singleton
 public class ConnectorPluginsResource implements ConnectResource {
 
     private static final String ALIAS_SUFFIX = "Connector";

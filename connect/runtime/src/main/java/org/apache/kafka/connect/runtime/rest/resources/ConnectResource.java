@@ -16,12 +16,15 @@
  */
 package org.apache.kafka.connect.runtime.rest.resources;
 
+import javax.ws.rs.container.ContainerRequestContext;
+import javax.ws.rs.container.ContainerRequestFilter;
+import java.io.IOException;
 import java.util.concurrent.TimeUnit;
 
 /**
  * This interface defines shared logic for all Connect REST resources.
  */
-public interface ConnectResource {
+public interface ConnectResource extends ContainerRequestFilter {
 
     // TODO: This should not be so long. However, due to potentially long rebalances that may have to wait a full
     // session timeout to complete, during which we cannot serve some requests. Ideally we could reduce this, but
@@ -37,4 +40,12 @@ public interface ConnectResource {
      */
     void requestTimeout(long requestTimeoutMs);
 
+    // Shameful hack: spuriously implement the ContainerRequestFilter interface to keep
+    // Jersey from logging unnecessary warning messages about "A provider ... registered in
+    // SERVER runtime does not implement any provider interfaces applicable in the SERVER
+    // runtime."
+    @Override
+    default void filter(ContainerRequestContext requestContext) throws IOException {
+        // No-op
+    }
 }

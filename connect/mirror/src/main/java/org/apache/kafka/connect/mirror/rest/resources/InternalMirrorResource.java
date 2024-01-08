@@ -23,6 +23,7 @@ import org.apache.kafka.connect.runtime.rest.resources.InternalClusterResource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import javax.inject.Singleton;
 import javax.ws.rs.NotFoundException;
 import javax.ws.rs.Path;
 import javax.ws.rs.core.Context;
@@ -30,6 +31,7 @@ import javax.ws.rs.core.UriInfo;
 import java.util.Map;
 
 @Path("/{source}/{target}/connectors")
+@Singleton
 public class InternalMirrorResource extends InternalClusterResource {
 
     @Context
