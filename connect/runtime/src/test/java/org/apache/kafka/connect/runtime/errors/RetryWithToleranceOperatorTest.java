@@ -123,9 +123,9 @@ public class RetryWithToleranceOperatorTest {
         RetryWithToleranceOperator retryWithToleranceOperator = new RetryWithToleranceOperator(0,
             ERRORS_RETRY_MAX_DELAY_DEFAULT, ALL, SYSTEM, errorHandlingMetrics);
 
-        ProcessingContext context = new ProcessingContext();
+        ProcessingContext context = new ProcessingContext(consumerRecord);
         retryWithToleranceOperator.executeFailed(context, Stage.TASK_PUT,
-            SinkTask.class, consumerRecord, new Throwable());
+            SinkTask.class, new Throwable());
     }
 
     @Test
@@ -133,9 +133,9 @@ public class RetryWithToleranceOperatorTest {
         RetryWithToleranceOperator retryWithToleranceOperator = new RetryWithToleranceOperator(0,
             ERRORS_RETRY_MAX_DELAY_DEFAULT, NONE, SYSTEM, errorHandlingMetrics);
 
-        ProcessingContext context = new ProcessingContext();
+        ProcessingContext context = new ProcessingContext(consumerRecord);
         assertThrows(ConnectException.class, () -> retryWithToleranceOperator.executeFailed(context, Stage.TASK_PUT,
-            SinkTask.class, consumerRecord, new Throwable()));
+            SinkTask.class, new Throwable()));
     }
 
     @Test
@@ -190,7 +190,7 @@ public class RetryWithToleranceOperatorTest {
 
     private void testHandleExceptionInStage(Stage type, Exception ex) {
         RetryWithToleranceOperator retryWithToleranceOperator = setupExecutor();
-        ProcessingContext context = new ProcessingContext();
+        ProcessingContext context = new ProcessingContext(consumerRecord);
         Operation<?> exceptionThrower = () -> {
             throw ex;
         };
@@ -243,7 +243,7 @@ public class RetryWithToleranceOperatorTest {
             });
         }
 
-        ProcessingContext context = new ProcessingContext();
+        ProcessingContext context = new ProcessingContext(consumerRecord);
         String result = retryWithToleranceOperator.execAndHandleError(context, mockOperation, Exception.class);
 
         if (successExpected) {
@@ -265,7 +265,7 @@ public class RetryWithToleranceOperatorTest {
 
         when(mockOperation.call()).thenThrow(new Exception("Test"));
 
-        ProcessingContext context = new ProcessingContext();
+        ProcessingContext context = new ProcessingContext(consumerRecord);
         String result = retryWithToleranceOperator.execAndHandleError(context, mockOperation, Exception.class);
         assertTrue(context.failed());
         assertNull(result);
@@ -302,7 +302,7 @@ public class RetryWithToleranceOperatorTest {
 
         // expect no more calls to exitLatch.await() after retryWithToleranceOperator.triggerStop() is called
 
-        ProcessingContext context = new ProcessingContext();
+        ProcessingContext context = new ProcessingContext(consumerRecord);
         retryWithToleranceOperator.execAndHandleError(context, mockOperation, Exception.class);
         assertTrue(context.failed());
         assertEquals(4500L, time.milliseconds());
@@ -414,7 +414,7 @@ public class RetryWithToleranceOperatorTest {
         List<CompletableFuture<RecordMetadata>> fs = IntStream.range(0, numberOfReports).mapToObj(i -> new CompletableFuture<RecordMetadata>()).collect(Collectors.toList());
         List<ErrorReporter> reporters = IntStream.range(0, numberOfReports).mapToObj(i -> (ErrorReporter) c -> fs.get(i)).collect(Collectors.toList());
         retryWithToleranceOperator.reporters(reporters);
-        ProcessingContext context = new ProcessingContext();
+        ProcessingContext context = new ProcessingContext(consumerRecord);
         Future<Void> result = retryWithToleranceOperator.report(context);
         fs.forEach(f -> {
             assertFalse(result.isDone());

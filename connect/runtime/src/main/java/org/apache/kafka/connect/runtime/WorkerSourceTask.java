@@ -179,7 +179,6 @@ class WorkerSourceTask extends AbstractWorkerSourceTask {
                     context,
                     Stage.KAFKA_PRODUCE,
                     WorkerSourceTask.class,
-                    preTransformRecord,
                     e
             );
             commitTaskRecord(preTransformRecord, null);

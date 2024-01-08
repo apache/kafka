@@ -508,8 +508,7 @@ class WorkerSinkTask extends WorkerTask {
             log.trace("{} Consuming and converting message in topic '{}' partition {} at offset {} and timestamp {}",
                     this, msg.topic(), msg.partition(), msg.offset(), msg.timestamp());
 
-            ProcessingContext context = new ProcessingContext();
-            context.consumerRecord(msg);
+            ProcessingContext context = new ProcessingContext(msg);
 
             SinkRecord transRecord = convertAndTransformRecord(context, msg);
 

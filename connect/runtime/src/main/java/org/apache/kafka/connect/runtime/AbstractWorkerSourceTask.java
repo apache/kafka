@@ -400,8 +400,7 @@ public abstract class AbstractWorkerSourceTask extends WorkerTask {
         final SourceRecordWriteCounter counter =
                 toSend.size() > 0 ? new SourceRecordWriteCounter(toSend.size(), sourceTaskMetricsGroup) : null;
         for (final SourceRecord preTransformRecord : toSend) {
-            ProcessingContext context = new ProcessingContext();
-            context.sourceRecord(preTransformRecord);
+            ProcessingContext context = new ProcessingContext(preTransformRecord);
             final SourceRecord record = transformationChain.apply(context, preTransformRecord);
             final ProducerRecord<byte[], byte[]> producerRecord = convertTransformedRecord(context, record);
             if (producerRecord == null || context.failed()) {

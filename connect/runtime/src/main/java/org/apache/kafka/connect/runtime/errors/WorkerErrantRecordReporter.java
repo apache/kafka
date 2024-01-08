@@ -107,11 +107,10 @@ public class WorkerErrantRecordReporter implements ErrantRecordReporter {
             ConsumerRecord<byte[], byte[]> consumerRecord = new ConsumerRecord<>(record.topic(), record.kafkaPartition(),
                 record.kafkaOffset(), record.timestamp(), record.timestampType(), keyLength,
                 valLength, key, value, headers, Optional.empty());
-            context = new ProcessingContext();
-            context.consumerRecord(consumerRecord);
+            context = new ProcessingContext(consumerRecord);
         }
 
-        Future<Void> future = retryWithToleranceOperator.executeFailed(context, Stage.TASK_PUT, SinkTask.class, context.consumerRecord(), error);
+        Future<Void> future = retryWithToleranceOperator.executeFailed(context, Stage.TASK_PUT, SinkTask.class, error);
         taskPutException.compareAndSet(null, error);
 
         if (!future.isDone()) {

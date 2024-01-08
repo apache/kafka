@@ -239,8 +239,8 @@ public class ErrorReporterTest {
         props.put(SinkConnectorConfig.DLQ_CONTEXT_HEADERS_ENABLE_CONFIG, "true");
         DeadLetterQueueReporter deadLetterQueueReporter = new DeadLetterQueueReporter(producer, config(props), TASK_ID, errorHandlingMetrics);
 
-        ProcessingContext context = new ProcessingContext();
-        context.consumerRecord(new ConsumerRecord<>("source-topic", 7, 10, "source-key".getBytes(), "source-value".getBytes()));
+        ConsumerRecord<byte[], byte[]> consumerRecord = new ConsumerRecord<>("source-topic", 7, 10, "source-key".getBytes(), "source-value".getBytes());
+        ProcessingContext context = new ProcessingContext(consumerRecord);
         context.currentContext(Stage.TRANSFORMATION, Transformation.class);
         context.error(new ConnectException("Test Exception"));
 
@@ -267,8 +267,8 @@ public class ErrorReporterTest {
         props.put(SinkConnectorConfig.DLQ_CONTEXT_HEADERS_ENABLE_CONFIG, "true");
         DeadLetterQueueReporter deadLetterQueueReporter = new DeadLetterQueueReporter(producer, config(props), TASK_ID, errorHandlingMetrics);
 
-        ProcessingContext context = new ProcessingContext();
-        context.consumerRecord(new ConsumerRecord<>("source-topic", 7, 10, "source-key".getBytes(), "source-value".getBytes()));
+        ConsumerRecord<byte[], byte[]> consumerRecord = new ConsumerRecord<>("source-topic", 7, 10, "source-key".getBytes(), "source-value".getBytes());
+        ProcessingContext context = new ProcessingContext(consumerRecord);
         context.currentContext(Stage.TRANSFORMATION, Transformation.class);
         context.error(new NullPointerException());
 
@@ -295,8 +295,8 @@ public class ErrorReporterTest {
         props.put(SinkConnectorConfig.DLQ_CONTEXT_HEADERS_ENABLE_CONFIG, "true");
         DeadLetterQueueReporter deadLetterQueueReporter = new DeadLetterQueueReporter(producer, config(props), TASK_ID, errorHandlingMetrics);
 
-        ProcessingContext context = new ProcessingContext();
-        context.consumerRecord(new ConsumerRecord<>("source-topic", 7, 10, "source-key".getBytes(), "source-value".getBytes()));
+        ConsumerRecord<byte[], byte[]> consumerRecord = new ConsumerRecord<>("source-topic", 7, 10, "source-key".getBytes(), "source-value".getBytes());
+        ProcessingContext context = new ProcessingContext(consumerRecord);
         context.currentContext(Stage.TRANSFORMATION, Transformation.class);
         context.error(new ConnectException("Test Exception"));
 
@@ -320,8 +320,8 @@ public class ErrorReporterTest {
     }
 
     private ProcessingContext processingContext() {
-        ProcessingContext context = new ProcessingContext();
-        context.consumerRecord(new ConsumerRecord<>(TOPIC, 5, 100, new byte[]{'a', 'b'}, new byte[]{'x'}));
+        ConsumerRecord<byte[], byte[]> consumerRecord = new ConsumerRecord<>(TOPIC, 5, 100, new byte[]{'a', 'b'}, new byte[]{'x'});
+        ProcessingContext context = new ProcessingContext(consumerRecord);
         context.currentContext(Stage.KEY_CONVERTER, JsonConverter.class);
         return context;
     }

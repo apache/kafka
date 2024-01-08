@@ -16,14 +16,12 @@
  */
 package org.apache.kafka.connect.runtime.errors;
 
-import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.errors.RetriableException;
 import org.apache.kafka.connect.runtime.ConnectorConfig;
-import org.apache.kafka.connect.source.SourceRecord;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -105,12 +103,8 @@ public class RetryWithToleranceOperator implements AutoCloseable {
         this.reporters = Collections.emptyList();
     }
 
-    public synchronized Future<Void> executeFailed(ProcessingContext context, Stage stage, Class<?> executingClass,
-                                      ConsumerRecord<byte[], byte[]> consumerRecord,
-                                      Throwable error) {
-
+    public Future<Void> executeFailed(ProcessingContext context, Stage stage, Class<?> executingClass, Throwable error) {
         markAsFailed();
-        context.consumerRecord(consumerRecord);
         context.currentContext(stage, executingClass);
         context.error(error);
         errorHandlingMetrics.recordFailure();
@@ -118,23 +112,6 @@ public class RetryWithToleranceOperator implements AutoCloseable {
         if (!withinToleranceLimits()) {
             errorHandlingMetrics.recordError();
             throw new ConnectException("Tolerance exceeded in error handler", error);
-        }
-        return errantRecordFuture;
-    }
-
-    public synchronized Future<Void> executeFailed(ProcessingContext context, Stage stage, Class<?> executingClass,
-                                                   SourceRecord sourceRecord,
-                                                   Throwable error) {
-
-        markAsFailed();
-        context.sourceRecord(sourceRecord);
-        context.currentContext(stage, executingClass);
-        context.error(error);
-        errorHandlingMetrics.recordFailure();
-        Future<Void> errantRecordFuture = report(context);
-        if (!withinToleranceLimits()) {
-            errorHandlingMetrics.recordError();
-            throw new ConnectException("Tolerance exceeded in Source Worker error handler", error);
         }
         return errantRecordFuture;
     }

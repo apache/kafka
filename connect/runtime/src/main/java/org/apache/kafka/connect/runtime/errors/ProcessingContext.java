@@ -21,13 +21,14 @@ import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.connect.source.SourceRecord;
 
 /**
- * Contains all the metadata related to the currently evaluating operation. Only one instance of this class is meant
- * to exist per task in a JVM.
+ * Contains all the metadata related to the currently evaluating operation, and associated with a particular
+ * sink or source record from the consumer or task, respectively. This class is not thread safe, and so once an
+ * instance is passed to a new thread, it should no longer be accessed by the previous thread.
  */
 public class ProcessingContext {
 
-    private ConsumerRecord<byte[], byte[]> consumedMessage;
-    private SourceRecord sourceRecord;
+    private final ConsumerRecord<byte[], byte[]> consumedMessage;
+    private final SourceRecord sourceRecord;
 
     /**
      * The following fields need to be reset every time a new record is seen.
@@ -38,24 +39,14 @@ public class ProcessingContext {
     private int attempt;
     private Throwable error;
 
-    /**
-     * Reset the internal fields before executing operations on a new record.
-     */
-    private void reset() {
-        attempt = 0;
-        position = null;
-        klass = null;
-        error = null;
+    public ProcessingContext(SourceRecord sourceRecord) {
+        this.consumedMessage = null;
+        this.sourceRecord = sourceRecord;
     }
 
-    /**
-     * Set the record consumed from Kafka in a sink connector.
-     *
-     * @param consumedMessage the record
-     */
-    public void consumerRecord(ConsumerRecord<byte[], byte[]> consumedMessage) {
-        this.consumedMessage = consumedMessage;
-        reset();
+    public ProcessingContext(ConsumerRecord<byte[], byte[]> consumerRecord) {
+        this.consumedMessage = consumerRecord;
+        this.sourceRecord = null;
     }
 
     /**
@@ -70,16 +61,6 @@ public class ProcessingContext {
      */
     public SourceRecord sourceRecord() {
         return sourceRecord;
-    }
-
-    /**
-     * Set the source record being processed in the connect pipeline.
-     *
-     * @param record the source record
-     */
-    public void sourceRecord(SourceRecord record) {
-        this.sourceRecord = record;
-        reset();
     }
 
     /**
