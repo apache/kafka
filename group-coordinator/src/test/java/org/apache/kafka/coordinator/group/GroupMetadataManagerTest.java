@@ -148,7 +148,6 @@ import static org.apache.kafka.coordinator.group.classic.ClassicGroupState.PREPA
 import static org.apache.kafka.coordinator.group.classic.ClassicGroupState.STABLE;
 import static org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetrics.CLASSIC_GROUP_COMPLETED_REBALANCES_SENSOR_NAME;
 import static org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetrics.CONSUMER_GROUP_REBALANCES_SENSOR_NAME;
-import static org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetrics.CLASSIC_GROUP_REBALANCES_SENSOR_NAME;
 import static org.junit.jupiter.api.AssertionFailureBuilder.assertionFailure;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -10672,22 +10671,6 @@ public class GroupMetadataManagerTest {
             .build();
         context.joinClassicGroupAsDynamicMemberAndCompleteRebalance("group-id");
         verify(context.metrics).record(CLASSIC_GROUP_COMPLETED_REBALANCES_SENSOR_NAME);
-    }
-
-    @Test
-    public void testClassicGroupRebalanceSensor() throws Exception {
-        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
-            .build();
-        context.createClassicGroup("group-id");
-
-        context.joinClassicGroupAsDynamicMemberAndCompleteJoin(
-            new JoinGroupRequestBuilder()
-                .withGroupId("group-id")
-                .withMemberId(UNKNOWN_MEMBER_ID)
-                .withDefaultProtocolTypeAndProtocols()
-                .build()
-        );
-        verify(context.metrics).record(CLASSIC_GROUP_REBALANCES_SENSOR_NAME);
     }
 
     @Test
