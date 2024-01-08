@@ -17,7 +17,6 @@
 
 package org.apache.kafka.connect.runtime.errors;
 
-import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.connect.errors.ConnectException;
@@ -39,7 +38,6 @@ import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -50,6 +48,7 @@ public class WorkerErrantRecordReporterTest {
 
     @Mock private Converter converter;
     @Mock private HeaderConverter headerConverter;
+    @Mock private ProcessingContext context;
     @Mock private InternalSinkRecord record;
     @Mock private ErrorHandlingMetrics errorHandlingMetrics;
     @Mock private ErrorReporter errorReporter;
@@ -82,8 +81,7 @@ public class WorkerErrantRecordReporterTest {
     private void testReport(boolean errorsTolerated) {
         initializeReporter(errorsTolerated);
         when(errorReporter.report(any())).thenReturn(CompletableFuture.completedFuture(null));
-        @SuppressWarnings("unchecked") ConsumerRecord<byte[], byte[]> consumerRecord = mock(ConsumerRecord.class);
-        when(record.originalRecord()).thenReturn(consumerRecord);
+        when(record.context()).thenReturn(context);
 
         if (errorsTolerated) {
             reporter.report(record, new Throwable());

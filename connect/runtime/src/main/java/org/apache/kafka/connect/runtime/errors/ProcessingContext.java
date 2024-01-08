@@ -24,7 +24,7 @@ import org.apache.kafka.connect.source.SourceRecord;
  * Contains all the metadata related to the currently evaluating operation. Only one instance of this class is meant
  * to exist per task in a JVM.
  */
-class ProcessingContext {
+public class ProcessingContext {
 
     private ConsumerRecord<byte[], byte[]> consumedMessage;
     private SourceRecord sourceRecord;
