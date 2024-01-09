@@ -163,7 +163,6 @@ public class ConnectorsResourceTest {
     public void setUp() throws NoSuchMethodException {
         when(serverConfig.topicTrackingEnabled()).thenReturn(true);
         when(serverConfig.topicTrackingResetEnabled()).thenReturn(true);
-        RestRequestTimeout requestTimeout = () -> RestServer.DEFAULT_REST_REQUEST_TIMEOUT_MS;
         connectorsResource = new ConnectorsResource(herder, serverConfig, restClient, REQUEST_TIMEOUT);
         forward = mock(UriInfo.class);
         MultivaluedMap<String, String> queryParams = new MultivaluedHashMap<>();

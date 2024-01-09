@@ -218,42 +218,30 @@ public abstract class RestServer {
     protected final void initializeResources() {
         log.info("Initializing REST resources");
 
-        ResourceConfig resourceConfig = new ResourceConfig();
-        resourceConfig.register(new JacksonJsonProvider());
-        resourceConfig.register(requestTimeout.binder());
-
+        ResourceConfig resourceConfig = newResourceConfig();
         Collection<Class<?>> regularResources = regularResources();
         regularResources.forEach(resourceConfig::register);
-
-        resourceConfig.register(ConnectExceptionMapper.class);
-        resourceConfig.property(ServerProperties.WADL_FEATURE_DISABLE, true);
-
         configureRegularResources(resourceConfig);
 
         List<String> adminListeners = config.adminListeners();
         ResourceConfig adminResourceConfig;
-        if (adminListeners == null) {
-            log.info("Adding admin resources to main listener");
-            adminResourceConfig = resourceConfig;
-            Collection<Class<?>> adminResources = adminResources();
-            adminResources.forEach(adminResourceConfig::register);
-            configureAdminResources(adminResourceConfig);
-        } else if (adminListeners.size() > 0) {
-            // TODO: we need to check if these listeners are same as 'listeners'
-            // TODO: the following code assumes that they are different
-            log.info("Adding admin resources to admin listener");
-            adminResourceConfig = new ResourceConfig();
-            adminResourceConfig.register(requestTimeout.binder());
-            adminResourceConfig.register(new JacksonJsonProvider());
-            Collection<Class<?>> adminResources = adminResources();
-            adminResources.forEach(adminResourceConfig::register);
-            adminResourceConfig.register(ConnectExceptionMapper.class);
-            adminResourceConfig.property(ServerProperties.WADL_FEATURE_DISABLE, true);
-            configureAdminResources(adminResourceConfig);
-        } else {
+        if (adminListeners != null && adminListeners.isEmpty()) {
             log.info("Skipping adding admin resources");
             // set up adminResource but add no handlers to it
             adminResourceConfig = resourceConfig;
+        } else {
+            if (adminListeners == null) {
+                log.info("Adding admin resources to main listener");
+                adminResourceConfig = resourceConfig;
+            } else {
+                // TODO: we need to check if these listeners are same as 'listeners'
+                // TODO: the following code assumes that they are different
+                log.info("Adding admin resources to admin listener");
+                adminResourceConfig = newResourceConfig();
+            }
+            Collection<Class<?>> adminResources = adminResources();
+            adminResources.forEach(adminResourceConfig::register);
+            configureAdminResources(adminResourceConfig);
         }
 
         ServletContainer servletContainer = new ServletContainer(resourceConfig);
@@ -309,6 +297,15 @@ public abstract class RestServer {
         }
 
         log.info("REST resources initialized; server is started and ready to handle requests");
+    }
+
+    private ResourceConfig newResourceConfig() {
+        ResourceConfig result = new ResourceConfig();
+        result.register(new JacksonJsonProvider());
+        result.register(requestTimeout.binder());
+        result.register(ConnectExceptionMapper.class);
+        result.property(ServerProperties.WADL_FEATURE_DISABLE, true);
+        return result;
     }
 
     /**
