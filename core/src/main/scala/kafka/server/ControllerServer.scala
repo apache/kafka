@@ -27,7 +27,7 @@ import kafka.server.QuotaFactory.QuotaManagers
 
 import scala.collection.immutable
 import kafka.server.metadata.{AclPublisher, ClientQuotaMetadataManager, DelegationTokenPublisher, DynamicClientQuotaPublisher, DynamicConfigPublisher, KRaftMetadataCache, KRaftMetadataCachePublisher, ScramPublisher}
-import kafka.utils.{CoreUtils, Logging, PasswordEncoder}
+import kafka.utils.{CoreUtils, Logging}
 import kafka.zk.{KafkaZkClient, ZkMigrationClient}
 import org.apache.kafka.common.message.ApiMessageType.ListenerType
 import org.apache.kafka.common.network.ListenerName
@@ -52,6 +52,7 @@ import org.apache.kafka.server.metrics.{KafkaMetricsGroup, KafkaYammerMetrics}
 import org.apache.kafka.server.network.{EndpointReadyFutures, KafkaAuthorizerServerInfo}
 import org.apache.kafka.server.policy.{AlterConfigPolicy, CreateTopicPolicy}
 import org.apache.kafka.server.util.{Deadline, FutureUtils}
+import org.apache.kafka.utils.PasswordEncoder
 
 import java.util
 import java.util.{Optional, OptionalLong}
@@ -281,11 +282,11 @@ class ControllerServer(
         val zkClient = KafkaZkClient.createZkClient("KRaft Migration", time, config, KafkaServer.zkClientConfigFromKafkaConfig(config))
         val zkConfigEncoder = config.passwordEncoderSecret match {
           case Some(secret) => PasswordEncoder.encrypting(secret,
-            config.passwordEncoderKeyFactoryAlgorithm,
+            config.passwordEncoderKeyFactoryAlgorithm.getOrElse(null),
             config.passwordEncoderCipherAlgorithm,
             config.passwordEncoderKeyLength,
             config.passwordEncoderIterations)
-          case None => PasswordEncoder.noop()
+          case None => PasswordEncoder.NO_OP_PASSWORD_ENCODER
         }
         val migrationClient = ZkMigrationClient(zkClient, zkConfigEncoder)
         val propagator: LegacyPropagator = new MigrationPropagator(config.nodeId, config)

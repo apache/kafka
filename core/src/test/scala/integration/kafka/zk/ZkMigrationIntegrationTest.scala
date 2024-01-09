@@ -23,7 +23,7 @@ import kafka.test.annotation.{AutoStart, ClusterConfigProperty, ClusterTemplate,
 import kafka.test.junit.ClusterTestExtensions
 import kafka.test.junit.ZkClusterInvocationContext.ZkClusterInstance
 import kafka.testkit.{KafkaClusterTestKit, TestKitNodes}
-import kafka.utils.{PasswordEncoder, TestUtils}
+import kafka.utils.TestUtils
 import org.apache.kafka.clients.ClientResponse
 import org.apache.kafka.clients.admin._
 import org.apache.kafka.common.{TopicPartition, Uuid}
@@ -48,6 +48,7 @@ import org.apache.kafka.raft.RaftConfig
 import org.apache.kafka.server.ControllerRequestCompletionHandler
 import org.apache.kafka.server.common.{ApiMessageAndVersion, MetadataVersion, ProducerIdsBlock}
 import org.apache.kafka.server.config.ConfigType
+import org.apache.kafka.utils.PasswordEncoder
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertNotEquals, assertNotNull, assertTrue, fail}
 import org.junit.jupiter.api.{Assumptions, Timeout}
 import org.junit.jupiter.api.extension.ExtendWith
@@ -139,7 +140,7 @@ class ZkMigrationIntegrationTest {
 
     val underlying = clusterInstance.asInstanceOf[ZkClusterInstance].getUnderlying()
     val zkClient = underlying.zkClient
-    val migrationClient = ZkMigrationClient(zkClient, PasswordEncoder.noop())
+    val migrationClient = ZkMigrationClient(zkClient, PasswordEncoder.NO_OP_PASSWORD_ENCODER)
     val verifier = new MetadataDeltaVerifier()
     migrationClient.readAllMetadata(batch => verifier.accept(batch), _ => { })
     verifier.verify { image =>
@@ -242,11 +243,11 @@ class ZkMigrationIntegrationTest {
     val zkConfigEncoder = kafkaConfig.passwordEncoderSecret match {
       case Some(secret) =>
         PasswordEncoder.encrypting(secret,
-          kafkaConfig.passwordEncoderKeyFactoryAlgorithm,
+          kafkaConfig.passwordEncoderKeyFactoryAlgorithm.getOrElse(null),
           kafkaConfig.passwordEncoderCipherAlgorithm,
           kafkaConfig.passwordEncoderKeyLength,
           kafkaConfig.passwordEncoderIterations)
-      case None => PasswordEncoder.noop()
+      case None => PasswordEncoder.NO_OP_PASSWORD_ENCODER
     }
 
     val migrationClient = ZkMigrationClient(zkClient, zkConfigEncoder)

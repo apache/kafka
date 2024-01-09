@@ -65,6 +65,7 @@ import org.apache.kafka.server.record.BrokerCompressionType
 import org.apache.kafka.server.util.ShutdownableThread
 import org.apache.kafka.storage.internals.log.{CleanerConfig, LogConfig}
 import org.apache.kafka.test.{TestSslUtils, TestUtils => JTestUtils}
+import org.apache.kafka.utils.PasswordEncoder
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Disabled, Test, TestInfo}
 import org.junit.jupiter.params.ParameterizedTest
@@ -1626,7 +1627,7 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
   private def createPasswordEncoder(config: KafkaConfig, secret: Option[Password]): PasswordEncoder = {
     val encoderSecret = secret.getOrElse(throw new IllegalStateException("Password encoder secret not configured"))
     PasswordEncoder.encrypting(encoderSecret,
-      config.passwordEncoderKeyFactoryAlgorithm,
+      config.passwordEncoderKeyFactoryAlgorithm.getOrElse(null),
       config.passwordEncoderCipherAlgorithm,
       config.passwordEncoderKeyLength,
       config.passwordEncoderIterations)
