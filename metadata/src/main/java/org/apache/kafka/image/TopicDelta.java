@@ -120,10 +120,12 @@ public final class TopicDelta {
      * Find the partitions that have change based on the replica given.
      *
      * The changes identified are:
-     *   1. partitions for which the broker is not a replica anymore
-     *   2. partitions for which the broker is now a leader (leader epoch bump on the leader)
-     *   3. partitions for which the isr or replicas change if the broker is a leader (partition epoch bump on the leader)
-     *   4. partitions for which the broker is now a follower or follower with isr or replica updates (partition epoch bump on follower)
+     *   1. deletes: partitions for which the broker is not a replica anymore
+     *   2. electedLeaders: partitions for which the broker is now a leader (leader epoch bump on the leader)
+     *   3. leaders: partitions for which the isr or replicas change if the broker is a leader (partition epoch bump on the leader)
+     *   4. followers: partitions for which the broker is now a follower or follower with isr or replica updates (partition epoch bump on follower)
+     *
+     * Leader epoch bumps are a strict subset of all partition epoch bumps, so all partitions in electedLeaders will be in leaders.
      *
      * @param brokerId the broker id
      * @return the list of partitions which the broker should remove, become leader, become/update leader, or become/update follower.
@@ -131,7 +133,7 @@ public final class TopicDelta {
     public LocalReplicaChanges localChanges(int brokerId) {
         Set<TopicPartition> deletes = new HashSet<>();
         Map<TopicPartition, LocalReplicaChanges.PartitionInfo> electedLeaders = new HashMap<>();
-        Map<TopicPartition, LocalReplicaChanges.PartitionInfo> updatedLeaders = new HashMap<>();
+        Map<TopicPartition, LocalReplicaChanges.PartitionInfo> leaders = new HashMap<>();
         Map<TopicPartition, LocalReplicaChanges.PartitionInfo> followers = new HashMap<>();
         Map<String, Uuid> topicIds = new HashMap<>();
         Map<TopicIdPartition, Uuid> directoryIds = new HashMap<>();
@@ -147,7 +149,7 @@ public final class TopicDelta {
                 if (prevPartition == null || prevPartition.partitionEpoch != entry.getValue().partitionEpoch) {
                     TopicPartition tp = new TopicPartition(name(), entry.getKey());
                     LocalReplicaChanges.PartitionInfo partitionInfo = new LocalReplicaChanges.PartitionInfo(id(), entry.getValue());
-                    updatedLeaders.put(tp, partitionInfo);
+                    leaders.put(tp, partitionInfo);
                     if (prevPartition == null || prevPartition.leaderEpoch != entry.getValue().leaderEpoch) {
                         electedLeaders.put(tp, partitionInfo);
                     }
@@ -184,7 +186,7 @@ public final class TopicDelta {
             }
         }
 
-        return new LocalReplicaChanges(deletes, electedLeaders, updatedLeaders, followers, topicIds, directoryIds);
+        return new LocalReplicaChanges(deletes, electedLeaders, leaders, followers, topicIds, directoryIds);
     }
 
     @Override

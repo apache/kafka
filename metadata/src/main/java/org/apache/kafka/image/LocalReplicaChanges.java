@@ -38,14 +38,14 @@ public final class LocalReplicaChanges {
         Set<TopicPartition> deletes,
         Map<TopicPartition, PartitionInfo> electedLeaders,
         Map<TopicPartition, PartitionInfo> updatedLeaders,
-        Map<TopicPartition, PartitionInfo> followers,
+        Map<TopicPartition, PartitionInfo> updatedFollowers,
         Map<String, Uuid> topicIds,
         Map<TopicIdPartition, Uuid> directoryIds
     ) {
         this.deletes = deletes;
         this.electedLeaders = electedLeaders;
         this.updatedLeaders = updatedLeaders;
-        this.followers = followers;
+        this.followers = updatedFollowers;
         this.topicIds = topicIds;
         this.directoryIds = directoryIds;
     }
