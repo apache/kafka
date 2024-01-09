@@ -25,7 +25,6 @@ import kafka.coordinator.group.OffsetConfig
 import kafka.coordinator.transaction.{TransactionLog, TransactionStateManager}
 import kafka.security.authorizer.AuthorizerUtils
 import kafka.server.KafkaConfig.{ControllerListenerNamesProp, ListenerSecurityProtocolMapProp}
-import kafka.server.KafkaRaftServer.{BrokerRole, ControllerRole, ProcessRole}
 import kafka.utils.CoreUtils.parseCsvList
 import kafka.utils.{CoreUtils, Logging}
 import kafka.utils.Implicits._
@@ -45,6 +44,7 @@ import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.coordinator.group.Group.GroupType
 import org.apache.kafka.coordinator.group.assignor.{PartitionAssignor, RangeAssignor, UniformAssignor}
 import org.apache.kafka.raft.RaftConfig
+import org.apache.kafka.server.ProcessRole
 import org.apache.kafka.server.authorizer.Authorizer
 import org.apache.kafka.server.common.{MetadataVersion, MetadataVersionValidator}
 import org.apache.kafka.server.common.MetadataVersion._
@@ -1771,8 +1771,8 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
 
   private def parseProcessRoles(): Set[ProcessRole] = {
     val roles = getList(KafkaConfig.ProcessRolesProp).asScala.map {
-      case "broker" => BrokerRole
-      case "controller" => ControllerRole
+      case "broker" => ProcessRole.BrokerRole
+      case "controller" => ProcessRole.ControllerRole
       case role => throw new ConfigException(s"Unknown process role '$role'" +
         " (only 'broker' and 'controller' are allowed roles)")
     }
@@ -1787,7 +1787,7 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
   }
 
   def isKRaftCombinedMode: Boolean = {
-    processRoles == Set(BrokerRole, ControllerRole)
+    processRoles == Set(ProcessRole.BrokerRole, ProcessRole.ControllerRole)
   }
 
   def metadataLogDir: String = {
@@ -2362,9 +2362,9 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
     def validateAdvertisedListenersNonEmptyForBroker(): Unit = {
       require(advertisedListenerNames.nonEmpty,
         "There must be at least one advertised listener." + (
-          if (processRoles.contains(BrokerRole)) s" Perhaps all listeners appear in $ControllerListenerNamesProp?" else ""))
+          if (processRoles.contains(ProcessRole.BrokerRole)) s" Perhaps all listeners appear in $ControllerListenerNamesProp?" else ""))
     }
-    if (processRoles == Set(BrokerRole)) {
+    if (processRoles == Set(ProcessRole.BrokerRole)) {
       // KRaft broker-only
       validateNonEmptyQuorumVotersForKRaft()
       validateControlPlaneListenerEmptyForKRaft()
@@ -2391,7 +2391,7 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
         warn(s"${KafkaConfig.ControllerListenerNamesProp} has multiple entries; only the first will be used since ${KafkaConfig.ProcessRolesProp}=broker: ${controllerListenerNames.asJava}")
       }
       validateAdvertisedListenersNonEmptyForBroker()
-    } else if (processRoles == Set(ControllerRole)) {
+    } else if (processRoles == Set(ProcessRole.ControllerRole)) {
       // KRaft controller-only
       validateNonEmptyQuorumVotersForKRaft()
       validateControlPlaneListenerEmptyForKRaft()
@@ -2439,7 +2439,7 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
     }
 
     val listenerNames = listeners.map(_.listenerName).toSet
-    if (processRoles.isEmpty || processRoles.contains(BrokerRole)) {
+    if (processRoles.isEmpty || processRoles.contains(ProcessRole.BrokerRole)) {
       // validations for all broker setups (i.e. ZooKeeper and KRaft broker-only and KRaft co-located)
       validateAdvertisedListenersNonEmptyForBroker()
       require(advertisedListenerNames.contains(interBrokerListenerName),
