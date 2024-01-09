@@ -16,8 +16,6 @@
  */
 package org.apache.kafka.common.config.provider;
 
-import java.util.HashMap;
-import java.util.Map;
 import org.apache.kafka.common.config.ConfigData;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.test.TestUtils;
@@ -32,7 +30,9 @@ import java.nio.file.Paths;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.Locale;
+import java.util.Map;
 import java.util.ServiceLoader;
 import java.util.Set;
 import java.util.stream.StreamSupport;

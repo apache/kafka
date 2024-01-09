@@ -18,7 +18,7 @@ package org.apache.kafka.common.config.provider;
 
 import org.apache.kafka.common.config.ConfigData;
 import org.apache.kafka.common.config.ConfigException;
-import org.apache.kafka.common.config.internals.ConfigProviderUtils;
+import org.apache.kafka.common.config.internals.AllowedPaths;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -30,7 +30,6 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Enumeration;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
@@ -46,10 +45,10 @@ public class FileConfigProvider implements ConfigProvider {
     public static final String ALLOWED_PATHS_CONFIG = "allowed.paths";
     public static final String ALLOWED_PATHS_DOC = "A comma separated list of paths that this config provider is " +
             "allowed to access. If not set, all paths are allowed.";
-    private List<Path> allowedPaths = null;
+    private AllowedPaths allowedPaths = null;
 
     public void configure(Map<String, ?> configs) {
-        allowedPaths = ConfigProviderUtils.configureAllowedPaths((String) configs.getOrDefault(ALLOWED_PATHS_CONFIG, null));
+        allowedPaths = AllowedPaths.configureAllowedPaths((String) configs.getOrDefault(ALLOWED_PATHS_CONFIG, null));
     }
 
     /**
@@ -64,7 +63,7 @@ public class FileConfigProvider implements ConfigProvider {
             return new ConfigData(data);
         }
 
-        Path filePath = ConfigProviderUtils.pathIsAllowed(Paths.get(path), allowedPaths);
+        Path filePath = allowedPaths.getIfPathIsAllowed(Paths.get(path));
         if (filePath == null) {
             log.warn("The path {} is not allowed to be accessed", path);
             return new ConfigData(data);
@@ -101,7 +100,7 @@ public class FileConfigProvider implements ConfigProvider {
             return new ConfigData(data);
         }
 
-        Path filePath = ConfigProviderUtils.pathIsAllowed(Paths.get(path), allowedPaths);
+        Path filePath = allowedPaths.getIfPathIsAllowed(Paths.get(path));
         if (filePath == null) {
             log.warn("The path {} is not allowed to be accessed", path);
             return new ConfigData(data);
