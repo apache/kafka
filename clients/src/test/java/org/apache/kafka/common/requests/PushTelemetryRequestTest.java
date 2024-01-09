@@ -34,12 +34,14 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 
+import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -55,7 +57,7 @@ public class PushTelemetryRequestTest {
 
     @ParameterizedTest
     @EnumSource(CompressionType.class)
-    public void testMetricsDataCompression(CompressionType compressionType) {
+    public void testMetricsDataCompression(CompressionType compressionType) throws IOException {
         MetricsData metricsData = getMetricsData();
         PushTelemetryRequest req = getPushTelemetryRequest(metricsData, compressionType);
 
@@ -67,18 +69,18 @@ public class PushTelemetryRequestTest {
         assertEquals(metricsData, receivedData);
     }
 
-    private PushTelemetryRequest getPushTelemetryRequest(MetricsData metricsData, CompressionType compressionType) {
+    private PushTelemetryRequest getPushTelemetryRequest(MetricsData metricsData, CompressionType compressionType) throws IOException {
         byte[] data = metricsData.toByteArray();
-        ByteBuffer metricsBuffer = ClientTelemetryUtils.compress(data, compressionType);
+        byte[] compressedData = ClientTelemetryUtils.compress(data, compressionType);
         if (compressionType != CompressionType.NONE) {
-            assertTrue(metricsBuffer.array().length < data.length);
+            assertTrue(compressedData.length < data.length);
         } else {
-            assertEquals(metricsBuffer.array().length, data.length);
+            assertArrayEquals(compressedData, data);
         }
 
         return new PushTelemetryRequest.Builder(
             new PushTelemetryRequestData()
-                .setMetrics(Utils.readBytes(metricsBuffer))
+                .setMetrics(compressedData)
                 .setCompressionType(compressionType.id)).build();
     }
 

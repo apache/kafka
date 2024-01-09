@@ -24,6 +24,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
+import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
@@ -122,14 +123,18 @@ public class ClientTelemetryUtilsTest {
 
     @ParameterizedTest
     @EnumSource(CompressionType.class)
-    public void testCompressDecompress(CompressionType compressionType) {
-        byte[] testString = "test string".getBytes(StandardCharsets.UTF_8);
-        ByteBuffer compressed = ClientTelemetryUtils.compress(testString, compressionType);
+    public void testCompressDecompress(CompressionType compressionType) throws IOException {
+        byte[] testString = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa".getBytes(StandardCharsets.UTF_8);
+        byte[] compressed = ClientTelemetryUtils.compress(testString, compressionType);
         assertNotNull(compressed);
+        if (compressionType != CompressionType.NONE) {
+            assertTrue(compressed.length < testString.length);
+        } else {
+            assertArrayEquals(testString, compressed);
+        }
 
-        ByteBuffer decompressed = ClientTelemetryUtils.decompress(compressed.array(), compressionType);
+        ByteBuffer decompressed = ClientTelemetryUtils.decompress(compressed, compressionType);
         assertNotNull(decompressed);
-
         assertArrayEquals(testString, decompressed.array());
     }
 }
