@@ -71,7 +71,6 @@ public class GroupCoordinatorMetrics extends CoordinatorMetrics implements AutoC
     public static final String OFFSET_EXPIRED_SENSOR_NAME = "OffsetExpired";
     public static final String OFFSET_DELETIONS_SENSOR_NAME = "OffsetDeletions";
     public static final String CLASSIC_GROUP_COMPLETED_REBALANCES_SENSOR_NAME = "CompletedRebalances";
-    public static final String CLASSIC_GROUP_REBALANCES_SENSOR_NAME = "ClassicGroupRebalances";
     public static final String CONSUMER_GROUP_REBALANCES_SENSOR_NAME = "ConsumerGroupRebalances";
 
     private final MetricName classicGroupCountMetricName;
@@ -186,15 +185,6 @@ public class GroupCoordinatorMetrics extends CoordinatorMetrics implements AutoC
                 METRICS_GROUP,
                 "The total number of classic group completed rebalances")));
 
-        Sensor classicGroupPreparingRebalancesSensor = metrics.sensor(CLASSIC_GROUP_REBALANCES_SENSOR_NAME);
-        classicGroupPreparingRebalancesSensor.add(new Meter(
-            metrics.metricName("group-rebalance-rate",
-                METRICS_GROUP,
-                "The rate of classic group preparing rebalances"),
-            metrics.metricName("group-rebalance-count",
-                METRICS_GROUP,
-                "The total number of classic group preparing rebalances")));
-
         Sensor consumerGroupRebalanceSensor = metrics.sensor(CONSUMER_GROUP_REBALANCES_SENSOR_NAME);
         consumerGroupRebalanceSensor.add(new Meter(
             metrics.metricName("consumer-group-rebalance-rate",
@@ -209,7 +199,6 @@ public class GroupCoordinatorMetrics extends CoordinatorMetrics implements AutoC
             Utils.mkEntry(OFFSET_EXPIRED_SENSOR_NAME, offsetExpiredSensor),
             Utils.mkEntry(OFFSET_DELETIONS_SENSOR_NAME, offsetDeletionsSensor),
             Utils.mkEntry(CLASSIC_GROUP_COMPLETED_REBALANCES_SENSOR_NAME, classicGroupCompletedRebalancesSensor),
-            Utils.mkEntry(CLASSIC_GROUP_REBALANCES_SENSOR_NAME, classicGroupPreparingRebalancesSensor),
             Utils.mkEntry(CONSUMER_GROUP_REBALANCES_SENSOR_NAME, consumerGroupRebalanceSensor)
         ));
     }
@@ -261,7 +250,6 @@ public class GroupCoordinatorMetrics extends CoordinatorMetrics implements AutoC
             OFFSET_EXPIRED_SENSOR_NAME,
             OFFSET_DELETIONS_SENSOR_NAME,
             CLASSIC_GROUP_COMPLETED_REBALANCES_SENSOR_NAME,
-            CLASSIC_GROUP_REBALANCES_SENSOR_NAME,
             CONSUMER_GROUP_REBALANCES_SENSOR_NAME
         ).forEach(metrics::removeSensor);
     }
