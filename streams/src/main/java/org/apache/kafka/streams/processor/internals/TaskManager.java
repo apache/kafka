@@ -550,7 +550,16 @@ public class TaskManager {
                         stateUpdater.remove(taskId);
                     }
                 } else if (task.isActive()) {
-                    if (tasks.removePendingActiveTaskToSuspend(taskId) || tasks.removePendingTaskToCloseClean(taskId)) {
+                    if (tasks.removePendingActiveTaskToSuspend(taskId)) {
+                        log.info(
+                            "We were planning on suspending a task {} because it was revoked " +
+                                "The task got reassigned to this thread, so we cancel suspending " +
+                                "of the task, but add it back to the state updater, since we do not know " +
+                                "if it is fully restored yet.",
+                            taskId);
+                        tasks.addPendingTaskToAddBack(taskId);
+                    }
+                    if (tasks.removePendingTaskToCloseClean(taskId)) {
                         log.info(
                             "We were planning on suspending or closing task {} because we lost one of its partitions." +
                             "The task got reassigned to this thread, so cancel closing  of the task, but add it back to the " +
