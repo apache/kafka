@@ -61,9 +61,9 @@ public class MetadataSchemaChecker {
 
         try {
             List<String> localContent = new ArrayList<>();
-            for(String jsonSchema: filesCheckMetadata) {
+            for(String fileName: filesCheckMetadata) {
                 final String dir = System.getProperty("user.dir");
-                String path = dir + "/metadata/src/main/resources/common/metadata/" + jsonSchema;
+                String path = dir + "/metadata/src/main/resources/common/metadata/" + fileName;
                 BufferedReader reader = new BufferedReader(new FileReader(path));
                 for (int i = 0; i < 15; i++) {
                     reader.readLine();
