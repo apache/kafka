@@ -127,7 +127,6 @@ import static org.apache.kafka.coordinator.group.classic.ClassicGroupState.PREPA
 import static org.apache.kafka.coordinator.group.classic.ClassicGroupState.STABLE;
 import static org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetrics.CLASSIC_GROUP_COMPLETED_REBALANCES_SENSOR_NAME;
 import static org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetrics.CONSUMER_GROUP_REBALANCES_SENSOR_NAME;
-import static org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetrics.CLASSIC_GROUP_REBALANCES_SENSOR_NAME;
 
 /**
  * The GroupMetadataManager manages the metadata of all classic and consumer groups. It holds
@@ -2639,7 +2638,6 @@ public class GroupMetadataManager {
         }
 
         group.transitionTo(PREPARING_REBALANCE);
-        metrics.record(CLASSIC_GROUP_REBALANCES_SENSOR_NAME);
 
         log.info("Preparing to rebalance group {} in state {} with old generation {} (reason: {}).",
             group.groupId(), group.currentState(), group.generationId(), reason);
