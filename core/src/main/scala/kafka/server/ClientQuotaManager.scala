@@ -32,6 +32,7 @@ import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.utils.{Sanitizer, Time}
 import org.apache.kafka.server.config.ConfigEntityName
 import org.apache.kafka.server.quota.{ClientQuotaCallback, ClientQuotaEntity, ClientQuotaType}
+import org.apache.kafka.server.config.ClientQuotaManagerConfig
 import org.apache.kafka.server.util.ShutdownableThread
 
 import scala.jdk.CollectionConverters._
@@ -43,23 +44,6 @@ import scala.jdk.CollectionConverters._
  * @param throttleTimeSensor @Sensor that tracks the throttle time
  */
 case class ClientSensors(metricTags: Map[String, String], quotaSensor: Sensor, throttleTimeSensor: Sensor)
-
-/**
- * Configuration settings for quota management
- * @param numQuotaSamples The number of samples to retain in memory
- * @param quotaWindowSizeSeconds The time span of each sample
- *
- */
-case class ClientQuotaManagerConfig(numQuotaSamples: Int =
-                                        ClientQuotaManagerConfig.DefaultNumQuotaSamples,
-                                    quotaWindowSizeSeconds: Int =
-                                        ClientQuotaManagerConfig.DefaultQuotaWindowSizeSeconds)
-
-object ClientQuotaManagerConfig {
-  // Always have 10 whole windows + 1 current window
-  val DefaultNumQuotaSamples = 11
-  val DefaultQuotaWindowSizeSeconds = 1
-}
 
 object QuotaTypes {
   val NoQuotas = 0
