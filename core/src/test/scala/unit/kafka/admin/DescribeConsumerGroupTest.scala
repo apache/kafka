@@ -38,7 +38,7 @@ class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testDescribeNonExistingGroup(quorum: String): Unit = {
-    createOffsetsTopic();
+    createOffsetsTopic()
 
     val missingGroup = "missing.group"
 
@@ -101,7 +101,7 @@ class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
   @ValueSource(strings = Array("zk", "kraft"))
   def testDescribeOffsetsOfNonExistingGroup(quorum: String): Unit = {
     val group = "missing.group"
-    createOffsetsTopic();
+    createOffsetsTopic()
 
     // run one consumer in the group consuming from a single-partition topic
     addConsumerGroupExecutor(numConsumers = 1)
@@ -118,7 +118,7 @@ class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
   @ValueSource(strings = Array("zk", "kraft"))
   def testDescribeMembersOfNonExistingGroup(quorum: String): Unit = {
     val group = "missing.group"
-    createOffsetsTopic();
+    createOffsetsTopic()
 
     // run one consumer in the group consuming from a single-partition topic
     addConsumerGroupExecutor(numConsumers = 1)
@@ -139,7 +139,7 @@ class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
   @ValueSource(strings = Array("zk", "kraft"))
   def testDescribeStateOfNonExistingGroup(quorum: String): Unit = {
     val group = "missing.group"
-    createOffsetsTopic();
+    createOffsetsTopic()
 
     // run one consumer in the group consuming from a single-partition topic
     addConsumerGroupExecutor(numConsumers = 1)
@@ -157,7 +157,7 @@ class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testDescribeExistingGroup(quorum: String): Unit = {
-    createOffsetsTopic();
+    createOffsetsTopic()
 
     for (describeType <- describeTypes) {
       val group = this.group + describeType.mkString("")
@@ -176,7 +176,7 @@ class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testDescribeExistingGroups(quorum: String): Unit = {
-    createOffsetsTopic();
+    createOffsetsTopic()
 
     // Create N single-threaded consumer groups from a single-partition topic
     val groups = (for (describeType <- describeTypes) yield {
@@ -202,7 +202,7 @@ class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testDescribeAllExistingGroups(quorum: String): Unit = {
-    createOffsetsTopic();
+    createOffsetsTopic()
 
     // Create N single-threaded consumer groups from a single-partition topic
     for (describeType <- describeTypes) {
@@ -227,7 +227,7 @@ class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testDescribeOffsetsOfExistingGroup(quorum: String): Unit = {
-    createOffsetsTopic();
+    createOffsetsTopic()
 
     // run one consumer in the group consuming from a single-partition topic
     addConsumerGroupExecutor(numConsumers = 1)
@@ -249,7 +249,7 @@ class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testDescribeMembersOfExistingGroup(quorum: String): Unit = {
-    createOffsetsTopic();
+    createOffsetsTopic()
 
     // run one consumer in the group consuming from a single-partition topic
     addConsumerGroupExecutor(numConsumers = 1)
@@ -283,7 +283,7 @@ class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testDescribeStateOfExistingGroup(quorum: String): Unit = {
-    createOffsetsTopic();
+    createOffsetsTopic()
 
     // run one consumer in the group consuming from a single-partition topic
     addConsumerGroupExecutor(numConsumers = 1)
@@ -303,7 +303,7 @@ class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testDescribeStateOfExistingGroupWithRoundRobinAssignor(quorum: String): Unit = {
-    createOffsetsTopic();
+    createOffsetsTopic()
 
     // run one consumer in the group consuming from a single-partition topic
     addConsumerGroupExecutor(numConsumers = 1, strategy = classOf[RoundRobinAssignor].getName)
@@ -323,7 +323,7 @@ class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testDescribeExistingGroupWithNoMembers(quorum: String): Unit = {
-    createOffsetsTopic();
+    createOffsetsTopic()
 
     for (describeType <- describeTypes) {
       val group = this.group + describeType.mkString("")
@@ -348,7 +348,7 @@ class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testDescribeOffsetsOfExistingGroupWithNoMembers(quorum: String): Unit = {
-    createOffsetsTopic();
+    createOffsetsTopic()
 
     // run one consumer in the group consuming from a single-partition topic
     val executor = addConsumerGroupExecutor(numConsumers = 1)
@@ -367,9 +367,7 @@ class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
     val (result, succeeded) = TestUtils.computeUntilTrue(service.collectGroupOffsets(group)) {
       case (state, assignments) =>
         val testGroupAssignments = assignments.toSeq.flatMap(_.filter(_.group == group))
-
         def assignment = testGroupAssignments.head
-
         state.contains("Empty") &&
           testGroupAssignments.size == 1 &&
           assignment.consumerId.exists(_.trim == ConsumerGroupCommand.MISSING_COLUMN_VALUE) && // the member should be gone
@@ -383,7 +381,7 @@ class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testDescribeMembersOfExistingGroupWithNoMembers(quorum: String): Unit = {
-    createOffsetsTopic();
+    createOffsetsTopic()
 
     // run one consumer in the group consuming from a single-partition topic
     val executor = addConsumerGroupExecutor(numConsumers = 1)
@@ -408,7 +406,7 @@ class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testDescribeStateOfExistingGroupWithNoMembers(quorum: String): Unit = {
-    createOffsetsTopic();
+    createOffsetsTopic()
 
     // run one consumer in the group consuming from a single-partition topic
     val executor = addConsumerGroupExecutor(numConsumers = 1)
@@ -436,7 +434,7 @@ class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testDescribeWithConsumersWithoutAssignedPartitions(quorum: String): Unit = {
-    createOffsetsTopic();
+    createOffsetsTopic()
 
     for (describeType <- describeTypes) {
       val group = this.group + describeType.mkString("")
@@ -456,7 +454,7 @@ class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testDescribeOffsetsWithConsumersWithoutAssignedPartitions(quorum: String): Unit = {
-    createOffsetsTopic();
+    createOffsetsTopic()
 
     // run two consumers in the group consuming from a single-partition topic
     addConsumerGroupExecutor(numConsumers = 2)
@@ -476,7 +474,7 @@ class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testDescribeMembersWithConsumersWithoutAssignedPartitions(quorum: String): Unit = {
-    createOffsetsTopic();
+    createOffsetsTopic()
 
     // run two consumers in the group consuming from a single-partition topic
     addConsumerGroupExecutor(numConsumers = 2)
@@ -502,7 +500,7 @@ class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testDescribeStateWithConsumersWithoutAssignedPartitions(quorum: String): Unit = {
-    createOffsetsTopic();
+    createOffsetsTopic()
 
     // run two consumers in the group consuming from a single-partition topic
     addConsumerGroupExecutor(numConsumers = 2)
@@ -519,7 +517,7 @@ class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testDescribeWithMultiPartitionTopicAndMultipleConsumers(quorum: String): Unit = {
-    createOffsetsTopic();
+    createOffsetsTopic()
 
     val topic2 = "foo2"
     createTopic(topic2, 2, 1)
@@ -542,7 +540,7 @@ class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testDescribeOffsetsWithMultiPartitionTopicAndMultipleConsumers(quorum: String): Unit = {
-    createOffsetsTopic();
+    createOffsetsTopic()
 
     val topic2 = "foo2"
     createTopic(topic2, 2, 1)
@@ -566,7 +564,7 @@ class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testDescribeMembersWithMultiPartitionTopicAndMultipleConsumers(quorum: String): Unit = {
-    createOffsetsTopic();
+    createOffsetsTopic()
 
     val topic2 = "foo2"
     createTopic(topic2, 2, 1)
@@ -594,7 +592,7 @@ class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testDescribeStateWithMultiPartitionTopicAndMultipleConsumers(quorum: String): Unit = {
-    createOffsetsTopic();
+    createOffsetsTopic()
 
     val topic2 = "foo2"
     createTopic(topic2, 2, 1)
@@ -616,7 +614,7 @@ class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
   def testDescribeSimpleConsumerGroup(quorum: String): Unit = {
     // Ensure that the offsets of consumers which don't use group management are still displayed
 
-    createOffsetsTopic();
+    createOffsetsTopic()
     val topic2 = "foo2"
     createTopic(topic2, 2, 1)
     addSimpleGroupExecutor(Seq(new TopicPartition(topic2, 0), new TopicPartition(topic2, 1)))
@@ -711,7 +709,7 @@ class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
   def testDescribeNonOffsetCommitGroup(quorum: String): Unit = {
-    createOffsetsTopic();
+    createOffsetsTopic()
 
     val customProps = new Properties
     // create a consumer group that never commits offsets
