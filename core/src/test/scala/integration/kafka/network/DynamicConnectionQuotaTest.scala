@@ -61,7 +61,7 @@ class DynamicConnectionQuotaTest extends BaseRequestTest {
   @BeforeEach
   override def setUp(testInfo: TestInfo): Unit = {
     super.setUp(testInfo)
-    admin = TestUtils.createAdminClient(brokers, listener)
+    admin = createAdminClient(listener)
     TestUtils.createTopicWithAdmin(admin, topic, brokers, controllerServers)
   }
 
