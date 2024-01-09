@@ -25,7 +25,7 @@ import org.apache.kafka.connect.runtime.rest.errors.BadRequestException;
 import org.apache.log4j.Level;
 import org.slf4j.LoggerFactory;
 
-import javax.inject.Singleton;
+import javax.inject.Inject;
 import javax.ws.rs.Consumes;
 import javax.ws.rs.DefaultValue;
 import javax.ws.rs.GET;
@@ -47,8 +47,7 @@ import java.util.Objects;
 @Path("/admin/loggers")
 @Produces(MediaType.APPLICATION_JSON)
 @Consumes(MediaType.APPLICATION_JSON)
-@Singleton
-public class LoggingResource implements ConnectResource {
+public class LoggingResource {
 
     private static final org.slf4j.Logger log = LoggerFactory.getLogger(LoggingResource.class);
 
@@ -57,13 +56,9 @@ public class LoggingResource implements ConnectResource {
 
     private final Herder herder;
 
+    @Inject
     public LoggingResource(Herder herder) {
         this.herder = herder;
-    }
-
-    @Override
-    public void requestTimeout(long requestTimeoutMs) {
-        // No-op
     }
 
     /**

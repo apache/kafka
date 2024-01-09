@@ -20,7 +20,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import org.apache.kafka.connect.runtime.Herder;
 import org.apache.kafka.connect.runtime.rest.entities.ServerInfo;
 
-import javax.inject.Singleton;
+import javax.inject.Inject;
 import javax.ws.rs.GET;
 import javax.ws.rs.Path;
 import javax.ws.rs.Produces;
@@ -28,18 +28,13 @@ import javax.ws.rs.core.MediaType;
 
 @Path("/")
 @Produces(MediaType.APPLICATION_JSON)
-@Singleton
-public class RootResource implements ConnectResource {
+public class RootResource {
 
     private final Herder herder;
 
+    @Inject
     public RootResource(Herder herder) {
         this.herder = herder;
-    }
-
-    @Override
-    public void requestTimeout(long requestTimeoutMs) {
-        // No-op
     }
 
     @GET

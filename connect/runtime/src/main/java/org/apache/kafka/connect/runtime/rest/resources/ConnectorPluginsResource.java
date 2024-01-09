@@ -22,6 +22,7 @@ import org.apache.kafka.connect.runtime.ConnectorConfig;
 import org.apache.kafka.connect.runtime.Herder;
 import org.apache.kafka.connect.runtime.isolation.PluginDesc;
 import org.apache.kafka.connect.runtime.isolation.PluginType;
+import org.apache.kafka.connect.runtime.rest.RestRequestTimeout;
 import org.apache.kafka.connect.runtime.rest.entities.ConfigInfos;
 import org.apache.kafka.connect.runtime.rest.entities.ConfigKeyInfo;
 import org.apache.kafka.connect.runtime.rest.entities.PluginInfo;
@@ -30,7 +31,7 @@ import org.apache.kafka.connect.util.FutureCallback;
 import org.apache.kafka.connect.util.Stage;
 import org.apache.kafka.connect.util.StagedTimeoutException;
 
-import javax.inject.Singleton;
+import javax.inject.Inject;
 import javax.ws.rs.BadRequestException;
 import javax.ws.rs.Consumes;
 import javax.ws.rs.DefaultValue;
@@ -57,18 +58,18 @@ import java.util.stream.Collectors;
 @Path("/connector-plugins")
 @Produces(MediaType.APPLICATION_JSON)
 @Consumes(MediaType.APPLICATION_JSON)
-@Singleton
-public class ConnectorPluginsResource implements ConnectResource {
+public class ConnectorPluginsResource {
 
     private static final String ALIAS_SUFFIX = "Connector";
     private final Herder herder;
     private final Set<PluginInfo> connectorPlugins;
-    private long requestTimeoutMs;
+    private final RestRequestTimeout requestTimeout;
 
-    public ConnectorPluginsResource(Herder herder) {
+    @Inject
+    public ConnectorPluginsResource(Herder herder, RestRequestTimeout requestTimeout) {
         this.herder = herder;
+        this.requestTimeout = requestTimeout;
         this.connectorPlugins = new LinkedHashSet<>();
-        this.requestTimeoutMs = DEFAULT_REST_REQUEST_TIMEOUT_MS;
 
         // TODO: improve once plugins are allowed to be added/removed during runtime.
         addConnectorPlugins(herder.plugins().sinkConnectors());
@@ -83,11 +84,6 @@ public class ConnectorPluginsResource implements ConnectResource {
         plugins.stream()
                 .map(PluginInfo::new)
                 .forEach(connectorPlugins::add);
-    }
-
-    @Override
-    public void requestTimeout(long requestTimeoutMs) {
-        this.requestTimeoutMs = requestTimeoutMs;
     }
 
     @PUT
@@ -111,7 +107,7 @@ public class ConnectorPluginsResource implements ConnectResource {
         herder.validateConnectorConfig(connectorConfig, validationCallback, false);
 
         try {
-            return validationCallback.get(requestTimeoutMs, TimeUnit.MILLISECONDS);
+            return validationCallback.get(requestTimeout.timeoutMs(), TimeUnit.MILLISECONDS);
         } catch (StagedTimeoutException e) {
             Stage stage = e.stage();
             String message;

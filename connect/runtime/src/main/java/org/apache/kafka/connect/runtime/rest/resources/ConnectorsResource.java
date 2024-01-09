@@ -25,6 +25,7 @@ import org.apache.kafka.connect.runtime.Herder;
 import org.apache.kafka.connect.runtime.RestartRequest;
 import org.apache.kafka.connect.runtime.rest.HerderRequestHandler;
 import org.apache.kafka.connect.runtime.rest.RestClient;
+import org.apache.kafka.connect.runtime.rest.RestRequestTimeout;
 import org.apache.kafka.connect.runtime.rest.RestServerConfig;
 import org.apache.kafka.connect.runtime.rest.entities.ActiveTopicsInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorInfo;
@@ -39,7 +40,7 @@ import org.apache.kafka.connect.util.FutureCallback;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import javax.inject.Singleton;
+import javax.inject.Inject;
 import javax.servlet.ServletContext;
 import javax.ws.rs.BadRequestException;
 import javax.ws.rs.Consumes;
@@ -71,8 +72,7 @@ import static org.apache.kafka.connect.runtime.rest.HerderRequestHandler.Transla
 @Path("/connectors")
 @Produces(MediaType.APPLICATION_JSON)
 @Consumes(MediaType.APPLICATION_JSON)
-@Singleton
-public class ConnectorsResource implements ConnectResource {
+public class ConnectorsResource {
     private static final Logger log = LoggerFactory.getLogger(ConnectorsResource.class);
 
     private final Herder herder;
@@ -82,16 +82,17 @@ public class ConnectorsResource implements ConnectResource {
     private final boolean isTopicTrackingDisabled;
     private final boolean isTopicTrackingResetDisabled;
 
-    public ConnectorsResource(Herder herder, RestServerConfig config, RestClient restClient) {
+    @Inject
+    public ConnectorsResource(
+            Herder herder,
+            RestServerConfig config,
+            RestClient restClient,
+            RestRequestTimeout requestTimeout
+    ) {
         this.herder = herder;
-        this.requestHandler = new HerderRequestHandler(restClient, DEFAULT_REST_REQUEST_TIMEOUT_MS);
+        this.requestHandler = new HerderRequestHandler(restClient, requestTimeout);
         this.isTopicTrackingDisabled = !config.topicTrackingEnabled();
         this.isTopicTrackingResetDisabled = !config.topicTrackingResetEnabled();
-    }
-
-    @Override
-    public void requestTimeout(long requestTimeoutMs) {
-        requestHandler.requestTimeoutMs(requestTimeoutMs);
     }
 
     @GET
