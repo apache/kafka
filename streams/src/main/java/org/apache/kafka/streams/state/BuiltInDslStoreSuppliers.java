@@ -36,7 +36,9 @@ public class BuiltInDslStoreSuppliers {
 
         @Override
         public KeyValueBytesStoreSupplier keyValueStore(final DslKeyValueParams params) {
-            return Stores.persistentTimestampedKeyValueStore(params.name());
+            return params.isTimestamped()
+                    ? Stores.persistentTimestampedKeyValueStore(params.name())
+                    : Stores.persistentKeyValueStore(params.name());
         }
 
         @Override
@@ -50,11 +52,19 @@ public class BuiltInDslStoreSuppliers {
                         params.isSlidingWindow());
             }
 
-            return Stores.persistentTimestampedWindowStore(
-                    params.name(),
-                    params.retentionPeriod(),
-                    params.windowSize(),
-                    params.retainDuplicates());
+            if (params.isTimestamped()) {
+                return Stores.persistentTimestampedWindowStore(
+                        params.name(),
+                        params.retentionPeriod(),
+                        params.windowSize(),
+                        params.retainDuplicates());
+            } else {
+                return Stores.persistentWindowStore(
+                        params.name(),
+                        params.retentionPeriod(),
+                        params.windowSize(),
+                        params.retainDuplicates());
+            }
         }
 
         @Override

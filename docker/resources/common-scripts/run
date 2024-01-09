@@ -32,7 +32,7 @@ echo "===> Setting default values of environment variables if not already set."
 . /etc/kafka/docker/configureDefaults
 
 echo "===> Configuring ..."
-/etc/kafka/docker/configure
+. /etc/kafka/docker/configure
 
 echo "===> Launching ... "
-exec /etc/kafka/docker/launch
+. /etc/kafka/docker/launch

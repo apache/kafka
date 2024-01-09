@@ -41,6 +41,10 @@ public interface TasksRegistry {
 
     void addPendingTaskToRecycle(final TaskId taskId, final Set<TopicPartition> inputPartitions);
 
+    Set<TopicPartition> removePendingTaskToCloseReviveAndUpdateInputPartitions(final TaskId taskId);
+
+    void addPendingTaskToCloseReviveAndUpdateInputPartitions(final TaskId taskId, final Set<TopicPartition> inputPartitions);
+
     Set<TopicPartition> removePendingTaskToUpdateInputPartitions(final TaskId taskId);
 
     void addPendingTaskToUpdateInputPartitions(final TaskId taskId, final Set<TopicPartition> inputPartitions);

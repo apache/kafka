@@ -17,12 +17,12 @@
 package kafka.server
 
 import java.util.Properties
-
 import kafka.server.metadata.ZkConfigRepository
 import kafka.zk.KafkaZkClient
 import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.config.ConfigResource.Type
 import org.apache.kafka.common.errors.InvalidRequestException
+import org.apache.kafka.server.config.ConfigType
 import org.junit.jupiter.api.Assertions.{assertEquals, assertThrows}
 import org.junit.jupiter.api.Test
 import org.mockito.Mockito.{mock, when}
@@ -39,8 +39,8 @@ class ZkConfigRepositoryTest {
     brokerProps.put("a", "b")
     val topicProps = new Properties()
     topicProps.put("c", "d")
-    when(zkClient.getEntityConfigs(ConfigType.Broker, brokerId.toString)).thenReturn(brokerProps)
-    when(zkClient.getEntityConfigs(ConfigType.Topic, topic)).thenReturn(topicProps)
+    when(zkClient.getEntityConfigs(ConfigType.BROKER, brokerId.toString)).thenReturn(brokerProps)
+    when(zkClient.getEntityConfigs(ConfigType.TOPIC, topic)).thenReturn(topicProps)
     assertEquals(brokerProps, zkConfigRepository.brokerConfig(brokerId))
     assertEquals(topicProps, zkConfigRepository.topicConfig(topic))
   }
