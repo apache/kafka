@@ -62,7 +62,6 @@ class ConsumerBounceTest extends AbstractConsumerTest with Logging {
     properties.put(KafkaConfig.GroupMaxSizeProp, maxGroupSize)
     properties.put(KafkaConfig.UncleanLeaderElectionEnableProp, "true")
     properties.put(KafkaConfig.AutoCreateTopicsEnableProp, "false")
-    properties.put(KafkaConfig.BrokerSessionTimeoutMsProp, "3000")
     if (isNewGroupCoordinatorEnabled()) {
       properties.put(KafkaConfig.UnstableApiVersionsEnableProp, "true")
       properties.put(KafkaConfig.NewGroupCoordinatorEnableProp, "true")
