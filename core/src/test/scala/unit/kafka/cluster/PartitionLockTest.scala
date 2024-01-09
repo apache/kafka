@@ -270,7 +270,7 @@ class PartitionLockTest extends Logging {
 
     logManager.startup(Set.empty)
     val partition = new Partition(topicPartition,
-      replicaLagTimeMaxMs = kafka.server.Defaults.ReplicaLagTimeMaxMs,
+      replicaLagTimeMaxMs = org.apache.kafka.server.config.Defaults.REPLICA_LAG_TIME_MAX_MS,
       interBrokerProtocolVersion = MetadataVersion.latestTesting,
       localBrokerId = brokerId,
       () => 1L,
@@ -299,7 +299,7 @@ class PartitionLockTest extends Logging {
         val segments = new LogSegments(log.topicPartition)
         val leaderEpochCache = UnifiedLog.maybeCreateLeaderEpochCache(log.dir, log.topicPartition, logDirFailureChannel, log.config.recordVersion, "")
         val maxTransactionTimeout = 5 * 60 * 1000
-        val producerStateManagerConfig = new ProducerStateManagerConfig(kafka.server.Defaults.ProducerIdExpirationMs, false)
+        val producerStateManagerConfig = new ProducerStateManagerConfig(org.apache.kafka.server.config.Defaults.PRODUCER_ID_EXPIRATION_MS, false)
         val producerStateManager = new ProducerStateManager(
           log.topicPartition,
           log.dir,

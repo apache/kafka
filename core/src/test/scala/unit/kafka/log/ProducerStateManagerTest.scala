@@ -46,7 +46,7 @@ class ProducerStateManagerTest {
   private val partition = new TopicPartition("test", 0)
   private val producerId = 1L
   private val maxTransactionTimeoutMs = 5 * 60 * 1000
-  private val producerStateManagerConfig = new ProducerStateManagerConfig(kafka.server.Defaults.ProducerIdExpirationMs, true)
+  private val producerStateManagerConfig = new ProducerStateManagerConfig(org.apache.kafka.server.config.Defaults.PRODUCER_ID_EXPIRATION_MS, true)
   private val lateTransactionTimeoutMs = maxTransactionTimeoutMs + ProducerStateManager.LATE_TRANSACTION_BUFFER_MS
   private val time = new MockTime
 

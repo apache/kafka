@@ -34,6 +34,7 @@ import org.apache.kafka.common.config.{ConfigException, SslConfigs}
 import org.apache.kafka.common.metrics.{JmxReporter, Metrics}
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.server.authorizer._
+import org.apache.kafka.server.config.Defaults
 import org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.apache.kafka.server.util.KafkaScheduler
@@ -630,7 +631,7 @@ class DynamicBrokerConfigTest {
     val config = KafkaConfig(props)
     config.dynamicConfig.initialize(None, None)
 
-    assertEquals(Defaults.MaxConnections, config.maxConnections)
+    assertEquals(Defaults.MAX_CONNECTIONS, config.maxConnections)
     assertEquals(LogConfig.DEFAULT_MAX_MESSAGE_BYTES, config.messageMaxBytes)
 
     var newProps = new Properties()
@@ -647,7 +648,7 @@ class DynamicBrokerConfigTest {
 
     config.dynamicConfig.updateDefaultConfig(newProps)
     // Invalid value should be skipped and reassigned as default value
-    assertEquals(Defaults.MaxConnections, config.maxConnections)
+    assertEquals(Defaults.MAX_CONNECTIONS, config.maxConnections)
     // Even if One property is invalid, the below should get correctly updated.
     assertEquals(1111, config.messageMaxBytes)
   }
@@ -842,8 +843,8 @@ class TestDynamicThreadPool() extends BrokerReconfigurable {
   }
 
   override def reconfigure(oldConfig: KafkaConfig, newConfig: KafkaConfig): Unit = {
-    assertEquals(Defaults.NumIoThreads, oldConfig.numIoThreads)
-    assertEquals(Defaults.BackgroundThreads, oldConfig.backgroundThreads)
+    assertEquals(Defaults.NUM_IO_THREADS, oldConfig.numIoThreads)
+    assertEquals(Defaults.BACKGROUND_THREADS, oldConfig.backgroundThreads)
 
     assertEquals(10, newConfig.numIoThreads)
     assertEquals(100, newConfig.backgroundThreads)

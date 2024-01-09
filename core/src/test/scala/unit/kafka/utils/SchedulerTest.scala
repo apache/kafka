@@ -133,8 +133,8 @@ class SchedulerTest {
     val logConfig = new LogConfig(new Properties())
     val brokerTopicStats = new BrokerTopicStats
     val maxTransactionTimeoutMs = 5 * 60 * 1000
-    val maxProducerIdExpirationMs = kafka.server.Defaults.ProducerIdExpirationMs
-    val producerIdExpirationCheckIntervalMs = kafka.server.Defaults.ProducerIdExpirationCheckIntervalMs
+    val maxProducerIdExpirationMs = org.apache.kafka.server.config.Defaults.PRODUCER_ID_EXPIRATION_MS
+    val producerIdExpirationCheckIntervalMs = org.apache.kafka.server.config.Defaults.PRODUCER_ID_EXPIRATION_CHECK_INTERVAL_MS
     val topicPartition = UnifiedLog.parseTopicPartitionName(logDir)
     val logDirFailureChannel = new LogDirFailureChannel(10)
     val segments = new LogSegments(topicPartition)

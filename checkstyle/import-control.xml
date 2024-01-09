@@ -261,6 +261,10 @@
         <allow pkg="org.apache.kafka.server.metrics" />
       </subpackage>
     </subpackage>
+
+  <subpackage name="transaction">
+
+  </subpackage>
   </subpackage>
 
   <subpackage name="server">
