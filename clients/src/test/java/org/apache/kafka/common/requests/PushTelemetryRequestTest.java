@@ -55,7 +55,7 @@ public class PushTelemetryRequestTest {
 
     @ParameterizedTest
     @EnumSource(CompressionType.class)
-    public void testMetricsDataCompressionTypeNone(CompressionType compressionType) {
+    public void testMetricsDataCompression(CompressionType compressionType) {
         MetricsData metricsData = getMetricsData();
         PushTelemetryRequest req = getPushTelemetryRequest(metricsData, compressionType);
 
