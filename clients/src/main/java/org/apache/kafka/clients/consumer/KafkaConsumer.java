@@ -754,7 +754,17 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
         delegate.subscribe(pattern);
     }
 
-    /**
+	@Override
+	public void subscribe(SubscriptionPattern pattern, ConsumerRebalanceListener callback) {
+
+	}
+
+	@Override
+	public void subscribe(SubscriptionPattern pattern) {
+
+	}
+
+	/**
      * Unsubscribe from topics currently subscribed with {@link #subscribe(Collection)} or {@link #subscribe(Pattern)}.
      * This also clears any partitions directly assigned through {@link #assign(Collection)}.
      *

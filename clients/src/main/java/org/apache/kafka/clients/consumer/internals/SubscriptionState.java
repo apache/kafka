@@ -23,6 +23,7 @@ import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.NoOffsetForPartitionException;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
+import org.apache.kafka.clients.consumer.SubscriptionPattern;
 import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.internals.PartitionStates;
@@ -84,6 +85,8 @@ public class SubscriptionState {
     /* the pattern user has requested */
     private Pattern subscribedPattern;
 
+    private SubscriptionPattern subscriptionPattern;
+
     /* the list of topics the user has requested */
     private Set<String> subscription;
 
@@ -136,6 +139,7 @@ public class SubscriptionState {
         this.assignment = new PartitionStates<>();
         this.groupSubscription = new HashSet<>();
         this.subscribedPattern = null;
+        this.subscriptionPattern = null;
         this.subscriptionType = SubscriptionType.NONE;
     }
 
@@ -172,6 +176,12 @@ public class SubscriptionState {
         registerRebalanceListener(listener);
         setSubscriptionType(SubscriptionType.AUTO_PATTERN);
         this.subscribedPattern = pattern;
+    }
+
+    public synchronized void subscribe(SubscriptionPattern pattern, Optional<ConsumerRebalanceListener> listener) {
+        registerRebalanceListener(listener);
+        setSubscriptionType(SubscriptionType.AUTO_PATTERN);
+        this.subscriptionPattern = pattern;
     }
 
     public synchronized boolean subscribeFromPattern(Set<String> topics) {

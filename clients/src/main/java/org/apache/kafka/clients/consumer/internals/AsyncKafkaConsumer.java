@@ -36,6 +36,7 @@ import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetAndTimestamp;
 import org.apache.kafka.clients.consumer.OffsetCommitCallback;
 import org.apache.kafka.clients.consumer.OffsetResetStrategy;
+import org.apache.kafka.clients.consumer.SubscriptionPattern;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEvent;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEventHandler;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEventProcessor;
@@ -1661,6 +1662,16 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
     }
 
     @Override
+    public void subscribe(SubscriptionPattern pattern, ConsumerRebalanceListener callback) {
+
+    }
+
+    @Override
+    public void subscribe(SubscriptionPattern pattern) {
+
+    }
+
+    @Override
     public void subscribe(Pattern pattern, ConsumerRebalanceListener listener) {
         if (listener == null)
             throw new IllegalArgumentException("RebalanceListener cannot be null");
@@ -1719,6 +1730,20 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             subscriptions.subscribe(pattern, listener);
             updatePatternSubscription(metadata.fetch());
             metadata.requestUpdateForNewTopics();
+        } finally {
+            release();
+        }
+    }
+
+    private void subscribeInternal(SubscriptionPattern pattern, Optional<ConsumerRebalanceListener> listener){
+        acquireAndEnsureOpen();
+        try {
+            maybeThrowInvalidGroupIdException();
+            if (pattern == null || pattern.pattern().isEmpty())
+                throw new IllegalArgumentException("Topic pattern to subscribe to cannot be " + (pattern == null ?
+                    "null" : "empty"));
+            throwIfNoAssignorsConfigured();
+            log.info("Subscribed to pattern: '{}'", pattern);
         } finally {
             release();
         }
