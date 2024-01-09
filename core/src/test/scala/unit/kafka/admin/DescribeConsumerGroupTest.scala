@@ -39,6 +39,7 @@ class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
   @ValueSource(strings = Array("zk", "kraft", "kraft+kip848"))
   def testDescribeNonExistingGroup(quorum: String): Unit = {
     createOffsetsTopic()
+    
     val missingGroup = "missing.group"
 
     for (describeType <- describeTypes) {
@@ -517,6 +518,7 @@ class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
   @ValueSource(strings = Array("zk", "kraft", "kraft+kip848"))
   def testDescribeWithMultiPartitionTopicAndMultipleConsumers(quorum: String): Unit = {
     createOffsetsTopic()
+
     val topic2 = "foo2"
     createTopic(topic2, 2, 1)
 
@@ -539,6 +541,7 @@ class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
   @ValueSource(strings = Array("zk", "kraft", "kraft+kip848"))
   def testDescribeOffsetsWithMultiPartitionTopicAndMultipleConsumers(quorum: String): Unit = {
     createOffsetsTopic()
+
     val topic2 = "foo2"
     createTopic(topic2, 2, 1)
 
@@ -553,8 +556,8 @@ class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
       state.contains("Stable") &&
         assignments.isDefined &&
         assignments.get.count(_.group == group) == 2 &&
-        assignments.get.count{ x => x.group == group && x.partition.isDefined} == 2 &&
-        assignments.get.count{ x => x.group == group && x.partition.isEmpty} == 0
+        assignments.get.count { x => x.group == group && x.partition.isDefined } == 2 &&
+        assignments.get.count { x => x.group == group && x.partition.isEmpty } == 0
     }, "Expected two rows (one row per consumer) in describe group results.")
   }
 
@@ -562,6 +565,7 @@ class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
   @ValueSource(strings = Array("zk", "kraft", "kraft+kip848"))
   def testDescribeMembersWithMultiPartitionTopicAndMultipleConsumers(quorum: String): Unit = {
     createOffsetsTopic()
+
     val topic2 = "foo2"
     createTopic(topic2, 2, 1)
 
@@ -576,8 +580,8 @@ class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
       state.contains("Stable") &&
         assignments.isDefined &&
         assignments.get.count(_.group == group) == 2 &&
-        assignments.get.count{ x => x.group == group && x.numPartitions == 1 } == 2 &&
-        assignments.get.count{ x => x.group == group && x.numPartitions == 0 } == 0
+        assignments.get.count { x => x.group == group && x.numPartitions == 1 } == 2 &&
+        assignments.get.count { x => x.group == group && x.numPartitions == 0 } == 0
     }, "Expected two rows (one row per consumer) in describe group members results.")
 
     val (state, assignments) = service.collectGroupMembers(group, true)
@@ -589,6 +593,7 @@ class DescribeConsumerGroupTest extends ConsumerGroupCommandTest {
   @ValueSource(strings = Array("zk", "kraft", "kraft+kip848"))
   def testDescribeStateWithMultiPartitionTopicAndMultipleConsumers(quorum: String): Unit = {
     createOffsetsTopic()
+
     val topic2 = "foo2"
     createTopic(topic2, 2, 1)
 
