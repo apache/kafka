@@ -17,7 +17,6 @@
 
 package kafka.network
 
-import java.net.InetAddress
 import java.nio.ByteBuffer
 import java.util.concurrent._
 import com.fasterxml.jackson.databind.JsonNode
@@ -34,8 +33,8 @@ import org.apache.kafka.common.message.EnvelopeResponseData
 import org.apache.kafka.common.network.{ClientInformation, Send}
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests._
-import org.apache.kafka.common.security.auth.KafkaPrincipal
-import org.apache.kafka.common.utils.{Sanitizer, Time}
+import org.apache.kafka.common.utils.Time
+import org.apache.kafka.network.Session
 import org.apache.kafka.server.metrics.KafkaMetricsGroup
 
 import java.util
@@ -56,10 +55,6 @@ object RequestChannel extends Logging {
   sealed trait BaseRequest
   case object ShutdownRequest extends BaseRequest
   case object WakeupRequest extends BaseRequest
-
-  case class Session(principal: KafkaPrincipal, clientAddress: InetAddress) {
-    val sanitizedUser: String = Sanitizer.sanitize(principal.getName)
-  }
 
   class Metrics(enabledApis: Iterable[ApiKeys]) {
     def this(scope: ListenerType) = {
@@ -103,7 +98,7 @@ object RequestChannel extends Logging {
     @volatile var callbackRequestDequeueTimeNanos: Option[Long] = None
     @volatile var callbackRequestCompleteTimeNanos: Option[Long] = None
 
-    val session = Session(context.principal, context.clientAddress)
+    val session = new Session(context.principal, context.clientAddress)
 
     private val bodyAndSize: RequestAndSize = context.parseRequest(buffer)
 
