@@ -191,15 +191,13 @@ public class ClientTelemetryUtils {
     }
 
     public static ByteBuffer compress(byte[] raw, CompressionType compressionType) {
-        try {
-            try (ByteBufferOutputStream compressedOut = new ByteBufferOutputStream(512)) {
-                try (OutputStream out = compressionType.wrapForOutput(compressedOut, RecordBatch.CURRENT_MAGIC_VALUE)) {
-                    out.write(raw);
-                    out.flush();
-                }
-                compressedOut.buffer().flip();
-                return ByteBuffer.wrap(Utils.toArray(compressedOut.buffer()));
+        try (ByteBufferOutputStream compressedOut = new ByteBufferOutputStream(512)) {
+            try (OutputStream out = compressionType.wrapForOutput(compressedOut, RecordBatch.CURRENT_MAGIC_VALUE)) {
+                out.write(raw);
+                out.flush();
             }
+            compressedOut.buffer().flip();
+            return ByteBuffer.wrap(Utils.toArray(compressedOut.buffer()));
         } catch (IOException e) {
             throw new KafkaException("Failed to compress metrics data", e);
         }
