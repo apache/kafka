@@ -33,7 +33,7 @@ import org.apache.kafka.common.config.internals.QuotaConfigs
 import org.apache.kafka.common.metrics.Quota
 import org.apache.kafka.common.metrics.Quota._
 import org.apache.kafka.common.utils.Sanitizer
-import org.apache.kafka.coordinator.group.consumer. ConsumerGroupConfigManager
+import org.apache.kafka.coordinator.group.GroupConfigManager
 import org.apache.kafka.server.ClientMetricsManager
 import org.apache.kafka.storage.internals.log.{LogConfig, ThrottledReplicaListValidator}
 import org.apache.kafka.storage.internals.log.LogConfig.MessageFormatVersion
@@ -269,8 +269,8 @@ class ClientMetricsConfigHandler(private val clientMetricsManager: ClientMetrics
 /**
  * The GroupConfigHandler will process individual group config changes in ZK.
  */
-class ConsumerGroupConfigHandler(private val consumerGroupConfigManager: ConsumerGroupConfigManager) extends ConfigHandler with Logging {
+class GroupConfigHandler(private val groupConfigManager: GroupConfigManager) extends ConfigHandler with Logging {
   override def processConfigChanges(groupId: String, properties: Properties): Unit = {
-    consumerGroupConfigManager.updateConsumerGroupConfig(groupId, properties)
+    groupConfigManager.updateGroupConfig(groupId, properties)
   }
 }

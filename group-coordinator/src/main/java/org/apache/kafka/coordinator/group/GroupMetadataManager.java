@@ -56,8 +56,6 @@ import org.apache.kafka.coordinator.group.assignor.PartitionAssignor;
 import org.apache.kafka.coordinator.group.assignor.PartitionAssignorException;
 import org.apache.kafka.coordinator.group.consumer.Assignment;
 import org.apache.kafka.coordinator.group.consumer.ConsumerGroup;
-import org.apache.kafka.coordinator.group.consumer.ConsumerGroupConfig;
-import org.apache.kafka.coordinator.group.consumer.ConsumerGroupConfigManager;
 import org.apache.kafka.coordinator.group.consumer.ConsumerGroupMember;
 import org.apache.kafka.coordinator.group.consumer.CurrentAssignmentBuilder;
 import org.apache.kafka.coordinator.group.consumer.TargetAssignmentBuilder;
@@ -148,7 +146,7 @@ public class GroupMetadataManager {
         private Time time = null;
         private CoordinatorTimer<Void, Record> timer = null;
         private List<PartitionAssignor> consumerGroupAssignors = null;
-        private ConsumerGroupConfigManager consumerGroupConfigManager = null;
+        private GroupConfigManager groupConfigManager = null;
         private int consumerGroupMaxSize = Integer.MAX_VALUE;
         private int consumerGroupHeartbeatIntervalMs = 5000;
         private int consumerGroupMetadataRefreshIntervalMs = Integer.MAX_VALUE;
@@ -186,9 +184,8 @@ public class GroupMetadataManager {
             return this;
         }
 
-
-        Builder withConsumerGroupConfigManager(ConsumerGroupConfigManager configManager) {
-            this.consumerGroupConfigManager = configManager;
+        Builder withGroupConfigManager(GroupConfigManager groupConfigManager) {
+            this.groupConfigManager = groupConfigManager;
             return this;
         }
 
@@ -259,8 +256,8 @@ public class GroupMetadataManager {
                 throw new IllegalArgumentException("Assignors must be set before building.");
             if (metrics == null)
                 throw new IllegalArgumentException("GroupCoordinatorMetricsShard must be set.");
-            if (consumerGroupConfigManager == null) {
-                throw new IllegalArgumentException("ConsumerGroupConfigManager must be set.");
+            if (groupConfigManager == null) {
+                throw new IllegalArgumentException("GroupConfigManager must be set.");
             }
 
             return new GroupMetadataManager(
@@ -271,7 +268,7 @@ public class GroupMetadataManager {
                 metrics,
                 consumerGroupAssignors,
                 metadataImage,
-                consumerGroupConfigManager,
+                groupConfigManager,
                 consumerGroupMaxSize,
                 consumerGroupSessionTimeoutMs,
                 consumerGroupHeartbeatIntervalMs,
@@ -335,9 +332,9 @@ public class GroupMetadataManager {
     private final TimelineHashMap<String, TimelineHashSet<String>> groupsByTopics;
 
     /**
-     * The consumer group manager.
+     * The group manager.
      */
-    private final ConsumerGroupConfigManager consumerGroupConfigManager;
+    private final GroupConfigManager groupConfigManager;
 
     /**
      * The maximum number of members allowed in a single consumer group.
@@ -406,7 +403,7 @@ public class GroupMetadataManager {
         GroupCoordinatorMetricsShard metrics,
         List<PartitionAssignor> assignors,
         MetadataImage metadataImage,
-        ConsumerGroupConfigManager consumerGroupConfigManager,
+        GroupConfigManager groupConfigManager,
         int consumerGroupMaxSize,
         int consumerGroupSessionTimeoutMs,
         int consumerGroupHeartbeatIntervalMs,
@@ -428,7 +425,7 @@ public class GroupMetadataManager {
         this.defaultAssignor = assignors.get(0);
         this.groups = new TimelineHashMap<>(snapshotRegistry, 0);
         this.groupsByTopics = new TimelineHashMap<>(snapshotRegistry, 0);
-        this.consumerGroupConfigManager = consumerGroupConfigManager;
+        this.groupConfigManager = groupConfigManager;
         this.consumerGroupMaxSize = consumerGroupMaxSize;
         this.consumerGroupSessionTimeoutMs = consumerGroupSessionTimeoutMs;
         this.consumerGroupHeartbeatIntervalMs = consumerGroupHeartbeatIntervalMs;
@@ -3513,8 +3510,8 @@ public class GroupMetadataManager {
      * Get the session timeout of the provided group.
      */
     private int getConsumerGroupSessionTimeoutMs(String groupId) {
-        Optional<ConsumerGroupConfig> consumerGroupConfig = consumerGroupConfigManager.getConsumerGroupConfig(groupId);
-        return consumerGroupConfig.map(groupConfig -> groupConfig.sessionTimeoutMs)
+        Optional<GroupConfig> groupConfig = groupConfigManager.getGroupConfig(groupId);
+        return groupConfig.map(config -> config.sessionTimeoutMs)
             .orElse(consumerGroupSessionTimeoutMs);
     }
 
@@ -3522,8 +3519,8 @@ public class GroupMetadataManager {
      * Get the heartbeat interval of the provided group.
      */
     private int getConsumerGroupHeartbeatIntervalMs(String groupId) {
-        Optional<ConsumerGroupConfig> consumerGroupConfig = consumerGroupConfigManager.getConsumerGroupConfig(groupId);
-        return consumerGroupConfig.map(groupConfig -> groupConfig.heartbeatIntervalMs)
+        Optional<GroupConfig> groupConfig = groupConfigManager.getGroupConfig(groupId);
+        return groupConfig.map(config -> config.heartbeatIntervalMs)
             .orElse(consumerGroupHeartbeatIntervalMs);
     }
 

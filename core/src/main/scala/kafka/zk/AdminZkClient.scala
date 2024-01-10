@@ -27,7 +27,7 @@ import org.apache.kafka.admin.{AdminUtils, BrokerMetadata}
 import org.apache.kafka.common.{TopicPartition, Uuid}
 import org.apache.kafka.common.errors._
 import org.apache.kafka.common.internals.Topic
-import org.apache.kafka.coordinator.group.consumer.ConsumerGroupConfig
+import org.apache.kafka.coordinator.group.GroupConfig
 import org.apache.kafka.server.common.AdminOperationException
 import org.apache.kafka.server.config.ConfigType
 import org.apache.kafka.storage.internals.log.LogConfig
@@ -540,7 +540,7 @@ class AdminZkClient(zkClient: KafkaZkClient,
    * @param configs properties to validate for the group
    */
   def validateGroupConfig(groupId: String, configs: Properties): Unit = {
-    ConsumerGroupConfig.validate(configs)
+    GroupConfig.validate(configs)
   }
 
   def changeGroupConfig(groupId: String, configs: Properties): Unit = {

@@ -24,7 +24,7 @@ import org.apache.kafka.common.config.ConfigResource.Type.{BROKER, CLIENT_METRIC
 import org.apache.kafka.controller.ConfigurationValidator
 import org.apache.kafka.common.errors.{InvalidConfigurationException, InvalidRequestException}
 import org.apache.kafka.common.internals.Topic
-import org.apache.kafka.coordinator.group.consumer.ConsumerGroupConfig
+import org.apache.kafka.coordinator.group.GroupConfig
 import org.apache.kafka.server.metrics.ClientMetricsConfigs
 import org.apache.kafka.storage.internals.log.LogConfig
 
@@ -124,19 +124,19 @@ class ControllerConfigurationValidator(kafkaConfig: KafkaConfig) extends Configu
       case GROUP =>
         validateGroupName(resource.name())
         val properties = new Properties()
-        val nullConsumerGroupConfigs = new mutable.ArrayBuffer[String]()
+        val nullGroupConfigs = new mutable.ArrayBuffer[String]()
         config.entrySet().forEach(e => {
           if (e.getValue == null) {
-            nullConsumerGroupConfigs += e.getKey
+            nullGroupConfigs += e.getKey
           } else {
             properties.setProperty(e.getKey, e.getValue)
           }
         })
-        if (nullConsumerGroupConfigs.nonEmpty) {
-          throw new InvalidConfigurationException("Null value not supported for consumer group configs: " +
-            nullConsumerGroupConfigs.mkString(","))
+        if (nullGroupConfigs.nonEmpty) {
+          throw new InvalidConfigurationException("Null value not supported for group configs: " +
+            nullGroupConfigs.mkString(","))
         }
-        ConsumerGroupConfig.validate(properties)
+        GroupConfig.validate(properties)
       case _ => throwExceptionForUnknownResourceType(resource)
     }
   }

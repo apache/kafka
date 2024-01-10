@@ -47,7 +47,7 @@ import org.apache.kafka.common.requests.CreateTopicsRequest._
 import org.apache.kafka.common.requests.{AlterConfigsRequest, ApiError}
 import org.apache.kafka.common.security.scram.internals.{ScramCredentialUtils, ScramFormatter}
 import org.apache.kafka.common.utils.Sanitizer
-import org.apache.kafka.coordinator.group.consumer.ConsumerGroupConfig
+import org.apache.kafka.coordinator.group.GroupConfig
 import org.apache.kafka.server.common.AdminOperationException
 import org.apache.kafka.server.config.ConfigType
 import org.apache.kafka.storage.internals.log.LogConfig
@@ -486,7 +486,7 @@ class ZkAdminManager(val config: KafkaConfig,
     if (groupId.isEmpty) {
       throw new InvalidRequestException("Default group resources are not allowed.")
     }
-    ConsumerGroupConfig.validate(configProps)
+    GroupConfig.validate(configProps)
     validateConfigPolicy(resource, configEntriesMap)
     if (!validateOnly) {
       info(s"Updating group $groupId with new configuration: ${toLoggableProps(resource, configProps).mkString(",")}" )

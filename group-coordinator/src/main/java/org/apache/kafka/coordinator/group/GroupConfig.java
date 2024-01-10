@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.coordinator.group.consumer;
+package org.apache.kafka.coordinator.group;
 
 import static org.apache.kafka.common.config.ConfigDef.Importance.MEDIUM;
 import static org.apache.kafka.common.config.ConfigDef.Range.atLeast;
@@ -31,10 +31,10 @@ import java.util.Map;
 import java.util.Properties;
 
 /**
- * Consumer group configuration related parameters and supporting methods like validation, etc. are
+ * Group configuration related parameters and supporting methods like validation, etc. are
  * defined in this class.
  */
-public class ConsumerGroupConfig extends AbstractConfig {
+public class GroupConfig extends AbstractConfig {
 
     public static final String CONSUMER_SESSION_TIMEOUT_CONFIG = "consumer.session.timeout.ms";
 
@@ -64,7 +64,7 @@ public class ConsumerGroupConfig extends AbstractConfig {
 
     public final int heartbeatIntervalMs;
 
-    public ConsumerGroupConfig(Map<?, ?> props) {
+    public GroupConfig(Map<?, ?> props) {
         super(CONFIG, props, false);
 
         this.sessionTimeoutMs = getInt(CONSUMER_SESSION_TIMEOUT_CONFIG);
@@ -82,7 +82,7 @@ public class ConsumerGroupConfig extends AbstractConfig {
         List<String> names = configNames();
         for (Object name : props.keySet()) {
             if (!names.contains(name)) {
-                throw new InvalidConfigurationException("Unknown consumer group config name: " + name);
+                throw new InvalidConfigurationException("Unknown group config name: " + name);
             }
         }
     }
@@ -93,12 +93,12 @@ public class ConsumerGroupConfig extends AbstractConfig {
     }
 
     /**
-     * Create a consumer group config instance using the given properties and defaults
+     * Create a group config instance using the given properties and defaults
      */
-    public static ConsumerGroupConfig fromProps(Map<?, ?> defaults, Properties overrides) {
+    public static GroupConfig fromProps(Map<?, ?> defaults, Properties overrides) {
         Properties props = new Properties();
         props.putAll(defaults);
         props.putAll(overrides);
-        return new ConsumerGroupConfig(props);
+        return new GroupConfig(props);
     }
 }

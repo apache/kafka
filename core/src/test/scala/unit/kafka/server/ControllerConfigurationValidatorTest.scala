@@ -22,7 +22,7 @@ import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.config.ConfigResource.Type.{BROKER, BROKER_LOGGER, CLIENT_METRICS, GROUP, TOPIC}
 import org.apache.kafka.common.config.TopicConfig.{SEGMENT_BYTES_CONFIG, SEGMENT_JITTER_MS_CONFIG, SEGMENT_MS_CONFIG}
 import org.apache.kafka.common.errors.{InvalidConfigurationException, InvalidRequestException, InvalidTopicException}
-import org.apache.kafka.coordinator.group.consumer.ConsumerGroupConfig
+import org.apache.kafka.coordinator.group.GroupConfig
 import org.apache.kafka.server.metrics.ClientMetricsConfigs
 import org.junit.jupiter.api.Assertions.{assertEquals, assertThrows}
 import org.junit.jupiter.api.Test
@@ -156,38 +156,38 @@ class ControllerConfigurationValidatorTest {
   }
 
   @Test
-  def testValidConsumerGroupConfig(): Unit = {
+  def testValidGroupConfig(): Unit = {
     val config = new TreeMap[String, String]()
-    config.put(ConsumerGroupConfig.CONSUMER_SESSION_TIMEOUT_CONFIG, "50000")
-    config.put(ConsumerGroupConfig.CONSUMER_HEARTBEAT_INTERVAL_CONFIG, "5000")
+    config.put(GroupConfig.CONSUMER_SESSION_TIMEOUT_CONFIG, "50000")
+    config.put(GroupConfig.CONSUMER_HEARTBEAT_INTERVAL_CONFIG, "5000")
     validator.validate(new ConfigResource(GROUP, "group"), config)
   }
 
   @Test
-  def testInvalidGroupNameConsumerGroupConfig(): Unit = {
+  def testInvalidGroupNameGroupConfig(): Unit = {
     val config = new TreeMap[String, String]()
     assertEquals("Default group resources are not allowed.",
       assertThrows(classOf[InvalidRequestException], () => validator.validate(
-        new ConfigResource(GROUP, ""), config)). getMessage())
+        new ConfigResource(GROUP, ""), config)).getMessage)
   }
 
   @Test
-  def testNullConsumerGroupConfigValue(): Unit = {
+  def testNullGroupConfigValue(): Unit = {
     val config = new TreeMap[String, String]()
-    config.put(ConsumerGroupConfig.CONSUMER_SESSION_TIMEOUT_CONFIG, "50000")
-    config.put(ConsumerGroupConfig.CONSUMER_HEARTBEAT_INTERVAL_CONFIG, null)
-    assertEquals("Null value not supported for consumer group configs: consumer.heartbeat.interval.ms",
+    config.put(GroupConfig.CONSUMER_SESSION_TIMEOUT_CONFIG, "50000")
+    config.put(GroupConfig.CONSUMER_HEARTBEAT_INTERVAL_CONFIG, null)
+    assertEquals("Null value not supported for group configs: consumer.heartbeat.interval.ms",
       assertThrows(classOf[InvalidConfigurationException], () => validator.validate(
-        new ConfigResource(GROUP, "group"), config)). getMessage())
+        new ConfigResource(GROUP, "group"), config)).getMessage)
   }
 
   @Test
-  def testInvalidConsumerGroupConfig(): Unit = {
+  def testInvalidGroupConfig(): Unit = {
     val config = new TreeMap[String, String]()
-    config.put(ConsumerGroupConfig.CONSUMER_SESSION_TIMEOUT_CONFIG, "50000")
+    config.put(GroupConfig.CONSUMER_SESSION_TIMEOUT_CONFIG, "50000")
     config.put("foobar", "abc")
-    assertEquals("Unknown consumer group config name: foobar",
+    assertEquals("Unknown group config name: foobar",
       assertThrows(classOf[InvalidConfigurationException], () => validator.validate(
-        new ConfigResource(GROUP, "group"), config)). getMessage())
+        new ConfigResource(GROUP, "group"), config)).getMessage)
   }
 }

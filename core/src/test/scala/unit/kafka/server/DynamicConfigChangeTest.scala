@@ -43,7 +43,7 @@ import org.apache.kafka.common.quota.ClientQuotaEntity.{CLIENT_ID, IP, USER}
 import org.apache.kafka.common.quota.{ClientQuotaAlteration, ClientQuotaEntity}
 import org.apache.kafka.common.record.{CompressionType, RecordVersion}
 import org.apache.kafka.common.security.auth.KafkaPrincipal
-import org.apache.kafka.coordinator.group.consumer.{ConsumerGroupConfig, ConsumerGroupConfigManager}
+import org.apache.kafka.coordinator.group.{GroupConfig, GroupConfigManager}
 import org.apache.kafka.server.common.MetadataVersion.IBP_3_0_IV1
 import org.apache.kafka.server.config.ConfigType
 import org.apache.kafka.storage.internals.log.LogConfig
@@ -474,14 +474,14 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
-  def testDynamicConsumerGroupConfigChange(quorum: String): Unit = {
+  def testDynamicGroupConfigChange(quorum: String): Unit = {
     val newSessionTimeoutMs = 50000
     val consumerGroupId = "group-foo"
     if (isKRaftTest()) {
       val admin = createAdminClient()
       try {
         val resource = new ConfigResource(ConfigResource.Type.GROUP, consumerGroupId)
-        val op = new AlterConfigOp(new ConfigEntry(ConsumerGroupConfig.CONSUMER_SESSION_TIMEOUT_CONFIG, newSessionTimeoutMs.toString),
+        val op = new AlterConfigOp(new ConfigEntry(GroupConfig.CONSUMER_SESSION_TIMEOUT_CONFIG, newSessionTimeoutMs.toString),
           SET)
         admin.incrementalAlterConfigs(Map(resource -> List(op).asJavaCollection).asJava).all.get
       } finally {
@@ -489,26 +489,26 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
       }
     } else {
       val newProps = new Properties()
-      newProps.put(ConsumerGroupConfig.CONSUMER_SESSION_TIMEOUT_CONFIG, newSessionTimeoutMs.toString)
+      newProps.put(GroupConfig.CONSUMER_SESSION_TIMEOUT_CONFIG, newSessionTimeoutMs.toString)
       adminZkClient.changeGroupConfig(consumerGroupId, newProps)
     }
 
     TestUtils.retry(10000) {
-      val configOpt = brokers.head.consumerGroupConfigManager.getConsumerGroupConfig(consumerGroupId)
+      val configOpt = brokers.head.groupConfigManager.getGroupConfig(consumerGroupId)
       assertTrue(configOpt.isPresent)
     }
 
-    val groupConfig = brokers.head.consumerGroupConfigManager.getConsumerGroupConfig(consumerGroupId).get()
+    val groupConfig = brokers.head.groupConfigManager.getGroupConfig(consumerGroupId).get()
     assertEquals(newSessionTimeoutMs, groupConfig.sessionTimeoutMs)
   }
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumName)
   @ValueSource(strings = Array("zk", "kraft"))
-  def testIncrementalAlterDefaultConsumerGroupConfig(quorum: String): Unit = {
+  def testIncrementalAlterDefaultGroupConfig(quorum: String): Unit = {
     val admin = createAdminClient()
     try {
       val resource = new ConfigResource(ConfigResource.Type.GROUP, "")
-      val op = new AlterConfigOp(new ConfigEntry(ConsumerGroupConfig.CONSUMER_SESSION_TIMEOUT_CONFIG, "200000"), SET)
+      val op = new AlterConfigOp(new ConfigEntry(GroupConfig.CONSUMER_SESSION_TIMEOUT_CONFIG, "200000"), SET)
       val future = admin.incrementalAlterConfigs(Map(resource -> List(op).asJavaCollection).asJava).all
       TestUtils.assertFutureExceptionTypeEquals(future, classOf[InvalidRequestException])
     } finally {
@@ -648,9 +648,9 @@ class DynamicConfigChangeUnitTest {
 
   @Test
   def testGroupHandlerInvalidGroupId(): Unit = {
-    val configHandler = new ConsumerGroupConfigHandler(new ConsumerGroupConfigManager(new util.HashMap[String, String]))
+    val configHandler = new GroupConfigHandler(new GroupConfigManager(new util.HashMap[String, String]))
     val props: Properties = new Properties()
-    props.put(ConsumerGroupConfig.CONSUMER_SESSION_TIMEOUT_CONFIG, "45000")
+    props.put(GroupConfig.CONSUMER_SESSION_TIMEOUT_CONFIG, "45000")
 
     assertThrows(classOf[InvalidRequestException], () => configHandler.processConfigChanges("", props))
   }

@@ -19,7 +19,7 @@ package org.apache.kafka.coordinator.group.runtime;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.coordinator.group.consumer.ConsumerGroupConfigManager;
+import org.apache.kafka.coordinator.group.GroupConfigManager;
 import org.apache.kafka.coordinator.group.metrics.CoordinatorMetrics;
 import org.apache.kafka.timeline.SnapshotRegistry;
 
@@ -80,11 +80,11 @@ public interface CoordinatorShardBuilder<S extends CoordinatorShard<U>, U> {
     /**
      * Sets the consumer group config manager.
      *
-     * @param consumerGroupConfigManager The config manager.
+     * @param groupConfigManager The config manager.
      * @return The builder.
      */
-    CoordinatorShardBuilder<S, U> withConsumerGroupConfigManager(
-        ConsumerGroupConfigManager consumerGroupConfigManager
+    CoordinatorShardBuilder<S, U> withGroupConfigManager(
+        GroupConfigManager groupConfigManager
     );
 
     /**

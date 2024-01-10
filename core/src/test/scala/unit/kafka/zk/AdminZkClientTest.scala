@@ -31,7 +31,7 @@ import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.config.internals.QuotaConfigs
 import org.apache.kafka.common.errors.{InvalidReplicaAssignmentException, InvalidTopicException, TopicExistsException}
 import org.apache.kafka.common.metrics.Quota
-import org.apache.kafka.coordinator.group.consumer.ConsumerGroupConfig
+import org.apache.kafka.coordinator.group.GroupConfig
 import org.apache.kafka.server.common.AdminOperationException
 import org.apache.kafka.server.config.ConfigType
 import org.apache.kafka.storage.internals.log.LogConfig
@@ -427,11 +427,11 @@ class AdminZkClientTest extends QuorumTestHarness with Logging with RackAwareTes
   }
 
   @Test
-  def testChangeConsumerGroupConfig(): Unit = {
+  def testChangeGroupConfig(): Unit = {
     val config = new Properties()
-    config.put(ConsumerGroupConfig.CONSUMER_SESSION_TIMEOUT_CONFIG, "10")
+    config.put(GroupConfig.CONSUMER_SESSION_TIMEOUT_CONFIG, "10")
     adminZkClient.changeGroupConfig("foo", config)
     val props = zkClient.getEntityConfigs(ConfigType.GROUP, "foo")
-    assertEquals("10", props.getProperty(ConsumerGroupConfig.CONSUMER_SESSION_TIMEOUT_CONFIG))
+    assertEquals("10", props.getProperty(GroupConfig.CONSUMER_SESSION_TIMEOUT_CONFIG))
   }
 }

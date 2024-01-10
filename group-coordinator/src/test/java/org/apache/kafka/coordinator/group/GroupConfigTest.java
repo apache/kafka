@@ -15,27 +15,28 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.coordinator.group.consumer;
+package org.apache.kafka.coordinator.group;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.errors.InvalidConfigurationException;
+import org.apache.kafka.coordinator.group.GroupConfig;
 import org.junit.jupiter.api.Test;
 
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
 
-public class ConsumerGroupConfigTest {
+public class GroupConfigTest {
 
     @Test
     public void testFromPropsInvalid() {
-        ConsumerGroupConfig.configNames().forEach(name -> {
-            if (ConsumerGroupConfig.CONSUMER_SESSION_TIMEOUT_CONFIG.equals(name)) {
+        GroupConfig.configNames().forEach(name -> {
+            if (GroupConfig.CONSUMER_SESSION_TIMEOUT_CONFIG.equals(name)) {
                 assertPropertyInvalid(name, "not_a_number", "-0.1", "1.2");
-            } else if (ConsumerGroupConfig.CONSUMER_HEARTBEAT_INTERVAL_CONFIG.equals(name)) {
+            } else if (GroupConfig.CONSUMER_HEARTBEAT_INTERVAL_CONFIG.equals(name)) {
                 assertPropertyInvalid(name, "not_a_number", "-0.1", "1.2");
             } else {
                 assertPropertyInvalid(name, "not_a_number", "-1");
@@ -47,7 +48,7 @@ public class ConsumerGroupConfigTest {
         for (Object value : values) {
             Properties props = new Properties();
             props.setProperty(name, value.toString());
-            assertThrows(Exception.class, () -> new ConsumerGroupConfig(props));
+            assertThrows(Exception.class, () -> new GroupConfig(props));
         }
     }
 
@@ -62,30 +63,30 @@ public class ConsumerGroupConfigTest {
 
     private void doTestInvalidProps(int sessionTimeoutMs, int heartbeatIntervalMs) {
         Properties props = new Properties();
-        props.put(ConsumerGroupConfig.CONSUMER_SESSION_TIMEOUT_CONFIG, String.valueOf(sessionTimeoutMs));
-        props.put(ConsumerGroupConfig.CONSUMER_HEARTBEAT_INTERVAL_CONFIG, String.valueOf(heartbeatIntervalMs));
-        assertThrows(ConfigException.class, () -> ConsumerGroupConfig.validate(props));
+        props.put(GroupConfig.CONSUMER_SESSION_TIMEOUT_CONFIG, String.valueOf(sessionTimeoutMs));
+        props.put(GroupConfig.CONSUMER_HEARTBEAT_INTERVAL_CONFIG, String.valueOf(heartbeatIntervalMs));
+        assertThrows(ConfigException.class, () -> GroupConfig.validate(props));
     }
 
     @Test
     public void testFromPropsWithDefaultValue() {
         Map<String, String> defaultValue = new HashMap<>();
-        defaultValue.put(ConsumerGroupConfig.CONSUMER_SESSION_TIMEOUT_CONFIG, "10");
-        defaultValue.put(ConsumerGroupConfig.CONSUMER_HEARTBEAT_INTERVAL_CONFIG, "10");
+        defaultValue.put(GroupConfig.CONSUMER_SESSION_TIMEOUT_CONFIG, "10");
+        defaultValue.put(GroupConfig.CONSUMER_HEARTBEAT_INTERVAL_CONFIG, "10");
 
         Properties props = new Properties();
-        props.put(ConsumerGroupConfig.CONSUMER_SESSION_TIMEOUT_CONFIG, "20");
-        ConsumerGroupConfig config = ConsumerGroupConfig.fromProps(defaultValue, props);
+        props.put(GroupConfig.CONSUMER_SESSION_TIMEOUT_CONFIG, "20");
+        GroupConfig config = GroupConfig.fromProps(defaultValue, props);
 
-        assertEquals(10, config.getInt(ConsumerGroupConfig.CONSUMER_HEARTBEAT_INTERVAL_CONFIG));
-        assertEquals(20, config.getInt(ConsumerGroupConfig.CONSUMER_SESSION_TIMEOUT_CONFIG));
+        assertEquals(10, config.getInt(GroupConfig.CONSUMER_HEARTBEAT_INTERVAL_CONFIG));
+        assertEquals(20, config.getInt(GroupConfig.CONSUMER_SESSION_TIMEOUT_CONFIG));
     }
 
     @Test
     public void testInvalidConfigName() {
         Properties props = new Properties();
-        props.put(ConsumerGroupConfig.CONSUMER_SESSION_TIMEOUT_CONFIG, "10");
+        props.put(GroupConfig.CONSUMER_SESSION_TIMEOUT_CONFIG, "10");
         props.put("invalid.config.name", "10");
-        assertThrows(InvalidConfigurationException.class, () -> ConsumerGroupConfig.validate(props));
+        assertThrows(InvalidConfigurationException.class, () -> GroupConfig.validate(props));
     }
 }

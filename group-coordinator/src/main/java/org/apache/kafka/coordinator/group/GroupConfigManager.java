@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.coordinator.group.consumer;
+package org.apache.kafka.coordinator.group;
 
 import org.apache.kafka.common.errors.InvalidRequestException;
 
@@ -25,45 +25,45 @@ import java.util.Properties;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * The consumer group config manager is responsible for config modification and cleaning.
+ * The group config manager is responsible for config modification and cleaning.
  */
-public class ConsumerGroupConfigManager {
+public class GroupConfigManager {
 
-    private final ConsumerGroupConfig defaultConfig;
+    private final GroupConfig defaultConfig;
 
-    private final Map<String, ConsumerGroupConfig> configMap;
+    private final Map<String, GroupConfig> configMap;
 
-    public ConsumerGroupConfigManager(Map<?, ?>  defaultConfig) {
+    public GroupConfigManager(Map<?, ?>  defaultConfig) {
         this.configMap = new ConcurrentHashMap<>();
-        this.defaultConfig = new ConsumerGroupConfig(defaultConfig);
+        this.defaultConfig = new GroupConfig(defaultConfig);
     }
 
     /**
      * Update the configuration of the provided group.
      *
      * @param groupId                   The group id.
-     * @param newConsumerGroupConfig    The new consumer group config.
+     * @param newGroupConfig            The new group config.
      */
-    public void updateConsumerGroupConfig(String groupId, Properties newConsumerGroupConfig) {
+    public void updateGroupConfig(String groupId, Properties newGroupConfig) {
         if (null == groupId || groupId.isEmpty()) {
-            throw new InvalidRequestException("Consumer group name can't be empty.");
+            throw new InvalidRequestException("Group name can't be empty.");
         }
 
         // Validate the configuration
-        ConsumerGroupConfig.validate(newConsumerGroupConfig);
+        GroupConfig.validate(newGroupConfig);
 
-        final ConsumerGroupConfig newConfig = ConsumerGroupConfig.fromProps(defaultConfig.originals(),
-            newConsumerGroupConfig);
+        final GroupConfig newConfig = GroupConfig.fromProps(defaultConfig.originals(),
+            newGroupConfig);
         configMap.put(groupId, newConfig);
     }
 
     /**
-     * Get the consumer group config if it exists, otherwise return None.
+     * Get the group config if it exists, otherwise return None.
      *
      * @param groupId  The group id.
-     * @return The consumer group config.
+     * @return The group config.
      */
-    public Optional<ConsumerGroupConfig> getConsumerGroupConfig(String groupId) {
+    public Optional<GroupConfig> getGroupConfig(String groupId) {
         if (configMap.containsKey(groupId))
             return Optional.of(configMap.get(groupId));
 
@@ -71,7 +71,7 @@ public class ConsumerGroupConfigManager {
     }
 
     /**
-     * Remove all consumer group configs.
+     * Remove all group configs.
      */
     public void close() {
         configMap.clear();

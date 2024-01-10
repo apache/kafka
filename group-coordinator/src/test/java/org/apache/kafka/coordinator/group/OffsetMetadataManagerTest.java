@@ -49,7 +49,6 @@ import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.annotation.ApiKeyVersionsSource;
 import org.apache.kafka.coordinator.group.assignor.RangeAssignor;
 import org.apache.kafka.coordinator.group.consumer.ConsumerGroup;
-import org.apache.kafka.coordinator.group.consumer.ConsumerGroupConfigManager;
 import org.apache.kafka.coordinator.group.consumer.ConsumerGroupMember;
 import org.apache.kafka.coordinator.group.generated.OffsetCommitKey;
 import org.apache.kafka.coordinator.group.generated.OffsetCommitValue;
@@ -101,7 +100,7 @@ public class OffsetMetadataManagerTest {
             private MetadataImage metadataImage = null;
             private GroupCoordinatorConfig config = null;
             private GroupCoordinatorMetricsShard metrics = mock(GroupCoordinatorMetricsShard.class);
-            private ConsumerGroupConfigManager configManager = mock(ConsumerGroupConfigManager.class);
+            private GroupConfigManager configManager = mock(GroupConfigManager.class);
 
             Builder withOffsetMetadataMaxSize(int offsetMetadataMaxSize) {
                 config = GroupCoordinatorConfigTest.createGroupCoordinatorConfig(offsetMetadataMaxSize, 60000L, 24 * 60 * 1000);
@@ -133,7 +132,7 @@ public class OffsetMetadataManagerTest {
                         .withMetadataImage(metadataImage)
                         .withConsumerGroupAssignors(Collections.singletonList(new RangeAssignor()))
                         .withGroupCoordinatorMetricsShard(metrics)
-                        .withConsumerGroupConfigManager(configManager)
+                        .withGroupConfigManager(configManager)
                         .build();
                 }
 

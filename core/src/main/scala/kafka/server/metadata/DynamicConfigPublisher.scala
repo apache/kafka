@@ -116,13 +116,13 @@ class DynamicConfigPublisher(
                 })
             case GROUP =>
               // Apply changes to a group's dynamic configuration.
-              dynamicConfigHandlers.get(ConfigType.GROUP).foreach(consumerGroupConfigHandler =>
+              dynamicConfigHandlers.get(ConfigType.GROUP).foreach(groupConfigHandler =>
                 try {
-                  info(s"Updating consumer group ${resource.name()} with new configuration : " +
+                  info(s"Updating group ${resource.name()} with new configuration : " +
                     toLoggableProps(resource, props).mkString(","))
-                  consumerGroupConfigHandler.processConfigChanges(resource.name(), props)
+                  groupConfigHandler.processConfigChanges(resource.name(), props)
                 } catch {
-                  case t: Throwable => faultHandler.handleFault("Error updating consumer group " +
+                  case t: Throwable => faultHandler.handleFault("Error updating group " +
                     s"${resource.name()} with new configuration: ${toLoggableProps(resource, props).mkString(",")} " +
                     s"in $deltaName", t)
                 })

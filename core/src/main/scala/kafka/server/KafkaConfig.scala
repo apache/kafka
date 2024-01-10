@@ -43,8 +43,8 @@ import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.security.authenticator.DefaultKafkaPrincipalBuilder
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.coordinator.group.Group.GroupType
+import org.apache.kafka.coordinator.group.GroupConfig
 import org.apache.kafka.coordinator.group.assignor.{PartitionAssignor, RangeAssignor, UniformAssignor}
-import org.apache.kafka.coordinator.group.consumer.ConsumerGroupConfig
 import org.apache.kafka.raft.RaftConfig
 import org.apache.kafka.server.authorizer.Authorizer
 import org.apache.kafka.server.common.{MetadataVersion, MetadataVersionValidator}
@@ -529,10 +529,10 @@ object KafkaConfig {
   val GroupCoordinatorNumThreadsProp = "group.coordinator.threads"
 
   /** Consumer group configs */
-  val ConsumerGroupSessionTimeoutMsProp = GroupConfigPrefix + ConsumerGroupConfig.CONSUMER_SESSION_TIMEOUT_CONFIG
+  val ConsumerGroupSessionTimeoutMsProp = GroupConfigPrefix + GroupConfig.CONSUMER_SESSION_TIMEOUT_CONFIG
   val ConsumerGroupMinSessionTimeoutMsProp = "group.consumer.min.session.timeout.ms"
   val ConsumerGroupMaxSessionTimeoutMsProp = "group.consumer.max.session.timeout.ms"
-  val ConsumerGroupHeartbeatIntervalMsProp = GroupConfigPrefix + ConsumerGroupConfig.CONSUMER_HEARTBEAT_INTERVAL_CONFIG
+  val ConsumerGroupHeartbeatIntervalMsProp = GroupConfigPrefix + GroupConfig.CONSUMER_HEARTBEAT_INTERVAL_CONFIG
   val ConsumerGroupMinHeartbeatIntervalMsProp = "group.consumer.min.heartbeat.interval.ms"
   val ConsumerGroupMaxHeartbeatIntervalMsProp ="group.consumer.max.heartbeat.interval.ms"
   val ConsumerGroupMaxSizeProp = "group.consumer.max.size"
@@ -1380,10 +1380,10 @@ object KafkaConfig {
       .defineInternal(NewGroupCoordinatorEnableProp, BOOLEAN, Defaults.NewGroupCoordinatorEnable, null, MEDIUM, NewGroupCoordinatorEnableDoc)
 
       /** Consumer groups configs */
-      .define(ConsumerGroupSessionTimeoutMsProp, INT, ConsumerGroupConfig.DEFAULT_CONSUMER_GROUP_SESSION_TIMEOUT_MS, atLeast(1), MEDIUM, ConsumerGroupSessionTimeoutMsDoc)
+      .define(ConsumerGroupSessionTimeoutMsProp, INT, GroupConfig.DEFAULT_CONSUMER_GROUP_SESSION_TIMEOUT_MS, atLeast(1), MEDIUM, ConsumerGroupSessionTimeoutMsDoc)
       .define(ConsumerGroupMinSessionTimeoutMsProp, INT, Defaults.ConsumerGroupMinSessionTimeoutMs, atLeast(1), MEDIUM, ConsumerGroupMinSessionTimeoutMsDoc)
       .define(ConsumerGroupMaxSessionTimeoutMsProp, INT, Defaults.ConsumerGroupMaxSessionTimeoutMs, atLeast(1), MEDIUM, ConsumerGroupMaxSessionTimeoutMsDoc)
-      .define(ConsumerGroupHeartbeatIntervalMsProp, INT, ConsumerGroupConfig.DEFAULT_CONSUMER_GROUP_HEARTBEAT_INTERVAL_MS, atLeast(1), MEDIUM, ConsumerGroupHeartbeatIntervalMsDoc)
+      .define(ConsumerGroupHeartbeatIntervalMsProp, INT, GroupConfig.DEFAULT_CONSUMER_GROUP_HEARTBEAT_INTERVAL_MS, atLeast(1), MEDIUM, ConsumerGroupHeartbeatIntervalMsDoc)
       .define(ConsumerGroupMinHeartbeatIntervalMsProp, INT, Defaults.ConsumerGroupMinHeartbeatIntervalMs, atLeast(1), MEDIUM, ConsumerGroupMinHeartbeatIntervalMsDoc)
       .define(ConsumerGroupMaxHeartbeatIntervalMsProp, INT, Defaults.ConsumerGroupMaxHeartbeatIntervalMs, atLeast(1), MEDIUM, ConsumerGroupMaxHeartbeatIntervalMsDoc)
       .define(ConsumerGroupMaxSizeProp, INT, Defaults.ConsumerGroupMaxSize, atLeast(1), MEDIUM, ConsumerGroupMaxSizeDoc)
@@ -2569,11 +2569,11 @@ class KafkaConfig private(doLog: Boolean, val props: java.util.Map[_, _], dynami
     logProps
   }
 
-  def extractConsumerGroupConfigMap: java.util.Map[String, Object] = {
-    val consumerGroupProps = new java.util.HashMap[String, Object]()
-    consumerGroupProps.put(ConsumerGroupConfig.CONSUMER_SESSION_TIMEOUT_CONFIG, consumerGroupSessionTimeoutMs)
-    consumerGroupProps.put(ConsumerGroupConfig.CONSUMER_HEARTBEAT_INTERVAL_CONFIG, consumerGroupHeartbeatIntervalMs)
-    consumerGroupProps
+  def extractGroupConfigMap: java.util.Map[String, Object] = {
+    val groupProps = new java.util.HashMap[String, Object]()
+    groupProps.put(GroupConfig.CONSUMER_SESSION_TIMEOUT_CONFIG, consumerGroupSessionTimeoutMs)
+    groupProps.put(GroupConfig.CONSUMER_HEARTBEAT_INTERVAL_CONFIG, consumerGroupHeartbeatIntervalMs)
+    groupProps
   }
 
   @nowarn("cat=deprecation")

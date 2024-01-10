@@ -74,7 +74,6 @@ import org.apache.kafka.coordinator.group.assignor.PartitionAssignorException;
 import org.apache.kafka.coordinator.group.assignor.SubscribedTopicDescriber;
 import org.apache.kafka.coordinator.group.consumer.Assignment;
 import org.apache.kafka.coordinator.group.consumer.ConsumerGroup;
-import org.apache.kafka.coordinator.group.consumer.ConsumerGroupConfigManager;
 import org.apache.kafka.coordinator.group.consumer.ConsumerGroupMember;
 import org.apache.kafka.coordinator.group.consumer.TopicMetadata;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupCurrentMemberAssignmentKey;
@@ -329,7 +328,7 @@ public class GroupMetadataManagerTest {
             private int classicGroupMinSessionTimeoutMs = 10;
             private int classicGroupMaxSessionTimeoutMs = 10 * 60 * 1000;
             private GroupCoordinatorMetricsShard metrics = mock(GroupCoordinatorMetricsShard.class);
-            private ConsumerGroupConfigManager consumerGroupConfigManager = mock(ConsumerGroupConfigManager.class);
+            private GroupConfigManager groupConfigManager = mock(GroupConfigManager.class);
 
             public Builder withMetadataImage(MetadataImage metadataImage) {
                 this.metadataImage = metadataImage;
@@ -402,7 +401,7 @@ public class GroupMetadataManagerTest {
                         .withClassicGroupInitialRebalanceDelayMs(classicGroupInitialRebalanceDelayMs)
                         .withClassicGroupNewMemberJoinTimeoutMs(classicGroupNewMemberJoinTimeoutMs)
                         .withGroupCoordinatorMetricsShard(metrics)
-                        .withConsumerGroupConfigManager(consumerGroupConfigManager)
+                        .withGroupConfigManager(groupConfigManager)
                         .build(),
                     classicGroupInitialRebalanceDelayMs,
                     classicGroupNewMemberJoinTimeoutMs

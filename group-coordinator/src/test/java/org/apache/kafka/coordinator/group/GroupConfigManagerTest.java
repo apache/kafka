@@ -15,18 +15,20 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.coordinator.group.consumer;
+package org.apache.kafka.coordinator.group;
 
-import static org.apache.kafka.coordinator.group.consumer.ConsumerGroupConfig.CONSUMER_HEARTBEAT_INTERVAL_CONFIG;
-import static org.apache.kafka.coordinator.group.consumer.ConsumerGroupConfig.CONSUMER_SESSION_TIMEOUT_CONFIG;
-import static org.apache.kafka.coordinator.group.consumer.ConsumerGroupConfig.DEFAULT_CONSUMER_GROUP_HEARTBEAT_INTERVAL_MS;
-import static org.apache.kafka.coordinator.group.consumer.ConsumerGroupConfig.DEFAULT_CONSUMER_GROUP_SESSION_TIMEOUT_MS;
+import static org.apache.kafka.coordinator.group.GroupConfig.CONSUMER_HEARTBEAT_INTERVAL_CONFIG;
+import static org.apache.kafka.coordinator.group.GroupConfig.CONSUMER_SESSION_TIMEOUT_CONFIG;
+import static org.apache.kafka.coordinator.group.GroupConfig.DEFAULT_CONSUMER_GROUP_HEARTBEAT_INTERVAL_MS;
+import static org.apache.kafka.coordinator.group.GroupConfig.DEFAULT_CONSUMER_GROUP_SESSION_TIMEOUT_MS;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import org.apache.kafka.common.errors.InvalidRequestException;
+import org.apache.kafka.coordinator.group.GroupConfig;
+import org.apache.kafka.coordinator.group.GroupConfigManager;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -36,9 +38,9 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
 
-public class ConsumerGroupConfigManagerTest {
+public class GroupConfigManagerTest {
 
-    private ConsumerGroupConfigManager configManager;
+    private GroupConfigManager configManager;
 
     @BeforeEach
     public void setUp() {
@@ -55,35 +57,35 @@ public class ConsumerGroupConfigManagerTest {
     @Test
     public void testUpdateConfigWithInvalidGroupId() {
         assertThrows(InvalidRequestException.class,
-            () -> configManager.updateConsumerGroupConfig("", new Properties()));
+            () -> configManager.updateGroupConfig("", new Properties()));
     }
 
     @Test
     public void testGetNonExistentGroupConfig() {
-        Optional<ConsumerGroupConfig> consumerGroupConfig = configManager.getConsumerGroupConfig("foo");
-        assertFalse(consumerGroupConfig.isPresent());
+        Optional<GroupConfig> groupConfig = configManager.getGroupConfig("foo");
+        assertFalse(groupConfig.isPresent());
     }
 
     @Test
-    public void testUpdateConsumerGroupConfig() {
+    public void testUpdateGroupConfig() {
         String groupId = "foo";
         Properties props = new Properties();
         props.put(CONSUMER_SESSION_TIMEOUT_CONFIG, "20");
-        configManager.updateConsumerGroupConfig(groupId, props);
+        configManager.updateGroupConfig(groupId, props);
 
-        Optional<ConsumerGroupConfig> configOptional = configManager.getConsumerGroupConfig(groupId);
+        Optional<GroupConfig> configOptional = configManager.getGroupConfig(groupId);
         assertTrue(configOptional.isPresent());
 
-        ConsumerGroupConfig config = configOptional.get();
+        GroupConfig config = configOptional.get();
         assertEquals(20, config.getInt(CONSUMER_SESSION_TIMEOUT_CONFIG));
         assertEquals(DEFAULT_CONSUMER_GROUP_HEARTBEAT_INTERVAL_MS, config.getInt(CONSUMER_HEARTBEAT_INTERVAL_CONFIG));
     }
 
-    private ConsumerGroupConfigManager createConfigManager() {
+    private GroupConfigManager createConfigManager() {
         Map<String, String> defaultConfig = new HashMap<>();
         defaultConfig.put(CONSUMER_SESSION_TIMEOUT_CONFIG, String.valueOf(DEFAULT_CONSUMER_GROUP_SESSION_TIMEOUT_MS));
         defaultConfig.put(CONSUMER_HEARTBEAT_INTERVAL_CONFIG,
             String.valueOf(DEFAULT_CONSUMER_GROUP_HEARTBEAT_INTERVAL_MS));
-        return new ConsumerGroupConfigManager(defaultConfig);
+        return new GroupConfigManager(defaultConfig);
     }
 }

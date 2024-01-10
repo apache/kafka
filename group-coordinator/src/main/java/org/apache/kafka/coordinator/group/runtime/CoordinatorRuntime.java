@@ -27,7 +27,7 @@ import org.apache.kafka.common.requests.TransactionResult;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.coordinator.group.consumer.ConsumerGroupConfigManager;
+import org.apache.kafka.coordinator.group.GroupConfigManager;
 import org.apache.kafka.coordinator.group.metrics.CoordinatorRuntimeMetrics;
 import org.apache.kafka.coordinator.group.metrics.CoordinatorMetrics;
 import org.apache.kafka.deferred.DeferredEvent;
@@ -99,7 +99,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
         private Duration defaultWriteTimeout;
         private CoordinatorRuntimeMetrics runtimeMetrics;
         private CoordinatorMetrics coordinatorMetrics;
-        private ConsumerGroupConfigManager consumerGroupConfigManager;
+        private GroupConfigManager groupConfigManager;
 
         public Builder<S, U> withLogPrefix(String logPrefix) {
             this.logPrefix = logPrefix;
@@ -156,8 +156,8 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
             return this;
         }
 
-        public Builder<S, U> withConsumerGroupConfigManager(ConsumerGroupConfigManager consumerGroupConfigManager) {
-            this.consumerGroupConfigManager = consumerGroupConfigManager;
+        public Builder<S, U> withGroupConfigManager(GroupConfigManager groupConfigManager) {
+            this.groupConfigManager = groupConfigManager;
             return this;
         }
 
@@ -182,8 +182,8 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
                 throw new IllegalArgumentException("CoordinatorRuntimeMetrics must be set.");
             if (coordinatorMetrics == null)
                 throw new IllegalArgumentException("CoordinatorMetrics must be set.");
-            if (consumerGroupConfigManager == null)
-                throw new IllegalArgumentException("ConsumerGroupManager must be set.");
+            if (groupConfigManager == null)
+                throw new IllegalArgumentException("GroupManager must be set.");
 
             return new CoordinatorRuntime<>(
                 logPrefix,
@@ -197,7 +197,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
                 defaultWriteTimeout,
                 runtimeMetrics,
                 coordinatorMetrics,
-                consumerGroupConfigManager
+                groupConfigManager
             );
         }
     }
@@ -496,7 +496,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
                             .withTimer(timer)
                             .withCoordinatorMetrics(coordinatorMetrics)
                             .withTopicPartition(tp)
-                            .withConsumerGroupConfigManager(consumerGroupConfigManager)
+                            .withGroupConfigManager(groupConfigManager)
                             .build(),
                         tp
                     );
@@ -1268,9 +1268,9 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
     private final CoordinatorMetrics coordinatorMetrics;
 
     /**
-     * The consumer group config manager.
+     * The group config manager.
      */
-    private final ConsumerGroupConfigManager consumerGroupConfigManager;
+    private final GroupConfigManager groupConfigManager;
 
     /**
      * Atomic boolean indicating whether the runtime is running.
@@ -1307,7 +1307,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
         Duration defaultWriteTimeout,
         CoordinatorRuntimeMetrics runtimeMetrics,
         CoordinatorMetrics coordinatorMetrics,
-        ConsumerGroupConfigManager consumerGroupConfigManager
+        GroupConfigManager groupConfigManager
     ) {
         this.logPrefix = logPrefix;
         this.logContext = logContext;
@@ -1323,7 +1323,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
         this.coordinatorShardBuilderSupplier = coordinatorShardBuilderSupplier;
         this.runtimeMetrics = runtimeMetrics;
         this.coordinatorMetrics = coordinatorMetrics;
-        this.consumerGroupConfigManager = consumerGroupConfigManager;
+        this.groupConfigManager = groupConfigManager;
     }
 
     /**
