@@ -664,7 +664,7 @@ public class OffsetMetadataManager {
     }
 
     /**
-     * @return true iif there is at least one pending transactional offsets for the given
+     * @return true iff there is at least one pending transactional offset for the given
      * group, topic and partition.
      */
     private boolean hasPendingTransactionalOffsets(
