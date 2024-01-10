@@ -514,6 +514,9 @@
       <allow pkg="kafka.server" />
       <subpackage name="rest">
         <allow pkg="javax.ws.rs" />
+        <allow pkg="javax.inject" />
+        <allow pkg="org.glassfish.jersey" />
+        <allow pkg="org.glassfish.hk2" />
       </subpackage>
     </subpackage>
 
@@ -528,6 +531,8 @@
       <subpackage name="rest">
         <allow pkg="org.eclipse.jetty" />
         <allow pkg="javax.ws.rs" />
+        <allow pkg="javax.inject" />
+        <allow pkg="org.glassfish.hk2" />
         <allow pkg="javax.servlet" />
         <allow pkg="org.glassfish.jersey" />
         <allow pkg="com.fasterxml.jackson" />

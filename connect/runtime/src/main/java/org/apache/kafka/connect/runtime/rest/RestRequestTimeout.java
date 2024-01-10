@@ -14,29 +14,13 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.connect.runtime.rest.resources;
+package org.apache.kafka.connect.runtime.rest;
 
-import org.apache.kafka.connect.runtime.Herder;
-import org.apache.kafka.connect.runtime.rest.RestClient;
-import org.apache.kafka.connect.runtime.rest.RestRequestTimeout;
+public interface RestRequestTimeout {
 
-import javax.inject.Inject;
-import javax.ws.rs.Path;
-
-@Path("/connectors")
-public class InternalConnectResource extends InternalClusterResource {
-
-    private final Herder herder;
-
-    @Inject
-    public InternalConnectResource(Herder herder, RestClient restClient, RestRequestTimeout requestTimeout) {
-        super(restClient, requestTimeout);
-        this.herder = herder;
-    }
-
-    @Override
-    protected Herder herderForRequest() {
-        return herder;
-    }
+    /**
+     * @return the current timeout that should be used for REST requests, in milliseconds
+     */
+    long timeoutMs();
 
 }

@@ -66,10 +66,10 @@ import org.apache.kafka.connect.runtime.errors.WorkerErrantRecordReporter;
 import org.apache.kafka.connect.runtime.isolation.LoaderSwap;
 import org.apache.kafka.connect.runtime.isolation.Plugins;
 import org.apache.kafka.connect.runtime.isolation.Plugins.ClassLoaderUsage;
+import org.apache.kafka.connect.runtime.rest.RestServer;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorOffset;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorOffsets;
 import org.apache.kafka.connect.runtime.rest.entities.Message;
-import org.apache.kafka.connect.runtime.rest.resources.ConnectResource;
 import org.apache.kafka.connect.sink.SinkConnector;
 import org.apache.kafka.connect.sink.SinkRecord;
 import org.apache.kafka.connect.sink.SinkTask;
@@ -718,7 +718,7 @@ public class Worker {
                             .map(this::taskTransactionalId)
                             .collect(Collectors.toList());
                     FenceProducersOptions fencingOptions = new FenceProducersOptions()
-                            .timeoutMs((int) ConnectResource.DEFAULT_REST_REQUEST_TIMEOUT_MS);
+                            .timeoutMs((int) RestServer.DEFAULT_REST_REQUEST_TIMEOUT_MS);
                     return admin.fenceProducers(transactionalIds, fencingOptions).all().whenComplete((ignored, error) -> {
                         if (error == null)
                             log.debug("Finished fencing out {} task producers for source connector {}", numTasks, connName);
@@ -1195,7 +1195,7 @@ public class Worker {
         Admin admin = adminFactory.apply(adminConfig);
         try {
             ListConsumerGroupOffsetsOptions listOffsetsOptions = new ListConsumerGroupOffsetsOptions()
-                    .timeoutMs((int) ConnectResource.DEFAULT_REST_REQUEST_TIMEOUT_MS);
+                    .timeoutMs((int) RestServer.DEFAULT_REST_REQUEST_TIMEOUT_MS);
             ListConsumerGroupOffsetsResult listConsumerGroupOffsetsResult = admin.listConsumerGroupOffsets(groupId, listOffsetsOptions);
             listConsumerGroupOffsetsResult.partitionsToOffsetAndMetadata().whenComplete((result, error) -> {
                 if (error != null) {
@@ -1299,7 +1299,7 @@ public class Worker {
                                     Map<Map<String, ?>, Map<String, ?>> offsets, ClassLoader connectorLoader, Callback<Message> cb) {
         executor.submit(plugins.withClassLoader(connectorLoader, () -> {
             try {
-                Timer timer = time.timer(Duration.ofMillis(ConnectResource.DEFAULT_REST_REQUEST_TIMEOUT_MS));
+                Timer timer = time.timer(Duration.ofMillis(RestServer.DEFAULT_REST_REQUEST_TIMEOUT_MS));
                 boolean isReset = offsets == null;
                 SinkConnectorConfig sinkConnectorConfig = new SinkConnectorConfig(plugins, connectorConfig);
                 Class<? extends Connector> sinkConnectorClass = connector.getClass();
@@ -1530,7 +1530,7 @@ public class Worker {
                                       ClassLoader connectorLoader, Callback<Message> cb) {
         executor.submit(plugins.withClassLoader(connectorLoader, () -> {
             try {
-                Timer timer = time.timer(Duration.ofMillis(ConnectResource.DEFAULT_REST_REQUEST_TIMEOUT_MS));
+                Timer timer = time.timer(Duration.ofMillis(RestServer.DEFAULT_REST_REQUEST_TIMEOUT_MS));
                 // This reads to the end of the offsets topic and can be a potentially time-consuming operation
                 offsetStore.start();
                 updateTimerAndCheckExpiry(timer, "Timed out while trying to read to the end of the offsets topic prior to modifying " +

@@ -41,18 +41,11 @@ public class HerderRequestHandler {
 
     private final RestClient restClient;
 
-    private volatile long requestTimeoutMs;
+    private final RestRequestTimeout requestTimeout;
 
-    public HerderRequestHandler(RestClient restClient, long requestTimeoutMs) {
+    public HerderRequestHandler(RestClient restClient, RestRequestTimeout requestTimeout) {
         this.restClient = restClient;
-        this.requestTimeoutMs = requestTimeoutMs;
-    }
-
-    public void requestTimeoutMs(long requestTimeoutMs) {
-        if (requestTimeoutMs < 1) {
-            throw new IllegalArgumentException("REST request timeout must be positive");
-        }
-        this.requestTimeoutMs = requestTimeoutMs;
+        this.requestTimeout = requestTimeout;
     }
 
     /**
@@ -64,7 +57,7 @@ public class HerderRequestHandler {
      */
     public <T> T completeRequest(FutureCallback<T> cb) throws Throwable {
         try {
-            return cb.get(requestTimeoutMs, TimeUnit.MILLISECONDS);
+            return cb.get(requestTimeout.timeoutMs(), TimeUnit.MILLISECONDS);
         } catch (ExecutionException e) {
             throw e.getCause();
         } catch (StagedTimeoutException e) {

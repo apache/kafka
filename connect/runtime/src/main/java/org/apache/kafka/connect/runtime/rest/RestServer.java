@@ -27,7 +27,6 @@ import org.apache.kafka.connect.runtime.Herder;
 import org.apache.kafka.connect.runtime.health.ConnectClusterDetailsImpl;
 import org.apache.kafka.connect.runtime.health.ConnectClusterStateImpl;
 import org.apache.kafka.connect.runtime.rest.errors.ConnectExceptionMapper;
-import org.apache.kafka.connect.runtime.rest.resources.ConnectResource;
 import org.apache.kafka.connect.runtime.rest.util.SSLUtils;
 import org.eclipse.jetty.server.Connector;
 import org.eclipse.jetty.server.CustomRequestLog;
@@ -43,6 +42,8 @@ import org.eclipse.jetty.servlet.ServletHolder;
 import org.eclipse.jetty.servlets.CrossOriginFilter;
 import org.eclipse.jetty.servlets.HeaderFilter;
 import org.eclipse.jetty.util.ssl.SslContextFactory;
+import org.glassfish.hk2.utilities.Binder;
+import org.glassfish.hk2.utilities.binding.AbstractBinder;
 import org.glassfish.jersey.server.ResourceConfig;
 import org.glassfish.jersey.server.ServerProperties;
 import org.glassfish.jersey.servlet.ServletContainer;
@@ -59,6 +60,7 @@ import java.util.Collections;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.concurrent.TimeUnit;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -66,6 +68,13 @@ import java.util.regex.Pattern;
  * Embedded server for the REST API that provides the control plane for Kafka Connect workers.
  */
 public abstract class RestServer {
+
+    // TODO: This should not be so long. However, due to potentially long rebalances that may have to wait a full
+    // session timeout to complete, during which we cannot serve some requests. Ideally we could reduce this, but
+    // we need to consider all possible scenarios this could fail. It might be ok to fail with a timeout in rare cases,
+    // but currently a worker simply leaving the group can take this long as well.
+    public static final long DEFAULT_REST_REQUEST_TIMEOUT_MS = TimeUnit.SECONDS.toMillis(90);
+
     private static final Logger log = LoggerFactory.getLogger(RestServer.class);
 
     // Used to distinguish between Admin connectors and regular REST API connectors when binding admin handlers
@@ -80,8 +89,8 @@ public abstract class RestServer {
     protected final RestServerConfig config;
     private final ContextHandlerCollection handlers;
     private final Server jettyServer;
+    private final RequestTimeout requestTimeout;
 
-    private Collection<ConnectResource> resources;
     private List<ConnectRestExtension> connectRestExtensions = Collections.emptyList();
 
     /**
@@ -95,6 +104,7 @@ public abstract class RestServer {
 
         jettyServer = new Server();
         handlers = new ContextHandlerCollection();
+        requestTimeout = new RequestTimeout(DEFAULT_REST_REQUEST_TIMEOUT_MS);
 
         createConnectors(listeners, adminListeners);
     }
@@ -207,44 +217,31 @@ public abstract class RestServer {
 
     protected final void initializeResources() {
         log.info("Initializing REST resources");
-        resources = new ArrayList<>();
 
-        ResourceConfig resourceConfig = new ResourceConfig();
-        resourceConfig.register(new JacksonJsonProvider());
-
-        Collection<ConnectResource> regularResources = regularResources();
+        ResourceConfig resourceConfig = newResourceConfig();
+        Collection<Class<?>> regularResources = regularResources();
         regularResources.forEach(resourceConfig::register);
-        resources.addAll(regularResources);
-
-        resourceConfig.register(ConnectExceptionMapper.class);
-        resourceConfig.property(ServerProperties.WADL_FEATURE_DISABLE, true);
-
         configureRegularResources(resourceConfig);
 
         List<String> adminListeners = config.adminListeners();
         ResourceConfig adminResourceConfig;
-        if (adminListeners == null) {
-            log.info("Adding admin resources to main listener");
-            adminResourceConfig = resourceConfig;
-            Collection<ConnectResource> adminResources = adminResources();
-            resources.addAll(adminResources);
-            adminResources.forEach(adminResourceConfig::register);
-            configureAdminResources(adminResourceConfig);
-        } else if (adminListeners.size() > 0) {
-            // TODO: we need to check if these listeners are same as 'listeners'
-            // TODO: the following code assumes that they are different
-            log.info("Adding admin resources to admin listener");
-            adminResourceConfig = new ResourceConfig();
-            adminResourceConfig.register(new JacksonJsonProvider());
-            Collection<ConnectResource> adminResources = adminResources();
-            resources.addAll(adminResources);
-            adminResources.forEach(adminResourceConfig::register);
-            adminResourceConfig.register(ConnectExceptionMapper.class);
-            configureAdminResources(adminResourceConfig);
-        } else {
+        if (adminListeners != null && adminListeners.isEmpty()) {
             log.info("Skipping adding admin resources");
             // set up adminResource but add no handlers to it
             adminResourceConfig = resourceConfig;
+        } else {
+            if (adminListeners == null) {
+                log.info("Adding admin resources to main listener");
+                adminResourceConfig = resourceConfig;
+            } else {
+                // TODO: we need to check if these listeners are same as 'listeners'
+                // TODO: the following code assumes that they are different
+                log.info("Adding admin resources to admin listener");
+                adminResourceConfig = newResourceConfig();
+            }
+            Collection<Class<?>> adminResources = adminResources();
+            adminResources.forEach(adminResourceConfig::register);
+            configureAdminResources(adminResourceConfig);
         }
 
         ServletContainer servletContainer = new ServletContainer(resourceConfig);
@@ -302,17 +299,26 @@ public abstract class RestServer {
         log.info("REST resources initialized; server is started and ready to handle requests");
     }
 
-    /**
-     * @return the {@link ConnectResource resources} that should be registered with the
-     * standard (i.e., non-admin) listener for this server; may be empty, but not null
-     */
-    protected abstract Collection<ConnectResource> regularResources();
+    private ResourceConfig newResourceConfig() {
+        ResourceConfig result = new ResourceConfig();
+        result.register(new JacksonJsonProvider());
+        result.register(requestTimeout.binder());
+        result.register(ConnectExceptionMapper.class);
+        result.property(ServerProperties.WADL_FEATURE_DISABLE, true);
+        return result;
+    }
 
     /**
-     * @return the {@link ConnectResource resources} that should be registered with the
+     * @return the resources that should be registered with the
+     * standard (i.e., non-admin) listener for this server; may be empty, but not null
+     */
+    protected abstract Collection<Class<?>> regularResources();
+
+    /**
+     * @return the resources that should be registered with the
      * admin listener for this server; may be empty, but not null
      */
-    protected abstract Collection<ConnectResource> adminResources();
+    protected abstract Collection<Class<?>> adminResources();
 
     /**
      * Pluggable hook to customize the regular (i.e., non-admin) resources on this server
@@ -438,7 +444,7 @@ public abstract class RestServer {
 
     // For testing only
     public void requestTimeout(long requestTimeoutMs) {
-        this.resources.forEach(resource -> resource.requestTimeout(requestTimeoutMs));
+        this.requestTimeout.timeoutMs(requestTimeoutMs);
     }
 
     String determineAdvertisedProtocol() {
@@ -488,7 +494,7 @@ public abstract class RestServer {
             config.restExtensions(),
             config, ConnectRestExtension.class);
 
-        long herderRequestTimeoutMs = ConnectResource.DEFAULT_REST_REQUEST_TIMEOUT_MS;
+        long herderRequestTimeoutMs = DEFAULT_REST_REQUEST_TIMEOUT_MS;
 
         Integer rebalanceTimeoutMs = config.rebalanceTimeoutMs();
 
@@ -519,5 +525,36 @@ public abstract class RestServer {
         FilterHolder headerFilterHolder = new FilterHolder(HeaderFilter.class);
         headerFilterHolder.setInitParameter("headerConfig", headerConfig);
         context.addFilter(headerFilterHolder, "/*", EnumSet.of(DispatcherType.REQUEST));
+    }
+
+    private static class RequestTimeout implements RestRequestTimeout {
+
+        private final RequestBinder binder;
+        private volatile long timeoutMs;
+
+        public RequestTimeout(long initialTimeoutMs) {
+            this.timeoutMs = initialTimeoutMs;
+            this.binder = new RequestBinder();
+        }
+
+        @Override
+        public long timeoutMs() {
+            return timeoutMs;
+        }
+
+        public void timeoutMs(long timeoutMs) {
+            this.timeoutMs = timeoutMs;
+        }
+
+        public Binder binder() {
+            return binder;
+        }
+
+        private class RequestBinder extends AbstractBinder {
+            @Override
+            protected void configure() {
+                bind(RequestTimeout.this).to(RestRequestTimeout.class);
+            }
+        }
     }
 }
