@@ -16,7 +16,9 @@
  */
 package org.apache.kafka.connect.runtime.errors;
 
+import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
+import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.connect.runtime.ConnectorConfig;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.slf4j.Logger;
@@ -29,7 +31,7 @@ import java.util.concurrent.Future;
 /**
  * Writes errors and their context to application logs.
  */
-public class LogReporter implements ErrorReporter {
+public abstract class LogReporter implements ErrorReporter {
 
     private static final Logger log = LoggerFactory.getLogger(LogReporter.class);
     private static final Future<RecordMetadata> COMPLETED = CompletableFuture.completedFuture(null);
@@ -38,7 +40,7 @@ public class LogReporter implements ErrorReporter {
     private final ConnectorConfig connConfig;
     private final ErrorHandlingMetrics errorHandlingMetrics;
 
-    public LogReporter(ConnectorTaskId id, ConnectorConfig connConfig, ErrorHandlingMetrics errorHandlingMetrics) {
+    private LogReporter(ConnectorTaskId id, ConnectorConfig connConfig, ErrorHandlingMetrics errorHandlingMetrics) {
         Objects.requireNonNull(id);
         Objects.requireNonNull(connConfig);
         Objects.requireNonNull(errorHandlingMetrics);
@@ -71,7 +73,55 @@ public class LogReporter implements ErrorReporter {
     // Visible for testing
     String message(ProcessingContext<?> context) {
         return String.format("Error encountered in task %s. %s", id,
-                context.toString(connConfig.includeRecordDetailsInErrorLog()));
+                toString(context, connConfig.includeRecordDetailsInErrorLog()));
     }
 
+    private String toString(ProcessingContext<?> context, boolean includeMessage) {
+        StringBuilder builder = new StringBuilder();
+        builder.append("Executing stage '");
+        builder.append(context.stage().name());
+        builder.append("' with class '");
+        builder.append(context.executingClass() == null ? "null" : context.executingClass().getName());
+        builder.append('\'');
+        if (includeMessage) {
+            appendMessage(builder, context.original());
+        }
+        builder.append('.');
+        return builder.toString();
+    }
+
+    protected abstract void appendMessage(StringBuilder builder, Object original);
+
+    public static class Sink extends LogReporter {
+
+        public Sink(ConnectorTaskId id, ConnectorConfig connConfig, ErrorHandlingMetrics errorHandlingMetrics) {
+            super(id, connConfig, errorHandlingMetrics);
+        }
+
+        protected void appendMessage(StringBuilder builder, Object original) {
+            @SuppressWarnings("unchecked")
+            ConsumerRecord<byte[], byte[]> msg = (ConsumerRecord<byte[], byte[]>) original;
+            builder.append(", where consumed record is ");
+            builder.append("{topic='").append(msg.topic()).append('\'');
+            builder.append(", partition=").append(msg.partition());
+            builder.append(", offset=").append(msg.offset());
+            if (msg.timestampType() == TimestampType.CREATE_TIME || msg.timestampType() == TimestampType.LOG_APPEND_TIME) {
+                builder.append(", timestamp=").append(msg.timestamp());
+                builder.append(", timestampType=").append(msg.timestampType());
+            }
+            builder.append("}");
+        }
+    }
+
+    public static class Source extends LogReporter {
+
+        public Source(ConnectorTaskId id, ConnectorConfig connConfig, ErrorHandlingMetrics errorHandlingMetrics) {
+            super(id, connConfig, errorHandlingMetrics);
+        }
+
+        protected void appendMessage(StringBuilder builder, Object original) {
+            builder.append(", where source record is = ");
+            builder.append(original);
+        }
+    }
 }
