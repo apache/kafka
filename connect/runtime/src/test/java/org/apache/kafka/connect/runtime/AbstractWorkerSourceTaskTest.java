@@ -353,7 +353,7 @@ public class AbstractWorkerSourceTaskTest {
         StringConverter stringConverter = new StringConverter();
         SampleConverterWithHeaders testConverter = new SampleConverterWithHeaders();
 
-        createWorkerTask(stringConverter, testConverter, stringConverter, RetryWithToleranceOperatorTest.NOOP_OPERATOR,
+        createWorkerTask(stringConverter, testConverter, stringConverter, RetryWithToleranceOperatorTest.noopOperator(),
                 Collections::emptyList);
 
         expectSendRecord(null);
@@ -709,7 +709,7 @@ public class AbstractWorkerSourceTaskTest {
 
     @Test
     public void testErrorReporterConfigurationExceptionPropagation() {
-        createWorkerTask(keyConverter, valueConverter, headerConverter, RetryWithToleranceOperatorTest.NOOP_OPERATOR,
+        createWorkerTask(keyConverter, valueConverter, headerConverter, RetryWithToleranceOperatorTest.noopOperator(),
                 () -> {
                     throw new ConnectException("Failed to create error reporters");
                 }
@@ -827,7 +827,7 @@ public class AbstractWorkerSourceTaskTest {
     }
 
     private void createWorkerTask() {
-        createWorkerTask(keyConverter, valueConverter, headerConverter, RetryWithToleranceOperatorTest.NOOP_OPERATOR, Collections::emptyList);
+        createWorkerTask(keyConverter, valueConverter, headerConverter, RetryWithToleranceOperatorTest.noopOperator(), Collections::emptyList);
     }
 
     private void createWorkerTask(Converter keyConverter, Converter valueConverter, HeaderConverter headerConverter,

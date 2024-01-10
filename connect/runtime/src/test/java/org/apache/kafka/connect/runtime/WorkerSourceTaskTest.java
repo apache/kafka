@@ -244,15 +244,15 @@ public class WorkerSourceTaskTest {
     }
 
     private void createWorkerTask() {
-        createWorkerTask(TargetState.STARTED, RetryWithToleranceOperatorTest.NOOP_OPERATOR);
+        createWorkerTask(TargetState.STARTED, RetryWithToleranceOperatorTest.noopOperator());
     }
 
     private void createWorkerTaskWithErrorToleration() {
-        createWorkerTask(TargetState.STARTED, RetryWithToleranceOperatorTest.ALL_OPERATOR);
+        createWorkerTask(TargetState.STARTED, RetryWithToleranceOperatorTest.allOperator());
     }
 
     private void createWorkerTask(TargetState initialState) {
-        createWorkerTask(initialState, RetryWithToleranceOperatorTest.NOOP_OPERATOR);
+        createWorkerTask(initialState, RetryWithToleranceOperatorTest.noopOperator());
     }
 
     private void createWorkerTask(TargetState initialState, RetryWithToleranceOperator retryWithToleranceOperator) {

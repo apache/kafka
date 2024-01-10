@@ -63,7 +63,7 @@ public class WorkerTaskTest {
     @Before
     public void setup() {
         metrics = new MockConnectMetrics();
-        retryWithToleranceOperator = RetryWithToleranceOperatorTest.NOOP_OPERATOR;
+        retryWithToleranceOperator = RetryWithToleranceOperatorTest.noopOperator();
     }
 
     @After

@@ -91,20 +91,23 @@ public class RetryWithToleranceOperatorTest {
             put(WorkerConfig.VALUE_CONVERTER_CLASS_CONFIG, TestConverter.class.getName());
         }};
 
-    public static final RetryWithToleranceOperator NOOP_OPERATOR = new RetryWithToleranceOperator(
-            ERRORS_RETRY_TIMEOUT_DEFAULT, ERRORS_RETRY_MAX_DELAY_DEFAULT, NONE, SYSTEM,
-            new ErrorHandlingMetrics(
-                    new ConnectorTaskId("noop-connector", -1),
-                    new ConnectMetrics("noop-worker", new TestableWorkerConfig(PROPERTIES),
-                            new SystemTime(), "test-cluster"))
-    );
-    public static final RetryWithToleranceOperator ALL_OPERATOR = new RetryWithToleranceOperator(
-            ERRORS_RETRY_TIMEOUT_DEFAULT, ERRORS_RETRY_MAX_DELAY_DEFAULT, ALL, SYSTEM,
-            new ErrorHandlingMetrics(
-                    new ConnectorTaskId("errors-all-tolerate-connector", -1),
-                    new ConnectMetrics("errors-all-tolerate-worker", new TestableWorkerConfig(PROPERTIES),
-                            new SystemTime(), "test-cluster"))
-    );
+    public static RetryWithToleranceOperator noopOperator() {
+        return genericOperator(ERRORS_RETRY_TIMEOUT_DEFAULT, NONE, new ErrorHandlingMetrics(
+                new ConnectorTaskId("noop-connector", -1),
+                new ConnectMetrics("noop-worker", new TestableWorkerConfig(PROPERTIES),
+                        new SystemTime(), "test-cluster")));
+    }
+
+    public static RetryWithToleranceOperator allOperator() {
+        return genericOperator(ERRORS_RETRY_TIMEOUT_DEFAULT, ALL, new ErrorHandlingMetrics(
+                new ConnectorTaskId("errors-all-tolerate-connector", -1),
+                new ConnectMetrics("errors-all-tolerate-worker", new TestableWorkerConfig(PROPERTIES),
+                        new SystemTime(), "test-cluster")));
+    }
+
+    private static RetryWithToleranceOperator genericOperator(int retryTimeout, ToleranceType toleranceType, ErrorHandlingMetrics metrics) {
+        return new RetryWithToleranceOperator(retryTimeout, ERRORS_RETRY_MAX_DELAY_DEFAULT, toleranceType, SYSTEM, metrics);
+    }
 
     @Mock
     private Operation<String> mockOperation;
@@ -120,8 +123,7 @@ public class RetryWithToleranceOperatorTest {
 
     @Test
     public void testExecuteFailed() {
-        RetryWithToleranceOperator retryWithToleranceOperator = new RetryWithToleranceOperator(0,
-            ERRORS_RETRY_MAX_DELAY_DEFAULT, ALL, SYSTEM, errorHandlingMetrics);
+        RetryWithToleranceOperator retryWithToleranceOperator = genericOperator(0, ALL, errorHandlingMetrics);
 
         ProcessingContext<ConsumerRecord<byte[], byte[]>> context = new ProcessingContext<>(consumerRecord);
         retryWithToleranceOperator.executeFailed(context, Stage.TASK_PUT,
@@ -130,8 +132,7 @@ public class RetryWithToleranceOperatorTest {
 
     @Test
     public void testExecuteFailedNoTolerance() {
-        RetryWithToleranceOperator retryWithToleranceOperator = new RetryWithToleranceOperator(0,
-            ERRORS_RETRY_MAX_DELAY_DEFAULT, NONE, SYSTEM, errorHandlingMetrics);
+        RetryWithToleranceOperator retryWithToleranceOperator = genericOperator(0, NONE, errorHandlingMetrics);
 
         ProcessingContext<ConsumerRecord<byte[], byte[]>> context = new ProcessingContext<>(consumerRecord);
         assertThrows(ConnectException.class, () -> retryWithToleranceOperator.executeFailed(context, Stage.TASK_PUT,
@@ -199,7 +200,7 @@ public class RetryWithToleranceOperatorTest {
     }
 
     private RetryWithToleranceOperator setupExecutor() {
-        RetryWithToleranceOperator retryWithToleranceOperator = new RetryWithToleranceOperator(0, ERRORS_RETRY_MAX_DELAY_DEFAULT, ALL, SYSTEM, errorHandlingMetrics);
+        RetryWithToleranceOperator retryWithToleranceOperator = genericOperator(0, ALL, errorHandlingMetrics);
         return retryWithToleranceOperator;
     }
 
@@ -354,16 +355,16 @@ public class RetryWithToleranceOperatorTest {
 
     @Test
     public void testToleranceLimit() {
-        RetryWithToleranceOperator retryWithToleranceOperator = new RetryWithToleranceOperator(ERRORS_RETRY_TIMEOUT_DEFAULT, ERRORS_RETRY_MAX_DELAY_DEFAULT, NONE, SYSTEM, errorHandlingMetrics);
+        RetryWithToleranceOperator retryWithToleranceOperator = genericOperator(ERRORS_RETRY_TIMEOUT_DEFAULT, NONE, errorHandlingMetrics);
         retryWithToleranceOperator.markAsFailed();
         assertFalse("should not tolerate any errors", retryWithToleranceOperator.withinToleranceLimits());
 
-        retryWithToleranceOperator = new RetryWithToleranceOperator(ERRORS_RETRY_TIMEOUT_DEFAULT, ERRORS_RETRY_MAX_DELAY_DEFAULT, ALL, SYSTEM, errorHandlingMetrics);
+        retryWithToleranceOperator = genericOperator(ERRORS_RETRY_TIMEOUT_DEFAULT, ALL, errorHandlingMetrics);
         retryWithToleranceOperator.markAsFailed();
         retryWithToleranceOperator.markAsFailed();
         assertTrue("should tolerate all errors", retryWithToleranceOperator.withinToleranceLimits());
 
-        retryWithToleranceOperator = new RetryWithToleranceOperator(ERRORS_RETRY_TIMEOUT_DEFAULT, ERRORS_RETRY_MAX_DELAY_DEFAULT, NONE, SYSTEM, errorHandlingMetrics);
+        retryWithToleranceOperator = genericOperator(ERRORS_RETRY_TIMEOUT_DEFAULT, NONE, errorHandlingMetrics);
         assertTrue("no tolerance is within limits if no failures", retryWithToleranceOperator.withinToleranceLimits());
     }
 
