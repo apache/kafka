@@ -106,7 +106,7 @@ object ConsumerGroupCommand extends Logging {
   }
 
   def consumerGroupTypesFromString(input: String): Set[ConsumerGroupType] = {
-    val parsedStates = input.split(',').map(s => ConsumerGroupType.parse(s.trim)).toSet
+    val parsedStates = input.toLowerCase.split(',').map(s => ConsumerGroupType.parse(s.trim)).toSet
     if (parsedStates.contains(ConsumerGroupType.UNKNOWN)) {
       val validTypes = ConsumerGroupType.values().filter(_ != ConsumerGroupType.UNKNOWN)
       throw new IllegalArgumentException(s"Invalid types list '$input'. Valid types are: ${validTypes.mkString(", ")}")

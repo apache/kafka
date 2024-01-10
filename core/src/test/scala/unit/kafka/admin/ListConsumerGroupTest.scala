@@ -115,7 +115,7 @@ class ListConsumerGroupTest extends ConsumerGroupCommandTest {
     }, s"Expected to show groups $expectedListing, but found $foundListing")
 
     // When group type is mentioned:
-    // Old Group Coordinator returns empty listings.
+    // Old Group Coordinator returns empty listings if type is not Classic.
     // New Group Coordinator returns groups according to the filter.
     val expectedListing2 = Set(
       new ConsumerGroupListing(simpleGroup, true)
@@ -128,12 +128,21 @@ class ListConsumerGroupTest extends ConsumerGroupCommandTest {
 
     foundListing = Set.empty[ConsumerGroupListing]
     TestUtils.waitUntilTrue(() => {
-      foundListing = service.listConsumerGroupsWithFilters(Set.empty, Set(ConsumerGroupType.CLASSIC)).toSet
+      foundListing = service.listConsumerGroupsWithFilters(Set.empty, Set(ConsumerGroupType.CONSUMER)).toSet
+      var expectedListing = Set.empty[ConsumerGroupListing]
       if (quorum.contains("kip848")) {
+        expectedListing = expectedListing2
         expectedListing2 == foundListing
       } else {
+        expectedListing = expectedListingStable
         expectedListingStable == foundListing
       }
+    }, s"Expected to show groups $expectedListing, but found $foundListing")
+
+    foundListing = Set.empty[ConsumerGroupListing]
+    TestUtils.waitUntilTrue(() => {
+      foundListing = service.listConsumerGroupsWithFilters(Set.empty, Set(ConsumerGroupType.CLASSIC)).toSet
+        expectedListing2 == foundListing
     }, s"Expected to show groups $expectedListing2, but found $foundListing")
 
     // Groups with Consumer type aren't available so empty group listing is returned.
