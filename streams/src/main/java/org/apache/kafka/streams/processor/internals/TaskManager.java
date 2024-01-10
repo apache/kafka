@@ -100,7 +100,6 @@ public class TaskManager {
     private final StandbyTaskCreator standbyTaskCreator;
     private final StateUpdater stateUpdater;
     private final DefaultTaskManager schedulingTaskManager;
-
     TaskManager(final Time time,
                 final ChangelogReader changelogReader,
                 final UUID processId,
@@ -543,8 +542,23 @@ public class TaskManager {
             final TaskId taskId = task.id();
             if (activeTasksToCreate.containsKey(taskId)) {
                 final Set<TopicPartition> inputPartitions = activeTasksToCreate.get(taskId);
-                if (task.isActive()) {
-                    updateInputPartitionsOrRemoveTaskFromTasksToSuspend(task, inputPartitions);
+                if (task.isActive() && !task.inputPartitions().equals(inputPartitions)) {
+                    if (tasks.removePendingTaskToCloseClean(taskId)) {
+                        tasks.addPendingTaskToCloseReviveAndUpdateInputPartitions(taskId, inputPartitions);
+                    } else {
+                        tasks.addPendingTaskToUpdateInputPartitions(taskId, inputPartitions);
+                        stateUpdater.remove(taskId);
+                    }
+                } else if (task.isActive()) {
+                    tasks.removePendingActiveTaskToSuspend(taskId);
+                    if (tasks.removePendingTaskToCloseClean(taskId)) {
+                        log.info(
+                            "We were planning on closing task {} because we lost one of its partitions." +
+                            "The task got reassigned to this thread, so cancel closing  of the task, but add it back to the " +
+                            "state updater, since we may have to catch up on the changelog.",
+                            taskId);
+                        tasks.addPendingTaskToAddBack(taskId);
+                    }
                 } else {
                     removeTaskToRecycleFromStateUpdater(taskId, inputPartitions);
                 }
@@ -557,17 +571,6 @@ public class TaskManager {
             } else {
                 removeUnusedTaskFromStateUpdater(taskId);
             }
-        }
-    }
-
-    private void updateInputPartitionsOrRemoveTaskFromTasksToSuspend(final Task task,
-                                                                     final Set<TopicPartition> inputPartitions) {
-        final TaskId taskId = task.id();
-        if (!task.inputPartitions().equals(inputPartitions)) {
-            stateUpdater.remove(taskId);
-            tasks.addPendingTaskToUpdateInputPartitions(taskId, inputPartitions);
-        } else {
-            tasks.removePendingActiveTaskToSuspend(taskId);
         }
     }
 
@@ -820,15 +823,17 @@ public class TaskManager {
         }
     }
 
-    private void closeTaskClean(final Task task,
-                                final Set<Task> tasksToCloseDirty,
-                                final Map<TaskId, RuntimeException> taskExceptions) {
+    /** Returns true if the task closed clean */
+    private boolean closeTaskClean(final Task task,
+                                   final Set<Task> tasksToCloseDirty,
+                                   final Map<TaskId, RuntimeException> taskExceptions) {
         try {
             task.suspend();
             task.closeClean();
             if (task.isActive()) {
                 activeTaskCreator.closeAndRemoveTaskProducerIfNeeded(task.id());
             }
+            return true;
         } catch (final RuntimeException e) {
             final String uncleanMessage = String.format("Failed to close task %s cleanly. " +
                 "Attempting to close remaining tasks before re-throwing:", task.id());
@@ -839,6 +844,7 @@ public class TaskManager {
             }
 
             taskExceptions.putIfAbsent(task.id(), e);
+            return false;
         }
     }
 
@@ -913,10 +919,16 @@ public class TaskManager {
             Set<TopicPartition> inputPartitions;
             if ((inputPartitions = tasks.removePendingTaskToRecycle(task.id())) != null) {
                 recycleTaskFromStateUpdater(task, inputPartitions, tasksToCloseDirty, taskExceptions);
+            } else if (tasks.removePendingTaskToAddBack(task.id())) {
+                stateUpdater.add(task);
             } else if (tasks.removePendingTaskToCloseClean(task.id())) {
                 closeTaskClean(task, tasksToCloseDirty, taskExceptions);
-            } else if (tasks.removePendingTaskToCloseDirty(task.id())) {
-                tasksToCloseDirty.add(task);
+            } else if ((inputPartitions = tasks.removePendingTaskToCloseReviveAndUpdateInputPartitions(task.id())) != null) {
+                if (closeTaskClean(task, tasksToCloseDirty, taskExceptions)) {
+                    task.revive();
+                    task.updateInputPartitions(inputPartitions, topologyMetadata.nodeToSourceTopics(task.id()));
+                    addTaskToStateUpdater(task);
+                }
             } else if ((inputPartitions = tasks.removePendingTaskToUpdateInputPartitions(task.id())) != null) {
                 task.updateInputPartitions(inputPartitions, topologyMetadata.nodeToSourceTopics(task.id()));
                 stateUpdater.add(task);
@@ -949,8 +961,14 @@ public class TaskManager {
                 recycleTaskFromStateUpdater(task, inputPartitions, tasksToCloseDirty, taskExceptions);
             } else if (tasks.removePendingTaskToCloseClean(task.id())) {
                 closeTaskClean(task, tasksToCloseDirty, taskExceptions);
-            } else if (tasks.removePendingTaskToCloseDirty(task.id())) {
-                tasksToCloseDirty.add(task);
+            } else if (tasks.removePendingTaskToAddBack(task.id())) {
+                stateUpdater.add(task);
+            } else if ((inputPartitions = tasks.removePendingTaskToCloseReviveAndUpdateInputPartitions(task.id())) != null) {
+                if (closeTaskClean(task, tasksToCloseDirty, taskExceptions)) {
+                    task.revive();
+                    task.updateInputPartitions(inputPartitions, topologyMetadata.nodeToSourceTopics(task.id()));
+                    addTaskToStateUpdater(task);
+                }
             } else if ((inputPartitions = tasks.removePendingTaskToUpdateInputPartitions(task.id())) != null) {
                 task.updateInputPartitions(inputPartitions, topologyMetadata.nodeToSourceTopics(task.id()));
                 transitRestoredTaskToRunning(task, now, offsetResetter);
@@ -1156,7 +1174,7 @@ public class TaskManager {
         if (stateUpdater != null) {
             for (final Task restoringTask : stateUpdater.getTasks()) {
                 if (restoringTask.isActive()) {
-                    tasks.addPendingTaskToCloseDirty(restoringTask.id());
+                    tasks.addPendingTaskToCloseClean(restoringTask.id());
                     stateUpdater.remove(restoringTask.id());
                 }
             }
@@ -1231,9 +1249,15 @@ public class TaskManager {
             try {
                 final TaskId id = parseTaskDirectoryName(dir.getName(), namedTopology);
                 if (stateDirectory.lock(id)) {
-                    lockedTaskDirectories.add(id);
-                    if (!allTasks.containsKey(id)) {
-                        log.debug("Temporarily locked unassigned task {} for the upcoming rebalance", id);
+                    // Check again in case the cleaner thread ran and emptied the directory
+                    if (stateDirectory.directoryForTaskIsEmpty(id)) {
+                        log.debug("Releasing lock on empty directory for task {}", id);
+                        stateDirectory.unlock(id);
+                    } else {
+                        lockedTaskDirectories.add(id);
+                        if (!allTasks.containsKey(id)) {
+                            log.debug("Temporarily locked unassigned task {} for the upcoming rebalance", id);
+                        }
                     }
                 }
             } catch (final TaskIdFormatException e) {
@@ -1307,7 +1331,7 @@ public class TaskManager {
             // before suspending and closing the topology
             task.prepareCommit();
         } catch (final RuntimeException swallow) {
-            log.error("Error flushing caches of dirty task {} ", task.id(), swallow);
+            log.error("Error flushing caches of dirty task {}", task.id(), swallow);
         }
 
         try {

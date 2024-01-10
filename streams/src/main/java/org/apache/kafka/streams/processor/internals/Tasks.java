@@ -121,6 +121,19 @@ class Tasks implements TasksRegistry {
     }
 
     @Override
+    public Set<TopicPartition> removePendingTaskToCloseReviveAndUpdateInputPartitions(final TaskId taskId) {
+        if (containsTaskIdWithAction(taskId, Action.CLOSE_REVIVE_AND_UPDATE_INPUT_PARTITIONS)) {
+            return pendingUpdateActions.remove(taskId).getInputPartitions();
+        }
+        return null;
+    }
+
+    @Override
+    public void addPendingTaskToCloseReviveAndUpdateInputPartitions(final TaskId taskId, final Set<TopicPartition> inputPartitions) {
+        pendingUpdateActions.put(taskId, PendingUpdateAction.createCloseReviveAndUpdateInputPartition(inputPartitions));
+    }
+
+    @Override
     public Set<TopicPartition> removePendingTaskToUpdateInputPartitions(final TaskId taskId) {
         if (containsTaskIdWithAction(taskId, Action.UPDATE_INPUT_PARTITIONS)) {
             return pendingUpdateActions.remove(taskId).getInputPartitions();
@@ -134,8 +147,8 @@ class Tasks implements TasksRegistry {
     }
 
     @Override
-    public boolean removePendingTaskToCloseDirty(final TaskId taskId) {
-        if (containsTaskIdWithAction(taskId, Action.CLOSE_DIRTY)) {
+    public boolean removePendingTaskToAddBack(final TaskId taskId) {
+        if (containsTaskIdWithAction(taskId, Action.ADD_BACK)) {
             pendingUpdateActions.remove(taskId);
             return true;
         }
@@ -143,8 +156,8 @@ class Tasks implements TasksRegistry {
     }
 
     @Override
-    public void addPendingTaskToCloseDirty(final TaskId taskId) {
-        pendingUpdateActions.put(taskId, PendingUpdateAction.createCloseDirty());
+    public void addPendingTaskToAddBack(final TaskId taskId) {
+        pendingUpdateActions.put(taskId, PendingUpdateAction.createAddBack());
     }
 
     @Override

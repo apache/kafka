@@ -87,7 +87,9 @@ class BrokerApiVersionsCommandTest extends KafkaServerTestHarness {
           else s"${apiVersion.minVersion} to ${apiVersion.maxVersion}"
         val usableVersion = nodeApiVersions.latestUsableVersion(apiKey)
 
-        val line = s"\t${apiKey.name}(${apiKey.id}): $versionRangeStr [usable: $usableVersion]$terminator"
+        val line =
+          if (apiKey == ApiKeys.GET_TELEMETRY_SUBSCRIPTIONS || apiKey == ApiKeys.PUSH_TELEMETRY) s"\t${apiKey.name}(${apiKey.id}): UNSUPPORTED$terminator"
+          else s"\t${apiKey.name}(${apiKey.id}): $versionRangeStr [usable: $usableVersion]$terminator"
         assertTrue(lineIter.hasNext)
         assertEquals(line, lineIter.next())
       } else {

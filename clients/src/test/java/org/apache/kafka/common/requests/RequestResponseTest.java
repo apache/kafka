@@ -167,6 +167,8 @@ import org.apache.kafka.common.message.LeaderAndIsrResponseData;
 import org.apache.kafka.common.message.LeaderAndIsrResponseData.LeaderAndIsrTopicErrorCollection;
 import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity;
 import org.apache.kafka.common.message.LeaveGroupResponseData;
+import org.apache.kafka.common.message.ListClientMetricsResourcesRequestData;
+import org.apache.kafka.common.message.ListClientMetricsResourcesResponseData;
 import org.apache.kafka.common.message.ListGroupsRequestData;
 import org.apache.kafka.common.message.ListGroupsResponseData;
 import org.apache.kafka.common.message.ListOffsetsRequestData.ListOffsetsPartition;
@@ -1074,6 +1076,7 @@ public class RequestResponseTest {
             case GET_TELEMETRY_SUBSCRIPTIONS: return createGetTelemetrySubscriptionsRequest(version);
             case PUSH_TELEMETRY: return createPushTelemetryRequest(version);
             case ASSIGN_REPLICAS_TO_DIRS: return createAssignReplicasToDirsRequest(version);
+            case LIST_CLIENT_METRICS_RESOURCES: return createListClientMetricsResourcesRequest(version);
             default: throw new IllegalArgumentException("Unknown API key " + apikey);
         }
     }
@@ -1154,6 +1157,7 @@ public class RequestResponseTest {
             case GET_TELEMETRY_SUBSCRIPTIONS: return createGetTelemetrySubscriptionsResponse();
             case PUSH_TELEMETRY: return createPushTelemetryResponse();
             case ASSIGN_REPLICAS_TO_DIRS: return createAssignReplicasToDirsResponse();
+            case LIST_CLIENT_METRICS_RESOURCES: return createListClientMetricsResourcesResponse();
             default: throw new IllegalArgumentException("Unknown API key " + apikey);
         }
     }
@@ -3498,7 +3502,9 @@ public class RequestResponseTest {
                         new BrokerRegistrationRequestData.Feature()).iterator()))
                 .setListeners(new BrokerRegistrationRequestData.ListenerCollection(singletonList(
                         new BrokerRegistrationRequestData.Listener()).iterator()))
-                .setIncarnationId(Uuid.randomUuid());
+                .setIncarnationId(Uuid.randomUuid())
+                .setLogDirs(Arrays.asList(Uuid.fromString("qaJjNJ05Q36kEgeTBDcj0Q")))
+                .setPreviousBrokerEpoch(123L);
         return new BrokerRegistrationRequest.Builder(data).build(v);
     }
 
@@ -3614,6 +3620,17 @@ public class RequestResponseTest {
         response.setErrorCode(Errors.NONE.code());
         response.setThrottleTimeMs(10);
         return new PushTelemetryResponse(response);
+    }
+
+    private ListClientMetricsResourcesRequest createListClientMetricsResourcesRequest(short version) {
+        return new ListClientMetricsResourcesRequest.Builder(new ListClientMetricsResourcesRequestData()).build(version);
+    }
+
+    private ListClientMetricsResourcesResponse createListClientMetricsResourcesResponse() {
+        ListClientMetricsResourcesResponseData response = new ListClientMetricsResourcesResponseData();
+        response.setErrorCode(Errors.NONE.code());
+        response.setThrottleTimeMs(10);
+        return new ListClientMetricsResourcesResponse(response);
     }
 
     @Test
