@@ -19,6 +19,7 @@ package kafka.coordinator.group
 import java.nio.ByteBuffer
 import java.util.UUID
 import java.util.concurrent.locks.ReentrantLock
+
 import kafka.common.OffsetAndMetadata
 import kafka.utils.{CoreUtils, Logging, nonthreadsafe}
 import kafka.utils.Implicits._

@@ -477,7 +477,7 @@ public class GroupMetadataManager {
             return stateCheck && typeCheck;
         };
 
-        Stream<Group> groupStream = groups.values(committedOffset).parallelStream();
+        Stream<Group> groupStream = groups.values(committedOffset).stream();
 
         return groupStream
             .filter(combinedFilter)
