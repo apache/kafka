@@ -39,7 +39,7 @@ public class InternalSinkRecordTest {
     public void testNewRecordHeaders() {
         SinkRecord sinkRecord = new SinkRecord(TOPIC, 0, null, null, null, null, 10);
         ConsumerRecord<byte[], byte[]> consumerRecord = new ConsumerRecord<>("test-topic", 0, 10, null, null);
-        ProcessingContext context = new ProcessingContext(consumerRecord);
+        ProcessingContext<ConsumerRecord<byte[], byte[]>> context = new ProcessingContext<>(consumerRecord);
         InternalSinkRecord internalSinkRecord = new InternalSinkRecord(context, sinkRecord);
         assertTrue(internalSinkRecord.headers().isEmpty());
         assertTrue(sinkRecord.headers().isEmpty());
@@ -54,7 +54,7 @@ public class InternalSinkRecordTest {
         String transformedTopic = "transformed-test-topic";
         SinkRecord sinkRecord = new SinkRecord(transformedTopic, 0, null, null, null, null, 10);
         ConsumerRecord<byte[], byte[]> consumerRecord = new ConsumerRecord<>(TOPIC, 0, 10, null, null);
-        ProcessingContext context = new ProcessingContext(consumerRecord);
+        ProcessingContext<ConsumerRecord<byte[], byte[]>> context = new ProcessingContext<>(consumerRecord);
         InternalSinkRecord internalSinkRecord = new InternalSinkRecord(context, sinkRecord);
 
         assertEquals(TOPIC, internalSinkRecord.originalTopic());

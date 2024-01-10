@@ -75,7 +75,7 @@ public class WorkerErrantRecordReporter implements ErrantRecordReporter {
 
     @Override
     public Future<Void> report(SinkRecord record, Throwable error) {
-        ProcessingContext context;
+        ProcessingContext<ConsumerRecord<byte[], byte[]>> context;
 
         // Most of the records will be an internal sink record, but the task could potentially
         // report modified or new records, so handle both cases
@@ -107,14 +107,14 @@ public class WorkerErrantRecordReporter implements ErrantRecordReporter {
             ConsumerRecord<byte[], byte[]> consumerRecord = new ConsumerRecord<>(record.topic(), record.kafkaPartition(),
                 record.kafkaOffset(), record.timestamp(), record.timestampType(), keyLength,
                 valLength, key, value, headers, Optional.empty());
-            context = new ProcessingContext(consumerRecord);
+            context = new ProcessingContext<>(consumerRecord);
         }
 
         Future<Void> future = retryWithToleranceOperator.executeFailed(context, Stage.TASK_PUT, SinkTask.class, error);
         taskPutException.compareAndSet(null, error);
 
         if (!future.isDone()) {
-            TopicPartition partition = new TopicPartition(context.consumerRecord().topic(), context.consumerRecord().partition());
+            TopicPartition partition = new TopicPartition(context.original().topic(), context.original().partition());
             futures.computeIfAbsent(partition, p -> new ArrayList<>()).add(future);
         }
         return future;

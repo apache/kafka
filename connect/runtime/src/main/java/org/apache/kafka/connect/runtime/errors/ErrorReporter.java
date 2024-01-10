@@ -31,7 +31,7 @@ public interface ErrorReporter extends AutoCloseable {
      * @param context the processing context (cannot be null).
      * @return future result from the producer sending a record to Kafka.
      */
-    Future<RecordMetadata> report(ProcessingContext context);
+    Future<RecordMetadata> report(ProcessingContext<?> context);
 
     @Override
     default void close() { }

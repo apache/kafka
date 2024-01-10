@@ -17,6 +17,7 @@
 
 package org.apache.kafka.connect.runtime.errors;
 
+import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.connect.errors.ConnectException;
@@ -48,7 +49,7 @@ public class WorkerErrantRecordReporterTest {
 
     @Mock private Converter converter;
     @Mock private HeaderConverter headerConverter;
-    @Mock private ProcessingContext context;
+    @Mock private ProcessingContext<ConsumerRecord<byte[], byte[]>> context;
     @Mock private InternalSinkRecord record;
     @Mock private ErrorHandlingMetrics errorHandlingMetrics;
     @Mock private ErrorReporter errorReporter;

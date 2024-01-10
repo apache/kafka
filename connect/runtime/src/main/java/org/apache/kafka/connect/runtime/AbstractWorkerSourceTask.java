@@ -167,7 +167,7 @@ public abstract class AbstractWorkerSourceTask extends WorkerTask {
      *          via {@link Callback} after the call to {@link Producer#send(ProducerRecord, Callback)} completed
      */
     protected abstract void producerSendFailed(
-            ProcessingContext context,
+            ProcessingContext<SourceRecord> context,
             boolean synchronous,
             ProducerRecord<byte[], byte[]> producerRecord,
             SourceRecord preTransformRecord,
@@ -400,7 +400,7 @@ public abstract class AbstractWorkerSourceTask extends WorkerTask {
         final SourceRecordWriteCounter counter =
                 toSend.size() > 0 ? new SourceRecordWriteCounter(toSend.size(), sourceTaskMetricsGroup) : null;
         for (final SourceRecord preTransformRecord : toSend) {
-            ProcessingContext context = new ProcessingContext(preTransformRecord);
+            ProcessingContext<SourceRecord> context = new ProcessingContext<>(preTransformRecord);
             final SourceRecord record = transformationChain.apply(context, preTransformRecord);
             final ProducerRecord<byte[], byte[]> producerRecord = convertTransformedRecord(context, record);
             if (producerRecord == null || context.failed()) {
@@ -484,7 +484,7 @@ public abstract class AbstractWorkerSourceTask extends WorkerTask {
      * @return the producer record which can sent over to Kafka. A null is returned if the input is null or
      * if an error was encountered during any of the converter stages.
      */
-    protected ProducerRecord<byte[], byte[]> convertTransformedRecord(ProcessingContext context, SourceRecord record) {
+    protected ProducerRecord<byte[], byte[]> convertTransformedRecord(ProcessingContext<SourceRecord> context, SourceRecord record) {
         if (record == null) {
             return null;
         }

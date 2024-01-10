@@ -25,10 +25,9 @@ import org.apache.kafka.connect.source.SourceRecord;
  * sink or source record from the consumer or task, respectively. This class is not thread safe, and so once an
  * instance is passed to a new thread, it should no longer be accessed by the previous thread.
  */
-public class ProcessingContext {
+public class ProcessingContext<T> {
 
-    private final ConsumerRecord<byte[], byte[]> consumedMessage;
-    private final SourceRecord sourceRecord;
+    private final T original;
 
     /**
      * The following fields need to be reset every time a new record is seen.
@@ -39,28 +38,15 @@ public class ProcessingContext {
     private int attempt;
     private Throwable error;
 
-    public ProcessingContext(SourceRecord sourceRecord) {
-        this.consumedMessage = null;
-        this.sourceRecord = sourceRecord;
-    }
-
-    public ProcessingContext(ConsumerRecord<byte[], byte[]> consumerRecord) {
-        this.consumedMessage = consumerRecord;
-        this.sourceRecord = null;
+    public ProcessingContext(T original) {
+        this.original = original;
     }
 
     /**
      * @return the record consumed from Kafka. could be null
      */
-    public ConsumerRecord<byte[], byte[]> consumerRecord() {
-        return consumedMessage;
-    }
-
-    /**
-     * @return the source record being processed.
-     */
-    public SourceRecord sourceRecord() {
-        return sourceRecord;
+    public T original() {
+        return original;
     }
 
     /**
@@ -116,11 +102,20 @@ public class ProcessingContext {
         builder.append("' with class '");
         builder.append(executingClass() == null ? "null" : executingClass().getName());
         builder.append('\'');
-        if (includeMessage && sourceRecord() != null) {
+        if (includeMessage) {
+            appendMessage(builder);
+        }
+        builder.append('.');
+        return builder.toString();
+    }
+
+    @SuppressWarnings("unchecked")
+    private void appendMessage(StringBuilder builder) {
+        if (original() instanceof SourceRecord) {
             builder.append(", where source record is = ");
-            builder.append(sourceRecord());
-        } else if (includeMessage && consumerRecord() != null) {
-            ConsumerRecord<byte[], byte[]> msg = consumerRecord();
+            builder.append(original());
+        } else if (original() instanceof ConsumerRecord) {
+            ConsumerRecord<byte[], byte[]> msg = (ConsumerRecord<byte[], byte[]>) original();
             builder.append(", where consumed record is ");
             builder.append("{topic='").append(msg.topic()).append('\'');
             builder.append(", partition=").append(msg.partition());
@@ -131,8 +126,6 @@ public class ProcessingContext {
             }
             builder.append("}");
         }
-        builder.append('.');
-        return builder.toString();
     }
 
     /**

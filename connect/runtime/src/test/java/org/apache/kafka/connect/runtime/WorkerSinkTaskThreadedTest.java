@@ -227,7 +227,7 @@ public class WorkerSinkTaskThreadedTest {
                         = new SinkRecord(TOPIC, PARTITION, KEY_SCHEMA, KEY, VALUE_SCHEMA, VALUE, FIRST_OFFSET + offset, TIMESTAMP, TIMESTAMP_TYPE);
                 ConsumerRecord<byte[], byte[]> referenceConsumerRecord
                         = new ConsumerRecord<>(TOPIC, PARTITION, FIRST_OFFSET + offset, null, null);
-                ProcessingContext context = new ProcessingContext(referenceConsumerRecord);
+                ProcessingContext<ConsumerRecord<byte[], byte[]>> context = new ProcessingContext<>(referenceConsumerRecord);
                 InternalSinkRecord referenceInternalSinkRecord = new InternalSinkRecord(context, referenceSinkRecord);
                 assertEquals(referenceInternalSinkRecord, rec);
                 offset++;

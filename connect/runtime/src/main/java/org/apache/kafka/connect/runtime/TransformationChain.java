@@ -43,7 +43,7 @@ public class TransformationChain<R extends ConnectRecord<R>> implements AutoClos
         this.retryWithToleranceOperator = retryWithToleranceOperator;
     }
 
-    public R apply(ProcessingContext context, R record) {
+    public R apply(ProcessingContext<?> context, R record) {
         if (transformationStages.isEmpty()) return record;
 
         for (final TransformationStage<R> transformationStage : transformationStages) {

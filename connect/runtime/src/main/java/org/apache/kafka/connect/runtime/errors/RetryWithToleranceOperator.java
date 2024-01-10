@@ -103,7 +103,7 @@ public class RetryWithToleranceOperator implements AutoCloseable {
         this.reporters = Collections.emptyList();
     }
 
-    public Future<Void> executeFailed(ProcessingContext context, Stage stage, Class<?> executingClass, Throwable error) {
+    public Future<Void> executeFailed(ProcessingContext<?> context, Stage stage, Class<?> executingClass, Throwable error) {
         markAsFailed();
         context.currentContext(stage, executingClass);
         context.error(error);
@@ -122,7 +122,7 @@ public class RetryWithToleranceOperator implements AutoCloseable {
      * @return a errant record future that potentially aggregates the producer futures
      */
     // Visible for testing
-    synchronized Future<Void> report(ProcessingContext context) {
+    synchronized Future<Void> report(ProcessingContext<?> context) {
         if (reporters.size() == 1) {
             return new WorkerErrantRecordReporter.ErrantRecordFuture(Collections.singletonList(reporters.iterator().next().report(context)));
         }
@@ -144,7 +144,7 @@ public class RetryWithToleranceOperator implements AutoCloseable {
      * @param <V> return type of the result of the operation.
      * @return result of the operation
      */
-    public <V> V execute(ProcessingContext context, Operation<V> operation, Stage stage, Class<?> executingClass) {
+    public <V> V execute(ProcessingContext<?> context, Operation<V> operation, Stage stage, Class<?> executingClass) {
         context.currentContext(stage, executingClass);
 
         if (context.failed()) {
@@ -171,7 +171,7 @@ public class RetryWithToleranceOperator implements AutoCloseable {
      * @return the result of the operation.
      * @throws Exception rethrow if a non-retriable Exception is thrown by the operation
      */
-    protected <V> V execAndRetry(ProcessingContext context, Operation<V> operation) throws Exception {
+    protected <V> V execAndRetry(ProcessingContext<?> context, Operation<V> operation) throws Exception {
         int attempt = 0;
         long startTime = time.milliseconds();
         long deadline = (errorRetryTimeout >= 0) ? startTime + errorRetryTimeout : Long.MAX_VALUE;
@@ -210,7 +210,7 @@ public class RetryWithToleranceOperator implements AutoCloseable {
      * @param <V> The return type of the result of the operation.
      * @return the result of the operation
      */
-    protected <V> V execAndHandleError(ProcessingContext context, Operation<V> operation, Class<? extends Exception> tolerated) {
+    protected <V> V execAndHandleError(ProcessingContext<?> context, Operation<V> operation, Class<? extends Exception> tolerated) {
         try {
             V result = execAndRetry(context, operation);
             if (context.failed()) {

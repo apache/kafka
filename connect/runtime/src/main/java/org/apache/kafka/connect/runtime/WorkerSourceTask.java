@@ -156,7 +156,7 @@ class WorkerSourceTask extends AbstractWorkerSourceTask {
 
     @Override
     protected void producerSendFailed(
-            ProcessingContext context,
+            ProcessingContext<SourceRecord> context,
             boolean synchronous,
             ProducerRecord<byte[], byte[]> producerRecord,
             SourceRecord preTransformRecord,

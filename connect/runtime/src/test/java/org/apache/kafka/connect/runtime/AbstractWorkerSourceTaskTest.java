@@ -875,7 +875,7 @@ public class AbstractWorkerSourceTaskTest {
             }
 
             @Override
-            protected void producerSendFailed(ProcessingContext context, boolean synchronous, ProducerRecord<byte[], byte[]> producerRecord, SourceRecord preTransformRecord, Exception e) {
+            protected void producerSendFailed(ProcessingContext<SourceRecord> context, boolean synchronous, ProducerRecord<byte[], byte[]> producerRecord, SourceRecord preTransformRecord, Exception e) {
             }
 
             @Override

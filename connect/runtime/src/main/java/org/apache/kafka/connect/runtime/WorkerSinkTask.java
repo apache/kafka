@@ -508,7 +508,7 @@ class WorkerSinkTask extends WorkerTask {
             log.trace("{} Consuming and converting message in topic '{}' partition {} at offset {} and timestamp {}",
                     this, msg.topic(), msg.partition(), msg.offset(), msg.timestamp());
 
-            ProcessingContext context = new ProcessingContext(msg);
+            ProcessingContext<ConsumerRecord<byte[], byte[]>> context = new ProcessingContext<>(msg);
 
             SinkRecord transRecord = convertAndTransformRecord(context, msg);
 
@@ -529,7 +529,7 @@ class WorkerSinkTask extends WorkerTask {
         sinkTaskMetricsGroup.recordConsumedOffsets(origOffsets);
     }
 
-    private SinkRecord convertAndTransformRecord(ProcessingContext context, final ConsumerRecord<byte[], byte[]> msg) {
+    private SinkRecord convertAndTransformRecord(ProcessingContext<ConsumerRecord<byte[], byte[]>> context, final ConsumerRecord<byte[], byte[]> msg) {
         SchemaAndValue keyAndSchema = retryWithToleranceOperator.execute(context, () -> keyConverter.toConnectData(msg.topic(), msg.headers(), msg.key()),
                 Stage.KEY_CONVERTER, keyConverter.getClass());
 

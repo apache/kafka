@@ -30,23 +30,23 @@ import org.apache.kafka.connect.sink.SinkRecord;
  */
 public class InternalSinkRecord extends SinkRecord {
 
-    private final ProcessingContext context;
+    private final ProcessingContext<ConsumerRecord<byte[], byte[]>> context;
 
-    public InternalSinkRecord(ProcessingContext context, SinkRecord record) {
+    public InternalSinkRecord(ProcessingContext<ConsumerRecord<byte[], byte[]>> context, SinkRecord record) {
         super(record.topic(), record.kafkaPartition(), record.keySchema(), record.key(),
                 record.valueSchema(), record.value(), record.kafkaOffset(), record.timestamp(),
-                record.timestampType(), record.headers(), context.consumerRecord().topic(),
-                context.consumerRecord().partition(), context.consumerRecord().offset());
+                record.timestampType(), record.headers(), context.original().topic(),
+                context.original().partition(), context.original().offset());
         this.context = context;
     }
 
-    protected InternalSinkRecord(ProcessingContext context, String topic,
+    protected InternalSinkRecord(ProcessingContext<ConsumerRecord<byte[], byte[]>> context, String topic,
                                  int partition, Schema keySchema, Object key, Schema valueSchema,
                                  Object value, long kafkaOffset, Long timestamp,
                                  TimestampType timestampType, Iterable<Header> headers) {
         super(topic, partition, keySchema, key, valueSchema, value, kafkaOffset, timestamp, timestampType, headers,
-                context.consumerRecord().topic(), context.consumerRecord().partition(),
-                context.consumerRecord().offset());
+                context.original().topic(), context.original().partition(),
+                context.original().offset());
         this.context = context;
     }
 
@@ -73,7 +73,7 @@ public class InternalSinkRecord extends SinkRecord {
      *
      * @return the processing context; never null
      */
-    public ProcessingContext context() {
+    public ProcessingContext<ConsumerRecord<byte[], byte[]>> context() {
         return context;
     }
 }
