@@ -203,7 +203,7 @@ public final class TopicsDelta {
 
             deletes.addAll(changes.deletes());
             electedLeaders.putAll(changes.electedLeaders());
-            leaders.putAll(changes.updatedLeaders());
+            leaders.putAll(changes.leaders());
             followers.putAll(changes.followers());
             topicIds.putAll(changes.topicIds());
             directoryIds.putAll(changes.directoryIds());

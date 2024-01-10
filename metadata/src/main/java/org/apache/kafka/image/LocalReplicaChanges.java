@@ -26,9 +26,13 @@ import java.util.Set;
 import java.util.Map;
 
 public final class LocalReplicaChanges {
+    // partitions for which the broker is not a replica anymore
     private final Set<TopicPartition> deletes;
+    // partitions for which the broker is now a leader (leader epoch bump on the leader)
     private final Map<TopicPartition, PartitionInfo> electedLeaders;
-    private final Map<TopicPartition, PartitionInfo> updatedLeaders;
+    // partitions for which the isr or replicas change if the broker is a leader (partition epoch bump on the leader)
+    private final Map<TopicPartition, PartitionInfo> leaders;
+    // partitions for which the broker is now a follower or follower with isr or replica updates (partition epoch bump on follower)
     private final Map<TopicPartition, PartitionInfo> followers;
     // The topic name -> topic id map in leaders and followers changes
     private final Map<String, Uuid> topicIds;
@@ -37,15 +41,15 @@ public final class LocalReplicaChanges {
     LocalReplicaChanges(
         Set<TopicPartition> deletes,
         Map<TopicPartition, PartitionInfo> electedLeaders,
-        Map<TopicPartition, PartitionInfo> updatedLeaders,
-        Map<TopicPartition, PartitionInfo> updatedFollowers,
+        Map<TopicPartition, PartitionInfo> leaders,
+        Map<TopicPartition, PartitionInfo> followers,
         Map<String, Uuid> topicIds,
         Map<TopicIdPartition, Uuid> directoryIds
     ) {
         this.deletes = deletes;
         this.electedLeaders = electedLeaders;
-        this.updatedLeaders = updatedLeaders;
-        this.followers = updatedFollowers;
+        this.leaders = leaders;
+        this.followers = followers;
         this.topicIds = topicIds;
         this.directoryIds = directoryIds;
     }
@@ -58,8 +62,8 @@ public final class LocalReplicaChanges {
         return electedLeaders;
     }
 
-    public Map<TopicPartition, PartitionInfo> updatedLeaders() {
-        return updatedLeaders;
+    public Map<TopicPartition, PartitionInfo> leaders() {
+        return leaders;
     }
 
     public Map<TopicPartition, PartitionInfo> followers() {
@@ -73,10 +77,10 @@ public final class LocalReplicaChanges {
     @Override
     public String toString() {
         return String.format(
-            "LocalReplicaChanges(deletes = %s, newly elected leaders = %s, updated leaders = %s, followers = %s)",
+            "LocalReplicaChanges(deletes = %s, newly elected leaders = %s, leaders = %s, followers = %s)",
             deletes,
             electedLeaders,
-            updatedLeaders,
+            leaders,
             followers
         );
     }
