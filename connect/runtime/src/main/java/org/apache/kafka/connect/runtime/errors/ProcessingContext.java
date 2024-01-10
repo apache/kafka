@@ -102,20 +102,13 @@ public class ProcessingContext<T> {
         builder.append("' with class '");
         builder.append(executingClass() == null ? "null" : executingClass().getName());
         builder.append('\'');
-        if (includeMessage) {
-            appendMessage(builder);
-        }
-        builder.append('.');
-        return builder.toString();
-    }
-
-    @SuppressWarnings("unchecked")
-    private void appendMessage(StringBuilder builder) {
-        if (original() instanceof SourceRecord) {
+        T original = original();
+        if (includeMessage && original instanceof SourceRecord) {
             builder.append(", where source record is = ");
-            builder.append(original());
-        } else if (original() instanceof ConsumerRecord) {
-            ConsumerRecord<byte[], byte[]> msg = (ConsumerRecord<byte[], byte[]>) original();
+            builder.append(original);
+        } else if (includeMessage && original instanceof ConsumerRecord) {
+            @SuppressWarnings("unchecked")
+            ConsumerRecord<byte[], byte[]> msg = (ConsumerRecord<byte[], byte[]>) original;
             builder.append(", where consumed record is ");
             builder.append("{topic='").append(msg.topic()).append('\'');
             builder.append(", partition=").append(msg.partition());
@@ -126,6 +119,8 @@ public class ProcessingContext<T> {
             }
             builder.append("}");
         }
+        builder.append('.');
+        return builder.toString();
     }
 
     /**
