@@ -473,10 +473,12 @@ public class GroupMetadataManager {
 
         Predicate<Group> combinedFilter = group -> {
             boolean stateCheck = statesFilter.isEmpty() || group.isInStates(caseInsensitiveFilterSet, committedOffset);
-            boolean typeCheck = typesFilter.isEmpty() || typesFilter.contains(group.type().toString());
+            boolean typeCheck = typesFilter.isEmpty() ||
+                typesFilter.stream()
+                    .map(String::toLowerCase)
+                    .anyMatch(type -> type.equals(group.type().toString()));
             return stateCheck && typeCheck;
         };
-
         Stream<Group> groupStream = groups.values(committedOffset).stream();
 
         return groupStream

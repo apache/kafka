@@ -9686,6 +9686,17 @@ public class GroupMetadataManagerTest {
                 .setGroupType(Group.GroupType.CLASSIC.toString())
         ).collect(Collectors.toMap(ListGroupsResponseData.ListedGroup::groupId, Function.identity()));
 
+        // Test list group response with no group state filter and with group type filter in a different case.
+        actualAllGroupMap = context.sendListGroups(Collections.emptyList(), Collections.singletonList("Classic")).stream()
+            .collect(Collectors.toMap(ListGroupsResponseData.ListedGroup::groupId, Function.identity()));
+        expectAllGroupMap = Stream.of(
+            new ListGroupsResponseData.ListedGroup()
+                .setGroupId(classicGroup.groupId())
+                .setProtocolType("classic")
+                .setGroupState(EMPTY.toString())
+                .setGroupType(ConsumerGroupType.CLASSIC.toString())
+        ).collect(Collectors.toMap(ListGroupsResponseData.ListedGroup::groupId, Function.identity()));
+
         assertEquals(expectAllGroupMap, actualAllGroupMap);
 
         actualAllGroupMap = context.sendListGroups(Arrays.asList("empty", "Assigning")).stream()

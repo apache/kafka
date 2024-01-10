@@ -3390,6 +3390,12 @@ class GroupCoordinatorTest {
     assertEquals(Errors.NONE, error3)
     assertEquals(1, groups3.size)
     assertEquals(GroupOverview("groupId", "consumer", Stable.toString, "classic"), groups3.head)
+
+    // Check that group type is case-insensitive.
+    val (error4, groups4) = groupCoordinator.handleListGroups(Set(), Set("Classic"))
+    assertEquals(Errors.NONE, error4)
+    assertEquals(1, groups4.size)
+    assertEquals(GroupOverview("groupId", "consumer", Stable.toString, "classic"), groups4.head)
   }
 
   @Test
