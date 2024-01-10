@@ -128,9 +128,9 @@ public interface PartitionWriter<T> {
      * @param transactionalId   The transactional id.
      * @param producerId        The producer id.
      * @param producerEpoch     The producer epoch.
-     * @return A future containing the {@link VerificationGuard} or an exception if the
-     *         transaction requires a verification; or {@link VerificationGuard#SENTINEL}
-     *         if the transaction has already been verified.
+     * @return A future failed with any error encountered; or the {@link VerificationGuard}
+     *         if the transaction required verification and {@link VerificationGuard#SENTINEL}
+     *         if it did not.
      * @throws KafkaException Any KafkaException caught during the operation.
      */
     CompletableFuture<VerificationGuard> maybeStartTransactionVerification(
