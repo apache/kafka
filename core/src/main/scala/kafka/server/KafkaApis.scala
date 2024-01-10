@@ -1304,7 +1304,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     val knownTopicNames = topicIds.flatMap(metadataCache.getTopicName)
 
     val unknownTopicIdsTopicMetadata = unknownTopicIds.map(topicId =>
-        metadataResponseTopic(Errors.UNKNOWN_TOPIC_ID, null, topicId, false, util.Collections.emptyList())).toSeq
+        metadataResponseTopic(Errors.UNKNOWN_TOPIC_ID, null, topicId, isInternal = false, util.Collections.emptyList())).toSeq
 
     val topics = if (metadataRequest.isAllTopics)
       metadataCache.getAllTopics()
@@ -1342,11 +1342,11 @@ class KafkaApis(val requestChannel: RequestChannel,
       else if (useTopicId) {
         // Topic IDs are not considered sensitive information, so returning TOPIC_AUTHORIZATION_FAILED is OK
         unauthorizedForDescribeTopics.map(topic =>
-          metadataResponseTopic(Errors.TOPIC_AUTHORIZATION_FAILED, null, metadataCache.getTopicId(topic), false, util.Collections.emptyList()))
+          metadataResponseTopic(Errors.TOPIC_AUTHORIZATION_FAILED, null, metadataCache.getTopicId(topic), isInternal = false, util.Collections.emptyList()))
       } else {
         // We should not return topicId when on unauthorized error, so we return zero uuid.
         unauthorizedForDescribeTopics.map(topic =>
-          metadataResponseTopic(Errors.TOPIC_AUTHORIZATION_FAILED, topic, Uuid.ZERO_UUID, false, util.Collections.emptyList()))
+          metadataResponseTopic(Errors.TOPIC_AUTHORIZATION_FAILED, topic, Uuid.ZERO_UUID, isInternal = false, util.Collections.emptyList()))
       }
 
     // In version 0, we returned an error when brokers with replicas were unavailable,
@@ -1985,7 +1985,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       }
 
       val authorizedTopics = if (hasClusterAuthorization) {
-        allowedTopicNames.toSet
+        allowedTopicNames
       } else {
         authHelper.filterByAuthorized(request.context, CREATE, TOPIC, allowedTopicNames)(identity)
       }

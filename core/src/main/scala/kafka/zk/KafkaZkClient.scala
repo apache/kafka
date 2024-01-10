@@ -468,7 +468,7 @@ class KafkaZkClient private[zk] (zooKeeperClient: ZooKeeperClient, isSecure: Boo
    * @param sanitizedEntityName entity name
    * @throws KeeperException if there is an error while setting or creating the znode
    */
-  def setOrCreateEntityConfigs(rootEntityType: String, sanitizedEntityName: String, config: Properties) = {
+  def setOrCreateEntityConfigs(rootEntityType: String, sanitizedEntityName: String, config: Properties): Unit = {
 
     def set(configData: Array[Byte]): SetDataResponse = {
       val setDataRequest = SetDataRequest(ConfigEntityZNode.path(rootEntityType, sanitizedEntityName),

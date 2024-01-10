@@ -178,6 +178,7 @@ class MiniKdc(config: Properties, workDir: File) extends Logging {
 
     // And start the ds
     ds.setInstanceId(config.getProperty(MiniKdc.Instance))
+    ds.setShutdownHookEnabled(false)
     ds.startup()
 
     // context entry, after ds.startup()

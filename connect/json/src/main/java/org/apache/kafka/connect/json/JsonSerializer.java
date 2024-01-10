@@ -37,7 +37,7 @@ public class JsonSerializer implements Serializer<JsonNode> {
      * Default constructor needed by Kafka
      */
     public JsonSerializer() {
-        this(Collections.emptySet(), new JsonNodeFactory(true));
+        this(Collections.emptySet(), new JsonNodeFactory(true), true);
     }
 
     /**
@@ -49,10 +49,14 @@ public class JsonSerializer implements Serializer<JsonNode> {
      */
     JsonSerializer(
         final Set<SerializationFeature> serializationFeatures,
-        final JsonNodeFactory jsonNodeFactory
+        final JsonNodeFactory jsonNodeFactory,
+        final boolean enableModules
     ) {
         serializationFeatures.forEach(objectMapper::enable);
         objectMapper.setNodeFactory(jsonNodeFactory);
+        if (enableModules) {
+            objectMapper.findAndRegisterModules();
+        }
     }
 
     @Override

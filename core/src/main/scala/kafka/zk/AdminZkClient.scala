@@ -20,7 +20,7 @@ import java.util.{Collections, Optional, Properties}
 import kafka.admin.RackAwareMode
 import kafka.common.TopicAlreadyMarkedForDeletionException
 import kafka.controller.ReplicaAssignment
-import kafka.server.{ConfigEntityName, DynamicConfig, KafkaConfig}
+import kafka.server.{DynamicConfig, KafkaConfig}
 import kafka.utils._
 import kafka.utils.Implicits._
 import org.apache.kafka.admin.{AdminUtils, BrokerMetadata}
@@ -29,7 +29,7 @@ import org.apache.kafka.common.errors._
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.coordinator.group.GroupConfig
 import org.apache.kafka.server.common.AdminOperationException
-import org.apache.kafka.server.config.ConfigType
+import org.apache.kafka.server.config.{ConfigEntityName, ConfigType}
 import org.apache.kafka.storage.internals.log.LogConfig
 import org.apache.zookeeper.KeeperException.NodeExistsException
 
@@ -346,7 +346,7 @@ class AdminZkClient(zkClient: KafkaZkClient,
    */
   def parseBroker(broker: String): Option[Int] = {
     broker match {
-      case ConfigEntityName.Default => None
+      case ConfigEntityName.DEFAULT => None
       case _ =>
         try Some(broker.toInt)
         catch {
@@ -372,7 +372,7 @@ class AdminZkClient(zkClient: KafkaZkClient,
       case ConfigType.BROKER => changeBrokerConfig(parseBroker(entityName), configs)
       case ConfigType.IP => changeIpConfig(entityName, configs)
       case ConfigType.GROUP => changeGroupConfig(entityName, configs)
-      case _ => throw new IllegalArgumentException(s"$entityType is not a known entityType. Should be one of ${ConfigType.ALL}")
+      case _ => throw new IllegalArgumentException(s"$entityType is not a known entityType. Should be one of List(${String.join(", ",ConfigType.ALL)})")
     }
   }
 
@@ -442,7 +442,7 @@ class AdminZkClient(zkClient: KafkaZkClient,
    *
    */
   def changeUserOrUserClientIdConfig(sanitizedEntityName: String, configs: Properties, isUserClientId: Boolean = false): Unit = {
-    if (sanitizedEntityName == ConfigEntityName.Default || sanitizedEntityName.contains("/clients"))
+    if (sanitizedEntityName == ConfigEntityName.DEFAULT || sanitizedEntityName.contains("/clients"))
       DynamicConfig.Client.validate(configs)
     else
       DynamicConfig.User.validate(configs)
@@ -522,7 +522,7 @@ class AdminZkClient(zkClient: KafkaZkClient,
     */
   def changeBrokerConfig(broker: Option[Int], configs: Properties): Unit = {
     validateBrokerConfig(configs)
-    changeEntityConfig(ConfigType.BROKER, broker.map(_.toString).getOrElse(ConfigEntityName.Default), configs)
+    changeEntityConfig(ConfigType.BROKER, broker.map(_.toString).getOrElse(ConfigEntityName.DEFAULT), configs)
   }
 
   /**

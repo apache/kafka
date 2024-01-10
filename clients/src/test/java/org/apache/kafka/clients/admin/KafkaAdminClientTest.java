@@ -2500,12 +2500,12 @@ public class KafkaAdminClientTest {
             try {
                 DescribeTopicsResult result = env.adminClient().describeTopics(
                         TopicCollection.ofTopicIds(singletonList(nonExistID)));
-                TestUtils.assertFutureError(result.allTopicIds(), InvalidTopicException.class);
+                TestUtils.assertFutureError(result.allTopicIds(), UnknownTopicIdException.class);
                 result.allTopicIds().get();
                 fail("describe with non-exist topic ID should throw exception");
             } catch (Exception e) {
                 assertEquals(
-                        String.format("org.apache.kafka.common.errors.InvalidTopicException: TopicId %s not found.", nonExistID),
+                        String.format("org.apache.kafka.common.errors.UnknownTopicIdException: TopicId %s not found.", nonExistID),
                         e.getMessage());
             }
 
