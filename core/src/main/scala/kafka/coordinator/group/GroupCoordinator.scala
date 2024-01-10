@@ -1116,7 +1116,8 @@ private[group] class GroupCoordinator(
       // If groupType is mentioned then no group is returned since the notion of groupTypes doesn't exist in the
       // old group coordinator.
       val groups = groupManager.currentGroups.filter { g =>
-        (states.isEmpty || g.isInStates(states.map(_.toLowerCase)) && groupTypes.isEmpty)
+        states.isEmpty || g.isInStates(states.map(_.toLowerCase)) &&
+          (groupTypes.isEmpty || groupTypes.contains("classic"))
       }
       (errorCode, groups.map(_.overview).toList)
     }

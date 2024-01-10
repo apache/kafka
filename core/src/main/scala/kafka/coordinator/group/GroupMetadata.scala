@@ -158,7 +158,8 @@ private object GroupMetadata extends Logging {
  */
 case class GroupOverview(groupId: String,
                          protocolType: String,
-                         state: String)
+                         state: String,
+                         groupType: String)
 
 /**
  * Case class used to represent group metadata for the DescribeGroup API
@@ -611,7 +612,7 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
   }
 
   def overview: GroupOverview = {
-    GroupOverview(groupId, protocolType.getOrElse(""), state.toString)
+    GroupOverview(groupId, protocolType.getOrElse(""), state.toString, "classic")
   }
 
   def initializeOffsets(offsets: collection.Map[TopicPartition, CommitRecordMetadataAndOffset],

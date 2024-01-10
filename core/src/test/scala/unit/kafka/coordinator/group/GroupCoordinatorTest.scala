@@ -3304,7 +3304,7 @@ class GroupCoordinatorTest {
     val (error, groups) = groupCoordinator.handleListGroups(Set(), Set())
     assertEquals(Errors.NONE, error)
     assertEquals(1, groups.size)
-    assertEquals(GroupOverview("groupId", "consumer", Stable.toString), groups.head)
+    assertEquals(GroupOverview("groupId", "consumer", Stable.toString, "classic"), groups.head)
   }
 
   @Test
@@ -3316,7 +3316,7 @@ class GroupCoordinatorTest {
     val (error, groups) = groupCoordinator.handleListGroups(Set(), Set())
     assertEquals(Errors.NONE, error)
     assertEquals(1, groups.size)
-    assertEquals(GroupOverview("groupId", "consumer", CompletingRebalance.toString), groups.head)
+    assertEquals(GroupOverview("groupId", "consumer", CompletingRebalance.toString, "classic"), groups.head)
   }
 
   @Test
@@ -3374,16 +3374,22 @@ class GroupCoordinatorTest {
     val syncGroupResult = syncGroupLeader(groupId, generationId, assignedMemberId, Map(assignedMemberId -> Array[Byte]()))
     assertEquals(Errors.NONE, syncGroupResult.error)
 
-    // When a group type filter is specified, no groups are returned since group types don't exist in this coordinator.
+    // When a group type filter is specified:
+    // All groups are returned if the type is classic, else nothing is returned.
     val (error1, groups1) = groupCoordinator.handleListGroups(Set(), Set("classic"))
     assertEquals(Errors.NONE, error1)
-    assertEquals(0, groups1.size)
+    assertEquals(1, groups1.size)
+    assertEquals(GroupOverview("groupId", "consumer", Stable.toString, "classic"), groups1.head)
 
-    // When no group type filter is specified, all groups are returned with unknown group type.
-    val (error2, groups2) = groupCoordinator.handleListGroups(Set(), Set())
+    val (error2, groups2) = groupCoordinator.handleListGroups(Set(), Set("consumer"))
     assertEquals(Errors.NONE, error2)
-    assertEquals(1, groups2.size)
-    assertEquals(GroupOverview("groupId", "consumer", Stable.toString), groups2.head)
+    assertEquals(0, groups2.size)
+
+    // When no group type filter is specified, all groups are returned with classic group type.
+    val (error3, groups3) = groupCoordinator.handleListGroups(Set(), Set())
+    assertEquals(Errors.NONE, error3)
+    assertEquals(1, groups3.size)
+    assertEquals(GroupOverview("groupId", "consumer", Stable.toString, "classic"), groups3.head)
   }
 
   @Test
