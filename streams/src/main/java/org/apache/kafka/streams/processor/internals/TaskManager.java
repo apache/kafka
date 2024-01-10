@@ -550,7 +550,15 @@ public class TaskManager {
                         stateUpdater.remove(taskId);
                     }
                 } else if (task.isActive()) {
-                    tasks.removePendingActiveTaskToSuspend(taskId);
+                    if (tasks.removePendingActiveTaskToSuspend(taskId)) {
+                        log.info(
+                            "We were planning on suspending a task {} because it was revoked " +
+                                "The task got reassigned to this thread, so we cancel suspending " +
+                                "of the task, but add it back to the state updater, since we do not know " +
+                                "if it is fully restored yet.",
+                            taskId);
+                        tasks.addPendingTaskToAddBack(taskId);
+                    }
                     if (tasks.removePendingTaskToCloseClean(taskId)) {
                         log.info(
                             "We were planning on closing task {} because we lost one of its partitions." +
@@ -1249,9 +1257,15 @@ public class TaskManager {
             try {
                 final TaskId id = parseTaskDirectoryName(dir.getName(), namedTopology);
                 if (stateDirectory.lock(id)) {
-                    lockedTaskDirectories.add(id);
-                    if (!allTasks.containsKey(id)) {
-                        log.debug("Temporarily locked unassigned task {} for the upcoming rebalance", id);
+                    // Check again in case the cleaner thread ran and emptied the directory
+                    if (stateDirectory.directoryForTaskIsEmpty(id)) {
+                        log.debug("Releasing lock on empty directory for task {}", id);
+                        stateDirectory.unlock(id);
+                    } else {
+                        lockedTaskDirectories.add(id);
+                        if (!allTasks.containsKey(id)) {
+                            log.debug("Temporarily locked unassigned task {} for the upcoming rebalance", id);
+                        }
                     }
                 }
             } catch (final TaskIdFormatException e) {

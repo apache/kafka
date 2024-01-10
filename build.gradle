@@ -210,7 +210,6 @@ if (repo != null) {
         'licenses/*',
         '**/generated/**',
         'clients/src/test/resources/serializedData/*',
-        'docker/resources/utility/go.sum',
         'docker/test/fixtures/secrets/*',
         'docker/examples/fixtures/secrets/*'
     ])
@@ -305,7 +304,7 @@ subprojects {
             from components.java
           } else {
             apply plugin: 'com.github.johnrengelman.shadow'
-            project.shadow.component(mavenJava)
+            artifact shadowJar
           }
 
           afterEvaluate {
