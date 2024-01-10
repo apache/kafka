@@ -24,9 +24,6 @@ import java.util.Properties
 import java.util.concurrent.CompletableFuture
 import kafka.log.LogManager
 import kafka.server.KafkaConfig
-import kafka.server.KafkaRaftServer.BrokerRole
-import kafka.server.KafkaRaftServer.ControllerRole
-import kafka.server.KafkaRaftServer.ProcessRole
 import kafka.utils.TestUtils
 import kafka.tools.TestRaftServer.ByteArraySerde
 import org.apache.kafka.common.TopicPartition
@@ -34,6 +31,7 @@ import org.apache.kafka.common.Uuid
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.raft.RaftConfig
+import org.apache.kafka.server.ProcessRole
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.ParameterizedTest
@@ -58,16 +56,16 @@ class RaftManagerTest {
     props.setProperty(KafkaConfig.ProcessRolesProp, processRoles.mkString(","))
     props.setProperty(KafkaConfig.NodeIdProp, nodeId.toString)
     props.setProperty(KafkaConfig.ControllerListenerNamesProp, "SSL")
-    if (processRoles.contains(BrokerRole)) {
+    if (processRoles.contains(ProcessRole.BrokerRole)) {
       props.setProperty(KafkaConfig.InterBrokerListenerNameProp, "PLAINTEXT")
-      if (processRoles.contains(ControllerRole)) { // co-located
+      if (processRoles.contains(ProcessRole.ControllerRole)) { // co-located
         props.setProperty(KafkaConfig.ListenersProp, "PLAINTEXT://localhost:9092,SSL://localhost:9093")
         props.setProperty(KafkaConfig.QuorumVotersProp, s"${nodeId}@localhost:9093")
       } else { // broker-only
         val voterId = nodeId + 1
         props.setProperty(KafkaConfig.QuorumVotersProp, s"${voterId}@localhost:9093")
       }
-    } else if (processRoles.contains(ControllerRole)) { // controller-only
+    } else if (processRoles.contains(ProcessRole.ControllerRole)) { // controller-only
       props.setProperty(KafkaConfig.ListenersProp, "SSL://localhost:9093")
       props.setProperty(KafkaConfig.QuorumVotersProp, s"${nodeId}@localhost:9093")
     }
@@ -100,10 +98,10 @@ class RaftManagerTest {
   def testNodeIdPresent(processRoles: String): Unit = {
     var processRolesSet = Set.empty[ProcessRole]
     if (processRoles.contains("broker")) {
-      processRolesSet = processRolesSet ++ Set(BrokerRole)
+      processRolesSet = processRolesSet ++ Set(ProcessRole.BrokerRole)
     }
     if (processRoles.contains("controller")) {
-      processRolesSet = processRolesSet ++ Set(ControllerRole)
+      processRolesSet = processRolesSet ++ Set(ProcessRole.ControllerRole)
     }
 
     val logDir = TestUtils.tempDir()
@@ -140,7 +138,7 @@ class RaftManagerTest {
     val raftManager = createRaftManager(
       new TopicPartition("__raft_id_test", 0),
       createConfig(
-        Set(ControllerRole),
+        Set(ProcessRole.ControllerRole),
         nodeId,
         logDir,
         metadataDir
@@ -164,7 +162,7 @@ class RaftManagerTest {
     val raftManager = createRaftManager(
       new TopicPartition("__raft_id_test", 0),
       createConfig(
-        Set(BrokerRole),
+        Set(ProcessRole.BrokerRole),
         nodeId,
         logDir,
         metadataDir
