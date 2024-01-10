@@ -632,6 +632,27 @@ public class TaskManagerTest {
     }
 
     @Test
+    public void shouldRemoveReassignedTaskInStateUpdaterFromPendingSuspend() {
+        final StreamTask reassignedTask = statefulTask(taskId03, taskId03ChangelogPartitions)
+            .inState(State.RESTORING)
+            .withInputPartitions(taskId03Partitions).build();
+        final TasksRegistry tasks = Mockito.mock(TasksRegistry.class);
+        final TaskManager taskManager = setUpTaskManager(ProcessingMode.AT_LEAST_ONCE, tasks, true);
+        when(stateUpdater.getTasks()).thenReturn(mkSet(reassignedTask));
+        when(tasks.removePendingActiveTaskToSuspend(reassignedTask.id())).thenReturn(true);
+
+        taskManager.handleAssignment(
+            mkMap(mkEntry(reassignedTask.id(), reassignedTask.inputPartitions())),
+            Collections.emptyMap()
+        );
+
+        Mockito.verify(activeTaskCreator).createTasks(consumer, Collections.emptyMap());
+        Mockito.verify(tasks).removePendingActiveTaskToSuspend(reassignedTask.id());
+        Mockito.verify(tasks).addPendingTaskToAddBack(reassignedTask.id());
+        Mockito.verify(standbyTaskCreator).createTasks(Collections.emptyMap());
+    }
+
+    @Test
     public void shouldNeverUpdateInputPartitionsOfStandbyTaskInStateUpdater() {
         final StandbyTask standbyTaskToUpdateInputPartitions = standbyTask(taskId02, taskId02ChangelogPartitions)
             .inState(State.RUNNING)
