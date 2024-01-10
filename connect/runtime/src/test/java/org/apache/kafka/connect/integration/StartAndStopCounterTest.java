@@ -21,6 +21,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
@@ -45,7 +46,7 @@ public class StartAndStopCounterTest {
     @Before
     public void setup() {
         clock = new MockTime();
-        counter = new StartAndStopCounter(clock);
+        counter = new StartAndStopCounter("test", clock);
     }
 
     @After
@@ -109,9 +110,12 @@ public class StartAndStopCounterTest {
     private Future<Boolean> asyncAwait(long duration, TimeUnit unit) {
         return waiters.submit(() -> {
             try {
-                return latch.await(duration, unit);
+                latch.await(duration, unit);
+                return true;
             } catch (InterruptedException e) {
                 Thread.interrupted();
+                return false;
+            } catch (TimeoutException e) {
                 return false;
             }
         });

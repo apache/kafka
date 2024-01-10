@@ -270,16 +270,12 @@ public class ConnectorRestartApiIntegrationTest {
         }
 
         // Wait for the connector to be stopped
-        assertTrue("Failed to stop connector and tasks within "
-                        + CONNECTOR_SETUP_DURATION_MS + "ms",
-                stopLatch.await(CONNECTOR_SETUP_DURATION_MS, TimeUnit.MILLISECONDS));
+        stopLatch.await(CONNECTOR_SETUP_DURATION_MS, TimeUnit.MILLISECONDS);
 
         connect.assertions().assertConnectorAndAtLeastNumTasksAreRunning(connectorName, NUM_TASKS,
                 "Connector tasks are not all in running state.");
         // Expect that the connector has started again
-        assertTrue("Failed to start connector and tasks within "
-                        + CONNECTOR_SETUP_DURATION_MS + "ms",
-                startLatch.await(CONNECTOR_SETUP_DURATION_MS, TimeUnit.MILLISECONDS));
+        startLatch.await(CONNECTOR_SETUP_DURATION_MS, TimeUnit.MILLISECONDS);
         StartsAndStops afterSnapshot = connectorHandle.startAndStopCounter().countsSnapshot();
 
         assertEquals(beforeSnapshot.starts() + expectedConnectorRestarts, afterSnapshot.starts());
@@ -323,9 +319,12 @@ public class ConnectorRestartApiIntegrationTest {
         connect.assertions().assertConnectorIsFailedAndTasksHaveFailed(connectorName, 0,
                 "Connector tasks are not all in running state.");
         // Expect that the connector has started again
-        assertTrue("Failed to start connector and tasks after coordinator failure within "
+        startLatch.await(
+                "Failed to start connector and tasks after coordinator failure within "
                         + CONNECTOR_SETUP_DURATION_MS + "ms",
-                startLatch.await(CONNECTOR_SETUP_DURATION_MS, TimeUnit.MILLISECONDS));
+                CONNECTOR_SETUP_DURATION_MS,
+                TimeUnit.MILLISECONDS
+        );
         StartsAndStops afterSnapshot = connectorHandle.startAndStopCounter().countsSnapshot();
 
         assertEquals(beforeSnapshot.starts() + expectedConnectorRestarts, afterSnapshot.starts());
@@ -358,16 +357,12 @@ public class ConnectorRestartApiIntegrationTest {
         }
 
         // Wait for the connector to be stopped
-        assertTrue("Failed to stop connector and tasks within "
-                        + CONNECTOR_SETUP_DURATION_MS + "ms",
-                stopLatch.await(CONNECTOR_SETUP_DURATION_MS, TimeUnit.MILLISECONDS));
+        stopLatch.await(CONNECTOR_SETUP_DURATION_MS, TimeUnit.MILLISECONDS);
 
         connect.assertions().assertConnectorIsRunningAndNumTasksHaveFailed(connectorName, NUM_TASKS, tasksToFail.size(),
                 "Connector tasks are not all in running state.");
         // Expect that the connector has started again
-        assertTrue("Failed to start connector and tasks within "
-                        + CONNECTOR_SETUP_DURATION_MS + "ms",
-                startLatch.await(CONNECTOR_SETUP_DURATION_MS, TimeUnit.MILLISECONDS));
+        startLatch.await(CONNECTOR_SETUP_DURATION_MS, TimeUnit.MILLISECONDS);
 
         StartsAndStops afterSnapshot = connectorHandle.startAndStopCounter().countsSnapshot();
 

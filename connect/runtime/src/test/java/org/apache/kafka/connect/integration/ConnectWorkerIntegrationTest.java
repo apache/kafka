@@ -246,9 +246,12 @@ public class ConnectWorkerIntegrationTest {
         Thread.sleep(TimeUnit.SECONDS.toMillis(10));
 
         // Wait for the connector to be stopped
-        assertTrue("Failed to stop connector and tasks after coordinator failure within "
+        stopLatch.await(
+                "Failed to stop connector and tasks after coordinator failure within "
                         + CONNECTOR_SETUP_DURATION_MS + "ms",
-                stopLatch.await(CONNECTOR_SETUP_DURATION_MS, TimeUnit.MILLISECONDS));
+                CONNECTOR_SETUP_DURATION_MS,
+                TimeUnit.MILLISECONDS
+        );
 
         StartAndStopLatch startLatch = connectorHandle.expectedStarts(1, false);
         connect.kafka().startOnlyKafkaOnSamePorts();
@@ -265,10 +268,12 @@ public class ConnectWorkerIntegrationTest {
         connect.assertions().assertConnectorAndAtLeastNumTasksAreRunning(CONNECTOR_NAME, numTasks,
                 "Connector tasks did not start in time.");
 
-        // Expect that the connector has started again
-        assertTrue("Failed to stop connector and tasks after coordinator failure within "
+        startLatch.await(
+                "Failed to stop connector and tasks after coordinator failure within "
                         + CONNECTOR_SETUP_DURATION_MS + "ms",
-                startLatch.await(CONNECTOR_SETUP_DURATION_MS, TimeUnit.MILLISECONDS));
+                CONNECTOR_SETUP_DURATION_MS,
+                TimeUnit.MILLISECONDS
+        );
     }
 
     /**
@@ -341,7 +346,7 @@ public class ConnectWorkerIntegrationTest {
         StartAndStopLatch stopCounter = connector.expectedStops(1);
         connect.deleteConnector(CONNECTOR_NAME);
 
-        assertTrue("Connector and all tasks were not stopped in time", stopCounter.await(1, TimeUnit.MINUTES));
+        stopCounter.await(1, TimeUnit.MINUTES);
     }
 
     /**

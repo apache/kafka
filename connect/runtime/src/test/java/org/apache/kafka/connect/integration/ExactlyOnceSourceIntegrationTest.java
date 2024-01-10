@@ -70,6 +70,7 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import java.util.stream.LongStream;
@@ -1097,22 +1098,17 @@ public class ExactlyOnceSourceIntegrationTest {
         return connectorHandle.expectedStarts(1, true);
     }
 
-    private void assertConnectorStarted(StartAndStopLatch connectorStart) throws InterruptedException {
-        assertTrue("Connector and tasks did not finish startup in time",
-                connectorStart.await(
-                        ConnectAssertions.CONNECTOR_SETUP_DURATION_MS,
-                        TimeUnit.MILLISECONDS
-                )
+    private void assertConnectorStarted(StartAndStopLatch connectorStart) throws InterruptedException, TimeoutException {
+        connectorStart.await(
+                ConnectAssertions.CONNECTOR_SETUP_DURATION_MS,
+                TimeUnit.MILLISECONDS
         );
     }
 
-    private void assertConnectorStopped(StartAndStopLatch connectorStop) throws InterruptedException {
-        assertTrue(
-                "Connector and tasks did not finish shutdown in time",
-                connectorStop.await(
-                        ConnectAssertions.CONNECTOR_SHUTDOWN_DURATION_MS,
-                        TimeUnit.MILLISECONDS
-                )
+    private void assertConnectorStopped(StartAndStopLatch connectorStop) throws InterruptedException, TimeoutException {
+        connectorStop.await(
+                ConnectAssertions.CONNECTOR_SHUTDOWN_DURATION_MS,
+                TimeUnit.MILLISECONDS
         );
     }
 
@@ -1120,7 +1116,7 @@ public class ExactlyOnceSourceIntegrationTest {
             int currentNumTasks,
             int newNumTasks,
             String topic,
-            Map<String, String> baseConnectorProps) throws InterruptedException {
+            Map<String, String> baseConnectorProps) throws InterruptedException, TimeoutException {
 
         // create a collection of producers that simulate the producers used for the existing tasks
         List<KafkaProducer<byte[], byte[]>> producers = IntStream.range(0, currentNumTasks)

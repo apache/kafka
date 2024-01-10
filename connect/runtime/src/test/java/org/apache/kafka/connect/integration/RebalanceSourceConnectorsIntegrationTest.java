@@ -172,9 +172,12 @@ public class RebalanceSourceConnectorsIntegrationTest {
         connect.configureConnector(CONNECTOR_NAME, props);
 
         // Wait for the connector *and tasks* to be restarted
-        assertTrue("Failed to alter connector configuration and see connector and tasks restart "
-                   + "within " + CONNECTOR_SETUP_DURATION_MS + "ms",
-                restartLatch.await(CONNECTOR_SETUP_DURATION_MS, TimeUnit.MILLISECONDS));
+        restartLatch.await(
+                "Failed to alter connector configuration and see connector and tasks restart "
+                        + "within " + CONNECTOR_SETUP_DURATION_MS + "ms",
+                CONNECTOR_SETUP_DURATION_MS,
+                TimeUnit.MILLISECONDS
+        );
 
         // And wait for the Connect to show the connectors and tasks are running
         connect.assertions().assertConnectorAndAtLeastNumTasksAreRunning(CONNECTOR_NAME, NUM_TASKS,

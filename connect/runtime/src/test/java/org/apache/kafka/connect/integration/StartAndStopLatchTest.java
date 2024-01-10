@@ -23,6 +23,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.apache.kafka.common.utils.MockTime;
@@ -61,7 +62,7 @@ public class StartAndStopLatchTest {
 
     @Test
     public void shouldReturnFalseWhenAwaitingForStartToNeverComplete() throws Throwable {
-        latch = new StartAndStopLatch(1, 1, this::complete, dependents, clock);
+        latch = new StartAndStopLatch(1, 1, this::complete, dependents, "test", clock);
         future = asyncAwait(100);
         clock.sleep(10);
         assertFalse(future.get(200, TimeUnit.MILLISECONDS));
@@ -70,7 +71,7 @@ public class StartAndStopLatchTest {
 
     @Test
     public void shouldReturnFalseWhenAwaitingForStopToNeverComplete() throws Throwable {
-        latch = new StartAndStopLatch(1, 1, this::complete, dependents, clock);
+        latch = new StartAndStopLatch(1, 1, this::complete, dependents, "test", clock);
         future = asyncAwait(100);
         latch.recordStart();
         clock.sleep(10);
@@ -80,7 +81,7 @@ public class StartAndStopLatchTest {
 
     @Test
     public void shouldReturnTrueWhenAwaitingForStartAndStopToComplete() throws Throwable {
-        latch = new StartAndStopLatch(1, 1, this::complete, dependents, clock);
+        latch = new StartAndStopLatch(1, 1, this::complete, dependents, "test", clock);
         future = asyncAwait(100);
         latch.recordStart();
         latch.recordStop();
@@ -91,9 +92,9 @@ public class StartAndStopLatchTest {
 
     @Test
     public void shouldReturnFalseWhenAwaitingForDependentLatchToComplete() throws Throwable {
-        StartAndStopLatch depLatch = new StartAndStopLatch(1, 1, this::complete, null, clock);
+        StartAndStopLatch depLatch = new StartAndStopLatch(1, 1, this::complete, null, "test", clock);
         dependents = Collections.singletonList(depLatch);
-        latch = new StartAndStopLatch(1, 1, this::complete, dependents, clock);
+        latch = new StartAndStopLatch(1, 1, this::complete, dependents, "test", clock);
 
         future = asyncAwait(100);
         latch.recordStart();
@@ -105,9 +106,9 @@ public class StartAndStopLatchTest {
 
     @Test
     public void shouldReturnTrueWhenAwaitingForStartAndStopAndDependentLatch() throws Throwable {
-        StartAndStopLatch depLatch = new StartAndStopLatch(1, 1, this::complete, null, clock);
+        StartAndStopLatch depLatch = new StartAndStopLatch(1, 1, this::complete, null, "test", clock);
         dependents = Collections.singletonList(depLatch);
-        latch = new StartAndStopLatch(1, 1, this::complete, dependents, clock);
+        latch = new StartAndStopLatch(1, 1, this::complete, dependents, "test", clock);
 
         future = asyncAwait(100);
         latch.recordStart();
@@ -126,9 +127,12 @@ public class StartAndStopLatchTest {
     private Future<Boolean> asyncAwait(long duration, TimeUnit unit) {
         return waiters.submit(() -> {
             try {
-                return latch.await(duration, unit);
+                latch.await(duration, unit);
+                return true;
             } catch (InterruptedException e) {
                 Thread.interrupted();
+                return false;
+            } catch (TimeoutException e) {
                 return false;
             }
         });

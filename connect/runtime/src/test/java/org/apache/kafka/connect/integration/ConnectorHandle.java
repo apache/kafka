@@ -41,7 +41,7 @@ public class ConnectorHandle {
 
     private final String connectorName;
     private final Map<String, TaskHandle> taskHandles = new ConcurrentHashMap<>();
-    private final StartAndStopCounter startAndStopCounter = new StartAndStopCounter();
+    private final StartAndStopCounter startAndStopCounter;
 
     private CountDownLatch recordsRemainingLatch;
     private CountDownLatch recordsToCommitLatch;
@@ -50,6 +50,7 @@ public class ConnectorHandle {
 
     public ConnectorHandle(String connectorName) {
         this.connectorName = connectorName;
+        this.startAndStopCounter = new StartAndStopCounter("connector " + connectorName);
     }
 
     /**

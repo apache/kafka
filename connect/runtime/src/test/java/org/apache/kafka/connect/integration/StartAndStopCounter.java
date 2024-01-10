@@ -28,13 +28,15 @@ public class StartAndStopCounter {
     private final AtomicInteger startCounter = new AtomicInteger(0);
     private final AtomicInteger stopCounter = new AtomicInteger(0);
     private final List<StartAndStopLatch> restartLatches = new CopyOnWriteArrayList<>();
+    private final String name;
     private final Time clock;
 
-    public StartAndStopCounter() {
-        this(Time.SYSTEM);
+    public StartAndStopCounter(String name) {
+        this(name, Time.SYSTEM);
     }
 
-    public StartAndStopCounter(Time clock) {
+    public StartAndStopCounter(String name, Time clock) {
+        this.name = name;
         this.clock = clock != null ? clock : Time.SYSTEM;
     }
 
@@ -99,7 +101,7 @@ public class StartAndStopCounter {
      * @return the latch; never null
      */
     public StartAndStopLatch expectedRestarts(int expectedStarts, int expectedStops, List<StartAndStopLatch> dependents) {
-        StartAndStopLatch latch = new StartAndStopLatch(expectedStarts, expectedStops, this::remove, dependents, clock);
+        StartAndStopLatch latch = new StartAndStopLatch(expectedStarts, expectedStops, this::remove, dependents, name, clock);
         restartLatches.add(latch);
         return latch;
     }

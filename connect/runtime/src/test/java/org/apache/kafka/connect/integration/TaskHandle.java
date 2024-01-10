@@ -42,7 +42,7 @@ public class TaskHandle {
     private final String taskId;
     private final ConnectorHandle connectorHandle;
     private final ConcurrentMap<TopicPartition, PartitionHistory> partitions = new ConcurrentHashMap<>();
-    private final StartAndStopCounter startAndStopCounter = new StartAndStopCounter();
+    private final StartAndStopCounter startAndStopCounter;
     private final Consumer<SinkRecord> consumer;
 
     private CountDownLatch recordsRemainingLatch;
@@ -54,6 +54,7 @@ public class TaskHandle {
         this.taskId = taskId;
         this.connectorHandle = connectorHandle;
         this.consumer = consumer;
+        this.startAndStopCounter = new StartAndStopCounter("task " + taskId);
     }
 
     public String taskId() {
