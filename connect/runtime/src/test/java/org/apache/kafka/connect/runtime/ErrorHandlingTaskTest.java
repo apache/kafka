@@ -231,10 +231,11 @@ public class ErrorHandlingTaskTest {
     }
 
     @Test
+    @SuppressWarnings("unchecked")
     public void testSinkTasksCloseErrorReporters() throws Exception {
-        ErrorReporter reporter = mock(ErrorReporter.class);
+        ErrorReporter<ConsumerRecord<byte[], byte[]>> reporter = mock(ErrorReporter.class);
 
-        RetryWithToleranceOperator retryWithToleranceOperator = operator();
+        RetryWithToleranceOperator<ConsumerRecord<byte[], byte[]>> retryWithToleranceOperator = operator();
 
         createSinkTask(initialState, retryWithToleranceOperator, singletonList(reporter));
         workerSinkTask.initialize(TASK_CONFIG);
@@ -249,10 +250,11 @@ public class ErrorHandlingTaskTest {
     }
 
     @Test
+    @SuppressWarnings("unchecked")
     public void testSourceTasksCloseErrorReporters() throws IOException {
-        ErrorReporter reporter = mock(ErrorReporter.class);
+        ErrorReporter<SourceRecord> reporter = mock(ErrorReporter.class);
 
-        RetryWithToleranceOperator retryWithToleranceOperator = operator();
+        RetryWithToleranceOperator<SourceRecord> retryWithToleranceOperator = operator();
 
         createSourceTask(initialState, retryWithToleranceOperator, singletonList(reporter));
 
@@ -264,11 +266,12 @@ public class ErrorHandlingTaskTest {
     }
 
     @Test
+    @SuppressWarnings("unchecked")
     public void testCloseErrorReportersExceptionPropagation() throws IOException {
-        ErrorReporter reporterA = mock(ErrorReporter.class);
-        ErrorReporter reporterB = mock(ErrorReporter.class);
+        ErrorReporter<SourceRecord> reporterA = mock(ErrorReporter.class);
+        ErrorReporter<SourceRecord> reporterB = mock(ErrorReporter.class);
 
-        RetryWithToleranceOperator retryWithToleranceOperator = operator();
+        RetryWithToleranceOperator<SourceRecord> retryWithToleranceOperator = operator();
 
         createSourceTask(initialState, retryWithToleranceOperator, Arrays.asList(reporterA, reporterB));
 
@@ -290,9 +293,9 @@ public class ErrorHandlingTaskTest {
         Map<String, String> reportProps = new HashMap<>();
         reportProps.put(ConnectorConfig.ERRORS_LOG_ENABLE_CONFIG, "true");
         reportProps.put(ConnectorConfig.ERRORS_LOG_INCLUDE_MESSAGES_CONFIG, "true");
-        LogReporter reporter = new LogReporter.Sink(taskId, connConfig(reportProps), errorHandlingMetrics);
+        LogReporter<ConsumerRecord<byte[], byte[]>> reporter = new LogReporter.Sink(taskId, connConfig(reportProps), errorHandlingMetrics);
 
-        RetryWithToleranceOperator retryWithToleranceOperator = operator();
+        RetryWithToleranceOperator<ConsumerRecord<byte[], byte[]>> retryWithToleranceOperator = operator();
         createSinkTask(initialState, retryWithToleranceOperator, singletonList(reporter));
 
         // valid json
@@ -329,8 +332,8 @@ public class ErrorHandlingTaskTest {
         assertErrorHandlingMetricValue("total-records-skipped", 1.0);
     }
 
-    private RetryWithToleranceOperator operator() {
-        return new RetryWithToleranceOperator(OPERATOR_RETRY_TIMEOUT_MILLIS,
+    private <T> RetryWithToleranceOperator<T> operator() {
+        return new RetryWithToleranceOperator<>(OPERATOR_RETRY_TIMEOUT_MILLIS,
                 OPERATOR_RETRY_MAX_DELAY_MILLIS, OPERATOR_TOLERANCE_TYPE,
                 SYSTEM, errorHandlingMetrics);
     }
@@ -340,9 +343,9 @@ public class ErrorHandlingTaskTest {
         Map<String, String> reportProps = new HashMap<>();
         reportProps.put(ConnectorConfig.ERRORS_LOG_ENABLE_CONFIG, "true");
         reportProps.put(ConnectorConfig.ERRORS_LOG_INCLUDE_MESSAGES_CONFIG, "true");
-        LogReporter reporter = new LogReporter.Source(taskId, connConfig(reportProps), errorHandlingMetrics);
+        LogReporter<SourceRecord> reporter = new LogReporter.Source(taskId, connConfig(reportProps), errorHandlingMetrics);
 
-        RetryWithToleranceOperator retryWithToleranceOperator = operator();
+        RetryWithToleranceOperator<SourceRecord> retryWithToleranceOperator = operator();
         createSourceTask(initialState, retryWithToleranceOperator, singletonList(reporter));
 
         // valid json
@@ -400,9 +403,9 @@ public class ErrorHandlingTaskTest {
         Map<String, String> reportProps = new HashMap<>();
         reportProps.put(ConnectorConfig.ERRORS_LOG_ENABLE_CONFIG, "true");
         reportProps.put(ConnectorConfig.ERRORS_LOG_INCLUDE_MESSAGES_CONFIG, "true");
-        LogReporter reporter = new LogReporter.Source(taskId, connConfig(reportProps), errorHandlingMetrics);
+        LogReporter<SourceRecord> reporter = new LogReporter.Source(taskId, connConfig(reportProps), errorHandlingMetrics);
 
-        RetryWithToleranceOperator retryWithToleranceOperator = operator();
+        RetryWithToleranceOperator<SourceRecord> retryWithToleranceOperator = operator();
         createSourceTask(initialState, retryWithToleranceOperator, singletonList(reporter), badConverter());
 
         // valid json
@@ -490,15 +493,15 @@ public class ErrorHandlingTaskTest {
         }
     }
 
-    private void createSinkTask(TargetState initialState, RetryWithToleranceOperator retryWithToleranceOperator,
-                                List<ErrorReporter> errorReporters) {
+    private void createSinkTask(TargetState initialState, RetryWithToleranceOperator<ConsumerRecord<byte[], byte[]>> retryWithToleranceOperator,
+                                List<ErrorReporter<ConsumerRecord<byte[], byte[]>>> errorReporters) {
         JsonConverter converter = new JsonConverter();
         Map<String, Object> oo = workerConfig.originalsWithPrefix("value.converter.");
         oo.put("converter.type", "value");
         oo.put("schemas.enable", "false");
         converter.configure(oo);
 
-        TransformationChain<SinkRecord> sinkTransforms =
+        TransformationChain<ConsumerRecord<byte[], byte[]>, SinkRecord> sinkTransforms =
                 new TransformationChain<>(singletonList(new TransformationStage<>(new FaultyPassthrough<SinkRecord>())), retryWithToleranceOperator);
 
         workerSinkTask = new WorkerSinkTask(
@@ -509,7 +512,7 @@ public class ErrorHandlingTaskTest {
                 statusBackingStore, () -> errorReporters);
     }
 
-    private void createSourceTask(TargetState initialState, RetryWithToleranceOperator retryWithToleranceOperator, List<ErrorReporter> errorReporters) {
+    private void createSourceTask(TargetState initialState, RetryWithToleranceOperator<SourceRecord> retryWithToleranceOperator, List<ErrorReporter<SourceRecord>> errorReporters) {
         JsonConverter converter = new JsonConverter();
         Map<String, Object> oo = workerConfig.originalsWithPrefix("value.converter.");
         oo.put("converter.type", "value");
@@ -528,9 +531,9 @@ public class ErrorHandlingTaskTest {
         return converter;
     }
 
-    private void createSourceTask(TargetState initialState, RetryWithToleranceOperator retryWithToleranceOperator,
-                                  List<ErrorReporter> errorReporters, Converter converter) {
-        TransformationChain<SourceRecord> sourceTransforms = new TransformationChain<>(singletonList(
+    private void createSourceTask(TargetState initialState, RetryWithToleranceOperator<SourceRecord> retryWithToleranceOperator,
+                                  List<ErrorReporter<SourceRecord>> errorReporters, Converter converter) {
+        TransformationChain<SourceRecord, SourceRecord> sourceTransforms = new TransformationChain<>(singletonList(
                 new TransformationStage<>(new FaultyPassthrough<SourceRecord>())), retryWithToleranceOperator);
 
         workerSourceTask = spy(new WorkerSourceTask(

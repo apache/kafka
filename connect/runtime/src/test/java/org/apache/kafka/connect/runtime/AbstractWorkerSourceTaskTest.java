@@ -133,7 +133,7 @@ public class AbstractWorkerSourceTaskTest {
     @Mock private Converter keyConverter;
     @Mock private Converter valueConverter;
     @Mock private HeaderConverter headerConverter;
-    @Mock private TransformationChain<SourceRecord> transformationChain;
+    @Mock private TransformationChain<SourceRecord, SourceRecord> transformationChain;
     @Mock private CloseableOffsetStorageReader offsetReader;
     @Mock private OffsetStorageWriter offsetWriter;
     @Mock private ConnectorOffsetBackingStore offsetStore;
@@ -697,12 +697,12 @@ public class AbstractWorkerSourceTaskTest {
 
     @Test
     public void testErrorReportersConfigured() {
-        RetryWithToleranceOperator retryWithToleranceOperator = mock(RetryWithToleranceOperator.class);
-        List<ErrorReporter> errorReporters = Collections.singletonList(mock(ErrorReporter.class));
+        RetryWithToleranceOperator<SourceRecord> retryWithToleranceOperator = mock(RetryWithToleranceOperator.class);
+        List<ErrorReporter<SourceRecord>> errorReporters = Collections.singletonList(mock(ErrorReporter.class));
         createWorkerTask(keyConverter, valueConverter, headerConverter, retryWithToleranceOperator, () -> errorReporters);
         workerTask.initializeAndStart();
 
-        ArgumentCaptor<List<ErrorReporter>> errorReportersCapture = ArgumentCaptor.forClass(List.class);
+        ArgumentCaptor<List<ErrorReporter<SourceRecord>>> errorReportersCapture = ArgumentCaptor.forClass(List.class);
         verify(retryWithToleranceOperator).reporters(errorReportersCapture.capture());
         assertEquals(errorReporters, errorReportersCapture.getValue());
     }
@@ -831,7 +831,7 @@ public class AbstractWorkerSourceTaskTest {
     }
 
     private void createWorkerTask(Converter keyConverter, Converter valueConverter, HeaderConverter headerConverter,
-                                  RetryWithToleranceOperator retryWithToleranceOperator, Supplier<List<ErrorReporter>> errorReportersSupplier) {
+                                  RetryWithToleranceOperator<SourceRecord> retryWithToleranceOperator, Supplier<List<ErrorReporter<SourceRecord>>> errorReportersSupplier) {
         workerTask = new AbstractWorkerSourceTask(
                 taskId, sourceTask, statusListener, TargetState.STARTED, keyConverter, valueConverter, headerConverter, transformationChain,
                 sourceTaskContext, producer, admin, TopicCreationGroup.configuredGroups(sourceConfig), offsetReader, offsetWriter, offsetStore,

@@ -156,7 +156,7 @@ public class WorkerSinkTaskTest {
     @Mock
     private HeaderConverter headerConverter;
     @Mock
-    private TransformationChain<SinkRecord> transformationChain;
+    private TransformationChain<ConsumerRecord<byte[], byte[]>, SinkRecord> transformationChain;
     @Mock
     private TaskStatus.Listener statusListener;
     @Mock
@@ -194,7 +194,7 @@ public class WorkerSinkTaskTest {
     }
 
     private void createTask(TargetState initialState, Converter keyConverter, Converter valueConverter, HeaderConverter headerConverter,
-                            RetryWithToleranceOperator retryWithToleranceOperator, Supplier<List<ErrorReporter>> errorReportersSupplier) {
+                            RetryWithToleranceOperator<ConsumerRecord<byte[], byte[]>> retryWithToleranceOperator, Supplier<List<ErrorReporter<ConsumerRecord<byte[], byte[]>>>> errorReportersSupplier) {
         workerTask = new WorkerSinkTask(
                 taskId, sinkTask, statusListener, initialState, workerConfig, ClusterConfigState.EMPTY, metrics,
                 keyConverter, valueConverter, errorHandlingMetrics, headerConverter,
@@ -1965,13 +1965,13 @@ public class WorkerSinkTaskTest {
 
     @Test
     public void testErrorReportersConfigured() {
-        RetryWithToleranceOperator retryWithToleranceOperator = createMock(RetryWithToleranceOperator.class);
-        List<ErrorReporter> errorReporters = Collections.singletonList(createMock(ErrorReporter.class));
+        RetryWithToleranceOperator<ConsumerRecord<byte[], byte[]>> retryWithToleranceOperator = createMock(RetryWithToleranceOperator.class);
+        List<ErrorReporter<ConsumerRecord<byte[], byte[]>>> errorReporters = Collections.singletonList(createMock(ErrorReporter.class));
         createTask(initialState, keyConverter, valueConverter, headerConverter, retryWithToleranceOperator,
                 () -> errorReporters);
 
         expectInitializeTask();
-        Capture<List<ErrorReporter>> errorReportersCapture = EasyMock.newCapture();
+        Capture<List<ErrorReporter<ConsumerRecord<byte[], byte[]>>>> errorReportersCapture = EasyMock.newCapture();
         retryWithToleranceOperator.reporters(EasyMock.capture(errorReportersCapture));
         PowerMock.expectLastCall();
 

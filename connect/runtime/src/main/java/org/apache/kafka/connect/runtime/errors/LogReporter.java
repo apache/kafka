@@ -20,6 +20,7 @@ import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.connect.runtime.ConnectorConfig;
+import org.apache.kafka.connect.source.SourceRecord;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -31,7 +32,7 @@ import java.util.concurrent.Future;
 /**
  * Writes errors and their context to application logs.
  */
-public abstract class LogReporter implements ErrorReporter {
+public abstract class LogReporter<T> implements ErrorReporter<T> {
 
     private static final Logger log = LoggerFactory.getLogger(LogReporter.class);
     private static final Future<RecordMetadata> COMPLETED = CompletableFuture.completedFuture(null);
@@ -56,7 +57,7 @@ public abstract class LogReporter implements ErrorReporter {
      * @param context the processing context.
      */
     @Override
-    public Future<RecordMetadata> report(ProcessingContext<?> context) {
+    public Future<RecordMetadata> report(ProcessingContext<T> context) {
         if (!connConfig.enableErrorLog()) {
             return COMPLETED;
         }
@@ -71,12 +72,12 @@ public abstract class LogReporter implements ErrorReporter {
     }
 
     // Visible for testing
-    String message(ProcessingContext<?> context) {
+    String message(ProcessingContext<T> context) {
         return String.format("Error encountered in task %s. %s", id,
                 toString(context, connConfig.includeRecordDetailsInErrorLog()));
     }
 
-    private String toString(ProcessingContext<?> context, boolean includeMessage) {
+    private String toString(ProcessingContext<T> context, boolean includeMessage) {
         StringBuilder builder = new StringBuilder();
         builder.append("Executing stage '");
         builder.append(context.stage().name());
@@ -90,17 +91,16 @@ public abstract class LogReporter implements ErrorReporter {
         return builder.toString();
     }
 
-    protected abstract void appendMessage(StringBuilder builder, Object original);
+    protected abstract void appendMessage(StringBuilder builder, T original);
 
-    public static class Sink extends LogReporter {
+    public static class Sink extends LogReporter<ConsumerRecord<byte[], byte[]>> {
 
         public Sink(ConnectorTaskId id, ConnectorConfig connConfig, ErrorHandlingMetrics errorHandlingMetrics) {
             super(id, connConfig, errorHandlingMetrics);
         }
 
-        protected void appendMessage(StringBuilder builder, Object original) {
-            @SuppressWarnings("unchecked")
-            ConsumerRecord<byte[], byte[]> msg = (ConsumerRecord<byte[], byte[]>) original;
+        @Override
+        protected void appendMessage(StringBuilder builder, ConsumerRecord<byte[], byte[]> msg) {
             builder.append(", where consumed record is ");
             builder.append("{topic='").append(msg.topic()).append('\'');
             builder.append(", partition=").append(msg.partition());
@@ -113,13 +113,14 @@ public abstract class LogReporter implements ErrorReporter {
         }
     }
 
-    public static class Source extends LogReporter {
+    public static class Source extends LogReporter<SourceRecord> {
 
         public Source(ConnectorTaskId id, ConnectorConfig connConfig, ErrorHandlingMetrics errorHandlingMetrics) {
             super(id, connConfig, errorHandlingMetrics);
         }
 
-        protected void appendMessage(StringBuilder builder, Object original) {
+        @Override
+        protected void appendMessage(StringBuilder builder, SourceRecord original) {
             builder.append(", where source record is = ");
             builder.append(original);
         }

@@ -49,7 +49,7 @@ import static java.util.Collections.singleton;
  * with its own Kafka topic dead letter queue. By default, the topic name is not set, and if the
  * connector config doesn't specify one, this feature is disabled.
  */
-public class DeadLetterQueueReporter implements ErrorReporter {
+public class DeadLetterQueueReporter implements ErrorReporter<ConsumerRecord<byte[], byte[]>> {
 
     private static final Logger log = LoggerFactory.getLogger(DeadLetterQueueReporter.class);
 
@@ -124,19 +124,17 @@ public class DeadLetterQueueReporter implements ErrorReporter {
      * @param context processing context containing the raw record at {@link ProcessingContext#original()}.
      * @return the future associated with the writing of this record; never null
      */
-    @SuppressWarnings("unchecked")
-    public Future<RecordMetadata> report(ProcessingContext<?> context) {
+    public Future<RecordMetadata> report(ProcessingContext<ConsumerRecord<byte[], byte[]>> context) {
         if (dlqTopicName.isEmpty()) {
             return CompletableFuture.completedFuture(null);
         }
         errorHandlingMetrics.recordDeadLetterQueueProduceRequest();
 
-        if (!(context.original() instanceof ConsumerRecord)) {
+        if (context.original() == null) {
             errorHandlingMetrics.recordDeadLetterQueueProduceFailed();
             return CompletableFuture.completedFuture(null);
         }
-        ProcessingContext<ConsumerRecord<byte[], byte[]>> sinkContext = (ProcessingContext<ConsumerRecord<byte[], byte[]>>) context;
-        ConsumerRecord<byte[], byte[]> originalMessage = sinkContext.original();
+        ConsumerRecord<byte[], byte[]> originalMessage = context.original();
 
         ProducerRecord<byte[], byte[]> producerRecord;
         if (originalMessage.timestamp() == RecordBatch.NO_TIMESTAMP) {
@@ -148,7 +146,7 @@ public class DeadLetterQueueReporter implements ErrorReporter {
         }
 
         if (connConfig.isDlqContextHeadersEnabled()) {
-            populateContextHeaders(producerRecord, sinkContext);
+            populateContextHeaders(producerRecord, context);
         }
 
         return this.kafkaProducer.send(producerRecord, (metadata, exception) -> {

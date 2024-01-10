@@ -83,7 +83,7 @@ class WorkerSinkTask extends WorkerTask {
     private final Converter keyConverter;
     private final Converter valueConverter;
     private final HeaderConverter headerConverter;
-    private final TransformationChain<SinkRecord> transformationChain;
+    private final TransformationChain<ConsumerRecord<byte[], byte[]>, SinkRecord> transformationChain;
     private final SinkTaskMetricsGroup sinkTaskMetricsGroup;
     private final boolean isTopicTrackingEnabled;
     private final Consumer<byte[], byte[]> consumer;
@@ -101,8 +101,8 @@ class WorkerSinkTask extends WorkerTask {
     private boolean committing;
     private boolean taskStopped;
     private final WorkerErrantRecordReporter workerErrantRecordReporter;
-    protected final RetryWithToleranceOperator retryWithToleranceOperator;
-    private final Supplier<List<ErrorReporter>> errorReportersSupplier;
+    protected final RetryWithToleranceOperator<ConsumerRecord<byte[], byte[]>> retryWithToleranceOperator;
+    private final Supplier<List<ErrorReporter<ConsumerRecord<byte[], byte[]>>>> errorReportersSupplier;
 
     public WorkerSinkTask(ConnectorTaskId id,
                           SinkTask task,
@@ -115,14 +115,14 @@ class WorkerSinkTask extends WorkerTask {
                           Converter valueConverter,
                           ErrorHandlingMetrics errorMetrics,
                           HeaderConverter headerConverter,
-                          TransformationChain<SinkRecord> transformationChain,
+                          TransformationChain<ConsumerRecord<byte[], byte[]>, SinkRecord> transformationChain,
                           Consumer<byte[], byte[]> consumer,
                           ClassLoader loader,
                           Time time,
-                          RetryWithToleranceOperator retryWithToleranceOperator,
+                          RetryWithToleranceOperator<ConsumerRecord<byte[], byte[]>> retryWithToleranceOperator,
                           WorkerErrantRecordReporter workerErrantRecordReporter,
                           StatusBackingStore statusBackingStore,
-                          Supplier<List<ErrorReporter>> errorReportersSupplier) {
+                          Supplier<List<ErrorReporter<ConsumerRecord<byte[], byte[]>>>> errorReportersSupplier) {
         super(id, statusListener, initialState, loader, connectMetrics, errorMetrics,
                 time, statusBackingStore);
 

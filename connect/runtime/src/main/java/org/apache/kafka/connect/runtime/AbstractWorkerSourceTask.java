@@ -192,7 +192,7 @@ public abstract class AbstractWorkerSourceTask extends WorkerTask {
     private final Converter keyConverter;
     private final Converter valueConverter;
     private final HeaderConverter headerConverter;
-    private final TransformationChain<SourceRecord> transformationChain;
+    private final TransformationChain<SourceRecord, SourceRecord> transformationChain;
     private final TopicAdmin admin;
     private final CloseableOffsetStorageReader offsetReader;
     private final SourceTaskMetricsGroup sourceTaskMetricsGroup;
@@ -200,8 +200,8 @@ public abstract class AbstractWorkerSourceTask extends WorkerTask {
     private final boolean topicTrackingEnabled;
     private final TopicCreation topicCreation;
     private final Executor closeExecutor;
-    protected final RetryWithToleranceOperator retryWithToleranceOperator;
-    private final Supplier<List<ErrorReporter>> errorReportersSupplier;
+    protected final RetryWithToleranceOperator<SourceRecord> retryWithToleranceOperator;
+    private final Supplier<List<ErrorReporter<SourceRecord>>> errorReportersSupplier;
 
     // Visible for testing
     List<SourceRecord> toSend;
@@ -216,7 +216,7 @@ public abstract class AbstractWorkerSourceTask extends WorkerTask {
                                        Converter keyConverter,
                                        Converter valueConverter,
                                        HeaderConverter headerConverter,
-                                       TransformationChain<SourceRecord> transformationChain,
+                                       TransformationChain<SourceRecord, SourceRecord> transformationChain,
                                        WorkerSourceTaskContext sourceTaskContext,
                                        Producer<byte[], byte[]> producer,
                                        TopicAdmin admin,
@@ -229,10 +229,10 @@ public abstract class AbstractWorkerSourceTask extends WorkerTask {
                                        ErrorHandlingMetrics errorMetrics,
                                        ClassLoader loader,
                                        Time time,
-                                       RetryWithToleranceOperator retryWithToleranceOperator,
+                                       RetryWithToleranceOperator<SourceRecord> retryWithToleranceOperator,
                                        StatusBackingStore statusBackingStore,
                                        Executor closeExecutor,
-                                       Supplier<List<ErrorReporter>> errorReportersSupplier) {
+                                       Supplier<List<ErrorReporter<SourceRecord>>> errorReportersSupplier) {
 
         super(id, statusListener, initialState, loader, connectMetrics, errorMetrics,
                 time, statusBackingStore);

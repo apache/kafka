@@ -135,7 +135,7 @@ public class WorkerSinkTaskThreadedTest {
     @Mock
     private HeaderConverter headerConverter;
     @Mock
-    private TransformationChain<SinkRecord> transformationChain;
+    private TransformationChain<ConsumerRecord<byte[], byte[]>, SinkRecord> transformationChain;
     private WorkerSinkTask workerTask;
     @Mock
     private KafkaConsumer<byte[], byte[]> consumer;

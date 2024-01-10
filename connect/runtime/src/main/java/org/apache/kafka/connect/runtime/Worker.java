@@ -27,6 +27,7 @@ import org.apache.kafka.clients.admin.FenceProducersOptions;
 import org.apache.kafka.clients.admin.ListConsumerGroupOffsetsOptions;
 import org.apache.kafka.clients.admin.ListConsumerGroupOffsetsResult;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
+import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.producer.KafkaProducer;
@@ -954,11 +955,11 @@ public class Worker {
         return new ErrorHandlingMetrics(id, metrics);
     }
 
-    private List<ErrorReporter> sinkTaskReporters(ConnectorTaskId id, SinkConnectorConfig connConfig,
-                                                  ErrorHandlingMetrics errorHandlingMetrics,
-                                                  Class<? extends Connector> connectorClass) {
-        ArrayList<ErrorReporter> reporters = new ArrayList<>();
-        LogReporter logReporter = new LogReporter.Sink(id, connConfig, errorHandlingMetrics);
+    private List<ErrorReporter<ConsumerRecord<byte[], byte[]>>> sinkTaskReporters(ConnectorTaskId id, SinkConnectorConfig connConfig,
+                                                     ErrorHandlingMetrics errorHandlingMetrics,
+                                                     Class<? extends Connector> connectorClass) {
+        ArrayList<ErrorReporter<ConsumerRecord<byte[], byte[]>>> reporters = new ArrayList<>();
+        LogReporter<ConsumerRecord<byte[], byte[]>> logReporter = new LogReporter.Sink(id, connConfig, errorHandlingMetrics);
         reporters.add(logReporter);
 
         // check if topic for dead letter queue exists
@@ -975,10 +976,10 @@ public class Worker {
         return reporters;
     }
 
-    private List<ErrorReporter> sourceTaskReporters(ConnectorTaskId id, ConnectorConfig connConfig,
-                                                      ErrorHandlingMetrics errorHandlingMetrics) {
-        List<ErrorReporter> reporters = new ArrayList<>();
-        LogReporter logReporter = new LogReporter.Source(id, connConfig, errorHandlingMetrics);
+    private List<ErrorReporter<SourceRecord>> sourceTaskReporters(ConnectorTaskId id, ConnectorConfig connConfig,
+                                                       ErrorHandlingMetrics errorHandlingMetrics) {
+        List<ErrorReporter<SourceRecord>> reporters = new ArrayList<>();
+        LogReporter<SourceRecord> logReporter = new LogReporter.Source(id, connConfig, errorHandlingMetrics);
         reporters.add(logReporter);
 
         return reporters;
@@ -986,7 +987,7 @@ public class Worker {
 
     private WorkerErrantRecordReporter createWorkerErrantRecordReporter(
         SinkConnectorConfig connConfig,
-        RetryWithToleranceOperator retryWithToleranceOperator,
+        RetryWithToleranceOperator<ConsumerRecord<byte[], byte[]>> retryWithToleranceOperator,
         Converter keyConverter,
         Converter valueConverter,
         HeaderConverter headerConverter
@@ -1790,10 +1791,10 @@ public class Worker {
                            ClassLoader classLoader,
                            ErrorHandlingMetrics errorHandlingMetrics,
                            Class<? extends Connector> connectorClass) {
-            RetryWithToleranceOperator retryWithToleranceOperator = new RetryWithToleranceOperator(connectorConfig.errorRetryTimeout(),
+            RetryWithToleranceOperator<ConsumerRecord<byte[], byte[]>> retryWithToleranceOperator = new RetryWithToleranceOperator<>(connectorConfig.errorRetryTimeout(),
                     connectorConfig.errorMaxDelayInMillis(), connectorConfig.errorToleranceType(), Time.SYSTEM, errorHandlingMetrics);
 
-            TransformationChain<SinkRecord> transformationChain = new TransformationChain<>(connectorConfig.<SinkRecord>transformationStages(), retryWithToleranceOperator);
+            TransformationChain<ConsumerRecord<byte[], byte[]>, SinkRecord> transformationChain = new TransformationChain<>(connectorConfig.<SinkRecord>transformationStages(), retryWithToleranceOperator);
             log.info("Initializing: {}", transformationChain);
             SinkConnectorConfig sinkConfig = new SinkConnectorConfig(plugins, connectorConfig.originalsStrings());
             WorkerErrantRecordReporter workerErrantRecordReporter = createWorkerErrantRecordReporter(sinkConfig, retryWithToleranceOperator,
@@ -1832,12 +1833,12 @@ public class Worker {
                            ClassLoader classLoader,
                            ErrorHandlingMetrics errorHandlingMetrics,
                            Class<? extends Connector> connectorClass) {
-            RetryWithToleranceOperator retryWithToleranceOperator = new RetryWithToleranceOperator(connectorConfig.errorRetryTimeout(),
+            RetryWithToleranceOperator<SourceRecord> retryWithToleranceOperator = new RetryWithToleranceOperator<>(connectorConfig.errorRetryTimeout(),
                     connectorConfig.errorMaxDelayInMillis(), connectorConfig.errorToleranceType(), Time.SYSTEM, errorHandlingMetrics);
 
             SourceConnectorConfig sourceConfig = new SourceConnectorConfig(plugins,
                     connectorConfig.originalsStrings(), config.topicCreationEnable());
-            TransformationChain<SourceRecord> transformationChain = new TransformationChain<>(sourceConfig.<SourceRecord>transformationStages(), retryWithToleranceOperator);
+            TransformationChain<SourceRecord, SourceRecord> transformationChain = new TransformationChain<>(sourceConfig.<SourceRecord>transformationStages(), retryWithToleranceOperator);
             log.info("Initializing: {}", transformationChain);
 
             Map<String, Object> producerProps = baseProducerConfigs(id.connector(), "connector-producer-" + id, config, sourceConfig, connectorClass,
@@ -1900,12 +1901,12 @@ public class Worker {
                                   ClassLoader classLoader,
                                   ErrorHandlingMetrics errorHandlingMetrics,
                                   Class<? extends Connector> connectorClass) {
-            RetryWithToleranceOperator retryWithToleranceOperator = new RetryWithToleranceOperator(connectorConfig.errorRetryTimeout(),
+            RetryWithToleranceOperator<SourceRecord> retryWithToleranceOperator = new RetryWithToleranceOperator<>(connectorConfig.errorRetryTimeout(),
                     connectorConfig.errorMaxDelayInMillis(), connectorConfig.errorToleranceType(), Time.SYSTEM, errorHandlingMetrics);
 
             SourceConnectorConfig sourceConfig = new SourceConnectorConfig(plugins,
                     connectorConfig.originalsStrings(), config.topicCreationEnable());
-            TransformationChain<SourceRecord> transformationChain = new TransformationChain<>(sourceConfig.<SourceRecord>transformationStages(), retryWithToleranceOperator);
+            TransformationChain<SourceRecord, SourceRecord> transformationChain = new TransformationChain<>(sourceConfig.<SourceRecord>transformationStages(), retryWithToleranceOperator);
             log.info("Initializing: {}", transformationChain);
 
             Map<String, Object> producerProps = exactlyOnceSourceTaskProducerConfigs(

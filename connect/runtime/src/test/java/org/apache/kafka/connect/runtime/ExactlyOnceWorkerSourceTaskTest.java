@@ -146,7 +146,7 @@ public class ExactlyOnceWorkerSourceTaskTest {
     @Mock private Converter keyConverter;
     @Mock private Converter valueConverter;
     @Mock private HeaderConverter headerConverter;
-    @Mock private TransformationChain<SourceRecord> transformationChain;
+    @Mock private TransformationChain<SourceRecord, SourceRecord> transformationChain;
     @Mock private Producer<byte[], byte[]> producer;
     @Mock private TopicAdmin admin;
     @Mock private CloseableOffsetStorageReader offsetReader;
