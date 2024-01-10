@@ -27,6 +27,8 @@ import org.apache.kafka.connect.runtime.distributed.NotAssignedException;
 import org.apache.kafka.connect.runtime.distributed.NotLeaderException;
 import org.apache.kafka.connect.runtime.distributed.RebalanceNeededException;
 import org.apache.kafka.connect.runtime.rest.RestClient;
+import org.apache.kafka.connect.runtime.rest.RestRequestTimeout;
+import org.apache.kafka.connect.runtime.rest.RestServer;
 import org.apache.kafka.connect.runtime.rest.RestServerConfig;
 import org.apache.kafka.connect.runtime.rest.entities.ActiveTopicsInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorInfo;
@@ -145,6 +147,8 @@ public class ConnectorsResourceTest {
     private static final Set<String> CONNECTOR2_ACTIVE_TOPICS = new HashSet<>(
             Arrays.asList("foo_topic", "baz_topic"));
 
+    private static final RestRequestTimeout REQUEST_TIMEOUT = () -> RestServer.DEFAULT_REST_REQUEST_TIMEOUT_MS;
+
     @Mock
     private Herder herder;
     private ConnectorsResource connectorsResource;
@@ -158,7 +162,7 @@ public class ConnectorsResourceTest {
     public void setUp() throws NoSuchMethodException {
         when(serverConfig.topicTrackingEnabled()).thenReturn(true);
         when(serverConfig.topicTrackingResetEnabled()).thenReturn(true);
-        connectorsResource = new ConnectorsResource(herder, serverConfig, restClient);
+        connectorsResource = new ConnectorsResource(herder, serverConfig, restClient, REQUEST_TIMEOUT);
         forward = mock(UriInfo.class);
         MultivaluedMap<String, String> queryParams = new MultivaluedHashMap<>();
         queryParams.putSingle("forward", "true");
@@ -696,7 +700,7 @@ public class ConnectorsResourceTest {
     public void testConnectorActiveTopicsWithTopicTrackingDisabled() {
         when(serverConfig.topicTrackingEnabled()).thenReturn(false);
         when(serverConfig.topicTrackingResetEnabled()).thenReturn(false);
-        connectorsResource = new ConnectorsResource(herder, serverConfig, restClient);
+        connectorsResource = new ConnectorsResource(herder, serverConfig, restClient, REQUEST_TIMEOUT);
 
         Exception e = assertThrows(ConnectRestException.class,
             () -> connectorsResource.getConnectorActiveTopics(CONNECTOR_NAME));
@@ -708,7 +712,7 @@ public class ConnectorsResourceTest {
         when(serverConfig.topicTrackingEnabled()).thenReturn(false);
         when(serverConfig.topicTrackingResetEnabled()).thenReturn(true);
         HttpHeaders headers = mock(HttpHeaders.class);
-        connectorsResource = new ConnectorsResource(herder, serverConfig, restClient);
+        connectorsResource = new ConnectorsResource(herder, serverConfig, restClient, REQUEST_TIMEOUT);
 
         Exception e = assertThrows(ConnectRestException.class,
             () -> connectorsResource.resetConnectorActiveTopics(CONNECTOR_NAME, headers));
@@ -720,7 +724,7 @@ public class ConnectorsResourceTest {
         when(serverConfig.topicTrackingEnabled()).thenReturn(true);
         when(serverConfig.topicTrackingResetEnabled()).thenReturn(false);
         HttpHeaders headers = mock(HttpHeaders.class);
-        connectorsResource = new ConnectorsResource(herder, serverConfig, restClient);
+        connectorsResource = new ConnectorsResource(herder, serverConfig, restClient, REQUEST_TIMEOUT);
 
         Exception e = assertThrows(ConnectRestException.class,
             () -> connectorsResource.resetConnectorActiveTopics(CONNECTOR_NAME, headers));
@@ -733,7 +737,7 @@ public class ConnectorsResourceTest {
         when(serverConfig.topicTrackingResetEnabled()).thenReturn(true);
         when(herder.connectorActiveTopics(CONNECTOR_NAME))
             .thenReturn(new ActiveTopicsInfo(CONNECTOR_NAME, CONNECTOR_ACTIVE_TOPICS));
-        connectorsResource = new ConnectorsResource(herder, serverConfig, restClient);
+        connectorsResource = new ConnectorsResource(herder, serverConfig, restClient, REQUEST_TIMEOUT);
 
         Response response = connectorsResource.getConnectorActiveTopics(CONNECTOR_NAME);
         assertEquals(Response.Status.OK.getStatusCode(), response.getStatus());
@@ -746,7 +750,7 @@ public class ConnectorsResourceTest {
     @Test
     public void testResetConnectorActiveTopics() {
         HttpHeaders headers = mock(HttpHeaders.class);
-        connectorsResource = new ConnectorsResource(herder, serverConfig, restClient);
+        connectorsResource = new ConnectorsResource(herder, serverConfig, restClient, REQUEST_TIMEOUT);
 
         Response response = connectorsResource.resetConnectorActiveTopics(CONNECTOR_NAME, headers);
         verify(herder).resetConnectorActiveTopics(CONNECTOR_NAME);

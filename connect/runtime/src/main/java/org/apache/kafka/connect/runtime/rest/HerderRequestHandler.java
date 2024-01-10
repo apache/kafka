@@ -37,19 +37,11 @@ public class HerderRequestHandler {
     private static final Logger log = LoggerFactory.getLogger(HerderRequestHandler.class);
 
     private final RestClient restClient;
+    private final RestRequestTimeout requestTimeout;
 
-    private long requestTimeoutMs;
-
-    public HerderRequestHandler(RestClient restClient, long requestTimeoutMs) {
+    public HerderRequestHandler(RestClient restClient, RestRequestTimeout requestTimeout) {
         this.restClient = restClient;
-        this.requestTimeoutMs = requestTimeoutMs;
-    }
-
-    public void requestTimeoutMs(long requestTimeoutMs) {
-        if (requestTimeoutMs < 1) {
-            throw new IllegalArgumentException("REST request timeout must be positive");
-        }
-        this.requestTimeoutMs = requestTimeoutMs;
+        this.requestTimeout = requestTimeout;
     }
 
     /**
@@ -61,7 +53,7 @@ public class HerderRequestHandler {
      */
     public <T> T completeRequest(FutureCallback<T> cb) throws Throwable {
         try {
-            return cb.get(requestTimeoutMs, TimeUnit.MILLISECONDS);
+            return cb.get(requestTimeout.timeoutMs(), TimeUnit.MILLISECONDS);
         } catch (ExecutionException e) {
             throw e.getCause();
         } catch (TimeoutException e) {
