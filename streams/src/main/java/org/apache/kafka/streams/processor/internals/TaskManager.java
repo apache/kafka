@@ -574,6 +574,15 @@ public class TaskManager {
             } else if (standbyTasksToCreate.containsKey(taskId)) {
                 if (task.isActive()) {
                     removeTaskToRecycleFromStateUpdater(taskId, standbyTasksToCreate.get(taskId));
+                } else {
+                    if (tasks.removePendingTaskToRecycle(taskId) != null) {
+                        log.info(
+                            "We were planning on recycling standby task {} to an active task." +
+                                "The task got reassigned to this thread as a standby task, so cancel recycling of the task, " +
+                                "but add it back to the state updater, since we may have to catch up on the changelog.",
+                            taskId);
+                        tasks.addPendingTaskToAddBack(taskId);
+                    }
                 }
                 standbyTasksToCreate.remove(taskId);
             } else {
