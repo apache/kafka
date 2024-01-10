@@ -29,21 +29,21 @@ public class ProcessingContext<T> {
 
     private final T original;
 
-    /**
-     * The following fields need to be reset every time a new record is seen.
-     */
-
     private Stage position;
     private Class<?> klass;
     private int attempt;
     private Throwable error;
 
+    /**
+     * Construct a context associated with the processing of a particular record
+     * @param original The original record before processing, as received from either Kafka or a Source Task
+     */
     public ProcessingContext(T original) {
         this.original = original;
     }
 
     /**
-     * @return the record consumed from Kafka. could be null
+     * @return The original record before processing, as received from either Kafka or a Source Task
      */
     public T original() {
         return original;
