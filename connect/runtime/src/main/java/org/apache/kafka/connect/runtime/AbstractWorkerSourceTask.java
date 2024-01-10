@@ -200,6 +200,7 @@ public abstract class AbstractWorkerSourceTask extends WorkerTask {
     private final boolean topicTrackingEnabled;
     private final TopicCreation topicCreation;
     private final Executor closeExecutor;
+    protected final RetryWithToleranceOperator retryWithToleranceOperator;
     private final Supplier<List<ErrorReporter>> errorReportersSupplier;
 
     // Visible for testing
@@ -234,7 +235,7 @@ public abstract class AbstractWorkerSourceTask extends WorkerTask {
                                        Supplier<List<ErrorReporter>> errorReportersSupplier) {
 
         super(id, statusListener, initialState, loader, connectMetrics, errorMetrics,
-                retryWithToleranceOperator, time, statusBackingStore);
+                time, statusBackingStore);
 
         this.workerConfig = workerConfig;
         this.task = task;
@@ -249,6 +250,7 @@ public abstract class AbstractWorkerSourceTask extends WorkerTask {
         this.offsetStore = Objects.requireNonNull(offsetStore, "offset store cannot be null for source tasks");
         this.closeExecutor = closeExecutor;
         this.sourceTaskContext = sourceTaskContext;
+        this.retryWithToleranceOperator = retryWithToleranceOperator;
         this.errorReportersSupplier = errorReportersSupplier;
 
         this.stopRequestedLatch = new CountDownLatch(1);
@@ -287,6 +289,7 @@ public abstract class AbstractWorkerSourceTask extends WorkerTask {
     @Override
     public void cancel() {
         super.cancel();
+        retryWithToleranceOperator.triggerStop();
         // Preemptively close the offset reader in case the task is blocked on an offset read.
         offsetReader.close();
         // We proactively close the producer here as the main work thread for the task may

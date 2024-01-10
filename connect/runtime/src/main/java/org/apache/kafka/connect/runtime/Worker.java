@@ -1748,12 +1748,10 @@ public class Worker {
             ErrorHandlingMetrics errorHandlingMetrics = errorHandlingMetrics(id);
             final Class<? extends Connector> connectorClass = plugins.connectorClass(
                     connectorConfig.getString(ConnectorConfig.CONNECTOR_CLASS_CONFIG));
-            RetryWithToleranceOperator retryWithToleranceOperator = new RetryWithToleranceOperator(connectorConfig.errorRetryTimeout(),
-                    connectorConfig.errorMaxDelayInMillis(), connectorConfig.errorToleranceType(), Time.SYSTEM, errorHandlingMetrics);
 
             return doBuild(task, id, configState, statusListener, initialState,
                     connectorConfig, keyConverter, valueConverter, headerConverter, classLoader,
-                    errorHandlingMetrics, connectorClass, retryWithToleranceOperator);
+                    errorHandlingMetrics, connectorClass);
         }
 
         abstract WorkerTask doBuild(Task task,
@@ -1767,8 +1765,7 @@ public class Worker {
                                     HeaderConverter headerConverter,
                                     ClassLoader classLoader,
                                     ErrorHandlingMetrics errorHandlingMetrics,
-                                    Class<? extends Connector> connectorClass,
-                                    RetryWithToleranceOperator retryWithToleranceOperator);
+                                    Class<? extends Connector> connectorClass);
 
     }
 
@@ -1792,8 +1789,9 @@ public class Worker {
                            HeaderConverter headerConverter,
                            ClassLoader classLoader,
                            ErrorHandlingMetrics errorHandlingMetrics,
-                           Class<? extends Connector> connectorClass,
-                           RetryWithToleranceOperator retryWithToleranceOperator) {
+                           Class<? extends Connector> connectorClass) {
+            RetryWithToleranceOperator retryWithToleranceOperator = new RetryWithToleranceOperator(connectorConfig.errorRetryTimeout(),
+                    connectorConfig.errorMaxDelayInMillis(), connectorConfig.errorToleranceType(), Time.SYSTEM, errorHandlingMetrics);
 
             TransformationChain<SinkRecord> transformationChain = new TransformationChain<>(connectorConfig.<SinkRecord>transformationStages(), retryWithToleranceOperator);
             log.info("Initializing: {}", transformationChain);
@@ -1833,8 +1831,9 @@ public class Worker {
                            HeaderConverter headerConverter,
                            ClassLoader classLoader,
                            ErrorHandlingMetrics errorHandlingMetrics,
-                           Class<? extends Connector> connectorClass,
-                           RetryWithToleranceOperator retryWithToleranceOperator) {
+                           Class<? extends Connector> connectorClass) {
+            RetryWithToleranceOperator retryWithToleranceOperator = new RetryWithToleranceOperator(connectorConfig.errorRetryTimeout(),
+                    connectorConfig.errorMaxDelayInMillis(), connectorConfig.errorToleranceType(), Time.SYSTEM, errorHandlingMetrics);
 
             SourceConnectorConfig sourceConfig = new SourceConnectorConfig(plugins,
                     connectorConfig.originalsStrings(), config.topicCreationEnable());
@@ -1900,8 +1899,9 @@ public class Worker {
                                   HeaderConverter headerConverter,
                                   ClassLoader classLoader,
                                   ErrorHandlingMetrics errorHandlingMetrics,
-                                  Class<? extends Connector> connectorClass,
-                                  RetryWithToleranceOperator retryWithToleranceOperator) {
+                                  Class<? extends Connector> connectorClass) {
+            RetryWithToleranceOperator retryWithToleranceOperator = new RetryWithToleranceOperator(connectorConfig.errorRetryTimeout(),
+                    connectorConfig.errorMaxDelayInMillis(), connectorConfig.errorToleranceType(), Time.SYSTEM, errorHandlingMetrics);
 
             SourceConnectorConfig sourceConfig = new SourceConnectorConfig(plugins,
                     connectorConfig.originalsStrings(), config.topicCreationEnable());

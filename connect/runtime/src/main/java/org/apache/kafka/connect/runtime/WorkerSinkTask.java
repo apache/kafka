@@ -101,6 +101,7 @@ class WorkerSinkTask extends WorkerTask {
     private boolean committing;
     private boolean taskStopped;
     private final WorkerErrantRecordReporter workerErrantRecordReporter;
+    protected final RetryWithToleranceOperator retryWithToleranceOperator;
     private final Supplier<List<ErrorReporter>> errorReportersSupplier;
 
     public WorkerSinkTask(ConnectorTaskId id,
@@ -123,7 +124,7 @@ class WorkerSinkTask extends WorkerTask {
                           StatusBackingStore statusBackingStore,
                           Supplier<List<ErrorReporter>> errorReportersSupplier) {
         super(id, statusListener, initialState, loader, connectMetrics, errorMetrics,
-                retryWithToleranceOperator, time, statusBackingStore);
+                time, statusBackingStore);
 
         this.workerConfig = workerConfig;
         this.task = task;
@@ -150,6 +151,7 @@ class WorkerSinkTask extends WorkerTask {
         this.isTopicTrackingEnabled = workerConfig.getBoolean(TOPIC_TRACKING_ENABLE_CONFIG);
         this.taskStopped = false;
         this.workerErrantRecordReporter = workerErrantRecordReporter;
+        this.retryWithToleranceOperator = retryWithToleranceOperator;
         this.errorReportersSupplier = errorReportersSupplier;
     }
 
@@ -162,6 +164,12 @@ class WorkerSinkTask extends WorkerTask {
             log.error("{} Task failed initialization and will not be started.", this, t);
             onFailure(t);
         }
+    }
+
+    @Override
+    public void cancel() {
+        super.cancel();
+        retryWithToleranceOperator.triggerStop();
     }
 
     @Override
