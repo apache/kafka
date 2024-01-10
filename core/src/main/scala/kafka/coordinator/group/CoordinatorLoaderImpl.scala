@@ -188,9 +188,6 @@ class CoordinatorLoaderImpl[T](
           }
 
           val endTimeMs = time.milliseconds()
-          info(s"Finished loading offsets and group metadata from $tp "
-            + s"in ${endTimeMs - startTimeMs} milliseconds, of which " +
-            s"$schedulerTimeMs milliseconds was spent in the scheduler.")
 
           if (logEndOffset == -1L) {
             future.completeExceptionally(new NotLeaderOrFollowerException(
