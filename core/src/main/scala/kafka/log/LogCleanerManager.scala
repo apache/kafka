@@ -235,11 +235,27 @@ private[log] class LogCleanerManager(val logDirs: Seq[File],
       val deletableLogs = logs.filter {
         case (_, log) => !log.config.compact // pick non-compacted logs
       }.filterNot {
-        case (topicPartition, _) => inProgress.contains(topicPartition) // skip any logs already in-progress
+        case (topicPartition, _) => {
+          inProgress.get(topicPartition) match {
+            case Some(LogCleaningInProgress) | Some(LogCleaningAborted) =>
+              true
+            case _ =>
+              false
+          }
+        } // skip  LogCleaningInProgress or LogCleaningAborted logs already in-progress
       }
 
       deletableLogs.foreach {
-        case (topicPartition, _) => inProgress.put(topicPartition, LogCleaningPaused(1))
+        case (topicPartition, _) => {
+          inProgress.get(topicPartition) match {
+            case None =>
+              inProgress.put(topicPartition, LogCleaningPaused(1))
+            case Some(LogCleaningPaused(count))  =>
+              inProgress.put(topicPartition, LogCleaningPaused(count + 1))
+            case _ =>
+
+          }
+        }
       }
       deletableLogs
     }
