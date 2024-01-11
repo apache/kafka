@@ -35,6 +35,7 @@ import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.server.util.timer.Timer;
 import org.apache.kafka.server.util.timer.TimerTask;
+import org.apache.kafka.storage.internals.log.VerificationGuard;
 import org.apache.kafka.timeline.SnapshotRegistry;
 import org.slf4j.Logger;
 
@@ -581,6 +582,11 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
         final short producerEpoch;
 
         /**
+         * The verification guard.
+         */
+        final VerificationGuard verificationGuard;
+
+        /**
          * The write operation to execute.
          */
         final CoordinatorWriteOperation<S, T, U> op;
@@ -627,6 +633,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
                 null,
                 RecordBatch.NO_PRODUCER_ID,
                 RecordBatch.NO_PRODUCER_EPOCH,
+                VerificationGuard.SENTINEL,
                 writeTimeout,
                 op
             );
@@ -640,6 +647,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
          * @param transactionalId           The transactional id.
          * @param producerId                The producer id.
          * @param producerEpoch             The producer epoch.
+         * @param verificationGuard         The verification guard.
          * @param writeTimeout              The write operation timeout
          * @param op                        The write operation.
          */
@@ -649,6 +657,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
             String transactionalId,
             long producerId,
             short producerEpoch,
+            VerificationGuard verificationGuard,
             Duration writeTimeout,
             CoordinatorWriteOperation<S, T, U> op
         ) {
@@ -658,6 +667,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
             this.transactionalId = transactionalId;
             this.producerId = producerId;
             this.producerEpoch = producerEpoch;
+            this.verificationGuard = verificationGuard;
             this.future = new CompletableFuture<>();
             this.createdTimeMs = time.milliseconds();
             this.writeTimeout = writeTimeout;
@@ -717,6 +727,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
                                 tp,
                                 producerId,
                                 producerEpoch,
+                                verificationGuard,
                                 result.records()
                             );
                             context.coordinator.updateLastWrittenOffset(offset);
@@ -1466,17 +1477,25 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
     ) {
         throwIfNotRunning();
         log.debug("Scheduled execution of transactional write operation {}.", name);
-        CoordinatorWriteEvent<T> event = new CoordinatorWriteEvent<>(
-            name,
+        return partitionWriter.maybeStartTransactionVerification(
             tp,
             transactionalId,
             producerId,
-            producerEpoch,
-            timeout,
-            op
-        );
-        enqueue(event);
-        return event.future;
+            producerEpoch
+        ).thenCompose(verificationGuard -> {
+            CoordinatorWriteEvent<T> event = new CoordinatorWriteEvent<>(
+                name,
+                tp,
+                transactionalId,
+                producerId,
+                producerEpoch,
+                verificationGuard,
+                timeout,
+                op
+            );
+            enqueue(event);
+            return event.future;
+        });
     }
 
     /**

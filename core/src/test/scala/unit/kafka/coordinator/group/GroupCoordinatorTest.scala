@@ -19,7 +19,7 @@ package kafka.coordinator.group
 
 import java.util.{Optional, OptionalInt}
 import kafka.common.OffsetAndMetadata
-import kafka.server.{DelayedOperationPurgatory, HostedPartition, KafkaConfig, ReplicaManager, RequestLocal}
+import kafka.server.{ActionQueue, DelayedOperationPurgatory, HostedPartition, KafkaConfig, ReplicaManager, RequestLocal}
 import kafka.utils._
 import org.apache.kafka.common.{TopicIdPartition, TopicPartition, Uuid}
 import org.apache.kafka.common.protocol.Errors
@@ -3903,7 +3903,8 @@ class GroupCoordinatorTest {
       capturedArgument.capture(),
       any[Option[ReentrantLock]],
       any(classOf[RequestLocal]),
-      any[Map[TopicPartition, VerificationGuard]]
+      any[Map[TopicPartition, VerificationGuard]],
+      any[ActionQueue]
     )).thenAnswer(_ => {
       capturedArgument.getValue.apply(
         Map(new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, groupPartitionId) ->
@@ -3935,7 +3936,8 @@ class GroupCoordinatorTest {
       capturedArgument.capture(),
       any[Option[ReentrantLock]],
       any(classOf[RequestLocal]),
-      any[Map[TopicPartition, VerificationGuard]]
+      any[Map[TopicPartition, VerificationGuard]],
+      any[ActionQueue]
     )).thenAnswer(_ => {
         capturedArgument.getValue.apply(
           Map(new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, groupPartitionId) ->
@@ -4078,7 +4080,8 @@ class GroupCoordinatorTest {
       capturedArgument.capture(),
       any[Option[ReentrantLock]],
       any(classOf[RequestLocal]),
-      any[Map[TopicPartition, VerificationGuard]]
+      any[Map[TopicPartition, VerificationGuard]],
+      any[ActionQueue]
     )).thenAnswer(_ => {
       capturedArgument.getValue.apply(
         Map(new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, groupPartitionId) ->
@@ -4120,7 +4123,8 @@ class GroupCoordinatorTest {
       capturedArgument.capture(),
       any[Option[ReentrantLock]],
       any(classOf[RequestLocal]),
-      any[Map[TopicPartition, VerificationGuard]]
+      any[Map[TopicPartition, VerificationGuard]],
+      any[ActionQueue]
     )).thenAnswer(_ => {
       capturedArgument.getValue.apply(
         Map(offsetTopicPartition ->
