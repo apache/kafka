@@ -56,6 +56,7 @@ import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentState;
 import org.apache.kafka.server.log.remote.storage.RemoteStorageException;
 import org.apache.kafka.server.log.remote.storage.RemoteStorageManager;
 import org.apache.kafka.server.metrics.KafkaMetricsGroup;
+import org.apache.kafka.server.metrics.KafkaYammerMetrics;
 import org.apache.kafka.storage.internals.checkpoint.InMemoryLeaderEpochCheckpoint;
 import org.apache.kafka.storage.internals.epoch.LeaderEpochFileCache;
 import org.apache.kafka.storage.internals.log.AbortedTxn;
@@ -788,11 +789,13 @@ public class RemoteLogManager implements Closeable {
             String topic = topicIdPartition.topic();
             int partition = topicIdPartition.partition();
 
-            brokerTopicStats.topicStats(topic).recordRemoteCopyLagBytes(partition, bytesLag);
-            brokerTopicStats.allTopicsStats().recordRemoteCopyLagBytes(topic, brokerTopicStats.topicStats(topic).remoteCopyLagBytes());
+            BrokerTopicMetrics brokerTopicMetrics = brokerTopicStats.topicStats(topic);
+            brokerTopicMetrics.recordRemoteCopyLagBytes(partition, bytesLag);
+            brokerTopicStats.allTopicsStats().recordRemoteCopyLagBytes(topic, brokerTopicMetrics.remoteCopyLagBytes());
 
             long segmentsLag = log.onlyLocalLogSegmentsCount();
-            brokerTopicStats.topicStats(topic).recordRemoteCopyLagSegments(partition, segmentsLag);
+            brokerTopicMetrics.recordRemoteCopyLagSegments(partition, segmentsLag);
+            brokerTopicStats.allTopicsStats().recordRemoteCopyLagSegments(topic, brokerTopicMetrics.remoteCopyLagSegments());
         }
 
         private Path toPathIfExists(File file) {
@@ -970,15 +973,21 @@ public class RemoteLogManager implements Closeable {
         private void updateMetadataCountAndLogSizeWith(int metadataCount, long remoteLogSizeBytes) {
             BrokerTopicMetrics brokerTopicMetrics = brokerTopicStats.topicStats(topicIdPartition.topic());
             int partition = topicIdPartition.partition();
+            String topic = topicIdPartition.topic();
             brokerTopicMetrics.recordRemoteLogMetadataCount(partition, metadataCount);
+            brokerTopicStats.allTopicsStats().recordRemoteLogMetadataCount(topic, brokerTopicMetrics.remoteLogMetadataCount());
             brokerTopicMetrics.recordRemoteLogSizeBytes(partition, remoteLogSizeBytes);
+            brokerTopicStats.allTopicsStats().recordRemoteLogSizeBytes(topic, brokerTopicMetrics.remoteLogSizeBytes());
         }
 
         private void updateRemoteDeleteLagWith(int segmentsLeftToDelete, long sizeOfDeletableSegmentsBytes) {
             BrokerTopicMetrics brokerTopicMetrics = brokerTopicStats.topicStats(topicIdPartition.topic());
+            String topic = topicIdPartition.topic();
             int partition = topicIdPartition.partition();
             brokerTopicMetrics.recordRemoteDeleteLagSegments(partition, segmentsLeftToDelete);
+            brokerTopicStats.allTopicsStats().recordRemoteDeleteLagSegments(topic, brokerTopicMetrics.remoteDeleteLagSegments());
             brokerTopicMetrics.recordRemoteDeleteLagBytes(partition, sizeOfDeletableSegmentsBytes);
+            brokerTopicStats.allTopicsStats().recordRemoteDeleteLagBytes(topic, brokerTopicMetrics.remoteDeleteLagBytes());
         }
 
         void cleanupExpiredRemoteLogSegments() throws RemoteStorageException, ExecutionException, InterruptedException {
@@ -1178,7 +1187,10 @@ public class RemoteLogManager implements Closeable {
                         }
                     }
                 }
-                brokerTopicStats.topicStats(topicIdPartition.topic()).recordRemoteLogSizeComputationTime(topicIdPartition.partition(), time.milliseconds() - startTimeMs);
+
+                BrokerTopicMetrics brokerTopicMetrics = brokerTopicStats.topicStats(topicIdPartition.topic());
+                brokerTopicMetrics.recordRemoteLogSizeComputationTime(topicIdPartition.partition(), time.milliseconds() - startTimeMs);
+                brokerTopicStats.allTopicsStats().recordRemoteLogSizeComputationTime(topicIdPartition.topic(), brokerTopicMetrics.remoteLogSizeComputationTime());
 
                 // This is the total size of segments in local log that have their base-offset > local-log-start-offset
                 // and size of the segments in remote storage which have their end-offset < local-log-start-offset.
@@ -1654,7 +1666,9 @@ public class RemoteLogManager implements Closeable {
 
     private void removeRemoteTopicPartitionMetrics(TopicIdPartition topicIdPartition) {
         BrokerTopicMetrics topicMetrics = brokerTopicStats.topicStats(topicIdPartition.topic());
+        String topic = topicIdPartition.topic();
         int partition = topicIdPartition.partition();
+        // remove the partition metric values
         topicMetrics.removeRemoteCopyLagBytes(partition);
         topicMetrics.removeRemoteCopyLagSegments(partition);
         topicMetrics.removeRemoteDeleteLagBytes(partition);
@@ -1662,6 +1676,15 @@ public class RemoteLogManager implements Closeable {
         topicMetrics.removeRemoteLogMetadataCount(partition);
         topicMetrics.removeRemoteLogSizeComputationTime(partition);
         topicMetrics.removeRemoteLogSizeBytes(partition);
+
+        // update the all topic metric values
+        brokerTopicStats.allTopicsStats().recordRemoteCopyLagBytes(topic, topicMetrics.remoteCopyLagBytes());
+        brokerTopicStats.allTopicsStats().recordRemoteCopyLagSegments(topic, topicMetrics.remoteCopyLagSegments());
+        brokerTopicStats.allTopicsStats().recordRemoteDeleteLagBytes(topic, topicMetrics.remoteDeleteLagBytes());
+        brokerTopicStats.allTopicsStats().recordRemoteDeleteLagSegments(topic, topicMetrics.remoteDeleteLagSegments());
+        brokerTopicStats.allTopicsStats().recordRemoteLogMetadataCount(topic, topicMetrics.remoteLogMetadataCount());
+        brokerTopicStats.allTopicsStats().recordRemoteLogSizeComputationTime(topic, topicMetrics.remoteLogSizeComputationTime());
+        brokerTopicStats.allTopicsStats().recordRemoteLogSizeBytes(topic, topicMetrics.remoteLogSizeBytes());
     }
 
     //Visible for testing

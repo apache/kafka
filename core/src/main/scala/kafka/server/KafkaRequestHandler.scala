@@ -429,6 +429,11 @@ class BrokerTopicMetrics(name: Option[String], configOpt: java.util.Optional[Kaf
     brokerTopicAggregatedMetric.setPartitionMetricValue(partition, segmentsLag)
   }
 
+  def recordRemoteCopyLagSegments(topic: String, segmentsLag: Long): Unit = {
+    val brokerTopicAggregatedMetric = metricGaugeTypeMap.get(RemoteStorageMetrics.REMOTE_COPY_LAG_SEGMENTS_METRIC.getName).brokerTopicAggregatedMetric
+    brokerTopicAggregatedMetric.setTopicMetricValue(topic, segmentsLag)
+  }
+
   def removeRemoteCopyLagSegments(partition: Int): Unit = {
     val brokerTopicAggregatedMetric = metricGaugeTypeMap.get(RemoteStorageMetrics.REMOTE_COPY_LAG_SEGMENTS_METRIC.getName).brokerTopicAggregatedMetric
     brokerTopicAggregatedMetric.removePartition(partition)
@@ -440,6 +445,11 @@ class BrokerTopicMetrics(name: Option[String], configOpt: java.util.Optional[Kaf
   def recordRemoteLogMetadataCount(partition: Int, count: Long): Unit = {
     val brokerTopicAggregatedMetric = metricGaugeTypeMap.get(RemoteStorageMetrics.REMOTE_LOG_METADATA_COUNT_METRIC.getName).brokerTopicAggregatedMetric
     brokerTopicAggregatedMetric.setPartitionMetricValue(partition, count)
+  }
+
+  def recordRemoteLogMetadataCount(topic: String, count: Long): Unit = {
+    val brokerTopicAggregatedMetric = metricGaugeTypeMap.get(RemoteStorageMetrics.REMOTE_LOG_METADATA_COUNT_METRIC.getName).brokerTopicAggregatedMetric
+    brokerTopicAggregatedMetric.setTopicMetricValue(topic, count)
   }
 
   def removeRemoteLogMetadataCount(partition: Int): Unit = {
@@ -454,6 +464,11 @@ class BrokerTopicMetrics(name: Option[String], configOpt: java.util.Optional[Kaf
     brokerTopicAggregatedMetric.setPartitionMetricValue(partition, size)
   }
 
+  def recordRemoteLogSizeBytes(topic: String, size: Long): Unit = {
+    val brokerTopicAggregatedMetric = metricGaugeTypeMap.get(RemoteStorageMetrics.REMOTE_LOG_SIZE_BYTES_METRIC.getName).brokerTopicAggregatedMetric
+    brokerTopicAggregatedMetric.setTopicMetricValue(topic, size)
+  }
+
   def removeRemoteLogSizeBytes(partition: Int): Unit = {
     val brokerTopicAggregatedMetric = metricGaugeTypeMap.get(RemoteStorageMetrics.REMOTE_LOG_SIZE_BYTES_METRIC.getName).brokerTopicAggregatedMetric
     brokerTopicAggregatedMetric.removePartition(partition)
@@ -464,6 +479,11 @@ class BrokerTopicMetrics(name: Option[String], configOpt: java.util.Optional[Kaf
   def recordRemoteLogSizeComputationTime(partition: Int, timeSpent: Long): Unit = {
     val brokerTopicAggregatedMetric = metricGaugeTypeMap.get(RemoteStorageMetrics.REMOTE_LOG_SIZE_COMPUTATION_TIME_METRIC.getName).brokerTopicAggregatedMetric
     brokerTopicAggregatedMetric.setPartitionMetricValue(partition, timeSpent)
+  }
+
+  def recordRemoteLogSizeComputationTime(topic: String, timeSpent: Long): Unit = {
+    val brokerTopicAggregatedMetric = metricGaugeTypeMap.get(RemoteStorageMetrics.REMOTE_LOG_SIZE_COMPUTATION_TIME_METRIC.getName).brokerTopicAggregatedMetric
+    brokerTopicAggregatedMetric.setTopicMetricValue(topic, timeSpent)
   }
 
   def removeRemoteLogSizeComputationTime(partition: Int): Unit = {
@@ -478,6 +498,11 @@ class BrokerTopicMetrics(name: Option[String], configOpt: java.util.Optional[Kaf
     brokerTopicAggregatedMetric.setPartitionMetricValue(partition, segmentsLag)
   }
 
+  def recordRemoteDeleteLagBytes(topic: String, segmentsLag: Long): Unit = {
+    val brokerTopicAggregatedMetric = metricGaugeTypeMap.get(RemoteStorageMetrics.REMOTE_DELETE_LAG_BYTES_METRIC.getName).brokerTopicAggregatedMetric
+    brokerTopicAggregatedMetric.setTopicMetricValue(topic, segmentsLag)
+  }
+
   def removeRemoteDeleteLagBytes(partition: Int): Unit = {
     val brokerTopicAggregatedMetric = metricGaugeTypeMap.get(RemoteStorageMetrics.REMOTE_DELETE_LAG_BYTES_METRIC.getName).brokerTopicAggregatedMetric
     brokerTopicAggregatedMetric.removePartition(partition)
@@ -489,6 +514,11 @@ class BrokerTopicMetrics(name: Option[String], configOpt: java.util.Optional[Kaf
   def recordRemoteDeleteLagSegments(partition: Int, segmentsLag: Long): Unit = {
     val brokerTopicAggregatedMetric = metricGaugeTypeMap.get(RemoteStorageMetrics.REMOTE_DELETE_LAG_SEGMENTS_METRIC.getName).brokerTopicAggregatedMetric
     brokerTopicAggregatedMetric.setPartitionMetricValue(partition, segmentsLag)
+  }
+
+  def recordRemoteDeleteLagSegments(topic: String, segmentsLag: Long): Unit = {
+    val brokerTopicAggregatedMetric = metricGaugeTypeMap.get(RemoteStorageMetrics.REMOTE_DELETE_LAG_SEGMENTS_METRIC.getName).brokerTopicAggregatedMetric
+    brokerTopicAggregatedMetric.setTopicMetricValue(topic, segmentsLag)
   }
 
   def removeRemoteDeleteLagSegments(partition: Int): Unit = {
@@ -557,7 +587,10 @@ class BrokerTopicAggregatedMetric(allTopics: Boolean = false) {
       topicMetricValues.values().stream().mapToLong(v => v).sum()
   }
 
-  def close(): Unit = partitionMetricValues.clear()
+  def close(): Unit = {
+    partitionMetricValues.clear()
+    topicMetricValues.clear()
+  }
 }
 
 object BrokerTopicStats {
