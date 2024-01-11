@@ -82,10 +82,7 @@ class CoordinatorPartitionWriter[T](
   }
 
   /**
-   * Register a PartitionWriter.Listener.
-   *
-   * @param tp       The partition to register the listener to.
-   * @param listener The listener.
+   * {@inheritDoc}
    */
   override def registerListener(
     tp: TopicPartition,
@@ -95,10 +92,7 @@ class CoordinatorPartitionWriter[T](
   }
 
   /**
-   * Deregister a PartitionWriter.Listener.
-   *
-   * @param tp       The partition to deregister the listener from.
-   * @param listener The listener.
+   * {@inheritDoc}
    */
   override def deregisterListener(
     tp: TopicPartition,
@@ -108,15 +102,7 @@ class CoordinatorPartitionWriter[T](
   }
 
   /**
-   * Write records to the partitions. Records are written in one batch so
-   * atomicity is guaranteed.
-   *
-   * @param tp            The partition to write records to.
-   * @param producerId    The producer id.
-   * @param producerEpoch The producer epoch.
-   * @param records       The list of records. The records are written in a single batch.
-   * @return The log end offset right after the written records.
-   * @throws KafkaException Any KafkaException caught during the write operation.
+   * {@inheritDoc}
    */
   override def append(
     tp: TopicPartition,
@@ -174,15 +160,7 @@ class CoordinatorPartitionWriter[T](
   }
 
   /**
-   * Write the transaction end marker.
-   *
-   * @param tp                The partition to write records to.
-   * @param producerId        The producer id.
-   * @param producerEpoch     The producer epoch.
-   * @param coordinatorEpoch  The epoch of the transaction coordinator.
-   * @param result            The transaction result.
-   * @return The log end offset right after the written records.
-   * @throws KafkaException Any KafkaException caught during the write operation.
+   * {@inheritDoc}
    */
   override def appendEndTransactionMarker(
     tp: TopicPartition,
@@ -204,16 +182,7 @@ class CoordinatorPartitionWriter[T](
   }
 
   /**
-   * Verify the transaction.
-   *
-   * @param tp              The partition to write records to.
-   * @param transactionalId The transactional id.
-   * @param producerId      The producer id.
-   * @param producerEpoch   The producer epoch.
-   * @return A future containing the {@link VerificationGuard} or an exception if the
-   *         transaction requires a verification; or {@link VerificationGuard#SENTINEL}
-   *         if the transaction has already been verified.
-   * @throws KafkaException Any KafkaException caught during the operation.
+   * {@inheritDoc}
    */
   override def maybeStartTransactionVerification(
     tp: TopicPartition,
