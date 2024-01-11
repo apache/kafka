@@ -35,6 +35,7 @@ import org.apache.kafka.common.utils.Time
 import org.apache.kafka.coordinator.group.OffsetConfig
 import org.apache.kafka.server.record.BrokerCompressionType
 import org.apache.kafka.storage.internals.log.VerificationGuard
+import org.apache.kafka.coordinator.group.Group
 
 import scala.collection.{Map, Seq, Set, immutable, mutable}
 import scala.math.max
@@ -1117,7 +1118,7 @@ private[group] class GroupCoordinator(
       // old group coordinator.
       val groups = groupManager.currentGroups.filter { g =>
         states.isEmpty || g.isInStates(states.map(_.toLowerCase)) &&
-          (groupTypes.isEmpty || groupTypes.contains("classic"))
+          (groupTypes.isEmpty || groupTypes.contains(Group.GroupType.CLASSIC.toString))
       }
       (errorCode, groups.map(_.overview).toList)
     }

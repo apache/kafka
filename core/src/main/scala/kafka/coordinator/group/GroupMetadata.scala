@@ -29,6 +29,7 @@ import org.apache.kafka.common.message.JoinGroupResponseData.JoinGroupResponseMe
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.protocol.types.SchemaException
 import org.apache.kafka.common.utils.Time
+import org.apache.kafka.coordinator.group.Group
 
 import scala.collection.{Seq, immutable, mutable}
 import scala.jdk.CollectionConverters._
@@ -612,7 +613,7 @@ private[group] class GroupMetadata(val groupId: String, initialState: GroupState
   }
 
   def overview: GroupOverview = {
-    GroupOverview(groupId, protocolType.getOrElse(""), state.toString, "classic")
+    GroupOverview(groupId, protocolType.getOrElse(""), state.toString, Group.GroupType.CLASSIC.toString)
   }
 
   def initializeOffsets(offsets: collection.Map[TopicPartition, CommitRecordMetadataAndOffset],
