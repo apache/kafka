@@ -27,7 +27,7 @@ import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.requests.TransactionResult
 import org.apache.kafka.common.utils.{BufferSupplier, Time}
 import org.apache.kafka.coordinator.group.runtime.PartitionWriter
-import org.apache.kafka.storage.internals.log.{VerificationGuard}
+import org.apache.kafka.storage.internals.log.VerificationGuard
 
 import java.util
 import java.util.concurrent.CompletableFuture
