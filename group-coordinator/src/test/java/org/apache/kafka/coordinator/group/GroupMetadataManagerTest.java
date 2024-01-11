@@ -9694,7 +9694,7 @@ public class GroupMetadataManagerTest {
                 .setGroupId(classicGroup.groupId())
                 .setProtocolType("classic")
                 .setGroupState(EMPTY.toString())
-                .setGroupType(ConsumerGroupType.CLASSIC.toString())
+                .setGroupType(Group.GroupType.CLASSIC.toString())
         ).collect(Collectors.toMap(ListGroupsResponseData.ListedGroup::groupId, Function.identity()));
 
         assertEquals(expectAllGroupMap, actualAllGroupMap);
