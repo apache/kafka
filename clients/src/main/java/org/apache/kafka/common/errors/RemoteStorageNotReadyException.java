@@ -17,7 +17,22 @@
 package org.apache.kafka.common.errors;
 
 /**
- * An exception that indicates remote storage is not ready to receive the requests yet.
+ * This retryable exception indicates that remote storage is not ready to receive the requests yet.
+ * <ul>
+ *     <li>The consumer reads data from a known offset. If there's no initial offset, then it's determined by the
+ *     {@link org.apache.kafka.clients.consumer.ConsumerConfig#AUTO_OFFSET_RESET_CONFIG} configuration which can be
+ *     set to earliest, latest, or none.</li>
+ *     <li>If the auto.offset.reset is set to earliest and the offset is in remote storage, then the consumer FETCH
+ *     request can't make progress until the remote log metadata is synced.</li>
+ *     <li>In a FETCH request, if there are multiple partitions with some fetching from local and others from remote
+ *     storage, only the partitions fetching from remote storage will be blocked. The ones fetching from local
+ *     storage can make progress.</li>
+ *     <li>If the fetch-offset for a partition is within local storage, then the consumer can fetch the messages.</li>
+ *     <li>All calls to LIST_OFFSETS will fail until the remote log metadata gets synced for that partition.</li>
+ * </ul>
+ * The behavior ensures that the consumer can continue to consume messages from local storage even if the remote
+ * storage is not available or not yet synced. However, it also means that the consumer can't consume messages from
+ * remote storage until the remote log metadata gets synced.
  */
 public class RemoteStorageNotReadyException extends RetriableException {
 
