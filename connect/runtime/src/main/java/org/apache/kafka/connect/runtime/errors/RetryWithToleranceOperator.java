@@ -103,6 +103,18 @@ public class RetryWithToleranceOperator implements AutoCloseable {
         this.reporters = Collections.emptyList();
     }
 
+    /**
+     * Inform this class that some external operation has already failed. This is used when the control flow does not
+     * allow for the operation to be started and stopped within the scope of a single {@link Operation}, and the
+     * {@link #execute(ProcessingContext, Operation, Stage, Class)} method cannot be used.
+     *
+     * @param context The {@link ProcessingContext} used to hold state about this operation
+     * @param stage The logical stage within the overall pipeline of the operation that has failed
+     * @param executingClass The class containing the operation implementation that failed
+     * @param error The error which caused the operation to fail
+     * @return A future which resolves when this failure has been persisted by all {@link ErrorReporter} instances
+     * @throws ConnectException if the operation is not tolerated, and the overall pipeline should stop
+     */
     public Future<Void> executeFailed(ProcessingContext<?> context, Stage stage, Class<?> executingClass, Throwable error) {
         markAsFailed();
         context.currentContext(stage, executingClass);
@@ -117,9 +129,9 @@ public class RetryWithToleranceOperator implements AutoCloseable {
     }
 
     /**
-     * Report errors. Should be called only if an error was encountered while executing the operation.
-     *
-     * @return a errant record future that potentially aggregates the producer futures
+     * Report an error to all configured {@link ErrorReporter} instances.
+     * @param context The context containing details of the error to report
+     * @return A future which resolves when this failure has been persisted by all {@link ErrorReporter} instances
      */
     // Visible for testing
     synchronized Future<Void> report(ProcessingContext<?> context) {
@@ -137,21 +149,30 @@ public class RetryWithToleranceOperator implements AutoCloseable {
     }
 
     /**
-     * Execute the recoverable operation. If the operation is already in a failed state, then simply return
-     * with the existing failure.
+     * Attempt to execute an operation. Handles retriable and tolerated exceptions thrown by the operation. This is
+     * used for small blocking operations which can be represented as an {@link Operation}. For operations which do
+     * not fit this interface, see {@link #executeFailed(ProcessingContext, Stage, Class, Throwable)}
      *
+     * <p>If any error is already present in the context, return null without modifying the context.
+     * <p>Retries are allowed if the operator is still running, and this operation is within the error retry timeout.
+     * <p>Tolerable exceptions are different for each stage, and encoded in {@link #TOLERABLE_EXCEPTIONS}
+     * <p>This method mutates the passed-in {@link ProcessingContext} with the number of attempts made to execute the
+     * operation, and the last error encountered if no attempt was successful.
+     *
+     * @param context The {@link ProcessingContext} used to hold state about this operation
      * @param operation the recoverable operation
+     * @param stage The logical stage within the overall pipeline of the operation that has failed
+     * @param executingClass The class containing the operation implementation that failed
      * @param <V> return type of the result of the operation.
-     * @return result of the operation
+     * @return result of the operation, or null if a prior exception occurred, or the operation only threw retriable or tolerable exceptions
+     * @throws ConnectException wrapper if any non-tolerated exception was thrown by the operation
      */
     public <V> V execute(ProcessingContext<?> context, Operation<V> operation, Stage stage, Class<?> executingClass) {
-        context.currentContext(stage, executingClass);
-
         if (context.failed()) {
             log.debug("ProcessingContext is already in failed state. Ignoring requested operation.");
             return null;
         }
-
+        context.currentContext(stage, executingClass);
         try {
             Class<? extends Exception> ex = TOLERABLE_EXCEPTIONS.getOrDefault(context.stage(), RetriableException.class);
             return execAndHandleError(context, operation, ex);
@@ -164,12 +185,16 @@ public class RetryWithToleranceOperator implements AutoCloseable {
     }
 
     /**
-     * Attempt to execute an operation. Retry if a {@link RetriableException} is raised. Re-throw everything else.
+     * Attempt to execute an operation. Handles retriable exceptions raised by the operation.
+     * <p>Retries are allowed if the operator is still running, and this operation is within the error retry timeout.
+     * <p>This method mutates the passed-in {@link ProcessingContext} with the number of attempts made to execute the
+     * operation, and the last error encountered if no attempt was successful.
      *
+     * @param context The {@link ProcessingContext} used to hold state about this operation
      * @param operation the operation to be executed.
      * @param <V> the return type of the result of the operation.
-     * @return the result of the operation.
-     * @throws Exception rethrow if a non-retriable Exception is thrown by the operation
+     * @return the result of the operation if it succeeded, or null if the operation only threw retriable exceptions
+     * @throws Exception rethrow if any non-retriable exception was thrown by the operation
      */
     protected <V> V execAndRetry(ProcessingContext<?> context, Operation<V> operation) throws Exception {
         int attempt = 0;
@@ -202,14 +227,17 @@ public class RetryWithToleranceOperator implements AutoCloseable {
     }
 
     /**
-     * Execute a given operation multiple times (if needed), and tolerate certain exceptions.
-     * Visible for testing.
+     * Attempt to execute an operation. Handles retriable and tolerated exceptions thrown by the operation.
+     * <p>This method mutates the passed-in {@link ProcessingContext} with the number of attempts made to execute the
+     * operation, and the last error encountered if no attempt was successful.
      *
      * @param operation the operation to be executed.
-     * @param tolerated the class of exceptions which can be tolerated.
+     * @param tolerated the class of exceptions which can be tolerated if errors.tolerance=all
      * @param <V> The return type of the result of the operation.
-     * @return the result of the operation
+     * @return the result of the operation, or null if the operation only threw retriable or tolerable exceptions
+     * @throws ConnectException wrapper if any non-tolerated exception was thrown by the operation
      */
+    // Visible for testing
     protected <V> V execAndHandleError(ProcessingContext<?> context, Operation<V> operation, Class<? extends Exception> tolerated) {
         try {
             V result = execAndRetry(context, operation);
