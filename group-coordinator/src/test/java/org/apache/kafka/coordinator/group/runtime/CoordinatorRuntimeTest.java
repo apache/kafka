@@ -1987,6 +1987,79 @@ public class CoordinatorRuntimeTest {
     }
 
     @Test
+    public void testRetryableTimerWithCustomBackoff() throws InterruptedException {
+        MockTimer timer = new MockTimer();
+        CoordinatorRuntime<MockCoordinatorShard, String> runtime =
+            new CoordinatorRuntime.Builder<MockCoordinatorShard, String>()
+                .withTime(timer.time())
+                .withTimer(timer)
+                .withDefaultWriteTimeOut(DEFAULT_WRITE_TIMEOUT)
+                .withLoader(new MockCoordinatorLoader())
+                .withEventProcessor(new DirectEventProcessor())
+                .withPartitionWriter(new MockPartitionWriter())
+                .withCoordinatorShardBuilderSupplier(new MockCoordinatorShardBuilderSupplier())
+                .withCoordinatorRuntimeMetrics(mock(GroupCoordinatorRuntimeMetrics.class))
+                .withCoordinatorMetrics(mock(GroupCoordinatorMetrics.class))
+                .build();
+
+        // Loads the coordinator.
+        runtime.scheduleLoadOperation(TP, 10);
+
+        // Check initial state.
+        CoordinatorRuntime<MockCoordinatorShard, String>.CoordinatorContext ctx = runtime.contextOrThrow(TP);
+        assertEquals(0, ctx.timer.size());
+
+        // Timer #1.
+        AtomicInteger cnt = new AtomicInteger(0);
+        ctx.timer.schedule("timer-1", 10, TimeUnit.MILLISECONDS, true, 1000, () -> {
+            cnt.incrementAndGet();
+            throw new KafkaException("error");
+        });
+
+        // The coordinator timer should have one pending task.
+        assertEquals(1, ctx.timer.size());
+
+        // Advance time to fire the pending timer.
+        timer.advanceClock(10 + 1);
+
+        // The timer should have been called and the timer should have one pending task.
+        assertEquals(1, cnt.get());
+        assertEquals(1, ctx.timer.size());
+
+        // Advance past the default retry backoff.
+        timer.advanceClock(500 + 1);
+
+        // The timer should not have been called yet.
+        assertEquals(1, cnt.get());
+        assertEquals(1, ctx.timer.size());
+
+        // Advance past the custom retry.
+        timer.advanceClock(500 + 1);
+
+        // The timer should have been called and the timer should have one pending task.
+        assertEquals(2, cnt.get());
+        assertEquals(1, ctx.timer.size());
+
+        // Advance past the default retry backoff.
+        timer.advanceClock(500 + 1);
+
+        // The timer should not have been called yet.
+        assertEquals(2, cnt.get());
+        assertEquals(1, ctx.timer.size());
+
+        // Advance past the custom retry.
+        timer.advanceClock(500 + 1);
+
+        // The timer should have been called and the timer should have one pending task.
+        assertEquals(3, cnt.get());
+        assertEquals(1, ctx.timer.size());
+
+        // Cancel Timer #1.
+        ctx.timer.cancel("timer-1");
+        assertEquals(0, ctx.timer.size());
+    }
+
+    @Test
     public void testNonRetryableTimer() throws InterruptedException {
         MockTimer timer = new MockTimer();
         CoordinatorRuntime<MockCoordinatorShard, String> runtime =

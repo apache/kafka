@@ -343,7 +343,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
                         if (retry) {
                             log.info("The write event {} for the timer {} failed due to {}. Rescheduling it. ",
                                 event.name, key, ex.getMessage());
-                            schedule(key, retryBackoff, TimeUnit.MILLISECONDS, retry, operation);
+                            schedule(key, retryBackoff, TimeUnit.MILLISECONDS, true, retryBackoff, operation);
                         } else {
                             log.error("The write event {} for the timer {} failed due to {}. Ignoring it. ",
                                 event.name, key, ex.getMessage());
