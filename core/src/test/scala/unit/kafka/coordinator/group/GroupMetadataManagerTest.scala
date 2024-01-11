@@ -42,6 +42,7 @@ import org.apache.kafka.common.record._
 import org.apache.kafka.common.requests.OffsetFetchResponse
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.utils.Utils
+import org.apache.kafka.coordinator.group.OffsetConfig
 import org.apache.kafka.coordinator.group.generated.{GroupMetadataValue, OffsetCommitValue}
 import org.apache.kafka.server.common.MetadataVersion
 import org.apache.kafka.server.common.MetadataVersion._
@@ -79,16 +80,16 @@ class GroupMetadataManagerTest {
 
   private val offsetConfig = {
     val config = KafkaConfig.fromProps(TestUtils.createBrokerConfig(nodeId = 0, zkConnect = ""))
-    OffsetConfig(maxMetadataSize = config.offsetMetadataMaxSize,
-      loadBufferSize = config.offsetsLoadBufferSize,
-      offsetsRetentionMs = config.offsetsRetentionMinutes * 60 * 1000L,
-      offsetsRetentionCheckIntervalMs = config.offsetsRetentionCheckIntervalMs,
-      offsetsTopicNumPartitions = config.offsetsTopicPartitions,
-      offsetsTopicSegmentBytes = config.offsetsTopicSegmentBytes,
-      offsetsTopicReplicationFactor = config.offsetsTopicReplicationFactor,
-      offsetsTopicCompressionType = config.offsetsTopicCompressionType,
-      offsetCommitTimeoutMs = config.offsetCommitTimeoutMs,
-      offsetCommitRequiredAcks = config.offsetCommitRequiredAcks)
+    new OffsetConfig(config.offsetMetadataMaxSize,
+      config.offsetsLoadBufferSize,
+      config.offsetsRetentionMinutes * 60 * 1000L,
+      config.offsetsRetentionCheckIntervalMs,
+      config.offsetsTopicPartitions,
+      config.offsetsTopicSegmentBytes,
+      config.offsetsTopicReplicationFactor,
+      config.offsetsTopicCompressionType,
+      config.offsetCommitTimeoutMs,
+      config.offsetCommitRequiredAcks)
   }
 
   @BeforeEach
@@ -775,7 +776,7 @@ class GroupMetadataManagerTest {
     )
 
     // create a GroupMetadata record larger then offsets.load.buffer.size (here at least 16 bytes larger)
-    val assignmentSize = OffsetConfig.DefaultLoadBufferSize + 16
+    val assignmentSize = OffsetConfig.DEFAULT_LOAD_BUFFER_SIZE + 16
     val memberId = "98098230493"
 
     val offsetCommitRecords = createCommittedOffsetRecords(committedOffsets)

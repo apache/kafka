@@ -114,7 +114,7 @@ public class RemoteIndexCache implements Closeable {
      *
      * We use {@link Caffeine} cache instead of implementing a thread safe LRU cache on our own.
      */
-    private Cache<Uuid, Entry> internalCache;
+    private final Cache<Uuid, Entry> internalCache;
 
     /**
      * Creates RemoteIndexCache with the given configs.

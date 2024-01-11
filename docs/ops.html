@@ -1893,6 +1893,66 @@ $ bin/kafka-acls.sh \
         <td>kafka.server:type=BrokerTopicMetrics,name=RemoteCopyErrorsPerSec,topic=([-.\w]+)</td>
       </tr>
       <tr>
+        <td>Remote Copy Lag Bytes</td>
+        <td>Bytes which are eligible for tiering, but are not in remote storage yet. Omitting 'topic=(...)' will yield the all-topic sum</td>
+        <td>kafka.server:type=BrokerTopicMetrics,name=RemoteCopyLagBytes,topic=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>Remote Copy Lag Segments</td>
+        <td>Segments which are eligible for tiering, but are not in remote storage yet. Omitting 'topic=(...)' will yield the all-topic count</td>
+        <td>kafka.server:type=BrokerTopicMetrics,name=RemoteCopyLagSegments,topic=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>Remote Delete Requests Per Sec</td>
+        <td>Rate of delete requests to remote storage per topic. Omitting 'topic=(...)' will yield the all-topic rate</td>
+        <td>kafka.server:type=BrokerTopicMetrics,name=RemoteDeleteRequestsPerSec,topic=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>Remote Delete Errors Per Sec</td>
+        <td>Rate of delete errors from remote storage per topic. Omitting 'topic=(...)' will yield the all-topic rate</td>
+        <td>kafka.server:type=BrokerTopicMetrics,name=RemoteDeleteErrorsPerSec,topic=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>Remote Delete Lag Bytes</td>
+        <td>Tiered bytes which are eligible for deletion, but have not been deleted yet. Omitting 'topic=(...)' will yield the all-topic sum</td>
+        <td>kafka.server:type=BrokerTopicMetrics,name=RemoteDeleteLagBytes,topic=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>Remote Delete Lag Segments</td>
+        <td>Tiered segments which are eligible for deletion, but have not been deleted yet. Omitting 'topic=(...)' will yield the all-topic count</td>
+        <td>kafka.server:type=BrokerTopicMetrics,name=RemoteDeleteLagSegments,topic=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>Build Remote Log Aux State Requests Per Sec</td>
+        <td>Rate of requests for rebuilding the auxiliary state from remote storage per topic. Omitting 'topic=(...)' will yield the all-topic rate</td>
+        <td>kafka.server:type=BrokerTopicMetrics,name=BuildRemoteLogAuxStateRequestsPerSec,topic=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>Build Remote Log Aux State Errors Per Sec</td>
+        <td>Rate of errors for rebuilding the auxiliary state from remote storage per topic. Omitting 'topic=(...)' will yield the all-topic rate</td>
+        <td>kafka.server:type=BrokerTopicMetrics,name=BuildRemoteLogAuxStateErrorsPerSec,topic=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>Remote Log Size Computation Time</td>
+        <td>The amount of time needed to compute the size of the remote log. Omitting 'topic=(...)' will yield the all-topic time</td>
+        <td>kafka.server:type=BrokerTopicMetrics,name=RemoteLogSizeComputationTime,topic=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>Remote Log Size Bytes</td>
+        <td>The total size of a remote log in bytes. Omitting 'topic=(...)' will yield the all-topic sum</td>
+        <td>kafka.server:type=BrokerTopicMetrics,name=RemoteLogSizeBytes,topic=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>Remote Log Metadata Count</td>
+        <td>The total number of metadata entries for remote storage. Omitting 'topic=(...)' will yield the all-topic count</td>
+        <td>kafka.server:type=BrokerTopicMetrics,name=RemoteLogMetadataCount,topic=([-.\w]+)</td>
+      </tr>
+      <tr>
+        <td>Delayed Remote Fetch Expires Per Sec</td>
+        <td>The number of expired remote fetches per second. Omitting 'topic=(...)' will yield the all-topic rate</td>
+        <td>kafka.server:type=DelayedRemoteFetchMetrics,name=ExpiresPerSec,topic=([-.\w]+)</td>
+      </tr>
+      <tr>
         <td>RemoteLogReader Task Queue Size</td>
         <td>Size of the queue holding remote storage read tasks</td>
         <td>org.apache.kafka.storage.internals.log:type=RemoteStorageThreadPool,name=RemoteLogReaderTaskQueueSize</td>

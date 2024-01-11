@@ -35,7 +35,6 @@ import java.util.stream.IntStream;
 
 import static org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetrics.CLASSIC_GROUP_COMPLETED_REBALANCES_SENSOR_NAME;
 import static org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetrics.CONSUMER_GROUP_REBALANCES_SENSOR_NAME;
-import static org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetrics.CLASSIC_GROUP_REBALANCES_SENSOR_NAME;
 import static org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetrics.METRICS_GROUP;
 import static org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetrics.OFFSET_COMMITS_SENSOR_NAME;
 import static org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetrics.OFFSET_EXPIRED_SENSOR_NAME;
@@ -62,8 +61,6 @@ public class GroupCoordinatorMetricsTest {
             metrics.metricName("offset-deletion-count", GroupCoordinatorMetrics.METRICS_GROUP),
             metrics.metricName("group-completed-rebalance-rate", GroupCoordinatorMetrics.METRICS_GROUP),
             metrics.metricName("group-completed-rebalance-count", GroupCoordinatorMetrics.METRICS_GROUP),
-            metrics.metricName("group-rebalance-rate", GroupCoordinatorMetrics.METRICS_GROUP),
-            metrics.metricName("group-rebalance-count", GroupCoordinatorMetrics.METRICS_GROUP),
             metrics.metricName("consumer-group-rebalance-rate", GroupCoordinatorMetrics.METRICS_GROUP),
             metrics.metricName("consumer-group-rebalance-count", GroupCoordinatorMetrics.METRICS_GROUP),
             metrics.metricName(
@@ -193,10 +190,6 @@ public class GroupCoordinatorMetricsTest {
         shard.record(OFFSET_EXPIRED_SENSOR_NAME, 30);
         assertMetricValue(metrics, metrics.metricName("offset-expiration-rate", GroupCoordinatorMetrics.METRICS_GROUP), 1.0);
         assertMetricValue(metrics, metrics.metricName("offset-expiration-count", GroupCoordinatorMetrics.METRICS_GROUP), 30);
-
-        shard.record(CLASSIC_GROUP_REBALANCES_SENSOR_NAME, 40);
-        assertMetricValue(metrics, metrics.metricName("group-rebalance-rate", GroupCoordinatorMetrics.METRICS_GROUP), 4.0 / 3.0);
-        assertMetricValue(metrics, metrics.metricName("group-rebalance-count", GroupCoordinatorMetrics.METRICS_GROUP), 40);
 
         shard.record(CONSUMER_GROUP_REBALANCES_SENSOR_NAME, 50);
         assertMetricValue(metrics, metrics.metricName("consumer-group-rebalance-rate", GroupCoordinatorMetrics.METRICS_GROUP), 5.0 / 3.0);

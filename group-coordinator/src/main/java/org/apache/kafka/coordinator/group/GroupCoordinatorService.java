@@ -1106,6 +1106,8 @@ public class GroupCoordinatorService implements GroupCoordinator {
      * @return The Errors instance associated with the given exception.
      */
     private static Errors normalizeException(Throwable exception) {
+        exception = Errors.maybeUnwrapException(exception);
+
         if (exception instanceof UnknownTopicOrPartitionException ||
             exception instanceof NotEnoughReplicasException ||
             exception instanceof TimeoutException) {

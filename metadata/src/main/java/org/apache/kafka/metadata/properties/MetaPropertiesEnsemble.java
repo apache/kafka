@@ -173,11 +173,11 @@ public final class MetaPropertiesEnsemble {
         };
 
         private final MetaPropertiesEnsemble prev;
-        private Random random = new Random();
-        private Set<String> emptyLogDirs;
-        private Set<String> errorLogDirs;
-        private Map<String, MetaProperties> logDirProps;
+        private final Set<String> emptyLogDirs;
+        private final Set<String> errorLogDirs;
+        private final Map<String, MetaProperties> logDirProps;
         private Optional<String> metaLogDir;
+        private Random random = new Random();
 
         private PreWriteHandler preWriteHandler = (logDir, isNew, metaProperties) -> {
             LOG.info("Writing out {} {}{}meta.properties file containing {}",
@@ -432,8 +432,8 @@ public final class MetaPropertiesEnsemble {
      */
     public Iterator<Entry<String, Optional<MetaProperties>>> nonFailedDirectoryProps() {
         return new Iterator<Entry<String, Optional<MetaProperties>>>() {
-            private Iterator<String> emptyLogDirsIterator = emptyLogDirs.iterator();
-            private Iterator<Entry<String, MetaProperties>> logDirsIterator =
+            private final Iterator<String> emptyLogDirsIterator = emptyLogDirs.iterator();
+            private final Iterator<Entry<String, MetaProperties>> logDirsIterator =
                     logDirProps.entrySet().iterator();
 
             @Override

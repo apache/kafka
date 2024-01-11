@@ -346,9 +346,9 @@ public class VerifiableProducer implements AutoCloseable {
 
     private static class SuccessfulSend extends ProducerEvent {
 
-        private String key;
-        private String value;
-        private RecordMetadata recordMetadata;
+        private final String key;
+        private final String value;
+        private final RecordMetadata recordMetadata;
 
         public SuccessfulSend(String key, String value, RecordMetadata recordMetadata) {
             assert recordMetadata != null : "Expected non-null recordMetadata object.";
@@ -390,10 +390,10 @@ public class VerifiableProducer implements AutoCloseable {
 
     private static class FailedSend extends ProducerEvent {
 
-        private String topic;
-        private String key;
-        private String value;
-        private Exception exception;
+        private final String topic;
+        private final String key;
+        private final String value;
+        private final Exception exception;
 
         public FailedSend(String key, String value, String topic, Exception exception) {
             assert exception != null : "Expected non-null exception.";
@@ -436,10 +436,10 @@ public class VerifiableProducer implements AutoCloseable {
 
     private static class ToolData extends ProducerEvent {
 
-        private long sent;
-        private long acked;
-        private long targetThroughput;
-        private double avgThroughput;
+        private final long sent;
+        private final long acked;
+        private final long targetThroughput;
+        private final double avgThroughput;
 
         public ToolData(long sent, long acked, long targetThroughput, double avgThroughput) {
             this.sent = sent;
@@ -485,8 +485,8 @@ public class VerifiableProducer implements AutoCloseable {
     /** Callback which prints errors to stdout when the producer fails to send. */
     private class PrintInfoCallback implements Callback {
 
-        private String key;
-        private String value;
+        private final String key;
+        private final String value;
 
         PrintInfoCallback(String key, String value) {
             this.key = key;

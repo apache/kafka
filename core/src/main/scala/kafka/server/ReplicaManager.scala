@@ -753,7 +753,6 @@ class ReplicaManager(val config: KafkaConfig,
    *                                      thread calling this method
    * @param actionQueue                   the action queue to use. ReplicaManager#defaultActionQueue is used by default.
    * @param verificationGuards            the mapping from topic partition to verification guards if transaction verification is used
-   * @param preAppendErrors               the mapping from topic partition to LogAppendResult for errors that occurred before appending
    */
   def appendRecords(timeout: Long,
                     requiredAcks: Short,
