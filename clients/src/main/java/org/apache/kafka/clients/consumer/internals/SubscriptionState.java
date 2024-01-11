@@ -338,6 +338,10 @@ public class SubscriptionState {
         return Collections.emptySet();
     }
 
+    public synchronized SubscriptionPattern subscriptionPattern() {
+        return this.subscriptionPattern;
+    }
+
     public synchronized Set<TopicPartition> pausedPartitions() {
         return collectPartitions(TopicPartitionState::isPaused);
     }

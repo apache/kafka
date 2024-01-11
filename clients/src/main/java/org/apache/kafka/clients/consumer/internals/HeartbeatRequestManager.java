@@ -535,7 +535,11 @@ public class HeartbeatRequestManager implements RequestManager {
                 }
             } else {
                 // SubscribedTopicRegex - only sent if has changed since the last heartbeat
-                //                      - not supported yet
+                String subscriptionTopicRegex = subscriptions.subscriptionPattern().pattern();
+                if(!subscriptionTopicRegex.equals(sentFields.subscribedTopicRegex)){
+                    data.setSubscribedTopicRegex(subscriptionTopicRegex);
+                    sentFields.subscribedTopicRegex = subscriptionTopicRegex;
+                }
             }
 
             // ServerAssignor - only sent if has changed since the last heartbeat
@@ -578,6 +582,7 @@ public class HeartbeatRequestManager implements RequestManager {
             private String instanceId = null;
             private int rebalanceTimeoutMs = -1;
             private TreeSet<String> subscribedTopicNames = null;
+            private String subscribedTopicRegex = null;
             private String serverAssignor = null;
             private TreeSet<String> topicPartitions = null;
 
@@ -587,6 +592,7 @@ public class HeartbeatRequestManager implements RequestManager {
                 instanceId = null;
                 rebalanceTimeoutMs = -1;
                 subscribedTopicNames = null;
+                subscribedTopicRegex = null;
                 serverAssignor = null;
                 topicPartitions = null;
             }
