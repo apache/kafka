@@ -77,9 +77,12 @@ import org.apache.kafka.timeline.SnapshotRegistry;
 import org.slf4j.Logger;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
+import java.util.stream.Collectors;
 
 /**
  * The group coordinator shard is a replicated state machine that manages the metadata of all
@@ -488,7 +491,11 @@ public class GroupCoordinatorShard implements CoordinatorShard<Record> {
         List<String> typesFilter,
         long committedOffset
     ) throws ApiException {
-        return groupMetadataManager.listGroups(statesFilter, typesFilter, committedOffset);
+
+        Set<String> statesFilterSet = new HashSet<>(statesFilter);
+        Set<String> typesFilterSet = new HashSet<>(typesFilter);
+
+        return groupMetadataManager.listGroups(statesFilterSet, typesFilterSet, committedOffset);
     }
 
     /**

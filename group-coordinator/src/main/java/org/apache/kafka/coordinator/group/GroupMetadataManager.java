@@ -462,8 +462,8 @@ public class GroupMetadataManager {
      * @return A list containing the ListGroupsResponseData.ListedGroup
      */
     public List<ListGroupsResponseData.ListedGroup> listGroups(
-        List<String> statesFilter,
-        List<String> typesFilter,
+        Set<String> statesFilter,
+        Set<String> typesFilter,
         long committedOffset
     ) {
         Set<String> caseInsensitiveFilterSet = statesFilter.stream()

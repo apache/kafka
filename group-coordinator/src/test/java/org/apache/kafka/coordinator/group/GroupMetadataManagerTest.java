@@ -1043,7 +1043,9 @@ public class GroupMetadataManagerTest {
         }
 
         public List<ListGroupsResponseData.ListedGroup> sendListGroups(List<String> statesFilter, List<String> typesFilter) {
-            return groupMetadataManager.listGroups(statesFilter, typesFilter, lastCommittedOffset);
+            Set<String> statesFilterSet = statesFilter.stream().collect(Collectors.toSet());
+            Set<String> typesFilterSet = typesFilter.stream().collect(Collectors.toSet());
+            return groupMetadataManager.listGroups(statesFilterSet, typesFilterSet, lastCommittedOffset);
         }
 
         public List<ConsumerGroupDescribeResponseData.DescribedGroup> sendConsumerGroupDescribe(List<String> groupIds) {
