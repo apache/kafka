@@ -1919,8 +1919,8 @@ public class OffsetMetadataManagerTest {
                 .setPartitionIndexes(Arrays.asList(0, 1))
         );
 
-        // Fetching offsets with "require stable" (Long.MAX_VALUE) should return the UNSTABLE_OFFSET_COMMIT
-        // errors for foo-1, bar-0 and bar-1.
+        // Fetching offsets with "require stable" (Long.MAX_VALUE) should return the committed offset for
+        // foo-0 and the UNSTABLE_OFFSET_COMMIT error for foo-1, bar-0 and bar-1.
         assertEquals(Arrays.asList(
             new OffsetFetchResponseData.OffsetFetchResponseTopics()
                 .setName("foo")
@@ -1936,8 +1936,8 @@ public class OffsetMetadataManagerTest {
                 ))
         ), context.fetchOffsets("group", request, Long.MAX_VALUE));
 
-        // Fetching offsets without "require stable" (lastCommittedOffset) should not return the
-        // UNSTABLE_OFFSET_COMMIT errors for foo-1 and bar-0.
+        // Fetching offsets without "require stable" (lastCommittedOffset) should return the committed
+        // offset for foo-0, foo-1 and bar-0 and the INVALID_OFFSET for bar-1.
         assertEquals(Arrays.asList(
             new OffsetFetchResponseData.OffsetFetchResponseTopics()
                 .setName("foo")
@@ -2098,8 +2098,8 @@ public class OffsetMetadataManagerTest {
         context.commitOffset(10L, "group", "foo", 1, 111L, 1, context.time.milliseconds());
         context.commitOffset(10L, "group", "bar", 0, 201L, 1, context.time.milliseconds());
 
-        // Fetching offsets with "require stable" (Long.MAX_VALUE) should return the UNSTABLE_OFFSET_COMMIT
-        // errors for foo-1 and bar-0.
+        // Fetching offsets with "require stable" (Long.MAX_VALUE) should return the committed offset for
+        // foo-0 and the UNSTABLE_OFFSET_COMMIT error for foo-1 and bar-0.
         assertEquals(Arrays.asList(
             new OffsetFetchResponseData.OffsetFetchResponseTopics()
                 .setName("bar")
@@ -2114,8 +2114,8 @@ public class OffsetMetadataManagerTest {
                 ))
         ), context.fetchAllOffsets("group", Long.MAX_VALUE));
 
-        // Fetching offsets without "require stable" (lastCommittedOffset) should not return the
-        // UNSTABLE_OFFSET_COMMIT errors for foo-1 and bar-0.
+        // Fetching offsets without "require stable" (lastCommittedOffset) should the committed
+        // offset for the foo-0, foo-1 and bar-0.
         assertEquals(Arrays.asList(
             new OffsetFetchResponseData.OffsetFetchResponseTopics()
                 .setName("bar")
