@@ -1113,11 +1113,12 @@ private[group] class GroupCoordinator(
       val errorCode = if (groupManager.isLoading) Errors.COORDINATOR_LOAD_IN_PROGRESS else Errors.NONE
 
       // Filter groups based on states and groupTypes. If either is empty, it won't filter on that criterion.
-      // If groupType is mentioned then no group is returned since the notion of groupTypes doesn't exist in the
-      // old group coordinator.
+      // While using the old group coordinator, all groups are considered classic groups by default.
+      // An empty list is returned for any other type filter.
+      val lowerCaseGroupTypes = groupTypes.map(_.toLowerCase)
       val groups = groupManager.currentGroups.filter { g =>
         states.isEmpty || g.isInStates(states.map(_.toLowerCase)) &&
-          (groupTypes.isEmpty || groupTypes.contains(Group.GroupType.CLASSIC.toString))
+          (groupTypes.isEmpty || lowerCaseGroupTypes.contains(Group.GroupType.CLASSIC.toString))
       }
       (errorCode, groups.map(_.overview).toList)
     }
