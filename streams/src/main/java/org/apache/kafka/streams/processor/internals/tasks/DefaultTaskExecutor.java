@@ -25,6 +25,7 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskMigratedException;
+import org.apache.kafka.streams.processor.internals.ProcessingThread;
 import org.apache.kafka.streams.processor.internals.ReadOnlyTask;
 import org.apache.kafka.streams.processor.internals.StreamTask;
 import org.apache.kafka.streams.processor.internals.Task;
@@ -39,7 +40,7 @@ import java.util.concurrent.atomic.AtomicReference;
 
 public class DefaultTaskExecutor implements TaskExecutor {
 
-    private class TaskExecutorThread extends Thread {
+    private class TaskExecutorThread extends Thread implements ProcessingThread {
 
         private final AtomicBoolean shutdownRequested = new AtomicBoolean(false);
         private final AtomicReference<KafkaFutureImpl<StreamTask>> taskReleaseRequested = new AtomicReference<>(null);
@@ -194,7 +195,16 @@ public class DefaultTaskExecutor implements TaskExecutor {
 
             // flush the task before giving it back to task manager, if we are not handing it back because of an error.
             if (!taskManager.hasUncaughtException(currentTask.id())) {
-                currentTask.flush();
+                try {
+                    currentTask.flush();
+                } catch (final StreamsException e) {
+                    log.error(String.format("Failed to flush stream task %s due to the following error:", currentTask.id()), e);
+                    e.setTaskId(currentTask.id());
+                    taskManager.setUncaughtException(e, currentTask.id());
+                } catch (final RuntimeException e) {
+                    log.error(String.format("Failed to flush stream task %s due to the following error:", currentTask.id()), e);
+                    taskManager.setUncaughtException(new StreamsException(e, currentTask.id()), currentTask.id());
+                }
             }
             taskManager.unassignTask(currentTask, DefaultTaskExecutor.this);
 

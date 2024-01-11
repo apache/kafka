@@ -164,4 +164,9 @@ abstract class AbstractLogCleanerIntegrationTest {
       magicValue = messageFormatVersion)
     (value, messageSet)
   }
+
+  def closeLog(log: UnifiedLog): Unit = {
+    log.close()
+    logs -= log
+  }
 }

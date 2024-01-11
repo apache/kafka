@@ -34,7 +34,7 @@ import scala.jdk.CollectionConverters._
 case class ProducePartitionStatus(requiredOffset: Long, responseStatus: PartitionResponse) {
   @volatile var acksPending = false
 
-  override def toString = s"[acksPending: $acksPending, error: ${responseStatus.error.code}, " +
+  override def toString: String = s"[acksPending: $acksPending, error: ${responseStatus.error.code}, " +
     s"startOffset: ${responseStatus.baseOffset}, requiredOffset: $requiredOffset]"
 }
 
@@ -62,7 +62,7 @@ class DelayedProduce(delayMs: Long,
                      lockOpt: Option[Lock] = None)
   extends DelayedOperation(delayMs, lockOpt) {
 
-  override lazy val logger = DelayedProduce.logger
+  override lazy val logger: Logger = DelayedProduce.logger
 
   // first update the acks pending variable according to the error code
   produceMetadata.produceStatus.forKeyValue { (topicPartition, status) =>

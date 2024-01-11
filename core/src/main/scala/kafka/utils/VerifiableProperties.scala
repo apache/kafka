@@ -161,7 +161,7 @@ class VerifiableProperties(val props: Properties) extends Logging {
     }
   }
 
-  def getBoolean(name: String) = getString(name).toBoolean
+  def getBoolean(name: String): Boolean = getString(name).toBoolean
 
   /**
    * Get a string property, or, if no such property is defined, return the given default value

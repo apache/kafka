@@ -600,7 +600,7 @@ public class TestUtils {
     ) {
         return createApiVersionsResponse(
                 throttleTimeMs,
-                ApiVersionsResponse.filterApis(RecordVersion.current(), listenerType, true),
+                ApiVersionsResponse.filterApis(RecordVersion.current(), listenerType, true, true),
                 Features.emptySupportedFeatures(),
                 false
         );
@@ -613,7 +613,7 @@ public class TestUtils {
     ) {
         return createApiVersionsResponse(
                 throttleTimeMs,
-                ApiVersionsResponse.filterApis(RecordVersion.current(), listenerType, enableUnstableLastVersion),
+                ApiVersionsResponse.filterApis(RecordVersion.current(), listenerType, enableUnstableLastVersion, true),
                 Features.emptySupportedFeatures(),
                 false
         );

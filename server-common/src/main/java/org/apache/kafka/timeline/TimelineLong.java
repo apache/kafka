@@ -22,7 +22,7 @@ import java.util.Iterator;
 
 /**
  * This is a mutable long which can be snapshotted.
- *
+ * <br>
  * This class requires external synchronization.
  */
 public class TimelineLong implements Revertable {
@@ -93,7 +93,6 @@ public class TimelineLong implements Revertable {
         set(get() - 1L);
     }
 
-    @SuppressWarnings("unchecked")
     @Override
     public void executeRevert(long targetEpoch, Delta delta) {
         LongContainer container = (LongContainer) delta;

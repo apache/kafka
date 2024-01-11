@@ -62,7 +62,7 @@ class LogCleanerParameterizedIntegrationTest extends AbstractLogCleanerIntegrati
 
     val firstDirty = log.activeSegment.baseOffset
     checkLastCleaned("log", 0, firstDirty)
-    val compactedSize = log.logSegments.map(_.size).sum
+    val compactedSize = log.logSegments.asScala.map(_.size).sum
     assertTrue(startSize > compactedSize, s"log should have been compacted: startSize=$startSize compactedSize=$compactedSize")
 
     checkLogAfterAppendingDups(log, startSize, appends)
@@ -111,7 +111,7 @@ class LogCleanerParameterizedIntegrationTest extends AbstractLogCleanerIntegrati
 
       // should compact the log
       checkLastCleaned("log", 0, firstDirty)
-      val compactedSize = log.logSegments.map(_.size).sum
+      val compactedSize = log.logSegments.asScala.map(_.size).sum
       assertTrue(startSize > compactedSize, s"log should have been compacted: startSize=$startSize compactedSize=$compactedSize")
       (log, messages)
     }
@@ -120,12 +120,13 @@ class LogCleanerParameterizedIntegrationTest extends AbstractLogCleanerIntegrati
 
     // Set the last modified time to an old value to force deletion of old segments
     val endOffset = log.logEndOffset
-    log.logSegments.foreach(_.lastModified = time.milliseconds - (2 * retentionMs))
+    log.logSegments.forEach(_.setLastModified(time.milliseconds - (2 * retentionMs)))
     TestUtils.waitUntilTrue(() => log.logStartOffset == endOffset,
       "Timed out waiting for deletion of old segments")
     assertEquals(1, log.numberOfSegments)
 
     cleaner.shutdown()
+    closeLog(log)
 
     // run the cleaner again to make sure if there are no issues post deletion
     val (log2, messages) = runCleanerAndCheckCompacted(20)
@@ -162,7 +163,7 @@ class LogCleanerParameterizedIntegrationTest extends AbstractLogCleanerIntegrati
 
     val firstDirty = log.activeSegment.baseOffset
     checkLastCleaned("log", 0, firstDirty)
-    val compactedSize = log.logSegments.map(_.size).sum
+    val compactedSize = log.logSegments.asScala.map(_.size).sum
     assertTrue(startSize > compactedSize, s"log should have been compacted: startSize=$startSize compactedSize=$compactedSize")
 
     checkLogAfterAppendingDups(log, startSize, appends)
@@ -220,7 +221,7 @@ class LogCleanerParameterizedIntegrationTest extends AbstractLogCleanerIntegrati
     assertTrue(firstDirty > appendsV0.size) // ensure we clean data from V0 and V1
 
     checkLastCleaned("log", 0, firstDirty)
-    val compactedSize = log.logSegments.map(_.size).sum
+    val compactedSize = log.logSegments.asScala.map(_.size).sum
     assertTrue(startSize > compactedSize, s"log should have been compacted: startSize=$startSize compactedSize=$compactedSize")
 
     checkLogAfterAppendingDups(log, startSize, appends)
@@ -274,7 +275,7 @@ class LogCleanerParameterizedIntegrationTest extends AbstractLogCleanerIntegrati
 
     assertEquals(2, cleaner.cleanerCount)
     checkLastCleaned("log", 0, firstDirty)
-    val compactedSize = log.logSegments.map(_.size).sum
+    val compactedSize = log.logSegments.asScala.map(_.size).sum
     assertTrue(startSize > compactedSize, s"log should have been compacted: startSize=$startSize compactedSize=$compactedSize")
   }
 
@@ -298,7 +299,7 @@ class LogCleanerParameterizedIntegrationTest extends AbstractLogCleanerIntegrati
   }
 
   private def readFromLog(log: UnifiedLog): Iterable[(Int, String, Long)] = {
-    for (segment <- log.logSegments; deepLogEntry <- segment.log.records.asScala) yield {
+    for (segment <- log.logSegments.asScala; deepLogEntry <- segment.log.records.asScala) yield {
       val key = TestUtils.readString(deepLogEntry.key).toInt
       val value = TestUtils.readString(deepLogEntry.value)
       (key, value, deepLogEntry.offset)

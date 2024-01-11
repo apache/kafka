@@ -53,7 +53,11 @@ public class LeaderEpochCheckpointFile implements LeaderEpochCheckpoint {
     }
 
     public void write(Collection<EpochEntry> epochs) {
-        checkpoint.write(epochs);
+        write(epochs, true);
+    }
+
+    public void write(Collection<EpochEntry> epochs, boolean sync) {
+        checkpoint.write(epochs, sync);
     }
 
     public List<EpochEntry> read() {

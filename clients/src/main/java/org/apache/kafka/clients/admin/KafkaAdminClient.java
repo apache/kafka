@@ -90,6 +90,7 @@ import org.apache.kafka.common.errors.ThrottlingQuotaExceededException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.UnacceptableCredentialException;
 import org.apache.kafka.common.errors.UnknownServerException;
+import org.apache.kafka.common.errors.UnknownTopicIdException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.errors.UnsupportedEndpointTypeException;
 import org.apache.kafka.common.errors.UnsupportedSaslMechanismException;
@@ -140,7 +141,9 @@ import org.apache.kafka.common.message.DescribeUserScramCredentialsRequestData;
 import org.apache.kafka.common.message.DescribeUserScramCredentialsRequestData.UserName;
 import org.apache.kafka.common.message.DescribeUserScramCredentialsResponseData;
 import org.apache.kafka.common.message.ExpireDelegationTokenRequestData;
+import org.apache.kafka.common.message.GetTelemetrySubscriptionsRequestData;
 import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity;
+import org.apache.kafka.common.message.ListClientMetricsResourcesRequestData;
 import org.apache.kafka.common.message.ListGroupsRequestData;
 import org.apache.kafka.common.message.ListGroupsResponseData;
 import org.apache.kafka.common.message.ListPartitionReassignmentsRequestData;
@@ -207,9 +210,13 @@ import org.apache.kafka.common.requests.ElectLeadersRequest;
 import org.apache.kafka.common.requests.ElectLeadersResponse;
 import org.apache.kafka.common.requests.ExpireDelegationTokenRequest;
 import org.apache.kafka.common.requests.ExpireDelegationTokenResponse;
+import org.apache.kafka.common.requests.GetTelemetrySubscriptionsRequest;
+import org.apache.kafka.common.requests.GetTelemetrySubscriptionsResponse;
 import org.apache.kafka.common.requests.IncrementalAlterConfigsRequest;
 import org.apache.kafka.common.requests.IncrementalAlterConfigsResponse;
 import org.apache.kafka.common.requests.JoinGroupRequest;
+import org.apache.kafka.common.requests.ListClientMetricsResourcesRequest;
+import org.apache.kafka.common.requests.ListClientMetricsResourcesResponse;
 import org.apache.kafka.common.requests.ListGroupsRequest;
 import org.apache.kafka.common.requests.ListGroupsResponse;
 import org.apache.kafka.common.requests.ListOffsetsRequest;
@@ -376,6 +383,12 @@ public class KafkaAdminClient extends AdminClient {
     private final long retryBackoffMs;
     private final long retryBackoffMaxMs;
     private final ExponentialBackoff retryBackoff;
+    private final boolean clientTelemetryEnabled;
+
+    /**
+     * The telemetry requests client instance id.
+     */
+    private Uuid clientInstanceId;
 
     /**
      * Get or create a list value from a map.
@@ -530,6 +543,7 @@ public class KafkaAdminClient extends AdminClient {
         }
     }
 
+    // Visible for tests
     static KafkaAdminClient createInternal(AdminClientConfig config,
                                            AdminMetadataManager metadataManager,
                                            KafkaClient client,
@@ -582,6 +596,7 @@ public class KafkaAdminClient extends AdminClient {
             CommonClientConfigs.RETRY_BACKOFF_EXP_BASE,
             retryBackoffMaxMs,
             CommonClientConfigs.RETRY_BACKOFF_JITTER);
+        this.clientTelemetryEnabled = config.getBoolean(AdminClientConfig.ENABLE_METRICS_PUSH_CONFIG);
         config.logUnused();
         AppInfoParser.registerAppInfo(JMX_PREFIX, clientId, metrics, time.milliseconds());
         log.debug("Kafka admin client initialized");
@@ -1303,7 +1318,7 @@ public class KafkaAdminClient extends AdminClient {
          *
          * @param now                   The current time in milliseconds.
          * @param responses             The latest responses from KafkaClient.
-         **/
+         */
         private void handleResponses(long now, List<ClientResponse> responses) {
             for (ClientResponse response : responses) {
                 int correlationId = response.requestHeader().correlationId();
@@ -2214,7 +2229,7 @@ public class KafkaAdminClient extends AdminClient {
 
                     String topicName = cluster.topicName(topicId);
                     if (topicName == null) {
-                        future.completeExceptionally(new InvalidTopicException("TopicId " + topicId + " not found."));
+                        future.completeExceptionally(new UnknownTopicIdException("TopicId " + topicId + " not found."));
                         continue;
                     }
                     Errors topicError = errors.get(topicId);
@@ -4383,6 +4398,86 @@ public class KafkaAdminClient extends AdminClient {
         FenceProducersHandler handler = new FenceProducersHandler(logContext);
         invokeDriver(handler, future, options.timeoutMs);
         return new FenceProducersResult(future.all());
+    }
+
+    @Override
+    public ListClientMetricsResourcesResult listClientMetricsResources(ListClientMetricsResourcesOptions options) {
+        final long now = time.milliseconds();
+        final KafkaFutureImpl<Collection<ClientMetricsResourceListing>> future = new KafkaFutureImpl<>();
+        runnable.call(new Call("listClientMetricsResources", calcDeadlineMs(now, options.timeoutMs()),
+            new LeastLoadedNodeProvider()) {
+
+            @Override
+            ListClientMetricsResourcesRequest.Builder createRequest(int timeoutMs) {
+                return new ListClientMetricsResourcesRequest.Builder(new ListClientMetricsResourcesRequestData());
+            }
+
+            @Override
+            void handleResponse(AbstractResponse abstractResponse) {
+                ListClientMetricsResourcesResponse response = (ListClientMetricsResourcesResponse) abstractResponse;
+                if (response.error().isFailure()) {
+                    future.completeExceptionally(response.error().exception());
+                } else {
+                    future.complete(response.clientMetricsResources());
+                }
+            }
+
+            @Override
+            void handleFailure(Throwable throwable) {
+                future.completeExceptionally(throwable);
+            }
+        }, now);
+        return new ListClientMetricsResourcesResult(future);
+    }
+
+    @Override
+    public Uuid clientInstanceId(Duration timeout) {
+        if (timeout.isNegative()) {
+            throw new IllegalArgumentException("The timeout cannot be negative.");
+        }
+
+        if (!clientTelemetryEnabled) {
+            throw new IllegalStateException("Telemetry is not enabled. Set config `" + AdminClientConfig.ENABLE_METRICS_PUSH_CONFIG + "` to `true`.");
+        }
+
+        if (clientInstanceId != null) {
+            return clientInstanceId;
+        }
+
+        final long now = time.milliseconds();
+        final KafkaFutureImpl<Uuid> future = new KafkaFutureImpl<>();
+        runnable.call(new Call("getTelemetrySubscriptions", calcDeadlineMs(now, (int) timeout.toMillis()),
+            new LeastLoadedNodeProvider()) {
+
+            @Override
+            GetTelemetrySubscriptionsRequest.Builder createRequest(int timeoutMs) {
+                return new GetTelemetrySubscriptionsRequest.Builder(new GetTelemetrySubscriptionsRequestData(), true);
+            }
+
+            @Override
+            void handleResponse(AbstractResponse abstractResponse) {
+                GetTelemetrySubscriptionsResponse response = (GetTelemetrySubscriptionsResponse) abstractResponse;
+                if (response.error() != Errors.NONE) {
+                    future.completeExceptionally(response.error().exception());
+                } else {
+                    future.complete(response.data().clientInstanceId());
+                }
+            }
+
+            @Override
+            void handleFailure(Throwable throwable) {
+                future.completeExceptionally(throwable);
+            }
+        }, now);
+
+        try {
+            clientInstanceId = future.get();
+        } catch (Exception e) {
+            log.error("Error occurred while fetching client instance id", e);
+            throw new KafkaException("Error occurred while fetching client instance id", e);
+        }
+
+        return clientInstanceId;
     }
 
     private <K, V> void invokeDriver(

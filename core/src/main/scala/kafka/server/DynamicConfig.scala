@@ -23,8 +23,10 @@ import org.apache.kafka.common.config.ConfigDef
 import org.apache.kafka.common.config.ConfigDef.Importance._
 import org.apache.kafka.common.config.ConfigDef.Range._
 import org.apache.kafka.common.config.ConfigDef.Type._
+import org.apache.kafka.server.config.ConfigEntityName
 import org.apache.kafka.storage.internals.log.LogConfig
 
+import java.util
 import scala.jdk.CollectionConverters._
 
 /**
@@ -100,7 +102,7 @@ object DynamicConfig {
     def validate(props: Properties) = DynamicConfig.validate(ipConfigs, props, customPropsAllowed = false)
 
     def isValidIpEntity(ip: String): Boolean = {
-      if (ip != ConfigEntityName.Default) {
+      if (ip != ConfigEntityName.DEFAULT) {
         try {
           InetAddress.getByName(ip)
         } catch {
@@ -109,6 +111,12 @@ object DynamicConfig {
       }
       true
     }
+  }
+
+  object ClientMetrics {
+    private val clientConfigs = org.apache.kafka.server.metrics.ClientMetricsConfigs.configDef()
+
+    def names: util.Set[String] = clientConfigs.names
   }
 
   private def validate(configDef: ConfigDef, props: Properties, customPropsAllowed: Boolean) = {
