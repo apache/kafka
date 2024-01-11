@@ -21,7 +21,6 @@ import java.{lang, util}
 import java.util.concurrent.TimeUnit
 import java.util.{Collections, Locale, Properties}
 import kafka.cluster.EndPoint
-import kafka.coordinator.group.OffsetConfig
 import kafka.coordinator.transaction.{TransactionLog, TransactionStateManager}
 import kafka.security.authorizer.AuthorizerUtils
 import kafka.server.KafkaConfig.{ControllerListenerNamesProp, ListenerSecurityProtocolMapProp}
@@ -42,6 +41,7 @@ import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.security.authenticator.DefaultKafkaPrincipalBuilder
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.coordinator.group.Group.GroupType
+import org.apache.kafka.coordinator.group.OffsetConfig
 import org.apache.kafka.coordinator.group.assignor.{PartitionAssignor, RangeAssignor, UniformAssignor}
 import org.apache.kafka.raft.RaftConfig
 import org.apache.kafka.server.ProcessRole
@@ -181,16 +181,16 @@ object Defaults {
   val ConsumerGroupAssignors = List(classOf[UniformAssignor].getName, classOf[RangeAssignor].getName).asJava
 
   /** ********* Offset management configuration ***********/
-  val OffsetMetadataMaxSize = OffsetConfig.DefaultMaxMetadataSize
-  val OffsetsLoadBufferSize = OffsetConfig.DefaultLoadBufferSize
-  val OffsetsTopicReplicationFactor = OffsetConfig.DefaultOffsetsTopicReplicationFactor
-  val OffsetsTopicPartitions: Int = OffsetConfig.DefaultOffsetsTopicNumPartitions
-  val OffsetsTopicSegmentBytes: Int = OffsetConfig.DefaultOffsetsTopicSegmentBytes
-  val OffsetsTopicCompressionCodec: Int = OffsetConfig.DefaultOffsetsTopicCompressionType.id
+  val OffsetMetadataMaxSize = OffsetConfig.DEFAULT_MAX_METADATA_SIZE
+  val OffsetsLoadBufferSize = OffsetConfig.DEFAULT_LOAD_BUFFER_SIZE
+  val OffsetsTopicReplicationFactor = OffsetConfig.DEFAULT_OFFSETS_TOPIC_REPLICATION_FACTOR
+  val OffsetsTopicPartitions: Int = OffsetConfig.DEFAULT_OFFSETS_TOPIC_NUM_PARTITIONS
+  val OffsetsTopicSegmentBytes: Int = OffsetConfig.DEFAULT_OFFSETS_TOPIC_SEGMENT_BYTES
+  val OffsetsTopicCompressionCodec: Int = OffsetConfig.DEFAULT_OFFSETS_TOPIC_COMPRESSION_TYPE.id
   val OffsetsRetentionMinutes: Int = 7 * 24 * 60
-  val OffsetsRetentionCheckIntervalMs: Long = OffsetConfig.DefaultOffsetsRetentionCheckIntervalMs
-  val OffsetCommitTimeoutMs = OffsetConfig.DefaultOffsetCommitTimeoutMs
-  val OffsetCommitRequiredAcks = OffsetConfig.DefaultOffsetCommitRequiredAcks
+  val OffsetsRetentionCheckIntervalMs: Long = OffsetConfig.DEFAULT_OFFSETS_RETENTION_CHECK_INTERVAL_MS
+  val OffsetCommitTimeoutMs = OffsetConfig.DEFAULT_OFFSET_COMMIT_TIMEOUT_MS
+  val OffsetCommitRequiredAcks = OffsetConfig.DEFAULT_OFFSET_COMMIT_REQUIRED_ACKS
 
   /** ********* Transaction management configuration ***********/
   val TransactionalIdExpirationMs = TransactionStateManager.DefaultTransactionalIdExpirationMs
