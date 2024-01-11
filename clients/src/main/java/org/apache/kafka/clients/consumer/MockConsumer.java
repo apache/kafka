@@ -67,6 +67,7 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
     private final AtomicBoolean wakeup;
 
     private final Map<TopicPartition, List<ConsumerRecord<K, V>>> records;
+
     private KafkaException pollException;
     private KafkaException offsetsException;
     private Duration lastPollTimeout;
