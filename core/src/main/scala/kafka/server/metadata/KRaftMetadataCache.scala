@@ -40,9 +40,12 @@ import org.apache.kafka.common.message.{DescribeClientQuotasRequestData, Describ
 import org.apache.kafka.metadata.{BrokerRegistration, PartitionRegistration, Replicas}
 import org.apache.kafka.server.common.{Features, MetadataVersion}
 
+import java.util.stream.Collectors
+import scala.collection.mutable.ListBuffer
 import scala.collection.{Map, Seq, Set, mutable}
 import scala.jdk.CollectionConverters._
 import scala.compat.java8.OptionConverters._
+import scala.util.control.Breaks._
 
 
 class KRaftMetadataCache(val brokerId: Int) extends MetadataCache with Logging with ConfigRepository {
@@ -141,17 +144,33 @@ class KRaftMetadataCache(val brokerId: Int) extends MetadataCache with Logging w
     }
   }
 
+  /**
+   * Return topic partition metadata for the given topic, listener and index range. Also, return a boolean value to
+   * indicate whether there are more partitions with index equal or larger than the upper index.
+   *
+   * @param image                       The metadata image
+   * @param topicName                   The name of the topic.
+   * @param listenerName                The listener name.
+   * @param startIndex                  The smallest index of the partitions to be included in the result.
+   * @param upperIndex                  The upper limit of the index of the partitions to be included in the result.
+   *                                    Note that, the upper index can be larger than the largest partition index in
+   *                                    this topic.
+   * @return                            A collection of topic partition metadata and whether there are more partitions.
+   */
   private def getPartitionMetadataForDescribeTopicResponse(
     image: MetadataImage,
     topicName: String,
-    listenerName: ListenerName
-  ): Option[List[DescribeTopicPartitionsResponsePartition]] = {
+    listenerName: ListenerName,
+    startIndex: Int,
+    upperIndex: Int
+  ): (Option[List[DescribeTopicPartitionsResponsePartition]], Boolean) = {
     Option(image.topics().getTopic(topicName)) match {
-      case None => None
+      case None => (None, false)
       case Some(topic) => {
-        val partitions = Some(topic.partitions().entrySet().asScala.map { entry =>
-          val partitionId = entry.getKey
-          val partition = entry.getValue
+        val result = new ListBuffer[DescribeTopicPartitionsResponsePartition]()
+        val endIndex = upperIndex.min(topic.partitions().size())
+        for (partitionId <- startIndex until endIndex) {
+          val partition = topic.partitions().get(partitionId)
           val filteredReplicas = maybeFilterAliveReplicas(image, partition.replicas,
             listenerName, false)
           val filteredIsr = maybeFilterAliveReplicas(image, partition.isr, listenerName,
@@ -168,14 +187,14 @@ class KRaftMetadataCache(val brokerId: Int) extends MetadataCache with Logging w
                   s"not found on leader ${partition.leader}")
                 Errors.LISTENER_NOT_FOUND
               }
-              new DescribeTopicPartitionsResponsePartition()
+              result.addOne(new DescribeTopicPartitionsResponsePartition()
                 .setErrorCode(error.code)
                 .setPartitionIndex(partitionId)
                 .setLeaderId(MetadataResponse.NO_LEADER_ID)
                 .setLeaderEpoch(partition.leaderEpoch)
                 .setReplicaNodes(filteredReplicas)
                 .setIsrNodes(filteredIsr)
-                .setOfflineReplicas(offlineReplicas)
+                .setOfflineReplicas(offlineReplicas))
             case Some(leader) =>
               val error = if (filteredReplicas.size < partition.replicas.length) {
                 debug(s"Error while fetching metadata for $topicName-$partitionId: replica information not available for " +
@@ -189,7 +208,7 @@ class KRaftMetadataCache(val brokerId: Int) extends MetadataCache with Logging w
                 Errors.NONE
               }
 
-              new DescribeTopicPartitionsResponsePartition()
+              result.addOne(new DescribeTopicPartitionsResponsePartition()
                 .setErrorCode(error.code)
                 .setPartitionIndex(partitionId)
                 .setLeaderId(leader.id())
@@ -198,10 +217,10 @@ class KRaftMetadataCache(val brokerId: Int) extends MetadataCache with Logging w
                 .setIsrNodes(filteredIsr)
                 .setOfflineReplicas(offlineReplicas)
                 .setEligibleLeaderReplicas(Replicas.toList(partition.elr))
-                .setLastKnownELR(Replicas.toList(partition.lastKnownElr))
+                .setLastKnownElr(Replicas.toList(partition.lastKnownElr)))
           }
-        }.toList)
-        partitions
+        }
+        (Some(result.toList), upperIndex < topic.partitions().size())
       }
     }
   }
@@ -265,13 +284,13 @@ class KRaftMetadataCache(val brokerId: Int) extends MetadataCache with Logging w
    * Note, the topics should be sorted in alphabetical order. The topics in the DescribeTopicPartitionsResponseData
    * will also be sorted in alphabetical order.
    *
-   * @param topics                        The set of topics and their corresponding first partition id to fetch.
+   * @param topics                        The iterator of topics and their corresponding first partition id to fetch.
    * @param listenerName                  The listener name.
    * @param firstTopicPartitionStartIndex The start partition index for the first topic
    * @param maximumNumberOfPartitions     The max number of partitions to return.
    */
   def getTopicMetadataForDescribeTopicResponse(
-    topics: Seq[String],
+    topics: Iterator[String],
     listenerName: ListenerName,
     firstTopicPartitionStartIndex: Int,
     maximumNumberOfPartitions: Int
@@ -280,62 +299,69 @@ class KRaftMetadataCache(val brokerId: Int) extends MetadataCache with Logging w
     var remaining = maximumNumberOfPartitions
     var startIndex = firstTopicPartitionStartIndex
     val result = new DescribeTopicPartitionsResponseData()
-    topics.foreach { topicName =>
-      if (remaining > 0) {
-        val partitionResponse = getPartitionMetadataForDescribeTopicResponse(image, topicName, listenerName)
-        partitionResponse.map( partitions => {
+    breakable {
+      topics.foreach { topicName =>
+        if (remaining > 0) {
           val upperIndex = startIndex + remaining
-          val response = new DescribeTopicPartitionsResponseTopic()
-            .setErrorCode(Errors.NONE.code)
-            .setName(topicName)
-            .setTopicId(Option(image.topics().getTopic(topicName).id()).getOrElse(Uuid.ZERO_UUID))
-            .setIsInternal(Topic.isInternal(topicName))
-            .setPartitions(partitions.filter(partition => {
-              partition.partitionIndex() >= startIndex && partition.partitionIndex() < upperIndex
-            }).asJava)
-          remaining -= response.partitions().size()
-          result.topics().add(response)
+          val (partitionResponse, hasRemainingPartitions) =
+            getPartitionMetadataForDescribeTopicResponse(image, topicName, listenerName, startIndex, upperIndex)
+          partitionResponse.map(partitions => {
+            val response = new DescribeTopicPartitionsResponseTopic()
+              .setErrorCode(Errors.NONE.code)
+              .setName(topicName)
+              .setTopicId(Option(image.topics().getTopic(topicName).id()).getOrElse(Uuid.ZERO_UUID))
+              .setIsInternal(Topic.isInternal(topicName))
+              .setPartitions(partitions.asJava)
+            result.topics().add(response)
 
-          if (upperIndex < partitions.size) {
-            result.setNextCursor(new Cursor()
-              .setTopicName(topicName)
-              .setPartitionIndex(upperIndex)
-            )
-            remaining = -1
+            if (hasRemainingPartitions) {
+              result.setNextCursor(new Cursor()
+                .setTopicName(topicName)
+                .setPartitionIndex(upperIndex)
+              )
+              break()
+            }
+            remaining -= partitions.size
+          })
+
+          // start index only applies to the first topic. Reset it here.
+          startIndex = 0
+
+          if (!partitionResponse.isDefined) {
+            val error = try {
+              Topic.validate(topicName)
+              Errors.UNKNOWN_TOPIC_OR_PARTITION
+            } catch {
+              case _: InvalidTopicException =>
+                Errors.INVALID_TOPIC_EXCEPTION
+            }
+            result.topics().add(new DescribeTopicPartitionsResponseTopic()
+              .setErrorCode(error.code())
+              .setName(topicName)
+              .setTopicId(getTopicId(topicName))
+              .setIsInternal(Topic.isInternal(topicName)))
           }
-        })
-
-        // start index only applies to the first topic. Reset it here.
-        startIndex = 0
-
-        if (!partitionResponse.isDefined) {
-          val error = try {
-            Topic.validate(topicName)
-            Errors.UNKNOWN_TOPIC_OR_PARTITION
-          } catch {
-            case _: InvalidTopicException =>
-              Errors.INVALID_TOPIC_EXCEPTION
-          }
-          result.topics().add(new DescribeTopicPartitionsResponseTopic()
-            .setErrorCode(error.code())
-            .setName(topicName)
-            .setTopicId(getTopicId(topicName))
-            .setIsInternal(Topic.isInternal(topicName)))
+        } else if (remaining == 0) {
+          // The cursor should point to the beginning of the current topic. All the partitions in the previous topic
+          // should be fulfilled. Note that, if a partition is pointed in the NextTopicPartition, it does not mean
+          // this topic exists.
+          result.setNextCursor(new Cursor()
+            .setTopicName(topicName)
+            .setPartitionIndex(0))
+          break()
         }
-      } else if (remaining == 0) {
-        // The cursor should point to the beginning of the current topic. All the partitions in the previous topic
-        // should be fulfilled. Note that, if a partition is pointed in the NextTopicPartition, it does not mean
-        // this topic exists.
-        result.setNextCursor(new Cursor()
-          .setTopicName(topicName)
-          .setPartitionIndex(0))
-        remaining = -1
       }
     }
     result
   }
 
   override def getAllTopics(): Set[String] = _currentImage.topics().topicsByName().keySet().asScala
+
+  // Get the topics whose name is lexicographically greater than the target topic name.
+  def getAllTopicsAfterTopic(targetTopicName: String): Set[String] = {
+    _currentImage.topics().topicsByName().keySet().stream()
+      .filter(topicName => topicName.compareTo(targetTopicName) > 0).collect(Collectors.toSet()).asScala
+  }
 
   override def getTopicPartitions(topicName: String): Set[TopicPartition] = {
     Option(_currentImage.topics().getTopic(topicName)) match {

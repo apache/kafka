@@ -17,12 +17,6 @@
 
 package kafka.server
 
-import java.net.InetAddress
-import java.nio.charset.StandardCharsets
-import java.util
-import java.util.Arrays.asList
-import java.util.concurrent.{CompletableFuture, TimeUnit}
-import java.util.{Collections, Comparator, Optional, OptionalInt, OptionalLong, Properties}
 import kafka.api.LeaderAndIsr
 import kafka.cluster.{Broker, Partition}
 import kafka.controller.{ControllerContext, KafkaController}
@@ -37,36 +31,34 @@ import org.apache.kafka.clients.admin.AlterConfigOp.OpType
 import org.apache.kafka.clients.admin.{AlterConfigOp, ConfigEntry}
 import org.apache.kafka.common.acl.AclOperation
 import org.apache.kafka.common.config.ConfigResource
-import org.apache.kafka.common.errors.{InvalidRequestException, UnsupportedVersionException}
+import org.apache.kafka.common.config.ConfigResource.Type.{BROKER, BROKER_LOGGER}
+import org.apache.kafka.common.errors.UnsupportedVersionException
 import org.apache.kafka.common.internals.{KafkaFutureImpl, Topic}
 import org.apache.kafka.common.memory.MemoryPool
-import org.apache.kafka.common.config.ConfigResource.Type.{BROKER, BROKER_LOGGER}
 import org.apache.kafka.common.message.AddPartitionsToTxnRequestData.{AddPartitionsToTxnTopic, AddPartitionsToTxnTopicCollection, AddPartitionsToTxnTransaction, AddPartitionsToTxnTransactionCollection}
 import org.apache.kafka.common.message.AddPartitionsToTxnResponseData.AddPartitionsToTxnResult
-import org.apache.kafka.common.message.AlterConfigsRequestData.{AlterConfigsResourceCollection => LAlterConfigsResourceCollection}
-import org.apache.kafka.common.message.AlterConfigsRequestData.{AlterConfigsResource => LAlterConfigsResource}
-import org.apache.kafka.common.message.AlterConfigsRequestData.{AlterableConfigCollection => LAlterableConfigCollection}
-import org.apache.kafka.common.message.AlterConfigsRequestData.{AlterableConfig => LAlterableConfig}
+import org.apache.kafka.common.message.AlterConfigsRequestData.{AlterConfigsResource => LAlterConfigsResource, AlterConfigsResourceCollection => LAlterConfigsResourceCollection, AlterableConfig => LAlterableConfig, AlterableConfigCollection => LAlterableConfigCollection}
 import org.apache.kafka.common.message.AlterConfigsResponseData.{AlterConfigsResourceResponse => LAlterConfigsResourceResponse}
 import org.apache.kafka.common.message.ApiMessageType.ListenerType
 import org.apache.kafka.common.message.ConsumerGroupDescribeResponseData.DescribedGroup
+import org.apache.kafka.common.message.CreatePartitionsRequestData.CreatePartitionsTopic
 import org.apache.kafka.common.message.CreateTopicsRequestData.{CreatableTopic, CreatableTopicCollection}
+import org.apache.kafka.common.message.CreateTopicsResponseData.CreatableTopicResult
 import org.apache.kafka.common.message.DescribeConfigsResponseData.DescribeConfigsResult
-import org.apache.kafka.common.message.IncrementalAlterConfigsRequestData.{AlterConfigsResource => IAlterConfigsResource}
-import org.apache.kafka.common.message.IncrementalAlterConfigsRequestData.{AlterConfigsResourceCollection => IAlterConfigsResourceCollection}
-import org.apache.kafka.common.message.IncrementalAlterConfigsRequestData.{AlterableConfig => IAlterableConfig}
-import org.apache.kafka.common.message.IncrementalAlterConfigsRequestData.{AlterableConfigCollection => IAlterableConfigCollection}
+import org.apache.kafka.common.message.IncrementalAlterConfigsRequestData.{AlterConfigsResource => IAlterConfigsResource, AlterConfigsResourceCollection => IAlterConfigsResourceCollection, AlterableConfig => IAlterableConfig, AlterableConfigCollection => IAlterableConfigCollection}
 import org.apache.kafka.common.message.IncrementalAlterConfigsResponseData.{AlterConfigsResourceResponse => IAlterConfigsResourceResponse}
 import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity
+import org.apache.kafka.common.message.ListClientMetricsResourcesResponseData.ClientMetricsResource
 import org.apache.kafka.common.message.ListOffsetsRequestData.{ListOffsetsPartition, ListOffsetsTopic}
 import org.apache.kafka.common.message.MetadataResponseData.MetadataResponseTopic
 import org.apache.kafka.common.message.OffsetDeleteRequestData.{OffsetDeleteRequestPartition, OffsetDeleteRequestTopic, OffsetDeleteRequestTopicCollection}
+import org.apache.kafka.common.message.OffsetDeleteResponseData.{OffsetDeleteResponsePartition, OffsetDeleteResponsePartitionCollection, OffsetDeleteResponseTopic, OffsetDeleteResponseTopicCollection}
 import org.apache.kafka.common.message.StopReplicaRequestData.{StopReplicaPartitionState, StopReplicaTopicState}
 import org.apache.kafka.common.message.UpdateMetadataRequestData.{UpdateMetadataBroker, UpdateMetadataEndpoint, UpdateMetadataPartitionState}
 import org.apache.kafka.common.message._
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.{ClientInformation, ListenerName}
-import org.apache.kafka.common.protocol.{ApiKeys, ApiMessage, Errors, MessageUtil}
+import org.apache.kafka.common.protocol.{ApiKeys, Errors, MessageUtil}
 import org.apache.kafka.common.quota.{ClientQuotaAlteration, ClientQuotaEntity}
 import org.apache.kafka.common.record.FileRecords.TimestampAndOffset
 import org.apache.kafka.common.record._
@@ -79,37 +71,33 @@ import org.apache.kafka.common.resource.{PatternType, Resource, ResourcePattern,
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, KafkaPrincipalSerde, SecurityProtocol}
 import org.apache.kafka.common.utils.annotation.ApiKeyVersionsSource
 import org.apache.kafka.common.utils.{ProducerIdAndEpoch, SecurityUtils, Utils}
-import org.apache.kafka.common.{ElectionType, IsolationLevel, Node, TopicIdPartition, TopicPartition, Uuid}
-import org.apache.kafka.server.authorizer.{Action, AuthorizationResult, Authorizer}
-import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.api.{AfterEach, Test}
-import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.{CsvSource, EnumSource, ValueSource}
-import org.mockito.ArgumentMatchers.{any, anyBoolean, anyDouble, anyInt, anyLong, anyShort, anyString, argThat, isNotNull}
-import org.mockito.Mockito.{mock, reset, times, verify, when}
-import org.mockito.{ArgumentCaptor, ArgumentMatchers, Mockito}
-
-import scala.collection.{Map, Seq, mutable}
-import scala.jdk.CollectionConverters._
-import org.apache.kafka.common.message.CreatePartitionsRequestData.CreatePartitionsTopic
-import org.apache.kafka.common.message.CreateTopicsResponseData.CreatableTopicResult
-import org.apache.kafka.common.message.DescribeTopicPartitionsRequestData.Cursor
-import org.apache.kafka.common.message.ListClientMetricsResourcesResponseData.ClientMetricsResource
-import org.apache.kafka.common.message.OffsetDeleteResponseData.{OffsetDeleteResponsePartition, OffsetDeleteResponsePartitionCollection, OffsetDeleteResponseTopic, OffsetDeleteResponseTopicCollection}
-import org.apache.kafka.common.metadata.RegisterBrokerRecord.{BrokerEndpoint, BrokerEndpointCollection}
-import org.apache.kafka.common.metadata.{PartitionRecord, RegisterBrokerRecord, TopicRecord}
+import org.apache.kafka.common._
 import org.apache.kafka.coordinator.group.GroupCoordinator
 import org.apache.kafka.server.ClientMetricsManager
-import org.apache.kafka.image.{ClusterImage, MetadataDelta, MetadataImage, MetadataProvenance}
-import org.apache.kafka.metadata.LeaderRecoveryState
-import org.apache.kafka.server.common.{Features, MetadataVersion}
+import org.apache.kafka.server.authorizer.{Action, AuthorizationResult, Authorizer}
 import org.apache.kafka.server.common.MetadataVersion.{IBP_0_10_2_IV0, IBP_2_2_IV1}
+import org.apache.kafka.server.common.{Features, MetadataVersion}
 import org.apache.kafka.server.config.ConfigType
 import org.apache.kafka.server.metrics.ClientMetricsTestUtils
 import org.apache.kafka.server.util.{FutureUtils, MockTime}
 import org.apache.kafka.storage.internals.log.{AppendOrigin, FetchParams, FetchPartitionData, LogConfig}
+import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.{AfterEach, Test}
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.{CsvSource, EnumSource, ValueSource}
+import org.mockito.ArgumentMatchers._
+import org.mockito.Mockito._
+import org.mockito.{ArgumentCaptor, ArgumentMatchers, Mockito}
 
+import java.net.InetAddress
+import java.nio.charset.StandardCharsets
 import java.time.Duration
+import java.util
+import java.util.Arrays.asList
+import java.util.concurrent.{CompletableFuture, TimeUnit}
+import java.util.{Collections, Comparator, Optional, OptionalInt, OptionalLong, Properties}
+import scala.collection.{Map, Seq, mutable}
+import scala.jdk.CollectionConverters._
 
 class KafkaApisTest extends Logging {
   private val requestChannel: RequestChannel = mock(classOf[RequestChannel])
@@ -4098,436 +4086,6 @@ class KafkaApisTest extends Logging {
         assertEquals(authorizedTopicId, metadataResponseTopic.topicId())
       }
     }
-  }
-
-  @Test
-  def testDescribeTopicPartitionsRequest(): Unit = {
-    // 1. Set up broker information
-    val plaintextListener = ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT)
-    val broker = new UpdateMetadataBroker()
-      .setId(0)
-      .setRack("rack")
-      .setEndpoints(Seq(
-        new UpdateMetadataEndpoint()
-          .setHost("broker0")
-          .setPort(9092)
-          .setSecurityProtocol(SecurityProtocol.PLAINTEXT.id)
-          .setListener(plaintextListener.value)
-      ).asJava)
-
-    // 2. Set up authorizer
-    val authorizer: Authorizer = mock(classOf[Authorizer])
-    val unauthorizedTopic = "unauthorized-topic"
-    val authorizedTopic = "authorized-topic"
-    val authorizedNonExistTopic = "authorized-non-exist"
-
-    val expectedActions1 = Seq(
-      new Action(AclOperation.DESCRIBE, new ResourcePattern(ResourceType.TOPIC, unauthorizedTopic, PatternType.LITERAL), 1, true, true),
-      new Action(AclOperation.DESCRIBE, new ResourcePattern(ResourceType.TOPIC, authorizedTopic, PatternType.LITERAL), 1, true, true)
-    )
-    val expectedActions2 = Seq(
-      new Action(AclOperation.DESCRIBE, new ResourcePattern(ResourceType.TOPIC, unauthorizedTopic, PatternType.LITERAL), 1, true, true),
-      new Action(AclOperation.DESCRIBE, new ResourcePattern(ResourceType.TOPIC, authorizedTopic, PatternType.LITERAL), 1, true, true),
-      new Action(AclOperation.DESCRIBE, new ResourcePattern(ResourceType.TOPIC, authorizedNonExistTopic, PatternType.LITERAL), 1, true, true)
-    )
-
-    // Here we need to use AuthHelperTest.matchSameElements instead of EasyMock.eq since the order of the request is unknown
-    when(authorizer.authorize(any[RequestContext], argThat((t: java.util.List[Action]) => t.containsAll(expectedActions1.asJava) || t.containsAll(expectedActions2.asJava))))
-      .thenAnswer { invocation =>
-        val actions = invocation.getArgument(1).asInstanceOf[util.List[Action]].asScala
-        actions.map { action =>
-          if (action.resourcePattern().name().startsWith("authorized"))
-            AuthorizationResult.ALLOWED
-          else
-            AuthorizationResult.DENIED
-        }.asJava
-      }
-
-    // 3. Set up MetadataCache
-    val authorizedTopicId = Uuid.randomUuid()
-    val unauthorizedTopicId = Uuid.randomUuid()
-
-    val topicIds = new util.HashMap[String, Uuid]()
-    topicIds.put(authorizedTopic, authorizedTopicId)
-    topicIds.put(unauthorizedTopic, unauthorizedTopicId)
-
-    val collection = new BrokerEndpointCollection()
-    collection.add(new BrokerEndpoint()
-      .setName(broker.endpoints.get(0).listener())
-      .setHost(broker.endpoints.get(0).host())
-      .setPort(broker.endpoints.get(0).port())
-      .setSecurityProtocol(broker.endpoints.get(0).securityProtocol())
-    )
-    val records = Seq(
-      new RegisterBrokerRecord()
-        .setBrokerId(broker.id())
-        .setBrokerEpoch(0)
-        .setIncarnationId(Uuid.randomUuid())
-        .setEndPoints(collection)
-        .setRack(broker.rack())
-        .setFenced(false),
-      new TopicRecord().setName(authorizedTopic).setTopicId(topicIds.get(authorizedTopic)),
-      new TopicRecord().setName(unauthorizedTopic).setTopicId(topicIds.get(unauthorizedTopic)),
-      new PartitionRecord()
-        .setTopicId(authorizedTopicId)
-        .setPartitionId(0)
-        .setReplicas(asList(0, 1, 2))
-        .setLeader(0)
-        .setIsr(asList(0))
-        .setEligibleLeaderReplicas(asList(1))
-        .setLastKnownELR(asList(2))
-        .setLeaderEpoch(0)
-        .setPartitionEpoch(1)
-        .setLeaderRecoveryState(LeaderRecoveryState.RECOVERED.value()),
-      new PartitionRecord()
-        .setTopicId(authorizedTopicId)
-        .setPartitionId(1)
-        .setReplicas(asList(0, 1, 2))
-        .setLeader(0)
-        .setIsr(asList(0))
-        .setEligibleLeaderReplicas(asList(1))
-        .setLastKnownELR(asList(2))
-        .setLeaderEpoch(0)
-        .setPartitionEpoch(1)
-        .setLeaderRecoveryState(LeaderRecoveryState.RECOVERED.value()),
-      new PartitionRecord()
-        .setTopicId(unauthorizedTopicId)
-        .setPartitionId(0)
-        .setReplicas(asList(0, 1, 3))
-        .setLeader(0)
-        .setIsr(asList(0))
-        .setEligibleLeaderReplicas(asList(1))
-        .setLastKnownELR(asList(3))
-        .setLeaderEpoch(0)
-        .setPartitionEpoch(2)
-        .setLeaderRecoveryState(LeaderRecoveryState.RECOVERED.value())
-    )
-    metadataCache = new KRaftMetadataCache(0)
-    updateKraftMetadataCache(metadataCache.asInstanceOf[KRaftMetadataCache], records)
-    val api = createKafkaApis(authorizer = Some(authorizer), raftSupport = true)
-
-    // 4.1 Basic test
-    var DescribeTopicPartitionsRequest = new DescribeTopicPartitionsRequest(new DescribeTopicPartitionsRequestData()
-    .setTopics(util.Arrays.asList(
-      new DescribeTopicPartitionsRequestData.TopicRequest().setName(authorizedTopic),
-      new DescribeTopicPartitionsRequestData.TopicRequest().setName(unauthorizedTopic),
-    )))
-
-    var request = buildRequest(DescribeTopicPartitionsRequest, plaintextListener)
-    when(clientRequestQuotaManager.maybeRecordAndGetThrottleTimeMs(any[RequestChannel.Request](),
-      any[Long])).thenReturn(0)
-
-    api.handleDescribeTopicPartitionsRequest(request)
-    var response = verifyNoThrottling[DescribeTopicPartitionsResponse](request)
-    var topics = response.data().topics().asScala.toList
-    assertEquals(2, topics.size)
-    var topicToCheck = topics(0)
-    assertEquals(authorizedTopicId, topicToCheck.topicId())
-    assertEquals(Errors.NONE.code(), topicToCheck.errorCode())
-    assertEquals(authorizedTopic, topicToCheck.name())
-    assertEquals(2, topicToCheck.partitions().size())
-
-    topicToCheck = topics(1)
-    assertNotEquals(unauthorizedTopicId, topicToCheck.topicId())
-    assertEquals(Errors.TOPIC_AUTHORIZATION_FAILED.code(), topicToCheck.errorCode())
-    assertEquals(unauthorizedTopic, topicToCheck.name())
-
-
-    // 4.2 With cursor
-    DescribeTopicPartitionsRequest = new DescribeTopicPartitionsRequest(new DescribeTopicPartitionsRequestData()
-      .setTopics(util.Arrays.asList(
-        new DescribeTopicPartitionsRequestData.TopicRequest().setName(authorizedTopic),
-        new DescribeTopicPartitionsRequestData.TopicRequest().setName(unauthorizedTopic),
-      ))
-      .setCursor(new Cursor().setTopicName(authorizedTopic).setPartitionIndex(1))
-    )
-
-    request = buildRequest(DescribeTopicPartitionsRequest, plaintextListener)
-    when(clientRequestQuotaManager.maybeRecordAndGetThrottleTimeMs(any[RequestChannel.Request](),
-      any[Long])).thenReturn(0)
-
-    api.handleDescribeTopicPartitionsRequest(request)
-    response = verifyNoThrottling[DescribeTopicPartitionsResponse](request)
-
-    topics = response.data().topics().asScala.toList
-    assertEquals(2, topics.size)
-    topicToCheck = topics(0)
-    assertEquals(authorizedTopicId, topicToCheck.topicId())
-    assertEquals(Errors.NONE.code(), topicToCheck.errorCode())
-    assertEquals(authorizedTopic, topicToCheck.name())
-    assertEquals(1, topicToCheck.partitions().size())
-
-    topicToCheck = topics(1)
-    assertNotEquals(unauthorizedTopicId, topicToCheck.topicId())
-    assertEquals(Errors.TOPIC_AUTHORIZATION_FAILED.code(), topicToCheck.errorCode())
-    assertEquals(unauthorizedTopic, topicToCheck.name())
-
-    // 4.3 Fetch all topics
-    DescribeTopicPartitionsRequest = new DescribeTopicPartitionsRequest(new DescribeTopicPartitionsRequestData())
-    request = buildRequest(DescribeTopicPartitionsRequest, plaintextListener)
-    when(clientRequestQuotaManager.maybeRecordAndGetThrottleTimeMs(any[RequestChannel.Request](),
-      any[Long])).thenReturn(0)
-
-    api.handleDescribeTopicPartitionsRequest(request)
-    response = verifyNoThrottling[DescribeTopicPartitionsResponse](request)
-
-    topics = response.data().topics().asScala.toList
-    assertEquals(1, topics.size)
-    topicToCheck = topics(0)
-    assertEquals(authorizedTopicId, topicToCheck.topicId())
-    assertEquals(Errors.NONE.code(), topicToCheck.errorCode())
-    assertEquals(authorizedTopic, topicToCheck.name())
-    assertEquals(2, topicToCheck.partitions().size())
-
-    // 4.4 Fetch all topics with cursor
-    DescribeTopicPartitionsRequest = new DescribeTopicPartitionsRequest(
-      new DescribeTopicPartitionsRequestData().setCursor(new Cursor().setTopicName(authorizedTopic).setPartitionIndex(1)))
-    request = buildRequest(DescribeTopicPartitionsRequest, plaintextListener)
-    when(clientRequestQuotaManager.maybeRecordAndGetThrottleTimeMs(any[RequestChannel.Request](),
-      any[Long])).thenReturn(0)
-
-    api.handleDescribeTopicPartitionsRequest(request)
-    response = verifyNoThrottling[DescribeTopicPartitionsResponse](request)
-
-    topics = response.data().topics().asScala.toList
-    assertEquals(1, topics.size)
-    topicToCheck = topics(0)
-    assertEquals(authorizedTopicId, topicToCheck.topicId())
-    assertEquals(Errors.NONE.code(), topicToCheck.errorCode())
-    assertEquals(authorizedTopic, topicToCheck.name())
-    assertEquals(1, topicToCheck.partitions().size())
-
-    // 4.5 Fetch all topics with cursor pointing to non exist topic. In the fetch all mode, the non existing cursor
-    // topic can be included in the output.
-    DescribeTopicPartitionsRequest = new DescribeTopicPartitionsRequest(
-      new DescribeTopicPartitionsRequestData().setCursor(new Cursor().setTopicName(authorizedNonExistTopic).setPartitionIndex(1)))
-    request = buildRequest(DescribeTopicPartitionsRequest, plaintextListener)
-    when(clientRequestQuotaManager.maybeRecordAndGetThrottleTimeMs(any[RequestChannel.Request](),
-      any[Long])).thenReturn(0)
-
-    api.handleDescribeTopicPartitionsRequest(request)
-    response = verifyNoThrottling[DescribeTopicPartitionsResponse](request)
-
-    topics = response.data().topics().asScala.toList
-    assertEquals(2, topics.size)
-    topicToCheck = topics(0)
-    assertEquals(Errors.UNKNOWN_TOPIC_OR_PARTITION.code(), topicToCheck.errorCode())
-
-    topicToCheck = topics(1)
-    assertEquals(authorizedTopicId, topicToCheck.topicId())
-    assertEquals(Errors.NONE.code(), topicToCheck.errorCode())
-    assertEquals(authorizedTopic, topicToCheck.name())
-    assertEquals(2, topicToCheck.partitions().size())
-
-    // 4.6 Fetch all topics with limit
-    DescribeTopicPartitionsRequest = new DescribeTopicPartitionsRequest(
-      new DescribeTopicPartitionsRequestData().setResponsePartitionLimit(1)
-    )
-    request = buildRequest(DescribeTopicPartitionsRequest, plaintextListener)
-    when(clientRequestQuotaManager.maybeRecordAndGetThrottleTimeMs(any[RequestChannel.Request](),
-      any[Long])).thenReturn(0)
-
-    api.handleDescribeTopicPartitionsRequest(request)
-    response = verifyNoThrottling[DescribeTopicPartitionsResponse](request)
-
-    topics = response.data().topics().asScala.toList
-    assertEquals(1, topics.size)
-    topicToCheck = topics(0)
-    assertEquals(authorizedTopicId, topicToCheck.topicId())
-    assertEquals(Errors.NONE.code(), topicToCheck.errorCode())
-    assertEquals(authorizedTopic, topicToCheck.name())
-    assertEquals(1, topicToCheck.partitions().size())
-  }
-
-  @Test
-  def testDescribeTopicPartitionsRequestWithEdgeCases(): Unit = {
-    // 1. Set up broker information
-    val plaintextListener = ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT)
-    val broker = new UpdateMetadataBroker()
-      .setId(0)
-      .setRack("rack")
-      .setEndpoints(Seq(
-        new UpdateMetadataEndpoint()
-          .setHost("broker0")
-          .setPort(9092)
-          .setSecurityProtocol(SecurityProtocol.PLAINTEXT.id)
-          .setListener(plaintextListener.value)
-      ).asJava)
-
-    // 2. Set up authorizer
-    val authorizer: Authorizer = mock(classOf[Authorizer])
-    val authorizedTopic = "authorized-topic1"
-    val authorizedTopic2 = "authorized-topic2"
-
-    val expectedActions1 = Seq(
-      new Action(AclOperation.DESCRIBE, new ResourcePattern(ResourceType.TOPIC, authorizedTopic2, PatternType.LITERAL), 1, true, true),
-      new Action(AclOperation.DESCRIBE, new ResourcePattern(ResourceType.TOPIC, authorizedTopic, PatternType.LITERAL), 1, true, true)
-    )
-    val expectedActions2 = Seq(
-      new Action(AclOperation.DESCRIBE, new ResourcePattern(ResourceType.TOPIC, authorizedTopic2, PatternType.LITERAL), 1, true, true)
-    )
-
-    // Here we need to use AuthHelperTest.matchSameElements instead of EasyMock.eq since the order of the request is unknown
-    when(authorizer.authorize(any[RequestContext], argThat((t: java.util.List[Action]) => t.containsAll(expectedActions1.asJava) || t.containsAll(expectedActions2.asJava))))
-      .thenAnswer { invocation =>
-        val actions = invocation.getArgument(1).asInstanceOf[util.List[Action]].asScala
-        actions.map { action =>
-          if (action.resourcePattern().name().startsWith("authorized-topic"))
-            AuthorizationResult.ALLOWED
-          else
-            AuthorizationResult.DENIED
-        }.asJava
-      }
-
-    // 3. Set up MetadataCache
-    val authorizedTopicId = Uuid.randomUuid()
-    val authorizedTopicId2 = Uuid.randomUuid()
-
-    val topicIds = new util.HashMap[String, Uuid]()
-    topicIds.put(authorizedTopic, authorizedTopicId)
-    topicIds.put(authorizedTopic2, authorizedTopicId2)
-
-    val collection = new BrokerEndpointCollection()
-    collection.add(new BrokerEndpoint()
-      .setName(broker.endpoints.get(0).listener())
-      .setHost(broker.endpoints.get(0).host())
-      .setPort(broker.endpoints.get(0).port())
-      .setSecurityProtocol(broker.endpoints.get(0).securityProtocol())
-    )
-    val records = Seq(
-      new RegisterBrokerRecord()
-        .setBrokerId(broker.id())
-        .setBrokerEpoch(0)
-        .setIncarnationId(Uuid.randomUuid())
-        .setEndPoints(collection)
-        .setRack(broker.rack())
-        .setFenced(false),
-      new TopicRecord().setName(authorizedTopic).setTopicId(topicIds.get(authorizedTopic)),
-      new TopicRecord().setName(authorizedTopic2).setTopicId(topicIds.get(authorizedTopic2)),
-      new PartitionRecord()
-        .setTopicId(authorizedTopicId)
-        .setPartitionId(0)
-        .setReplicas(asList(0, 1, 2))
-        .setLeader(0)
-        .setIsr(asList(0))
-        .setEligibleLeaderReplicas(asList(1))
-        .setLastKnownELR(asList(2))
-        .setLeaderEpoch(0)
-        .setPartitionEpoch(1)
-        .setLeaderRecoveryState(LeaderRecoveryState.RECOVERED.value()),
-      new PartitionRecord()
-        .setTopicId(authorizedTopicId)
-        .setPartitionId(1)
-        .setReplicas(asList(0, 1, 2))
-        .setLeader(0)
-        .setIsr(asList(0))
-        .setEligibleLeaderReplicas(asList(1))
-        .setLastKnownELR(asList(2))
-        .setLeaderEpoch(0)
-        .setPartitionEpoch(1)
-        .setLeaderRecoveryState(LeaderRecoveryState.RECOVERED.value()),
-      new PartitionRecord()
-        .setTopicId(authorizedTopicId2)
-        .setPartitionId(0)
-        .setReplicas(asList(0, 1, 3))
-        .setLeader(0)
-        .setIsr(asList(0))
-        .setEligibleLeaderReplicas(asList(1))
-        .setLastKnownELR(asList(3))
-        .setLeaderEpoch(0)
-        .setPartitionEpoch(2)
-        .setLeaderRecoveryState(LeaderRecoveryState.RECOVERED.value())
-    )
-    metadataCache = new KRaftMetadataCache(0)
-    updateKraftMetadataCache(metadataCache.asInstanceOf[KRaftMetadataCache], records)
-    val api = createKafkaApis(authorizer = Some(authorizer), raftSupport = true)
-
-    // 4.1 With cursor point to the first one
-    var describeTopicPartitionsRequest = new DescribeTopicPartitionsRequest(new DescribeTopicPartitionsRequestData()
-      .setTopics(util.Arrays.asList(
-        new DescribeTopicPartitionsRequestData.TopicRequest().setName(authorizedTopic),
-        new DescribeTopicPartitionsRequestData.TopicRequest().setName(authorizedTopic2),
-      ))
-      .setCursor(new Cursor().setTopicName(authorizedTopic).setPartitionIndex(1))
-    )
-
-    var request = buildRequest(describeTopicPartitionsRequest, plaintextListener)
-    when(clientRequestQuotaManager.maybeRecordAndGetThrottleTimeMs(any[RequestChannel.Request](),
-      any[Long])).thenReturn(0)
-
-    api.handleDescribeTopicPartitionsRequest(request)
-    var response = verifyNoThrottling[DescribeTopicPartitionsResponse](request)
-
-    var topics = response.data().topics().asScala.toList
-    assertEquals(2, topics.size)
-    var topicToCheck = topics(0)
-    assertEquals(authorizedTopicId, topicToCheck.topicId())
-    assertEquals(Errors.NONE.code(), topicToCheck.errorCode())
-    assertEquals(authorizedTopic, topicToCheck.name())
-    assertEquals(1, topicToCheck.partitions().size())
-
-    topicToCheck = topics(1)
-    assertEquals(authorizedTopicId2, topicToCheck.topicId())
-    assertEquals(Errors.NONE.code(), topicToCheck.errorCode())
-    assertEquals(authorizedTopic2, topicToCheck.name())
-    assertEquals(1, topicToCheck.partitions().size())
-
-    // 4.2 With cursor point to the second one. The first topic should be ignored.
-    describeTopicPartitionsRequest = new DescribeTopicPartitionsRequest(new DescribeTopicPartitionsRequestData()
-      .setTopics(util.Arrays.asList(
-        new DescribeTopicPartitionsRequestData.TopicRequest().setName(authorizedTopic),
-        new DescribeTopicPartitionsRequestData.TopicRequest().setName(authorizedTopic2),
-      ))
-      .setCursor(new Cursor().setTopicName(authorizedTopic2).setPartitionIndex(0))
-    )
-
-    request = buildRequest(describeTopicPartitionsRequest, plaintextListener)
-    when(clientRequestQuotaManager.maybeRecordAndGetThrottleTimeMs(any[RequestChannel.Request](),
-      any[Long])).thenReturn(0)
-
-    api.handleDescribeTopicPartitionsRequest(request)
-    response = verifyNoThrottling[DescribeTopicPartitionsResponse](request)
-
-    topics = response.data().topics().asScala.toList
-    assertEquals(1, topics.size)
-    topicToCheck = topics(0)
-    assertEquals(authorizedTopicId2, topicToCheck.topicId())
-    assertEquals(Errors.NONE.code(), topicToCheck.errorCode())
-    assertEquals(authorizedTopic2, topicToCheck.name())
-    assertEquals(1, topicToCheck.partitions().size())
-
-    // 4.3 With cursor point to a non existing topic. Exception should be thrown if not querying all the topics.
-    describeTopicPartitionsRequest = new DescribeTopicPartitionsRequest(new DescribeTopicPartitionsRequestData()
-      .setTopics(util.Arrays.asList(
-        new DescribeTopicPartitionsRequestData.TopicRequest().setName(authorizedTopic),
-        new DescribeTopicPartitionsRequestData.TopicRequest().setName(authorizedTopic2),
-      ))
-      .setCursor(new Cursor().setTopicName("Non-existing").setPartitionIndex(0))
-    )
-
-    request = buildRequest(describeTopicPartitionsRequest, plaintextListener)
-    when(clientRequestQuotaManager.maybeRecordAndGetThrottleTimeMs(any[RequestChannel.Request](),
-      any[Long])).thenReturn(0)
-
-    assertThrows(classOf[InvalidRequestException], () => api.handleDescribeTopicPartitionsRequest(request))
-  }
-
-  def updateKraftMetadataCache(kRaftMetadataCache: KRaftMetadataCache, records: Seq[ApiMessage]): Unit = {
-    val image = kRaftMetadataCache.currentImage()
-    val partialImage = new MetadataImage(
-      new MetadataProvenance(100L, 10, 1000L),
-      image.features(),
-      ClusterImage.EMPTY,
-      image.topics(),
-      image.configs(),
-      image.clientQuotas(),
-      image.producerIds(),
-      image.acls(),
-      image.scram(),
-      image.delegationTokens())
-    val delta = new MetadataDelta.Builder().setImage(partialImage).build()
-    records.foreach(delta.replay)
-    kRaftMetadataCache.setImage(delta.apply(new MetadataProvenance(100L, 10, 1000L)))
   }
 
     /**

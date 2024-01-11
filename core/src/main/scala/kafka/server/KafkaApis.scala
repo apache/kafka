@@ -22,7 +22,8 @@ import kafka.controller.ReplicaAssignment
 import kafka.coordinator.transaction.{InitProducerIdResult, TransactionCoordinator}
 import kafka.network.RequestChannel
 import kafka.server.QuotaFactory.{QuotaManagers, UnboundedQuota}
-import kafka.server.metadata.{ConfigRepository, KRaftMetadataCache, ZkMetadataCache}
+import kafka.server.handlers.DescribeTopicPartitionsRequestHandler
+import kafka.server.metadata.{ConfigRepository, ZkMetadataCache}
 import kafka.utils.Implicits._
 import kafka.utils.{CoreUtils, Logging}
 import org.apache.kafka.admin.AdminUtils
@@ -43,7 +44,6 @@ import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopic
 import org.apache.kafka.common.message.CreateTopicsResponseData.{CreatableTopicResult, CreatableTopicResultCollection}
 import org.apache.kafka.common.message.DeleteRecordsResponseData.{DeleteRecordsPartitionResult, DeleteRecordsTopicResult}
 import org.apache.kafka.common.message.DeleteTopicsResponseData.{DeletableTopicResult, DeletableTopicResultCollection}
-import org.apache.kafka.common.message.DescribeTopicPartitionsResponseData.{DescribeTopicPartitionsResponsePartition, DescribeTopicPartitionsResponseTopic}
 import org.apache.kafka.common.message.ElectLeadersResponseData.{PartitionResult, ReplicaElectionResult}
 import org.apache.kafka.common.message.ListClientMetricsResourcesResponseData.ClientMetricsResource
 import org.apache.kafka.common.message.ListOffsetsRequestData.ListOffsetsPartition
@@ -121,6 +121,7 @@ class KafkaApis(val requestChannel: RequestChannel,
   val requestHelper = new RequestHandlerHelper(requestChannel, quotas, time)
   val aclApis = new AclApis(authHelper, authorizer, requestHelper, "broker", config)
   val configManager = new ConfigAdminManager(brokerId, config, configRepository)
+  val describeTopicPartitionsRequestHandler = new DescribeTopicPartitionsRequestHandler(metadataCache, authHelper, config)
 
   def close(): Unit = {
     aclApis.close()
@@ -1239,21 +1240,6 @@ class KafkaApis(val requestChannel: RequestChannel,
       .setPartitions(partitionData)
   }
 
-  private def describeTopicPartitionsResponseTopic(
-    error: Errors,
-    topic: String,
-    topicId: Uuid,
-    isInternal: Boolean,
-    partitionData: util.List[DescribeTopicPartitionsResponsePartition]
-  ): DescribeTopicPartitionsResponseTopic = {
-    new DescribeTopicPartitionsResponseTopic()
-      .setErrorCode(error.code)
-      .setName(topic)
-      .setTopicId(topicId)
-      .setIsInternal(isInternal)
-      .setPartitions(partitionData)
-  }
-
   private def getTopicMetadata(
     request: RequestChannel.Request,
     fetchAllTopics: Boolean,
@@ -1432,63 +1418,9 @@ class KafkaApis(val requestChannel: RequestChannel,
         throw new InvalidRequestException("ZK cluster does not handle DescribeTopicPartitions request")
       case _ =>
     }
-    val KRaftMetadataCache = metadataCache.asInstanceOf[KRaftMetadataCache]
+    val response = describeTopicPartitionsRequestHandler.handleDescribeTopicPartitionsRequest(request);
 
-    val describeTopicPartitionsRequest = request.body[DescribeTopicPartitionsRequest].data()
-    var topics = scala.collection.mutable.Set[String]()
-    describeTopicPartitionsRequest.topics().forEach(topic => topics.add(topic.name()))
-
-    val cursor = describeTopicPartitionsRequest.cursor()
-    val fetchAllTopics = topics.isEmpty
-    if (fetchAllTopics) {
-      metadataCache.getAllTopics().foreach(topic => topics.add(topic))
-      // Includes the cursor topic in case the cursor topic does not exist anymore.
-      if (cursor != null) {
-        topics.add(cursor.topicName())
-      }
-    } else if (cursor != null && !topics.contains(cursor.topicName())){
-      // The topic in cursor must be included in the topic list if provided.
-      throw new InvalidRequestException(s"DescribeTopicPartitionsRequest topic list should contain the cursor topic: ${cursor.topicName()}")
-    }
-
-    if (cursor != null) {
-      // Drop all the topics are ahead of the cursor topic.
-      topics = topics.filter(topicName => topicName.compareTo(cursor.topicName()) >= 0)
-    }
-
-    val authorizedForDescribeTopics = authHelper.filterByAuthorized(request.context, DESCRIBE, TOPIC,
-      topics)(identity)
-    val (authorizedTopics, unauthorizedForDescribeTopics) = topics.partition(authorizedForDescribeTopics.contains)
-
-    // Do not disclose the existence of topics unauthorized for Describe, so we've not even checked if they exist or not
-    val unauthorizedForDescribeTopicMetadata = {
-      if (fetchAllTopics) {
-        Set.empty[DescribeTopicPartitionsResponseTopic]
-      } else {
-        // We should not return topicId when on unauthorized error, so we return zero uuid.
-        unauthorizedForDescribeTopics.map(topic =>
-          describeTopicPartitionsResponseTopic(Errors.TOPIC_AUTHORIZATION_FAILED, topic, Uuid.ZERO_UUID, false, util.Collections.emptyList()))
-      }
-    }
-
-    val firstPartitionId = if (cursor == null) 0 else cursor.partitionIndex()
-    val response = KRaftMetadataCache.getTopicMetadataForDescribeTopicResponse(
-      authorizedTopics.toList.sorted,
-      request.context.listenerName,
-      firstPartitionId,
-      Math.min(config.maxRequestPartitionSizeLimit, describeTopicPartitionsRequest.responsePartitionLimit()))
-
-    // get topic authorized operations
-    def setTopicAuthorizedOperations(response: DescribeTopicPartitionsResponseData): Unit = {
-      response.topics().forEach(topicData =>
-        topicData.setTopicAuthorizedOperations(authHelper.authorizedOperations(request, new Resource(ResourceType.TOPIC, topicData.name))))
-    }
-
-    setTopicAuthorizedOperations(response)
-
-    response.topics().addAll(unauthorizedForDescribeTopicMetadata.asJava)
-
-    trace("Sending topic metadata %s for correlation id %d to client %s".format(response.topics().asScala.mkString(","),
+    trace("Sending topic partitions metadata %s for correlation id %d to client %s".format(response.topics().asScala.mkString(","),
       request.header.correlationId, request.header.clientId))
 
     requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs => {

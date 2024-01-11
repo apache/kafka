@@ -48,7 +48,7 @@
         { "name": "EligibleLeaderReplicas", "type": "[]int32", "default": "null", "entityType": "brokerId",
           "versions": "0+", "nullableVersions": "0+",
           "about": "The new eligible leader replicas otherwise." },
-        { "name": "LastKnownELR", "type": "[]int32", "default": "null", "entityType": "brokerId",
+        { "name": "LastKnownElr", "type": "[]int32", "default": "null", "entityType": "brokerId",
           "versions": "0+", "nullableVersions": "0+",
           "about": "The last known ELR." },
         { "name": "OfflineReplicas", "type": "[]int32", "versions": "0+", "ignorable": true, "entityType": "brokerId",

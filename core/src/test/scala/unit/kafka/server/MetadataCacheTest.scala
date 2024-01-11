@@ -16,30 +16,29 @@
   */
 package kafka.server
 
-import org.apache.kafka.common.{DirectoryId, Node, TopicPartition, Uuid}
-
-import java.util
-import java.util.Arrays.asList
-import java.util.Collections
 import kafka.api.LeaderAndIsr
 import kafka.server.metadata.{KRaftMetadataCache, MetadataSnapshot, ZkMetadataCache}
-import org.apache.kafka.common.message.DescribeTopicPartitionsResponseData.{Cursor, DescribeTopicPartitionsResponsePartition}
+import org.apache.kafka.common.message.DescribeTopicPartitionsResponseData.DescribeTopicPartitionsResponsePartition
 import org.apache.kafka.common.message.UpdateMetadataRequestData.{UpdateMetadataBroker, UpdateMetadataEndpoint, UpdateMetadataPartitionState, UpdateMetadataTopicState}
+import org.apache.kafka.common.metadata.RegisterBrokerRecord.{BrokerEndpoint, BrokerEndpointCollection}
+import org.apache.kafka.common.metadata._
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.{ApiKeys, ApiMessage, Errors}
 import org.apache.kafka.common.record.RecordBatch
 import org.apache.kafka.common.requests.{AbstractControlRequest, UpdateMetadataRequest}
 import org.apache.kafka.common.security.auth.SecurityProtocol
-import org.apache.kafka.common.metadata.{BrokerRegistrationChangeRecord, PartitionRecord, RegisterBrokerRecord, RemoveTopicRecord, TopicRecord}
-import org.apache.kafka.common.metadata.RegisterBrokerRecord.{BrokerEndpoint, BrokerEndpointCollection}
+import org.apache.kafka.common.{DirectoryId, Node, TopicPartition, Uuid}
 import org.apache.kafka.image.{ClusterImage, MetadataDelta, MetadataImage, MetadataProvenance}
 import org.apache.kafka.metadata.LeaderRecoveryState
 import org.apache.kafka.server.common.MetadataVersion
 import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.MethodSource
-import org.junit.jupiter.api.Test
 
+import java.util
+import java.util.Arrays.asList
+import java.util.Collections
 import scala.collection.{Seq, mutable}
 import scala.jdk.CollectionConverters._
 
@@ -768,7 +767,7 @@ class MetadataCacheTest {
         .setLeader(0)
         .setIsr(asList(0))
         .setEligibleLeaderReplicas(asList(1))
-        .setLastKnownELR(asList(2))
+        .setLastKnownElr(asList(2))
         .setLeaderEpoch(0)
         .setPartitionEpoch(1)
         .setLeaderRecoveryState(LeaderRecoveryState.RECOVERED.value()),
@@ -779,7 +778,7 @@ class MetadataCacheTest {
         .setLeader(0)
         .setIsr(asList(0))
         .setEligibleLeaderReplicas(asList(1))
-        .setLastKnownELR(asList(3))
+        .setLastKnownElr(asList(3))
         .setLeaderEpoch(0)
         .setPartitionEpoch(2)
         .setLeaderRecoveryState(LeaderRecoveryState.RECOVERED.value()),
@@ -790,7 +789,7 @@ class MetadataCacheTest {
         .setLeader(3)
         .setIsr(asList(3))
         .setEligibleLeaderReplicas(asList(2))
-        .setLastKnownELR(asList(0))
+        .setLastKnownElr(asList(0))
         .setLeaderEpoch(1)
         .setPartitionEpoch(2)
         .setLeaderRecoveryState(LeaderRecoveryState.RECOVERED.value()),
@@ -801,7 +800,7 @@ class MetadataCacheTest {
         .setLeader(2)
         .setIsr(asList(2))
         .setEligibleLeaderReplicas(asList(1))
-        .setLastKnownELR(asList(0))
+        .setLastKnownElr(asList(0))
         .setLeaderEpoch(10)
         .setPartitionEpoch(11)
         .setLeaderRecoveryState(LeaderRecoveryState.RECOVERED.value()),
@@ -834,13 +833,13 @@ class MetadataCacheTest {
         assertEquals(expectedPartition.partitionId(), partition.partitionIndex())
         assertEquals(expectedPartition.eligibleLeaderReplicas(), partition.eligibleLeaderReplicas())
         assertEquals(expectedPartition.isr(), partition.isrNodes())
-        assertEquals(expectedPartition.lastKnownELR(), partition.lastKnownELR())
+        assertEquals(expectedPartition.lastKnownElr(), partition.lastKnownElr())
         assertEquals(expectedPartition.leader(), partition.leaderId())
       })
     }
 
     // Basic test
-    var result = metadataCache.getTopicMetadataForDescribeTopicResponse(Seq(topic0, topic1), listenerName, 0, 10).topics().asScala.toList
+    var result = metadataCache.getTopicMetadataForDescribeTopicResponse(Seq(topic0, topic1).iterator, listenerName, 0, 10).topics().asScala.toList
     assertEquals(2, result.size)
     var resultTopic = result(0)
     assertEquals(topic0, resultTopic.name())
@@ -857,7 +856,7 @@ class MetadataCacheTest {
     checkTopicMetadata(topic1, Set(0), resultTopic.partitions().asScala)
 
     // Quota reached
-    var response = metadataCache.getTopicMetadataForDescribeTopicResponse(Seq(topic0, topic1), listenerName, 0, 2)
+    var response = metadataCache.getTopicMetadataForDescribeTopicResponse(Seq(topic0, topic1).iterator, listenerName, 0, 2)
     result = response.topics().asScala.toList
     assertEquals(1, result.size)
     resultTopic = result(0)
@@ -866,10 +865,11 @@ class MetadataCacheTest {
     assertEquals(topicIds.get(topic0), resultTopic.topicId())
     assertEquals(2, resultTopic.partitions().size())
     checkTopicMetadata(topic0, Set(0, 1), resultTopic.partitions().asScala)
-    assertEquals(new Cursor().setTopicName(topic0).setPartitionIndex(2),response.nextCursor())
+    assertEquals(topic0, response.nextCursor().topicName())
+    assertEquals(2, response.nextCursor().partitionIndex())
 
     // With start index
-    result = metadataCache.getTopicMetadataForDescribeTopicResponse(Seq(topic0), listenerName, 1, 10).topics().asScala.toList
+    result = metadataCache.getTopicMetadataForDescribeTopicResponse(Seq(topic0).iterator, listenerName, 1, 10).topics().asScala.toList
     assertEquals(1, result.size)
     resultTopic = result(0)
     assertEquals(topic0, resultTopic.name())
@@ -879,7 +879,7 @@ class MetadataCacheTest {
     checkTopicMetadata(topic0, Set(1, 2), resultTopic.partitions().asScala)
 
     // With start index and quota reached
-    response = metadataCache.getTopicMetadataForDescribeTopicResponse(Seq(topic0, topic1), listenerName, 2, 1)
+    response = metadataCache.getTopicMetadataForDescribeTopicResponse(Seq(topic0, topic1).iterator, listenerName, 2, 1)
     result = response.topics().asScala.toList
     assertEquals(1, result.size)
 
@@ -889,10 +889,11 @@ class MetadataCacheTest {
     assertEquals(topicIds.get(topic0), resultTopic.topicId())
     assertEquals(1, resultTopic.partitions().size())
     checkTopicMetadata(topic0, Set(2), resultTopic.partitions().asScala)
-    assertEquals(new Cursor().setTopicName(topic1).setPartitionIndex(0),response.nextCursor())
+    assertEquals(topic1, response.nextCursor().topicName())
+    assertEquals(0, response.nextCursor().partitionIndex())
 
     // When the first topic does not exist
-    result = metadataCache.getTopicMetadataForDescribeTopicResponse(Seq("Non-exist", topic0), listenerName, 1, 1).topics().asScala.toList
+    result = metadataCache.getTopicMetadataForDescribeTopicResponse(Seq("Non-exist", topic0).iterator, listenerName, 1, 1).topics().asScala.toList
     assertEquals(2, result.size)
     resultTopic = result(0)
     assertEquals("Non-exist", resultTopic.name())
