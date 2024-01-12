@@ -256,10 +256,10 @@ LATEST_3_4 = V_3_4_1
 # 3.5.x versions
 V_3_5_0 = KafkaVersion("3.5.0")
 V_3_5_1 = KafkaVersion("3.5.1")
-LATEST_3_5 = V_3_5_1
+V_3_5_2 = KafkaVersion("3.5.2")
+LATEST_3_5 = V_3_5_2
 
 # 3.6.x versions
 V_3_6_0 = KafkaVersion("3.6.0")
-LATEST_3_6 = V_3_6_0
-
-# only add released versions here
+V_3_6_1 = KafkaVersion("3.6.1")
+LATEST_3_6 = V_3_6_1
