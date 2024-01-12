@@ -371,6 +371,11 @@ public class SuppressScenarioTest {
                 .map((final Windowed<String> k, final Long v) -> new KeyValue<>(k.toString(), v))
                 .to("output-suppressed", Produced.with(STRING_SERDE, Serdes.Long()));
 
+        valueCounts
+                .toStream()
+                .map((final Windowed<String> k, final Long v) -> new KeyValue<>(k.toString(), v))
+                .to("output-raw", Produced.with(STRING_SERDE, Serdes.Long()));
+
         final Topology topology = builder.build();
         System.out.println(topology.describe());
         try (final TopologyTestDriver driver = new TopologyTestDriver(topology, config)) {
@@ -392,6 +397,18 @@ public class SuppressScenarioTest {
 
             //won't be emitted as it comes after last wall clock advancement
             inputTopic.pipeInput("k1", "v1", 3L);
+            verify(
+                    drainProducerRecords(driver, "output-raw", STRING_DESERIALIZER, LONG_DESERIALIZER),
+                    asList(
+                            new KeyValueTimestamp<>("[k1@0/2]", 1L, 0L),
+                            new KeyValueTimestamp<>("[k1@0/2]", 2L, 1L),
+                            new KeyValueTimestamp<>("[k1@2/4]", 1L, 2L),
+                            new KeyValueTimestamp<>("[k1@2/4]", 2L, 3L),
+                            new KeyValueTimestamp<>("[k1@4/6]", 1L, 4L),
+                            new KeyValueTimestamp<>("[k1@4/6]", 2L, 5L)
+                    )
+            );
+
             verify(
                     drainProducerRecords(driver, "output-suppressed", STRING_DESERIALIZER, LONG_DESERIALIZER),
                     asList(
