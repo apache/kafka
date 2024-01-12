@@ -336,7 +336,26 @@ public class GroupCoordinatorServiceTest {
 
         verify(runtime, times(1)).scheduleUnloadOperation(
             new TopicPartition("__consumer_offsets", 5),
-            10
+            OptionalInt.of(10)
+        );
+    }
+
+    @Test
+    public void testOnResignationWithEmptyLeaderEpoch() {
+        CoordinatorRuntime<GroupCoordinatorShard, Record> runtime = mockRuntime();
+        GroupCoordinatorService service = new GroupCoordinatorService(
+            new LogContext(),
+            createConfig(),
+            runtime,
+            new GroupCoordinatorMetrics()
+        );
+
+        service.startup(() -> 1);
+        service.onResignation(5, OptionalInt.empty());
+
+        verify(runtime, times(1)).scheduleUnloadOperation(
+            new TopicPartition("__consumer_offsets", 5),
+            OptionalInt.empty()
         );
     }
 

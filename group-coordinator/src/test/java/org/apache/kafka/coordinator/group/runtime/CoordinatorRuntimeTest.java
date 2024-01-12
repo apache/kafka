@@ -49,6 +49,7 @@ import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Objects;
+import java.util.OptionalInt;
 import java.util.Queue;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
@@ -669,7 +670,7 @@ public class CoordinatorRuntimeTest {
         assertEquals(10, ctx.epoch);
 
         // Schedule the unloading.
-        runtime.scheduleUnloadOperation(TP, ctx.epoch + 1);
+        runtime.scheduleUnloadOperation(TP, OptionalInt.of(ctx.epoch + 1));
         assertEquals(CLOSED, ctx.state);
 
         // Verify that onUnloaded is called.
@@ -684,6 +685,60 @@ public class CoordinatorRuntimeTest {
         // Getting the coordinator context fails because it no longer exists.
         assertThrows(NotCoordinatorException.class, () -> runtime.contextOrThrow(TP));
     }
+
+    @Test
+    public void testScheduleUnloadingWithEmptyEpoch() {
+        MockTimer timer = new MockTimer();
+        MockPartitionWriter writer = mock(MockPartitionWriter.class);
+        MockCoordinatorShardBuilderSupplier supplier = mock(MockCoordinatorShardBuilderSupplier.class);
+        MockCoordinatorShardBuilder builder = mock(MockCoordinatorShardBuilder.class);
+        MockCoordinatorShard coordinator = mock(MockCoordinatorShard.class);
+
+        CoordinatorRuntime<MockCoordinatorShard, String> runtime =
+            new CoordinatorRuntime.Builder<MockCoordinatorShard, String>()
+                .withTime(timer.time())
+                .withTimer(timer)
+                .withDefaultWriteTimeOut(DEFAULT_WRITE_TIMEOUT)
+                .withLoader(new MockCoordinatorLoader())
+                .withEventProcessor(new DirectEventProcessor())
+                .withPartitionWriter(writer)
+                .withCoordinatorShardBuilderSupplier(supplier)
+                .withCoordinatorRuntimeMetrics(mock(GroupCoordinatorRuntimeMetrics.class))
+                .withCoordinatorMetrics(mock(GroupCoordinatorMetrics.class))
+                .build();
+
+        when(builder.withSnapshotRegistry(any())).thenReturn(builder);
+        when(builder.withLogContext(any())).thenReturn(builder);
+        when(builder.withTime(any())).thenReturn(builder);
+        when(builder.withTimer(any())).thenReturn(builder);
+        when(builder.withCoordinatorMetrics(any())).thenReturn(builder);
+        when(builder.withTopicPartition(any())).thenReturn(builder);
+        when(builder.build()).thenReturn(coordinator);
+        when(supplier.get()).thenReturn(builder);
+
+        // Loads the coordinator. It directly transitions to active.
+        runtime.scheduleLoadOperation(TP, 10);
+        CoordinatorRuntime<MockCoordinatorShard, String>.CoordinatorContext ctx = runtime.contextOrThrow(TP);
+        assertEquals(ACTIVE, ctx.state);
+        assertEquals(10, ctx.epoch);
+
+        // Schedule the unloading.
+        runtime.scheduleUnloadOperation(TP, OptionalInt.empty());
+        assertEquals(CLOSED, ctx.state);
+
+        // Verify that onUnloaded is called.
+        verify(coordinator, times(1)).onUnloaded();
+
+        // Verify that the listener is deregistered.
+        verify(writer, times(1)).deregisterListener(
+            eq(TP),
+            any(PartitionWriter.Listener.class)
+        );
+
+        // Getting the coordinator context fails because it no longer exists.
+        assertThrows(NotCoordinatorException.class, () -> runtime.contextOrThrow(TP));
+    }
+
     @Test
     public void testScheduleUnloadingWhenContextDoesntExist() {
         MockTimer timer = new MockTimer();
@@ -717,7 +772,7 @@ public class CoordinatorRuntimeTest {
         // is asked to unload its state. The unload event is skipped in this case.
 
         // Schedule the unloading.
-        runtime.scheduleUnloadOperation(TP, 11);
+        runtime.scheduleUnloadOperation(TP, OptionalInt.of(11));
 
         // Verify that onUnloaded is not called.
         verify(coordinator, times(0)).onUnloaded();
@@ -765,7 +820,7 @@ public class CoordinatorRuntimeTest {
 
         // Unloading with a previous epoch is a no-op. The coordinator stays
         // in active with the correct epoch.
-        runtime.scheduleUnloadOperation(TP, 0);
+        runtime.scheduleUnloadOperation(TP, OptionalInt.of(0));
         assertEquals(ACTIVE, ctx.state);
         assertEquals(10, ctx.epoch);
     }
