@@ -1047,8 +1047,6 @@ public class StandaloneHerderTest {
         expectConfigValidation(connectorMock, false, newConfig);
         herder.putConnectorConfig(CONNECTOR_NAME, newConfig, true, reconfigureCallback);
 
-        Thread.sleep(10);
-
         // Reconfigure the tasks
         herder.requestTaskReconfiguration(CONNECTOR_NAME);
 
