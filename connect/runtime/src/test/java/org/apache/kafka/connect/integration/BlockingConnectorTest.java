@@ -68,6 +68,7 @@ import static org.apache.kafka.connect.runtime.ConnectorConfig.TASKS_MAX_CONFIG;
 import static org.apache.kafka.connect.runtime.SinkConnectorConfig.TOPICS_CONFIG;
 import static org.apache.kafka.connect.runtime.rest.RestServer.DEFAULT_REST_REQUEST_TIMEOUT_MS;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertNotNull;
 import static org.junit.Assert.assertThrows;
 import static org.junit.Assert.assertTrue;
 
@@ -498,6 +499,10 @@ public class BlockingConnectorTest {
                 log.info("Will block on {}", block);
                 CountDownLatch blockLatch;
                 synchronized (Block.class) {
+                    assertNotNull(
+                            "Block was reset prematurely",
+                            awaitBlockLatch
+                    );
                     awaitBlockLatch.countDown();
                     blockLatch = newBlockLatch();
                     BLOCKED_THREADS.add(Thread.currentThread());
