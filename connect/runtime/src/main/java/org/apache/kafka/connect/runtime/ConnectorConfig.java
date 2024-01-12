@@ -292,6 +292,10 @@ public class ConnectorConfig extends AbstractConfig {
         return getBoolean(ERRORS_LOG_INCLUDE_MESSAGES_CONFIG);
     }
 
+    public int tasksMax() {
+        return getInt(TASKS_MAX_CONFIG);
+    }
+
     public boolean enforceTasksMax() {
         return getBoolean(TASKS_MAX_ENFORCE_CONFIG);
     }

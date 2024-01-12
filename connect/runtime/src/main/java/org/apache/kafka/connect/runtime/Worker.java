@@ -389,7 +389,7 @@ public class Worker {
             if (workerConnector == null)
                 throw new ConnectException("Connector " + connName + " not found in this worker.");
 
-            int maxTasks = connConfig.getInt(ConnectorConfig.TASKS_MAX_CONFIG);
+            int maxTasks = connConfig.tasksMax();
             Map<String, String> connOriginals = connConfig.originalsStrings();
 
             Connector connector = workerConnector.connector();
@@ -655,7 +655,7 @@ public class Worker {
             try (LoaderSwap loaderSwap = plugins.withClassLoader(connectorLoader)) {
                 final ConnectorConfig connConfig = new ConnectorConfig(plugins, connProps);
 
-                int maxTasks = connConfig.getInt(ConnectorConfig.TASKS_MAX_CONFIG);
+                int maxTasks = connConfig.tasksMax();
                 int numTasks = configState.taskCount(id.connector());
                 checkTasksMax(id.connector(), numTasks, maxTasks, connConfig.enforceTasksMax());
 
