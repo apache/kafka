@@ -153,16 +153,16 @@ public class StartAndStopLatch {
             throw new TimeoutException(detailMessage +
                     "Timed out while awaiting " + expectedStarts
                             + " start(s) for " + name +
-                            "; there are currently " + startLatch.getCount()
-                            + " left"
+                            "; currently, " + startLatch.getCount()
+                            + " remain(s)"
             );
         }
         if (!stopLatch.await(end - clock.milliseconds(), TimeUnit.MILLISECONDS)) {
             throw new TimeoutException(detailMessage +
                     "Timed out while awaiting " + expectedStops
                             + " stop(s) for " + name +
-                            "; there are currently " + stopLatch.getCount()
-                            + " left"
+                            "; currently, " + stopLatch.getCount()
+                            + " remain(s)"
             );
         }
 
