@@ -100,15 +100,15 @@ class DescribeTopicPartitionsRequestHandlerTest {
 
     ListenerName plaintextListener = ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT);
     UpdateMetadataBroker broker = new UpdateMetadataBroker()
-            .setId(0)
-            .setRack("rack")
-            .setEndpoints(Arrays.asList(
-                    new UpdateMetadataRequestData.UpdateMetadataEndpoint()
-                            .setHost("broker0")
-                            .setPort(9092)
-                            .setSecurityProtocol(SecurityProtocol.PLAINTEXT.id)
-                            .setListener(plaintextListener.value())
-            ));
+        .setId(0)
+        .setRack("rack")
+        .setEndpoints(Arrays.asList(
+            new UpdateMetadataRequestData.UpdateMetadataEndpoint()
+                .setHost("broker0")
+                .setPort(9092)
+                .setSecurityProtocol(SecurityProtocol.PLAINTEXT.id)
+                .setListener(plaintextListener.value())
+        ));
 
     @Test
     void testDescribeTopicPartitionsRequest() {
