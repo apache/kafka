@@ -498,9 +498,9 @@ class BrokerTopicMetrics(name: Option[String], configOpt: java.util.Optional[Kaf
     brokerTopicAggregatedMetric.setPartitionMetricValue(partition, segmentsLag)
   }
 
-  def recordRemoteDeleteLagBytes(topic: String, segmentsLag: Long): Unit = {
+  def recordRemoteDeleteLagBytes(topic: String, bytesLag: Long): Unit = {
     val brokerTopicAggregatedMetric = metricGaugeTypeMap.get(RemoteStorageMetrics.REMOTE_DELETE_LAG_BYTES_METRIC.getName).brokerTopicAggregatedMetric
-    brokerTopicAggregatedMetric.setTopicMetricValue(topic, segmentsLag)
+    brokerTopicAggregatedMetric.setTopicMetricValue(topic, bytesLag)
   }
 
   def removeRemoteDeleteLagBytes(partition: Int): Unit = {
