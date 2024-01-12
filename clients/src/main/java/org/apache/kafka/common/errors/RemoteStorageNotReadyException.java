@@ -17,7 +17,11 @@
 package org.apache.kafka.common.errors;
 
 /**
- * This retryable exception indicates that remote storage is not ready to receive the requests yet.
+ * This retriable exception indicates that remote storage is not ready to receive the requests yet.
+ * This exception will be thrown only when using the
+ * {@code org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemoteLogMetadataManager} as the implementation
+ * for {@code org.apache.kafka.server.log.remote.metadata.storage.RemoteLogMetadataManager}.
+ *
  * <ul>
  *     <li>The consumer reads data from a known offset. If there's no initial offset, then it's determined by the
  *     {@link org.apache.kafka.clients.consumer.ConsumerConfig#AUTO_OFFSET_RESET_CONFIG} configuration which can be
