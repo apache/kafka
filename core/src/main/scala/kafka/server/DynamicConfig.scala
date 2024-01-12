@@ -23,7 +23,7 @@ import org.apache.kafka.common.config.ConfigDef
 import org.apache.kafka.common.config.ConfigDef.Importance._
 import org.apache.kafka.common.config.ConfigDef.Range._
 import org.apache.kafka.common.config.ConfigDef.Type._
-import org.apache.kafka.server.config.ConfigEntityName
+import org.apache.kafka.server.config.{ConfigEntityName, ReplicationQuotaManagerConfig}
 import org.apache.kafka.storage.internals.log.LogConfig
 
 import java.util
@@ -42,7 +42,7 @@ object DynamicConfig {
     val ReplicaAlterLogDirsIoMaxBytesPerSecondProp = "replica.alter.log.dirs.io.max.bytes.per.second"
 
     // Defaults
-    val DefaultReplicationThrottledRate = ReplicationQuotaManagerConfig.QuotaBytesPerSecondDefault
+    val DefaultReplicationThrottledRate = ReplicationQuotaManagerConfig.DEFAULT_QUOTA_BYTES_PER_SECOND
 
     // Documentation
     val LeaderReplicationThrottledRateDoc = "A long representing the upper bound (bytes/sec) on replication traffic for leaders enumerated in the " +

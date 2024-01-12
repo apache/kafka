@@ -23,7 +23,7 @@ import java.net.InetAddress
 import java.nio.file.{Files, Paths}
 import java.util
 import java.util.concurrent.atomic.{AtomicBoolean, AtomicLong, AtomicReference}
-import java.util.concurrent.{CountDownLatch, TimeUnit}
+import java.util.concurrent.{Callable, CountDownLatch, TimeUnit}
 import java.util.stream.IntStream
 import java.util.{Collections, Optional, OptionalLong, Properties}
 import kafka.api._
@@ -2633,99 +2633,133 @@ class ReplicaManagerTest {
     }
 
     val logManager = TestUtils.createLogManager(config.logDirs.map(new File(_)), defaultConfig = new LogConfig(new Properties()), time = time)
+    val quotaManager = QuotaFactory.instantiate(config, metrics, time, "")
     val replicaManager = new ReplicaManager(
       metrics = metrics,
       config = config,
       time = time,
       scheduler = time.scheduler,
       logManager = logManager,
-      quotaManagers = QuotaFactory.instantiate(config, metrics, time, ""),
+      quotaManagers = quotaManager,
       metadataCache = MetadataCache.zkMetadataCache(config.brokerId, config.interBrokerProtocolVersion),
       logDirFailureChannel = new LogDirFailureChannel(config.logDirs.size),
       alterPartitionManager = alterPartitionManager,
       threadNamePrefix = Option(this.getClass.getName))
 
-    logManager.startup(Set.empty[String])
+    try {
 
-    // Create a hosted topic, a hosted topic that will become stray
-    createHostedLogs("hosted-topic", numLogs = 2, replicaManager).toSet
-    createHostedLogs("hosted-stray", numLogs = 10, replicaManager).toSet
+      logManager.startup(Set.empty[String])
 
-    val lisr = new LeaderAndIsrRequest.Builder(ApiKeys.LEADER_AND_ISR.latestVersion,
-      3000, 0, brokerEpoch,
-      Seq(
-        new LeaderAndIsrPartitionState()
-          .setTopicName("hosted-topic")
-          .setPartitionIndex(0)
-          .setControllerEpoch(controllerEpoch)
-          .setLeader(0)
-          .setLeaderEpoch(10)
-          .setIsr(Seq[Integer](0, 1).asJava)
-          .setPartitionEpoch(0)
-          .setReplicas(Seq[Integer](0, 1).asJava)
-          .setIsNew(false),
-        new LeaderAndIsrPartitionState()
-          .setTopicName("hosted-topic")
-          .setPartitionIndex(1)
-          .setControllerEpoch(controllerEpoch)
-          .setLeader(1)
-          .setLeaderEpoch(10)
-          .setIsr(Seq[Integer](1, 0).asJava)
-          .setPartitionEpoch(0)
-          .setReplicas(Seq[Integer](1, 0).asJava)
-          .setIsNew(false)
-      ).asJava,
-      topicIds.asJava,
-      Set(new Node(0, "host0", 0), new Node(1, "host1", 1)).asJava,
-      true,
-      AbstractControlRequest.Type.FULL
-    ).build()
+      // Create a hosted topic, a hosted topic that will become stray
+      createHostedLogs("hosted-topic", numLogs = 2, replicaManager).toSet
+      createHostedLogs("hosted-stray", numLogs = 10, replicaManager).toSet
 
-    replicaManager.becomeLeaderOrFollower(0, lisr, (_, _) => ())
+      val lisr = new LeaderAndIsrRequest.Builder(ApiKeys.LEADER_AND_ISR.latestVersion,
+        3000, 0, brokerEpoch,
+        Seq(
+          new LeaderAndIsrPartitionState()
+            .setTopicName("hosted-topic")
+            .setPartitionIndex(0)
+            .setControllerEpoch(controllerEpoch)
+            .setLeader(0)
+            .setLeaderEpoch(10)
+            .setIsr(Seq[Integer](0, 1).asJava)
+            .setPartitionEpoch(0)
+            .setReplicas(Seq[Integer](0, 1).asJava)
+            .setIsNew(false),
+          new LeaderAndIsrPartitionState()
+            .setTopicName("hosted-topic")
+            .setPartitionIndex(1)
+            .setControllerEpoch(controllerEpoch)
+            .setLeader(1)
+            .setLeaderEpoch(10)
+            .setIsr(Seq[Integer](1, 0).asJava)
+            .setPartitionEpoch(0)
+            .setReplicas(Seq[Integer](1, 0).asJava)
+            .setIsNew(false)
+        ).asJava,
+        topicIds.asJava,
+        Set(new Node(0, "host0", 0), new Node(1, "host1", 1)).asJava,
+        true,
+        AbstractControlRequest.Type.FULL
+      ).build()
 
-    val ht0 = replicaManager.getPartition(new TopicPartition("hosted-topic", 0))
-    assertTrue(ht0.isInstanceOf[HostedPartition.Online])
+      replicaManager.becomeLeaderOrFollower(0, lisr, (_, _) => ())
 
-    val stray0 = replicaManager.getPartition(new TopicPartition("hosted-stray", 0))
+      val ht0 = replicaManager.getPartition(new TopicPartition("hosted-topic", 0))
+      assertTrue(ht0.isInstanceOf[HostedPartition.Online])
 
-    if (zkMigrationEnabled) {
-      assertEquals(HostedPartition.None, stray0)
-    } else {
-      assertTrue(stray0.isInstanceOf[HostedPartition.Online])
+      val stray0 = replicaManager.getPartition(new TopicPartition("hosted-stray", 0))
+
+      if (zkMigrationEnabled) {
+        assertEquals(HostedPartition.None, stray0)
+      } else {
+        assertTrue(stray0.isInstanceOf[HostedPartition.Online])
+      }
+    } finally {
+      Utils.tryAll(util.Arrays.asList[Callable[Void]] (
+        () => {
+          replicaManager.shutdown(checkpointHW = false)
+          null
+        },
+        () => {
+          logManager.shutdown()
+          null
+        },
+        () => {
+          quotaManager.shutdown()
+          null
+        }
+      ))
     }
   }
 
   @Test
   def testUpdateStrayLogs(): Unit = {
     val logManager = TestUtils.createLogManager(config.logDirs.map(new File(_)), defaultConfig = new LogConfig(new Properties()), time = time)
+    val quotaManager = QuotaFactory.instantiate(config, metrics, time, "")
     val replicaManager = new ReplicaManager(
       metrics = metrics,
       config = config,
       time = time,
       scheduler = time.scheduler,
       logManager = logManager,
-      quotaManagers = QuotaFactory.instantiate(config, metrics, time, ""),
+      quotaManagers = quotaManager,
       metadataCache = MetadataCache.zkMetadataCache(config.brokerId, config.interBrokerProtocolVersion),
       logDirFailureChannel = new LogDirFailureChannel(config.logDirs.size),
       alterPartitionManager = alterPartitionManager,
       threadNamePrefix = Option(this.getClass.getName))
 
-    logManager.startup(Set.empty[String])
+    try {
+      logManager.startup(Set.empty[String])
 
-    // Create a hosted topic, a hosted topic that will become stray, and a stray topic
-    val validLogs = createHostedLogs("hosted-topic", numLogs = 2, replicaManager).toSet
-    createHostedLogs("hosted-stray", numLogs = 10, replicaManager).toSet
-    createStrayLogs(10, logManager)
+      // Create a hosted topic, a hosted topic that will become stray, and a stray topic
+      val validLogs = createHostedLogs("hosted-topic", numLogs = 2, replicaManager).toSet
+      createHostedLogs("hosted-stray", numLogs = 10, replicaManager).toSet
+      createStrayLogs(10, logManager)
 
-    val allReplicasFromLISR = Set(new TopicPartition("hosted-topic", 0), new TopicPartition("hosted-topic", 1))
+      val allReplicasFromLISR = Set(new TopicPartition("hosted-topic", 0), new TopicPartition("hosted-topic", 1))
 
-    replicaManager.updateStrayLogs(replicaManager.findStrayPartitionsFromLeaderAndIsr(allReplicasFromLISR))
+      replicaManager.updateStrayLogs(replicaManager.findStrayPartitionsFromLeaderAndIsr(allReplicasFromLISR))
 
-    assertEquals(validLogs, logManager.allLogs.toSet)
-    assertEquals(validLogs.size, replicaManager.partitionCount.value)
-
-    replicaManager.shutdown()
-    logManager.shutdown()
+      assertEquals(validLogs, logManager.allLogs.toSet)
+      assertEquals(validLogs.size, replicaManager.partitionCount.value)
+    } finally {
+      Utils.tryAll(util.Arrays.asList[Callable[Void]](
+        () => {
+          replicaManager.shutdown(checkpointHW = false)
+          null
+        },
+        () => {
+          logManager.shutdown()
+          null
+        },
+        () => {
+          quotaManager.shutdown()
+          null
+        }
+      ))
+    }
   }
 
   private def createHostedLogs(name: String, numLogs: Int, replicaManager: ReplicaManager): Seq[UnifiedLog] = {
@@ -2878,6 +2912,8 @@ class ReplicaManagerTest {
       purgatoryName = "DeleteRecords", timer, reaperEnabled = false)
     val mockElectLeaderPurgatory = new DelayedOperationPurgatory[DelayedElectLeader](
       purgatoryName = "ElectLeader", timer, reaperEnabled = false)
+    val mockRemoteFetchPurgatory = new DelayedOperationPurgatory[DelayedRemoteFetch](
+      purgatoryName = "RemoteFetch", timer, reaperEnabled = false)
 
     // Mock network client to show leader offset of 5
     val blockingSend = new MockBlockingSender(
@@ -2902,6 +2938,7 @@ class ReplicaManagerTest {
       delayedFetchPurgatoryParam = Some(mockFetchPurgatory),
       delayedDeleteRecordsPurgatoryParam = Some(mockDeleteRecordsPurgatory),
       delayedElectLeaderPurgatoryParam = Some(mockElectLeaderPurgatory),
+      delayedRemoteFetchPurgatoryParam = Some(mockRemoteFetchPurgatory),
       threadNamePrefix = Option(this.getClass.getName)) {
 
       override protected def createReplicaFetcherManager(metrics: Metrics,
@@ -3458,8 +3495,16 @@ class ReplicaManagerTest {
       rm0.becomeLeaderOrFollower(correlationId, leaderAndIsrRequest2, (_, _) => ())
       rm1.becomeLeaderOrFollower(correlationId, leaderAndIsrRequest2, (_, _) => ())
     } finally {
-      rm0.shutdown(checkpointHW = false)
-      rm1.shutdown(checkpointHW = false)
+      Utils.tryAll(util.Arrays.asList[Callable[Void]](
+        () => {
+          rm0.shutdown(checkpointHW = false)
+          null
+        },
+        () => {
+          rm1.shutdown(checkpointHW = false)
+          null
+        }
+      ))
     }
 
     // verify that broker 1 did remove its metrics when no longer being the leader of partition 1
@@ -3546,8 +3591,16 @@ class ReplicaManagerTest {
       rm0.becomeLeaderOrFollower(correlationId, leaderAndIsrRequest2, (_, _) => ())
       rm1.becomeLeaderOrFollower(correlationId, leaderAndIsrRequest2, (_, _) => ())
     } finally {
-      rm0.shutdown(checkpointHW = false)
-      rm1.shutdown(checkpointHW = false)
+      Utils.tryAll(util.Arrays.asList[Callable[Void]](
+        () => {
+          rm0.shutdown(checkpointHW = false)
+          null
+        },
+        () => {
+          rm1.shutdown(checkpointHW = false)
+          null
+        }
+      ))
     }
 
     // verify that broker 1 did remove its metrics when no longer being the leader of partition 1
@@ -4019,7 +4072,16 @@ class ReplicaManagerTest {
       // unlock all tasks
       doneLatch.countDown()
     } finally {
-      replicaManager.shutdown(checkpointHW = false)
+      Utils.tryAll(util.Arrays.asList[Callable[Void]](
+        () => {
+          replicaManager.shutdown(checkpointHW = false)
+          null
+        },
+        () => {
+          remoteLogManager.close()
+          null
+        }
+      ))
     }
   }
 
@@ -4115,7 +4177,16 @@ class ReplicaManagerTest {
           safeYammerMetricValue("type=DelayedRemoteFetchMetrics,name=ExpiresPerSec").asInstanceOf[Long])
       latch.countDown()
     } finally {
-      replicaManager.shutdown(checkpointHW = false)
+      Utils.tryAll(util.Arrays.asList[Callable[Void]](
+        () => {
+          replicaManager.shutdown(checkpointHW = false)
+          null
+        },
+        () => {
+          remoteLogManager.close()
+          null
+        }
+      ))
     }
   }
 

@@ -702,6 +702,7 @@ public class GroupMetadataManager {
 
     /**
      * Throws an InvalidRequestException if the value is non-null and empty.
+     * A string containing only whitespaces is also considered empty.
      *
      * @param value The value.
      * @param error The error message.
@@ -711,7 +712,7 @@ public class GroupMetadataManager {
         String value,
         String error
     ) throws InvalidRequestException {
-        if (value != null && value.isEmpty()) {
+        if (value != null && value.trim().isEmpty()) {
             throw new InvalidRequestException(error);
         }
     }
