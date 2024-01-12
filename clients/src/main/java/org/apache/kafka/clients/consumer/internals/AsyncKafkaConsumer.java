@@ -357,6 +357,11 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
 
             // This FetchBuffer is shared between the application and network threads.
             this.fetchBuffer = new FetchBuffer(logContext);
+            ConsumerCoordinatorMetrics coordinatorMetrics = new ConsumerCoordinatorMetrics(
+                subscriptions,
+                metrics,
+                CONSUMER_METRIC_GROUP_PREFIX
+            );
             final Supplier<NetworkClientDelegate> networkClientDelegateSupplier = NetworkClientDelegate.supplier(time,
                     logContext,
                     metadata,
@@ -376,7 +381,8 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                     apiVersions,
                     fetchMetricsManager,
                     networkClientDelegateSupplier,
-                    clientTelemetryReporter);
+                    clientTelemetryReporter,
+                    coordinatorMetrics);
             final Supplier<ApplicationEventProcessor> applicationEventProcessorSupplier = ApplicationEventProcessor.supplier(logContext,
                     metadata,
                     applicationEventQueue,
@@ -388,11 +394,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                     applicationEventProcessorSupplier,
                     networkClientDelegateSupplier,
                     requestManagersSupplier);
-            ConsumerCoordinatorMetrics coordinatorMetrics = new ConsumerCoordinatorMetrics(
-                    subscriptions,
-                    metrics,
-                    CONSUMER_METRIC_GROUP_PREFIX
-            );
+
             ConsumerRebalanceListenerInvoker rebalanceListenerInvoker = new ConsumerRebalanceListenerInvoker(
                     logContext,
                     subscriptions,
@@ -566,8 +568,8 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             apiVersions,
             fetchMetricsManager,
             networkClientDelegateSupplier,
-            clientTelemetryReporter
-        );
+            clientTelemetryReporter,
+            coordinatorMetrics);
         Supplier<ApplicationEventProcessor> applicationEventProcessorSupplier = ApplicationEventProcessor.supplier(
                 logContext,
                 metadata,

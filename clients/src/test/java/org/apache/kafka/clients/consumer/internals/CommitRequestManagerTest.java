@@ -30,6 +30,8 @@ import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.message.OffsetCommitRequestData;
 import org.apache.kafka.common.message.OffsetCommitResponseData;
 import org.apache.kafka.common.message.OffsetFetchRequestData;
+import org.apache.kafka.common.metrics.KafkaMetric;
+import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.AbstractRequest;
@@ -72,9 +74,11 @@ import static org.apache.kafka.clients.consumer.ConsumerConfig.KEY_DESERIALIZER_
 import static org.apache.kafka.clients.consumer.ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG;
 import static org.apache.kafka.clients.consumer.internals.ConsumerTestBuilder.DEFAULT_GROUP_ID;
 import static org.apache.kafka.clients.consumer.internals.ConsumerTestBuilder.DEFAULT_GROUP_INSTANCE_ID;
+import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.CONSUMER_METRIC_GROUP_PREFIX;
 import static org.apache.kafka.test.TestUtils.assertFutureThrows;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
@@ -93,6 +97,11 @@ public class CommitRequestManagerTest {
     private LogContext logContext;
     private MockTime time;
     private CoordinatorRequestManager coordinatorRequestManager;
+    private Metrics metrics = new Metrics();
+    private ConsumerCoordinatorMetrics consumerCoordinatorMetrics = new ConsumerCoordinatorMetrics(
+            subscriptionState,
+            metrics,
+            CONSUMER_METRIC_GROUP_PREFIX);
     private Properties props;
 
     private final int defaultApiTimeoutMs = 60000;
@@ -735,6 +744,23 @@ public class CommitRequestManagerTest {
         assertEquals(memberId, reqData.memberId());
     }
 
+    @Test
+    public void testEnsureCommitSensorRecordsMetric() {
+        CommitRequestManager commitRequestManager = create(true, 100);
+        when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(mockedNode));
+        Map<TopicPartition, OffsetAndMetadata> offsets = Collections.singletonMap(
+            new TopicPartition("topic", 1),
+            new OffsetAndMetadata(0));
+        commitRequestManager.addOffsetCommitRequest(offsets, Optional.empty(), true);
+        NetworkClientDelegate.PollResult res = commitRequestManager.poll(time.milliseconds());
+        assertEquals(1, res.unsentRequests.size());
+        res.unsentRequests.get(0).future().complete(mockOffsetCommitResponse("topic", 1, (short) 1, Errors.NONE));
+        assertNotNull(getMetric("commit-latency-avg"));
+        assertNotNull(getMetric("commit-latency-max"));
+        assertNotNull(getMetric("commit-rate"));
+        assertNotNull(getMetric("commit-total"));
+    }
+
     private void completeOffsetFetchRequestWithError(CommitRequestManager commitRequestManager,
                                                      Set<TopicPartition> partitions,
                                                      Errors error) {
@@ -944,7 +970,8 @@ public class CommitRequestManagerTest {
                 Optional.of(DEFAULT_GROUP_INSTANCE_ID),
                 retryBackoffMs,
                 retryBackoffMaxMs,
-                OptionalDouble.of(0)));
+                OptionalDouble.of(0),
+                consumerCoordinatorMetrics));
     }
 
     private ClientResponse buildOffsetFetchClientResponse(
@@ -1019,5 +1046,11 @@ public class CommitRequestManagerTest {
                 null,
                 response
         );
+    }
+
+    private KafkaMetric getMetric(String name) {
+        return metrics.metrics().get(metrics.metricName(
+            name,
+            CONSUMER_METRIC_GROUP_PREFIX + "-coordinator-metrics"));
     }
 }

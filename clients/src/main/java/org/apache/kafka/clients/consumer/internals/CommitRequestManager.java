@@ -77,6 +77,7 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
     private final OptionalDouble jitter;
     private final boolean throwOnFetchStableOffsetUnsupported;
     final PendingRequests pendingRequests;
+    private final ConsumerCoordinatorMetrics coordinatorMetrics;
     private boolean closing = false;
 
     /**
@@ -94,10 +95,19 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
             final ConsumerConfig config,
             final CoordinatorRequestManager coordinatorRequestManager,
             final String groupId,
-            final Optional<String> groupInstanceId) {
-        this(time, logContext, subscriptions, config, coordinatorRequestManager, groupId,
-                groupInstanceId, config.getLong(ConsumerConfig.RETRY_BACKOFF_MS_CONFIG),
-                config.getLong(ConsumerConfig.RETRY_BACKOFF_MAX_MS_CONFIG), OptionalDouble.empty());
+            final Optional<String> groupInstanceId,
+            final ConsumerCoordinatorMetrics coordinatorMetrics) {
+        this(time,
+            logContext,
+            subscriptions,
+            config,
+            coordinatorRequestManager,
+            groupId,
+            groupInstanceId,
+            config.getLong(ConsumerConfig.RETRY_BACKOFF_MS_CONFIG),
+            config.getLong(ConsumerConfig.RETRY_BACKOFF_MAX_MS_CONFIG),
+            OptionalDouble.empty(),
+            coordinatorMetrics);
     }
 
     // Visible for testing
@@ -111,7 +121,8 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
         final Optional<String> groupInstanceId,
         final long retryBackoffMs,
         final long retryBackoffMaxMs,
-        final OptionalDouble jitter) {
+        final OptionalDouble jitter,
+        final ConsumerCoordinatorMetrics coordinatorMetrics) {
         Objects.requireNonNull(coordinatorRequestManager, "Coordinator is needed upon committing offsets");
         this.logContext = logContext;
         this.log = logContext.logger(getClass());
@@ -132,6 +143,7 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
         this.jitter = jitter;
         this.throwOnFetchStableOffsetUnsupported = config.getBoolean(THROW_ON_FETCH_STABLE_OFFSET_UNSUPPORTED);
         this.memberInfo = new MemberInfo();
+        this.coordinatorMetrics = coordinatorMetrics;
     }
 
     /**
@@ -483,6 +495,7 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
         }
 
         public void onResponse(final ClientResponse response) {
+            coordinatorMetrics.commitSensor.record(response.requestLatencyMs());
             long currentTimeMs = response.receivedTimeMs();
             OffsetCommitResponse commitResponse = (OffsetCommitResponse) response.responseBody();
             Set<String> unauthorizedTopics = new HashSet<>();

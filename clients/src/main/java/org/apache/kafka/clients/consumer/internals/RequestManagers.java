@@ -33,9 +33,8 @@ import java.util.List;
 import java.util.Optional;
 import java.util.function.Supplier;
 
-import static org.apache.kafka.common.utils.Utils.closeQuietly;
-
 import static java.util.Objects.requireNonNull;
+import static org.apache.kafka.common.utils.Utils.closeQuietly;
 
 /**
  * {@code RequestManagers} provides a means to pass around the set of {@link RequestManager} instances in the system.
@@ -116,7 +115,8 @@ public class RequestManagers implements Closeable {
                                                      final ApiVersions apiVersions,
                                                      final FetchMetricsManager fetchMetricsManager,
                                                      final Supplier<NetworkClientDelegate> networkClientDelegateSupplier,
-                                                     final Optional<ClientTelemetryReporter> clientTelemetryReporter) {
+                                                     final Optional<ClientTelemetryReporter> clientTelemetryReporter,
+                                                     final ConsumerCoordinatorMetrics consumerCoordinatorMetrics) {
         return new CachedSupplier<RequestManagers>() {
             @Override
             protected RequestManagers create() {
@@ -167,7 +167,8 @@ public class RequestManagers implements Closeable {
                             config,
                             coordinator,
                             groupRebalanceConfig.groupId,
-                            groupRebalanceConfig.groupInstanceId);
+                            groupRebalanceConfig.groupInstanceId,
+                            consumerCoordinatorMetrics);
                     membershipManager = new MembershipManagerImpl(
                             groupRebalanceConfig.groupId,
                             groupRebalanceConfig.groupInstanceId,
