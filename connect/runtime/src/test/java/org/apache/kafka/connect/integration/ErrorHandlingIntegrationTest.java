@@ -39,7 +39,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
 
 import static org.apache.kafka.connect.runtime.ConnectorConfig.CONNECTOR_CLASS_CONFIG;
@@ -247,7 +249,12 @@ public class ErrorHandlingIntegrationTest {
 
         // consume failed records from dead letter queue topic
         log.info("Consuming records from test topic");
-        connect.kafka().consume(NUM_RECORDS_PRODUCED, CONSUME_MAX_DURATION_MS, DLQ_TOPIC);
+        Set<String> keys = new HashSet<>();
+        for (ConsumerRecord<byte[], byte[]> rec : connect.kafka().consume(NUM_RECORDS_PRODUCED, CONSUME_MAX_DURATION_MS, DLQ_TOPIC)) {
+            String k = new String(rec.key());
+            keys.add(k);
+        }
+        assertEquals(NUM_RECORDS_PRODUCED, keys.size());
 
         connect.deleteConnector(CONNECTOR_NAME);
         connect.assertions().assertConnectorDoesNotExist(CONNECTOR_NAME,
