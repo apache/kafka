@@ -225,7 +225,11 @@ public class WorkerConnector implements Runnable {
         }
     }
 
-    private void onFailure(Throwable t) {
+    private synchronized void onFailure(Throwable t) {
+        // If we've already failed, we don't overwrite the last-reported cause of failure
+        if (this.state == State.FAILED)
+            return;
+
         statusListener.onFailure(connName, t);
         this.state = State.FAILED;
     }
