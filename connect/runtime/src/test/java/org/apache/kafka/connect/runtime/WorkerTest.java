@@ -636,7 +636,7 @@ public class WorkerTest {
                 Collections.emptySet(),
                 Collections.emptySet()
         );
-        assertTrue(worker.startSourceTask(TASK_ID, ClusterConfigState.EMPTY, connectorConfigs, origProps, taskStatusListener, TargetState.STARTED));
+        assertTrue(worker.startSourceTask(TASK_ID, configState, connectorConfigs, origProps, taskStatusListener, TargetState.STARTED));
         assertStatistics(worker, 0, 1);
         assertEquals(Collections.singleton(TASK_ID), worker.taskIds());
         worker.stopAndAwaitTask(TASK_ID);
@@ -762,7 +762,7 @@ public class WorkerTest {
                 Collections.emptySet()
         );
 
-        assertTrue(worker.startExactlyOnceSourceTask(TASK_ID, ClusterConfigState.EMPTY,  connectorConfigs, origProps, taskStatusListener, TargetState.STARTED, preProducer, postProducer));
+        assertTrue(worker.startExactlyOnceSourceTask(TASK_ID, configState,  connectorConfigs, origProps, taskStatusListener, TargetState.STARTED, preProducer, postProducer));
         assertStatistics(worker, 0, 1);
         assertEquals(Collections.singleton(TASK_ID), worker.taskIds());
         worker.stopAndAwaitTask(TASK_ID);
