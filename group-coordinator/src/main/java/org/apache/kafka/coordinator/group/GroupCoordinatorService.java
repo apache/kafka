@@ -1029,12 +1029,9 @@ public class GroupCoordinatorService implements GroupCoordinator {
         OptionalInt groupMetadataPartitionLeaderEpoch
     ) {
         throwIfNotActive();
-        if (!groupMetadataPartitionLeaderEpoch.isPresent()) {
-            throw new IllegalArgumentException("The leader epoch should always be provided in KRaft.");
-        }
         runtime.scheduleUnloadOperation(
             new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, groupMetadataPartitionIndex),
-            groupMetadataPartitionLeaderEpoch.getAsInt()
+            groupMetadataPartitionLeaderEpoch
         );
     }
 

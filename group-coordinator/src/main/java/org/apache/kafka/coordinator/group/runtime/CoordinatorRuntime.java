@@ -44,6 +44,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.Map;
+import java.util.OptionalInt;
 import java.util.OptionalLong;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
@@ -1669,11 +1670,12 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
      * leader anymore.
      *
      * @param tp                The topic partition of the coordinator.
-     * @param partitionEpoch    The partition epoch.
+     * @param partitionEpoch    The partition epoch as an optional value.
+     *                          An empty value means that the topic was deleted.
      */
     public void scheduleUnloadOperation(
         TopicPartition tp,
-        int partitionEpoch
+        OptionalInt partitionEpoch
     ) {
         throwIfNotRunning();
         log.info("Scheduling unloading of metadata for {} with epoch {}", tp, partitionEpoch);
@@ -1683,7 +1685,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
             if (context != null) {
                 try {
                     context.lock.lock();
-                    if (context.epoch < partitionEpoch) {
+                    if (!partitionEpoch.isPresent() || context.epoch < partitionEpoch.getAsInt()) {
                         log.info("Started unloading metadata for {} with epoch {}.", tp, partitionEpoch);
                         context.transitionTo(CoordinatorState.CLOSED);
                         coordinators.remove(tp, context);
