@@ -1030,7 +1030,8 @@ public class ConnectWorkerIntegrationTest {
                 "connector did not fail in time, or tasks were incorrectly failed"
         );
 
-        // Make sure that the tasks have had a chance to fail (i.e., that the worker has been
+        // Make sure that the tasks have had a chance to fail (i.e., that the worker has been given
+        // a chance to check on the number of tasks for the connector during task startup)
         for (int i = 0; i < maxTasks; i++)
             connect.restartTask(CONNECTOR_NAME, i);
 
