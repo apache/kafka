@@ -69,6 +69,7 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
     private final Logger log;
     private final Optional<AutoCommitState> autoCommitState;
     private final CoordinatorRequestManager coordinatorRequestManager;
+    private final OffsetCommitCallbackInvoker offsetCommitCallbackInvoker;
     private final long retryBackoffMs;
     private final String groupId;
     private final Optional<String> groupInstanceId;
@@ -93,9 +94,11 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
             final SubscriptionState subscriptions,
             final ConsumerConfig config,
             final CoordinatorRequestManager coordinatorRequestManager,
+            final OffsetCommitCallbackInvoker offsetCommitCallbackInvoker,
             final String groupId,
             final Optional<String> groupInstanceId) {
-        this(time, logContext, subscriptions, config, coordinatorRequestManager, groupId,
+        this(time, logContext, subscriptions, config, coordinatorRequestManager,
+                offsetCommitCallbackInvoker, groupId,
                 groupInstanceId, config.getLong(ConsumerConfig.RETRY_BACKOFF_MS_CONFIG),
                 config.getLong(ConsumerConfig.RETRY_BACKOFF_MAX_MS_CONFIG), OptionalDouble.empty());
     }
@@ -107,6 +110,7 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
         final SubscriptionState subscriptions,
         final ConsumerConfig config,
         final CoordinatorRequestManager coordinatorRequestManager,
+        final OffsetCommitCallbackInvoker offsetCommitCallbackInvoker,
         final String groupId,
         final Optional<String> groupInstanceId,
         final long retryBackoffMs,
@@ -132,6 +136,7 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
         this.jitter = jitter;
         this.throwOnFetchStableOffsetUnsupported = config.getBoolean(THROW_ON_FETCH_STABLE_OFFSET_UNSUPPORTED);
         this.memberInfo = new MemberInfo();
+        this.offsetCommitCallbackInvoker = offsetCommitCallbackInvoker;
     }
 
     /**
@@ -271,6 +276,7 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
         return (response, throwable) -> {
             autoCommitState.ifPresent(autoCommitState -> autoCommitState.setInflightCommitStatus(false));
             if (throwable == null) {
+                offsetCommitCallbackInvoker.submitCommitInterceptors(allConsumedOffsets);
                 log.debug("Completed asynchronous auto-commit of offsets {}", allConsumedOffsets);
             } else if (throwable instanceof RetriableCommitFailedException) {
                 log.debug("Asynchronous auto-commit of offsets {} failed due to retriable error: {}",

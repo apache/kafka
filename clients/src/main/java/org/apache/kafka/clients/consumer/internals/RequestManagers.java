@@ -116,7 +116,9 @@ public class RequestManagers implements Closeable {
                                                      final ApiVersions apiVersions,
                                                      final FetchMetricsManager fetchMetricsManager,
                                                      final Supplier<NetworkClientDelegate> networkClientDelegateSupplier,
-                                                     final Optional<ClientTelemetryReporter> clientTelemetryReporter) {
+                                                     final Optional<ClientTelemetryReporter> clientTelemetryReporter,
+                                                     final OffsetCommitCallbackInvoker offsetCommitCallbackInvoker
+                                                     ) {
         return new CachedSupplier<RequestManagers>() {
             @Override
             protected RequestManagers create() {
@@ -166,6 +168,7 @@ public class RequestManagers implements Closeable {
                             subscriptions,
                             config,
                             coordinator,
+                            offsetCommitCallbackInvoker,
                             groupRebalanceConfig.groupId,
                             groupRebalanceConfig.groupInstanceId);
                     membershipManager = new MembershipManagerImpl(

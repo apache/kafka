@@ -445,8 +445,8 @@ public class AsyncKafkaConsumerTest {
         completeCommitApplicationEventSuccessfully();
 
         assertDoesNotThrow(() -> consumer.commitAsync(new HashMap<>(), callback));
-        assertEquals(1, consumer.callbacks());
         forceCommitCallbackInvocation();
+        assertEquals(1, callback.invoked);
         assertEquals(currentThread, callback.completionThread);
     }
 
