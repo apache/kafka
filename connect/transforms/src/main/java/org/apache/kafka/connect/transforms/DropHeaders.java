@@ -39,7 +39,7 @@ public class DropHeaders<R extends ConnectRecord<R>> implements Transformation<R
             "Removes one or more headers from each record.";
 
     public static final String HEADERS_FIELD = "headers";
-    public static final String HEADERS_PATTERN_FIELD = "headers.pattern";
+    public static final String HEADERS_PATTERN_FIELD = "headers.patterns";
     public static final String MATCH_EMPTY = "$^";
 
     public static final ConfigDef CONFIG_DEF = new ConfigDef()
