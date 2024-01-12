@@ -23,20 +23,19 @@ import kafka.coordinator.transaction.{InitProducerIdResult, TransactionCoordinat
 import kafka.network.RequestChannel
 import kafka.server.QuotaFactory.{QuotaManagers, UnboundedQuota}
 import kafka.server.handlers.DescribeTopicPartitionsRequestHandler
-import kafka.server.metadata.{ConfigRepository, ZkMetadataCache}
+import kafka.server.metadata.{ConfigRepository, KRaftMetadataCache}
 import kafka.utils.Implicits._
 import kafka.utils.{CoreUtils, Logging}
 import org.apache.kafka.admin.AdminUtils
 import org.apache.kafka.clients.admin.AlterConfigOp.OpType
 import org.apache.kafka.clients.admin.{AlterConfigOp, ConfigEntry, EndpointType}
-import org.apache.kafka.common.acl.AclOperation._
 import org.apache.kafka.common.acl.AclOperation
+import org.apache.kafka.common.acl.AclOperation._
 import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.errors._
 import org.apache.kafka.common.internals.Topic.{GROUP_METADATA_TOPIC_NAME, TRANSACTION_STATE_TOPIC_NAME, isInternal}
 import org.apache.kafka.common.internals.{FatalExitError, Topic}
-import org.apache.kafka.common.message.AddPartitionsToTxnResponseData.AddPartitionsToTxnResult
-import org.apache.kafka.common.message.AddPartitionsToTxnResponseData.AddPartitionsToTxnResultCollection
+import org.apache.kafka.common.message.AddPartitionsToTxnResponseData.{AddPartitionsToTxnResult, AddPartitionsToTxnResultCollection}
 import org.apache.kafka.common.message.AlterConfigsResponseData.AlterConfigsResourceResponse
 import org.apache.kafka.common.message.AlterPartitionReassignmentsResponseData.{ReassignablePartitionResponse, ReassignableTopicResponse}
 import org.apache.kafka.common.message.CreatePartitionsResponseData.CreatePartitionsTopicResult
@@ -80,8 +79,8 @@ import java.lang.{Long => JLong}
 import java.nio.ByteBuffer
 import java.time.Duration
 import java.util
-import java.util.concurrent.{CompletableFuture, ConcurrentHashMap}
 import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.{CompletableFuture, ConcurrentHashMap}
 import java.util.{Collections, Optional, OptionalInt}
 import scala.annotation.nowarn
 import scala.collection.mutable.ArrayBuffer
@@ -121,7 +120,11 @@ class KafkaApis(val requestChannel: RequestChannel,
   val requestHelper = new RequestHandlerHelper(requestChannel, quotas, time)
   val aclApis = new AclApis(authHelper, authorizer, requestHelper, "broker", config)
   val configManager = new ConfigAdminManager(brokerId, config, configRepository)
-  val describeTopicPartitionsRequestHandler = new DescribeTopicPartitionsRequestHandler(metadataCache, authHelper, config)
+  val describeTopicPartitionsRequestHandler : Option[DescribeTopicPartitionsRequestHandler] = metadataCache match {
+    case kRaftMetadataCache: KRaftMetadataCache =>
+      Some(new DescribeTopicPartitionsRequestHandler(kRaftMetadataCache, authHelper, config))
+    case _ => None
+  }
 
   def close(): Unit = {
     aclApis.close()
@@ -1413,20 +1416,19 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   def handleDescribeTopicPartitionsRequest(request: RequestChannel.Request): Unit = {
-    metadataCache match {
-      case _: ZkMetadataCache =>
-        throw new InvalidRequestException("ZK cluster does not handle DescribeTopicPartitions request")
-      case _ =>
+    describeTopicPartitionsRequestHandler match {
+      case Some(handler) => {
+        val response = handler.handleDescribeTopicPartitionsRequest(request)
+        trace("Sending topic partitions metadata %s for correlation id %d to client %s".format(response.topics().asScala.mkString(","),
+          request.header.correlationId, request.header.clientId))
+
+        requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs => {
+          response.setThrottleTimeMs(requestThrottleMs)
+          new DescribeTopicPartitionsResponse(response)
+        })
+      }
+      case None => throw new InvalidRequestException("ZK cluster does not handle DescribeTopicPartitions request")
     }
-    val response = describeTopicPartitionsRequestHandler.handleDescribeTopicPartitionsRequest(request);
-
-    trace("Sending topic partitions metadata %s for correlation id %d to client %s".format(response.topics().asScala.mkString(","),
-      request.header.correlationId, request.header.clientId))
-
-    requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs => {
-      response.setThrottleTimeMs(requestThrottleMs)
-      new DescribeTopicPartitionsResponse(response)
-    })
   }
 
   /**

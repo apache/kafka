@@ -20,9 +20,7 @@ package kafka.server.handlers;
 import kafka.network.RequestChannel;
 import kafka.server.AuthHelper;
 import kafka.server.KafkaConfig;
-import kafka.server.MetadataCache;
 import kafka.server.metadata.KRaftMetadataCache;
-import kafka.server.metadata.ZkMetadataCache;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.InvalidRequestException;
 import org.apache.kafka.common.message.DescribeTopicPartitionsRequestData;
@@ -44,12 +42,12 @@ import static org.apache.kafka.common.acl.AclOperation.DESCRIBE;
 import static org.apache.kafka.common.resource.ResourceType.TOPIC;
 
 public class DescribeTopicPartitionsRequestHandler {
-    MetadataCache metadataCache;
+    KRaftMetadataCache metadataCache;
     AuthHelper authHelper;
     KafkaConfig config;
 
     public DescribeTopicPartitionsRequestHandler(
-        MetadataCache metadataCache,
+        KRaftMetadataCache metadataCache,
         AuthHelper authHelper,
         KafkaConfig config
     ) {
@@ -59,18 +57,13 @@ public class DescribeTopicPartitionsRequestHandler {
     }
 
     public DescribeTopicPartitionsResponseData handleDescribeTopicPartitionsRequest(RequestChannel.Request abstractRequest) {
-        if (metadataCache instanceof ZkMetadataCache) {
-            throw new InvalidRequestException("ZK cluster does not handle DescribeTopicPartitions request");
-        }
-        KRaftMetadataCache kRaftMetadataCache = (KRaftMetadataCache) metadataCache;
-
         DescribeTopicPartitionsRequestData request = ((DescribeTopicPartitionsRequest) abstractRequest.loggableRequest()).data();
         Set<String> topics = new HashSet<>();
         boolean fetchAllTopics = request.topics().isEmpty();
         DescribeTopicPartitionsRequestData.Cursor cursor = request.cursor();
         String cursorTopicName = cursor != null ? cursor.topicName() : "";
         if (fetchAllTopics) {
-            JavaConverters.asJava(kRaftMetadataCache.getAllTopics()).forEach(topicName -> {
+            JavaConverters.asJava(metadataCache.getAllTopics()).forEach(topicName -> {
                 if (topicName.compareTo(cursorTopicName) >= 0) {
                     topics.add(topicName);
                 }
@@ -92,7 +85,7 @@ public class DescribeTopicPartitionsRequestHandler {
         // Do not disclose the existence of topics unauthorized for Describe, so we've not even checked if they exist or not
         Set<DescribeTopicPartitionsResponseTopic> unauthorizedForDescribeTopicMetadata = new HashSet<>();
 
-        Stream<String> authorizedTopicsStream = topics.stream().filter(topicName -> {
+        Stream<String> authorizedTopicsStream = topics.stream().sorted().filter(topicName -> {
             boolean isAuthorized = authHelper.authorize(
                 abstractRequest.context(), DESCRIBE, TOPIC, topicName, true, true, 1);
             if (!fetchAllTopics && !isAuthorized) {
@@ -102,17 +95,12 @@ public class DescribeTopicPartitionsRequestHandler {
                 );
             }
             return isAuthorized;
-        }).sorted();
+        });
 
-        // Reset the first partition index if the cursor topic is missing from the authorized topic list.
-        int firstPartitionId = !cursorTopicName.isEmpty() && authHelper.authorize(
-            abstractRequest.context(), DESCRIBE, TOPIC, cursorTopicName, true, true, 1)
-            ? cursor.partitionIndex() : 0;
-
-        DescribeTopicPartitionsResponseData response = kRaftMetadataCache.getTopicMetadataForDescribeTopicResponse(
+        DescribeTopicPartitionsResponseData response = metadataCache.getTopicMetadataForDescribeTopicResponse(
             JavaConverters.asScala(authorizedTopicsStream.iterator()),
             abstractRequest.context().listenerName,
-            firstPartitionId,
+            (String topicName) -> topicName.equals(cursorTopicName) ? cursor.partitionIndex() : 0,
             Math.min(config.maxRequestPartitionSizeLimit(), request.responsePartitionLimit()),
             fetchAllTopics
         );
