@@ -98,22 +98,21 @@ class DescribeTopicPartitionsRequestHandlerTest {
         }
     };
 
-    @Test
-    void testDescribeTopicPartitionsRequest() {
-        // 1. Set up broker information
-        ListenerName plaintextListener = ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT);
-        UpdateMetadataBroker broker = new UpdateMetadataBroker()
+    ListenerName plaintextListener = ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT);
+    UpdateMetadataBroker broker = new UpdateMetadataBroker()
             .setId(0)
             .setRack("rack")
             .setEndpoints(Arrays.asList(
-                new UpdateMetadataRequestData.UpdateMetadataEndpoint()
-                    .setHost("broker0")
-                    .setPort(9092)
-                    .setSecurityProtocol(SecurityProtocol.PLAINTEXT.id)
-                    .setListener(plaintextListener.value())
+                    new UpdateMetadataRequestData.UpdateMetadataEndpoint()
+                            .setHost("broker0")
+                            .setPort(9092)
+                            .setSecurityProtocol(SecurityProtocol.PLAINTEXT.id)
+                            .setListener(plaintextListener.value())
             ));
 
-        // 2. Set up authorizer
+    @Test
+    void testDescribeTopicPartitionsRequest() {
+        // 1. Set up authorizer
         Authorizer authorizer = mock(Authorizer.class);
         String unauthorizedTopic = "unauthorized-topic";
         String authorizedTopic = "authorized-topic";
@@ -136,7 +135,7 @@ class DescribeTopicPartitionsRequestHandlerTest {
                 }).collect(Collectors.toList());
             });
 
-        // 3. Set up MetadataCache
+        // 2. Set up MetadataCache
         Uuid authorizedTopicId = Uuid.randomUuid();
         Uuid unauthorizedTopicId = Uuid.randomUuid();
 
@@ -200,7 +199,7 @@ class DescribeTopicPartitionsRequestHandlerTest {
         DescribeTopicPartitionsRequestHandler handler =
             new DescribeTopicPartitionsRequestHandler(metadataCache, new AuthHelper(scala.Option.apply(authorizer)), createKafkaDefaultConfig());
 
-        // 4.1 Basic test
+        // 3.1 Basic test
         DescribeTopicPartitionsRequest describeTopicPartitionsRequest = new DescribeTopicPartitionsRequest(
             new DescribeTopicPartitionsRequestData()
                 .setTopics(Arrays.asList(
@@ -229,7 +228,7 @@ class DescribeTopicPartitionsRequestHandlerTest {
         assertEquals(Errors.TOPIC_AUTHORIZATION_FAILED.code(), topicToCheck.errorCode());
         assertEquals(unauthorizedTopic, topicToCheck.name());
 
-        // 4.2 With cursor
+        // 3.2 With cursor
         describeTopicPartitionsRequest = new DescribeTopicPartitionsRequest(new DescribeTopicPartitionsRequestData()
             .setTopics(Arrays.asList(
                 new DescribeTopicPartitionsRequestData.TopicRequest().setName(authorizedTopic),
@@ -258,7 +257,7 @@ class DescribeTopicPartitionsRequestHandlerTest {
         assertEquals(Errors.TOPIC_AUTHORIZATION_FAILED.code(), topicToCheck.errorCode());
         assertEquals(unauthorizedTopic, topicToCheck.name());
 
-        // 4.3 Fetch all topics
+        // 3.3 Fetch all topics
         describeTopicPartitionsRequest = new DescribeTopicPartitionsRequest(new DescribeTopicPartitionsRequestData());
         try {
             request = buildRequest(describeTopicPartitionsRequest, plaintextListener);
@@ -275,7 +274,7 @@ class DescribeTopicPartitionsRequestHandlerTest {
         assertEquals(authorizedTopic, topicToCheck.name());
         assertEquals(2, topicToCheck.partitions().size());
 
-        // 4.4 Fetch all topics with cursor
+        // 3.4 Fetch all topics with cursor
         describeTopicPartitionsRequest = new DescribeTopicPartitionsRequest(
             new DescribeTopicPartitionsRequestData().setCursor(
                 new DescribeTopicPartitionsRequestData.Cursor().setTopicName(authorizedTopic).setPartitionIndex(1)));
@@ -294,30 +293,7 @@ class DescribeTopicPartitionsRequestHandlerTest {
         assertEquals(authorizedTopic, topicToCheck.name());
         assertEquals(1, topicToCheck.partitions().size());
 
-        // 4.5 Fetch all topics with cursor pointing to non exist topic. In the fetch all mode, the non existing cursor
-        // topic can be included in the output.
-        describeTopicPartitionsRequest = new DescribeTopicPartitionsRequest(
-            new DescribeTopicPartitionsRequestData().setCursor(
-                new DescribeTopicPartitionsRequestData.Cursor().setTopicName(authorizedNonExistTopic).setPartitionIndex(1)));
-        try {
-            request = buildRequest(describeTopicPartitionsRequest, plaintextListener);
-        } catch (Exception e) {
-            assertTrue(false, e.getMessage());
-            return;
-        }
-        response = handler.handleDescribeTopicPartitionsRequest(request);
-        topics = response.topics().valuesList();
-        assertEquals(2, topics.size());
-        topicToCheck = topics.get(0);
-        assertEquals(Errors.UNKNOWN_TOPIC_OR_PARTITION.code(), topicToCheck.errorCode());
-
-        topicToCheck = topics.get(1);
-        assertEquals(authorizedTopicId, topicToCheck.topicId());
-        assertEquals(Errors.NONE.code(), topicToCheck.errorCode());
-        assertEquals(authorizedTopic, topicToCheck.name());
-        assertEquals(2, topicToCheck.partitions().size());
-
-        // 4.6 Fetch all topics with limit
+        // 3.5 Fetch all topics with limit
         describeTopicPartitionsRequest = new DescribeTopicPartitionsRequest(
                 new DescribeTopicPartitionsRequestData().setResponsePartitionLimit(1)
         );
@@ -341,20 +317,7 @@ class DescribeTopicPartitionsRequestHandlerTest {
 
     @Test
     void testDescribeTopicPartitionsRequestWithEdgeCases() {
-        // 1. Set up broker information
-        ListenerName plaintextListener = ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT);
-        UpdateMetadataBroker broker = new UpdateMetadataBroker()
-            .setId(0)
-            .setRack("rack")
-            .setEndpoints(Arrays.asList(
-                new UpdateMetadataRequestData.UpdateMetadataEndpoint()
-                    .setHost("broker0")
-                    .setPort(9092)
-                    .setSecurityProtocol(SecurityProtocol.PLAINTEXT.id)
-                    .setListener(plaintextListener.value())
-            ));
-
-        // 2. Set up authorizer
+        // 1. Set up authorizer
         Authorizer authorizer = mock(Authorizer.class);
         String authorizedTopic = "authorized-topic1";
         String authorizedTopic2 = "authorized-topic2";
@@ -375,7 +338,7 @@ class DescribeTopicPartitionsRequestHandlerTest {
                 }).collect(Collectors.toList());
             });
 
-        // 3. Set up MetadataCache
+        // 2. Set up MetadataCache
         Uuid authorizedTopicId = Uuid.randomUuid();
         Uuid authorizedTopicId2 = Uuid.randomUuid();
 
@@ -439,7 +402,7 @@ class DescribeTopicPartitionsRequestHandlerTest {
         DescribeTopicPartitionsRequestHandler handler =
             new DescribeTopicPartitionsRequestHandler(metadataCache, new AuthHelper(scala.Option.apply(authorizer)), createKafkaDefaultConfig());
 
-        // 4.1 With cursor point to the first one
+        // 3.1 With cursor point to the first one
         DescribeTopicPartitionsRequest describeTopicPartitionsRequest = new DescribeTopicPartitionsRequest(new DescribeTopicPartitionsRequestData()
             .setTopics(Arrays.asList(
                 new DescribeTopicPartitionsRequestData.TopicRequest().setName(authorizedTopic),
@@ -470,7 +433,7 @@ class DescribeTopicPartitionsRequestHandlerTest {
         assertEquals(authorizedTopic2, topicToCheck.name());
         assertEquals(1, topicToCheck.partitions().size());
 
-        // 4.2 With cursor point to the second one. The first topic should be ignored.
+        // 3.2 With cursor point to the second one. The first topic should be ignored.
         describeTopicPartitionsRequest = new DescribeTopicPartitionsRequest(new DescribeTopicPartitionsRequestData()
             .setTopics(Arrays.asList(
                 new DescribeTopicPartitionsRequestData.TopicRequest().setName(authorizedTopic),
@@ -494,7 +457,7 @@ class DescribeTopicPartitionsRequestHandlerTest {
         assertEquals(authorizedTopic2, topicToCheck.name());
         assertEquals(1, topicToCheck.partitions().size());
 
-        // 4.3 With cursor point to a non existing topic. Exception should be thrown if not querying all the topics.
+        // 3.3 With cursor point to a non existing topic. Exception should be thrown if not querying all the topics.
         describeTopicPartitionsRequest = new DescribeTopicPartitionsRequest(new DescribeTopicPartitionsRequestData()
             .setTopics(Arrays.asList(
                 new DescribeTopicPartitionsRequestData.TopicRequest().setName(authorizedTopic),
@@ -508,6 +471,235 @@ class DescribeTopicPartitionsRequestHandlerTest {
         } catch (Exception e) {
             assertTrue(e instanceof InvalidRequestException, e.getMessage());
         }
+    }
+
+    @Test
+    void testDescribeTopicPartitionsRequestWithNonconsecutivePartitionIndex() {
+        // 1. Set up authorizer
+        Authorizer authorizer = mock(Authorizer.class);
+        String authorizedTopic = "authorized-topic1";
+        String authorizedTopic2 = "authorized-topic2";
+        String unauthorizedTopic = "aa-unauthorized-topic";
+
+        Action expectedActions1 = new Action(AclOperation.DESCRIBE, new ResourcePattern(ResourceType.TOPIC, authorizedTopic, PatternType.LITERAL), 1, true, true);
+        Action expectedActions2 = new Action(AclOperation.DESCRIBE, new ResourcePattern(ResourceType.TOPIC, authorizedTopic2, PatternType.LITERAL), 1, true, true);
+        Action expectedActions3 = new Action(AclOperation.DESCRIBE, new ResourcePattern(ResourceType.TOPIC, unauthorizedTopic, PatternType.LITERAL), 1, true, true);
+
+        // Here we need to use AuthHelperTest.matchSameElements instead of EasyMock.eq since the order of the request is unknown
+        when(authorizer.authorize(any(RequestContext.class), argThat(t ->
+            t.contains(expectedActions1) || t.contains(expectedActions2) || t.contains(expectedActions3))))
+            .thenAnswer(invocation -> {
+                List<Action> actions = (List<Action>) invocation.getArgument(1);
+                return actions.stream().map(action -> {
+                    if (!action.resourcePattern().name().contains("unauthorized"))
+                        return AuthorizationResult.ALLOWED;
+                    else
+                        return AuthorizationResult.DENIED;
+                }).collect(Collectors.toList());
+            });
+
+        // 3. Set up MetadataCache
+        Uuid authorizedTopicId = Uuid.randomUuid();
+        Uuid authorizedTopicId2 = Uuid.randomUuid();
+        Uuid unauthorizedTopicId = Uuid.randomUuid();
+
+        Map<String, Uuid> topicIds = new HashMap<>();
+        topicIds.put(authorizedTopic, authorizedTopicId);
+        topicIds.put(authorizedTopic2, authorizedTopicId2);
+        topicIds.put(unauthorizedTopic, unauthorizedTopicId);
+
+        BrokerEndpointCollection collection = new BrokerEndpointCollection();
+        collection.add(new BrokerEndpoint()
+            .setName(broker.endpoints().get(0).listener())
+            .setHost(broker.endpoints().get(0).host())
+            .setPort(broker.endpoints().get(0).port())
+            .setSecurityProtocol(broker.endpoints().get(0).securityProtocol())
+        );
+
+        // authorizedTopic has partition [2,4,8]. authorizedTopic2 has partition[10]
+        List<ApiMessage> records = Arrays.asList(
+            new RegisterBrokerRecord()
+                .setBrokerId(broker.id())
+                .setBrokerEpoch(0)
+                .setIncarnationId(Uuid.randomUuid())
+                .setEndPoints(collection)
+                .setRack(broker.rack())
+                .setFenced(false),
+            new TopicRecord().setName(authorizedTopic).setTopicId(topicIds.get(authorizedTopic)),
+            new TopicRecord().setName(authorizedTopic2).setTopicId(topicIds.get(authorizedTopic2)),
+                new TopicRecord().setName(unauthorizedTopic).setTopicId(topicIds.get(unauthorizedTopic)),
+            new PartitionRecord()
+                .setTopicId(authorizedTopicId)
+                .setPartitionId(2)
+                .setReplicas(Arrays.asList(0, 1, 2))
+                .setLeader(0)
+                .setIsr(Arrays.asList(0))
+                .setEligibleLeaderReplicas(Arrays.asList(1))
+                .setLastKnownElr(Arrays.asList(2))
+                .setLeaderEpoch(0)
+                .setPartitionEpoch(1)
+                .setLeaderRecoveryState(LeaderRecoveryState.RECOVERED.value()),
+            new PartitionRecord()
+                .setTopicId(authorizedTopicId)
+                .setPartitionId(4)
+                .setReplicas(Arrays.asList(0, 1, 2))
+                .setLeader(0)
+                .setIsr(Arrays.asList(0))
+                .setEligibleLeaderReplicas(Arrays.asList(1))
+                .setLastKnownElr(Arrays.asList(2))
+                .setLeaderEpoch(0)
+                .setPartitionEpoch(1)
+                .setLeaderRecoveryState(LeaderRecoveryState.RECOVERED.value()),
+            new PartitionRecord()
+                .setTopicId(authorizedTopicId)
+                .setPartitionId(8)
+                .setReplicas(Arrays.asList(0, 1, 2))
+                .setLeader(0)
+                .setIsr(Arrays.asList(0))
+                .setEligibleLeaderReplicas(Arrays.asList(1))
+                .setLastKnownElr(Arrays.asList(2))
+                .setLeaderEpoch(0)
+                .setPartitionEpoch(1)
+                .setLeaderRecoveryState(LeaderRecoveryState.RECOVERED.value()),
+            new PartitionRecord()
+                .setTopicId(authorizedTopicId2)
+                .setPartitionId(10)
+                .setReplicas(Arrays.asList(0, 1, 3))
+                .setLeader(0)
+                .setIsr(Arrays.asList(0))
+                .setEligibleLeaderReplicas(Arrays.asList(1))
+                .setLastKnownElr(Arrays.asList(3))
+                .setLeaderEpoch(0)
+                .setPartitionEpoch(2)
+                .setLeaderRecoveryState(LeaderRecoveryState.RECOVERED.value())
+        );
+        KRaftMetadataCache metadataCache = new KRaftMetadataCache(0);
+        updateKraftMetadataCache(metadataCache, records);
+        DescribeTopicPartitionsRequestHandler handler =
+                new DescribeTopicPartitionsRequestHandler(metadataCache, new AuthHelper(scala.Option.apply(authorizer)), createKafkaDefaultConfig());
+
+        // 3.1 With cursor point to the unauthorizedTopic
+        DescribeTopicPartitionsRequest describeTopicPartitionsRequest = new DescribeTopicPartitionsRequest(new DescribeTopicPartitionsRequestData()
+            .setTopics(Arrays.asList(
+                new DescribeTopicPartitionsRequestData.TopicRequest().setName(unauthorizedTopic),
+                new DescribeTopicPartitionsRequestData.TopicRequest().setName(authorizedTopic),
+                new DescribeTopicPartitionsRequestData.TopicRequest().setName(authorizedTopic2)
+            ))
+            .setCursor(new DescribeTopicPartitionsRequestData.Cursor().setTopicName(unauthorizedTopic).setPartitionIndex(1))
+        );
+
+        RequestChannel.Request request;
+        try {
+            request = buildRequest(describeTopicPartitionsRequest, plaintextListener);
+        } catch (Exception e) {
+            assertTrue(false, e.getMessage());
+            return;
+        }
+        DescribeTopicPartitionsResponseData response = handler.handleDescribeTopicPartitionsRequest(request);
+        List<DescribeTopicPartitionsResponseTopic> topics = response.topics().valuesList();
+        assertEquals(3, topics.size());
+
+        DescribeTopicPartitionsResponseTopic topicToCheck = topics.get(0);
+        assertEquals(authorizedTopicId, topicToCheck.topicId());
+        assertEquals(Errors.NONE.code(), topicToCheck.errorCode());
+        assertEquals(authorizedTopic, topicToCheck.name());
+        assertEquals(3, topicToCheck.partitions().size());
+
+        topicToCheck = topics.get(1);
+        assertEquals(authorizedTopicId2, topicToCheck.topicId());
+        assertEquals(Errors.NONE.code(), topicToCheck.errorCode());
+        assertEquals(authorizedTopic2, topicToCheck.name());
+        assertEquals(1, topicToCheck.partitions().size());
+
+        topicToCheck = topics.get(2);
+        assertEquals(Errors.TOPIC_AUTHORIZATION_FAILED.code(), topicToCheck.errorCode());
+        assertEquals(unauthorizedTopic, topicToCheck.name());
+        assertEquals(0, topicToCheck.partitions().size());
+
+        // 3.2 Fetch all and cursor points to the unauthorized topic.
+        describeTopicPartitionsRequest = new DescribeTopicPartitionsRequest(new DescribeTopicPartitionsRequestData()
+            .setCursor(new DescribeTopicPartitionsRequestData.Cursor().setTopicName(unauthorizedTopic).setPartitionIndex(0))
+        );
+
+        try {
+            request = buildRequest(describeTopicPartitionsRequest, plaintextListener);
+        } catch (Exception e) {
+            assertTrue(false, e.getMessage());
+            return;
+        }
+        response = handler.handleDescribeTopicPartitionsRequest(request);
+        topics = response.topics().valuesList();
+        assertEquals(2, topics.size());
+        topicToCheck = topics.get(0);
+        assertEquals(authorizedTopicId, topicToCheck.topicId());
+        assertEquals(Errors.NONE.code(), topicToCheck.errorCode());
+        assertEquals(authorizedTopic, topicToCheck.name());
+        assertEquals(3, topicToCheck.partitions().size());
+
+        topicToCheck = topics.get(1);
+        assertEquals(authorizedTopicId2, topicToCheck.topicId());
+        assertEquals(Errors.NONE.code(), topicToCheck.errorCode());
+        assertEquals(authorizedTopic2, topicToCheck.name());
+        assertEquals(1, topicToCheck.partitions().size());
+
+        // 3.3 With limit on nonconsecutive partition topic.
+        describeTopicPartitionsRequest = new DescribeTopicPartitionsRequest(new DescribeTopicPartitionsRequestData()
+            .setTopics(Arrays.asList(
+                new DescribeTopicPartitionsRequestData.TopicRequest().setName(authorizedTopic),
+                new DescribeTopicPartitionsRequestData.TopicRequest().setName(authorizedTopic2)
+            ))
+            .setResponsePartitionLimit(2)
+        );
+
+        try {
+            request = buildRequest(describeTopicPartitionsRequest, plaintextListener);
+        } catch (Exception e) {
+            assertTrue(false, e.getMessage());
+            return;
+        }
+        response = handler.handleDescribeTopicPartitionsRequest(request);
+        topics = response.topics().valuesList();
+        assertEquals(1, topics.size());
+        topicToCheck = topics.get(0);
+        assertEquals(authorizedTopicId, topicToCheck.topicId());
+        assertEquals(Errors.NONE.code(), topicToCheck.errorCode());
+        assertEquals(authorizedTopic, topicToCheck.name());
+        assertEquals(2, topicToCheck.partitions().size());
+        assertEquals(2, topicToCheck.partitions().get(0).partitionIndex());
+        assertEquals(4, topicToCheck.partitions().get(1).partitionIndex());
+
+        assertEquals(authorizedTopic, response.nextCursor().topicName());
+        assertEquals(8, response.nextCursor().partitionIndex());
+
+        // 3.4 With cursor and limit on nonconsecutive partition topic.
+        describeTopicPartitionsRequest = new DescribeTopicPartitionsRequest(new DescribeTopicPartitionsRequestData()
+            .setTopics(Arrays.asList(
+                new DescribeTopicPartitionsRequestData.TopicRequest().setName(authorizedTopic),
+                new DescribeTopicPartitionsRequestData.TopicRequest().setName(authorizedTopic2)
+            ))
+            .setCursor(new DescribeTopicPartitionsRequestData.Cursor().setTopicName(authorizedTopic).setPartitionIndex(4))
+            .setResponsePartitionLimit(2)
+        );
+
+        try {
+            request = buildRequest(describeTopicPartitionsRequest, plaintextListener);
+        } catch (Exception e) {
+            assertTrue(false, e.getMessage());
+            return;
+        }
+        response = handler.handleDescribeTopicPartitionsRequest(request);
+        topics = response.topics().valuesList();
+        assertEquals(1, topics.size());
+        topicToCheck = topics.get(0);
+        assertEquals(authorizedTopicId, topicToCheck.topicId());
+        assertEquals(Errors.NONE.code(), topicToCheck.errorCode());
+        assertEquals(authorizedTopic, topicToCheck.name());
+        assertEquals(2, topicToCheck.partitions().size());
+        assertEquals(4, topicToCheck.partitions().get(0).partitionIndex());
+        assertEquals(8, topicToCheck.partitions().get(1).partitionIndex());
+
+        assertEquals(authorizedTopic2, response.nextCursor().topicName());
+        assertEquals(0, response.nextCursor().partitionIndex());
     }
 
     void updateKraftMetadataCache(KRaftMetadataCache kRaftMetadataCache, List<ApiMessage> records) {

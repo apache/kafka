@@ -36,9 +36,9 @@ import scala.collection.JavaConverters;
 
 import java.util.Collections;
 import java.util.HashSet;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Set;
+import java.util.stream.Stream;
 
 import static org.apache.kafka.common.acl.AclOperation.DESCRIBE;
 import static org.apache.kafka.common.resource.ResourceType.TOPIC;
@@ -68,19 +68,18 @@ public class DescribeTopicPartitionsRequestHandler {
         Set<String> topics = new HashSet<>();
         boolean fetchAllTopics = request.topics().isEmpty();
         DescribeTopicPartitionsRequestData.Cursor cursor = request.cursor();
+        String cursorTopicName = cursor != null ? cursor.topicName() : "";
         if (fetchAllTopics) {
-            if (cursor != null) {
-                // Includes the cursor topic in case the cursor topic does not exist anymore.
-                topics.add(cursor.topicName());
-                kRaftMetadataCache.getAllTopicsAfterTopic(cursor.topicName()).foreach(topic -> topics.add(topic));
-            } else {
-                kRaftMetadataCache.getAllTopics().foreach(topic -> topics.add(topic));
-            }
+            JavaConverters.asJava(kRaftMetadataCache.getAllTopics()).forEach(topicName -> {
+                if (topicName.compareTo(cursorTopicName) >= 0) {
+                    topics.add(topicName);
+                }
+            });
         } else {
             request.topics().forEach(topic -> {
                 String topicName = topic.name();
-                if (cursor == null || topicName.compareTo(cursor.topicName()) >= 0) {
-                    topics.add(topic.name());
+                if (topicName.compareTo(cursorTopicName) >= 0) {
+                    topics.add(topicName);
                 }
             });
 
@@ -93,7 +92,7 @@ public class DescribeTopicPartitionsRequestHandler {
         // Do not disclose the existence of topics unauthorized for Describe, so we've not even checked if they exist or not
         Set<DescribeTopicPartitionsResponseTopic> unauthorizedForDescribeTopicMetadata = new HashSet<>();
 
-        Iterator<String> authorizedTopics = topics.stream().filter(topicName -> {
+        Stream<String> authorizedTopicsStream = topics.stream().filter(topicName -> {
             boolean isAuthorized = authHelper.authorize(
                 abstractRequest.context(), DESCRIBE, TOPIC, topicName, true, true, 1);
             if (!fetchAllTopics && !isAuthorized) {
@@ -103,14 +102,20 @@ public class DescribeTopicPartitionsRequestHandler {
                 );
             }
             return isAuthorized;
-        }).sorted().iterator();
+        }).sorted();
 
-        int firstPartitionId = cursor == null ? 0 : cursor.partitionIndex();
+        // Reset the first partition index if the cursor topic is missing from the authorized topic list.
+        int firstPartitionId = !cursorTopicName.isEmpty() && authHelper.authorize(
+            abstractRequest.context(), DESCRIBE, TOPIC, cursorTopicName, true, true, 1)
+            ? cursor.partitionIndex() : 0;
+
         DescribeTopicPartitionsResponseData response = kRaftMetadataCache.getTopicMetadataForDescribeTopicResponse(
-            JavaConverters.asScala(authorizedTopics),
+            JavaConverters.asScala(authorizedTopicsStream.iterator()),
             abstractRequest.context().listenerName,
             firstPartitionId,
-            Math.min(config.maxRequestPartitionSizeLimit(), request.responsePartitionLimit()));
+            Math.min(config.maxRequestPartitionSizeLimit(), request.responsePartitionLimit()),
+            fetchAllTopics
+        );
 
         // get topic authorized operations
         response.topics().forEach(topicData ->
