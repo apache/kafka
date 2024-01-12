@@ -36,7 +36,7 @@ public class OffsetAndMetadata {
     /**
      * The committed offset.
      */
-    public final long offset;
+    public final long committedOffset;
 
     /**
      * The leader epoch in use when the offset was committed.
@@ -61,14 +61,38 @@ public class OffsetAndMetadata {
      */
     public final OptionalLong expireTimestampMs;
 
+    /**
+     * The offset of the commit record in the log.
+     */
+    public final long recordOffset;
+
     public OffsetAndMetadata(
-        long offset,
+        long committedOffset,
         OptionalInt leaderEpoch,
         String metadata,
         long commitTimestampMs,
         OptionalLong expireTimestampMs
     ) {
-        this.offset = offset;
+        this(
+            -1L,
+            committedOffset,
+            leaderEpoch,
+            metadata,
+            commitTimestampMs,
+            expireTimestampMs
+        );
+    }
+
+    public OffsetAndMetadata(
+        long recordOffset,
+        long committedOffset,
+        OptionalInt leaderEpoch,
+        String metadata,
+        long commitTimestampMs,
+        OptionalLong expireTimestampMs
+    ) {
+        this.recordOffset = recordOffset;
+        this.committedOffset = committedOffset;
         this.leaderEpoch = Objects.requireNonNull(leaderEpoch);
         this.metadata = Objects.requireNonNull(metadata);
         this.commitTimestampMs = commitTimestampMs;
@@ -77,11 +101,12 @@ public class OffsetAndMetadata {
 
     @Override
     public String toString() {
-        return "OffsetAndMetadata(offset=" + offset +
+        return "OffsetAndMetadata(offset=" + committedOffset +
             ", leaderEpoch=" + leaderEpoch +
             ", metadata=" + metadata +
             ", commitTimestampMs=" + commitTimestampMs +
             ", expireTimestampMs=" + expireTimestampMs +
+            ", recordOffset=" + recordOffset +
             ')';
     }
 
@@ -92,20 +117,22 @@ public class OffsetAndMetadata {
 
         OffsetAndMetadata that = (OffsetAndMetadata) o;
 
-        if (offset != that.offset) return false;
+        if (committedOffset != that.committedOffset) return false;
         if (commitTimestampMs != that.commitTimestampMs) return false;
-        if (!leaderEpoch.equals(that.leaderEpoch)) return false;
-        if (!metadata.equals(that.metadata)) return false;
-        return expireTimestampMs.equals(that.expireTimestampMs);
+        if (recordOffset != that.recordOffset) return false;
+        if (!Objects.equals(leaderEpoch, that.leaderEpoch)) return false;
+        if (!Objects.equals(metadata, that.metadata)) return false;
+        return Objects.equals(expireTimestampMs, that.expireTimestampMs);
     }
 
     @Override
     public int hashCode() {
-        int result = (int) (offset ^ (offset >>> 32));
-        result = 31 * result + leaderEpoch.hashCode();
-        result = 31 * result + metadata.hashCode();
+        int result = (int) (committedOffset ^ (committedOffset >>> 32));
+        result = 31 * result + (leaderEpoch != null ? leaderEpoch.hashCode() : 0);
+        result = 31 * result + (metadata != null ? metadata.hashCode() : 0);
         result = 31 * result + (int) (commitTimestampMs ^ (commitTimestampMs >>> 32));
-        result = 31 * result + expireTimestampMs.hashCode();
+        result = 31 * result + (expireTimestampMs != null ? expireTimestampMs.hashCode() : 0);
+        result = 31 * result + (int) (recordOffset ^ (recordOffset >>> 32));
         return result;
     }
 
@@ -113,9 +140,11 @@ public class OffsetAndMetadata {
      * @return An OffsetAndMetadata created from a OffsetCommitValue record.
      */
     public static OffsetAndMetadata fromRecord(
+        long recordOffset,
         OffsetCommitValue record
     ) {
         return new OffsetAndMetadata(
+            recordOffset,
             record.offset(),
             ofSentinel(record.leaderEpoch()),
             record.metadata(),

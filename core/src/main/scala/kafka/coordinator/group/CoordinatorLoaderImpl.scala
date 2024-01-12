@@ -157,6 +157,7 @@ class CoordinatorLoaderImpl[T](
                   numRecords = numRecords + 1
                   try {
                     coordinator.replay(
+                      record.offset(),
                       batch.producerId,
                       batch.producerEpoch,
                       deserializer.deserialize(record.key, record.value)
